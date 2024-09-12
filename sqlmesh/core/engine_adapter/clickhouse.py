@@ -294,25 +294,53 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
             this=exp.Schema(expressions=partitioned_by),
         )
 
-    def _inject_query_settings(
+    def _inject_query_setting(
         self,
         query: Query,
+        setting_name: str = "join_use_nulls",
+        setting_value: str = "1",
+        check_server_default: bool = False,
     ) -> Query:
-        # Add `join_use_nulls` setting so empty cells in a join are filled with NULL instead of default data type value
+        # Set a setting in the query's SETTINGS clause
         #
-        # A query's settings are locally scoped, so we can add this here without impacting the behavior of any other
-        # subqueries or the outer query.
-        # https://github.com/ClickHouse/ClickHouse/issues/63078#issuecomment-2081284070
-        query.set(
-            "settings",
-            (query.args.get("settings") or [])
-            + [
-                exp.EQ(
-                    this=exp.var("join_use_nulls"),
-                    expression=exp.Literal(this="1", is_string=False),
-                )
-            ],
-        )
+        # Use in SCD models:
+        #  - The SCD query we build must include the setting `join_use_nulls = 1` to ensure that empty cells in a join
+        #      are filled with NULL instead of the default data type value. The default join_use_nulls value is `0`.
+        #  - The SCD embeds the user's original query in the `source` CTE
+        #  - Settings are dynamically scoped, so our setting may override the server's default setting the user expects
+        #      for their query.
+        #  - To prevent this, we:
+        #     - Determine if the user query already sets `join_use_nulls` - if so, we leave it as-is
+        #     - If the user query does not set `join_use_nulls`, we query the server for the current setting. If the
+        #         current setting is `0`, we add `join_use_nulls = 0` to the user query.
+        #  - We specify our setting on the outermost scope, so it applies to all CTEs/subqueries other than the user's
+        inject_setting = True
+        if check_server_default:
+            user_settings = query.args.get("settings")
+            query_has_setting = user_settings and [
+                isinstance(setting, exp.EQ) and setting.this.this == setting_name
+                for setting in user_settings
+            ]
+            if query_has_setting:
+                inject_setting = False
+            else:
+                server_setting = self.fetchone(
+                    f"SELECT value FROM system.settings WHERE name = '{setting_name}'"
+                )[0]
+                inject_setting = setting_value != server_setting
+                setting_value = server_setting if inject_setting else setting_value
+
+        if inject_setting:
+            query.set(
+                "settings",
+                (query.args.get("settings") or [])
+                + [
+                    exp.EQ(
+                        this=exp.var(setting_name),
+                        expression=exp.Literal(this=setting_value, is_string=False),
+                    )
+                ],
+            )
 
         return query
 
@@ -410,7 +438,7 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
                     exp.SettingsProperty(
                         expressions=[
                             exp.EQ(
-                                this=exp.var(k),
+                                this=exp.var(k.lower()),
                                 expression=v
                                 if isinstance(v, exp.Expression)
                                 else exp.Literal(this=v, is_string=isinstance(v, str)),

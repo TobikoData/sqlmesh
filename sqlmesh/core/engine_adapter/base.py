@@ -1586,7 +1586,11 @@ class EngineAdapter:
                     "source",
                     exp.select(exp.true().as_("_exists"), *select_source_columns)
                     .distinct(*unique_key)
-                    .from_(source_query.subquery("raw_source")),  # type: ignore
+                    .from_(
+                        self._inject_query_setting(
+                            source_query, check_server_default=True
+                        ).subquery("raw_source")  # type: ignore
+                    ),
                 )
                 # Historical Records that Do Not Change
                 .with_(
@@ -1727,7 +1731,7 @@ class EngineAdapter:
 
             self.replace_query(
                 target_table,
-                self._inject_query_settings(query),
+                self._inject_query_setting(query),
                 columns_to_types=columns_to_types,
                 table_description=table_description,
                 column_descriptions=column_descriptions,
@@ -2306,7 +2310,13 @@ class EngineAdapter:
     ) -> None:
         self.execute(exp.rename_table(old_table_name, new_table_name))
 
-    def _inject_query_settings(self, query: Query) -> Query:
+    def _inject_query_setting(
+        self,
+        query: Query,
+        setting_name: str = "join_use_nulls",
+        setting_value: str = "1",
+        check_server_default: bool = False,
+    ) -> Query:
         return query
 
     def ping(self) -> None:

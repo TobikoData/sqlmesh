@@ -229,6 +229,7 @@ def test_model_properties(adapter: ClickhouseEngineAdapter):
                 f"""
         MODEL (
             name foo,
+            dialect clickhouse,
             {storage_format}
             physical_properties (
               {order_by}
@@ -261,11 +262,11 @@ def test_model_properties(adapter: ClickhouseEngineAdapter):
 
     assert (
         build_properties_sql(
-            storage_format="storage_format ReplicatedMergeTree,",
+            storage_format="storage_format ReplicatedMergeTree('/clickhouse/tables/{shard}/table_name', '{replica}', ver),",
             order_by="ORDER_BY = a,",
             primary_key="PRIMARY_KEY = a,",
         )
-        == "ENGINE=ReplicatedMergeTree ORDER BY (a) PRIMARY KEY (a)"
+        == "ENGINE=ReplicatedMergeTree('/clickhouse/tables/{shard}/table_name', '{replica}', ver) ORDER BY (a) PRIMARY KEY (a)"
     )
 
     assert (
@@ -300,7 +301,7 @@ def test_model_properties(adapter: ClickhouseEngineAdapter):
             primary_key="PRIMARY_KEY = (a, b),",
             properties="PROP1 = 1, PROP2 = '2'",
         )
-        == "ENGINE=MergeTree ORDER BY (a, b + 1) PRIMARY KEY (a, b) SETTINGS PROP1 = 1 SETTINGS PROP2 = '2'"
+        == "ENGINE=MergeTree ORDER BY (a, b + 1) PRIMARY KEY (a, b) SETTINGS prop1 = 1 SETTINGS prop2 = '2'"
     )
 
     assert (
@@ -347,6 +348,45 @@ def test_create_table_properties(make_mocked_engine_adapter: t.Callable, mocker)
     ]
 
 
+def test_inject_query_setting(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
+    adapter = make_mocked_engine_adapter(ClickhouseEngineAdapter)
+
+    query = exp.select("col1").from_("table")
+
+    assert (
+        adapter._inject_query_setting(query.copy()).sql(adapter.dialect)
+        == "SELECT col1 FROM table SETTINGS join_use_nulls = 1"
+    )
+
+    # User already set the setting, so we should not override it
+    query_with_setting = query.copy()
+    query_with_setting.set(
+        "settings",
+        [
+            exp.EQ(
+                this=exp.var("join_use_nulls"),
+                expression=exp.Literal(this="0", is_string=False),
+            )
+        ],
+    )
+
+    assert (
+        adapter._inject_query_setting(query_with_setting, check_server_default=True)
+        == query_with_setting
+    )
+
+    # Server default of 0 != method default of 1, so we inject 0
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.ClickhouseEngineAdapter.fetchone",
+        return_value="0",
+    )
+
+    assert (
+        adapter._inject_query_setting(query, check_server_default=True).sql(adapter.dialect)
+        == "SELECT col1 FROM table SETTINGS join_use_nulls = 0"
+    )
+
+
 def test_scd_type_2_by_time(
     make_mocked_engine_adapter: t.Callable, mocker: MockerFixture, make_temp_table_name: t.Callable
 ):
@@ -356,6 +396,15 @@ def test_scd_type_2_by_time(
     table_name = "target"
     temp_table_id = "abcdefgh"
     temp_table_mock.return_value = make_temp_table_name(table_name, temp_table_id)
+
+    # The SCD query we build must specify the setting join_use_nulls = 1. We need to ensure that our
+    # setting on the outer query doesn't override the value the user expects.
+    #
+    # This test's user query does not contain a setting "join_use_nulls", so we determine whether or not
+    # to inject it based on the current server value. The mocked server value is 1, so we should not
+    # inject.
+    fetchone_mock = mocker.patch("sqlmesh.core.engine_adapter.ClickhouseEngineAdapter.fetchone")
+    fetchone_mock.return_value = "1"
 
     adapter.scd_type_2_by_time(
         target_table="target",
@@ -555,6 +604,14 @@ def test_scd_type_2_by_column(
     temp_table_id = "abcdefgh"
     temp_table_mock.return_value = make_temp_table_name(table_name, temp_table_id)
 
+    # The SCD query we build must specify the setting join_use_nulls = 1. We need to ensure that our
+    # setting on the outer query doesn't override the value the user expects.
+    #
+    # This test's user query does not contain a setting "join_use_nulls", so we determine whether or not
+    # to inject it based on the current server value. The mocked server value is 0, so we should inject.
+    fetchone_mock = mocker.patch("sqlmesh.core.engine_adapter.ClickhouseEngineAdapter.fetchone")
+    fetchone_mock.return_value = "0"
+
     adapter.scd_type_2_by_column(
         target_table="target",
         source_table=t.cast(exp.Select, parse_one("SELECT id, name, price FROM source")),
@@ -587,6 +644,7 @@ WITH "source" AS (
       "name",
       "price"
     FROM "source"
+    SETTINGS join_use_nulls = 0
   ) AS "raw_source"
 ), "static" AS (
   SELECT
