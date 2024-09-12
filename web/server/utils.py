@@ -104,22 +104,3 @@ def is_relative_to(path: PurePath, other: PurePath | str) -> bool:
         return True
     except ValueError:
         return False
-
-
-def ensure_list(value: t.Optional[t.Any] = None) -> t.List:
-    """Ensure that the value is a list. If None is provided, return an empty list.
-    If the value is not iterable, wrap it in a list."""
-
-    if value is None:
-        return []
-
-    if isinstance(value, list):
-        return value
-
-    if isinstance(value, (str, bytes)):
-        return [value]
-
-    try:
-        return list(value)
-    except TypeError:
-        return [value]

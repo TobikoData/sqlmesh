@@ -15,7 +15,8 @@ from web.server.settings import (
     get_settings,
     invalidate_context_cache,
 )
-from web.server.utils import ensure_list, is_relative_to
+from web.server.utils import is_relative_to
+from sqlglot.helper import ensure_list
 
 
 async def watch_project() -> None:
@@ -28,8 +29,8 @@ async def watch_project() -> None:
         (settings.project_path / c.METRICS).resolve(),
         (settings.project_path / c.SEEDS).resolve(),
     ]
-    ignore_dirs = ensure_list(".env")
-    ignore_paths = ensure_list((settings.project_path / c.CACHE).resolve())
+    ignore_dirs = [".env"]
+    ignore_paths: t.List[t.Union[str, Path]] = [(settings.project_path / c.CACHE).resolve()]
     ignore_entity_patterns = context.config.ignore_patterns if context else c.IGNORE_PATTERNS
     ignore_entity_patterns.append("^.*\\.db(\\.wal)?$")
 
