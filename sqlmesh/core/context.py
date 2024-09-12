@@ -337,8 +337,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         self.dbt_configs: t.Dict[Path, C] = {}
         self.sqlmesh_configs: t.Dict[Path, C] = {}
         for path, config in self.configs.items():
-            project_type = c.DBT if config.loader.__name__.lower().startswith(c.DBT) else c.NATIVE
-
+            project_type = config.loader.project_type
             if project_type == c.DBT:
                 self.dbt_configs[path] = config
                 if not self._dbt_loader:

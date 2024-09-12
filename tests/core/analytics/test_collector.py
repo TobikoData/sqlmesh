@@ -5,6 +5,7 @@ from unittest.mock import call
 import pytest
 from pytest_mock.plugin import MockerFixture
 
+from sqlmesh.core import constants as c
 from sqlmesh.core.analytics.collector import AnalyticsCollector
 from sqlmesh.core.snapshot import SnapshotChangeCategory
 from sqlmesh.integrations.github.cicd.config import GithubCICDBotConfig
@@ -42,7 +43,7 @@ def test_on_project_loaded(collector: AnalyticsCollector, mocker: MockerFixture,
 
     from dbt.version import __version__ as dbt_version
 
-    version = ', "dbt_version": "' + dbt_version + '"' if project_type != "native" else ""
+    version = ', "dbt_version": "' + dbt_version + '"' if project_type != c.NATIVE else ""
     collector._dispatcher.add_event.assert_has_calls(  # type: ignore
         [
             call(

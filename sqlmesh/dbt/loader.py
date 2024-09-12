@@ -67,6 +67,8 @@ def sqlmesh_config(
 
 
 class DbtLoader(Loader):
+    project_type = c.DBT
+
     def __init__(self) -> None:
         self._projects: t.List[Project] = []
         self._macros_max_mtime: t.Optional[float] = None
