@@ -259,6 +259,19 @@ MODEL (
 
 The `source` and `target` aliases are required when using the `when_matched` expression in order to distinguish between the source and target columns.
 
+Multiple `WHEN MATCHED` expressions can also be provided. Ex:
+
+```sql linenums="1" hl_lines="5-6"
+MODEL (
+  name db.employees,
+  kind INCREMENTAL_BY_UNIQUE_KEY (
+    unique_key name,
+    when_matched WHEN MATCHED AND source.value IS NULL THEN UPDATE SET target.salary = COALESCE(source.salary, target.salary),
+    WHEN MATCHED THEN UPDATE SET target.title = COALESCE(source.title, target.title)
+  )
+);
+```
+
 **Note**: `when_matched` is only available on engines that support the `MERGE` statement. Currently supported engines include:
 
 * BigQuery

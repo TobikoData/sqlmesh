@@ -6,6 +6,7 @@ from enum import Enum
 
 from pydantic import Field
 from sqlglot import exp
+from sqlglot.helper import ensure_list
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 from sqlglot.optimizer.qualify_columns import quote_identifiers
 from sqlglot.optimizer.simplify import gen
@@ -424,14 +425,16 @@ class IncrementalByTimeRangeKind(_IncrementalBy):
 class IncrementalByUniqueKeyKind(_IncrementalBy):
     name: Literal[ModelKindName.INCREMENTAL_BY_UNIQUE_KEY] = ModelKindName.INCREMENTAL_BY_UNIQUE_KEY
     unique_key: SQLGlotListOfFields
-    when_matched: t.Optional[exp.When] = None
+    when_matched: t.Optional[t.List[exp.When]] = None
     batch_concurrency: Literal[1] = 1
 
     @field_validator("when_matched", mode="before")
     @field_validator_v1_args
     def _when_matched_validator(
-        cls, v: t.Optional[t.Union[exp.When, str]], values: t.Dict[str, t.Any]
-    ) -> t.Optional[exp.When]:
+        cls,
+        v: t.Optional[t.Union[exp.When, str, t.List[exp.When], t.List[str]]],
+        values: t.Dict[str, t.Any],
+    ) -> t.Optional[t.List[exp.When]]:
         def replace_table_references(expression: exp.Expression) -> exp.Expression:
             from sqlmesh.core.engine_adapter.base import (
                 MERGE_SOURCE_ALIAS,
@@ -451,13 +454,19 @@ class IncrementalByUniqueKeyKind(_IncrementalBy):
                     )
             return expression
 
-        if isinstance(v, str):
-            return t.cast(exp.When, d.parse_one(v, into=exp.When, dialect=get_dialect(values)))
-
         if not v:
-            return v
+            return v  # type: ignore
 
-        return t.cast(exp.When, v.transform(replace_table_references))
+        result = []
+        list_v = ensure_list(v)
+        for value in ensure_list(list_v):
+            if isinstance(value, str):
+                result.append(
+                    t.cast(exp.When, d.parse_one(value, into=exp.When, dialect=get_dialect(values)))
+                )
+            else:
+                result.append(t.cast(exp.When, value.transform(replace_table_references)))  # type: ignore
+        return result
 
     @property
     def data_hash_values(self) -> t.List[t.Optional[str]]:

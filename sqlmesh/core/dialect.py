@@ -398,7 +398,9 @@ def _parse_props(self: Parser) -> t.Optional[exp.Expression]:
 
     name = key.name.lower()
     if name == "when_matched":
-        value: t.Optional[exp.Expression] = self._parse_when_matched()[0]
+        value: t.Optional[t.Union[exp.Expression, t.List[exp.Expression]]] = (
+            self._parse_when_matched()  # type: ignore
+        )
     elif name == "time_data_type":
         # TODO: if we make *_data_type a convention to parse things into exp.DataType, we could make this more generic
         value = self._parse_types(schema=True)
@@ -410,7 +412,7 @@ def _parse_props(self: Parser) -> t.Optional[exp.Expression]:
 
     if name == "path" and value:
         # Make sure if we get a windows path that it is converted to posix
-        value = exp.Literal.string(value.this.replace("\\", "/"))
+        value = exp.Literal.string(value.this.replace("\\", "/"))  # type: ignore
 
     return self.expression(exp.Property, this=name, value=value)
 

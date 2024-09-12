@@ -3904,10 +3904,44 @@ def test_when_matched():
     expected_when_matched = "WHEN MATCHED THEN UPDATE SET __MERGE_TARGET__.salary = COALESCE(__MERGE_SOURCE__.salary, __MERGE_TARGET__.salary)"
 
     model = load_sql_based_model(expressions, dialect="hive")
-    assert model.kind.when_matched.sql() == expected_when_matched
+    assert len(model.kind.when_matched) == 1
+    assert model.kind.when_matched[0].sql() == expected_when_matched
 
     model = SqlModel.parse_raw(model.json())
-    assert model.kind.when_matched.sql() == expected_when_matched
+    assert len(model.kind.when_matched) == 1
+    assert model.kind.when_matched[0].sql() == expected_when_matched
+
+
+def test_when_matched_multiple():
+    expressions = d.parse(
+        """
+        MODEL (
+          name db.employees,
+          kind INCREMENTAL_BY_UNIQUE_KEY (
+            unique_key name,
+            when_matched WHEN MATCHED AND source.x = 1 THEN UPDATE SET target.salary = COALESCE(source.salary, target.salary),
+            WHEN MATCHED THEN UPDATE SET target.salary = COALESCE(source.salary, target.salary)
+            
+          )
+        );
+        SELECT 'name' AS name, 1 AS salary;
+    """
+    )
+
+    expected_when_matched = [
+        "WHEN MATCHED AND __MERGE_SOURCE__.x = 1 THEN UPDATE SET __MERGE_TARGET__.salary = COALESCE(__MERGE_SOURCE__.salary, __MERGE_TARGET__.salary)",
+        "WHEN MATCHED THEN UPDATE SET __MERGE_TARGET__.salary = COALESCE(__MERGE_SOURCE__.salary, __MERGE_TARGET__.salary)",
+    ]
+
+    model = load_sql_based_model(expressions, dialect="hive")
+    assert len(model.kind.when_matched) == 2
+    assert model.kind.when_matched[0].sql() == expected_when_matched[0]
+    assert model.kind.when_matched[1].sql() == expected_when_matched[1]
+
+    model = SqlModel.parse_raw(model.json())
+    assert len(model.kind.when_matched) == 2
+    assert model.kind.when_matched[0].sql() == expected_when_matched[0]
+    assert model.kind.when_matched[1].sql() == expected_when_matched[1]
 
 
 def test_default_catalog_sql(assert_exp_eq):
@@ -5438,7 +5472,35 @@ on_destructive_change 'ERROR'
         .sql()
         == """INCREMENTAL_BY_UNIQUE_KEY (
 unique_key ("a"),
-when_matched WHEN MATCHED THEN UPDATE SET __MERGE_TARGET__.b = COALESCE(__MERGE_SOURCE__.b, __MERGE_TARGET__.b),
+when_matched ARRAY(WHEN MATCHED THEN UPDATE SET __MERGE_TARGET__.b = COALESCE(__MERGE_SOURCE__.b, __MERGE_TARGET__.b)),
+batch_concurrency 1,
+forward_only FALSE,
+disable_restatement FALSE,
+on_destructive_change 'ERROR'
+)"""
+    )
+
+    assert (
+        load_sql_based_model(
+            d.parse(
+                """
+            MODEL (
+                name db.table,
+                kind INCREMENTAL_BY_UNIQUE_KEY(
+                    unique_key a,
+                    when_matched WHEN MATCHED AND source.x = 1 THEN UPDATE SET target.b = COALESCE(source.b, target.b),
+                    WHEN MATCHED THEN UPDATE SET target.b = COALESCE(source.b, target.b)
+                ),
+            );
+            SELECT a, b
+            """
+            )
+        )
+        .kind.to_expression()
+        .sql()
+        == """INCREMENTAL_BY_UNIQUE_KEY (
+unique_key ("a"),
+when_matched ARRAY(WHEN MATCHED AND __MERGE_SOURCE__.x = 1 THEN UPDATE SET __MERGE_TARGET__.b = COALESCE(__MERGE_SOURCE__.b, __MERGE_TARGET__.b), WHEN MATCHED THEN UPDATE SET __MERGE_TARGET__.b = COALESCE(__MERGE_SOURCE__.b, __MERGE_TARGET__.b)),
 batch_concurrency 1,
 forward_only FALSE,
 disable_restatement FALSE,
