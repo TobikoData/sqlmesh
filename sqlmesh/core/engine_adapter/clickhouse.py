@@ -638,6 +638,9 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
     def use_server_nulls_for_unmatched_after_join(
         self,
         query: Query,
+        setting_name: str = "join_use_nulls",
+        setting_value: str = "1",
+        check_server_default: bool = False,
     ) -> Query:
         # Set the `join_use_nulls` server value in a query's SETTINGS clause
         #
