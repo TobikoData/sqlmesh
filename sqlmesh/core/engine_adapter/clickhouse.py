@@ -16,7 +16,6 @@ from sqlmesh.core.engine_adapter.shared import (
     CommentCreationView,
 )
 from sqlmesh.core.schema_diff import SchemaDiffer
-from functools import cached_property
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import SchemaName, TableName
@@ -39,7 +38,7 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
     DEFAULT_TABLE_ENGINE = "MergeTree"
     ORDER_BY_TABLE_ENGINE_REGEX = "^.*?MergeTree.*$"
 
-    @cached_property
+    @property
     def engine_run_mode(self) -> EngineRunMode:
         if self._extra_config.get("cloud_mode"):
             return EngineRunMode.CLOUD
@@ -344,6 +343,20 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
 
         return query
 
+    def _build_settings_property(
+        self, key: str, value: exp.Expression | str | int | float
+    ) -> exp.SettingsProperty:
+        return exp.SettingsProperty(
+            expressions=[
+                exp.EQ(
+                    this=exp.var(key.lower()),
+                    expression=value
+                    if isinstance(value, exp.Expression)
+                    else exp.Literal(this=value, is_string=isinstance(value, str)),
+                )
+            ]
+        )
+
     def _build_table_properties_exp(
         self,
         catalog_name: t.Optional[str] = None,
@@ -434,19 +447,7 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
 
         if table_properties_copy:
             properties.extend(
-                [
-                    exp.SettingsProperty(
-                        expressions=[
-                            exp.EQ(
-                                this=exp.var(k.lower()),
-                                expression=v
-                                if isinstance(v, exp.Expression)
-                                else exp.Literal(this=v, is_string=isinstance(v, str)),
-                            )
-                        ]
-                    )
-                    for k, v in table_properties_copy.items()
-                ]
+                [self._build_settings_property(k, v) for k, v in table_properties_copy.items()]
             )
 
         if table_description:
@@ -477,19 +478,7 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
 
         if view_properties_copy:
             properties.extend(
-                [
-                    exp.SettingsProperty(
-                        expressions=[
-                            exp.EQ(
-                                this=exp.var(k),
-                                expression=v
-                                if isinstance(v, exp.Expression)
-                                else exp.Literal(this=v, is_string=isinstance(v, str)),
-                            )
-                        ]
-                    )
-                    for k, v in view_properties_copy.items()
-                ]
+                [self._build_settings_property(k, v) for k, v in view_properties_copy.items()]
             )
 
         if table_description:

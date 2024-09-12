@@ -1546,10 +1546,7 @@ class EngineAdapter:
                     )
                     .else_(updated_at_col),
                 )
-                .when(
-                    prefixed_valid_from_col.is_(exp.Null()),
-                    update_valid_from_start,
-                )
+                .when(prefixed_valid_from_col.is_(exp.Null()), update_valid_from_start)
                 .else_(prefixed_valid_from_col)
             ).as_(valid_from_col.this)
 
