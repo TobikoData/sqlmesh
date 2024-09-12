@@ -521,7 +521,7 @@ Other state engines with fast and reliable database transactions (less tested th
 
 Unsupported state engines, even for development:
 
-* [Clickhouse](,,/integrations/engines/clickhouse.md)
+* [Clickhouse](../integrations/engines/clickhouse.md)
 * [Spark](../integrations/engines/spark.md)
 * [Trino](../integrations/engines/trino.md)
 
