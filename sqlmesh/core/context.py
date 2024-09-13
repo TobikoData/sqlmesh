@@ -105,6 +105,7 @@ from sqlmesh.core.test import (
     run_tests,
 )
 from sqlmesh.core.user import User
+from sqlmesh.dbt.loader import DbtLoader
 from sqlmesh.utils import UniqueKeyDict, sys_path
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import TimeLike, now_ds, to_date
@@ -337,7 +338,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         self.dbt_configs: t.Dict[Path, C] = {}
         self.sqlmesh_configs: t.Dict[Path, C] = {}
         for path, config in self.configs.items():
-            project_type = config.loader.PROJECT_TYPE
+            project_type = c.DBT if issubclass(config.loader, DbtLoader) else c.NATIVE
             if project_type == c.DBT:
                 self.dbt_configs[path] = config
                 if not self._dbt_loader:
