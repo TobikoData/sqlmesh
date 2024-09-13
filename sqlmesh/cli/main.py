@@ -683,7 +683,7 @@ def ui(ctx: click.Context, host: str, port: int, mode: str) -> None:
         if gateway:
             os.environ["GATEWAY"] = gateway
     uvicorn.run(
-        "web.server.main:app",
+        "web.server.app:app",
         host=host,
         port=port,
         log_level="info",
