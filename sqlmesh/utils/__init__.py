@@ -65,7 +65,7 @@ def random_id(short: bool = False) -> str:
     return uuid.uuid4().hex
 
 
-class UniqueKeyDict(dict, t.Mapping[KEY, VALUE]):
+class UniqueKeyDict(t.Dict[KEY, VALUE]):
     """Dict that raises when a duplicate key is set."""
 
     def __init__(self, name: str, *args: t.Dict[KEY, VALUE], **kwargs: VALUE) -> None:

@@ -2332,7 +2332,7 @@ def _list_of_calls_to_exp(value: t.List[t.Tuple[str, t.Dict[str, t.Any]]]) -> ex
 
 def _extract_audit_expressions(
     audits: t.Optional[dict[str, Audit]] = None,
-    inline_audits: t.Optional[dict[str, Audit]] = None,
+    inline_audits: t.Optional[t.Mapping[str, Audit]] = None,
     model_audits: t.Optional[t.Any] = None,
     default_audits: t.Optional[t.List[AuditReference]] = None,
 ) -> list:
