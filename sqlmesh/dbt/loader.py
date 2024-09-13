@@ -67,7 +67,7 @@ def sqlmesh_config(
 
 
 class DbtLoader(Loader):
-    project_type = c.DBT
+    PROJECT_TYPE = c.DBT
 
     def __init__(self) -> None:
         self._projects: t.List[Project] = []

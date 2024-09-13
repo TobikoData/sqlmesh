@@ -57,7 +57,7 @@ class LoadedProject:
 class Loader(abc.ABC):
     """Abstract base class to load macros and models for a context"""
 
-    project_type = c.NATIVE
+    PROJECT_TYPE = c.NATIVE
 
     def __init__(self) -> None:
         self._path_mtimes: t.Dict[Path, float] = {}

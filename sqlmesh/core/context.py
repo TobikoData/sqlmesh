@@ -337,7 +337,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         self.dbt_configs: t.Dict[Path, C] = {}
         self.sqlmesh_configs: t.Dict[Path, C] = {}
         for path, config in self.configs.items():
-            project_type = config.loader.project_type
+            project_type = config.loader.PROJECT_TYPE
             if project_type == c.DBT:
                 self.dbt_configs[path] = config
                 if not self._dbt_loader:
@@ -541,17 +541,17 @@ class GenericContext(BaseContext, t.Generic[C]):
         """Load all files in the context's path."""
         load_start_ts = time.perf_counter()
 
-        projects = [
-            project
-            for loader, configs in [
-                (self._dbt_loader, self.dbt_configs),
-                (self._sqlmesh_loader, self.sqlmesh_configs),
-            ]
-            for project in [
-                self._load_factory("project", loader, configs, update_schemas=update_schemas)
-            ]
-            if isinstance(project, LoadedProject)
-        ]
+        projects = []
+        dbt_project = self._load_factory(
+            self._dbt_loader, self.dbt_configs, update_schemas=update_schemas
+        )
+        sqlmesh_project = self._load_factory(
+            self._sqlmesh_loader, self.sqlmesh_configs, update_schemas=update_schemas
+        )
+        if isinstance(dbt_project, LoadedProject):
+            projects.append(dbt_project)
+        if isinstance(sqlmesh_project, LoadedProject):
+            projects.append(sqlmesh_project)
 
         self._standalone_audits.clear()
         self._audits.clear()
@@ -560,15 +560,9 @@ class GenericContext(BaseContext, t.Generic[C]):
         self._metrics.clear()
         for project in projects:
             self._jinja_macros = self._jinja_macros.merge(project.jinja_macros)
-            self._macros.update(
-                {key: value for key, value in project.macros.items() if key not in self._macros}
-            )
-            self._models.update(
-                {key: value for key, value in project.models.items() if key not in self._models}
-            )
-            self._metrics.update(
-                {key: value for key, value in project.metrics.items() if key not in self._metrics}
-            )
+            self._macros.update(project.macros)
+            self._models.update(project.models)
+            self._metrics.update(project.metrics)
 
             for name, audit in project.audits.items():
                 if isinstance(audit, StandaloneAudit):
@@ -643,8 +637,8 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         if not self._loaded:
             # Signals should be loaded to run correctly.
-            self._load_factory("signals", self._dbt_loader, self.dbt_configs)
-            self._load_factory("signals", self._sqlmesh_loader, self.sqlmesh_configs)
+            self._load_factory(self._dbt_loader, self.dbt_configs, load_project=False)
+            self._load_factory(self._sqlmesh_loader, self.sqlmesh_configs, load_project=False)
 
         success = False
         try:
@@ -2086,16 +2080,16 @@ class GenericContext(BaseContext, t.Generic[C]):
 
     def _load_factory(
         self,
-        method: str,
         loader: t.Optional[Loader] = None,
         configs: t.Optional[t.Dict[Path, C]] = None,
+        load_project: bool = True,
         **kwargs: t.Any,
     ) -> LoadedProject | None:
         if loader and configs:
             with sys_path(*configs):
-                if method == "project":
+                if load_project:
                     return loader.load(self, **kwargs)
-                elif method == "signals":
+                else:
                     loader.load_signals(self, **kwargs)
         return None
 

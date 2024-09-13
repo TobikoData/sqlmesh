@@ -5,9 +5,6 @@ gateways:
     connection:
       type: duckdb
       database: prod.duckdb
-  memory:
-    connection:
-      type: duckdb
 
 default_gateway: prod
 
