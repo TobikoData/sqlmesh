@@ -24,6 +24,7 @@ from sqlmesh.core.context import Context
 from sqlmesh.core.engine_adapter import SparkEngineAdapter
 from sqlmesh.core.engine_adapter.base import EngineAdapter
 from sqlmesh.core.environment import EnvironmentNamingInfo
+from sqlmesh.core import lineage
 from sqlmesh.core.macros import macro
 from sqlmesh.core.model import IncrementalByTimeRangeKind, SqlModel, model
 from sqlmesh.core.model.kind import OnDestructiveChange
@@ -219,6 +220,12 @@ def rescope_duckdb_classvar(request):
 @pytest.fixture(scope="module", autouse=True)
 def rescope_log_handlers():
     logging.getLogger().handlers.clear()
+    yield
+
+
+@pytest.fixture(scope="function", autouse=True)
+def rescope_lineage_cache(request):
+    lineage.CACHE.clear()
     yield
 
 
