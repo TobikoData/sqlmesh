@@ -296,8 +296,8 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
     def inject_query_setting(
         self,
         query: Query,
-        setting_name: t.Optional[str] = "join_use_nulls",
-        setting_value: t.Optional[str] = "1",
+        setting_name: t.Optional[str] = None,
+        setting_value: t.Optional[str] = None,
         check_server_default: bool = False,
     ) -> Query:
         # Set a setting in the query's SETTINGS clause
@@ -313,33 +313,27 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
         #     - If the user query does not set `join_use_nulls`, we query the server for the current setting. If the
         #         current setting is `0`, we add `join_use_nulls = 0` to the user query.
         #  - We specify our setting on the outermost scope, so it applies to all CTEs/subqueries other than the user's
-        if setting_name and setting_value:
-            inject_setting = True
-            if check_server_default:
-                user_settings = query.args.get("settings")
-                if user_settings and [
-                    isinstance(setting, exp.EQ) and setting.this.this == setting_name
-                    for setting in user_settings
-                ]:
-                    inject_setting = False
-                else:
-                    server_setting = self.fetchone(
-                        f"SELECT value FROM system.settings WHERE name = '{setting_name}'"
-                    )[0]
-                    inject_setting = setting_value != server_setting
-                    setting_value = server_setting if inject_setting else setting_value
+        setting_name = setting_name if setting_name and setting_value else "join_use_nulls"
+        setting_value = setting_value if setting_name and setting_value else "1"
+        assert setting_name and setting_value
 
-            if inject_setting:
-                query.set(
-                    "settings",
-                    (query.args.get("settings") or [])
-                    + [
-                        exp.EQ(
-                            this=exp.var(setting_name),
-                            expression=exp.Literal(this=setting_value, is_string=False),
-                        )
-                    ],
-                )
+        inject_setting = True
+        if check_server_default:
+            user_settings = query.args.get("settings")
+            if user_settings and [
+                isinstance(setting, exp.EQ) and setting.name == setting_name
+                for setting in user_settings
+            ]:
+                inject_setting = False
+            else:
+                server_setting = self.fetchone(
+                    f"SELECT value FROM system.settings WHERE name = '{setting_name}'"
+                )[0]
+                inject_setting = setting_value != server_setting
+                setting_value = server_setting if inject_setting else setting_value
+
+        if inject_setting:
+            query.append("settings", exp.var(setting_name).eq(exp.Literal.number(setting_value)))
 
         return query
 

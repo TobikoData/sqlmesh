@@ -154,9 +154,7 @@ class ModelMeta(_Node):
     @field_validator("storage_format", mode="before")
     @field_validator_v1_args
     def _storage_format_validator(cls, v: t.Any, values: t.Dict[str, t.Any]) -> t.Optional[str]:
-        if isinstance(v, exp.Expression) and not (
-            isinstance(v, exp.Literal) or isinstance(v, exp.Identifier)
-        ):
+        if isinstance(v, exp.Expression) and not (isinstance(v, (exp.Literal, exp.Identifier))):
             return v.sql(values.get("dialect"))
         return str_or_exp_to_str(v)
 
