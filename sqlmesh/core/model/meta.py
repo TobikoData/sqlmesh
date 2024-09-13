@@ -439,7 +439,7 @@ class ModelMeta(_Node):
         return getattr(self.kind, "managed_columns", {})
 
     @property
-    def when_matched(self) -> t.Optional[exp.When]:
+    def when_matched(self) -> t.Optional[t.List[exp.When]]:
         if isinstance(self.kind, IncrementalByUniqueKeyKind):
             return self.kind.when_matched
         return None

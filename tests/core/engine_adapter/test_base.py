@@ -974,6 +974,75 @@ MERGE INTO "target" AS "__MERGE_TARGET__" USING (
     )
 
 
+def test_merge_when_matched_multiple(make_mocked_engine_adapter: t.Callable, assert_exp_eq):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
+
+    adapter.merge(
+        target_table="target",
+        source_table=t.cast(exp.Select, parse_one('SELECT "ID", ts, val FROM source')),
+        columns_to_types={
+            "ID": exp.DataType.build("int"),
+            "ts": exp.DataType.build("timestamp"),
+            "val": exp.DataType.build("int"),
+        },
+        unique_key=[exp.to_identifier("ID", quoted=True)],
+        when_matched=[
+            exp.When(
+                matched=True,
+                condition=exp.column("ID", "__MERGE_SOURCE__").eq(exp.Literal.number(1)),
+                then=exp.Update(
+                    expressions=[
+                        exp.column("val", "__MERGE_TARGET__").eq(
+                            exp.column("val", "__MERGE_SOURCE__")
+                        ),
+                        exp.column("ts", "__MERGE_TARGET__").eq(
+                            exp.Coalesce(
+                                this=exp.column("ts", "__MERGE_SOURCE__"),
+                                expressions=[exp.column("ts", "__MERGE_TARGET__")],
+                            )
+                        ),
+                    ],
+                ),
+            ),
+            exp.When(
+                matched=True,
+                source=False,
+                then=exp.Update(
+                    expressions=[
+                        exp.column("val", "__MERGE_TARGET__").eq(
+                            exp.column("val", "__MERGE_SOURCE__")
+                        ),
+                        exp.column("ts", "__MERGE_TARGET__").eq(
+                            exp.Coalesce(
+                                this=exp.column("ts", "__MERGE_SOURCE__"),
+                                expressions=[exp.column("ts", "__MERGE_TARGET__")],
+                            )
+                        ),
+                    ],
+                ),
+            ),
+        ],
+    )
+
+    assert_exp_eq(
+        adapter.cursor.execute.call_args[0][0],
+        """
+MERGE INTO "target" AS "__MERGE_TARGET__" USING (
+  SELECT
+    "ID",
+    "ts",
+    "val"
+  FROM "source"
+) AS "__MERGE_SOURCE__"
+  ON "__MERGE_TARGET__"."ID" = "__MERGE_SOURCE__"."ID"
+  WHEN MATCHED AND "__MERGE_SOURCE__"."ID" = 1 THEN UPDATE SET "__MERGE_TARGET__"."val" = "__MERGE_SOURCE__"."val", "__MERGE_TARGET__"."ts" = COALESCE("__MERGE_SOURCE__"."ts", "__MERGE_TARGET__"."ts"),
+  WHEN MATCHED THEN UPDATE SET "__MERGE_TARGET__"."val" = "__MERGE_SOURCE__"."val", "__MERGE_TARGET__"."ts" = COALESCE("__MERGE_SOURCE__"."ts", "__MERGE_TARGET__"."ts")
+  WHEN NOT MATCHED THEN INSERT ("ID", "ts", "val")
+    VALUES ("__MERGE_SOURCE__"."ID", "__MERGE_SOURCE__"."ts", "__MERGE_SOURCE__"."val")
+""",
+    )
+
+
 def test_scd_type_2_by_time(make_mocked_engine_adapter: t.Callable):
     adapter = make_mocked_engine_adapter(EngineAdapter)
 
