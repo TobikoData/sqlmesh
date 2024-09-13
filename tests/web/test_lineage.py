@@ -1,17 +1,17 @@
 from __future__ import annotations
 
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from sqlmesh.core.context import Context
-from web.server.main import app
 
 pytestmark = pytest.mark.web
 
 
 @pytest.fixture
-def client() -> TestClient:
-    return TestClient(app)
+def client(web_app: FastAPI) -> TestClient:
+    return TestClient(web_app)
 
 
 def test_get_lineage(client: TestClient, web_sushi_context: Context) -> None:
