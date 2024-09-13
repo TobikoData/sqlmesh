@@ -9,7 +9,7 @@ This page describes SQLMesh support for the Clickhouse engine, including configu
 
 [Clickhouse](https://clickhouse.com/) is a distributed, column-oriented SQL engine designed to rapidly execute analytical workloads.
 
-It provides users find-grained control of its behavior, but that control comes at the cost of complex configuration.
+It provides users fine-grained control of its behavior, but that control comes at the cost of complex configuration.
 
 This section provides background information about Clickhouse, providing context for how to use SQLMesh with the Clickhouse engine.
 

@@ -429,7 +429,7 @@ def test_scd_type_2_by_time(
         execution_time=datetime(2020, 1, 1, 0, 0, 0),
     )
 
-    assert adapter.cursor.execute.call_args_list[4][0][0] == parse_one(
+    assert to_sql_calls(adapter)[4] == parse_one(
         """
 INSERT INTO "target" ("id", "name", "price", "test_UPDATED_at", "test_valid_from", "test_valid_to")
 WITH "source" AS (
@@ -629,7 +629,7 @@ def test_scd_type_2_by_column(
         execution_time=datetime(2020, 1, 1, 0, 0, 0),
     )
 
-    assert adapter.cursor.execute.call_args_list[4][0][0] == parse_one(
+    assert to_sql_calls(adapter)[4] == parse_one(
         """
 INSERT INTO "target" ("id", "name", "price", "test_VALID_from", "test_valid_to")
 WITH "source" AS (

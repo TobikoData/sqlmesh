@@ -2310,8 +2310,8 @@ class EngineAdapter:
     def inject_query_setting(
         self,
         query: Query,
-        setting_name: str = "join_use_nulls",
-        setting_value: str = "1",
+        setting_name: t.Optional[str] = None,
+        setting_value: t.Optional[str] = None,
         check_server_default: bool = False,
     ) -> Query:
         return query
