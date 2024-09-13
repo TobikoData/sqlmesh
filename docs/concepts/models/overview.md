@@ -348,6 +348,10 @@ Some properties are only available in specific model kinds - see the [model conf
 
     Engines that support partitioning, such as Spark and BigQuery, use the time column as the model's partition key. Multi-column partitions or modifications to columns can be specified with the [`partitioned_by` property](#partitioned_by).
 
+    !!! tip "Important"
+
+        The `time_column` variable **must** be in the UTC time zone - learn more [here](./model_kinds.md#timezones).
+
 ### batch_size
 :   Batch size is used to optimize backfilling incremental data. It determines the maximum number of intervals to run in a single job.
 
@@ -410,36 +414,3 @@ FROM y;
 -- Cleanup statements
 DROP TABLE temp_table;
 ```
-
-## Time column
-Models that are loaded incrementally require a time column to partition data.
-
-A time column is a column in a model with an optional format string in the dialect of the model; for example, `'%Y-%m-%d'` for DuckDB or `'yyyy-mm-dd'` for Snowflake.
-
-For more information, refer to [time column](./model_kinds.md#time-column).
-
-### Advanced usage
-The column used as your model's time column is not limited to a text or date type. In the following example, the time column, `di`, is an integer:
-
-```sql linenums="1" hl_lines="5"
--- Orders are partitioned by the di int column
-MODEL (
-  name sushi.orders,
-  dialect duckdb,
-  kind INCREMENTAL_BY_TIME_RANGE (
-    time_column (order_date_int, '%Y%m%d')
-  ),
-);
-
-SELECT
-  id::INT AS id, -- Primary key
-  customer_id::INT AS customer_id, -- Id of customer who made the order
-  waiter_id::INT AS waiter_id, -- Id of waiter who took the order
-  start_ts::TEXT AS start_ts, -- Start timestamp
-  end_ts::TEXT AS end_ts, -- End timestamp
-  di::INT AS order_date_int -- Date of order
-FROM raw.orders
-WHERE
-  order_date_int BETWEEN @start_ds AND @end_ds
-```
-SQLMesh will handle casting the start and end dates to the type of your time column. The format is reflected in the time column format string.

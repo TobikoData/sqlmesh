@@ -109,6 +109,10 @@ The model configuration specifies that the column `model_time_column` represents
 
 The `WHERE` clause uses the [SQLMesh predefined macro variables](../concepts/macros/macro_variables.md#predefined-variables) `@start_ds` and `@end_ds` to specify the date range. SQLMesh automatically substitutes in the correct dates based on which intervals are being processed in a job.
 
+!!! tip "Important"
+
+    The `time_column` must be in the [UTC time zone](https://en.wikipedia.org/wiki/Coordinated_Universal_Time) to ensure correct interaction with SQLMesh's scheduler and predefined macro variables.
+
 In addition to the query `WHERE` clause, SQLMesh prevents data leakage by automatically wrapping the query in another time-filtering `WHERE` clause using the time column in the model's configuration.
 
 This raises a question: if SQLMesh automatically adds a time filtering `WHERE` clause, why do you need to include one in the query? Because the two filters play different roles:

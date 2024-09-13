@@ -53,7 +53,11 @@ Most predefined variables are related to time and use a combination of prefixes 
 
 SQLMesh uses the python [datetime module](https://docs.python.org/3/library/datetime.html) for handling dates and times. It uses the standard [Unix epoch](https://en.wikipedia.org/wiki/Unix_time) start of 1970-01-01.
 
-*All predefined variables with a time component use the [UTC time zone](https://en.wikipedia.org/wiki/Coordinated_Universal_Time).*
+!!! tip "Important"
+
+    Predefined variables with a time component always use the [UTC time zone](https://en.wikipedia.org/wiki/Coordinated_Universal_Time).
+
+    Learn more about timezones and incremental models [here](../models/model_kinds.md#timezones).
 
 Prefixes:
 

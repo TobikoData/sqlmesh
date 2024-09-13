@@ -21,7 +21,17 @@ MODEL (
 );
 ```
 
+<a id="timezones"></a>
 In addition to specifying a time column in the `MODEL` DDL, the model's query must contain a `WHERE` clause that filters the upstream records by time range. SQLMesh provides special macros that represent the start and end of the time range being processed: `@start_date` / `@end_date` and `@start_ds` / `@end_ds`. Refer to [Macros](../macros/macro_variables.md) for more information.
+
+!!! tip "Important"
+
+    A model's `time_column` must be in the [UTC time zone](https://en.wikipedia.org/wiki/Coordinated_Universal_Time) to ensure correct interaction with SQLMesh's scheduler and predefined macro variables.
+
+    This requirement aligns with the data engineering best practice of converting datetime/timestamp columns to UTC as soon as they are ingested into the data system and only converting them to local timezones when they exit the system for downstream uses.
+
+    Placing all timezone conversion code in the system's first/last transformation models prevents inadvertent timezone-related errors as data flows between models.
+
 
 This example implements a complete `INCREMENTAL_BY_TIME_RANGE` model that specifies the time column name `event_date` in the `MODEL` DDL and includes a SQL `WHERE` clause to filter records by time range:
 
@@ -44,6 +54,10 @@ WHERE
 ### Time column
 SQLMesh needs to know which column in the model's output represents the timestamp or date associated with each record.
 
+!!! tip "Important"
+
+    The `time_column` variable **must** be in the UTC time zone - learn more [above](#timezones).
+
 The time column is used to determine which records will be overwritten during data [restatement](../plans.md#restatement-plans) and provides a partition key for engines that support partitioning (such as Apache Spark). The name of the time column is specified in the `MODEL` DDL `kind` specification:
 
 ```sql linenums="1" hl_lines="4"
@@ -64,7 +78,10 @@ MODEL (
   )
 );
 ```
-**Note:** The time format should be defined using the same SQL dialect as the one used to define the model's query.
+
+!!! note
+
+    The time format should be defined using the same SQL dialect as the one used to define the model's query.
 
 SQLMesh also uses the time column to automatically append a time range filter to the model's query at runtime, which prevents records that are not part of the target interval from being stored. This is a safety mechanism that prevents unintentionally overwriting unrelated records when handling late-arriving data.
 
@@ -217,7 +234,7 @@ MODEL (
 );
 ```
 
-`INCREMENTAL_BY_UNIQUE_KEY` model kinds can also filter upstream records by time range using a SQL `WHERE` clause and the `@start_date`, `@end_date` or other macros (similar to the [INCREMENTAL_BY_TIME_RANGE](#incremental_by_time_range) kind):
+`INCREMENTAL_BY_UNIQUE_KEY` model kinds can also filter upstream records by time range using a SQL `WHERE` clause and the `@start_date`, `@end_date` or other macro variables (similar to the [INCREMENTAL_BY_TIME_RANGE](#incremental_by_time_range) kind). Note that SQLMesh macro time variables are in the UTC time zone.
 ```sql linenums="1" hl_lines="6-7"
 SELECT
   name::TEXT as name,
