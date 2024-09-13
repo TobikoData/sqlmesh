@@ -350,7 +350,7 @@ Some properties are only available in specific model kinds - see the [model conf
 
     !!! tip "Important"
 
-        The `time_column` variable **must** be in the UTC time zone - learn more [here](./model_kinds.md#timezones).
+        The `time_column` variable should be in the UTC time zone - learn more [here](./model_kinds.md#timezones).
 
 ### batch_size
 :   Batch size is used to optimize backfilling incremental data. It determines the maximum number of intervals to run in a single job.

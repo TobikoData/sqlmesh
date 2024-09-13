@@ -26,11 +26,13 @@ In addition to specifying a time column in the `MODEL` DDL, the model's query mu
 
 !!! tip "Important"
 
-    A model's `time_column` must be in the [UTC time zone](https://en.wikipedia.org/wiki/Coordinated_Universal_Time) to ensure correct interaction with SQLMesh's scheduler and predefined macro variables.
+    A model's `time_column` should be in the [UTC time zone](https://en.wikipedia.org/wiki/Coordinated_Universal_Time) to ensure correct interaction with SQLMesh's scheduler and predefined macro variables.
 
     This requirement aligns with the data engineering best practice of converting datetime/timestamp columns to UTC as soon as they are ingested into the data system and only converting them to local timezones when they exit the system for downstream uses.
 
     Placing all timezone conversion code in the system's first/last transformation models prevents inadvertent timezone-related errors as data flows between models.
+
+    If a model must use a different timezone, parameters like [lookback](./overview.md#lookback), [allow_partials](./overview.md#allow_partials), and [cron](./overview.md#cron) with offset time can be used to try to account for misalignment between the model's timezone and the UTC timezone used by SQLMesh.
 
 
 This example implements a complete `INCREMENTAL_BY_TIME_RANGE` model that specifies the time column name `event_date` in the `MODEL` DDL and includes a SQL `WHERE` clause to filter records by time range:
@@ -56,7 +58,7 @@ SQLMesh needs to know which column in the model's output represents the timestam
 
 !!! tip "Important"
 
-    The `time_column` variable **must** be in the UTC time zone - learn more [above](#timezones).
+    The `time_column` variable should be in the UTC time zone - learn more [above](#timezones).
 
 The time column is used to determine which records will be overwritten during data [restatement](../plans.md#restatement-plans) and provides a partition key for engines that support partitioning (such as Apache Spark). The name of the time column is specified in the `MODEL` DDL `kind` specification:
 
