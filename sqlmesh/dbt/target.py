@@ -692,7 +692,7 @@ class MSSQLConfig(TargetConfig):
         try:
             # 1.8.0+
             from dbt.adapters.sqlserver.sqlserver_column import SQLServerColumn
-        except ImportError:
+        except (ImportError, ModuleNotFoundError):
             # <1.8.0
             from dbt.adapters.sqlserver.sql_server_column import SQLServerColumn  # type: ignore
 

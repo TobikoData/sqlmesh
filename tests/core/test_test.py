@@ -1124,25 +1124,30 @@ test_foo:
   inputs:
     sushi.raw:
       columns:
-        array: "INT[]"
+        array1: "INT[]"
+        array2: "STRUCT<k VARCHAR, v STRUCT<v_str VARCHAR, v_int INT, v_int_arr INT[]>>[]"
         struct: "STRUCT(x INT[], y VARCHAR, z INT, w STRUCT(a INT))"
       rows:
-        - array: [1, 2, 3]
+        - array1: [1, 2, 3]
+          array2: [{'k': 'hello', 'v': {'v_str': 'there', 'v_int': 10, 'v_int_arr': [1, 2]}}]
           struct: {'x': [1, 2, 3], 'y': 'foo', 'z': 1, 'w': {'a': 5}}
-        - array:
+        - array1:
           - 2
           - 3
-        - array: [0, 4, 1]
+        - array1: [0, 4, 1]
   outputs:
     query:
-      - array: [0, 4, 1]
-      - array: [1, 2, 3]
+      - array1: [0, 4, 1]
+      - array1: [1, 2, 3]
+        array2: [{'k': 'hello', 'v': {'v_str': 'there', 'v_int': 10, 'v_int_arr': [1, 2]}}]
         struct: {'x': [1, 2, 3], 'y': 'foo', 'z': 1, 'w': {'a': 5}}
-      - array: [2, 3]
+      - array1: [2, 3]
                 """
             ),
             test_name="test_foo",
-            model=_create_model("SELECT array, struct FROM sushi.raw", default_catalog="memory"),
+            model=_create_model(
+                "SELECT array1, array2, struct FROM sushi.raw", default_catalog="memory"
+            ),
             context=Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))),
         ).run()
     )
