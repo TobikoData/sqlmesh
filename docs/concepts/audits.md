@@ -10,7 +10,7 @@ A comprehensive suite of audits can identify data issues upstream, whether they 
 **NOTE**: For incremental models, audits are only applied to intervals being processed - not for the entire underlying table.
 
 ## User-Defined Audits
-In SQLMesh, user-defined audits are defined in `.sql` files in an `audit` directory in your SQLMesh project. Multiple audits can be defined in a single file, so you can organize them to your liking. Alternatively, audits can be defined inline within the model definition itself.
+In SQLMesh, user-defined audits are defined in `.sql` files in an `audits` directory in your SQLMesh project. Multiple audits can be defined in a single file, so you can organize them to your liking. Alternatively, audits can be defined inline within the model definition itself.
 
 Audits are SQL queries that should not return any rows; in other words, they query for bad data, so returned rows indicates that something is wrong.
 
