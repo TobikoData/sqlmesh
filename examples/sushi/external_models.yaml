@@ -1,5 +1,6 @@
 - name: raw.demographics
   description: Table containing demographics information
+  dialect: duckdb
   start: 1 week ago
   audits:
     - name: not_null
