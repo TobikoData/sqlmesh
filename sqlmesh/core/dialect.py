@@ -1055,13 +1055,44 @@ def transform_values(
     values: t.Tuple[t.Any, ...], columns_to_types: t.Dict[str, exp.DataType]
 ) -> t.Iterator[t.Any]:
     """Perform transformations on values given columns_to_types."""
-    for value, col_type in zip(values, columns_to_types.values()):
-        if col_type.is_type(exp.DataType.Type.JSON):
-            yield exp.func("PARSE_JSON", f"'{value}'")
-        elif isinstance(value, dict) and col_type.is_type(*exp.DataType.STRUCT_TYPES):
-            yield _dict_to_struct(value)
-        else:
-            yield value
+
+    def _transform_value(value: t.Any, dtype: exp.DataType) -> t.Any:
+        if (
+            isinstance(value, list)
+            and dtype.is_type(*exp.DataType.ARRAY_TYPES)
+            and len(dtype.expressions) == 1
+        ):
+            element_type = dtype.expressions[0]
+            return exp.convert([_transform_value(v, element_type) for v in value])
+
+        if (
+            isinstance(value, dict)
+            and dtype.is_type(*exp.DataType.STRUCT_TYPES)
+            and len(value) == len(dtype.expressions)
+        ):
+            expressions = []
+            for (field_name, field_value), field_type in zip(value.items(), dtype.expressions):
+                if isinstance(field_type, exp.ColumnDef):
+                    field_type = field_type.kind
+                else:
+                    field_type = exp.DataType.build(exp.DataType.Type.UNKNOWN)
+
+                expressions.append(
+                    exp.PropertyEQ(
+                        this=exp.to_identifier(field_name),
+                        expression=_transform_value(field_value, field_type),
+                    )
+                )
+
+            return exp.Struct(expressions=expressions)
+
+        if dtype.is_type(exp.DataType.Type.JSON):
+            return exp.func("PARSE_JSON", f"'{value}'")
+
+        return exp.convert(value)
+
+    for col_value, col_type in zip(values, columns_to_types.values()):
+        yield _transform_value(col_value, col_type)
 
 
 def to_schema(sql_path: str | exp.Table) -> exp.Table:
@@ -1105,16 +1136,6 @@ def _unquote_schema(schema: t.Dict) -> t.Dict:
     return {
         k.strip('"'): _unquote_schema(v) if isinstance(v, dict) else v for k, v in schema.items()
     }
-
-
-def _dict_to_struct(values: t.Dict) -> exp.Struct:
-    expressions = []
-    for key, value in values.items():
-        key = exp.to_identifier(key)
-        value = _dict_to_struct(value) if isinstance(value, dict) else exp.convert(value)
-        expressions.append(exp.PropertyEQ(this=key, expression=value))
-
-    return exp.Struct(expressions=expressions)
 
 
 @contextmanager

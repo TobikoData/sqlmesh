@@ -228,7 +228,9 @@ class ModelTest(unittest.TestCase):
 
         def _to_hashable(x: t.Any) -> t.Any:
             if isinstance(x, (list, np.ndarray)):
-                return tuple(x)
+                return tuple(_to_hashable(v) for v in x)
+            if isinstance(x, dict):
+                return tuple((k, _to_hashable(v)) for k, v in x.items())
             return str(x) if not isinstance(x, t.Hashable) else x
 
         if sort:
