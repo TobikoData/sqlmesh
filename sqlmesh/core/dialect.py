@@ -1059,8 +1059,7 @@ def transform_values(
     def _transform_value(value: t.Any, dtype: exp.DataType) -> t.Any:
         if (
             isinstance(value, list)
-            # TODO: replace ARRAY, LIST with *ARRAY_TYPES once we bump sqlglot
-            and dtype.is_type(exp.DataType.Type.ARRAY, exp.DataType.Type.LIST)
+            and dtype.is_type(*exp.DataType.ARRAY_TYPES)
             and len(dtype.expressions) == 1
         ):
             return exp.convert([_transform_value(v, dtype.expressions[0]) for v in value])
