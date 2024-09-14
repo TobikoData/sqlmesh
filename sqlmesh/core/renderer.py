@@ -517,6 +517,11 @@ class QueryRenderer(BaseExpressionRenderer):
             logger.warning(
                 "%s for model '%s', the column may not exist or is ambiguous", ex, self._model_fqn
             )
+        except Exception as ex:
+            raise_config_error(
+                f"Failed to optimize query, please file an issue at https://github.com/TobikoData/sqlmesh/issues/new. {ex}",
+                self._path,
+            )
 
         if not query.type:
             for select in query.expressions:
