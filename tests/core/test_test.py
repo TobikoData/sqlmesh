@@ -1125,7 +1125,7 @@ test_foo:
     sushi.raw:
       columns:
         array1: "INT[]"
-        array2: "STRUCT<k VARCHAR, v STRUCT<v_str VARCHAR, v_int INT, v_int_arr INT[]>>[]"
+        array2: "STRUCT(k VARCHAR, v STRUCT(v_str VARCHAR, v_int INT, v_int_arr INT[]))[]"
         struct: "STRUCT(x INT[], y VARCHAR, z INT, w STRUCT(a INT))"
       rows:
         - array1: [1, 2, 3]
