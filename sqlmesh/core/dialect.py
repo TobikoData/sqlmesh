@@ -1062,7 +1062,8 @@ def transform_values(
             and dtype.is_type(*exp.DataType.ARRAY_TYPES)
             and len(dtype.expressions) == 1
         ):
-            return exp.convert([_transform_value(v, dtype.expressions[0]) for v in value])
+            element_type = dtype.expressions[0]
+            return exp.convert([_transform_value(v, element_type) for v in value])
 
         if (
             isinstance(value, dict)
