@@ -318,6 +318,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         self.configs = (
             config if isinstance(config, dict) else load_configs(config, self.CONFIG_TYPE, paths)
         )
+        self._loaders: UniqueKeyDict[str, tuple[Loader, t.Dict[Path, C]]] = UniqueKeyDict("loaders")
         self.dag: DAG[str] = DAG()
         self._models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
         self._audits: UniqueKeyDict[str, Audit] = UniqueKeyDict("audits")
@@ -331,24 +332,16 @@ class GenericContext(BaseContext, t.Generic[C]):
         self._loaded: bool = False
 
         self.path, self.config = t.cast(t.Tuple[Path, C], next(iter(self.configs.items())))
-
-        # Separate loader and configurations for different project types (dbt, native, hybrid)
-        self._dbt_loader: t.Optional[Loader] = None
-        self._sqlmesh_loader: t.Optional[Loader] = None
-        self.dbt_configs: t.Dict[Path, C] = {}
-        self.sqlmesh_configs: t.Dict[Path, C] = {}
         for path, config in self.configs.items():
             project_type = c.DBT if issubclass(config.loader, DbtLoader) else c.NATIVE
-            if project_type == c.DBT:
-                self.dbt_configs[path] = config
-                if not self._dbt_loader:
-                    self._dbt_loader = (loader or config.loader)(**config.loader_kwargs)
-            else:
-                self.sqlmesh_configs[path] = config
-                if not self._sqlmesh_loader:
-                    self._sqlmesh_loader = (loader or config.loader)(**config.loader_kwargs)
+            if project_type not in self._loaders:
+                self._loaders[project_type] = (
+                    (loader or config.loader)(**config.loader_kwargs),
+                    {},
+                )
+            self._loaders[project_type][1][path] = config
 
-        self.project_type = c.HYBRID if self._dbt_loader and self._sqlmesh_loader else project_type
+        self.project_type = c.HYBRID if len(self._loaders) > 1 else project_type
         self._all_dialects: t.Set[str] = {self.config.dialect or ""}
 
         # This allows overriding the default dialect's normalization strategy, so for example
@@ -533,9 +526,7 @@ class GenericContext(BaseContext, t.Generic[C]):
 
     def refresh(self) -> None:
         """Refresh all models that have been updated."""
-        if (self._dbt_loader and self._dbt_loader.reload_needed()) or (
-            self._sqlmesh_loader and self._sqlmesh_loader.reload_needed()
-        ):
+        if any(loader.reload_needed() for loader, _ in self._loaders.values()):
             self.load()
 
     def load(self, update_schemas: bool = True) -> GenericContext[C]:
@@ -543,13 +534,9 @@ class GenericContext(BaseContext, t.Generic[C]):
         load_start_ts = time.perf_counter()
 
         projects = []
-        if self._dbt_loader:
-            with sys_path(*self.dbt_configs):
-                projects.append(self._dbt_loader.load(self, update_schemas))
-
-        if self._sqlmesh_loader:
-            with sys_path(*self.sqlmesh_configs):
-                projects.append(self._sqlmesh_loader.load(self, update_schemas))
+        for loader, configs in self._loaders.values():
+            with sys_path(*configs):
+                projects.append(loader.load(self, update_schemas))
 
         self._standalone_audits.clear()
         self._audits.clear()
@@ -635,12 +622,9 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         if not self._loaded:
             # Signals should be loaded to run correctly.
-            if self._sqlmesh_loader:
-                with sys_path(*self.sqlmesh_configs):
-                    self._sqlmesh_loader.load_signals(self)
-            if self._dbt_loader:
-                with sys_path(*self.dbt_configs):
-                    self._dbt_loader.load_signals(self)
+            for loader, configs in self._loaders.values():
+                with sys_path(configs):
+                    loader.load_signals(self)
 
         success = False
         try:
