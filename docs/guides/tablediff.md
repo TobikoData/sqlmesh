@@ -153,3 +153,127 @@ SQLMESH_EXAMPLE.INCREMENTAL_MODEL ONLY sample rows:
 ```
 
 The output matches, with the exception of the column labels in the `COMMON ROWS sample data differences`. The underlying table for each column is indicated by `s__` for "source" table (first table in the command's colon operator `:`) and `t__` for "target" table (second table in the command's colon operator `:`).
+
+## Diffing tables or views across gateways
+
+!!! info "Tobiko Cloud Feature"
+
+    Cross-database table diffing is a feature of [Tobiko Cloud](./observer.md#installation).
+
+Sometimes, you might want to compare two different tables that reside in two different database systems. For example, you may have migrated some data transformations on a legacy database to SQLMesh using a modern database and would like to verify that the data transformation logic is working correctly by comparing the new dataset against the old dataset.
+
+In this case, it is not possible to apply the [in-database diff](#diffing-models-across-environments) because a single database engine does not have access to all the data in order to perform a join. In addition, the source and target database engines may be completely different and may even reside in different cloud platforms.
+
+However, we can apply the cross-database diffing algorithm to detect differences in the data. In order to do this, first configure [Gateways](../reference/configuration#Gateways) for each database system:
+
+```yaml
+gateways:
+  bigquery:
+    connection:
+      type: bigquery
+      ...etc
+
+  snowflake:
+    connection:
+      type: snowflake
+      ...etc
+```
+
+Then, invoke the existing `table_diff` command with the following syntax: `[source_gateway]|[source table]:[target_gateway]|[target table]`.
+
+For example:
+
+```sh
+$ sqlmesh table_diff 'bigquery|landing.table:snowflake|lake.table'
+```
+
+This syntax triggers the cross-database diffing algorithm to be used instead the normal in-database diffing algorithm.
+
+Aside from that, the same options as a normal `table_diff` apply for specifying the join keys, decimal precision etc.
+
+See `sqlmesh table_diff --help` for a [full list of options](../reference/cli.md#table_diff).
+
+!!! warning
+
+    Cross-database diff works for physical objects (tables / views).
+    Diffing _models_ is not supported because we do not assume that both the source and target databases are managed by SQLMesh.
+
+### Example output
+
+A cross-database diff is broken up into two stages.
+
+The first stage is a schema diff:
+
+```bash
+$ sqlmesh table_diff 'bigquery|sqlmesh_example.full_model:snowflake|erin.sqlmesh_example.full_model' --on item_id --show-sample
+
+Schema Diff Between 'BIGQUERY|SQLMESH_EXAMPLE.FULL_MODEL' and 'SNOWFLAKE|SQLMESH_EXAMPLE.FULL_MODEL':
+├── Added Columns:
+│   ├── ITEM_ID (DECIMAL(38, 0))
+│   └── NUM_ORDERS (DECIMAL(38, 0))
+└── Removed Columns:
+    ├── item_id (BIGINT)
+    └── num_orders (BIGINT)
+Schema has differences; continue comparing rows? [y/n]:
+```
+
+This allows you to decide whether or not you want to proceed if the schemas are vastly different or if you can see you need to exclude columns from the diff.
+
+The second stage is evaluating each chunk until a mismatch is found. If a mismatch is found, then a row-level diff is performed on that chunk with a sample of mismatched rows printed:
+
+```bash
+Dividing source dataset into 10 chunks (based on 10947709 total records)
+Checking chunks against target dataset
+Chunk 1 hash mismatch!
+Starting row-level comparison for the range (1 -> 3)
+Identifying individual record hashes that dont match
+Comparing
+
+Row Counts:
+├──  PARTIAL MATCH: 2 rows (66.67%)
+├──  BIGQUERY ONLY: 1 rows (16.67%)
+└──  SNOWFLAKE ONLY: 1 rows (16.67%)
+
+COMMON ROWS column comparison stats:
+            pct_match
+num_orders        0.0
+
+
+COMMON ROWS sample data differences:
+Column: num_orders
+┏━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━┓
+┃ item_id ┃ BIGQUERY ┃ SNOWFLAKE ┃
+┡━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━┩
+│ 1       │ 5        │ 7         │
+│ 2       │ 1        │ 2         │
+└─────────┴──────────┴───────────┘
+
+BIGQUERY ONLY sample rows:
+item_id num_orders
+      7          4
+
+
+SNOWFLAKE ONLY sample rows:
+item_id num_orders
+      4          6
+```
+
+If there are no mismatches then the source and target datasets can be considered equal:
+
+```bash
+Chunk 1 (1094771 rows) matches!
+Chunk 2 (1094771 rows) matches!
+...
+Chunk 10 (1094770 rows) matches!
+
+All 10947709 records match between 'bigquery|sqlmesh_example.full_model' and 'snowflake|TEST.SQLMESH_EXAMPLE.FULL_MODEL'
+```
+
+!!! info
+
+    Don't forget to use `--show-sample` if you'd like to see a sample of the actual mismatched data!
+    Otherwise, only high level statistics for the mismatched rows will be printed.
+
+### Supported engines
+
+Cross-database diffing is supported on all execution engines that [SQLMesh supports](../integrations/overview.md#execution-engines).
