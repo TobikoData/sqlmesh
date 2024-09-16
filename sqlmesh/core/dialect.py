@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import functools
+import logging
 import re
 import sys
 import typing as t
@@ -32,6 +33,8 @@ if t.TYPE_CHECKING:
 SQLMESH_MACRO_PREFIX = "@"
 
 TABLES_META = "sqlmesh.tables"
+
+logger = logging.getLogger(__name__)
 
 
 class Model(exp.Expression):
@@ -312,6 +315,13 @@ def _parse_join(
 
     macro.this.append("expressions", join)
     return macro
+
+
+def _warn_unsupported(self: Parser) -> None:
+    self.__warn_unsupported()  # type: ignore
+    logger.warning(
+        "SQLMesh is unable to resolve model references on unsupported syntax; Consider using Jinja as explained here https://sqlmesh.readthedocs.io/en/stable/concepts/macros/macro_variables/#audit-only-variables"
+    )
 
 
 def _parse_select(
@@ -886,6 +896,7 @@ def extend_sqlglot() -> None:
     _override(Parser, _parse_types)
     _override(Parser, _parse_if)
     _override(Parser, _parse_id_var)
+    _override(Parser, _warn_unsupported)
     _override(Snowflake.Parser, _parse_table_parts)
 
 
