@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import datetime
-import multiprocessing as mp
 import os
 import typing as t
 from pathlib import Path
+
+from sqlmesh.utils.system import is_daemon_process
 
 SQLMESH = "sqlmesh"
 SQLMESH_PATH = Path.home() / ".sqlmesh"
@@ -36,7 +37,7 @@ MAX_MODEL_DEFINITION_SIZE = 10000
 # None means default to process pool, 1 means don't fork, :N is number of processes
 # Factors in the number of available CPUs even if the process is bound to a subset of them
 # (e.g. via taskset) to avoid oversubscribing the system and causing kill signals
-if hasattr(os, "fork") and not mp.current_process().daemon:
+if hasattr(os, "fork") and not is_daemon_process():
     try:
         MAX_FORK_WORKERS: t.Optional[int] = int(os.getenv("MAX_FORK_WORKERS"))  # type: ignore
     except TypeError:
