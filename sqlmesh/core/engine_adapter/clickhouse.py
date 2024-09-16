@@ -299,14 +299,12 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
             this=exp.Schema(expressions=partitioned_by),
         )
 
-    def inject_query_setting(
+    def add_nulls_after_join_setting(
         self,
         query: Query,
-        setting_name: t.Optional[str] = None,
-        setting_value: t.Optional[str] = None,
-        check_server_default: bool = False,
+        use_server_value: bool = False,
     ) -> Query:
-        # Set a setting in the query's SETTINGS clause
+        # Set the `join_use_nulls` setting in the query's SETTINGS clause
         #
         # Use in SCD models:
         #  - The SCD query we build must include the setting `join_use_nulls = 1` to ensure that empty cells in a join
@@ -315,31 +313,42 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
         #  - Settings are dynamically scoped, so our setting may override the server's default setting the user expects
         #      for their query.
         #  - To prevent this, we:
-        #     - Determine if the user query already sets `join_use_nulls` - if so, we leave it as-is
-        #     - If the user query does not set `join_use_nulls`, we query the server for the current setting. If the
-        #         current setting is `0`, we add `join_use_nulls = 0` to the user query.
+        #     - If the user query sets `join_use_nulls`, we do nothing
+        #     - If the user query does not set `join_use_nulls`, we query the server for the current setting
+        #       - If the server value is 1, we do nothing
+        #       - If the server values is not 1, we inject its `join_use_nulls` value into the user query
+        #     - We do not need to check user subqueries because our injected setting operates at the same scope the
+        #         server value would normally operate at
         #  - We specify our setting on the outermost scope, so it applies to all CTEs/subqueries other than the user's
-        setting_name = setting_name if setting_name and setting_value else "join_use_nulls"
-        setting_value = setting_value if setting_name and setting_value else "1"
-        assert setting_name and setting_value
+        setting_name = "join_use_nulls"
+        setting_value = "1"
 
-        inject_setting = True
-        if check_server_default:
-            user_settings = query.args.get("settings")
-            if user_settings and [
-                isinstance(setting, exp.EQ) and setting.name == setting_name
-                for setting in user_settings
-            ]:
-                inject_setting = False
-            else:
-                server_setting = self.fetchone(
-                    f"SELECT value FROM system.settings WHERE name = '{setting_name}'"
+        user_settings = query.args.get("settings")
+        # if user has not already set it explicitly
+        if not (
+            user_settings
+            and any(
+                [
+                    isinstance(setting, exp.EQ) and setting.name == setting_name
+                    for setting in user_settings
+                ]
+            )
+        ):
+            inject_setting = True
+            if use_server_value:
+                server_value = self.fetchone(
+                    exp.select("value")
+                    .from_("system.settings")
+                    .where(exp.column("name").eq(exp.Literal.string(setting_name)))
                 )[0]
-                inject_setting = setting_value != server_setting
-                setting_value = server_setting if inject_setting else setting_value
+                # only inject the setting if the server value isn't 1
+                inject_setting = setting_value != server_value
+                setting_value = server_value if inject_setting else setting_value
 
-        if inject_setting:
-            query.append("settings", exp.var(setting_name).eq(exp.Literal.number(setting_value)))
+            if inject_setting:
+                query.append(
+                    "settings", exp.var(setting_name).eq(exp.Literal.number(setting_value))
+                )
 
         return query
 

@@ -1467,7 +1467,7 @@ class EngineAdapter:
             row_check_conditions = []
             for col in check_columns:
                 col_qualified = col.copy()
-                col_qualified.set("table", exp.parse_identifier("joined"))
+                col_qualified.set("table", exp.to_identifier("joined"))
 
                 t_col = col_qualified.copy()
                 t_col.this.set("this", f"t_{col.name}")
@@ -1483,7 +1483,7 @@ class EngineAdapter:
             unique_key_conditions = []
             for key in unique_key:
                 key_qualified = key.copy()
-                key_qualified.set("table", exp.parse_identifier("joined"))
+                key_qualified.set("table", exp.to_identifier("joined"))
                 t_key = key_qualified.copy()
                 for col in t_key.find_all(exp.Column):
                     col.this.set("this", f"t_{col.name}")
@@ -1584,7 +1584,9 @@ class EngineAdapter:
                     exp.select(exp.true().as_("_exists"), *select_source_columns)
                     .distinct(*unique_key)
                     .from_(
-                        self.inject_query_setting(source_query, check_server_default=True).subquery(  # type: ignore
+                        self.add_nulls_after_join_setting(
+                            source_query, use_server_value=True
+                        ).subquery(  # type: ignore
                             "raw_source"
                         )
                     ),
@@ -1728,7 +1730,7 @@ class EngineAdapter:
 
             self.replace_query(
                 target_table,
-                self.inject_query_setting(query),
+                self.add_nulls_after_join_setting(query),
                 columns_to_types=columns_to_types,
                 table_description=table_description,
                 column_descriptions=column_descriptions,
@@ -2307,12 +2309,10 @@ class EngineAdapter:
     ) -> None:
         self.execute(exp.rename_table(old_table_name, new_table_name))
 
-    def inject_query_setting(
+    def add_nulls_after_join_setting(
         self,
         query: Query,
-        setting_name: t.Optional[str] = None,
-        setting_value: t.Optional[str] = None,
-        check_server_default: bool = False,
+        use_server_value: bool = False,
     ) -> Query:
         return query
 
