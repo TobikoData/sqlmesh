@@ -318,7 +318,9 @@ class GenericContext(BaseContext, t.Generic[C]):
         self.configs = (
             config if isinstance(config, dict) else load_configs(config, self.CONFIG_TYPE, paths)
         )
-        self._loaders: UniqueKeyDict[str, tuple[Loader, t.Dict[Path, C]]] = UniqueKeyDict("loaders")
+        self._loaders: UniqueKeyDict[str, t.Dict[str, Loader | t.Dict[Path, C]]] = UniqueKeyDict(
+            "loaders"
+        )
         self.dag: DAG[str] = DAG()
         self._models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
         self._audits: UniqueKeyDict[str, Audit] = UniqueKeyDict("audits")
@@ -335,11 +337,11 @@ class GenericContext(BaseContext, t.Generic[C]):
         for path, config in self.configs.items():
             project_type = c.DBT if issubclass(config.loader, DbtLoader) else c.NATIVE
             if project_type not in self._loaders:
-                self._loaders[project_type] = (
-                    (loader or config.loader)(**config.loader_kwargs),
-                    {},
-                )
-            self._loaders[project_type][1][path] = config
+                self._loaders[project_type] = {
+                    "loader": (loader or config.loader)(**config.loader_kwargs),
+                    "configs": {},
+                }
+            self._loaders[project_type]["configs"][path] = config
 
         self.project_type = c.HYBRID if len(self._loaders) > 1 else project_type
         self._all_dialects: t.Set[str] = {self.config.dialect or ""}
@@ -526,7 +528,7 @@ class GenericContext(BaseContext, t.Generic[C]):
 
     def refresh(self) -> None:
         """Refresh all models that have been updated."""
-        if any(loader.reload_needed() for loader, _ in self._loaders.values()):
+        if any(loader_dict["loader"].reload_needed() for loader_dict in self._loaders.values()):
             self.load()
 
     def load(self, update_schemas: bool = True) -> GenericContext[C]:
@@ -534,9 +536,9 @@ class GenericContext(BaseContext, t.Generic[C]):
         load_start_ts = time.perf_counter()
 
         projects = []
-        for loader, configs in self._loaders.values():
-            with sys_path(*configs):
-                projects.append(loader.load(self, update_schemas))
+        for loader_dict in self._loaders.values():
+            with sys_path(*loader_dict["configs"]):
+                projects.append(loader_dict["loader"].load(self, update_schemas))
 
         self._standalone_audits.clear()
         self._audits.clear()
@@ -555,11 +557,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                 else:
                     self._audits[name] = audit
 
-        self.dag = (
-            DAG({**projects[0].dag.graph, **projects[1].dag.graph})
-            if len(projects) == 2
-            else projects[0].dag
-        )
+        self.dag = DAG({k: v for project in projects for k, v in project.dag.graph.items()})
 
         duplicates = set(self._models) & set(self._standalone_audits)
         if duplicates:
@@ -622,9 +620,9 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         if not self._loaded:
             # Signals should be loaded to run correctly.
-            for loader, configs in self._loaders.values():
-                with sys_path(*configs):
-                    loader.load_signals(self)
+            for loader_dict in self._loaders.values():
+                with sys_path(*loader_dict["configs"]):
+                    loader_dict["loader"].load_signals(self)
 
         success = False
         try:

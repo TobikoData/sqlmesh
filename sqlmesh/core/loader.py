@@ -321,7 +321,7 @@ class SqlMeshLoader(Loader):
     ) -> UniqueKeyDict[str, Model]:
         """Loads the sql models into a Dict"""
         models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
-        for context_path, config in self._context._loaders[c.NATIVE][1].items():
+        for context_path, config in self._context._loaders[c.NATIVE]["configs"].items():
             cache = SqlMeshLoader._Cache(self, context_path)
             variables = self._variables(config)
 
