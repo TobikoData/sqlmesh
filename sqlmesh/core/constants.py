@@ -2,10 +2,9 @@ from __future__ import annotations
 
 import datetime
 import os
+import sys
 import typing as t
 from pathlib import Path
-
-from sqlmesh.utils.system import is_daemon_process
 
 SQLMESH = "sqlmesh"
 SQLMESH_PATH = Path.home() / ".sqlmesh"
@@ -31,6 +30,22 @@ DEFAULT_TIME_COLUMN_FORMAT = "%Y-%m-%d"
 """Default time column format"""
 MAX_MODEL_DEFINITION_SIZE = 10000
 """Maximum number of characters in a model definition"""
+
+
+def is_daemon_process() -> bool:
+    """
+    Determines whether the current process is running as a daemon (background process).
+
+    This function checks if the standard output (stdout) is connected to a terminal.
+    It does this by calling `sys.stdout.fileno()` to retrieve the file descriptor
+    for the stdout stream and `os.isatty()` to check if this file descriptor is
+    associated with a terminal device.
+
+    Returns:
+        bool: True if the process is running as a daemon (not attached to a terminal),
+              False if the process is running in a terminal (interactive mode).
+    """
+    return not os.isatty(sys.stdout.fileno())
 
 
 # The maximum number of fork processes, used for loading projects
@@ -81,7 +96,6 @@ GATEWAY = "gateway"
 SQLMESH_MACRO = "__sqlmesh__macro__"
 SQLMESH_BUILTIN = "__sqlmesh__builtin__"
 SQLMESH_METADATA = "__sqlmesh__metadata__"
-
 
 BUILTIN = "builtin"
 AIRFLOW = "airflow"
