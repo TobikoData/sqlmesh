@@ -3916,7 +3916,7 @@ def test_when_matched_multiple():
     expressions = d.parse(
         """
         MODEL (
-          name db.employees,
+          name @{schema}.employees,
           kind INCREMENTAL_BY_UNIQUE_KEY (
             unique_key name,
             when_matched WHEN MATCHED AND source.x = 1 THEN UPDATE SET target.salary = COALESCE(source.salary, target.salary),
@@ -3933,7 +3933,7 @@ def test_when_matched_multiple():
         "WHEN MATCHED THEN UPDATE SET __MERGE_TARGET__.salary = COALESCE(__MERGE_SOURCE__.salary, __MERGE_TARGET__.salary)",
     ]
 
-    model = load_sql_based_model(expressions, dialect="hive")
+    model = load_sql_based_model(expressions, dialect="hive", variables={"schema": "db"})
     assert len(model.kind.when_matched) == 2
     assert model.kind.when_matched[0].sql() == expected_when_matched[0]
     assert model.kind.when_matched[1].sql() == expected_when_matched[1]
