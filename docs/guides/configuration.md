@@ -963,7 +963,7 @@ The `VIEW`, `FULL`, and `EMBEDDED` model kinds are specified by name only, while
     );
     ```
 
-    `INCREMENTAL_BY_TIME_RANGE` requires an array specifying the model's `time_column`:
+    `INCREMENTAL_BY_TIME_RANGE` requires an array specifying the model's `time_column` (which should be in the UTC time zone):
 
     ```sql linenums="1"
     MODEL(
