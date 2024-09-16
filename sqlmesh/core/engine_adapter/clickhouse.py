@@ -239,6 +239,12 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
 
         self.execute(f"RENAME TABLE {old_table_sql} TO {new_table_sql}{self._on_cluster_sql()}")
 
+    def delete_from(self, table_name: TableName, where: t.Union[str, exp.Expression]) -> None:
+        delete_expr = exp.delete(table_name, where)
+        if self.engine_run_mode.is_cluster:
+            delete_expr.set("cluster", exp.OnCluster(this=exp.to_identifier(self.cluster)))
+        self.execute(delete_expr)
+
     def alter_table(
         self,
         alter_expressions: t.List[exp.Alter],

@@ -123,6 +123,29 @@ def test_rename_table(adapter: ClickhouseEngineAdapter, mocker):
     ]
 
 
+def test_delete_from(adapter: ClickhouseEngineAdapter, mocker):
+    mocker.patch.object(
+        ClickhouseEngineAdapter,
+        "cluster",
+        new_callable=mocker.PropertyMock(return_value="default"),
+    )
+
+    # ON CLUSTER not added because engine_run_mode.is_cluster=False
+    adapter.delete_from(exp.to_table("foo"), "a = 1")
+
+    mocker.patch.object(
+        ClickhouseEngineAdapter,
+        "engine_run_mode",
+        new_callable=mocker.PropertyMock(return_value=EngineRunMode.CLUSTER),
+    )
+    adapter.delete_from(exp.to_table("foo"), "a = 1")
+
+    assert to_sql_calls(adapter) == [
+        'DELETE FROM "foo" WHERE "a" = 1',
+        'DELETE FROM "foo" ON CLUSTER "default" WHERE "a" = 1',
+    ]
+
+
 def test_alter_table(
     adapter: ClickhouseEngineAdapter,
     mocker,
