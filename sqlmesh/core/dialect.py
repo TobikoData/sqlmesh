@@ -318,9 +318,11 @@ def _parse_join(
 
 
 def _warn_unsupported(self: Parser) -> None:
-    self.__warn_unsupported()  # type: ignore
+    sql = self._find_sql(self._tokens[0], self._tokens[-1])[: self.error_message_context]
+
     logger.warning(
-        "SQLMesh is unable to resolve model references on unsupported syntax; Consider using Jinja as explained here https://sqlmesh.readthedocs.io/en/stable/concepts/macros/macro_variables/#audit-only-variables"
+        f"'{sql}' could not be semantically understood as it contains unsupported syntax, falling back to parsing as 'Command'. SQLMesh is unable to resolve any references to the model's "
+        "underlying physical table in this case, consider using Jinja as explained here https://sqlmesh.readthedocs.io/en/stable/concepts/macros/macro_variables/#audit-only-variables"
     )
 
 
