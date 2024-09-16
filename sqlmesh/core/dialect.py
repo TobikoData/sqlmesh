@@ -579,7 +579,12 @@ def _props_sql(self: Generator, expressions: t.List[exp.Expression]) -> str:
     size = len(expressions)
 
     for i, prop in enumerate(expressions):
-        sql = self.indent(f"{prop.name} {self.sql(prop, 'value')}")
+        value = prop.args.get("value")
+        if prop.name == "when_matched" and isinstance(value, list):
+            output_value = ", ".join(self.sql(v) for v in value)
+        else:
+            output_value = self.sql(prop, "value")
+        sql = self.indent(f"{prop.name} {output_value}")
 
         if i < size - 1:
             sql += ","
