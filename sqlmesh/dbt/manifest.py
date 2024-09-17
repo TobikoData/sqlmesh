@@ -229,6 +229,11 @@ class ManifestHelper:
             )
             node_config = _node_base_config(node)
 
+            node_name = node.name
+            node_version = getattr(node, "version", None)
+            if node_version:
+                node_name = f"{node_name}_v{node_version}"
+
             if node.resource_type in {"model", "snapshot"}:
                 sql = node.raw_code if DBT_VERSION >= (1, 3) else node.raw_sql  # type: ignore
                 dependencies = Dependencies(
@@ -239,15 +244,14 @@ class ManifestHelper:
                     self._flatten_dependencies_from_macros(dependencies.macros, node.package_name)
                 )
 
-                # Using the alias instead of the name because the alias captures the version of the model.
-                self._models_per_package[node.package_name][node.alias] = ModelConfig(
+                self._models_per_package[node.package_name][node_name] = ModelConfig(
                     sql=sql,
                     dependencies=dependencies,
                     tests=tests,
                     **node_config,
                 )
             else:
-                self._seeds_per_package[node.package_name][node.alias] = SeedConfig(
+                self._seeds_per_package[node.package_name][node_name] = SeedConfig(
                     dependencies=Dependencies(macros=macro_references),
                     tests=tests,
                     **node_config,

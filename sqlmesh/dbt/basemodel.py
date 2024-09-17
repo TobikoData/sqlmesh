@@ -184,9 +184,9 @@ class BaseModelConfig(GeneralConfig):
     @property
     def config_name(self) -> str:
         """
-        Get the model's config name (package_name.alias)
+        Get the model's config name (package_name.name)
         """
-        return f"{self.package_name}.{self.alias}"
+        return f"{self.package_name}.{self.name}"
 
     def dialect(self, context: DbtContext) -> str:
         return self.dialect_ or context.default_dialect
