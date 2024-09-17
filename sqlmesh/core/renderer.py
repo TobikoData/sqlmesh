@@ -424,6 +424,8 @@ class QueryRenderer(BaseExpressionRenderer):
             except ParsetimeAdapterCallError:
                 return None
 
+            expressions = [e for e in expressions if not isinstance(e, exp.Semicolon)]
+
             if not expressions:
                 raise ConfigError(f"Failed to render query at '{self._path}':\n{self._expression}")
 

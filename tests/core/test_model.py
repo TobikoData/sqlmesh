@@ -5858,6 +5858,42 @@ def test_trailing_comments():
     assert not model.render_post_statements()
 
 
+def test_comments_in_jinja_query():
+    expressions = d.parse(
+        """
+        MODEL (name db.table);
+
+        JINJA_QUERY_BEGIN;
+        /* some comment A */
+
+        SELECT 1;
+        /* some comment B */
+
+        JINJA_END;
+        """
+    )
+    model = load_sql_based_model(expressions)
+    assert model.render_query().sql() == '/* some comment A */ SELECT 1 AS "1"'
+
+    expressions = d.parse(
+        """
+        MODEL (name db.table);
+
+        JINJA_QUERY_BEGIN;
+        /* some comment A */
+
+        SELECT 1;
+        SELECT 2;
+        /* some comment B */
+
+        JINJA_END;
+        """
+    )
+    model = load_sql_based_model(expressions)
+    with pytest.raises(ConfigError, match=r"Too many statements in query.*"):
+        model.render_query()
+
+
 def test_staged_file_path():
     expressions = d.parse(
         """
