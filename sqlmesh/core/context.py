@@ -45,7 +45,7 @@ from functools import cached_property
 from io import StringIO
 from pathlib import Path
 from shutil import rmtree
-from types import MappingProxyType
+from types import MappingProxyType, SimpleNamespace
 
 import pandas as pd
 from sqlglot import Dialect, exp
@@ -318,9 +318,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         self.configs = (
             config if isinstance(config, dict) else load_configs(config, self.CONFIG_TYPE, paths)
         )
-        self._loaders: UniqueKeyDict[str, t.Dict[str, Loader | t.Dict[Path, C]]] = UniqueKeyDict(
-            "loaders"
-        )
+        self._loaders: UniqueKeyDict[str, SimpleNamespace] = UniqueKeyDict("loaders")
         self.dag: DAG[str] = DAG()
         self._models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
         self._audits: UniqueKeyDict[str, ModelAudit] = UniqueKeyDict("audits")
@@ -337,11 +335,10 @@ class GenericContext(BaseContext, t.Generic[C]):
         for path, config in self.configs.items():
             project_type = c.DBT if issubclass(config.loader, DbtLoader) else c.NATIVE
             if project_type not in self._loaders:
-                self._loaders[project_type] = {
-                    "loader": (loader or config.loader)(**config.loader_kwargs),
-                    "configs": {},
-                }
-            self._loaders[project_type]["configs"][path] = config
+                self._loaders[project_type] = SimpleNamespace(
+                    loader=(loader or config.loader)(**config.loader_kwargs), configs={}
+                )
+            self._loaders[project_type].configs[path] = config
 
         self.project_type = c.HYBRID if len(self._loaders) > 1 else project_type
         self._all_dialects: t.Set[str] = {self.config.dialect or ""}
@@ -528,7 +525,7 @@ class GenericContext(BaseContext, t.Generic[C]):
 
     def refresh(self) -> None:
         """Refresh all models that have been updated."""
-        if any(loader_dict["loader"].reload_needed() for loader_dict in self._loaders.values()):
+        if any(context_loader.loader.reload_needed() for context_loader in self._loaders.values()):
             self.load()
 
     def load(self, update_schemas: bool = True) -> GenericContext[C]:
@@ -536,9 +533,9 @@ class GenericContext(BaseContext, t.Generic[C]):
         load_start_ts = time.perf_counter()
 
         projects = []
-        for loader_dict in self._loaders.values():
-            with sys_path(*loader_dict["configs"]):
-                projects.append(loader_dict["loader"].load(self, update_schemas))
+        for context_loader in self._loaders.values():
+            with sys_path(*context_loader.configs):
+                projects.append(context_loader.loader.load(self, update_schemas))
 
         self._standalone_audits.clear()
         self._audits.clear()
@@ -620,9 +617,9 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         if not self._loaded:
             # Signals should be loaded to run correctly.
-            for loader_dict in self._loaders.values():
-                with sys_path(*loader_dict["configs"]):
-                    loader_dict["loader"].load_signals(self)
+            for context_loader in self._loaders.values():
+                with sys_path(*context_loader.configs):
+                    context_loader.loader.load_signals(self)
 
         success = False
         try:
