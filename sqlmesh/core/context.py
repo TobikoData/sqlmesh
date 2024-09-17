@@ -54,7 +54,7 @@ from sqlglot.lineage import GraphHTML
 from sqlmesh.core import analytics
 from sqlmesh.core import constants as c
 from sqlmesh.core.analytics import python_api_analytics
-from sqlmesh.core.audit import Audit, StandaloneAudit
+from sqlmesh.core.audit import Audit, ModelAudit, StandaloneAudit
 from sqlmesh.core.config import CategorizerConfig, Config, load_configs
 from sqlmesh.core.config.loader import C
 from sqlmesh.core.console import Console, get_console
@@ -319,7 +319,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         )
         self.dag: DAG[str] = DAG()
         self._models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
-        self._audits: UniqueKeyDict[str, Audit] = UniqueKeyDict("audits")
+        self._audits: UniqueKeyDict[str, ModelAudit] = UniqueKeyDict("audits")
         self._standalone_audits: UniqueKeyDict[str, StandaloneAudit] = UniqueKeyDict(
             "standaloneaudits"
         )
@@ -743,7 +743,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                 pass
         return self.config
 
-    def config_for_node(self, node: str | Model | StandaloneAudit) -> Config:
+    def config_for_node(self, node: str | Model | Audit) -> Config:
         if isinstance(node, str):
             return self.config_for_path(self.get_snapshot(node, raise_if_missing=True).node._path)  # type: ignore
         return self.config_for_path(node._path)  # type: ignore
@@ -888,7 +888,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         """Format all SQL models and audits."""
         format_targets = {**self._models, **self._audits}
         for target in format_targets.values():
-            if not target._path.suffix == ".sql":
+            if target._path is None or target._path.suffix != ".sql":
                 continue
             with open(target._path, "r+", encoding="utf-8") as file:
                 before = file.read()
