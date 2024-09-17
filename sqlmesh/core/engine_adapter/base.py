@@ -1092,14 +1092,12 @@ class EngineAdapter:
         **kwargs: t.Any,
     ) -> None:
         """Drop a view."""
-        self.execute(
-            exp.Drop(
-                this=exp.to_table(view_name),
-                exists=ignore_if_not_exists,
-                materialized=materialized and self.SUPPORTS_MATERIALIZED_VIEWS,
-                kind="VIEW",
-                **kwargs,
-            )
+        self._drop_object(
+            name=view_name,
+            exists=ignore_if_not_exists,
+            kind="VIEW",
+            materialized=materialized and self.SUPPORTS_MATERIALIZED_VIEWS,
+            **kwargs,
         )
 
     def columns(
@@ -1516,7 +1514,7 @@ class EngineAdapter:
         else:
             assert updated_at_col is not None
             updated_at_col_qualified = updated_at_col.copy()
-            updated_at_col_qualified.set("table", exp.parse_identifier("joined"))
+            updated_at_col_qualified.set("table", exp.to_identifier("joined"))
             prefixed_updated_at_col = updated_at_col_qualified.copy()
             prefixed_updated_at_col.this.set("this", f"t_{updated_at_col_qualified.name}")
             updated_row_filter = updated_at_col_qualified > prefixed_updated_at_col
@@ -2245,7 +2243,7 @@ class EngineAdapter:
                 delete_filter = key_exp.isin(query=delete_query)
 
                 if not self.INSERT_OVERWRITE_STRATEGY.is_replace_where:
-                    self.execute(exp.delete(target_table).where(delete_filter))
+                    self.delete_from(target_table, delete_filter)
                 else:
                     insert_statement.set("where", delete_filter)
                     insert_statement.set("this", exp.to_table(target_table))
