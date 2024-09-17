@@ -321,8 +321,8 @@ def _warn_unsupported(self: Parser) -> None:
     sql = self._find_sql(self._tokens[0], self._tokens[-1])[: self.error_message_context]
 
     logger.warning(
-        f"'{sql}' could not be semantically understood as it contains unsupported syntax, falling back to parsing as 'Command'. SQLMesh is unable to resolve any references to the model's "
-        "underlying physical table in this case, consider using Jinja as explained here https://sqlmesh.readthedocs.io/en/stable/concepts/macros/macro_variables/#audit-only-variables"
+        f"'{sql}' could not be semantically understood as it contains unsupported syntax, SQLMesh will treat the command as is. Note that any references to the model's "
+        "underlying physical table can't be resolved in this case, consider using Jinja as explained here https://sqlmesh.readthedocs.io/en/stable/concepts/macros/macro_variables/#audit-only-variables"
     )
 
 
