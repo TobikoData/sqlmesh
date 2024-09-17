@@ -101,7 +101,7 @@ def signal_factory(f: SignalFactory) -> None:
 
     global _registered_signal_factory
 
-    if _registered_signal_factory is not None:
+    if _registered_signal_factory is not None and _registered_signal_factory.__code__ != f.__code__:
         raise SQLMeshError("Only one function may be decorated with @signal_factory")
 
     _registered_signal_factory = f
