@@ -2164,6 +2164,38 @@ def test_multi_dbt(mocker):
     validate_apply_basics(context, c.PROD, plan.snapshots.values())
 
 
+def test_multi_hybrid(mocker):
+    context = Context(
+        paths=["examples/multi_hybrid/dbt_repo", "examples/multi_hybrid/sqlmesh_repo"]
+    )
+    context._new_state_sync().reset(default_catalog=context.default_catalog)
+    plan = context.plan()
+
+    assert len(plan.new_snapshots) == 5
+    assert context.dag.roots == {'"memory"."dbt_repo"."e"'}
+    assert context.dag.graph['"memory"."dbt_repo"."c"'] == {'"memory"."sqlmesh_repo"."b"'}
+    assert context.dag.graph['"memory"."sqlmesh_repo"."b"'] == {'"memory"."sqlmesh_repo"."a"'}
+    assert context.dag.graph['"memory"."sqlmesh_repo"."a"'] == {'"memory"."dbt_repo"."e"'}
+    assert context.dag.downstream('"memory"."dbt_repo"."e"') == [
+        '"memory"."sqlmesh_repo"."a"',
+        '"memory"."sqlmesh_repo"."b"',
+        '"memory"."dbt_repo"."c"',
+        '"memory"."dbt_repo"."d"',
+    ]
+
+    sqlmesh_model_a = context.get_model("sqlmesh_repo.a")
+    dbt_model_c = context.get_model("dbt_repo.c")
+    assert sqlmesh_model_a.project == "sqlmesh_repo"
+
+    sqlmesh_rendered = 'SELECT ROUND(CAST(("col_a" / NULLIF(100, 0)) AS DECIMAL(16, 2)), 2) AS "col_a", "col_b" AS "col_b" FROM "memory"."dbt_repo"."e" AS "e"'
+    dbt_rendered = 'SELECT DISTINCT ROUND(CAST(("col_a" / NULLIF(100, 0)) AS DECIMAL(16, 2)), 2) AS "rounded_col_a" FROM "memory"."sqlmesh_repo"."b" AS "b"'
+    assert sqlmesh_model_a.render_query().sql() == sqlmesh_rendered
+    assert dbt_model_c.render_query().sql() == dbt_rendered
+
+    context.apply(plan)
+    validate_apply_basics(context, c.PROD, plan.snapshots.values())
+
+
 def test_incremental_time_self_reference(
     mocker: MockerFixture, sushi_context: Context, sushi_data_validator: SushiDataValidator
 ):

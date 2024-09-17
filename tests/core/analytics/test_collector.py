@@ -5,6 +5,7 @@ from unittest.mock import call
 import pytest
 from pytest_mock.plugin import MockerFixture
 
+from sqlmesh.core import constants as c
 from sqlmesh.core.analytics.collector import AnalyticsCollector
 from sqlmesh.core.snapshot import SnapshotChangeCategory
 from sqlmesh.integrations.github.cicd.config import GithubCICDBotConfig
@@ -17,21 +18,17 @@ def collector(mocker: MockerFixture) -> AnalyticsCollector:
     return AnalyticsCollector(dispatcher=dispatcher_mock)
 
 
-def test_on_project_loaded(collector: AnalyticsCollector, mocker: MockerFixture):
+@pytest.mark.parametrize(
+    "project_type",
+    [
+        "native",
+        "dbt",
+        "hybrid",
+    ],
+)
+def test_on_project_loaded(collector: AnalyticsCollector, mocker: MockerFixture, project_type):
     collector.on_project_loaded(
-        project_type="native",
-        models_count=1,
-        audits_count=2,
-        standalone_audits_count=3,
-        macros_count=4,
-        jinja_macros_count=5,
-        load_time_sec=1.123,
-        state_sync_fingerprint="test_fingerprint",
-        project_name="test_project",
-    )
-
-    collector.on_project_loaded(
-        project_type="dbt",
+        project_type=project_type,
         models_count=1,
         audits_count=2,
         standalone_audits_count=3,
@@ -46,6 +43,7 @@ def test_on_project_loaded(collector: AnalyticsCollector, mocker: MockerFixture)
 
     from dbt.version import __version__ as dbt_version
 
+    version = ', "dbt_version": "' + dbt_version + '"' if project_type != c.NATIVE else ""
     collector._dispatcher.add_event.assert_has_calls(  # type: ignore
         [
             call(
@@ -55,17 +53,11 @@ def test_on_project_loaded(collector: AnalyticsCollector, mocker: MockerFixture)
                     "seq_num": 0,
                     "event_type": "PROJECT_LOADED",
                     "client_ts": mocker.ANY,
-                    "event": '{"project_type": "native", "models_count": 1, "audits_count": 2, "standalone_audits_count": 3, "macros_count": 4, "jinja_macros_count": 5, "load_time_ms": 1123, "state_sync_fingerprint": "test_fingerprint", "project_name_hash": "6e72a69d5c5cca8f0400338441c022e4"}',
-                }
-            ),
-            call(
-                {
-                    "user_id": mocker.ANY,
-                    "process_id": collector._process_id,
-                    "seq_num": 1,
-                    "event_type": "PROJECT_LOADED",
-                    "client_ts": mocker.ANY,
-                    "event": f'{{"project_type": "dbt", "models_count": 1, "audits_count": 2, "standalone_audits_count": 3, "macros_count": 4, "jinja_macros_count": 5, "load_time_ms": 1123, "state_sync_fingerprint": "test_fingerprint", "project_name_hash": "6e72a69d5c5cca8f0400338441c022e4", "dbt_version": "{dbt_version}"}}',
+                    "event": '{"project_type": "'
+                    + project_type
+                    + '", "models_count": 1, "audits_count": 2, "standalone_audits_count": 3, "macros_count": 4, "jinja_macros_count": 5, "load_time_ms": 1123, "state_sync_fingerprint": "test_fingerprint", "project_name_hash": "6e72a69d5c5cca8f0400338441c022e4"'
+                    + version
+                    + "}",
                 }
             ),
         ]

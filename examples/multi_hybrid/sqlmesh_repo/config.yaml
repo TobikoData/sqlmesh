@@ -1,0 +1,12 @@
+project: sqlmesh_repo
+
+gateways:
+  prod:
+    connection:
+      type: duckdb
+      database: prod.duckdb
+
+default_gateway: prod
+
+model_defaults:
+  dialect: duckdb
