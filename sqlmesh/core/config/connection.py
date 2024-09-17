@@ -1399,6 +1399,10 @@ class ClickhouseConnectionConfig(ConnectionConfig):
     register_comments: bool = True
     pre_ping: bool = False
 
+    # This should return a urllib3 Pool Manager. See:
+    # https://urllib3.readthedocs.io/en/stable/advanced-usage.html#customizing-pool-behavior
+    pool_manager_factory: t.Optional[t.Callable[["ClickhouseConnectionConfig"], t.Any]] = None
+
     type_: Literal["clickhouse"] = Field(alias="type", default="clickhouse")
 
     @property
@@ -1421,8 +1425,24 @@ class ClickhouseConnectionConfig(ConnectionConfig):
 
     @property
     def _connection_factory(self) -> t.Callable:
-        from clickhouse_connect.dbapi import connect  # type: ignore
+        """Returns a clickhouse connection. If the pool_manager_factory is set
+        the connect function is returned with the `pool_mgr` value set. The
+        factory should be something like:
 
+            def pool_manager_factory(config: ClickhouseConnectionConfig):
+                from clickhouse_connect.driver import httputil
+
+                return httputil.get_pool_manager(
+                    num_pools=config.concurrent_tasks
+                )
+        """
+        from clickhouse_connect.dbapi import connect  # type: ignore
+        from functools import partial
+
+        if self.pool_manager_factory:
+            pool_mgr = self.pool_manager_factory(self)
+
+            return partial(connect, pool_mgr=pool_mgr)
         return connect
 
     @property
