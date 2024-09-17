@@ -1427,17 +1427,6 @@ class ClickhouseConnectionConfig(ConnectionConfig):
 
     @property
     def _connection_factory(self) -> t.Callable:
-        """Returns a clickhouse connection. If the pool_manager_factory is set
-        the connect function is returned with the `pool_mgr` value set. The
-        factory should be something like:
-
-            def pool_manager_factory(config: ClickhouseConnectionConfig):
-                from clickhouse_connect.driver import httputil
-
-                return httputil.get_pool_manager(
-                    num_pools=config.concurrent_tasks
-                )
-        """
         from clickhouse_connect.dbapi import connect  # type: ignore
         from clickhouse_connect.driver import httputil  # type: ignore
         from functools import partial
