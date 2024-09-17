@@ -1432,9 +1432,11 @@ class ClickhouseConnectionConfig(ConnectionConfig):
     register_comments: bool = True
     pre_ping: bool = False
 
-    # This should return a urllib3 Pool Manager. See:
-    # https://urllib3.readthedocs.io/en/stable/advanced-usage.html#customizing-pool-behavior
-    pool_manager_factory: t.Optional[t.Callable[["ClickhouseConnectionConfig"], t.Any]] = None
+    # This object expects options from urllib3 and also from clickhouse-connect
+    # See:
+    # * https://urllib3.readthedocs.io/en/stable/advanced-usage.html
+    # * https://clickhouse.com/docs/en/integrations/python#customizing-the-http-connection-pool
+    connection_pool_options: t.Optional[t.Dict[str, t.Any]] = None
 
     type_: Literal["clickhouse"] = Field(alias="type", default="clickhouse")
 
@@ -1470,13 +1472,19 @@ class ClickhouseConnectionConfig(ConnectionConfig):
                 )
         """
         from clickhouse_connect.dbapi import connect  # type: ignore
+        from clickhouse_connect.driver import httputil  # type: ignore
         from functools import partial
 
-        if self.pool_manager_factory:
-            pool_mgr = self.pool_manager_factory(self)
+        pool_manager_options: t.Dict[str, t.Any] = dict(
+            num_pools=self.concurrent_tasks,
+            maxsize=self.concurrent_tasks,
+            block=True,
+        )
+        if self.connection_pool_options:
+            pool_manager_options.update(self.connection_pool_options)
+        pool_mgr = httputil.get_pool_manager(**pool_manager_options)
 
-            return partial(connect, pool_mgr=pool_mgr)
-        return connect
+        return partial(connect, pool_mgr=pool_mgr)
 
     @property
     def cloud_mode(self) -> bool:
@@ -1595,7 +1603,9 @@ CONNECTION_CONFIG_TO_TYPE = {
     # Map all subclasses of ConnectionConfig to the value of their `type_` field.
     tpe.all_field_infos()["type_"].default: tpe
     for tpe in subclasses(
-        __name__, ConnectionConfig, exclude=(ConnectionConfig, BaseDuckDBConnectionConfig)
+        __name__,
+        ConnectionConfig,
+        exclude=(ConnectionConfig, BaseDuckDBConnectionConfig),
     )
 }
 
