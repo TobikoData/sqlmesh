@@ -16,7 +16,6 @@ from sqlmesh.core.engine_adapter.shared import (
     CommentCreationView,
 )
 from sqlmesh.core.schema_diff import SchemaDiffer
-from functools import cached_property
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import SchemaName, TableName
@@ -31,6 +30,7 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
     DIALECT = "clickhouse"
     SUPPORTS_TRANSACTIONS = False
     SUPPORTS_VIEW_SCHEMA = False
+    SUPPORTS_REPLACE_TABLE = False
     COMMENT_CREATION_VIEW = CommentCreationView.COMMENT_COMMAND_ONLY
 
     SCHEMA_DIFFER = SchemaDiffer()
@@ -38,12 +38,9 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
     DEFAULT_TABLE_ENGINE = "MergeTree"
     ORDER_BY_TABLE_ENGINE_REGEX = "^.*?MergeTree.*$"
 
-    @cached_property
+    @property
     def engine_run_mode(self) -> EngineRunMode:
-        cloud_query_value = self.fetchone(
-            "select value from system.settings where name='cloud_mode'"
-        )
-        if str(cloud_query_value[0]) == "1":
+        if self._extra_config.get("cloud_mode"):
             return EngineRunMode.CLOUD
         # we use the user's specification of a cluster in the connection config to determine if
         #   the engine is in cluster mode
@@ -242,6 +239,12 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
 
         self.execute(f"RENAME TABLE {old_table_sql} TO {new_table_sql}{self._on_cluster_sql()}")
 
+    def delete_from(self, table_name: TableName, where: t.Union[str, exp.Expression]) -> None:
+        delete_expr = exp.delete(table_name, where)
+        if self.engine_run_mode.is_cluster:
+            delete_expr.set("cluster", exp.OnCluster(this=exp.to_identifier(self.cluster)))
+        self.execute(delete_expr)
+
     def alter_table(
         self,
         alter_expressions: t.List[exp.Alter],
@@ -294,6 +297,77 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
     ) -> t.Optional[t.Union[exp.PartitionedByProperty, exp.Property]]:
         return exp.PartitionedByProperty(
             this=exp.Schema(expressions=partitioned_by),
+        )
+
+    def ensure_nulls_for_unmatched_after_join(
+        self,
+        query: Query,
+    ) -> Query:
+        # Set `join_use_nulls = 1` in a query's SETTINGS clause
+        query.append("settings", exp.var("join_use_nulls").eq(exp.Literal.number("1")))
+        return query
+
+    def use_server_nulls_for_unmatched_after_join(
+        self,
+        query: Query,
+    ) -> Query:
+        # Set the `join_use_nulls` server value in a query's SETTINGS clause
+        #
+        # Use in SCD models:
+        #  - The SCD query we build must include the setting `join_use_nulls = 1` to ensure that empty cells in a join
+        #      are filled with NULL instead of the default data type value. The default join_use_nulls value is `0`.
+        #  - The SCD embeds the user's original query in the `source` CTE
+        #  - Settings are dynamically scoped, so our setting may override the server's default setting the user expects
+        #      for their query.
+        #  - To prevent this, we:
+        #     - If the user query sets `join_use_nulls`, we do nothing
+        #     - If the user query does not set `join_use_nulls`, we query the server for the current setting
+        #       - If the server value is 1, we do nothing
+        #       - If the server values is not 1, we inject its `join_use_nulls` value into the user query
+        #     - We do not need to check user subqueries because our injected setting operates at the same scope the
+        #         server value would normally operate at
+        setting_name = "join_use_nulls"
+        setting_value = "1"
+
+        user_settings = query.args.get("settings")
+        # if user has not already set it explicitly
+        if not (
+            user_settings
+            and any(
+                [
+                    isinstance(setting, exp.EQ) and setting.name == setting_name
+                    for setting in user_settings
+                ]
+            )
+        ):
+            server_value = self.fetchone(
+                exp.select("value")
+                .from_("system.settings")
+                .where(exp.column("name").eq(exp.Literal.string(setting_name)))
+            )[0]
+            # only inject the setting if the server value isn't 1
+            inject_setting = setting_value != server_value
+            setting_value = server_value if inject_setting else setting_value
+
+            if inject_setting:
+                query.append(
+                    "settings", exp.var(setting_name).eq(exp.Literal.number(setting_value))
+                )
+
+        return query
+
+    def _build_settings_property(
+        self, key: str, value: exp.Expression | str | int | float
+    ) -> exp.SettingsProperty:
+        return exp.SettingsProperty(
+            expressions=[
+                exp.EQ(
+                    this=exp.var(key.lower()),
+                    expression=value
+                    if isinstance(value, exp.Expression)
+                    else exp.Literal(this=value, is_string=isinstance(value, str)),
+                )
+            ]
         )
 
     def _build_table_properties_exp(
@@ -385,7 +459,9 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
             properties.append(exp.EmptyProperty())
 
         if table_properties_copy:
-            properties.extend(self._table_or_view_properties_to_expressions(table_properties_copy))
+            properties.extend(
+                [self._build_settings_property(k, v) for k, v in table_properties_copy.items()]
+            )
 
         if table_description:
             properties.append(
@@ -414,7 +490,9 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
             properties.append(exp.OnCluster(this=exp.to_identifier(self.cluster)))
 
         if view_properties_copy:
-            properties.extend(self._table_or_view_properties_to_expressions(view_properties_copy))
+            properties.extend(
+                [self._build_settings_property(k, v) for k, v in view_properties_copy.items()]
+            )
 
         if table_description:
             properties.append(

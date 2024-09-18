@@ -1092,14 +1092,12 @@ class EngineAdapter:
         **kwargs: t.Any,
     ) -> None:
         """Drop a view."""
-        self.execute(
-            exp.Drop(
-                this=exp.to_table(view_name),
-                exists=ignore_if_not_exists,
-                materialized=materialized and self.SUPPORTS_MATERIALIZED_VIEWS,
-                kind="VIEW",
-                **kwargs,
-            )
+        self._drop_object(
+            name=view_name,
+            exists=ignore_if_not_exists,
+            kind="VIEW",
+            materialized=materialized and self.SUPPORTS_MATERIALIZED_VIEWS,
+            **kwargs,
         )
 
     def columns(
@@ -1466,23 +1464,29 @@ class EngineAdapter:
         if check_columns:
             row_check_conditions = []
             for col in check_columns:
-                t_col = col.copy()
+                col_qualified = col.copy()
+                col_qualified.set("table", exp.to_identifier("joined"))
+
+                t_col = col_qualified.copy()
                 t_col.this.set("this", f"t_{col.name}")
+
                 row_check_conditions.extend(
                     [
-                        col.neq(t_col),
-                        exp.and_(t_col.is_(exp.Null()), col.is_(exp.Null()).not_()),
-                        exp.and_(t_col.is_(exp.Null()).not_(), col.is_(exp.Null())),
+                        col_qualified.neq(t_col),
+                        exp.and_(t_col.is_(exp.Null()), col_qualified.is_(exp.Null()).not_()),
+                        exp.and_(t_col.is_(exp.Null()).not_(), col_qualified.is_(exp.Null())),
                     ]
                 )
             row_value_check = exp.or_(*row_check_conditions)
             unique_key_conditions = []
             for key in unique_key:
-                t_key = key.copy()
+                key_qualified = key.copy()
+                key_qualified.set("table", exp.to_identifier("joined"))
+                t_key = key_qualified.copy()
                 for col in t_key.find_all(exp.Column):
                     col.this.set("this", f"t_{col.name}")
                 unique_key_conditions.extend(
-                    [t_key.is_(exp.Null()).not_(), key.is_(exp.Null()).not_()]
+                    [t_key.is_(exp.Null()).not_(), key_qualified.is_(exp.Null()).not_()]
                 )
             unique_key_check = exp.and_(*unique_key_conditions)
             # unique_key_check is saying "if the row is updated"
@@ -1509,11 +1513,15 @@ class EngineAdapter:
             ).as_(valid_from_col.this)
         else:
             assert updated_at_col is not None
-            prefixed_updated_at_col = updated_at_col.copy()
-            prefixed_updated_at_col.this.set("this", f"t_{updated_at_col.name}")
-            updated_row_filter = updated_at_col > prefixed_updated_at_col
+            updated_at_col_qualified = updated_at_col.copy()
+            updated_at_col_qualified.set("table", exp.to_identifier("joined"))
+            prefixed_updated_at_col = updated_at_col_qualified.copy()
+            prefixed_updated_at_col.this.set("this", f"t_{updated_at_col_qualified.name}")
+            updated_row_filter = updated_at_col_qualified > prefixed_updated_at_col
 
-            valid_to_case_stmt_builder = exp.Case().when(updated_row_filter, updated_at_col)
+            valid_to_case_stmt_builder = exp.Case().when(
+                updated_row_filter, updated_at_col_qualified
+            )
             if delete_check:
                 valid_to_case_stmt_builder = valid_to_case_stmt_builder.when(
                     delete_check, execution_ts
@@ -1573,7 +1581,11 @@ class EngineAdapter:
                     "source",
                     exp.select(exp.true().as_("_exists"), *select_source_columns)
                     .distinct(*unique_key)
-                    .from_(source_query.subquery("raw_source")),  # type: ignore
+                    .from_(
+                        self.use_server_nulls_for_unmatched_after_join(source_query).subquery(  # type: ignore
+                            "raw_source"
+                        )
+                    ),
                 )
                 # Historical Records that Do Not Change
                 .with_(
@@ -1714,7 +1726,7 @@ class EngineAdapter:
 
             self.replace_query(
                 target_table,
-                query,
+                self.ensure_nulls_for_unmatched_after_join(query),
                 columns_to_types=columns_to_types,
                 table_description=table_description,
                 column_descriptions=column_descriptions,
@@ -2229,7 +2241,7 @@ class EngineAdapter:
                 delete_filter = key_exp.isin(query=delete_query)
 
                 if not self.INSERT_OVERWRITE_STRATEGY.is_replace_where:
-                    self.execute(exp.delete(target_table).where(delete_filter))
+                    self.delete_from(target_table, delete_filter)
                 else:
                     insert_statement.set("where", delete_filter)
                     insert_statement.set("this", exp.to_table(target_table))
@@ -2292,6 +2304,18 @@ class EngineAdapter:
         new_table_name: TableName,
     ) -> None:
         self.execute(exp.rename_table(old_table_name, new_table_name))
+
+    def ensure_nulls_for_unmatched_after_join(
+        self,
+        query: Query,
+    ) -> Query:
+        return query
+
+    def use_server_nulls_for_unmatched_after_join(
+        self,
+        query: Query,
+    ) -> Query:
+        return query
 
     def ping(self) -> None:
         try:

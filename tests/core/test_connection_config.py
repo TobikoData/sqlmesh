@@ -635,12 +635,14 @@ def test_clickhouse(make_config):
         password="default",
         cluster="default",
         use_compression=True,
+        connection_settings={"this_setting": "1"},
     )
     assert isinstance(config, ClickhouseConnectionConfig)
     assert config.cluster == "default"
     assert config.use_compression
     assert config._static_connection_kwargs["compress"]
     assert config._static_connection_kwargs["client_name"] == f"SQLMesh/{__version__}"
+    assert config._static_connection_kwargs["this_setting"] == "1"
     assert config.is_recommended_for_state_sync is False
     assert config.is_forbidden_for_state_sync
 

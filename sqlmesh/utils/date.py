@@ -353,16 +353,16 @@ def to_time_column(
         return exp.cast(time_column, to=time_column_type)
     if time_column_type.is_type(exp.DataType.Type.DATE):
         return exp.cast(exp.Literal.string(to_ds(time_column)), to="date")
-    if time_column_type.this in TEMPORAL_TZ_TYPES:
-        return exp.cast(exp.Literal.string(to_tstz(time_column)), to=time_column_type.this)
-    if time_column_type.this in exp.DataType.TEMPORAL_TYPES:
-        return exp.cast(exp.Literal.string(to_ts(time_column)), to=time_column_type.this)
+    if time_column_type.is_type(*TEMPORAL_TZ_TYPES):
+        return exp.cast(exp.Literal.string(to_tstz(time_column)), to=time_column_type)
+    if time_column_type.is_type(*exp.DataType.TEMPORAL_TYPES):
+        return exp.cast(exp.Literal.string(to_ts(time_column)), to=time_column_type)
 
     if time_column_format:
         time_column = to_datetime(time_column).strftime(time_column_format)
-    if time_column_type.this in exp.DataType.TEXT_TYPES:
+    if time_column_type.is_type(*exp.DataType.TEXT_TYPES):
         return exp.Literal.string(time_column)
-    if time_column_type.this in exp.DataType.NUMERIC_TYPES:
+    if time_column_type.is_type(*exp.DataType.NUMERIC_TYPES):
         return exp.Literal.number(time_column)
     return exp.convert(time_column)
 

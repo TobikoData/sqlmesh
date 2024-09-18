@@ -67,6 +67,7 @@ nav:
       - integrations/github.md
     - Execution engines:
       - integrations/engines/bigquery.md
+      - integrations/engines/clickhouse.md
       - integrations/engines/databricks.md
       - integrations/engines/duckdb.md
       - integrations/engines/motherduck.md
@@ -139,6 +140,7 @@ markdown_extensions:
   - pymdownx.details
   - attr_list
   - md_in_html
+  - pymdownx.caret
 extra_css:
   - stylesheets/extra.css
 copyright: Tobiko Data Inc.

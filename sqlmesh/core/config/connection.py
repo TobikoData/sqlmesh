@@ -13,7 +13,6 @@ from functools import partial
 from pydantic import Field
 from sqlglot import exp
 from sqlglot.helper import subclasses
-
 from sqlmesh.core import engine_adapter
 from sqlmesh.core.config.base import BaseConfig
 from sqlmesh.core.config.common import (
@@ -1394,6 +1393,7 @@ class ClickhouseConnectionConfig(ConnectionConfig):
     query_limit: int = 0
     use_compression: bool = True
     compression_method: t.Optional[str] = None
+    connection_settings: t.Optional[t.Dict[str, t.Any]] = None
 
     concurrent_tasks: int = 1
     register_comments: bool = True
@@ -1426,8 +1426,12 @@ class ClickhouseConnectionConfig(ConnectionConfig):
         return connect
 
     @property
+    def cloud_mode(self) -> bool:
+        return "clickhouse.cloud" in self.host
+
+    @property
     def _extra_engine_config(self) -> t.Dict[str, t.Any]:
-        return {"cluster": self.cluster}
+        return {"cluster": self.cluster, "cloud_mode": self.cloud_mode}
 
     @property
     def _static_connection_kwargs(self) -> t.Dict[str, t.Any]:
@@ -1440,7 +1444,27 @@ class ClickhouseConnectionConfig(ConnectionConfig):
         if compress and self.compression_method:
             compress = self.compression_method
 
-        return {"compress": compress, "client_name": f"SQLMesh/{__version__}"}
+        # Clickhouse system settings passed to connection
+        # https://clickhouse.com/docs/en/operations/settings/settings
+        # - below are set to align with dbt-clickhouse
+        # - https://github.com/ClickHouse/dbt-clickhouse/blob/44d26308ea6a3c8ead25c280164aa88191f05f47/dbt/adapters/clickhouse/dbclient.py#L77
+        settings = self.connection_settings or {}
+        #  mutations_sync = 2: "The query waits for all mutations [ALTER statements] to complete on all replicas (if they exist)"
+        settings["mutations_sync"] = "2"
+        #  insert_distributed_sync = 1: "INSERT operation succeeds only after all the data is saved on all shards"
+        settings["insert_distributed_sync"] = "1"
+        if self.cluster or self.cloud_mode:
+            # database_replicated_enforce_synchronous_settings = 1:
+            #   - "Enforces synchronous waiting for some queries"
+            #   - https://github.com/ClickHouse/ClickHouse/blob/ccaa8d03a9351efc16625340268b9caffa8a22ba/src/Core/Settings.h#L709
+            settings["database_replicated_enforce_synchronous_settings"] = "1"
+            # insert_quorum = auto:
+            #   - "INSERT succeeds only when ClickHouse manages to correctly write data to the insert_quorum of replicas during
+            #       the insert_quorum_timeout"
+            #   - "use majority number (number_of_replicas / 2 + 1) as quorum number"
+            settings["insert_quorum"] = "auto"
+
+        return {"compress": compress, "client_name": f"SQLMesh/{__version__}", **settings}
 
 
 CONNECTION_CONFIG_TO_TYPE = {
