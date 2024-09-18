@@ -430,7 +430,10 @@ class EngineAdapterStateSync(StateSync):
                 unpaused_snapshots[snapshot.unpaused_ts].append(snapshot.snapshot_id)
             elif not is_target_snapshot:
                 target_snapshot = target_snapshots_by_version[(snapshot.name, snapshot.version)]
-                if target_snapshot.normalized_effective_from_ts:
+                if (
+                    target_snapshot.normalized_effective_from_ts
+                    and not target_snapshot.disable_restatement
+                ):
                     # Making sure that there are no overlapping intervals.
                     effective_from_ts = target_snapshot.normalized_effective_from_ts
                     logger.info(
