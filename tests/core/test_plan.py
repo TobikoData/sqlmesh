@@ -1290,6 +1290,60 @@ def test_effective_from(make_snapshot, mocker: MockerFixture):
     assert updated_snapshot.effective_from is None
 
 
+def test_effective_from_non_evaluatble_model(make_snapshot, mocker: MockerFixture):
+    snapshot = make_snapshot(
+        SqlModel(
+            name="a",
+            kind="EMBEDDED",
+            query=parse_one("select 1, ds FROM b"),
+            start="2023-01-01",
+            dialect="duckdb",
+        )
+    )
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    updated_snapshot = make_snapshot(
+        SqlModel(
+            name="a",
+            kind="EMBEDDED",
+            query=parse_one("select 2, ds FROM b"),
+            start="2023-01-01",
+            dialect="duckdb",
+        )
+    )
+    updated_snapshot.previous_versions = snapshot.all_versions
+
+    context_diff = ContextDiff(
+        environment="test_environment",
+        is_new_environment=True,
+        is_unfinalized_environment=False,
+        normalize_environment_name=True,
+        create_from="prod",
+        added=set(),
+        removed_snapshots={},
+        modified_snapshots={updated_snapshot.name: (updated_snapshot, snapshot)},
+        snapshots={updated_snapshot.snapshot_id: updated_snapshot},
+        new_snapshots={updated_snapshot.snapshot_id: updated_snapshot},
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
+    )
+
+    schema_differ = DuckDBEngineAdapter.SCHEMA_DIFFER
+    plan_builder = PlanBuilder(
+        context_diff,
+        schema_differ,
+        forward_only=True,
+        start="2023-01-01",
+        end="2023-03-01",
+        is_dev=True,
+    )
+
+    plan_builder.set_effective_from("2023-02-01")
+    assert plan_builder.build().effective_from == "2023-02-01"
+    assert not updated_snapshot.effective_from
+
+
 def test_new_environment_no_changes(make_snapshot, mocker: MockerFixture):
     snapshot = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds")))
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
