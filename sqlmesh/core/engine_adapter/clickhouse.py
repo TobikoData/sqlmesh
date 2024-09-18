@@ -299,12 +299,19 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
             this=exp.Schema(expressions=partitioned_by),
         )
 
-    def add_nulls_after_join_setting(
+    def ensure_nulls_for_unmatched_after_join(
         self,
         query: Query,
-        use_server_value: bool = False,
     ) -> Query:
-        # Set the `join_use_nulls` setting in the query's SETTINGS clause
+        # Set `join_use_nulls = 1` in a query's SETTINGS clause
+        query.append("settings", exp.var("join_use_nulls").eq(exp.Literal.number("1")))
+        return query
+
+    def use_server_nulls_for_unmatched_after_join(
+        self,
+        query: Query,
+    ) -> Query:
+        # Set the `join_use_nulls` server value in a query's SETTINGS clause
         #
         # Use in SCD models:
         #  - The SCD query we build must include the setting `join_use_nulls = 1` to ensure that empty cells in a join
@@ -319,7 +326,6 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
         #       - If the server values is not 1, we inject its `join_use_nulls` value into the user query
         #     - We do not need to check user subqueries because our injected setting operates at the same scope the
         #         server value would normally operate at
-        #  - We specify our setting on the outermost scope, so it applies to all CTEs/subqueries other than the user's
         setting_name = "join_use_nulls"
         setting_value = "1"
 
@@ -334,16 +340,14 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
                 ]
             )
         ):
-            inject_setting = True
-            if use_server_value:
-                server_value = self.fetchone(
-                    exp.select("value")
-                    .from_("system.settings")
-                    .where(exp.column("name").eq(exp.Literal.string(setting_name)))
-                )[0]
-                # only inject the setting if the server value isn't 1
-                inject_setting = setting_value != server_value
-                setting_value = server_value if inject_setting else setting_value
+            server_value = self.fetchone(
+                exp.select("value")
+                .from_("system.settings")
+                .where(exp.column("name").eq(exp.Literal.string(setting_name)))
+            )[0]
+            # only inject the setting if the server value isn't 1
+            inject_setting = setting_value != server_value
+            setting_value = server_value if inject_setting else setting_value
 
             if inject_setting:
                 query.append(

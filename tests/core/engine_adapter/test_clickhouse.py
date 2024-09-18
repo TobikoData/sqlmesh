@@ -371,15 +371,13 @@ def test_create_table_properties(make_mocked_engine_adapter: t.Callable, mocker)
     ]
 
 
-def test_add_nulls_after_join_setting(
-    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture
-):
+def test_nulls_after_join(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
     adapter = make_mocked_engine_adapter(ClickhouseEngineAdapter)
 
     query = exp.select("col1").from_("table")
 
     assert (
-        adapter.add_nulls_after_join_setting(query.copy()).sql(adapter.dialect)
+        adapter.ensure_nulls_for_unmatched_after_join(query.copy()).sql(adapter.dialect)
         == "SELECT col1 FROM table SETTINGS join_use_nulls = 1"
     )
 
@@ -396,8 +394,7 @@ def test_add_nulls_after_join_setting(
     )
 
     assert (
-        adapter.add_nulls_after_join_setting(query_with_setting, use_server_value=True)
-        == query_with_setting
+        adapter.use_server_nulls_for_unmatched_after_join(query_with_setting) == query_with_setting
     )
 
     # Server default of 0 != method default of 1, so we inject 0
@@ -407,7 +404,7 @@ def test_add_nulls_after_join_setting(
     )
 
     assert (
-        adapter.add_nulls_after_join_setting(query, use_server_value=True).sql(adapter.dialect)
+        adapter.use_server_nulls_for_unmatched_after_join(query).sql(adapter.dialect)
         == "SELECT col1 FROM table SETTINGS join_use_nulls = 0"
     )
 

@@ -1582,9 +1582,7 @@ class EngineAdapter:
                     exp.select(exp.true().as_("_exists"), *select_source_columns)
                     .distinct(*unique_key)
                     .from_(
-                        self.add_nulls_after_join_setting(
-                            source_query, use_server_value=True
-                        ).subquery(  # type: ignore
+                        self.use_server_nulls_for_unmatched_after_join(source_query).subquery(  # type: ignore
                             "raw_source"
                         )
                     ),
@@ -1728,7 +1726,7 @@ class EngineAdapter:
 
             self.replace_query(
                 target_table,
-                self.add_nulls_after_join_setting(query),
+                self.ensure_nulls_for_unmatched_after_join(query),
                 columns_to_types=columns_to_types,
                 table_description=table_description,
                 column_descriptions=column_descriptions,
@@ -2307,10 +2305,15 @@ class EngineAdapter:
     ) -> None:
         self.execute(exp.rename_table(old_table_name, new_table_name))
 
-    def add_nulls_after_join_setting(
+    def ensure_nulls_for_unmatched_after_join(
         self,
         query: Query,
-        use_server_value: bool = False,
+    ) -> Query:
+        return query
+
+    def use_server_nulls_for_unmatched_after_join(
+        self,
+        query: Query,
     ) -> Query:
         return query
 
