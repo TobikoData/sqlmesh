@@ -517,6 +517,7 @@ Recommended state engines for production deployments:
 Other state engines with fast and reliable database transactions (less tested than the recommended engines):
 
 * [DuckDB](../integrations/engines/duckdb.md)
+    * Does not support concurrency and may error if the primary connection executes with concurrent tasks (its [connection configuration's `concurrent_tasks`](#connections) is greater than 1)
 * [MySQL](../integrations/engines/mysql.md)
 
 Unsupported state engines, even for development:
