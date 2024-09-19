@@ -128,11 +128,6 @@ SQLMesh provides two other predefined variables used to modify model behavior ba
     * 'evaluating' - The model query logic is being evaluated.
     * 'testing' - The model query logic is being evaluated in the context of a unit test.
 * @gateway - A string value containing the name of the current [gateway](../../guides/connections.md).
-
-### Audit-only variables
-
-Some predefined variables are only supported in [SQLMesh audit definitions](../audits.md).
-
-* @this_model - used to create [generic audits](../audits.md#generic-audits)
-
-The `{{ this_model }}` Jinja macro variable may be used in model definitions for the rare cases when SQLGlot cannot fully parse a statement and you need to reference the model's underlying physical table directly. We recommend against using it unless absolutely required.
+* @this_model - A string value containing the name of the physical table the model view selects from. Typically used to create [generic audits](../audits.md#generic-audits).
+    * Can be used in model definitions when SQLGlot cannot fully parse a statement and you need to reference the model's underlying physical table directly.
+    * Can be passed as an argument to macros that access or interact with the underlying physical table.
