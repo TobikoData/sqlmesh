@@ -1483,6 +1483,66 @@ class ClickhouseConnectionConfig(ConnectionConfig):
         return {"compress": compress, "client_name": f"SQLMesh/{__version__}", **settings}
 
 
+class AthenaConnectionConfig(ConnectionConfig):
+    # PyAthena connection options
+    aws_access_key_id: t.Optional[str] = None
+    aws_secret_access_key: t.Optional[str] = None
+    role_arn: t.Optional[str] = None
+    role_session_name: t.Optional[str] = None
+    region_name: t.Optional[str] = None
+    work_group: t.Optional[str] = None
+    s3_staging_dir: t.Optional[str] = None
+    schema_name: t.Optional[str] = None
+    catalog_name: t.Optional[str] = None
+
+    # SQLMesh options
+    s3_warehouse_location: t.Optional[str] = None
+    concurrent_tasks: int = 4
+    register_comments: bool = False  # because Athena doesnt support comments in most cases
+    pre_ping: Literal[False] = False
+
+    type_: Literal["athena"] = Field(alias="type", default="athena")
+
+    @model_validator(mode="after")
+    @model_validator_v1_args
+    def _root_validator(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
+        work_group = values.get("work_group")
+        s3_staging_dir = values.get("s3_staging_dir")
+
+        if not work_group and not s3_staging_dir:
+            raise ConfigError("At least one of work_group or s3_staging_dir must be set")
+
+        return values
+
+    @property
+    def _connection_kwargs_keys(self) -> t.Set[str]:
+        return {
+            "aws_access_key_id",
+            "aws_secret_access_key",
+            "role_arn",
+            "role_session_name",
+            "region_name",
+            "work_group",
+            "s3_staging_dir",
+            "schema_name",
+            "catalog_name",
+        }
+
+    @property
+    def _engine_adapter(self) -> t.Type[EngineAdapter]:
+        return engine_adapter.AthenaEngineAdapter
+
+    @property
+    def _extra_engine_config(self) -> t.Dict[str, t.Any]:
+        return {"s3_warehouse_location": self.s3_warehouse_location}
+
+    @property
+    def _connection_factory(self) -> t.Callable:
+        from pyathena import connect  # type: ignore
+
+        return connect
+
+
 CONNECTION_CONFIG_TO_TYPE = {
     # Map all subclasses of ConnectionConfig to the value of their `type_` field.
     tpe.all_field_infos()["type_"].default: tpe

@@ -223,6 +223,7 @@ class TrinoEngineAdapter(
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
         truncate: bool = False,
+        **kwargs: t.Any,
     ) -> None:
         if columns_to_types and self.current_catalog_type == "delta_lake":
             columns_to_types = self._to_delta_ts(columns_to_types)
@@ -243,6 +244,7 @@ class TrinoEngineAdapter(
             table_description,
             column_descriptions,
             truncate,
+            **kwargs,
         )
 
     # delta_lake only supports two timestamp data types. This method converts other

@@ -66,6 +66,7 @@ nav:
       - integrations/dbt.md
       - integrations/github.md
     - Execution engines:
+      - integrations/engines/athena.md
       - integrations/engines/bigquery.md
       - integrations/engines/clickhouse.md
       - integrations/engines/databricks.md

@@ -483,6 +483,7 @@ Example snowflake connection configuration:
 
 These pages describe the connection configuration options for each execution engine.
 
+* [Athena](../integrations/engines/athena.md)
 * [BigQuery](../integrations/engines/bigquery.md)
 * [Databricks](../integrations/engines/databricks.md)
 * [DuckDB](../integrations/engines/duckdb.md)
