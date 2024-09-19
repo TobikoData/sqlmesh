@@ -1,5 +1,10 @@
 # DuckDB
 
+!!! warning "DuckDB state connection limitations"
+    DuckDB does not support concurrent connections, so it may "hang" when used as a state database if the primary connection's `concurrent_tasks` value is greater than 1.
+
+    For proof-of-concept or test projects, work around this by setting `concurrent_tasks` to 1 in the primary connection. For production projects use a more robust state database such as Postgres.
+
 ## Local/Built-in Scheduler
 **Engine Adapter Type**: `duckdb`
 
@@ -62,7 +67,7 @@ SQLMesh will place models with the explicit catalog "ephemeral", such as `epheme
 
 Catalogs can also be defined to connect to anything that [DuckDB can be attached to](https://duckdb.org/docs/sql/statements/attach.html).
 
-Below are examples of connecting to a SQLite database and a PostgreSQL database. 
+Below are examples of connecting to a SQLite database and a PostgreSQL database.
 The SQLite database is read-write, while the PostgreSQL database is read-only.
 
 === "YAML"
@@ -102,12 +107,12 @@ The SQLite database is read-write, while the PostgreSQL database is read-only.
                     catalogs={
                         "memory": ":memory:",
                         "sqlite": DuckDBAttachOptions(
-                            type="sqlite", 
+                            type="sqlite",
                             path="test.db"
                         ),
                         "postgres": DuckDBAttachOptions(
-                            type="postgres", 
-                            path="dbname=postgres user=postgres host=127.0.0.1", 
+                            type="postgres",
+                            path="dbname=postgres user=postgres host=127.0.0.1",
                             read_only=True
                         ),
                     }
@@ -125,7 +130,7 @@ Example: mounting a SQLite database with the name `sqlite` that has a table `exa
 
 ##### Sensitive fields in paths
 
-If a connector, like Postgres, requires sensitive information in the path, it might support defining environment variables instead. 
+If a connector, like Postgres, requires sensitive information in the path, it might support defining environment variables instead.
 [See DuckDB Documentation for more information](https://duckdb.org/docs/extensions/postgres#configuring-via-environment-variables).
 
 #### Cloud service authentication
