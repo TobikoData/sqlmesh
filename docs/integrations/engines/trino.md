@@ -60,6 +60,57 @@ hive.metastore.uri=thrift://example.net:9083
 delta.hive-catalog-name=datalake_delta # example catalog name, can be any valid string
 ```
 
+#### AWS Glue
+
+[AWS Glue](https://aws.amazon.com/glue/) provides an implementation of the Hive metastore catalog.
+
+Your Trino project's physical data objects are stored in a specific location, such as an [AWS S3](https://aws.amazon.com/s3/) bucket. Hive provides a default location, which you can override in its configuration file.
+
+Set the default location for your project's tables in the Hive catalog configuration's [`hive.metastore.glue.default-warehouse-dir` parameter](https://trino.io/docs/current/object-storage/metastores.html#aws-glue-catalog-configuration-properties).
+
+For example:
+
+```linenums="1"
+hive.metastore=glue
+hive.metastore.glue.default-warehouse-dir=s3://my-bucket/
+```
+
+If a model should not use the default location, you may specify its location in the model DDL's [`physical_properties` dictionary](../../concepts/models/overview.md#physical_properties). This value will be passed to the `LOCATION` property in the model's `CREATE` statements.
+
+For example:
+
+``` sql linenums="1"
+MODEL (
+  name my_schema.my_model,
+  physical_properties (
+    location = 's3://my-bucket/'
+  )
+);
+```
+
+If multiple models use the same location, you can avoid writing it repeatedly by assigning it to a [global macro variable](../../concepts/macros/sqlmesh_macros.md#global-variables) in your project configuration and passing that to each model.
+
+For example, this project configuration defines the variable `special_model_location` in the `variables` dictionary:
+
+```yaml linenums="1"
+gateways:
+  [...gateway configuration here...]
+
+variables:
+  special_model_location: "s3://my-special-bucket/"
+```
+
+And this model definition passes the `special_model_location` variable to the `location` property:
+
+``` sql linenums="1"
+MODEL (
+  name my_schema.my_model,
+  physical_properties (
+    location = @special_model_location
+  )
+);
+```
+
 ### Connection options
 
 | Option               | Description                                                                                                                                                               |  Type  | Required |
