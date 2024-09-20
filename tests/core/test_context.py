@@ -11,7 +11,7 @@ import pytest
 import pandas as pd
 from pathlib import Path
 from pytest_mock.plugin import MockerFixture
-from sqlglot import parse_one
+from sqlglot import exp, parse_one
 from sqlglot.errors import SchemaError
 
 import sqlmesh.core.constants
@@ -175,6 +175,50 @@ def test_render_sql_model(sushi_context, assert_exp_eq, copy_to_temp_path: t.Cal
         GROUP BY
           "o"."waiter_id",
           "o"."event_date"
+        """,
+    )
+
+
+@pytest.mark.slow
+def test_render_non_deployable_parent(sushi_context, assert_exp_eq, copy_to_temp_path: t.Callable):
+    model = sushi_context.get_model("sushi.waiter_revenue_by_day")
+    forward_only_kind = model.kind.copy(update={"forward_only": True})
+    model = model.copy(update={"kind": forward_only_kind})
+    sushi_context.upsert_model(model)
+    sushi_context.plan("dev", no_prompts=True, auto_apply=True)
+
+    expected_table_name = parse_one(
+        sushi_context.get_snapshot("sushi.waiter_revenue_by_day").table_name(is_deployable=False),
+        into=exp.Table,
+    ).this.this
+
+    assert_exp_eq(
+        sushi_context.render(
+            "sushi.top_waiters",
+            start=date(2021, 1, 1),
+            end=date(2021, 1, 1),
+        ),
+        f"""
+        WITH "test_macros" AS (
+          SELECT
+            2 AS "lit_two",
+            "waiter_revenue_by_day"."revenue" * 2.0 AS "sql_exp",
+            CAST("waiter_revenue_by_day"."revenue" AS TEXT) AS "sql_lit"
+          FROM "memory"."sqlmesh__sushi"."{expected_table_name}" AS "waiter_revenue_by_day" /* memory.sushi.waiter_revenue_by_day */
+        )
+        SELECT
+          CAST("waiter_revenue_by_day"."waiter_id" AS INT) AS "waiter_id",
+          CAST("waiter_revenue_by_day"."revenue" AS DOUBLE) AS "revenue"
+        FROM "memory"."sqlmesh__sushi"."{expected_table_name}" AS "waiter_revenue_by_day" /* memory.sushi.waiter_revenue_by_day */
+        WHERE
+          "waiter_revenue_by_day"."event_date" = (
+            SELECT
+              MAX("waiter_revenue_by_day"."event_date") AS "_col_0"
+            FROM "memory"."sqlmesh__sushi"."{expected_table_name}" AS "waiter_revenue_by_day" /* memory.sushi.waiter_revenue_by_day */
+          )
+        ORDER BY
+          "revenue" DESC
+        LIMIT 10
         """,
     )
 

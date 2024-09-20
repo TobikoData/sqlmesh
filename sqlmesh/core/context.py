@@ -845,12 +845,16 @@ class GenericContext(BaseContext, t.Generic[C]):
             )
             return next(pandas_to_sql(t.cast(pd.DataFrame, df), model.columns_to_types))
 
+        snapshots = self.snapshots
+        deployability_index = DeployabilityIndex.create(snapshots.values())
+
         return model.render_query_or_raise(
             start=start,
             end=end,
             execution_time=execution_time,
-            snapshots=self.snapshots,
+            snapshots=snapshots,
             expand=expand,
+            deployability_index=deployability_index,
             engine_adapter=self.engine_adapter,
             **kwargs,
         )
