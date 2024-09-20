@@ -8,6 +8,7 @@ import sqlmesh.core.dialect as d
 from sqlmesh.core.engine_adapter import AthenaEngineAdapter
 from sqlmesh.core.model import load_sql_based_model
 from sqlmesh.core.model.definition import SqlModel
+from sqlmesh.utils.errors import SQLMeshError
 
 from tests.core.engine_adapter import to_sql_calls
 
@@ -31,7 +32,6 @@ def adapter(make_mocked_engine_adapter: t.Callable) -> AthenaEngineAdapter:
             exp.to_table("schema.table"),
             "s3://some/location/table/",
         ),
-        (None, None, exp.Table(db=exp.Identifier(this="test")), None),
         # Location set to bucket
         ("s3://bucket", None, exp.to_table("schema.table"), "s3://bucket/schema/table/"),
         ("s3://bucket", {}, exp.to_table("schema.table"), "s3://bucket/schema/table/"),
@@ -73,18 +73,29 @@ def test_table_location(
     expected_location: t.Optional[str],
 ) -> None:
     adapter.s3_warehouse_location = config_s3_warehouse_location
-    location = adapter._table_location(table_properties, table)
-    final_location = None
-
-    if location and expected_location:
-        final_location = (
-            location.this.name
-        )  # extract the unquoted location value from the LocationProperty
-
-    assert final_location == expected_location
+    if expected_location is None:
+        with pytest.raises(SQLMeshError, match=r"Cannot figure out location for table.*"):
+            adapter._table_location_or_raise(table_properties, table)
+    else:
+        location = adapter._table_location_or_raise(
+            table_properties, table
+        ).this.name  # extract the unquoted location value from the LocationProperty
+        assert location == expected_location
 
     if table_properties is not None:
-        assert "location" not in table_properties
+        # this get consumed by _table_location because we dont want it to end up in a TBLPROPERTIES clause
+        assert "s3_base_location" not in table_properties
+
+
+def test_table_location_length(adapter: AthenaEngineAdapter) -> None:
+    with pytest.raises(SQLMeshError, match=r".*cannot be more than 700 characters"):
+        long_path = "foo/bar/" * 100
+        assert len(long_path) > 700
+
+        adapter._table_location(
+            table_properties={"s3_base_location": exp.Literal.string(f"s3://{long_path}")},
+            table=exp.to_table("foo"),
+        )
 
 
 def test_create_schema(adapter: AthenaEngineAdapter) -> None:
@@ -163,7 +174,7 @@ def test_create_table_iceberg(adapter: AthenaEngineAdapter) -> None:
     ]
 
 
-def test_create_table_inferred_location(adapter: AthenaEngineAdapter) -> None:
+def test_create_table_no_location(adapter: AthenaEngineAdapter) -> None:
     expressions = d.parse(
         """
         MODEL (
@@ -176,11 +187,12 @@ def test_create_table_inferred_location(adapter: AthenaEngineAdapter) -> None:
     )
     model: SqlModel = t.cast(SqlModel, load_sql_based_model(expressions))
 
-    adapter.create_table(
-        model.name,
-        columns_to_types=model.columns_to_types_or_raise,
-        table_properties=model.physical_properties,
-    )
+    with pytest.raises(SQLMeshError, match=r"Cannot figure out location.*"):
+        adapter.create_table(
+            model.name,
+            columns_to_types=model.columns_to_types_or_raise,
+            table_properties=model.physical_properties,
+        )
 
     adapter.s3_warehouse_location = "s3://bucket/prefix"
     adapter.create_table(
@@ -190,7 +202,6 @@ def test_create_table_inferred_location(adapter: AthenaEngineAdapter) -> None:
     )
 
     assert to_sql_calls(adapter) == [
-        "CREATE EXTERNAL TABLE IF NOT EXISTS `test_table` (`a` INT)",
         "CREATE EXTERNAL TABLE IF NOT EXISTS `test_table` (`a` INT) LOCATION 's3://bucket/prefix/test_table/'",
     ]
 
@@ -220,8 +231,20 @@ def test_ctas_iceberg(adapter: AthenaEngineAdapter):
     )
 
     assert to_sql_calls(adapter) == [
-        'CREATE TABLE IF NOT EXISTS "foo"."bar" WITH (location=\'s3://bucket/prefix/foo/bar/\', table_type=\'iceberg\', is_external=false) AS SELECT CAST("a" AS INTEGER) AS "a" FROM (SELECT 1) AS "_subquery"'
+        'CREATE TABLE IF NOT EXISTS "foo"."bar" WITH (location=\'s3://bucket/prefix/foo/bar/\', is_external=false, table_type=\'iceberg\') AS SELECT CAST("a" AS INTEGER) AS "a" FROM (SELECT 1) AS "_subquery"'
     ]
+
+
+def test_ctas_iceberg_no_specific_location(adapter: AthenaEngineAdapter):
+    with pytest.raises(SQLMeshError, match=r"Cannot figure out location.*"):
+        adapter.ctas(
+            table_name="foo.bar",
+            columns_to_types={"a": exp.DataType.build("int")},
+            query_or_df=parse_one("select 1", into=exp.Select),
+            table_properties={"table_type": exp.Literal.string("iceberg")},
+        )
+
+    assert to_sql_calls(adapter) == []
 
 
 def test_replace_query(adapter: AthenaEngineAdapter, mocker: MockerFixture):
@@ -250,6 +273,7 @@ def test_replace_query(adapter: AthenaEngineAdapter, mocker: MockerFixture):
     )
     adapter.cursor.execute.reset_mock()
 
+    adapter.s3_warehouse_location = "s3://foo"
     adapter.replace_query(
         table_name="test",
         query_or_df=parse_one("select 1 as a", into=exp.Select),
@@ -257,8 +281,9 @@ def test_replace_query(adapter: AthenaEngineAdapter, mocker: MockerFixture):
         table_properties={},
     )
 
+    # gets recreated as a Hive table because table_exists=False and nothing in the properties indicates it should be Iceberg
     assert to_sql_calls(adapter) == [
-        'CREATE TABLE IF NOT EXISTS "test" AS SELECT CAST("a" AS INTEGER) AS "a" FROM (SELECT 1 AS "a") AS "_subquery"'
+        'CREATE TABLE IF NOT EXISTS "test" WITH (external_location=\'s3://foo/test/\') AS SELECT CAST("a" AS INTEGER) AS "a" FROM (SELECT 1 AS "a") AS "_subquery"'
     ]
 
 
@@ -288,8 +313,9 @@ def test_truncate_table(adapter: AthenaEngineAdapter):
 
 
 def test_create_state_table(adapter: AthenaEngineAdapter):
+    adapter.s3_warehouse_location = "s3://base"
     adapter.create_state_table("_snapshots", {"name": exp.DataType.build("varchar")})
 
     assert to_sql_calls(adapter) == [
-        "CREATE TABLE IF NOT EXISTS `_snapshots` (`name` STRING) TBLPROPERTIES ('table_type'='iceberg')"
+        "CREATE TABLE IF NOT EXISTS `_snapshots` (`name` STRING) LOCATION 's3://base/_snapshots/' TBLPROPERTIES ('table_type'='iceberg')"
     ]

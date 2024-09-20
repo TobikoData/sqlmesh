@@ -422,6 +422,13 @@ class TestContext:
         )
         if config_mutator:
             config_mutator(self.gateway, config)
+
+        if "athena" in self.gateway:
+            # Ensure that s3_warehouse_location is propagated
+            config.gateways[
+                self.gateway
+            ].connection.s3_warehouse_location = self.engine_adapter.s3_warehouse_location
+
         self._context = Context(paths=".", config=config, gateway=self.gateway)
         return self._context
 
@@ -710,8 +717,18 @@ def mark_gateway(request) -> t.Tuple[str, str]:
     return request.param, f"inttest_{request.param}"
 
 
+@pytest.fixture(scope="session")
+def run_count(request) -> t.Iterable[int]:
+    count: int = request.config.cache.get("run_count", 0)
+    count += 1
+    yield count
+    request.config.cache.set("run_count", count)
+
+
 @pytest.fixture
-def engine_adapter(mark_gateway: t.Tuple[str, str], config, testrun_uid) -> EngineAdapter:
+def engine_adapter(
+    mark_gateway: t.Tuple[str, str], config, testrun_uid, run_count
+) -> EngineAdapter:
     mark, gateway = mark_gateway
     if gateway not in config.gateways:
         # TODO: Once everything is fully setup we want to error if a gateway is not configured that we expect
@@ -730,7 +747,7 @@ def engine_adapter(mark_gateway: t.Tuple[str, str], config, testrun_uid) -> Engi
             if testrun_path not in current_location:
                 # only add it if its not already there (since this setup code gets called multiple times in a full test run)
                 connection_config.s3_warehouse_location = os.path.join(
-                    current_location, testrun_path
+                    current_location, testrun_path, str(run_count)
                 )
 
     engine_adapter = connection_config.create_engine_adapter()

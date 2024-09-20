@@ -4,6 +4,7 @@ import typing as t
 import logging
 from sqlglot import exp
 from sqlmesh.core.dialect import to_schema
+from sqlmesh.core.config.common import validate_s3_location
 from sqlmesh.core.engine_adapter.mixins import PandasNativeFetchDFSupportMixin
 from sqlmesh.core.engine_adapter.trino import TrinoEngineAdapter
 from sqlmesh.core.node import IntervalUnit
@@ -22,20 +23,6 @@ if t.TYPE_CHECKING:
     from sqlmesh.core._typing import SchemaName, TableName
 
 logger = logging.getLogger(__name__)
-
-
-def _ensure_valid_location(value: str) -> str:
-    if not value.startswith("s3://"):
-        raise SQLMeshError(f"Location '{value}' must be a s3:// URI")
-
-    if not value.endswith("/"):
-        value += "/"
-
-    # To avoid HIVE_METASTORE_ERROR: S3 resource path length must be less than or equal to 700.
-    if len(value) > 700:
-        raise SQLMeshError(f"Location '{value}' cannot be more than 700 characters")
-
-    return value
 
 
 # Athena's interaction with the Glue Data Catalog is a bit racey when lots of DDL queries are being fired at it, eg in integration tests
@@ -85,7 +72,7 @@ class AthenaEngineAdapter(PandasNativeFetchDFSupportMixin):
     @s3_warehouse_location.setter
     def s3_warehouse_location(self, value: t.Optional[str]) -> None:
         if value:
-            value = _ensure_valid_location(value)
+            value = validate_s3_location(value)
         self._s3_warehouse_location = value
 
     def create_state_table(
@@ -116,8 +103,7 @@ class AthenaEngineAdapter(PandasNativeFetchDFSupportMixin):
             exp.select(
                 exp.case()
                 .when(
-                    # 'awsdatacatalog' is the default catalog that is invisible for all intents and purposes
-                    # it just happens to show up in information_schema queries
+                    # calling code expects data objects in the default catalog to have their catalog set to None
                     exp.column("table_catalog", table="t").eq("awsdatacatalog"),
                     exp.Null(),
                 )
@@ -134,11 +120,7 @@ class AthenaEngineAdapter(PandasNativeFetchDFSupportMixin):
                 .as_("type"),
             )
             .from_(exp.to_table("information_schema.tables", alias="t"))
-            .where(
-                exp.and_(
-                    exp.column("table_schema", table="t").eq(schema),
-                )
-            )
+            .where(exp.column("table_schema", table="t").eq(schema))
         )
         if object_names:
             query = query.where(exp.column("table_name", table="t").isin(*object_names))
@@ -312,19 +294,17 @@ class AthenaEngineAdapter(PandasNativeFetchDFSupportMixin):
                 # STORED AS PARQUET
                 properties.append(exp.FileFormatProperty(this=storage_format))
 
-        if table and (location := self._table_location(table_properties, table)):
+        if table and (location := self._table_location_or_raise(table_properties, table)):
             properties.append(location)
+
+            if is_iceberg and expression:
+                # To make a CTAS expression persist as iceberg, alongside setting `table_type=iceberg`, you also need to set is_external=false
+                # Note that SQLGlot does the right thing with LocationProperty and writes it as `location` (Iceberg) instead of `external_location` (Hive)
+                # ref: https://docs.aws.amazon.com/athena/latest/ug/create-table-as.html#ctas-table-properties
+                properties.append(exp.Property(this=exp.var("is_external"), value="false"))
 
         for name, value in table_properties.items():
             properties.append(exp.Property(this=exp.var(name), value=value))
-
-        if is_iceberg and expression:
-            # To make a CTAS expression persist as iceberg, alongside setting `table_type=iceberg` (which the user has already
-            # supplied in physical_properties and is thus set above), you also need to set:
-            #  - is_external=false
-            #  - table_location='s3://<path>'
-            # ref: https://docs.aws.amazon.com/athena/latest/ug/create-table-as.html#ctas-table-properties
-            properties.append(exp.Property(this=exp.var("is_external"), value="false"))
 
         if properties:
             return exp.Properties(expressions=properties)
@@ -342,7 +322,7 @@ class AthenaEngineAdapter(PandasNativeFetchDFSupportMixin):
         """
         Use the user-specified table_properties to figure out of this is a Hive or an Iceberg table
         """
-        # if table_type is not defined or is not set to "iceberg", this is a Hive table
+        # if we cant detect any indication of Iceberg, this is a Hive table
         if table_properties and (table_type := table_properties.get("table_type", None)):
             if "iceberg" in table_type.sql(dialect=self.dialect).lower():
                 return "iceberg"
@@ -365,6 +345,16 @@ class AthenaEngineAdapter(PandasNativeFetchDFSupportMixin):
                 return "hive"
         return "iceberg"
 
+    def _table_location_or_raise(
+        self, table_properties: t.Optional[t.Dict[str, exp.Expression]], table: exp.Table
+    ) -> exp.LocationProperty:
+        location = self._table_location(table_properties, table)
+        if not location:
+            raise SQLMeshError(
+                f"Cannot figure out location for table {table}. Please either set `s3_base_location` in `physical_properties` or set `s3_warehouse_location` in the Athena connection config"
+            )
+        return location
+
     def _table_location(
         self,
         table_properties: t.Optional[t.Dict[str, exp.Expression]],
@@ -384,18 +374,11 @@ class AthenaEngineAdapter(PandasNativeFetchDFSupportMixin):
 
         elif self.s3_warehouse_location:
             # If the user has set `s3_warehouse_location` in the connection config, the base URI is <s3_warehouse_location>/<catalog>/<schema>/
-            catalog_name = table.catalog if hasattr(table, "catalog") else None
-            schema_name = table.db if hasattr(table, "db") else None
-            base_uri = os.path.join(
-                self.s3_warehouse_location, catalog_name or "", schema_name or ""
-            )
+            base_uri = os.path.join(self.s3_warehouse_location, table.catalog or "", table.db or "")
         else:
-            # Assume the user has set a default location for this schema in the metastore
             return None
 
-        table_name = table.name if hasattr(table, "name") else None
-        full_uri = _ensure_valid_location(os.path.join(base_uri, table_name or ""))
-
+        full_uri = validate_s3_location(os.path.join(base_uri, table.text("this") or ""))
         return exp.LocationProperty(this=exp.Literal.string(full_uri))
 
     def _find_matching_columns(

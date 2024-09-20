@@ -18,6 +18,7 @@ from sqlmesh.core.config.base import BaseConfig
 from sqlmesh.core.config.common import (
     concurrent_tasks_validator,
     http_headers_validator,
+    validate_s3_location,
 )
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.utils.errors import ConfigError
@@ -1498,7 +1499,9 @@ class AthenaConnectionConfig(ConnectionConfig):
     # SQLMesh options
     s3_warehouse_location: t.Optional[str] = None
     concurrent_tasks: int = 4
-    register_comments: bool = False  # because Athena doesnt support comments in most cases
+    register_comments: Literal[False] = (
+        False  # because Athena doesnt support comments in most cases
+    )
     pre_ping: Literal[False] = False
 
     type_: Literal["athena"] = Field(alias="type", default="athena")
@@ -1508,9 +1511,18 @@ class AthenaConnectionConfig(ConnectionConfig):
     def _root_validator(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
         work_group = values.get("work_group")
         s3_staging_dir = values.get("s3_staging_dir")
+        s3_warehouse_location = values.get("s3_warehouse_location")
 
         if not work_group and not s3_staging_dir:
             raise ConfigError("At least one of work_group or s3_staging_dir must be set")
+
+        if s3_staging_dir:
+            values["s3_staging_dir"] = validate_s3_location(s3_staging_dir, error_type=ConfigError)
+
+        if s3_warehouse_location:
+            values["s3_warehouse_location"] = validate_s3_location(
+                s3_warehouse_location, error_type=ConfigError
+            )
 
         return values
 
