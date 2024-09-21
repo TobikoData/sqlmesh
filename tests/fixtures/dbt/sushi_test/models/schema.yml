@@ -2,6 +2,13 @@ version: 2
 
 models:
   - name: top_waiters
+    columns:
+      - name: waiter_id
+        data_type: int
+      - name: revenue
+        data_type: double
+      - name: model_columns
+        data_type: int
     config:
       dialect: postgres
   - name: waiters

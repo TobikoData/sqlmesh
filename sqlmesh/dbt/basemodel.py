@@ -231,9 +231,6 @@ class BaseModelConfig(GeneralConfig):
             }
         )
 
-    def model_function(self) -> AttributeDict[str, t.Any]:
-        return AttributeDict({"config": self.config_attribute_dict})
-
     @property
     def tests_ref_source_dependencies(self) -> Dependencies:
         dependencies = Dependencies()
@@ -280,6 +277,14 @@ class BaseModelConfig(GeneralConfig):
     def sqlmesh_config_fields(self) -> t.Set[str]:
         return {"description", "owner", "stamp", "storage_format"}
 
+    @property
+    def node_name(self) -> str:
+        resource_type = getattr(self, "resource_type", "model")
+        node_name = f"{resource_type}.{self.package_name}.{self.name}"
+        if self.version:
+            node_name += f".v{self.version}"
+        return node_name
+
     def sqlmesh_model_kwargs(self, context: DbtContext) -> t.Dict[str, t.Any]:
         """Get common sqlmesh model parameters"""
         self.check_for_circular_test_refs(context)
@@ -289,10 +294,21 @@ class BaseModelConfig(GeneralConfig):
         jinja_macros = model_context.jinja_macros.trim(
             self.dependencies.macros, package=self.package_name
         )
+
+        model_node: AttributeDict[str, t.Any] = AttributeDict(
+            {
+                k: v
+                for k, v in context._manifest._manifest.nodes[self.node_name].to_dict().items()
+                if k in self.dependencies.model_attrs
+            }
+            if context._manifest and self.node_name in context._manifest._manifest.nodes
+            else {}
+        )
+
         jinja_macros.add_globals(
             {
                 "this": self.relation_info,
-                "model": self.model_function(),
+                "model": model_node,
                 "schema": self.table_schema,
                 "config": self.config_attribute_dict,
                 **model_context.jinja_globals,  # type: ignore

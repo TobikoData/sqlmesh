@@ -5,9 +5,13 @@
     )
 }}
 
+{% set columns = model.columns %}
+{% set config = model.config %}
+
 SELECT
   waiter_id::INT AS waiter_id,
-  revenue::DOUBLE AS {{ var("top_waiters:revenue") }}
+  revenue::DOUBLE AS {{ var("top_waiters:revenue") }},
+  {{ columns | length }} AS model_columns
 FROM {{ ref('sushi', 'waiter_revenue_by_day') }}
 WHERE
   ds = (
