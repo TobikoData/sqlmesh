@@ -914,7 +914,8 @@ class GCPPostgresConnectionConfig(ConnectionConfig):
         creds = None
         if self.keyfile:
             creds = service_account.Credentials.from_service_account_file(
-                self.keyfile, scopes=self.scopes)
+                self.keyfile, scopes=self.scopes
+            )
         elif self.keyfile_json:
             creds = service_account.Credentials.from_service_account_info(
                 self.keyfile_json, scopes=self.scopes
