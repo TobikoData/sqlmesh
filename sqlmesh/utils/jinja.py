@@ -16,6 +16,10 @@ from sqlmesh.core import dialect as d
 from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.pydantic import PRIVATE_FIELDS, PydanticModel, field_serializer, field_validator
 
+
+if t.TYPE_CHECKING:
+    CallNames = t.Tuple[t.Tuple[str, ...], t.Union[nodes.Call, nodes.Getattr]]
+
 SQLMESH_JINJA_PACKAGE = "sqlmesh.utils.jinja"
 
 
@@ -27,8 +31,6 @@ def environment(**kwargs: t.Any) -> Environment:
 
 
 ENVIRONMENT = environment()
-
-CallNames = t.Tuple[t.Tuple[str, ...], nodes.Call]
 
 
 class MacroReference(PydanticModel, frozen=True):
@@ -136,7 +138,9 @@ def find_call_names(node: nodes.Node, vars_in_scope: t.Set[str]) -> t.Iterator[C
         elif isinstance(child_node, nodes.Macro):
             for arg in child_node.args:
                 vars_in_scope.add(arg.name)
-        elif isinstance(child_node, nodes.Call):
+        elif isinstance(child_node, nodes.Call) or (
+            isinstance(child_node, nodes.Getattr) and not isinstance(child_node.node, nodes.Getattr)
+        ):
             name = call_name(child_node)
             if name[0][0] != "'" and name[0] not in vars_in_scope:
                 yield (name, child_node)
@@ -168,6 +172,7 @@ def extract_macro_references_and_variables(
     for jinja_str in jinja_strs:
         for call_name, node in extract_call_names(jinja_str):
             if call_name[0] == c.VAR:
+                assert isinstance(node, nodes.Call)
                 args = [jinja_call_arg_name(arg) for arg in node.args]
                 if args and args[0]:
                     variables.add(args[0].lower())

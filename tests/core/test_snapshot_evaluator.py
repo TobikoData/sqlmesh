@@ -2673,7 +2673,7 @@ def test_create_managed_forward_only_with_previous_version_doesnt_clone_for_dev_
         )
     )
 
-    snapshot: Snapshot = make_snapshot(model)
+    snapshot = make_snapshot(model)
     snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
     snapshot.previous_versions = (
         SnapshotDataVersion(

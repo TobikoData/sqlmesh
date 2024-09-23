@@ -60,6 +60,21 @@ hive.metastore.uri=thrift://example.net:9083
 delta.hive-catalog-name=datalake_delta # example catalog name, can be any valid string
 ```
 
+#### AWS Glue
+
+[AWS Glue](https://aws.amazon.com/glue/) provides an implementation of the Hive metastore catalog.
+
+Your Trino project's physical data objects are stored in a specific location, such as an [AWS S3](https://aws.amazon.com/s3/) bucket. Hive provides a default location, which you can override in its configuration file.
+
+Set the default location for your project's tables in the Hive catalog configuration's [`hive.metastore.glue.default-warehouse-dir` parameter](https://trino.io/docs/current/object-storage/metastores.html#aws-glue-catalog-configuration-properties).
+
+For example:
+
+```linenums="1"
+hive.metastore=glue
+hive.metastore.glue.default-warehouse-dir=s3://my-bucket/
+```
+
 ### Connection options
 
 | Option               | Description                                                                                                                                                               |  Type  | Required |

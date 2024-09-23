@@ -2315,7 +2315,7 @@ def test_to_time_column(
         #   specific data type to validate what is returned.
         import re
 
-        time_column = re.match("^(.*?)\+", time_column).group(1)
+        time_column = re.match(r"^(.*?)\+", time_column).group(1)
         time_column_type = exp.DataType.build("TIMESTAMP('UTC')", dialect="clickhouse")
 
     time_column = to_time_column(time_column, time_column_type, time_column_format)

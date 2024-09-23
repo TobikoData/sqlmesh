@@ -31,6 +31,7 @@ def test_manifest_helper(caplog):
     assert models["top_waiters"].dependencies == Dependencies(
         refs={"sushi.waiter_revenue_by_day", "waiter_revenue_by_day"},
         variables={"top_waiters:revenue", "top_waiters:limit"},
+        model_attrs={"columns", "config"},
         macros=[MacroReference(name="ref"), MacroReference(name="var")],
     )
     assert models["top_waiters"].materialized == "view"

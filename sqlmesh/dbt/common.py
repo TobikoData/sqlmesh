@@ -179,6 +179,7 @@ class Dependencies(PydanticModel):
     sources: t.Set[str] = set()
     refs: t.Set[str] = set()
     variables: t.Set[str] = set()
+    model_attrs: t.Set[str] = set()
 
     def union(self, other: Dependencies) -> Dependencies:
         return Dependencies(
@@ -186,6 +187,7 @@ class Dependencies(PydanticModel):
             sources=self.sources | other.sources,
             refs=self.refs | other.refs,
             variables=self.variables | other.variables,
+            model_attrs=self.model_attrs | other.model_attrs,
         )
 
     @field_validator("macros", mode="after")

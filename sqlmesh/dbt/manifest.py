@@ -15,6 +15,7 @@ from dbt import constants as dbt_constants, flags
 # Override the file name to prevent dbt commands from invalidating the cache.
 dbt_constants.PARTIAL_PARSE_FILE_NAME = "sqlmesh_partial_parse.msgpack"
 
+import jinja2
 from dbt.adapters.factory import register_adapter, reset_adapters
 from dbt.config import Profile, Project, RuntimeConfig
 from dbt.config.profile import read_profile
@@ -398,6 +399,9 @@ class ManifestHelper:
         for call_name, node in extract_call_names(target, cache=self._calls):
             if call_name[0] == "config":
                 continue
+            elif isinstance(node, jinja2.nodes.Getattr):
+                if call_name[0] == "model":
+                    dependencies.model_attrs.add(call_name[1])
             elif call_name[0] == "source":
                 args = [jinja_call_arg_name(arg) for arg in node.args]
                 if args and all(arg for arg in args):

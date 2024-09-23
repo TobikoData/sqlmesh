@@ -81,7 +81,10 @@ class UniqueKeyDict(t.Dict[KEY, VALUE]):
 
 
 class AttributeDict(dict, t.Mapping[KEY, VALUE]):
-    __getattr__ = dict.get
+    def __getattr__(self, key: t.Any) -> t.Optional[VALUE]:
+        if key.startswith("__") and not hasattr(self, key):
+            raise AttributeError
+        return self.get(key)
 
     def set(self, field: str, value: t.Any) -> str:
         self[field] = value

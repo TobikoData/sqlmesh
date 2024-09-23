@@ -1386,6 +1386,30 @@ def test_dbt_select_star_is_directly_modified(sushi_test_dbt_context: Context):
     assert plan.snapshots[snapshot_b_id].change_category == SnapshotChangeCategory.NON_BREAKING
 
 
+def test_model_attr(sushi_test_dbt_context: Context, assert_exp_eq):
+    context = sushi_test_dbt_context
+    model = context.get_model("sushi.top_waiters")
+    assert_exp_eq(
+        model.render_query(),
+        """
+        SELECT
+          CAST("waiter_id" AS INT) AS "waiter_id",
+          CAST("revenue" AS DOUBLE) AS "revenue",
+          3 AS "model_columns"
+        FROM "memory"."sushi"."waiter_revenue_by_day_v2" AS "waiter_revenue_by_day_v2"
+        WHERE
+          "ds" = (
+             SELECT
+               MAX("ds")
+             FROM "memory"."sushi"."waiter_revenue_by_day_v2" AS "waiter_revenue_by_day_v2"
+           )
+        ORDER BY
+          "revenue" DESC NULLS FIRST
+        LIMIT 10
+        """,
+    )
+
+
 @freeze_time("2023-01-08 15:00:00")
 def test_incremental_by_partition(init_and_plan_context: t.Callable):
     context, plan = init_and_plan_context("examples/sushi")
