@@ -11,6 +11,7 @@ SQLMesh supports integrations with the following tools:
 ## Execution engines
 SQLMesh supports the following execution engines for running SQLMesh projects:
 
+* [Athena](./engines/athena.md)
 * [BigQuery](./engines/bigquery.md)
 * [Databricks](./engines/databricks.md)
 * [DuckDB](./engines/duckdb.md)

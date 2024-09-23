@@ -16,6 +16,7 @@ from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 from sqlmesh import Config, Context, EngineAdapter
 from sqlmesh.cli.example_project import init_example_project
 from sqlmesh.core.config import load_config_from_paths
+from sqlmesh.core.config.connection import AthenaConnectionConfig
 from sqlmesh.core.dialect import normalize_model_name
 import sqlmesh.core.dialect as d
 from sqlmesh.core.engine_adapter import SparkEngineAdapter, TrinoEngineAdapter
@@ -179,6 +180,13 @@ class TestContext:
                 dialect=self.dialect,
             )
         )
+
+    def physical_properties(
+        self, properties_for_dialect: t.Dict[str, t.Dict[str, str | exp.Expression]]
+    ) -> t.Dict[str, exp.Expression]:
+        if props := properties_for_dialect.get(self.dialect):
+            return {k: exp.Literal.string(v) if isinstance(v, str) else v for k, v in props.items()}
+        return {}
 
     def schema(self, schema_name: str, catalog_name: t.Optional[str] = None) -> str:
         return exp.table_name(
@@ -414,6 +422,13 @@ class TestContext:
         )
         if config_mutator:
             config_mutator(self.gateway, config)
+
+        if "athena" in self.gateway:
+            # Ensure that s3_warehouse_location is propagated
+            config.gateways[
+                self.gateway
+            ].connection.s3_warehouse_location = self.engine_adapter.s3_warehouse_location
+
         self._context = Context(paths=".", config=config, gateway=self.gateway)
         return self._context
 
@@ -687,19 +702,54 @@ def config() -> Config:
                 pytest.mark.xdist_group("engine_integration_clickhouse_cloud"),
             ],
         ),
+        pytest.param(
+            "athena",
+            marks=[
+                pytest.mark.engine,
+                pytest.mark.remote,
+                pytest.mark.athena,
+                pytest.mark.xdist_group("engine_integration_athena"),
+            ],
+        ),
     ]
 )
 def mark_gateway(request) -> t.Tuple[str, str]:
     return request.param, f"inttest_{request.param}"
 
 
+@pytest.fixture(scope="session")
+def run_count(request) -> t.Iterable[int]:
+    count: int = request.config.cache.get("run_count", 0)
+    count += 1
+    yield count
+    request.config.cache.set("run_count", count)
+
+
 @pytest.fixture
-def engine_adapter(mark_gateway: t.Tuple[str, str], config) -> EngineAdapter:
+def engine_adapter(
+    mark_gateway: t.Tuple[str, str], config, testrun_uid, run_count
+) -> EngineAdapter:
     mark, gateway = mark_gateway
     if gateway not in config.gateways:
         # TODO: Once everything is fully setup we want to error if a gateway is not configured that we expect
         pytest.skip(f"Gateway {gateway} not configured")
     connection_config = config.gateways[gateway].connection
+
+    if mark == "athena":
+        connection_config = t.cast(AthenaConnectionConfig, connection_config)
+        # S3 files need to go into a unique location for each test run
+        # This is because DROP TABLE on a Hive table just drops the table from the metastore
+        # The files still exist in S3, so if you CREATE TABLE to the same location, the old data shows back up
+        # This is a problem for any tests like `test_init_project` that use a consistent schema like `sqlmesh_example` between runs
+        # Note that the `testrun_uid` fixture comes from the xdist plugin
+        testrun_path = f"testrun_{testrun_uid}"
+        if current_location := connection_config.s3_warehouse_location:
+            if testrun_path not in current_location:
+                # only add it if its not already there (since this setup code gets called multiple times in a full test run)
+                connection_config.s3_warehouse_location = os.path.join(
+                    current_location, testrun_path, str(run_count)
+                )
+
     engine_adapter = connection_config.create_engine_adapter()
     # Trino: If we batch up the requests then when running locally we get a table not found error after creating the
     # table and then immediately after trying to insert rows into it. There seems to be a delay between when the
@@ -1276,7 +1326,16 @@ def test_merge(ctx: TestContext):
 
     ctx.init()
     table = ctx.table("test_table")
-    ctx.engine_adapter.create_table(table, ctx.columns_to_types)
+
+    table_properties = ctx.physical_properties(
+        {
+            # Athena only supports MERGE on Iceberg tables
+            # And it cant fall back to a logical merge on Hive tables because it cant delete records
+            "athena": {"table_type": "iceberg"}
+        }
+    )
+
+    ctx.engine_adapter.create_table(table, ctx.columns_to_types, table_properties=table_properties)
     input_data = pd.DataFrame(
         [
             {"id": 1, "ds": "2022-01-01"},
@@ -1346,7 +1405,13 @@ def test_scd_type_2_by_time(ctx: TestContext):
     input_schema = {
         k: v for k, v in ctx.columns_to_types.items() if k not in ("valid_from", "valid_to")
     }
-    ctx.engine_adapter.create_table(table, ctx.columns_to_types)
+    table_properties = ctx.physical_properties(
+        {
+            # Athena only supports the operations required for SCD models on Iceberg tables
+            "athena": {"table_type": "iceberg"}
+        }
+    )
+    ctx.engine_adapter.create_table(table, ctx.columns_to_types, table_properties=table_properties)
     input_data = pd.DataFrame(
         [
             {"id": 1, "name": "a", "updated_at": "2022-01-01 00:00:00"},
@@ -1364,6 +1429,7 @@ def test_scd_type_2_by_time(ctx: TestContext):
         execution_time="2023-01-01 00:00:00",
         updated_at_as_valid_from=False,
         columns_to_types=input_schema,
+        table_properties=table_properties,
     )
     results = ctx.get_metadata_results()
     assert len(results.views) == 0
@@ -1424,6 +1490,7 @@ def test_scd_type_2_by_time(ctx: TestContext):
         execution_time="2023-01-05 00:00:00",
         updated_at_as_valid_from=False,
         columns_to_types=input_schema,
+        table_properties=table_properties,
     )
     results = ctx.get_metadata_results()
     assert len(results.views) == 0
@@ -1489,7 +1556,13 @@ def test_scd_type_2_by_column(ctx: TestContext):
     input_schema = {
         k: v for k, v in ctx.columns_to_types.items() if k not in ("valid_from", "valid_to")
     }
-    ctx.engine_adapter.create_table(table, ctx.columns_to_types)
+    table_properties = ctx.physical_properties(
+        {
+            # Athena only supports the operations required for SCD models on Iceberg tables
+            "athena": {"table_type": "iceberg"}
+        }
+    )
+    ctx.engine_adapter.create_table(table, ctx.columns_to_types, table_properties=table_properties)
     input_data = pd.DataFrame(
         [
             {"id": 1, "name": "a", "status": "active"},
@@ -1721,7 +1794,15 @@ def test_truncate_table(ctx: TestContext):
 
     ctx.init()
     table = ctx.table("test_table")
-    ctx.engine_adapter.create_table(table, ctx.columns_to_types)
+
+    table_properties = ctx.physical_properties(
+        {
+            # Athena only supports TRUNCATE (DELETE FROM <table>) on Iceberg tables
+            "athena": {"table_type": "iceberg"}
+        }
+    )
+
+    ctx.engine_adapter.create_table(table, ctx.columns_to_types, table_properties=table_properties)
     input_data = pd.DataFrame(
         [
             {"id": 1, "ds": "2022-01-01"},
@@ -1773,7 +1854,13 @@ def test_sushi(mark_gateway: t.Tuple[str, str], ctx: TestContext):
         ],
         personal_paths=[pathlib.Path("~/.sqlmesh/config.yaml").expanduser()],
     )
-    _, gateway = mark_gateway
+    mark, gateway = mark_gateway
+
+    if mark == "athena":
+        # Ensure that this test is using the same s3_warehouse_location as TestContext (which includes the testrun_id)
+        config.gateways[
+            gateway
+        ].connection.s3_warehouse_location = ctx.engine_adapter.s3_warehouse_location
 
     # clear cache from prior runs
     cache_dir = pathlib.Path("./examples/sushi/.cache")
@@ -1852,6 +1939,13 @@ def test_sushi(mark_gateway: t.Tuple[str, str], ctx: TestContext):
             )
             context.engine_adapter.execute(
                 "CREATE VIEW raw.demographics ON CLUSTER cluster1 AS SELECT 1 AS customer_id, '00000' AS zip;"
+            )
+
+    # Athena needs models that get mutated after creation to be using Iceberg
+    if ctx.dialect == "athena":
+        for model_name in {"sushi.customer_revenue_lifetime"}:
+            context.get_model(model_name).physical_properties["table_type"] = exp.Literal.string(
+                "iceberg"
             )
 
     plan: Plan = context.plan(
@@ -2136,7 +2230,14 @@ def test_init_project(ctx: TestContext, mark_gateway: t.Tuple[str, str], tmp_pat
     if config.model_defaults.dialect != ctx.dialect:
         config.model_defaults = config.model_defaults.copy(update={"dialect": ctx.dialect})
 
-    _, gateway = mark_gateway
+    mark, gateway = mark_gateway
+
+    if mark == "athena":
+        # Ensure that this test is using the same s3_warehouse_location as TestContext (which includes the testrun_id)
+        config.gateways[
+            gateway
+        ].connection.s3_warehouse_location = ctx.engine_adapter.s3_warehouse_location
+
     context = Context(paths=tmp_path, config=config, gateway=gateway)
     ctx.engine_adapter = context.engine_adapter
 
@@ -2368,6 +2469,12 @@ def test_batch_size_on_incremental_by_unique_key_model(
     context.upsert_model(
         create_sql_model(name=f"{schema}.seed_model", query=seed_query, kind="FULL")
     )
+
+    physical_properties = ""
+    if ctx.dialect == "athena":
+        # INCREMENTAL_BY_UNIQUE_KEY uses MERGE which is only supported in Athena on Iceberg tables
+        physical_properties = "physical_properties (table_type = 'iceberg'),"
+
     context.upsert_model(
         load_sql_based_model(
             d.parse(
@@ -2377,6 +2484,7 @@ def test_batch_size_on_incremental_by_unique_key_model(
                         unique_key item_id,
                         batch_size 1
                     ),
+                    {physical_properties}
                     start '2020-01-01',
                     end '2020-01-07',
                     cron '@daily'

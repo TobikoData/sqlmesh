@@ -1034,8 +1034,9 @@ class EngineAdapter:
         schema_name: SchemaName,
         ignore_if_exists: bool = True,
         warn_on_error: bool = True,
-        properties: t.List[exp.Expression] = [],
+        properties: t.Optional[t.List[exp.Expression]] = None,
     ) -> None:
+        properties = properties or []
         return self._create_schema(
             schema_name=schema_name,
             ignore_if_exists=ignore_if_exists,
@@ -1325,6 +1326,7 @@ class EngineAdapter:
             table_description=table_description,
             column_descriptions=column_descriptions,
             truncate=truncate,
+            **kwargs,
         )
 
     def scd_type_2_by_column(
@@ -1358,6 +1360,7 @@ class EngineAdapter:
             table_description=table_description,
             column_descriptions=column_descriptions,
             truncate=truncate,
+            **kwargs,
         )
 
     def _scd_type_2(
@@ -1377,6 +1380,7 @@ class EngineAdapter:
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
         truncate: bool = False,
+        **kwargs: t.Any,
     ) -> None:
         def remove_managed_columns(
             cols_to_types: t.Dict[str, exp.DataType],
@@ -1730,6 +1734,7 @@ class EngineAdapter:
                 columns_to_types=columns_to_types,
                 table_description=table_description,
                 column_descriptions=column_descriptions,
+                **kwargs,
             )
 
     def merge(

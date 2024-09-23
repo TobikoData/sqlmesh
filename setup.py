@@ -50,6 +50,7 @@ setup(
         "sqlglot[rs]~=25.22.0",
     ],
     extras_require={
+        "athena": ["PyAthena[Pandas]"],
         "bigquery": [
             "google-cloud-bigquery[pandas]",
             "google-cloud-bigquery-storage",

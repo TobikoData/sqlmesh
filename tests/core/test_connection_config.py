@@ -15,6 +15,7 @@ from sqlmesh.core.config.connection import (
     PostgresConnectionConfig,
     SnowflakeConnectionConfig,
     TrinoAuthenticationMethod,
+    AthenaConnectionConfig,
     _connection_config_validator,
 )
 from sqlmesh.utils.errors import ConfigError
@@ -668,3 +669,55 @@ def test_clickhouse(make_config):
 
     assert not config3.use_compression
     assert not config3._static_connection_kwargs["compress"]
+
+
+def test_athena(make_config):
+    config = make_config(type="athena", work_group="primary")
+    assert isinstance(config, AthenaConnectionConfig)
+
+
+def test_athena_s3_staging_dir_or_workgroup(make_config):
+    with pytest.raises(
+        ConfigError, match=r"At least one of work_group or s3_staging_dir must be set"
+    ):
+        config = make_config(type="athena")
+
+    config = make_config(type="athena", s3_staging_dir="s3://foo")
+
+    assert isinstance(config, AthenaConnectionConfig)
+    assert config.work_group is None
+    assert config.s3_staging_dir == "s3://foo/"  # validator appends trailing /
+
+    config = make_config(type="athena", work_group="test")
+
+    assert isinstance(config, AthenaConnectionConfig)
+    assert config.work_group == "test"
+    assert config.s3_staging_dir is None
+
+
+def test_athena_s3_locations_valid(make_config):
+    with pytest.raises(ConfigError, match=r".*must be a s3:// URI.*"):
+        make_config(
+            type="athena", work_group="primary", s3_warehouse_location="hdfs://legacy/location"
+        )
+
+    with pytest.raises(ConfigError, match=r".*must be a s3:// URI.*"):
+        make_config(type="athena", s3_staging_dir="alskdjlskadgj")
+
+    config = make_config(
+        type="athena",
+        s3_staging_dir="s3://bucket/query-results",
+        s3_warehouse_location="s3://bucket/prod/warehouse/",
+    )
+
+    assert isinstance(config, AthenaConnectionConfig)
+    assert config.s3_staging_dir == "s3://bucket/query-results/"
+    assert config.s3_warehouse_location == "s3://bucket/prod/warehouse/"
+
+    config = make_config(
+        type="athena", work_group="primary", s3_staging_dir=None, s3_warehouse_location=None
+    )
+
+    assert isinstance(config, AthenaConnectionConfig)
+    assert config.s3_staging_dir is None
+    assert config.s3_warehouse_location is None

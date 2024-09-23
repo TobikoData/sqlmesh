@@ -153,5 +153,17 @@ gateways:
     state_connection:
       type: duckdb
 
+  inttest_athena:
+    connection:
+      type: athena
+      aws_access_key_id: {{ env_var("AWS_ACCESS_KEY_ID") }}
+      aws_secret_access_key: {{ env_var("AWS_SECRET_ACCESS_KEY") }}
+      region_name: {{ env_var("AWS_REGION") }}
+      work_group: {{ env_var("ATHENA_WORK_GROUP", "primary") }}
+      s3_warehouse_location: {{ env_var("ATHENA_S3_WAREHOUSE_LOCATION", "") }}
+      concurrent_tasks: 1
+    state_connection:
+      type: duckdb
+
 model_defaults:
     dialect: duckdb
