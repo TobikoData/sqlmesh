@@ -848,6 +848,8 @@ class GCPPostgresConnectionConfig(ConnectionConfig):
         password: The postgres user's password. Only needed when the user is a postgres user.
         enable_iam_auth: Set to True when user is an IAM user.
         db: Name of the db to connect to.
+        keyfile: string path to json service account credentials file
+        keyfile_json: dict service account credentials info
         pre_ping: Whether or not to pre-ping the connection before starting a new transaction to ensure it is still alive.
     """
 
@@ -856,8 +858,11 @@ class GCPPostgresConnectionConfig(ConnectionConfig):
     password: t.Optional[str] = None
     enable_iam_auth: t.Optional[bool] = None
     db: str
+    # Keyfile Auth
+    keyfile: t.Optional[str] = None
+    keyfile_json: t.Optional[t.Dict[str, t.Any]] = None
     timeout: t.Optional[int] = None
-
+    scopes: t.Tuple[str, ...] = ("https://www.googleapis.com/auth/sqlservice.admin",)
     driver: str = "pg8000"
     type_: Literal["gcp_postgres"] = Field(alias="type", default="gcp_postgres")
     concurrent_tasks: int = 4
@@ -904,8 +909,18 @@ class GCPPostgresConnectionConfig(ConnectionConfig):
     @property
     def _connection_factory(self) -> t.Callable:
         from google.cloud.sql.connector import Connector
+        from google.oauth2 import service_account
 
-        return Connector().connect
+        creds = None
+        if self.keyfile:
+            creds = service_account.Credentials.from_service_account_file(
+                self.keyfile, scopes=self.scopes)
+        elif self.keyfile_json:
+            creds = service_account.Credentials.from_service_account_info(
+                self.keyfile_json, scopes=self.scopes
+            )
+
+        return Connector(credentials=creds).connect
 
 
 class RedshiftConnectionConfig(ConnectionConfig):
