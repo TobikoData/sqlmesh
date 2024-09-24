@@ -108,7 +108,7 @@ def full_model_with_two_ctes(request) -> SqlModel:
         renamed AS (
             SELECT id AS fid FROM source
         )
-        SELECT fid FROM renamed;
+        SELECT fid FROM RENAMED;
         """,
         dialect=getattr(request, "param", None),
         default_catalog="memory",
