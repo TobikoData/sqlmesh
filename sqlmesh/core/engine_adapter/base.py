@@ -1197,7 +1197,8 @@ class EngineAdapter:
         source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
             query_or_df, columns_to_types, target_table=table_name
         )
-        columns_to_types = columns_to_types or self.columns(table_name)
+        if not columns_to_types or not columns_to_types_all_known(columns_to_types):
+            columns_to_types = self.columns(table_name)
         low, high = [time_formatter(dt, columns_to_types) for dt in make_inclusive(start, end)]
         if isinstance(time_column, TimeColumn):
             time_column = time_column.column
