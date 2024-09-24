@@ -410,6 +410,40 @@ def test_seed_columns():
     assert sqlmesh_seed.column_descriptions == expected_column_descriptions
 
 
+def test_seed_column_types():
+    seed = SeedConfig(
+        name="foo",
+        package="package",
+        path=Path("examples/sushi_dbt/seeds/waiter_names.csv"),
+        column_types={
+            "address": "text",
+            "zipcode": "text",
+        },
+        columns={
+            "zipcode": ColumnConfig(name="zipcode", description="Business zipcode"),
+        },
+        quote_columns=True,
+    )
+
+    expected_column_types = {
+        "address": parse_one("text", into=exp.DataType),
+        "zipcode": parse_one("text", into=exp.DataType),
+    }
+    expected_column_descriptions = {
+        "zipcode": "Business zipcode",
+    }
+
+    context = DbtContext()
+    context.project_name = "Foo"
+    context.target = DuckDbConfig(name="target", schema="test")
+    sqlmesh_seed = seed.to_sqlmesh(context)
+
+    assert seed.columns["zipcode"].quote
+    assert seed.columns["address"].quote
+    assert sqlmesh_seed.columns_to_types == expected_column_types
+    assert sqlmesh_seed.column_descriptions == expected_column_descriptions
+
+
 def test_seed_column_inference(tmp_path):
     seed_csv = tmp_path / "seed.csv"
     with open(seed_csv, "w", encoding="utf-8") as fd:

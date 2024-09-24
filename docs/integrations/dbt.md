@@ -214,6 +214,25 @@ seeds:
         data_type: <SQL data type>
 ```
 
+Alternatively, you can specify a [column_types](https://docs.getdbt.com/reference/resource-configs/column_types) dictionary in your `dbt_project.yml` file, where the keys define the column names and the values the data types.
+
+``` yaml
+seeds:
+  <seed name>
+    +column_types:
+        <column name> : <SQL data type>
+```
+
+You can also define this dictionary in the seed properties configuration file.
+
+``` yaml
+seeds:
+  - name: <seed name>
+    config:
+        column_types:
+            <column name> : <SQL data type>
+```
+
 ## Package Management
 SQLMesh does not have its own package manager; however, SQLMesh's dbt adapter is compatible with dbt's package manager. Continue to use [dbt deps](https://docs.getdbt.com/reference/commands/deps) and [dbt clean](https://docs.getdbt.com/reference/commands/clean) to update, add, or remove packages.
 

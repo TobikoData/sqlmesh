@@ -16,6 +16,7 @@ from sqlglot import exp
 
 from sqlmesh.core.model import Model, SeedKind, create_seed_model
 from sqlmesh.dbt.basemodel import BaseModelConfig
+from sqlmesh.dbt.column import ColumnConfig
 
 if t.TYPE_CHECKING:
     from sqlmesh.dbt.context import DbtContext
@@ -31,10 +32,18 @@ class SeedConfig(BaseModelConfig):
     """
 
     delimiter: str = ","
+    column_types: t.Optional[t.Dict[str, str]] = None
+    quote_columns: t.Optional[bool] = False
 
     def to_sqlmesh(self, context: DbtContext) -> Model:
         """Converts the dbt seed into a SQLMesh model."""
         seed_path = self.path.absolute().as_posix()
+
+        for name, data_type in (self.column_types or {}).items():
+            column = self.columns.setdefault(name, ColumnConfig(name=name))
+            column.data_type = data_type
+            column.quote = self.quote_columns or column.quote
+
         kwargs = self.sqlmesh_model_kwargs(context)
         if kwargs.get("columns") is None:
             agate_table = (
