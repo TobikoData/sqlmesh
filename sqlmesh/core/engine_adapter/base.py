@@ -1026,7 +1026,7 @@ class EngineAdapter:
             )
             and self.comments_enabled
         ):
-            self._create_column_comments(view_name, column_descriptions, "VIEW")
+            self._create_column_comments(view_name, column_descriptions, "VIEW", materialized)
 
     @set_catalog()
     def create_schema(
@@ -2293,6 +2293,7 @@ class EngineAdapter:
         table_name: TableName,
         column_comments: t.Dict[str, str],
         table_kind: str = "TABLE",
+        materialized_view: bool = False,
     ) -> None:
         table = exp.to_table(table_name)
 
