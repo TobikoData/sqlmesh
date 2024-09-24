@@ -1922,20 +1922,24 @@ class GenericContext(BaseContext, t.Generic[C]):
     def _snapshots(
         self, models_override: t.Optional[UniqueKeyDict[str, Model]] = None
     ) -> t.Dict[str, Snapshot]:
-        prod = self.state_reader.get_environment(c.PROD)
-        remote_snapshots = (
-            {
-                snapshot.name: snapshot
-                for snapshot in self.state_reader.get_snapshots(prod.snapshots).values()
-            }
-            if prod
-            else {}
-        )
+        projects = {config.project for config in self.configs.values()}
+
+        if any(projects):
+            prod = self.state_reader.get_environment(c.PROD)
+            remote_snapshots = (
+                {
+                    snapshot.name: snapshot
+                    for snapshot in self.state_reader.get_snapshots(prod.snapshots).values()
+                }
+                if prod
+                else {}
+            )
+        else:
+            remote_snapshots = {}
 
         local_nodes = {**(models_override or self._models), **self._standalone_audits}
         nodes = local_nodes.copy()
         audits = self._audits.copy()
-        projects = {config.project for config in self.configs.values()}
 
         for name, snapshot in remote_snapshots.items():
             if name not in nodes and snapshot.node.project not in projects:
