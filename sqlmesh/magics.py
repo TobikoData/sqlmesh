@@ -199,7 +199,10 @@ class SQLMeshMagics(Magics):
                 expressions = parse(file.read(), default_dialect=config.dialect)
 
         formatted = format_model_expressions(
-            expressions, model.dialect, **config.format.generator_options
+            expressions,
+            model.dialect,
+            cast_function=config.format.cast_function,
+            **config.format.generator_options,
         )
 
         self._shell.set_next_input(
@@ -701,6 +704,12 @@ class SQLMeshMagics(Magics):
         "--append-newline",
         action="store_true",
         help="Whether or not to append a newline to the end of the file.",
+        default=None,
+    )
+    @argument(
+        "--cast-function",
+        action="store_true",
+        help="Use the standard CAST function over the :: syntax.",
         default=None,
     )
     @argument(

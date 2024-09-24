@@ -441,8 +441,8 @@ options:
 
 #### format
 ```
-%format [--transpile TRANSPILE] [--append-newline] [--normalize]
-              [--pad PAD] [--indent INDENT]
+%format [--transpile TRANSPILE] [--append-newline] [--cast-function]
+              [--normalize] [--pad PAD] [--indent INDENT]
               [--normalize-functions NORMALIZE_FUNCTIONS] [--leading-comma]
               [--max-text-width MAX_TEXT_WIDTH] [--check]
 
@@ -453,6 +453,7 @@ options:
                         Transpile project models to the specified dialect.
   --append-newline      Whether or not to append a newline to the end of the
                         file.
+  --cast-function       Use the standard CAST function over the :: syntax.
   --normalize           Whether or not to normalize identifiers to lowercase.
   --pad PAD             Determines the pad size in a formatted string.
   --indent INDENT       Determines the indentation size in a formatted string.

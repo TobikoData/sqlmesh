@@ -16,6 +16,7 @@ class FormatConfig(BaseConfig):
         leading_comma: Whether to use leading commas or not.
         max_text_width: The maximum text width in a segment before creating new lines.
         append_newline: Whether to append a newline to the end of the file or not.
+        cast_function: Whether to use the standard CAST function over the :: syntax.
     """
 
     normalize: bool = False
@@ -25,6 +26,7 @@ class FormatConfig(BaseConfig):
     leading_comma: bool = False
     max_text_width: int = 80
     append_newline: bool = False
+    cast_function: bool = False
 
     @property
     def generator_options(self) -> t.Dict[str, t.Any]:
@@ -33,4 +35,4 @@ class FormatConfig(BaseConfig):
         Returns:
             The generator options.
         """
-        return self.dict(exclude={"append_newline"})
+        return self.dict(exclude={"append_newline", "cast_function"})

@@ -224,6 +224,12 @@ def evaluate(
     default=None,
 )
 @click.option(
+    "--cast-function",
+    is_flag=True,
+    help="Use the standard CAST function over the :: syntax.",
+    default=None,
+)
+@click.option(
     "--normalize",
     is_flag=True,
     help="Whether or not to normalize identifiers to lowercase.",
