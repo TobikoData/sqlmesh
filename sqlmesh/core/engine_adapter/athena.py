@@ -10,7 +10,6 @@ from sqlmesh.core.engine_adapter.trino import TrinoEngineAdapter
 from sqlmesh.core.node import IntervalUnit
 import os
 from sqlmesh.utils.errors import SQLMeshError
-from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_fixed
 from sqlmesh.core.engine_adapter.shared import (
     CatalogSupport,
     DataObject,
@@ -23,24 +22,6 @@ if t.TYPE_CHECKING:
     from sqlmesh.core._typing import SchemaName, TableName
 
 logger = logging.getLogger(__name__)
-
-
-# Athena's interaction with the Glue Data Catalog is a bit racey when lots of DDL queries are being fired at it, eg in integration tests
-# - a DROP query will fail and then the same query will succeed a few seconds later
-# - a CREATE immediately followed by a DESCRIBE will fail in the DESCRIBE but will succeed a few seconds later
-def metadata_retry(func: t.Callable) -> t.Callable:
-    try:
-        from pyathena.error import OperationalError  # type: ignore
-
-        return retry(
-            retry=retry_if_exception_type(OperationalError),
-            stop=stop_after_attempt(3),
-            wait=wait_fixed(5),
-            reraise=True,
-        )(func)
-    except ImportError:
-        # if pyathena isnt installed, this is a no-op
-        return func
 
 
 class AthenaEngineAdapter(PandasNativeFetchDFSupportMixin):
@@ -137,7 +118,6 @@ class AthenaEngineAdapter(PandasNativeFetchDFSupportMixin):
             for row in df.itertuples()
         ]
 
-    @metadata_retry
     def columns(
         self, table_name: TableName, include_pseudo_columns: bool = False
     ) -> t.Dict[str, exp.DataType]:
@@ -413,7 +393,6 @@ class AthenaEngineAdapter(PandasNativeFetchDFSupportMixin):
 
         return None
 
-    @metadata_retry
     def _drop_object(
         self,
         name: TableName | SchemaName,
