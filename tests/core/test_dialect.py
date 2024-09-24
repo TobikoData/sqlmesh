@@ -201,7 +201,7 @@ SELECT
             SELECT 1::INT AS bla
             """
         ),
-        cast_function=True,
+        no_rewrite_casts=True,
     )
     assert (
         x

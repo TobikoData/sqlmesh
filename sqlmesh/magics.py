@@ -201,7 +201,7 @@ class SQLMeshMagics(Magics):
         formatted = format_model_expressions(
             expressions,
             model.dialect,
-            cast_function=config.format.cast_function,
+            no_rewrite_casts=config.format.no_rewrite_casts,
             **config.format.generator_options,
         )
 
@@ -707,9 +707,9 @@ class SQLMeshMagics(Magics):
         default=None,
     )
     @argument(
-        "--cast-function",
+        "--no-rewrite-casts",
         action="store_true",
-        help="Use the standard CAST function over the :: syntax.",
+        help="Whether or not to preserve the existing casts, without rewriting them to use the :: syntax.",
         default=None,
     )
     @argument(

@@ -172,8 +172,8 @@ Options:
   -t, --transpile TEXT        Transpile project models to the specified
                               dialect.
   --append-newline            Include a newline at the end of each file.
-  --cast-function             Use the standard CAST function over the ::
-                              syntax.
+  --no-rewrite-casts          Preserve the existing casts, without rewriting
+                              them to use the :: syntax.
   --normalize                 Whether or not to normalize identifiers to
                               lowercase.
   --pad INTEGER               Determines the pad size in a formatted string.

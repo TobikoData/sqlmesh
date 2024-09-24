@@ -224,9 +224,9 @@ def evaluate(
     default=None,
 )
 @click.option(
-    "--cast-function",
+    "--no-rewrite-casts",
     is_flag=True,
-    help="Use the standard CAST function over the :: syntax.",
+    help="Preserve the existing casts, without rewriting them to use the :: syntax.",
     default=None,
 )
 @click.option(

@@ -645,7 +645,7 @@ def _override(klass: t.Type[Tokenizer | Parser], func: t.Callable) -> None:
 def format_model_expressions(
     expressions: t.List[exp.Expression],
     dialect: t.Optional[str] = None,
-    cast_function: bool = False,
+    no_rewrite_casts: bool = False,
     **kwargs: t.Any,
 ) -> str:
     """Format a model's expressions into a standardized format.
@@ -653,7 +653,7 @@ def format_model_expressions(
     Args:
         expressions: The model's expressions, must be at least model def + query.
         dialect: The dialect to render the expressions as.
-        cast_function: Whether to use the standard CAST function over the :: syntax.
+        no_rewrite_casts: Preserve the existing casts, without rewriting them to use the :: syntax.
         **kwargs: Additional keyword arguments to pass to the sql generator.
 
     Returns:
@@ -664,7 +664,7 @@ def format_model_expressions(
 
     *statements, query = expressions
 
-    if not cast_function:
+    if not no_rewrite_casts:
 
         def cast_to_colon(node: exp.Expression) -> exp.Expression:
             if isinstance(node, exp.Cast) and not any(

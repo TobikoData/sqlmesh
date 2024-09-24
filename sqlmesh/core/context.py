@@ -900,7 +900,7 @@ class GenericContext(BaseContext, t.Generic[C]):
     def format(
         self,
         transpile: t.Optional[str] = None,
-        cast_function: t.Optional[bool] = None,
+        no_rewrite_casts: t.Optional[bool] = None,
         append_newline: t.Optional[bool] = None,
         *,
         check: t.Optional[bool] = None,
@@ -929,7 +929,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                 after = format_model_expressions(
                     expressions,
                     transpile or target.dialect,
-                    cast_function=cast_function or format_config.cast_function,
+                    no_rewrite_casts=no_rewrite_casts or format_config.no_rewrite_casts,
                     **{**format_config.generator_options, **kwargs},
                 )
 
