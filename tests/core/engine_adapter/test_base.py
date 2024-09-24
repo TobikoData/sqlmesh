@@ -184,6 +184,34 @@ def test_insert_overwrite_by_time_partition(make_mocked_engine_adapter: t.Callab
     ]
 
 
+def test_insert_overwrite_by_time_partition_missing_time_column_type(
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture
+):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
+
+    columns_mock = mocker.patch.object(adapter, "columns")
+    columns_mock.return_value = {"a": exp.DataType.build("INT"), "b": exp.DataType.build("STRING")}
+
+    adapter.insert_overwrite_by_time_partition(
+        "test_table",
+        parse_one("SELECT a, b FROM tbl"),
+        start="2022-01-01",
+        end="2022-01-02",
+        time_column="b",
+        time_formatter=lambda x, _: exp.Literal.string(to_ds(x)),
+        columns_to_types={"a": exp.DataType.build("INT"), "b": exp.DataType.build("UNKNOWN")},
+    )
+
+    columns_mock.assert_called_once_with("test_table")
+    adapter.cursor.begin.assert_called_once()
+    adapter.cursor.commit.assert_called_once()
+
+    assert to_sql_calls(adapter) == [
+        """DELETE FROM "test_table" WHERE "b" BETWEEN '2022-01-01' AND '2022-01-02'""",
+        """INSERT INTO "test_table" ("a", "b") SELECT "a", "b" FROM (SELECT "a", "b" FROM "tbl") AS "_subquery" WHERE "b" BETWEEN '2022-01-01' AND '2022-01-02'""",
+    ]
+
+
 def test_insert_overwrite_by_time_partition_supports_insert_overwrite(
     make_mocked_engine_adapter: t.Callable,
 ):
