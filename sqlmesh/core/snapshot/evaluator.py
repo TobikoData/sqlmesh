@@ -1052,6 +1052,7 @@ class EvaluationStrategy(abc.ABC):
             name,
             query_or_df,
             columns_to_types=model.columns_to_types if model.annotated else None,
+            table_format=model.table_format,
             storage_format=model.storage_format,
             partitioned_by=model.partitioned_by,
             partition_interval_unit=model.interval_unit,
@@ -1180,6 +1181,7 @@ class MaterializableStrategy(PromotableStrategy):
             self.adapter.create_table(
                 table_name,
                 columns_to_types=model.columns_to_types_or_raise,
+                table_format=model.table_format,
                 storage_format=model.storage_format,
                 partitioned_by=model.partitioned_by,
                 partition_interval_unit=model.interval_unit,
@@ -1202,6 +1204,7 @@ class MaterializableStrategy(PromotableStrategy):
                 table_name,
                 ctas_query,
                 model.columns_to_types,
+                table_format=model.table_format,
                 storage_format=model.storage_format,
                 partitioned_by=model.partitioned_by,
                 partition_interval_unit=model.interval_unit,
@@ -1408,6 +1411,7 @@ class SCDType2Strategy(MaterializableStrategy):
             self.adapter.create_table(
                 table_name,
                 columns_to_types=columns_to_types,
+                table_format=model.table_format,
                 storage_format=model.storage_format,
                 partitioned_by=model.partitioned_by,
                 partition_interval_unit=model.interval_unit,

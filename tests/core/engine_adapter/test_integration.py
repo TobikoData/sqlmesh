@@ -181,13 +181,6 @@ class TestContext:
             )
         )
 
-    def physical_properties(
-        self, properties_for_dialect: t.Dict[str, t.Dict[str, str | exp.Expression]]
-    ) -> t.Dict[str, exp.Expression]:
-        if props := properties_for_dialect.get(self.dialect):
-            return {k: exp.Literal.string(v) if isinstance(v, str) else v for k, v in props.items()}
-        return {}
-
     def schema(self, schema_name: str, catalog_name: t.Optional[str] = None) -> str:
         return exp.table_name(
             normalize_model_name(
@@ -1327,15 +1320,11 @@ def test_merge(ctx: TestContext):
     ctx.init()
     table = ctx.table("test_table")
 
-    table_properties = ctx.physical_properties(
-        {
-            # Athena only supports MERGE on Iceberg tables
-            # And it cant fall back to a logical merge on Hive tables because it cant delete records
-            "athena": {"table_type": "iceberg"}
-        }
-    )
+    # Athena only supports MERGE on Iceberg tables
+    # And it cant fall back to a logical merge on Hive tables because it cant delete records
+    table_format = "iceberg" if ctx.dialect == "athena" else None
 
-    ctx.engine_adapter.create_table(table, ctx.columns_to_types, table_properties=table_properties)
+    ctx.engine_adapter.create_table(table, ctx.columns_to_types, table_format=table_format)
     input_data = pd.DataFrame(
         [
             {"id": 1, "ds": "2022-01-01"},
@@ -1405,13 +1394,11 @@ def test_scd_type_2_by_time(ctx: TestContext):
     input_schema = {
         k: v for k, v in ctx.columns_to_types.items() if k not in ("valid_from", "valid_to")
     }
-    table_properties = ctx.physical_properties(
-        {
-            # Athena only supports the operations required for SCD models on Iceberg tables
-            "athena": {"table_type": "iceberg"}
-        }
-    )
-    ctx.engine_adapter.create_table(table, ctx.columns_to_types, table_properties=table_properties)
+
+    # Athena only supports the operations required for SCD models on Iceberg tables
+    table_format = "iceberg" if ctx.dialect == "athena" else None
+
+    ctx.engine_adapter.create_table(table, ctx.columns_to_types, table_format=table_format)
     input_data = pd.DataFrame(
         [
             {"id": 1, "name": "a", "updated_at": "2022-01-01 00:00:00"},
@@ -1429,7 +1416,7 @@ def test_scd_type_2_by_time(ctx: TestContext):
         execution_time="2023-01-01 00:00:00",
         updated_at_as_valid_from=False,
         columns_to_types=input_schema,
-        table_properties=table_properties,
+        table_format=table_format,
     )
     results = ctx.get_metadata_results()
     assert len(results.views) == 0
@@ -1490,7 +1477,7 @@ def test_scd_type_2_by_time(ctx: TestContext):
         execution_time="2023-01-05 00:00:00",
         updated_at_as_valid_from=False,
         columns_to_types=input_schema,
-        table_properties=table_properties,
+        table_format=table_format,
     )
     results = ctx.get_metadata_results()
     assert len(results.views) == 0
@@ -1556,13 +1543,11 @@ def test_scd_type_2_by_column(ctx: TestContext):
     input_schema = {
         k: v for k, v in ctx.columns_to_types.items() if k not in ("valid_from", "valid_to")
     }
-    table_properties = ctx.physical_properties(
-        {
-            # Athena only supports the operations required for SCD models on Iceberg tables
-            "athena": {"table_type": "iceberg"}
-        }
-    )
-    ctx.engine_adapter.create_table(table, ctx.columns_to_types, table_properties=table_properties)
+
+    # Athena only supports the operations required for SCD models on Iceberg tables
+    table_format = "iceberg" if ctx.dialect == "athena" else None
+
+    ctx.engine_adapter.create_table(table, ctx.columns_to_types, table_format=table_format)
     input_data = pd.DataFrame(
         [
             {"id": 1, "name": "a", "status": "active"},
@@ -1795,14 +1780,10 @@ def test_truncate_table(ctx: TestContext):
     ctx.init()
     table = ctx.table("test_table")
 
-    table_properties = ctx.physical_properties(
-        {
-            # Athena only supports TRUNCATE (DELETE FROM <table>) on Iceberg tables
-            "athena": {"table_type": "iceberg"}
-        }
-    )
+    # Athena only supports TRUNCATE (DELETE FROM <table>) on Iceberg tables
+    table_format = "iceberg" if ctx.dialect == "athena" else None
 
-    ctx.engine_adapter.create_table(table, ctx.columns_to_types, table_properties=table_properties)
+    ctx.engine_adapter.create_table(table, ctx.columns_to_types, table_format=table_format)
     input_data = pd.DataFrame(
         [
             {"id": 1, "ds": "2022-01-01"},
@@ -1943,10 +1924,10 @@ def test_sushi(mark_gateway: t.Tuple[str, str], ctx: TestContext):
 
     # Athena needs models that get mutated after creation to be using Iceberg
     if ctx.dialect == "athena":
-        for model_name in {"sushi.customer_revenue_lifetime"}:
-            context.get_model(model_name).physical_properties["table_type"] = exp.Literal.string(
-                "iceberg"
-            )
+        for model_name in {"customer_revenue_lifetime"}:
+            model_key = next(k for k in context._models if model_name in k)
+            model = context._models[model_key].copy(update={"table_format": "iceberg"})
+            context._models.update({model_key: model})
 
     plan: Plan = context.plan(
         environment="test_prod",
@@ -2470,10 +2451,10 @@ def test_batch_size_on_incremental_by_unique_key_model(
         create_sql_model(name=f"{schema}.seed_model", query=seed_query, kind="FULL")
     )
 
-    physical_properties = ""
+    table_format = ""
     if ctx.dialect == "athena":
         # INCREMENTAL_BY_UNIQUE_KEY uses MERGE which is only supported in Athena on Iceberg tables
-        physical_properties = "physical_properties (table_type = 'iceberg'),"
+        table_format = "table_format iceberg,"
 
     context.upsert_model(
         load_sql_based_model(
@@ -2484,7 +2465,7 @@ def test_batch_size_on_incremental_by_unique_key_model(
                         unique_key item_id,
                         batch_size 1
                     ),
-                    {physical_properties}
+                    {table_format}
                     start '2020-01-01',
                     end '2020-01-07',
                     cron '@daily'

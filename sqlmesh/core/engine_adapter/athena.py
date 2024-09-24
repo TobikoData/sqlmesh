@@ -66,10 +66,8 @@ class AthenaEngineAdapter(PandasNativeFetchDFSupportMixin):
             table_name,
             columns_to_types,
             primary_key=primary_key,
-            table_properties={
-                # it's painfully slow, but it works
-                "table_type": exp.Literal.string("iceberg")
-            },
+            # it's painfully slow, but it works
+            table_format="iceberg",
         )
 
     def _get_data_objects(
@@ -189,7 +187,7 @@ class AthenaEngineAdapter(PandasNativeFetchDFSupportMixin):
             **kwargs,
         )
 
-        is_hive = self._table_type(table_properties) == "hive"
+        is_hive = self._table_type(kwargs.get("table_format", None)) == "hive"
 
         # Filter any PARTITIONED BY properties from the main column list since they cant be specified in both places
         # ref: https://docs.aws.amazon.com/athena/latest/ug/partitions.html
@@ -214,6 +212,7 @@ class AthenaEngineAdapter(PandasNativeFetchDFSupportMixin):
     def _build_table_properties_exp(
         self,
         catalog_name: t.Optional[str] = None,
+        table_format: t.Optional[str] = None,
         storage_format: t.Optional[str] = None,
         partitioned_by: t.Optional[t.List[exp.Expression]] = None,
         partition_interval_unit: t.Optional[IntervalUnit] = None,
@@ -229,13 +228,18 @@ class AthenaEngineAdapter(PandasNativeFetchDFSupportMixin):
         properties: t.List[exp.Expression] = []
         table_properties = table_properties or {}
 
-        is_hive = self._table_type(table_properties) == "hive"
+        is_hive = self._table_type(table_format) == "hive"
         is_iceberg = not is_hive
 
         if is_hive and not expression:
             # Hive tables are CREATE EXTERNAL TABLE, Iceberg tables are CREATE TABLE
             # Unless it's a CTAS, those are always CREATE TABLE
             properties.append(exp.ExternalProperty())
+
+        if table_format:
+            properties.append(
+                exp.Property(this=exp.var("table_type"), value=exp.Literal.string(table_format))
+            )
 
         if table_description:
             properties.append(exp.SchemaCommentProperty(this=exp.Literal.string(table_description)))
@@ -297,15 +301,12 @@ class AthenaEngineAdapter(PandasNativeFetchDFSupportMixin):
         self.execute(f"DELETE FROM {table.sql(dialect=self.dialect, identify=True)}")
 
     def _table_type(
-        self, table_properties: t.Optional[t.Dict[str, exp.Expression]] = None
+        self, table_type: t.Optional[str] = None
     ) -> t.Union[t.Literal["hive"], t.Literal["iceberg"]]:
-        """
-        Use the user-specified table_properties to figure out of this is a Hive or an Iceberg table
-        """
+        if table_type and table_type.lower() == "iceberg":
+            return "iceberg"
+
         # if we cant detect any indication of Iceberg, this is a Hive table
-        if table_properties and (table_type := table_properties.get("table_type", None)):
-            if "iceberg" in table_type.sql(dialect=self.dialect).lower():
-                return "iceberg"
         return "hive"
 
     @lru_cache()
@@ -392,12 +393,3 @@ class AthenaEngineAdapter(PandasNativeFetchDFSupportMixin):
                 raise SQLMeshError("Cannot delete from non-empty Hive table")
 
         return None
-
-    def _drop_object(
-        self,
-        name: TableName | SchemaName,
-        exists: bool = True,
-        kind: str = "TABLE",
-        **drop_args: t.Any,
-    ) -> None:
-        return super()._drop_object(name, exists=exists, kind=kind, **drop_args)

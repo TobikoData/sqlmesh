@@ -95,6 +95,7 @@ def serialize_model(context: Context, model: Model, render_query: bool = False) 
         stamp=model.stamp,
         start=model.start,
         retention=model.retention,
+        table_format=model.table_format,
         storage_format=model.storage_format,
         time_column=time_column,
         tags=tags,

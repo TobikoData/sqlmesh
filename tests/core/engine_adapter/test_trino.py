@@ -400,3 +400,47 @@ def test_delta_timestamps(make_mocked_engine_adapter: t.Callable):
         "ts_tz": ts3_tz,
         "ts_tz_1": ts3_tz,
     }
+
+
+def test_table_format(trino_mocked_engine_adapter: TrinoEngineAdapter, mocker: MockerFixture):
+    adapter = trino_mocked_engine_adapter
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.trino.TrinoEngineAdapter.get_current_catalog",
+        return_value="iceberg",
+    )
+
+    expressions = d.parse(
+        """
+        MODEL (
+            name iceberg.test_table,
+            kind FULL,
+            table_format iceberg,
+            storage_format orc
+        );
+
+        SELECT 1::timestamp AS cola, 2::varchar as colb, 'foo' as colc;
+    """
+    )
+    model: SqlModel = t.cast(SqlModel, load_sql_based_model(expressions))
+
+    adapter.create_table(
+        table_name=model.name,
+        columns_to_types=model.columns_to_types_or_raise,
+        table_format=model.table_format,
+        storage_format=model.storage_format,
+    )
+
+    adapter.ctas(
+        table_name=model.name,
+        query_or_df=t.cast(exp.Query, model.query),
+        columns_to_types=model.columns_to_types_or_raise,
+        table_format=model.table_format,
+        storage_format=model.storage_format,
+    )
+
+    # Trino needs to ignore the `table_format` property because to create Iceberg tables, you target an Iceberg catalog
+    # rather than explicitly telling it to create an Iceberg table
+    assert to_sql_calls(adapter) == [
+        'CREATE TABLE IF NOT EXISTS "iceberg"."test_table" ("cola" TIMESTAMP, "colb" VARCHAR, "colc" VARCHAR) WITH (FORMAT=\'ORC\')',
+        'CREATE TABLE IF NOT EXISTS "iceberg"."test_table" WITH (FORMAT=\'ORC\') AS SELECT CAST("cola" AS TIMESTAMP) AS "cola", CAST("colb" AS VARCHAR) AS "colb", CAST("colc" AS VARCHAR) AS "colc" FROM (SELECT CAST(1 AS TIMESTAMP) AS "cola", CAST(2 AS VARCHAR) AS "colb", \'foo\' AS "colc") AS "_subquery"',
+    ]

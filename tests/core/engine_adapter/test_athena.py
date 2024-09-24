@@ -149,9 +149,9 @@ def test_create_table_iceberg(adapter: AthenaEngineAdapter) -> None:
             name test_table,
             kind FULL,
             partitioned_by (colc, bucket(16, cola)),
+            table_format iceberg,
             storage_format parquet,
             physical_properties (
-                table_type = 'iceberg',
                 s3_base_location = 's3://foo'
             )
         );
@@ -166,6 +166,7 @@ def test_create_table_iceberg(adapter: AthenaEngineAdapter) -> None:
         columns_to_types=model.columns_to_types_or_raise,
         table_properties=model.physical_properties,
         partitioned_by=model.partitioned_by,
+        table_format=model.table_format,
         storage_format=model.storage_format,
     )
 
@@ -227,11 +228,11 @@ def test_ctas_iceberg(adapter: AthenaEngineAdapter):
         table_name="foo.bar",
         columns_to_types={"a": exp.DataType.build("int")},
         query_or_df=parse_one("select 1", into=exp.Select),
-        table_properties={"table_type": exp.Literal.string("iceberg")},
+        table_format="iceberg",
     )
 
     assert to_sql_calls(adapter) == [
-        'CREATE TABLE IF NOT EXISTS "foo"."bar" WITH (location=\'s3://bucket/prefix/foo/bar/\', is_external=false, table_type=\'iceberg\') AS SELECT CAST("a" AS INTEGER) AS "a" FROM (SELECT 1) AS "_subquery"'
+        'CREATE TABLE IF NOT EXISTS "foo"."bar" WITH (table_type=\'iceberg\', location=\'s3://bucket/prefix/foo/bar/\', is_external=false) AS SELECT CAST("a" AS INTEGER) AS "a" FROM (SELECT 1) AS "_subquery"'
     ]
 
 

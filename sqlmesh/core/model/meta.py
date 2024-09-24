@@ -57,6 +57,7 @@ class ModelMeta(_Node):
     name: str
     kind: ModelKind = ViewKind()
     retention: t.Optional[int] = None  # not implemented yet
+    table_format: t.Optional[str] = None
     storage_format: t.Optional[str] = None
     partitioned_by_: t.List[exp.Expression] = Field(default=[], alias="partitioned_by")
     clustered_by: t.List[str] = []
@@ -151,7 +152,7 @@ class ModelMeta(_Node):
 
         return v
 
-    @field_validator("storage_format", mode="before")
+    @field_validator("table_format", "storage_format", mode="before")
     @field_validator_v1_args
     def _storage_format_validator(cls, v: t.Any, values: t.Dict[str, t.Any]) -> t.Optional[str]:
         if isinstance(v, exp.Expression) and not (isinstance(v, (exp.Literal, exp.Identifier))):

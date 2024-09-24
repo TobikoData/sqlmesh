@@ -180,7 +180,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
             "models_to_backfill": ['"test_model"'],
             "end_bounded": False,
             "ensure_finalized_snapshots": False,
-            "directly_modified_snapshots": [{"identifier": "844700562", "name": '"test_model"'}],
+            "directly_modified_snapshots": [{"identifier": "4011362914", "name": '"test_model"'}],
             "indirectly_modified_snapshots": {},
             "removed_snapshots": [],
             "restatements": {
