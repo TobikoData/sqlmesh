@@ -220,7 +220,7 @@ Alternatively, you can specify a [column_types](https://docs.getdbt.com/referenc
 seeds:
   <seed name>
     +column_types:
-        <column name> : <SQL data type>
+      <column name>: <SQL data type>
 ```
 
 You can also define this dictionary in the seed properties configuration file.
@@ -229,8 +229,8 @@ You can also define this dictionary in the seed properties configuration file.
 seeds:
   - name: <seed name>
     config:
-        column_types:
-            <column name> : <SQL data type>
+      column_types:
+        <column name>: <SQL data type>
 ```
 
 ## Package Management
