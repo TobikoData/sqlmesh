@@ -93,7 +93,7 @@ Formatting settings for the `sqlmesh format` command and UI.
 | `leading_comma`       | Whether to use leading commas (Default: False)                                                 | boolean |    N     |
 | `max_text_width`      | The maximum text width in a segment before creating new lines (Default: 80)                    |   int   |    N     |
 | `append_newline`      | Whether to append a newline to the end of the file (Default: False)                            | boolean |    N     |
-| `cast_function`       | Whether to use the standard CAST function over the :: syntax (Default: False)                  | boolean |    N     |
+| `cast_function`       | Whether to preserve the existing casts, without rewriting them to use the :: syntax. (Default: False)                  | boolean |    N     |
 
 ## UI
 
