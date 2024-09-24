@@ -297,7 +297,11 @@ class ModelTest(unittest.TestCase):
             path: An optional path to the test definition yaml file.
             preserve_fixtures: Preserve the fixture tables in the testing database, useful for debugging.
         """
-        name = normalize_model_name(body["model"], default_catalog=default_catalog, dialect=dialect)
+        name = body.get("model")
+        if name is None:
+            _raise_error("Missing required 'model' field", path)
+
+        name = normalize_model_name(name, default_catalog=default_catalog, dialect=dialect)
         model = models.get(name)
         if not model:
             _raise_error(f"Model '{name}' was not found", path)
