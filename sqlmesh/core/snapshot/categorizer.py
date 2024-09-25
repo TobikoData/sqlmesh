@@ -8,7 +8,11 @@ from sqlmesh.utils.errors import SQLMeshError
 
 
 def categorize_change(
-    new: Snapshot, old: Snapshot, config: t.Optional[CategorizerConfig] = None
+    new: Snapshot,
+    old: Snapshot,
+    config: t.Optional[CategorizerConfig] = None,
+    is_breaking_change: t.Optional[t.Callable[..., t.Optional[bool]]] = None,
+    **kwargs: t.Any,
 ) -> t.Optional[SnapshotChangeCategory]:
     """Attempts to automatically categorize a change between two snapshots.
 
@@ -19,6 +23,10 @@ def categorize_change(
     Args:
         new: The new snapshot.
         old: The old snapshot.
+        config: Configuration for the automatic categorizer of snapshot changes.
+        is_breaking_change: Callable that compares two models (new, old) and determines
+            whether there is a breaking change between them.
+        kwargs: Additional arguments to pass to is_breaking_change.
 
     Returns:
         The change category or None if the category can't be determined automatically.
@@ -48,11 +56,14 @@ def categorize_change(
             return SnapshotChangeCategory.NON_BREAKING
         return None
 
-    is_breaking_change = new_model.is_breaking_change(old_model)
-    if is_breaking_change is None:
-        return default_category
-    return (
-        SnapshotChangeCategory.BREAKING
+    breaking_change = (
+        is_breaking_change(new_model, old_model, **kwargs)
         if is_breaking_change
-        else SnapshotChangeCategory.NON_BREAKING
+        else new_model.is_breaking_change(old_model)
+    )
+    if breaking_change is None:
+        return default_category
+
+    return (
+        SnapshotChangeCategory.BREAKING if breaking_change else SnapshotChangeCategory.NON_BREAKING
     )
