@@ -370,20 +370,50 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin):
         )
         return self._db_call(job.result)
 
+    def __get_bq_schemafield(self, name: str, tpe: exp.DataType) -> bigquery.SchemaField:
+        from google.cloud import bigquery
+
+        mode = "NULLABLE"
+        if tpe.is_type(exp.DataType.Type.ARRAY):
+            mode = "REPEATED"
+            tpe = tpe.expressions[0]
+
+        field_type = tpe.sql(dialect=self.dialect)
+        fields = []
+        if tpe.is_type(*exp.DataType.NESTED_TYPES):
+            field_type = "RECORD"
+            for inner_field in tpe.expressions:
+                if isinstance(inner_field, exp.ColumnDef):
+                    inner_name = inner_field.this.sql(dialect=self.dialect)
+                    inner_type = inner_field.kind
+                    if inner_type is None:
+                        raise ValueError(
+                            f"cannot convert unknown type to BQ schema field {inner_field}"
+                        )
+                    fields.append(self.__get_bq_schemafield(name=inner_name, tpe=inner_type))
+                else:
+                    raise ValueError(f"unexpected nested expression {inner_field}")
+
+        return bigquery.SchemaField(
+            name=name,
+            field_type=field_type,
+            mode=mode,
+            fields=fields,
+        )
+
     def __get_bq_schema(
         self, columns_to_types: t.Dict[str, exp.DataType]
     ) -> t.List[bigquery.SchemaField]:
         """
         Returns a bigquery schema object from a dictionary of column names to types.
         """
-        from google.cloud import bigquery
 
         precisionless_col_to_types = {
             col_name: remove_precision_parameterized_types(col_type)
             for col_name, col_type in columns_to_types.items()
         }
         return [
-            bigquery.SchemaField(col_name, col_type.sql(dialect=self.dialect))
+            self.__get_bq_schemafield(name=col_name, tpe=t.cast(exp.DataType, col_type))
             for col_name, col_type in precisionless_col_to_types.items()
         ]
 
