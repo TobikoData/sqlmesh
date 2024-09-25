@@ -194,6 +194,25 @@ SELECT
   SAFE_CAST('bla' AS INT64) AS FOO"""
     )
 
+    x = format_model_expressions(
+        parse(
+            """
+            MODEL(name foo);
+            SELECT 1::INT AS bla
+            """
+        ),
+        rewrite_casts=False,
+    )
+    assert (
+        x
+        == """MODEL (
+  name foo
+);
+
+SELECT
+  CAST(1 AS INT) AS bla"""
+    )
+
 
 def test_macro_format():
     assert parse_one("@EACH(ARRAY(1,2), x -> x)").sql() == "@EACH(ARRAY(1, 2), x -> x)"

@@ -199,7 +199,10 @@ class SQLMeshMagics(Magics):
                 expressions = parse(file.read(), default_dialect=config.dialect)
 
         formatted = format_model_expressions(
-            expressions, model.dialect, **config.format.generator_options
+            expressions,
+            model.dialect,
+            rewrite_casts=not config.format.no_rewrite_casts,
+            **config.format.generator_options,
         )
 
         self._shell.set_next_input(
@@ -704,6 +707,12 @@ class SQLMeshMagics(Magics):
         default=None,
     )
     @argument(
+        "--no-rewrite-casts",
+        action="store_true",
+        help="Whether or not to preserve the existing casts, without rewriting them to use the :: syntax.",
+        default=None,
+    )
+    @argument(
         "--normalize",
         action="store_true",
         help="Whether or not to normalize identifiers to lowercase.",
@@ -745,8 +754,11 @@ class SQLMeshMagics(Magics):
     @pass_sqlmesh_context
     def format(self, context: Context, line: str) -> bool:
         """Format all SQL models and audits."""
-        args = parse_argstring(self.format, line)
-        return context.format(**{k: v for k, v in vars(args).items() if v is not None})
+        format_opts = vars(parse_argstring(self.format, line))
+        if format_opts.pop("no_rewrite_casts", None):
+            format_opts["rewrite_casts"] = False
+
+        return context.format(**{k: v for k, v in format_opts.items() if v is not None})
 
     @magic_arguments()
     @argument("environment", type=str, help="The environment to diff local state against.")

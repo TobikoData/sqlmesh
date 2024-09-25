@@ -900,6 +900,7 @@ class GenericContext(BaseContext, t.Generic[C]):
     def format(
         self,
         transpile: t.Optional[str] = None,
+        rewrite_casts: t.Optional[bool] = None,
         append_newline: t.Optional[bool] = None,
         *,
         check: t.Optional[bool] = None,
@@ -910,6 +911,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         for target in format_targets.values():
             if target._path is None or target._path.suffix != ".sql":
                 continue
+
             with open(target._path, "r+", encoding="utf-8") as file:
                 before = file.read()
                 expressions = parse(before, default_dialect=self.config_for_node(target).dialect)
@@ -922,13 +924,24 @@ class GenericContext(BaseContext, t.Generic[C]):
                                     value=exp.Literal.string(transpile or target.dialect),
                                 )
                             )
-                format = self.config_for_node(target).format
-                opts = {**format.generator_options, **kwargs}
-                after = format_model_expressions(expressions, transpile or target.dialect, **opts)
+
+                format_config = self.config_for_node(target).format
+                after = format_model_expressions(
+                    expressions,
+                    transpile or target.dialect,
+                    rewrite_casts=(
+                        rewrite_casts
+                        if rewrite_casts is not None
+                        else not format_config.no_rewrite_casts
+                    ),
+                    **{**format_config.generator_options, **kwargs},
+                )
+
                 if append_newline is None:
-                    append_newline = format.append_newline
+                    append_newline = format_config.append_newline
                 if append_newline:
                     after += "\n"
+
                 if not check:
                     file.seek(0)
                     file.write(after)

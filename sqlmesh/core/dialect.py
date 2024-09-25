@@ -643,13 +643,17 @@ def _override(klass: t.Type[Tokenizer | Parser], func: t.Callable) -> None:
 
 
 def format_model_expressions(
-    expressions: t.List[exp.Expression], dialect: t.Optional[str] = None, **kwargs: t.Any
+    expressions: t.List[exp.Expression],
+    dialect: t.Optional[str] = None,
+    rewrite_casts: bool = True,
+    **kwargs: t.Any,
 ) -> str:
     """Format a model's expressions into a standardized format.
 
     Args:
         expressions: The model's expressions, must be at least model def + query.
         dialect: The dialect to render the expressions as.
+        rewrite_casts: Whether to rewrite all casts to use the :: syntax.
         **kwargs: Additional keyword arguments to pass to the sql generator.
 
     Returns:
@@ -660,26 +664,28 @@ def format_model_expressions(
 
     *statements, query = expressions
 
-    def cast_to_colon(node: exp.Expression) -> exp.Expression:
-        if isinstance(node, exp.Cast) and not any(
-            # Only convert CAST into :: if it doesn't have additional args set, otherwise this
-            # conversion could alter the semantics (eg. changing SAFE_CAST in BigQuery to CAST)
-            arg
-            for name, arg in node.args.items()
-            if name not in ("this", "to")
-        ):
-            this = node.this
+    if rewrite_casts:
 
-            if not isinstance(this, (exp.Binary, exp.Unary)) or isinstance(this, exp.Paren):
-                cast = DColonCast(this=this, to=node.to)
-                cast.comments = node.comments
-                node = cast
+        def cast_to_colon(node: exp.Expression) -> exp.Expression:
+            if isinstance(node, exp.Cast) and not any(
+                # Only convert CAST into :: if it doesn't have additional args set, otherwise this
+                # conversion could alter the semantics (eg. changing SAFE_CAST in BigQuery to CAST)
+                arg
+                for name, arg in node.args.items()
+                if name not in ("this", "to")
+            ):
+                this = node.this
 
-        exp.replace_children(node, cast_to_colon)
-        return node
+                if not isinstance(this, (exp.Binary, exp.Unary)) or isinstance(this, exp.Paren):
+                    cast = DColonCast(this=this, to=node.to)
+                    cast.comments = node.comments
+                    node = cast
 
-    query = query.copy()
-    exp.replace_children(query, cast_to_colon)
+            exp.replace_children(node, cast_to_colon)
+            return node
+
+        query = query.copy()
+        exp.replace_children(query, cast_to_colon)
 
     return ";\n\n".join(
         [

@@ -224,6 +224,12 @@ def evaluate(
     default=None,
 )
 @click.option(
+    "--no-rewrite-casts",
+    is_flag=True,
+    help="Preserve the existing casts, without rewriting them to use the :: syntax.",
+    default=None,
+)
+@click.option(
     "--normalize",
     is_flag=True,
     help="Whether or not to normalize identifiers to lowercase.",
@@ -266,6 +272,9 @@ def evaluate(
 @cli_analytics
 def format(ctx: click.Context, **kwargs: t.Any) -> None:
     """Format all SQL models and audits."""
+    if kwargs.pop("no_rewrite_casts", None):
+        kwargs["rewrite_casts"] = False
+
     if not ctx.obj.format(**{k: v for k, v in kwargs.items() if v is not None}):
         ctx.exit(1)
 
