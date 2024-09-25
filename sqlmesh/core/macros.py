@@ -74,6 +74,7 @@ SQL = t.NewType("SQL", str)
 
 SUPPORTED_TYPES = {
     "t": t,
+    "typing": t,
     "List": t.List,
     "Tuple": t.Tuple,
     "Union": t.Union,
