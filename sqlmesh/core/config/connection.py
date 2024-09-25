@@ -1465,8 +1465,9 @@ class ClickhouseConnectionConfig(ConnectionConfig):
         from functools import partial
 
         pool_manager_options: t.Dict[str, t.Any] = dict(
-            num_pools=self.concurrent_tasks,
+            # Match the maxsize to the number of concurrent tasks
             maxsize=self.concurrent_tasks,
+            # Block if there are no free connections
             block=True,
         )
         if self.connection_pool_options:
@@ -1514,7 +1515,11 @@ class ClickhouseConnectionConfig(ConnectionConfig):
             #   - "use majority number (number_of_replicas / 2 + 1) as quorum number"
             settings["insert_quorum"] = "auto"
 
-        return {"compress": compress, "client_name": f"SQLMesh/{__version__}", **settings}
+        return {
+            "compress": compress,
+            "client_name": f"SQLMesh/{__version__}",
+            **settings,
+        }
 
 
 class AthenaConnectionConfig(ConnectionConfig):
