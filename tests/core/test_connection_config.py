@@ -578,16 +578,21 @@ def test_bigquery(make_config):
         type="bigquery",
         project="project",
         execution_project="execution_project",
+        quota_project="quota_project",
     )
 
     assert isinstance(config, BigQueryConnectionConfig)
     assert config.project == "project"
     assert config.execution_project == "execution_project"
+    assert config.quota_project == "quota_project"
     assert config.get_catalog() == "project"
     assert config.is_recommended_for_state_sync is False
 
     with pytest.raises(ConfigError, match="you must also specify the `project` field"):
         make_config(type="bigquery", execution_project="execution_project")
+
+    with pytest.raises(ConfigError, match="you must also specify the `project` field"):
+        make_config(type="bigquery", quota_project="quota_project")
 
 
 def test_postgres(make_config):
