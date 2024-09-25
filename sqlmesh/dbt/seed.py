@@ -40,15 +40,16 @@ class SeedConfig(BaseModelConfig):
         """Converts the dbt seed into a SQLMesh model."""
         seed_path = self.path.absolute().as_posix()
 
-        # Store a copy to reset after getting the sqlmesh column types
-        columns = copy.deepcopy(self.columns)
-        for name, data_type in (self.column_types or {}).items():
-            column = self.columns.setdefault(name, ColumnConfig(name=name))
-            column.data_type = data_type
-            column.quote = self.quote_columns or column.quote
+        if column_types := self.column_types:
+            columns = copy.deepcopy(self.columns)
+            for name, data_type in column_types.items():
+                column = columns.setdefault(name, ColumnConfig(name=name))
+                column.data_type = data_type
+                column.quote = self.quote_columns or column.quote
+                kwargs = self.sqlmesh_model_kwargs(context, columns)
+        else:
+            kwargs = self.sqlmesh_model_kwargs(context)
 
-        kwargs = self.sqlmesh_model_kwargs(context)
-        self.columns = columns
         if kwargs.get("columns") is None:
             agate_table = (
                 agate_helper.from_csv(seed_path, [], delimiter=self.delimiter)

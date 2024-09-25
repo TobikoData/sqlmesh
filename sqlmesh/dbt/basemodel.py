@@ -285,7 +285,11 @@ class BaseModelConfig(GeneralConfig):
             node_name += f".v{self.version}"
         return node_name
 
-    def sqlmesh_model_kwargs(self, context: DbtContext) -> t.Dict[str, t.Any]:
+    def sqlmesh_model_kwargs(
+        self,
+        context: DbtContext,
+        column_types_override: t.Optional[t.Dict[str, ColumnConfig]] = None,
+    ) -> t.Dict[str, t.Any]:
         """Get common sqlmesh model parameters"""
         self.check_for_circular_test_refs(context)
         model_context = context.context_for_dependencies(
@@ -316,7 +320,10 @@ class BaseModelConfig(GeneralConfig):
         )
         return {
             "audits": [(test.name, {}) for test in self.tests],
-            "columns": column_types_to_sqlmesh(self.columns, self.dialect(context)) or None,
+            "columns": column_types_to_sqlmesh(
+                column_types_override or self.columns, self.dialect(context)
+            )
+            or None,
             "column_descriptions": column_descriptions_to_sqlmesh(self.columns) or None,
             "depends_on": {
                 model.canonical_name(context) for model in model_context.refs.values()
