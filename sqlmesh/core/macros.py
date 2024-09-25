@@ -72,6 +72,14 @@ class MacroStrTemplate(Template):
 EXPRESSIONS_NAME_MAP = {}
 SQL = t.NewType("SQL", str)
 
+SUPPORTED_TYPES = {
+    "t": t,
+    "typing": t,
+    "List": t.List,
+    "Tuple": t.Tuple,
+    "Union": t.Union,
+}
+
 for klass in sqlglot.Parser.EXPRESSION_PARSERS:
     name = klass if isinstance(klass, str) else klass.__name__  # type: ignore
     EXPRESSIONS_NAME_MAP[name.lower()] = name
@@ -195,7 +203,7 @@ class MacroEvaluator:
             raise MacroEvalError("Error trying to eval macro.") from e
 
         try:
-            annotations = t.get_type_hints(func)
+            annotations = t.get_type_hints(func, localns=SUPPORTED_TYPES)
         except NameError:  # forward references aren't handled
             annotations = {}
 
