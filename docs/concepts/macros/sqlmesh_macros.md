@@ -923,15 +923,15 @@ select * from raw_data
 would be rendered as:
 
 ```sql linenums="1"
-WITH "raw_data" AS (                                                                           
-  SELECT                                                                                       
-    *                                                                                          
-  FROM "my_table" AS "my_table"                                                                
-  QUALIFY                                                                                      
-    ROW_NUMBER() OVER (PARTITION BY "id", CAST("event_date" AS DATE) ORDER BY "event_date" DESC, "status" ASC) = 1                                                                        
-)                                                                                        
-SELECT                                                                                         
-  *                                                                                            
+WITH "raw_data" AS (
+  SELECT
+    *
+  FROM "my_table" AS "my_table"
+  QUALIFY
+    ROW_NUMBER() OVER (PARTITION BY "id", CAST("event_date" AS DATE) ORDER BY "event_date" DESC, "status" ASC) = 1
+)
+SELECT
+  *
 FROM "raw_data" AS "raw_data"
 ```
 
@@ -957,18 +957,18 @@ SELECT * FROM discount_promotion_dates
 would be rendered as:
 
 ```sql linenums="1"
-WITH "discount_promotion_dates" AS (                                                                             
-  SELECT                                                                                                         
-    "_exploded"."date_day" AS "date_day"                                                                         
-  FROM UNNEST(CAST(GENERATE_SERIES(CAST('2024-01-01' AS DATE), CAST('2024-01-16' AS DATE), INTERVAL '1' DAY) AS  
-DATE[])) AS "_exploded"("date_day")                                                                              
-)                                                                                                                
-SELECT                                                                                                           
-  "discount_promotion_dates"."date_day" AS "date_day"                                                            
+WITH "discount_promotion_dates" AS (
+  SELECT
+    "_exploded"."date_day" AS "date_day"
+  FROM UNNEST(CAST(GENERATE_SERIES(CAST('2024-01-01' AS DATE), CAST('2024-01-16' AS DATE), INTERVAL '1' DAY) AS
+DATE[])) AS "_exploded"("date_day")
+)
+SELECT
+  "discount_promotion_dates"."date_day" AS "date_day"
 FROM "discount_promotion_dates" AS "discount_promotion_dates"
 ```
 
-Note: This is DuckDB SQL and other dialects will be transpiled accordingly. 
+Note: This is DuckDB SQL and other dialects will be transpiled accordingly.
 - Recursive CTEs (common table expressions) will be used for `Redshift / MySQL / MSSQL`.
 - For `MSSQL` in particular, there's a recursion limit of approximately 100. If this becomes a problem, you can add an `OPTION (MAXRECURSION 0)` clause after the date spine macro logic to remove the limit. This applies for long date ranges.
 
@@ -1763,9 +1763,9 @@ SQLMesh supports common Python types for typed macros including:
 - `float`
 - `bool`
 - `SQL` -- When you want the SQL string representation of the argument that's passed in
-- `List[T]` - where `T` is any supported type including sqlglot expressions
-- `Tuple[T]` - where `T` is any supported type including sqlglot expressions
-- `Union[T1, T2, ...]` - where `T1`, `T2`, etc. are any supported types including sqlglot expressions
+- `list[T]` - where `T` is any supported type including sqlglot expressions
+- `tuple[T]` - where `T` is any supported type including sqlglot expressions
+- `T1 | T2 | ...` - where `T1`, `T2`, etc. are any supported types including sqlglot expressions
 
 We also support SQLGlot expressions as type hints, allowing you to ensure inputs are coerced to the desired SQL AST node your intending on working with. Some useful examples include:
 
