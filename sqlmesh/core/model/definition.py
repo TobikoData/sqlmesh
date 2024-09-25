@@ -107,8 +107,10 @@ class _Model(ModelMeta, frozen=True):
         end: The date that the model will be backfilled up until. Follows the same syntax as 'start',
             should be omitted if there is no end date.
         lookback: The number of previous incremental intervals in the lookback window.
+        table_format: The table format used to manage the physical table files defined by `storage_format`, only applicable in certain engines.
+            (eg, 'iceberg', 'delta', 'hudi')
         storage_format: The storage format used to store the physical table, only applicable in certain engines.
-            (eg. 'parquet')
+            (eg. 'parquet', 'orc')
         partitioned_by: The partition columns or engine specific expressions, only applicable in certain engines. (eg. (ds, hour))
         clustered_by: The cluster columns, only applicable in certain engines. (eg. (ds, hour))
         python_env: Dictionary containing all global variables needed to render the model's macros.
@@ -821,6 +823,7 @@ class _Model(ModelMeta, frozen=True):
                 [(k, v) for k, v in self.sorted_python_env if not v.is_metadata]
             ),
             *self.kind.data_hash_values,
+            self.table_format,
             self.storage_format,
             str(self.lookback),
             *(gen(expr) for expr in (self.partitioned_by or [])),

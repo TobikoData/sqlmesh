@@ -155,6 +155,7 @@ class ModelDetails(PydanticModel):
     stamp: t.Optional[TimeLike] = None
     start: t.Optional[TimeLike] = None
     retention: t.Optional[int] = None
+    table_format: t.Optional[str] = None
     storage_format: t.Optional[str] = None
     time_column: t.Optional[str] = None
     tags: t.Optional[str] = None

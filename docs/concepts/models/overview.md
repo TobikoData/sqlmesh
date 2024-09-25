@@ -258,8 +258,13 @@ Learn more about these properties and their default values in the [model configu
 ### depends_on
 :   Depends on explicitly specifies the models on which the model depends, in addition to the ones automatically inferred by from the model code.
 
+### table_format
+:   Table format is an optional property for engines that support table formats like `iceberg` and `hive` where the physical file format is configurable. The intention is to define the table type using `table_format` and then the on-disk format of the files within the table using `storage_format`.
+
+    Note that this property only implemented for engines that allow the `table_format` to be configured independently of the `storage_format`.
+
 ### storage_format
-:   Storage format is a property for engines such as Spark or Hive that support storage formats such as  `parquet` and `orc`.
+:   Storage format is a property for engines such as Spark or Hive that support storage formats such as `parquet` and `orc`. Note that some engines dont make a distinction between `table_format` and `storage_format`, in which case `storage_format` is used and `table_format` is ignored.
 
 ### partitioned_by
 :   Partitioned by plays two roles. For most model kinds, it is an optional property for engines that support table partitioning such as Spark or BigQuery.

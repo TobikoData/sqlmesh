@@ -149,6 +149,7 @@ class HiveMetastoreTablePropertiesMixin(EngineAdapter):
     def _build_table_properties_exp(
         self,
         catalog_name: t.Optional[str] = None,
+        table_format: t.Optional[str] = None,
         storage_format: t.Optional[str] = None,
         partitioned_by: t.Optional[t.List[exp.Expression]] = None,
         partition_interval_unit: t.Optional[IntervalUnit] = None,
@@ -160,7 +161,15 @@ class HiveMetastoreTablePropertiesMixin(EngineAdapter):
     ) -> t.Optional[exp.Properties]:
         properties: t.List[exp.Expression] = []
 
-        if storage_format:
+        if table_format and self.dialect == "spark":
+            properties.append(exp.FileFormatProperty(this=exp.Var(this=table_format)))
+            if storage_format:
+                properties.append(
+                    exp.Property(
+                        this="write.format.default", value=exp.Literal.string(storage_format)
+                    )
+                )
+        elif storage_format:
             properties.append(exp.FileFormatProperty(this=exp.Var(this=storage_format)))
 
         if partitioned_by:

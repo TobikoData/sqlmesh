@@ -103,6 +103,7 @@ class BaseModelConfig(GeneralConfig):
     # sqlmesh fields
     owner: t.Optional[str] = None
     stamp: t.Optional[str] = None
+    table_format: t.Optional[str] = None
     storage_format: t.Optional[str] = None
     path: Path = Path()
     dependencies: Dependencies = Dependencies()

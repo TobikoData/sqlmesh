@@ -12,8 +12,16 @@ from sqlglot import parse_one
 from sqlmesh.core.engine_adapter import SparkEngineAdapter
 from sqlmesh.utils.errors import SQLMeshError
 from tests.core.engine_adapter import to_sql_calls
+import sqlmesh.core.dialect as d
+from sqlmesh.core.model import load_sql_based_model
+from sqlmesh.core.model.definition import SqlModel
 
 pytestmark = [pytest.mark.engine, pytest.mark.spark]
+
+
+@pytest.fixture
+def adapter(make_mocked_engine_adapter: t.Callable) -> SparkEngineAdapter:
+    return make_mocked_engine_adapter(SparkEngineAdapter)
 
 
 def test_create_table_properties(make_mocked_engine_adapter: t.Callable):
@@ -986,4 +994,62 @@ def test_replace_query_with_wap_self_reference(
         "CREATE TABLE IF NOT EXISTS `catalog`.`schema`.`temp_branch_wap_12345_abcdefgh` USING ICEBERG AS SELECT CAST(`a` AS INT) AS `a` FROM (SELECT `a` FROM `catalog`.`schema`.`table`.`branch_wap_12345`) AS `_subquery`",
         "INSERT OVERWRITE TABLE `catalog`.`schema`.`table`.`branch_wap_12345` (`a`) SELECT 1 AS `a` FROM `catalog`.`schema`.`temp_branch_wap_12345_abcdefgh`",
         "DROP TABLE IF EXISTS `catalog`.`schema`.`temp_branch_wap_12345_abcdefgh`",
+    ]
+
+
+def test_table_format(adapter: SparkEngineAdapter, mocker: MockerFixture):
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.spark.SparkEngineAdapter.table_exists",
+        return_value=True,
+    )
+
+    expressions = d.parse(
+        """
+        MODEL (
+            name test_table,
+            kind FULL,
+            table_format iceberg,
+            storage_format orc
+        );
+
+        SELECT 1::timestamp AS cola, 2::varchar as colb, 'foo' as colc;
+    """
+    )
+    model: SqlModel = t.cast(SqlModel, load_sql_based_model(expressions))
+
+    # both table_format and storage_format
+    adapter.create_table(
+        table_name=model.name,
+        columns_to_types=model.columns_to_types_or_raise,
+        table_format=model.table_format,
+        storage_format=model.storage_format,
+    )
+
+    # just table_format
+    adapter.create_table(
+        table_name=model.name,
+        columns_to_types=model.columns_to_types_or_raise,
+        table_format=model.table_format,
+    )
+
+    # just storage_format set to a table format (test for backwards compatibility)
+    adapter.create_table(
+        table_name=model.name,
+        columns_to_types=model.columns_to_types_or_raise,
+        storage_format=model.table_format,
+    )
+
+    adapter.ctas(
+        table_name=model.name,
+        query_or_df=model.query,
+        columns_to_types=model.columns_to_types_or_raise,
+        table_format=model.table_format,
+        storage_format=model.storage_format,
+    )
+
+    assert to_sql_calls(adapter) == [
+        "CREATE TABLE IF NOT EXISTS `test_table` (`cola` TIMESTAMP, `colb` STRING, `colc` STRING) USING ICEBERG TBLPROPERTIES ('write.format.default'='orc')",
+        "CREATE TABLE IF NOT EXISTS `test_table` (`cola` TIMESTAMP, `colb` STRING, `colc` STRING) USING ICEBERG",
+        "CREATE TABLE IF NOT EXISTS `test_table` (`cola` TIMESTAMP, `colb` STRING, `colc` STRING) USING ICEBERG",
+        "CREATE TABLE IF NOT EXISTS `test_table` USING ICEBERG TBLPROPERTIES ('write.format.default'='orc') AS SELECT CAST(`cola` AS TIMESTAMP) AS `cola`, CAST(`colb` AS STRING) AS `colb`, CAST(`colc` AS STRING) AS `colc` FROM (SELECT CAST(1 AS TIMESTAMP) AS `cola`, CAST(2 AS STRING) AS `colb`, 'foo' AS `colc`) AS `_subquery`",
     ]

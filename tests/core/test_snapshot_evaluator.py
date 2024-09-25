@@ -172,6 +172,7 @@ def test_evaluate(mocker: MockerFixture, adapter_mock, make_snapshot):
 
     common_kwargs = dict(
         columns_to_types={"a": exp.DataType.build("int")},
+        table_format=None,
         storage_format="parquet",
         partitioned_by=[exp.to_column("a", quoted=True)],
         partition_interval_unit=IntervalUnit.DAY,
@@ -544,7 +545,7 @@ def test_evaluate_materialized_view_with_partitioned_by_cluster_by(
     execute_mock.assert_has_calls(
         [
             call(
-                "CREATE MATERIALIZED VIEW `sqlmesh__test_schema`.`test_schema__test_model__2383078413` PARTITION BY `a` CLUSTER BY `b` AS SELECT `a` AS `a`, `b` AS `b` FROM `tbl` AS `tbl`"
+                "CREATE MATERIALIZED VIEW `sqlmesh__test_schema`.`test_schema__test_model__2531876769` PARTITION BY `a` CLUSTER BY `b` AS SELECT `a` AS `a`, `b` AS `b` FROM `tbl` AS `tbl`"
             ),
         ]
     )
@@ -661,6 +662,7 @@ def test_evaluate_incremental_unmanaged_no_intervals(
         columns_to_types=None,
         partition_interval_unit=model.interval_unit,
         partitioned_by=model.partitioned_by,
+        table_format=None,
         storage_format=None,
         table_description=None,
         table_properties={},
@@ -1214,6 +1216,7 @@ def test_create_clone_in_dev(mocker: MockerFixture, adapter_mock, make_snapshot)
     adapter_mock.create_table.assert_called_once_with(
         f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}__temp__schema_migration_source",
         columns_to_types={"a": exp.DataType.build("int"), "ds": exp.DataType.build("date")},
+        table_format=None,
         storage_format=None,
         partitioned_by=[exp.to_column("ds", quoted=True)],
         partition_interval_unit=IntervalUnit.DAY,
@@ -1321,6 +1324,7 @@ def test_create_clone_in_dev_self_referencing(mocker: MockerFixture, adapter_moc
     adapter_mock.create_table.assert_called_once_with(
         f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}__temp__schema_migration_source",
         columns_to_types={"a": exp.DataType.build("int"), "ds": exp.DataType.build("date")},
+        table_format=None,
         storage_format=None,
         partitioned_by=[exp.to_column("ds", quoted=True)],
         partition_interval_unit=IntervalUnit.DAY,
@@ -1435,6 +1439,7 @@ def test_forward_only_snapshot_for_added_model(mocker: MockerFixture, adapter_mo
 
     common_create_args = dict(
         columns_to_types={"a": exp.DataType.build("int"), "ds": exp.DataType.build("date")},
+        table_format=None,
         storage_format=None,
         partitioned_by=[exp.to_column("ds", quoted=True)],
         partition_interval_unit=IntervalUnit.DAY,
@@ -1485,6 +1490,7 @@ def test_create_scd_type_2_by_time(adapter_mock, make_snapshot):
             "valid_from": exp.DataType.build("TIMESTAMPTZ"),
             "valid_to": exp.DataType.build("TIMESTAMPTZ"),
         },
+        table_format=None,
         storage_format=None,
         partitioned_by=[],
         partition_interval_unit=IntervalUnit.DAY,
@@ -1533,6 +1539,7 @@ def test_create_ctas_scd_type_2_by_time(adapter_mock, make_snapshot):
 
     # Verify that managed columns are included in CTAS with types
     common_kwargs = dict(
+        table_format=None,
         storage_format=None,
         partitioned_by=[],
         partition_interval_unit=IntervalUnit.DAY,
@@ -1649,6 +1656,7 @@ def test_create_scd_type_2_by_column(adapter_mock, make_snapshot):
             "valid_from": exp.DataType.build("TIMESTAMP"),
             "valid_to": exp.DataType.build("TIMESTAMP"),
         },
+        table_format=None,
         storage_format=None,
         partitioned_by=[],
         partition_interval_unit=IntervalUnit.DAY,
@@ -1697,6 +1705,7 @@ def test_create_ctas_scd_type_2_by_column(adapter_mock, make_snapshot):
 
     # Verify that managed columns are included in CTAS with types
     common_kwargs = dict(
+        table_format=None,
         storage_format=None,
         partitioned_by=[],
         partition_interval_unit=IntervalUnit.DAY,
@@ -1958,6 +1967,7 @@ def test_create_incremental_by_unique_no_intervals(adapter_mock, make_snapshot):
         columns_to_types=model.columns_to_types,
         partition_interval_unit=model.interval_unit,
         partitioned_by=model.partitioned_by,
+        table_format=None,
         storage_format=None,
         table_description=None,
         table_properties={},
@@ -1987,6 +1997,7 @@ def test_create_seed(mocker: MockerFixture, adapter_mock, make_snapshot):
 
     common_create_kwargs: t.Dict[str, t.Any] = dict(
         columns_to_types={"id": exp.DataType.build("bigint"), "name": exp.DataType.build("text")},
+        table_format=None,
         storage_format=None,
         partitioned_by=[],
         partition_interval_unit=IntervalUnit.DAY,
@@ -2070,6 +2081,7 @@ def test_create_seed_on_error(mocker: MockerFixture, adapter_mock, make_snapshot
         mocker.ANY,
         column_descriptions={},
         columns_to_types={"id": exp.DataType.build("bigint"), "name": exp.DataType.build("text")},
+        table_format=None,
         storage_format=None,
         partitioned_by=[],
         partition_interval_unit=IntervalUnit.DAY,
@@ -2125,6 +2137,7 @@ def test_create_seed_no_intervals(mocker: MockerFixture, adapter_mock, make_snap
         mocker.ANY,
         column_descriptions={},
         columns_to_types={"id": exp.DataType.build("bigint"), "name": exp.DataType.build("text")},
+        table_format=None,
         storage_format=None,
         partitioned_by=[],
         partition_interval_unit=IntervalUnit.DAY,
@@ -2528,6 +2541,7 @@ def test_create_managed(adapter_mock, make_snapshot, mocker: MockerFixture):
         f"{snapshot.table_name()}__temp",
         mocker.ANY,
         model.columns_to_types,
+        table_format=model.table_format,
         storage_format=model.storage_format,
         partitioned_by=model.partitioned_by,
         partition_interval_unit=model.interval_unit,
@@ -2607,6 +2621,7 @@ def test_evaluate_managed(adapter_mock, make_snapshot, mocker: MockerFixture):
         f"{snapshot.table_name()}__temp",
         mocker.ANY,
         columns_to_types=None,
+        table_format=model.table_format,
         storage_format=model.storage_format,
         partitioned_by=model.partitioned_by,
         partition_interval_unit=model.interval_unit,
@@ -2648,10 +2663,10 @@ def test_cleanup_managed(adapter_mock, make_snapshot, mocker: MockerFixture):
     evaluator.cleanup(target_snapshots=[cleanup_task])
 
     adapter_mock.drop_table.assert_called_once_with(
-        "sqlmesh__test_schema.test_schema__test_model__1556851963__temp"
+        "sqlmesh__test_schema.test_schema__test_model__2998759427__temp"
     )
     adapter_mock.drop_managed_table.assert_called_once_with(
-        "sqlmesh__test_schema.test_schema__test_model__1556851963"
+        "sqlmesh__test_schema.test_schema__test_model__2998759427"
     )
 
 

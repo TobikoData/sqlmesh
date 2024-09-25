@@ -27,8 +27,10 @@ class ModelDefaultsConfig(BaseConfig):
         start: The earliest date that the model will be backfilled for. If this is None,
             then the date is inferred by taking the most recent start date of its ancestors.
             The start date can be a static datetime or a relative datetime like "1 year ago"
+        table_format: The table format used to manage the physical table files defined by `storage_format`, only applicable in certain engines.
+            (eg, 'iceberg', 'delta', 'hudi')
         storage_format: The storage format used to store the physical table, only applicable in certain engines.
-            (eg. 'parquet')
+            (eg. 'parquet', 'orc')
         on_destructive_change: What should happen when a forward-only model requires a destructive schema change.
         audits: The audits to be applied globally to all models in the project.
     """
@@ -38,6 +40,7 @@ class ModelDefaultsConfig(BaseConfig):
     cron: t.Optional[str] = None
     owner: t.Optional[str] = None
     start: t.Optional[TimeLike] = None
+    table_format: t.Optional[str] = None
     storage_format: t.Optional[str] = None
     on_destructive_change: t.Optional[OnDestructiveChange] = None
     session_properties: t.Optional[t.Dict[str, t.Any]] = None
