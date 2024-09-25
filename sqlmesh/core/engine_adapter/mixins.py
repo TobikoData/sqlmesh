@@ -161,14 +161,16 @@ class HiveMetastoreTablePropertiesMixin(EngineAdapter):
     ) -> t.Optional[exp.Properties]:
         properties: t.List[exp.Expression] = []
 
-        if table_format and storage_format and self.dialect == "spark":
+        if table_format and self.dialect == "spark":
             properties.append(exp.FileFormatProperty(this=exp.Var(this=table_format)))
-            properties.append(
-                exp.Property(this="write.format.default", value=exp.Literal.string(storage_format))
-            )
-        else:
             if storage_format:
-                properties.append(exp.FileFormatProperty(this=exp.Var(this=storage_format)))
+                properties.append(
+                    exp.Property(
+                        this="write.format.default", value=exp.Literal.string(storage_format)
+                    )
+                )
+        elif storage_format:
+            properties.append(exp.FileFormatProperty(this=exp.Var(this=storage_format)))
 
         if partitioned_by:
             properties.append(

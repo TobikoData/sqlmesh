@@ -154,7 +154,7 @@ class ModelMeta(_Node):
 
     @field_validator("table_format", "storage_format", mode="before")
     @field_validator_v1_args
-    def _storage_format_validator(cls, v: t.Any, values: t.Dict[str, t.Any]) -> t.Optional[str]:
+    def _format_validator(cls, v: t.Any, values: t.Dict[str, t.Any]) -> t.Optional[str]:
         if isinstance(v, exp.Expression) and not (isinstance(v, (exp.Literal, exp.Identifier))):
             return v.sql(values.get("dialect"))
         return str_or_exp_to_str(v)
@@ -330,6 +330,18 @@ class ModelMeta(_Node):
     @model_validator_v1_args
     def _root_validator(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
         values = cls._kind_validator(values)
+
+        # needs to be in a mode=after model validator so that the field validators have run to convert from Expression -> str
+        if (storage_format := values.get("storage_format")) and storage_format.lower() in {
+            "iceberg",
+            "hive",
+            "hudi",
+            "delta",
+        }:
+            logger.warning(
+                f"Model {values['name']} has `storage_format` set to a table format '{storage_format}' which is deprecated. Please use the `table_format` property instead"
+            )
+
         return values
 
     @classmethod

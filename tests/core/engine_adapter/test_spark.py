@@ -997,7 +997,12 @@ def test_replace_query_with_wap_self_reference(
     ]
 
 
-def test_table_format(adapter: SparkEngineAdapter):
+def test_table_format(adapter: SparkEngineAdapter, mocker: MockerFixture):
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.spark.SparkEngineAdapter.table_exists",
+        return_value=True,
+    )
+
     expressions = d.parse(
         """
         MODEL (
@@ -1012,11 +1017,26 @@ def test_table_format(adapter: SparkEngineAdapter):
     )
     model: SqlModel = t.cast(SqlModel, load_sql_based_model(expressions))
 
+    # both table_format and storage_format
     adapter.create_table(
         table_name=model.name,
         columns_to_types=model.columns_to_types_or_raise,
         table_format=model.table_format,
         storage_format=model.storage_format,
+    )
+
+    # just table_format
+    adapter.create_table(
+        table_name=model.name,
+        columns_to_types=model.columns_to_types_or_raise,
+        table_format=model.table_format,
+    )
+
+    # just storage_format set to a table format (test for backwards compatibility)
+    adapter.create_table(
+        table_name=model.name,
+        columns_to_types=model.columns_to_types_or_raise,
+        storage_format=model.table_format,
     )
 
     adapter.ctas(
@@ -1029,5 +1049,7 @@ def test_table_format(adapter: SparkEngineAdapter):
 
     assert to_sql_calls(adapter) == [
         "CREATE TABLE IF NOT EXISTS `test_table` (`cola` TIMESTAMP, `colb` STRING, `colc` STRING) USING ICEBERG TBLPROPERTIES ('write.format.default'='orc')",
+        "CREATE TABLE IF NOT EXISTS `test_table` (`cola` TIMESTAMP, `colb` STRING, `colc` STRING) USING ICEBERG",
+        "CREATE TABLE IF NOT EXISTS `test_table` (`cola` TIMESTAMP, `colb` STRING, `colc` STRING) USING ICEBERG",
         "CREATE TABLE IF NOT EXISTS `test_table` USING ICEBERG TBLPROPERTIES ('write.format.default'='orc') AS SELECT CAST(`cola` AS TIMESTAMP) AS `cola`, CAST(`colb` AS STRING) AS `colb`, CAST(`colc` AS STRING) AS `colc` FROM (SELECT CAST(1 AS TIMESTAMP) AS `cola`, CAST(2 AS STRING) AS `colb`, 'foo' AS `colc`) AS `_subquery`",
     ]
