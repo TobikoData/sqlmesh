@@ -728,6 +728,7 @@ class BigQueryConnectionConfig(ConnectionConfig):
 
     project: t.Optional[str] = None
     execution_project: t.Optional[str] = None
+    quota_project: t.Optional[str] = None
     location: t.Optional[str] = None
     # Keyfile Auth
     keyfile: t.Optional[str] = None
@@ -766,6 +767,19 @@ class BigQueryConnectionConfig(ConnectionConfig):
             )
         return v
 
+    @field_validator("quota_project")
+    @field_validator_v1_args
+    def validate_quota_project(
+        cls,
+        v: t.Optional[str],
+        values: t.Dict[str, t.Any],
+    ) -> t.Optional[str]:
+        if v and not values.get("project"):
+            raise ConfigError(
+                "If the `quota_project` field is specified, you must also specify the `project` field to provide a default object location."
+            )
+        return v
+
     @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
         return set()
@@ -778,7 +792,7 @@ class BigQueryConnectionConfig(ConnectionConfig):
     def _static_connection_kwargs(self) -> t.Dict[str, t.Any]:
         """The static connection kwargs for this connection"""
         import google.auth
-        from google.api_core import client_info
+        from google.api_core import client_info, client_options
         from google.oauth2 import credentials, service_account
 
         if self.method == BigQueryConnectionMethod.OAUTH:
@@ -802,11 +816,13 @@ class BigQueryConnectionConfig(ConnectionConfig):
             )
         else:
             raise ConfigError("Invalid BigQuery Connection Method")
+        options = client_options.ClientOptions(quota_project_id=self.quota_project)
         client = google.cloud.bigquery.Client(
             project=self.execution_project or self.project,
             credentials=creds,
             location=self.location,
             client_info=client_info.ClientInfo(user_agent="sqlmesh"),
+            client_options=options,
         )
 
         return {
