@@ -202,19 +202,7 @@ SQLMesh parses seed CSV files using [Panda's `read_csv` utility](https://pandas.
 
 dbt parses seed CSV files using [agate's csv reader](https://agate.readthedocs.io/en/latest/api/csv.html#csv-reader-and-writer) and [customizes agate's default type inference](https://github.com/dbt-labs/dbt-common/blob/ae8ffe082926fdb3ef2a15486588f40c7739aea9/dbt_common/clients/agate_helper.py#L59).
 
-If SQLMesh and dbt infer different column types for a seed CSV file, you may specify your desired data types in a [seed properties configuration file](https://docs.getdbt.com/reference/seed-properties).
-
-Specify a column's SQL data type in its `data_type` key, as shown below. The file must list all columns present in the CSV file; SQLMesh's default type inference will be used for columns that do not specify the `data_type` key.
-
-``` yaml
-seeds:
-  - name: <seed name>
-    columns:
-      - name: <column name>
-        data_type: <SQL data type>
-```
-
-Alternatively, you can specify a [column_types](https://docs.getdbt.com/reference/resource-configs/column_types) dictionary in your `dbt_project.yml` file, where the keys define the column names and the values the data types.
+If SQLMesh and dbt infer different column types for a seed CSV file, you may specify a [column_types](https://docs.getdbt.com/reference/resource-configs/column_types) dictionary in your `dbt_project.yml` file, where the keys define the column names and the values the data types.
 
 ``` yaml
 seeds:
@@ -223,7 +211,7 @@ seeds:
       <column name>: <SQL data type>
 ```
 
-You can also define this dictionary in the seed properties configuration file.
+Alternatively, you can define this dictionary in the seed [seed properties configuration file](https://docs.getdbt.com/reference/seed-properties).
 
 ``` yaml
 seeds:
@@ -231,6 +219,16 @@ seeds:
     config:
       column_types:
         <column name>: <SQL data type>
+```
+
+You may also specify a column's SQL data type in its `data_type` key, as shown below. The file must list all columns present in the CSV file; SQLMesh's default type inference will be used for columns that do not specify the `data_type` key.
+
+``` yaml
+seeds:
+  - name: <seed name>
+    columns:
+      - name: <column name>
+        data_type: <SQL data type>
 ```
 
 ## Package Management

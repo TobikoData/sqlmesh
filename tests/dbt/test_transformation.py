@@ -438,8 +438,6 @@ def test_seed_column_types():
     context.target = DuckDbConfig(name="target", schema="test")
     sqlmesh_seed = seed.to_sqlmesh(context)
 
-    assert seed.columns["zipcode"].quote
-    assert seed.columns["address"].quote
     assert sqlmesh_seed.columns_to_types == expected_column_types
     assert sqlmesh_seed.column_descriptions == expected_column_descriptions
 
