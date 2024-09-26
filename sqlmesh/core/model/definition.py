@@ -15,7 +15,7 @@ import numpy as np
 from astor import to_source
 from pydantic import Field
 from sqlglot import diff, exp
-from sqlglot.diff import Insert, Keep
+from sqlglot.diff import Insert
 from sqlglot.helper import ensure_list
 from sqlglot.optimizer.simplify import gen
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
@@ -1176,25 +1176,27 @@ class SqlModel(_SqlBasedModel):
             # Can't determine if there's a breaking change if we can't render the query.
             return None
 
-        edits = diff(previous_query, this_query, matchings=[(previous_query, this_query)])
+        edits = diff(
+            previous_query, this_query, matchings=[(previous_query, this_query)], delta_only=True
+        )
         inserted_expressions = {e.expression for e in edits if isinstance(e, Insert)}
 
         for edit in edits:
-            if isinstance(edit, Insert):
-                expr = edit.expression
-                if _is_udtf(expr):
-                    # projection subqueries do not change cardinality, engines don't allow these to return
-                    # more than one row of data
-                    parent = expr.find_ancestor(exp.Subquery)
+            if not isinstance(edit, Insert):
+                return None
 
-                    if not parent:
-                        return None
+            expr = edit.expression
+            if _is_udtf(expr):
+                # projection subqueries do not change cardinality, engines don't allow these to return
+                # more than one row of data
+                parent = expr.find_ancestor(exp.Subquery)
 
-                    expr = parent
-
-                if not _is_projection(expr) and expr.parent not in inserted_expressions:
+                if not parent:
                     return None
-            elif not isinstance(edit, Keep):
+
+                expr = parent
+
+            if not _is_projection(expr) and expr.parent not in inserted_expressions:
                 return None
 
         return False
