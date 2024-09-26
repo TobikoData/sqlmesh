@@ -11,7 +11,7 @@ gateways:
   inttest_trino:
     connection:
       type: trino
-      host: localhost
+      host: {{ env_var('DOCKER_HOSTNAME', 'localhost') }}
       port: 8080
       user: admin
       catalog: datalake
@@ -23,7 +23,7 @@ gateways:
   inttest_trino_iceberg:
     connection:
       type: trino
-      host: localhost
+      host: {{ env_var('DOCKER_HOSTNAME', 'localhost') }}
       port: 8080
       user: admin
       catalog: datalake_iceberg
@@ -35,7 +35,7 @@ gateways:
   inttest_trino_delta:
     connection:
       type: trino
-      host: localhost
+      host: {{ env_var('DOCKER_HOSTNAME', 'localhost') }}
       port: 8080
       user: admin
       catalog: datalake_delta
@@ -48,14 +48,14 @@ gateways:
     connection:
       type: spark
       config:
-        spark.remote: sc://localhost
+        spark.remote: sc://{{ env_var('DOCKER_HOSTNAME', 'localhost') }}
       concurrent_tasks: 1
     state_connection:
       type: duckdb
   inttest_mssql:
     connection:
       type: mssql
-      host: localhost
+      host: {{ env_var('DOCKER_HOSTNAME', 'localhost') }}
       user: sa
       password: 1StrongPwd@@
   inttest_postgres:
@@ -64,13 +64,13 @@ gateways:
       user: postgres
       password: postgres
       database: postgres
-      host: localhost
+      host: {{ env_var('DOCKER_HOSTNAME', 'localhost') }}
       port: 5432
       concurrent_tasks: 1
   inttest_mysql:
     connection:
       type: mysql
-      host: localhost
+      host: {{ env_var('DOCKER_HOSTNAME', 'localhost') }}
       user: root
       password: mysql
       port: 3306
@@ -78,7 +78,7 @@ gateways:
   inttest_clickhouse:
     connection:
       type: clickhouse
-      host: localhost
+      host: {{ env_var('DOCKER_HOSTNAME', 'localhost') }}
       port: 8123
       username: clickhouse
       password: clickhouse
@@ -88,7 +88,7 @@ gateways:
   inttest_clickhouse_cluster:
     connection:
       type: clickhouse
-      host: localhost
+      host: {{ env_var('DOCKER_HOSTNAME', 'localhost') }}
       port: 8123
       username: clickhouse
       password: clickhouse
