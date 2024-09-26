@@ -321,7 +321,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin):
             current_fields = list(field.fields)
             if field.name in nested_fields_to_add:
                 current_fields.extend(
-                    bigquery.SchemaField(new_field[1], new_field[0], mode="NULLABLE")
+                    self.__get_bq_schemafield(new_field[1], exp.DataType.build(new_field[0]))
                     for new_field in nested_fields_to_add[field.name]
                 )
             if current_fields:
