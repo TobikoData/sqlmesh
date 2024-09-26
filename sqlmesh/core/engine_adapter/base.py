@@ -1453,7 +1453,10 @@ class EngineAdapter:
                     "Cannot use `updated_at_as_valid_from` without `updated_at_name` for SCD Type 2"
                 )
             update_valid_from_start: t.Union[str, exp.Expression] = updated_at_col
-        elif execution_time_as_valid_from:
+        # If using check_columns and the user doesn't always want execution_time for valid from
+        # then we only use epoch 0 if we are truncating the table and loading rows for the first time.
+        # All future new rows should have execution time.
+        elif check_columns and (execution_time_as_valid_from or not truncate):
             update_valid_from_start = execution_ts
         else:
             update_valid_from_start = to_time_column("1970-01-01 00:00:00+00:00", time_data_type)
@@ -1631,7 +1634,7 @@ class EngineAdapter:
                     .group_by(*unique_key),
                 )
                 # Do a full join between latest records and source table in order to combine them together
-                # MySQL doesn't suport full join so going to do a left then right join and remove dups with union
+                # MySQL doesn't support full join so going to do a left then right join and remove dups with union
                 # We do a left/right and filter right on only matching to remove the need to do union distinct
                 # which allows scd type 2 to be compatible with unhashable data types
                 .with_(

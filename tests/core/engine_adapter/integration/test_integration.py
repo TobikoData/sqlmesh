@@ -869,6 +869,7 @@ def test_scd_type_2_by_time(ctx: TestContext):
         updated_at_as_valid_from=False,
         columns_to_types=input_schema,
         table_format=table_format,
+        truncate=True,
     )
     results = ctx.get_metadata_results()
     assert len(results.views) == 0
@@ -930,6 +931,7 @@ def test_scd_type_2_by_time(ctx: TestContext):
         updated_at_as_valid_from=False,
         columns_to_types=input_schema,
         table_format=table_format,
+        truncate=False,
     )
     results = ctx.get_metadata_results()
     assert len(results.views) == 0
@@ -1018,6 +1020,7 @@ def test_scd_type_2_by_column(ctx: TestContext):
         execution_time="2023-01-01",
         execution_time_as_valid_from=False,
         columns_to_types=ctx.columns_to_types,
+        truncate=True,
     )
     results = ctx.get_metadata_results()
     assert len(results.views) == 0
@@ -1087,6 +1090,7 @@ def test_scd_type_2_by_column(ctx: TestContext):
         execution_time="2023-01-05 00:00:00",
         execution_time_as_valid_from=False,
         columns_to_types=ctx.columns_to_types,
+        truncate=False,
     )
     results = ctx.get_metadata_results()
     assert len(results.views) == 0
@@ -1143,7 +1147,7 @@ def test_scd_type_2_by_column(ctx: TestContext):
                     "id": 5,
                     "name": "e",
                     "status": "inactive",
-                    "valid_from": "1970-01-01 00:00:00",
+                    "valid_from": "2023-01-05 00:00:00",
                     "valid_to": pd.NaT,
                 },
             ]
