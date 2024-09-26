@@ -11,8 +11,6 @@ from sqlglot import exp
 from sqlmesh.core.dialect import normalize_model_name
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.loader import update_model_schemas
-from sqlmesh.core.model import Model
-from sqlmesh.core.state_sync import StateReader
 from sqlmesh.utils import UniqueKeyDict
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.git import GitClient
@@ -20,11 +18,18 @@ from sqlmesh.utils.git import GitClient
 logger = logging.getLogger(__name__)
 
 
+if t.TYPE_CHECKING:
+    from sqlmesh.core.audit import ModelAudit
+    from sqlmesh.core.model import Model
+    from sqlmesh.core.state_sync import StateReader
+
+
 class Selector:
     def __init__(
         self,
         state_reader: StateReader,
         models: UniqueKeyDict[str, Model],
+        audits: t.Dict[str, ModelAudit],
         context_path: Path = Path("."),
         dag: t.Optional[DAG[str]] = None,
         default_catalog: t.Optional[str] = None,
@@ -32,6 +37,7 @@ class Selector:
     ):
         self._state_reader = state_reader
         self._models = models
+        self._audits = audits
         self._context_path = context_path
         self._default_catalog = default_catalog
         self._dialect = dialect
@@ -144,7 +150,9 @@ class Selector:
             models[model.fqn] = model
 
         if needs_update:
-            update_model_schemas(dag, models, self._context_path)
+            update_model_schemas(
+                dag, models=models, audits=self._audits, context_path=self._context_path
+            )
 
         return models
 

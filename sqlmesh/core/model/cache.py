@@ -8,6 +8,7 @@ from pathlib import Path
 
 from sqlglot import exp
 from sqlglot.optimizer.simplify import gen
+from sqlglot.schema import MappingSchema
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.model.definition import Model, SqlModel, _Model
@@ -18,7 +19,11 @@ from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
 
-T = t.TypeVar("T")
+if t.TYPE_CHECKING:
+    from sqlmesh.core.audit import ModelAudit
+    from sqlmesh.core.snapshot import SnapshotId
+
+    T = t.TypeVar("T")
 
 
 class ModelCache:
@@ -133,47 +138,65 @@ class OptimizedQueryCache:
         return f"{model.name}_{crc32(hash_data)}"
 
 
-def optimized_query_cache_pool(optimized_query_cache: OptimizedQueryCache) -> ProcessPoolExecutor:
+def optimized_query_cache_pool(*args: t.Any) -> ProcessPoolExecutor:
     return ProcessPoolExecutor(
         mp_context=mp.get_context("fork"),
         initializer=_init_optimized_query_cache,
-        initargs=(optimized_query_cache,),
+        initargs=args,
         max_workers=c.MAX_FORK_WORKERS,
     )
 
 
-@t.overload
-def load_optimized_query_cache(
-    model_or_tuple: t.Tuple[Model, T],
-) -> t.Tuple[T, t.Optional[str]]: ...
+_optimized_query_cache: t.Optional[OptimizedQueryCache] = None
+_audits: t.Optional[t.Dict[str, ModelAudit]] = None
 
 
-@t.overload
-def load_optimized_query_cache(model_or_tuple: Model) -> t.Tuple[str, t.Optional[str]]: ...
+def _init_optimized_query_cache(
+    optimized_query_cache: t.Optional[OptimizedQueryCache] = None,
+    audits: t.Optional[t.Dict[str, ModelAudit]] = None,
+) -> None:
+    global _optimized_query_cache, _nodes, _audits
+    _optimized_query_cache = optimized_query_cache
+    _audits = audits
 
 
-def load_optimized_query_cache(model_or_tuple):  # type: ignore
+def load_optimized_query(
+    model_snapshot_id: t.Tuple[Model, SnapshotId],
+) -> t.Tuple[SnapshotId, t.Optional[str]]:
     assert _optimized_query_cache
-
-    if isinstance(model_or_tuple, _Model):
-        model = model_or_tuple
-        key = None
-    else:
-        model, key = model_or_tuple
+    model, snapshot_id = model_snapshot_id
 
     if isinstance(model, SqlModel):
         entry_name = _optimized_query_cache.put(model)
     else:
         entry_name = None
-    return key or model.fqn, entry_name
+    return snapshot_id, entry_name
 
 
-_optimized_query_cache: t.Optional[OptimizedQueryCache] = None
+def load_optimized_query_and_mapping(
+    model: Model, mapping: t.Dict
+) -> t.Tuple[str, t.Optional[str], str, str, t.Dict]:
+    assert _optimized_query_cache
+    assert _audits is not None
 
+    schema = MappingSchema(normalize=False)
+    for parent, columns_to_types in mapping.items():
+        schema.add_table(parent, columns_to_types, dialect=model.dialect)
+    model.update_schema(schema)
 
-def _init_optimized_query_cache(optimized_query_cache: OptimizedQueryCache) -> None:
-    global _optimized_query_cache
-    _optimized_query_cache = optimized_query_cache
+    if isinstance(model, SqlModel):
+        entry_name = _optimized_query_cache._entry_name(model)
+        _optimized_query_cache.with_optimized_query(model, entry_name)
+    else:
+        entry_name = None
+
+    return (
+        model.fqn,
+        entry_name,
+        model.data_hash,
+        model.metadata_hash(_audits),
+        model.mapping_schema,
+    )
 
 
 def _mapping_schema_hash_data(schema: t.Dict[str, t.Any]) -> t.List[str]:

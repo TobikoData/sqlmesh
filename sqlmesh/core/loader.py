@@ -14,7 +14,7 @@ from sqlglot.errors import SchemaError, SqlglotError
 from sqlglot.schema import MappingSchema
 
 from sqlmesh.core import constants as c
-from sqlmesh.core.audit import Audit, load_multiple_audits
+from sqlmesh.core.audit import Audit, ModelAudit, load_multiple_audits
 from sqlmesh.core.dialect import parse
 from sqlmesh.core.macros import MacroRegistry, macro
 from sqlmesh.core.metric import Metric, MetricMeta, expand_metrics, load_metric_ddl
@@ -27,7 +27,7 @@ from sqlmesh.core.model import (
     create_external_model,
     load_sql_based_model,
 )
-from sqlmesh.core.model.cache import optimized_query_cache_pool, load_optimized_query_cache
+from sqlmesh.core.model.cache import load_optimized_query_and_mapping, optimized_query_cache_pool
 from sqlmesh.core.model import model as model_registry
 from sqlmesh.utils import UniqueKeyDict
 from sqlmesh.utils.dag import DAG
@@ -104,8 +104,9 @@ class Loader(abc.ABC):
         if update_schemas:
             update_model_schemas(
                 self._dag,
-                models,
-                self._context.path,
+                models=models,
+                audits={k: v for k, v in audits.items() if isinstance(v, ModelAudit)},
+                context_path=self._context.path,
             )
             for model in models.values():
                 # The model definition can be validated correctly only after the schema is set.
@@ -552,6 +553,7 @@ class SqlMeshLoader(Loader):
 def update_model_schemas(
     dag: DAG[str],
     models: UniqueKeyDict[str, Model],
+    audits: t.Dict[str, ModelAudit],
     context_path: Path,
 ) -> None:
     schema = MappingSchema(normalize=False)
@@ -560,14 +562,14 @@ def update_model_schemas(
     if c.MAX_FORK_WORKERS == 1:
         _update_model_schemas_sequential(dag, models, schema, optimized_query_cache)
     else:
-        _update_model_schemas_parallel(dag, models, schema, optimized_query_cache)
+        _update_model_schemas_parallel(dag, models, audits, schema, optimized_query_cache)
 
 
 def _update_schema_with_model(schema: MappingSchema, model: Model) -> None:
     columns_to_types = model.columns_to_types
     if columns_to_types:
         try:
-            schema.add_table(model.fqn, columns_to_types, dialect=model.dialect, normalize=False)
+            schema.add_table(model.fqn, columns_to_types, dialect=model.dialect)
         except SchemaError as e:
             if "nesting level:" in str(e):
                 logger.error(
@@ -597,6 +599,7 @@ def _update_model_schemas_sequential(
 def _update_model_schemas_parallel(
     dag: DAG[str],
     models: UniqueKeyDict[str, Model],
+    audits: t.Dict[str, ModelAudit],
     schema: MappingSchema,
     optimized_query_cache: OptimizedQueryCache,
 ) -> None:
@@ -617,19 +620,29 @@ def _update_model_schemas_parallel(
             if not deps:
                 del graph[name]
                 model = models[name]
-                model.update_schema(schema)
-                futures.add(executor.submit(load_optimized_query_cache, model))
+                futures.add(
+                    executor.submit(
+                        load_optimized_query_and_mapping,
+                        model,
+                        mapping={
+                            parent: models[parent].columns_to_types
+                            for parent in model.depends_on
+                            if parent in models
+                        },
+                    )
+                )
 
-    with optimized_query_cache_pool(optimized_query_cache) as executor:
+    with optimized_query_cache_pool(optimized_query_cache, audits) as executor:
         process_models()
 
         while futures:
             for future in as_completed(futures):
                 futures.remove(future)
-                fqn, entry_name = future.result()
+                fqn, entry_name, data_hash, metadata_hash, mapping_schema = future.result()
                 model = models[fqn]
-                if entry_name:
-                    optimized_query_cache.with_optimized_query(model, entry_name)
-
+                model._data_hash = data_hash
+                model._metadata_hash = metadata_hash
+                model.update_schema(mapping_schema)
+                optimized_query_cache.with_optimized_query(model, entry_name)
                 _update_schema_with_model(schema, model)
                 process_models(completed_model=model)

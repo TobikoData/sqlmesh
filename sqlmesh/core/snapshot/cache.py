@@ -6,7 +6,7 @@ from pathlib import Path
 from sqlmesh.core.model.cache import (
     OptimizedQueryCache,
     optimized_query_cache_pool,
-    load_optimized_query_cache,
+    load_optimized_query,
 )
 from sqlmesh.core import constants as c
 from sqlmesh.core.snapshot.definition import Snapshot, SnapshotId
@@ -54,7 +54,7 @@ class SnapshotCache:
         if c.MAX_FORK_WORKERS != 1:
             with optimized_query_cache_pool(self._optimized_query_cache) as executor:
                 for key, entry_name in executor.map(
-                    load_optimized_query_cache,
+                    load_optimized_query,
                     (
                         (snapshot.model, s_id)
                         for s_id, snapshot in snapshots.items()
