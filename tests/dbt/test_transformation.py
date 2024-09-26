@@ -11,7 +11,7 @@ from dbt.adapters.base import BaseRelation
 from dbt.exceptions import CompilationError
 from freezegun import freeze_time
 from pytest_mock.plugin import MockerFixture
-from sqlglot import exp, parse_one
+from sqlglot import exp
 from sqlmesh.core import dialect as d
 from sqlmesh.core.audit import StandaloneAudit
 from sqlmesh.core.context import Context
@@ -355,9 +355,9 @@ def test_model_columns():
     )
 
     expected_column_types = {
-        "ADDRESS": parse_one("text", into=exp.DataType),
-        "ZIPCODE": parse_one("varchar(5)", into=exp.DataType),
-        "DATE": parse_one("timestamp_ntz", into=exp.DataType, dialect="snowflake"),
+        "ADDRESS": exp.DataType.build("text"),
+        "ZIPCODE": exp.DataType.build("varchar(5)"),
+        "DATE": exp.DataType.build("timestamp_ntz", dialect="snowflake"),
     }
     expected_column_descriptions = {
         "ADDRESS": "Business address",
@@ -394,8 +394,8 @@ def test_seed_columns():
     )
 
     expected_column_types = {
-        "address": parse_one("text", into=exp.DataType),
-        "zipcode": parse_one("text", into=exp.DataType),
+        "address": exp.DataType.build("text"),
+        "zipcode": exp.DataType.build("text"),
     }
     expected_column_descriptions = {
         "address": "Business address",
@@ -406,6 +406,38 @@ def test_seed_columns():
     context.project_name = "Foo"
     context.target = DuckDbConfig(name="target", schema="test")
     sqlmesh_seed = seed.to_sqlmesh(context)
+    assert sqlmesh_seed.columns_to_types == expected_column_types
+    assert sqlmesh_seed.column_descriptions == expected_column_descriptions
+
+
+def test_seed_column_types():
+    seed = SeedConfig(
+        name="foo",
+        package="package",
+        path=Path("examples/sushi_dbt/seeds/waiter_names.csv"),
+        column_types={
+            "address": "text",
+            "zipcode": "text",
+        },
+        columns={
+            "zipcode": ColumnConfig(name="zipcode", description="Business zipcode"),
+        },
+        quote_columns=True,
+    )
+
+    expected_column_types = {
+        "address": exp.DataType.build("text"),
+        "zipcode": exp.DataType.build("text"),
+    }
+    expected_column_descriptions = {
+        "zipcode": "Business zipcode",
+    }
+
+    context = DbtContext()
+    context.project_name = "Foo"
+    context.target = DuckDbConfig(name="target", schema="test")
+    sqlmesh_seed = seed.to_sqlmesh(context)
+
     assert sqlmesh_seed.columns_to_types == expected_column_types
     assert sqlmesh_seed.column_descriptions == expected_column_descriptions
 
