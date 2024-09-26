@@ -627,25 +627,22 @@ class _Model(ModelMeta, frozen=True):
             return to_time_column(time, time_column_type, self.time_column.format)
         return exp.convert(time)
 
-    def update_schema(self, schema: MappingSchema | t.Dict) -> None:
-        """Updates the schema for this model's dependencies based on the given mapping schema."""
-        if isinstance(schema, dict):
-            self.mapping_schema.clear()
-            self.mapping_schema.update(schema)
-        else:
-            for dep in self.depends_on:
-                table = exp.to_table(dep)
-                mapping_schema = schema.find(table)
+    def set_mapping_schema(self, schema: t.Dict) -> None:
+        self.mapping_schema.clear()
+        self.mapping_schema.update(schema)
 
-                if mapping_schema:
-                    nested_set(
-                        self.mapping_schema,
-                        tuple(part.sql(copy=False) for part in table.parts),
-                        {
-                            col: dtype.sql(dialect=self.dialect)
-                            for col, dtype in mapping_schema.items()
-                        },
-                    )
+    def update_schema(self, schema: MappingSchema) -> None:
+        """Updates the schema for this model's dependencies based on the given mapping schema."""
+        for dep in self.depends_on:
+            table = exp.to_table(dep)
+            mapping_schema = schema.find(table)
+
+            if mapping_schema:
+                nested_set(
+                    self.mapping_schema,
+                    tuple(part.sql(copy=False) for part in table.parts),
+                    {col: dtype.sql(dialect=self.dialect) for col, dtype in mapping_schema.items()},
+                )
 
     @property
     def depends_on(self) -> t.Set[str]:
@@ -1113,8 +1110,15 @@ class SqlModel(_SqlBasedModel):
             if select.comments
         }
 
-    def update_schema(self, schema: MappingSchema | t.Dict) -> None:
+    def set_mapping_schema(self, schema: t.Dict) -> None:
+        super().set_mapping_schema(schema)
+        self._on_mapping_schema_set()
+
+    def update_schema(self, schema: MappingSchema) -> None:
         super().update_schema(schema)
+        self._on_mapping_schema_set()
+
+    def _on_mapping_schema_set(self) -> None:
         self._columns_to_types = None
         self._query_renderer.update_schema(self.mapping_schema)
 

@@ -138,11 +138,14 @@ class OptimizedQueryCache:
         return f"{model.name}_{crc32(hash_data)}"
 
 
-def optimized_query_cache_pool(*args: t.Any) -> ProcessPoolExecutor:
+def optimized_query_cache_pool(
+    optimized_query_cache: OptimizedQueryCache,
+    audits: t.Optional[t.Dict[str, ModelAudit]] = None,
+) -> ProcessPoolExecutor:
     return ProcessPoolExecutor(
         mp_context=mp.get_context("fork"),
         initializer=_init_optimized_query_cache,
-        initargs=args,
+        initargs=(optimized_query_cache, audits),
         max_workers=c.MAX_FORK_WORKERS,
     )
 
@@ -152,10 +155,10 @@ _audits: t.Optional[t.Dict[str, ModelAudit]] = None
 
 
 def _init_optimized_query_cache(
-    optimized_query_cache: t.Optional[OptimizedQueryCache] = None,
+    optimized_query_cache: OptimizedQueryCache,
     audits: t.Optional[t.Dict[str, ModelAudit]] = None,
 ) -> None:
-    global _optimized_query_cache, _nodes, _audits
+    global _optimized_query_cache, _audits
     _optimized_query_cache = optimized_query_cache
     _audits = audits
 
