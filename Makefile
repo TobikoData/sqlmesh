@@ -70,13 +70,13 @@ api-docs-serve:
 	python pdoc/cli.py
 
 ui-up:
-	docker-compose -f ./web/docker-compose.yml up --build -d && $(if $(shell which open), open http://localhost:8001, echo "Open http://localhost:8001 in your browser.")
+	docker compose -f ./web/docker-compose.yml up --build -d && $(if $(shell which open), open http://localhost:8001, echo "Open http://localhost:8001 in your browser.")
 
 ui-down:
-	docker-compose -f ./web/docker-compose.yml down
+	docker compose -f ./web/docker-compose.yml down
 
 ui-build:
-	docker-compose -f ./web/docker-compose.yml -f ./web/docker-compose.build.yml run app
+	docker compose -f ./web/docker-compose.yml -f ./web/docker-compose.build.yml run app
 
 clean-build:
 	rm -rf build/ && rm -rf dist/ && rm -rf *.egg-info
@@ -156,11 +156,11 @@ engine-%-install:
 	pip3 install -e ".[dev,web,slack,${*}]"
 
 engine-%-up: engine-%-install
-	docker compose -f ./tests/core/engine_adapter/docker/compose.${*}.yaml up -d
+	docker compose -f ./tests/core/engine_adapter/integration/docker/compose.${*}.yaml up -d
 	./.circleci/wait-for-db.sh ${*}
 
 engine-%-down:
-	docker compose -f ./tests/core/engine_adapter/docker/compose.${*}.yaml down -v
+	docker compose -f ./tests/core/engine_adapter/integration/docker/compose.${*}.yaml down -v
 
 ##################
 # Docker Engines #

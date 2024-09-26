@@ -4,6 +4,9 @@
 # The idea is to block until the database is available to serve requests. Once the database can serve requests,
 # the integration tests can be run.
 # Therefore, the ports etc are tightly coupled with the compose.yml files under tests/core/engine_adapter/docker/
+#
+# Note that if the docker daemon is not running `localhost`, you can set the DOCKER_HOSTNAME environment variable to the
+# correct host Docker is running on
 
 set -e
 
@@ -20,7 +23,7 @@ function_exists() {
 }
 
 probe_port() {
-    while ! nc -z localhost $1; do
+    while ! nc -z ${DOCKER_HOSTNAME:-localhost} $1; do
         sleep 1
     done
 }
@@ -47,7 +50,7 @@ spark_ready() {
 
 trino_ready() {
     # Trino has a built-in healthcheck script, just call that
-    docker compose -f tests/core/engine_adapter/docker/compose.trino.yaml exec trino /bin/bash -c '/usr/lib/trino/bin/health-check'
+    docker compose -f tests/core/engine_adapter/integration/docker/compose.trino.yaml exec trino /bin/bash -c '/usr/lib/trino/bin/health-check'
 }
 
 echo "Waiting for $ENGINE to be ready..."
