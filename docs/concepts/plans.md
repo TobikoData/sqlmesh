@@ -106,7 +106,7 @@ The `plan` command provides two temporal options: `--start` and `--end`. These o
 
 For context, every model has a start date. The start can be specified in [the model definition](./models/overview.md#start), in the [project configuration's `model_defaults`](../guides/configuration.md#model-defaults), or by SQLMesh's default value of yesterday.
 
-Because the prod environment supports business operations, prod plans ensure every model is backfilled from its start date until the most recent completed time interval. The `plan` command's `--start` and `--end` options are not applicable for prod due to that restriction.
+Because the prod environment supports business operations, prod plans ensure every model is backfilled from its start date until the most recent completed time interval. Due to that restriction, the `plan` command's `--start` and `--end` options are not supported for regular plans against prod. The options are supported for [restatement plans](#restatement-plans) against prod to allow re-processing a subset of existing data.
 
 Non-prod plans are typically used for development, so their models can optionally be backfilled for any date range with the `--start` and `--end` options. Limiting the date range makes backfills faster and development more efficient, especially for incremental models using large tables.
 
@@ -128,6 +128,127 @@ Those model kinds will behave as follows in a non-prod plan that specifies a lim
 
 - If the `--start` option date is the same as or before the model's start date, the model is fully refreshed for all of time
 - If the `--start` option date is after the model's start date, the model is ignored by the plan and is not backfilled
+
+#### Example
+
+Consider a SQLMesh project with a default start date of 2024-09-20.
+
+It contains the following `INCREMENTAL_BY_UNIQUE_KEY` model that specifies an explicit start date of 2024-09-23:
+
+```sql linenums="1" hl_lines="6"
+MODEL (
+  name sqlmesh_example.start_end_model,
+  kind INCREMENTAL_BY_UNIQUE_KEY (
+    unique_key item_id
+  ),
+  start '2024-09-23'
+);
+
+SELECT
+  item_id,
+  num_orders
+FROM
+  sqlmesh_example.full_model
+```
+
+When we run the project's first plan, we see that SQLMesh correctly detected a different start date for our `start_end_model` than the other models (which have the project default start of 2024-09-20):
+
+```bash linenums="1" hl_lines="17"
+❯ sqlmesh plan
+======================================================================
+Successfully Ran 1 tests against duckdb
+----------------------------------------------------------------------
+New environment `prod` will be created from `prod`
+Summary of differences against `prod`:
+Models:
+└── Added:
+    ├── sqlmesh_example.full_model
+    ├── sqlmesh_example.incremental_model
+    ├── sqlmesh_example.seed_model
+    └── sqlmesh_example.start_end_model
+Models needing backfill (missing dates):
+├── sqlmesh_example.full_model: 2024-09-20 - 2024-09-26
+├── sqlmesh_example.incremental_model: 2024-09-20 - 2024-09-26
+├── sqlmesh_example.seed_model: 2024-09-20 - 2024-09-26
+└── sqlmesh_example.start_end_model: 2024-09-23 - 2024-09-26
+Apply - Backfill Tables [y/n]:
+```
+
+After executing that plan, we add columns to both the `incremental_model` and `start_end_model` queries.
+
+We then execute `sqlmesh plan dev` to create the new `dev` environment:
+
+```bash linenums="1" hl_lines="23-26"
+
+❯ sqlmesh plan dev
+======================================================================
+Successfully Ran 1 tests against duckdb
+----------------------------------------------------------------------
+New environment `dev` will be created from `prod`
+Summary of differences against `dev`:
+Models:
+├── Directly Modified:
+│   ├── sqlmesh_example__dev.start_end_model
+│   └── sqlmesh_example__dev.incremental_model
+└── Indirectly Modified:
+    └── sqlmesh_example__dev.full_model
+
+[...model diff omitted...]
+
+Directly Modified: sqlmesh_example__dev.incremental_model (Non-breaking)
+└── Indirectly Modified Children:
+    └── sqlmesh_example__dev.full_model (Indirect Non-breaking)
+
+[...model diff omitted...]
+
+Directly Modified: sqlmesh_example__dev.start_end_model (Non-breaking)
+Models needing backfill (missing dates):
+├── sqlmesh_example__dev.incremental_model: 2024-09-20 - 2024-09-26
+└── sqlmesh_example__dev.start_end_model: 2024-09-23 - 2024-09-26
+Enter the backfill start date (eg. '1 year', '2020-01-01') or blank to backfill from the beginning of history:
+```
+
+Note two things about the output:
+
+1. As before, SQLMesh displays the complete backfill time range for each model, using the project default start of 2024-09-20 for `incremental_model` and 2024-09-23 for `start_end_model`
+2. SQLMesh prompted us for a backfill start date because we didn't pass the `--start` option to the `sqlmesh plan dev` command
+
+Let's cancel that plan and start a new one, passing a start date of 2024-09-24.
+
+The `start_end_model` is of kind `INCREMENTAL_BY_UNIQUE_KEY`, which is non-idempotent and cannot be backfilled for a limited time range.
+
+Because the command's `--start` of 2024-09-24 is after `start_end_model`'s start date 2024-09-23, `start_end_model` is ignored:
+
+``` bash linenums="1" hl_lines="12-13 20-21"
+❯ sqlmesh plan dev --start 2024-09-24
+======================================================================
+Successfully Ran 1 tests against duckdb
+----------------------------------------------------------------------
+New environment `dev` will be created from `prod`
+Summary of differences against `dev`:
+Models:
+├── Directly Modified:
+│   └── sqlmesh_example__dev.incremental_model
+├── Indirectly Modified:
+│   └── sqlmesh_example__dev.full_model
+└── Ignored Models (Expected Plan Start):
+    └── sqlmesh_example__dev.start_end_model (2024-09-23 00:00:00+00:00)
+
+[...model diff omitted...]
+
+Directly Modified: sqlmesh_example__dev.incremental_model (Non-breaking)
+└── Indirectly Modified Children:
+    └── sqlmesh_example__dev.full_model (Indirect Non-breaking)
+Models needing backfill (missing dates):
+└── sqlmesh_example__dev.incremental_model: 2024-09-24 - 2024-09-26
+Enter the backfill end date (eg. '1 month ago', '2020-01-01') or blank to backfill up until '2024-09-27 00:00:00':
+```
+
+The plan output contains a new `Ignored Models` entry telling us that `sqlmesh_example__dev.start_end_model` was ignored.
+
+It also displays the expected plan start date `2024-09-23`, which is the date our `--start` should include if we want the model to be included in the plan.
+
+Because it is ignored, `start_end_model` is not in the list of `Models needing backfill` at the bottom.
 
 ### Data preview for forward-only changes
 As mentioned earlier, the data output produced by [forward-only changes](#forward-only-change) in a development environment can only be used for preview and will not be reused in production.
