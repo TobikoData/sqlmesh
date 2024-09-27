@@ -1432,6 +1432,12 @@ class ClickhouseConnectionConfig(ConnectionConfig):
     register_comments: bool = True
     pre_ping: bool = False
 
+    # This object expects options from urllib3 and also from clickhouse-connect
+    # See:
+    # * https://urllib3.readthedocs.io/en/stable/advanced-usage.html
+    # * https://clickhouse.com/docs/en/integrations/python#customizing-the-http-connection-pool
+    connection_pool_options: t.Optional[t.Dict[str, t.Any]] = None
+
     type_: Literal["clickhouse"] = Field(alias="type", default="clickhouse")
 
     @property
@@ -1455,8 +1461,20 @@ class ClickhouseConnectionConfig(ConnectionConfig):
     @property
     def _connection_factory(self) -> t.Callable:
         from clickhouse_connect.dbapi import connect  # type: ignore
+        from clickhouse_connect.driver import httputil  # type: ignore
+        from functools import partial
 
-        return connect
+        pool_manager_options: t.Dict[str, t.Any] = dict(
+            # Match the maxsize to the number of concurrent tasks
+            maxsize=self.concurrent_tasks,
+            # Block if there are no free connections
+            block=True,
+        )
+        if self.connection_pool_options:
+            pool_manager_options.update(self.connection_pool_options)
+        pool_mgr = httputil.get_pool_manager(**pool_manager_options)
+
+        return partial(connect, pool_mgr=pool_mgr)
 
     @property
     def cloud_mode(self) -> bool:
@@ -1497,7 +1515,11 @@ class ClickhouseConnectionConfig(ConnectionConfig):
             #   - "use majority number (number_of_replicas / 2 + 1) as quorum number"
             settings["insert_quorum"] = "auto"
 
-        return {"compress": compress, "client_name": f"SQLMesh/{__version__}", **settings}
+        return {
+            "compress": compress,
+            "client_name": f"SQLMesh/{__version__}",
+            **settings,
+        }
 
 
 class AthenaConnectionConfig(ConnectionConfig):
@@ -1575,7 +1597,9 @@ CONNECTION_CONFIG_TO_TYPE = {
     # Map all subclasses of ConnectionConfig to the value of their `type_` field.
     tpe.all_field_infos()["type_"].default: tpe
     for tpe in subclasses(
-        __name__, ConnectionConfig, exclude=(ConnectionConfig, BaseDuckDBConnectionConfig)
+        __name__,
+        ConnectionConfig,
+        exclude=(ConnectionConfig, BaseDuckDBConnectionConfig),
     )
 }
 
