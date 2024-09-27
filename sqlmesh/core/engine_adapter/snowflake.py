@@ -394,6 +394,7 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
         table_name: TableName,
         column_comments: t.Dict[str, str],
         table_kind: str = "TABLE",
+        materialized_view: bool = False,
     ) -> None:
         """
         Reference: https://docs.snowflake.com/en/sql-reference/sql/alter-table-column#syntax

@@ -623,24 +623,39 @@ def test_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture)
         column_descriptions={"a": long_column_comment},
     )
 
+    adapter._create_table_comment(
+        "test_table",
+        long_table_comment,
+    )
+
     adapter.create_view(
         "test_table",
         parse_one("SELECT a, b FROM source_table"),
         table_description=long_table_comment,
     )
 
-    adapter._create_table_comment(
-        "test_table",
-        long_table_comment,
+    # Bigquery doesn't support column comments for materialized views
+    db_call_mock = mocker.patch(
+        "sqlmesh.core.engine_adapter.bigquery.BigQueryEngineAdapter._db_call"
     )
+
+    adapter.create_view(
+        "test_table",
+        parse_one("SELECT a, b FROM source_table"),
+        table_description=long_table_comment,
+        column_descriptions={"a": long_column_comment},
+        materialized=True,
+    )
+    assert not db_call_mock.called
 
     sql_calls = _to_sql_calls(execute_mock)
     assert sql_calls == [
         f"CREATE TABLE IF NOT EXISTS `test_table` (`a` INT64 OPTIONS (description='{truncated_column_comment}'), `b` INT64) OPTIONS (description='{truncated_table_comment}')",
         "CREATE TABLE IF NOT EXISTS `test_table` (`a` INT64 OPTIONS (description='\\\\'), `b` INT64) OPTIONS (description='\\\\')",
         f"CREATE TABLE IF NOT EXISTS `test_table` (`a` INT64 OPTIONS (description='{truncated_column_comment}'), `b` INT64) OPTIONS (description='{truncated_table_comment}') AS SELECT CAST(`a` AS INT64) AS `a`, CAST(`b` AS INT64) AS `b` FROM (SELECT `a`, `b` FROM `source_table`) AS `_subquery`",
-        f"CREATE OR REPLACE VIEW `test_table` OPTIONS (description='{truncated_table_comment}') AS SELECT `a`, `b` FROM `source_table`",
         f"ALTER TABLE `test_table` SET OPTIONS(description = '{truncated_table_comment}')",
+        f"CREATE OR REPLACE VIEW `test_table` OPTIONS (description='{truncated_table_comment}') AS SELECT `a`, `b` FROM `source_table`",
+        f"CREATE OR REPLACE MATERIALIZED VIEW `test_table` OPTIONS (description='{truncated_table_comment}') AS SELECT `a`, `b` FROM `source_table`",
     ]
 
 

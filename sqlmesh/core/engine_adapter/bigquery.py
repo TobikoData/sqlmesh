@@ -547,31 +547,33 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin):
         table_name: TableName,
         column_comments: t.Dict[str, str],
         table_kind: str = "TABLE",
+        materialized_view: bool = False,
     ) -> None:
-        table = self._get_table(table_name)
+        if not table_kind == "VIEW" and materialized_view:
+            table = self._get_table(table_name)
 
-        # convert Table object to dict
-        table_def = table.to_api_repr()
+            # convert Table object to dict
+            table_def = table.to_api_repr()
 
-        # set the column descriptions
-        for i in range(len(table_def["schema"]["fields"])):
-            comment = column_comments.get(table_def["schema"]["fields"][i]["name"], None)
-            if comment:
-                table_def["schema"]["fields"][i]["description"] = self._truncate_comment(
-                    comment, self.MAX_COLUMN_COMMENT_LENGTH
-                )
+            # set the column descriptions
+            for i in range(len(table_def["schema"]["fields"])):
+                comment = column_comments.get(table_def["schema"]["fields"][i]["name"], None)
+                if comment:
+                    table_def["schema"]["fields"][i]["description"] = self._truncate_comment(
+                        comment, self.MAX_COLUMN_COMMENT_LENGTH
+                    )
 
-        # An "etag" is BQ versioning metadata that changes when an object is updated/modified. `update_table`
-        # compares the etags of the table object passed to it and the remote table, erroring if the etags
-        # don't match. We set the local etag to None to avoid this check.
-        table_def["etag"] = None
+            # An "etag" is BQ versioning metadata that changes when an object is updated/modified. `update_table`
+            # compares the etags of the table object passed to it and the remote table, erroring if the etags
+            # don't match. We set the local etag to None to avoid this check.
+            table_def["etag"] = None
 
-        # convert dict back to a Table object
-        table = table.from_api_repr(table_def)
+            # convert dict back to a Table object
+            table = table.from_api_repr(table_def)
 
-        # update table schema
-        logger.info(f"Registering column comments for table {table_name}")
-        self._db_call(self.client.update_table, table=table, fields=["schema"])
+            # update table schema
+            logger.info(f"Registering column comments for table {table_name}")
+            self._db_call(self.client.update_table, table=table, fields=["schema"])
 
     def _build_description_property_exp(
         self,
