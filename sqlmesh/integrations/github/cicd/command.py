@@ -51,7 +51,10 @@ def _check_required_approvers(controller: GithubController) -> bool:
 @cli_analytics
 def check_required_approvers(ctx: click.Context) -> None:
     """Checks if a required approver has provided approval on the PR."""
-    _check_required_approvers(ctx.obj["github"])
+    if not _check_required_approvers(ctx.obj["github"]):
+        raise CICDBotError(
+            "Required approver has not approved the PR. See check status for more information."
+        )
 
 
 def _run_tests(controller: GithubController) -> bool:
@@ -80,7 +83,8 @@ def _run_tests(controller: GithubController) -> bool:
 @cli_analytics
 def run_tests(ctx: click.Context) -> None:
     """Runs the unit tests"""
-    _run_tests(ctx.obj["github"])
+    if not _run_tests(ctx.obj["github"]):
+        raise CICDBotError("Failed to run tests. See check status for more information.")
 
 
 def _update_pr_environment(controller: GithubController) -> bool:
@@ -105,7 +109,10 @@ def _update_pr_environment(controller: GithubController) -> bool:
 @cli_analytics
 def update_pr_environment(ctx: click.Context) -> None:
     """Creates or updates the PR environments"""
-    _update_pr_environment(ctx.obj["github"])
+    if not _update_pr_environment(ctx.obj["github"]):
+        raise CICDBotError(
+            "Failed to update PR environment. See check status for more information."
+        )
 
 
 def _gen_prod_plan(controller: GithubController) -> bool:
@@ -134,7 +141,10 @@ def gen_prod_plan(ctx: click.Context) -> None:
     """Generates the production plan"""
     controller = ctx.obj["github"]
     controller.update_prod_plan_preview_check(status=GithubCheckStatus.IN_PROGRESS)
-    _gen_prod_plan(controller)
+    if not _gen_prod_plan(controller):
+        raise CICDBotError(
+            "Failed to generate production plan. See check status for more information."
+        )
 
 
 def _deploy_production(controller: GithubController) -> bool:
@@ -171,7 +181,8 @@ def _deploy_production(controller: GithubController) -> bool:
 @cli_analytics
 def deploy_production(ctx: click.Context) -> None:
     """Deploys the production environment"""
-    _deploy_production(ctx.obj["github"])
+    if not _deploy_production(ctx.obj["github"]):
+        raise CICDBotError("Failed to deploy to production. See check status for more information.")
 
 
 def _run_all(controller: GithubController) -> None:
