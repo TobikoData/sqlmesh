@@ -393,6 +393,29 @@ def test_schema_diff_calculate_type_transitions():
             ],
             dict(support_positional_add=True, support_nested_operations=True),
         ),
+        # Add columns in different levels of nesting of structs
+        (
+            "STRUCT<id INT, info STRUCT<col_a INT, col_b INT, col_c INT>>",
+            "STRUCT<id INT, info STRUCT<col_a INT, col_b INT, col_c INT, col_d INT>, txt TEXT>",
+            [
+                TableAlterOperation.add(
+                    [
+                        TableAlterColumn.primitive("txt"),
+                    ],
+                    "TEXT",
+                    expected_table_struct="STRUCT<id INT, info STRUCT<col_a INT, col_b INT, col_c INT>, txt TEXT>",
+                ),
+                TableAlterOperation.add(
+                    [
+                        TableAlterColumn.struct("info"),
+                        TableAlterColumn.primitive("col_d"),
+                    ],
+                    "INT",
+                    expected_table_struct="STRUCT<id INT, info STRUCT<col_a INT, col_b INT, col_c INT, col_d INT>, txt TEXT>",
+                ),
+            ],
+            dict(support_positional_add=False, support_nested_operations=True),
+        ),
         # Remove a column from the start of a struct
         (
             "STRUCT<id INT, info STRUCT<col_a INT, col_b INT, col_c INT>>",
@@ -720,6 +743,29 @@ def test_schema_diff_calculate_type_transitions():
                     exp.DataType.build("INT"): {exp.DataType.build("TEXT")},
                 },
             ),
+        ),
+        # Add columns to struct of array within different nesting levels
+        (
+            "STRUCT<id INT, infos ARRAY<STRUCT<col_a INT, col_b INT, col_c INT>>>",
+            "STRUCT<id INT, infos ARRAY<STRUCT<col_a INT, col_b INT, col_c INT, col_d INT >>, col_e INT>",
+            [
+                TableAlterOperation.add(
+                    [
+                        TableAlterColumn.primitive("col_e"),
+                    ],
+                    "INT",
+                    expected_table_struct="STRUCT<id INT, infos ARRAY<STRUCT<col_a INT, col_b INT, col_c INT>>, col_e INT>",
+                ),
+                TableAlterOperation.add(
+                    [
+                        TableAlterColumn.array_of_struct("infos"),
+                        TableAlterColumn.primitive("col_d"),
+                    ],
+                    "INT",
+                    expected_table_struct="STRUCT<id INT, infos ARRAY<STRUCT<col_a INT, col_b INT,  col_c INT, col_d INT>>, col_e INT>",
+                ),
+            ],
+            dict(support_positional_add=False, support_nested_operations=True),
         ),
         # Add an array of primitives
         (

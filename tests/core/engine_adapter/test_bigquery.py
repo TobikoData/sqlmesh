@@ -805,3 +805,94 @@ def test_materialized_view_properties(
     assert sql_calls == [
         "CREATE OR REPLACE MATERIALIZED VIEW `test_table` PARTITION BY `ds` CLUSTER BY `a` AS SELECT 1",
     ]
+
+
+def test_nested_fields_update(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
+    adapter = make_mocked_engine_adapter(BigQueryEngineAdapter)
+
+    current_schema = [
+        bigquery.SchemaField(
+            "user",
+            "RECORD",
+            "NULLABLE",
+            fields=(
+                bigquery.SchemaField("name", "STRING", "NULLABLE"),
+                bigquery.SchemaField(
+                    "orders",
+                    "RECORD",
+                    "REPEATED",
+                    fields=([bigquery.SchemaField("id", "INT64", "NULLABLE")]),
+                ),
+            ),
+        )
+    ]
+    new_nested_fields = [("year", "INT64", ["user", "orders"]), ("active", "BOOL", ["user"])]
+    expected = [
+        bigquery.SchemaField(
+            "user",
+            "RECORD",
+            "NULLABLE",
+            fields=(
+                bigquery.SchemaField("name", "STRING", "NULLABLE"),
+                bigquery.SchemaField(
+                    "orders",
+                    "RECORD",
+                    "REPEATED",
+                    fields=(
+                        bigquery.SchemaField("id", "INT64", "NULLABLE"),
+                        bigquery.SchemaField("year", "INT64", "NULLABLE"),
+                    ),
+                ),
+                bigquery.SchemaField("active", "BOOL", "NULLABLE"),
+            ),
+        )
+    ]
+    assert adapter._build_nested_fields(current_schema, new_nested_fields) == expected
+
+    current_schema = [
+        bigquery.SchemaField(
+            "users",
+            "RECORD",
+            "REPEATED",
+            fields=(
+                [
+                    bigquery.SchemaField(
+                        "user",
+                        "RECORD",
+                        "NULLABLE",
+                        fields=(bigquery.SchemaField("name", "STRING", "NULLABLE"),),
+                    )
+                ]
+            ),
+        )
+    ]
+    new_nested_fields = [
+        ("orders", "ARRAY<INT64>", ["users", "user"]),
+        ("tags", "STRING", ["users"]),
+        ("details", "ARRAY<STRING>", []),
+    ]
+    expected = [
+        bigquery.SchemaField(
+            "users",
+            "RECORD",
+            "REPEATED",
+            fields=(
+                bigquery.SchemaField(
+                    "user",
+                    "RECORD",
+                    "NULLABLE",
+                    fields=(
+                        bigquery.SchemaField("name", "STRING", "NULLABLE"),
+                        bigquery.SchemaField("orders", "INT64", "REPEATED"),
+                    ),
+                ),
+                bigquery.SchemaField(
+                    "tags",
+                    "STRING",
+                    "NULLABLE",
+                ),
+            ),
+        ),
+        bigquery.SchemaField("details", "STRING", "REPEATED"),
+    ]
+    assert adapter._build_nested_fields(current_schema, new_nested_fields) == expected
