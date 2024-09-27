@@ -628,16 +628,25 @@ def test_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture)
         long_table_comment,
     )
 
+    # Only called if column comments are registered
+    get_table_mock = mocker.patch(
+        "sqlmesh.core.engine_adapter.bigquery.BigQueryEngineAdapter._get_table"
+    )
+
+    db_call_mock = mocker.patch(
+        "sqlmesh.core.engine_adapter.bigquery.BigQueryEngineAdapter._db_call"
+    )
+
     adapter.create_view(
         "test_table",
         parse_one("SELECT a, b FROM source_table"),
         table_description=long_table_comment,
+        column_descriptions={"a": long_column_comment},
     )
+    assert get_table_mock.called
 
     # Bigquery doesn't support column comments for materialized views
-    db_call_mock = mocker.patch(
-        "sqlmesh.core.engine_adapter.bigquery.BigQueryEngineAdapter._db_call"
-    )
+    db_call_mock.reset_mock()
 
     adapter.create_view(
         "test_table",
