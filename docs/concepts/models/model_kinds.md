@@ -736,10 +736,10 @@ This is the most accurate representation of the menu based on the source data pr
 
 ### SCD Type 2 By Column Configuration Options
 
-| Name                         | Description                                                                                                                                                                   | Type                      |
-|------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------------------------|
-| columns                      | The name of the columns to check for changes. `*` to represent that all columns should be checked.                                                                            | List of strings or string |
-| execution_time_as_valid_from | By default, for new rows `valid_from` is set to `1970-01-01 00:00:00`. This changes the behavior to set it to the `execution_time` of when the pipeline ran. Default: `false` | bool                      |
+| Name                         | Description                                                                                                                                                                                                                                 | Type                      |
+|------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------------------------|
+| columns                      | The name of the columns to check for changes. `*` to represent that all columns should be checked.                                                                                                                                          | List of strings or string |
+| execution_time_as_valid_from | By default, when the model is first loaded `valid_from` is set to `1970-01-01 00:00:00` and future new rows will have `execution_time` of when the pipeline ran. This changes the behavior to always use `execution_time`. Default: `false` | bool                      |
 
 ### Querying SCD Type 2 Models
 
