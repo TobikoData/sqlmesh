@@ -549,7 +549,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin):
         table_kind: str = "TABLE",
         materialized_view: bool = False,
     ) -> None:
-        if not table_kind == "VIEW" and materialized_view:
+        if not (table_kind == "VIEW" and materialized_view):
             table = self._get_table(table_name)
 
             # convert Table object to dict
