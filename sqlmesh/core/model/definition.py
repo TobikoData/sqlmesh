@@ -627,10 +627,11 @@ class _Model(ModelMeta, frozen=True):
             return to_time_column(time, time_column_type, self.time_column.format)
         return exp.convert(time)
 
-    def update_schema(
-        self,
-        schema: MappingSchema,
-    ) -> None:
+    def set_mapping_schema(self, schema: t.Dict) -> None:
+        self.mapping_schema.clear()
+        self.mapping_schema.update(schema)
+
+    def update_schema(self, schema: MappingSchema) -> None:
         """Updates the schema for this model's dependencies based on the given mapping schema."""
         for dep in self.depends_on:
             table = exp.to_table(dep)
@@ -1109,11 +1110,15 @@ class SqlModel(_SqlBasedModel):
             if select.comments
         }
 
-    def update_schema(
-        self,
-        schema: MappingSchema,
-    ) -> None:
+    def set_mapping_schema(self, schema: t.Dict) -> None:
+        super().set_mapping_schema(schema)
+        self._on_mapping_schema_set()
+
+    def update_schema(self, schema: MappingSchema) -> None:
         super().update_schema(schema)
+        self._on_mapping_schema_set()
+
+    def _on_mapping_schema_set(self) -> None:
         self._columns_to_types = None
         self._query_renderer.update_schema(self.mapping_schema)
 

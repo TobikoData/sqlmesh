@@ -453,8 +453,9 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         update_model_schemas(
             self.dag,
-            self._models,
-            self.path,
+            models=self._models,
+            audits=self._audits,
+            context_path=self.path,
         )
 
         if model.dialect:
@@ -2057,7 +2058,8 @@ class GenericContext(BaseContext, t.Generic[C]):
     def _new_selector(self) -> Selector:
         return Selector(
             self.state_reader,
-            self._models,
+            models=self._models,
+            audits=self._audits,
             context_path=self.path,
             default_catalog=self.default_catalog,
             dialect=self.default_dialect,
