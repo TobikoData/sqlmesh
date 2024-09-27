@@ -1,9 +1,11 @@
+import typing as t
 from pathlib import Path
 
 from pytest_mock.plugin import MockerFixture
 from sqlglot import parse_one
 
-from sqlmesh.core.model import SqlModel
+from sqlmesh.core import dialect as d
+from sqlmesh.core.model import SqlModel, load_sql_based_model
 from sqlmesh.core.model.cache import OptimizedQueryCache
 from sqlmesh.utils.cache import FileCache
 from sqlmesh.utils.pydantic import PydanticModel
@@ -79,3 +81,52 @@ def test_optimized_query_cache_missing_rendered_query(tmp_path: Path, mocker: Mo
 
     assert model._query_renderer._cache == [None]
     assert model._query_renderer._optimized_cache is None
+
+
+def test_optimized_query_cache_macro_def_change(tmp_path: Path, mocker: MockerFixture):
+    expressions = d.parse(
+        """
+        MODEL (name db.table);
+
+        @DEF(filter_, a = 1);
+
+        SELECT a FROM (SELECT 1 AS a) WHERE @filter_;
+        """
+    )
+    model = t.cast(SqlModel, load_sql_based_model(expressions))
+
+    cache = OptimizedQueryCache(tmp_path)
+
+    assert not cache.with_optimized_query(model)
+
+    model._query_renderer._cache = []
+    model._query_renderer._optimized_cache = None
+
+    assert cache.with_optimized_query(model)
+    assert (
+        model.render_query_or_raise().sql()
+        == 'SELECT "_q_0"."a" AS "a" FROM (SELECT 1 AS "a") AS "_q_0" WHERE "_q_0"."a" = 1'
+    )
+
+    # Change the filter_ definition
+    new_expressions = d.parse(
+        """
+        MODEL (name db.table);
+
+        @DEF(filter_, a = 2);
+
+        SELECT a FROM (SELECT 1 AS a) WHERE @filter_;
+        """
+    )
+    new_model = t.cast(SqlModel, load_sql_based_model(new_expressions))
+
+    assert not cache.with_optimized_query(new_model)
+
+    new_model._query_renderer._cache = []
+    new_model._query_renderer._optimized_cache = None
+
+    assert cache.with_optimized_query(new_model)
+    assert (
+        new_model.render_query_or_raise().sql()
+        == 'SELECT "_q_0"."a" AS "a" FROM (SELECT 1 AS "a") AS "_q_0" WHERE "_q_0"."a" = 2'
+    )
