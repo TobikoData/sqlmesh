@@ -37,8 +37,8 @@ if t.TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-NestedField = t.Tuple[str, str, list[str]]
-NestedFieldsDict = t.Dict[str, list[NestedField]]
+NestedField = t.Tuple[str, str, t.List[str]]
+NestedFieldsDict = t.Dict[str, t.List[NestedField]]
 
 
 @set_catalog()
