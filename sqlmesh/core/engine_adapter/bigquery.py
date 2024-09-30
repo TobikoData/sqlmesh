@@ -37,6 +37,10 @@ if t.TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+NestedField = t.Tuple[str, str, list[str]]
+NestedFieldsDict = t.Dict[str, list[NestedField]]
+
+
 @set_catalog()
 class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin):
     """
@@ -282,11 +286,11 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin):
     def _split_alter_expressions(
         self,
         alter_expressions: t.List[exp.Alter],
-    ) -> t.Tuple[t.Dict[str, list[t.Tuple[str, str, list[str]]]], t.List[exp.Alter]]:
+    ) -> t.Tuple[NestedFieldsDict, t.List[exp.Alter]]:
         """
         Returns a dictionary of the nested fields to add and a list of the non-nested alter expressions.
         """
-        nested_fields_to_add: t.Dict[str, list[t.Tuple[str, str, list[str]]]] = defaultdict(list)
+        nested_fields_to_add: NestedFieldsDict = defaultdict(list)
         non_nested_expressions = []
 
         for alter_expression in alter_expressions:
@@ -308,7 +312,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin):
     def _build_nested_fields(
         self,
         current_fields: list[bigquery.SchemaField],
-        fields_to_add: list[t.Tuple[str, str, list[str]]],
+        fields_to_add: list[NestedField],
     ) -> list[bigquery.SchemaField]:
         """
         Recursively builds and updates the schema fields with the new nested fields.
@@ -317,7 +321,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin):
 
         new_fields = []
         root: list[t.Tuple[str, str]] = []
-        leaves: t.Dict[str, list[t.Tuple[str, str, list[str]]]] = defaultdict(list)
+        leaves: NestedFieldsDict = defaultdict(list)
         for new_field, data_type, leaf_fields in fields_to_add:
             if leaf_fields:
                 leaves[leaf_fields[0]].append((new_field, data_type, leaf_fields[1:]))
@@ -347,7 +351,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin):
         return new_fields
 
     def _update_table_schema_nested_fields(
-        self, nested_fields_to_add: t.Dict[str, list[t.Tuple[str, str, list[str]]]], table_name: str
+        self, nested_fields_to_add: NestedFieldsDict, table_name: str
     ) -> None:
         """
         Updates a BigQuery table schema by adding the new nested fields provided.
