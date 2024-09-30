@@ -2524,6 +2524,12 @@ def test_is_breaking_change():
     )
 
 
+def test_is_breaking_change_sql_model_change_kind():
+    sql = parse_one("SELECT a FROM z")
+    model = create_sql_model("a", sql, kind="full")
+    assert model.is_breaking_change(create_sql_model("a", sql, kind="view")) is True
+
+
 def test_parse_expression_list_with_jinja():
     input = [
         "JINJA_STATEMENT_BEGIN;\n{{ log('log message') }}\nJINJA_END;",

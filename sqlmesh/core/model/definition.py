@@ -1170,6 +1170,15 @@ class SqlModel(_SqlBasedModel):
         if self.lookback != previous.lookback:
             return None
 
+        # Look if the kind has changed
+        # TODO: My understanding of this is that there are other properties inside of the structure that may cause breaking changes as well
+        #  - Change of incremental keys in all types
+        #  - Any chance to materialization strategy
+        #  - grains
+        #  - Generally I wonder if it is safer to do the other way around -> Assume is breaking unless we mark it as not relevant, for example mark comments as not breaking
+        if self.kind != previous.kind:
+            return True
+
         try:
             # the previous model which comes from disk could be unrenderable
             previous_query = previous.render_query()
