@@ -14,6 +14,7 @@ from sqlglot.time import format_time
 
 from sqlmesh.core import dialect as d
 from sqlmesh.core.model.common import parse_properties, properties_validator
+from sqlmesh.core.model.risingwavesink import RwSinkSettings
 from sqlmesh.core.model.seed import CsvSettings
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import (
@@ -567,10 +568,26 @@ class IncrementalUnmanagedKind(_Incremental):
 class ViewKind(_ModelKind):
     name: Literal[ModelKindName.VIEW] = ModelKindName.VIEW
     materialized: SQLGlotBool = False
+    sink: t.Optional[SQLGlotBool] = False
+    connections_str: t.Optional[RwSinkSettings] = None
+
+    @field_validator("connections_str", mode="before")
+    @classmethod
+    def _parse_connections_str(cls, v: t.Any) -> t.Optional[RwSinkSettings]:
+        if v is None or isinstance(v, RwSinkSettings):
+            return v
+        if isinstance(v, exp.Expression):
+            tuple_exp = parse_properties(cls, v, {})
+            if not tuple_exp:
+                return None
+            return RwSinkSettings(**{e.left.name: e.right for e in tuple_exp.expressions})
+        if isinstance(v, dict):
+            return RwSinkSettings(**v)
+        return v
 
     @property
     def data_hash_values(self) -> t.List[t.Optional[str]]:
-        return [*super().data_hash_values, str(self.materialized)]
+        return [*super().data_hash_values, str(self.materialized), str(self.sink), *(self.connections_str or RwSinkSettings()).dict().values()]
 
     @property
     def supports_python_models(self) -> bool:
@@ -582,7 +599,11 @@ class ViewKind(_ModelKind):
         return super().to_expression(
             expressions=[
                 *(expressions or []),
-                _property("materialized", self.materialized),
+                *_properties(
+                    {
+                        "materialized": self.materialized,
+                    }
+                ),
             ],
         )
 

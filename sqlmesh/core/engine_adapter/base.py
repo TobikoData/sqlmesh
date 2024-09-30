@@ -100,6 +100,7 @@ class EngineAdapter:
     SUPPORTS_REPLACE_TABLE = True
     DEFAULT_CATALOG_TYPE = DIALECT
     QUOTE_IDENTIFIERS_IN_VIEWS = True
+    SUPPORTS_RW_SINK = False
 
     def __init__(
         self,
