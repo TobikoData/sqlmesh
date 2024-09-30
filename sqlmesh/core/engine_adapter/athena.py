@@ -3,8 +3,9 @@ from functools import lru_cache
 import typing as t
 import logging
 from sqlglot import exp
+from sqlglot.optimizer.qualify_columns import quote_identifiers
 from sqlmesh.core.dialect import to_schema
-from sqlmesh.core.config.common import validate_s3_location
+from sqlmesh.utils.aws import validate_s3_uri, parse_s3_uri
 from sqlmesh.core.engine_adapter.mixins import PandasNativeFetchDFSupportMixin
 from sqlmesh.core.engine_adapter.trino import TrinoEngineAdapter
 from sqlmesh.core.node import IntervalUnit
@@ -16,6 +17,8 @@ from sqlmesh.core.engine_adapter.shared import (
     DataObjectType,
     CommentCreationTable,
     CommentCreationView,
+    SourceQuery,
+    InsertOverwriteStrategy,
 )
 
 if t.TYPE_CHECKING:
@@ -53,8 +56,16 @@ class AthenaEngineAdapter(PandasNativeFetchDFSupportMixin):
     @s3_warehouse_location.setter
     def s3_warehouse_location(self, value: t.Optional[str]) -> None:
         if value:
-            value = validate_s3_location(value)
+            value = validate_s3_uri(value, base=True)
         self._s3_warehouse_location = value
+
+    @property
+    def s3_warehouse_location_or_raise(self) -> str:
+        # this makes tests easier to write without extra null checks to keep mypy happy
+        if location := self.s3_warehouse_location:
+            return location
+
+        raise SQLMeshError("s3_warehouse_location was expected to be populated; it isnt")
 
     def create_state_table(
         self,
@@ -296,14 +307,28 @@ class AthenaEngineAdapter(PandasNativeFetchDFSupportMixin):
         return None
 
     def _truncate_table(self, table_name: TableName) -> None:
-        table = exp.to_table(table_name)
-        # Athena doesnt support TRUNCATE TABLE. The closest thing is DELETE FROM <table> but it only works on Iceberg
-        self.execute(f"DELETE FROM {table.sql(dialect=self.dialect, identify=True)}")
+        if isinstance(table_name, str):
+            table_name = exp.to_table(table_name)
+
+        # Truncating an Iceberg table is just DELETE FROM <table>
+        if self._query_table_type(table_name) == "iceberg":
+            return self.delete_from(table_name, exp.true())
+
+        # Truncating a partitioned Hive table is dropping all partitions and deleting the data from S3
+        if self._is_hive_partitioned_table(table_name):
+            self._clear_partition_data(table_name, exp.true())
+        else:
+            # Truncating a non-partitioned Hive table is clearing out all data in its Location
+            if s3_location := self._query_table_s3_location(table_name):
+                self._clear_s3_location(s3_location)
 
     def _table_type(
-        self, table_type: t.Optional[str] = None
+        self, table_format: t.Optional[str] = None
     ) -> t.Union[t.Literal["hive"], t.Literal["iceberg"]]:
-        if table_type and table_type.lower() == "iceberg":
+        """
+        Interpret the "table_format" property to check if this is a Hive or an Iceberg table
+        """
+        if table_format and table_format.lower() == "iceberg":
             return "iceberg"
 
         # if we cant detect any indication of Iceberg, this is a Hive table
@@ -317,6 +342,8 @@ class AthenaEngineAdapter(PandasNativeFetchDFSupportMixin):
         Hit the DB to check if this is a Hive or an Iceberg table
         """
         table_name = exp.to_table(table_name)
+        quote_identifiers(table_name)
+
         # Note: SHOW TBLPROPERTIES gets parsed by SQLGlot as an exp.Command anyway so we just use a string here
         # This also means we need to use dialect="hive" instead of dialect="athena" so that the identifiers get the correct quoting (backticks)
         for row in self.fetchall(f"SHOW TBLPROPERTIES {table_name.sql(dialect='hive')}"):
@@ -325,6 +352,15 @@ class AthenaEngineAdapter(PandasNativeFetchDFSupportMixin):
             if "external" in row_lower and "true" in row_lower:
                 return "hive"
         return "iceberg"
+
+    def _is_hive_partitioned_table(self, table_name: exp.Table) -> bool:
+        try:
+            self._list_partitions(table=table_name, where=None, limit=1)
+            return True
+        except Exception as e:
+            if "TABLE_NOT_FOUND" in str(e):
+                return False
+            raise e
 
     def _table_location_or_raise(
         self, table_properties: t.Optional[t.Dict[str, exp.Expression]], table: exp.Table
@@ -359,7 +395,7 @@ class AthenaEngineAdapter(PandasNativeFetchDFSupportMixin):
         else:
             return None
 
-        full_uri = validate_s3_location(os.path.join(base_uri, table.text("this") or ""))
+        full_uri = validate_s3_uri(os.path.join(base_uri, table.text("this") or ""), base=True)
         return exp.LocationProperty(this=exp.Literal.string(full_uri))
 
     def _find_matching_columns(
@@ -373,6 +409,101 @@ class AthenaEngineAdapter(PandasNativeFetchDFSupportMixin):
                 matches.append((key, match_dtype))
         return matches
 
+    def _insert_overwrite_by_time_partition(
+        self,
+        table_name: TableName,
+        source_queries: t.List[SourceQuery],
+        columns_to_types: t.Dict[str, exp.DataType],
+        where: exp.Condition,
+        **kwargs: t.Any,
+    ) -> None:
+        table_type = self._query_table_type(table_name)
+
+        if table_type == "iceberg":
+            # Iceberg tables work as expected, we can use the default behaviour
+            return super()._insert_overwrite_by_time_partition(
+                table_name, source_queries, columns_to_types, where, **kwargs
+            )
+
+        # For Hive tables, we need to drop all the partitions covered by the query and delete the data from S3
+        self._clear_partition_data(table_name, where)
+
+        # Now the data is physically gone, we can continue with inserting a new partition
+        return super()._insert_overwrite_by_time_partition(
+            table_name,
+            source_queries,
+            columns_to_types,
+            where,
+            insert_overwrite_strategy_override=InsertOverwriteStrategy.INTO_IS_OVERWRITE,  # since we already cleared the data
+            **kwargs,
+        )
+
+    def _clear_partition_data(self, table: TableName, where: t.Optional[exp.Condition]) -> None:
+        if isinstance(table, str):
+            table = exp.to_table(table)
+
+        if partitions_to_drop := self._list_partitions(table, where):
+            for _, s3_location in partitions_to_drop:
+                logger.debug(
+                    f"Clearing S3 location for '{table.sql(dialect=self.dialect)}': {s3_location}"
+                )
+                self._clear_s3_location(s3_location)
+
+            partition_values = [k for k, _ in partitions_to_drop]
+            logger.debug(
+                f"Dropping partitions for '{table.sql(dialect=self.dialect)}' from metastore: {partition_values}"
+            )
+            self._drop_partitions_from_metastore(table, partition_values)
+
+    def _list_partitions(
+        self,
+        table: exp.Table,
+        where: t.Optional[exp.Condition] = None,
+        limit: t.Optional[int] = None,
+    ) -> t.List[t.Tuple[t.List[str], str]]:
+        # Use Athena's magic "$partitions" metadata table to identify the partitions to drop
+        # Doing it this way allows us to use SQL to filter the partition list
+        partition_table_name = table.copy()
+        partition_table_name.this.replace(
+            exp.to_identifier(f"{table.name}$partitions", quoted=True)
+        )
+
+        query = exp.select("*").from_(partition_table_name).where(where)
+        if limit:
+            query = query.limit(limit)
+
+        partition_values = [list(r) for r in self.fetchall(query, quote_identifiers=True)]
+
+        if len(partition_values) > 0:
+            response = self._glue_client.batch_get_partition(
+                DatabaseName=table.db,
+                TableName=table.name,
+                PartitionsToGet=[{"Values": v} for v in partition_values],
+            )
+            return sorted(
+                [(p["Values"], p["StorageDescriptor"]["Location"]) for p in response["Partitions"]]
+            )
+
+        return []
+
+    def _query_table_s3_location(self, table_name: exp.Table) -> str:
+        response = self._glue_client.get_table(DatabaseName=table_name.db, Name=table_name.name)
+
+        # Athena wont let you create a table without a location, so *theoretically* this should never be empty
+        if location := response.get("Table", {}).get("StorageDescriptor", {}).get("Location", None):
+            return location
+
+        raise SQLMeshError(f"Table {table_name} has no location set in the metastore!")
+
+    def _drop_partitions_from_metastore(
+        self, table: exp.Table, partition_values: t.List[t.List[t.Any]]
+    ) -> None:
+        self._glue_client.batch_delete_partition(
+            DatabaseName=table.db,
+            TableName=table.name,
+            PartitionsToDelete=[{"Values": v} for v in partition_values],
+        )
+
     def delete_from(self, table_name: TableName, where: t.Union[str, exp.Expression]) -> None:
         table_type = self._query_table_type(table_name)
 
@@ -382,14 +513,50 @@ class AthenaEngineAdapter(PandasNativeFetchDFSupportMixin):
 
         # If Hive, DELETE is an error
         if table_type == "hive":
-            # However, if the table is empty, we can make DELETE a no-op
+            # However, if there are no actual records to delete, we can make DELETE a no-op
             # This simplifies a bunch of calling code that just assumes DELETE works (which to be fair is a reasonable assumption since it does for every other engine)
             empty_check = (
-                exp.select("*").from_(table_name).limit(1)
+                exp.select("*").from_(table_name).where(where).limit(1)
             )  # deliberately not count(*) because we want the engine to stop as soon as it finds a record
             if len(self.fetchall(empty_check)) > 0:
-                # TODO: in future, if SQLMesh adds support for explicit partition management, we may
-                # be able to covert the DELETE query into an ALTER TABLE DROP PARTITION assuming the WHERE clause fully covers the partition bounds
-                raise SQLMeshError("Cannot delete from non-empty Hive table")
+                raise SQLMeshError("Cannot delete individual records from a Hive table")
 
         return None
+
+    def _clear_s3_location(self, s3_uri: str) -> None:
+        s3 = self._s3_client
+
+        bucket, key = parse_s3_uri(s3_uri)
+        if not key.endswith("/"):
+            key = f"{key}/"
+
+        keys_to_delete = []
+
+        # note: uses Delimiter=/ to prevent stepping into folders
+        # the assumption is that all the files in a partition live directly at the partition `Location`
+        for page in s3.get_paginator("list_objects_v2").paginate(
+            Bucket=bucket, Prefix=key, Delimiter="/"
+        ):
+            # list_objects_v2() returns 1000 keys per page so that lines up nicely with delete_objects() being able to delete 1000 keys at a time
+            keys_to_delete.append([item["Key"] for item in page.get("Contents", [])])
+
+        for chunk in keys_to_delete:
+            s3.delete_objects(Bucket=bucket, Delete={"Objects": [{"Key": k} for k in chunk]})
+
+    @property
+    def _glue_client(self) -> t.Any:
+        return self._boto3_client("glue")
+
+    @property
+    def _s3_client(self) -> t.Any:
+        return self._boto3_client("s3")
+
+    def _boto3_client(self, name: str) -> t.Any:
+        # use the client factory from PyAthena which is already configured with the correct AWS details
+        conn = self.connection
+        return conn.session.client(
+            name,
+            region_name=conn.region_name,
+            config=conn.config,
+            **conn._client_kwargs,
+        )  # type: ignore

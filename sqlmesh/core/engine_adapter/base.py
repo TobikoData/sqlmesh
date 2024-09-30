@@ -1207,7 +1207,21 @@ class EngineAdapter:
             low=low,
             high=high,
         )
-        self._insert_overwrite_by_condition(table_name, source_queries, columns_to_types, where)
+        return self._insert_overwrite_by_time_partition(
+            table_name, source_queries, columns_to_types, where, **kwargs
+        )
+
+    def _insert_overwrite_by_time_partition(
+        self,
+        table_name: TableName,
+        source_queries: t.List[SourceQuery],
+        columns_to_types: t.Dict[str, exp.DataType],
+        where: exp.Condition,
+        **kwargs: t.Any,
+    ) -> None:
+        return self._insert_overwrite_by_condition(
+            table_name, source_queries, columns_to_types, where
+        )
 
     def _values_to_sql(
         self,

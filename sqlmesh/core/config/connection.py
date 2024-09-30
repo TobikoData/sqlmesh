@@ -18,7 +18,6 @@ from sqlmesh.core.config.base import BaseConfig
 from sqlmesh.core.config.common import (
     concurrent_tasks_validator,
     http_headers_validator,
-    validate_s3_location,
 )
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.utils.errors import ConfigError
@@ -29,6 +28,7 @@ from sqlmesh.utils.pydantic import (
     model_validator_v1_args,
     field_validator_v1_args,
 )
+from sqlmesh.utils.aws import validate_s3_uri
 
 if sys.version_info >= (3, 9):
     from typing import Literal
@@ -1555,11 +1555,13 @@ class AthenaConnectionConfig(ConnectionConfig):
             raise ConfigError("At least one of work_group or s3_staging_dir must be set")
 
         if s3_staging_dir:
-            values["s3_staging_dir"] = validate_s3_location(s3_staging_dir, error_type=ConfigError)
+            values["s3_staging_dir"] = validate_s3_uri(
+                s3_staging_dir, base=True, error_type=ConfigError
+            )
 
         if s3_warehouse_location:
-            values["s3_warehouse_location"] = validate_s3_location(
-                s3_warehouse_location, error_type=ConfigError
+            values["s3_warehouse_location"] = validate_s3_uri(
+                s3_warehouse_location, base=True, error_type=ConfigError
             )
 
         return values
