@@ -6,7 +6,8 @@ import typing as t
 
 import pandas as pd
 from pandas.api.types import is_datetime64_any_dtype  # type: ignore
-from sqlglot import exp
+from sqlglot import exp, parse_one
+from sqlglot.helper import seq_get
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 from sqlglot.optimizer.qualify_columns import quote_identifiers
 
@@ -30,6 +31,14 @@ if t.TYPE_CHECKING:
     from sqlmesh.core._typing import SchemaName, SessionProperties, TableName
     from sqlmesh.core.engine_adapter._typing import DF, Query, SnowparkSession
     from sqlmesh.core.node import IntervalUnit
+
+
+class SnowflakeDataObject(DataObject):
+    clustering_key: t.Optional[str] = None
+
+    @property
+    def is_clustered(self) -> bool:
+        return bool(self.clustering_key)
 
 
 @set_catalog(
@@ -325,6 +334,7 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
                 )
                 .else_(exp.column("TABLE_TYPE"))
                 .as_("type"),
+                exp.column("CLUSTERING_KEY").as_("clustering_key"),
             )
             .from_(exp.table_("TABLES", db="INFORMATION_SCHEMA", catalog=catalog_name))
             .where(exp.column("TABLE_SCHEMA").eq(schema.db))
@@ -338,11 +348,12 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
         if df.empty:
             return []
         return [
-            DataObject(
+            SnowflakeDataObject(
                 catalog=row.catalog,  # type: ignore
                 schema=row.schema_name,  # type: ignore
                 name=row.name,  # type: ignore
                 type=DataObjectType.from_str(row.type),  # type: ignore
+                clustering_key=row.clustering_key,  # type: ignore
             )
             for row in df.itertuples()
         ]
@@ -422,3 +433,50 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
                 f"Column comments for table '{table.alias_or_name}' not registered - this may be due to limited permissions.",
                 exc_info=True,
             )
+
+    def get_alter_expressions(
+        self, current_table_name: TableName, target_table_name: TableName
+    ) -> t.List[exp.Alter]:
+        schema_expressions = super().get_alter_expressions(current_table_name, target_table_name)
+        additional_expressions = []
+
+        # check for a change in clustering
+        current_table = exp.to_table(current_table_name)
+        target_table = exp.to_table(target_table_name)
+
+        current_table_info = t.cast(
+            SnowflakeDataObject,
+            seq_get(self.get_data_objects(current_table.db, {current_table.name}), 0),
+        )
+        target_table_info = t.cast(
+            SnowflakeDataObject,
+            seq_get(self.get_data_objects(target_table.db, {target_table.name}), 0),
+        )
+
+        if current_table_info and target_table_info:
+            if target_table_info.is_clustered:
+                if target_table_info.clustering_key and (
+                    current_table_info.clustering_key != target_table_info.clustering_key
+                ):
+                    # Note: If you create a table with eg `CLUSTER BY (c2, c1)` and read the info back from information_schema,
+                    # it gets returned as a string like "LINEAR(c2, c1)" which we need to parse back into a list of columns
+                    parsed_cluster_key = parse_one(
+                        target_table_info.clustering_key, dialect=self.dialect
+                    )
+                    additional_expressions.append(
+                        exp.Alter(
+                            this=current_table,
+                            kind="TABLE",
+                            actions=[exp.Cluster(expressions=parsed_cluster_key.expressions)],
+                        )
+                    )
+            elif current_table_info.is_clustered:
+                additional_expressions.append(
+                    exp.Alter(
+                        this=current_table,
+                        kind="TABLE",
+                        actions=[exp.Command(this="DROP", expression="CLUSTERING KEY")],
+                    )
+                )
+
+        return schema_expressions + additional_expressions
