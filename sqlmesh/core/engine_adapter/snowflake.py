@@ -454,28 +454,29 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
         )
 
         if current_table_info and target_table_info:
-            if any([current_table_info.is_clustered, target_table_info.is_clustered]):
-                if target_table_info.clustering_key:
-                    if current_table_info.clustering_key != target_table_info.clustering_key:
-                        # Note: If you create a table with eg `CLUSTER BY (c2, c1)` and read the info back from information_schema,
-                        # it gets returned as a string like "LINEAR(c2, c1)" which we need to parse back into a list of columns
-                        parsed_cluster_key = parse_one(
-                            target_table_info.clustering_key, dialect=self.dialect
-                        )
-                        additional_expressions.append(
-                            exp.Alter(
-                                this=current_table,
-                                kind="TABLE",
-                                actions=[exp.Cluster(expressions=parsed_cluster_key.expressions)],
-                            )
-                        )
-                else:
+            if target_table_info.is_clustered:
+                if target_table_info.clustering_key and (
+                    current_table_info.clustering_key != target_table_info.clustering_key
+                ):
+                    # Note: If you create a table with eg `CLUSTER BY (c2, c1)` and read the info back from information_schema,
+                    # it gets returned as a string like "LINEAR(c2, c1)" which we need to parse back into a list of columns
+                    parsed_cluster_key = parse_one(
+                        target_table_info.clustering_key, dialect=self.dialect
+                    )
                     additional_expressions.append(
                         exp.Alter(
                             this=current_table,
                             kind="TABLE",
-                            actions=[exp.Command(this="DROP", expression="CLUSTERING KEY")],
+                            actions=[exp.Cluster(expressions=parsed_cluster_key.expressions)],
                         )
                     )
+            elif current_table_info.is_clustered:
+                additional_expressions.append(
+                    exp.Alter(
+                        this=current_table,
+                        kind="TABLE",
+                        actions=[exp.Command(this="DROP", expression="CLUSTERING KEY")],
+                    )
+                )
 
         return schema_expressions + additional_expressions
