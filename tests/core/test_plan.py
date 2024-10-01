@@ -245,6 +245,49 @@ def test_forward_only_plan_added_models(make_snapshot, mocker: MockerFixture):
     assert snapshot_b.change_category == SnapshotChangeCategory.BREAKING
 
 
+def test_forward_only_plan_categorizes_change_model_kind_as_breaking(
+    make_snapshot, mocker: MockerFixture
+):
+    snapshot_old = make_snapshot(
+        SqlModel(
+            name="a",
+            dialect="duckdb",
+            query=parse_one("select 1, ds"),
+            kind=dict(name=ModelKindName.INCREMENTAL_BY_TIME_RANGE, time_column="ds"),
+        )
+    )
+
+    # Simulate a change in the model kind.
+    updated_snapshot = make_snapshot(
+        SqlModel(
+            **{
+                **snapshot_old.model.dict(),
+                "kind": dict(name=ModelKindName.VIEW),
+            }
+        )
+    )
+
+    context_diff = ContextDiff(
+        environment="prod",
+        is_new_environment=False,
+        is_unfinalized_environment=False,
+        normalize_environment_name=True,
+        create_from="prod",
+        added=set(),
+        removed_snapshots={},
+        modified_snapshots={updated_snapshot.name: (updated_snapshot, snapshot_old)},
+        snapshots={updated_snapshot.snapshot_id: updated_snapshot},
+        new_snapshots={updated_snapshot.snapshot_id: updated_snapshot},
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
+    )
+
+    PlanBuilder(context_diff, DuckDBEngineAdapter.SCHEMA_DIFFER, forward_only=True).build()
+
+    assert updated_snapshot.change_category == SnapshotChangeCategory.BREAKING
+
+
 def test_paused_forward_only_parent(make_snapshot, mocker: MockerFixture):
     snapshot_a = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds")))
     snapshot_a.previous_versions = (

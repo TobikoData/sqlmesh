@@ -532,11 +532,20 @@ class PlanBuilder:
                 # In case of the forward only plan any modifications result in reuse of the
                 # previous version for non-seed models.
                 # New snapshots of seed models are considered non-breaking ones.
-                snapshot.categorize_as(
+                category_in_no_change_kind = (
                     SnapshotChangeCategory.NON_BREAKING
                     if snapshot.is_seed
                     else SnapshotChangeCategory.FORWARD_ONLY
                 )
+                # If the model kind changes mark as breaking
+                if snapshot.is_model and snapshot.name in self._context_diff.modified_snapshots:
+                    _, old = self._context_diff.modified_snapshots[snapshot.name]
+                    if old.model.kind.name != snapshot.model.kind.name:
+                        snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+                    else:
+                        snapshot.categorize_as(category_in_no_change_kind)
+                else:
+                    snapshot.categorize_as(category_in_no_change_kind)
             elif s_id.name in self._context_diff.modified_snapshots:
                 self._categorize_snapshot(snapshot, dag, indirectly_modified)
 
