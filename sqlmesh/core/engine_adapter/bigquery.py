@@ -37,6 +37,10 @@ if t.TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+NestedField = t.Tuple[str, str, t.List[str]]
+NestedFieldsDict = t.Dict[str, t.List[NestedField]]
+
+
 @set_catalog()
 class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin):
     """
@@ -282,11 +286,11 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin):
     def _split_alter_expressions(
         self,
         alter_expressions: t.List[exp.Alter],
-    ) -> t.Tuple[t.Dict[str, list[t.Tuple[str, str]]], t.List[exp.Alter]]:
+    ) -> t.Tuple[NestedFieldsDict, t.List[exp.Alter]]:
         """
         Returns a dictionary of the nested fields to add and a list of the non-nested alter expressions.
         """
-        nested_fields_to_add: t.Dict[str, list[t.Tuple[str, str]]] = defaultdict(list)
+        nested_fields_to_add: NestedFieldsDict = defaultdict(list)
         non_nested_expressions = []
 
         for alter_expression in alter_expressions:
@@ -296,17 +300,58 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin):
                 and isinstance(action.this, exp.Dot)
                 and isinstance(action.kind, exp.DataType)
             ):
-                record = action.this.this.sql(dialect="bigquery")
-                field = action.this.expression.sql(dialect="bigquery")
-                data_type = action.kind.sql(dialect="bigquery")
-                nested_fields_to_add[record].append((data_type, field))
+                root_field, *leaf_fields = action.this.this.sql(dialect=self.dialect).split(".")
+                new_field = action.this.expression.sql(dialect=self.dialect)
+                data_type = action.kind.sql(dialect=self.dialect)
+                nested_fields_to_add[root_field].append((new_field, data_type, leaf_fields))
             else:
                 non_nested_expressions.append(alter_expression)
 
         return nested_fields_to_add, non_nested_expressions
 
+    def _build_nested_fields(
+        self,
+        current_fields: t.List[bigquery.SchemaField],
+        fields_to_add: t.List[NestedField],
+    ) -> t.List[bigquery.SchemaField]:
+        """
+        Recursively builds and updates the schema fields with the new nested fields.
+        """
+        from google.cloud import bigquery
+
+        new_fields = []
+        root: t.List[t.Tuple[str, str]] = []
+        leaves: NestedFieldsDict = defaultdict(list)
+        for new_field, data_type, leaf_fields in fields_to_add:
+            if leaf_fields:
+                leaves[leaf_fields[0]].append((new_field, data_type, leaf_fields[1:]))
+            else:
+                root.append((new_field, data_type))
+
+        for field in current_fields:
+            # If the new fields are nested, we need to recursively build them
+            if field.name in leaves:
+                subfields = list(field.fields)
+                subfields = self._build_nested_fields(subfields, leaves[field.name])
+                new_fields.append(
+                    bigquery.SchemaField(
+                        field.name, "RECORD", mode=field.mode, fields=tuple(subfields)
+                    )
+                )
+            else:
+                new_fields.append(field)
+
+        # Build and append the new root-level fields
+        new_fields.extend(
+            self.__get_bq_schemafield(
+                new_field[0], exp.DataType.build(new_field[1], dialect=self.dialect)
+            )
+            for new_field in root
+        )
+        return new_fields
+
     def _update_table_schema_nested_fields(
-        self, nested_fields_to_add: t.Dict[str, list[t.Tuple[str, str]]], table_name: str
+        self, nested_fields_to_add: NestedFieldsDict, table_name: str
     ) -> None:
         """
         Updates a BigQuery table schema by adding the new nested fields provided.
@@ -316,18 +361,17 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin):
         table = self._get_table(table_name)
         original_schema = table.schema
         new_schema = []
-
         for field in original_schema:
-            current_fields = list(field.fields)
             if field.name in nested_fields_to_add:
-                current_fields.extend(
-                    bigquery.SchemaField(new_field[1], new_field[0], mode="NULLABLE")
-                    for new_field in nested_fields_to_add[field.name]
+                fields = self._build_nested_fields(
+                    list(field.fields), nested_fields_to_add[field.name]
                 )
-            if current_fields:
                 new_schema.append(
                     bigquery.SchemaField(
-                        field.name, "RECORD", mode="NULLABLE", fields=tuple(current_fields)
+                        field.name,
+                        "RECORD",
+                        mode=field.mode,
+                        fields=tuple(fields),
                     )
                 )
             else:
