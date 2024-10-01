@@ -46,6 +46,7 @@ from sqlmesh.utils.metaprogramming import (
 )
 
 if t.TYPE_CHECKING:
+    from sqlglot.dialects.dialect import DialectType
     from sqlmesh.core._typing import TableName
     from sqlmesh.core.audit import ModelAudit, Audit
     from sqlmesh.core.context import ExecutionContext
@@ -1600,24 +1601,15 @@ def load_sql_based_model(
         if prop.name.lower() == "audits":
             model_audits = prop.args.get("value")
 
-    meta_python_env = _python_env(
-        expressions=meta,
-        jinja_macro_references=None,
+    meta_renderer = _meta_renderer(
+        expression=meta,
         module_path=module_path,
-        macros=macros or macro.get_registry(),
+        macros=macros,
+        jinja_macros=jinja_macros,
         variables=variables,
         path=path,
-    )
-    meta_renderer = ExpressionRenderer(
-        meta,
-        dialect,
-        [],
-        path=path,
-        jinja_macro_registry=jinja_macros,
-        python_env=meta_python_env,
+        dialect=dialect,
         default_catalog=default_catalog,
-        quote_identifiers=False,
-        normalize_identifiers=False,
     )
 
     rendered_meta_exprs = meta_renderer.render()
@@ -1953,6 +1945,19 @@ def create_python_model(
                 path=path,
             )
         )
+
+    dialect = kwargs.get("dialect")
+    name_renderer = _meta_renderer(
+        expression=d.parse_one(name, dialect=dialect),
+        module_path=module_path,
+        macros=macros,
+        jinja_macros=jinja_macros,
+        variables=variables,
+        path=path,
+        dialect=dialect,
+        default_catalog=kwargs.get("default_catalog"),
+    )
+    name = t.cast(t.List[exp.Expression], name_renderer.render())[0].sql(dialect=dialect)
 
     parsed_depends_on, referenced_variables = (
         _parse_dependencies(python_env, entrypoint) if python_env is not None else (set(), set())
@@ -2383,6 +2388,37 @@ def _single_expr_or_tuple(values: t.Sequence[exp.Expression]) -> exp.Expression 
 
 def _refs_to_sql(values: t.Any) -> exp.Expression:
     return exp.Tuple(expressions=values)
+
+
+def _meta_renderer(
+    expression: exp.Expression,
+    module_path: Path,
+    path: Path,
+    jinja_macros: t.Optional[JinjaMacroRegistry] = None,
+    macros: t.Optional[MacroRegistry] = None,
+    dialect: DialectType = None,
+    variables: t.Optional[t.Dict[str, t.Any]] = None,
+    default_catalog: t.Optional[str] = None,
+) -> ExpressionRenderer:
+    meta_python_env = _python_env(
+        expressions=expression,
+        jinja_macro_references=None,
+        module_path=module_path,
+        macros=macros or macro.get_registry(),
+        variables=variables,
+        path=path,
+    )
+    return ExpressionRenderer(
+        expression,
+        dialect,
+        [],
+        path=path,
+        jinja_macro_registry=jinja_macros,
+        python_env=meta_python_env,
+        default_catalog=default_catalog,
+        quote_identifiers=False,
+        normalize_identifiers=False,
+    )
 
 
 META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {

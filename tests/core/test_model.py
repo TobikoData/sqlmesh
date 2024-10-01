@@ -4565,7 +4565,7 @@ def test_variables_jinja():
 
 def test_variables_python_model(mocker: MockerFixture) -> None:
     @model(
-        "test_variables_python_model",
+        "foo_@{bar}",
         kind="full",
         columns={"a": "string", "b": "string", "c": "string"},
     )
@@ -4580,12 +4580,13 @@ def test_variables_python_model(mocker: MockerFixture) -> None:
             ]
         )
 
-    python_model = model.get_registry()["test_variables_python_model"].model(
+    python_model = model.get_registry()["foo_@{bar}"].model(
         module_path=Path("."),
         path=Path("."),
-        variables={"test_var_a": "test_value", "test_var_unused": 2},
+        variables={"test_var_a": "test_value", "test_var_unused": 2, "bar": "suffix"},
     )
 
+    assert python_model.name == "foo_suffix"
     assert python_model.python_env[c.SQLMESH_VARS] == Executable.value({"test_var_a": "test_value"})
 
     context = ExecutionContext(mocker.Mock(), {}, None, None)

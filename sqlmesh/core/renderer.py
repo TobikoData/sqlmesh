@@ -28,6 +28,7 @@ from sqlmesh.utils.metaprogramming import Executable, prepare_env
 
 if t.TYPE_CHECKING:
     from sqlglot._typing import E
+    from sqlglot.dialects.dialect import DialectType
 
     from sqlmesh.core.snapshot import DeployabilityIndex, Snapshot
 
@@ -39,7 +40,7 @@ class BaseExpressionRenderer:
     def __init__(
         self,
         expression: exp.Expression,
-        dialect: str,
+        dialect: DialectType,
         macro_definitions: t.List[d.MacroDef],
         path: Path = Path(),
         jinja_macro_registry: t.Optional[JinjaMacroRegistry] = None,
