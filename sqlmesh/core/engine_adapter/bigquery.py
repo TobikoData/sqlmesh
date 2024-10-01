@@ -311,16 +311,16 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin):
 
     def _build_nested_fields(
         self,
-        current_fields: list[bigquery.SchemaField],
-        fields_to_add: list[NestedField],
-    ) -> list[bigquery.SchemaField]:
+        current_fields: t.List[bigquery.SchemaField],
+        fields_to_add: t.List[NestedField],
+    ) -> t.List[bigquery.SchemaField]:
         """
         Recursively builds and updates the schema fields with the new nested fields.
         """
         from google.cloud import bigquery
 
         new_fields = []
-        root: list[t.Tuple[str, str]] = []
+        root: t.List[t.Tuple[str, str]] = []
         leaves: NestedFieldsDict = defaultdict(list)
         for new_field, data_type, leaf_fields in fields_to_add:
             if leaf_fields:
