@@ -1166,7 +1166,7 @@ def _unquote_schema(schema: t.Dict) -> t.Dict:
 
 @contextmanager
 def normalize_and_quote(
-    query: E, dialect: str, default_catalog: t.Optional[str], quote: bool = True
+    query: E, dialect: DialectType, default_catalog: t.Optional[str], quote: bool = True
 ) -> t.Iterator[E]:
     qualify_tables(query, catalog=default_catalog, dialect=dialect)
     normalize_identifiers(query, dialect=dialect)

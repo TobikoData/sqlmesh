@@ -44,6 +44,7 @@ from sqlmesh.utils.jinja import JinjaMacroRegistry, has_jinja
 from sqlmesh.utils.metaprogramming import Executable, prepare_env, print_exception
 
 if t.TYPE_CHECKING:
+    from sqlglot.dialects.dialect import DialectType
     from sqlmesh.core._typing import TableName
     from sqlmesh.core.engine_adapter import EngineAdapter
     from sqlmesh.core.snapshot import Snapshot
@@ -144,7 +145,7 @@ class MacroEvaluator:
 
     def __init__(
         self,
-        dialect: str = "",
+        dialect: DialectType = "",
         python_env: t.Optional[t.Dict[str, Executable]] = None,
         jinja_env: t.Optional[Environment] = None,
         schema: t.Optional[MappingSchema] = None,
