@@ -47,7 +47,7 @@ setup(
         "requests",
         "rich[jupyter]",
         "ruamel.yaml",
-        "sqlglot[rs]~=25.24.0",
+        "sqlglot[rs]~=25.24.1",
     ],
     extras_require={
         "athena": ["PyAthena[Pandas]"],
