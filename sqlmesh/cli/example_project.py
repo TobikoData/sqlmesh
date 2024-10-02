@@ -4,12 +4,14 @@ from pathlib import Path
 
 import click
 from sqlglot import Dialect
+from sqlmesh.integrations.dlt import extract_dlt_models
 from sqlmesh.utils.date import yesterday_ds
 
 
 class ProjectTemplate(Enum):
     AIRFLOW = "airflow"
     DBT = "dbt"
+    DLT = "dlt"
     DEFAULT = "default"
     EMPTY = "empty"
 
@@ -55,6 +57,7 @@ config = sqlmesh_config(Path(__file__).parent)
     }
 
     default_configs[ProjectTemplate.EMPTY] = default_configs[ProjectTemplate.DEFAULT]
+    default_configs[ProjectTemplate.DLT] = default_configs[ProjectTemplate.DEFAULT]
     return default_configs[template]
 
 
@@ -158,6 +161,7 @@ def init_example_project(
     path: t.Union[str, Path],
     dialect: t.Optional[str],
     template: ProjectTemplate = ProjectTemplate.DEFAULT,
+    pipeline: t.Optional[str] = None,
 ) -> None:
     root_path = Path(path)
     config_extension = "py" if template == ProjectTemplate.DBT else "yaml"
@@ -176,11 +180,21 @@ def init_example_project(
             "Default SQL dialect is a required argument for SQLMesh projects"
         )
 
+    if template == ProjectTemplate.DLT and not pipeline:
+        raise click.ClickException(
+            "DLT pipeline is a required argument to generate a SQLMesh project from DLT"
+        )
+
     _create_config(config_path, dialect, template)
     if template == ProjectTemplate.DBT:
         return
 
     _create_folders([audits_path, macros_path, models_path, seeds_path, tests_path])
+
+    if template == ProjectTemplate.DLT:
+        assert pipeline and dialect
+        _create_models(models_path, extract_dlt_models(pipeline, dialect))
+        return
 
     if template != ProjectTemplate.EMPTY:
         _create_macros(macros_path)
@@ -216,8 +230,8 @@ def _create_audits(audits_path: Path) -> None:
     _write_file(audits_path / "assert_positive_order_ids.sql", EXAMPLE_AUDIT)
 
 
-def _create_models(models_path: Path) -> None:
-    for model_name, model_def in [
+def _create_models(models_path: Path, models: t.Optional[t.List[t.Tuple[str, str]]] = None) -> None:
+    for model_name, model_def in models or [
         (EXAMPLE_FULL_MODEL_NAME, EXAMPLE_FULL_MODEL_DEF),
         (EXAMPLE_INCREMENTAL_MODEL_NAME, EXAMPLE_INCREMENTAL_MODEL_DEF),
         (EXAMPLE_SEED_MODEL_NAME, EXAMPLE_SEED_MODEL_DEF),

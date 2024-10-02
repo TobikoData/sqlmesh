@@ -118,20 +118,30 @@ def cli(
     "-t",
     "--template",
     type=str,
-    help="Project template. Supported values: airflow, dbt, default, empty.",
+    help="Project template. Supported values: airflow, dbt, dlt, default, empty.",
+)
+@click.option(
+    "--dlt-pipeline",
+    type=str,
+    help="DLT pipeline for which to generate a SQLMesh project.",
 )
 @click.pass_context
 @error_handler
 @cli_analytics
 def init(
-    ctx: click.Context, sql_dialect: t.Optional[str] = None, template: t.Optional[str] = None
+    ctx: click.Context,
+    sql_dialect: t.Optional[str] = None,
+    template: t.Optional[str] = None,
+    dlt_pipeline: t.Optional[str] = None,
 ) -> None:
     """Create a new SQLMesh repository."""
     try:
         project_template = ProjectTemplate(template.lower() if template else "default")
     except ValueError:
         raise click.ClickException(f"Invalid project template '{template}'")
-    init_example_project(ctx.obj, dialect=sql_dialect, template=project_template)
+    init_example_project(
+        ctx.obj, dialect=sql_dialect, template=project_template, pipeline=dlt_pipeline
+    )
 
 
 @cli.command("render")
