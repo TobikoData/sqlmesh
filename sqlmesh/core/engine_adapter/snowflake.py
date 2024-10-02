@@ -42,6 +42,7 @@ if t.TYPE_CHECKING:
 class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixin):
     DIALECT = "snowflake"
     SUPPORTS_MATERIALIZED_VIEWS = True
+    SUPPORTS_SECURE_VIEWS = True
     SUPPORTS_MATERIALIZED_VIEW_SCHEMA = True
     SUPPORTS_CLONING = True
     SUPPORTS_MANAGED_MODELS = True

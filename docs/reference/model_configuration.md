@@ -75,8 +75,9 @@ Learn more about model kinds at the [model kind concepts page](../concepts/model
 Configuration options for models of the [`VIEW` kind](../concepts/models/model_kinds.md#view) (in addition to [general model properties](#general-model-properties)).
 
 | Option         | Description                                                                                          | Type | Required |
-| -------------- | ---------------------------------------------------------------------------------------------------- | :--: | :------: |
+|----------------|------------------------------------------------------------------------------------------------------|:----:|:--------:|
 | `materialized` | Whether views should be materialized (for engines supporting materialized views). (Default: `False`) | bool |    N     |
+| `secure`       | Whether views should be marked secure (for engines suppring it). (Default: `False`)                  | bool |    N     |
 
 Python model kind `name` enum value: [ModelKindName.VIEW](https://sqlmesh.readthedocs.io/en/stable/_readthedocs/html/sqlmesh/core/model/kind.html#ModelKindName)
 

@@ -64,15 +64,15 @@ def test_create_materialized_view(make_mocked_engine_adapter: t.Callable):
     adapter.create_view(
         "test_view",
         parse_one("SELECT a FROM tbl"),
-        materialized=True,
         columns_to_types={"a": exp.DataType.build("INT")},
+        materialized=True,
     )
     adapter.create_view(
         "test_view",
         parse_one("SELECT a FROM tbl"),
+        columns_to_types={"a": exp.DataType.build("INT")},
         replace=False,
         materialized=True,
-        columns_to_types={"a": exp.DataType.build("INT")},
     )
 
     adapter.cursor.execute.assert_has_calls(
@@ -86,9 +86,9 @@ def test_create_materialized_view(make_mocked_engine_adapter: t.Callable):
     adapter.create_view(
         "test_view",
         parse_one("SELECT a, b FROM tbl"),
+        columns_to_types={"a": exp.DataType.build("INT"), "b": exp.DataType.build("INT")},
         replace=False,
         materialized=True,
-        columns_to_types={"a": exp.DataType.build("INT"), "b": exp.DataType.build("INT")},
     )
     adapter.create_view(
         "test_view", parse_one("SELECT a, b FROM tbl"), replace=False, materialized=True

@@ -449,3 +449,59 @@ def test_materialized_view_properties(make_mocked_engine_adapter: t.Callable):
     assert sql_calls == [
         'CREATE OR REPLACE MATERIALIZED VIEW "test_table" CLUSTER BY ("a") AS SELECT 1',
     ]
+
+
+def test_secure_view(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(SnowflakeEngineAdapter)
+
+    adapter.create_view(
+        "test_table",
+        parse_one("SELECT 1"),
+        secure=True,
+    )
+
+    sql_calls = to_sql_calls(adapter)
+    # https://docs.snowflake.com/en/sql-reference/sql/create-view.html
+    assert sql_calls == [
+        'CREATE OR REPLACE SECURE VIEW "test_table" AS SELECT 1',
+    ]
+
+
+def test_secure_materialized_view(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(SnowflakeEngineAdapter)
+
+    adapter.create_view(
+        "test_table",
+        parse_one("SELECT 1"),
+        secure=True,
+        materialized=True,
+    )
+
+    sql_calls = to_sql_calls(adapter)
+    # https://docs.snowflake.com/en/sql-reference/sql/create-view.html
+    assert sql_calls == [
+        'CREATE OR REPLACE SECURE MATERIALIZED VIEW "test_table" AS SELECT 1',
+    ]
+
+
+def test_secure_materialized_view_with_properties(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(SnowflakeEngineAdapter)
+
+    adapter.create_view(
+        "test_table",
+        parse_one("SELECT 1"),
+        secure=True,
+        materialized=True,
+        materialized_properties={
+            # Partitioned by is not supported so we are confirming it is ignored
+            "partitioned_by": [exp.column("ds")],
+            "clustered_by": ["a"],
+            "partition_interval_unit": IntervalUnit.DAY,
+        },
+    )
+
+    sql_calls = to_sql_calls(adapter)
+    # https://docs.snowflake.com/en/sql-reference/sql/create-view.html
+    assert sql_calls == [
+        'CREATE OR REPLACE SECURE MATERIALIZED VIEW "test_table" CLUSTER BY ("a") AS SELECT 1',
+    ]
