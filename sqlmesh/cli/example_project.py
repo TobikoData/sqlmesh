@@ -4,7 +4,7 @@ from pathlib import Path
 
 import click
 from sqlglot import Dialect
-from sqlmesh.integrations.dlt import extract_dlt_models
+from sqlmesh.integrations.dlt import generate_dlt_models_and_settings
 from sqlmesh.utils.date import yesterday_ds
 
 
@@ -16,13 +16,20 @@ class ProjectTemplate(Enum):
     EMPTY = "empty"
 
 
-def _gen_config(dialect: t.Optional[str], template: ProjectTemplate) -> str:
+def _gen_config(
+    dialect: t.Optional[str], settings: t.Optional[str], template: ProjectTemplate
+) -> str:
+    connection_settings = (
+        settings
+        or """      type: duckdb
+      database: db.db"""
+    )
+
     default_configs = {
         ProjectTemplate.DEFAULT: f"""gateways:
   local:
     connection:
-      type: duckdb
-      database: db.db
+{connection_settings}
 
 default_gateway: local
 
@@ -33,8 +40,7 @@ model_defaults:
         ProjectTemplate.AIRFLOW: f"""gateways:
   local:
     connection:
-      type: duckdb
-      database: db.db
+      {connection_settings}
 
 default_gateway: local
 
@@ -180,20 +186,24 @@ def init_example_project(
             "Default SQL dialect is a required argument for SQLMesh projects"
         )
 
-    if template == ProjectTemplate.DLT and not pipeline:
-        raise click.ClickException(
-            "DLT pipeline is a required argument to generate a SQLMesh project from DLT"
-        )
+    models = None
+    settings = None
+    if template == ProjectTemplate.DLT:
+        if pipeline and dialect:
+            models, settings = generate_dlt_models_and_settings(pipeline, dialect)
+        else:
+            raise click.ClickException(
+                "DLT pipeline is a required argument to generate a SQLMesh project from DLT"
+            )
 
-    _create_config(config_path, dialect, template)
+    _create_config(config_path, dialect, settings, template)
     if template == ProjectTemplate.DBT:
         return
 
     _create_folders([audits_path, macros_path, models_path, seeds_path, tests_path])
 
     if template == ProjectTemplate.DLT:
-        assert pipeline and dialect
-        _create_models(models_path, extract_dlt_models(pipeline, dialect))
+        _create_models(models_path, models)
         return
 
     if template != ProjectTemplate.EMPTY:
@@ -210,11 +220,16 @@ def _create_folders(target_folders: t.Sequence[Path]) -> None:
         (folder_path / ".gitkeep").touch()
 
 
-def _create_config(config_path: Path, dialect: t.Optional[str], template: ProjectTemplate) -> None:
+def _create_config(
+    config_path: Path,
+    dialect: t.Optional[str],
+    settings: t.Optional[str],
+    template: ProjectTemplate,
+) -> None:
     if dialect:
         Dialect.get_or_raise(dialect)
 
-    project_config = _gen_config(dialect, template)
+    project_config = _gen_config(dialect, settings, template)
 
     _write_file(
         config_path,
