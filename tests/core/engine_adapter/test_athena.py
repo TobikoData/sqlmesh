@@ -1,5 +1,6 @@
 import typing as t
 import pytest
+from unittest.mock import Mock
 from pytest_mock import MockerFixture
 import pandas as pd
 
@@ -85,17 +86,6 @@ def test_table_location(
     if table_properties is not None:
         # this get consumed by _table_location because we dont want it to end up in a TBLPROPERTIES clause
         assert "s3_base_location" not in table_properties
-
-
-def test_table_location_length(adapter: AthenaEngineAdapter) -> None:
-    with pytest.raises(SQLMeshError, match=r".*cannot be more than 700 characters"):
-        long_path = "foo/bar/" * 100
-        assert len(long_path) > 700
-
-        adapter._table_location(
-            table_properties={"s3_base_location": exp.Literal.string(f"s3://{long_path}")},
-            table=exp.to_table("foo"),
-        )
 
 
 def test_create_schema(adapter: AthenaEngineAdapter) -> None:
@@ -307,10 +297,65 @@ def test_columns(adapter: AthenaEngineAdapter, mocker: MockerFixture):
     )
 
 
-def test_truncate_table(adapter: AthenaEngineAdapter):
+def test_truncate_table_iceberg(adapter: AthenaEngineAdapter, mocker: MockerFixture):
+    mocker.patch.object(
+        adapter,
+        "_query_table_type",
+        return_value="iceberg",
+    )
+    mocker.patch.multiple(
+        adapter, _clear_partition_data=mocker.DEFAULT, _clear_s3_location=mocker.DEFAULT
+    )
     adapter._truncate_table(exp.to_table("foo.bar"))
 
-    assert to_sql_calls(adapter) == ['DELETE FROM "foo"."bar"']
+    assert to_sql_calls(adapter) == ['DELETE FROM "foo"."bar" WHERE TRUE']
+    t.cast(Mock, adapter._clear_partition_data).assert_not_called()
+    t.cast(Mock, adapter._clear_s3_location).assert_not_called()
+
+
+def test_truncate_table_hive(adapter: AthenaEngineAdapter, mocker: MockerFixture):
+    mocker.patch.object(
+        adapter,
+        "_query_table_type",
+        return_value="hive",
+    )
+    mocker.patch.object(
+        adapter,
+        "_is_hive_partitioned_table",
+        return_value=False,
+    )
+    mocker.patch.object(adapter, "_query_table_s3_location", return_value="s3://foo/bar")
+    mocker.patch.multiple(
+        adapter, _clear_partition_data=mocker.DEFAULT, _clear_s3_location=mocker.DEFAULT
+    )
+
+    adapter._truncate_table(exp.to_table("foo.bar"))
+
+    assert to_sql_calls(adapter) == []
+    t.cast(Mock, adapter._clear_partition_data).assert_not_called()
+    t.cast(Mock, adapter._clear_s3_location).assert_called_with("s3://foo/bar")
+
+
+def test_truncate_table_hive_partitioned(adapter: AthenaEngineAdapter, mocker: MockerFixture):
+    mocker.patch.object(
+        adapter,
+        "_query_table_type",
+        return_value="hive",
+    )
+    mocker.patch.object(
+        adapter,
+        "_is_hive_partitioned_table",
+        return_value=True,
+    )
+    mocker.patch.object(adapter, "_clear_partition_data")
+    mocker.patch.object(adapter, "_clear_s3_location")
+    adapter._truncate_table(exp.to_table("foo.bar"))
+
+    assert to_sql_calls(adapter) == []
+    t.cast(Mock, adapter._clear_partition_data).assert_called_with(
+        exp.to_table("foo.bar"), exp.true()
+    )
+    t.cast(Mock, adapter._clear_s3_location).assert_not_called()
 
 
 def test_create_state_table(adapter: AthenaEngineAdapter):

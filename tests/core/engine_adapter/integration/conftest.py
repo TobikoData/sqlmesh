@@ -4,12 +4,14 @@ import typing as t
 import pytest
 import pathlib
 import os
+from pytest import FixtureRequest
 
 from sqlmesh import Config, EngineAdapter
 from sqlmesh.core.config.connection import AthenaConnectionConfig
+from sqlmesh.core.engine_adapter import AthenaEngineAdapter
 from sqlmesh.core.config import load_config_from_paths
 
-from tests.core.engine_adapter.integration import TestContext
+from tests.core.engine_adapter.integration import TestContext, TEST_SCHEMA
 
 
 @pytest.fixture(scope="session")
@@ -34,7 +36,11 @@ def config() -> Config:
 
 @pytest.fixture
 def engine_adapter(
-    mark_gateway: t.Tuple[str, str], config, testrun_uid, run_count
+    mark_gateway: t.Tuple[str, str],
+    config,
+    testrun_uid: str,
+    run_count: int,
+    request: pytest.FixtureRequest,
 ) -> EngineAdapter:
     mark, gateway = mark_gateway
 
@@ -44,23 +50,25 @@ def engine_adapter(
 
     connection_config = config.gateways[gateway].connection
 
-    if mark == "athena":
-        connection_config = t.cast(AthenaConnectionConfig, connection_config)
+    engine_adapter = connection_config.create_engine_adapter()
+
+    if "athena" in mark:
+        assert isinstance(connection_config, AthenaConnectionConfig)
+        assert isinstance(engine_adapter, AthenaEngineAdapter)
+
         # S3 files need to go into a unique location for each test run
         # This is because DROP TABLE on a Hive table just drops the table from the metastore
         # The files still exist in S3, so if you CREATE TABLE to the same location, the old data shows back up
         # This is a problem for any tests like `test_init_project` that use a consistent schema like `sqlmesh_example` between runs
         # Note that the `testrun_uid` fixture comes from the xdist plugin
-        testrun_path = f"testrun_{testrun_uid}"
-        # TODO: remove the compexity of run_count and just use boto3 to clear out the S3 test location prior to running tests
-        if current_location := connection_config.s3_warehouse_location:
-            if testrun_path not in current_location:
-                # only add it if its not already there (since this setup code gets called multiple times in a full test run)
-                connection_config.s3_warehouse_location = os.path.join(
-                    current_location, testrun_path, str(run_count)
-                )
+        if connection_config.s3_warehouse_location:
+            engine_adapter.s3_warehouse_location = os.path.join(
+                connection_config.s3_warehouse_location,
+                f"testrun_{testrun_uid}",
+                str(run_count),
+                request.node.originalname,
+            )
 
-    engine_adapter = connection_config.create_engine_adapter()
     # Trino: If we batch up the requests then when running locally we get a table not found error after creating the
     # table and then immediately after trying to insert rows into it. There seems to be a delay between when the
     # metastore is made aware of the table and when it responds that it exists. I'm hoping this is not an issue
@@ -75,15 +83,27 @@ def engine_adapter(
 
 
 @pytest.fixture
-def ctx(request, engine_adapter, test_type, mark_gateway):
-    _, gateway = mark_gateway
+def ctx(
+    request: FixtureRequest,
+    engine_adapter: EngineAdapter,
+    test_type: str,
+    mark_gateway: t.Tuple[str, str],
+) -> t.Iterable[TestContext]:
+    mark, gateway = mark_gateway
     is_remote = request.node.get_closest_marker("remote") is not None
-    return TestContext(test_type, engine_adapter, gateway, is_remote=is_remote)
+
+    ctx = TestContext(test_type, engine_adapter, mark, gateway, is_remote=is_remote)
+    ctx.init()
+
+    yield ctx
+
+    ctx.cleanup()
 
 
-@pytest.fixture(autouse=True)
-def cleanup(ctx: TestContext):
-    yield  # run test
-
-    if ctx:
-        ctx.cleanup()
+@pytest.fixture
+def schema(ctx: TestContext) -> str:
+    schema_name = ctx.schema(TEST_SCHEMA)
+    ctx.engine_adapter.create_schema(
+        schema_name
+    )  # note: gets cleaned up when the TestContext fixture gets cleaned up
+    return schema_name

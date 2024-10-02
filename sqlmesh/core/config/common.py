@@ -4,7 +4,7 @@ import typing as t
 from enum import Enum
 
 from sqlmesh.utils import classproperty
-from sqlmesh.utils.errors import ConfigError, SQLMeshError
+from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import field_validator
 
 
@@ -86,17 +86,3 @@ variables_validator = field_validator(
     mode="before",
     check_fields=False,
 )(_variables_validator)
-
-
-def validate_s3_location(value: str, error_type: t.Type[Exception] = SQLMeshError) -> str:
-    if not value.startswith("s3://"):
-        raise error_type(f"Location '{value}' must be a s3:// URI")
-
-    if not value.endswith("/"):
-        value += "/"
-
-    # To avoid HIVE_METASTORE_ERROR: S3 resource path length must be less than or equal to 700.
-    if len(value) > 700:
-        raise error_type(f"Location '{value}' cannot be more than 700 characters")
-
-    return value
