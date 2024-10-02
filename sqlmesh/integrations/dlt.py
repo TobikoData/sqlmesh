@@ -28,7 +28,7 @@ def generate_dlt_models_and_settings(
     configs = {
         "type": pipeline.destination.to_name(pipeline.destination),
         "database": credentials.database,
-        "password": credentials.password,
+        "password": '"' + credentials.password + '"',
         "user": credentials.username,
         "host": credentials.host,
         "port": credentials.port,
