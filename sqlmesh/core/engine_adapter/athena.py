@@ -3,7 +3,6 @@ from functools import lru_cache
 import typing as t
 import logging
 from sqlglot import exp
-from sqlglot.optimizer.qualify_columns import quote_identifiers
 from sqlmesh.core.dialect import to_schema
 from sqlmesh.utils.aws import validate_s3_uri, parse_s3_uri
 from sqlmesh.core.engine_adapter.mixins import PandasNativeFetchDFSupportMixin
@@ -317,10 +316,9 @@ class AthenaEngineAdapter(PandasNativeFetchDFSupportMixin):
         # Truncating a partitioned Hive table is dropping all partitions and deleting the data from S3
         if self._is_hive_partitioned_table(table_name):
             self._clear_partition_data(table_name, exp.true())
-        else:
+        elif s3_location := self._query_table_s3_location(table_name):
             # Truncating a non-partitioned Hive table is clearing out all data in its Location
-            if s3_location := self._query_table_s3_location(table_name):
-                self._clear_s3_location(s3_location)
+            self._clear_s3_location(s3_location)
 
     def _table_type(
         self, table_format: t.Optional[str] = None
@@ -336,26 +334,23 @@ class AthenaEngineAdapter(PandasNativeFetchDFSupportMixin):
 
     @lru_cache()
     def _query_table_type(
-        self, table_name: TableName
+        self, table: exp.Table
     ) -> t.Union[t.Literal["hive"], t.Literal["iceberg"]]:
         """
         Hit the DB to check if this is a Hive or an Iceberg table
         """
-        table_name = exp.to_table(table_name)
-        quote_identifiers(table_name)
-
         # Note: SHOW TBLPROPERTIES gets parsed by SQLGlot as an exp.Command anyway so we just use a string here
         # This also means we need to use dialect="hive" instead of dialect="athena" so that the identifiers get the correct quoting (backticks)
-        for row in self.fetchall(f"SHOW TBLPROPERTIES {table_name.sql(dialect='hive')}"):
+        for row in self.fetchall(f"SHOW TBLPROPERTIES {table.sql(dialect='hive', identify=True)}"):
             # This query returns a single column with values like 'EXTERNAL\tTRUE'
             row_lower = row[0].lower()
             if "external" in row_lower and "true" in row_lower:
                 return "hive"
         return "iceberg"
 
-    def _is_hive_partitioned_table(self, table_name: exp.Table) -> bool:
+    def _is_hive_partitioned_table(self, table: exp.Table) -> bool:
         try:
-            self._list_partitions(table=table_name, where=None, limit=1)
+            self._list_partitions(table=table, where=None, limit=1)
             return True
         except Exception as e:
             if "TABLE_NOT_FOUND" in str(e):
@@ -417,6 +412,9 @@ class AthenaEngineAdapter(PandasNativeFetchDFSupportMixin):
         where: exp.Condition,
         **kwargs: t.Any,
     ) -> None:
+        if isinstance(table_name, str):
+            table_name = exp.to_table(table_name)
+
         table_type = self._query_table_type(table_name)
 
         if table_type == "iceberg":
@@ -438,10 +436,7 @@ class AthenaEngineAdapter(PandasNativeFetchDFSupportMixin):
             **kwargs,
         )
 
-    def _clear_partition_data(self, table: TableName, where: t.Optional[exp.Condition]) -> None:
-        if isinstance(table, str):
-            table = exp.to_table(table)
-
+    def _clear_partition_data(self, table: exp.Table, where: t.Optional[exp.Condition]) -> None:
         if partitions_to_drop := self._list_partitions(table, where):
             for _, s3_location in partitions_to_drop:
                 logger.debug(
@@ -474,7 +469,7 @@ class AthenaEngineAdapter(PandasNativeFetchDFSupportMixin):
 
         partition_values = [list(r) for r in self.fetchall(query, quote_identifiers=True)]
 
-        if len(partition_values) > 0:
+        if partition_values:
             response = self._glue_client.batch_get_partition(
                 DatabaseName=table.db,
                 TableName=table.name,
@@ -486,14 +481,14 @@ class AthenaEngineAdapter(PandasNativeFetchDFSupportMixin):
 
         return []
 
-    def _query_table_s3_location(self, table_name: exp.Table) -> str:
-        response = self._glue_client.get_table(DatabaseName=table_name.db, Name=table_name.name)
+    def _query_table_s3_location(self, table: exp.Table) -> str:
+        response = self._glue_client.get_table(DatabaseName=table.db, Name=table.name)
 
         # Athena wont let you create a table without a location, so *theoretically* this should never be empty
         if location := response.get("Table", {}).get("StorageDescriptor", {}).get("Location", None):
             return location
 
-        raise SQLMeshError(f"Table {table_name} has no location set in the metastore!")
+        raise SQLMeshError(f"Table {table} has no location set in the metastore!")
 
     def _drop_partitions_from_metastore(
         self, table: exp.Table, partition_values: t.List[t.List[t.Any]]
@@ -505,6 +500,9 @@ class AthenaEngineAdapter(PandasNativeFetchDFSupportMixin):
         )
 
     def delete_from(self, table_name: TableName, where: t.Union[str, exp.Expression]) -> None:
+        if isinstance(table_name, str):
+            table_name = exp.to_table(table_name)
+
         table_type = self._query_table_type(table_name)
 
         # If Iceberg, DELETE operations work as expected
