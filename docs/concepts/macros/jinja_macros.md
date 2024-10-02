@@ -90,6 +90,14 @@ WHERE some_value = {{ var('missing_var', 0) }};
 JINJA_END;
 ```
 
+### Gateway variables
+
+Like global variables, gateway variables are defined in the project configuration file. However, they are specified in a specific gateway's `variables` key. Learn more about defining gateway variables in the [SQLMesh macros documentation](./sqlmesh_macros.md#gateway-variables).
+
+Access gateway variables in models using the same methods as [global variables](#global-variables).
+
+Gateway-specific variable values take precedence over variables with the same name specified in the configuration file's root `variables` key.
+
 ### Local variables
 
 Define your own variables with the Jinja statement `{% set ... %}`. For example, we could specify the name of the `num_orders` column in the `sqlmesh_example.full_model` like this:
