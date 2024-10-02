@@ -13,6 +13,7 @@ from sqlglot.helper import ensure_list
 from sqlmesh.core import dialect as d
 from sqlmesh.core.dialect import normalize_model_name
 from sqlmesh.core.engine_adapter import EngineAdapter, EngineAdapterWithIndexSupport
+from sqlmesh.core.engine_adapter.mixins import InsertOverwriteWithMergeMixin
 from sqlmesh.core.engine_adapter.shared import InsertOverwriteStrategy
 from sqlmesh.core.schema_diff import SchemaDiffer, TableAlterOperation
 from sqlmesh.utils import columns_to_types_to_struct
@@ -319,6 +320,30 @@ def test_insert_overwrite_no_where(make_mocked_engine_adapter: t.Callable):
     assert to_sql_calls(adapter) == [
         """DELETE FROM "test_table" WHERE TRUE""",
         """INSERT INTO "test_table" ("a", "b") SELECT "a", "b" FROM (SELECT "b", "a" FROM "tbl") AS "_subquery" """.strip(),
+    ]
+
+
+def test_insert_overwrite_by_condition_column_contains_unsafe_characters(
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture
+):
+    adapter = make_mocked_engine_adapter(InsertOverwriteWithMergeMixin)
+
+    source_queries, columns_to_types = adapter._get_source_queries_and_columns_to_types(
+        parse_one("SELECT 1 AS c"), None, target_table="test_table"
+    )
+
+    columns_mock = mocker.patch.object(adapter, "columns")
+    columns_mock.return_value = {"foo.bar.baz": exp.DataType.build("INT")}
+
+    adapter._insert_overwrite_by_condition(
+        "test_table",
+        source_queries,
+        columns_to_types=None,
+    )
+
+    # The goal here is to assert that we don't parse `foo.bar.baz` into a qualified column
+    assert to_sql_calls(adapter) == [
+        'MERGE INTO "test_table" AS "__MERGE_TARGET__" USING (SELECT "foo.bar.baz" FROM (SELECT 1 AS "c") AS "_subquery") AS "__MERGE_SOURCE__" ON FALSE WHEN NOT MATCHED BY SOURCE THEN DELETE WHEN NOT MATCHED THEN INSERT ("foo.bar.baz") VALUES ("foo.bar.baz")'
     ]
 
 
