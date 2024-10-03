@@ -29,9 +29,11 @@ def generate_dlt_models_and_settings(
     credentials = config.credentials
     db_type = pipeline.destination.to_name(pipeline.destination)
     configs = {
-        key: getattr(credentials, key)
+        key: value
         for key in dir(credentials)
-        if not key.startswith("_") and not callable(getattr(credentials, key))
+        if not key.startswith("_")
+        and not callable(value := getattr(credentials, key))
+        and value is not None
     }
 
     dlt_tables = {
@@ -116,21 +118,19 @@ FROM
 """
 
 
-def format_config(configs: t.Dict[str, str | None], db_type: str) -> str:
+def format_config(configs: t.Dict[str, str], db_type: str) -> str:
     """Generate a string for the gateway connection config."""
     config = {
         "type": db_type,
     }
 
     for key, value in configs.items():
-        # We want to retain "False" values
-        if value is not None:
-            if key == "password":
-                config[key] = f'"{value}"'
-            elif key == "username":
-                config["user"] = value
-            else:
-                config[key] = value
+        if key == "password":
+            config[key] = f'"{value}"'
+        elif key == "username":
+            config["user"] = value
+        else:
+            config[key] = value
 
     # Validate the connection config fields
     invalid_fields = []
@@ -145,7 +145,7 @@ def format_config(configs: t.Dict[str, str | None], db_type: str) -> str:
     )
 
 
-def format_columns(dlt_columns: t.Dict[str | None, exp.DataType], dialect: str) -> str:
+def format_columns(dlt_columns: t.Dict[str, exp.DataType], dialect: str) -> str:
     """Format the columns for the SQLMesh model definition."""
     if not dlt_columns:
         return ""
@@ -163,6 +163,6 @@ def format_grain(primary_key: t.List[str]) -> str:
     return ""
 
 
-def format_columns_for_select(dlt_columns: t.Dict[str | None, exp.DataType]) -> str:
+def format_columns_for_select(dlt_columns: t.Dict[str, exp.DataType]) -> str:
     """Format the columns for the SELECT statement in the model."""
     return ",\n".join(f"  {column_name}" for column_name in dlt_columns) if dlt_columns else ""
