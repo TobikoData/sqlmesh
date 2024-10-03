@@ -1,6 +1,8 @@
 import typing as t
 import click
+from pydantic import ValidationError
 from sqlglot import exp, parse_one
+from sqlmesh.core.config.connection import parse_connection_config
 
 
 def generate_dlt_models_and_settings(
@@ -25,13 +27,11 @@ def generate_dlt_models_and_settings(
     client = pipeline._sql_job_client(pipeline.default_schema)
     config = client.config
     credentials = config.credentials
+    db_type = pipeline.destination.to_name(pipeline.destination)
     configs = {
-        "type": pipeline.destination.to_name(pipeline.destination),
-        "database": credentials.database,
-        "password": '"' + credentials.password + '"',
-        "user": credentials.username,
-        "host": credentials.host,
-        "port": credentials.port,
+        key: getattr(credentials, key)
+        for key in dir(credentials)
+        if not key.startswith("_") and not callable(getattr(credentials, key))
     }
 
     dlt_tables = {
@@ -65,7 +65,7 @@ def generate_dlt_models_and_settings(
         sqlmesh_models.extend(
             [(INCREMENTAL_MODEL_NAME, incremental_model_sql), (FULL_MODEL_NAME, full_model_sql)]
         )
-    return sqlmesh_models, format_config(configs)
+    return sqlmesh_models, format_config(configs, db_type)
 
 
 def extract_columns_and_primary_key(
@@ -126,10 +126,32 @@ FROM
 """
 
 
-def format_config(config: t.Dict[str, str | None]) -> str:
+def format_config(configs: t.Dict[str, str | None], db_type: str) -> str:
     """Generate a string for the gateway connection config."""
+    config = {
+        "type": db_type,
+    }
+
+    for key, value in configs.items():
+        # We want to retain "False" values
+        if value is not None:
+            if key == "password":
+                config[key] = f'"{value}"'
+            elif key == "username":
+                config["user"] = value
+            else:
+                config[key] = value
+
+    # Validate the connection config fields
+    invalid_fields = []
+    try:
+        parse_connection_config(config)
+    except ValidationError as e:
+        for error in e.errors():
+            invalid_fields.append(error.get("loc", [])[0])
+
     return "\n".join(
-        [f"      {key}: {value}" for key, value in config.items() if value is not None]
+        [f"      {key}: {value}" for key, value in config.items() if key not in invalid_fields]
     )
 
 

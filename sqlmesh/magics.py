@@ -141,6 +141,11 @@ class SQLMeshMagics(Magics):
         type=str,
         help="Project template. Supported values: airflow, dbt, default, empty.",
     )
+    @argument(
+        "--dlt-pipeline",
+        type=str,
+        help="DLT pipeline for which to generate a SQLMesh project.",
+    )
     @line_magic
     def init(self, line: str) -> None:
         """Creates a SQLMesh project scaffold with a default SQL dialect."""
@@ -151,7 +156,7 @@ class SQLMeshMagics(Magics):
             )
         except ValueError:
             raise MagicError(f"Invalid project template '{args.template}'")
-        init_example_project(args.path, args.sql_dialect, project_template)
+        init_example_project(args.path, args.sql_dialect, project_template, args.dlt_pipeline)
         html = str(
             h(
                 "div",
