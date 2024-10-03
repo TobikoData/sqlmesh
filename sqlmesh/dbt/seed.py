@@ -51,9 +51,8 @@ class SeedConfig(BaseModelConfig):
             kwargs = self.sqlmesh_model_kwargs(context)
 
         columns = kwargs.get("columns") or {}
-        missing_types = (
-            set((kwargs.get("column_descriptions") or {}).keys()) | set(self.columns.keys())
-        ) - set(columns.keys())
+        descriptions = kwargs.get("column_descriptions") or {}
+        missing_types = (set(descriptions) | set(self.columns)) - set(columns)
         if not columns or missing_types:
             agate_table = (
                 agate_helper.from_csv(seed_path, [], delimiter=self.delimiter)
@@ -64,9 +63,8 @@ class SeedConfig(BaseModelConfig):
                 name: AGATE_TYPE_MAPPING[tpe.__class__]
                 for name, tpe in zip(agate_table.column_names, agate_table.column_types)
             }
-            columns.update(
-                {key: inferred_types[key] for key in missing_types or inferred_types.keys()}
-            )
+            for key in missing_types or inferred_types:
+                columns[key] = inferred_types[key]
             kwargs["columns"] = columns
 
         return create_seed_model(
