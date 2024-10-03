@@ -41,25 +41,33 @@ class SeedConfig(BaseModelConfig):
         seed_path = self.path.absolute().as_posix()
 
         if column_types := self.column_types:
-            columns = copy.deepcopy(self.columns)
+            column_types_override = copy.deepcopy(self.columns)
             for name, data_type in column_types.items():
-                column = columns.setdefault(name, ColumnConfig(name=name))
+                column = column_types_override.setdefault(name, ColumnConfig(name=name))
                 column.data_type = data_type
                 column.quote = self.quote_columns or column.quote
-                kwargs = self.sqlmesh_model_kwargs(context, columns)
+                kwargs = self.sqlmesh_model_kwargs(context, column_types_override)
         else:
             kwargs = self.sqlmesh_model_kwargs(context)
 
-        if kwargs.get("columns") is None:
+        columns = kwargs.get("columns") or {}
+        missing_types = (
+            set((kwargs.get("column_descriptions") or {}).keys()) | set(self.columns.keys())
+        ) - set(columns.keys())
+        if not columns or missing_types:
             agate_table = (
                 agate_helper.from_csv(seed_path, [], delimiter=self.delimiter)
                 if SUPPORTS_DELIMITER
                 else agate_helper.from_csv(seed_path, [])
             )
-            kwargs["columns"] = {
+            inferred_types = {
                 name: AGATE_TYPE_MAPPING[tpe.__class__]
                 for name, tpe in zip(agate_table.column_names, agate_table.column_types)
             }
+            columns.update(
+                {key: inferred_types[key] for key in missing_types or inferred_types.keys()}
+            )
+            kwargs["columns"] = columns
 
         return create_seed_model(
             self.canonical_name(context),

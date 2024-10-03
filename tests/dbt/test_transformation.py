@@ -470,6 +470,52 @@ def test_seed_column_inference(tmp_path):
     }
 
 
+def test_seed_partial_column_inference(tmp_path):
+    seed_csv = tmp_path / "seed.csv"
+    with open(seed_csv, "w", encoding="utf-8") as fd:
+        fd.write("int_col,double_col,datetime_col,boolean_col\n")
+        fd.write("1,1.2,2021-01-01 00:00:00,true\n")
+        fd.write("2,2.3,2021-01-02 00:00:00,false\n")
+        fd.write("null,,null,\n")
+
+    seed = SeedConfig(
+        name="test_model",
+        package="package",
+        path=Path(seed_csv),
+        column_types={
+            "double_col": "double",
+        },
+        columns={
+            "int_col": ColumnConfig(
+                name="int_col", data_type="int", description="Description with type."
+            ),
+            "datetime_col": ColumnConfig(
+                name="datetime_col", description="Description without type."
+            ),
+            "boolean_col": ColumnConfig(name="boolean_col"),
+        },
+    )
+
+    expected_column_types = {
+        "int_col": exp.DataType.build("int"),
+        "double_col": exp.DataType.build("double"),
+        "datetime_col": exp.DataType.build("datetime"),
+        "boolean_col": exp.DataType.build("boolean"),
+    }
+
+    expected_column_descriptions = {
+        "int_col": "Description with type.",
+        "datetime_col": "Description without type.",
+    }
+
+    context = DbtContext()
+    context.project_name = "Foo"
+    context.target = DuckDbConfig(name="target", schema="test")
+    sqlmesh_seed = seed.to_sqlmesh(context)
+    assert sqlmesh_seed.columns_to_types == expected_column_types
+    assert sqlmesh_seed.column_descriptions == expected_column_descriptions
+
+
 def test_agate_integer_cast():
     agate_integer = Integer(null_values=("null", ""))
     assert agate_integer.cast("1") == 1
