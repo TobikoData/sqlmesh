@@ -167,6 +167,19 @@ class ManifestHelper:
                 path=Path(macro.original_file_path),
             )
 
+        # This is a workaround for dbt adapter macros (eg. "spark__dateadd") whcih are expected to be
+        # available in the global scope regardless of the package they came from.
+        adapter_macro_names = {
+            name[name.find("__") + 2 :]
+            for name in self._macros_per_package.get("dbt", {})
+            if "__" in name
+        }
+        for macros in self._macros_per_package.values():
+            for name, macro_config in macros.items():
+                pos = name.find("__")
+                if pos > 0 and name[pos + 2 :] in adapter_macro_names:
+                    macro_config.info.is_top_level = True
+
     def _load_tests(self) -> None:
         for node in self._manifest.nodes.values():
             if node.resource_type != "test":
