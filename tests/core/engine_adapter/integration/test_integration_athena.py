@@ -4,6 +4,7 @@ import pandas as pd
 import datetime
 from sqlmesh.core.engine_adapter import AthenaEngineAdapter
 from sqlmesh.utils.aws import parse_s3_uri
+from sqlmesh.utils.pandas import columns_to_types_from_df
 from tests.core.engine_adapter.integration import TestContext
 from sqlglot import exp
 
@@ -249,3 +250,95 @@ def test_hive_truncate_table(ctx: TestContext, engine_adapter: AthenaEngineAdapt
     assert len(s3_list_objects(s3, table_2_location)) == len(table_2_files)
 
     assert engine_adapter.fetchone(f"select count(*) from {table_1}")[0] == 0  # type: ignore
+
+    # check truncating an empty table doesnt throw an error
+    engine_adapter._truncate_table(table_1)
+
+
+def test_hive_drop_table_removes_data(ctx: TestContext, engine_adapter: AthenaEngineAdapter):
+    # check no exception with dropping a table that doesnt exist
+    engine_adapter.drop_table("nonexist")
+
+    seed_table = ctx.table("seed")
+
+    data = pd.DataFrame(
+        [
+            {"id": 1, "name": "one"},
+        ]
+    )
+
+    columns_to_types = columns_to_types_from_df(data)
+
+    engine_adapter.create_table(
+        table_name=seed_table, columns_to_types=columns_to_types, exists=False
+    )
+    engine_adapter.insert_append(
+        table_name=seed_table, query_or_df=data, columns_to_types=columns_to_types
+    )
+    assert engine_adapter.fetchone(f"select count(*) from {seed_table}")[0] == 1  # type: ignore
+
+    # By default, dropping a Hive table leaves its data in S3 so creating a new table with the same name / location picks up the old data
+    # This ensures that our drop table logic to delete the data from S3 is working
+    engine_adapter.drop_table(seed_table, exists=False)
+    engine_adapter.create_table(
+        table_name=seed_table, columns_to_types=columns_to_types, exists=False
+    )
+    assert engine_adapter.fetchone(f"select count(*) from {seed_table}")[0] == 0  # type: ignore
+
+
+def test_hive_replace_query_same_schema(ctx: TestContext, engine_adapter: AthenaEngineAdapter):
+    seed_table = ctx.table("seed")
+
+    data = pd.DataFrame(
+        [
+            {"id": 1, "name": "one"},
+            {"id": 2, "name": "two"},
+        ]
+    )
+
+    assert not engine_adapter.table_exists(seed_table)
+
+    engine_adapter.replace_query(table_name=seed_table, query_or_df=data)
+
+    assert engine_adapter.fetchone(f"select count(*) from {seed_table}")[0] == 2  # type: ignore
+
+    data.loc[len(data)] = [3, "three"]  # type: ignore
+
+    engine_adapter.replace_query(table_name=seed_table, query_or_df=data)
+
+    assert engine_adapter.fetchone(f"select count(*) from {seed_table}")[0] == 3  # type: ignore
+
+
+def test_hive_replace_query_new_schema(ctx: TestContext, engine_adapter: AthenaEngineAdapter):
+    seed_table = ctx.table("seed")
+
+    orig_data = pd.DataFrame(
+        [
+            {"id": 1, "name": "one"},
+            {"id": 2, "name": "two"},
+        ]
+    )
+
+    new_data = pd.DataFrame(
+        [
+            {"foo": 1, "bar": "one", "ts": datetime.datetime(2023, 1, 1)},
+        ]
+    )
+
+    engine_adapter.replace_query(table_name=seed_table, query_or_df=orig_data)
+
+    assert engine_adapter.fetchall(f"select id, name from {seed_table} order by id") == [
+        (1, "one"),
+        (2, "two"),
+    ]
+
+    engine_adapter.replace_query(table_name=seed_table, query_or_df=new_data)
+
+    with pytest.raises(Exception, match=r".*COLUMN_NOT_FOUND.*"):
+        assert engine_adapter.fetchall(f"select id, name from {seed_table}")
+
+    assert engine_adapter.fetchone(f"select foo, bar, ts from {seed_table}") == (
+        1,
+        "one",
+        datetime.datetime(2023, 1, 1),
+    )

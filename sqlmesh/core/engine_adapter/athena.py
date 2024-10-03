@@ -22,6 +22,9 @@ from sqlmesh.core.engine_adapter.shared import (
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import SchemaName, TableName
+    from sqlmesh.core.engine_adapter._typing import QueryOrDF
+
+    TableType = t.Union[t.Literal["hive"], t.Literal["iceberg"]]
 
 logger = logging.getLogger(__name__)
 
@@ -30,8 +33,10 @@ class AthenaEngineAdapter(PandasNativeFetchDFSupportMixin):
     DIALECT = "athena"
     SUPPORTS_TRANSACTIONS = False
     SUPPORTS_REPLACE_TABLE = False
-    # Athena has the concept of catalogs but no notion of current_catalog or setting the current catalog
-    CATALOG_SUPPORT = CatalogSupport.UNSUPPORTED
+    # Athena has the concept of catalogs but the current catalog is set in the connection parameters with no way to query or change it after that
+    # It also cant create new catalogs, you have to configure them in AWS. Typically, catalogs that are not "awsdatacatalog"
+    # are pointers to the "awsdatacatalog" of other AWS accounts
+    CATALOG_SUPPORT = CatalogSupport.SINGLE_CATALOG_ONLY
     # Athena's support for table and column comments is too patchy to consider "supported"
     # Hive tables: Table + Column comments are supported
     # Iceberg tables: Column comments only
@@ -47,6 +52,8 @@ class AthenaEngineAdapter(PandasNativeFetchDFSupportMixin):
         # which means that EngineAdapter.with_log_level() keeps this property when it makes a clone
         super().__init__(*args, s3_warehouse_location=s3_warehouse_location, **kwargs)
         self.s3_warehouse_location = s3_warehouse_location
+
+        self._default_catalog = self._default_catalog or "awsdatacatalog"
 
     @property
     def s3_warehouse_location(self) -> t.Optional[str]:
@@ -90,14 +97,7 @@ class AthenaEngineAdapter(PandasNativeFetchDFSupportMixin):
         schema = schema_name.db
         query = (
             exp.select(
-                exp.case()
-                .when(
-                    # calling code expects data objects in the default catalog to have their catalog set to None
-                    exp.column("table_catalog", table="t").eq("awsdatacatalog"),
-                    exp.Null(),
-                )
-                .else_(exp.column("table_catalog"))
-                .as_("catalog"),
+                exp.column("table_catalog").as_("catalog"),
                 exp.column("table_schema", table="t").as_("schema"),
                 exp.column("table_name", table="t").as_("name"),
                 exp.case()
@@ -130,6 +130,7 @@ class AthenaEngineAdapter(PandasNativeFetchDFSupportMixin):
         self, table_name: TableName, include_pseudo_columns: bool = False
     ) -> t.Dict[str, exp.DataType]:
         table = exp.to_table(table_name)
+        # note: the data_type column contains the full parameterized type, eg 'varchar(10)'
         query = (
             exp.select("column_name", "data_type")
             .from_("information_schema.columns")
@@ -305,24 +306,29 @@ class AthenaEngineAdapter(PandasNativeFetchDFSupportMixin):
 
         return None
 
+    def drop_table(self, table_name: TableName, exists: bool = True) -> None:
+        table = exp.to_table(table_name)
+
+        if self._query_table_type(table) == "hive":
+            self._truncate_table(table)
+
+        return super().drop_table(table_name=table, exists=exists)
+
     def _truncate_table(self, table_name: TableName) -> None:
-        if isinstance(table_name, str):
-            table_name = exp.to_table(table_name)
+        table = exp.to_table(table_name)
 
         # Truncating an Iceberg table is just DELETE FROM <table>
-        if self._query_table_type(table_name) == "iceberg":
-            return self.delete_from(table_name, exp.true())
+        if self._query_table_type(table) == "iceberg":
+            return self.delete_from(table, exp.true())
 
         # Truncating a partitioned Hive table is dropping all partitions and deleting the data from S3
-        if self._is_hive_partitioned_table(table_name):
-            self._clear_partition_data(table_name, exp.true())
-        elif s3_location := self._query_table_s3_location(table_name):
+        if self._is_hive_partitioned_table(table):
+            self._clear_partition_data(table, exp.true())
+        elif s3_location := self._query_table_s3_location(table):
             # Truncating a non-partitioned Hive table is clearing out all data in its Location
             self._clear_s3_location(s3_location)
 
-    def _table_type(
-        self, table_format: t.Optional[str] = None
-    ) -> t.Union[t.Literal["hive"], t.Literal["iceberg"]]:
+    def _table_type(self, table_format: t.Optional[str] = None) -> TableType:
         """
         Interpret the "table_format" property to check if this is a Hive or an Iceberg table
         """
@@ -332,12 +338,19 @@ class AthenaEngineAdapter(PandasNativeFetchDFSupportMixin):
         # if we cant detect any indication of Iceberg, this is a Hive table
         return "hive"
 
+    def _query_table_type(self, table: exp.Table) -> t.Optional[TableType]:
+        if self.table_exists(table):
+            return self._query_table_type_or_raise(table)
+        return None
+
     @lru_cache()
-    def _query_table_type(
-        self, table: exp.Table
-    ) -> t.Union[t.Literal["hive"], t.Literal["iceberg"]]:
+    def _query_table_type_or_raise(self, table: exp.Table) -> TableType:
         """
-        Hit the DB to check if this is a Hive or an Iceberg table
+        Hit the DB to check if this is a Hive or an Iceberg table.
+
+        Note that in order to @lru_cache() this method, we have the following assumptions:
+         - The table must exist (otherwise we would cache None if this method was called before table creation and always return None after creation)
+         - The table type will not change within the same SQLMesh session
         """
         # Note: SHOW TBLPROPERTIES gets parsed by SQLGlot as an exp.Command anyway so we just use a string here
         # This also means we need to use dialect="hive" instead of dialect="athena" so that the identifiers get the correct quoting (backticks)
@@ -404,6 +417,29 @@ class AthenaEngineAdapter(PandasNativeFetchDFSupportMixin):
                 matches.append((key, match_dtype))
         return matches
 
+    def replace_query(
+        self,
+        table_name: TableName,
+        query_or_df: QueryOrDF,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        table_description: t.Optional[str] = None,
+        column_descriptions: t.Optional[t.Dict[str, str]] = None,
+        **kwargs: t.Any,
+    ) -> None:
+        table = exp.to_table(table_name)
+
+        if self._query_table_type(table=table) == "hive":
+            self.drop_table(table)
+
+        return super().replace_query(
+            table_name=table,
+            query_or_df=query_or_df,
+            columns_to_types=columns_to_types,
+            table_description=table_description,
+            column_descriptions=column_descriptions,
+            **kwargs,
+        )
+
     def _insert_overwrite_by_time_partition(
         self,
         table_name: TableName,
@@ -412,23 +448,22 @@ class AthenaEngineAdapter(PandasNativeFetchDFSupportMixin):
         where: exp.Condition,
         **kwargs: t.Any,
     ) -> None:
-        if isinstance(table_name, str):
-            table_name = exp.to_table(table_name)
+        table = exp.to_table(table_name)
 
-        table_type = self._query_table_type(table_name)
+        table_type = self._query_table_type(table)
 
         if table_type == "iceberg":
             # Iceberg tables work as expected, we can use the default behaviour
             return super()._insert_overwrite_by_time_partition(
-                table_name, source_queries, columns_to_types, where, **kwargs
+                table, source_queries, columns_to_types, where, **kwargs
             )
 
         # For Hive tables, we need to drop all the partitions covered by the query and delete the data from S3
-        self._clear_partition_data(table_name, where)
+        self._clear_partition_data(table, where)
 
         # Now the data is physically gone, we can continue with inserting a new partition
         return super()._insert_overwrite_by_time_partition(
-            table_name,
+            table,
             source_queries,
             columns_to_types,
             where,
@@ -500,21 +535,20 @@ class AthenaEngineAdapter(PandasNativeFetchDFSupportMixin):
         )
 
     def delete_from(self, table_name: TableName, where: t.Union[str, exp.Expression]) -> None:
-        if isinstance(table_name, str):
-            table_name = exp.to_table(table_name)
+        table = exp.to_table(table_name)
 
-        table_type = self._query_table_type(table_name)
+        table_type = self._query_table_type(table)
 
         # If Iceberg, DELETE operations work as expected
         if table_type == "iceberg":
-            return super().delete_from(table_name, where)
+            return super().delete_from(table, where)
 
         # If Hive, DELETE is an error
         if table_type == "hive":
             # However, if there are no actual records to delete, we can make DELETE a no-op
             # This simplifies a bunch of calling code that just assumes DELETE works (which to be fair is a reasonable assumption since it does for every other engine)
             empty_check = (
-                exp.select("*").from_(table_name).where(where).limit(1)
+                exp.select("*").from_(table).where(where).limit(1)
             )  # deliberately not count(*) because we want the engine to stop as soon as it finds a record
             if len(self.fetchall(empty_check)) > 0:
                 raise SQLMeshError("Cannot delete individual records from a Hive table")
@@ -536,7 +570,9 @@ class AthenaEngineAdapter(PandasNativeFetchDFSupportMixin):
             Bucket=bucket, Prefix=key, Delimiter="/"
         ):
             # list_objects_v2() returns 1000 keys per page so that lines up nicely with delete_objects() being able to delete 1000 keys at a time
-            keys_to_delete.append([item["Key"] for item in page.get("Contents", [])])
+            keys = [item["Key"] for item in page.get("Contents", [])]
+            if keys:
+                keys_to_delete.append(keys)
 
         for chunk in keys_to_delete:
             s3.delete_objects(Bucket=bucket, Delete={"Objects": [{"Key": k} for k in chunk]})
@@ -558,3 +594,6 @@ class AthenaEngineAdapter(PandasNativeFetchDFSupportMixin):
             config=conn.config,
             **conn._client_kwargs,
         )  # type: ignore
+
+    def get_current_catalog(self) -> t.Optional[str]:
+        return self.connection.catalog_name
