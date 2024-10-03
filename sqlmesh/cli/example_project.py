@@ -245,7 +245,7 @@ def _create_audits(audits_path: Path) -> None:
     _write_file(audits_path / "assert_positive_order_ids.sql", EXAMPLE_AUDIT)
 
 
-def _create_models(models_path: Path, models: t.Optional[t.List[t.Tuple[str, str]]] = None) -> None:
+def _create_models(models_path: Path, models: t.Optional[t.Set[t.Tuple[str, str]]] = None) -> None:
     for model_name, model_def in models or [
         (EXAMPLE_FULL_MODEL_NAME, EXAMPLE_FULL_MODEL_DEF),
         (EXAMPLE_INCREMENTAL_MODEL_NAME, EXAMPLE_INCREMENTAL_MODEL_DEF),

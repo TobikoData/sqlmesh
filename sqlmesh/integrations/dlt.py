@@ -1,13 +1,13 @@
 import typing as t
 import click
 from pydantic import ValidationError
-from sqlglot import exp, parse_one
+from sqlglot import exp
 from sqlmesh.core.config.connection import parse_connection_config
 
 
 def generate_dlt_models_and_settings(
     pipeline_name: str, dialect: str
-) -> t.Tuple[t.List[t.Tuple[str, str]], str]:
+) -> t.Tuple[t.Set[t.Tuple[str, str]], str]:
     """This function attaches to a DLT pipeline and retrieves the connection configs and
     SQLMesh models based on the tables present in the pipeline's default schema.
     """
@@ -43,11 +43,11 @@ def generate_dlt_models_and_settings(
         or name == schema.loads_table_name
     }
 
-    sqlmesh_models = []
-    SQLMESH_SCHEMA_NAME = f"{dataset}_sqlmesh"
+    sqlmesh_models = set()
+    sqlmesh_schema_name = f"{dataset}_sqlmesh"
     for table_name, table in dlt_tables.items():
         dlt_columns = {
-            c["name"]: parse_one(str(c["data_type"]), into=exp.DataType, dialect=dialect)
+            c["name"]: exp.DataType.build(str(c["data_type"]), dialect=dialect)
             for c in filter(is_complete_column, table["columns"].values())
             if c.get("name") and c.get("data_type")
         }
@@ -59,23 +59,24 @@ def generate_dlt_models_and_settings(
         model_def_columns = format_columns(dlt_columns, dialect)
         select_columns = format_columns_for_select(dlt_columns)
         grain = format_grain(primary_key)
-        INCREMENTAL_MODEL_NAME = f"{SQLMESH_SCHEMA_NAME}.incremental_{table_name}"
-        FULL_MODEL_NAME = f"{SQLMESH_SCHEMA_NAME}.full_{table_name}"
+        incremental_model_name = f"{sqlmesh_schema_name}.incremental_{table_name}"
+        full_model_name = f"{sqlmesh_schema_name}.full_{table_name}"
 
         incremental_model_sql = generate_incremental_model(
-            INCREMENTAL_MODEL_NAME,
+            incremental_model_name,
             model_def_columns,
             select_columns,
             grain,
             dataset + "." + table_name,
         )
         full_model_sql = generate_full_model(
-            FULL_MODEL_NAME, model_def_columns, select_columns, grain, INCREMENTAL_MODEL_NAME
+            full_model_name, model_def_columns, select_columns, grain, incremental_model_name
         )
 
-        sqlmesh_models.extend(
-            [(INCREMENTAL_MODEL_NAME, incremental_model_sql), (FULL_MODEL_NAME, full_model_sql)]
+        sqlmesh_models.update(
+            {(incremental_model_name, incremental_model_sql), (full_model_name, full_model_sql)}
         )
+
     return sqlmesh_models, format_config(configs, db_type)
 
 
