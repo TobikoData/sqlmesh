@@ -63,9 +63,17 @@ class SeedConfig(BaseModelConfig):
                 name: AGATE_TYPE_MAPPING[tpe.__class__]
                 for name, tpe in zip(agate_table.column_names, agate_table.column_types)
             }
-            for key in missing_types or inferred_types:
-                columns[key] = inferred_types[key]
-            kwargs["columns"] = columns
+
+            # The columns list built from the mixture of supplied and inferred types needs to
+            # be in the same order as the data for assumptions elsewhere in the codebase to hold true
+            new_columns = {}
+            for column_name in agate_table.column_names:
+                if (column_name in missing_types) or (column_name not in columns):
+                    new_columns[column_name] = inferred_types[column_name]
+                else:
+                    new_columns[column_name] = columns[column_name]
+
+            kwargs["columns"] = new_columns
 
         return create_seed_model(
             self.canonical_name(context),

@@ -515,6 +515,36 @@ def test_seed_partial_column_inference(tmp_path):
     assert sqlmesh_seed.columns_to_types == expected_column_types
     assert sqlmesh_seed.column_descriptions == expected_column_descriptions
 
+    # Check that everything still lines up
+    seed_df = next(sqlmesh_seed.render_seed())
+    assert list(seed_df.columns) == list(sqlmesh_seed.columns_to_types.keys())
+
+
+def test_seed_column_order(tmp_path):
+    seed_csv = tmp_path / "seed.csv"
+
+    with open(seed_csv, "w", encoding="utf-8") as fd:
+        fd.writelines("\n".join(["id,name", "0,Toby", "1,Tyson", "2,Ryan"]))
+
+    seed = SeedConfig(
+        name="test_model",
+        package="package",
+        path=Path(seed_csv),
+        columns={
+            "id": ColumnConfig(name="id"),
+            "name": ColumnConfig(name="name", data_type="varchar"),
+        },
+    )
+
+    context = DbtContext()
+    context.project_name = "Foo"
+    context.target = DuckDbConfig(name="target", schema="test")
+    sqlmesh_seed = seed.to_sqlmesh(context)
+
+    # Check that everything still lines up
+    seed_df = next(sqlmesh_seed.render_seed())
+    assert list(seed_df.columns) == list(sqlmesh_seed.columns_to_types.keys())
+
 
 def test_agate_integer_cast():
     agate_integer = Integer(null_values=("null", ""))
