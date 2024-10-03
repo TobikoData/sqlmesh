@@ -13,7 +13,7 @@ def generate_dlt_models_and_settings(
     """
 
     import dlt
-    from dlt.common.schema.utils import has_table_seen_data
+    from dlt.common.schema.utils import has_table_seen_data, is_complete_column
     from dlt.pipeline.exceptions import CannotRestorePipelineException
 
     try:
@@ -44,7 +44,16 @@ def generate_dlt_models_and_settings(
     sqlmesh_models = []
     SQLMESH_SCHEMA_NAME = f"{dataset}_sqlmesh"
     for table_name, table in dlt_tables.items():
-        dlt_columns, primary_key = extract_columns_and_primary_key(table, dialect)
+        dlt_columns = {
+            c["name"]: parse_one(str(c["data_type"]), into=exp.DataType, dialect=dialect)
+            for c in filter(is_complete_column, table["columns"].values())
+            if c.get("name") and c.get("data_type")
+        }
+        primary_key = [
+            str(c["name"])
+            for c in filter(is_complete_column, table["columns"].values())
+            if c.get("primary_key") and c.get("name")
+        ]
         model_def_columns = format_columns(dlt_columns, dialect)
         select_columns = format_columns_for_select(dlt_columns)
         grain = format_grain(primary_key)
@@ -66,25 +75,6 @@ def generate_dlt_models_and_settings(
             [(INCREMENTAL_MODEL_NAME, incremental_model_sql), (FULL_MODEL_NAME, full_model_sql)]
         )
     return sqlmesh_models, format_config(configs, db_type)
-
-
-def extract_columns_and_primary_key(
-    table: t.Dict[str, t.Any], dialect: str
-) -> t.Tuple[t.Dict[str, exp.DataType], t.List[str]]:
-    """Extract column information and primary key for a given DLT table."""
-
-    from dlt.common.schema.utils import is_complete_column
-
-    dlt_columns = {
-        c["name"]: parse_one(c["data_type"], into=exp.DataType, dialect=dialect)
-        for c in filter(is_complete_column, table["columns"].values())
-    }
-    primary_key = [
-        c["name"]
-        for c in filter(is_complete_column, table["columns"].values())
-        if c.get("primary_key")
-    ]
-    return dlt_columns, primary_key
 
 
 def generate_incremental_model(
@@ -155,13 +145,15 @@ def format_config(configs: t.Dict[str, str | None], db_type: str) -> str:
     )
 
 
-def format_columns(dlt_columns: t.Dict[str, exp.DataType], dialect: str) -> str:
+def format_columns(dlt_columns: t.Dict[str | None, exp.DataType], dialect: str) -> str:
     """Format the columns for the SQLMesh model definition."""
-    return (
-        f"\n  columns ({',\n    '.join(f'{name} {data_type.sql(dialect=dialect)}' for name, data_type in dlt_columns.items())}\n  ),"
-        if dlt_columns
-        else ""
+    if not dlt_columns:
+        return ""
+
+    columns_str = ",\n    ".join(
+        f"{name} {data_type.sql(dialect=dialect)}" for name, data_type in dlt_columns.items()
     )
+    return f"\n  columns ({columns_str}\n  ),"
 
 
 def format_grain(primary_key: t.List[str]) -> str:
@@ -171,6 +163,6 @@ def format_grain(primary_key: t.List[str]) -> str:
     return ""
 
 
-def format_columns_for_select(dlt_columns: t.Dict[str, exp.DataType]) -> str:
+def format_columns_for_select(dlt_columns: t.Dict[str | None, exp.DataType]) -> str:
     """Format the columns for the SELECT statement in the model."""
     return ",\n".join(f"  {column_name}" for column_name in dlt_columns) if dlt_columns else ""
