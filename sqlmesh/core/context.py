@@ -616,10 +616,11 @@ class GenericContext(BaseContext, t.Generic[C]):
         )
 
         if not self._loaded:
-            # Signals should be loaded to run correctly.
+            # Signals and materializations should be loaded to run correctly.
             for context_loader in self._loaders.values():
                 with sys_path(*context_loader.configs):
                     context_loader.loader.load_signals(self)
+                    context_loader.loader.load_materializations(self)
 
         success = False
         try:
