@@ -3,7 +3,7 @@ import os
 import setuptools
 
 os.chdir(os.path.join(os.path.dirname(__file__), ".."))
-sqlmesh_dist = setuptools.distutils.core.run_setup("setup.py", stop_after="init")
+sqlmesh_dist = setuptools.distutils.core.run_setup("setup.py", stop_after="init")  # type: ignore
 requirements = sqlmesh_dist.install_requires + sqlmesh_dist.extras_require["dev"]  # type: ignore
 os.chdir(os.path.dirname(__file__))
 
