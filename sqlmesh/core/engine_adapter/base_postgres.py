@@ -26,7 +26,12 @@ class BasePostgresEngineAdapter(EngineAdapter):
     COMMENT_CREATION_TABLE = CommentCreationTable.COMMENT_COMMAND_ONLY
     COMMENT_CREATION_VIEW = CommentCreationView.COMMENT_COMMAND_ONLY
 
-    def _columns_query(self, table: exp.Table) -> exp.Select:
+    def columns(
+        self, table_name: TableName, include_pseudo_columns: bool = False
+    ) -> t.Dict[str, exp.DataType]:
+        """Fetches column names and types for the target table."""
+        table = exp.to_table(table_name)
+
         sql = (
             exp.select(
                 "attname AS column_name",
@@ -45,14 +50,8 @@ class BasePostgresEngineAdapter(EngineAdapter):
         )
         if table.args.get("db"):
             sql = sql.where(exp.column("nspname").eq(table.args["db"].name))
-        return sql
 
-    def columns(
-        self, table_name: TableName, include_pseudo_columns: bool = False
-    ) -> t.Dict[str, exp.DataType]:
-        """Fetches column names and types for the target table."""
-        table = exp.to_table(table_name)
-        self.execute(self._columns_query(table))
+        self.execute(sql)
         resp = self.cursor.fetchall()
         if not resp:
             raise SQLMeshError("Could not get columns for table '%s'. Table not found.", table_name)

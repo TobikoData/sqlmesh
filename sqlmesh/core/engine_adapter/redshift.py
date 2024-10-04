@@ -55,15 +55,57 @@ class RedshiftEngineAdapter(
         },
     )
 
-    def _columns_query(self, table: exp.Table) -> exp.Select:
+    def columns(
+        self,
+        table_name: TableName,
+        include_pseudo_columns: bool = True,
+    ) -> t.Dict[str, exp.DataType]:
+        table = exp.to_table(table_name)
+
         sql = (
-            exp.select("column_name", "data_type")
+            exp.select(
+                "column_name",
+                "data_type",
+                "character_maximum_length",
+                "numeric_precision",
+                "numeric_scale",
+            )
             .from_("svv_columns")  # Includes late-binding views
             .where(exp.column("table_name").eq(table.alias_or_name))
         )
         if table.args.get("db"):
             sql = sql.where(exp.column("table_schema").eq(table.args["db"].name))
-        return sql
+
+        columns_raw = self.fetchall(sql, quote_identifiers=True)
+
+        def build_var_length_col(row: tuple) -> tuple:
+            var_len_chars = (
+                "char",
+                "character",
+                "nchar",
+                "varchar",
+                "character varying",
+                "nvarchar",
+                "varbyte",
+                "varbinary",
+                "binary varying",
+            )
+            if row[1].lower() in var_len_chars and row[2] is not None:
+                return (row[0], f"{row[1]}({row[2]})")
+            if row[1].lower() in (
+                "decimal",
+                "numeric",
+            ):
+                return (row[0], f"{row[1]}({row[3]}, {row[4]})")
+
+            return (row[0], row[1])
+
+        columns = [build_var_length_col(col) for col in columns_raw]
+
+        return {
+            column_name: exp.DataType.build(data_type, dialect=self.dialect)
+            for column_name, data_type in columns
+        }
 
     @property
     def cursor(self) -> t.Any:
