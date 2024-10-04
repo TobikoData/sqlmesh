@@ -67,6 +67,7 @@ setup(
             "dbt-duckdb>=1.7.1",
             "dbt-snowflake",
             "dbt-bigquery",
+            "dlt",
             "Faker",
             "google-auth",
             "google-cloud-bigquery",
@@ -104,6 +105,9 @@ setup(
         ],
         "dbt": [
             "dbt-core<2",
+        ],
+        "dlt": [
+            "dlt>=1.1.0",
         ],
         "gcppostgres": [
             "cloud-sql-python-connector[pg8000]",

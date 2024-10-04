@@ -19,7 +19,7 @@ def generate_dlt_models_and_settings(
     try:
         pipeline = dlt.attach(pipeline_name=pipeline_name)
     except CannotRestorePipelineException:
-        raise click.ClickException("Could not attach to pipeline {pipeline_name}")
+        raise click.ClickException(f"Could not attach to pipeline {pipeline_name}")
 
     schema = pipeline.default_schema
     dataset = pipeline.dataset_name
@@ -46,19 +46,24 @@ def generate_dlt_models_and_settings(
     sqlmesh_models = set()
     sqlmesh_schema_name = f"{dataset}_sqlmesh"
     for table_name, table in dlt_tables.items():
-        dlt_columns = {
-            c["name"]: exp.DataType.build(str(c["data_type"]), dialect=dialect)
-            for c in filter(is_complete_column, table["columns"].values())
-            if c.get("name") and c.get("data_type")
-        }
-        primary_key = [
-            str(c["name"])
-            for c in filter(is_complete_column, table["columns"].values())
-            if c.get("primary_key") and c.get("name")
-        ]
-        model_def_columns = format_columns(dlt_columns, dialect)
-        select_columns = format_columns_for_select(dlt_columns)
-        grain = format_grain(primary_key)
+        dlt_columns = {}
+        primary_key = []
+
+        # is_complete_column returns true if column contains a name and a data type
+        for col in filter(is_complete_column, table["columns"].values()):
+            dlt_columns[col["name"]] = exp.DataType.build(str(col["data_type"]), dialect=dialect)
+            if col.get("primary_key"):
+                primary_key.append(str(col["name"]))
+
+        model_def_columns = (
+            f"\n  columns ({',\n    '.join(f'{name} {data_type.sql(dialect=dialect)}' for name, data_type in dlt_columns.items())}\n  ),"
+            if dlt_columns
+            else ""
+        )
+        select_columns = (
+            ",\n".join(f"  {column_name}" for column_name in dlt_columns) if dlt_columns else ""
+        )
+        grain = f"\n  grain ({', '.join(primary_key)})," if primary_key else ""
         incremental_model_name = f"{sqlmesh_schema_name}.incremental_{table_name}"
         full_model_name = f"{sqlmesh_schema_name}.full_{table_name}"
 
@@ -144,26 +149,3 @@ def format_config(configs: t.Dict[str, str], db_type: str) -> str:
     return "\n".join(
         [f"      {key}: {value}" for key, value in config.items() if key not in invalid_fields]
     )
-
-
-def format_columns(dlt_columns: t.Dict[str, exp.DataType], dialect: str) -> str:
-    """Format the columns for the SQLMesh model definition."""
-    if not dlt_columns:
-        return ""
-
-    columns_str = ",\n    ".join(
-        f"{name} {data_type.sql(dialect=dialect)}" for name, data_type in dlt_columns.items()
-    )
-    return f"\n  columns ({columns_str}\n  ),"
-
-
-def format_grain(primary_key: t.List[str]) -> str:
-    """Format the grain for the SQLMesh model definition."""
-    if primary_key:
-        return f"\n  grain ({', '.join(primary_key)}),"
-    return ""
-
-
-def format_columns_for_select(dlt_columns: t.Dict[str, exp.DataType]) -> str:
-    """Format the columns for the SELECT statement in the model."""
-    return ",\n".join(f"  {column_name}" for column_name in dlt_columns) if dlt_columns else ""

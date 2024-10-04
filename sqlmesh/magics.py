@@ -144,7 +144,7 @@ class SQLMeshMagics(Magics):
     @argument(
         "--dlt-pipeline",
         type=str,
-        help="DLT pipeline for which to generate a SQLMesh project.",
+        help="DLT pipeline for which to generate a SQLMesh project. Use alongside template: dlt",
     )
     @line_magic
     def init(self, line: str) -> None:

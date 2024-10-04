@@ -1,13 +1,13 @@
 import logging
 from contextlib import contextmanager
-from os import path
+from os import getcwd, path, remove
 from pathlib import Path
 
 import pytest
 from click.testing import CliRunner
 from freezegun import freeze_time
 
-from sqlmesh.cli.example_project import init_example_project
+from sqlmesh.cli.example_project import ProjectTemplate, init_example_project
 from sqlmesh.cli.main import cli
 from sqlmesh.core.context import Context
 
@@ -660,3 +660,135 @@ def test_info_on_new_project_does_not_create_state_sync(runner, tmp_path):
     assert not context.engine_adapter.table_exists("sqlmesh._intervals")
     assert not context.engine_adapter.table_exists("sqlmesh._plan_dags")
     assert not context.engine_adapter.table_exists("sqlmesh._versions")
+
+
+def test_dlt_pipeline_errors(runner, tmp_path):
+    # Error if no pipeline is provided
+    result = runner.invoke(cli, ["--paths", tmp_path, "init", "-t", "dlt", "duckdb"])
+    assert (
+        "Error: DLT pipeline is a required argument to generate a SQLMesh project from DLT"
+        in result.output
+    )
+
+    # Error if the pipeline provided is not correct
+    result = runner.invoke(
+        cli,
+        ["--paths", tmp_path, "init", "-t", "dlt", "--dlt-pipeline", "missing_pipeline", "duckdb"],
+    )
+    assert "Error: Could not attach to pipeline" in result.output
+
+
+def test_plan_dlt(runner, tmp_path):
+    root_dir = path.abspath(getcwd())
+    pipeline_path = root_dir + "/examples/sushi_dlt/sushi_pipeline.py"
+    with open(pipeline_path) as file:
+        exec(file.read())
+
+    dataset_path = root_dir + "/sushi.duckdb"
+    init_example_project(tmp_path, "duckdb", ProjectTemplate.DLT, "sushi")
+
+    expected_config = f"""gateways:
+  local:
+    connection:
+      type: duckdb
+      database: {dataset_path}
+
+default_gateway: local
+
+model_defaults:
+  dialect: duckdb
+  start: 2024-10-03
+"""
+
+    with open(tmp_path / "config.yaml") as file:
+        config = file.read()
+
+    expected_full_model = """MODEL (
+  name sushi_dataset_sqlmesh.full_sushi_types,
+  kind FULL,
+  cron '@daily',
+  columns (id BIGINT,
+    name TEXT,
+    _dlt_load_id TEXT,
+    _dlt_id TEXT
+  ),
+  grain (id),
+);
+
+SELECT
+  id,
+  name,
+  _dlt_load_id,
+  _dlt_id
+FROM
+  sushi_dataset_sqlmesh.incremental_sushi_types
+"""
+
+    with open(tmp_path / "models/full_sushi_types.sql") as file:
+        full_model = file.read()
+
+    expected_incremental_model = """MODEL (
+  name sushi_dataset_sqlmesh.incremental_sushi_types,
+  kind INCREMENTAL_BY_UNIQUE_KEY (
+    unique_key _dlt_id,
+  ),
+  columns (id BIGINT,
+    name TEXT,
+    _dlt_load_id TEXT,
+    _dlt_id TEXT
+  ),
+  grain (id),
+);
+
+SELECT
+  id,
+  name,
+  _dlt_load_id,
+  _dlt_id
+FROM
+  sushi_dataset.sushi_types
+"""
+
+    with open(tmp_path / "models/incremental_sushi_types.sql") as file:
+        incremental_model = file.read()
+
+    expected_dlt_loads_model = """MODEL (
+  name sushi_dataset_sqlmesh.incremental__dlt_loads,
+  kind INCREMENTAL_BY_UNIQUE_KEY (
+    unique_key load_id,
+  ),
+  columns (load_id TEXT,
+    schema_name TEXT,
+    status BIGINT,
+    inserted_at TIMESTAMP,
+    schema_version_hash TEXT
+  ),
+);
+
+SELECT
+  load_id,
+  schema_name,
+  status,
+  inserted_at,
+  schema_version_hash
+FROM
+  sushi_dataset._dlt_loads
+"""
+
+    with open(tmp_path / "models/incremental__dlt_loads.sql") as file:
+        dlt_loads_model = file.read()
+
+    # Validate generated config and models
+    assert config == expected_config
+    assert dlt_loads_model == expected_dlt_loads_model
+    assert incremental_model == expected_incremental_model
+    assert full_model == expected_full_model
+
+    # Plan prod and backfill
+    result = runner.invoke(
+        cli, ["--log-file-dir", tmp_path, "--paths", tmp_path, "plan", "--auto-apply"]
+    )
+
+    assert result.exit_code == 0
+    assert_backfill_success(result)
+    remove(dataset_path)

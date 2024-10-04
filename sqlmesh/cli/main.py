@@ -123,7 +123,7 @@ def cli(
 @click.option(
     "--dlt-pipeline",
     type=str,
-    help="DLT pipeline for which to generate a SQLMesh project.",
+    help="DLT pipeline for which to generate a SQLMesh project. Use alongside template: dlt",
 )
 @click.pass_context
 @error_handler
