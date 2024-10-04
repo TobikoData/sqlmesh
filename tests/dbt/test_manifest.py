@@ -206,3 +206,30 @@ def test_source_meta_external_location():
     )
     assert relation.identifier == "items"
     assert relation.render() == "read_parquet('path/to/external/items.parquet')"
+
+
+@pytest.mark.xdist_group("dbt_manifest")
+def test_top_level_dbt_adapter_macros():
+    project_path = Path("tests/fixtures/dbt/sushi_test")
+    profile = Profile.load(DbtContext(project_path))
+
+    helper = ManifestHelper(
+        project_path,
+        project_path,
+        "sushi",
+        profile.target,
+        variable_overrides={"start": "2020-01-01"},
+    )
+
+    # Adapter macros must be marked as top-level
+    dbt_macros = helper.macros("dbt")
+    dbt_duckdb_macros = helper.macros("dbt_duckdb")
+    assert dbt_macros["default__dateadd"].info.is_top_level
+    assert dbt_macros["default__datediff"].info.is_top_level
+    assert dbt_duckdb_macros["duckdb__datediff"].info.is_top_level
+    assert dbt_duckdb_macros["duckdb__dateadd"].info.is_top_level
+
+    # Project dispatch macros should not be marked as top-level
+    customers_macros = helper.macros("customers")
+    assert not customers_macros["default__current_engine"].info.is_top_level
+    assert not customers_macros["duckdb__current_engine"].info.is_top_level

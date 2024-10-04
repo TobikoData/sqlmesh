@@ -280,3 +280,21 @@ def test_find_call_names():
         ("package", "package_macro"),
         ("'stringval'", "function"),
     ]
+
+
+def test_dbt_adapter_macro_scope():
+    package_a = """
+{% macro spark__macro_a() %}
+macro_a
+{% endmacro %}"""
+
+    extractor = MacroExtractor()
+    registry = JinjaMacroRegistry()
+
+    macros = extractor.extract(package_a)
+    macros["spark__macro_a"].is_top_level = True
+
+    registry.add_macros(macros, package="package_a")
+
+    rendered = registry.build_environment().from_string("{{ spark__macro_a() }}").render()
+    assert rendered.strip() == "macro_a"

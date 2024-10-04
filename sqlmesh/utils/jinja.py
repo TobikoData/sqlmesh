@@ -52,6 +52,7 @@ class MacroInfo(PydanticModel):
 
     definition: str
     depends_on: t.List[MacroReference]
+    is_top_level: bool = False
 
 
 class MacroReturnVal(Exception):
@@ -298,10 +299,11 @@ class JinjaMacroRegistry(PydanticModel):
 
         package_macros: t.Dict[str, t.Any] = defaultdict(AttributeDict)
         for package_name, macros in self.packages.items():
-            for macro_name in macros:
-                package_macros[package_name][macro_name] = self._MacroWrapper(
-                    macro_name, package_name, self, context
-                )
+            for macro_name, macro in macros.items():
+                macro_wrapper = self._MacroWrapper(macro_name, package_name, self, context)
+                package_macros[package_name][macro_name] = macro_wrapper
+                if macro.is_top_level and macro_name not in root_macros:
+                    root_macros[macro_name] = macro_wrapper
 
         if self.root_package_name is not None:
             package_macros[self.root_package_name].update(root_macros)
