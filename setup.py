@@ -86,7 +86,7 @@ setup(
             "pytz",
             "snowflake-connector-python[pandas,secure-local-storage]>=3.0.2",
             "sqlalchemy-stubs",
-            "tenacity==8.1.0",
+            "tenacity",
             "types-croniter",
             "types-dateparser",
             "types-python-dateutil",
@@ -100,6 +100,7 @@ setup(
             "dbt-redshift",
             "dbt-sqlserver>=1.7.0",
             "dbt-trino",
+            "dbt-athena-community",
         ],
         "dbt": [
             "dbt-core<2",

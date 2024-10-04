@@ -22,6 +22,7 @@ from sqlmesh.core.config.connection import (
     SnowflakeConnectionConfig,
     TrinoAuthenticationMethod,
     TrinoConnectionConfig,
+    AthenaConnectionConfig,
 )
 from sqlmesh.core.model import (
     IncrementalByTimeRangeKind,
@@ -109,6 +110,8 @@ class TargetConfig(abc.ABC, DbtConfig):
             return MSSQLConfig(**data)
         elif db_type == "trino":
             return TrinoConfig(**data)
+        elif db_type == "athena":
+            return AthenaConfig(**data)
 
         raise ConfigError(f"{db_type} not supported.")
 
@@ -849,6 +852,89 @@ class TrinoConfig(TargetConfig):
         )
 
 
+class AthenaConfig(TargetConfig):
+    """
+    Project connection and operational configuration for the Athena target.
+
+    Args:
+        s3_staging_dir: S3 location to store Athena query results and metadata
+        s3_data_dir: Prefix for storing tables, if different from the connection's s3_staging_dir
+        s3_data_naming: How to generate table paths in s3_data_dir
+        s3_tmp_table_dir: Prefix for storing temporary tables, if different from the connection's s3_data_dir
+        region_name: AWS region of your Athena instance
+        schema: Specify the schema (Athena database) to build models into (lowercase only)
+        database: Specify the database (Data catalog) to build models into (lowercase only)
+        poll_interval: Interval in seconds to use for polling the status of query results in Athena
+        debug_query_state: Flag if debug message with Athena query state is needed
+        aws_access_key_id: Access key ID of the user performing requests
+        aws_secret_access_key: Secret access key of the user performing requests
+        aws_profile_name: Profile to use from your AWS shared credentials file
+        work_group: Identifier of Athena workgroup
+        skip_workgroup_check: Indicates if the WorkGroup check (additional AWS call) can be skipped
+        num_retries: Number of times to retry a failing query
+        num_boto3_retries: Number of times to retry boto3 requests (e.g. deleting S3 files for materialized tables)
+        num_iceberg_retries: Number of times to retry iceberg commit queries to fix ICEBERG_COMMIT_ERROR
+        spark_work_group: Identifier of Athena Spark workgroup for running Python models
+        seed_s3_upload_args: Dictionary containing boto3 ExtraArgs when uploading to S3
+        lf_tags_database: Default LF tags for new database if it's created by dbt
+    """
+
+    type: Literal["athena"] = "athena"
+    threads: int = 4
+
+    s3_staging_dir: t.Optional[str] = None
+    s3_data_dir: t.Optional[str] = None
+    s3_data_naming: t.Optional[str] = None
+    s3_tmp_table_dir: t.Optional[str] = None
+    poll_interval: t.Optional[int] = None
+    debug_query_state: bool = False
+    work_group: t.Optional[str] = None
+    skip_workgroup_check: t.Optional[bool] = None
+    spark_work_group: t.Optional[str] = None
+
+    aws_access_key_id: t.Optional[str] = None
+    aws_secret_access_key: t.Optional[str] = None
+    aws_profile_name: t.Optional[str] = None
+    region_name: t.Optional[str] = None
+
+    num_retries: t.Optional[int] = None
+    num_boto3_retries: t.Optional[int] = None
+    num_iceberg_retries: t.Optional[int] = None
+
+    seed_s3_upload_args: t.Dict[str, str] = {}
+    lf_tags_database: t.Dict[str, str] = {}
+
+    @classproperty
+    def relation_class(cls) -> t.Type[BaseRelation]:
+        from dbt.adapters.athena.relation import AthenaRelation
+
+        return AthenaRelation
+
+    @classproperty
+    def column_class(cls) -> t.Type[Column]:
+        from dbt.adapters.athena.column import AthenaColumn
+
+        return AthenaColumn
+
+    def default_incremental_strategy(self, kind: IncrementalKind) -> str:
+        return "insert_overwrite"
+
+    def to_sqlmesh(self, **kwargs: t.Any) -> ConnectionConfig:
+        return AthenaConnectionConfig(
+            type="athena",
+            aws_access_key_id=self.aws_access_key_id,
+            aws_secret_access_key=self.aws_secret_access_key,
+            region_name=self.region_name,
+            work_group=self.work_group,
+            s3_staging_dir=self.s3_staging_dir,
+            s3_warehouse_location=self.s3_data_dir,
+            schema_name=self.schema_,
+            catalog_name=self.database,
+            concurrent_tasks=self.threads,
+            **kwargs,
+        )
+
+
 TARGET_TYPE_TO_CONFIG_CLASS: t.Dict[str, t.Type[TargetConfig]] = {
     "databricks": DatabricksConfig,
     "duckdb": DuckDbConfig,
@@ -859,4 +945,5 @@ TARGET_TYPE_TO_CONFIG_CLASS: t.Dict[str, t.Type[TargetConfig]] = {
     "sqlserver": MSSQLConfig,
     "tsql": MSSQLConfig,
     "trino": TrinoConfig,
+    "athena": AthenaConfig,
 }

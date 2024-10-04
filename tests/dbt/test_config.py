@@ -28,6 +28,7 @@ from sqlmesh.dbt.target import (
     SnowflakeConfig,
     TargetConfig,
     TrinoConfig,
+    AthenaConfig,
 )
 from sqlmesh.dbt.test import TestConfig
 from sqlmesh.utils.errors import ConfigError
@@ -735,6 +736,35 @@ def test_trino_config():
     )
 
 
+def test_athena_config():
+    _test_warehouse_config(
+        """
+        dbt-athena:
+          target: dev
+          outputs:
+            dev:
+              type: athena
+              s3_staging_dir: s3://athena-query-results/dbt/
+              s3_data_dir: s3://your_s3_bucket/dbt/
+              s3_data_naming: schema_table
+              s3_tmp_table_dir: s3://your_s3_bucket/temp/
+              region_name: eu-west-1
+              schema: dbt
+              database: awsdatacatalog
+              threads: 4
+              aws_profile_name: my-profile
+              work_group: my-workgroup
+              spark_work_group: my-spark-workgroup
+              seed_s3_upload_args:
+                ACL: bucket-owner-full-control
+        """,
+        AthenaConfig,
+        "dbt-athena",
+        "outputs",
+        "dev",
+    )
+
+
 def test_connection_args(tmp_path):
     dbt_project_dir = "tests/fixtures/dbt/sushi_test"
 
@@ -753,6 +783,7 @@ def test_db_type_to_relation_class():
     from dbt.adapters.redshift import RedshiftRelation
     from dbt.adapters.snowflake import SnowflakeRelation
     from dbt.adapters.trino.relation import TrinoRelation
+    from dbt.adapters.athena.relation import AthenaRelation
 
     assert (TARGET_TYPE_TO_CONFIG_CLASS["bigquery"].relation_class) == BigQueryRelation
     assert (TARGET_TYPE_TO_CONFIG_CLASS["databricks"].relation_class) == DatabricksRelation
@@ -760,6 +791,7 @@ def test_db_type_to_relation_class():
     assert (TARGET_TYPE_TO_CONFIG_CLASS["redshift"].relation_class) == RedshiftRelation
     assert (TARGET_TYPE_TO_CONFIG_CLASS["snowflake"].relation_class) == SnowflakeRelation
     assert (TARGET_TYPE_TO_CONFIG_CLASS["trino"].relation_class) == TrinoRelation
+    assert (TARGET_TYPE_TO_CONFIG_CLASS["athena"].relation_class) == AthenaRelation
 
 
 @pytest.mark.cicdonly
@@ -769,6 +801,7 @@ def test_db_type_to_column_class():
     from dbt.adapters.snowflake import SnowflakeColumn
     from dbt.adapters.sqlserver.sqlserver_column import SQLServerColumn
     from dbt.adapters.trino.column import TrinoColumn
+    from dbt.adapters.athena.column import AthenaColumn
 
     assert (TARGET_TYPE_TO_CONFIG_CLASS["bigquery"].column_class) == BigQueryColumn
     assert (TARGET_TYPE_TO_CONFIG_CLASS["databricks"].column_class) == DatabricksColumn
@@ -776,6 +809,7 @@ def test_db_type_to_column_class():
     assert (TARGET_TYPE_TO_CONFIG_CLASS["snowflake"].column_class) == SnowflakeColumn
     assert (TARGET_TYPE_TO_CONFIG_CLASS["sqlserver"].column_class) == SQLServerColumn
     assert (TARGET_TYPE_TO_CONFIG_CLASS["trino"].column_class) == TrinoColumn
+    assert (TARGET_TYPE_TO_CONFIG_CLASS["athena"].column_class) == AthenaColumn
 
 
 def test_db_type_to_quote_policy():
