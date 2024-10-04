@@ -78,29 +78,34 @@ class RedshiftEngineAdapter(
 
         columns_raw = self.fetchall(sql, quote_identifiers=True)
 
-        def build_var_length_col(row: tuple) -> tuple:
-            var_len_chars = (
-                "char",
-                "character",
-                "nchar",
-                "varchar",
-                "character varying",
-                "nvarchar",
-                "varbyte",
-                "varbinary",
-                "binary varying",
-            )
-            if row[1].lower() in var_len_chars and row[2] is not None:
-                return (row[0], f"{row[1]}({row[2]})")
-            if row[1].lower() in (
-                "decimal",
-                "numeric",
-            ):
-                return (row[0], f"{row[1]}({row[3]}, {row[4]})")
+        var_len_types = {
+            "char",
+            "character",
+            "nchar",
+            "varchar",
+            "character varying",
+            "nvarchar",
+            "varbyte",
+            "varbinary",
+            "binary varying",
+        }
 
-            return (row[0], row[1])
+        def build_var_length_col(
+            column_name: str,
+            data_type: str,
+            character_maximum_length: t.Optional[int] = None,
+            numeric_precision: t.Optional[int] = None,
+            numeric_scale: t.Optional[int] = None,
+        ) -> tuple:
+            data_type = data_type.lower()
+            if data_type in var_len_types and character_maximum_length is not None:
+                return (column_name, f"{data_type}({character_maximum_length})")
+            if data_type in ("decimal", "numeric"):
+                return (column_name, f"{data_type}({numeric_precision}, {numeric_scale})")
 
-        columns = [build_var_length_col(col) for col in columns_raw]
+            return (column_name, data_type)
+
+        columns = [build_var_length_col(*row) for row in columns_raw]
 
         return {
             column_name: exp.DataType.build(data_type, dialect=self.dialect)
