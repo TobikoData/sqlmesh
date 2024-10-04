@@ -41,7 +41,7 @@ First, run the pipeline within the project directory:
 ```bash
 $ python sushi_pipeline.py
 Pipeline sushi load step completed in 2.09 seconds
-Load package 1728047074.1973782 is LOADED and contains no failed jobs
+Load package 1728074157.660565 is LOADED and contains no failed jobs
 ```
 
 After the pipeline has run, generate a SQLMesh project by executing:
@@ -58,31 +58,22 @@ New environment `prod` will be created from `prod`
 Summary of differences against `prod`:
 Models:
 └── Added:
-    ├── sushi_dataset_sqlmesh.full__dlt_loads
-    ├── sushi_dataset_sqlmesh.full_sushi_types
-    ├── sushi_dataset_sqlmesh.full_waiters
     ├── sushi_dataset_sqlmesh.incremental__dlt_loads
     ├── sushi_dataset_sqlmesh.incremental_sushi_types
     └── sushi_dataset_sqlmesh.incremental_waiters
 Models needing backfill (missing dates):
-├── sushi_dataset_sqlmesh.full__dlt_loads: 2024-10-03 - 2024-10-03
-├── sushi_dataset_sqlmesh.full_sushi_types: 2024-10-03 - 2024-10-03
-├── sushi_dataset_sqlmesh.full_waiters: 2024-10-03 - 2024-10-03
 ├── sushi_dataset_sqlmesh.incremental__dlt_loads: 2024-10-03 - 2024-10-03
 ├── sushi_dataset_sqlmesh.incremental_sushi_types: 2024-10-03 - 2024-10-03
 └── sushi_dataset_sqlmesh.incremental_waiters: 2024-10-03 - 2024-10-03
 Apply - Backfill Tables [y/n]: y
-Creating physical table ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 6/6 • 0:00:00
+Creating physical table ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 3/3 • 0:00:00
 
 All model versions have been created successfully
 
 [1/1] sushi_dataset_sqlmesh.incremental__dlt_loads evaluated in 0.01s
 [1/1] sushi_dataset_sqlmesh.incremental_sushi_types evaluated in 0.00s
-[1/1] sushi_dataset_sqlmesh.incremental_waiters evaluated in 0.00s
-[1/1] sushi_dataset_sqlmesh.full__dlt_loads evaluated in 0.00s
-[1/1] sushi_dataset_sqlmesh.full_sushi_types evaluated in 0.00s
-[1/1] sushi_dataset_sqlmesh.full_waiters evaluated in 0.00s
-Evaluating models ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 6/6 • 0:00:00                                                                              
+[1/1] sushi_dataset_sqlmesh.incremental_waiters evaluated in 0.01s
+Evaluating models ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 3/3 • 0:00:00                                                                              
                                                                                                                                                                
 
 All model batches have been executed successfully
