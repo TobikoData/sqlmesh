@@ -24,7 +24,7 @@ def generate_dlt_models_and_settings(
     schema = pipeline.default_schema
     dataset = pipeline.dataset_name
 
-    client = pipeline._sql_job_client(pipeline.default_schema)
+    client = pipeline._sql_job_client(schema)
     config = client.config
     credentials = config.credentials
     db_type = pipeline.destination.to_name(pipeline.destination)
@@ -44,7 +44,6 @@ def generate_dlt_models_and_settings(
     }
 
     sqlmesh_models = set()
-    sqlmesh_schema_name = f"{dataset}_sqlmesh"
     for table_name, table in dlt_tables.items():
         dlt_columns = {}
         primary_key = []
@@ -64,8 +63,7 @@ def generate_dlt_models_and_settings(
             ",\n".join(f"  {column_name}" for column_name in dlt_columns) if dlt_columns else ""
         )
         grain = f"\n  grain ({', '.join(primary_key)})," if primary_key else ""
-        incremental_model_name = f"{sqlmesh_schema_name}.incremental_{table_name}"
-        full_model_name = f"{sqlmesh_schema_name}.full_{table_name}"
+        incremental_model_name = f"{dataset}_sqlmesh.incremental_{table_name}"
 
         incremental_model_sql = generate_incremental_model(
             incremental_model_name,
@@ -74,13 +72,8 @@ def generate_dlt_models_and_settings(
             grain,
             dataset + "." + table_name,
         )
-        full_model_sql = generate_full_model(
-            full_model_name, model_def_columns, select_columns, grain, incremental_model_name
-        )
 
-        sqlmesh_models.update(
-            {(incremental_model_name, incremental_model_sql), (full_model_name, full_model_sql)}
-        )
+        sqlmesh_models.add((incremental_model_name, incremental_model_sql))
 
     return sqlmesh_models, format_config(configs, db_type)
 
@@ -97,24 +90,6 @@ def generate_incremental_model(
   kind INCREMENTAL_BY_UNIQUE_KEY (
     unique_key {key},
   ),{model_def_columns}{grain}
-);
-
-SELECT
-{select_columns}
-FROM
-  {from_table}
-"""
-
-
-def generate_full_model(
-    model_name: str, model_def_columns: str, select_columns: str, grain: str, from_table: str
-) -> str:
-    """Generate the SQL definition for a full model."""
-
-    return f"""MODEL (
-  name {model_name},
-  kind FULL,
-  cron '@daily',{model_def_columns}{grain}
 );
 
 SELECT

@@ -703,30 +703,6 @@ model_defaults:
     with open(tmp_path / "config.yaml") as file:
         config = file.read()
 
-    expected_full_model = """MODEL (
-  name sushi_dataset_sqlmesh.full_sushi_types,
-  kind FULL,
-  cron '@daily',
-  columns (id BIGINT,
-    name TEXT,
-    _dlt_load_id TEXT,
-    _dlt_id TEXT
-  ),
-  grain (id),
-);
-
-SELECT
-  id,
-  name,
-  _dlt_load_id,
-  _dlt_id
-FROM
-  sushi_dataset_sqlmesh.incremental_sushi_types
-"""
-
-    with open(tmp_path / "models/full_sushi_types.sql") as file:
-        full_model = file.read()
-
     expected_incremental_model = """MODEL (
   name sushi_dataset_sqlmesh.incremental_sushi_types,
   kind INCREMENTAL_BY_UNIQUE_KEY (
@@ -782,7 +758,6 @@ FROM
     assert config == expected_config
     assert dlt_loads_model == expected_dlt_loads_model
     assert incremental_model == expected_incremental_model
-    assert full_model == expected_full_model
 
     # Plan prod and backfill
     result = runner.invoke(
