@@ -1,8 +1,10 @@
+import typing as t
 import dlt
+
 
 # Example sushi_types table
 @dlt.resource(name="sushi_types", primary_key="id", write_disposition="merge")
-def sushi_types():
+def sushi_types() -> t.Iterator[t.Dict[str, t.Any]]:
     yield from [
         {"id": 0, "name": "Tobiko"},
         {"id": 1, "name": "Sashimi"},
@@ -10,9 +12,10 @@ def sushi_types():
         {"id": 3, "name": "Temaki"},
     ]
 
+
 # Example waiters table
 @dlt.resource(name="waiters", primary_key="id", write_disposition="merge")
-def waiters():
+def waiters() -> t.Iterator[t.Dict[str, t.Any]]:
     yield from [
         {"id": 0, "name": "Toby"},
         {"id": 1, "name": "Tyson"},
@@ -25,6 +28,7 @@ def waiters():
         {"id": 8, "name": "Emma"},
         {"id": 9, "name": "Maia"},
     ]
+
 
 # Run the pipeline
 p = dlt.pipeline(pipeline_name="sushi", destination="duckdb")

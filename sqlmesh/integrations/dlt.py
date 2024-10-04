@@ -55,11 +55,11 @@ def generate_dlt_models_and_settings(
             if col.get("primary_key"):
                 primary_key.append(str(col["name"]))
 
-        model_def_columns = (
-            f"\n  columns ({',\n    '.join(f'{name} {data_type.sql(dialect=dialect)}' for name, data_type in dlt_columns.items())}\n  ),"
-            if dlt_columns
-            else ""
+        columns_str = ",\n    ".join(
+            f"{name} {data_type.sql(dialect=dialect)}" for name, data_type in dlt_columns.items()
         )
+        model_def_columns = f"\n  columns ({columns_str}\n  )," if columns_str else ""
+
         select_columns = (
             ",\n".join(f"  {column_name}" for column_name in dlt_columns) if dlt_columns else ""
         )
