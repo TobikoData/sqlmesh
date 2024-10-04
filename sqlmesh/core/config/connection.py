@@ -173,18 +173,20 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
         from duckdb import BinderException
 
         def init(cursor: duckdb.DuckDBPyConnection) -> None:
+            for field, setting in self.connector_config.items():
+                try:
+                    cursor.execute(f"SET {field} = '{setting}'")
+                except Exception as e:
+                    raise ConfigError(
+                        f"Failed to set connector config {field} to {setting}: {e}"
+                    )
+
             for extension in self.extensions:
                 try:
                     cursor.execute(f"INSTALL {extension}")
                     cursor.execute(f"LOAD {extension}")
                 except Exception as e:
                     raise ConfigError(f"Failed to load extension {extension}: {e}")
-
-            for field, setting in self.connector_config.items():
-                try:
-                    cursor.execute(f"SET {field} = '{setting}'")
-                except Exception as e:
-                    raise ConfigError(f"Failed to set connector config {field} to {setting}: {e}")
 
             for i, (alias, path_options) in enumerate(
                 (getattr(self, "catalogs", None) or {}).items()
