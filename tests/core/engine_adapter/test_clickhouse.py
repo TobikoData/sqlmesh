@@ -343,6 +343,98 @@ def test_model_properties(adapter: ClickhouseEngineAdapter):
     )
 
 
+def test_partitioned_by_expr(make_mocked_engine_adapter: t.Callable):
+    model = load_sql_based_model(
+        parse(
+            """
+        MODEL (
+            name foo,
+            dialect clickhouse,
+            kind INCREMENTAL_BY_TIME_RANGE(
+              time_column ds
+            )
+        );
+
+        select
+            *
+        from bar;
+        """,
+            default_dialect="clickhouse",
+        )
+    )
+
+    assert model.partitioned_by == [exp.func("toMonday", '"ds"')]
+
+    model = load_sql_based_model(
+        parse(
+            """
+        MODEL (
+            name foo,
+            dialect clickhouse,
+            kind INCREMENTAL_BY_TIME_RANGE(
+              time_column ds
+            ),
+            partitioned_by x
+        );
+
+        select
+            *
+        from bar;
+        """,
+            default_dialect="clickhouse",
+        )
+    )
+
+    assert model.partitioned_by == [exp.func("toMonday", '"ds"'), exp.column("x", quoted=True)]
+
+    model = load_sql_based_model(
+        parse(
+            """
+        MODEL (
+            name foo,
+            dialect clickhouse,
+            kind INCREMENTAL_BY_TIME_RANGE(
+              time_column ds
+            ),
+            partitioned_by toStartOfWeek(ds)
+        );
+
+        select
+            *
+        from bar;
+        """,
+            default_dialect="clickhouse",
+        )
+    )
+
+    assert model.partitioned_by == [exp.func("toStartOfWeek", '"ds"')]
+
+
+def test_nullable_partition_cols(make_mocked_engine_adapter: t.Callable, mocker):
+    adapter = make_mocked_engine_adapter(ClickhouseEngineAdapter)
+
+    columns_to_types = {
+        "cola": exp.DataType.build("INT"),
+        "colb": exp.DataType.build("TEXT"),
+    }
+
+    adapter.create_table(
+        "test_table",
+        columns_to_types,
+    )
+
+    adapter.create_table(
+        "test_table",
+        columns_to_types,
+        partitioned_by=[exp.to_column("colb")],
+    )
+
+    assert to_sql_calls(adapter) == [
+        'CREATE TABLE IF NOT EXISTS "test_table" ("cola" Nullable(Int32), "colb" Nullable(String)) ENGINE=MergeTree ORDER BY ()',
+        'CREATE TABLE IF NOT EXISTS "test_table" ("cola" Nullable(Int32), "colb" String) ENGINE=MergeTree ORDER BY () PARTITION BY ("colb")',
+    ]
+
+
 def test_create_table_properties(make_mocked_engine_adapter: t.Callable, mocker):
     adapter = make_mocked_engine_adapter(ClickhouseEngineAdapter)
 
@@ -417,8 +509,10 @@ def test_scd_type_2_by_time(
 
     temp_table_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter._get_temp_table")
     table_name = "target"
-    temp_table_id = "abcdefgh"
-    temp_table_mock.return_value = make_temp_table_name(table_name, temp_table_id)
+    temp_table_mock.side_effect = [
+        make_temp_table_name(table_name, "abcd"),
+        make_temp_table_name(table_name, "efgh"),
+    ]
 
     # The SCD query we build must specify the setting join_use_nulls = 1. We need to ensure that our
     # setting on the outer query doesn't override the value the user expects.
@@ -454,7 +548,7 @@ def test_scd_type_2_by_time(
 
     assert to_sql_calls(adapter)[4] == parse_one(
         """
-INSERT INTO "target" ("id", "name", "price", "test_UPDATED_at", "test_valid_from", "test_valid_to")
+INSERT INTO "__temp_target_efgh" ("id", "name", "price", "test_UPDATED_at", "test_valid_from", "test_valid_to")
 WITH "source" AS (
   SELECT DISTINCT ON (COALESCE("id", '') || '|' || COALESCE("name", ''), COALESCE("name", ''))
     TRUE AS "_exists",
@@ -479,7 +573,7 @@ WITH "source" AS (
     "test_valid_from",
     "test_valid_to",
     TRUE AS "_exists"
-  FROM ""__temp_target_abcdefgh""
+  FROM ""__temp_target_abcd""
   WHERE
     NOT "test_valid_to" IS NULL
 ), "latest" AS (
@@ -491,7 +585,7 @@ WITH "source" AS (
     "test_valid_from",
     "test_valid_to",
     TRUE AS "_exists"
-  FROM ""__temp_target_abcdefgh""
+  FROM ""__temp_target_abcd""
   WHERE
     "test_valid_to" IS NULL
 ), "deleted" AS (
@@ -624,8 +718,10 @@ def test_scd_type_2_by_column(
 
     temp_table_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter._get_temp_table")
     table_name = "target"
-    temp_table_id = "abcdefgh"
-    temp_table_mock.return_value = make_temp_table_name(table_name, temp_table_id)
+    temp_table_mock.side_effect = [
+        make_temp_table_name(table_name, "abcd"),
+        make_temp_table_name(table_name, "efgh"),
+    ]
 
     # The SCD query we build must specify the setting join_use_nulls = 1. We need to ensure that our
     # setting on the outer query doesn't override the value the user expects.
@@ -654,7 +750,7 @@ def test_scd_type_2_by_column(
 
     assert to_sql_calls(adapter)[4] == parse_one(
         """
-INSERT INTO "target" ("id", "name", "price", "test_VALID_from", "test_valid_to")
+INSERT INTO "__temp_target_efgh" ("id", "name", "price", "test_VALID_from", "test_valid_to")
 WITH "source" AS (
   SELECT DISTINCT ON ("id")
     TRUE AS "_exists",
@@ -677,7 +773,7 @@ WITH "source" AS (
     "test_VALID_from",
     "test_valid_to",
     TRUE AS "_exists"
-  FROM "__temp_target_abcdefgh"
+  FROM "__temp_target_abcd"
   WHERE
     NOT "test_valid_to" IS NULL
 ), "latest" AS (
@@ -688,7 +784,7 @@ WITH "source" AS (
     "test_VALID_from",
     "test_valid_to",
     TRUE AS "_exists"
-  FROM "__temp_target_abcdefgh"
+  FROM "__temp_target_abcd"
   WHERE
     "test_valid_to" IS NULL
 ), "deleted" AS (

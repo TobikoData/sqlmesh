@@ -339,6 +339,7 @@ class EngineAdapter:
                 exists=True,
                 table_description=table_description,
                 column_descriptions=column_descriptions,
+                **kwargs,
             )
         # All engines support `CREATE TABLE AS` so we use that if the table doesn't already exist and we
         # use `CREATE OR REPLACE TABLE AS` if the engine supports it
@@ -1284,6 +1285,7 @@ class EngineAdapter:
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         where: t.Optional[exp.Condition] = None,
         insert_overwrite_strategy_override: t.Optional[InsertOverwriteStrategy] = None,
+        **kwargs: t.Any,
     ) -> None:
         table = exp.to_table(table_name)
         insert_overwrite_strategy = (

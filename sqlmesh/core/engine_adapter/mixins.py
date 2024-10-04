@@ -74,6 +74,7 @@ class InsertOverwriteWithMergeMixin(EngineAdapter):
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         where: t.Optional[exp.Condition] = None,
         insert_overwrite_strategy_override: t.Optional[InsertOverwriteStrategy] = None,
+        **kwargs: t.Any,
     ) -> None:
         """
         Some engines do not support `INSERT OVERWRITE` but instead support

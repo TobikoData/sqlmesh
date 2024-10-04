@@ -87,6 +87,7 @@ class TrinoEngineAdapter(
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         where: t.Optional[exp.Condition] = None,
         insert_overwrite_strategy_override: t.Optional[InsertOverwriteStrategy] = None,
+        **kwargs: t.Any,
     ) -> None:
         catalog = exp.to_table(table_name).catalog or self.get_current_catalog()
 
