@@ -4,6 +4,7 @@ import asyncio
 import logging
 import os
 import typing as t
+from contextlib import asynccontextmanager
 from functools import lru_cache
 from pathlib import Path
 
@@ -83,19 +84,19 @@ async def get_path_to_model_mapping(
     settings: Settings = Depends(get_settings),
 ) -> dict[Path, Model]:
     try:
-        context = await get_loaded_context(settings)
+        async with asynccontextmanager(get_loaded_context)(settings) as context:
+            return _get_path_to_model_mapping(context)
     except Exception:
         logger.exception("Error creating a context")
         return {}
-    return _get_path_to_model_mapping(context)
 
 
-async def get_loaded_context(settings: Settings = Depends(get_settings)) -> Context:
+async def get_loaded_context(settings: Settings = Depends(get_settings)) -> t.AsyncGenerator:
     loop = asyncio.get_running_loop()
 
     try:
         async with get_context_lock:
-            return await loop.run_in_executor(
+            yield await loop.run_in_executor(
                 None,
                 _get_loaded_context,
                 settings.project_path,
