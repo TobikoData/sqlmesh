@@ -26,7 +26,7 @@ This will create the configuration file and directories, which are found in all 
 - ./macros
     - Macro files. Refer to [macros](../concepts/macros/overview.md).
 
-SQLMesh will also automatically generate models to ingest data from the pipeline incrementally. Incremental loading is ideal for large datasets where recomputing entire tables is resource-intensive. In this case utilizing the [`INCREMENTAL_BY_UNIQUE_KEY` model kind](../concepts/models/model_kinds.md#incremental_by_unique_key) with the unique `_dlt_load_id` key present in each dlt table. However, these model definitions can be customized to meet your specific project needs.
+SQLMesh will also automatically generate models to ingest data from the pipeline incrementally. Incremental loading is ideal for large datasets where recomputing entire tables is resource-intensive. In this case utilizing the [`INCREMENTAL_BY_TIME_RANGE` model kind](../concepts/models/model_kinds.md#incremental_by_time_range). However, these model definitions can be customized to meet your specific project needs.
 
 #### Configuration
 
