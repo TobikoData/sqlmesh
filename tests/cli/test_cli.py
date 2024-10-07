@@ -10,6 +10,7 @@ from freezegun import freeze_time
 from sqlmesh.cli.example_project import ProjectTemplate, init_example_project
 from sqlmesh.cli.main import cli
 from sqlmesh.core.context import Context
+from sqlmesh.utils.date import yesterday_ds
 
 FREEZE_TIME = "2023-01-01 00:00:00"
 
@@ -697,7 +698,7 @@ default_gateway: local
 
 model_defaults:
   dialect: duckdb
-  start: 2024-10-03
+  start: {yesterday_ds()}
 """
 
     with open(tmp_path / "config.yaml") as file:
@@ -705,13 +706,14 @@ model_defaults:
 
     expected_incremental_model = """MODEL (
   name sushi_dataset_sqlmesh.incremental_sushi_types,
-  kind INCREMENTAL_BY_UNIQUE_KEY (
-    unique_key _dlt_id,
+  kind INCREMENTAL_BY_TIME_RANGE (
+    time_column _dlt_load_time,
   ),
   columns (id BIGINT,
     name TEXT,
     _dlt_load_id TEXT,
-    _dlt_id TEXT
+    _dlt_id TEXT,
+    _dlt_load_time TIMESTAMP
   ),
   grain (id),
 );
@@ -720,9 +722,12 @@ SELECT
   id,
   name,
   _dlt_load_id,
-  _dlt_id
+  _dlt_id,
+  TO_TIMESTAMP(CAST(_dlt_load_id AS DOUBLE)) as _dlt_load_time
 FROM
   sushi_dataset.sushi_types
+WHERE
+  _dlt_load_time BETWEEN @start_ds AND @end_ds
 """
 
     with open(tmp_path / "models/incremental_sushi_types.sql") as file:
@@ -730,14 +735,15 @@ FROM
 
     expected_dlt_loads_model = """MODEL (
   name sushi_dataset_sqlmesh.incremental__dlt_loads,
-  kind INCREMENTAL_BY_UNIQUE_KEY (
-    unique_key load_id,
+  kind INCREMENTAL_BY_TIME_RANGE (
+    time_column _dlt_load_time,
   ),
   columns (load_id TEXT,
     schema_name TEXT,
     status BIGINT,
     inserted_at TIMESTAMP,
-    schema_version_hash TEXT
+    schema_version_hash TEXT,
+    _dlt_load_time TIMESTAMP
   ),
 );
 
@@ -746,9 +752,12 @@ SELECT
   schema_name,
   status,
   inserted_at,
-  schema_version_hash
+  schema_version_hash,
+  TO_TIMESTAMP(CAST(load_id AS DOUBLE)) as _dlt_load_time
 FROM
   sushi_dataset._dlt_loads
+WHERE
+  _dlt_load_time BETWEEN @start_ds AND @end_ds
 """
 
     with open(tmp_path / "models/incremental__dlt_loads.sql") as file:

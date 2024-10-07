@@ -17,7 +17,10 @@ class ProjectTemplate(Enum):
 
 
 def _gen_config(
-    dialect: t.Optional[str], settings: t.Optional[str], template: ProjectTemplate
+    dialect: t.Optional[str],
+    settings: t.Optional[str],
+    start: t.Optional[str],
+    template: ProjectTemplate,
 ) -> str:
     connection_settings = (
         settings
@@ -35,7 +38,7 @@ default_gateway: local
 
 model_defaults:
   dialect: {dialect}
-  start: {yesterday_ds()}
+  start: {start or yesterday_ds()}
 """,
         ProjectTemplate.AIRFLOW: f"""gateways:
   local:
@@ -188,15 +191,16 @@ def init_example_project(
 
     models = None
     settings = None
+    start = None
     if template == ProjectTemplate.DLT:
         if pipeline and dialect:
-            models, settings = generate_dlt_models_and_settings(pipeline, dialect)
+            models, settings, start = generate_dlt_models_and_settings(pipeline, dialect)
         else:
             raise click.ClickException(
                 "DLT pipeline is a required argument to generate a SQLMesh project from DLT"
             )
 
-    _create_config(config_path, dialect, settings, template)
+    _create_config(config_path, dialect, settings, start, template)
     if template == ProjectTemplate.DBT:
         return
 
@@ -224,12 +228,13 @@ def _create_config(
     config_path: Path,
     dialect: t.Optional[str],
     settings: t.Optional[str],
+    start: t.Optional[str],
     template: ProjectTemplate,
 ) -> None:
     if dialect:
         Dialect.get_or_raise(dialect)
 
-    project_config = _gen_config(dialect, settings, template)
+    project_config = _gen_config(dialect, settings, start, template)
 
     _write_file(
         config_path,
