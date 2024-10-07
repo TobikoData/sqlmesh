@@ -106,9 +106,6 @@ setup(
         "dbt": [
             "dbt-core<2",
         ],
-        "dlt": [
-            "dlt>=1.1.0",
-        ],
         "gcppostgres": [
             "cloud-sql-python-connector[pg8000]",
         ],
