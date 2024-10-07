@@ -1,7 +1,7 @@
 .PHONY: docs
 
 install-dev:
-	pip3 install -e ".[dev,web,slack]"
+	pip3 install -e ".[dev,web,slack,dlt]"
 
 install-cicd-test:
 	pip3 install -e ".[dev,web,slack,cicdtest,dlt]"
