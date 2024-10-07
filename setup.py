@@ -67,7 +67,6 @@ setup(
             "dbt-duckdb>=1.7.1",
             "dbt-snowflake",
             "dbt-bigquery",
-            "dlt",
             "Faker",
             "google-auth",
             "google-cloud-bigquery",
