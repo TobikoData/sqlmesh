@@ -1065,7 +1065,6 @@ class PostgresConnectionConfig(ConnectionConfig):
             "database",
             "keepalives_idle",
             "connect_timeout",
-            "role",
             "sslmode",
         }
 
@@ -1078,6 +1077,16 @@ class PostgresConnectionConfig(ConnectionConfig):
         from psycopg2 import connect
 
         return connect
+
+    @property
+    def _cursor_init(self) -> t.Optional[t.Callable[[t.Any], None]]:
+        if not self.role:
+            return None
+
+        def init(cursor: t.Any) -> None:
+            cursor.execute(f"SET ROLE {self.role}")
+
+        return init
 
 
 class MySQLConnectionConfig(ConnectionConfig):
