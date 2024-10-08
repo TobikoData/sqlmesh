@@ -5,6 +5,7 @@ SQLMesh supports integrations with the following tools:
 
 * [Airflow](airflow.md)
 * [dbt](dbt.md)
+* [dlt](dlt.md)
 * [GitHub Actions](github.md)
 * [Kestra](https://kestra.io/plugins/plugin-sqlmesh/tasks/cli/io.kestra.plugin.sqlmesh.cli.sqlmeshcli)
 

@@ -4,35 +4,46 @@ from pathlib import Path
 
 import click
 from sqlglot import Dialect
+from sqlmesh.integrations.dlt import generate_dlt_models_and_settings
 from sqlmesh.utils.date import yesterday_ds
 
 
 class ProjectTemplate(Enum):
     AIRFLOW = "airflow"
     DBT = "dbt"
+    DLT = "dlt"
     DEFAULT = "default"
     EMPTY = "empty"
 
 
-def _gen_config(dialect: t.Optional[str], template: ProjectTemplate) -> str:
+def _gen_config(
+    dialect: t.Optional[str],
+    settings: t.Optional[str],
+    start: t.Optional[str],
+    template: ProjectTemplate,
+) -> str:
+    connection_settings = (
+        settings
+        or """      type: duckdb
+      database: db.db"""
+    )
+
     default_configs = {
         ProjectTemplate.DEFAULT: f"""gateways:
   local:
     connection:
-      type: duckdb
-      database: db.db
+{connection_settings}
 
 default_gateway: local
 
 model_defaults:
   dialect: {dialect}
-  start: {yesterday_ds()}
+  start: {start or yesterday_ds()}
 """,
         ProjectTemplate.AIRFLOW: f"""gateways:
   local:
     connection:
-      type: duckdb
-      database: db.db
+      {connection_settings}
 
 default_gateway: local
 
@@ -55,6 +66,7 @@ config = sqlmesh_config(Path(__file__).parent)
     }
 
     default_configs[ProjectTemplate.EMPTY] = default_configs[ProjectTemplate.DEFAULT]
+    default_configs[ProjectTemplate.DLT] = default_configs[ProjectTemplate.DEFAULT]
     return default_configs[template]
 
 
@@ -158,6 +170,7 @@ def init_example_project(
     path: t.Union[str, Path],
     dialect: t.Optional[str],
     template: ProjectTemplate = ProjectTemplate.DEFAULT,
+    pipeline: t.Optional[str] = None,
 ) -> None:
     root_path = Path(path)
     config_extension = "py" if template == ProjectTemplate.DBT else "yaml"
@@ -176,11 +189,26 @@ def init_example_project(
             "Default SQL dialect is a required argument for SQLMesh projects"
         )
 
-    _create_config(config_path, dialect, template)
+    models = None
+    settings = None
+    start = None
+    if template == ProjectTemplate.DLT:
+        if pipeline and dialect:
+            models, settings, start = generate_dlt_models_and_settings(pipeline, dialect)
+        else:
+            raise click.ClickException(
+                "DLT pipeline is a required argument to generate a SQLMesh project from DLT"
+            )
+
+    _create_config(config_path, dialect, settings, start, template)
     if template == ProjectTemplate.DBT:
         return
 
     _create_folders([audits_path, macros_path, models_path, seeds_path, tests_path])
+
+    if template == ProjectTemplate.DLT:
+        _create_models(models_path, models)
+        return
 
     if template != ProjectTemplate.EMPTY:
         _create_macros(macros_path)
@@ -196,11 +224,17 @@ def _create_folders(target_folders: t.Sequence[Path]) -> None:
         (folder_path / ".gitkeep").touch()
 
 
-def _create_config(config_path: Path, dialect: t.Optional[str], template: ProjectTemplate) -> None:
+def _create_config(
+    config_path: Path,
+    dialect: t.Optional[str],
+    settings: t.Optional[str],
+    start: t.Optional[str],
+    template: ProjectTemplate,
+) -> None:
     if dialect:
         Dialect.get_or_raise(dialect)
 
-    project_config = _gen_config(dialect, template)
+    project_config = _gen_config(dialect, settings, start, template)
 
     _write_file(
         config_path,
@@ -216,8 +250,8 @@ def _create_audits(audits_path: Path) -> None:
     _write_file(audits_path / "assert_positive_order_ids.sql", EXAMPLE_AUDIT)
 
 
-def _create_models(models_path: Path) -> None:
-    for model_name, model_def in [
+def _create_models(models_path: Path, models: t.Optional[t.Set[t.Tuple[str, str]]] = None) -> None:
+    for model_name, model_def in models or [
         (EXAMPLE_FULL_MODEL_NAME, EXAMPLE_FULL_MODEL_DEF),
         (EXAMPLE_INCREMENTAL_MODEL_NAME, EXAMPLE_INCREMENTAL_MODEL_DEF),
         (EXAMPLE_SEED_MODEL_NAME, EXAMPLE_SEED_MODEL_DEF),
