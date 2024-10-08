@@ -62,8 +62,9 @@ def generate_dlt_models_and_settings(
         )
 
         dlt_columns["_dlt_load_time"] = exp.DataType.build("TIMESTAMP", dialect=dialect)
-        columns_str = ",\n    ".join(
-            f"{name} {data_type.sql(dialect=dialect)}" for name, data_type in dlt_columns.items()
+        columns_str = ",".join(
+            f"\n    {name} {data_type.sql(dialect=dialect)}"
+            for name, data_type in dlt_columns.items()
         )
         model_def_columns = f"\n  columns ({columns_str}\n  )," if columns_str else ""
 

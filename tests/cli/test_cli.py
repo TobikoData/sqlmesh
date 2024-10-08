@@ -709,7 +709,8 @@ model_defaults:
   kind INCREMENTAL_BY_TIME_RANGE (
     time_column _dlt_load_time,
   ),
-  columns (id BIGINT,
+  columns (
+    id BIGINT,
     name TEXT,
     _dlt_load_id TEXT,
     _dlt_id TEXT,
@@ -738,7 +739,8 @@ WHERE
   kind INCREMENTAL_BY_TIME_RANGE (
     time_column _dlt_load_time,
   ),
-  columns (load_id TEXT,
+  columns (
+    load_id TEXT,
     schema_name TEXT,
     status BIGINT,
     inserted_at TIMESTAMP,
