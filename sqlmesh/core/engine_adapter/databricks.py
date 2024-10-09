@@ -15,6 +15,7 @@ from sqlmesh.core.engine_adapter.shared import (
     SourceQuery,
 )
 from sqlmesh.core.engine_adapter.spark import SparkEngineAdapter
+from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.schema_diff import SchemaDiffer
 from sqlmesh.utils.errors import SQLMeshError
 
@@ -252,3 +253,35 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
 
     def wap_supported(self, table_name: TableName) -> bool:
         return False
+
+    def _build_table_properties_exp(
+        self,
+        catalog_name: t.Optional[str] = None,
+        table_format: t.Optional[str] = None,
+        storage_format: t.Optional[str] = None,
+        partitioned_by: t.Optional[t.List[exp.Expression]] = None,
+        partition_interval_unit: t.Optional[IntervalUnit] = None,
+        clustered_by: t.Optional[t.List[str]] = None,
+        table_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        table_description: t.Optional[str] = None,
+        table_kind: t.Optional[str] = None,
+    ) -> t.Optional[exp.Properties]:
+        properties = super()._build_table_properties_exp(
+            catalog_name=catalog_name,
+            table_format=table_format,
+            storage_format=storage_format,
+            partitioned_by=partitioned_by,
+            partition_interval_unit=partition_interval_unit,
+            clustered_by=clustered_by,
+            table_properties=table_properties,
+            columns_to_types=columns_to_types,
+            table_description=table_description,
+            table_kind=table_kind,
+        )
+        if clustered_by:
+            clustered_by_exp = exp.Cluster(expressions=[exp.column(col) for col in clustered_by])
+            expressions = properties.expressions if properties else []
+            expressions.append(clustered_by_exp)
+            properties = exp.Properties(expressions=expressions)
+        return properties
