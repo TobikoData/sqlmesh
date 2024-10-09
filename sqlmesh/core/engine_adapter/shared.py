@@ -164,6 +164,13 @@ class DataObject(PydanticModel):
     name: str
     type: DataObjectType
 
+    # for type=DataObjectType.Table, only if the DB supports it
+    clustering_key: t.Optional[str] = None
+
+    @property
+    def is_clustered(self) -> bool:
+        return bool(self.clustering_key)
+
 
 class CatalogSupport(Enum):
     UNSUPPORTED = 1
