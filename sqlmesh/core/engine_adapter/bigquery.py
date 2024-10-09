@@ -5,7 +5,7 @@ import typing as t
 from collections import defaultdict
 
 import pandas as pd
-from sqlglot import exp
+from sqlglot import exp, parse_one
 from sqlglot.transforms import remove_precision_parameterized_types
 
 from sqlmesh.core.dialect import to_schema
@@ -39,6 +39,9 @@ logger = logging.getLogger(__name__)
 
 NestedField = t.Tuple[str, str, t.List[str]]
 NestedFieldsDict = t.Dict[str, t.List[NestedField]]
+
+# used to tag AST nodes to be specially handled in alter_table()
+_CLUSTERING_META_KEY = "__sqlmesh_update_table_clustering"
 
 
 @set_catalog()
@@ -242,6 +245,18 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin):
 
         if nested_fields:
             self._update_table_schema_nested_fields(nested_fields, alter_expressions[0].this)
+
+        # this is easier than trying to detect exp.Cluster nodes
+        # or exp.Command nodes that contain the string "DROP CLUSTERING KEY"
+        clustering_change_operations = [
+            e for e in non_nested_expressions if _CLUSTERING_META_KEY in e.meta
+        ]
+        for op in clustering_change_operations:
+            non_nested_expressions.remove(op)
+            table, cluster_by = op.meta[_CLUSTERING_META_KEY]
+            assert isinstance(table, str) or isinstance(table, exp.Table)
+
+            self._update_clustering_key(table, cluster_by)
 
         if non_nested_expressions:
             super().alter_table(non_nested_expressions)
@@ -847,25 +862,55 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin):
         # resort to using SQL instead.
         schema = to_schema(schema_name)
         catalog = schema.catalog or self.default_catalog
-        query = exp.select(
-            exp.column("table_catalog").as_("catalog"),
-            exp.column("table_name").as_("name"),
-            exp.column("table_schema").as_("schema_name"),
-            exp.case()
-            .when(exp.column("table_type").eq("BASE TABLE"), exp.Literal.string("TABLE"))
-            .when(exp.column("table_type").eq("CLONE"), exp.Literal.string("TABLE"))
-            .when(exp.column("table_type").eq("EXTERNAL"), exp.Literal.string("TABLE"))
-            .when(exp.column("table_type").eq("SNAPSHOT"), exp.Literal.string("TABLE"))
-            .when(exp.column("table_type").eq("VIEW"), exp.Literal.string("VIEW"))
-            .when(
-                exp.column("table_type").eq("MATERIALIZED VIEW"),
-                exp.Literal.string("MATERIALIZED_VIEW"),
+        query = (
+            exp.select(
+                exp.column("table_catalog").as_("catalog"),
+                exp.column("table_name").as_("name"),
+                exp.column("table_schema").as_("schema_name"),
+                exp.case()
+                .when(exp.column("table_type").eq("BASE TABLE"), exp.Literal.string("TABLE"))
+                .when(exp.column("table_type").eq("CLONE"), exp.Literal.string("TABLE"))
+                .when(exp.column("table_type").eq("EXTERNAL"), exp.Literal.string("TABLE"))
+                .when(exp.column("table_type").eq("SNAPSHOT"), exp.Literal.string("TABLE"))
+                .when(exp.column("table_type").eq("VIEW"), exp.Literal.string("VIEW"))
+                .when(
+                    exp.column("table_type").eq("MATERIALIZED VIEW"),
+                    exp.Literal.string("MATERIALIZED_VIEW"),
+                )
+                .else_(exp.column("table_type"))
+                .as_("type"),
+                exp.column("clustering_key", "ci").as_("clustering_key"),
             )
-            .else_(exp.column("table_type"))
-            .as_("type"),
-        ).from_(
-            exp.to_table(
-                f"`{catalog}`.`{schema.db}`.INFORMATION_SCHEMA.TABLES", dialect=self.dialect
+            .with_(
+                "clustering_info",
+                as_=exp.select(
+                    exp.column("table_catalog"),
+                    exp.column("table_schema"),
+                    exp.column("table_name"),
+                    parse_one(
+                        "string_agg(column_name order by clustering_ordinal_position)",
+                        dialect=self.dialect,
+                    ).as_("clustering_key"),
+                )
+                .from_(
+                    exp.to_table(
+                        f"`{catalog}`.`{schema.db}`.INFORMATION_SCHEMA.COLUMNS",
+                        dialect=self.dialect,
+                    )
+                )
+                .where(exp.column("clustering_ordinal_position").is_(exp.not_(exp.null())))
+                .group_by("1", "2", "3"),
+            )
+            .from_(
+                exp.to_table(
+                    f"`{catalog}`.`{schema.db}`.INFORMATION_SCHEMA.TABLES", dialect=self.dialect
+                )
+            )
+            .join(
+                "clustering_info",
+                using=["table_catalog", "table_schema", "table_name"],
+                join_type="left",
+                join_alias="ci",
             )
         )
         if object_names:
@@ -886,9 +931,40 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin):
                 schema=row.schema_name,  # type: ignore
                 name=row.name,  # type: ignore
                 type=DataObjectType.from_str(row.type),  # type: ignore
+                clustering_key=f"({row.clustering_key})" if row.clustering_key else None,  # type: ignore
             )
             for row in df.itertuples()
         ]
+
+    def _change_clustering_key_expr(
+        self, table: exp.Table, cluster_by: t.List[exp.Expression]
+    ) -> exp.Alter:
+        expr = super()._change_clustering_key_expr(table=table, cluster_by=cluster_by)
+        expr.meta[_CLUSTERING_META_KEY] = (table, cluster_by)
+        return expr
+
+    def _drop_clustering_key_expr(self, table: exp.Table) -> exp.Alter:
+        expr = super()._drop_clustering_key_expr(table=table)
+        expr.meta[_CLUSTERING_META_KEY] = (table, None)
+        return expr
+
+    def _update_clustering_key(
+        self, table_name: TableName, cluster_by: t.Optional[t.List[exp.Expression]]
+    ) -> None:
+        cluster_by = cluster_by or []
+        bq_table = self._get_table(table_name)
+
+        rendered_columns = [c.sql(dialect=self.dialect) for c in cluster_by]
+        bq_table.clustering_fields = (
+            rendered_columns or None
+        )  # causes a drop of the key if cluster_by is empty or None
+
+        self._db_call(self.client.update_table, table=bq_table, fields=["clustering_fields"])
+
+        if cluster_by:
+            # BigQuery only applies new clustering going forward, so this rewrites the columns to apply the new clustering to historical data
+            # ref: https://cloud.google.com/bigquery/docs/creating-clustered-tables#modifying-cluster-spec
+            self.execute(exp.update(table_name, {c: c for c in cluster_by}, where=exp.true()))
 
     @property
     def _query_data(self) -> t.Any:
@@ -971,7 +1047,7 @@ def select_partitions_expr(
     """Generates a SQL expression that aggregates partition values for a table.
 
     Args:
-        schema: The schema (BigQueyr dataset) of the table.
+        schema: The schema (BigQuery dataset) of the table.
         table_name: The name of the table.
         data_type: The data type of the partition column.
         granularity: The granularity of the partition. Supported values are: 'day', 'month', 'year' and 'hour'.
