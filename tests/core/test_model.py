@@ -5922,3 +5922,38 @@ def test_cache():
     model = load_sql_based_model(expressions)
     assert model.depends_on == {'"y"'}
     assert model.copy(update={"depends_on_": {'"z"'}}).depends_on == {'"z"', '"y"'}
+
+
+def test_snowflake_macro_func_as_table(tmp_path: Path):
+    init_example_project(tmp_path, dialect="duckdb")
+
+    custom_macro_file = tmp_path / "macros/custom_macros.py"
+    custom_macro_file.parent.mkdir(parents=True, exist_ok=True)
+    custom_macro_file.write_text("""
+from sqlmesh import macro
+
+@macro()
+def custom_macro(evaluator, arg1, arg2):
+    return f"{arg1}{arg2}"
+    """)
+
+    new_snowflake_model_file = tmp_path / "models/new_model.sql"
+    new_snowflake_model_file.parent.mkdir(parents=True, exist_ok=True)
+    new_snowflake_model_file.write_text("""
+MODEL (
+  name sqlmesh_example.test,
+  dialect snowflake,
+);
+
+@DEF(foo, foo);
+@DEF(bar, bar);
+
+SELECT * FROM @custom_macro(@foo, @bar)
+    """)
+
+    config = Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))
+    context = Context(paths=tmp_path, config=config)
+
+    query = context.get_model("sqlmesh_example.test").render_query()
+
+    assert t.cast(exp.Query, query).sql("snowflake") == 'SELECT * FROM "FOOBAR" AS "FOOBAR"'
