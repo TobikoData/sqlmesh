@@ -68,6 +68,7 @@ class MSSQLEngineAdapter(
             exp.DataType.build("NVARCHAR", dialect=DIALECT).this: 2147483647,
         },
     )
+    VARIABLE_LENGTH_DATA_TYPES = {"binary", "varbinary", "char", "varchar", "nchar", "nvarchar"}
 
     def columns(
         self,
@@ -95,8 +96,6 @@ class MSSQLEngineAdapter(
 
         columns_raw = self.fetchall(sql, quote_identifiers=True)
 
-        var_len_types = {"binary", "varbinary", "char", "varchar", "nchar", "nvarchar"}
-
         def build_var_length_col(
             column_name: str,
             data_type: str,
@@ -106,7 +105,7 @@ class MSSQLEngineAdapter(
         ) -> tuple:
             data_type = data_type.lower()
             if (
-                data_type in var_len_types
+                data_type in self.VARIABLE_LENGTH_DATA_TYPES
                 and character_maximum_length is not None
                 and character_maximum_length > 0
             ):

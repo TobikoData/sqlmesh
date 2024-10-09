@@ -54,6 +54,17 @@ class RedshiftEngineAdapter(
             exp.DataType.build("VARCHAR", dialect=DIALECT).this: 65535,
         },
     )
+    VARIABLE_LENGTH_DATA_TYPES = {
+        "char",
+        "character",
+        "nchar",
+        "varchar",
+        "character varying",
+        "nvarchar",
+        "varbyte",
+        "varbinary",
+        "binary varying",
+    }
 
     def columns(
         self,
@@ -78,18 +89,6 @@ class RedshiftEngineAdapter(
 
         columns_raw = self.fetchall(sql, quote_identifiers=True)
 
-        var_len_types = {
-            "char",
-            "character",
-            "nchar",
-            "varchar",
-            "character varying",
-            "nvarchar",
-            "varbyte",
-            "varbinary",
-            "binary varying",
-        }
-
         def build_var_length_col(
             column_name: str,
             data_type: str,
@@ -98,7 +97,10 @@ class RedshiftEngineAdapter(
             numeric_scale: t.Optional[int] = None,
         ) -> tuple:
             data_type = data_type.lower()
-            if data_type in var_len_types and character_maximum_length is not None:
+            if (
+                data_type in self.VARIABLE_LENGTH_DATA_TYPES
+                and character_maximum_length is not None
+            ):
                 return (column_name, f"{data_type}({character_maximum_length})")
             if data_type in ("decimal", "numeric"):
                 return (column_name, f"{data_type}({numeric_precision}, {numeric_scale})")
