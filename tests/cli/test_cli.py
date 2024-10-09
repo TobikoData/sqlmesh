@@ -728,7 +728,7 @@ SELECT
 FROM
   sushi_dataset.sushi_types
 WHERE
-  _dlt_load_time BETWEEN @start_ds AND @end_ds
+  TO_TIMESTAMP(CAST(_dlt_load_id AS DOUBLE)) BETWEEN @start_ds AND @end_ds
 """
 
     with open(tmp_path / "models/incremental_sushi_types.sql") as file:
@@ -759,7 +759,7 @@ SELECT
 FROM
   sushi_dataset._dlt_loads
 WHERE
-  _dlt_load_time BETWEEN @start_ds AND @end_ds
+  TO_TIMESTAMP(CAST(load_id AS DOUBLE)) BETWEEN @start_ds AND @end_ds
 """
 
     with open(tmp_path / "models/incremental__dlt_loads.sql") as file:
