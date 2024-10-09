@@ -1,6 +1,7 @@
 import React from 'react'
 import { Disclosure } from '@headlessui/react'
 import { MinusCircleIcon, PlusCircleIcon } from '@heroicons/react/24/solid'
+import Markdown from 'react-markdown'
 import {
   isArrayNotEmpty,
   isFalse,
@@ -69,7 +70,7 @@ const Documentation = function Documentation({
           headline="Description"
           defaultOpen={true}
         >
-          {model.description ?? 'No description'}
+          <Markdown>{model.description ?? 'No description'}</Markdown>
         </Section>
       )}
       {withColumns && (
