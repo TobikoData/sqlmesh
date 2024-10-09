@@ -111,7 +111,7 @@ SELECT
 FROM
   {from_table}
 WHERE
-  _dlt_load_time BETWEEN @start_ds AND @end_ds
+  {time_column} BETWEEN @start_ds AND @end_ds
 """
 
 
