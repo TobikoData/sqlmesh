@@ -23,7 +23,7 @@ repos:
         files: *files
         require_serial: true
         exclude: ^(tests/fixtures)
-  - repo: https://github.com/pre-commit/mirrors-prettier
+  - repo: git@github.com:pre-commit/mirrors-prettier.git
     rev: "fc26039"
     hooks:
       - id: prettier
