@@ -4,6 +4,7 @@ import typing as t
 import pytest
 import pathlib
 import os
+import logging
 from pytest import FixtureRequest
 
 from sqlmesh import Config, EngineAdapter
@@ -13,13 +14,7 @@ from sqlmesh.core.config import load_config_from_paths
 
 from tests.core.engine_adapter.integration import TestContext, TEST_SCHEMA
 
-
-@pytest.fixture(scope="session")
-def run_count(request) -> t.Iterable[int]:
-    count: int = request.config.cache.get("run_count", 0)
-    count += 1
-    yield count
-    request.config.cache.set("run_count", count)
+logger = logging.getLogger(__name__)
 
 
 @pytest.fixture(scope="session")
@@ -39,7 +34,6 @@ def engine_adapter(
     mark_gateway: t.Tuple[str, str],
     config,
     testrun_uid: str,
-    run_count: int,
     request: pytest.FixtureRequest,
 ) -> EngineAdapter:
     mark, gateway = mark_gateway
@@ -59,13 +53,11 @@ def engine_adapter(
         # S3 files need to go into a unique location for each test run
         # This is because DROP TABLE on a Hive table just drops the table from the metastore
         # The files still exist in S3, so if you CREATE TABLE to the same location, the old data shows back up
-        # This is a problem for any tests like `test_init_project` that use a consistent schema like `sqlmesh_example` between runs
         # Note that the `testrun_uid` fixture comes from the xdist plugin
         if connection_config.s3_warehouse_location:
             engine_adapter.s3_warehouse_location = os.path.join(
                 connection_config.s3_warehouse_location,
                 f"testrun_{testrun_uid}",
-                str(run_count),
                 request.node.originalname,
             )
 
@@ -75,10 +67,12 @@ def engine_adapter(
     # in practice on production machines.
     if not mark.startswith("trino"):
         engine_adapter.DEFAULT_BATCH_SIZE = 1
+
     # Clear our any local db files that may have been left over from previous runs
     if mark == "duckdb":
         for raw_path in (connection_config.catalogs or {}).values():
             pathlib.Path(raw_path).unlink(missing_ok=True)
+
     return engine_adapter
 
 
@@ -97,7 +91,12 @@ def ctx(
 
     yield ctx
 
-    ctx.cleanup()
+    try:
+        ctx.cleanup()
+    except Exception:
+        # We need to catch this exception because if there is an error during teardown, pytest-retry aborts immediately
+        # instead of retrying
+        logger.exception("Context cleanup failed")
 
 
 @pytest.fixture

@@ -1,6 +1,7 @@
 import typing as t
 from enum import Enum
 from pathlib import Path
+from dataclasses import dataclass
 
 import click
 from sqlglot import Dialect
@@ -70,100 +71,134 @@ config = sqlmesh_config(Path(__file__).parent)
     return default_configs[template]
 
 
-EXAMPLE_SCHEMA_NAME = "sqlmesh_example"
-EXAMPLE_FULL_MODEL_NAME = f"{EXAMPLE_SCHEMA_NAME}.full_model"
-EXAMPLE_INCREMENTAL_MODEL_NAME = f"{EXAMPLE_SCHEMA_NAME}.incremental_model"
-EXAMPLE_SEED_MODEL_NAME = f"{EXAMPLE_SCHEMA_NAME}.seed_model"
+@dataclass
+class ExampleObjects:
+    schema_name: str
+    full_model_name: str
+    full_model_def: str
+    incremental_model_name: str
+    incremental_model_def: str
+    seed_model_name: str
+    seed_model_def: str
+    seed_data: str
+    audit_def: str
+    test_def: str
 
-EXAMPLE_FULL_MODEL_DEF = f"""MODEL (
-  name {EXAMPLE_FULL_MODEL_NAME},
-  kind FULL,
-  cron '@daily',
-  grain item_id,
-  audits (assert_positive_order_ids),
-);
+    def models(self) -> t.Set[t.Tuple[str, str]]:
+        return {
+            (self.full_model_name, self.full_model_def),
+            (self.incremental_model_name, self.incremental_model_def),
+            (self.seed_model_name, self.seed_model_def),
+        }
 
-SELECT
-  item_id,
-  COUNT(DISTINCT id) AS num_orders,
-FROM
-  {EXAMPLE_INCREMENTAL_MODEL_NAME}
-GROUP BY item_id
-"""
 
-EXAMPLE_INCREMENTAL_MODEL_DEF = f"""MODEL (
-  name {EXAMPLE_INCREMENTAL_MODEL_NAME},
-  kind INCREMENTAL_BY_TIME_RANGE (
-    time_column event_date
-  ),
-  start '2020-01-01',
-  cron '@daily',
-  grain (id, event_date)
-);
+def _gen_example_objects(schema_name: str) -> ExampleObjects:
+    full_model_name = f"{schema_name}.full_model"
+    incremental_model_name = f"{schema_name}.incremental_model"
+    seed_model_name = f"{schema_name}.seed_model"
 
-SELECT
-  id,
-  item_id,
-  event_date,
-FROM
-  {EXAMPLE_SEED_MODEL_NAME}
-WHERE
-  event_date BETWEEN @start_date AND @end_date
-"""
+    full_model_def = f"""MODEL (
+    name {full_model_name},
+    kind FULL,
+    cron '@daily',
+    grain item_id,
+    audits (assert_positive_order_ids),
+  );
 
-EXAMPLE_SEED_MODEL_DEF = f"""MODEL (
-  name {EXAMPLE_SEED_MODEL_NAME},
-  kind SEED (
-    path '../seeds/seed_data.csv'
-  ),
-  columns (
-    id INTEGER,
-    item_id INTEGER,
-    event_date DATE
-  ),
-  grain (id, event_date)
-);
-"""
+  SELECT
+    item_id,
+    COUNT(DISTINCT id) AS num_orders,
+  FROM
+    {incremental_model_name}
+  GROUP BY item_id
+  """
 
-EXAMPLE_AUDIT = """AUDIT (
-  name assert_positive_order_ids,
-);
+    incremental_model_def = f"""MODEL (
+    name {incremental_model_name},
+    kind INCREMENTAL_BY_TIME_RANGE (
+      time_column event_date
+    ),
+    start '2020-01-01',
+    cron '@daily',
+    grain (id, event_date)
+  );
 
-SELECT *
-FROM @this_model
-WHERE
-  item_id < 0
-"""
+  SELECT
+    id,
+    item_id,
+    event_date,
+  FROM
+    {seed_model_name}
+  WHERE
+    event_date BETWEEN @start_date AND @end_date
+  """
 
-EXAMPLE_SEED_DATA = """id,item_id,event_date
-1,2,2020-01-01
-2,1,2020-01-01
-3,3,2020-01-03
-4,1,2020-01-04
-5,1,2020-01-05
-6,1,2020-01-06
-7,1,2020-01-07
-"""
+    seed_model_def = f"""MODEL (
+    name {seed_model_name},
+    kind SEED (
+      path '../seeds/seed_data.csv'
+    ),
+    columns (
+      id INTEGER,
+      item_id INTEGER,
+      event_date DATE
+    ),
+    grain (id, event_date)
+  );
+  """
 
-EXAMPLE_TEST = f"""test_example_full_model:
-  model: {EXAMPLE_FULL_MODEL_NAME}
-  inputs:
-    {EXAMPLE_INCREMENTAL_MODEL_NAME}:
-      rows:
-      - id: 1
-        item_id: 1
-      - id: 2
-        item_id: 1
-      - id: 3
-        item_id: 2
-  outputs:
-    query:
-      rows:
-      - item_id: 1
-        num_orders: 2
-      - item_id: 2
-        num_orders: 1
-"""
+    audit_def = """AUDIT (
+    name assert_positive_order_ids,
+  );
+
+  SELECT *
+  FROM @this_model
+  WHERE
+    item_id < 0
+  """
+
+    seed_data = """id,item_id,event_date
+  1,2,2020-01-01
+  2,1,2020-01-01
+  3,3,2020-01-03
+  4,1,2020-01-04
+  5,1,2020-01-05
+  6,1,2020-01-06
+  7,1,2020-01-07
+  """
+
+    test_def = f"""test_example_full_model:
+    model: {full_model_name}
+    inputs:
+      {incremental_model_name}:
+        rows:
+        - id: 1
+          item_id: 1
+        - id: 2
+          item_id: 1
+        - id: 3
+          item_id: 2
+    outputs:
+      query:
+        rows:
+        - item_id: 1
+          num_orders: 2
+        - item_id: 2
+          num_orders: 1
+  """
+
+    return ExampleObjects(
+        schema_name=schema_name,
+        full_model_name=full_model_name,
+        full_model_def=full_model_def,
+        incremental_model_name=incremental_model_name,
+        incremental_model_def=incremental_model_def,
+        seed_model_name=seed_model_name,
+        seed_model_def=seed_model_def,
+        seed_data=seed_data,
+        audit_def=audit_def,
+        test_def=test_def,
+    )
 
 
 def init_example_project(
@@ -171,6 +206,7 @@ def init_example_project(
     dialect: t.Optional[str],
     template: ProjectTemplate = ProjectTemplate.DEFAULT,
     pipeline: t.Optional[str] = None,
+    schema_name: str = "sqlmesh_example",
 ) -> None:
     root_path = Path(path)
     config_extension = "py" if template == ProjectTemplate.DBT else "yaml"
@@ -189,7 +225,7 @@ def init_example_project(
             "Default SQL dialect is a required argument for SQLMesh projects"
         )
 
-    models = None
+    models: t.Set[t.Tuple[str, str]] = set()
     settings = None
     start = None
     if template == ProjectTemplate.DLT:
@@ -210,12 +246,14 @@ def init_example_project(
         _create_models(models_path, models)
         return
 
+    example_objects = _gen_example_objects(schema_name=schema_name)
+
     if template != ProjectTemplate.EMPTY:
         _create_macros(macros_path)
-        _create_audits(audits_path)
-        _create_models(models_path)
-        _create_seeds(seeds_path)
-        _create_tests(tests_path)
+        _create_audits(audits_path, example_objects)
+        _create_models(models_path, example_objects.models())
+        _create_seeds(seeds_path, example_objects)
+        _create_tests(tests_path, example_objects)
 
 
 def _create_folders(target_folders: t.Sequence[Path]) -> None:
@@ -246,25 +284,21 @@ def _create_macros(macros_path: Path) -> None:
     (macros_path / "__init__.py").touch()
 
 
-def _create_audits(audits_path: Path) -> None:
-    _write_file(audits_path / "assert_positive_order_ids.sql", EXAMPLE_AUDIT)
+def _create_audits(audits_path: Path, example_objects: ExampleObjects) -> None:
+    _write_file(audits_path / "assert_positive_order_ids.sql", example_objects.audit_def)
 
 
-def _create_models(models_path: Path, models: t.Optional[t.Set[t.Tuple[str, str]]] = None) -> None:
-    for model_name, model_def in models or [
-        (EXAMPLE_FULL_MODEL_NAME, EXAMPLE_FULL_MODEL_DEF),
-        (EXAMPLE_INCREMENTAL_MODEL_NAME, EXAMPLE_INCREMENTAL_MODEL_DEF),
-        (EXAMPLE_SEED_MODEL_NAME, EXAMPLE_SEED_MODEL_DEF),
-    ]:
+def _create_models(models_path: Path, models: t.Set[t.Tuple[str, str]]) -> None:
+    for model_name, model_def in models:
         _write_file(models_path / f"{model_name.split('.')[-1]}.sql", model_def)
 
 
-def _create_seeds(seeds_path: Path) -> None:
-    _write_file(seeds_path / "seed_data.csv", EXAMPLE_SEED_DATA)
+def _create_seeds(seeds_path: Path, example_objects: ExampleObjects) -> None:
+    _write_file(seeds_path / "seed_data.csv", example_objects.seed_data)
 
 
-def _create_tests(tests_path: Path) -> None:
-    _write_file(tests_path / "test_full_model.yaml", EXAMPLE_TEST)
+def _create_tests(tests_path: Path, example_objects: ExampleObjects) -> None:
+    _write_file(tests_path / "test_full_model.yaml", example_objects.test_def)
 
 
 def _write_file(path: Path, payload: str) -> None:

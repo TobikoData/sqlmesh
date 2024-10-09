@@ -30,6 +30,11 @@ def trino_mocked_engine_adapter(
         side_effect=mock_catalog_type,
     )
 
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.trino.TrinoEngineAdapter._block_until_table_exists",
+        return_value=True,
+    )
+
     return make_mocked_engine_adapter(TrinoEngineAdapter)
 
 
@@ -301,7 +306,9 @@ def test_comments_hive(mocker: MockerFixture, make_mocked_engine_adapter: t.Call
     sql_calls = to_sql_calls(adapter)
     assert sql_calls == [
         f"""CREATE TABLE IF NOT EXISTS "test_table" ("a" INTEGER COMMENT '{truncated_column_comment}', "b" INTEGER) COMMENT '{truncated_table_comment}'""",
+        'DESCRIBE "test_table"',
         f"""CREATE TABLE IF NOT EXISTS "test_table" COMMENT '{truncated_table_comment}' AS SELECT CAST("a" AS INTEGER) AS "a", CAST("b" AS INTEGER) AS "b" FROM (SELECT "a", "b" FROM "source_table") AS "_subquery\"""",
+        'DESCRIBE "test_table"',
         f"""COMMENT ON COLUMN "test_table"."a" IS '{truncated_column_comment}'""",
         """CREATE OR REPLACE VIEW test_view AS SELECT a, b FROM source_table""",
         f"""COMMENT ON VIEW "test_view" IS '{truncated_table_comment}'""",
