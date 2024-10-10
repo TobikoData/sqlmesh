@@ -14,6 +14,9 @@ from sqlmesh.core.config import (
     ModelDefaultsConfig,
     BigQueryConnectionConfig,
     MotherDuckConnectionConfig,
+    BuiltInSchedulerConfig,
+    MWAASchedulerConfig,
+    AirflowSchedulerConfig,
 )
 from sqlmesh.core.config.connection import DuckDBAttachOptions
 from sqlmesh.core.config.feature_flag import DbtFeatureFlag, FeatureFlag
@@ -663,3 +666,39 @@ model_defaults:
     assert config.model_defaults.audits[1][1]["column"].this.this == "id"
     assert type(config.model_defaults.audits[1][1]["threshold"]) == exp.Literal
     assert config.model_defaults.audits[1][1]["threshold"].this == "1000"
+
+
+def test_scheduler_config(tmp_path_factory):
+    config_path = tmp_path_factory.mktemp("yaml_config") / "config.yaml"
+    with open(config_path, "w", encoding="utf-8") as fd:
+        fd.write(
+            """
+gateways:
+    airflow_gateway:
+        scheduler:
+            type: airflow
+            airflow_url: https://airflow.url
+    mwaa_gateway:
+        scheduler:
+            type: mwaa
+            environment: test_environment
+    builtin_gateway:
+        scheduler:
+            type: builtin
+
+default_scheduler:
+    type: builtin
+
+model_defaults:
+    dialect: bigquery
+        """
+        )
+
+    config = load_config_from_paths(
+        Config,
+        project_paths=[config_path],
+    )
+    assert isinstance(config.default_scheduler, BuiltInSchedulerConfig)
+    assert isinstance(config.get_gateway("airflow_gateway").scheduler, AirflowSchedulerConfig)
+    assert isinstance(config.get_gateway("mwaa_gateway").scheduler, MWAASchedulerConfig)
+    assert isinstance(config.get_gateway("builtin_gateway").scheduler, BuiltInSchedulerConfig)
