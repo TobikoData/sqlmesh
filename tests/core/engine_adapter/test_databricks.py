@@ -176,5 +176,5 @@ def test_create_table_clustered_by(make_mocked_engine_adapter: t.Callable):
 
     sql_calls = to_sql_calls(adapter)
     assert sql_calls == [
-        "CREATE TABLE IF NOT EXISTS `test_table` (`cola` INT, `colb` STRING) CLUSTER BY `cola`",
+        "CREATE TABLE IF NOT EXISTS `test_table` (`cola` INT, `colb` STRING) CLUSTER BY (`cola`)",
     ]
