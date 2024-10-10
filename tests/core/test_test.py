@@ -1543,6 +1543,35 @@ test_parameterized_model_names:
     assert len(results.successes) == 2
 
 
+def test_custom_testing_schema(mocker: MockerFixture) -> None:
+    test = _create_test(
+        body=load_yaml(
+            """
+test_foo:
+  model: xyz
+  schema: my_schema
+  outputs:
+    query:
+      - a: 1
+            """
+        ),
+        test_name="test_foo",
+        model=_create_model("SELECT 1 AS a"),
+        context=Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))),
+    )
+
+    spy_execute = mocker.spy(test.engine_adapter, "_execute")
+    _check_successful_or_raise(test.run())
+
+    spy_execute.assert_has_calls(
+        [
+            call('CREATE SCHEMA IF NOT EXISTS "memory"."my_schema"'),
+            call('SELECT 1 AS "a"'),
+            call('DROP SCHEMA IF EXISTS "memory"."my_schema" CASCADE'),
+        ]
+    )
+
+
 def test_test_generation(tmp_path: Path) -> None:
     init_example_project(tmp_path, dialect="duckdb")
 

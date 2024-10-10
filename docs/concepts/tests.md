@@ -486,6 +486,9 @@ These fixtures are dropped by default after the execution completes, but it is p
 
 This can be helpful when debugging a test failure, because for example it's possible to query the fixture views directly and verify that they are defined correctly.
 
+!!! note
+    By default, the views that are necessary to run a unit test are created within a new, unique schema, whose name looks like `sqlmesh_test_<random_ID>`. To specify a custom name for this schema, set the [`<test_name>.schema`](#test_nameschema) test attribute.
+
 ### Type mismatches
 
 It's not always possible to correctly interpret certain values in a unit test without additional context. For example, a YAML dictionary can be used to represent both a `STRUCT` and a `MAP` value in SQL.
@@ -511,6 +514,10 @@ The name of the model being tested. This model must be defined in the project's 
 ### `<test_name>.description`
 
 An optional description of the test, which can be used to provide additional context.
+
+### `<test_name>.schema`
+
+The name of the schema that will contain the views that are necessary to run this unit test.
 
 ### `<test_name>.gateway`
 
