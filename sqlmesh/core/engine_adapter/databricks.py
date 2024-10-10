@@ -281,7 +281,7 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
         )
         if clustered_by:
             cluster_key = exp.maybe_parse(
-                f"({','.join(clustered_by)})", into=exp.Ordered, dialect="databricks"
+                f"({','.join(clustered_by)})", into=exp.Ordered, dialect=self.dialect
             )
             clustered_by_exp = exp.Cluster(expressions=[cluster_key])
             expressions = properties.expressions if properties else []
