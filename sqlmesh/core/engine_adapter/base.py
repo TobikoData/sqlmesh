@@ -89,6 +89,7 @@ class EngineAdapter:
     MAX_COLUMN_COMMENT_LENGTH: t.Optional[int] = None
     INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.DELETE_INSERT
     SUPPORTS_MATERIALIZED_VIEWS = False
+    SUPPORTS_SECURE_VIEWS = False
     SUPPORTS_MATERIALIZED_VIEW_SCHEMA = False
     SUPPORTS_VIEW_SCHEMA = True
     SUPPORTS_CLONING = False
@@ -895,6 +896,7 @@ class EngineAdapter:
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         replace: bool = True,
         materialized: bool = False,
+        secure: bool = False,
         materialized_properties: t.Optional[t.Dict[str, t.Any]] = None,
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
@@ -910,8 +912,9 @@ class EngineAdapter:
             view_name: The view name.
             query_or_df: A query or dataframe.
             columns_to_types: Columns to use in the view statement.
-            replace: Whether or not to replace an existing view defaults to True.
-            materialized: Whether to create a a materialized view. Only used for engines that support this feature.
+            replace: Whether to replace an existing view defaults to True.
+            materialized: Whether to create a materialized view. Only used for engines that support this feature.
+            secure: Whether to create a secured view. Only used for engines that support this feature.
             materialized_properties: Optional materialized view properties to add to the view.
             table_description: Optional table description from MODEL DDL.
             column_descriptions: Optional column descriptions from model query.
@@ -992,6 +995,13 @@ class EngineAdapter:
 
         if properties.expressions:
             create_kwargs["properties"] = properties
+
+        if secure and self.SUPPORTS_SECURE_VIEWS:
+            if "properties" in create_kwargs:
+                create_kwargs["properties"].expressions.insert(0, exp.SecureProperty())
+            else:
+                create_kwargs["properties"] = exp.Properties()
+                create_kwargs["properties"].append("expressions", exp.SecureProperty())
 
         with source_queries[0] as query:
             self.execute(
