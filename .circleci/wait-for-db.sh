@@ -23,7 +23,9 @@ function_exists() {
 }
 
 probe_port() {
-    while ! nc -z ${DOCKER_HOSTNAME:-localhost} $1; do
+    HOSTNAME=${DOCKER_HOSTNAME:-localhost}
+    echo "Probing '$HOSTNAME' on port $1"
+    while ! nc -z $HOSTNAME $1; do
         sleep 1
     done
 }
