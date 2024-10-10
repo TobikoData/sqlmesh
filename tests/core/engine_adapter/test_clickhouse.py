@@ -509,8 +509,8 @@ def test_scd_type_2_by_time(
     temp_table_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter._get_temp_table")
     table_name = "target"
     temp_table_mock.side_effect = [
-        make_temp_table_name(table_name, "abcd"),
         make_temp_table_name(table_name, "efgh"),
+        make_temp_table_name(table_name, "abcd"),
     ]
 
     # The SCD query we build must specify the setting join_use_nulls = 1. We need to ensure that our
@@ -547,7 +547,7 @@ def test_scd_type_2_by_time(
 
     assert to_sql_calls(adapter)[4] == parse_one(
         """
-INSERT INTO "__temp_target_efgh" ("id", "name", "price", "test_UPDATED_at", "test_valid_from", "test_valid_to")
+INSERT INTO "__temp_target_abcd" ("id", "name", "price", "test_UPDATED_at", "test_valid_from", "test_valid_to")
 WITH "source" AS (
   SELECT DISTINCT ON (COALESCE("id", '') || '|' || COALESCE("name", ''), COALESCE("name", ''))
     TRUE AS "_exists",
@@ -572,7 +572,7 @@ WITH "source" AS (
     "test_valid_from",
     "test_valid_to",
     TRUE AS "_exists"
-  FROM ""__temp_target_abcd""
+  FROM ""__temp_target_efgh""
   WHERE
     NOT "test_valid_to" IS NULL
 ), "latest" AS (
@@ -584,7 +584,7 @@ WITH "source" AS (
     "test_valid_from",
     "test_valid_to",
     TRUE AS "_exists"
-  FROM ""__temp_target_abcd""
+  FROM ""__temp_target_efgh""
   WHERE
     "test_valid_to" IS NULL
 ), "deleted" AS (
@@ -718,8 +718,8 @@ def test_scd_type_2_by_column(
     temp_table_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter._get_temp_table")
     table_name = "target"
     temp_table_mock.side_effect = [
-        make_temp_table_name(table_name, "abcd"),
         make_temp_table_name(table_name, "efgh"),
+        make_temp_table_name(table_name, "abcd"),
     ]
 
     # The SCD query we build must specify the setting join_use_nulls = 1. We need to ensure that our
@@ -749,7 +749,7 @@ def test_scd_type_2_by_column(
 
     assert to_sql_calls(adapter)[4] == parse_one(
         """
-INSERT INTO "__temp_target_efgh" ("id", "name", "price", "test_VALID_from", "test_valid_to")
+INSERT INTO "__temp_target_abcd" ("id", "name", "price", "test_VALID_from", "test_valid_to")
 WITH "source" AS (
   SELECT DISTINCT ON ("id")
     TRUE AS "_exists",
@@ -772,7 +772,7 @@ WITH "source" AS (
     "test_VALID_from",
     "test_valid_to",
     TRUE AS "_exists"
-  FROM "__temp_target_abcd"
+  FROM "__temp_target_efgh"
   WHERE
     NOT "test_valid_to" IS NULL
 ), "latest" AS (
@@ -783,7 +783,7 @@ WITH "source" AS (
     "test_VALID_from",
     "test_valid_to",
     TRUE AS "_exists"
-  FROM "__temp_target_abcd"
+  FROM "__temp_target_efgh"
   WHERE
     "test_valid_to" IS NULL
 ), "deleted" AS (

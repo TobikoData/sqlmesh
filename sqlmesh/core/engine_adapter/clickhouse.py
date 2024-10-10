@@ -190,7 +190,7 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
         temp_table = self._get_temp_table(target_table)
         self._create_table_like(temp_table, target_table)
 
-        # extract dynamic kwargs if present
+        # REPLACE BY KEY: extract replace by key dynamic kwargs if present
         dynamic_key = kwargs.get("dynamic_key")
         if dynamic_key:
             dynamic_key_exp = t.cast(exp.Expression, kwargs.get("dynamic_key_exp"))
@@ -199,6 +199,7 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
         # insert new records into temp table
         for source_query in source_queries:
             with source_query as query:
+                # REPLACE BY KEY: if unique key, DISTINCTify by key value before inserting
                 if dynamic_key and dynamic_key_unique:
                     query = query.distinct(*dynamic_key)  # type: ignore
                 query = self._order_projections_and_filter(query, columns_to_types, where=where)
@@ -209,7 +210,7 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
                     order_projections=False,
                 )
 
-        # build dynamic key IN query
+        # REPLACE BY KEY: build replace by key IN query
         if dynamic_key:
             key_query = exp.select(dynamic_key_exp).from_(temp_table)
             if not dynamic_key_unique:
@@ -217,14 +218,15 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
             where = dynamic_key_exp.isin(query=key_query)
 
         if where:
-            # if not all records are being overwritten, we identify the records to retain by
-            #   inverting the where clause
+            # identify existing records to keep by inverting the delete where clause
             existing_records_insert_exp = exp.insert(
-                self._select_columns(columns_to_types).from_(target_table).where(where.not_()),
+                self._select_columns(columns_to_types)
+                .from_(target_table)
+                .where(exp.paren(expression=where).not_()),
                 temp_table,
             )
 
-            # introspectively determine if the table is partitioned
+            # confirm the target table is partitioned
             table_partition_exp = self.fetchdf(
                 exp.select("partition_key")
                 .from_("system.tables")
@@ -234,90 +236,126 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
                 )
             )["partition_key"][0]
 
-            # if table is partitioned, we only process records that are in one of the partitions
-            #   affected by overwrite
+            # if table is partitioned, only process records that are in one of the partitions affected by overwrite
+            partitions_to_drop_or_replace = None
             if table_partition_exp:
-                # identify all partition IDs with existing records in target table
-                #   - storing in temp table so we can reuse query results
-                partitions_to_remove_temp_table = self._get_temp_table(
-                    exp.to_table(f"{target_table.catalog}.partitions_to_remove")
-                )
-                self.ctas(
-                    partitions_to_remove_temp_table,
-                    exp.select("_partition_id").distinct().from_(target_table).where(where),
-                )
-                partitions_to_remove_or_replace = self._list_partitions(
-                    partitions_to_remove_temp_table
-                )
-
-                if partitions_to_remove_or_replace:
-                    # we only want to insert records that BOTH meet the inverted where clause and
-                    #   are in a partition we will process
-                    existing_records_insert_exp.set(
-                        "expression",
-                        existing_records_insert_exp.expression.where(
-                            exp.column("_partition_id").isin(
-                                exp.select("_partition_id").from_(partitions_to_remove_temp_table)
-                            )
-                        ),
+                partitions_to_drop_or_replace, existing_records_insert_exp = (
+                    self._get_affected_partitions_and_insert_exp(
+                        target_table, temp_table, where, existing_records_insert_exp
                     )
+                )
 
+            # insert existing records into temp table
             self.execute(existing_records_insert_exp)
 
-            if table_partition_exp:
+            if partitions_to_drop_or_replace:
+                # replace partitions that have records in temp_table
                 partitions_to_replace = self._list_partitions(temp_table)
-                # we only need to grab len(partitions_to_replace) + 1 values to determine if partitions_to_replace == all_partitions
-                all_partitions = self._list_partitions(
-                    target_table, limit=len(partitions_to_replace) + 1
-                )
 
-                # table swap if target table has no populated partitions or we are replacing all partitions
-                if not all_partitions or partitions_to_replace == all_partitions:
-                    self._exchange_tables(target_table, temp_table)
-                else:
-                    alter_expr = exp.Alter(this=target_table, kind="TABLE")
-                    # replace target table partitions that have corresponding rows in temp table
-                    for partition in partitions_to_replace:
-                        partitions_to_remove_or_replace.discard(partition)
-                        alter_expr.append(
-                            "actions",
-                            exp.ReplacePartition(
-                                expression=exp.Partition(
-                                    expressions=[
-                                        exp.PartitionId(
-                                            this=exp.Literal(
-                                                this=partition, is_string=isinstance(partition, str)
-                                            )
-                                        )
-                                    ]
-                                ),
-                                source=temp_table,
-                            ),
+                # drop partitions with no records in temp_table
+                partitions_to_drop = partitions_to_drop_or_replace - partitions_to_replace
+
+                self.alter_table(
+                    [
+                        self._build_alter_partition_exp(
+                            target_table, temp_table, partitions_to_replace, partitions_to_drop
                         )
-                    # drop target table partitions with no corresponding rows in temp table
-                    for partition in partitions_to_remove_or_replace:
-                        alter_expr.append(
-                            "actions",
-                            exp.DropPartition(
-                                expression=exp.Partition(
-                                    expressions=[
-                                        exp.PartitionId(
-                                            this=exp.Literal(
-                                                this=partition, is_string=isinstance(partition, str)
-                                            )
-                                        )
-                                    ]
-                                ),
-                                source=temp_table,
-                            ),
-                        )
-                    self.alter_table([alter_expr])
+                    ]
+                )
             else:
                 self._exchange_tables(target_table, temp_table)
         else:
             self._exchange_tables(target_table, temp_table)
 
         self.drop_table(temp_table)
+
+    def _get_affected_partitions_and_insert_exp(
+        self,
+        target_table: exp.Table,
+        temp_table: exp.Table,
+        where: exp.Condition,
+        existing_records_insert_exp: exp.Insert,
+    ) -> tuple[t.Set[str], exp.Insert]:
+        # identify all affected partition IDs
+        #   - store in temp table so we can reuse query results
+        affected_partitions_tbl = self._get_temp_table(
+            exp.to_table(f"{target_table.db}._affected_partitions")
+        )
+        self.ctas(
+            affected_partitions_tbl,
+            exp.select("_partition_id")
+            .distinct()
+            .from_(
+                exp.union(
+                    # partitions with records in WHERE clause
+                    exp.select("_partition_id").from_(target_table).where(where),
+                    # partitions with new records to insert
+                    exp.select("_partition_id").from_(temp_table),
+                ).subquery("_affected_partitions")
+            ),
+        )
+        # read all affected partition IDs into memory
+        partitions_to_drop_or_replace = self._list_partitions(affected_partitions_tbl)
+
+        if partitions_to_drop_or_replace:
+            # add IN clause to existing records insert expression
+            existing_records_insert_exp.set(
+                "expression",
+                existing_records_insert_exp.expression.where(
+                    exp.column("_partition_id").isin(
+                        exp.select("_partition_id").from_(affected_partitions_tbl)
+                    )
+                ),
+            )
+
+        return partitions_to_drop_or_replace, existing_records_insert_exp
+
+    def _build_alter_partition_exp(
+        self,
+        target_table: exp.Table,
+        temp_table: exp.Table,
+        partitions_to_replace: t.Set[str],
+        partitions_to_drop: t.Set[str],
+    ) -> exp.Alter:
+        alter_expr = exp.Alter(this=target_table, kind="TABLE")
+
+        for partition in partitions_to_replace:
+            alter_expr.append(
+                "actions",
+                exp.ReplacePartition(
+                    expression=exp.Partition(
+                        expressions=[
+                            exp.PartitionId(
+                                this=exp.Literal(
+                                    this=partition, is_string=isinstance(partition, str)
+                                )
+                            )
+                        ]
+                    ),
+                    source=temp_table,
+                ),
+            )
+
+        for partition in partitions_to_drop:
+            alter_expr.append(
+                "actions",
+                exp.DropPartition(
+                    expressions=[
+                        exp.Partition(
+                            expressions=[
+                                exp.PartitionId(
+                                    this=exp.Literal(
+                                        this=partition, is_string=isinstance(partition, str)
+                                    )
+                                )
+                            ]
+                        )
+                    ],
+                    source=temp_table,
+                ),
+            )
+
+        return alter_expr
 
     def _replace_by_key(
         self,
@@ -439,16 +477,6 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
                 columns_to_types or self.columns(table_name),
             )
 
-    def _rename_table(
-        self,
-        old_table_name: TableName,
-        new_table_name: TableName,
-    ) -> None:
-        old_table_sql = exp.to_table(old_table_name).sql(dialect=self.dialect, identify=True)
-        new_table_sql = exp.to_table(new_table_name).sql(dialect=self.dialect, identify=True)
-
-        self.execute(f"RENAME TABLE {old_table_sql} TO {new_table_sql}{self._on_cluster_sql()}")
-
     def _exchange_tables(
         self,
         old_table_name: TableName,
@@ -458,6 +486,16 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
         new_table_sql = exp.to_table(new_table_name).sql(dialect=self.dialect, identify=True)
 
         self.execute(f"EXCHANGE TABLES {old_table_sql} AND {new_table_sql}{self._on_cluster_sql()}")
+
+    def _rename_table(
+        self,
+        old_table_name: TableName,
+        new_table_name: TableName,
+    ) -> None:
+        old_table_sql = exp.to_table(old_table_name).sql(dialect=self.dialect, identify=True)
+        new_table_sql = exp.to_table(new_table_name).sql(dialect=self.dialect, identify=True)
+
+        self.execute(f"RENAME TABLE {old_table_sql} TO {new_table_sql}{self._on_cluster_sql()}")
 
     def delete_from(self, table_name: TableName, where: t.Union[str, exp.Expression]) -> None:
         delete_expr = exp.delete(table_name, where)
