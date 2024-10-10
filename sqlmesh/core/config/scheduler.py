@@ -8,6 +8,7 @@ import typing as t
 from pydantic import Field
 from requests import Session
 
+from sqlglot.helper import subclasses
 from sqlmesh.core.config.base import BaseConfig
 from sqlmesh.core.config.common import concurrent_tasks_validator
 from sqlmesh.core.console import Console
@@ -30,15 +31,15 @@ if t.TYPE_CHECKING:
     from sqlmesh.core.context import GenericContext
 
 if sys.version_info >= (3, 9):
-    from typing import Annotated, Literal
+    from typing import Literal
 else:
-    from typing_extensions import Annotated, Literal
+    from typing_extensions import Literal
 
 
 logger = logging.getLogger(__name__)
 
 
-class _SchedulerConfig(abc.ABC):
+class SchedulerConfig(abc.ABC):
     """Abstract base class for Scheduler configurations."""
 
     @abc.abstractmethod
@@ -77,7 +78,7 @@ class _SchedulerConfig(abc.ABC):
         """
 
 
-class _EngineAdapterStateSyncSchedulerConfig(_SchedulerConfig):
+class _EngineAdapterStateSyncSchedulerConfig(SchedulerConfig):
     def create_state_sync(self, context: GenericContext) -> StateSync:
         state_connection = (
             context.config.get_state_connection(context.gateway) or context._connection_config
@@ -386,12 +387,31 @@ class MWAASchedulerConfig(_EngineAdapterStateSyncSchedulerConfig, BaseConfig):
         return self.default_catalog_override or default_catalog
 
 
-SchedulerConfig = Annotated[
-    t.Union[
-        BuiltInSchedulerConfig,
-        AirflowSchedulerConfig,
-        CloudComposerSchedulerConfig,
-        MWAASchedulerConfig,
-    ],
-    Field(discriminator="type_"),
-]
+SCHEDULER_CONFIG_TO_TYPE = {
+    tpe.all_field_infos()["type_"].default: tpe
+    for tpe in subclasses(__name__, BaseConfig, exclude=(BaseConfig,))
+}
+
+
+def _scheduler_config_validator(
+    cls: t.Type, v: SchedulerConfig | t.Dict[str, t.Any] | None
+) -> SchedulerConfig | None:
+    if v is None or isinstance(v, SchedulerConfig):
+        return v
+
+    if "type" not in v:
+        raise ConfigError("Missing scheduler type.")
+
+    scheduler_type = v["type"]
+    if scheduler_type not in SCHEDULER_CONFIG_TO_TYPE:
+        raise ConfigError(f"Unknown scheduler type '{scheduler_type}'.")
+
+    return SCHEDULER_CONFIG_TO_TYPE[scheduler_type](**v)
+
+
+scheduler_config_validator = field_validator(
+    "scheduler",
+    "default_scheduler",
+    mode="before",
+    check_fields=False,
+)(_scheduler_config_validator)

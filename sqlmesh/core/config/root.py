@@ -30,7 +30,11 @@ from sqlmesh.core.config.model import ModelDefaultsConfig
 from sqlmesh.core.config.naming import NameInferenceConfig as NameInferenceConfig
 from sqlmesh.core.config.plan import PlanConfig
 from sqlmesh.core.config.run import RunConfig
-from sqlmesh.core.config.scheduler import BuiltInSchedulerConfig, SchedulerConfig
+from sqlmesh.core.config.scheduler import (
+    BuiltInSchedulerConfig,
+    SchedulerConfig,
+    scheduler_config_validator,
+)
 from sqlmesh.core.config.ui import UIConfig
 from sqlmesh.core.loader import Loader, SqlMeshLoader
 from sqlmesh.core.notification_target import NotificationTarget
@@ -137,6 +141,7 @@ class Config(BaseConfig):
     }
 
     _connection_config_validator = connection_config_validator
+    _scheduler_config_validator = scheduler_config_validator
     _variables_validator = variables_validator
 
     @field_validator("gateways", mode="before", always=True)
