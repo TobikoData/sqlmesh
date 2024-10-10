@@ -1603,6 +1603,52 @@ class AthenaConnectionConfig(ConnectionConfig):
 
         return connect
 
+class SingleStoreConnectionConfig(ConnectionConfig):
+    host: str
+    user: str
+    password: str
+    port: t.Optional[int] = None
+    charset: t.Optional[str] = None
+    ssl_disabled: t.Optional[bool] = None
+    database: t.Optional[str] = None
+
+    concurrent_tasks: int = 4
+    register_comments: bool = True
+    pre_ping: bool = True
+
+    type_: Literal["singlestore"] = Field(alias="type", default="singlestore")
+
+    @property
+    def _cursor_kwargs(self) -> t.Optional[t.Dict[str, t.Any]]:
+        return {"buffered": True}
+
+    @property
+    def _connection_kwargs_keys(self) -> t.Set[str]:
+        connection_keys = {
+            "host",
+            "user",
+            "password",
+            "port",
+            "database",
+        }
+        if self.port is not None:
+            connection_keys.add("port")
+        if self.charset is not None:
+            connection_keys.add("charset")
+        if self.ssl_disabled is not None:
+            connection_keys.add("ssl_disabled")
+        return connection_keys
+
+    @property
+    def _engine_adapter(self) -> t.Type[EngineAdapter]:
+        return engine_adapter.SingleStoreEngineAdapter
+
+    @property
+    def _connection_factory(self) -> t.Callable:
+        from mysql.connector import connect
+
+        return connect
+
 
 CONNECTION_CONFIG_TO_TYPE = {
     # Map all subclasses of ConnectionConfig to the value of their `type_` field.
@@ -1613,7 +1659,6 @@ CONNECTION_CONFIG_TO_TYPE = {
         exclude=(ConnectionConfig, BaseDuckDBConnectionConfig),
     )
 }
-
 
 def parse_connection_config(v: t.Dict[str, t.Any]) -> ConnectionConfig:
     if "type" not in v:
