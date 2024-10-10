@@ -280,7 +280,10 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
             table_kind=table_kind,
         )
         if clustered_by:
-            clustered_by_exp = exp.Cluster(expressions=[exp.column(col) for col in clustered_by])
+            cluster_key = exp.maybe_parse(
+                f"({','.join(clustered_by)})", into=exp.Ordered, dialect="databricks"
+            )
+            clustered_by_exp = exp.Cluster(expressions=[cluster_key])
             expressions = properties.expressions if properties else []
             expressions.append(clustered_by_exp)
             properties = exp.Properties(expressions=expressions)
