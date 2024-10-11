@@ -202,7 +202,7 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
                 dynamic_key_exp: Expression to build key (replace by key only)
                 dynamic_key_unique: Whether more than one record can exist per key value (replace by key only)
 
-                is_inc_by_partition: Boolean of whether the call is only overwriting full partitions (incremental by partition only)
+                is_inc_by_partition: Whether to overwrite partitions with only new records (incremental by partition only)
 
         Returns:
             Side effects only: execution of insert-overwrite operation.
@@ -223,7 +223,7 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
             # insert new records into temp table
             for source_query in source_queries:
                 with source_query as query:
-                    # REPLACE BY KEY: if unique key, DISTINCTify by key value so only one row is present per key
+                    # REPLACE BY KEY: if unique key, DISTINCTify by key columns so only one row is present per key
                     if dynamic_key and dynamic_key_unique:
                         query = query.distinct(*dynamic_key)  # type: ignore
 
@@ -235,7 +235,7 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
                         order_projections=False,
                     )
 
-            # REPLACE BY KEY: build `where` as "key IN (new rows' key values)"
+            # REPLACE BY KEY: build `where` expression as "key IN (new rows' key values)"
             if dynamic_key:
                 key_query = exp.select(dynamic_key_exp).from_(temp_table)
                 if not dynamic_key_unique:
@@ -283,17 +283,18 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
                 partitions_to_replace = self._get_affected_partitions(temp_table)
 
                 # drop affected partitions that have no records in temp_table
-                #   - NOTE: `all_affected_partitions` will be empty for incremental_by_partition
-                #      because there is no `where` and previous code block is skipped
+                #   - NOTE: `all_affected_partitions` will be empty when is_inc_by_partition=True
+                #      because previous code block is skipped
                 partitions_to_drop = all_affected_partitions - partitions_to_replace
 
-                self.alter_table(
-                    [
-                        self._build_alter_partition_exp(
-                            target_table, temp_table, partitions_to_replace, partitions_to_drop
-                        )
-                    ]
-                )
+                if partitions_to_replace or partitions_to_drop:
+                    self.alter_table(
+                        [
+                            self._build_alter_partition_exp(
+                                target_table, temp_table, partitions_to_replace, partitions_to_drop
+                            )
+                        ]
+                    )
             else:
                 self._exchange_tables(target_table, temp_table)
         finally:
