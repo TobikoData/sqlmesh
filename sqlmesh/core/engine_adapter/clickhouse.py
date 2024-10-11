@@ -184,49 +184,65 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
         insert_overwrite_strategy_override: t.Optional[InsertOverwriteStrategy] = None,
         **kwargs: t.Any,
     ) -> None:
+        """
+        Implements the table or partition swap approach to insert-overwriting records.
+
+        Because this method executes multiple variants (full table replace, replace by time
+        range, replace by key, replace by partition), some upstream caller info is needed and
+        passed via kwargs.
+
+        Args:
+            table_name: Name of target table
+            source_queries: Source queries returning records to insert
+            columns_to_types: Column names and data types of target table
+            where: SQLGlot expression determining which target table rows should be overwritten
+            insert_overwrite_strategy_override: Not used by Clickhouse
+            kwargs:
+                dynamic_key: Key columns (replace by key only)
+                dynamic_key_exp: Expression to build key (replace by key only)
+                dynamic_key_unique: Whether more than one record can exist per key value (replace by key only)
+
+                is_inc_by_partition: Boolean of whether the call is only overwriting full partitions (incremental by partition only)
+
+        Returns:
+            Side effects only: execution of insert-overwrite operation.
+        """
         target_table = exp.to_table(table_name)
         columns_to_types = columns_to_types or self.columns(target_table)
 
         temp_table = self._get_temp_table(target_table)
         self._create_table_like(temp_table, target_table)
 
-        # REPLACE BY KEY: extract replace by key dynamic kwargs if present
+        # REPLACE BY KEY: extract kwargs if present
         dynamic_key = kwargs.get("dynamic_key")
         if dynamic_key:
             dynamic_key_exp = t.cast(exp.Expression, kwargs.get("dynamic_key_exp"))
             dynamic_key_unique = t.cast(bool, kwargs.get("dynamic_key_unique"))
 
-        # insert new records into temp table
-        for source_query in source_queries:
-            with source_query as query:
-                # REPLACE BY KEY: if unique key, DISTINCTify by key value before inserting
-                if dynamic_key and dynamic_key_unique:
-                    query = query.distinct(*dynamic_key)  # type: ignore
-                query = self._order_projections_and_filter(query, columns_to_types, where=where)
-                self._insert_append_query(
-                    temp_table,
-                    query,
-                    columns_to_types=columns_to_types,
-                    order_projections=False,
-                )
+        try:
+            # insert new records into temp table
+            for source_query in source_queries:
+                with source_query as query:
+                    # REPLACE BY KEY: if unique key, DISTINCTify by key value so only one row is present per key
+                    if dynamic_key and dynamic_key_unique:
+                        query = query.distinct(*dynamic_key)  # type: ignore
 
-        # REPLACE BY KEY: build replace by key IN query
-        if dynamic_key:
-            key_query = exp.select(dynamic_key_exp).from_(temp_table)
-            if not dynamic_key_unique:
-                key_query = key_query.distinct()
-            where = dynamic_key_exp.isin(query=key_query)
+                    query = self._order_projections_and_filter(query, columns_to_types, where=where)
+                    self._insert_append_query(
+                        temp_table,
+                        query,
+                        columns_to_types=columns_to_types,
+                        order_projections=False,
+                    )
 
-        if where:
-            # identify existing records to keep by inverting the delete where clause
-            existing_records_insert_exp = exp.insert(
-                self._select_columns(columns_to_types)
-                .from_(target_table)
-                .where(exp.paren(expression=where).not_()),
-                temp_table,
-            )
+            # REPLACE BY KEY: build `where` as "key IN (new rows' key values)"
+            if dynamic_key:
+                key_query = exp.select(dynamic_key_exp).from_(temp_table)
+                if not dynamic_key_unique:
+                    key_query = key_query.distinct()
+                where = dynamic_key_exp.isin(query=key_query)
 
-            # confirm the target table is partitioned
+            # get target table partition key to confirm it's actually partitioned
             table_partition_exp = self.fetchdf(
                 exp.select("partition_key")
                 .from_("system.tables")
@@ -236,24 +252,40 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
                 )
             )["partition_key"][0]
 
-            # if table is partitioned, only process records that are in one of the partitions affected by overwrite
-            partitions_to_drop_or_replace = None
-            if table_partition_exp:
-                partitions_to_drop_or_replace, existing_records_insert_exp = (
-                    self._get_affected_partitions_and_insert_exp(
-                        target_table, temp_table, where, existing_records_insert_exp
-                    )
+            all_affected_partitions: t.Set[str] = set()
+
+            if where:
+                # identify existing records to keep by inverting the delete `where` clause
+                existing_records_insert_exp = exp.insert(
+                    self._select_columns(columns_to_types)
+                    .from_(target_table)
+                    .where(exp.paren(expression=where).not_()),
+                    temp_table,
                 )
 
-            # insert existing records into temp table
-            self.execute(existing_records_insert_exp)
+                # if target table is partitioned, modify insert expression to only insert
+                #   existing records that are in one of the affected partitions
+                if table_partition_exp:
+                    all_affected_partitions, existing_records_insert_exp = (
+                        self._get_affected_partitions_and_insert_exp(
+                            target_table, temp_table, where, existing_records_insert_exp
+                        )
+                    )
 
-            if partitions_to_drop_or_replace:
-                # replace partitions that have records in temp_table
-                partitions_to_replace = self._list_partitions(temp_table)
+                self.execute(existing_records_insert_exp)
 
-                # drop partitions with no records in temp_table
-                partitions_to_drop = partitions_to_drop_or_replace - partitions_to_replace
+            # process by partition if:
+            #   1. The table is partitioned AND
+            #   (2a. There are existing records to keep (`where`) OR
+            #    2b. We're replacing complete partitions (incremental by partition model))
+            if table_partition_exp and (where or kwargs.get("is_inc_by_partition")):
+                # only replace partitions that have records in temp_table
+                partitions_to_replace = self._get_affected_partitions(temp_table)
+
+                # drop affected partitions that have no records in temp_table
+                #   - NOTE: `all_affected_partitions` will be empty for incremental_by_partition
+                #      because there is no `where` and previous code block is skipped
+                partitions_to_drop = all_affected_partitions - partitions_to_replace
 
                 self.alter_table(
                     [
@@ -264,10 +296,8 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
                 )
             else:
                 self._exchange_tables(target_table, temp_table)
-        else:
-            self._exchange_tables(target_table, temp_table)
-
-        self.drop_table(temp_table)
+        finally:
+            self.drop_table(temp_table)
 
     def _get_affected_partitions_and_insert_exp(
         self,
@@ -277,38 +307,45 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
         existing_records_insert_exp: exp.Insert,
     ) -> tuple[t.Set[str], exp.Insert]:
         # identify all affected partition IDs
-        #   - store in temp table so we can reuse query results
+        #   - store in temp table so we can reuse results
         affected_partitions_tbl = self._get_temp_table(
             exp.to_table(f"{target_table.db}._affected_partitions")
         )
         self.ctas(
             affected_partitions_tbl,
-            exp.select("_partition_id")
+            exp.select("partition_id")
             .distinct()
             .from_(
                 exp.union(
-                    # partitions with records in WHERE clause
-                    exp.select("_partition_id").from_(target_table).where(where),
-                    # partitions with new records to insert
-                    exp.select("_partition_id").from_(temp_table),
+                    # target table partitions with records in `where`
+                    exp.select(exp.column("_partition_id").as_("partition_id"))
+                    .from_(target_table)
+                    .where(where),
+                    # temp table partitions with new records to insert
+                    exp.select(
+                        exp.column("_partition_id").as_("partition_id"),
+                    ).from_(temp_table),
                 ).subquery("_affected_partitions")
             ),
         )
+
         # read all affected partition IDs into memory
-        partitions_to_drop_or_replace = self._list_partitions(affected_partitions_tbl)
+        all_affected_partitions = self._get_affected_partitions(
+            affected_partitions_tbl, "partition_id"
+        )
 
-        if partitions_to_drop_or_replace:
-            # add IN clause to existing records insert expression
-            existing_records_insert_exp.set(
-                "expression",
-                existing_records_insert_exp.expression.where(
-                    exp.column("_partition_id").isin(
-                        exp.select("_partition_id").from_(affected_partitions_tbl)
-                    )
-                ),
-            )
+        # limit existing records insert expression WHERE to affected target table partitions
+        #   by adding `AND _partition_id IN (affected partition IDs)`
+        existing_records_insert_exp.set(
+            "expression",
+            existing_records_insert_exp.expression.where(
+                exp.column("_partition_id").isin(
+                    exp.select("partition_id").from_(affected_partitions_tbl)
+                )
+            ),
+        )
 
-        return partitions_to_drop_or_replace, existing_records_insert_exp
+        return all_affected_partitions, existing_records_insert_exp
 
     def _build_alter_partition_exp(
         self,
@@ -380,6 +417,21 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
             dynamic_key_unique=is_unique_key,
         )
 
+    def insert_overwrite_by_partition(
+        self,
+        table_name: TableName,
+        query_or_df: QueryOrDF,
+        partitioned_by: t.List[exp.Expression],
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+    ) -> None:
+        source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
+            query_or_df, columns_to_types, target_table=table_name
+        )
+
+        self._insert_overwrite_by_condition(
+            table_name, source_queries, columns_to_types, is_inc_by_partition=True
+        )
+
     def _create_table_like(
         self, target_table_name: TableName, source_table_name: TableName
     ) -> None:
@@ -388,22 +440,22 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
             f"CREATE TABLE {target_table_name}{self._on_cluster_sql()} AS {source_table_name}"
         )
 
-    def _list_partitions(
+    def _get_affected_partitions(
         self,
         table: exp.Table,
+        partition_col_name: str = "_partition_id",
         where: t.Optional[exp.Condition] = None,
         limit: t.Optional[int] = None,
     ) -> t.Set[t.Any]:
         """List partition IDs present in table"""
-        partitions_query = exp.select("_partition_id").distinct().from_(table)
+        partitions_query = exp.select(partition_col_name).distinct().from_(table)
         if where:
             partitions_query = partitions_query.where(where)
         if limit:
             partitions_query = partitions_query.limit(limit)
-
         partitions_df = self.fetchdf(partitions_query)
 
-        return set(partitions_df["_partition_id"].to_list() if not partitions_df.empty else [])
+        return set(partitions_df[partition_col_name].to_list() if not partitions_df.empty else [])
 
     def _create_table(
         self,
