@@ -2661,17 +2661,17 @@ def test_missing_schema_warnings():
 
 
 def test_user_provided_depends_on():
-    expressions = d.parse(
-        """
-        MODEL (name db.table, depends_on [table_b]);
+    for l_delim, r_delim in (("(", ")"), ("[", "]")):
+        expressions = d.parse(
+            f"""
+            MODEL (name db.table, depends_on {l_delim}table_b{r_delim});
 
-        SELECT a FROM table_a
-        """
-    )
+            SELECT a FROM table_a
+            """
+        )
 
-    model = load_sql_based_model(expressions)
-
-    assert model.depends_on == {'"table_a"', '"table_b"'}
+        model = load_sql_based_model(expressions)
+        assert model.depends_on == {'"table_a"', '"table_b"'}, f"Delimiters {l_delim}, {r_delim}"
 
 
 def test_check_schema_mapping_when_rendering_at_runtime(assert_exp_eq):

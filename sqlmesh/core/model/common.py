@@ -93,6 +93,9 @@ def depends_on(cls: t.Type, v: t.Any, values: t.Dict[str, t.Any]) -> t.Optional[
     dialect = values.get("dialect")
     default_catalog = values.get("default_catalog")
 
+    if isinstance(v, exp.Paren):
+        v = v.unnest()
+
     if isinstance(v, (exp.Array, exp.Tuple)):
         return {
             normalize_model_name(
