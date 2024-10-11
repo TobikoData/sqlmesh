@@ -11,6 +11,8 @@ from sqlmesh.core.schema_diff import SchemaDiffer
 from datetime import datetime
 from pytest_mock.plugin import MockerFixture
 from sqlmesh.core import dialect as d
+from sqlmesh.utils.date import to_datetime
+import pandas as pd
 
 pytestmark = [pytest.mark.clickhouse, pytest.mark.engine]
 
@@ -514,6 +516,11 @@ def test_scd_type_2_by_time(
         make_temp_table_name(table_name, "abcd"),
     ]
 
+    fetchdf_mock = mocker.patch(
+        "sqlmesh.core.engine_adapter.ClickhouseEngineAdapter._fetch_native_df"
+    )
+    fetchdf_mock.return_value = pd.DataFrame({"partition_key": [None]})
+
     # The SCD query we build must specify the setting join_use_nulls = 1. We need to ensure that our
     # setting on the outer query doesn't override the value the user expects.
     #
@@ -723,6 +730,11 @@ def test_scd_type_2_by_column(
         make_temp_table_name(table_name, "abcd"),
     ]
 
+    fetchdf_mock = mocker.patch(
+        "sqlmesh.core.engine_adapter.ClickhouseEngineAdapter._fetch_native_df"
+    )
+    fetchdf_mock.return_value = pd.DataFrame({"partition_key": [None]})
+
     # The SCD query we build must specify the setting join_use_nulls = 1. We need to ensure that our
     # setting on the outer query doesn't override the value the user expects.
     #
@@ -905,6 +917,301 @@ SELECT "id", "name", "price", "test_VALID_from", "test_valid_to" FROM "static" U
     """,
         dialect=adapter.dialect,
     ).sql(adapter.dialect)
+
+
+def test_insert_overwrite_by_condition_replace_partitioned(
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture, make_temp_table_name: t.Callable
+):
+    adapter = make_mocked_engine_adapter(ClickhouseEngineAdapter)
+
+    temp_table_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter._get_temp_table")
+    table_name = "target"
+    temp_table_mock.return_value = make_temp_table_name(table_name, "abcd")
+
+    fetchdf_mock = mocker.patch(
+        "sqlmesh.core.engine_adapter.ClickhouseEngineAdapter._fetch_native_df"
+    )
+    fetchdf_mock.return_value = pd.DataFrame({"partition_key": ["toMonday(ds)"]})
+
+    insert_table_name = make_temp_table_name("new_records", "abcd")
+    existing_table_name = make_temp_table_name("existing_records", "abcd")
+
+    source_queries, columns_to_types = adapter._get_source_queries_and_columns_to_types(
+        parse_one(f"SELECT * FROM {insert_table_name}"),
+        {
+            "id": exp.DataType.build("Int8", dialect="clickhouse"),
+            "ds": exp.DataType.build("Date", dialect="clickhouse"),
+        },
+        existing_table_name,
+    )
+
+    adapter._insert_overwrite_by_condition(
+        existing_table_name.sql(),
+        source_queries,
+        columns_to_types,
+    )
+
+    assert to_sql_calls(adapter) == [
+        "CREATE TABLE __temp_target_abcd AS __temp_existing_records_abcd",
+        'INSERT INTO "__temp_target_abcd" ("id", "ds") SELECT "id", "ds" FROM (SELECT * FROM "__temp_new_records_abcd") AS "_subquery"',
+        'EXCHANGE TABLES "__temp_existing_records_abcd" AND "__temp_target_abcd"',
+        'DROP TABLE IF EXISTS "__temp_target_abcd"',
+    ]
+
+
+def test_insert_overwrite_by_condition_replace(
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture, make_temp_table_name: t.Callable
+):
+    adapter = make_mocked_engine_adapter(ClickhouseEngineAdapter)
+
+    temp_table_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter._get_temp_table")
+    table_name = "target"
+    temp_table_mock.return_value = make_temp_table_name(table_name, "abcd")
+
+    fetchdf_mock = mocker.patch(
+        "sqlmesh.core.engine_adapter.ClickhouseEngineAdapter._fetch_native_df"
+    )
+    fetchdf_mock.return_value = pd.DataFrame({"partition_key": [None]})
+
+    insert_table_name = make_temp_table_name("new_records", "abcd")
+    existing_table_name = make_temp_table_name("existing_records", "abcd")
+
+    source_queries, columns_to_types = adapter._get_source_queries_and_columns_to_types(
+        parse_one(f"SELECT * FROM {insert_table_name}"),
+        {
+            "id": exp.DataType.build("Int8", dialect="clickhouse"),
+            "ds": exp.DataType.build("Date", dialect="clickhouse"),
+        },
+        existing_table_name,
+    )
+
+    adapter._insert_overwrite_by_condition(
+        existing_table_name.sql(),
+        source_queries,
+        columns_to_types,
+    )
+
+    to_sql_calls(adapter) == [
+        "CREATE TABLE __temp_target_abcd AS __temp_existing_records_abcd",
+        'INSERT INTO "__temp_target_abcd" ("id", "ds") SELECT "id", "ds" FROM (SELECT * FROM "__temp_new_records_abcd") AS "_subquery"',
+        'EXCHANGE TABLES "__temp_existing_records_abcd" AND "__temp_target_abcd"',
+        'DROP TABLE IF EXISTS "__temp_target_abcd"',
+    ]
+
+
+def test_insert_overwrite_by_condition_where_partitioned(
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture, make_temp_table_name: t.Callable
+):
+    adapter = make_mocked_engine_adapter(ClickhouseEngineAdapter)
+
+    temp_table_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter._get_temp_table")
+    table_name = "target"
+    temp_table_mock.return_value = make_temp_table_name(table_name, "abcd")
+
+    fetchdf_mock = mocker.patch(
+        "sqlmesh.core.engine_adapter.ClickhouseEngineAdapter._fetch_native_df"
+    )
+    fetchdf_mock.side_effect = [
+        pd.DataFrame({"partition_key": ["toMonday(ds)"]}),
+        pd.DataFrame({"partition_id": ["1", "2", "3", "4"]}),
+        pd.DataFrame({"_partition_id": ["1", "2", "4"]}),
+    ]
+
+    insert_table_name = make_temp_table_name("new_records", "abcd")
+    existing_table_name = make_temp_table_name("existing_records", "abcd")
+
+    source_queries, columns_to_types = adapter._get_source_queries_and_columns_to_types(
+        parse_one(f"SELECT * FROM {insert_table_name}"),
+        {
+            "id": exp.DataType.build("Int8", dialect="clickhouse"),
+            "ds": exp.DataType.build("Date", dialect="clickhouse"),
+        },
+        existing_table_name,
+    )
+
+    adapter._insert_overwrite_by_condition(
+        existing_table_name.sql(),
+        source_queries,
+        columns_to_types,
+        exp.Between(
+            this=exp.column("ds"),
+            low=parse_one("'2024-02-15'"),
+            high=parse_one("'2024-04-30'"),
+        ),
+    )
+
+    to_sql_calls(adapter) == [
+        "CREATE TABLE __temp_target_abcd AS __temp_existing_records_abcd",
+        """INSERT INTO "__temp_target_abcd" ("id", "ds") SELECT "id", "ds" FROM (SELECT * FROM "__temp_new_records_abcd") AS "_subquery" WHERE "ds" BETWEEN '2024-02-15' AND '2024-04-30'""",
+        """CREATE TABLE IF NOT EXISTS "__temp_target_abcd" ENGINE=MergeTree ORDER BY () AS SELECT DISTINCT "partition_id" FROM (SELECT "_partition_id" AS "partition_id" FROM "__temp_existing_records_abcd" WHERE "ds" BETWEEN '2024-02-15' AND '2024-04-30' UNION DISTINCT SELECT "_partition_id" AS "partition_id" FROM "__temp_target_abcd") AS "_affected_partitions\"""",
+        """INSERT INTO "__temp_target_abcd" SELECT "id", "ds" FROM "__temp_existing_records_abcd" WHERE NOT ("ds" BETWEEN '2024-02-15' AND '2024-04-30') AND "_partition_id" IN (SELECT "partition_id" FROM "__temp_target_abcd")""",
+        """ALTER TABLE "__temp_existing_records_abcd" REPLACE PARTITION ID '1' FROM "__temp_target_abcd", REPLACE PARTITION ID '2' FROM "__temp_target_abcd", REPLACE PARTITION ID '4' FROM "__temp_target_abcd", DROP PARTITION ID '3'""",
+        'DROP TABLE IF EXISTS "__temp_target_abcd"',
+    ]
+
+
+def test_insert_overwrite_by_condition_by_key(
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture, make_temp_table_name: t.Callable
+):
+    adapter = make_mocked_engine_adapter(ClickhouseEngineAdapter)
+
+    temp_table_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter._get_temp_table")
+    table_name = "target"
+    temp_table_mock.return_value = make_temp_table_name(table_name, "abcd")
+
+    fetchdf_mock = mocker.patch(
+        "sqlmesh.core.engine_adapter.ClickhouseEngineAdapter._fetch_native_df"
+    )
+    fetchdf_mock.return_value = pd.DataFrame({"partition_key": [None]})
+
+    insert_table_name = make_temp_table_name("new_records", "abcd")
+    existing_table_name = make_temp_table_name("existing_records", "abcd")
+
+    source_queries, columns_to_types = adapter._get_source_queries_and_columns_to_types(
+        parse_one(f"SELECT * FROM {insert_table_name}"),
+        {
+            "id": exp.DataType.build("Int8", dialect="clickhouse"),
+            "ds": exp.DataType.build("Date", dialect="clickhouse"),
+        },
+        existing_table_name,
+    )
+    adapter._insert_overwrite_by_condition(
+        existing_table_name.sql(),
+        source_queries,
+        columns_to_types,
+        dynamic_key=[exp.column("id")],
+        dynamic_key_exp=exp.column("id"),
+        dynamic_key_unique=True,
+    )
+
+    adapter._insert_overwrite_by_condition(
+        existing_table_name.sql(),
+        source_queries,
+        columns_to_types,
+        dynamic_key=[exp.column("id")],
+        dynamic_key_exp=exp.column("id"),
+        dynamic_key_unique=False,
+    )
+
+    to_sql_calls(adapter) == [
+        "CREATE TABLE __temp_target_abcd AS __temp_existing_records_abcd",
+        'INSERT INTO "__temp_target_abcd" ("id", "ds") SELECT "id", "ds" FROM (SELECT DISTINCT ON ("id") * FROM "__temp_new_records_abcd") AS "_subquery"',
+        'INSERT INTO "__temp_target_abcd" SELECT "id", "ds" FROM "__temp_existing_records_abcd" WHERE NOT ("id" IN (SELECT "id" FROM "__temp_target_abcd"))',
+        'EXCHANGE TABLES "__temp_existing_records_abcd" AND "__temp_target_abcd"',
+        'DROP TABLE IF EXISTS "__temp_target_abcd"',
+        "CREATE TABLE __temp_target_abcd AS __temp_existing_records_abcd",
+        'INSERT INTO "__temp_target_abcd" ("id", "ds") SELECT "id", "ds" FROM (SELECT * FROM "__temp_new_records_abcd") AS "_subquery"',
+        'INSERT INTO "__temp_target_abcd" SELECT "id", "ds" FROM "__temp_existing_records_abcd" WHERE NOT ("id" IN (SELECT "id" FROM "__temp_target_abcd"))',
+        'EXCHANGE TABLES "__temp_existing_records_abcd" AND "__temp_target_abcd"',
+        'DROP TABLE IF EXISTS "__temp_target_abcd"',
+    ]
+
+
+def test_insert_overwrite_by_condition_by_key_partitioned(
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture, make_temp_table_name: t.Callable
+):
+    adapter = make_mocked_engine_adapter(ClickhouseEngineAdapter)
+
+    temp_table_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter._get_temp_table")
+    table_name = "target"
+    temp_table_mock.return_value = make_temp_table_name(table_name, "abcd")
+
+    fetchdf_mock = mocker.patch(
+        "sqlmesh.core.engine_adapter.ClickhouseEngineAdapter._fetch_native_df"
+    )
+    fetchdf_mock.side_effect = [
+        pd.DataFrame({"partition_key": ["toMonday(ds)"]}),
+        pd.DataFrame({"partition_id": ["1", "2", "3", "4"]}),
+        pd.DataFrame({"_partition_id": ["1", "2", "4"]}),
+        pd.DataFrame({"partition_key": ["toMonday(ds)"]}),
+        pd.DataFrame({"partition_id": ["1", "2", "3", "4"]}),
+        pd.DataFrame({"_partition_id": ["1", "2", "4"]}),
+    ]
+
+    insert_table_name = make_temp_table_name("new_records", "abcd")
+    existing_table_name = make_temp_table_name("existing_records", "abcd")
+
+    source_queries, columns_to_types = adapter._get_source_queries_and_columns_to_types(
+        parse_one(f"SELECT * FROM {insert_table_name}"),
+        {
+            "id": exp.DataType.build("Int8", dialect="clickhouse"),
+            "ds": exp.DataType.build("Date", dialect="clickhouse"),
+        },
+        existing_table_name,
+    )
+    adapter._insert_overwrite_by_condition(
+        existing_table_name.sql(),
+        source_queries,
+        columns_to_types,
+        dynamic_key=[exp.column("id")],
+        dynamic_key_exp=exp.column("id"),
+        dynamic_key_unique=True,
+    )
+
+    adapter._insert_overwrite_by_condition(
+        existing_table_name.sql(),
+        source_queries,
+        columns_to_types,
+        dynamic_key=[exp.column("id")],
+        dynamic_key_exp=exp.column("id"),
+        dynamic_key_unique=False,
+    )
+
+    to_sql_calls(adapter) == [
+        "CREATE TABLE __temp_target_abcd AS __temp_existing_records_abcd",
+        'INSERT INTO "__temp_target_abcd" ("id", "ds") SELECT "id", "ds" FROM (SELECT DISTINCT ON ("id") * FROM "__temp_new_records_abcd") AS "_subquery"',
+        'CREATE TABLE IF NOT EXISTS "__temp_target_abcd" ENGINE=MergeTree ORDER BY () AS SELECT DISTINCT "partition_id" FROM (SELECT "_partition_id" AS "partition_id" FROM "__temp_existing_records_abcd" WHERE "id" IN (SELECT "id" FROM "__temp_target_abcd") UNION DISTINCT SELECT "_partition_id" AS "partition_id" FROM "__temp_target_abcd") AS "_affected_partitions"',
+        'INSERT INTO "__temp_target_abcd" SELECT "id", "ds" FROM "__temp_existing_records_abcd" WHERE NOT ("id" IN (SELECT "id" FROM "__temp_target_abcd")) AND "_partition_id" IN (SELECT "partition_id" FROM "__temp_target_abcd")',
+        """ALTER TABLE "__temp_existing_records_abcd" REPLACE PARTITION ID '2' FROM "__temp_target_abcd", REPLACE PARTITION ID '1' FROM "__temp_target_abcd", REPLACE PARTITION ID '4' FROM "__temp_target_abcd", DROP PARTITION ID '3'""",
+        'DROP TABLE IF EXISTS "__temp_target_abcd"',
+        "CREATE TABLE __temp_target_abcd AS __temp_existing_records_abcd",
+        'INSERT INTO "__temp_target_abcd" ("id", "ds") SELECT "id", "ds" FROM (SELECT * FROM "__temp_new_records_abcd") AS "_subquery"',
+        'CREATE TABLE IF NOT EXISTS "__temp_target_abcd" ENGINE=MergeTree ORDER BY () AS SELECT DISTINCT "partition_id" FROM (SELECT "_partition_id" AS "partition_id" FROM "__temp_existing_records_abcd" WHERE "id" IN (SELECT "id" FROM "__temp_target_abcd") UNION DISTINCT SELECT "_partition_id" AS "partition_id" FROM "__temp_target_abcd") AS "_affected_partitions"',
+        'INSERT INTO "__temp_target_abcd" SELECT "id", "ds" FROM "__temp_existing_records_abcd" WHERE NOT ("id" IN (SELECT "id" FROM "__temp_target_abcd")) AND "_partition_id" IN (SELECT "partition_id" FROM "__temp_target_abcd")',
+        """ALTER TABLE "__temp_existing_records_abcd" REPLACE PARTITION ID '2' FROM "__temp_target_abcd", REPLACE PARTITION ID '1' FROM "__temp_target_abcd", REPLACE PARTITION ID '4' FROM "__temp_target_abcd", DROP PARTITION ID '3'""",
+        'DROP TABLE IF EXISTS "__temp_target_abcd"',
+    ]
+
+
+def test_insert_overwrite_by_condition_inc_by_partition(
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture, make_temp_table_name: t.Callable
+):
+    adapter = make_mocked_engine_adapter(ClickhouseEngineAdapter)
+
+    temp_table_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter._get_temp_table")
+    table_name = "target"
+    temp_table_mock.return_value = make_temp_table_name(table_name, "abcd")
+
+    fetchdf_mock = mocker.patch(
+        "sqlmesh.core.engine_adapter.ClickhouseEngineAdapter._fetch_native_df"
+    )
+    fetchdf_mock.side_effect = [
+        pd.DataFrame({"partition_key": ["toMonday(ds)"]}),
+        pd.DataFrame({"_partition_id": ["1", "2", "4"]}),
+        pd.DataFrame({"partition_id": []}),
+    ]
+
+    insert_table_name = make_temp_table_name("new_records", "abcd")
+    existing_table_name = make_temp_table_name("existing_records", "abcd")
+
+    source_queries, columns_to_types = adapter._get_source_queries_and_columns_to_types(
+        parse_one(f"SELECT * FROM {insert_table_name}"),
+        {
+            "id": exp.DataType.build("Int8", dialect="clickhouse"),
+            "ds": exp.DataType.build("Date", dialect="clickhouse"),
+        },
+        existing_table_name,
+    )
+    adapter._insert_overwrite_by_condition(
+        existing_table_name.sql(), source_queries, columns_to_types, is_inc_by_partition=True
+    )
+
+    to_sql_calls(adapter) == [
+        "CREATE TABLE __temp_target_abcd AS __temp_existing_records_abcd",
+        'INSERT INTO "__temp_target_abcd" ("id", "ds") SELECT "id", "ds" FROM (SELECT * FROM "__temp_new_records_abcd") AS "_subquery"',
+        """ALTER TABLE "__temp_existing_records_abcd" REPLACE PARTITION ID '1' FROM "__temp_target_abcd", REPLACE PARTITION ID '2' FROM "__temp_target_abcd", REPLACE PARTITION ID '4' FROM "__temp_target_abcd\"""",
+        'DROP TABLE IF EXISTS "__temp_target_abcd"',
+    ]
 
 
 def test_to_time_column():
