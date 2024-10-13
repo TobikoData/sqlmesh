@@ -1,10 +1,10 @@
 .PHONY: docs
 
 install-dev:
-	pip3 install -e ".[dev,web,slack]"
+	pip3 install -e ".[dev,web,slack,dlt]"
 
 install-cicd-test:
-	pip3 install -e ".[dev,web,slack,cicdtest]"
+	pip3 install -e ".[dev,web,slack,cicdtest,dlt]"
 
 install-doc:
 	pip3 install -r ./docs/requirements.txt

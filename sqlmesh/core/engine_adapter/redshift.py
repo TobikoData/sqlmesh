@@ -54,16 +54,65 @@ class RedshiftEngineAdapter(
             exp.DataType.build("VARCHAR", dialect=DIALECT).this: 65535,
         },
     )
+    VARIABLE_LENGTH_DATA_TYPES = {
+        "char",
+        "character",
+        "nchar",
+        "varchar",
+        "character varying",
+        "nvarchar",
+        "varbyte",
+        "varbinary",
+        "binary varying",
+    }
 
-    def _columns_query(self, table: exp.Table) -> exp.Select:
+    def columns(
+        self,
+        table_name: TableName,
+        include_pseudo_columns: bool = True,
+    ) -> t.Dict[str, exp.DataType]:
+        table = exp.to_table(table_name)
+
         sql = (
-            exp.select("column_name", "data_type")
+            exp.select(
+                "column_name",
+                "data_type",
+                "character_maximum_length",
+                "numeric_precision",
+                "numeric_scale",
+            )
             .from_("svv_columns")  # Includes late-binding views
             .where(exp.column("table_name").eq(table.alias_or_name))
         )
         if table.args.get("db"):
             sql = sql.where(exp.column("table_schema").eq(table.args["db"].name))
-        return sql
+
+        columns_raw = self.fetchall(sql, quote_identifiers=True)
+
+        def build_var_length_col(
+            column_name: str,
+            data_type: str,
+            character_maximum_length: t.Optional[int] = None,
+            numeric_precision: t.Optional[int] = None,
+            numeric_scale: t.Optional[int] = None,
+        ) -> tuple:
+            data_type = data_type.lower()
+            if (
+                data_type in self.VARIABLE_LENGTH_DATA_TYPES
+                and character_maximum_length is not None
+            ):
+                return (column_name, f"{data_type}({character_maximum_length})")
+            if data_type in ("decimal", "numeric"):
+                return (column_name, f"{data_type}({numeric_precision}, {numeric_scale})")
+
+            return (column_name, data_type)
+
+        columns = [build_var_length_col(*row) for row in columns_raw]
+
+        return {
+            column_name: exp.DataType.build(data_type, dialect=self.dialect)
+            for column_name, data_type in columns
+        }
 
     @property
     def cursor(self) -> t.Any:

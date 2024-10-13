@@ -70,6 +70,9 @@ jobs:
           name: Install SQLMesh and dbt adapter dependencies
           command: make install-cicd-test
       - run:
+          name: Fix Git URL override
+          command: git config --global --unset url."ssh://git@github.com".insteadOf
+      - run:
           name: Run linters and code style checks
           command: make py-style
       - run:
@@ -99,6 +102,9 @@ jobs:
       - run:
           name: Install Pydantic v1
           command: pip install --upgrade "pydantic<2.0.0" && pip uninstall pydantic_core -y
+      - run:
+          name: Fix Git URL override
+          command: git config --global --unset url."ssh://git@github.com".insteadOf
       - run:
           name: Run linters and code style checks
           command: make py-style
@@ -136,6 +142,9 @@ jobs:
       - run:
           name: Install pre-commit
           command: pip install pre-commit
+      - run:
+          name: Fix Git URL override
+          command: git config --global --unset url."ssh://git@github.com".insteadOf
       - run:
           name: Run linters and code style checks
           command: make ui-style
