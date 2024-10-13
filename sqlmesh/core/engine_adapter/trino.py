@@ -5,6 +5,7 @@ import pandas as pd
 from pandas.api.types import is_datetime64_any_dtype  # type: ignore
 from sqlglot import exp
 from sqlglot.helper import seq_get
+from tenacity import retry, wait_fixed, stop_after_attempt, retry_if_result
 
 from sqlmesh.core.dialect import schema_, to_schema
 from sqlmesh.core.engine_adapter.mixins import (
@@ -271,3 +272,44 @@ class TrinoEngineAdapter(
         }
 
         return delta_columns_to_types
+
+    @retry(wait=wait_fixed(1), stop=stop_after_attempt(10), retry=retry_if_result(lambda v: not v))
+    def _block_until_table_exists(self, table_name: TableName) -> bool:
+        return self.table_exists(table_name)
+
+    def _create_table(
+        self,
+        table_name_or_schema: t.Union[exp.Schema, TableName],
+        expression: t.Optional[exp.Expression],
+        exists: bool = True,
+        replace: bool = False,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        table_description: t.Optional[str] = None,
+        column_descriptions: t.Optional[t.Dict[str, str]] = None,
+        table_kind: t.Optional[str] = None,
+        **kwargs: t.Any,
+    ) -> None:
+        super()._create_table(
+            table_name_or_schema=table_name_or_schema,
+            expression=expression,
+            exists=exists,
+            replace=replace,
+            columns_to_types=columns_to_types,
+            table_description=table_description,
+            column_descriptions=column_descriptions,
+            table_kind=table_kind,
+            **kwargs,
+        )
+
+        # extract the table name
+        if isinstance(table_name_or_schema, exp.Schema):
+            table_name = table_name_or_schema.this
+            assert isinstance(table_name, exp.Table)
+        else:
+            table_name = table_name_or_schema
+
+        if self.current_catalog_type == "hive":
+            # the Trino Hive connector can take a few seconds for metadata changes to propagate to all internal threads
+            # (even if metadata TTL is set to 0s)
+            # Blocking until the table shows up means that subsequent code expecting it to exist immediately will not fail
+            self._block_until_table_exists(table_name)

@@ -114,12 +114,13 @@ class DuckDBMetadata:
 
 
 class SushiDataValidator:
-    def __init__(self, engine_adapter: EngineAdapter):
+    def __init__(self, engine_adapter: EngineAdapter, sushi_schema_name: str):
         self.engine_adapter = engine_adapter
+        self.sushi_schema_name = sushi_schema_name
 
     @classmethod
-    def from_context(cls, context: Context):
-        return cls(engine_adapter=context.engine_adapter)
+    def from_context(cls, context: Context, sushi_schema_name: str = "sushi"):
+        return cls(engine_adapter=context.engine_adapter, sushi_schema_name=sushi_schema_name)
 
     def validate(
         self,
@@ -154,9 +155,12 @@ class SushiDataValidator:
         """
         Both start and end are inclusive.
         """
-        if model_name == "sushi.customer_revenue_lifetime":
+        if model_name in (
+            f"{self.sushi_schema_name}.customer_revenue_lifetime",
+            "sushi.customer_revenue_lifetime",
+        ):
             env_name = f"__{env_name}" if env_name else ""
-            full_table_path = f"sushi{env_name}.customer_revenue_lifetime"
+            full_table_path = f"{self.sushi_schema_name}{env_name}.customer_revenue_lifetime"
             query = f"SELECT event_date, count(*) AS the_count FROM {full_table_path} group by event_date order by 2 desc, 1 desc"
             results = self.engine_adapter.fetchdf(
                 parse_one(query), quote_identifiers=True
