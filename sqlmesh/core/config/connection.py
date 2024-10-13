@@ -510,11 +510,16 @@ class DatabricksConnectionConfig(ConnectionConfig):
     Databricks connection that uses the SQL connector for SQL models and then Databricks Connect for Dataframe operations
 
     Arg Source: https://github.com/databricks/databricks-sql-python/blob/main/src/databricks/sql/client.py#L39
+    OAuth ref: https://docs.databricks.com/en/dev-tools/python-sql-connector.html#oauth-machine-to-machine-m2m-authentication
+
     Args:
         server_hostname: Databricks instance host name.
         http_path: Http path either to a DBSQL endpoint (e.g. /sql/1.0/endpoints/1234567890abcdef)
             or to a DBR interactive cluster (e.g. /sql/protocolv1/o/1234567890123456/1234-123456-slid123)
         access_token: Http Bearer access token, e.g. Databricks Personal Access Token.
+        auth_type: Set to 'databricks-oauth' or 'azure-oauth' to trigger OAuth (or dont set at all to use `access_token`)
+        oauth_client_id: Client ID to use when auth_type is set to one of the 'oauth' types
+        oauth_client_secret: Client Secret to use when auth_type is set to one of the 'oauth' types
         catalog: Default catalog to use for SQL models. Defaults to None which means it will use the default set in
             the Databricks cluster (most likely `hive_metastore`).
         http_headers: An optional list of (k, v) pairs that will be set as Http headers on every request
@@ -535,6 +540,9 @@ class DatabricksConnectionConfig(ConnectionConfig):
     server_hostname: t.Optional[str] = None
     http_path: t.Optional[str] = None
     access_token: t.Optional[str] = None
+    auth_type: t.Optional[str] = None
+    oauth_client_id: t.Optional[str] = None
+    oauth_client_secret: t.Optional[str] = None
     catalog: t.Optional[str] = None
     http_headers: t.Optional[t.List[t.Tuple[str, str]]] = None
     session_configuration: t.Optional[t.Dict[str, t.Any]] = None
@@ -564,18 +572,22 @@ class DatabricksConnectionConfig(ConnectionConfig):
             bool(values.get("disable_spark_session"))
         ):
             return values
+
         databricks_connect_use_serverless = values.get("databricks_connect_use_serverless")
-        server_hostname, http_path, access_token = (
+        server_hostname, http_path, access_token, auth_type = (
             values.get("server_hostname"),
             values.get("http_path"),
             values.get("access_token"),
+            values.get("auth_type"),
         )
+
         if databricks_connect_use_serverless:
             values["force_databricks_connect"] = True
             values["disable_databricks_connect"] = False
-        if (
-            not server_hostname or not http_path or not access_token
-        ) and not databricks_connect_use_serverless:
+
+        if (not server_hostname or not http_path or not access_token) and (
+            not databricks_connect_use_serverless and not auth_type
+        ):
             raise ValueError(
                 "`server_hostname`, `http_path`, and `access_token` are required for Databricks connections when not running in a notebook"
             )
@@ -599,6 +611,27 @@ class DatabricksConnectionConfig(ConnectionConfig):
                     if t.TYPE_CHECKING:
                         assert http_path is not None
                     values["databricks_connect_cluster_id"] = http_path.split("/")[-1]
+
+        if auth_type:
+            from databricks.sql.auth.auth import AuthType
+
+            all_values = [m.value for m in AuthType]
+            if auth_type not in all_values:
+                raise ValueError(
+                    f"`auth_type` {auth_type} does not match a valid option: {all_values}"
+                )
+
+            client_id = values.get("oauth_client_id")
+            client_secret = values.get("oauth_client_secret")
+
+            if client_secret and not client_id:
+                raise ValueError(
+                    "`oauth_client_id` is required when `oauth_client_secret` is specified"
+                )
+
+            if not http_path:
+                raise ValueError("`http_path` is still required when using `auth_type`")
+
         return values
 
     @property
@@ -652,9 +685,30 @@ class DatabricksConnectionConfig(ConnectionConfig):
         from sqlmesh.core.engine_adapter.databricks import DatabricksEngineAdapter
 
         if not self.use_spark_session_only:
-            return {
+            conn_kwargs: t.Dict[str, t.Any] = {
                 "_user_agent_entry": "sqlmesh",
             }
+
+            if self.auth_type and "oauth" in self.auth_type:
+                # there are two types of oauth: User-to-Machine (U2M) and Machine-to-Machine (M2M)
+                if self.oauth_client_secret:
+                    # if a client_secret exists, then a client_id also exists and we are using M2M
+                    # ref: https://docs.databricks.com/en/dev-tools/python-sql-connector.html#oauth-machine-to-machine-m2m-authentication
+                    # ref: https://github.com/databricks/databricks-sql-python/blob/main/examples/m2m_oauth.py
+                    from databricks.sdk.core import oauth_service_principal, Config
+
+                    config = Config(
+                        host=f"https://{self.server_hostname}",
+                        client_id=self.oauth_client_id,
+                        client_secret=self.oauth_client_secret,
+                    )
+                    conn_kwargs["credentials_provider"] = lambda: oauth_service_principal(config)
+                else:
+                    # if auth_type is set to an 'oauth' type but no client_id/secret are set, then we are using U2M
+                    # ref: https://docs.databricks.com/en/dev-tools/python-sql-connector.html#oauth-user-to-machine-u2m-authentication
+                    conn_kwargs["auth_type"] = self.auth_type
+
+            return conn_kwargs
 
         if DatabricksEngineAdapter.can_access_spark_session(self.disable_spark_session):
             from pyspark.sql import SparkSession
