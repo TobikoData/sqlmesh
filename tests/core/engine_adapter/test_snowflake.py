@@ -457,7 +457,7 @@ def test_secure_view(make_mocked_engine_adapter: t.Callable):
     adapter.create_view(
         "test_table",
         parse_one("SELECT 1"),
-        secure=True,
+        creatable_properties=["SECURE"],
     )
 
     sql_calls = to_sql_calls(adapter)
@@ -475,6 +475,7 @@ def test_secure_materialized_view(make_mocked_engine_adapter: t.Callable):
         parse_one("SELECT 1"),
         secure=True,
         materialized=True,
+        creatable_properties=["SECURE"],
     )
 
     sql_calls = to_sql_calls(adapter)
@@ -490,7 +491,7 @@ def test_secure_materialized_view_with_properties(make_mocked_engine_adapter: t.
     adapter.create_view(
         "test_table",
         parse_one("SELECT 1"),
-        secure=True,
+        creatable_properties=["SECURE"],
         materialized=True,
         materialized_properties={
             # Partitioned by is not supported so we are confirming it is ignored
@@ -504,4 +505,49 @@ def test_secure_materialized_view_with_properties(make_mocked_engine_adapter: t.
     # https://docs.snowflake.com/en/sql-reference/sql/create-view.html
     assert sql_calls == [
         'CREATE OR REPLACE SECURE MATERIALIZED VIEW "test_table" CLUSTER BY ("a") AS SELECT 1',
+    ]
+
+
+def test_temporary_view(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(SnowflakeEngineAdapter)
+
+    adapter.create_view(
+        "test_table",
+        parse_one("SELECT 1"),
+        creatable_properties=["TEMPORARY"],
+    )
+
+    sql_calls = to_sql_calls(adapter)
+    assert sql_calls == [
+        'CREATE OR REPLACE TEMPORARY VIEW "test_table" AS SELECT 1',
+    ]
+
+
+def test_temporary_table(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(SnowflakeEngineAdapter)
+
+    adapter.create_table(
+        "test_table",
+        {"a": exp.DataType.build("INT"), "b": exp.DataType.build("INT")},
+        creatable_properties=["TEMPORARY"],
+    )
+
+    sql_calls = to_sql_calls(adapter)
+    assert sql_calls == [
+        'CREATE TEMPORARY TABLE IF NOT EXISTS "test_table" ("a" INT, "b" INT)',
+    ]
+
+
+def test_transient_table(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(SnowflakeEngineAdapter)
+
+    adapter.create_table(
+        "test_table",
+        {"a": exp.DataType.build("INT"), "b": exp.DataType.build("INT")},
+        creatable_properties=["TRANSIENT"],
+    )
+
+    sql_calls = to_sql_calls(adapter)
+    assert sql_calls == [
+        'CREATE TRANSIENT TABLE IF NOT EXISTS "test_table" ("a" INT, "b" INT)',
     ]

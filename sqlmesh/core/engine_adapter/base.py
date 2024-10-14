@@ -89,7 +89,6 @@ class EngineAdapter:
     MAX_COLUMN_COMMENT_LENGTH: t.Optional[int] = None
     INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.DELETE_INSERT
     SUPPORTS_MATERIALIZED_VIEWS = False
-    SUPPORTS_SECURE_VIEWS = False
     SUPPORTS_MATERIALIZED_VIEW_SCHEMA = False
     SUPPORTS_VIEW_SCHEMA = True
     SUPPORTS_CLONING = False
@@ -896,8 +895,8 @@ class EngineAdapter:
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         replace: bool = True,
         materialized: bool = False,
-        secure: bool = False,
         materialized_properties: t.Optional[t.Dict[str, t.Any]] = None,
+        creatable_properties: t.Optional[t.List[str]] = None,
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
         view_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
@@ -914,8 +913,8 @@ class EngineAdapter:
             columns_to_types: Columns to use in the view statement.
             replace: Whether to replace an existing view defaults to True.
             materialized: Whether to create a materialized view. Only used for engines that support this feature.
-            secure: Whether to create a secured view. Only used for engines that support this feature.
             materialized_properties: Optional materialized view properties to add to the view.
+            creatable_properties: Optional create view properties to add to the view, like SECURE for secure views in snowflake.
             table_description: Optional table description from MODEL DDL.
             column_descriptions: Optional column descriptions from model query.
             view_properties: Optional view properties to add to the view.
@@ -996,12 +995,13 @@ class EngineAdapter:
         if properties.expressions:
             create_kwargs["properties"] = properties
 
-        if secure and self.SUPPORTS_SECURE_VIEWS:
-            if "properties" in create_kwargs:
-                create_kwargs["properties"].expressions.insert(0, exp.SecureProperty())
-            else:
+        parsed_creatable_properties = self._parse_creatable_properties(creatable_properties)
+        if parsed_creatable_properties:
+            if "properties" not in create_kwargs:
                 create_kwargs["properties"] = exp.Properties()
-                create_kwargs["properties"].append("expressions", exp.SecureProperty())
+            for prop in parsed_creatable_properties:
+                for expression in prop.expressions:
+                    create_kwargs["properties"].append("expressions", expression)
 
         with source_queries[0] as query:
             self.execute(
@@ -2096,6 +2096,7 @@ class EngineAdapter:
         partitioned_by: t.Optional[t.List[exp.Expression]] = None,
         partition_interval_unit: t.Optional[IntervalUnit] = None,
         clustered_by: t.Optional[t.List[str]] = None,
+        creatable_properties: t.Optional[t.Union[str, t.List[str]]] = None,
         table_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         table_description: t.Optional[str] = None,
@@ -2110,6 +2111,12 @@ class EngineAdapter:
                     this=exp.Literal.string(self._truncate_table_comment(table_description))
                 )
             )
+
+        parsed_creatable_properties = self._parse_creatable_properties(creatable_properties)
+        if parsed_creatable_properties:
+            for prop in parsed_creatable_properties:
+                for expression in prop.expressions:
+                    properties.append(expression)
 
         if properties:
             return exp.Properties(expressions=properties)
@@ -2318,6 +2325,23 @@ class EngineAdapter:
                     f"Column comments for column '{col}' in table '{table.alias_or_name}' not registered - this may be due to limited permissions.",
                     exc_info=True,
                 )
+
+    def _parse_creatable_properties(
+        self, creatable_properties: t.Optional[t.Union[str, t.List[str]]]
+    ) -> t.Optional[t.List[exp.Expression]]:
+        if not creatable_properties:
+            return None
+        if isinstance(creatable_properties, str):
+            return [
+                exp.maybe_parse(creatable_properties, into=exp.Properties, dialect=self.dialect)
+            ]
+        if isinstance(creatable_properties, list):
+            outs = []
+            for prop in creatable_properties:
+                out = exp.maybe_parse(prop, into=exp.Properties, dialect=self.dialect)
+                outs.append(out)
+            return outs
+        raise ValueError(f"Invalid creatable_properties value: {creatable_properties}")
 
     def _rename_table(
         self,

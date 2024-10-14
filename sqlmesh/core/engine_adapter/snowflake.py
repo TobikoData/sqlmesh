@@ -42,7 +42,6 @@ if t.TYPE_CHECKING:
 class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixin):
     DIALECT = "snowflake"
     SUPPORTS_MATERIALIZED_VIEWS = True
-    SUPPORTS_SECURE_VIEWS = True
     SUPPORTS_MATERIALIZED_VIEW_SCHEMA = True
     SUPPORTS_CLONING = True
     SUPPORTS_MANAGED_MODELS = True
@@ -163,6 +162,7 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
         partitioned_by: t.Optional[t.List[exp.Expression]] = None,
         partition_interval_unit: t.Optional[IntervalUnit] = None,
         clustered_by: t.Optional[t.List[str]] = None,
+        creatable_properties: t.Optional[t.Union[str, t.List[str]]] = None,
         table_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         table_description: t.Optional[str] = None,
@@ -192,7 +192,12 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
 
             properties.extend(self._table_or_view_properties_to_expressions(table_properties))
 
-        if properties:
+        parsed_creatable_properties = self._parse_creatable_properties(creatable_properties)
+        if parsed_creatable_properties:
+            for prop in parsed_creatable_properties:
+                for expression in prop.expressions:
+                    properties.append(expression)
+
             return exp.Properties(expressions=properties)
 
         return None

@@ -651,9 +651,9 @@ def test_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture)
     adapter.create_view(
         "test_table",
         parse_one("SELECT a, b FROM source_table"),
-        materialized=True,
         table_description=long_table_comment,
         column_descriptions={"a": long_column_comment},
+        materialized=True,
     )
     assert not db_call_mock.called
 

@@ -1558,9 +1558,9 @@ class ViewStrategy(PromotableStrategy):
             model.columns_to_types,
             replace=not self.adapter.HAS_VIEW_BINDING,
             materialized=self._is_materialized_view(model),
+            view_properties=model.physical_properties,
             table_description=model.description,
             column_descriptions=model.column_descriptions,
-            view_properties=model.physical_properties,
         )
 
     def append(
@@ -1608,12 +1608,13 @@ class ViewStrategy(PromotableStrategy):
         self.adapter.create_view(
             table_name,
             model.render_query_or_raise(**render_kwargs),
+            # Make sure we never replace the view during creation to avoid race conditions in engines with no late binding support.
             replace=False,
             materialized=self._is_materialized_view(model),
             materialized_properties=materialized_properties,
+            view_properties=model.physical_properties,
             table_description=model.description if is_table_deployable else None,
             column_descriptions=model.column_descriptions if is_table_deployable else None,
-            view_properties=model.physical_properties,
         )
 
     def migrate(
@@ -1632,9 +1633,9 @@ class ViewStrategy(PromotableStrategy):
             ),
             model.columns_to_types,
             materialized=self._is_materialized_view(model),
+            view_properties=model.physical_properties,
             table_description=model.description,
             column_descriptions=model.column_descriptions,
-            view_properties=model.physical_properties,
         )
 
     def delete(self, name: str, **kwargs: t.Any) -> None:
