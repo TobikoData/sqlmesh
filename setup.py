@@ -47,7 +47,7 @@ setup(
         "requests",
         "rich[jupyter]",
         "ruamel.yaml",
-        "sqlglot[rs]~=25.24.3",
+        "sqlglot[rs]~=25.25.0",
         "tenacity",
     ],
     extras_require={

@@ -1192,7 +1192,7 @@ class SqlModel(_SqlBasedModel):
                 return None
 
             expr = edit.expression
-            if _is_udtf(expr):
+            if isinstance(expr, exp.UDTF):
                 # projection subqueries do not change cardinality, engines don't allow these to return
                 # more than one row of data
                 parent = expr.find_ancestor(exp.Subquery)
@@ -2365,13 +2365,6 @@ def _extract_audit_expressions(
 def _is_projection(expr: exp.Expression) -> bool:
     parent = expr.parent
     return isinstance(parent, exp.Select) and expr.arg_key == "expressions"
-
-
-def _is_udtf(expr: exp.Expression) -> bool:
-    return isinstance(expr, (exp.Explode, exp.Posexplode, exp.Unnest)) or (
-        isinstance(expr, exp.Anonymous)
-        and expr.this.upper() in ("EXPLODE_OUTER", "POSEXPLODE_OUTER", "UNNEST")
-    )
 
 
 def _single_value_or_tuple(values: t.Sequence) -> exp.Identifier | exp.Tuple:
