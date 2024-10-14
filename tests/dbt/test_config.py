@@ -628,6 +628,34 @@ def test_databricks_config():
     )
 
 
+def test_databricks_config_oauth():
+    config = _test_warehouse_config(
+        """
+        dbt-databricks:
+          target: dev
+          outputs:
+            dev:
+              type: databricks
+              catalog: test_catalog
+              schema: analytics
+              host: yourorg.databrickshost.com
+              http_path: /sql/your/http/path
+              auth_type: oauth
+              client_id: client-id
+              client_secret: client-secret
+        """,
+        DatabricksConfig,
+        "dbt-databricks",
+        "outputs",
+        "dev",
+    )
+
+    as_sqlmesh = config.to_sqlmesh()
+    assert as_sqlmesh.auth_type == "databricks-oauth"
+    assert as_sqlmesh.oauth_client_id == "client-id"
+    assert as_sqlmesh.oauth_client_secret == "client-secret"
+
+
 def test_bigquery_config():
     _test_warehouse_config(
         """

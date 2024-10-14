@@ -460,8 +460,11 @@ class DatabricksConfig(TargetConfig):
     type: Literal["databricks"] = "databricks"
     host: str
     http_path: str
-    token: str
+    token: t.Optional[str] = None  # only required if auth_type is not set to 'oauth'
     database: t.Optional[str] = Field(alias="catalog")  # type: ignore
+    auth_type: t.Optional[str] = None
+    client_id: t.Optional[str] = None
+    client_secret: t.Optional[str] = None
 
     def default_incremental_strategy(self, kind: IncrementalKind) -> str:
         return "merge"
@@ -485,6 +488,9 @@ class DatabricksConfig(TargetConfig):
             access_token=self.token,
             concurrent_tasks=self.threads,
             catalog=self.database,
+            auth_type="databricks-oauth" if self.auth_type == "oauth" else self.auth_type,
+            oauth_client_id=self.client_id,
+            oauth_client_secret=self.client_secret,
             **kwargs,
         )
 

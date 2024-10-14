@@ -8,6 +8,7 @@ from sqlmesh.core.config.connection import (
     BigQueryConnectionConfig,
     ClickhouseConnectionConfig,
     ConnectionConfig,
+    DatabricksConnectionConfig,
     DuckDBAttachOptions,
     DuckDBConnectionConfig,
     GCPPostgresConnectionConfig,
@@ -726,3 +727,75 @@ def test_athena_s3_locations_valid(make_config):
     assert isinstance(config, AthenaConnectionConfig)
     assert config.s3_staging_dir is None
     assert config.s3_warehouse_location is None
+
+
+def test_databricks(make_config):
+    # Personal Access Token
+    oauth_pat_config = make_config(
+        type="databricks",
+        server_hostname="dbc-test.cloud.databricks.com",
+        http_path="sql/test/foo",
+        access_token="foo",
+    )
+    assert isinstance(oauth_pat_config, DatabricksConnectionConfig)
+    assert oauth_pat_config.server_hostname == "dbc-test.cloud.databricks.com"
+    assert oauth_pat_config.http_path == "sql/test/foo"
+    assert oauth_pat_config.access_token == "foo"
+    assert oauth_pat_config.auth_type is None
+    assert oauth_pat_config.oauth_client_id is None
+    assert oauth_pat_config.oauth_client_secret is None
+
+    # OAuth (M2M)
+    oauth_m2m_config = make_config(
+        type="databricks",
+        server_hostname="dbc-test.cloud.databricks.com",
+        http_path="sql/test/foo",
+        auth_type="databricks-oauth",
+        oauth_client_id="client-id",
+        oauth_client_secret="client-secret",
+    )
+    assert isinstance(oauth_m2m_config, DatabricksConnectionConfig)
+    assert oauth_m2m_config.server_hostname == "dbc-test.cloud.databricks.com"
+    assert oauth_pat_config.http_path == "sql/test/foo"
+    assert oauth_m2m_config.access_token is None
+    assert oauth_m2m_config.auth_type == "databricks-oauth"
+    assert oauth_m2m_config.oauth_client_id == "client-id"
+    assert oauth_m2m_config.oauth_client_secret == "client-secret"
+
+    # OAuth (U2M)
+    oauth_u2m_config = make_config(
+        type="databricks",
+        server_hostname="dbc-test.cloud.databricks.com",
+        http_path="sql/test/foo",
+        auth_type="databricks-oauth",
+    )
+    assert isinstance(oauth_u2m_config, DatabricksConnectionConfig)
+    assert oauth_u2m_config.server_hostname == "dbc-test.cloud.databricks.com"
+    assert oauth_pat_config.http_path == "sql/test/foo"
+    assert oauth_u2m_config.access_token is None
+    assert oauth_u2m_config.auth_type == "databricks-oauth"
+    assert oauth_u2m_config.oauth_client_id is None
+    assert oauth_u2m_config.oauth_client_secret is None
+
+    # auth_type must match the AuthType enum if specified
+    with pytest.raises(ValueError, match=r".*nonexist does not match a valid option.*"):
+        make_config(
+            type="databricks", server_hostname="dbc-test.cloud.databricks.com", auth_type="nonexist"
+        )
+
+    # if client_secret is specified, client_id must also be specified
+    with pytest.raises(ValueError, match=r"`oauth_client_id` is required.*"):
+        make_config(
+            type="databricks",
+            server_hostname="dbc-test.cloud.databricks.com",
+            auth_type="databricks-oauth",
+            oauth_client_secret="client-secret",
+        )
+
+    # http_path is still required when auth_type is specified
+    with pytest.raises(ValueError, match=r"`http_path` is still required.*"):
+        make_config(
+            type="databricks",
+            server_hostname="dbc-test.cloud.databricks.com",
+            auth_type="databricks-oauth",
+        )
