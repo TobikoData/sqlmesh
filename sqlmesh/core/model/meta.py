@@ -379,9 +379,7 @@ class ModelMeta(_Node):
             col for col in self._partition_by_columns
         ]:
             return [
-                (TIME_COL_PARTITION_FUNC.get(self.dialect) or (lambda x: x))(
-                    self.time_column.column
-                ),
+                TIME_COL_PARTITION_FUNC.get(self.dialect, lambda x: x)(self.time_column.column),
                 *self.partitioned_by_,
             ]
         return self.partitioned_by_
