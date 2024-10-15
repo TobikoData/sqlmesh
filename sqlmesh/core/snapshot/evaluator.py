@@ -859,7 +859,7 @@ class SnapshotEvaluator:
             select("COUNT(*)").from_(query.subquery("audit")),
             quote_identifiers=True,
         )  # type: ignore
-        if count and raise_exception:
+        if count:
             audit_error = AuditError(
                 audit_name=audit.name,
                 model=snapshot.model_or_none,
@@ -867,7 +867,7 @@ class SnapshotEvaluator:
                 query=query,
                 adapter_dialect=self.adapter.dialect,
             )
-            if blocking:
+            if raise_exception and blocking:
                 raise audit_error
             else:
                 logger.warning(f"{audit_error}\nAudit is warn only so proceeding with execution.")
