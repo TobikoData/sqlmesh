@@ -12,7 +12,6 @@ from datetime import datetime
 from pytest_mock.plugin import MockerFixture
 from sqlmesh.core import dialect as d
 from sqlmesh.utils.date import to_datetime
-import pandas as pd
 
 pytestmark = [pytest.mark.clickhouse, pytest.mark.engine]
 
@@ -516,10 +515,8 @@ def test_scd_type_2_by_time(
         make_temp_table_name(table_name, "abcd"),
     ]
 
-    fetchdf_mock = mocker.patch(
-        "sqlmesh.core.engine_adapter.ClickhouseEngineAdapter._fetch_native_df"
-    )
-    fetchdf_mock.return_value = pd.DataFrame({"partition_key": [None]})
+    fetchone_mock = mocker.patch("sqlmesh.core.engine_adapter.ClickhouseEngineAdapter.fetchone")
+    fetchone_mock.return_value = None
 
     # The SCD query we build must specify the setting join_use_nulls = 1. We need to ensure that our
     # setting on the outer query doesn't override the value the user expects.
@@ -730,10 +727,8 @@ def test_scd_type_2_by_column(
         make_temp_table_name(table_name, "abcd"),
     ]
 
-    fetchdf_mock = mocker.patch(
-        "sqlmesh.core.engine_adapter.ClickhouseEngineAdapter._fetch_native_df"
-    )
-    fetchdf_mock.return_value = pd.DataFrame({"partition_key": [None]})
+    fetchone_mock = mocker.patch("sqlmesh.core.engine_adapter.ClickhouseEngineAdapter.fetchone")
+    fetchone_mock.return_value = None
 
     # The SCD query we build must specify the setting join_use_nulls = 1. We need to ensure that our
     # setting on the outer query doesn't override the value the user expects.
@@ -928,10 +923,8 @@ def test_insert_overwrite_by_condition_replace_partitioned(
     table_name = "target"
     temp_table_mock.return_value = make_temp_table_name(table_name, "abcd")
 
-    fetchdf_mock = mocker.patch(
-        "sqlmesh.core.engine_adapter.ClickhouseEngineAdapter._fetch_native_df"
-    )
-    fetchdf_mock.return_value = pd.DataFrame({"partition_key": ["toMonday(ds)"]})
+    fetchone_mock = mocker.patch("sqlmesh.core.engine_adapter.ClickhouseEngineAdapter.fetchone")
+    fetchone_mock.return_value = "toMonday(ds)"
 
     insert_table_name = make_temp_table_name("new_records", "abcd")
     existing_table_name = make_temp_table_name("existing_records", "abcd")
@@ -968,10 +961,8 @@ def test_insert_overwrite_by_condition_replace(
     table_name = "target"
     temp_table_mock.return_value = make_temp_table_name(table_name, "abcd")
 
-    fetchdf_mock = mocker.patch(
-        "sqlmesh.core.engine_adapter.ClickhouseEngineAdapter._fetch_native_df"
-    )
-    fetchdf_mock.return_value = pd.DataFrame({"partition_key": [None]})
+    fetchone_mock = mocker.patch("sqlmesh.core.engine_adapter.ClickhouseEngineAdapter.fetchone")
+    fetchone_mock.return_value = None
 
     insert_table_name = make_temp_table_name("new_records", "abcd")
     existing_table_name = make_temp_table_name("existing_records", "abcd")
@@ -1008,13 +999,13 @@ def test_insert_overwrite_by_condition_where_partitioned(
     table_name = "target"
     temp_table_mock.return_value = make_temp_table_name(table_name, "abcd")
 
-    fetchdf_mock = mocker.patch(
-        "sqlmesh.core.engine_adapter.ClickhouseEngineAdapter._fetch_native_df"
-    )
-    fetchdf_mock.side_effect = [
-        pd.DataFrame({"partition_key": ["toMonday(ds)"]}),
-        pd.DataFrame({"partition_id": ["1", "2", "3", "4"]}),
-        pd.DataFrame({"_partition_id": ["1", "2", "4"]}),
+    fetchone_mock = mocker.patch("sqlmesh.core.engine_adapter.ClickhouseEngineAdapter.fetchone")
+    fetchone_mock.return_value = "toMonday(ds)"
+
+    fetchall_mock = mocker.patch("sqlmesh.core.engine_adapter.ClickhouseEngineAdapter.fetchall")
+    fetchall_mock.side_effect = [
+        [("1",), ("2",), ("3",), ("4",)],
+        ["1", "2", "4"],
     ]
 
     insert_table_name = make_temp_table_name("new_records", "abcd")
@@ -1059,10 +1050,8 @@ def test_insert_overwrite_by_condition_by_key(
     table_name = "target"
     temp_table_mock.return_value = make_temp_table_name(table_name, "abcd")
 
-    fetchdf_mock = mocker.patch(
-        "sqlmesh.core.engine_adapter.ClickhouseEngineAdapter._fetch_native_df"
-    )
-    fetchdf_mock.return_value = pd.DataFrame({"partition_key": [None]})
+    fetchone_mock = mocker.patch("sqlmesh.core.engine_adapter.ClickhouseEngineAdapter.fetchone")
+    fetchone_mock.return_value = None
 
     insert_table_name = make_temp_table_name("new_records", "abcd")
     existing_table_name = make_temp_table_name("existing_records", "abcd")
@@ -1116,16 +1105,15 @@ def test_insert_overwrite_by_condition_by_key_partitioned(
     table_name = "target"
     temp_table_mock.return_value = make_temp_table_name(table_name, "abcd")
 
-    fetchdf_mock = mocker.patch(
-        "sqlmesh.core.engine_adapter.ClickhouseEngineAdapter._fetch_native_df"
-    )
-    fetchdf_mock.side_effect = [
-        pd.DataFrame({"partition_key": ["toMonday(ds)"]}),
-        pd.DataFrame({"partition_id": ["1", "2", "3", "4"]}),
-        pd.DataFrame({"_partition_id": ["1", "2", "4"]}),
-        pd.DataFrame({"partition_key": ["toMonday(ds)"]}),
-        pd.DataFrame({"partition_id": ["1", "2", "3", "4"]}),
-        pd.DataFrame({"_partition_id": ["1", "2", "4"]}),
+    fetchone_mock = mocker.patch("sqlmesh.core.engine_adapter.ClickhouseEngineAdapter.fetchone")
+    fetchone_mock.side_effect = ["toMonday(ds)", "toMonday(ds)"]
+
+    fetchall_mock = mocker.patch("sqlmesh.core.engine_adapter.ClickhouseEngineAdapter.fetchall")
+    fetchall_mock.side_effect = [
+        [("1",), ("2",), ("3",), ("4",)],
+        ["1", "2", "4"],
+        [("1",), ("2",), ("3",), ("4",)],
+        ["1", "2", "4"],
     ]
 
     insert_table_name = make_temp_table_name("new_records", "abcd")
@@ -1182,14 +1170,11 @@ def test_insert_overwrite_by_condition_inc_by_partition(
     table_name = "target"
     temp_table_mock.return_value = make_temp_table_name(table_name, "abcd")
 
-    fetchdf_mock = mocker.patch(
-        "sqlmesh.core.engine_adapter.ClickhouseEngineAdapter._fetch_native_df"
-    )
-    fetchdf_mock.side_effect = [
-        pd.DataFrame({"partition_key": ["toMonday(ds)"]}),
-        pd.DataFrame({"_partition_id": ["1", "2", "4"]}),
-        pd.DataFrame({"partition_id": []}),
-    ]
+    fetchone_mock = mocker.patch("sqlmesh.core.engine_adapter.ClickhouseEngineAdapter.fetchone")
+    fetchone_mock.return_value = "toMonday(ds)"
+
+    fetchall_mock = mocker.patch("sqlmesh.core.engine_adapter.ClickhouseEngineAdapter.fetchall")
+    fetchall_mock.return_value = [("1",), ("2",), ("4",)]
 
     insert_table_name = make_temp_table_name("new_records", "abcd")
     existing_table_name = make_temp_table_name("existing_records", "abcd")
@@ -1203,7 +1188,10 @@ def test_insert_overwrite_by_condition_inc_by_partition(
         existing_table_name,
     )
     adapter._insert_overwrite_by_condition(
-        existing_table_name.sql(), source_queries, columns_to_types, is_inc_by_partition=True
+        existing_table_name.sql(),
+        source_queries,
+        columns_to_types,
+        keep_existing_partition_rows=False,
     )
 
     to_sql_calls(adapter) == [
