@@ -5934,7 +5934,7 @@ from sqlmesh import macro
 
 @macro()
 def custom_macro(evaluator, arg1, arg2):
-    return f"{arg1}{arg2}"
+    return "SELECT 1 AS c"
     """)
 
     new_snowflake_model_file = tmp_path / "models/new_model.sql"
@@ -5948,7 +5948,7 @@ MODEL (
 @DEF(foo, foo);
 @DEF(bar, bar);
 
-SELECT * FROM @custom_macro(@foo, @bar)
+SELECT * FROM (@custom_macro(@foo, @bar)) AS q
     """)
 
     config = Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))
@@ -5956,4 +5956,9 @@ SELECT * FROM @custom_macro(@foo, @bar)
 
     query = context.get_model("sqlmesh_example.test").render_query()
 
-    assert t.cast(exp.Query, query).sql("snowflake") == 'SELECT * FROM "FOOBAR" AS "FOOBAR"'
+    assert (
+        t.cast(exp.Query, query).sql("snowflake")
+        == 'SELECT "Q"."C" AS "C" FROM (SELECT 1 AS "C") AS "Q"'
+    )
+
+    context.plan(no_prompts=True, auto_apply=True)

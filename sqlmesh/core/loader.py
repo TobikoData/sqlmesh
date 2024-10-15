@@ -93,17 +93,10 @@ class Loader(abc.ABC):
         self._config_mtimes = {path: max(mtimes) for path, mtimes in config_mtimes.items()}
 
         macros, jinja_macros = self._load_scripts()
-
-        # All macros need to be known at parse time
-        standard_macros = macro.get_registry()
-        macro.set_registry(macros)
-
         audits = self._load_audits(macros=macros, jinja_macros=jinja_macros)
         models = self._load_models(
             macros, jinja_macros, context.gateway or context.config.default_gateway, audits or None
         )
-
-        macro.set_registry(standard_macros)
 
         for model in models.values():
             self._add_model_to_dag(model)
