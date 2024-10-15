@@ -202,7 +202,7 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
                 dynamic_key_exp: Expression to build key (replace by key only)
                 dynamic_key_unique: Whether more than one record can exist per key value (replace by key only)
 
-                is_inc_by_partition: Whether to overwrite partitions with only new records (incremental by partition only)
+                keep_existing_partition_rows: Whether to overwrite partitions with only new records (incremental by partition only)
 
         Returns:
             Side effects only: execution of insert-overwrite operation.
@@ -243,14 +243,14 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
                 where = dynamic_key_exp.isin(query=key_query)
 
             # get target table partition key to confirm it's actually partitioned
-            table_partition_exp = self.fetchdf(
+            table_partition_exp = self.fetchone(
                 exp.select("partition_key")
                 .from_("system.tables")
                 .where(
                     exp.column("database").eq(target_table.db),
                     exp.column("name").eq(target_table.name),
                 )
-            )["partition_key"][0]
+            )
 
             all_affected_partitions: t.Set[str] = set()
 
@@ -266,21 +266,34 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
                 # if target table is partitioned, modify insert expression to only insert
                 #   existing records that are in one of the affected partitions
                 if table_partition_exp:
+                    partitions_temp_table_name = self._get_temp_table(
+                        exp.to_table(f"{target_table.db}._affected_partitions")
+                    )
                     all_affected_partitions, existing_records_insert_exp = (
                         self._get_affected_partitions_and_insert_exp(
-                            target_table, temp_table, where, existing_records_insert_exp
+                            target_table,
+                            temp_table,
+                            where,
+                            existing_records_insert_exp,
+                            partitions_temp_table_name,
                         )
                     )
 
-                self.execute(existing_records_insert_exp)
+                try:
+                    self.execute(existing_records_insert_exp)
+                finally:
+                    if table_partition_exp:
+                        self.drop_table(partitions_temp_table_name)
 
             # process by partition if:
             #   1. The table is partitioned AND
             #   (2a. There are existing records to keep (`where`) OR
-            #    2b. We're replacing complete partitions (incremental by partition model))
-            if table_partition_exp and (where or kwargs.get("is_inc_by_partition")):
+            #    2b. We're overwriting existing partition rows (incremental by partition model))
+            if table_partition_exp and (
+                where or kwargs.get("keep_existing_partition_rows") is False
+            ):
                 # only replace partitions that have records in temp_table
-                partitions_to_replace = self._get_affected_partitions(temp_table)
+                partitions_to_replace = self._get_partition_ids(temp_table)
 
                 # drop affected partitions that have no records in temp_table
                 #   - NOTE: `all_affected_partitions` will be empty when is_inc_by_partition=True
@@ -306,14 +319,12 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
         temp_table: exp.Table,
         where: exp.Condition,
         existing_records_insert_exp: exp.Insert,
+        partitions_temp_table_name: exp.Table,
     ) -> tuple[t.Set[str], exp.Insert]:
         # identify all affected partition IDs
         #   - store in temp table so we can reuse results
-        affected_partitions_tbl = self._get_temp_table(
-            exp.to_table(f"{target_table.db}._affected_partitions")
-        )
         self.ctas(
-            affected_partitions_tbl,
+            partitions_temp_table_name,
             exp.select("partition_id")
             .distinct()
             .from_(
@@ -331,8 +342,8 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
         )
 
         # read all affected partition IDs into memory
-        all_affected_partitions = self._get_affected_partitions(
-            affected_partitions_tbl, "partition_id"
+        all_affected_partitions = self._get_partition_ids(
+            partitions_temp_table_name, "partition_id"
         )
 
         # limit existing records insert expression WHERE to affected target table partitions
@@ -341,7 +352,7 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
             "expression",
             existing_records_insert_exp.expression.where(
                 exp.column("_partition_id").isin(
-                    exp.select("partition_id").from_(affected_partitions_tbl)
+                    exp.select("partition_id").from_(partitions_temp_table_name)
                 )
             ),
         )
@@ -362,13 +373,7 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
                 "actions",
                 exp.ReplacePartition(
                     expression=exp.Partition(
-                        expressions=[
-                            exp.PartitionId(
-                                this=exp.Literal(
-                                    this=partition, is_string=isinstance(partition, str)
-                                )
-                            )
-                        ]
+                        expressions=[exp.PartitionId(this=exp.Literal.string(str(partition)))]
                     ),
                     source=temp_table,
                 ),
@@ -380,13 +385,7 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
                 exp.DropPartition(
                     expressions=[
                         exp.Partition(
-                            expressions=[
-                                exp.PartitionId(
-                                    this=exp.Literal(
-                                        this=partition, is_string=isinstance(partition, str)
-                                    )
-                                )
-                            ]
+                            expressions=[exp.PartitionId(this=exp.Literal.string(str(partition)))]
                         )
                     ],
                     source=temp_table,
@@ -430,7 +429,7 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
         )
 
         self._insert_overwrite_by_condition(
-            table_name, source_queries, columns_to_types, is_inc_by_partition=True
+            table_name, source_queries, columns_to_types, keep_existing_partition_rows=False
         )
 
     def _create_table_like(
@@ -441,7 +440,7 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
             f"CREATE TABLE {target_table_name}{self._on_cluster_sql()} AS {source_table_name}"
         )
 
-    def _get_affected_partitions(
+    def _get_partition_ids(
         self,
         table: exp.Table,
         partition_col_name: str = "_partition_id",
@@ -454,9 +453,9 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
             partitions_query = partitions_query.where(where)
         if limit:
             partitions_query = partitions_query.limit(limit)
-        partitions_df = self.fetchdf(partitions_query)
+        partitions = self.fetchall(partitions_query)
 
-        return set(partitions_df[partition_col_name].to_list() if not partitions_df.empty else [])
+        return set([part[0] for part in partitions] if partitions else [])
 
     def _create_table(
         self,

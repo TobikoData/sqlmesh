@@ -728,8 +728,7 @@ def test_insert_overwrite_by_time_partition(ctx: TestContext):
     results = ctx.get_metadata_results()
     assert len(results.views) == 0
     assert len(results.materialized_views) == 0
-    assert len(results.tables) == 2 if ctx.dialect == "clickhouse" else 1
-    assert len(results.non_temp_tables) == 1
+    assert len(results.tables) == len(results.non_temp_tables) == 1
     assert results.non_temp_tables[0] == table.name
     ctx.compare_with_current(table, input_data.iloc[1:])
 
@@ -753,8 +752,7 @@ def test_insert_overwrite_by_time_partition(ctx: TestContext):
         results = ctx.get_metadata_results()
         assert len(results.views) == 0
         assert len(results.materialized_views) == 0
-        assert len(results.tables) == 3 if ctx.dialect == "clickhouse" else 1
-        assert len(results.non_temp_tables) == 1
+        assert len(results.tables) == len(results.non_temp_tables) == 1
         assert results.non_temp_tables[0] == table.name
         ctx.compare_with_current(
             table,
@@ -1753,7 +1751,7 @@ def test_init_project(ctx: TestContext, tmp_path: pathlib.Path):
     physical_layer_results = ctx.get_metadata_results(object_names["physical_schema"][0])
     assert len(physical_layer_results.views) == 0
     assert len(physical_layer_results.materialized_views) == 0
-    assert len(physical_layer_results.tables) == 7 if ctx.dialect == "clickhouse" else 6
+    assert len(physical_layer_results.tables) == 6
     assert len(physical_layer_results.non_temp_tables) == 6
 
     # make and validate unmodified dev environment

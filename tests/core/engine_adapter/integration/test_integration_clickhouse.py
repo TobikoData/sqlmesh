@@ -13,7 +13,6 @@ from sqlglot import exp, parse_one
                 pytest.mark.docker,
                 pytest.mark.engine,
                 pytest.mark.clickhouse,
-                pytest.mark.xdist_group("engine_integration_clickhouse"),
             ],
         ),
         pytest.param(
@@ -22,7 +21,6 @@ from sqlglot import exp, parse_one
                 pytest.mark.docker,
                 pytest.mark.engine,
                 pytest.mark.clickhouse_cluster,
-                pytest.mark.xdist_group("engine_integration_clickhouse_cluster"),
             ],
         ),
         pytest.param(
@@ -31,7 +29,6 @@ from sqlglot import exp, parse_one
                 pytest.mark.engine,
                 pytest.mark.remote,
                 pytest.mark.clickhouse_cloud,
-                pytest.mark.xdist_group("engine_integration_clickhouse_cloud"),
             ],
         ),
     ]
@@ -92,8 +89,6 @@ def _create_table_and_insert_existing_data(
 
 
 def test_insert_overwrite_by_condition_replace_partitioned(ctx: TestContext):
-    ctx.init()
-
     existing_table_name = _create_table_and_insert_existing_data(ctx)
 
     # new data to insert
@@ -127,12 +122,9 @@ def test_insert_overwrite_by_condition_replace_partitioned(ctx: TestContext):
             ]
         ),
     )
-    ctx.engine_adapter.drop_table(existing_table_name.sql())
 
 
 def test_insert_overwrite_by_condition_replace(ctx: TestContext):
-    ctx.init()
-
     existing_table_name = _create_table_and_insert_existing_data(ctx, partitioned_by=None)
 
     # new data to insert
@@ -166,12 +158,9 @@ def test_insert_overwrite_by_condition_replace(ctx: TestContext):
             ]
         ),
     )
-    ctx.engine_adapter.drop_table(existing_table_name.sql())
 
 
 def test_insert_overwrite_by_condition_where_partitioned(ctx: TestContext):
-    ctx.init()
-
     # `where` time window
     start_date = "2024-02-15"
     end_date = "2024-04-30"
@@ -216,12 +205,9 @@ def test_insert_overwrite_by_condition_where_partitioned(ctx: TestContext):
             ]
         ),
     )
-    ctx.engine_adapter.drop_table(existing_table_name.sql())
 
 
 def test_insert_overwrite_by_condition_where_compound_partitioned(ctx: TestContext):
-    ctx.init()
-
     # `where` time window
     start_date = "2024-02-15"
     end_date = "2024-04-30"
@@ -297,12 +283,9 @@ def test_insert_overwrite_by_condition_where_compound_partitioned(ctx: TestConte
             ]
         ),
     )
-    ctx.engine_adapter.drop_table(existing_table_name.sql())
 
 
 def test_insert_overwrite_by_condition_by_key(ctx: TestContext):
-    ctx.init()
-
     # key parameters
     key = [exp.column("id")]
     key_exp = key[0]
@@ -386,12 +369,8 @@ def test_insert_overwrite_by_condition_by_key(ctx: TestContext):
             ),
         )
 
-    ctx.engine_adapter.drop_table(existing_table_name.sql())
-
 
 def test_insert_overwrite_by_condition_by_key_partitioned(ctx: TestContext):
-    ctx.init()
-
     # key parameters
     key = [exp.column("id")]
     key_exp = key[0]
@@ -478,12 +457,8 @@ def test_insert_overwrite_by_condition_by_key_partitioned(ctx: TestContext):
             ),
         )
 
-    ctx.engine_adapter.drop_table(existing_table_name.sql())
-
 
 def test_insert_overwrite_by_condition_inc_by_partition(ctx: TestContext):
-    ctx.init()
-
     existing_table_name = _create_table_and_insert_existing_data(ctx)
 
     # new data to insert
@@ -502,7 +477,10 @@ def test_insert_overwrite_by_condition_inc_by_partition(ctx: TestContext):
             ctx, insert_table, existing_table_name
         )
         ctx.engine_adapter._insert_overwrite_by_condition(
-            existing_table_name.sql(), source_queries, columns_to_types, is_inc_by_partition=True
+            existing_table_name.sql(),
+            source_queries,
+            columns_to_types,
+            keep_existing_partition_rows=False,
         )
 
     ctx.compare_with_current(
@@ -519,4 +497,3 @@ def test_insert_overwrite_by_condition_inc_by_partition(ctx: TestContext):
             ]
         ),
     )
-    ctx.engine_adapter.drop_table(existing_table_name.sql())
