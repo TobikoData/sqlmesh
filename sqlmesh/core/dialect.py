@@ -464,11 +464,23 @@ def _parse_table_parts(
     name = table_arg.name
 
     if isinstance(table_arg, exp.Var) and name.startswith(SQLMESH_MACRO_PREFIX):
-        # Macro functions do not clash with the staged file syntax, so we can safely parse them
-        from sqlmesh.core.macros import macro
-
-        macros = macro.get_registry()
-        if self._prev.token_type == TokenType.STRING or "{" in name or name[1:].lower() in macros:
+        # In these cases, we don't want to produce a `StagedFilePath` node:
+        #
+        # - @'...' needs to parsed as a string template
+        # - @{foo}.bar needs to be parsed as a table with a macro var part
+        # - @name(arg1 [, arg2 ...]) needs to be parsed as a macro function call
+        #
+        # These cases can unambiguously be parsed using the base `_parse_table_parts`, as there
+        # is no overlap with staged files https://docs.snowflake.com/en/user-guide/querying-stage
+        if (
+            self._prev.token_type == TokenType.STRING
+            or "{" in name
+            or (
+                self._curr
+                and self._prev.token_type == TokenType.L_PAREN
+                and self._curr.text.upper() not in ("FILE_FORMAT", "PATTERN")
+            )
+        ):
             self._retreat(index)
             return Parser._parse_table_parts(self, schema=schema, is_db_reference=is_db_reference)
 
