@@ -63,6 +63,8 @@ logger = logging.getLogger(__name__)
 MERGE_TARGET_ALIAS = "__MERGE_TARGET__"
 MERGE_SOURCE_ALIAS = "__MERGE_SOURCE__"
 
+KEY_FOR_CREATABLE_TYPE = "CREATABLE_TYPE"
+
 
 @set_catalog()
 class EngineAdapter:
@@ -406,6 +408,23 @@ class EngineAdapter:
             exists=exists,
         )
         self.execute(expression)
+
+    def _pop_creatable_type_from_properties(
+        self,
+        properties: t.Dict[str, exp.Expression],
+    ) -> t.Optional[exp.Expression]:
+        """Pop out the creatable_type from the properties dictionary (if exists (return it/remove it) else return none).
+        It also checks that none of the expressions are MATERIALIZE as that conflicts with the `materialize` parameter.
+        """
+        for key in list(properties.keys()):
+            upper_key = key.upper()
+            if upper_key == KEY_FOR_CREATABLE_TYPE:
+                if isinstance(properties[key], exp.MaterializedProperty):
+                    raise SQLMeshError(
+                        f"Cannot set {KEY_FOR_CREATABLE_TYPE} to MATERIALIZE as it conflicts with the `materialize` property."
+                    )
+                return properties.pop(key)
+        return None
 
     def create_table(
         self,
@@ -951,6 +970,11 @@ class EngineAdapter:
         if not properties:
             properties = exp.Properties(expressions=[])
 
+        if view_properties:
+            table_type = self._pop_creatable_type_from_properties(view_properties)
+            if table_type:
+                properties.append("expressions", table_type)
+
         if materialized and self.SUPPORTS_MATERIALIZED_VIEWS:
             properties.append("expressions", exp.MaterializedProperty())
 
@@ -988,7 +1012,11 @@ class EngineAdapter:
         )
         if create_view_properties:
             for view_property in create_view_properties.expressions:
-                properties.append("expressions", view_property)
+                # Small hack to make sure SECURE goes at the beginning before materialized as required by Snowflake
+                if isinstance(view_property, exp.SecureProperty):
+                    properties.set("expressions", view_property, index=0, overwrite=False)
+                else:
+                    properties.append("expressions", view_property)
 
         if properties.expressions:
             create_kwargs["properties"] = properties
@@ -2119,6 +2147,10 @@ class EngineAdapter:
                     this=exp.Literal.string(self._truncate_table_comment(table_description))
                 )
             )
+
+        if table_properties:
+            table_type = self._pop_creatable_type_from_properties(table_properties)
+            properties.extend(ensure_list(table_type))
 
         if properties:
             return exp.Properties(expressions=properties)

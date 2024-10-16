@@ -83,8 +83,8 @@ def test_generate_table_name_in_dialect(mocker: MockerFixture):
 
 def test_config_not_found(copy_to_temp_path: t.Callable):
     with pytest.raises(
-        ConfigError,
-        match=r".*config could not be found.*",
+            ConfigError,
+            match=r".*config could not be found.*",
     ):
         Context(paths="nonexistent/directory", config="config")
 
@@ -335,8 +335,8 @@ def test_plan_execution_time():
         no_prompts=True,
     )
     assert (
-        str(list(context.fetchdf("select * from db__dev.x")["execution_date"])[0])
-        == "2024-01-02 00:00:00"
+            str(list(context.fetchdf("select * from db__dev.x")["execution_date"])[0])
+            == "2024-01-02 00:00:00"
     )
 
 
@@ -423,11 +423,11 @@ def test_python_model_empty_df_raises(sushi_context, capsys):
         sushi_context.plan(no_prompts=True, auto_apply=True)
 
     assert (
-        "Cannot construct source query from an empty \nDataFrame. This error "
-        "is commonly related to Python models that produce no data.\nFor such "
-        "models, consider yielding from an empty generator if the resulting set "
-        "\nis empty, i.e. use `yield from ()`"
-    ) in capsys.readouterr().out
+               "Cannot construct source query from an empty \nDataFrame. This error "
+               "is commonly related to Python models that produce no data.\nFor such "
+               "models, consider yielding from an empty generator if the resulting set "
+               "\nis empty, i.e. use `yield from ()`"
+           ) in capsys.readouterr().out
 
 
 def test_env_and_default_schema_normalization(mocker: MockerFixture):
@@ -574,8 +574,8 @@ model_defaults:
 """,
         )
         with pytest.raises(
-            ConfigError,
-            match="User and password must be provided if using default authentication",
+                ConfigError,
+                match="User and password must be provided if using default authentication",
         ):
             load_configs("config", Config, paths=project_config.parent)
         loaded_configs: t.Dict[pathlib.Path, Config] = load_configs(
@@ -622,9 +622,9 @@ def test_physical_schema_override(copy_to_temp_path: t.Callable) -> None:
     assert get_view_schemas(context) == {"sushi", "raw"}
     sushi_fingerprints = get_sushi_fingerprints(context)
     assert (
-        len(sushi_fingerprints)
-        == len(no_mapping_fingerprints)
-        == len(no_mapping_fingerprints - sushi_fingerprints)
+            len(sushi_fingerprints)
+            == len(no_mapping_fingerprints)
+            == len(no_mapping_fingerprints - sushi_fingerprints)
     )
 
 
@@ -852,8 +852,8 @@ def test_unrestorable_snapshot(sushi_context: Context) -> None:
     )
 
     assert (
-        model_v1_new_snapshot.node.stamp
-        == f"revert to {model_v1_old_snapshot.snapshot_id.identifier}"
+            model_v1_new_snapshot.node.stamp
+            == f"revert to {model_v1_old_snapshot.snapshot_id.identifier}"
     )
     assert model_v1_old_snapshot.snapshot_id != model_v1_new_snapshot.snapshot_id
     assert model_v1_old_snapshot.fingerprint != model_v1_new_snapshot.fingerprint
@@ -861,8 +861,8 @@ def test_unrestorable_snapshot(sushi_context: Context) -> None:
 
 def test_default_catalog_connections(copy_to_temp_path: t.Callable):
     with patch(
-        "sqlmesh.core.engine_adapter.base.EngineAdapter.default_catalog",
-        PropertyMock(return_value=None),
+            "sqlmesh.core.engine_adapter.base.EngineAdapter.default_catalog",
+            PropertyMock(return_value=None),
     ):
         context = Context(paths=copy_to_temp_path("examples/sushi"))
         assert context.default_catalog is None
@@ -996,4 +996,42 @@ def post_statement(evaluator):
     )
 
     context = Context(paths=tmp_path, config=Config())
+    context.plan(auto_apply=True, no_prompts=True)
+
+
+def test_creatable_properties_temp_view():
+    context = Context(config=Config())
+
+    context.upsert_model(
+        load_sql_based_model(
+            parse(
+                """
+        MODEL(name with_limit, kind VIEW, 
+physical_properties (
+    creatable_type = SECURE,
+));
+        SELECT t.v as v FROM (VALUES (1), (2), (3), (4), (5)) AS t(v) LIMIT 1 + 2"""
+            )
+        )
+    )
+
+    context.plan(auto_apply=True, no_prompts=True)
+
+def test_creatable_properties_temp_view_and_other():
+    context = Context(config=Config())
+
+    context.upsert_model(
+        load_sql_based_model(
+            parse(
+                """
+        MODEL(name with_limit, kind VIEW, 
+physical_properties (
+    creatable_type = SECURE,
+    other_property = 'test'
+));
+        SELECT t.v as v FROM (VALUES (1), (2), (3), (4), (5)) AS t(v) LIMIT 1 + 2"""
+            )
+        )
+    )
+
     context.plan(auto_apply=True, no_prompts=True)

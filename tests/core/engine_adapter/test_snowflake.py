@@ -449,3 +449,105 @@ def test_materialized_view_properties(make_mocked_engine_adapter: t.Callable):
     assert sql_calls == [
         'CREATE OR REPLACE MATERIALIZED VIEW "test_table" CLUSTER BY ("a") AS SELECT 1',
     ]
+
+
+def test_secure_view(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(SnowflakeEngineAdapter)
+
+    adapter.create_view(
+        "test_table",
+        parse_one("SELECT 1"),
+        view_properties={
+            "creatable_type": exp.SecureProperty(),
+        },
+    )
+
+    sql_calls = to_sql_calls(adapter)
+    # https://docs.snowflake.com/en/sql-reference/sql/create-view.html
+    assert sql_calls == [
+        'CREATE OR REPLACE SECURE VIEW "test_table" AS SELECT 1',
+    ]
+
+
+def test_secure_materialized_view(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(SnowflakeEngineAdapter)
+
+    adapter.create_view(
+        "test_table",
+        parse_one("SELECT 1"),
+        secure=True,
+        materialized=True,
+        view_properties={
+            "creatable_type": exp.SecureProperty(),
+        },
+    )
+
+    sql_calls = to_sql_calls(adapter)
+    # https://docs.snowflake.com/en/sql-reference/sql/create-view.html
+    assert sql_calls == [
+        'CREATE OR REPLACE SECURE MATERIALIZED VIEW "test_table" AS SELECT 1',
+    ]
+
+
+def test_temporary_view(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(SnowflakeEngineAdapter)
+
+    adapter.create_view(
+        "test_table",
+        parse_one("SELECT 1"),
+        view_properties={
+            "creatable_type": exp.TemporaryProperty(),
+        },
+    )
+
+    sql_calls = to_sql_calls(adapter)
+    assert sql_calls == [
+        'CREATE OR REPLACE TEMPORARY VIEW "test_table" AS SELECT 1',
+    ]
+
+
+def test_temporary_table(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(SnowflakeEngineAdapter)
+
+    adapter.create_table(
+        "test_table",
+        {"a": exp.DataType.build("INT"), "b": exp.DataType.build("INT")},
+        table_properties={
+            "creatable_type": exp.TemporaryProperty(),
+        },
+    )
+
+    sql_calls = to_sql_calls(adapter)
+    assert sql_calls == [
+        'CREATE TEMPORARY TABLE IF NOT EXISTS "test_table" ("a" INT, "b" INT)',
+    ]
+
+
+def test_transient_table(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(SnowflakeEngineAdapter)
+
+    adapter.create_table(
+        "test_table",
+        {"a": exp.DataType.build("INT"), "b": exp.DataType.build("INT")},
+        table_properties={
+            "creatable_type": exp.TransientProperty(),
+        },
+    )
+
+    sql_calls = to_sql_calls(adapter)
+    assert sql_calls == [
+        'CREATE TRANSIENT TABLE IF NOT EXISTS "test_table" ("a" INT, "b" INT)',
+    ]
+
+
+def test_materialize_creatable_type_raise_error(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(SnowflakeEngineAdapter)
+
+    with pytest.raises(SQLMeshError):
+        adapter.create_view(
+            "test_view",
+            parse_one("SELECT 1"),
+            view_properties={
+                "creatable_type": exp.MaterializedProperty(),
+            },
+        )
