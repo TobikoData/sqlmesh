@@ -1613,8 +1613,7 @@ def test_sushi(ctx: TestContext, tmp_path_factory: pytest.TempPathFactory):
 
             return None
 
-        # confirm physical layer comments are registered
-        validate_comments("sqlmesh__sushi")
+        validate_comments(f"sqlmesh__{sushi_test_schema}", prod_schema_name=sushi_test_schema)
 
         # confirm view layer comments are not registered in non-PROD environment
         env_name = "test_prod"
