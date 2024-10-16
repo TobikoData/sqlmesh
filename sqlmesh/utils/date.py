@@ -256,18 +256,18 @@ def to_ds(obj: TimeLike) -> str:
     return to_ts(obj)[0:10]
 
 
-def to_ts(obj: TimeLike, include_fractional_seconds: bool = True) -> str:
+def to_ts(obj: TimeLike, include_microseconds: bool = True) -> str:
     """Converts a TimeLike object into YYYY-MM-DD HH:MM:SS formatted string."""
     obj_dt = to_datetime(obj)
-    if not include_fractional_seconds:
+    if not include_microseconds:
         obj_dt = obj_dt.replace(microsecond=0)
     return obj_dt.replace(tzinfo=None).isoformat(sep=" ")
 
 
-def to_tstz(obj: TimeLike, include_fractional_seconds: bool = True) -> str:
+def to_tstz(obj: TimeLike, include_microseconds: bool = True) -> str:
     """Converts a TimeLike object into YYYY-MM-DD HH:MM:SS+00:00 formatted string."""
     obj_dt = to_datetime(obj)
-    if not include_fractional_seconds:
+    if not include_microseconds:
         obj_dt = obj_dt.replace(microsecond=0)
     return obj_dt.isoformat(sep=" ")
 
@@ -353,7 +353,7 @@ def to_time_column(
     time_column: t.Union[TimeLike, exp.Null],
     time_column_type: exp.DataType,
     time_column_format: t.Optional[str] = None,
-    include_fractional_seconds: bool = True,
+    include_microseconds: bool = True,
 ) -> exp.Expression:
     """Convert a TimeLike object to the same time format and type as the model's time column."""
     if isinstance(time_column, exp.Null):
@@ -362,12 +362,12 @@ def to_time_column(
         return exp.cast(exp.Literal.string(to_ds(time_column)), to="date")
     if time_column_type.is_type(*TEMPORAL_TZ_TYPES):
         return exp.cast(
-            exp.Literal.string(to_tstz(time_column, include_fractional_seconds)),
+            exp.Literal.string(to_tstz(time_column, include_microseconds)),
             to=time_column_type,
         )
     if time_column_type.is_type(*exp.DataType.TEMPORAL_TYPES):
         return exp.cast(
-            exp.Literal.string(to_ts(time_column, include_fractional_seconds)), to=time_column_type
+            exp.Literal.string(to_ts(time_column, include_microseconds)), to=time_column_type
         )
 
     if time_column_format:
