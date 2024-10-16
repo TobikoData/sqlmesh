@@ -139,6 +139,7 @@ def test_json(snapshot: Snapshot):
             "allow_partials": False,
             "signals": [],
             "enabled": True,
+            "extract_dependencies_from_query": True,
         },
         "audits": [],
         "name": '"name"',

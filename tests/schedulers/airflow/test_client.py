@@ -132,6 +132,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
                         "allow_partials": False,
                         "signals": [],
                         "enabled": True,
+                        "extract_dependencies_from_query": True,
                     },
                     "audits": [],
                     "name": '"test_model"',
