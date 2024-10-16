@@ -232,7 +232,7 @@ def _run_all(controller: GithubController) -> None:
                 conclusion=GithubCheckConclusion.SKIPPED,
                 skip_reason="Unit Test(s) Failed so skipping deploying to production",
             )
-        return
+        raise CICDBotError("Failed to run tests. See check status for more information.")
     pr_environment_updated = _update_pr_environment(controller)
     prod_plan_generated = False
     if pr_environment_updated:
@@ -241,8 +241,9 @@ def _run_all(controller: GithubController) -> None:
         controller.update_prod_plan_preview_check(
             status=GithubCheckStatus.COMPLETED, conclusion=GithubCheckConclusion.SKIPPED
         )
-    if tests_passed and has_required_approval and pr_environment_updated and prod_plan_generated:
-        _deploy_production(controller)
+    deployed_to_prod = False
+    if has_required_approval and prod_plan_generated:
+        deployed_to_prod = _deploy_production(controller)
     elif is_auto_deploying_prod:
         if not has_required_approval:
             skip_reason = (
@@ -262,6 +263,14 @@ def _run_all(controller: GithubController) -> None:
             status=GithubCheckStatus.COMPLETED,
             conclusion=GithubCheckConclusion.SKIPPED,
             skip_reason=skip_reason,
+        )
+    if (
+        not pr_environment_updated
+        or not prod_plan_generated
+        or (has_required_approval and not deployed_to_prod)
+    ):
+        raise CICDBotError(
+            "A step of the run-all check failed. See check status for more information."
         )
 
 
