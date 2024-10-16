@@ -295,7 +295,7 @@ def make_inclusive(start: TimeLike, end: TimeLike) -> Interval:
     In the ds ('2020-01-01') case, because start_ds and end_ds are categorical, between works even if
     start_ds and end_ds are equivalent. However, when we move to ts ('2022-01-01 12:00:00'), because timestamps
     are numeric, using simple equality doesn't make sense. When the end is not a categorical date, then it is
-    treated as an exclusive range and converted to inclusive by subtracting 1 millisecond.
+    treated as an exclusive range and converted to inclusive by subtracting 1 microsecond.
 
     Args:
         start: Start timelike object.
