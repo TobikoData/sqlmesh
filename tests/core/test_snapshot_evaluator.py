@@ -181,19 +181,11 @@ def test_evaluate(mocker: MockerFixture, adapter_mock, make_snapshot):
         table_description=None,
     )
 
-    adapter_mock.create_table.assert_has_calls(
-        [
-            call(
-                snapshot.table_name(is_deployable=False),
-                column_descriptions=None,
-                **common_kwargs,
-            ),
-            call(
-                snapshot.table_name(),
-                column_descriptions={},
-                **common_kwargs,
-            ),
-        ]
+    # Create will be called once and only prod table will be created
+    adapter_mock.create_table.assert_called_once_with(
+        snapshot.table_name(),
+        column_descriptions={},
+        **common_kwargs,
     )
 
 
@@ -824,18 +816,8 @@ def test_create_materialized_view(mocker: MockerFixture, adapter_mock, make_snap
         replace=False,
     )
 
-    adapter_mock.create_view.assert_has_calls(
-        [
-            call(
-                snapshot.table_name(is_deployable=False),
-                model.render_query(),
-                column_descriptions=None,
-                **common_kwargs,
-            ),
-            call(
-                snapshot.table_name(), model.render_query(), column_descriptions={}, **common_kwargs
-            ),
-        ]
+    adapter_mock.create_view.assert_called_once_with(
+        snapshot.table_name(), model.render_query(), column_descriptions={}, **common_kwargs
     )
 
 
@@ -882,18 +864,8 @@ def test_create_view_with_properties(mocker: MockerFixture, adapter_mock, make_s
         replace=False,
     )
 
-    adapter_mock.create_view.assert_has_calls(
-        [
-            call(
-                snapshot.table_name(is_deployable=False),
-                model.render_query(),
-                column_descriptions=None,
-                **common_kwargs,
-            ),
-            call(
-                snapshot.table_name(), model.render_query(), column_descriptions={}, **common_kwargs
-            ),
-        ]
+    adapter_mock.create_view.assert_called_once_with(
+        snapshot.table_name(), model.render_query(), column_descriptions={}, **common_kwargs
     )
 
 
@@ -1020,7 +992,6 @@ def test_evaluate_creation_duckdb(
             "SELECT table_schema, table_name, table_type FROM information_schema.tables"
         ).fetchall() == [
             ("sqlmesh__db", f"db__model__{version}", "BASE TABLE"),
-            ("sqlmesh__db", f"db__model__{version}__temp", "BASE TABLE"),
             ("main", "tbl", "VIEW"),
         ]
 
@@ -1499,13 +1470,10 @@ def test_create_scd_type_2_by_time(adapter_mock, make_snapshot):
         table_description=None,
     )
 
-    adapter_mock.create_table.assert_has_calls(
-        [
-            call(
-                snapshot.table_name(is_deployable=False), column_descriptions=None, **common_kwargs
-            ),
-            call(snapshot.table_name(), column_descriptions={}, **common_kwargs),
-        ]
+    adapter_mock.create_table.assert_called_once_with(
+        snapshot.table_name(),
+        column_descriptions={},
+        **common_kwargs,
     )
 
 
@@ -1548,17 +1516,8 @@ def test_create_ctas_scd_type_2_by_time(adapter_mock, make_snapshot):
         table_description=None,
     )
 
-    adapter_mock.ctas.assert_has_calls(
-        [
-            call(
-                snapshot.table_name(is_deployable=False),
-                query,
-                None,
-                column_descriptions=None,
-                **common_kwargs,
-            ),
-            call(snapshot.table_name(), query, None, column_descriptions={}, **common_kwargs),
-        ]
+    adapter_mock.ctas.assert_called_once_with(
+        snapshot.table_name(), query, None, column_descriptions={}, **common_kwargs
     )
 
 
@@ -1665,14 +1624,8 @@ def test_create_scd_type_2_by_column(adapter_mock, make_snapshot):
         table_description=None,
     )
 
-    adapter_mock.create_table.assert_has_calls(
-        [
-            call(
-                snapshot.table_name(is_deployable=False),
-                **{**common_kwargs, "column_descriptions": None},
-            ),
-            call(snapshot.table_name(), **{**common_kwargs, "column_descriptions": {}}),
-        ]
+    adapter_mock.create_table.assert_called_once_with(
+        snapshot.table_name(), **{**common_kwargs, "column_descriptions": {}}
     )
 
 
@@ -1714,18 +1667,8 @@ def test_create_ctas_scd_type_2_by_column(adapter_mock, make_snapshot):
         table_description=None,
     )
 
-    adapter_mock.ctas.assert_has_calls(
-        [
-            call(
-                snapshot.table_name(is_deployable=False),
-                query,
-                None,
-                **{**common_kwargs, "column_descriptions": None},
-            ),
-            call(
-                snapshot.table_name(), query, None, **{**common_kwargs, "column_descriptions": {}}
-            ),
-        ]
+    adapter_mock.ctas.assert_called_once_with(
+        snapshot.table_name(), query, None, **{**common_kwargs, "column_descriptions": {}}
     )
 
 
@@ -2013,19 +1956,10 @@ def test_create_seed(mocker: MockerFixture, adapter_mock, make_snapshot):
         **common_create_kwargs,
     )
 
-    adapter_mock.create_table.assert_has_calls(
-        [
-            call(
-                f"sqlmesh__db.db__seed__{snapshot.version}__temp",
-                column_descriptions=None,
-                **common_create_kwargs,
-            ),
-            call(
-                f"sqlmesh__db.db__seed__{snapshot.version}",
-                column_descriptions={},
-                **common_create_kwargs,
-            ),
-        ]
+    adapter_mock.create_table.assert_called_once_with(
+        f"sqlmesh__db.db__seed__{snapshot.version}",
+        column_descriptions={},
+        **common_create_kwargs,
     )
 
     replace_query_calls = adapter_mock.replace_query.call_args_list
@@ -2711,6 +2645,72 @@ def test_create_managed_forward_only_with_previous_version_doesnt_clone_for_dev_
     # The table gets created using ctas() because the model column types arent known
     adapter_mock.ctas.assert_called_once()
     assert adapter_mock.ctas.call_args_list[0].args[0] == snapshot.table_name(is_deployable=False)
+
+
+def test_migrate_snapshot(snapshot: Snapshot, mocker: MockerFixture, adapter_mock, make_snapshot):
+    adapter_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter")
+    adapter_mock.dialect = "duckdb"
+
+    evaluator = SnapshotEvaluator(adapter_mock)
+    evaluator.create([snapshot], {})
+
+    updated_model_dict = snapshot.model.dict()
+    updated_model_dict["query"] = "SELECT a::int, b::int FROM tbl"
+    updated_model = SqlModel.parse_obj(updated_model_dict)
+
+    new_snapshot = make_snapshot(updated_model)
+    new_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    new_snapshot.version = snapshot.version
+
+    assert new_snapshot.table_name() == snapshot.table_name()
+
+    evaluator.create([new_snapshot], {})
+    evaluator.migrate([new_snapshot], {})
+
+    common_kwargs: t.Dict[str, t.Any] = dict(
+        table_format=None,
+        storage_format=None,
+        partitioned_by=[],
+        partition_interval_unit=IntervalUnit.DAY,
+        clustered_by=[],
+        table_properties={},
+        table_description=None,
+    )
+
+    adapter_mock.create_table.assert_has_calls(
+        [
+            call(
+                new_snapshot.table_name(),
+                columns_to_types={"a": exp.DataType.build("int")},
+                column_descriptions={},
+                **common_kwargs,
+            ),
+            call(
+                new_snapshot.table_name(is_deployable=False),
+                columns_to_types={"a": exp.DataType.build("int"), "b": exp.DataType.build("int")},
+                column_descriptions=None,
+                **common_kwargs,
+            ),
+        ]
+    )
+
+    adapter_mock.fetchall.assert_has_calls(
+        [
+            call(
+                parse_one('SELECT CAST("a" AS INT) AS "a" FROM "tbl" AS "tbl" WHERE FALSE LIMIT 0')
+            ),
+            call(
+                parse_one(
+                    'SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM "tbl" AS "tbl" WHERE FALSE LIMIT 0'
+                )
+            ),
+        ]
+    )
+
+    adapter_mock.get_alter_expressions.assert_called_once_with(
+        snapshot.table_name(),
+        new_snapshot.table_name(is_deployable=False),
+    )
 
 
 def test_migrate_managed(adapter_mock, make_snapshot, mocker: MockerFixture):
