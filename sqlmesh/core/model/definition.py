@@ -630,8 +630,8 @@ class _Model(ModelMeta, frozen=True):
                 time_column_type,
                 self.time_column.format,
                 include_microseconds=not (
-                    self.dialect in NO_MICROSECONDS
-                    and time_column_type.is_type(*NO_MICROSECONDS[self.dialect])
+                    self.dialect in TIME_COLUMN_NO_MICROSECONDS_TYPES
+                    and time_column_type.is_type(*TIME_COLUMN_NO_MICROSECONDS_TYPES[self.dialect])
                 ),
             )
         return exp.convert(time)
@@ -2450,4 +2450,6 @@ def get_model_name(path: Path) -> str:
     return ".".join(path_parts[-3:])
 
 
-NO_MICROSECONDS = {"clickhouse": (exp.DataType.Type.DATETIME, exp.DataType.Type.TIMESTAMP)}
+TIME_COLUMN_NO_MICROSECONDS_TYPES = {
+    "clickhouse": (exp.DataType.Type.DATETIME, exp.DataType.Type.TIMESTAMP)
+}
