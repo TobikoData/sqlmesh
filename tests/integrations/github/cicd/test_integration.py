@@ -23,6 +23,7 @@ from sqlmesh.integrations.github.cicd.controller import (
     GithubCheckStatus,
     GithubController,
 )
+from sqlmesh.utils.errors import CICDBotError
 from tests.integrations.github.cicd.fixtures import MockIssueComment
 
 pytest_plugins = ["tests.integrations.github.cicd.fixtures"]
@@ -509,7 +510,8 @@ def test_merge_pr_has_non_breaking_change_no_categorization(
     github_output_file = tmp_path / "github_output.txt"
 
     with mock.patch.dict(os.environ, {"GITHUB_OUTPUT": str(github_output_file)}):
-        command._run_all(controller)
+        with pytest.raises(CICDBotError):
+            command._run_all(controller)
 
     assert "SQLMesh - Run Unit Tests" in controller._check_run_mapping
     test_checks_runs = controller._check_run_mapping["SQLMesh - Run Unit Tests"].all_kwargs
@@ -1347,7 +1349,8 @@ def test_error_msg_when_applying_plan_with_bug(
     github_output_file = tmp_path / "github_output.txt"
 
     with mock.patch.dict(os.environ, {"GITHUB_OUTPUT": str(github_output_file)}):
-        command._run_all(controller)
+        with pytest.raises(CICDBotError):
+            command._run_all(controller)
 
     assert "SQLMesh - Run Unit Tests" in controller._check_run_mapping
     test_checks_runs = controller._check_run_mapping["SQLMesh - Run Unit Tests"].all_kwargs
