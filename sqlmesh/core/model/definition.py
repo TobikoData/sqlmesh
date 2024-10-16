@@ -625,7 +625,15 @@ class _Model(ModelMeta, frozen=True):
 
             time_column_type = columns_to_types[self.time_column.column.name]
 
-            return to_time_column(time, time_column_type, self.time_column.format)
+            return to_time_column(
+                time,
+                time_column_type,
+                self.time_column.format,
+                include_microseconds=not (
+                    self.dialect in TIME_COLUMN_NO_MICROSECONDS_TYPES
+                    and time_column_type.is_type(*TIME_COLUMN_NO_MICROSECONDS_TYPES[self.dialect])
+                ),
+            )
         return exp.convert(time)
 
     def set_mapping_schema(self, schema: t.Dict) -> None:
@@ -2440,3 +2448,8 @@ META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
 def get_model_name(path: Path) -> str:
     path_parts = list(path.parts[path.parts.index("models") + 1 : -1]) + [path.stem]
     return ".".join(path_parts[-3:])
+
+
+TIME_COLUMN_NO_MICROSECONDS_TYPES = {
+    "clickhouse": (exp.DataType.Type.DATETIME, exp.DataType.Type.TIMESTAMP)
+}

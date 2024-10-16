@@ -10,6 +10,8 @@ import typing as t
 from sqlmesh.core.schema_diff import SchemaDiffer
 from datetime import datetime
 from pytest_mock.plugin import MockerFixture
+from sqlmesh.core import dialect as d
+from sqlmesh.utils.date import to_datetime
 
 pytestmark = [pytest.mark.clickhouse, pytest.mark.engine]
 
@@ -808,3 +810,49 @@ SELECT "id", "name", "price", "test_VALID_from", "test_valid_to" FROM "static" U
     """,
         dialect=adapter.dialect,
     ).sql(adapter.dialect)
+
+
+def test_to_time_column():
+    # datetime/timestamp data type should remove fractional seconds
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.table,
+            kind INCREMENTAL_BY_TIME_RANGE(
+                time_column (ds)
+            ),
+            dialect clickhouse
+        );
+
+        SELECT ds::datetime
+    """
+    )
+    model = load_sql_based_model(expressions)
+    assert model.convert_to_time_column("2022-01-01 00:00:00.000001").this == d.parse_one(
+        "'2022-01-01 00:00:00'"
+    )
+    assert model.convert_to_time_column(
+        to_datetime("2022-01-01 00:00:00.000001")
+    ).this == d.parse_one("'2022-01-01 00:00:00'")
+
+    # DateTime64 data type should retain fractional seconds
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.table,
+            kind INCREMENTAL_BY_TIME_RANGE(
+                time_column (ds)
+            ),
+            dialect clickhouse
+        );
+
+        SELECT ds::DateTime64
+    """
+    )
+    model = load_sql_based_model(expressions)
+    assert model.convert_to_time_column("2022-01-01 00:00:00.000001").this == d.parse_one(
+        "'2022-01-01 00:00:00.000001'"
+    )
+    assert model.convert_to_time_column(
+        to_datetime("2022-01-01 00:00:00.000001")
+    ).this == d.parse_one("'2022-01-01 00:00:00.000001'")

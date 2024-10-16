@@ -256,14 +256,20 @@ def to_ds(obj: TimeLike) -> str:
     return to_ts(obj)[0:10]
 
 
-def to_ts(obj: TimeLike) -> str:
+def to_ts(obj: TimeLike, include_microseconds: bool = True) -> str:
     """Converts a TimeLike object into YYYY-MM-DD HH:MM:SS formatted string."""
-    return to_datetime(obj).replace(tzinfo=None).isoformat(sep=" ")
+    obj_dt = to_datetime(obj)
+    if not include_microseconds:
+        obj_dt = obj_dt.replace(microsecond=0)
+    return obj_dt.replace(tzinfo=None).isoformat(sep=" ")
 
 
-def to_tstz(obj: TimeLike) -> str:
+def to_tstz(obj: TimeLike, include_microseconds: bool = True) -> str:
     """Converts a TimeLike object into YYYY-MM-DD HH:MM:SS+00:00 formatted string."""
-    return to_datetime(obj).isoformat(sep=" ")
+    obj_dt = to_datetime(obj)
+    if not include_microseconds:
+        obj_dt = obj_dt.replace(microsecond=0)
+    return obj_dt.isoformat(sep=" ")
 
 
 def is_date(obj: TimeLike) -> bool:
@@ -289,7 +295,7 @@ def make_inclusive(start: TimeLike, end: TimeLike) -> Interval:
     In the ds ('2020-01-01') case, because start_ds and end_ds are categorical, between works even if
     start_ds and end_ds are equivalent. However, when we move to ts ('2022-01-01 12:00:00'), because timestamps
     are numeric, using simple equality doesn't make sense. When the end is not a categorical date, then it is
-    treated as an exclusive range and converted to inclusive by subtracting 1 millisecond.
+    treated as an exclusive range and converted to inclusive by subtracting 1 microsecond.
 
     Args:
         start: Start timelike object.
@@ -347,6 +353,7 @@ def to_time_column(
     time_column: t.Union[TimeLike, exp.Null],
     time_column_type: exp.DataType,
     time_column_format: t.Optional[str] = None,
+    include_microseconds: bool = True,
 ) -> exp.Expression:
     """Convert a TimeLike object to the same time format and type as the model's time column."""
     if isinstance(time_column, exp.Null):
@@ -354,9 +361,14 @@ def to_time_column(
     if time_column_type.is_type(exp.DataType.Type.DATE):
         return exp.cast(exp.Literal.string(to_ds(time_column)), to="date")
     if time_column_type.is_type(*TEMPORAL_TZ_TYPES):
-        return exp.cast(exp.Literal.string(to_tstz(time_column)), to=time_column_type)
+        return exp.cast(
+            exp.Literal.string(to_tstz(time_column, include_microseconds)),
+            to=time_column_type,
+        )
     if time_column_type.is_type(*exp.DataType.TEMPORAL_TYPES):
-        return exp.cast(exp.Literal.string(to_ts(time_column)), to=time_column_type)
+        return exp.cast(
+            exp.Literal.string(to_ts(time_column, include_microseconds)), to=time_column_type
+        )
 
     if time_column_format:
         time_column = to_datetime(time_column).strftime(time_column_format)
