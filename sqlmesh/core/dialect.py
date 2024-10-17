@@ -522,32 +522,6 @@ def _parse_if(self: Parser) -> t.Optional[exp.Expression]:
 
         return exp.Anonymous(this="IF", expressions=[cond, stmt])
 
-def _parse_physical_properties(self: Parser) -> t.Optional[exp.Expression]:
-    def is_creatable_statement(
-            expression: exp.Expression
-    ) -> bool:
-        if isinstance(expression, exp.EQ):
-            left_arg = expression.args.get('this')
-            return isinstance(left_arg, exp.Column) and left_arg.name.upper() == KEY_FOR_CREATABLE_TYPE
-
-    def parse_creatable(expression: exp.Expression) -> exp.Expression:
-        # TODO this is probably not the right way to do it
-        return exp.Property(value=expression.args.get('expression').this.name)
-
-    value = self._parse_bracket(self._parse_field(any_token=True))
-    if is_creatable_statement(value):
-        return parse_creatable(value)
-    if isinstance(value, exp.Tuple):
-        expressions = value.expressions
-        index_of_creatable = next((index for index, value in enumerate(expressions) if is_creatable_statement(value)), None)
-        if index_of_creatable is not None:
-            creatable = parse_creatable(expressions[index_of_creatable])
-            expressions.pop(index_of_creatable)
-            return exp.Properties(expressions=[creatable, *expressions])
-        else:
-            return value
-    self.raise_error("Expected physical properties to be Tuple or Eq")
-
 
 def _create_parser(parser_type: t.Type[exp.Expression], table_keys: t.List[str]) -> t.Callable:
     def parse(self: Parser) -> t.Optional[exp.Expression]:
@@ -607,10 +581,28 @@ def _create_parser(parser_type: t.Type[exp.Expression], table_keys: t.List[str])
                     )
             elif key == "expression":
                 value = self._parse_conjunction()
-            elif key == "physical_properties":
-                value = _parse_physical_properties(self)
             else:
                 value = self._parse_bracket(self._parse_field(any_token=True))
+                if key == "physical_properties":
+                    if isinstance(value, exp.Paren):
+                        values = [value.this]
+                    elif isinstance(value, (exp.Bracket, exp.Tuple)):
+                        values = value.expressions
+                    else:
+                        values = []
+                        self.raise_error("Expected () or [] delimiters for physical_properties.")
+
+                    for value in values:
+                        if (
+                            isinstance(value, exp.EQ)
+                            and value.left.name.upper() == KEY_FOR_CREATABLE_TYPE
+                        ):
+                            properties = exp.maybe_parse(value.right.name, into=exp.Properties)
+                            if len(properties.expressions) != 1:
+                                self.raise_error(
+                                    "Only a single value is supported for 'creatable_type'."
+                                )
+                            value.set("expression", properties.expressions[0])
 
             if isinstance(value, exp.Expression):
                 value.meta["sql"] = self._find_sql(start, self._prev)

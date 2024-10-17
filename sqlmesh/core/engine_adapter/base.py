@@ -27,6 +27,7 @@ from sqlmesh.core.dialect import (
     schema_,
     select_from_values_for_batch_range,
     to_schema,
+    KEY_FOR_CREATABLE_TYPE,
 )
 from sqlmesh.core.engine_adapter.shared import (
     CatalogSupport,
@@ -62,8 +63,6 @@ logger = logging.getLogger(__name__)
 
 MERGE_TARGET_ALIAS = "__MERGE_TARGET__"
 MERGE_SOURCE_ALIAS = "__MERGE_SOURCE__"
-
-KEY_FOR_CREATABLE_TYPE = "CREATABLE_TYPE"
 
 
 @set_catalog()
