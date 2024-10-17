@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import typing as t
 
 import pandas as pd
@@ -25,6 +26,8 @@ from sqlmesh.core.schema_diff import SchemaDiffer
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import SchemaName, TableName
     from sqlmesh.core.engine_adapter.base import QueryOrDF
+
+logger = logging.getLogger(__name__)
 
 
 @set_catalog()
@@ -128,7 +131,23 @@ class RedshiftEngineAdapter(
     ) -> pd.DataFrame:
         """Fetches a Pandas DataFrame from the cursor"""
         self.execute(query, quote_identifiers=quote_identifiers)
-        return self.cursor.fetch_dataframe()
+
+        # We manually build the `DataFrame` here because the driver's `fetch_dataframe`
+        # method does not respect the active case-sensitivity configuration.
+        #
+        # Context: https://github.com/aws/amazon-redshift-python-driver/issues/238
+        fetcheddata = self.cursor.fetchall()
+
+        try:
+            columns = [column[0] for column in self.cursor.description]
+        except Exception:
+            columns = None
+            logging.warning(
+                "No row description was found, pandas dataframe will be missing column labels."
+            )
+
+        result = [tuple(row) for row in fetcheddata]
+        return pd.DataFrame(result, columns=columns)
 
     def _create_table_from_source_queries(
         self,
