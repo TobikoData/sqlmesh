@@ -116,12 +116,14 @@ class _Model(ModelMeta, frozen=True):
         clustered_by: The cluster columns, only applicable in certain engines. (eg. (ds, hour))
         python_env: Dictionary containing all global variables needed to render the model's macros.
         mapping_schema: The schema of table names to column and types.
+        extract_dependencies_from_query: Whether to extract additional dependencies from the rendered model's query.
         physical_schema_override: The desired physical schema name override.
     """
 
     python_env_: t.Optional[t.Dict[str, Executable]] = Field(default=None, alias="python_env")
     jinja_macros: JinjaMacroRegistry = JinjaMacroRegistry()
     mapping_schema: t.Dict[str, t.Any] = {}
+    extract_dependencies_from_query: bool = True
 
     _full_depends_on: t.Optional[t.Set[str]] = None
     _statement_renderer_cache: t.Dict[int, ExpressionRenderer] = {}
@@ -969,6 +971,8 @@ class _Model(ModelMeta, frozen=True):
 
     @property
     def full_depends_on(self) -> t.Set[str]:
+        if not self.extract_dependencies_from_query:
+            return self.depends_on_ or set()
         if self._full_depends_on is None:
             depends_on = self.depends_on_ or set()
 

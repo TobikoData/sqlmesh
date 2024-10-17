@@ -428,14 +428,13 @@ class ModelConfig(BaseModelConfig):
             dialect=model_dialect,
             kind=self.model_kind(context),
             start=self.start,
+            # This ensures that we bypass query rendering that would otherwise be required to extract additional
+            # dependencies from the model's SQL.
+            # Note: any table dependencies that are not referenced using the `ref` macro will not be included.
+            extract_dependencies_from_query=False,
             **optional_kwargs,
             **model_kwargs,
         )
-        # Prepopulate the _full_depends_on cache with dependencies sourced directly from the manifest.
-        # This ensures that we bypass query rendering that would otherwise be required to extract additional
-        # dependencies from the model's SQL.
-        # Note: any table dependencies that are not referenced using the `ref` macro will not be included.
-        model._full_depends_on = model.depends_on_
         return model
 
     def _dbt_max_partition_blob(self) -> t.Optional[str]:
