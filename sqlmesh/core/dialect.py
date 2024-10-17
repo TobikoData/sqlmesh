@@ -532,7 +532,7 @@ def _parse_physical_properties(self: Parser) -> t.Optional[exp.Expression]:
 
     def parse_creatable(expression: exp.Expression) -> exp.Expression:
         # TODO this is probably not the right way to do it
-        return parse_one(expression.args.get('value').this.name, into=exp.Property)
+        return exp.Property(value=expression.args.get('expression').this.name)
 
     value = self._parse_bracket(self._parse_field(any_token=True))
     if is_creatable_statement(value):
@@ -540,7 +540,7 @@ def _parse_physical_properties(self: Parser) -> t.Optional[exp.Expression]:
     if isinstance(value, exp.Tuple):
         expressions = value.expressions
         index_of_creatable = next((index for index, value in enumerate(expressions) if is_creatable_statement(value)), None)
-        if index_of_creatable:
+        if index_of_creatable is not None:
             creatable = parse_creatable(expressions[index_of_creatable])
             expressions.pop(index_of_creatable)
             return exp.Properties(expressions=[creatable, *expressions])
