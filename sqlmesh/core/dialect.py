@@ -33,6 +33,7 @@ if t.TYPE_CHECKING:
 SQLMESH_MACRO_PREFIX = "@"
 
 TABLES_META = "sqlmesh.tables"
+KEY_FOR_CREATABLE_TYPE = "CREATABLE_TYPE"
 
 logger = logging.getLogger(__name__)
 
@@ -582,6 +583,26 @@ def _create_parser(parser_type: t.Type[exp.Expression], table_keys: t.List[str])
                 value = self._parse_conjunction()
             else:
                 value = self._parse_bracket(self._parse_field(any_token=True))
+                if key == "physical_properties":
+                    if isinstance(value, exp.Paren):
+                        values = [value.this]
+                    elif isinstance(value, (exp.Bracket, exp.Tuple)):
+                        values = value.expressions
+                    else:
+                        values = []
+                        self.raise_error("Expected () or [] delimiters for physical_properties.")
+
+                    for value in values:
+                        if (
+                            isinstance(value, exp.EQ)
+                            and value.left.name.upper() == KEY_FOR_CREATABLE_TYPE
+                        ):
+                            properties = exp.maybe_parse(value.right.name, into=exp.Properties)
+                            if len(properties.expressions) != 1:
+                                self.raise_error(
+                                    "Only a single value is supported for 'creatable_type'."
+                                )
+                            value.set("expression", properties.expressions[0])
 
             if isinstance(value, exp.Expression):
                 value.meta["sql"] = self._find_sql(start, self._prev)

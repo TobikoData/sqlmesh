@@ -997,3 +997,42 @@ def post_statement(evaluator):
 
     context = Context(paths=tmp_path, config=Config())
     context.plan(auto_apply=True, no_prompts=True)
+
+
+def test_creatable_properties_temp_view():
+    context = Context(config=Config())
+
+    context.upsert_model(
+        load_sql_based_model(
+            parse(
+                """
+        MODEL(name with_limit, kind VIEW, 
+physical_properties (
+    creatable_type = SECURE,
+));
+        SELECT t.v as v FROM (VALUES (1), (2), (3), (4), (5)) AS t(v) LIMIT 1 + 2"""
+            )
+        )
+    )
+
+    context.plan(auto_apply=True, no_prompts=True)
+
+
+def test_creatable_properties_temp_view_and_other():
+    context = Context(config=Config())
+
+    context.upsert_model(
+        load_sql_based_model(
+            parse(
+                """
+        MODEL(name with_limit, kind VIEW, 
+physical_properties (
+    creatable_type = SECURE,
+    other_property = 'test'
+));
+        SELECT t.v as v FROM (VALUES (1), (2), (3), (4), (5)) AS t(v) LIMIT 1 + 2"""
+            )
+        )
+    )
+
+    context.plan(auto_apply=True, no_prompts=True)
