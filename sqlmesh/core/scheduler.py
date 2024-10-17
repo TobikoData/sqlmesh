@@ -537,8 +537,17 @@ def compute_interval_params(
     """
     snapshot_batches = {}
 
+    snapshots_by_name = {snapshot.name: snapshot for snapshot in snapshots}
+
+    dag = DAG[str]()
+
+    for snapshot in snapshots_by_name.values():
+        dag.add(snapshot.name, snapshot.model.depends_on)
+
+    all_unready_intervals: t.Dict[str, set[SnapshotInterval]] = {}
+
     for snapshot, intervals in missing_intervals(
-        snapshots,
+        [snapshots_by_name[fqn] for fqn in dag if fqn in snapshots],
         start=start,
         end=end,
         execution_time=execution_time,
@@ -549,6 +558,8 @@ def compute_interval_params(
         end_bounded=end_bounded,
     ).items():
         if signal_factory and snapshot.is_model:
+            unready = set(intervals)
+
             for signal in snapshot.model.render_signals(
                 start=start, end=end, execution_time=execution_time
             ):
@@ -556,12 +567,24 @@ def compute_interval_params(
                     signal=signal_factory(signal),
                     intervals=intervals,
                 )
+            unready -= set(intervals)
+        else:
+            unready = set()
+
+        for parent in snapshot.model.depends_on:
+            if parent in all_unready_intervals:
+                unready.update(all_unready_intervals[parent])
+
+        all_unready_intervals[snapshot.name] = unready
 
         batches = []
         batch_size = snapshot.node.batch_size
         next_batch: t.List[t.Tuple[int, int]] = []
 
         for interval in intervals:
+            if interval in unready:
+                continue
+
             if (batch_size and len(next_batch) >= batch_size) or (
                 next_batch and interval[0] != next_batch[-1][-1]
             ):

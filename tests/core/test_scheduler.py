@@ -16,7 +16,7 @@ from sqlmesh.core.model.kind import (
     TimeColumn,
 )
 from sqlmesh.core.node import IntervalUnit
-from sqlmesh.core.scheduler import Scheduler, compute_interval_params
+from sqlmesh.core.scheduler import Scheduler, compute_interval_params, signal_factory, Batch, Signal
 from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotEvaluator,
@@ -623,8 +623,6 @@ def test_audit_failure_notifications(
 
 
 def test_signal_factory(mocker: MockerFixture, make_snapshot):
-    from sqlmesh.core.scheduler import signal_factory, Batch, Signal
-
     class AlwaysReadySignal(Signal):
         def check_intervals(self, batch: Batch):
             return True
@@ -663,3 +661,55 @@ def test_signal_factory(mocker: MockerFixture, make_snapshot):
     scheduler.batches(start, end, end)
 
     assert signal_factory_invoked > 0
+
+
+def test_signal_intervals(mocker: MockerFixture, make_snapshot):
+    class TestSignal(Signal):
+        def __init__(self, signal: t.Dict):
+            self.name = signal["kind"]
+
+        def check_intervals(self, batch: Batch):
+            if self.name == "a":
+                return [batch[0], batch[1]]
+            if self.name == "b":
+                return [batch[1], batch[2]]
+
+    a = make_snapshot(
+        SqlModel(
+            name="a",
+            kind="full",
+            start="2023-01-01",
+            query=parse_one("SELECT 1 x"),
+            signals=[{"kind": "a"}],
+        )
+    )
+    b = make_snapshot(
+        SqlModel(
+            name="b",
+            kind="full",
+            start="2023-01-01",
+            query=parse_one("SELECT 2 x"),
+            signals=[{"kind": "b"}],
+        )
+    )
+    c = make_snapshot(
+        SqlModel(
+            name="c",
+            kind="full",
+            start="2023-01-01",
+            query=parse_one("select * from a union select * from b"),
+        )
+    )
+
+    batches = compute_interval_params(
+        [c, a, b],
+        start="2023-01-01",
+        end="2023-01-03",
+        signal_factory=lambda signal: TestSignal(signal),
+    )
+
+    assert batches == {
+        a: [(to_datetime("2023-01-01"), to_datetime("2023-01-03"))],
+        b: [(to_datetime("2023-01-02"), to_datetime("2023-01-04"))],
+        c: [(to_datetime("2023-01-02"), to_datetime("2023-01-03"))],
+    }
