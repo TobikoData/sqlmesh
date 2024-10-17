@@ -85,3 +85,12 @@ def test_columns(ctx: TestContext):
             {k: columns[k] for k in max_cols}
         ).values()
     ] == ["CHAR(max)", "CHAR(max)", "CHAR(max)", "VARCHAR(max)", "VARCHAR(max)", "VARCHAR(max)"]
+
+
+def test_fetch_native_df_respects_case_sensitivity(ctx: TestContext):
+    adapter = ctx.engine_adapter
+    adapter.execute("SET enable_case_sensitive_identifier TO true")
+    assert adapter.fetchdf('WITH t AS (SELECT 1 AS "C", 2 AS "c") SELECT * FROM t').to_dict() == {
+        "C": {0: 1},
+        "c": {0: 2},
+    }
