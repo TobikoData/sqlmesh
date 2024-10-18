@@ -23,7 +23,7 @@ from sqlmesh.core.snapshot import (
     missing_intervals,
 )
 from sqlmesh.core.snapshot.definition import Interval as SnapshotInterval
-from sqlmesh.core.snapshot.definition import SnapshotId
+from sqlmesh.core.snapshot.definition import Intervals, SnapshotId, merge_intervals
 from sqlmesh.core.state_sync import StateSync
 from sqlmesh.utils import format_exception
 from sqlmesh.utils.concurrency import concurrent_apply_to_dag, NodeExecutionFailedError
@@ -537,8 +537,18 @@ def compute_interval_params(
     """
     snapshot_batches = {}
 
+    snapshots_by_name = {snapshot.name: snapshot for snapshot in snapshots}
+
+    dag = DAG[str]()
+
+    for snapshot in snapshots_by_name.values():
+        dag.add(snapshot.name, [p.name for p in snapshot.parents])
+
+    all_unready_intervals: t.Dict[str, set[SnapshotInterval]] = {}
+
     for snapshot, intervals in missing_intervals(
-        snapshots,
+        # need to iterate through missing intervals in dag order to propogate unready intervals
+        [snapshots_by_name[fqn] for fqn in dag if fqn in snapshots_by_name],
         start=start,
         end=end,
         execution_time=execution_time,
@@ -549,6 +559,8 @@ def compute_interval_params(
         end_bounded=end_bounded,
     ).items():
         if signal_factory and snapshot.is_model:
+            unready = set(intervals)
+
             for signal in snapshot.model.render_signals(
                 start=start, end=end, execution_time=execution_time
             ):
@@ -556,12 +568,23 @@ def compute_interval_params(
                     signal=signal_factory(signal),
                     intervals=intervals,
                 )
+            unready -= set(intervals)
+        else:
+            unready = set()
+
+        for parent in snapshot.parents:
+            if parent.name in all_unready_intervals:
+                unready.update(all_unready_intervals[parent.name])
+
+        all_unready_intervals[snapshot.name] = unready
 
         batches = []
         batch_size = snapshot.node.batch_size
         next_batch: t.List[t.Tuple[int, int]] = []
 
-        for interval in intervals:
+        for interval in interval_diff(
+            intervals, merge_intervals(unready), uninterrupted=snapshot.depends_on_past
+        ):
             if (batch_size and len(next_batch) >= batch_size) or (
                 next_batch and interval[0] != next_batch[-1][-1]
             ):
@@ -573,6 +596,44 @@ def compute_interval_params(
         snapshot_batches[snapshot] = [(to_datetime(s), to_datetime(e)) for s, e in batches]
 
     return snapshot_batches
+
+
+def interval_diff(
+    intervals_a: Intervals, intervals_b: Intervals, uninterrupted: bool = False
+) -> Intervals:
+    if not intervals_a or not intervals_b:
+        return intervals_a
+
+    index_a, index_b = 0, 0
+    len_a = len(intervals_a)
+    len_b = len(intervals_b)
+
+    results = []
+
+    while index_a < len_a and index_b < len_b:
+        interval_a = intervals_a[index_a]
+        interval_b = intervals_b[index_b]
+
+        if interval_a[0] >= interval_b[1]:
+            index_b += 1
+        elif interval_b[0] >= interval_a[1]:
+            results.append(interval_a)
+            index_a += 1
+        else:
+            if uninterrupted:
+                return results
+
+            if interval_a[0] >= interval_b[0]:
+                index_a += 1
+            else:
+                index_b += 1
+
+    if index_a < len_a:
+        interval_a = intervals_a[index_a]
+        if interval_a[0] >= interval_b[1] or interval_b[0] >= interval_a[1]:
+            results.extend(intervals_a[index_a:])
+
+    return results
 
 
 def _resolve_one_snapshot_per_version(
@@ -594,8 +655,8 @@ def _resolve_one_snapshot_per_version(
 
 
 def _contiguous_intervals(
-    intervals: t.List[SnapshotInterval],
-) -> t.List[t.List[SnapshotInterval]]:
+    intervals: Intervals,
+) -> t.List[Intervals]:
     """Given a list of intervals with gaps, returns a list of sequences of contiguous intervals."""
     contiguous_intervals = []
     current_batch: t.List[SnapshotInterval] = []
@@ -614,8 +675,8 @@ def _contiguous_intervals(
 
 def _check_ready_intervals(
     signal: Signal,
-    intervals: t.List[SnapshotInterval],
-) -> t.List[SnapshotInterval]:
+    intervals: Intervals,
+) -> Intervals:
     """Returns a list of intervals that are considered ready by the provided signal.
 
     Note that this will handle gaps in the provided intervals. The returned intervals
