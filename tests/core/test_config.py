@@ -17,6 +17,7 @@ from sqlmesh.core.config import (
     BuiltInSchedulerConfig,
     MWAASchedulerConfig,
     AirflowSchedulerConfig,
+    SinglestoreConnectionConfig
 )
 from sqlmesh.core.config.connection import DuckDBAttachOptions
 from sqlmesh.core.config.feature_flag import DbtFeatureFlag, FeatureFlag
