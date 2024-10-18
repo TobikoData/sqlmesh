@@ -2647,6 +2647,96 @@ def test_create_managed_forward_only_with_previous_version_doesnt_clone_for_dev_
     assert adapter_mock.ctas.call_args_list[0].args[0] == snapshot.table_name(is_deployable=False)
 
 
+@pytest.mark.parametrize(
+    "deployability_index,  snapshot_category, temp_table",
+    [
+        (DeployabilityIndex.all_deployable(), SnapshotChangeCategory.BREAKING, [False]),
+        (DeployabilityIndex.all_deployable(), SnapshotChangeCategory.NON_BREAKING, [False]),
+        (DeployabilityIndex.all_deployable(), SnapshotChangeCategory.FORWARD_ONLY, [True]),
+        (DeployabilityIndex.all_deployable(), SnapshotChangeCategory.INDIRECT_BREAKING, [False]),
+        (DeployabilityIndex.all_deployable(), SnapshotChangeCategory.INDIRECT_NON_BREAKING, [True]),
+        (DeployabilityIndex.all_deployable(), SnapshotChangeCategory.METADATA, [True]),
+        (
+            DeployabilityIndex.none_deployable(),
+            SnapshotChangeCategory.BREAKING,
+            [True, False],
+        ),
+        (
+            DeployabilityIndex.none_deployable(),
+            SnapshotChangeCategory.NON_BREAKING,
+            [True, False],
+        ),
+        (
+            DeployabilityIndex.none_deployable(),
+            SnapshotChangeCategory.FORWARD_ONLY,
+            [True],
+        ),
+        (
+            DeployabilityIndex.none_deployable(),
+            SnapshotChangeCategory.INDIRECT_BREAKING,
+            [True, False],
+        ),
+        (
+            DeployabilityIndex.none_deployable(),
+            SnapshotChangeCategory.INDIRECT_NON_BREAKING,
+            [True],
+        ),
+        (
+            DeployabilityIndex.none_deployable(),
+            SnapshotChangeCategory.METADATA,
+            [True],
+        ),
+    ],
+)
+def test_create_snapshot(
+    snapshot: Snapshot,
+    mocker: MockerFixture,
+    adapter_mock,
+    deployability_index: DeployabilityIndex,
+    temp_table: t.List[bool],
+    snapshot_category: SnapshotChangeCategory,
+):
+    adapter_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter")
+    adapter_mock.dialect = "duckdb"
+
+    evaluator = SnapshotEvaluator(adapter_mock)
+    snapshot.categorize_as(category=snapshot_category)
+    evaluator._create_snapshot(
+        snapshot=snapshot,
+        snapshots={},
+        deployability_index=deployability_index,
+        on_complete=None,
+        allow_destructive_snapshots=set(),
+    )
+
+    common_kwargs: t.Dict[str, t.Any] = dict(
+        columns_to_types={"a": exp.DataType.build("int")},
+        table_format=None,
+        storage_format=None,
+        partitioned_by=[],
+        partition_interval_unit=IntervalUnit.DAY,
+        clustered_by=[],
+        table_properties={},
+        table_description=None,
+    )
+
+    tables_created = [
+        call(
+            snapshot.table_name(is_deployable=not temp),
+            column_descriptions=(None if temp else {}),
+            **common_kwargs,
+        )
+        for temp in temp_table
+    ]
+
+    adapter_mock.create_table.assert_has_calls(tables_created)
+
+    # Even if one or two (prod and dev) tables are created, the dry run should be conducted once
+    adapter_mock.fetchall.assert_called_once_with(
+        parse_one('SELECT CAST("a" AS INT) AS "a" FROM "tbl" AS "tbl" WHERE FALSE LIMIT 0')
+    )
+
+
 def test_migrate_snapshot(snapshot: Snapshot, mocker: MockerFixture, adapter_mock, make_snapshot):
     adapter_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter")
     adapter_mock.dialect = "duckdb"
