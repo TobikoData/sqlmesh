@@ -1460,7 +1460,7 @@ class EngineAdapter:
         # column names and then remove them from the unmanaged_columns
         if check_columns and check_columns == exp.Star():
             check_columns = [exp.column(col) for col in unmanaged_columns_to_types]
-        execution_ts = to_time_column(execution_time, time_data_type)
+        execution_ts = to_time_column(execution_time, time_data_type, self.dialect, nullable=True)
         if updated_at_as_valid_from:
             if not updated_at_col:
                 raise SQLMeshError(
@@ -1473,7 +1473,9 @@ class EngineAdapter:
         elif check_columns and (execution_time_as_valid_from or not truncate):
             update_valid_from_start = execution_ts
         else:
-            update_valid_from_start = to_time_column("1970-01-01 00:00:00+00:00", time_data_type)
+            update_valid_from_start = to_time_column(
+                "1970-01-01 00:00:00+00:00", time_data_type, self.dialect, nullable=True
+            )
         insert_valid_from_start = execution_ts if check_columns else updated_at_col  # type: ignore
         # joined._exists IS NULL is saying "if the row is deleted"
         delete_check = (
@@ -1739,7 +1741,9 @@ class EngineAdapter:
                     exp.select(
                         *unmanaged_columns_to_types,
                         insert_valid_from_start.as_(valid_from_col.this),  # type: ignore
-                        to_time_column(exp.null(), time_data_type).as_(valid_to_col.this),
+                        to_time_column(exp.null(), time_data_type, self.dialect, nullable=True).as_(
+                            valid_to_col.this
+                        ),
                     )
                     .from_("joined")
                     .where(updated_row_filter),
