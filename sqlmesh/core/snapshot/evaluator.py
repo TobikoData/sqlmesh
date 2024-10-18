@@ -648,11 +648,7 @@ class SnapshotEvaluator:
             **common_render_kwargs,
             deployability_index=deployability_index.with_deployable(snapshot),
         )
-        create_render_kwargs = dict(
-            **common_render_kwargs,
-            # Refers to self as non-deployable to successfully create self-referential tables / views.
-            deployability_index=deployability_index.with_non_deployable(snapshot),
-        )
+        create_render_kwargs = dict(**common_render_kwargs, deployability_index=deployability_index)
 
         # It can still be useful for some strategies to know if the snapshot was actually deployable
         is_snapshot_deployable = deployability_index.is_deployable(snapshot)
@@ -701,9 +697,21 @@ class SnapshotEvaluator:
                 finally:
                     self.adapter.drop_table(tmp_table_name)
             else:
-                table_deployability_flags = [False]
+                dry_run = True
+                table_deployability_flags = (
+                    []
+                    if (
+                        is_snapshot_deployable
+                        and not snapshot.reuses_previous_version
+                        and not snapshot.is_managed
+                    )
+                    else [False]
+                )
                 if not snapshot.reuses_previous_version:
                     table_deployability_flags.append(True)
+                    if len(table_deployability_flags) > 1:
+                        dry_run = False
+
                 for is_table_deployable in table_deployability_flags:
                     evaluation_strategy.create(
                         table_name=snapshot.table_name(is_deployable=is_table_deployable),
@@ -711,6 +719,7 @@ class SnapshotEvaluator:
                         is_table_deployable=is_table_deployable,
                         render_kwargs=create_render_kwargs,
                         is_snapshot_deployable=is_snapshot_deployable,
+                        dry_run=dry_run,
                     )
 
             self.adapter.execute(snapshot.model.render_post_statements(**pre_post_render_kwargs))
@@ -1191,12 +1200,13 @@ class MaterializableStrategy(PromotableStrategy):
                 column_descriptions=model.column_descriptions if is_table_deployable else None,
             )
 
+            # If we create both temp and prod tables, we need to make sure that we dry run once.
+            dry_run = kwargs.get("dry_run", True) or not is_table_deployable
+
             # Only sql models have queries that can be tested.
-            # Additionally, we always create temp tables and sometimes we additionally created prod tables,
-            # we need to make sure that we only dry run once.
             # We also need to make sure that we don't dry run on Redshift because its planner / optimizer sometimes
             # breaks on our CTAS queries due to us relying on the WHERE FALSE LIMIT 0 combo.
-            if model.is_sql and not is_table_deployable and self.adapter.dialect != "redshift":
+            if model.is_sql and dry_run and self.adapter.dialect != "redshift":
                 logger.info("Dry running model '%s'", model.name)
                 self.adapter.fetchall(ctas_query)
         else:
