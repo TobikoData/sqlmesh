@@ -890,7 +890,7 @@ def star(
         exp.column(column, table=table_identifier, quoted=quoted).as_(
             f"{prefix.this}{column}{suffix.this}", quoted=quoted
         )
-        for column, type_ in evaluator.columns_to_types(relation).items()
+        for column, type_ in columns_to_types.items()
     ]
 
 

@@ -101,7 +101,7 @@ def macro_evaluator() -> MacroEvaluator:
 
 def test_star(assert_exp_eq) -> None:
     sql = """SELECT @STAR(foo) FROM foo"""
-    expected_sql = """SELECT CAST([foo].[a] AS DATETIMEOFFSET) AS [a], CAST([foo].[b] AS INTEGER) AS [b] FROM foo"""
+    expected_sql = "SELECT CAST([foo].[a] AS DATETIMEOFFSET) AS [a], CAST([foo].[b] AS INTEGER) AS [b] FROM foo"
     schema = MappingSchema(
         {
             "foo": {
@@ -114,7 +114,7 @@ def test_star(assert_exp_eq) -> None:
     evaluator = MacroEvaluator(schema=schema, dialect="tsql")
     assert_exp_eq(evaluator.transform(parse_one(sql, read="tsql")), expected_sql, dialect="tsql")
 
-    sql = """SELECT @STAR(foo, exclude := [SomeColumn]) FROM foo"""
+    sql = "SELECT @STAR(foo, exclude := [SomeColumn]) FROM foo"
     expected_sql = "SELECT CAST(`foo`.`a` AS STRING) AS `a` FROM foo"
     schema = MappingSchema(
         {
@@ -131,6 +131,20 @@ def test_star(assert_exp_eq) -> None:
         expected_sql,
         dialect="databricks",
     )
+
+    sql = "SELECT @STAR(foo, exclude := ARRAY(b)) FROM foo"
+    expected_sql = "SELECT [foo].[a] AS [a] FROM foo"
+    schema = MappingSchema(
+        {
+            "foo": {
+                "a": exp.DataType.build("unknown"),
+                "b": "int",
+            },
+        },
+        dialect="tsql",
+    )
+    evaluator = MacroEvaluator(schema=schema, dialect="tsql")
+    assert_exp_eq(evaluator.transform(parse_one(sql, read="tsql")), expected_sql, dialect="tsql")
 
 
 def test_start_no_column_types(assert_exp_eq) -> None:
