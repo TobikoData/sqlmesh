@@ -14,6 +14,7 @@ from sqlglot.time import format_time
 
 from sqlmesh.core import dialect as d
 from sqlmesh.core.model.common import parse_properties, properties_validator
+from sqlmesh.core.model.risingwavesink import RwSinkSettings, PropertiesSettings, FormatSettings
 from sqlmesh.core.model.seed import CsvSettings
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import (
@@ -567,10 +568,53 @@ class IncrementalUnmanagedKind(_Incremental):
 class ViewKind(_ModelKind):
     name: Literal[ModelKindName.VIEW] = ModelKindName.VIEW
     materialized: SQLGlotBool = False
+    sink: t.Optional[SQLGlotBool] = False
+    connections_str: t.Optional[RwSinkSettings] = None
+
+    @field_validator("connections_str", mode="before")
+    @classmethod
+    def _parse_connections_str(cls, v: t.Any) -> t.Optional[RwSinkSettings]:
+        if v is None or isinstance(v, RwSinkSettings):
+            return v
+
+        if isinstance(v, exp.Tuple):
+            parsed_data = {}
+            for e in v.expressions:
+                # Handle properties and format as nested Anonymous expressions
+                if isinstance(e, exp.Anonymous):
+                    key = e.this.lower()  # 'properties' or 'format'
+                    nested_data = {}
+
+                    # Iterate over the expressions inside the Anonymous expression
+                    for ne in e.expressions:
+                        if isinstance(ne, exp.EQ):
+                            # Extract key-value pairs from the EQ expression
+                            nested_key = ne.this.this.name  # The left part of the EQ (e.g., 'connector')
+                            nested_value = ne.expression.this  # The right part of the EQ (e.g., 'kafka')
+                            nested_data[nested_key] = nested_value
+
+                    # Assign to either PropertiesSettings or FormatSettings based on the key
+                    if key == 'properties':
+                        parsed_data[key] = PropertiesSettings(**nested_data)
+                    elif key == 'format':
+                        parsed_data[key] = FormatSettings(**nested_data)
+                else:
+                    # TODO :: handle this print statement properly
+                    print(f"Invalid expression structure: {e}")
+
+            # Create and return the RwSinkSettings object with unpacked values
+            return RwSinkSettings(**parsed_data)
+
+        if isinstance(v, dict):
+            return RwSinkSettings(**v)
+
+        return v
 
     @property
     def data_hash_values(self) -> t.List[t.Optional[str]]:
-        return [*super().data_hash_values, str(self.materialized)]
+        return [*super().data_hash_values, str(self.materialized), str(self.sink),
+                *(str(v) for v in (self.connections_str or RwSinkSettings()).dict().values())
+                ]
 
     @property
     def supports_python_models(self) -> bool:

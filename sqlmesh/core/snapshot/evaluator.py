@@ -1571,6 +1571,8 @@ class ViewStrategy(PromotableStrategy):
             view_properties=model.physical_properties,
             table_description=model.description,
             column_descriptions=model.column_descriptions,
+            sink=self._is_sink(model),
+            connections_str=model.kind.connections_str,
         )
 
     def append(
@@ -1625,6 +1627,8 @@ class ViewStrategy(PromotableStrategy):
             view_properties=model.physical_properties,
             table_description=model.description if is_table_deployable else None,
             column_descriptions=model.column_descriptions if is_table_deployable else None,
+            sink=self._is_sink(model),
+            connections_str=model.kind.connections_str,
         )
 
     def migrate(
@@ -1646,6 +1650,8 @@ class ViewStrategy(PromotableStrategy):
             view_properties=model.physical_properties,
             table_description=model.description,
             column_descriptions=model.column_descriptions,
+            sink=self._is_sink(model),
+            connections_str=model.kind.connections_str,
         )
 
     def delete(self, name: str, **kwargs: t.Any) -> None:
@@ -1662,6 +1668,9 @@ class ViewStrategy(PromotableStrategy):
 
     def _is_materialized_view(self, model: Model) -> bool:
         return isinstance(model.kind, ViewKind) and model.kind.materialized
+    
+    def _is_sink(self, model: Model) -> bool:
+        return isinstance(model.kind, ViewKind) and model.kind.sink
 
 
 class CustomMaterialization(MaterializableStrategy):

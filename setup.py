@@ -153,6 +153,9 @@ setup(
             "sse-starlette>=0.2.2",
             "pyarrow",
         ],
+        "risingwave": [
+            "psycopg2",
+        ],
     },
     classifiers=[
         "Intended Audience :: Developers",
