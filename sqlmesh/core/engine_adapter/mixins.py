@@ -28,22 +28,13 @@ class LogicalMergeMixin(EngineAdapter):
         unique_key: t.Sequence[exp.Expression],
         when_matched: t.Optional[t.Union[exp.When, t.List[exp.When]]] = None,
     ) -> None:
-        """
-        Merge implementation for engine adapters that do not support merge natively.
-
-        The merge is executed as follows:
-        1. Create a temporary table containing the new data to merge.
-        2. Delete rows from target table where unique_key cols match a row in the temporary table.
-        3. Insert the temporary table contents into the target table. Any duplicate, non-unique rows
-           within the temporary table are ommitted.
-        4. Drop the temporary table.
-        """
-        if when_matched:
-            raise SQLMeshError(
-                "This engine does not support MERGE expressions and therefore `when_matched` is not supported."
-            )
-        self._replace_by_key(
-            target_table, source_table, columns_to_types, unique_key, is_unique_key=True
+        logical_merge(
+            self,
+            target_table,
+            source_table,
+            columns_to_types,
+            unique_key,
+            when_matched=when_matched,
         )
 
 
@@ -396,3 +387,30 @@ class ClusteredByMixin(EngineAdapter):
             kind="TABLE",
             actions=[exp.Command(this="DROP", expression="CLUSTERING KEY")],
         )
+
+
+def logical_merge(
+    engine_adapter: EngineAdapter,
+    target_table: TableName,
+    source_table: QueryOrDF,
+    columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
+    unique_key: t.Sequence[exp.Expression],
+    when_matched: t.Optional[t.Union[exp.When, t.List[exp.When]]] = None,
+) -> None:
+    """
+    Merge implementation for engine adapters that do not support merge natively.
+
+    The merge is executed as follows:
+    1. Create a temporary table containing the new data to merge.
+    2. Delete rows from target table where unique_key cols match a row in the temporary table.
+    3. Insert the temporary table contents into the target table. Any duplicate, non-unique rows
+       within the temporary table are ommitted.
+    4. Drop the temporary table.
+    """
+    if when_matched:
+        raise SQLMeshError(
+            "This engine does not support MERGE expressions and therefore `when_matched` is not supported."
+        )
+    engine_adapter._replace_by_key(
+        target_table, source_table, columns_to_types, unique_key, is_unique_key=True
+    )
