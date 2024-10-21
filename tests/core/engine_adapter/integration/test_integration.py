@@ -23,7 +23,7 @@ from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType
 from sqlmesh.core.model.definition import create_sql_model
 from sqlmesh.core.plan import Plan
 from sqlmesh.core.snapshot import Snapshot, SnapshotChangeCategory
-from sqlmesh.utils.date import now, to_date, to_time_column, yesterday
+from sqlmesh.utils.date import now, to_date, to_time_column
 from sqlmesh.utils.pydantic import PydanticModel
 from tests.conftest import SushiDataValidator
 from tests.core.engine_adapter.integration import TestContext, MetadataResults, TEST_SCHEMA
@@ -1340,8 +1340,9 @@ def test_sushi(ctx: TestContext, tmp_path_factory: pytest.TempPathFactory):
 
     context = Context(paths=tmp_path, config=config, gateway=ctx.gateway)
 
-    start = to_date(now() - timedelta(days=7))
     end = now()
+    start = to_date(end - timedelta(days=7))
+    yesterday = to_date(end - timedelta(days=1))
 
     # Databricks requires the table property `delta.columnMapping.mode = 'name'` for
     # spaces in column names. Other engines error if it is set in the model definition,
@@ -1422,7 +1423,7 @@ def test_sushi(ctx: TestContext, tmp_path_factory: pytest.TempPathFactory):
     data_validator.validate(
         f"{sushi_test_schema}.customer_revenue_lifetime",
         start,
-        yesterday(),
+        yesterday,
         env_name="test_prod",
         dialect=ctx.dialect,
         environment_naming_info=plan.environment_naming_info,
@@ -1643,7 +1644,7 @@ def test_sushi(ctx: TestContext, tmp_path_factory: pytest.TempPathFactory):
     data_validator.validate(
         f"{sushi_test_schema}.customer_revenue_lifetime",
         start,
-        yesterday(),
+        yesterday,
         env_name="test_dev",
         dialect=ctx.dialect,
         environment_naming_info=no_change_plan.environment_naming_info,
