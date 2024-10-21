@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 import typing as t
 from dataclasses import dataclass
 from datetime import datetime
@@ -27,6 +28,12 @@ from sqlmesh.utils.date import TimeLike, now, to_datetime, to_timestamp
 from sqlmesh.utils.pydantic import PydanticModel
 
 SnapshotMapping = t.Dict[SnapshotId, t.Set[SnapshotId]]
+
+
+if sys.version_info >= (3, 12):
+    from importlib import metadata
+else:
+    import importlib_metadata as metadata  # type: ignore
 
 
 class Plan(PydanticModel, frozen=True):
@@ -209,6 +216,19 @@ class Plan(PydanticModel, frozen=True):
             else self.context_diff.previous_finalized_snapshots
         )
 
+        requirements = {}
+
+        for snapshot in self.context_diff.snapshots.values():
+            if snapshot.is_model:
+                for executable in snapshot.model.python_env.values():
+                    if executable.kind == "import":
+                        try:
+                            lib = executable.payload.split("import ")[1].split()[0].split(".")[0]
+                            if lib not in requirements and lib != "sqlglot":
+                                requirements[lib] = metadata.version(lib)
+                        except metadata.PackageNotFoundError:
+                            pass
+
         return Environment(
             snapshots=snapshots,
             start_at=self.provided_start or self._earliest_interval_start,
@@ -218,6 +238,7 @@ class Plan(PydanticModel, frozen=True):
             expiration_ts=expiration_ts,
             promoted_snapshot_ids=promoted_snapshot_ids,
             previous_finalized_snapshots=previous_finalized_snapshots,
+            requirements=requirements,
             **self.environment_naming_info.dict(),
         )
 

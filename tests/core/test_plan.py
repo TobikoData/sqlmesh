@@ -2562,3 +2562,12 @@ def test_interval_end_per_model(make_snapshot):
         is_dev=True,
     )
     assert plan_builder.build().interval_end_per_model is None
+
+
+def test_plan_requirements():
+    plan = (
+        Context(paths="examples/sushi")
+        .plan("dev", no_prompts=True, skip_tests=True, skip_backfill=True)
+        .environment.requirements
+    )
+    assert set(plan) == {"numpy", "pandas"}
