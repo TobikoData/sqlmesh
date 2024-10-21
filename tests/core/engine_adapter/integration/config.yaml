@@ -89,6 +89,14 @@ gateways:
       cluster: cluster1
     state_connection:
       type: duckdb
+  inttest_risingwave:
+    connection:
+      type: risingwave
+      user: risingwave
+      password: risingwave
+      database: risingwave
+      host: {{ env_var('DOCKER_HOSTNAME', 'localhost') }}
+      port: 5432
 
 
   # Cloud databases
