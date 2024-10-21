@@ -6,7 +6,7 @@ import typing as t
 from typing import List
 
 
-from sqlglot import exp
+from sqlglot import exp, Dialect
 
 from sqlmesh.core.engine_adapter.base_postgres import BasePostgresEngineAdapter
 from sqlmesh.core.engine_adapter.mixins import (
@@ -147,6 +147,25 @@ class RisingwaveEngineAdapter(
             },
         },
     )
+    
+    def __init__(
+        self,
+        connection_factory: t.Callable[[], t.Any],
+        dialect: str = "",
+        sql_gen_kwargs: t.Optional[t.Dict[str, Dialect | bool | str]] = None,
+        multithreaded: bool = False,
+        cursor_kwargs: t.Optional[t.Dict[str, t.Any]] = None,
+        cursor_init: t.Optional[t.Callable[[t.Any], None]] = None,
+        default_catalog: t.Optional[str] = None,
+        execute_log_level: int = logging.DEBUG,
+        register_comments: bool = True,
+        pre_ping: bool = False,
+        **kwargs: t.Any,
+    ):
+        super().__init__(connection_factory, dialect, sql_gen_kwargs, multithreaded, cursor_kwargs, cursor_init, default_catalog, execute_log_level, register_comments, pre_ping, **kwargs)
+        if hasattr(self, 'cursor'):
+            sql = "SET RW_IMPLICIT_FLUSH TO true;"
+            self._execute(sql)
 
     def _fetch_native_df(
         self, query: t.Union[exp.Expression, str], quote_identifiers: bool = False
