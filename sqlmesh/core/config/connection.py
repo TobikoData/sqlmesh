@@ -1657,6 +1657,7 @@ class AthenaConnectionConfig(ConnectionConfig):
 
         return connect
 
+
 class RisingwaveConnectionConfig(ConnectionConfig):
     host: str
     user: str
@@ -1697,6 +1698,7 @@ class RisingwaveConnectionConfig(ConnectionConfig):
         from psycopg2 import connect
 
         return connect
+
 
 CONNECTION_CONFIG_TO_TYPE = {
     # Map all subclasses of ConnectionConfig to the value of their `type_` field.

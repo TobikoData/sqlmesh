@@ -13,7 +13,12 @@ from sqlmesh.core.engine_adapter.mixins import (
     GetCurrentCatalogFromFunctionMixin,
     PandasNativeFetchDFSupportMixin,
 )
-from sqlmesh.core.engine_adapter.shared import set_catalog, CatalogSupport, CommentCreationView, CommentCreationTable
+from sqlmesh.core.engine_adapter.shared import (
+    set_catalog,
+    CatalogSupport,
+    CommentCreationView,
+    CommentCreationTable,
+)
 from sqlmesh.core.model.risingwavesink import RwSinkSettings
 from sqlmesh.core.schema_diff import SchemaDiffer
 
@@ -24,6 +29,7 @@ if t.TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+
 def _increment_sink_version(sink_name: str) -> str:
     """
     Increments the version number in the sink name.
@@ -33,7 +39,7 @@ def _increment_sink_version(sink_name: str) -> str:
         str: The updated sink name with incremented version.
     """
     # Regular expression to match the version suffix (v followed by digits)
-    match = re.search(r'(_v\d+)$', sink_name)
+    match = re.search(r"(_v\d+)$", sink_name)
 
     if match:
         # Extract the version part
@@ -49,7 +55,7 @@ def _increment_sink_version(sink_name: str) -> str:
         new_version_part = f"_v{new_version_number}"  # e.g., _v2
 
         # Replace the old version part with the new version part
-        new_sink_name = sink_name[:match.start()] + new_version_part
+        new_sink_name = sink_name[: match.start()] + new_version_part
         return new_sink_name
 
     return sink_name  # Return original if no version suffix found
@@ -69,7 +75,7 @@ def _extract_sink_name(view_name: TableName) -> t.Optional[str]:
 
     # Convert the exp.Table object to a string representation (if needed)
     table_name = str(view_name)
-    parts = table_name.split('__')
+    parts = table_name.split("__")
 
     if table_name.endswith("__temp"):
         return None
@@ -77,7 +83,6 @@ def _extract_sink_name(view_name: TableName) -> t.Optional[str]:
     if len(parts) > 2:
         return parts[2]
     return None
-
 
 
 def _find_latest_sink(sink_names: List[str]) -> str:
@@ -147,7 +152,7 @@ class RisingwaveEngineAdapter(
             },
         },
     )
-    
+
     def __init__(
         self,
         connection_factory: t.Callable[[], t.Any],
@@ -162,8 +167,20 @@ class RisingwaveEngineAdapter(
         pre_ping: bool = False,
         **kwargs: t.Any,
     ):
-        super().__init__(connection_factory, dialect, sql_gen_kwargs, multithreaded, cursor_kwargs, cursor_init, default_catalog, execute_log_level, register_comments, pre_ping, **kwargs)
-        if hasattr(self, 'cursor'):
+        super().__init__(
+            connection_factory,
+            dialect,
+            sql_gen_kwargs,
+            multithreaded,
+            cursor_kwargs,
+            cursor_init,
+            default_catalog,
+            execute_log_level,
+            register_comments,
+            pre_ping,
+            **kwargs,
+        )
+        if hasattr(self, "cursor"):
             sql = "SET RW_IMPLICIT_FLUSH TO true;"
             self._execute(sql)
 
@@ -179,7 +196,6 @@ class RisingwaveEngineAdapter(
             self._connection_pool.commit()
         return df
 
-
     def create_view(
         self,
         view_name: TableName,
@@ -187,11 +203,12 @@ class RisingwaveEngineAdapter(
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         replace: bool = True,
         materialized: bool = False,
+        materialized_properties: t.Optional[t.Dict[str, t.Any]] = None,
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
         view_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
-        sink: bool = False,
-        connections_str: t.Optional[RwSinkSettings] = None,
+        # sink: bool = False,
+        # connections_str: t.Optional[RwSinkSettings] = None,
         **create_kwargs: t.Any,
     ) -> None:
         """
@@ -200,6 +217,8 @@ class RisingwaveEngineAdapter(
         to work around these constraints.
         Reference: https://www.postgresql.org/docs/current/sql-createview.html
         """
+        sink: bool = create_kwargs.get("sink", False)
+        connections_str: t.Optional[RwSinkSettings] = create_kwargs.get("connections_str", None)
         if materialized:
             replace = True
 
@@ -213,14 +232,13 @@ class RisingwaveEngineAdapter(
                 columns_to_types=columns_to_types,
                 replace=replace,
                 materialized=materialized,
+                materialized_properties=materialized_properties,
                 table_description=table_description,
                 column_descriptions=column_descriptions,
                 view_properties=view_properties,
-                sink=sink,
-                connections_str=connections_str,
                 **create_kwargs,
             )
-            if sink:
+            if sink and connections_str is not None:
                 self.create_rw_sink(view_name, connections_str)
 
     def drop_view(
@@ -249,11 +267,12 @@ class RisingwaveEngineAdapter(
            """
 
         # Build the base query with WHERE conditions
+        table = exp.to_table(view_name)
         query = (
             exp.select("table_type")
             .from_("information_schema.tables")
-            .where(exp.column("table_schema").eq(view_name.db))
-            .where(exp.column("table_name").eq(view_name.name))
+            .where(exp.column("table_schema").eq(table.db))
+            .where(exp.column("table_name").eq(table.name))
         )
 
         # Fetch the result as a DataFrame
@@ -262,10 +281,10 @@ class RisingwaveEngineAdapter(
         if not df.empty:
             # Access the first row to get table_type
             first_row = df.iloc[0]
-            table_type = first_row['table_type']
+            table_type = first_row["table_type"]
 
             # Check if table_type is MATERIALIZED VIEW
-            if table_type == 'MATERIALIZED VIEW':
+            if table_type == "MATERIALIZED VIEW":
                 _is_materialized = True
                 logger.debug("The object is a MATERIALIZED VIEW.")
             else:
@@ -276,11 +295,11 @@ class RisingwaveEngineAdapter(
         # Return whether the object is materialized
         return _is_materialized
 
-    def create_rw_sink(self, view_name: TableName,connections_str :RwSinkSettings) -> None:
+    def create_rw_sink(self, view_name: TableName, connections_str: RwSinkSettings) -> None:
         """
-           Builds a SQL query to check for a table in information_schema.tables
-           based on dbname.schema_name.table_name.
-           """
+        Builds a SQL query to check for a table in information_schema.tables
+        based on dbname.schema_name.table_name.
+        """
         _is_sink_need_drop = False
         sink_name = _extract_sink_name(view_name)
 
@@ -291,13 +310,17 @@ class RisingwaveEngineAdapter(
 
         sink_names = self._is_sink_exists(view_name, sink_name)
 
-        topic = connections_str.properties.topic
+        topic = connections_str.properties.topic if connections_str.properties else None
         if not sink_names:  # Check if sink_names is None or an empty list
-            sink_name = sink_name + '_v1'  # Set to v1 if no sinks exist
+            sink_name = sink_name + "_v1"  # Set to v1 if no sinks exist
         else:
             if len(sink_names) > 1:
-                logger.warning("Found more than one version of sinks in the model ! Please clear the other versions of not required !")
-                logger.warning("This will use the compute power and might slow down the entire process !")
+                logger.warning(
+                    "Found more than one version of sinks in the model ! Please clear the other versions of not required !"
+                )
+                logger.warning(
+                    "This will use the compute power and might slow down the entire process !"
+                )
             # If sink_names is not empty, find the latest sink and increment its version
             sink_name_latest = _find_latest_sink(sink_names)
             sink_name = _increment_sink_version(sink_name_latest)
@@ -308,33 +331,40 @@ class RisingwaveEngineAdapter(
 
         properties = connections_str.properties
         # Start finding topics
-        if topic is None:
+        if topic is None and properties is not None:
             properties = properties.copy(update={"topic": sink_name})
             connections_str = connections_str.copy(update={"properties": properties})
 
-        self._create_rw_sink(sink_name,view_name,connections_str,_is_sink_need_drop)
+        self._create_rw_sink(sink_name, view_name, connections_str, _is_sink_need_drop)
 
-
-    def _create_rw_sink(self, sink_name: str, view_name: TableName,connections_str :RwSinkSettings,_is_sink_need_drop:bool) -> None:
-
-        '''sink_name = sink_name.split('__', 1)[1]'''
-        if _is_sink_need_drop :
-            logger.warning(f"no topic names are present in connection strings, drop current sink and create new one.")
+    def _create_rw_sink(
+        self,
+        sink_name: str,
+        view_name: TableName,
+        connections_str: RwSinkSettings,
+        _is_sink_need_drop: bool,
+    ) -> None:
+        """sink_name = sink_name.split('__', 1)[1]"""
+        if _is_sink_need_drop:
+            logger.warning(
+                "no topic names are present in connection strings, drop current sink and create new one."
+            )
             query = f"DROP SINK IF EXISTS {sink_name}"
             self._execute(query)
         # Start building the query
         query = f"CREATE SINK IF NOT EXISTS {sink_name} FROM {view_name} \nWITH (\n"
 
         # Iterate over the settings fields dynamically
-        for field_name, value in connections_str.properties.model_dump().items():
-            if value:
-                setting_name = field_name.replace('_', '.')
-                query += f"\t{setting_name}='{value}',\n"
+        if connections_str.properties is not None:
+            for field_name, value in connections_str.properties.model_dump().items():
+                if value:
+                    setting_name = field_name.replace("_", ".")
+                    query += f"\t{setting_name}='{value}',\n"
 
         # Remove the last comma and newline if any "WITH" properties were added
-        query = query.rstrip(',\n') + "\n)"
+        query = query.rstrip(",\n") + "\n)"
         # Add format and encode block if available
-        if connections_str.format :
+        if connections_str.format:
             query += " FORMAT"
             if connections_str.format.format:
                 query += f" {connections_str.format.format}"
@@ -343,26 +373,25 @@ class RisingwaveEngineAdapter(
 
         # Add force_append_only under the FORMAT block if available
         excluded_attributes = {"format", "encode"}
-        for field_name, value in connections_str.format.model_dump().items():
-            if field_name not in excluded_attributes:
-              setting_name = field_name # Remove the 'f_' prefix
-              query += f" \t{setting_name}='{value}',\n"
-        query = query.rstrip(',\n') + "\n)"
+        if connections_str.format is not None:
+            for field_name, value in connections_str.format.model_dump().items():
+                if field_name not in excluded_attributes:
+                    setting_name = field_name  # Remove the 'f_' prefix
+                    query += f" \t{setting_name}='{value}',\n"
+        query = query.rstrip(",\n") + "\n)"
         self._execute(query)
 
     def _is_sink_exists(self, view_name: TableName, sink_name: str) -> t.Optional[List[str]]:
-
         """
-           Builds a SQL query to check for a table in information_schema.tables
-           based on dbname.schema_name.table_name.
-           """
+        Builds a SQL query to check for a table in information_schema.tables
+        based on dbname.schema_name.table_name.
+        """
         # Build the base query with WHERE conditions
         query = (
             exp.select("table_name")
             .from_("information_schema.tables")
             .where(exp.column("table_type").eq("SINK"))
             .where(f"table_name LIKE '{sink_name}_v%'")
-
         )
         # Fetch the result as a DataFrame
         df = self.fetchdf(query)
@@ -375,5 +404,7 @@ class RisingwaveEngineAdapter(
             # Return a list of table names (assuming the column is named 'table_name')
             table_list = df["table_name"].tolist()
             if len(table_list) > 1:
-                logger.warning(f"multiple sink {table_list} found for {sink_name} !. Please drop it if not necessary !")
+                logger.warning(
+                    f"multiple sink {table_list} found for {sink_name} !. Please drop it if not necessary !"
+                )
             return df["table_name"].tolist()

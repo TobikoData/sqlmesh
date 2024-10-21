@@ -578,7 +578,7 @@ class ViewKind(_ModelKind):
             return v
 
         if isinstance(v, exp.Tuple):
-            parsed_data = {}
+            parsed_data: t.Dict[str, t.Any] = {}
             for e in v.expressions:
                 # Handle properties and format as nested Anonymous expressions
                 if isinstance(e, exp.Anonymous):
@@ -589,14 +589,18 @@ class ViewKind(_ModelKind):
                     for ne in e.expressions:
                         if isinstance(ne, exp.EQ):
                             # Extract key-value pairs from the EQ expression
-                            nested_key = ne.this.this.name  # The left part of the EQ (e.g., 'connector')
-                            nested_value = ne.expression.this  # The right part of the EQ (e.g., 'kafka')
+                            nested_key = (
+                                ne.this.this.name
+                            )  # The left part of the EQ (e.g., 'connector')
+                            nested_value = (
+                                ne.expression.this
+                            )  # The right part of the EQ (e.g., 'kafka')
                             nested_data[nested_key] = nested_value
 
                     # Assign to either PropertiesSettings or FormatSettings based on the key
-                    if key == 'properties':
+                    if key == "properties":
                         parsed_data[key] = PropertiesSettings(**nested_data)
-                    elif key == 'format':
+                    elif key == "format":
                         parsed_data[key] = FormatSettings(**nested_data)
                 else:
                     # TODO :: handle this print statement properly
@@ -612,9 +616,12 @@ class ViewKind(_ModelKind):
 
     @property
     def data_hash_values(self) -> t.List[t.Optional[str]]:
-        return [*super().data_hash_values, str(self.materialized), str(self.sink),
-                *(str(v) for v in (self.connections_str or RwSinkSettings()).dict().values())
-                ]
+        return [
+            *super().data_hash_values,
+            str(self.materialized),
+            str(self.sink),
+            *(str(v) for v in (self.connections_str or RwSinkSettings()).dict().values()),
+        ]
 
     @property
     def supports_python_models(self) -> bool:

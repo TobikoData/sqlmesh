@@ -4,6 +4,7 @@ from sqlmesh.utils.pydantic import PydanticModel, field_validator
 from sqlglot.dialects.dialect import UNESCAPED_SEQUENCES
 from sqlglot import exp
 
+
 # Nested settings for properties fields (e.g., bootstrap server, sasl, ssl)
 class PropertiesSettings(PydanticModel):
     connector: t.Optional[str] = None
@@ -19,6 +20,7 @@ class PropertiesSettings(PydanticModel):
     properties_ssl_key_location: t.Optional[str] = None
     properties_ssl_endpoint_identification_algorithm: t.Optional[str] = None
 
+
 # Nested settings for properties fields (e.g., bootstrap server, sasl, ssl)
 class FormatSettings(PydanticModel):
     format: t.Optional[str] = None
@@ -27,8 +29,10 @@ class FormatSettings(PydanticModel):
     schema_registry: t.Optional[str] = None
     force_append_only: t.Optional[str] = None
 
+
 class RwSinkSettings(PydanticModel):
     """Settings for a Sink that include connector, properties, topic, format, and encoding."""
+
     properties: t.Optional[PropertiesSettings] = None  # Nested model for properties
     # FORMAT and ENCODE fields with 'f_' prefix
     format: t.Optional[FormatSettings] = None
