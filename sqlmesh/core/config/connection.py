@@ -1657,6 +1657,9 @@ class AthenaConnectionConfig(ConnectionConfig):
 
         return connect
 
+    def get_catalog(self) -> t.Optional[str]:
+        return self.catalog_name
+
 
 CONNECTION_CONFIG_TO_TYPE = {
     # Map all subclasses of ConnectionConfig to the value of their `type_` field.

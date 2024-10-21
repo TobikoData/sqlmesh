@@ -682,6 +682,21 @@ def test_athena(make_config):
     assert isinstance(config, AthenaConnectionConfig)
 
 
+def test_athena_catalog(make_config):
+    config = make_config(type="athena", work_group="primary", catalog_name="foo")
+    assert isinstance(config, AthenaConnectionConfig)
+
+    assert config.catalog_name == "foo"
+    adapter = config.create_engine_adapter()
+    assert adapter.default_catalog == "foo"
+
+    config = make_config(type="athena", work_group="primary")
+    assert isinstance(config, AthenaConnectionConfig)
+    assert config.catalog_name is None
+    adapter = config.create_engine_adapter()
+    assert adapter.default_catalog == "awsdatacatalog"
+
+
 def test_athena_s3_staging_dir_or_workgroup(make_config):
     with pytest.raises(
         ConfigError, match=r"At least one of work_group or s3_staging_dir must be set"
