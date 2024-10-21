@@ -1,7 +1,7 @@
 services:
-  postgres:
-    image: risingwave
+  risingwave:
+    image: risingwavelabs/risingwave:v2.0.1
     ports:
       - '5432:5432'
     environment:
-      POSTGRES_PASSWORD: risingwave
+      RISINGWAVE_PASSWORD: risingwave
