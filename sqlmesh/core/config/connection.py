@@ -1657,6 +1657,46 @@ class AthenaConnectionConfig(ConnectionConfig):
 
         return connect
 
+class RisingwaveConnectionConfig(ConnectionConfig):
+    host: str
+    user: str
+    password: str
+    port: int
+    database: str
+    keepalives_idle: t.Optional[int] = None
+    connect_timeout: int = 10
+    role: t.Optional[str] = None
+    sslmode: t.Optional[str] = None
+
+    concurrent_tasks: int = 4
+    register_comments: bool = True
+    pre_ping: bool = True
+
+    type_: Literal["risingwave"] = Field(alias="type", default="risingwave")
+
+    @property
+    def _connection_kwargs_keys(self) -> t.Set[str]:
+        return {
+            "host",
+            "user",
+            "password",
+            "port",
+            "database",
+            "keepalives_idle",
+            "connect_timeout",
+            "role",
+            "sslmode",
+        }
+
+    @property
+    def _engine_adapter(self) -> t.Type[EngineAdapter]:
+        return engine_adapter.RisingwaveEngineAdapter
+
+    @property
+    def _connection_factory(self) -> t.Callable:
+        from psycopg2 import connect
+
+        return connect
 
 CONNECTION_CONFIG_TO_TYPE = {
     # Map all subclasses of ConnectionConfig to the value of their `type_` field.

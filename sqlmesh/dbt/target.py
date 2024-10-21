@@ -112,6 +112,8 @@ class TargetConfig(abc.ABC, DbtConfig):
             return TrinoConfig(**data)
         elif db_type == "athena":
             return AthenaConfig(**data)
+        elif db_type == "risingwave":
+            return PostgresConfig(**data)
 
         raise ConfigError(f"{db_type} not supported.")
 
