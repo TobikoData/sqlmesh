@@ -11,7 +11,6 @@ from sqlmesh.core.schema_diff import SchemaDiffer
 from datetime import datetime
 from pytest_mock.plugin import MockerFixture
 from sqlmesh.core import dialect as d
-from sqlmesh.utils.date import to_datetime
 
 pytestmark = [pytest.mark.clickhouse, pytest.mark.engine]
 
