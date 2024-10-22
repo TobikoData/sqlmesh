@@ -152,6 +152,7 @@ class EngineAdapterStateSync(StateSync):
             "catalog_name_override": exp.DataType.build("text"),
             "previous_finalized_snapshots": exp.DataType.build("text"),
             "normalize_name": exp.DataType.build("boolean"),
+            "requirements": exp.DataType.build("text"),
         }
 
         self._interval_columns_to_types = {
@@ -1711,6 +1712,7 @@ def _environment_to_df(environment: Environment) -> pd.DataFrame:
                     else None
                 ),
                 "normalize_name": environment.normalize_name,
+                "requirements": json.dumps(environment.requirements),
             }
         ]
     )

@@ -101,6 +101,7 @@ class Environment(EnvironmentNamingInfo):
         promoted_snapshot_ids: The IDs of the snapshots that are promoted in this environment
             (i.e. for which the views are created). If not specified, all snapshots are promoted.
         previous_finalized_snapshots: Snapshots that were part of this environment last time it was finalized.
+        requirements: A mapping of library versions for all the snapshots in this environment.
     """
 
     snapshots_: t.List[t.Any] = Field(alias="snapshots")
@@ -116,6 +117,7 @@ class Environment(EnvironmentNamingInfo):
     previous_finalized_snapshots_: t.Optional[t.List[t.Any]] = Field(
         default=None, alias="previous_finalized_snapshots"
     )
+    requirements: t.Dict[str, str] = {}
 
     @field_validator("snapshots_", "previous_finalized_snapshots_", mode="before")
     @classmethod
@@ -134,6 +136,12 @@ class Environment(EnvironmentNamingInfo):
         if v and not isinstance(next(iter(v)), (dict, SnapshotId)):
             raise ValueError("Must be a list of SnapshotId dicts or objects")
         return v
+
+    @field_validator("requirements", mode="before")
+    def _load_requirements(cls, v: t.Any) -> t.Any:
+        if isinstance(v, str):
+            v = json.loads(v)
+        return v or {}
 
     @property
     def snapshots(self) -> t.List[SnapshotTableInfo]:
