@@ -24,7 +24,7 @@ from sqlmesh.core.schema_diff import SchemaDiffer
 
 
 if t.TYPE_CHECKING:
-    from sqlmesh.core._typing import TableName
+    from sqlmesh.core._typing import TableName, SessionProperties
     from sqlmesh.core.engine_adapter._typing import DF
 
 logger = logging.getLogger(__name__)
@@ -183,6 +183,11 @@ class RisingwaveEngineAdapter(
         if hasattr(self, "cursor"):
             sql = "SET RW_IMPLICIT_FLUSH TO true;"
             self._execute(sql)
+
+    def _begin_session(self, properties: SessionProperties) -> t.Any:
+        """Begin a new session."""
+        sql = "SET RW_IMPLICIT_FLUSH TO true;"
+        self._execute(sql)
 
     def _fetch_native_df(
         self, query: t.Union[exp.Expression, str], quote_identifiers: bool = False
