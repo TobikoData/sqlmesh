@@ -475,7 +475,6 @@ def test_creatable_type_secure_materialized_view(make_mocked_engine_adapter: t.C
     adapter.create_view(
         "test_table",
         parse_one("SELECT 1"),
-        secure=True,
         materialized=True,
         view_properties={
             "creatable_type": exp.Column(this=exp.Identifier(this="secure")),
@@ -496,7 +495,7 @@ def test_creatable_type_temporary_view(make_mocked_engine_adapter: t.Callable):
         "test_table",
         parse_one("SELECT 1"),
         view_properties={
-            "creatable_type": exp.Column(this=exp.Identifier(this="temporary")),
+            "creatable_type": exp.column("temporary"),
         },
     )
 
@@ -513,7 +512,7 @@ def test_creatable_type_temporary_table(make_mocked_engine_adapter: t.Callable):
         "test_table",
         {"a": exp.DataType.build("INT"), "b": exp.DataType.build("INT")},
         table_properties={
-            "creatable_type": exp.Column(this=exp.Identifier(this="temporary")),
+            "creatable_type": exp.column("temporary"),
         },
     )
 
@@ -530,7 +529,7 @@ def test_creatable_type_transient_table(make_mocked_engine_adapter: t.Callable):
         "test_table",
         {"a": exp.DataType.build("INT"), "b": exp.DataType.build("INT")},
         table_properties={
-            "creatable_type": exp.Column(this=exp.Identifier(this="transient")),
+            "creatable_type": exp.column("transient"),
         },
     )
 
@@ -559,20 +558,7 @@ def test_creatable_type_materialize_creatable_type_raise_error(
             "test_view",
             parse_one("SELECT 1"),
             view_properties={
-                "creatable_type": exp.Column(this=exp.Identifier(this="materialized")),
-            },
-        )
-
-
-def test_creatable_type_raise_error_rubbish_property(make_mocked_engine_adapter: t.Callable):
-    adapter = make_mocked_engine_adapter(SnowflakeEngineAdapter)
-
-    with pytest.raises(SQLMeshError):
-        adapter.create_table(
-            "test_table",
-            {"a": exp.DataType.build("INT"), "b": exp.DataType.build("INT")},
-            table_properties={
-                "creatable_type": exp.Column(this=exp.Identifier(this="rubbish")),
+                "creatable_type": exp.column("materialized"),
             },
         )
 

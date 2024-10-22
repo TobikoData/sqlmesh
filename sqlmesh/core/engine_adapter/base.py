@@ -426,18 +426,23 @@ class EngineAdapter:
                     and isinstance(value.this.this, str)
                 ):
                     value_as_str = value.this.this.upper()
-                    if value_as_str == "MATERIALIZED":
+                    parsed_properties = exp.maybe_parse(
+                        value_as_str, into=exp.Properties, dialect=self.dialect
+                    )
+
+                    property, *others = parsed_properties.expressions
+                    if others:
+                        # Multiple properties are unsupported today, can look into it in the future if needed
+                        raise SQLMeshError(
+                            f"Invalid creatable_type value with multiple properties: {value_as_str}"
+                        )
+
+                    if isinstance(property, exp.MaterializedProperty):
                         raise SQLMeshError(
                             f"Cannot use {value.this.this} as a creatable_type as it conflicts with the `materialize` parameter."
                         )
-                    # TODO Improve this
-                    if value_as_str == "SECURE":
-                        return exp.SecureProperty()
-                    if value_as_str == "TRANSIENT":
-                        return exp.TransientProperty()
-                    if value_as_str == "TEMPORARY" or value_as_str == "TEMP":
-                        return exp.TemporaryProperty()
-                    raise SQLMeshError(f"Invalid creatable_type value: {value_as_str}")
+
+                    return property
                 else:
                     raise SQLMeshError(f"Invalid creatable_type value: {value}")
         return None
