@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import sys
 import typing as t
 from dataclasses import dataclass
@@ -27,6 +28,8 @@ from sqlmesh.core.snapshot.definition import (
 from sqlmesh.utils.date import TimeLike, now, to_datetime, to_timestamp
 from sqlmesh.utils.pydantic import PydanticModel
 
+logger = logging.getLogger(__name__)
+
 SnapshotMapping = t.Dict[SnapshotId, t.Set[SnapshotId]]
 
 
@@ -34,6 +37,9 @@ if sys.version_info >= (3, 12):
     from importlib import metadata
 else:
     import importlib_metadata as metadata  # type: ignore
+
+
+IGNORED_PACKAGES = {"sqlmesh", "sqlglot"}
 
 
 class Plan(PydanticModel, frozen=True):
@@ -217,17 +223,21 @@ class Plan(PydanticModel, frozen=True):
         )
 
         requirements = {}
+        distributions = metadata.packages_distributions()
 
         for snapshot in self.context_diff.snapshots.values():
             if snapshot.is_model:
                 for executable in snapshot.model.python_env.values():
                     if executable.kind == "import":
                         try:
-                            lib = executable.payload.split("import ")[1].split()[0].split(".")[0]
-                            if lib not in requirements and lib != "sqlglot":
-                                requirements[lib] = metadata.version(lib)
+                            start = "from " if executable.payload.startswith("from ") else "import "
+                            lib = executable.payload.split(start)[1].split()[0].split(".")[0]
+                            if lib in distributions:
+                                for dist in distributions[lib]:
+                                    if dist not in requirements and dist not in IGNORED_PACKAGES:
+                                        requirements[dist] = metadata.version(dist)
                         except metadata.PackageNotFoundError:
-                            pass
+                            logger.warning("Failed to find package for %s", lib)
 
         return Environment(
             snapshots=snapshots,
