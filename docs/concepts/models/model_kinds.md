@@ -10,7 +10,7 @@ Only missing time intervals are processed during each execution for `INCREMENTAL
 
 An `INCREMENTAL_BY_TIME_RANGE` model has two requirements that other models do not: it must know which column contains the time data it will use to filter the data by time range, and it must contain a `WHERE` clause that filters the upstream data by time.
 
-The name of the column containing time data is specified in the model's `MODEL` DDL. It is specified ih the DDL `kind` specification's `time_column` key. This example shows the `MODEL` DDL for an `INCREMENTAL_BY_TIME_RANGE` model that stores time data in the "event_date" column:
+The name of the column containing time data is specified in the model's `MODEL` DDL. It is specified in the DDL `kind` specification's `time_column` key. This example shows the `MODEL` DDL for an `INCREMENTAL_BY_TIME_RANGE` model that stores time data in the "event_date" column:
 
 ```sql linenums="1"
 MODEL (

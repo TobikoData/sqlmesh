@@ -37,7 +37,7 @@ RUN curl https://dlcdn.apache.org/hadoop/common/hadoop-3.3.6/hadoop-3.3.6.tar.gz
 ENV HADOOP_HOME="/opt/hadoop"
 
 # Install Hive
-RUN curl https://dlcdn.apache.org/hive/hive-3.1.3/apache-hive-3.1.3-bin.tar.gz -o apache-hive-3.1.3-bin.tar.gz && \
+RUN curl https://storage.googleapis.com/tobiko_public/airflow/apache-hive-3.1.3-bin.tar.gz -o apache-hive-3.1.3-bin.tar.gz && \
     tar xf apache-hive-3.1.3-bin.tar.gz -C /opt/ && \
     mv /opt/apache-hive-3.1.3-bin /opt/hive
 

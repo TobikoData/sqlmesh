@@ -3,7 +3,8 @@ from __future__ import annotations
 import logging
 import typing as t
 
-from sqlglot import exp
+from sqlglot import exp, parse_one
+from sqlglot.helper import seq_get
 
 from sqlmesh.core.engine_adapter.base import EngineAdapter
 from sqlmesh.core.engine_adapter.shared import InsertOverwriteStrategy, SourceQuery
@@ -27,22 +28,13 @@ class LogicalMergeMixin(EngineAdapter):
         unique_key: t.Sequence[exp.Expression],
         when_matched: t.Optional[t.Union[exp.When, t.List[exp.When]]] = None,
     ) -> None:
-        """
-        Merge implementation for engine adapters that do not support merge natively.
-
-        The merge is executed as follows:
-        1. Create a temporary table containing the new data to merge.
-        2. Delete rows from target table where unique_key cols match a row in the temporary table.
-        3. Insert the temporary table contents into the target table. Any duplicate, non-unique rows
-           within the temporary table are ommitted.
-        4. Drop the temporary table.
-        """
-        if when_matched:
-            raise SQLMeshError(
-                "This engine does not support MERGE expressions and therefore `when_matched` is not supported."
-            )
-        self._replace_by_key(
-            target_table, source_table, columns_to_types, unique_key, is_unique_key=True
+        logical_merge(
+            self,
+            target_table,
+            source_table,
+            columns_to_types,
+            unique_key,
+            when_matched=when_matched,
         )
 
 
@@ -337,3 +329,88 @@ class ClusteredByMixin(EngineAdapter):
         **kwargs: t.Any,
     ) -> t.Optional[exp.Cluster]:
         return exp.Cluster(expressions=[exp.column(col) for col in clustered_by])
+
+    def _parse_clustering_key(self, clustering_key: t.Optional[str]) -> t.List[exp.Expression]:
+        if not clustering_key:
+            return []
+
+        # Note: Assumes `clustering_key` as a string like:
+        # - "(col_a)"
+        # - "(col_a, col_b)"
+        # - "func(col_a, transform(col_b))"
+        parsed_cluster_key = parse_one(clustering_key, dialect=self.dialect)
+
+        return parsed_cluster_key.expressions or [parsed_cluster_key.this]
+
+    def get_alter_expressions(
+        self, current_table_name: TableName, target_table_name: TableName
+    ) -> t.List[exp.Alter]:
+        expressions = super().get_alter_expressions(current_table_name, target_table_name)
+
+        # check for a change in clustering
+        current_table = exp.to_table(current_table_name)
+        target_table = exp.to_table(target_table_name)
+
+        current_table_info = seq_get(
+            self.get_data_objects(current_table.db, {current_table.name}), 0
+        )
+        target_table_info = seq_get(self.get_data_objects(target_table.db, {target_table.name}), 0)
+
+        if current_table_info and target_table_info:
+            if target_table_info.is_clustered:
+                if target_table_info.clustering_key and (
+                    current_table_info.clustering_key != target_table_info.clustering_key
+                ):
+                    expressions.append(
+                        self._change_clustering_key_expr(
+                            current_table,
+                            self._parse_clustering_key(target_table_info.clustering_key),
+                        )
+                    )
+            elif current_table_info.is_clustered:
+                expressions.append(self._drop_clustering_key_expr(current_table))
+
+        return expressions
+
+    def _change_clustering_key_expr(
+        self, table: exp.Table, cluster_by: t.List[exp.Expression]
+    ) -> exp.Alter:
+        return exp.Alter(
+            this=table,
+            kind="TABLE",
+            actions=[exp.Cluster(expressions=cluster_by)],
+        )
+
+    def _drop_clustering_key_expr(self, table: exp.Table) -> exp.Alter:
+        return exp.Alter(
+            this=table,
+            kind="TABLE",
+            actions=[exp.Command(this="DROP", expression="CLUSTERING KEY")],
+        )
+
+
+def logical_merge(
+    engine_adapter: EngineAdapter,
+    target_table: TableName,
+    source_table: QueryOrDF,
+    columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
+    unique_key: t.Sequence[exp.Expression],
+    when_matched: t.Optional[t.Union[exp.When, t.List[exp.When]]] = None,
+) -> None:
+    """
+    Merge implementation for engine adapters that do not support merge natively.
+
+    The merge is executed as follows:
+    1. Create a temporary table containing the new data to merge.
+    2. Delete rows from target table where unique_key cols match a row in the temporary table.
+    3. Insert the temporary table contents into the target table. Any duplicate, non-unique rows
+       within the temporary table are ommitted.
+    4. Drop the temporary table.
+    """
+    if when_matched:
+        raise SQLMeshError(
+            "This engine does not support MERGE expressions and therefore `when_matched` is not supported."
+        )
+    engine_adapter._replace_by_key(
+        target_table, source_table, columns_to_types, unique_key, is_unique_key=True
+    )

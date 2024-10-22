@@ -8,7 +8,7 @@ from sqlmesh.utils.pandas import columns_to_types_from_df
 from tests.core.engine_adapter.integration import TestContext
 from sqlglot import exp
 
-pytestmark = [pytest.mark.docker, pytest.mark.engine, pytest.mark.athena]
+pytestmark = [pytest.mark.remote, pytest.mark.engine, pytest.mark.athena]
 
 
 @pytest.fixture

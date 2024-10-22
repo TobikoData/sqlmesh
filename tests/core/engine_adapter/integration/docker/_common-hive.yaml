@@ -8,6 +8,7 @@ services:
       POSTGRES_PASSWORD: hive
     volumes:
       - ./init-metastore-db.sql:/docker-entrypoint-initdb.d/initdb.sql
+    command: -c max_connections=500
 
   # S3-style object storage
   minio:

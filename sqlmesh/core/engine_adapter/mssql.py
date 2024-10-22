@@ -68,6 +68,7 @@ class MSSQLEngineAdapter(
             exp.DataType.build("NVARCHAR", dialect=DIALECT).this: 2147483647,
         },
     )
+    VARIABLE_LENGTH_DATA_TYPES = {"binary", "varbinary", "char", "varchar", "nchar", "nvarchar"}
 
     def columns(
         self,
@@ -95,23 +96,34 @@ class MSSQLEngineAdapter(
 
         columns_raw = self.fetchall(sql, quote_identifiers=True)
 
-        def build_var_length_col(row: tuple) -> tuple:
-            var_len_chars = ("binary", "varbinary", "char", "varchar", "nchar", "nvarchar")
-            if row[1] in var_len_chars and row[2] > 0:
-                return (row[0], f"{row[1]}({row[2]})")
-            if row[1] in ("varbinary", "varchar", "nvarchar") and row[2] == -1:
-                return (row[0], f"{row[1]}(max)")
-            if row[1] in (
-                "decimal",
-                "numeric",
+        def build_var_length_col(
+            column_name: str,
+            data_type: str,
+            character_maximum_length: t.Optional[int] = None,
+            numeric_precision: t.Optional[int] = None,
+            numeric_scale: t.Optional[int] = None,
+        ) -> tuple:
+            data_type = data_type.lower()
+            if (
+                data_type in self.VARIABLE_LENGTH_DATA_TYPES
+                and character_maximum_length is not None
+                and character_maximum_length > 0
             ):
-                return (row[0], f"{row[1]}({row[3]}, {row[4]})")
-            if row[1] == "float":
-                return (row[0], f"{row[1]}({row[3]})")
+                return (column_name, f"{data_type}({character_maximum_length})")
+            if (
+                data_type in ("varbinary", "varchar", "nvarchar")
+                and character_maximum_length is not None
+                and character_maximum_length == -1
+            ):
+                return (column_name, f"{data_type}(max)")
+            if data_type in ("decimal", "numeric"):
+                return (column_name, f"{data_type}({numeric_precision}, {numeric_scale})")
+            if data_type == "float":
+                return (column_name, f"{data_type}({numeric_precision})")
 
-            return (row[0], row[1])
+            return (column_name, data_type)
 
-        columns = [build_var_length_col(col) for col in columns_raw]
+        columns = [build_var_length_col(*row) for row in columns_raw]
 
         return {
             column_name: exp.DataType.build(data_type, dialect=self.dialect)

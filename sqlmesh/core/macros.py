@@ -890,20 +890,20 @@ def star(
         exp.column(column, table=table_identifier, quoted=quoted).as_(
             f"{prefix.this}{column}{suffix.this}", quoted=quoted
         )
-        for column, type_ in evaluator.columns_to_types(relation).items()
+        for column, type_ in columns_to_types.items()
     ]
 
 
 @macro()
-def generate_surrogate_key(_: MacroEvaluator, *fields: exp.Expression) -> exp.Func:
+def generate_surrogate_key(evaluator: MacroEvaluator, *fields: exp.Expression) -> exp.Func:
     """Generates a surrogate key for the given fields.
 
     Example:
         >>> from sqlglot import parse_one
         >>> from sqlmesh.core.macros import MacroEvaluator
         >>> sql = "SELECT @GENERATE_SURROGATE_KEY(a, b, c) FROM foo"
-        >>> MacroEvaluator().transform(parse_one(sql)).sql()
-        "SELECT MD5(CONCAT(COALESCE(CAST(a AS TEXT), '_sqlmesh_surrogate_key_null_'), '|', COALESCE(CAST(b AS TEXT), '_sqlmesh_surrogate_key_null_'), '|', COALESCE(CAST(c AS TEXT), '_sqlmesh_surrogate_key_null_'))) FROM foo"
+        >>> MacroEvaluator(dialect="bigquery").transform(parse_one(sql, dialect="bigquery")).sql("bigquery")
+        "SELECT MD5(CONCAT(COALESCE(CAST(a AS STRING), '_sqlmesh_surrogate_key_null_'), '|', COALESCE(CAST(b AS STRING), '_sqlmesh_surrogate_key_null_'), '|', COALESCE(CAST(c AS STRING), '_sqlmesh_surrogate_key_null_'))) FROM foo"
     """
     string_fields: t.List[exp.Expression] = []
     for i, field in enumerate(fields):
@@ -916,7 +916,7 @@ def generate_surrogate_key(_: MacroEvaluator, *fields: exp.Expression) -> exp.Fu
                 exp.Literal.string("_sqlmesh_surrogate_key_null_"),
             )
         )
-    return exp.func("MD5", exp.func("CONCAT", *string_fields))
+    return exp.func("MD5", exp.func("CONCAT", *string_fields), dialect=evaluator.dialect)
 
 
 @macro()

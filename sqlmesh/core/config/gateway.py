@@ -9,7 +9,7 @@ from sqlmesh.core.config.connection import (
     SerializableConnectionConfig,
     connection_config_validator,
 )
-from sqlmesh.core.config.scheduler import SchedulerConfig
+from sqlmesh.core.config.scheduler import SchedulerConfig, scheduler_config_validator
 
 
 class GatewayConfig(BaseConfig):
@@ -36,4 +36,5 @@ class GatewayConfig(BaseConfig):
     variables: t.Dict[str, t.Any] = {}
 
     _connection_config_validator = connection_config_validator
+    _scheduler_config_validator = scheduler_config_validator
     _variables_validator = variables_validator

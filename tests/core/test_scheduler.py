@@ -16,7 +16,14 @@ from sqlmesh.core.model.kind import (
     TimeColumn,
 )
 from sqlmesh.core.node import IntervalUnit
-from sqlmesh.core.scheduler import Scheduler, compute_interval_params
+from sqlmesh.core.scheduler import (
+    Scheduler,
+    interval_diff,
+    compute_interval_params,
+    signal_factory,
+    Batch,
+    Signal,
+)
 from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotEvaluator,
@@ -623,8 +630,6 @@ def test_audit_failure_notifications(
 
 
 def test_signal_factory(mocker: MockerFixture, make_snapshot):
-    from sqlmesh.core.scheduler import signal_factory, Batch, Signal
-
     class AlwaysReadySignal(Signal):
         def check_intervals(self, batch: Batch):
             return True
@@ -663,3 +668,97 @@ def test_signal_factory(mocker: MockerFixture, make_snapshot):
     scheduler.batches(start, end, end)
 
     assert signal_factory_invoked > 0
+
+
+def test_interval_diff():
+    assert interval_diff([(1, 2)], []) == [(1, 2)]
+    assert interval_diff([(1, 2)], [(1, 2)]) == []
+    assert interval_diff([(1, 2)], [(0, 2)]) == []
+    assert interval_diff([(1, 2)], [(2, 3)]) == [(1, 2)]
+    assert interval_diff([(1, 2)], [(0, 1)]) == [(1, 2)]
+    assert interval_diff([(1, 2), (2, 3), (3, 4)], [(1, 4)]) == []
+    assert interval_diff([(1, 2), (2, 3), (3, 4)], [(1, 2)]) == [(2, 3), (3, 4)]
+    assert interval_diff([(4, 5)], [(1, 2), (2, 3)]) == [(4, 5)]
+    assert interval_diff(
+        [(1, 2), (2, 3), (3, 4), (4, 5), (5, 6)],
+        [(2, 3), (4, 6)],
+    ) == [(1, 2), (3, 4)]
+
+    assert interval_diff(
+        [(1, 2), (2, 3), (3, 4)],
+        [(1, 3)],
+    ) == [(3, 4)]
+
+    assert interval_diff(
+        [(1, 3), (3, 4)],
+        [(1, 2), (2, 3)],
+    ) == [(3, 4)]
+
+    assert interval_diff([(1, 2), (2, 3)], [(1, 2)], uninterrupted=True) == []
+    assert interval_diff([(1, 2), (2, 3)], [(3, 4)], uninterrupted=True) == [(1, 2), (2, 3)]
+    assert interval_diff([(1, 2), (2, 3)], [(2, 3)], uninterrupted=True) == [(1, 2)]
+
+
+def test_signal_intervals(mocker: MockerFixture, make_snapshot):
+    class TestSignal(Signal):
+        def __init__(self, signal: t.Dict):
+            self.name = signal["kind"]
+
+        def check_intervals(self, batch: Batch):
+            if self.name == "a":
+                return [batch[0], batch[1]]
+            if self.name == "b":
+                return batch[-49:]
+
+    a = make_snapshot(
+        SqlModel(
+            name="a",
+            kind="full",
+            start="2023-01-01",
+            query=parse_one("SELECT 1 x"),
+            signals=[{"kind": "a"}],
+        ),
+    )
+    b = make_snapshot(
+        SqlModel(
+            name="b",
+            kind="full",
+            start="2023-01-01",
+            cron="@hourly",
+            query=parse_one("SELECT 2 x"),
+            signals=[{"kind": "b"}],
+        ),
+        nodes={a.name: a.model},
+    )
+    c = make_snapshot(
+        SqlModel(
+            name="c",
+            kind="full",
+            start="2023-01-01",
+            query=parse_one("select * from a union select * from b"),
+        ),
+        nodes={a.name: a.model, b.name: b.model},
+    )
+    d = make_snapshot(
+        SqlModel(
+            name="d",
+            kind="full",
+            start="2023-01-01",
+            query=parse_one("select * from c union all select * from d"),
+        ),
+        nodes={a.name: a.model, b.name: b.model, c.name: c.model},
+    )
+
+    batches = compute_interval_params(
+        [c, a, d, b],
+        start="2023-01-01",
+        end="2023-01-03",
+        signal_factory=lambda signal: TestSignal(signal),
+    )
+
+    assert batches == {
+        a: [(to_datetime("2023-01-01"), to_datetime("2023-01-03"))],
+        b: [(to_datetime("2023-01-01 23:00:00"), to_datetime("2023-01-04"))],
+        c: [(to_datetime("2023-01-02"), to_datetime("2023-01-03"))],
+        d: [],
+    }

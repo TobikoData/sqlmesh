@@ -17,7 +17,6 @@ gateways:
       catalog: datalake
       http_scheme: http
       retries: 20
-      concurrent_tasks: 1
     state_connection:
       type: duckdb
   inttest_trino_iceberg:
@@ -29,7 +28,6 @@ gateways:
       catalog: datalake_iceberg
       http_scheme: http
       retries: 20
-      concurrent_tasks: 1
     state_connection:
       type: duckdb
   inttest_trino_delta:
@@ -41,7 +39,6 @@ gateways:
       catalog: datalake_delta
       http_scheme: http
       retries: 20
-      concurrent_tasks: 1
     state_connection:
       type: duckdb
   inttest_spark:
@@ -49,7 +46,6 @@ gateways:
       type: spark
       config:
         spark.remote: sc://{{ env_var('DOCKER_HOSTNAME', 'localhost') }}
-      concurrent_tasks: 1
     state_connection:
       type: duckdb
   inttest_mssql:
@@ -66,7 +62,6 @@ gateways:
       database: postgres
       host: {{ env_var('DOCKER_HOSTNAME', 'localhost') }}
       port: 5432
-      concurrent_tasks: 1
   inttest_mysql:
     connection:
       type: mysql
@@ -82,7 +77,6 @@ gateways:
       port: 8123
       username: clickhouse
       password: clickhouse
-      concurrent_tasks: 1
     state_connection:
       type: duckdb
   inttest_clickhouse_cluster:
@@ -93,7 +87,6 @@ gateways:
       username: clickhouse
       password: clickhouse
       cluster: cluster1
-      concurrent_tasks: 1
     state_connection:
       type: duckdb
 
@@ -107,7 +100,6 @@ gateways:
       database: {{ env_var('SNOWFLAKE_DATABASE') }}
       user: {{ env_var('SNOWFLAKE_USER') }}
       password: {{ env_var('SNOWFLAKE_PASSWORD') }}
-      concurrent_tasks: 1
     state_connection:
       type: duckdb
 
@@ -118,7 +110,6 @@ gateways:
       server_hostname: {{ env_var('DATABRICKS_SERVER_HOSTNAME') }}
       http_path: {{ env_var('DATABRICKS_HTTP_PATH') }}
       access_token: {{ env_var('DATABRICKS_ACCESS_TOKEN') }}
-      concurrent_tasks: 1
     state_connection:
       type: duckdb
 
@@ -129,7 +120,6 @@ gateways:
       user: {{ env_var('REDSHIFT_USER') }}
       password: {{ env_var('REDSHIFT_PASSWORD') }}
       database: {{ env_var('REDSHIFT_DATABASE') }}
-      concurrent_tasks: 1
     state_connection:
       type: duckdb
 
@@ -138,7 +128,6 @@ gateways:
       type: bigquery
       method: service-account
       keyfile: {{ env_var('BIGQUERY_KEYFILE') }}
-      concurrent_tasks: 1
     state_connection:
       type: duckdb
 
@@ -149,7 +138,6 @@ gateways:
       port: 8443
       username: {{ env_var("CLICKHOUSE_CLOUD_USERNAME") }}
       password: {{ env_var("CLICKHOUSE_CLOUD_PASSWORD") }}
-      concurrent_tasks: 1
     state_connection:
       type: duckdb
 
@@ -161,7 +149,6 @@ gateways:
       region_name: {{ env_var("AWS_REGION") }}
       work_group: {{ env_var("ATHENA_WORK_GROUP", "primary") }}
       s3_warehouse_location: {{ env_var("ATHENA_S3_WAREHOUSE_LOCATION", "") }}
-      concurrent_tasks: 1
     state_connection:
       type: duckdb
 

@@ -47,7 +47,8 @@ setup(
         "requests",
         "rich[jupyter]",
         "ruamel.yaml",
-        "sqlglot[rs]~=25.24.3",
+        "sqlglot[rs]~=25.27.0",
+        "tenacity",
     ],
     extras_require={
         "athena": ["PyAthena[Pandas]"],
@@ -86,7 +87,6 @@ setup(
             "pytz",
             "snowflake-connector-python[pandas,secure-local-storage]>=3.0.2",
             "sqlalchemy-stubs",
-            "tenacity",
             "types-croniter",
             "types-dateparser",
             "types-python-dateutil",
@@ -104,6 +104,9 @@ setup(
         ],
         "dbt": [
             "dbt-core<2",
+        ],
+        "dlt": [
+            "dlt",
         ],
         "gcppostgres": [
             "cloud-sql-python-connector[pg8000]",

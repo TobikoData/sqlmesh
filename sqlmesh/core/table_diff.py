@@ -153,6 +153,8 @@ class TableDiff:
         self.source = source
         self.target = target
         self.dialect = adapter.dialect
+        self.source_table = exp.to_table(self.source, dialect=self.dialect)
+        self.target_table = exp.to_table(self.target, dialect=self.dialect)
         self.where = exp.condition(where, dialect=self.dialect) if where else None
         self.limit = limit
         self.model_name = model_name
@@ -198,13 +200,13 @@ class TableDiff:
     @property
     def source_schema(self) -> t.Dict[str, exp.DataType]:
         if self._source_schema is None:
-            self._source_schema = self.adapter.columns(self.source)
+            self._source_schema = self.adapter.columns(self.source_table)
         return self._source_schema
 
     @property
     def target_schema(self) -> t.Dict[str, exp.DataType]:
         if self._target_schema is None:
-            self._target_schema = self.adapter.columns(self.target)
+            self._target_schema = self.adapter.columns(self.target_table)
         return self._target_schema
 
     def schema_diff(self) -> SchemaDiff:
@@ -274,12 +276,12 @@ class TableDiff:
 
             source_query = (
                 exp.select(*(exp.column(c) for c in source_schema))
-                .from_(self.source)
+                .from_(self.source_table)
                 .where(self.where)
             )
             target_query = (
                 exp.select(*(exp.column(c) for c in target_schema))
-                .from_(self.target)
+                .from_(self.target_table)
                 .where(self.where)
             )
 

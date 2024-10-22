@@ -159,3 +159,22 @@ def test_materialized_view_properties(make_mocked_engine_adapter: t.Callable):
     assert sql_calls == [
         "CREATE OR REPLACE MATERIALIZED VIEW test_table PARTITIONED BY (ds) AS SELECT 1",
     ]
+
+
+def test_create_table_clustered_by(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(DatabricksEngineAdapter)
+
+    columns_to_types = {
+        "cola": exp.DataType.build("INT"),
+        "colb": exp.DataType.build("TEXT"),
+    }
+    adapter.create_table(
+        "test_table",
+        columns_to_types,
+        clustered_by=["cola"],
+    )
+
+    sql_calls = to_sql_calls(adapter)
+    assert sql_calls == [
+        "CREATE TABLE IF NOT EXISTS `test_table` (`cola` INT, `colb` STRING) CLUSTER BY (`cola`)",
+    ]

@@ -1496,7 +1496,7 @@ def _parents_from_node(
     return parent_nodes
 
 
-def merge_intervals(intervals: Intervals) -> Intervals:
+def merge_intervals(intervals: t.Collection[Interval]) -> Intervals:
     """Merge a list of intervals.
 
     Args:
@@ -1505,6 +1505,8 @@ def merge_intervals(intervals: Intervals) -> Intervals:
     Returns:
         A new list of sorted and merged intervals.
     """
+    if not intervals:
+        return []
     intervals = sorted(intervals)
 
     merged = [intervals[0]]

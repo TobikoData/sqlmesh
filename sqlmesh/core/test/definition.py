@@ -94,8 +94,11 @@ class ModelTest(unittest.TestCase):
         else:
             self._fixture_catalog = None
 
-        # The test schema name is randomized to avoid concurrency issues
-        self._fixture_schema = exp.to_identifier(f"sqlmesh_test_{random_id(short=True)}")
+        # The test schema name is randomized to avoid concurrency issues,
+        # unless a schema is provided in the unit tests's body
+        self._fixture_schema = exp.parse_identifier(
+            self.body.get("schema") or f"sqlmesh_test_{random_id(short=True)}"
+        )
         self._qualified_fixture_schema = schema_(self._fixture_schema, self._fixture_catalog)
 
         self._transforms = self._test_adapter_dialect.generator_class.TRANSFORMS

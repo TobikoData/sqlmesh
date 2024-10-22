@@ -16,7 +16,7 @@ from sqlmesh.integrations.github.cicd.controller import (
     GithubCheckConclusion,
     GithubCheckStatus,
 )
-from sqlmesh.utils.errors import ConflictingPlanError, PlanError, TestError
+from sqlmesh.utils.errors import ConflictingPlanError, PlanError, TestError, CICDBotError
 
 pytest_plugins = ["tests.integrations.github.cicd.fixtures"]
 pytestmark = [
@@ -461,7 +461,8 @@ def test_run_all_test_failed(
     github_output_file = tmp_path / "github_output.txt"
 
     with mock.patch.dict(os.environ, {"GITHUB_OUTPUT": str(github_output_file)}):
-        command._run_all(controller)
+        with pytest.raises(CICDBotError):
+            command._run_all(controller)
 
     assert "SQLMesh - Run Unit Tests" in controller._check_run_mapping
     test_checks_runs = controller._check_run_mapping["SQLMesh - Run Unit Tests"].all_kwargs
@@ -593,7 +594,8 @@ def test_run_all_test_exception(
     github_output_file = tmp_path / "github_output.txt"
 
     with mock.patch.dict(os.environ, {"GITHUB_OUTPUT": str(github_output_file)}):
-        command._run_all(controller)
+        with pytest.raises(CICDBotError):
+            command._run_all(controller)
 
     assert "SQLMesh - Run Unit Tests" in controller._check_run_mapping
     test_checks_runs = controller._check_run_mapping["SQLMesh - Run Unit Tests"].all_kwargs
@@ -727,7 +729,8 @@ def test_pr_update_failure(
     github_output_file = tmp_path / "github_output.txt"
 
     with mock.patch.dict(os.environ, {"GITHUB_OUTPUT": str(github_output_file)}):
-        command._run_all(controller)
+        with pytest.raises(CICDBotError):
+            command._run_all(controller)
 
     assert "SQLMesh - PR Environment Synced" in controller._check_run_mapping
     pr_checks_runs = controller._check_run_mapping["SQLMesh - PR Environment Synced"].all_kwargs
@@ -851,7 +854,8 @@ def make_test_prod_update_failure_case(
     github_output_file = tmp_path / "github_output.txt"
 
     with mock.patch.dict(os.environ, {"GITHUB_OUTPUT": str(github_output_file)}):
-        command._run_all(controller)
+        with pytest.raises(CICDBotError):
+            command._run_all(controller)
 
     assert "SQLMesh - Prod Plan Preview" in controller._check_run_mapping
     prod_plan_preview_checks_runs = controller._check_run_mapping[

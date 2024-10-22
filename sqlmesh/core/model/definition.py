@@ -116,12 +116,14 @@ class _Model(ModelMeta, frozen=True):
         clustered_by: The cluster columns, only applicable in certain engines. (eg. (ds, hour))
         python_env: Dictionary containing all global variables needed to render the model's macros.
         mapping_schema: The schema of table names to column and types.
+        extract_dependencies_from_query: Whether to extract additional dependencies from the rendered model's query.
         physical_schema_override: The desired physical schema name override.
     """
 
     python_env_: t.Optional[t.Dict[str, Executable]] = Field(default=None, alias="python_env")
     jinja_macros: JinjaMacroRegistry = JinjaMacroRegistry()
     mapping_schema: t.Dict[str, t.Any] = {}
+    extract_dependencies_from_query: bool = True
 
     _full_depends_on: t.Optional[t.Set[str]] = None
     _statement_renderer_cache: t.Dict[int, ExpressionRenderer] = {}
@@ -625,7 +627,12 @@ class _Model(ModelMeta, frozen=True):
 
             time_column_type = columns_to_types[self.time_column.column.name]
 
-            return to_time_column(time, time_column_type, self.time_column.format)
+            return to_time_column(
+                time,
+                time_column_type,
+                self.dialect,
+                self.time_column.format,
+            )
         return exp.convert(time)
 
     def set_mapping_schema(self, schema: t.Dict) -> None:
@@ -961,6 +968,8 @@ class _Model(ModelMeta, frozen=True):
 
     @property
     def full_depends_on(self) -> t.Set[str]:
+        if not self.extract_dependencies_from_query:
+            return self.depends_on_ or set()
         if self._full_depends_on is None:
             depends_on = self.depends_on_ or set()
 
@@ -1192,7 +1201,7 @@ class SqlModel(_SqlBasedModel):
                 return None
 
             expr = edit.expression
-            if _is_udtf(expr):
+            if isinstance(expr, exp.UDTF):
                 # projection subqueries do not change cardinality, engines don't allow these to return
                 # more than one row of data
                 parent = expr.find_ancestor(exp.Subquery)
@@ -2365,13 +2374,6 @@ def _extract_audit_expressions(
 def _is_projection(expr: exp.Expression) -> bool:
     parent = expr.parent
     return isinstance(parent, exp.Select) and expr.arg_key == "expressions"
-
-
-def _is_udtf(expr: exp.Expression) -> bool:
-    return isinstance(expr, (exp.Explode, exp.Posexplode, exp.Unnest)) or (
-        isinstance(expr, exp.Anonymous)
-        and expr.this.upper() in ("EXPLODE_OUTER", "POSEXPLODE_OUTER", "UNNEST")
-    )
 
 
 def _single_value_or_tuple(values: t.Sequence) -> exp.Identifier | exp.Tuple:

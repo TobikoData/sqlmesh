@@ -10,6 +10,7 @@ import typing as t
 from sqlmesh.core.schema_diff import SchemaDiffer
 from datetime import datetime
 from pytest_mock.plugin import MockerFixture
+from sqlmesh.core import dialect as d
 
 pytestmark = [pytest.mark.clickhouse, pytest.mark.engine]
 
@@ -579,14 +580,14 @@ WITH "source" AS (
         ELSE "test_UPDATED_at"
       END
       WHEN "t_test_valid_from" IS NULL
-      THEN CAST('1970-01-01 00:00:00' AS Nullable(DateTime))
+      THEN CAST('1970-01-01 00:00:00' AS Nullable(DateTime64(6)))
       ELSE "t_test_valid_from"
     END AS "test_valid_from",
     CASE
       WHEN "joined"."test_UPDATED_at" > "joined"."t_test_UPDATED_at"
       THEN "joined"."test_UPDATED_at"
       WHEN "joined"."_exists" IS NULL
-      THEN CAST('2020-01-01 00:00:00' AS Nullable(DateTime))
+      THEN CAST('2020-01-01 00:00:00' AS Nullable(DateTime64(6)))
       ELSE "t_test_valid_to"
     END AS "test_valid_to"
   FROM "joined"
@@ -602,7 +603,7 @@ WITH "source" AS (
     "price",
     "test_UPDATED_at",
     "test_UPDATED_at" AS "test_valid_from",
-    CAST(NULL AS Nullable(DateTime)) AS "test_valid_to"
+    CAST(NULL AS Nullable(DateTime64(6))) AS "test_valid_to"
   FROM "joined"
   WHERE
     "joined"."test_UPDATED_at" > "joined"."t_test_UPDATED_at"
@@ -745,7 +746,7 @@ WITH "source" AS (
     COALESCE("joined"."t_id", "joined"."id") AS "id",
     COALESCE("joined"."t_name", "joined"."name") AS "name",
     COALESCE("joined"."t_price", "joined"."price") AS "price",
-    COALESCE("t_test_VALID_from", CAST('2020-01-01 00:00:00' AS Nullable(DateTime))) AS "test_VALID_from",
+    COALESCE("t_test_VALID_from", CAST('2020-01-01 00:00:00' AS Nullable(DateTime64(6)))) AS "test_VALID_from",
     CASE
       WHEN "joined"."_exists" IS NULL
       OR (
@@ -769,7 +770,7 @@ WITH "source" AS (
           )
         )
       )
-      THEN CAST('2020-01-01 00:00:00' AS Nullable(DateTime))
+      THEN CAST('2020-01-01 00:00:00' AS Nullable(DateTime64(6)))
       ELSE "t_test_valid_to"
     END AS "test_valid_to"
   FROM "joined"
@@ -780,8 +781,8 @@ WITH "source" AS (
     "id",
     "name",
     "price",
-    CAST('2020-01-01 00:00:00' AS Nullable(DateTime)) AS "test_VALID_from",
-    CAST(NULL AS Nullable(DateTime)) AS "test_valid_to"
+    CAST('2020-01-01 00:00:00' AS Nullable(DateTime64(6))) AS "test_VALID_from",
+    CAST(NULL AS Nullable(DateTime64(6))) AS "test_valid_to"
   FROM "joined"
   WHERE
     (
@@ -808,3 +809,72 @@ SELECT "id", "name", "price", "test_VALID_from", "test_valid_to" FROM "static" U
     """,
         dialect=adapter.dialect,
     ).sql(adapter.dialect)
+
+
+def test_to_time_column():
+    # we should get DateTime64(6) back for any temporal type other than explicit DateTime64
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.table,
+            kind INCREMENTAL_BY_TIME_RANGE(
+                time_column (ds)
+            ),
+            dialect clickhouse
+        );
+
+        SELECT ds::datetime
+    """
+    )
+    model = load_sql_based_model(expressions)
+    assert (
+        model.convert_to_time_column("2022-01-01 00:00:00.000001").sql("clickhouse")
+        == "CAST('2022-01-01 00:00:00.000001' AS DateTime64(6))"
+    )
+
+    # We should respect the user's DateTime64 precision if specified
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.table,
+            kind INCREMENTAL_BY_TIME_RANGE(
+                time_column (ds)
+            ),
+            dialect clickhouse
+        );
+
+        SELECT ds::DateTime64(4)
+    """
+    )
+    model = load_sql_based_model(expressions)
+    assert (
+        model.convert_to_time_column("2022-01-01 00:00:00.000001").sql("clickhouse")
+        == "CAST('2022-01-01 00:00:00.000001' AS DateTime64(4))"
+    )
+
+    # We should respect the user's DateTime64 precision if specified, even if we're making it nullable
+    from sqlmesh.utils.date import to_time_column
+
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.table,
+            kind INCREMENTAL_BY_TIME_RANGE(
+                time_column (ds)
+            ),
+            dialect clickhouse
+        );
+
+        SELECT ds::DateTime64(4)
+    """
+    )
+    model = load_sql_based_model(expressions)
+    assert (
+        to_time_column(
+            "2022-01-01 00:00:00.000001",
+            exp.DataType.build("DateTime64(4)", dialect="clickhouse"),
+            dialect="clickhouse",
+            nullable=True,
+        ).sql("clickhouse")
+        == "CAST('2022-01-01 00:00:00.000001' AS Nullable(DateTime64(4)))"
+    )

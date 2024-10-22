@@ -70,7 +70,7 @@ options:
 
 #### init
 ```
-%init [--template TEMPLATE] path sql_dialect
+%init [--template TEMPLATE] [--dlt-pipeline PIPELINE] path sql_dialect
 
 Creates a SQLMesh project scaffold with a default SQL dialect.
 
@@ -87,7 +87,10 @@ positional arguments:
 options:
   --template TEMPLATE, -t TEMPLATE
                         Project template. Supported values: airflow, dbt,
-                        default, empty.
+                        dlt, default, empty.
+  --dlt-pipeline PIPELINE
+                        DLT pipeline for which to generate a SQLMesh project.
+                        This option is supported if the template is dlt.
 ```
 
 #### plan

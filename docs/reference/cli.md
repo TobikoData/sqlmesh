@@ -214,7 +214,9 @@ Usage: sqlmesh init [OPTIONS] [SQL_DIALECT]
 
 Options:
   -t, --template TEXT  Project template. Supported values: airflow, dbt,
-                       default, empty.
+                       dlt, default, empty.
+  --dlt-pipeline TEXT  DLT pipeline for which to generate a SQLMesh project.
+                       This option is supported if the template is dlt.
   --help               Show this message and exit.
 ```
 
