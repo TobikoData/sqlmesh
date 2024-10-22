@@ -149,7 +149,7 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
         pre_ping: Whether or not to pre-ping the connection before starting a new transaction to ensure it is still alive.
     """
 
-    extensions: t.List[str | t.Dict[str, t.Any]] = []
+    extensions: t.List[t.Union[str, t.Dict[str, t.Any]]] = []
     connector_config: t.Dict[str, t.Any] = {}
 
     concurrent_tasks: Literal[1] = 1
