@@ -1838,7 +1838,7 @@ def test_dialects(ctx: TestContext):
     [
         (
             exp.null(),
-            exp.DataType.build("TIMESTAMP"),
+            exp.DataType.build("TIMESTAMP", nullable=True),
             None,
             {
                 "default": None,
@@ -1913,7 +1913,7 @@ def test_to_time_column(
         time_column = re.match(r"^(.*?)\+", time_column).group(1)
         time_column_type = exp.DataType.build("TIMESTAMP('UTC')", dialect="clickhouse")
 
-    time_column = to_time_column(time_column, time_column_type, time_column_format)
+    time_column = to_time_column(time_column, time_column_type, ctx.dialect, time_column_format)
     df = ctx.engine_adapter.fetchdf(exp.select(time_column).as_("the_col"))
     expected = result.get(ctx.dialect, result.get("default"))
     col_name = "THE_COL" if ctx.dialect == "snowflake" else "the_col"

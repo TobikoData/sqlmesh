@@ -134,41 +134,47 @@ def test_to_tstz():
 
 
 @pytest.mark.parametrize(
-    "time_column, time_column_type, time_column_format, result",
+    "time_column, time_column_type, dialect, time_column_format, result",
     [
         (
             exp.null(),
             exp.DataType.build("TIMESTAMP"),
+            "",
             None,
             "CAST(NULL AS TIMESTAMP)",
         ),
         (
             "2020-01-01 00:00:00+00:00",
             exp.DataType.build("DATE"),
+            "",
             None,
             "CAST('2020-01-01' AS DATE)",
         ),
         (
             "2020-01-01 00:00:00+00:00",
             exp.DataType.build("TIMESTAMPTZ"),
+            "",
             None,
             "CAST('2020-01-01 00:00:00+00:00' AS TIMESTAMPTZ)",
         ),
         (
             "2020-01-01 00:00:00+00:00",
             exp.DataType.build("TIMESTAMP"),
+            "",
             None,
             "CAST('2020-01-01 00:00:00' AS TIMESTAMP)",
         ),
         (
             "2020-01-01 00:00:00+00:00",
             exp.DataType.build("TEXT"),
+            "",
             "%Y-%m-%dT%H:%M:%S%z",
             "'2020-01-01T00:00:00+0000'",
         ),
         (
             "2020-01-01 00:00:00+00:00",
             exp.DataType.build("INT"),
+            "",
             "%Y%m%d",
             "20200101",
         ),
@@ -177,10 +183,13 @@ def test_to_tstz():
 def test_to_time_column(
     time_column: t.Union[TimeLike, exp.Null],
     time_column_type: exp.DataType,
+    dialect: str,
     time_column_format: t.Optional[str],
     result: str,
 ):
-    assert to_time_column(time_column, time_column_type, time_column_format).sql() == result
+    assert (
+        to_time_column(time_column, time_column_type, dialect, time_column_format).sql() == result
+    )
 
 
 def test_date_dict():
