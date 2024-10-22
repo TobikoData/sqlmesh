@@ -224,8 +224,8 @@ class RisingwaveEngineAdapter(
 
         with self.transaction():
             """check this why replace is always false incase of materialized is enabled to true"""
-            if replace:
-                self.drop_view(view_name, materialized=materialized)
+            # if replace:
+            #     self.drop_view(view_name, materialized=materialized)
             super().create_view(
                 view_name,
                 query_or_df,
@@ -238,7 +238,7 @@ class RisingwaveEngineAdapter(
                 view_properties=view_properties,
                 **create_kwargs,
             )
-            if sink and connections_str is not None:
+            if sink is not None and connections_str is not None:
                 self.create_rw_sink(view_name, connections_str)
 
     def drop_view(
