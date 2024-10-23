@@ -736,7 +736,6 @@ def test_insert_overwrite_by_time_partition(ctx: TestContext):
     assert len(results.views) == 0
     assert len(results.materialized_views) == 0
     assert len(results.tables) == len(results.non_temp_tables) == 1
-    assert len(results.non_temp_tables) == 1
     assert results.non_temp_tables[0] == table.name
     ctx.compare_with_current(table, input_data.iloc[1:])
 
