@@ -296,7 +296,7 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
                 partitions_to_replace = self._get_partition_ids(temp_table)
 
                 # drop affected partitions that have no records in temp_table
-                #   - NOTE: `all_affected_partitions` will be empty when is_inc_by_partition=True
+                #   - NOTE: `all_affected_partitions` will be empty when keep_existing_partition_rows=False
                 #      because previous code block is skipped
                 partitions_to_drop = all_affected_partitions - partitions_to_replace
 
@@ -347,7 +347,7 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
         )
 
         # limit existing records insert expression WHERE to affected target table partitions
-        #   by adding `AND _partition_id IN (affected partition IDs)`
+        #   by adding `AND _partition_id IN (SELECT partition_id FROM partitions_temp_table)`
         existing_records_insert_exp.set(
             "expression",
             existing_records_insert_exp.expression.where(
