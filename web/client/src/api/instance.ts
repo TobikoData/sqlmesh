@@ -39,7 +39,10 @@ export async function fetchAPI<T = any, B extends object = any>(
 
   const hasSearchParams = Object.keys({ ...params }).length > 0
   const fullUrl = url.replace(/([^:]\/)\/+/g, '$1')
-  const input = new URL(fullUrl, baseURL)
+  const input = new URL(
+    `${import.meta.env.BASE_URL}${fullUrl}`.replaceAll('//', '/'),
+    baseURL,
+  )
 
   if (hasSearchParams) {
     const searchParams: Record<string, string> = Object.entries({

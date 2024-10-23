@@ -50,7 +50,13 @@ export default function ModelNode({
     const modelColumns = model?.columns ?? []
 
     Object.keys(lineage[id]?.columns ?? {}).forEach((column: string) => {
-      const found = modelColumns.find(({ name }) => name === decodeURI(column))
+      const found = modelColumns.find(({ name }) => {
+        try {
+          return name === decodeURI(column)
+        } catch {
+          return name === column
+        }
+      })
 
       if (isNil(found)) {
         modelColumns.push({ name: column, type: EnumColumnType.UNKNOWN })

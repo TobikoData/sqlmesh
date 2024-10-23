@@ -49,7 +49,7 @@ import {
   type BodyInitiateApplyApiCommandsApplyPostCategories,
   type Model,
   getModelApiModelsNameGet,
-  getApiMetaApiModulesGet,
+  getApiModulesApiModulesGet,
   type Modules,
   type ColumnLineageApiLineageModelNameColumnNameGetParams,
 } from './client'
@@ -95,7 +95,7 @@ export function useApiModules(
   return useQueryWithTimeout(
     {
       queryKey: ['/api/modules'],
-      queryFn: getApiMetaApiModulesGet,
+      queryFn: getApiModulesApiModulesGet,
       enabled: true,
     },
     {

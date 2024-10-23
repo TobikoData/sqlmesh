@@ -697,9 +697,9 @@
     },
     "/api/modules": {
       "get": {
-        "summary": "Get Api Meta",
+        "summary": "Get Api Modules",
         "description": "Get the modules",
-        "operationId": "get_api_meta_api_modules_get",
+        "operationId": "get_api_modules_api_modules_get",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -708,7 +708,7 @@
                 "schema": {
                   "items": { "$ref": "#/components/schemas/Modules" },
                   "type": "array",
-                  "title": "Response Get Api Meta Api Modules Get"
+                  "title": "Response Get Api Modules Api Modules Get"
                 }
               }
             }
@@ -1404,6 +1404,10 @@
             "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Sql"
           },
+          "definition": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Definition"
+          },
           "default_catalog": {
             "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Default Catalog"
@@ -1466,6 +1470,10 @@
           "retention": {
             "anyOf": [{ "type": "integer" }, { "type": "null" }],
             "title": "Retention"
+          },
+          "table_format": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Table Format"
           },
           "storage_format": {
             "anyOf": [{ "type": "string" }, { "type": "null" }],

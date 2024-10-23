@@ -1,7 +1,11 @@
 import { isFalse, isNil, isNotNil } from '../utils'
 
 type ChannelCallback<TData = any> = (data: TData) => void
-interface Channel {
+export type EventSourceChannel = <TData = any>(
+  topic: string,
+  callback?: ChannelCallback<TData>,
+) => Channel
+export interface Channel {
   subscribe: () => void
   unsubscribe: () => void
 }
