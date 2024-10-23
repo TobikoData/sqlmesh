@@ -554,8 +554,9 @@ MODEL (
 
 ### Frequent Authentication Prompts
 
-When using Snowflake with enabled security features like Multi-Factor Authentication (MFA), you may experience repeated prompts for authentication tokens or sign-ins while running SQLMesh commands. This typically occurs when your Snowflake account is configured to restrict short-lived token issuance. To reduce authentication prompts, you can enable token caching in your Snowflake connection configuration:
+When using Snowflake with security features like Multi-Factor Authentication (MFA), you may experience repeated prompts for authentication while running SQLMesh commands. This typically occurs when your Snowflake account isn't configured to issue short-lived tokens.
 
-For general authentication, see [Connection Caching Documentation](https://docs.snowflake.com/en/user-guide/admin-security-fed-auth-use#using-connection-caching-to-minimize-the-number-of-prompts-for-authentication-optional)
+To reduce authentication prompts, you can enable token caching in your Snowflake connection configuration:
 
-For MFA specifically, see [MFA Token Caching Documentation](https://docs.snowflake.com/en/user-guide/security-mfa#using-mfa-token-caching-to-minimize-the-number-of-prompts-during-authentication-optional).
+- For general authentication, see [Connection Caching Documentation](https://docs.snowflake.com/en/user-guide/admin-security-fed-auth-use#using-connection-caching-to-minimize-the-number-of-prompts-for-authentication-optional)
+- For MFA specifically, see [MFA Token Caching Documentation](https://docs.snowflake.com/en/user-guide/security-mfa#using-mfa-token-caching-to-minimize-the-number-of-prompts-during-authentication-optional).
