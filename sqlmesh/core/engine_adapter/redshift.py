@@ -13,6 +13,7 @@ from sqlmesh.core.engine_adapter.mixins import (
     LogicalMergeMixin,
     NonTransactionalTruncateMixin,
     VarcharSizeWorkaroundMixin,
+    RowDiffMixin,
 )
 from sqlmesh.core.engine_adapter.shared import (
     CommentCreationView,
@@ -37,6 +38,7 @@ class RedshiftEngineAdapter(
     GetCurrentCatalogFromFunctionMixin,
     NonTransactionalTruncateMixin,
     VarcharSizeWorkaroundMixin,
+    RowDiffMixin,
 ):
     DIALECT = "redshift"
     CURRENT_CATALOG_EXPRESSION = exp.func("current_database")
@@ -319,3 +321,18 @@ class RedshiftEngineAdapter(
             )
             for row in df.itertuples()
         ]
+
+    def _normalize_decimal_value(self, expr: exp.Expression, precision: int) -> exp.Expression:
+        # Redshift is finicky. It truncates when the data is already in a table, but rounds when the data is generated as part of a SELECT.
+        #
+        # The following works:
+        #  > select cast(cast(3.14159 as decimal(6, 5)) as decimal(6, 3)); --produces '3.142', the value we want / what every other database produces
+        #
+        # However, if you write that to a table, and then cast it to a less precise decimal, you get _truncation_.
+        #  > create table foo (val decimal(6, 5)); insert into foo(val) values (3.14159);
+        #  > select cast(val as decimal(6, 3)) from foo; --produces '3.141'
+        #
+        # So to make up for this, we force it to round by injecting a round() expression
+        rounded = exp.func("ROUND", expr, precision)
+
+        return super()._normalize_decimal_value(rounded, precision)

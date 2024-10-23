@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import math
 import typing as t
+from functools import cached_property
 
 import pandas as pd
+from sqlmesh.core.engine_adapter.mixins import RowDiffMixin
 from sqlglot import exp, parse_one
 from sqlglot.helper import ensure_list
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
@@ -14,6 +16,8 @@ from sqlmesh.utils.pydantic import PydanticModel
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import TableName
     from sqlmesh.core.engine_adapter import EngineAdapter
+
+SQLMESH_JOIN_KEY_COL = "__sqlmesh_join_key"
 
 
 class SchemaDiff(PydanticModel, frozen=True):
@@ -149,6 +153,9 @@ class TableDiff:
         model_dialect: t.Optional[str] = None,
         decimals: int = 3,
     ):
+        if not isinstance(adapter, RowDiffMixin):
+            raise ValueError(f"Engine {adapter} doesnt support RowDiff")
+
         self.adapter = adapter
         self.source = source
         self.target = target
@@ -165,24 +172,6 @@ class TableDiff:
         self.source_alias = source_alias
         self.target_alias = target_alias
 
-        if isinstance(on, (list, tuple)):
-            join_condition = [exp.parse_identifier(key) for key in on]
-            s_table = exp.to_identifier("s", quoted=True)
-            t_table = exp.to_identifier("t", quoted=True)
-
-            self.on: exp.Condition = exp.and_(
-                *(
-                    exp.column(c, s_table).eq(exp.column(c, t_table))
-                    | (
-                        exp.column(c, s_table).is_(exp.null())
-                        & exp.column(c, t_table).is_(exp.null())
-                    )
-                    for c in join_condition
-                )
-            )
-        else:
-            self.on = on
-
         self.skip_columns = {
             normalize_identifiers(
                 exp.parse_identifier(t.cast(str, col)),
@@ -191,23 +180,67 @@ class TableDiff:
             for col in ensure_list(skip_columns)
         }
 
-        normalize_identifiers(self.on, dialect=self.model_dialect or self.dialect)
-
-        self._source_schema: t.Optional[t.Dict[str, exp.DataType]] = None
-        self._target_schema: t.Optional[t.Dict[str, exp.DataType]] = None
+        self._on = on
         self._row_diff: t.Optional[RowDiff] = None
 
-    @property
+    @cached_property
     def source_schema(self) -> t.Dict[str, exp.DataType]:
-        if self._source_schema is None:
-            self._source_schema = self.adapter.columns(self.source_table)
-        return self._source_schema
+        return self.adapter.columns(self.source_table)
+
+    @cached_property
+    def target_schema(self) -> t.Dict[str, exp.DataType]:
+        return self.adapter.columns(self.target_table)
+
+    @cached_property
+    def key_columns(self) -> t.Tuple[t.List[exp.Column], t.List[exp.Column], t.List[str]]:
+        dialect = self.model_dialect or self.dialect
+
+        # If the columns to join on are explicitly specified, then just return them
+        if isinstance(self._on, (list, tuple)):
+            identifiers = [normalize_identifiers(c, dialect=dialect) for c in self._on]
+            s_index = [exp.column(c, "s") for c in identifiers]
+            t_index = [exp.column(c, "t") for c in identifiers]
+            return s_index, t_index, [i.name for i in identifiers]
+
+        # Otherwise, we need to parse them out of the supplied "on" condition
+        index_cols = []
+        s_index = []
+        t_index = []
+
+        normalize_identifiers(self._on, dialect=dialect)
+        for col in self._on.find_all(exp.Column):
+            index_cols.append(col.name)
+            if col.table.lower() == "s":
+                s_index.append(col)
+            elif col.table.lower() == "t":
+                t_index.append(col)
+
+        index_cols = list(dict.fromkeys(index_cols))
+        s_index = list(dict.fromkeys(s_index))
+        t_index = list(dict.fromkeys(t_index))
+
+        return s_index, t_index, index_cols
 
     @property
-    def target_schema(self) -> t.Dict[str, exp.DataType]:
-        if self._target_schema is None:
-            self._target_schema = self.adapter.columns(self.target_table)
-        return self._target_schema
+    def source_key_expression(self) -> exp.Expression:
+        s_index, _, _ = self.key_columns
+        return self._key_expression(s_index, self.source_schema)
+
+    @property
+    def target_key_expression(self) -> exp.Expression:
+        _, t_index, _ = self.key_columns
+        return self._key_expression(t_index, self.target_schema)
+
+    def _key_expression(
+        self, cols: t.List[exp.Column], schema: t.Dict[str, exp.DataType]
+    ) -> exp.Expression:
+        # if there is a single column, dont do anything fancy to it in order to allow existing indexes to be hit
+        if len(cols) == 1:
+            return exp.to_column(cols[0].name)
+
+        # if there are multiple columns, turn them into a single column by stringify-ing/concatenating them together
+        key_columns_to_types = {key.name: schema[key.name] for key in cols}
+        return self.adapter.concat_columns(key_columns_to_types, self.decimals)
 
     def schema_diff(self) -> SchemaDiff:
         return SchemaDiff(
@@ -231,22 +264,18 @@ class TableDiff:
 
             s_selects = {c: exp.column(c, "s").as_(f"s__{c}") for c in source_schema}
             t_selects = {c: exp.column(c, "t").as_(f"t__{c}") for c in target_schema}
-
-            index_cols = []
-            s_index = []
-            t_index = []
-
-            for col in self.on.find_all(exp.Column):
-                index_cols.append(col.name)
-                if col.table == "s":
-                    s_index.append(col)
-                elif col.table == "t":
-                    t_index.append(col)
-            index_cols = list(dict.fromkeys(index_cols))
-            s_index = list(dict.fromkeys(s_index))
-            t_index = list(dict.fromkeys(t_index))
+            s_selects[SQLMESH_JOIN_KEY_COL] = exp.column(SQLMESH_JOIN_KEY_COL, "s").as_(
+                f"s__{SQLMESH_JOIN_KEY_COL}"
+            )
+            t_selects[SQLMESH_JOIN_KEY_COL] = exp.column(SQLMESH_JOIN_KEY_COL, "t").as_(
+                f"t__{SQLMESH_JOIN_KEY_COL}"
+            )
 
             matched_columns = {c: t for c, t in source_schema.items() if t == target_schema.get(c)}
+
+            s_index, t_index, index_cols = self.key_columns
+            s_index_names = [c.name for c in s_index]
+            t_index_names = [t.name for t in t_index]
 
             def _column_expr(name: str, table: str) -> exp.Expression:
                 if matched_columns[name].this in exp.DataType.FLOAT_TYPES:
@@ -275,12 +304,18 @@ class TableDiff:
                 return e.args["alias"].sql(identify=True)
 
             source_query = (
-                exp.select(*(exp.column(c) for c in source_schema))
+                exp.select(
+                    *(exp.column(c) for c in source_schema),
+                    self.source_key_expression.as_(SQLMESH_JOIN_KEY_COL),
+                )
                 .from_(self.source_table)
                 .where(self.where)
             )
             target_query = (
-                exp.select(*(exp.column(c) for c in target_schema))
+                exp.select(
+                    *(exp.column(c) for c in target_schema),
+                    self.target_key_expression.as_(SQLMESH_JOIN_KEY_COL),
+                )
                 .from_(self.target_table)
                 .where(self.where)
             )
@@ -302,13 +337,11 @@ class TableDiff:
                     exp.func(
                         "IF",
                         exp.and_(
-                            *(
-                                exp.and_(
-                                    exp.column(c, "s").eq(exp.column(c, "t")),
-                                    exp.column(c, "s").is_(exp.Null()).not_(),
-                                    exp.column(c, "t").is_(exp.Null()).not_(),
-                                )
-                                for c in index_cols
+                            exp.column(SQLMESH_JOIN_KEY_COL, "s").eq(
+                                exp.column(SQLMESH_JOIN_KEY_COL, "t")
+                            ),
+                            exp.and_(
+                                *(c.is_(exp.Null()).not_() for c in s_index + t_index),
                             ),
                         ),
                         1,
@@ -319,10 +352,10 @@ class TableDiff:
                         exp.or_(
                             *(
                                 exp.and_(
-                                    exp.column(c, "s").is_(exp.Null()),
-                                    exp.column(c, "t").is_(exp.Null()),
+                                    s.is_(exp.Null()),
+                                    t.is_(exp.Null()),
                                 )
-                                for c in index_cols
+                                for s, t in zip(s_index, t_index)
                             ),
                         ),
                         1,
@@ -331,7 +364,13 @@ class TableDiff:
                     *comparisons,
                 )
                 .from_(source_table.as_("s"))
-                .join(target_table.as_("t"), on=self.on, join_type="FULL")
+                .join(
+                    target_table.as_("t"),
+                    on=exp.column(SQLMESH_JOIN_KEY_COL, "s").eq(
+                        exp.column(SQLMESH_JOIN_KEY_COL, "t")
+                    ),
+                    join_type="FULL",
+                )
             )
 
             base_query = (
@@ -373,12 +412,14 @@ class TableDiff:
                 ]
 
                 if not skip_grain_check:
-                    s_grains = ", ".join((f"s__{c}" for c in index_cols))
-                    t_grains = ", ".join((f"t__{c}" for c in index_cols))
                     summary_sums.extend(
                         [
-                            parse_one(f"COUNT(DISTINCT({s_grains}))").as_("distinct_count_s"),
-                            parse_one(f"COUNT(DISTINCT({t_grains}))").as_("distinct_count_t"),
+                            parse_one(f"COUNT(DISTINCT(s__{SQLMESH_JOIN_KEY_COL}))").as_(
+                                "distinct_count_s"
+                            ),
+                            parse_one(f"COUNT(DISTINCT(t__{SQLMESH_JOIN_KEY_COL}))").as_(
+                                "distinct_count_t"
+                            ),
                         ]
                     )
 
@@ -394,7 +435,13 @@ class TableDiff:
                         *(
                             exp.func(
                                 "ROUND",
-                                100 * (exp.func("SUM", name(c)) / exp.func("COUNT", name(c))),
+                                100
+                                * (
+                                    exp.cast(
+                                        exp.func("SUM", name(c)), exp.DataType.build("NUMERIC")
+                                    )
+                                    / exp.func("COUNT", name(c))
+                                ),
                                 1,
                             ).as_(c.alias)
                             for c in comparisons
@@ -403,13 +450,16 @@ class TableDiff:
                     .from_(table)
                     .where(exp.column("row_joined").eq(exp.Literal.number(1)))
                 )
+
                 column_stats = (
                     self.adapter.fetchdf(column_stats_query, quote_identifiers=True)
                     .T.rename(
                         columns={0: "pct_match"},
                         index=lambda x: str(x).replace("_matches", "") if x else "",
                     )
-                    .drop(index=index_cols)
+                    # errors=ignore because all the index_cols might not be present in the DF if the `on` condition was something like "s.id == t.item_id"
+                    # because these would not be present in the matching_cols (since they have different names) and thus no summary would be generated
+                    .drop(index=index_cols, errors="ignore")
                 )
 
                 sample_filter_cols = ["s_exists", "t_exists", "row_joined", "row_full_match"]
@@ -429,7 +479,7 @@ class TableDiff:
                 )
                 sample = self.adapter.fetchdf(sample_query, quote_identifiers=True)
 
-                joined_sample_cols = [f"s__{c}" for c in index_cols]
+                joined_sample_cols = [f"s__{c}" for c in s_index_names]
                 comparison_cols = [
                     (f"s__{c}", f"t__{c}")
                     for c in column_stats[column_stats["pct_match"] < 100].index
@@ -477,8 +527,8 @@ class TableDiff:
 
                 s_sample = sample[(sample["s_exists"] == 1) & (sample["row_joined"] == 0)][
                     [
-                        *[f"s__{c}" for c in index_cols],
-                        *[f"s__{c}" for c in source_schema if c not in index_cols],
+                        *[f"s__{c}" for c in s_index_names],
+                        *[f"s__{c}" for c in source_schema if c not in s_index_names],
                     ]
                 ]
                 s_sample.rename(
@@ -487,15 +537,19 @@ class TableDiff:
 
                 t_sample = sample[(sample["t_exists"] == 1) & (sample["row_joined"] == 0)][
                     [
-                        *[f"t__{c}" for c in index_cols],
-                        *[f"t__{c}" for c in target_schema if c not in index_cols],
+                        *[f"t__{c}" for c in t_index_names],
+                        *[f"t__{c}" for c in target_schema if c not in t_index_names],
                     ]
                 ]
                 t_sample.rename(
                     columns={c: c.replace("t__", "") for c in t_sample.columns}, inplace=True
                 )
 
-                sample.drop(columns=sample_filter_cols, inplace=True)
+                sample.drop(
+                    columns=sample_filter_cols
+                    + [f"s__{SQLMESH_JOIN_KEY_COL}", f"t__{SQLMESH_JOIN_KEY_COL}"],
+                    inplace=True,
+                )
 
                 self._row_diff = RowDiff(
                     source=self.source,

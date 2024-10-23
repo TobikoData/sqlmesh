@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 import numpy as np
 import pandas as pd
 import pytest
+import pytz
 from sqlglot import exp, parse_one
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
@@ -18,15 +19,21 @@ from sqlmesh import Config, Context
 from sqlmesh.cli.example_project import init_example_project
 from sqlmesh.core.config import load_config_from_paths
 import sqlmesh.core.dialect as d
+from sqlmesh.core.dialect import select_from_values
 from sqlmesh.core.model import Model, load_sql_based_model
 from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType
+from sqlmesh.core.engine_adapter.mixins import RowDiffMixin
 from sqlmesh.core.model.definition import create_sql_model
 from sqlmesh.core.plan import Plan
 from sqlmesh.core.snapshot import Snapshot, SnapshotChangeCategory
 from sqlmesh.utils.date import now, to_date, to_time_column
+from sqlmesh.core.table_diff import TableDiff
 from sqlmesh.utils.pydantic import PydanticModel
 from tests.conftest import SushiDataValidator
 from tests.core.engine_adapter.integration import TestContext, MetadataResults, TEST_SCHEMA
+
+DATA_TYPE = exp.DataType.Type
+VARCHAR_100 = exp.DataType.build("varchar(100)")
 
 
 class PlanResults(PydanticModel):
@@ -2216,3 +2223,414 @@ def test_managed_model_upstream_forward_only(ctx: TestContext):
         plan_4.table_name_for(model_b) not in plan_4.internal_schema_metadata.tables
     )  # however, it should be a managed table, not a normal table
     assert plan_4.table_name_for(model_b) in plan_4.internal_schema_metadata.managed_tables
+
+
+@pytest.mark.parametrize(
+    "column_type, input_data, expected_results",
+    [
+        (DATA_TYPE.BOOLEAN, (True, False, None), ("1", "0", None)),
+        (
+            DATA_TYPE.DATE,
+            (datetime(2023, 1, 1).date(), datetime(2024, 12, 15, 5, 30, 0).date(), None),
+            ("2023-01-01", "2024-12-15", None),
+        ),
+        (
+            DATA_TYPE.TIMESTAMP,
+            (
+                datetime(2023, 1, 1),
+                datetime(2023, 1, 1, 13, 14, 15),
+                datetime(2023, 1, 1, 13, 14, 15, 123456),
+                None,
+            ),
+            (
+                "2023-01-01 00:00:00.000000",
+                "2023-01-01 13:14:15.000000",
+                "2023-01-01 13:14:15.123456",
+                None,
+            ),
+        ),
+        (
+            DATA_TYPE.DATETIME,
+            (
+                datetime(2023, 1, 1),
+                datetime(2023, 1, 1, 13, 14, 15),
+                datetime(2023, 1, 1, 13, 14, 15, 123456),
+                None,
+            ),
+            (
+                "2023-01-01 00:00:00.000000",
+                "2023-01-01 13:14:15.000000",
+                "2023-01-01 13:14:15.123456",
+                None,
+            ),
+        ),
+        (
+            DATA_TYPE.TIMESTAMPTZ,
+            (
+                pytz.timezone("America/Los_Angeles").localize(datetime(2023, 1, 1)),
+                pytz.timezone("Europe/Athens").localize(datetime(2023, 1, 1, 13, 14, 15)),
+                pytz.timezone("Pacific/Auckland").localize(
+                    datetime(2023, 1, 1, 13, 14, 15, 123456)
+                ),
+                None,
+            ),
+            (
+                "2023-01-01 08:00:00.000000",
+                "2023-01-01 11:14:15.000000",
+                "2023-01-01 00:14:15.123456",
+                None,
+            ),
+        ),
+    ],
+)
+def test_value_normalization(
+    ctx: TestContext,
+    column_type: exp.DataType.Type,
+    input_data: t.Tuple[t.Any, ...],
+    expected_results: t.Tuple[str, ...],
+) -> None:
+    if ctx.test_type != "query":
+        pytest.skip("Value normalization tests only need to run for query")
+
+    if (
+        ctx.dialect == "trino"
+        and ctx.engine_adapter.current_catalog_type == "hive"
+        and column_type == exp.DataType.Type.TIMESTAMPTZ
+    ):
+        pytest.skip(
+            "Trino on Hive doesnt support creating tables with TIMESTAMP WITH TIME ZONE fields"
+        )
+
+    if not isinstance(ctx.engine_adapter, RowDiffMixin):
+        pytest.skip(
+            "Value normalization tests are only relevant for engines with row diffing implemented"
+        )
+
+    full_column_type = exp.DataType.build(column_type)
+
+    # resolve dialect-specific types
+    if column_type in (DATA_TYPE.DATETIME, DATA_TYPE.TIMESTAMP, DATA_TYPE.TIMESTAMPTZ):
+        if ctx.dialect in ("mysql", "trino"):
+            # MySQL needs DATETIME(6) instead of DATETIME or subseconds will be truncated.
+            # It also needs TIMESTAMP(6) as the column type for CREATE TABLE or the truncation will occur
+            full_column_type = exp.DataType.build(
+                column_type,
+                expressions=[
+                    exp.DataTypeParam(
+                        this=exp.Literal.number(ctx.engine_adapter.MAX_TIMESTAMP_PRECISION)
+                    )
+                ],
+            )
+
+    columns_to_types = {
+        "_idx": exp.DataType.build(DATA_TYPE.INT),
+        "value": full_column_type,
+    }
+
+    input_data_with_idx = [(idx, value) for idx, value in enumerate(input_data)]
+
+    test_table = normalize_identifiers(
+        exp.to_table(ctx.table("test_value_normalization")), dialect=ctx.dialect
+    )
+    columns_to_types_normalized = {
+        normalize_identifiers(k, dialect=ctx.dialect).sql(dialect=ctx.dialect): v
+        for k, v in columns_to_types.items()
+    }
+
+    ctx.engine_adapter.create_table(
+        table_name=test_table, columns_to_types=columns_to_types_normalized
+    )
+    data_query = next(select_from_values(input_data_with_idx, columns_to_types_normalized))
+    ctx.engine_adapter.insert_append(
+        table_name=test_table,
+        query_or_df=data_query,
+        columns_to_types=columns_to_types_normalized,
+    )
+
+    query = (
+        exp.select(
+            ctx.engine_adapter.normalize_value(
+                normalize_identifiers(exp.to_column("value"), dialect=ctx.dialect),
+                columns_to_types["value"],
+                decimal_precision=3,
+                timestamp_precision=ctx.engine_adapter.MAX_TIMESTAMP_PRECISION,
+            ).as_("value")
+        )
+        .from_(test_table)
+        .order_by(normalize_identifiers("_idx", dialect=ctx.dialect))
+    )
+    result = ctx.engine_adapter.fetchdf(query, quote_identifiers=True)
+    assert len(result) == len(expected_results)
+
+    def truncate_timestamp(ts: str, precision: int) -> str:
+        if not ts:
+            return ts
+
+        digits_to_truncate = 6 - precision
+        return ts[:-digits_to_truncate] if digits_to_truncate > 0 else ts
+
+    if full_column_type.is_type(DATA_TYPE.DATETIME, DATA_TYPE.TIMESTAMP, DATA_TYPE.TIMESTAMPTZ):
+        # truncate our expected results to the engine precision
+        expected_results = tuple(
+            truncate_timestamp(e, ctx.engine_adapter.MAX_TIMESTAMP_PRECISION)
+            for e in expected_results
+        )
+
+    for idx, row in enumerate(result.itertuples(index=False)):
+        assert row.value == expected_results[idx]
+
+
+def test_table_diff_grain_check_single_key(ctx: TestContext):
+    if ctx.test_type != "query":
+        pytest.skip("table_diff tests are only relevant for query")
+
+    if not isinstance(ctx.engine_adapter, RowDiffMixin):
+        pytest.skip("table_diff tests are only relevant for engines with row diffing implemented")
+
+    src_table = ctx.table("source")
+    target_table = ctx.table("target")
+
+    columns_to_types = {"key1": exp.DataType.build("int"), "value": exp.DataType.build("varchar")}
+
+    ctx.engine_adapter.create_table(src_table, columns_to_types)
+    ctx.engine_adapter.create_table(target_table, columns_to_types)
+
+    src_data = [
+        (1, "one"),
+        (2, "two"),
+        (None, "three"),
+        (4, "four"),  # missing in target
+    ]
+
+    target_data = [
+        (1, "one"),
+        (2, "two"),
+        (None, "three"),
+        (5, "five"),  # missing in src
+        (6, "six"),  # missing in src
+    ]
+
+    ctx.engine_adapter.replace_query(
+        src_table, pd.DataFrame(src_data, columns=columns_to_types.keys()), columns_to_types
+    )
+    ctx.engine_adapter.replace_query(
+        target_table, pd.DataFrame(target_data, columns=columns_to_types.keys()), columns_to_types
+    )
+
+    table_diff = TableDiff(
+        adapter=ctx.engine_adapter,
+        source=exp.table_name(src_table),
+        target=exp.table_name(target_table),
+        on=['"key1"'],
+    )
+
+    row_diff = table_diff.row_diff()
+
+    assert row_diff.full_match_count == 2
+    assert row_diff.full_match_pct == 57.14
+    assert row_diff.s_only_count == 1
+    assert row_diff.t_only_count == 2
+    assert row_diff.stats["key1_matches"] == 4
+    assert row_diff.stats["value_matches"] == 2
+    assert row_diff.stats["join_count"] == 2
+    assert row_diff.stats["null_grain_count"] == 2
+    assert row_diff.stats["s_count"] == 3
+    assert row_diff.stats["distinct_count_s"] == 3
+    assert row_diff.stats["t_count"] == 4
+    assert row_diff.stats["distinct_count_t"] == 4
+    assert row_diff.stats["s_only_count"] == 1
+    assert row_diff.stats["t_only_count"] == 2
+    assert row_diff.s_sample.shape == (1, 2)
+    assert row_diff.t_sample.shape == (2, 2)
+
+
+def test_table_diff_grain_check_multiple_keys(ctx: TestContext):
+    if ctx.test_type != "query":
+        pytest.skip("table_diff tests are only relevant for query")
+
+    if not isinstance(ctx.engine_adapter, RowDiffMixin):
+        pytest.skip("table_diff tests are only relevant for engines with row diffing implemented")
+
+    src_table = ctx.table("source")
+    target_table = ctx.table("target")
+
+    columns_to_types = {
+        "key1": exp.DataType.build("int"),
+        "key2": exp.DataType.build("varchar"),
+        "value": exp.DataType.build("varchar"),
+    }
+
+    ctx.engine_adapter.create_table(src_table, columns_to_types)
+    ctx.engine_adapter.create_table(target_table, columns_to_types)
+
+    src_data = [
+        (1, 1, 1),
+        (7, 4, 2),
+        (None, 3, 3),
+        (None, None, 3),
+        (1, 2, 2),
+        (4, None, 3),
+        (2, 3, 2),
+    ]
+
+    target_data = src_data + [(1, 6, 1), (1, 5, 3), (None, 2, 3)]
+
+    ctx.engine_adapter.insert_append(
+        src_table, next(select_from_values(src_data, columns_to_types)), columns_to_types
+    )
+    ctx.engine_adapter.insert_append(
+        target_table, next(select_from_values(target_data, columns_to_types)), columns_to_types
+    )
+
+    table_diff = TableDiff(
+        adapter=ctx.engine_adapter,
+        source=exp.table_name(src_table),
+        target=exp.table_name(target_table),
+        on=['"key1"', '"key2"'],
+    )
+
+    row_diff = table_diff.row_diff()
+
+    assert row_diff.full_match_count == 7
+    assert row_diff.full_match_pct == 93.33
+    assert row_diff.s_only_count == 2
+    assert row_diff.t_only_count == 5
+    assert row_diff.stats["join_count"] == 4
+    assert row_diff.stats["null_grain_count"] == 4
+    assert row_diff.stats["s_count"] != row_diff.stats["distinct_count_s"]
+    assert row_diff.stats["distinct_count_s"] == 7
+    assert row_diff.stats["t_count"] != row_diff.stats["distinct_count_t"]
+    assert row_diff.stats["distinct_count_t"] == 10
+    assert row_diff.s_sample.shape == (0, 3)
+    assert row_diff.t_sample.shape == (3, 3)
+
+
+def test_table_diff_arbitrary_condition(ctx: TestContext):
+    if ctx.test_type != "query":
+        pytest.skip("table_diff tests are only relevant for query")
+
+    if not isinstance(ctx.engine_adapter, RowDiffMixin):
+        pytest.skip("table_diff tests are only relevant for engines with row diffing implemented")
+
+    src_table = ctx.table("source")
+    target_table = ctx.table("target")
+
+    columns_to_types_src = {
+        "id": exp.DataType.build("int"),
+        "value": exp.DataType.build("varchar"),
+        "ts": exp.DataType.build("timestamp"),
+    }
+
+    columns_to_types_target = {
+        "item_id": exp.DataType.build("int"),
+        "value": exp.DataType.build("varchar"),
+        "ts": exp.DataType.build("timestamp"),
+    }
+
+    ctx.engine_adapter.create_table(src_table, columns_to_types_src)
+    ctx.engine_adapter.create_table(target_table, columns_to_types_target)
+
+    src_data = [
+        (1, "one", datetime(2023, 1, 1, 12, 13, 14)),
+        (2, "two", datetime(2023, 10, 1, 8, 13, 14)),
+        (3, "three", datetime(2024, 1, 1, 8, 13, 14)),
+    ]
+
+    target_data = src_data + [(4, "four", datetime(2024, 2, 1, 8, 13, 14))]
+
+    ctx.engine_adapter.replace_query(
+        src_table, pd.DataFrame(src_data, columns=columns_to_types_src.keys()), columns_to_types_src
+    )
+    ctx.engine_adapter.replace_query(
+        target_table,
+        pd.DataFrame(target_data, columns=columns_to_types_target.keys()),
+        columns_to_types_target,
+    )
+
+    table_diff = TableDiff(
+        adapter=ctx.engine_adapter,
+        source=exp.table_name(src_table),
+        target=exp.table_name(target_table),
+        on=parse_one('"s"."id" = "t"."item_id"', into=exp.Condition),
+        where=parse_one("to_char(\"ts\", 'YYYY') = '2024'", dialect="postgres", into=exp.Condition),
+    )
+
+    row_diff = table_diff.row_diff()
+
+    assert row_diff.full_match_count == 1
+    assert row_diff.full_match_pct == 66.67
+    assert row_diff.s_only_count == 0
+    assert row_diff.t_only_count == 1
+    assert row_diff.stats["value_matches"] == 1
+    assert row_diff.stats["ts_matches"] == 1
+    assert row_diff.stats["join_count"] == 1
+    assert row_diff.stats["null_grain_count"] == 0
+    assert row_diff.stats["s_count"] == 1
+    assert row_diff.stats["distinct_count_s"] == 1
+    assert row_diff.stats["t_count"] == 2
+    assert row_diff.stats["distinct_count_t"] == 2
+    assert row_diff.stats["s_only_count"] == 0
+    assert row_diff.stats["t_only_count"] == 1
+    assert row_diff.s_sample.shape == (0, 3)
+    assert row_diff.t_sample.shape == (1, 3)
+
+
+def test_table_diff_identical_dataset(ctx: TestContext):
+    if ctx.test_type != "query":
+        pytest.skip("table_diff tests are only relevant for query")
+
+    if not isinstance(ctx.engine_adapter, RowDiffMixin):
+        pytest.skip("table_diff tests are only relevant for engines with row diffing implemented")
+
+    src_table = ctx.table("source")
+    target_table = ctx.table("target")
+
+    columns_to_types = {
+        "key1": exp.DataType.build("int"),
+        "key2": exp.DataType.build("varchar"),
+        "value": exp.DataType.build("varchar"),
+    }
+
+    ctx.engine_adapter.create_table(src_table, columns_to_types)
+    ctx.engine_adapter.create_table(target_table, columns_to_types)
+
+    src_data = [
+        (1, 1, 1),
+        (7, 4, 2),
+        (1, 2, 2),
+        (4, 1, 3),
+        (2, 3, 2),
+    ]
+
+    target_data = src_data
+
+    ctx.engine_adapter.insert_append(
+        src_table, next(select_from_values(src_data, columns_to_types)), columns_to_types
+    )
+    ctx.engine_adapter.insert_append(
+        target_table, next(select_from_values(target_data, columns_to_types)), columns_to_types
+    )
+
+    table_diff = TableDiff(
+        adapter=ctx.engine_adapter,
+        source=exp.table_name(src_table),
+        target=exp.table_name(target_table),
+        on=['"key1"', '"key2"'],
+    )
+
+    row_diff = table_diff.row_diff()
+
+    assert row_diff.full_match_count == 5
+    assert row_diff.full_match_pct == 100
+    assert row_diff.s_only_count == 0
+    assert row_diff.t_only_count == 0
+    assert row_diff.stats["join_count"] == 5
+    assert row_diff.stats["null_grain_count"] == 0
+    assert row_diff.stats["s_count"] == 5
+    assert row_diff.stats["distinct_count_s"] == 5
+    assert row_diff.stats["t_count"] == 5
+    assert row_diff.stats["distinct_count_t"] == 5
+    assert row_diff.stats["s_only_count"] == 0
+    assert row_diff.stats["t_only_count"] == 0
+    assert row_diff.s_sample.shape == (0, 3)
+    assert row_diff.t_sample.shape == (0, 3)

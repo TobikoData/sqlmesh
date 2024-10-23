@@ -12,6 +12,7 @@ from sqlmesh.core.engine_adapter.mixins import (
     GetCurrentCatalogFromFunctionMixin,
     HiveMetastoreTablePropertiesMixin,
     PandasNativeFetchDFSupportMixin,
+    RowDiffMixin,
 )
 from sqlmesh.core.engine_adapter.shared import (
     CatalogSupport,
@@ -36,6 +37,7 @@ class TrinoEngineAdapter(
     PandasNativeFetchDFSupportMixin,
     HiveMetastoreTablePropertiesMixin,
     GetCurrentCatalogFromFunctionMixin,
+    RowDiffMixin,
 ):
     DIALECT = "trino"
     INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.INTO_IS_OVERWRITE
@@ -58,6 +60,9 @@ class TrinoEngineAdapter(
             exp.DataType.build("TIMESTAMP", dialect=DIALECT).this: [(3,)],
         },
     )
+    # some catalogs support microsecond (precision 6) but it has to be specifically enabled (Hive) or just isnt available (Delta / TIMESTAMP WITH TIME ZONE)
+    # and even if you have a TIMESTAMP(6) the date formatting functions still only support millisecond precision
+    MAX_TIMESTAMP_PRECISION = 3
 
     def set_current_catalog(self, catalog: str) -> None:
         """Sets the catalog name of the current connection."""

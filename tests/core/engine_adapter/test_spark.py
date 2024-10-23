@@ -532,6 +532,7 @@ def test_scd_type_2_by_time(
     )
 
     adapter = make_mocked_engine_adapter(SparkEngineAdapter)
+    adapter._default_catalog = "spark_catalog"
     adapter.spark.catalog.currentCatalog.return_value = "spark_catalog"
     adapter.spark.catalog.currentDatabase.return_value = "default"
 

@@ -9,7 +9,11 @@ from sqlglot import exp, parse_one
 from sqlglot.transforms import remove_precision_parameterized_types
 
 from sqlmesh.core.dialect import to_schema
-from sqlmesh.core.engine_adapter.mixins import InsertOverwriteWithMergeMixin, ClusteredByMixin
+from sqlmesh.core.engine_adapter.mixins import (
+    InsertOverwriteWithMergeMixin,
+    ClusteredByMixin,
+    RowDiffMixin,
+)
 from sqlmesh.core.engine_adapter.shared import (
     CatalogSupport,
     DataObject,
@@ -45,7 +49,7 @@ _CLUSTERING_META_KEY = "__sqlmesh_update_table_clustering"
 
 
 @set_catalog()
-class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin):
+class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, RowDiffMixin):
     """
     BigQuery Engine Adapter using the `google-cloud-bigquery` library's DB API.
     """
@@ -965,6 +969,9 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin):
             # BigQuery only applies new clustering going forward, so this rewrites the columns to apply the new clustering to historical data
             # ref: https://cloud.google.com/bigquery/docs/creating-clustered-tables#modifying-cluster-spec
             self.execute(exp.update(table_name, {c: c for c in cluster_by}, where=exp.true()))
+
+    def _normalize_decimal_value(self, col: exp.Expression, precision: int) -> exp.Expression:
+        return exp.func("FORMAT", exp.Literal.string(f"%.{precision}f"), col)
 
     @property
     def _query_data(self) -> t.Any:

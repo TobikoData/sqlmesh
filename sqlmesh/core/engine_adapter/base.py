@@ -2085,7 +2085,7 @@ class EngineAdapter:
         name = exp.to_table(name)
         # ensure that we use default catalog if none is not specified
         if isinstance(name, exp.Table) and not name.catalog and name.db:
-            name.set("catalog", value=self.default_catalog)
+            name.set("catalog", exp.to_identifier(self.default_catalog))
 
         source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
             query_or_df, columns_to_types=columns_to_types, target_table=name
