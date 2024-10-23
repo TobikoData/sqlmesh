@@ -243,7 +243,7 @@ class RisingwaveEngineAdapter(
                 view_properties=view_properties,
                 **create_kwargs,
             )
-            if sink is not None and connections_str is not None:
+            if sink and connections_str is not None:
                 self.create_rw_sink(view_name, connections_str)
 
     def drop_view(
@@ -334,11 +334,12 @@ class RisingwaveEngineAdapter(
                 sink_name = sink_name_latest
                 _is_sink_need_drop = True
 
-        properties = connections_str.properties
         # Start finding topics
-        if topic is None and properties is not None:
-            properties = properties.copy(update={"topic": sink_name})
-            connections_str = connections_str.copy(update={"properties": properties})
+        # @TODO: Need to check whether this logic is needed.
+        # properties = connections_str.properties
+        # if topic is None and properties is not None:
+        #     properties = properties.copy(update={"topic": sink_name})
+        #     connections_str = connections_str.copy(update={"properties": properties})
 
         self._create_rw_sink(sink_name, view_name, connections_str, _is_sink_need_drop)
 
@@ -355,6 +356,7 @@ class RisingwaveEngineAdapter(
                 "no topic names are present in connection strings, drop current sink and create new one."
             )
             query = f"DROP SINK IF EXISTS {sink_name}"
+            self._log_sql(query)
             self._execute(query)
         # Start building the query
         query = f"CREATE SINK IF NOT EXISTS {sink_name} FROM {view_name} \nWITH (\n"
@@ -363,8 +365,9 @@ class RisingwaveEngineAdapter(
         if connections_str.properties is not None:
             for field_name, value in connections_str.properties.model_dump().items():
                 if value:
-                    setting_name = field_name.replace("_", ".")
-                    query += f"\t{setting_name}='{value}',\n"
+                    if field_name != "primary_key":
+                        field_name = field_name.replace("_", ".")
+                    query += f"\t{field_name}='{value}',\n"
 
         # Remove the last comma and newline if any "WITH" properties were added
         query = query.rstrip(",\n") + "\n)"
@@ -378,12 +381,13 @@ class RisingwaveEngineAdapter(
 
         # Add force_append_only under the FORMAT block if available
         excluded_attributes = {"format", "encode"}
-        if connections_str.format is not None:
+        if connections_str.format:
             for field_name, value in connections_str.format.model_dump().items():
                 if field_name not in excluded_attributes:
                     setting_name = field_name  # Remove the 'f_' prefix
                     query += f" \t{setting_name}='{value}',\n"
-        query = query.rstrip(",\n") + "\n)"
+            query = query.rstrip(",\n") + "\n)"
+        self._log_sql(query)
         self._execute(query)
 
     def _is_sink_exists(self, view_name: TableName, sink_name: str) -> t.Optional[List[str]]:

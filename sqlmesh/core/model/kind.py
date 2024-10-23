@@ -612,6 +612,7 @@ class ViewKind(_ModelKind):
         if isinstance(v, dict):
             return RwSinkSettings(**v)
 
+        raise Exception(f"Invalid connections_str: {v}")
         return v
 
     @property

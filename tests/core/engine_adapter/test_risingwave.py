@@ -15,7 +15,7 @@ def test_create_view(make_mocked_engine_adapter: t.Callable):
 
     adapter.create_view("db.view", parse_one("SELECT 1"), replace=True)
     adapter.create_view("db.view", parse_one("SELECT 1"), replace=False)
-    
+
     adapter.cursor.execute.assert_has_calls(
         [
             # 1st call
@@ -43,12 +43,12 @@ def test_create_sink(make_mocked_engine_adapter: t.Callable):
     )
 
     # view_name = 'sqlmesh__sqlmesh.sqlmesh__mv_sales_test01__3707292608'
-    view_name = 'db.sink'
+    view_name = "db.sink"
     adapter.create_view(
         view_name, parse_one("SELECT 1"), replace=True, sink=True, connections_str=rwsink_settings
     )
-
-    print('has following calls:', adapter.cursor.execute.mock_calls, flush=True)
+    #@TODO: Fix this test
+    print("has following calls:", adapter.cursor.execute.mock_calls, flush=True)
     # adapter.cursor.execute.assert_has_calls(
     #     [
     #         # 1st call

@@ -10,6 +10,9 @@ class PropertiesSettings(PydanticModel):
     connector: t.Optional[str] = None
     topic: t.Optional[str] = None
     primary_key: t.Optional[str] = None
+    type: t.Optional[str] = None
+    jdbc_url: t.Optional[str] = None
+    table_name: t.Optional[str] = None
     properties_bootstrap_server: t.Optional[str] = None
     properties_sasl_mechanism: t.Optional[str] = None
     properties_sasl_username: t.Optional[str] = None
