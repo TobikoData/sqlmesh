@@ -155,9 +155,12 @@ guard-%:
 engine-%-install:
 	pip3 install -e ".[dev,web,slack,${*}]"
 
-engine-%-up: engine-%-install
+engine-docker-%-up:
 	docker compose -f ./tests/core/engine_adapter/integration/docker/compose.${*}.yaml up -d
 	./.circleci/wait-for-db.sh ${*}
+
+engine-%-up: engine-%-install engine-docker-%-up
+	@echo "Engine '${*}' is up and running"
 
 engine-%-down:
 	docker compose -f ./tests/core/engine_adapter/integration/docker/compose.${*}.yaml down -v

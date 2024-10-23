@@ -9,6 +9,7 @@ from sqlmesh.core.engine_adapter.base_postgres import BasePostgresEngineAdapter
 from sqlmesh.core.engine_adapter.mixins import (
     GetCurrentCatalogFromFunctionMixin,
     PandasNativeFetchDFSupportMixin,
+    RowDiffMixin,
     logical_merge,
 )
 from sqlmesh.core.engine_adapter.shared import set_catalog
@@ -26,6 +27,7 @@ class PostgresEngineAdapter(
     BasePostgresEngineAdapter,
     PandasNativeFetchDFSupportMixin,
     GetCurrentCatalogFromFunctionMixin,
+    RowDiffMixin,
 ):
     DIALECT = "postgres"
     SUPPORTS_INDEXES = True
