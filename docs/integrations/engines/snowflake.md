@@ -22,10 +22,10 @@ Snowflake provides multiple methods of authorizing a connection (e.g., password,
 Before working through this connection quickstart, ensure that:
 
 1. You have a Snowflake account and know your username and password
-1. Your Snowflake account has at least one [warehouse](https://docs.snowflake.com/en/user-guide/warehouses-overview) available for running computations
-2. Your computer has [SQLMesh installed](../../installation.md) with the [Snowflake extra available](../../installation.md#install-extras)
+2. Your Snowflake account has at least one [warehouse](https://docs.snowflake.com/en/user-guide/warehouses-overview) available for running computations
+3. Your computer has [SQLMesh installed](../../installation.md) with the [Snowflake extra available](../../installation.md#install-extras)
     - Install from the command line with the command `pip install "sqlmesh[snowflake]"`
-3. You have initialized a [SQLMesh example project](../../quickstart/cli#1-create-the-sqlmesh-project) on your computer
+4. You have initialized a [SQLMesh example project](../../quickstart/cli#1-create-the-sqlmesh-project) on your computer
     - Open a command line interface and navigate to the directory where the project files should go
     - Initialize the project with the command `sqlmesh init snowflake`
 
