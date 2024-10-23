@@ -5,6 +5,7 @@ import Markdown from 'react-markdown'
 import {
   isArrayNotEmpty,
   isFalse,
+  isNotNil,
   isString,
   isTrue,
   toDateFormat,
@@ -19,12 +20,8 @@ const Documentation = function Documentation({
   withModel = true,
   withDescription = true,
   withColumns = true,
-  withCode = true,
-  withQuery = true,
 }: {
   model: ModelSQLMeshModel
-  withCode?: boolean
-  withQuery?: boolean
   withModel?: boolean
   withDescription?: boolean
   withColumns?: boolean
@@ -37,10 +34,12 @@ const Documentation = function Documentation({
           defaultOpen={true}
         >
           <ul className="w-full">
-            <DetailsItem
-              name="Path"
-              value={model.path}
-            />
+            {isNotNil(model.path) && (
+              <DetailsItem
+                name="Path"
+                value={model.path}
+              />
+            )}
             <DetailsItem
               name="Name"
               title={model.displayName}

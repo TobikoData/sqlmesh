@@ -51,7 +51,7 @@ const PROD = 'prod'
 
 const environments = new Set(ModelEnvironment.getEnvironments())
 const environment =
-  ModelEnvironment.getEnvironment() ?? environments.values().next().value
+  ModelEnvironment.getEnvironment() ?? environments.values().next().value!
 
 export const useStoreContext = create<ContextStore>((set, get) => ({
   version: undefined,
@@ -137,7 +137,7 @@ export const useStoreContext = create<ContextStore>((set, get) => ({
     }))
   },
   getNextEnvironment() {
-    return get().environments.values().next().value
+    return get().environments.values().next().value ?? environment
   },
   isExistingEnvironment(environment) {
     const s = get()

@@ -319,7 +319,7 @@ function CodeEditorRemoteFile({
         file.update(data)
       }
 
-      refreshFiles()
+      refreshFiles(Array.from(files.values()))
     })
 
     return () => {
