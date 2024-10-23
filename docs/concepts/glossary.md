@@ -57,6 +57,9 @@ Combining data from various sources (such as from a data warehouse) into one uni
 ## Lineage
 The lineage of your data is a visualization of the life cycle of your data as it flows from data sources downstream to consumption.
 
+## Physical Layer
+The physical layer is where SQLMesh actually stores and manages data in database tables and materialized views. It represents the concrete data storage layer of the system, in contrast to the virtual layer's abstract view definitions. While SQLMesh handles the management and maintenance of this layer automatically, shielding users from the underlying complexity, it's where all persistent data of models ultimately resides.
+
 ## Plan Summaries
 An upcoming feature that allows users to see a summary of changes applied to a given environment.
 
@@ -77,6 +80,9 @@ A view is the result of a SQL query on a database.
 
 ## Virtual Environments
 SQLMesh's unique approach to environment that allows it to provide both environment isolation and the ability to share tables across environments. This is done in a way to ensure data consistency and accuracy. See [plan application](plans.md#plan-application) for more information.
+
+## Virtual Layer
+The virtual layer is a conceptual framework managed by SQLMesh that provides an abstraction layer over the physical layer and physical data storage. Unlike the physical layer, where data is actually stored in tables and views, the virtual layer exists purely as a set of views, derived from the model definitions and environments, that expose the underlying physical layer. While typically transparent to end users, the virtual layer is the layer that users interact with when querying data. 
 
 ## Virtual Update
 Term used to describe a plan that can be applied without having to load any additional data or build any additional tables. See [Virtual Update](plans.md#virtual-update) for more information.
