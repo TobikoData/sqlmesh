@@ -179,7 +179,13 @@ def to_datetime(
                 expression
             ):
                 relative_base = relative_base.replace(hour=0, minute=0, second=0, microsecond=0)
-            dt = dateparser.parse(expression, settings={"RELATIVE_BASE": relative_base})
+
+            # note: we hardcode TIMEZONE: UTC to work around this bug: https://github.com/scrapinghub/dateparser/issues/896
+            # where dateparser just silently fails if it cant interpret the contents of /etc/localtime
+            # this works because SQLMesh only deals with UTC, there is no concept of user local time
+            dt = dateparser.parse(
+                expression, settings={"RELATIVE_BASE": relative_base, "TIMEZONE": "UTC"}
+            )
         else:
             try:
                 dt = datetime.strptime(str(value), DATE_INT_FMT)
