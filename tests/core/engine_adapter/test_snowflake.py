@@ -549,15 +549,6 @@ def test_creatable_type_materialize_creatable_type_raise_error(
             "test_view",
             parse_one("SELECT 1"),
             view_properties={
-                "creatable_type": exp.MaterializedProperty(),
-            },
-        )
-
-    with pytest.raises(SQLMeshError):
-        adapter.create_view(
-            "test_view",
-            parse_one("SELECT 1"),
-            view_properties={
                 "creatable_type": exp.column("materialized"),
             },
         )

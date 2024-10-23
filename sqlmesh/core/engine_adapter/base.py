@@ -419,32 +419,21 @@ class EngineAdapter:
         for key in list(properties.keys()):
             upper_key = key.upper()
             if upper_key == KEY_FOR_CREATABLE_TYPE:
-                value = properties.pop(key)
-                if (
-                    isinstance(value, exp.Column)
-                    and isinstance(value.this, exp.Identifier)
-                    and isinstance(value.this.this, str)
-                ):
-                    value_as_str = value.this.this.upper()
-                    parsed_properties = exp.maybe_parse(
-                        value_as_str, into=exp.Properties, dialect=self.dialect
+                value = properties.pop(key).name
+                parsed_properties = exp.maybe_parse(
+                    value, into=exp.Properties, dialect=self.dialect
+                )
+                property, *others = parsed_properties.expressions
+                if others:
+                    # Multiple properties are unsupported today, can look into it in the future if needed
+                    raise SQLMeshError(
+                        f"Invalid creatable_type value with multiple properties: {value}"
                     )
-
-                    property, *others = parsed_properties.expressions
-                    if others:
-                        # Multiple properties are unsupported today, can look into it in the future if needed
-                        raise SQLMeshError(
-                            f"Invalid creatable_type value with multiple properties: {value_as_str}"
-                        )
-
-                    if isinstance(property, exp.MaterializedProperty):
-                        raise SQLMeshError(
-                            f"Cannot use {value.this.this} as a creatable_type as it conflicts with the `materialize` parameter."
-                        )
-
-                    return property
-                else:
-                    raise SQLMeshError(f"Invalid creatable_type value: {value}")
+                if isinstance(property, exp.MaterializedProperty):
+                    raise SQLMeshError(
+                        f"Cannot use {value} as a creatable_type as it conflicts with the `materialize` parameter."
+                    )
+                return property
         return None
 
     def create_table(
