@@ -580,6 +580,12 @@ function ColumnDisplay({
   withDescription?: boolean
   className?: string
 }): JSX.Element {
+  let decodedColumnName = columnName
+
+  try {
+    decodedColumnName = decodeURI(columnName)
+  } catch {}
+
   return (
     <div
       className={clsx(
@@ -590,7 +596,7 @@ function ColumnDisplay({
     >
       <div className="w-full flex justify-between items-center">
         <span
-          title={decodeURI(columnName)}
+          title={decodedColumnName}
           className={clsx('flex items-center', disabled && 'opacity-50')}
         >
           {disabled && (
@@ -599,7 +605,7 @@ function ColumnDisplay({
               className="w-3 h-3 mr-2"
             />
           )}
-          {truncate(decodeURI(columnName), 50, 20)}
+          {truncate(decodedColumnName, 50, 20)}
         </span>
         <span className="inline-block ml-2 text-[0.5rem] font-black opacity-60">
           {columnType}

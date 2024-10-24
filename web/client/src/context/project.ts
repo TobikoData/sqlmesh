@@ -28,7 +28,7 @@ interface ProjectStore {
   selectedFile?: ModelFile
   setSelectedFile: (selectedFile?: ModelFile) => void
   findArtifactByPath: (path: string) => ModelArtifact | undefined
-  refreshFiles: () => void
+  refreshFiles: (files?: ModelFile[]) => void
   inActiveRange: (artifact: ModelArtifact) => boolean
 }
 
@@ -83,10 +83,10 @@ export const useStoreProject = create<ProjectStore>((set, get) => ({
 
     return ModelArtifact.findArtifactByPath(s.project, path)
   },
-  refreshFiles() {
+  refreshFiles(files) {
     const s = get()
 
-    s.setFiles(s.project.allFiles)
+    s.setFiles(files ?? s.project.allFiles)
   },
 }))
 

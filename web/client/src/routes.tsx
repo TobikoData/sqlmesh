@@ -418,5 +418,5 @@ export function getBrowserRouter(
     },
   ].filter(Boolean) as RouteObject[]
 
-  return createBrowserRouter(routes)
+  return createBrowserRouter(routes, { basename: import.meta.env.BASE_URL })
 }
