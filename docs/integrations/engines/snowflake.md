@@ -549,6 +549,40 @@ MODEL (
   ),
 );
 ```
+ 
+## Custom View and Table types
+
+SQLMesh supports custom view and table types for Snowflake models. You can apply these modifiers to either the physical layer or virtual layer of a model using the `physical_properties` and `virtual_properties` attributes respectively. For example:
+
+### Secure Views
+
+A table can be exposed through a `SECURE` view in the virtual layer by specifying the `creatable_type` property and setting it to `SECURE`:
+
+```sql linenums="1"
+Model (
+  name = schema_name.model_name,
+  virtual_properties (
+      creatable_type = SECURE
+  )
+);
+
+SELECT a FROM schema_name.model_b;
+```
+
+### Transient Tables
+
+A model can use a `TRANSIENT` table in the physical layer by specifying the `creatable_type` property and setting it to `TRANSIENT`:
+
+```sql linenums="1"
+Model (
+  name = schema_name.model_name,
+  physical_properties (
+      creatable_type = TRANSIENT
+  )
+);
+
+SELECT a FROM schema_name.model_b;
+```
 
 ## Troubleshooting
 
