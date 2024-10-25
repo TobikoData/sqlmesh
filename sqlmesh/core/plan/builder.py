@@ -254,7 +254,7 @@ class PlanBuilder:
 
         models_to_backfill = self._build_models_to_backfill(filtered_dag)
         restatements = self._build_restatements(
-            dag, earliest_interval_start(filtered_snapshots.values())
+            dag, earliest_interval_start(filtered_snapshots.values()), ignored
         )
 
         interval_end_per_model = self._interval_end_per_model
@@ -323,12 +323,19 @@ class PlanBuilder:
         return filtered_dag, ignored_snapshot_ids
 
     def _build_restatements(
-        self, dag: DAG[SnapshotId], earliest_interval_start: TimeLike
+        self,
+        dag: DAG[SnapshotId],
+        earliest_interval_start: TimeLike,
+        ignored_snapshots: t.Set[SnapshotId],
     ) -> t.Dict[SnapshotId, Interval]:
         def is_restateable_snapshot(snapshot: Snapshot) -> bool:
             if not self._is_dev and snapshot.disable_restatement:
                 return False
-            return not snapshot.is_symbolic and not snapshot.is_seed
+            return (
+                not snapshot.is_symbolic
+                and not snapshot.is_seed
+                and snapshot.snapshot_id not in ignored_snapshots
+            )
 
         restate_models = self._restate_models
         if restate_models == set():
@@ -354,6 +361,7 @@ class PlanBuilder:
                     self._context_diff.directly_modified(s.name)
                     or self._context_diff.indirectly_modified(s.name)
                 )
+                and s.snapshot_id not in ignored_snapshots
             }
             is_preview = True
 

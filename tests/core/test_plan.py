@@ -2577,3 +2577,69 @@ def test_plan_requirements():
         "dev", no_prompts=True, skip_tests=True, skip_backfill=True
     ).environment.requirements
     assert set(plan) == {"ipywidgets", "numpy", "pandas", "ruamel.yaml", "ruamel.yaml.clib"}
+
+
+def test_ignored_model_with_forward_only_preview(make_snapshot):
+    snapshot_a = make_snapshot(
+        SqlModel(
+            name="a",
+            query=parse_one("select 1, ds"),
+            kind=dict(
+                name=ModelKindName.INCREMENTAL_BY_TIME_RANGE, forward_only=True, time_column="ds"
+            ),
+        )
+    )
+    snapshot_a.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    new_snapshot_a = make_snapshot(
+        SqlModel(
+            name="a",
+            query=parse_one("select 2, ds"),
+            kind=dict(
+                name=ModelKindName.INCREMENTAL_BY_TIME_RANGE, forward_only=True, time_column="ds"
+            ),
+        )
+    )
+    new_snapshot_a.previous_versions = snapshot_a.all_versions
+    new_snapshot_a.unpaused_ts = 1
+
+    snapshot_b = make_snapshot(
+        SqlModel(
+            name="b",
+            query=parse_one("select 1 AS key"),
+            kind=dict(name=ModelKindName.INCREMENTAL_BY_UNIQUE_KEY, unique_key="key"),
+            start="2024-01-01",
+            depends_on={"a"},
+        ),
+        nodes={new_snapshot_a.name: new_snapshot_a.model},
+    )
+
+    context_diff = ContextDiff(
+        environment="test_environment",
+        is_new_environment=True,
+        is_unfinalized_environment=False,
+        normalize_environment_name=True,
+        create_from="prod",
+        added={snapshot_b.snapshot_id},
+        removed_snapshots={},
+        snapshots={new_snapshot_a.snapshot_id: new_snapshot_a, snapshot_b.snapshot_id: snapshot_b},
+        new_snapshots={
+            new_snapshot_a.snapshot_id: new_snapshot_a,
+            snapshot_b.snapshot_id: snapshot_b,
+        },
+        modified_snapshots={snapshot_a.name: (new_snapshot_a, snapshot_a)},
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
+    )
+
+    plan_builder = PlanBuilder(
+        context_diff,
+        DuckDBEngineAdapter.SCHEMA_DIFFER,
+        enable_preview=True,
+        is_dev=True,
+    )
+    plan = plan_builder.build()
+
+    assert plan.ignored == {snapshot_b.snapshot_id}
+    assert set(plan.restatements) == {new_snapshot_a.snapshot_id}
