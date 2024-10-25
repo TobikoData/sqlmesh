@@ -5945,13 +5945,13 @@ MODEL (
   dialect snowflake,
 );
 
-@DEF(foo, foo);
-@DEF(bar, bar);
-
 SELECT * FROM (@custom_macro(@foo, @bar)) AS q
     """)
 
-    config = Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        variables={"foo": "foo", "bar": "boo"},
+    )
     context = Context(paths=tmp_path, config=config)
 
     query = context.get_model("sqlmesh_example.test").render_query()
