@@ -106,6 +106,7 @@ setup(
             "dbt-redshift",
             "dbt-sqlserver>=1.7.0",
             "dbt-trino",
+            "dbt-clickhouse",
         ],
         "dbt": [
             "dbt-core<2",

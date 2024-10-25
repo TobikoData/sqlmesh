@@ -110,6 +110,16 @@ class ModelConfig(BaseModelConfig):
     # which are defined here: https://docs.getdbt.com/reference/resource-configs/snowflake-configs#dynamic-tables
     target_lag: t.Optional[str] = None
 
+    # clickhouse
+    engine: t.Optional[str] = None
+    order_by: t.Optional[t.Union[t.List[str], str]] = None
+    primary_key: t.Optional[t.Union[t.List[str], str]] = None
+    ttl: t.Optional[t.Union[t.List[str], str]] = None
+    settings: t.Optional[t.Dict[str, t.Any]] = None
+    query_settings: t.Optional[t.Dict[str, t.Any]] = None
+    inserts_only: t.Optional[bool] = None
+    incremental_predicates: t.Optional[t.List[str]] = None
+
     # Private fields
     _sql_embedded_config: t.Optional[SqlStr] = None
     _sql_no_config: t.Optional[SqlStr] = None
@@ -373,13 +383,19 @@ class ModelConfig(BaseModelConfig):
         query = d.jinja_query(self.sql_no_config)
 
         optional_kwargs: t.Dict[str, t.Any] = {}
+        physical_properties: t.Dict[str, t.Any] = {}
 
         if self.partition_by:
-            optional_kwargs["partitioned_by"] = (
-                [exp.to_column(val, dialect=model_dialect) for val in self.partition_by]
-                if isinstance(self.partition_by, list)
-                else self._big_query_partition_by_expr(context)
-            )
+            partitioned_by = []
+            if isinstance(self.partition_by, list):
+                for p in self.partition_by:
+                    try:
+                        partitioned_by.append(d.parse_one(p, dialect=model_dialect))
+                    except SqlglotError as e:
+                        raise ConfigError(f"Failed to parse partition_by field '{p}': {e}") from e
+            else:
+                partitioned_by.append(self._big_query_partition_by_expr(context))
+            optional_kwargs["partitioned_by"] = partitioned_by
 
         if self.cluster_by:
             clustered_by = []
@@ -399,7 +415,6 @@ class ModelConfig(BaseModelConfig):
             if dbt_max_partition_blob:
                 model_kwargs["pre_statements"].append(d.jinja_statement(dbt_max_partition_blob))
 
-            physical_properties = {}
             if self.partition_expiration_days is not None:
                 physical_properties["partition_expiration_days"] = self.partition_expiration_days
             if self.require_partition_filter is not None:
@@ -422,6 +437,55 @@ class ModelConfig(BaseModelConfig):
                     "warehouse": self.snowflake_warehouse,
                     "target_lag": self.target_lag,
                 }
+
+        if context.target.dialect == "clickhouse":
+            if self.materialized in [
+                "dictionary",
+                "distributed_table",
+                "distributed_incremental",
+                "materialized_view",
+            ]:
+                raise ConfigError(
+                    f"SQLMesh does not support the '{self.materialized}' materialization."
+                )
+
+            if self.model_materialization == Materialization.INCREMENTAL:
+                if self.incremental_strategy in ["delete+insert", "append", "insert_overwrite"]:
+                    logger.warning(
+                        f"The '{self.incremental_strategy}' incremental strategy is not supported - SQLMesh uses the temp table/partition swap strategy for all incremental models."
+                    )
+
+            if self.inserts_only:
+                # old alias for incremental_strategy == "append"
+                logger.warning(
+                    "The 'inserts_only' incremental strategy is not supported - SQLMesh uses the temp table/partition swap strategy for all incremental models."
+                )
+
+            if self.incremental_predicates:
+                logger.warning("SQLMesh does not support `incremental_predicates`.")
+
+            if self.query_settings:
+                logger.warning(
+                    "SQLMesh does not support the `query_settings` model configuration parameter. Specify the query settings directly in the model query."
+                )
+
+            if self.engine:
+                optional_kwargs["storage_format"] = self.engine
+
+            if self.order_by:
+                physical_properties["order_by"] = self.order_by
+
+            if self.primary_key:
+                physical_properties["primary_key"] = self.primary_key
+
+            if self.ttl:
+                physical_properties["ttl"] = self.ttl
+
+            if self.settings:
+                physical_properties.update(self.settings)
+
+            if physical_properties:
+                model_kwargs["physical_properties"] = physical_properties
 
         model = create_sql_model(
             self.canonical_name(context),

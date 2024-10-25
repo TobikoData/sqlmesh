@@ -20,7 +20,7 @@ from sqlmesh.core.schema_diff import SchemaDiffer
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import SchemaName, TableName
-    from sqlmesh.core.engine_adapter._typing import DF, Query
+    from sqlmesh.core.engine_adapter._typing import DF, Query, QueryOrDF
 
     from sqlmesh.core.node import IntervalUnit
 
@@ -42,10 +42,7 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
 
     @property
     def engine_run_mode(self) -> EngineRunMode:
-        cloud_query_value = self.fetchone(
-            "select value from system.settings where name='cloud_mode'"
-        )
-        if str(cloud_query_value[0]) == "1":
+        if self._extra_config.get("cloud_mode"):
             return EngineRunMode.CLOUD
         # we use the user's specification of a cluster in the connection config to determine if
         #   the engine is in cluster mode
@@ -641,9 +638,6 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
     def use_server_nulls_for_unmatched_after_join(
         self,
         query: Query,
-        setting_name: t.Optional[str] = "join_use_nulls",
-        setting_value: t.Optional[str] = "1",
-        check_server_default: bool = False,
     ) -> Query:
         # Set the `join_use_nulls` server value in a query's SETTINGS clause
         #

@@ -34,6 +34,7 @@ from sqlmesh.dbt.target import (
     TargetConfig,
     TrinoConfig,
     AthenaConfig,
+    ClickhouseConfig,
 )
 from sqlmesh.dbt.test import TestConfig
 from sqlmesh.utils.errors import ConfigError
@@ -816,6 +817,35 @@ def test_athena_config():
     )
 
 
+def test_clickhouse_config():
+    _test_warehouse_config(
+        """
+        dbt-clickhouse:
+          target: dev
+          outputs:
+            dev:
+              type: clickhouse
+              host: thehost
+              user: theuser
+              password: thepassword
+              port: 1234
+              secure: true
+              cluster: thecluster
+              connect_timeout: 1
+              send_receive_timeout: 2
+              verify: false
+              compression: lz4
+              custom_settings:
+                setting: value
+
+        """,
+        ClickhouseConfig,
+        "dbt-clickhouse",
+        "outputs",
+        "dev",
+    )
+
+
 def test_connection_args(tmp_path):
     dbt_project_dir = "tests/fixtures/dbt/sushi_test"
 
@@ -835,6 +865,7 @@ def test_db_type_to_relation_class():
     from dbt.adapters.snowflake import SnowflakeRelation
     from dbt.adapters.trino.relation import TrinoRelation
     from dbt.adapters.athena.relation import AthenaRelation
+    from dbt.adapters.clickhouse.relation import ClickHouseRelation
 
     assert (TARGET_TYPE_TO_CONFIG_CLASS["bigquery"].relation_class) == BigQueryRelation
     assert (TARGET_TYPE_TO_CONFIG_CLASS["databricks"].relation_class) == DatabricksRelation
@@ -843,6 +874,7 @@ def test_db_type_to_relation_class():
     assert (TARGET_TYPE_TO_CONFIG_CLASS["snowflake"].relation_class) == SnowflakeRelation
     assert (TARGET_TYPE_TO_CONFIG_CLASS["trino"].relation_class) == TrinoRelation
     assert (TARGET_TYPE_TO_CONFIG_CLASS["athena"].relation_class) == AthenaRelation
+    assert (TARGET_TYPE_TO_CONFIG_CLASS["clickhouse"].relation_class) == ClickHouseRelation
 
 
 @pytest.mark.cicdonly
@@ -853,6 +885,7 @@ def test_db_type_to_column_class():
     from dbt.adapters.sqlserver.sqlserver_column import SQLServerColumn
     from dbt.adapters.trino.column import TrinoColumn
     from dbt.adapters.athena.column import AthenaColumn
+    from dbt.adapters.clickhouse.column import ClickHouseColumn
 
     assert (TARGET_TYPE_TO_CONFIG_CLASS["bigquery"].column_class) == BigQueryColumn
     assert (TARGET_TYPE_TO_CONFIG_CLASS["databricks"].column_class) == DatabricksColumn
@@ -861,6 +894,7 @@ def test_db_type_to_column_class():
     assert (TARGET_TYPE_TO_CONFIG_CLASS["sqlserver"].column_class) == SQLServerColumn
     assert (TARGET_TYPE_TO_CONFIG_CLASS["trino"].column_class) == TrinoColumn
     assert (TARGET_TYPE_TO_CONFIG_CLASS["athena"].column_class) == AthenaColumn
+    assert (TARGET_TYPE_TO_CONFIG_CLASS["clickhouse"].column_class) == ClickHouseColumn
 
 
 def test_db_type_to_quote_policy():

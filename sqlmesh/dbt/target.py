@@ -10,9 +10,11 @@ from dbt.adapters.base import BaseRelation, Column
 from pydantic import Field
 
 from sqlmesh.core.config.connection import (
+    AthenaConnectionConfig,
     BigQueryConnectionConfig,
     BigQueryConnectionMethod,
     BigQueryPriority,
+    ClickhouseConnectionConfig,
     ConnectionConfig,
     DatabricksConnectionConfig,
     DuckDBConnectionConfig,
@@ -22,7 +24,6 @@ from sqlmesh.core.config.connection import (
     SnowflakeConnectionConfig,
     TrinoAuthenticationMethod,
     TrinoConnectionConfig,
-    AthenaConnectionConfig,
 )
 from sqlmesh.core.model import (
     IncrementalByTimeRangeKind,
@@ -1048,4 +1049,5 @@ TARGET_TYPE_TO_CONFIG_CLASS: t.Dict[str, t.Type[TargetConfig]] = {
     "tsql": MSSQLConfig,
     "trino": TrinoConfig,
     "athena": AthenaConfig,
+    "clickhouse": ClickhouseConfig,
 }
