@@ -142,7 +142,11 @@ class OneweekAgo(Signal):
         ]
 ```
 
-These signals can be added to a model like so. `Kind` is used so that the signal factory can instantiate the correct one. In this case, kind is an arbitrary key value which serves as an example of how to handle multiple signals.
+These signals can be added to a model like so. Now that we have more than one signal, we must have a way to tell the signal factory which signal should be called.
+
+In this example, we use the `kind` key to tell the signal factory which signal class should be called. The key name is arbitrary, and you may choose any key name you want.
+
+This example model specifies two `kind` values so both signals are called.
 
 ```sql linenums="1" hl_lines="7-10"
 MODEL (
