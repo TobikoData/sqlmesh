@@ -144,7 +144,9 @@ class OneweekAgo(Signal):
             if start <= self.dt
         ]
 ```
+Instead of returning a single `True`/`False` value for whether a batch of intervals is ready for evaluation, the `OneweekAgo` signal class returns specific intervals from the batch.
 
+Its `check_intervals` method accepts a `dt` datetime argument, to which It compares the beginning of each interval in the batch. If the interval start is before that argument, the interval is ready for evaluation and included in the returned list.
 These signals can be added to a model like so. Now that we have more than one signal, we must have a way to tell the signal factory which signal should be called.
 
 In this example, we use the `kind` key to tell the signal factory which signal class should be called. The key name is arbitrary, and you may choose any key name you want.
