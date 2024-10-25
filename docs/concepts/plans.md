@@ -228,19 +228,17 @@ New environment `dev` will be created from `prod`
 Summary of differences against `dev`:
 Models:
 ├── Directly Modified:
+│   ├── sqlmesh_example__dev.start_end_model
 │   └── sqlmesh_example__dev.incremental_model
-├── Indirectly Modified:
-│   └── sqlmesh_example__dev.full_model
-└── Ignored Models (Expected Plan Start):
-    └── sqlmesh_example__dev.start_end_model (2024-09-23 00:00:00+00:00)
+└── Indirectly Modified:
+    └── sqlmesh_example__dev.full_model
 
 [...model diff omitted...]
 
-Directly Modified: sqlmesh_example__dev.incremental_model (Non-breaking)
-└── Indirectly Modified Children:
-    └── sqlmesh_example__dev.full_model (Indirect Non-breaking)
+Directly Modified: sqlmesh_example__dev.start_end_model (Non-breaking)
 Models needing backfill (missing dates):
-└── sqlmesh_example__dev.incremental_model: 2024-09-24 - 2024-09-26
+├── sqlmesh_example__dev.incremental_model: 2024-09-24 - 2024-09-26
+└── sqlmesh_example__dev.start_end_model: 2024-09-24 - 2024-09-26 (preview)
 Enter the backfill end date (eg. '1 month ago', '2020-01-01') or blank to backfill up until '2024-09-27 00:00:00':
 ```
 
