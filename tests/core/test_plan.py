@@ -702,7 +702,6 @@ def test_missing_intervals_lookback(make_snapshot, mocker: MockerFixture):
         environment_naming_info=EnvironmentNamingInfo(),
         directly_modified={snapshot_a.snapshot_id},
         indirectly_modified={},
-        ignored=set(),
         deployability_index=DeployabilityIndex.all_deployable(),
         restatements={},
         end_bounded=False,
@@ -2140,7 +2139,6 @@ def test_dev_plan_depends_past(make_snapshot, mocker: MockerFixture):
         context_diff, schema_differ, start="2023-01-02", end="2023-01-10", is_dev=True
     ).build()
     assert len(dev_plan_start_ahead_of_model.new_snapshots) == 3
-    assert not dev_plan_start_ahead_of_model.ignored
     assert not dev_plan_start_ahead_of_model.deployability_index.is_deployable(snapshot)
     assert not dev_plan_start_ahead_of_model.deployability_index.is_deployable(snapshot_child)
     assert dev_plan_start_ahead_of_model.deployability_index.is_deployable(unrelated_snapshot)
@@ -2237,15 +2235,6 @@ def test_dev_plan_depends_past_non_deployable(make_snapshot, mocker: MockerFixtu
         '"a_child"',
         '"b"',
     ]
-
-    # There should be no ignored snapshots because all changes are non-deployable.
-    dev_plan_start_ahead_of_model = new_builder(start="2023-01-02", end="2023-01-10").build()
-    assert sorted([x.name for x in dev_plan_start_ahead_of_model.new_snapshots]) == [
-        '"a"',
-        '"a_child"',
-        '"b"',
-    ]
-    assert not dev_plan_start_ahead_of_model.ignored
 
 
 def test_restatement_intervals_after_updating_start(sushi_context: Context):

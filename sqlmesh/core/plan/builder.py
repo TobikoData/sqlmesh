@@ -259,7 +259,6 @@ class PlanBuilder:
             environment_naming_info=self.environment_naming_info,
             directly_modified=directly_modified,
             indirectly_modified=indirectly_modified,
-            ignored=set(),
             deployability_index=deployability_index,
             restatements=restatements,
             interval_end_per_model=interval_end_per_model,

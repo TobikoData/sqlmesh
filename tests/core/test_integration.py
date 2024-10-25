@@ -2553,7 +2553,6 @@ def execute(
 
     assert plan.has_changes
     assert not plan.indirectly_modified
-    assert not plan.ignored
 
     assert len(plan.directly_modified) == 1
     snapshot_id = list(plan.directly_modified)[0]

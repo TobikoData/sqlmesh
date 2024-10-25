@@ -29,7 +29,6 @@ from sqlmesh.core.snapshot import (
     SnapshotChangeCategory,
     SnapshotId,
     SnapshotInfoLike,
-    start_date,
 )
 from sqlmesh.core.test import ModelTest
 from sqlmesh.utils import rich as srich
@@ -186,7 +185,6 @@ class Console(abc.ABC):
         environment_naming_info: EnvironmentNamingInfo,
         default_catalog: t.Optional[str],
         no_diff: bool = True,
-        ignored_snapshot_ids: t.Optional[t.Set[SnapshotId]] = None,
     ) -> None:
         """Displays a summary of differences for the given models."""
 
@@ -604,7 +602,6 @@ class TerminalConsole(Console):
         environment_naming_info: EnvironmentNamingInfo,
         default_catalog: t.Optional[str],
         no_diff: bool = True,
-        ignored_snapshot_ids: t.Optional[t.Set[SnapshotId]] = None,
     ) -> None:
         """Shows a summary of the differences.
 
@@ -613,9 +610,7 @@ class TerminalConsole(Console):
             environment_naming_info: The environment naming info to reference when printing model names
             default_catalog: The default catalog to reference when deciding to remove catalog from display names
             no_diff: Hide the actual SQL differences.
-            ignored_snapshot_ids: A set of snapshot ids that are ignored
         """
-        ignored_snapshot_ids = ignored_snapshot_ids or set()
         if context_diff.is_new_environment:
             self._print(
                 Tree(
@@ -637,7 +632,6 @@ class TerminalConsole(Console):
             environment_naming_info,
             default_catalog,
             no_diff=no_diff,
-            ignored_snapshot_ids=ignored_snapshot_ids,
         )
         self._show_summary_tree_for(
             context_diff,
@@ -646,7 +640,6 @@ class TerminalConsole(Console):
             environment_naming_info,
             default_catalog,
             no_diff=no_diff,
-            ignored_snapshot_ids=ignored_snapshot_ids,
         )
 
     def plan(
@@ -687,21 +680,6 @@ class TerminalConsole(Console):
         if auto_apply:
             plan_builder.apply()
 
-    def _get_ignored_tree(
-        self,
-        ignored_snapshot_ids: t.Set[SnapshotId],
-        snapshots: t.Dict[SnapshotId, Snapshot],
-        environment_naming_info: EnvironmentNamingInfo,
-        default_catalog: t.Optional[str],
-    ) -> Tree:
-        ignored = Tree("[bold][ignored]Ignored Models (Expected Plan Start):")
-        for s_id in ignored_snapshot_ids:
-            snapshot = snapshots[s_id]
-            ignored.add(
-                f"[ignored]{snapshot.display_name(environment_naming_info, default_catalog, dialect=self.dialect)} ({snapshot.get_latest(start_date(snapshot, snapshots.values()))})"
-            )
-        return ignored
-
     def _show_summary_tree_for(
         self,
         context_diff: ContextDiff,
@@ -710,36 +688,25 @@ class TerminalConsole(Console):
         environment_naming_info: EnvironmentNamingInfo,
         default_catalog: t.Optional[str],
         no_diff: bool = True,
-        ignored_snapshot_ids: t.Optional[t.Set[SnapshotId]] = None,
     ) -> None:
-        ignored_snapshot_ids = ignored_snapshot_ids or set()
-        selected_snapshots = {
-            s_id: snapshot
-            for s_id, snapshot in context_diff.snapshots.items()
-            if snapshot_selector(snapshot)
-        }
-        selected_ignored_snapshot_ids = {
-            s_id for s_id in selected_snapshots if s_id in ignored_snapshot_ids
-        }
         added_snapshot_ids = {
             s_id for s_id in context_diff.added if snapshot_selector(context_diff.snapshots[s_id])
-        } - selected_ignored_snapshot_ids
+        }
         removed_snapshot_ids = {
             s_id
             for s_id, snapshot in context_diff.removed_snapshots.items()
             if snapshot_selector(snapshot)
-        } - selected_ignored_snapshot_ids
+        }
         modified_snapshot_ids = {
             current_snapshot.snapshot_id
             for _, (current_snapshot, _) in context_diff.modified_snapshots.items()
             if snapshot_selector(current_snapshot)
-        } - selected_ignored_snapshot_ids
+        }
 
         tree_sets = (
             added_snapshot_ids,
             removed_snapshot_ids,
             modified_snapshot_ids,
-            selected_ignored_snapshot_ids,
         )
         if all(not s_ids for s_ids in tree_sets):
             return
@@ -790,15 +757,6 @@ class TerminalConsole(Console):
                 tree.add(self._limit_model_names(indirect, self.verbose))
             if metadata.children:
                 tree.add(metadata)
-        if selected_ignored_snapshot_ids:
-            tree.add(
-                self._get_ignored_tree(
-                    selected_ignored_snapshot_ids,
-                    selected_snapshots,
-                    environment_naming_info,
-                    default_catalog,
-                )
-            )
         self._print(tree)
 
     def _show_options_after_categorization(
@@ -832,7 +790,6 @@ class TerminalConsole(Console):
             plan.context_diff,
             plan.environment_naming_info,
             default_catalog=default_catalog,
-            ignored_snapshot_ids=plan.ignored,
         )
 
         if not no_diff:
@@ -966,15 +923,6 @@ class TerminalConsole(Console):
 
             plan = plan_builder.build()
 
-        if plan.ignored:
-            self._print(
-                self._get_ignored_tree(
-                    plan.ignored,
-                    plan.context_diff.snapshots,
-                    plan.environment_naming_info,
-                    default_catalog,
-                )
-            )
         if not auto_apply and self._confirm(f"Apply - {backfill_or_preview.capitalize()} Tables"):
             plan_builder.apply()
 
@@ -1592,7 +1540,6 @@ class MarkdownConsole(CaptureTerminalConsole):
         environment_naming_info: EnvironmentNamingInfo,
         default_catalog: t.Optional[str],
         no_diff: bool = True,
-        ignored_snapshot_ids: t.Optional[t.Set[SnapshotId]] = None,
     ) -> None:
         """Shows a summary of the differences.
 
@@ -1601,9 +1548,7 @@ class MarkdownConsole(CaptureTerminalConsole):
             environment_naming_info: The environment naming info to reference when printing model names
             default_catalog: The default catalog to reference when deciding to remove catalog from display names
             no_diff: Hide the actual SQL differences.
-            ignored_snapshot_ids: A set of snapshot names that are ignored
         """
-        ignored_snapshot_ids = ignored_snapshot_ids or set()
         if context_diff.is_new_environment:
             self._print(
                 f"**New environment `{context_diff.environment}` will be created from `{context_diff.create_from}`**\n"
@@ -1617,11 +1562,7 @@ class MarkdownConsole(CaptureTerminalConsole):
 
         self._print(f"**Summary of differences against `{context_diff.environment}`:**\n")
 
-        added_snapshots = {
-            context_diff.snapshots[s_id]
-            for s_id in context_diff.added
-            if s_id not in ignored_snapshot_ids
-        }
+        added_snapshots = {context_diff.snapshots[s_id] for s_id in context_diff.added}
         added_snapshot_models = {s for s in added_snapshots if s.is_model}
         if added_snapshot_models:
             self._print("\n**Added Models:**")
@@ -1645,11 +1586,7 @@ class MarkdownConsole(CaptureTerminalConsole):
                     f"- `{snapshot.display_name(environment_naming_info, default_catalog, dialect=self.dialect)}`"
                 )
 
-        removed_snapshot_table_infos = {
-            snapshot_table_info
-            for s_id, snapshot_table_info in context_diff.removed_snapshots.items()
-            if s_id not in ignored_snapshot_ids
-        }
+        removed_snapshot_table_infos = set(context_diff.removed_snapshots.values())
         removed_model_snapshot_table_infos = {s for s in removed_snapshot_table_infos if s.is_model}
         if removed_model_snapshot_table_infos:
             self._print("\n**Removed Models:**")
@@ -1674,9 +1611,7 @@ class MarkdownConsole(CaptureTerminalConsole):
                 )
 
         modified_snapshots = {
-            current_snapshot
-            for current_snapshot, _ in context_diff.modified_snapshots.values()
-            if current_snapshot.snapshot_id not in ignored_snapshot_ids
+            current_snapshot for current_snapshot, _ in context_diff.modified_snapshots.values()
         }
         if modified_snapshots:
             directly_modified = []
@@ -1721,13 +1656,6 @@ class MarkdownConsole(CaptureTerminalConsole):
                     self._print(
                         f"- `{snapshot.display_name(environment_naming_info, default_catalog, dialect=self.dialect)}`"
                     )
-        if ignored_snapshot_ids:
-            self._print("\n**Ignored Models (Expected Plan Start):**")
-            for s_id in sorted(ignored_snapshot_ids):
-                snapshot = context_diff.snapshots[s_id]
-                self._print(
-                    f"- `{snapshot.display_name(environment_naming_info, default_catalog, dialect=self.dialect)}` ({snapshot.get_latest(start_date(snapshot, context_diff.snapshots.values()))})"
-                )
 
     def _show_missing_dates(self, plan: Plan, default_catalog: t.Optional[str]) -> None:
         """Displays the models with missing dates."""
@@ -2068,7 +1996,6 @@ class DebuggerTerminalConsole(TerminalConsole):
         environment_naming_info: EnvironmentNamingInfo,
         default_catalog: t.Optional[str],
         no_diff: bool = True,
-        ignored_snapshot_ids: t.Optional[t.Set[SnapshotId]] = None,
     ) -> None:
         self._write("Model Difference Summary:")
         for added in context_diff.new_snapshots:
