@@ -31,6 +31,7 @@ A project may have one signal factory function. The factory function determines 
 To define a signal, create a `signals` directory in your project folder. Define your signal in a file named `__init__.py` in that directory.
 
 The file must:
+
 - Define at least one `Signal` sub-class containing a `check_intervals` method
 - Define a factory function that returns a `Signal` sub-class and decorate the function with the `@signal_factory` decorator
 
@@ -108,4 +109,69 @@ SELECT 1
 
 The next time this project is `sqlmesh run`, our signal will metaphorically flip a coin to determine whether the model should be evaluated.
 
-###
+### Advanced Example
+
+Multiple signals can be used within one model. A signal can return a subset of the intervals within a batch. The intersection of the intervals returned by all the signals determines what is evaluated.
+
+In this example, there are two signals.
+
+```python
+import typing as t
+from datetime import datetime
+
+from sqlmesh.core.scheduler import signal_factory, Batch, Signal
+from sqlmesh.utils.date import to_datetime
+
+
+class AlwaysReady(Signal):
+    # signal that indicates every interval is always ready
+    def check_intervals(self, batch: Batch) -> t.Union[bool, Batch]:
+        return True
+
+
+class OneweekAgo(Signal):
+    def __init__(self, dt: datetime):
+        self.dt = dt
+
+    # signal that returns only intervals that are <= 1 week ago
+    def check_intervals(self, batch: Batch) -> t.Union[bool, Batch]:
+        return [
+            (start, end)
+            for start, end in batch
+            if start <= self.dt
+        ]
+```
+
+These signals can be added to a model like so. `Kind` is used so that the signal factory can instantiate the correct one. In this case, kind is an arbitrary key value which serves as an example of how to handle multiple signals.
+
+```sql linenums="1" hl_lines="7-10"
+MODEL (
+  name example.signal_model,
+  kind INCREMENTAL_BY_TIME_RANGE (
+    time_column ds,
+  ),
+  start '2 week ago',
+  signals [
+    (kind = 'a'),
+    (kind = 'b'),
+  ]
+);
+
+
+SELECT @start_ds AS ds
+```
+
+The appropriate signal can then be instantiated through the "kind" parameter.
+
+```python linenums="1" hl_lines="3-3"
+@signal_factory
+def my_signal_factory(signal_metadata: t.Dict[str, t.Union[str, int, float, bool]]) -> Signal:
+    kind = signal_metadata["kind"]
+
+    if kind == "a":
+        return AlwaysReady()
+    if kind == "b":
+        return OneweekAgo(to_datetime("1 week ago"))
+    raise Exception(f"Unknown signal {kind}")
+```
+
