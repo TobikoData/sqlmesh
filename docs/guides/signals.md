@@ -165,7 +165,7 @@ MODEL (
 SELECT @start_ds AS ds
 ```
 
-The appropriate signal can then be instantiated through the "kind" parameter.
+Our signal factory definition extracts the `kind` key value from the `signal_metadata`, then instantiates the signal class corresponding to the value:
 
 ```python linenums="1" hl_lines="3-3"
 @signal_factory
