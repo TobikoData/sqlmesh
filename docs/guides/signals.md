@@ -111,7 +111,10 @@ The next time this project is `sqlmesh run`, our signal will metaphorically flip
 
 ### Advanced Example
 
-Multiple signals can be used within one model. A signal can return a subset of the intervals within a batch. The intersection of the intervals returned by all the signals determines what is evaluated.
+This example demonstrates more advanced use of signals, including:
+
+- Multiple signals in one model
+- A signal returning a subset of intervals from a batch (rather than a single `True`/`False` value for all intervals in the batch)
 
 In this example, there are two signals.
 
