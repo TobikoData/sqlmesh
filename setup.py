@@ -94,6 +94,7 @@ setup(
             "types-requests==2.28.8",
             "typing-extensions",
             "custom-materializations",
+            "clickhouse-connect",
         ],
         "cicdtest": [
             "dbt-databricks",

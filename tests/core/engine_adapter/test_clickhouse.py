@@ -11,6 +11,7 @@ from sqlmesh.core.schema_diff import SchemaDiffer
 from datetime import datetime
 from pytest_mock.plugin import MockerFixture
 from sqlmesh.core import dialect as d
+from sqlglot.optimizer.qualify_columns import quote_identifiers
 
 pytestmark = [pytest.mark.clickhouse, pytest.mark.engine]
 
@@ -1268,3 +1269,39 @@ def test_to_time_column():
         ).sql("clickhouse")
         == "CAST('2022-01-01 00:00:00.000001' AS Nullable(DateTime64(4)))"
     )
+
+
+def test_exchange_tables(
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture, make_temp_table_name: t.Callable
+):
+    from clickhouse_connect.driver.exceptions import DatabaseError  # type: ignore
+
+    adapter = make_mocked_engine_adapter(ClickhouseEngineAdapter)
+
+    temp_table_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter._get_temp_table")
+    temp_table_mock.return_value = make_temp_table_name("table1", "abcd")
+
+    execute_mock = mocker.patch("sqlmesh.core.engine_adapter.ClickhouseEngineAdapter.execute")
+    execute_mock.side_effect = [
+        DatabaseError(
+            "DB::Exception: Moving tables between databases of different engines is not supported. (NOT_IMPLEMENTED)"
+        ),
+        None,
+        None,
+        None,
+    ]
+
+    adapter._exchange_tables("table1", "table2")
+
+    # The EXCHANGE TABLES call errored, so we RENAME TABLE instead
+    assert [
+        quote_identifiers(call.args[0]).sql("clickhouse")
+        if isinstance(call.args[0], exp.Expression)
+        else call.args[0]
+        for call in execute_mock.call_args_list
+    ] == [
+        'EXCHANGE TABLES "table1" AND "table2"',
+        'RENAME TABLE "table1" TO "__temp_table1_abcd"',
+        'RENAME TABLE "table2" TO "table1"',
+        'DROP TABLE IF EXISTS "__temp_table1_abcd"',
+    ]
