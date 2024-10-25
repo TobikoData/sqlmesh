@@ -1308,7 +1308,9 @@ class DeployabilityIndex(PydanticModel, frozen=True):
 
     @classmethod
     def create(
-        cls, snapshots: t.Dict[SnapshotId, Snapshot] | t.Collection[Snapshot]
+        cls,
+        snapshots: t.Dict[SnapshotId, Snapshot] | t.Collection[Snapshot],
+        start: t.Optional[TimeLike] = None,
     ) -> DeployabilityIndex:
         if not isinstance(snapshots, dict):
             snapshots = {s.snapshot_id: s for s in snapshots}
@@ -1317,6 +1319,8 @@ class DeployabilityIndex(PydanticModel, frozen=True):
 
         deployability_mapping: t.Dict[SnapshotId, bool] = {}
         representative_shared_version_ids: t.Set[SnapshotId] = set()
+
+        start_date_cache: t.Optional[t.Dict[str, datetime]] = {}
 
         def _visit(node: SnapshotId, deployable: bool = True) -> None:
             if deployability_mapping.get(node) in (False, deployable) and (
@@ -1333,19 +1337,31 @@ class DeployabilityIndex(PydanticModel, frozen=True):
                     and snapshot.is_model
                     and snapshot.model.forward_only
                 )
+
+                is_valid_start = (
+                    snapshot.is_valid_start(
+                        start, start_date(snapshot, snapshots.values(), start_date_cache)
+                    )
+                    if start is not None
+                    else True
+                )
+
                 if (
                     snapshot.is_forward_only
                     or snapshot.is_indirect_non_breaking
                     or is_uncategorized_forward_only_model
+                    or not is_valid_start
                 ):
                     # FORWARD_ONLY and INDIRECT_NON_BREAKING snapshots are not deployable by nature.
+                    # Similarly, if the model depends on past and the start date is not aligned with the
+                    # model's start, we should consider this snapshot non-deployable.
                     this_deployable = False
                     if not snapshot.is_paused or snapshot.is_indirect_non_breaking:
                         # This snapshot represents what's currently deployed in prod.
                         representative_shared_version_ids.add(node)
                 else:
                     this_deployable = True
-                children_deployable = not (
+                children_deployable = is_valid_start and not (
                     snapshot.is_paused
                     and (snapshot.is_forward_only or is_uncategorized_forward_only_model)
                 )

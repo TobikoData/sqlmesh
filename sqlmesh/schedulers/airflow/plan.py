@@ -121,7 +121,7 @@ def create_plan_dag_spec(
         for s, interval in intervals_to_remove:
             all_snapshots[s.snapshot_id].remove_interval(interval)
 
-    deployability_index_for_creation = DeployabilityIndex.create(all_snapshots)
+    deployability_index_for_creation = DeployabilityIndex.create(all_snapshots, start=plan.start)
     deployability_index_for_evaluation = (
         deployability_index_for_creation if plan.is_dev else DeployabilityIndex.all_deployable()
     )
