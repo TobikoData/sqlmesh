@@ -614,13 +614,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             engine_type=self.snapshot_evaluator.adapter.dialect,
             state_sync_type=self.state_sync.state_type(),
         )
-
-        if not self._loaded:
-            # Signals and materializations should be loaded to run correctly.
-            for context_loader in self._loaders.values():
-                with sys_path(*context_loader.configs):
-                    context_loader.loader.load_signals(self)
-                    context_loader.loader.load_materializations(self)
+        self._load_materializations_and_signals()
 
         success = False
         try:
@@ -1712,6 +1706,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         Please contact your SQLMesh administrator before doing this.
         """
         self.notification_target_manager.notify(NotificationEvent.MIGRATION_START)
+        self._load_materializations_and_signals()
         try:
             self._new_state_sync().migrate(
                 default_catalog=self.default_catalog,
@@ -2081,6 +2076,13 @@ class GenericContext(BaseContext, t.Generic[C]):
         self.notification_target_manager = NotificationTargetManager(
             event_notifications, user_notification_targets, username=self.config.username
         )
+
+    def _load_materializations_and_signals(self) -> None:
+        if not self._loaded:
+            for context_loader in self._loaders.values():
+                with sys_path(*context_loader.configs):
+                    context_loader.loader.load_signals(self)
+                    context_loader.loader.load_materializations(self)
 
 
 class Context(GenericContext[Config]):
