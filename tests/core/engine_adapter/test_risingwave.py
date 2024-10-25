@@ -42,20 +42,24 @@ def test_create_sink(make_mocked_engine_adapter: t.Callable):
         format=format_settings,
     )
 
-    # view_name = 'sqlmesh__sqlmesh.sqlmesh__mv_sales_test01__3707292608'
-    view_name = "db.sink"
-    adapter.create_view(
-        view_name, parse_one("SELECT 1"), replace=True, sink=True, connections_str=rwsink_settings
-    )
-    #@TODO: Fix this test
+    sink_name = "db.sink"
+    view_name = "db.view"
+    adapter._create_rw_sink(sink_name, view_name, rwsink_settings, _is_sink_need_drop=False)
+    adapter._create_rw_sink(sink_name, view_name, rwsink_settings, _is_sink_need_drop=True)
     print("has following calls:", adapter.cursor.execute.mock_calls, flush=True)
-    # adapter.cursor.execute.assert_has_calls(
-    #     [
-    #         # 1st call
-    #         call('DROP VIEW IF EXISTS "sqlmesh__sqlmesh"."sqlmesh__mv_sales_test01__3707292608" CASCADE'),
-    #         call('CREATE VIEW "sqlmesh__sqlmesh"."sqlmesh__mv_sales_test01__3707292608" AS SELECT 1'),
-    #     ]
-    # )
+    adapter.cursor.execute.assert_has_calls(
+        [
+            # 1st call
+            call(
+                "CREATE SINK IF NOT EXISTS db.sink FROM db.view \nWITH (\n\tconnector='kafka',\n\ttopic='my_topic'\n) FORMAT json \tschema_registry_name_strategy='None',\n \tschema_registry='None',\n \tforce_append_only='None'\n)"
+            ),
+            # 2nd call
+            call("DROP SINK IF EXISTS db.sink"),
+            call(
+                "CREATE SINK IF NOT EXISTS db.sink FROM db.view \nWITH (\n\tconnector='kafka',\n\ttopic='my_topic'\n) FORMAT json \tschema_registry_name_strategy='None',\n \tschema_registry='None',\n \tforce_append_only='None'\n)"
+            ),
+        ]
+    )
 
 
 def test_drop_view(make_mocked_engine_adapter: t.Callable):
