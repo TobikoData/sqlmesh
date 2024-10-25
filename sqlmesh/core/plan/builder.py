@@ -5,7 +5,6 @@ import re
 import sys
 import typing as t
 from collections import defaultdict
-from datetime import datetime
 from functools import cached_property
 
 
@@ -25,7 +24,7 @@ from sqlmesh.core.snapshot import (
     SnapshotChangeCategory,
 )
 from sqlmesh.core.snapshot.categorizer import categorize_change
-from sqlmesh.core.snapshot.definition import Interval, SnapshotId, start_date
+from sqlmesh.core.snapshot.definition import Interval, SnapshotId
 from sqlmesh.utils import columns_to_types_all_known, random_id
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import TimeLike, now, to_datetime, yesterday_ds
@@ -229,32 +228,14 @@ class PlanBuilder:
         self._adjust_new_snapshot_intervals()
 
         deployability_index = (
-            DeployabilityIndex.create(self._context_diff.snapshots.values())
+            DeployabilityIndex.create(self._context_diff.snapshots.values(), start=self._start)
             if self._is_dev
             else DeployabilityIndex.all_deployable()
         )
 
-        filtered_dag, ignored = self._build_filtered_dag(dag, deployability_index)
-
-        # Exclude ignored snapshots from the modified sets.
-        directly_modified = {s_id for s_id in directly_modified if s_id not in ignored}
-        for s_id in list(indirectly_modified):
-            if s_id in ignored:
-                indirectly_modified.pop(s_id, None)
-            else:
-                indirectly_modified[s_id] = {
-                    s_id for s_id in indirectly_modified[s_id] if s_id not in ignored
-                }
-
-        filtered_snapshots = {
-            s.snapshot_id: s
-            for s in self._context_diff.snapshots.values()
-            if s.snapshot_id not in ignored
-        }
-
-        models_to_backfill = self._build_models_to_backfill(filtered_dag)
+        models_to_backfill = self._build_models_to_backfill(dag)
         restatements = self._build_restatements(
-            dag, earliest_interval_start(filtered_snapshots.values()), ignored
+            dag, earliest_interval_start(self._context_diff.snapshots.values())
         )
 
         interval_end_per_model = self._interval_end_per_model
@@ -278,7 +259,6 @@ class PlanBuilder:
             environment_naming_info=self.environment_naming_info,
             directly_modified=directly_modified,
             indirectly_modified=indirectly_modified,
-            ignored=ignored,
             deployability_index=deployability_index,
             restatements=restatements,
             interval_end_per_model=interval_end_per_model,
@@ -298,44 +278,13 @@ class PlanBuilder:
             dag.add(s_id, context_snapshot.parents)
         return dag
 
-    def _build_filtered_dag(
-        self, full_dag: DAG[SnapshotId], deployability_index: DeployabilityIndex
-    ) -> t.Tuple[DAG[SnapshotId], t.Set[SnapshotId]]:
-        ignored_snapshot_ids: t.Set[SnapshotId] = set()
-        filtered_dag: DAG[SnapshotId] = DAG()
-        cache: t.Optional[t.Dict[str, datetime]] = {}
-        for s_id in full_dag:
-            snapshot = self._context_diff.snapshots.get(s_id)
-            # If the snapshot doesn't exist then it must be an external model
-            if not snapshot:
-                continue
-
-            is_deployable = deployability_index.is_deployable(s_id)
-            is_valid_start = snapshot.is_valid_start(
-                self._start, start_date(snapshot, self._context_diff.snapshots.values(), cache)
-            )
-            if set(snapshot.parents).isdisjoint(ignored_snapshot_ids) and (
-                not is_deployable or is_valid_start
-            ):
-                filtered_dag.add(s_id, snapshot.parents)
-            else:
-                ignored_snapshot_ids.add(s_id)
-        return filtered_dag, ignored_snapshot_ids
-
     def _build_restatements(
-        self,
-        dag: DAG[SnapshotId],
-        earliest_interval_start: TimeLike,
-        ignored_snapshots: t.Set[SnapshotId],
+        self, dag: DAG[SnapshotId], earliest_interval_start: TimeLike
     ) -> t.Dict[SnapshotId, Interval]:
         def is_restateable_snapshot(snapshot: Snapshot) -> bool:
             if not self._is_dev and snapshot.disable_restatement:
                 return False
-            return (
-                not snapshot.is_symbolic
-                and not snapshot.is_seed
-                and snapshot.snapshot_id not in ignored_snapshots
-            )
+            return not snapshot.is_symbolic and not snapshot.is_seed
 
         restate_models = self._restate_models
         if restate_models == set():
@@ -361,7 +310,6 @@ class PlanBuilder:
                     self._context_diff.directly_modified(s.name)
                     or self._context_diff.indirectly_modified(s.name)
                 )
-                and s.snapshot_id not in ignored_snapshots
             }
             is_preview = True
 

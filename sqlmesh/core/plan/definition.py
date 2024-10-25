@@ -62,7 +62,6 @@ class Plan(PydanticModel, frozen=True):
 
     directly_modified: t.Set[SnapshotId]
     indirectly_modified: t.Dict[SnapshotId, t.Set[SnapshotId]]
-    ignored: t.Set[SnapshotId]
 
     deployability_index: DeployabilityIndex
     restatements: t.Dict[SnapshotId, Interval]
@@ -104,7 +103,7 @@ class Plan(PydanticModel, frozen=True):
             *self.context_diff.added,
             *self.context_diff.removed_snapshots,
             *self.context_diff.current_modified_snapshot_ids,
-        } - self.ignored
+        }
         return (
             self.context_diff.is_new_environment
             or self.context_diff.is_unfinalized_environment
@@ -139,11 +138,9 @@ class Plan(PydanticModel, frozen=True):
             if not self.context_diff.snapshots[s_id].version
         ]
 
-    @cached_property
+    @property
     def snapshots(self) -> t.Dict[SnapshotId, Snapshot]:
-        return {
-            s_id: s for s_id, s in self.context_diff.snapshots.items() if s_id not in self.ignored
-        }
+        return self.context_diff.snapshots
 
     @cached_property
     def modified_snapshots(self) -> t.Dict[SnapshotId, t.Union[Snapshot, SnapshotTableInfo]]:
@@ -161,9 +158,7 @@ class Plan(PydanticModel, frozen=True):
     @property
     def new_snapshots(self) -> t.List[Snapshot]:
         """Gets only new snapshots in the plan/environment."""
-        return [
-            s for s in self.context_diff.new_snapshots.values() if s.snapshot_id not in self.ignored
-        ]
+        return list(self.context_diff.new_snapshots.values())
 
     @property
     def missing_intervals(self) -> t.List[SnapshotIntervals]:
@@ -255,7 +250,7 @@ class Plan(PydanticModel, frozen=True):
     def is_new_snapshot(self, snapshot: Snapshot) -> bool:
         """Returns True if the given snapshot is a new snapshot in this plan."""
         snapshot_id = snapshot.snapshot_id
-        return snapshot_id in self.context_diff.new_snapshots and snapshot_id not in self.ignored
+        return snapshot_id in self.context_diff.new_snapshots
 
     def is_selected_for_backfill(self, model_fqn: str) -> bool:
         """Returns True if a model with the given FQN should be backfilled as part of this plan."""

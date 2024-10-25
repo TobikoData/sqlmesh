@@ -44,6 +44,7 @@ from sqlmesh.core.model import (
 from sqlmesh.core.model.kind import model_kind_type_from_name
 from sqlmesh.core.plan import Plan, PlanBuilder, SnapshotIntervals
 from sqlmesh.core.snapshot import (
+    DeployabilityIndex,
     Snapshot,
     SnapshotChangeCategory,
     SnapshotId,
@@ -1497,7 +1498,7 @@ def test_custom_materialization(init_and_plan_context: t.Callable):
 
 
 @freeze_time("2023-01-08 15:00:00")
-def test_ignored_snapshot_with_non_deployable_downstream(init_and_plan_context: t.Callable):
+def test_unaligned_start_snapshot_with_non_deployable_downstream(init_and_plan_context: t.Callable):
     context, _ = init_and_plan_context("examples/sushi")
 
     downstream_model_name = "memory.sushi.customer_max_revenue"
@@ -1542,12 +1543,13 @@ def test_ignored_snapshot_with_non_deployable_downstream(init_and_plan_context: 
     )
 
     plan = context.plan("dev", no_prompts=True, enable_preview=True)
-    assert {s.name for s in plan.ignored} == {
+    assert {s.name for s in plan.new_snapshots} == {
         '"memory"."sushi"."customer_revenue_lifetime_new"',
         '"memory"."sushi"."customer_max_revenue"',
     }
-    assert not plan.new_snapshots
-    assert not plan.missing_intervals
+    for snapshot_interval in plan.missing_intervals:
+        assert not plan.deployability_index.is_deployable(snapshot_interval.snapshot_id)
+        assert snapshot_interval.intervals[0][0] == to_timestamp("2023-01-07")
 
 
 @freeze_time("2023-01-08 15:00:00")
@@ -2455,7 +2457,7 @@ def test_environment_catalog_mapping(init_and_plan_context: t.Callable):
     "context_fixture",
     ["sushi_context", "sushi_no_default_catalog"],
 )
-def test_ignored_snapshots(context_fixture: Context, request):
+def test_unaligned_start_snapshots(context_fixture: Context, request):
     context = request.getfixturevalue(context_fixture)
     environment = "dev"
     apply_to_environment(context, environment)
@@ -2463,25 +2465,17 @@ def test_ignored_snapshots(context_fixture: Context, request):
     context.upsert_model("sushi.order_items", stamp="1")
     # Apply the change starting at a date later then the beginning of the downstream depends_on_self model
     plan = apply_to_environment(
-        context, environment, choice=SnapshotChangeCategory.BREAKING, plan_start="2 days ago"
+        context,
+        environment,
+        choice=SnapshotChangeCategory.BREAKING,
+        plan_start="2 days ago",
+        enable_preview=True,
     )
     revenue_lifetime_snapshot = context.get_snapshot(
         "sushi.customer_revenue_lifetime", raise_if_missing=True
     )
-    # Validate that the depends_on_self model is ignored
-    assert plan.ignored == {revenue_lifetime_snapshot.snapshot_id}
-    # Validate that the table was really ignored
-    metadata = DuckDBMetadata.from_context(context)
-    # Make sure prod view exists
-    catalog = context.default_catalog or "memory"
-    assert exp.table_("customer_revenue_lifetime", "sushi", catalog) in metadata.qualified_views
-    # Make sure dev view doesn't exist since it was ignored
-    assert (
-        exp.table_("customer_revenue_lifetime", "sushi__dev", catalog)
-        not in metadata.qualified_views
-    )
-    # Make sure that dev view for order items was created
-    assert exp.table_("order_items", "sushi__dev", catalog) in metadata.qualified_views
+    # Validate that the depends_on_self model is non-deployable
+    assert not plan.deployability_index.is_deployable(revenue_lifetime_snapshot)
 
 
 class OldPythonModel(PythonModel):
@@ -2559,7 +2553,6 @@ def execute(
 
     assert plan.has_changes
     assert not plan.indirectly_modified
-    assert not plan.ignored
 
     assert len(plan.directly_modified) == 1
     snapshot_id = list(plan.directly_modified)[0]
@@ -2590,6 +2583,7 @@ def apply_to_environment(
     apply_validators: t.Optional[t.Iterable[t.Callable]] = None,
     plan_start: t.Optional[TimeLike] = None,
     allow_destructive_models: t.Optional[t.List[str]] = None,
+    enable_preview: bool = False,
 ):
     plan_validators = plan_validators or []
     apply_validators = apply_validators or []
@@ -2600,6 +2594,7 @@ def apply_to_environment(
         forward_only=choice == SnapshotChangeCategory.FORWARD_ONLY,
         include_unmodified=True,
         allow_destructive_models=allow_destructive_models if allow_destructive_models else [],
+        enable_preview=enable_preview,
     )
     if environment != c.PROD:
         plan_builder.set_start(plan_start or start(context))
@@ -2612,7 +2607,7 @@ def apply_to_environment(
     plan = plan_builder.build()
     context.apply(plan)
 
-    validate_apply_basics(context, environment, plan.snapshots.values())
+    validate_apply_basics(context, environment, plan.snapshots.values(), plan.deployability_index)
     for validator in apply_validators:
         validator(context)
     return plan
@@ -2671,12 +2666,15 @@ def validate_versions_different(
 
 
 def validate_apply_basics(
-    context: Context, environment: str, snapshots: t.Iterable[Snapshot]
+    context: Context,
+    environment: str,
+    snapshots: t.Iterable[Snapshot],
+    deployability_index: t.Optional[DeployabilityIndex] = None,
 ) -> None:
     validate_snapshots_in_state_sync(snapshots, context)
     validate_state_sync_environment(snapshots, environment, context)
-    validate_tables(snapshots, context)
-    validate_environment_views(snapshots, environment, context)
+    validate_tables(snapshots, context, deployability_index)
+    validate_environment_views(snapshots, environment, context, deployability_index)
 
 
 def validate_snapshots_in_state_sync(snapshots: t.Iterable[Snapshot], context: Context) -> None:
@@ -2697,22 +2695,33 @@ def validate_state_sync_environment(
     assert set(snapshot_infos) == set(environment_table_infos)
 
 
-def validate_tables(snapshots: t.Iterable[Snapshot], context: Context) -> None:
+def validate_tables(
+    snapshots: t.Iterable[Snapshot],
+    context: Context,
+    deployability_index: t.Optional[DeployabilityIndex] = None,
+) -> None:
     adapter = context.engine_adapter
+    deployability_index = deployability_index or DeployabilityIndex.all_deployable()
     for snapshot in snapshots:
+        is_deployable = deployability_index.is_representative(snapshot)
         if not snapshot.is_model or snapshot.is_external:
             continue
         table_should_exist = not snapshot.is_embedded
-        assert adapter.table_exists(snapshot.table_name()) == table_should_exist
+        assert adapter.table_exists(snapshot.table_name(is_deployable)) == table_should_exist
         if table_should_exist:
-            assert select_all(snapshot.table_name(), adapter)
+            assert select_all(snapshot.table_name(is_deployable), adapter)
 
 
 def validate_environment_views(
-    snapshots: t.Iterable[Snapshot], environment: str, context: Context
+    snapshots: t.Iterable[Snapshot],
+    environment: str,
+    context: Context,
+    deployability_index: t.Optional[DeployabilityIndex] = None,
 ) -> None:
     adapter = context.engine_adapter
+    deployability_index = deployability_index or DeployabilityIndex.all_deployable()
     for snapshot in snapshots:
+        is_deployable = deployability_index.is_representative(snapshot)
         if not snapshot.is_model or snapshot.is_symbolic:
             continue
         view_name = snapshot.qualified_view_name.for_environment(
@@ -2722,8 +2731,6 @@ def validate_environment_views(
                 suffix_target=context.config.environment_suffix_target,
             )
         )
-
-        is_deployable = environment == c.PROD or not snapshot.is_paused_forward_only
 
         assert adapter.table_exists(view_name)
         assert select_all(snapshot.table_name(is_deployable), adapter) == select_all(

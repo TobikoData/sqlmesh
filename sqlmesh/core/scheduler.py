@@ -328,7 +328,7 @@ class Scheduler:
             environment_naming_info = environment
 
         deployability_index = deployability_index or (
-            DeployabilityIndex.create(self.snapshots.values())
+            DeployabilityIndex.create(self.snapshots.values(), start=start)
             if environment_naming_info.name != c.PROD
             else DeployabilityIndex.all_deployable()
         )
