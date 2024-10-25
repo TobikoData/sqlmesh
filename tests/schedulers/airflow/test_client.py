@@ -172,6 +172,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
                 ],
                 "suffix_target": "schema",
                 "normalize_name": True,
+                "requirements": {},
             },
             "no_gaps": False,
             "skip_backfill": False,

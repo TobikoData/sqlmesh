@@ -532,6 +532,7 @@ def test_scd_type_2_by_time(
     )
 
     adapter = make_mocked_engine_adapter(SparkEngineAdapter)
+    adapter._default_catalog = "spark_catalog"
     adapter.spark.catalog.currentCatalog.return_value = "spark_catalog"
     adapter.spark.catalog.currentDatabase.return_value = "default"
 
@@ -989,7 +990,7 @@ def test_replace_query_with_wap_self_reference(
 
     sql_calls = to_sql_calls(adapter)
     assert sql_calls == [
-        "CREATE TABLE IF NOT EXISTS `catalog`.`schema`.`table` (`a` INT)",
+        "CREATE TABLE IF NOT EXISTS `catalog`.`schema`.`table` (`a` INT) USING ICEBERG",
         "CREATE SCHEMA IF NOT EXISTS `catalog`.`schema`",
         "CREATE TABLE IF NOT EXISTS `catalog`.`schema`.`temp_branch_wap_12345_abcdefgh` USING ICEBERG AS SELECT CAST(`a` AS INT) AS `a` FROM (SELECT `a` FROM `catalog`.`schema`.`table`.`branch_wap_12345`) AS `_subquery`",
         "INSERT OVERWRITE TABLE `catalog`.`schema`.`table`.`branch_wap_12345` (`a`) SELECT 1 AS `a` FROM `catalog`.`schema`.`temp_branch_wap_12345_abcdefgh`",

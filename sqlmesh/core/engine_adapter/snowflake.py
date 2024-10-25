@@ -7,11 +7,16 @@ import typing as t
 import pandas as pd
 from pandas.api.types import is_datetime64_any_dtype  # type: ignore
 from sqlglot import exp
+from sqlglot.helper import ensure_list
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 from sqlglot.optimizer.qualify_columns import quote_identifiers
 
 from sqlmesh.core.dialect import to_schema
-from sqlmesh.core.engine_adapter.mixins import GetCurrentCatalogFromFunctionMixin, ClusteredByMixin
+from sqlmesh.core.engine_adapter.mixins import (
+    GetCurrentCatalogFromFunctionMixin,
+    ClusteredByMixin,
+    RowDiffMixin,
+)
 from sqlmesh.core.engine_adapter.shared import (
     CatalogSupport,
     DataObject,
@@ -39,7 +44,7 @@ if t.TYPE_CHECKING:
         "drop_schema": CatalogSupport.REQUIRES_SET_CATALOG,
     }
 )
-class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixin):
+class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixin, RowDiffMixin):
     DIALECT = "snowflake"
     SUPPORTS_MATERIALIZED_VIEWS = True
     SUPPORTS_MATERIALIZED_VIEW_SCHEMA = True
@@ -189,12 +194,12 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
                 for prop in {"WAREHOUSE", "TARGET_LAG", "REFRESH_MODE", "INITIALIZE"}:
                     table_properties.pop(prop, None)
 
+            table_type = self._pop_creatable_type_from_properties(table_properties)
+            properties.extend(ensure_list(table_type))
+
             properties.extend(self._table_or_view_properties_to_expressions(table_properties))
 
-        if properties:
-            return exp.Properties(expressions=properties)
-
-        return None
+        return exp.Properties(expressions=properties) if properties else None
 
     def _df_to_source_queries(
         self,

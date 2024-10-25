@@ -5,7 +5,7 @@ import logging
 from sqlglot import exp
 from sqlmesh.core.dialect import to_schema
 from sqlmesh.utils.aws import validate_s3_uri, parse_s3_uri
-from sqlmesh.core.engine_adapter.mixins import PandasNativeFetchDFSupportMixin
+from sqlmesh.core.engine_adapter.mixins import PandasNativeFetchDFSupportMixin, RowDiffMixin
 from sqlmesh.core.engine_adapter.trino import TrinoEngineAdapter
 from sqlmesh.core.node import IntervalUnit
 import os
@@ -29,7 +29,7 @@ if t.TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class AthenaEngineAdapter(PandasNativeFetchDFSupportMixin):
+class AthenaEngineAdapter(PandasNativeFetchDFSupportMixin, RowDiffMixin):
     DIALECT = "athena"
     SUPPORTS_TRANSACTIONS = False
     SUPPORTS_REPLACE_TABLE = False
@@ -44,6 +44,7 @@ class AthenaEngineAdapter(PandasNativeFetchDFSupportMixin):
     COMMENT_CREATION_TABLE = CommentCreationTable.UNSUPPORTED
     COMMENT_CREATION_VIEW = CommentCreationView.UNSUPPORTED
     SCHEMA_DIFFER = TrinoEngineAdapter.SCHEMA_DIFFER
+    MAX_TIMESTAMP_PRECISION = 3  # copied from Trino
 
     def __init__(
         self, *args: t.Any, s3_warehouse_location: t.Optional[str] = None, **kwargs: t.Any

@@ -149,7 +149,7 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
         pre_ping: Whether or not to pre-ping the connection before starting a new transaction to ensure it is still alive.
     """
 
-    extensions: t.List[str] = []
+    extensions: t.List[t.Union[str, t.Dict[str, t.Any]]] = []
     connector_config: t.Dict[str, t.Any] = {}
 
     concurrent_tasks: Literal[1] = 1
@@ -174,11 +174,21 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
 
         def init(cursor: duckdb.DuckDBPyConnection) -> None:
             for extension in self.extensions:
+                extension = extension if isinstance(extension, dict) else {"name": extension}
+
+                install_command = f"INSTALL {extension['name']}"
+
+                if extension.get("repository"):
+                    install_command = f"{install_command} FROM {extension['repository']}"
+
+                if extension.get("force_install"):
+                    install_command = f"FORCE {install_command}"
+
                 try:
-                    cursor.execute(f"INSTALL {extension}")
-                    cursor.execute(f"LOAD {extension}")
+                    cursor.execute(install_command)
+                    cursor.execute(f"LOAD {extension['name']}")
                 except Exception as e:
-                    raise ConfigError(f"Failed to load extension {extension}: {e}")
+                    raise ConfigError(f"Failed to load extension {extension['name']}: {e}")
 
             for field, setting in self.connector_config.items():
                 try:
@@ -1656,6 +1666,9 @@ class AthenaConnectionConfig(ConnectionConfig):
         from pyathena import connect  # type: ignore
 
         return connect
+
+    def get_catalog(self) -> t.Optional[str]:
+        return self.catalog_name
 
 
 class RisingwaveConnectionConfig(ConnectionConfig):

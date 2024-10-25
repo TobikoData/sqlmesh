@@ -22,10 +22,10 @@ Snowflake provides multiple methods of authorizing a connection (e.g., password,
 Before working through this connection quickstart, ensure that:
 
 1. You have a Snowflake account and know your username and password
-1. Your Snowflake account has at least one [warehouse](https://docs.snowflake.com/en/user-guide/warehouses-overview) available for running computations
-2. Your computer has [SQLMesh installed](../../installation.md) with the [Snowflake extra available](../../installation.md#install-extras)
+2. Your Snowflake account has at least one [warehouse](https://docs.snowflake.com/en/user-guide/warehouses-overview) available for running computations
+3. Your computer has [SQLMesh installed](../../installation.md) with the [Snowflake extra available](../../installation.md#install-extras)
     - Install from the command line with the command `pip install "sqlmesh[snowflake]"`
-3. You have initialized a [SQLMesh example project](../../quickstart/cli#1-create-the-sqlmesh-project) on your computer
+4. You have initialized a [SQLMesh example project](../../quickstart/cli#1-create-the-sqlmesh-project) on your computer
     - Open a command line interface and navigate to the directory where the project files should go
     - Initialize the project with the command `sqlmesh init snowflake`
 
@@ -549,3 +549,48 @@ MODEL (
   ),
 );
 ```
+ 
+## Custom View and Table types
+
+SQLMesh supports custom view and table types for Snowflake models. You can apply these modifiers to either the physical layer or virtual layer of a model using the `physical_properties` and `virtual_properties` attributes respectively. For example:
+
+### Secure Views
+
+A table can be exposed through a `SECURE` view in the virtual layer by specifying the `creatable_type` property and setting it to `SECURE`:
+
+```sql linenums="1"
+Model (
+  name = schema_name.model_name,
+  virtual_properties (
+      creatable_type = SECURE
+  )
+);
+
+SELECT a FROM schema_name.model_b;
+```
+
+### Transient Tables
+
+A model can use a `TRANSIENT` table in the physical layer by specifying the `creatable_type` property and setting it to `TRANSIENT`:
+
+```sql linenums="1"
+Model (
+  name = schema_name.model_name,
+  physical_properties (
+      creatable_type = TRANSIENT
+  )
+);
+
+SELECT a FROM schema_name.model_b;
+```
+
+## Troubleshooting
+
+### Frequent Authentication Prompts
+
+When using Snowflake with security features like Multi-Factor Authentication (MFA), you may experience repeated prompts for authentication while running SQLMesh commands. This typically occurs when your Snowflake account isn't configured to issue short-lived tokens.
+
+To reduce authentication prompts, you can enable token caching in your Snowflake connection configuration:
+
+- For general authentication, see [Connection Caching Documentation](https://docs.snowflake.com/en/user-guide/admin-security-fed-auth-use#using-connection-caching-to-minimize-the-number-of-prompts-for-authentication-optional)
+- For MFA specifically, see [MFA Token Caching Documentation](https://docs.snowflake.com/en/user-guide/security-mfa#using-mfa-token-caching-to-minimize-the-number-of-prompts-during-authentication-optional).

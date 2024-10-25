@@ -375,12 +375,13 @@ class ModelMeta(_Node):
     @property
     def partitioned_by(self) -> t.List[exp.Expression]:
         """Columns to partition the model by, including the time column if it is not already included."""
-        if (
-            self.time_column
-            and self.time_column.column not in [col for col in self._partition_by_columns]
-            and self.dialect not in NO_PARTITIONED_TIME_COLUMN_DIALECTS
-        ):
-            return [self.time_column.column, *self.partitioned_by_]
+        if self.time_column and self.time_column.column not in [
+            col for col in self._partition_by_columns
+        ]:
+            return [
+                TIME_COL_PARTITION_FUNC.get(self.dialect, lambda x: x)(self.time_column.column),
+                *self.partitioned_by_,
+            ]
         return self.partitioned_by_
 
     @property
@@ -480,5 +481,6 @@ class ModelMeta(_Node):
         return getattr(self.kind, "on_destructive_change", OnDestructiveChange.ALLOW)
 
 
-# dialects for which time_column should not automatically be added to partitioned_by
-NO_PARTITIONED_TIME_COLUMN_DIALECTS = {"clickhouse"}
+# function applied to time column when automatically used for partitioning in
+#   INCREMENTAL_BY_TIME_RANGE models
+TIME_COL_PARTITION_FUNC = {"clickhouse": lambda x: exp.func("toMonday", x)}

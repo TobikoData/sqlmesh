@@ -11,6 +11,7 @@ from sqlmesh.core.dialect import to_schema
 from sqlmesh.core.engine_adapter.mixins import (
     GetCurrentCatalogFromFunctionMixin,
     HiveMetastoreTablePropertiesMixin,
+    RowDiffMixin,
 )
 from sqlmesh.core.engine_adapter.shared import (
     CatalogSupport,
@@ -44,7 +45,9 @@ logger = logging.getLogger(__name__)
 
 
 @set_catalog()
-class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTablePropertiesMixin):
+class SparkEngineAdapter(
+    GetCurrentCatalogFromFunctionMixin, HiveMetastoreTablePropertiesMixin, RowDiffMixin
+):
     DIALECT = "spark"
     SUPPORTS_TRANSACTIONS = False
     INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.INSERT_OVERWRITE

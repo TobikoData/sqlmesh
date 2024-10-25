@@ -18,6 +18,9 @@ if t.TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+NORMALIZED_DATE_FORMAT = "%Y-%m-%d"
+NORMALIZED_TIMESTAMP_FORMAT = "%Y-%m-%d %H:%M:%S.%f"
+
 
 class LogicalMergeMixin(EngineAdapter):
     def merge(
@@ -28,22 +31,13 @@ class LogicalMergeMixin(EngineAdapter):
         unique_key: t.Sequence[exp.Expression],
         when_matched: t.Optional[t.Union[exp.When, t.List[exp.When]]] = None,
     ) -> None:
-        """
-        Merge implementation for engine adapters that do not support merge natively.
-
-        The merge is executed as follows:
-        1. Create a temporary table containing the new data to merge.
-        2. Delete rows from target table where unique_key cols match a row in the temporary table.
-        3. Insert the temporary table contents into the target table. Any duplicate, non-unique rows
-           within the temporary table are ommitted.
-        4. Drop the temporary table.
-        """
-        if when_matched:
-            raise SQLMeshError(
-                "This engine does not support MERGE expressions and therefore `when_matched` is not supported."
-            )
-        self._replace_by_key(
-            target_table, source_table, columns_to_types, unique_key, is_unique_key=True
+        logical_merge(
+            self,
+            target_table,
+            source_table,
+            columns_to_types,
+            unique_key,
+            when_matched=when_matched,
         )
 
 
@@ -80,6 +74,7 @@ class InsertOverwriteWithMergeMixin(EngineAdapter):
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         where: t.Optional[exp.Condition] = None,
         insert_overwrite_strategy_override: t.Optional[InsertOverwriteStrategy] = None,
+        **kwargs: t.Any,
     ) -> None:
         """
         Some engines do not support `INSERT OVERWRITE` but instead support
@@ -396,3 +391,141 @@ class ClusteredByMixin(EngineAdapter):
             kind="TABLE",
             actions=[exp.Command(this="DROP", expression="CLUSTERING KEY")],
         )
+
+
+def logical_merge(
+    engine_adapter: EngineAdapter,
+    target_table: TableName,
+    source_table: QueryOrDF,
+    columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
+    unique_key: t.Sequence[exp.Expression],
+    when_matched: t.Optional[t.Union[exp.When, t.List[exp.When]]] = None,
+) -> None:
+    """
+    Merge implementation for engine adapters that do not support merge natively.
+
+    The merge is executed as follows:
+    1. Create a temporary table containing the new data to merge.
+    2. Delete rows from target table where unique_key cols match a row in the temporary table.
+    3. Insert the temporary table contents into the target table. Any duplicate, non-unique rows
+       within the temporary table are ommitted.
+    4. Drop the temporary table.
+    """
+    if when_matched:
+        raise SQLMeshError(
+            "This engine does not support MERGE expressions and therefore `when_matched` is not supported."
+        )
+    engine_adapter._replace_by_key(
+        target_table, source_table, columns_to_types, unique_key, is_unique_key=True
+    )
+
+
+class RowDiffMixin(EngineAdapter):
+    # The maximum supported value for n in timestamp(n).
+    # Most databases are microsecond (6) but some can only handle millisecond (3) while others go to nanosecond (9)
+    MAX_TIMESTAMP_PRECISION = 6
+
+    def concat_columns(
+        self,
+        columns_to_types: t.Dict[str, exp.DataType],
+        decimal_precision: int = 3,
+        timestamp_precision: int = MAX_TIMESTAMP_PRECISION,
+        delimiter: str = ",",
+    ) -> exp.Expression:
+        """
+        Produce an expression that generates a string version of a record, that is:
+            - Every column converted to a string representation, joined together into a single string using the specified :delimiter
+        """
+        expressions_to_concat: t.List[exp.Expression] = []
+        for idx, (column, type) in enumerate(columns_to_types.items()):
+            expressions_to_concat.append(
+                exp.func(
+                    "COALESCE",
+                    self.normalize_value(
+                        exp.to_column(column), type, decimal_precision, timestamp_precision
+                    ),
+                    exp.Literal.string(""),
+                )
+            )
+            if idx < len(columns_to_types) - 1:
+                expressions_to_concat.append(exp.Literal.string(delimiter))
+
+        return exp.func("CONCAT", *expressions_to_concat)
+
+    def normalize_value(
+        self,
+        expr: exp.Expression,
+        type: exp.DataType,
+        decimal_precision: int = 3,
+        timestamp_precision: int = MAX_TIMESTAMP_PRECISION,
+    ) -> exp.Expression:
+        """
+        Return an expression that converts the values inside the column `col` to a normalized string
+
+        This string should be comparable across database engines, eg:
+            - `date` columns -> YYYY-MM-DD string
+            - `datetime`/`timestamp`/`timestamptz` columns -> ISO-8601 string to :timestamp_precision digits of subsecond precision
+            - `float` / `double` / `decimal` -> Value formatted to :decimal_precision decimal places
+            - `boolean` columns -> '1' or '0'
+            - NULLS -> "" (empty string)
+        """
+        if type.is_type(exp.DataType.Type.BOOLEAN):
+            value = self._normalize_boolean_value(expr)
+        elif type.is_type(*exp.DataType.INTEGER_TYPES):
+            value = self._normalize_integer_value(expr)
+        elif type.is_type(*exp.DataType.REAL_TYPES):
+            # If there is no scale on the decimal type, treat it like an integer when comparing
+            # Some databases like Snowflake deliberately create all integer types as NUMERIC(<size>, 0)
+            # and they should be treated as integers and not decimals
+            type_params = list(type.find_all(exp.DataTypeParam))
+            if len(type_params) == 2 and type_params[-1].this.to_py() == 0:
+                value = self._normalize_integer_value(expr)
+            else:
+                value = self._normalize_decimal_value(expr, decimal_precision)
+        elif type.is_type(*exp.DataType.TEMPORAL_TYPES):
+            value = self._normalize_timestamp_value(expr, type, timestamp_precision)
+        else:
+            value = expr
+
+        return exp.cast(value, to=exp.DataType.build("VARCHAR"))
+
+    def _normalize_timestamp_value(
+        self, expr: exp.Expression, type: exp.DataType, precision: int
+    ) -> exp.Expression:
+        if precision > self.MAX_TIMESTAMP_PRECISION:
+            raise ValueError(
+                f"Requested timestamp precision '{precision}' exceeds maximum supported precision: {self.MAX_TIMESTAMP_PRECISION}"
+            )
+
+        is_date = type.is_type(exp.DataType.Type.DATE, exp.DataType.Type.DATE32)
+
+        format = NORMALIZED_DATE_FORMAT if is_date else NORMALIZED_TIMESTAMP_FORMAT
+
+        if type.is_type(
+            exp.DataType.Type.TIMESTAMPTZ,
+            exp.DataType.Type.TIMESTAMPLTZ,
+            exp.DataType.Type.TIMESTAMPNTZ,
+        ):
+            # Convert all timezone-aware values to UTC for comparison
+            expr = exp.AtTimeZone(this=expr, zone=exp.Literal.string("UTC"))
+
+        digits_to_chop_off = (
+            6 - precision
+        )  # 6 = max precision across all adapters and also the max amount of digits TimeToStr will render since its based on `strftime` and `%f` only renders to microseconds
+
+        expr = exp.TimeToStr(this=expr, format=exp.Literal.string(format))
+        if digits_to_chop_off > 0:
+            expr = exp.func(
+                "SUBSTRING", expr, 1, len("2023-01-01 12:13:14.000000") - digits_to_chop_off
+            )
+
+        return expr
+
+    def _normalize_integer_value(self, expr: exp.Expression) -> exp.Expression:
+        return exp.cast(expr, "BIGINT")
+
+    def _normalize_decimal_value(self, expr: exp.Expression, precision: int) -> exp.Expression:
+        return exp.cast(expr, f"DECIMAL(38,{precision})")
+
+    def _normalize_boolean_value(self, expr: exp.Expression) -> exp.Expression:
+        return exp.cast(expr, "INT")

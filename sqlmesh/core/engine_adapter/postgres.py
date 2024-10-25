@@ -2,19 +2,22 @@ from __future__ import annotations
 
 import logging
 import typing as t
+from functools import partial
 from sqlglot import exp
 
 from sqlmesh.core.engine_adapter.base_postgres import BasePostgresEngineAdapter
 from sqlmesh.core.engine_adapter.mixins import (
     GetCurrentCatalogFromFunctionMixin,
     PandasNativeFetchDFSupportMixin,
+    RowDiffMixin,
+    logical_merge,
 )
 from sqlmesh.core.engine_adapter.shared import set_catalog
 from sqlmesh.core.schema_diff import SchemaDiffer
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import TableName
-    from sqlmesh.core.engine_adapter._typing import DF
+    from sqlmesh.core.engine_adapter._typing import DF, QueryOrDF
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +27,7 @@ class PostgresEngineAdapter(
     BasePostgresEngineAdapter,
     PandasNativeFetchDFSupportMixin,
     GetCurrentCatalogFromFunctionMixin,
+    RowDiffMixin,
 ):
     DIALECT = "postgres"
     SUPPORTS_INDEXES = True
@@ -93,4 +97,26 @@ class PostgresEngineAdapter(
                 kind="TABLE",
                 exists=exists,
             )
+        )
+
+    def merge(
+        self,
+        target_table: TableName,
+        source_table: QueryOrDF,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
+        unique_key: t.Sequence[exp.Expression],
+        when_matched: t.Optional[t.Union[exp.When, t.List[exp.When]]] = None,
+    ) -> None:
+        # Merge isn't supported until Postgres 15
+        merge_impl = (
+            super().merge
+            if self._connection_pool.get().server_version >= 150000
+            else partial(logical_merge, self)
+        )
+        merge_impl(  # type: ignore
+            target_table,
+            source_table,
+            columns_to_types,
+            unique_key,
+            when_matched=when_matched,
         )

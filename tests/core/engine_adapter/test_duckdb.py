@@ -75,3 +75,17 @@ def test_set_current_catalog(make_mocked_engine_adapter: t.Callable, duck_conn):
     assert to_sql_calls(adapter) == [
         'USE "test_catalog"',
     ]
+
+
+def test_temporary_table(make_mocked_engine_adapter: t.Callable, duck_conn):
+    adapter = make_mocked_engine_adapter(DuckDBEngineAdapter)
+
+    adapter.create_table(
+        "test_table",
+        {"a": exp.DataType.build("INT"), "b": exp.DataType.build("INT")},
+        table_properties={"creatable_type": exp.Column(this=exp.Identifier(this="Temporary"))},
+    )
+
+    assert to_sql_calls(adapter) == [
+        'CREATE TEMPORARY TABLE IF NOT EXISTS "test_table" ("a" INT, "b" INT)',
+    ]

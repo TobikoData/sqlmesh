@@ -179,7 +179,13 @@ def to_datetime(
                 expression
             ):
                 relative_base = relative_base.replace(hour=0, minute=0, second=0, microsecond=0)
-            dt = dateparser.parse(expression, settings={"RELATIVE_BASE": relative_base})
+
+            # note: we hardcode TIMEZONE: UTC to work around this bug: https://github.com/scrapinghub/dateparser/issues/896
+            # where dateparser just silently fails if it cant interpret the contents of /etc/localtime
+            # this works because SQLMesh only deals with UTC, there is no concept of user local time
+            dt = dateparser.parse(
+                expression, settings={"RELATIVE_BASE": relative_base, "TIMEZONE": "UTC"}
+            )
         else:
             try:
                 dt = datetime.strptime(str(value), DATE_INT_FMT)
@@ -256,20 +262,14 @@ def to_ds(obj: TimeLike) -> str:
     return to_ts(obj)[0:10]
 
 
-def to_ts(obj: TimeLike, include_microseconds: bool = True) -> str:
+def to_ts(obj: TimeLike) -> str:
     """Converts a TimeLike object into YYYY-MM-DD HH:MM:SS formatted string."""
-    obj_dt = to_datetime(obj)
-    if not include_microseconds:
-        obj_dt = obj_dt.replace(microsecond=0)
-    return obj_dt.replace(tzinfo=None).isoformat(sep=" ")
+    return to_datetime(obj).replace(tzinfo=None).isoformat(sep=" ")
 
 
-def to_tstz(obj: TimeLike, include_microseconds: bool = True) -> str:
+def to_tstz(obj: TimeLike) -> str:
     """Converts a TimeLike object into YYYY-MM-DD HH:MM:SS+00:00 formatted string."""
-    obj_dt = to_datetime(obj)
-    if not include_microseconds:
-        obj_dt = obj_dt.replace(microsecond=0)
-    return obj_dt.isoformat(sep=" ")
+    return to_datetime(obj).isoformat(sep=" ")
 
 
 def is_date(obj: TimeLike) -> bool:
@@ -352,23 +352,41 @@ def is_categorical_relative_expression(expression: str) -> bool:
 def to_time_column(
     time_column: t.Union[TimeLike, exp.Null],
     time_column_type: exp.DataType,
+    dialect: str,
     time_column_format: t.Optional[str] = None,
-    include_microseconds: bool = True,
+    nullable: bool = False,
 ) -> exp.Expression:
     """Convert a TimeLike object to the same time format and type as the model's time column."""
+    if dialect == "clickhouse" and time_column_type.is_type(
+        *(exp.DataType.TEMPORAL_TYPES - {exp.DataType.Type.DATE, exp.DataType.Type.DATE32})
+    ):
+        if time_column_type.is_type(exp.DataType.Type.DATETIME64):
+            if nullable:
+                time_column_type.set("nullable", nullable)
+        else:
+            # Clickhouse will error if we pass fractional seconds to DateTime, so we always
+            # use DateTime64 for timestamps.
+            #
+            # `datetime` objects have microsecond precision, so we specify the type precision as 6.
+            # If a timezone is present in the passed type object, it is included in the DateTime64 type
+            # via the `expressions` arg.
+            time_column_type = exp.DataType.build(
+                exp.DataType.Type.DATETIME64,
+                expressions=[
+                    exp.DataTypeParam(this=exp.Literal(this=6, is_string=False)),
+                    *time_column_type.expressions,
+                ],
+                nullable=nullable or time_column_type.args.get("nullable", False),
+            )
+
     if isinstance(time_column, exp.Null):
         return exp.cast(time_column, to=time_column_type)
-    if time_column_type.is_type(exp.DataType.Type.DATE):
+    if time_column_type.is_type(exp.DataType.Type.DATE, exp.DataType.Type.DATE32):
         return exp.cast(exp.Literal.string(to_ds(time_column)), to="date")
     if time_column_type.is_type(*TEMPORAL_TZ_TYPES):
-        return exp.cast(
-            exp.Literal.string(to_tstz(time_column, include_microseconds)),
-            to=time_column_type,
-        )
+        return exp.cast(exp.Literal.string(to_tstz(time_column)), to=time_column_type)
     if time_column_type.is_type(*exp.DataType.TEMPORAL_TYPES):
-        return exp.cast(
-            exp.Literal.string(to_ts(time_column, include_microseconds)), to=time_column_type
-        )
+        return exp.cast(exp.Literal.string(to_ts(time_column)), to=time_column_type)
 
     if time_column_format:
         time_column = to_datetime(time_column).strftime(time_column_format)

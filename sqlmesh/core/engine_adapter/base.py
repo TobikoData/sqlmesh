@@ -63,6 +63,8 @@ logger = logging.getLogger(__name__)
 MERGE_TARGET_ALIAS = "__MERGE_TARGET__"
 MERGE_SOURCE_ALIAS = "__MERGE_SOURCE__"
 
+KEY_FOR_CREATABLE_TYPE = "CREATABLE_TYPE"
+
 
 @set_catalog()
 class EngineAdapter:
@@ -338,6 +340,7 @@ class EngineAdapter:
                 exists=True,
                 table_description=table_description,
                 column_descriptions=column_descriptions,
+                **kwargs,
             )
         # All engines support `CREATE TABLE AS` so we use that if the table doesn't already exist and we
         # use `CREATE OR REPLACE TABLE AS` if the engine supports it
@@ -407,6 +410,33 @@ class EngineAdapter:
             exists=exists,
         )
         self.execute(expression)
+
+    def _pop_creatable_type_from_properties(
+        self,
+        properties: t.Dict[str, exp.Expression],
+    ) -> t.Optional[exp.Property]:
+        """Pop out the creatable_type from the properties dictionary (if exists (return it/remove it) else return none).
+        It also checks that none of the expressions are MATERIALIZE as that conflicts with the `materialize` parameter.
+        """
+        for key in list(properties.keys()):
+            upper_key = key.upper()
+            if upper_key == KEY_FOR_CREATABLE_TYPE:
+                value = properties.pop(key).name
+                parsed_properties = exp.maybe_parse(
+                    value, into=exp.Properties, dialect=self.dialect
+                )
+                property, *others = parsed_properties.expressions
+                if others:
+                    # Multiple properties are unsupported today, can look into it in the future if needed
+                    raise SQLMeshError(
+                        f"Invalid creatable_type value with multiple properties: {value}"
+                    )
+                if isinstance(property, exp.MaterializedProperty):
+                    raise SQLMeshError(
+                        f"Cannot use {value} as a creatable_type as it conflicts with the `materialize` parameter."
+                    )
+                return property
+        return None
 
     def create_table(
         self,
@@ -952,6 +982,11 @@ class EngineAdapter:
         if not properties:
             properties = exp.Properties(expressions=[])
 
+        if view_properties:
+            table_type = self._pop_creatable_type_from_properties(view_properties)
+            if table_type:
+                properties.append("expressions", table_type)
+
         if materialized and self.SUPPORTS_MATERIALIZED_VIEWS:
             properties.append("expressions", exp.MaterializedProperty())
 
@@ -989,7 +1024,11 @@ class EngineAdapter:
         )
         if create_view_properties:
             for view_property in create_view_properties.expressions:
-                properties.append("expressions", view_property)
+                # Small hack to make sure SECURE goes at the beginning before materialized as required by Snowflake
+                if isinstance(view_property, exp.SecureProperty):
+                    properties.set("expressions", view_property, index=0, overwrite=False)
+                else:
+                    properties.append("expressions", view_property)
 
         if properties.expressions:
             create_kwargs["properties"] = properties
@@ -1247,6 +1286,7 @@ class EngineAdapter:
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         where: t.Optional[exp.Condition] = None,
         insert_overwrite_strategy_override: t.Optional[InsertOverwriteStrategy] = None,
+        **kwargs: t.Any,
     ) -> None:
         table = exp.to_table(table_name)
         insert_overwrite_strategy = (
@@ -1461,7 +1501,7 @@ class EngineAdapter:
         # column names and then remove them from the unmanaged_columns
         if check_columns and check_columns == exp.Star():
             check_columns = [exp.column(col) for col in unmanaged_columns_to_types]
-        execution_ts = to_time_column(execution_time, time_data_type)
+        execution_ts = to_time_column(execution_time, time_data_type, self.dialect, nullable=True)
         if updated_at_as_valid_from:
             if not updated_at_col:
                 raise SQLMeshError(
@@ -1474,7 +1514,9 @@ class EngineAdapter:
         elif check_columns and (execution_time_as_valid_from or not truncate):
             update_valid_from_start = execution_ts
         else:
-            update_valid_from_start = to_time_column("1970-01-01 00:00:00+00:00", time_data_type)
+            update_valid_from_start = to_time_column(
+                "1970-01-01 00:00:00+00:00", time_data_type, self.dialect, nullable=True
+            )
         insert_valid_from_start = execution_ts if check_columns else updated_at_col  # type: ignore
         # joined._exists IS NULL is saying "if the row is deleted"
         delete_check = (
@@ -1740,7 +1782,9 @@ class EngineAdapter:
                     exp.select(
                         *unmanaged_columns_to_types,
                         insert_valid_from_start.as_(valid_from_col.this),  # type: ignore
-                        to_time_column(exp.null(), time_data_type).as_(valid_to_col.this),
+                        to_time_column(exp.null(), time_data_type, self.dialect, nullable=True).as_(
+                            valid_to_col.this
+                        ),
                     )
                     .from_("joined")
                     .where(updated_row_filter),
@@ -2043,8 +2087,8 @@ class EngineAdapter:
         """
         name = exp.to_table(name)
         # ensure that we use default catalog if none is not specified
-        if isinstance(name, exp.Table) and not name.catalog and name.db:
-            name.set("catalog", value=self.default_catalog)
+        if isinstance(name, exp.Table) and not name.catalog and name.db and self.default_catalog:
+            name.set("catalog", exp.parse_identifier(self.default_catalog))
 
         source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
             query_or_df, columns_to_types=columns_to_types, target_table=name
@@ -2120,6 +2164,10 @@ class EngineAdapter:
                     this=exp.Literal.string(self._truncate_table_comment(table_description))
                 )
             )
+
+        if table_properties:
+            table_type = self._pop_creatable_type_from_properties(table_properties)
+            properties.extend(ensure_list(table_type))
 
         if properties:
             return exp.Properties(expressions=properties)
