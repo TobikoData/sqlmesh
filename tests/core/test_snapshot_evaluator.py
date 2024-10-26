@@ -697,7 +697,6 @@ def test_create_tables_exists(mocker: MockerFixture, adapter_mock, make_snapshot
     adapter_mock.get_data_objects.assert_called_once_with(
         schema_("sqlmesh__test_schema"),
         {
-            f"test_schema__test_model__{snapshot.version}__temp",
             f"test_schema__test_model__{snapshot.version}",
         },
     )
@@ -736,7 +735,6 @@ def test_create_only_dev_table_exists(mocker: MockerFixture, adapter_mock, make_
     adapter_mock.get_data_objects.assert_called_once_with(
         schema_("sqlmesh__test_schema"),
         {
-            f"test_schema__test_model__{snapshot.version}__temp",
             f"test_schema__test_model__{snapshot.version}",
         },
     )

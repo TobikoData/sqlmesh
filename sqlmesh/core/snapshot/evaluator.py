@@ -262,7 +262,10 @@ class SnapshotEvaluator:
         for snapshot in target_snapshots:
             if not snapshot.is_model or snapshot.is_symbolic:
                 continue
-            for is_deployable in (True, False):
+            is_snapshot_deployable = (
+                deployability_index.is_deployable(snapshot) if deployability_index else True
+            )
+            for is_deployable in self._table_deployability_flags(snapshot, is_snapshot_deployable):
                 table = exp.to_table(
                     snapshot.table_name(is_deployable), dialect=snapshot.model.dialect
                 )
@@ -697,20 +700,10 @@ class SnapshotEvaluator:
                 finally:
                     self.adapter.drop_table(tmp_table_name)
             else:
-                dry_run = True
-                table_deployability_flags = (
-                    []
-                    if (
-                        is_snapshot_deployable
-                        and not snapshot.reuses_previous_version
-                        and not snapshot.is_managed
-                    )
-                    else [False]
+                table_deployability_flags = self._table_deployability_flags(
+                    snapshot, is_snapshot_deployable
                 )
-                if not snapshot.reuses_previous_version:
-                    table_deployability_flags.append(True)
-                    if len(table_deployability_flags) > 1:
-                        dry_run = False
+                dry_run = False if len(table_deployability_flags) > 1 else True
 
                 for is_table_deployable in table_deployability_flags:
                     evaluation_strategy.create(
@@ -897,6 +890,23 @@ class SnapshotEvaluator:
             schema = schema_(schema_name, catalog)
             logger.info("Creating schema '%s'", schema)
             self.adapter.create_schema(schema)
+
+    def _table_deployability_flags(
+        self, snapshot: Snapshot, is_snapshot_deployable: bool
+    ) -> t.List[bool]:
+        flags = (
+            []
+            if (
+                is_snapshot_deployable
+                and not snapshot.reuses_previous_version
+                and not snapshot.is_managed
+            )
+            else [False]
+        )
+        if not snapshot.reuses_previous_version:
+            flags.append(True)
+
+        return flags
 
 
 def _evaluation_strategy(snapshot: SnapshotInfoLike, adapter: EngineAdapter) -> EvaluationStrategy:
