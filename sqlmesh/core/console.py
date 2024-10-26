@@ -626,6 +626,10 @@ class TerminalConsole(Console):
             return
 
         self._print(Tree(f"[bold]Summary of differences against `{context_diff.environment}`:"))
+
+        if context_diff.has_requirement_changes:
+            self._print(f"Requirements:\n{context_diff.requirements_diff()}")
+
         self._show_summary_tree_for(
             context_diff,
             "Models",
@@ -1563,6 +1567,9 @@ class MarkdownConsole(CaptureTerminalConsole):
 
         self._print(f"**Summary of differences against `{context_diff.environment}`:**\n")
 
+        if context_diff.has_requirement_changes:
+            self._print(f"Requirements:\n{context_diff.requirements_diff()}")
+
         added_snapshots = {context_diff.snapshots[s_id] for s_id in context_diff.added}
         added_snapshot_models = {s for s in added_snapshots if s.is_model}
         if added_snapshot_models:
@@ -1999,6 +2006,10 @@ class DebuggerTerminalConsole(TerminalConsole):
         no_diff: bool = True,
     ) -> None:
         self._write("Model Difference Summary:")
+
+        if context_diff.has_requirement_changes:
+            self._write(f"Requirements:\n{context_diff.requirements_diff()}")
+
         for added in context_diff.new_snapshots:
             self._write(f"  Added: {added}")
         for removed in context_diff.removed_snapshots:

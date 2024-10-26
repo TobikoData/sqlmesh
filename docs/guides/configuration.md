@@ -1055,3 +1055,18 @@ Example enabling debug mode for the CLI command `sqlmesh plan`:
     C:\> set SQLMESH_DEBUG=1
     C:\> sqlmesh plan
     ```
+
+
+### Python library dependencies
+SQLMesh enables you to write Python models and macros which depend on third-party libraries. To ensure each run / evaluation uses the same version, you can specify versions in a sqlmesh.lock file in the root of your project.
+
+The sqlmesh.lock must be of the format `dep==version`. Only `==` is supported.
+
+For example:
+
+```
+numpy==2.1.2
+pandas==2.2.3
+```
+
+This feature is only available in [Tobiko Cloud](https://tobikodata.com/product.html).

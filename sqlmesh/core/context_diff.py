@@ -13,15 +13,26 @@ another remote environment and determine if nodes have been added, removed, or m
 from __future__ import annotations
 
 import logging
+import sys
 import typing as t
+from difflib import ndiff
 from functools import cached_property
 
 from sqlmesh.core.snapshot import Snapshot, SnapshotId, SnapshotTableInfo
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
 
+
+if sys.version_info >= (3, 12):
+    from importlib import metadata
+else:
+    import importlib_metadata as metadata  # type: ignore
+
+
 if t.TYPE_CHECKING:
     from sqlmesh.core.state_sync import StateReader
+
+IGNORED_PACKAGES = {"sqlmesh", "sqlglot"}
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +70,10 @@ class ContextDiff(PydanticModel):
     """Snapshot IDs that were promoted by the previous plan."""
     previous_finalized_snapshots: t.Optional[t.List[SnapshotTableInfo]]
     """Snapshots from the previous finalized state."""
+    previous_requirements: t.Dict[str, str] = {}
+    """Previous requirements."""
+    provided_requirements: t.Dict[str, str] = {}
+    """Requirements from lock file."""
 
     @classmethod
     def create(
@@ -68,6 +83,7 @@ class ContextDiff(PydanticModel):
         create_from: str,
         state_reader: StateReader,
         ensure_finalized_snapshots: bool = False,
+        requirements: t.Optional[t.Dict[str, str]] = None,
     ) -> ContextDiff:
         """Create a ContextDiff object.
 
@@ -80,6 +96,7 @@ class ContextDiff(PydanticModel):
             ensure_finalized_snapshots: Whether to compare against snapshots from the latest finalized
                 environment state, or to use whatever snapshots are in the current environment state even if
                 the environment is not finalized.
+            requirements: Fixed requirements to build the context diff with.
 
         Returns:
             The ContextDiff object.
@@ -174,6 +191,8 @@ class ContextDiff(PydanticModel):
             previous_plan_id=env.plan_id if env and not is_new_environment else None,
             previously_promoted_snapshot_ids=previously_promoted_snapshot_ids,
             previous_finalized_snapshots=env.previous_finalized_snapshots if env else None,
+            previous_requirements=env.requirements if env else {},
+            provided_requirements=requirements,
         )
 
     @classmethod
@@ -207,13 +226,22 @@ class ContextDiff(PydanticModel):
             previous_plan_id=env.plan_id,
             previously_promoted_snapshot_ids={s.snapshot_id for s in env.promoted_snapshots},
             previous_finalized_snapshots=env.previous_finalized_snapshots,
+            previous_requirements=env.requirements,
+            provided_requirements=env.requirements,
         )
 
     @property
     def has_changes(self) -> bool:
         return (
-            self.has_snapshot_changes or self.is_new_environment or self.is_unfinalized_environment
+            self.has_snapshot_changes
+            or self.is_new_environment
+            or self.is_unfinalized_environment
+            or self.has_requirement_changes
         )
+
+    @property
+    def has_requirement_changes(self) -> bool:
+        return self.previous_requirements != self.requirements
 
     @property
     def has_snapshot_changes(self) -> bool:
@@ -250,6 +278,37 @@ class ContextDiff(PydanticModel):
     @cached_property
     def snapshots_by_name(self) -> t.Dict[str, Snapshot]:
         return {x.name: x for x in self.snapshots.values()}
+
+    @cached_property
+    def requirements(self) -> t.Dict[str, str]:
+        requirements = self.provided_requirements.copy()
+        distributions = metadata.packages_distributions()
+
+        for snapshot in self.snapshots.values():
+            if snapshot.is_model:
+                for executable in snapshot.model.python_env.values():
+                    if executable.kind == "import":
+                        try:
+                            start = "from " if executable.payload.startswith("from ") else "import "
+                            lib = executable.payload.split(start)[1].split()[0].split(".")[0]
+                            if lib in distributions:
+                                for dist in distributions[lib]:
+                                    if dist not in requirements and dist not in IGNORED_PACKAGES:
+                                        requirements[dist] = metadata.version(dist)
+                        except metadata.PackageNotFoundError:
+                            logger.warning("Failed to find package for %s", lib)
+        return requirements
+
+    def requirements_diff(self) -> str:
+        return "\n".join(
+            ndiff(
+                [
+                    f"{k}=={self.previous_requirements[k]}"
+                    for k in sorted(self.previous_requirements)
+                ],
+                [f"{k}=={self.requirements[k]}" for k in sorted(self.requirements)],
+            )
+        )
 
     @property
     def environment_snapshots(self) -> t.List[SnapshotTableInfo]:
