@@ -2,6 +2,13 @@ version: 2.1
 
 setup: true
 
+on_main_or_tag_filter: &on_main_or_tag_filter
+  filters:
+    branches:
+      only: main
+    tags:
+      only: /^v.+/
+
 on_tag_filter: &on_tag_filter
   filters:
     branches:
@@ -95,11 +102,9 @@ workflows:
       - gh-release:
           <<: *on_tag_filter
       - ui-build:
-          <<: *on_tag_filter
-          requires:
-            - gh-release
+          <<: *on_main_or_tag_filter
       - publish:
-          <<: *on_tag_filter
+          <<: *on_main_or_tag_filter
           requires:
             - ui-build
       - trigger_private_renovate:
