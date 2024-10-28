@@ -301,26 +301,28 @@ Learn more about these properties and their default values in the [model configu
 ### physical_properties
 :   Previously named `table_properties`
 
-    Physical properties is a key-value mapping of arbitrary properties specific to the target engine that are applied to the model table / view in the physical layer. For example:
+    Physical properties is a key-value mapping of arbitrary properties that are applied to the model table / view in the physical layer. Note the partitioning details and `creatable_type` which overrides the kind of model/view created. In this case it creates a `TRANSIENT TABLE`. While `creatable_type` is generic, other properties are adapter specific so check the engine documentation for those. For example:
 
     ```sql linenums="1"
     MODEL (
       ...,
       physical_properties (
         partition_expiration_days = 7,
-        require_partition_filter = true
+        require_partition_filter = true,
+        creatable_type = TRANSIENT
       )
     );
 
     ```
 
 ### virtual_properties
-:   Virtual properties is a key-value mapping of arbitrary properties specific to the target engine that are applied to the model view in the virtual layer. For example:
+:   Virtual properties is a key-value mapping of arbitrary properties that are applied to the model view in the virtual layer. Note the partitioning details and `creatable_type` which overrides the kind of model/view created. In this case it creates a `SECURE VIEW`. While `creatable_type` is generic, other properties are adapter specific so check the engine documentation for those. For example:
 
     ```sql linenums="1"
     MODEL (
       ...,
       virtual_properties (
+        creatable_type = SECURE,
         labels = [('test-label', 'label-value')]
       )
     );
