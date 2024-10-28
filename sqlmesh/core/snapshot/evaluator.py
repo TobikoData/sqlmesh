@@ -265,7 +265,9 @@ class SnapshotEvaluator:
             is_snapshot_deployable = (
                 deployability_index.is_deployable(snapshot) if deployability_index else True
             )
-            for is_deployable in self._table_deployability_flags(snapshot, is_snapshot_deployable):
+            for is_deployable in set(
+                self._table_deployability_flags(snapshot, is_snapshot_deployable) + [True]
+            ):
                 table = exp.to_table(
                     snapshot.table_name(is_deployable), dialect=snapshot.model.dialect
                 )

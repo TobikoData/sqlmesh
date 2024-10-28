@@ -814,7 +814,7 @@ def test_create_tables_exist(
         schema_("sqlmesh__db"),
         {
             f"db__model__{snapshot.version}" if not flag else f"db__model__{snapshot.version}__temp"
-            for flag in deployability_flags
+            for flag in set(deployability_flags + [False])
         },
     )
     adapter_mock.create_schema.assert_not_called()
@@ -852,6 +852,7 @@ def test_create_prod_table_exists_forward_only(mocker: MockerFixture, adapter_mo
         schema_("sqlmesh__test_schema"),
         {
             f"test_schema__test_model__{snapshot.version}__temp",
+            f"test_schema__test_model__{snapshot.version}",
         },
     )
 
