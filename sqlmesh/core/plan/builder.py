@@ -396,10 +396,6 @@ class PlanBuilder:
     def _build_models_to_backfill(self, dag: DAG[SnapshotId]) -> t.Optional[t.Set[str]]:
         if self._backfill_models is None:
             return None
-        if not self._is_dev:
-            raise PlanError(
-                "Selecting models to backfill is only supported for development environments."
-            )
         return {
             self._context_diff.snapshots[s_id].name
             for s_id in dag.subdag(

@@ -382,7 +382,7 @@ class SQLMeshMagics(Magics):
         "--backfill-model",
         type=str,
         nargs="*",
-        help="Backfill only the models whose names match the expression. This is supported only when targeting a development environment.",
+        help="Backfill only the models whose names match the expression.",
     )
     @argument(
         "--no-diff",
@@ -445,6 +445,12 @@ class SQLMeshMagics(Magics):
         action="store_true",
         help="Run for all missing intervals, ignoring individual cron schedules.",
     )
+    @argument(
+        "--select-model",
+        type=str,
+        nargs="*",
+        help="Select specific models to run. Note: this always includes upstream dependencies.",
+    )
     @line_magic
     @pass_sqlmesh_context
     def run_dag(self, context: Context, line: str) -> None:
@@ -457,6 +463,7 @@ class SQLMeshMagics(Magics):
             end=args.end,
             skip_janitor=args.skip_janitor,
             ignore_cron=args.ignore_cron,
+            select_models=args.select_model,
         )
         if not success:
             raise SQLMeshError("Error Running DAG. Check logs for details.")
