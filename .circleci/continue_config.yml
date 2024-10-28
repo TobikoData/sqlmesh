@@ -216,11 +216,10 @@ jobs:
         - run:
             name: Trigger private tests
             command: |
-              echo 'export COMMIT_MESSAGE="$(git log --format=%s -n 1 $CIRCLE_SHA1)"' >> "$BASH_ENV"
-              echo 'export FORMATTED_COMMIT_MESSAGE="${COMMIT_MESSAGE//\"/\\\"}"' >> "$BASH_ENV"
+              export COMMIT_MESSAGE="$(git log --format=%s -n 1 $CIRCLE_SHA1)"
+              export FORMATTED_COMMIT_MESSAGE="${COMMIT_MESSAGE//\"/\\\"}"
               # returns a version string like 0.1.0.dev11
-              echo 'export PACKAGE_VERSION="$(python ./.circleci/get_scm_version.py)"' >> "$BASH_ENV"
-              source "$BASH_ENV"
+              export PACKAGE_VERSION="$(python ./.circleci/get_scm_version.py)"
               curl --request POST \
                 --url $TOBIKO_PRIVATE_CIRCLECI_URL \
                 --header "Circle-Token: $TOBIKO_PRIVATE_CIRCLECI_KEY" \
