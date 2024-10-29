@@ -284,8 +284,11 @@ def test_on_snapshots_created(
 
 def test_on_run(collector: AnalyticsCollector, mocker: MockerFixture):
     run_id = collector.on_run_start(engine_type="bigquery", state_sync_type="mysql")
-    collector.on_run_end(run_id=run_id, succeeded=True)
-    collector.on_run_end(run_id=run_id, succeeded=False, error=SQLMeshError("test_error"))
+    collector.on_run_end(run_id=run_id, succeeded=True, interrupted=False)
+    collector.on_run_end(
+        run_id=run_id, succeeded=False, interrupted=False, error=SQLMeshError("test_error")
+    )
+    collector.on_run_end(run_id=run_id, succeeded=False, interrupted=True)
 
     collector.flush()
 
@@ -309,7 +312,7 @@ def test_on_run(collector: AnalyticsCollector, mocker: MockerFixture):
                 {
                     "seq_num": 1,
                     "event_type": "RUN_END",
-                    "event": f'{{"run_id": "{run_id}", "succeeded": true, "error": null}}',
+                    "event": f'{{"run_id": "{run_id}", "succeeded": true, "interrupted": false, "error": null}}',
                     **common_fields,
                 }
             ),
@@ -317,7 +320,15 @@ def test_on_run(collector: AnalyticsCollector, mocker: MockerFixture):
                 {
                     "seq_num": 2,
                     "event_type": "RUN_END",
-                    "event": f'{{"run_id": "{run_id}", "succeeded": false, "error": "SQLMeshError"}}',
+                    "event": f'{{"run_id": "{run_id}", "succeeded": false, "interrupted": false, "error": "SQLMeshError"}}',
+                    **common_fields,
+                }
+            ),
+            call(
+                {
+                    "seq_num": 3,
+                    "event_type": "RUN_END",
+                    "event": f'{{"run_id": "{run_id}", "succeeded": false, "interrupted": true, "error": null}}',
                     **common_fields,
                 }
             ),

@@ -444,6 +444,11 @@ def plan(
     multiple=True,
     help="Select specific models to run. Note: this always includes upstream dependencies.",
 )
+@click.option(
+    "--exit-on-env-update",
+    type=int,
+    help="If set, the command will exit with the specified code if the run is interrupted by an update to the target environment.",
+)
 @click.pass_context
 @error_handler
 @cli_analytics
