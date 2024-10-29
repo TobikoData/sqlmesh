@@ -715,6 +715,8 @@ class EngineAdapter:
                             query, columns_to_types, coerce_types=True
                         )
                     if i == 0:
+                        print("schema", schema)
+                        print("table", table)
                         self._create_table(
                             schema if schema else table,
                             query,
