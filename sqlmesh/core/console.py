@@ -430,7 +430,8 @@ class TerminalConsole(Console):
     ) -> None:
         """Indicates that a new creation progress has begun."""
         if self.creation_progress is None:
-            self.creation_progress = make_progress_bar("Creating physical table", self.console)
+            message = "Creating physical table" if total_tasks == 1 else "Creating physical tables"
+            self.creation_progress = make_progress_bar(message, self.console)
 
             self.creation_progress.start()
             self.creation_task = self.creation_progress.add_task(
