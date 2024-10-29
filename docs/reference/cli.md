@@ -312,8 +312,7 @@ Options:
   --select-model TEXT             Select specific model changes that should be
                                   included in the plan.
   --backfill-model TEXT           Backfill only the models whose names match
-                                  the expression. This is supported only when
-                                  targeting a development environment.
+                                  the expression.
   --no-diff                       Hide text differences for changed models.
   --run                           Run latest intervals as part of the plan
                                   application (prod environment only).
@@ -399,14 +398,16 @@ Usage: sqlmesh run [OPTIONS] [ENVIRONMENT]
   Evaluate missing intervals for the target environment.
 
 Options:
-  -s, --start TEXT  The start datetime of the interval for which this command
-                    will be applied.
-  -e, --end TEXT    The end datetime of the interval for which this command
-                    will be applied.
-  --skip-janitor    Skip the janitor task.
-  --ignore-cron     Run for all missing intervals, ignoring individual cron
-                    schedules.
-  --help            Show this message and exit.
+  -s, --start TEXT     The start datetime of the interval for which this
+                       command will be applied.
+  -e, --end TEXT       The end datetime of the interval for which this command
+                       will be applied.
+  --skip-janitor       Skip the janitor task.
+  --ignore-cron        Run for all missing intervals, ignoring individual cron
+                       schedules.
+  --select-model TEXT  Select specific models to run. Note: this always
+                       includes upstream dependencies.
+  --help               Show this message and exit.
 ```
 
 ## table_diff

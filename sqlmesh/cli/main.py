@@ -385,7 +385,7 @@ def diff(ctx: click.Context, environment: t.Optional[str] = None) -> None:
     "--backfill-model",
     type=str,
     multiple=True,
-    help="Backfill only the models whose names match the expression. This is supported only when targeting a development environment.",
+    help="Backfill only the models whose names match the expression.",
 )
 @click.option(
     "--no-diff",
@@ -438,13 +438,20 @@ def plan(
     is_flag=True,
     help="Run for all missing intervals, ignoring individual cron schedules.",
 )
+@click.option(
+    "--select-model",
+    type=str,
+    multiple=True,
+    help="Select specific models to run. Note: this always includes upstream dependencies.",
+)
 @click.pass_context
 @error_handler
 @cli_analytics
 def run(ctx: click.Context, environment: t.Optional[str] = None, **kwargs: t.Any) -> None:
     """Evaluate missing intervals for the target environment."""
     context = ctx.obj
-    success = context.run(environment, **kwargs)
+    select_models = kwargs.pop("select_model") or None
+    success = context.run(environment, select_models=select_models, **kwargs)
     if not success:
         raise click.ClickException("Run DAG Failed. See output for details.")
 

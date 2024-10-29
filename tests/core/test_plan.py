@@ -2286,11 +2286,6 @@ def test_models_selected_for_backfill(make_snapshot, mocker: MockerFixture):
     )
 
     schema_differ = DuckDBEngineAdapter.SCHEMA_DIFFER
-    with pytest.raises(
-        PlanError,
-        match="Selecting models to backfill is only supported for development environments",
-    ):
-        PlanBuilder(context_diff, schema_differ, backfill_models={'"a"'}).build()
 
     plan = PlanBuilder(context_diff, schema_differ).build()
     assert plan.is_selected_for_backfill('"a"')
