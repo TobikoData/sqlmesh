@@ -252,11 +252,15 @@ class AnalyticsCollector:
         )
         return run_id
 
-    def on_run_end(self, *, run_id: str, succeeded: bool, error: t.Optional[t.Any] = None) -> None:
+    def on_run_end(
+        self, *, run_id: str, succeeded: bool, interrupted: bool, error: t.Optional[t.Any] = None
+    ) -> None:
         """Called after a run ends.
 
         Args:
             run_id: The ID of the run.
+            succeeded: Whether the run succeeded.
+            interrupted: Whether the run was interrupted.
             error: The error that occurred during the run, if any.
         """
         self._add_event(
@@ -264,6 +268,7 @@ class AnalyticsCollector:
             {
                 "run_id": run_id,
                 "succeeded": succeeded,
+                "interrupted": interrupted,
                 "error": type(error).__name__ if error else None,
             },
         )

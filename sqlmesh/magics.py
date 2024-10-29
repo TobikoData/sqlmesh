@@ -451,6 +451,11 @@ class SQLMeshMagics(Magics):
         nargs="*",
         help="Select specific models to run. Note: this always includes upstream dependencies.",
     )
+    @argument(
+        "--exit-on-env-update",
+        type=int,
+        help="If set, the command will exit with the specified code if the run is interrupted by an update to the target environment.",
+    )
     @line_magic
     @pass_sqlmesh_context
     def run_dag(self, context: Context, line: str) -> None:
@@ -464,6 +469,7 @@ class SQLMeshMagics(Magics):
             skip_janitor=args.skip_janitor,
             ignore_cron=args.ignore_cron,
             select_models=args.select_model,
+            exit_on_env_update=args.exit_on_env_update,
         )
         if not success:
             raise SQLMeshError("Error Running DAG. Check logs for details.")

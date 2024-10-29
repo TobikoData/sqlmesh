@@ -36,6 +36,7 @@ from __future__ import annotations
 import abc
 import collections
 import logging
+import sys
 import time
 import traceback
 import typing as t
@@ -592,6 +593,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         skip_janitor: bool = False,
         ignore_cron: bool = False,
         select_models: t.Optional[t.Collection[str]] = None,
+        exit_on_env_update: t.Optional[int] = None,
     ) -> bool:
         """Run the entire dag through the scheduler.
 
@@ -604,6 +606,8 @@ class GenericContext(BaseContext, t.Generic[C]):
             ignore_cron: Whether to ignore the model's cron schedule and run all available missing intervals.
             select_models: A list of model selection expressions to filter models that should run. Note that
                 upstream dependencies of selected models will also be evaluated.
+            exit_on_env_update: If set, exits with the provided code if the run is interrupted by an update
+                to the target environment.
 
         Returns:
             True if the run was successful, False otherwise.
@@ -620,6 +624,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         self._load_materializations_and_signals()
 
         success = False
+        interrupted = False
         try:
             success = self._run(
                 environment=environment,
@@ -629,16 +634,21 @@ class GenericContext(BaseContext, t.Generic[C]):
                 skip_janitor=skip_janitor,
                 ignore_cron=ignore_cron,
                 select_models=select_models,
+                exit_on_env_update=exit_on_env_update is not None,
             )
+        except CircuitBreakerError:
+            interrupted = True
         except Exception as e:
             self.notification_target_manager.notify(
                 NotificationEvent.RUN_FAILURE, traceback.format_exc()
             )
             logger.error(f"Run Failure: {traceback.format_exc()}")
-            analytics.collector.on_run_end(run_id=analytics_run_id, succeeded=False, error=e)
+            analytics.collector.on_run_end(
+                run_id=analytics_run_id, succeeded=False, interrupted=False, error=e
+            )
             raise e
 
-        if success:
+        if success or interrupted:
             self.notification_target_manager.notify(
                 NotificationEvent.RUN_END, environment=environment
             )
@@ -648,7 +658,12 @@ class GenericContext(BaseContext, t.Generic[C]):
                 NotificationEvent.RUN_FAILURE, "See console logs for details."
             )
 
-        analytics.collector.on_run_end(run_id=analytics_run_id, succeeded=success)
+        analytics.collector.on_run_end(
+            run_id=analytics_run_id, succeeded=success, interrupted=interrupted
+        )
+
+        if interrupted and exit_on_env_update is not None:
+            sys.exit(exit_on_env_update)
 
         return success
 
@@ -1800,6 +1815,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         skip_janitor: bool,
         ignore_cron: bool,
         select_models: t.Optional[t.Collection[str]],
+        exit_on_env_update: bool,
     ) -> bool:
         if not skip_janitor and environment.lower() == c.PROD:
             self._run_janitor()
@@ -1873,6 +1889,8 @@ class GenericContext(BaseContext, t.Generic[C]):
                     "Environment '%s' has been modified while running. Restarting the run...",
                     environment,
                 )
+                if exit_on_env_update:
+                    raise
 
         return success
 
