@@ -233,10 +233,10 @@ class PlanBuilder:
             else DeployabilityIndex.all_deployable()
         )
 
-        models_to_backfill = self._build_models_to_backfill(dag)
         restatements = self._build_restatements(
             dag, earliest_interval_start(self._context_diff.snapshots.values())
         )
+        models_to_backfill = self._build_models_to_backfill(dag, restatements)
 
         interval_end_per_model = self._interval_end_per_model
         if interval_end_per_model and self.override_end:
@@ -393,15 +393,25 @@ class PlanBuilder:
             indirectly_modified,
         )
 
-    def _build_models_to_backfill(self, dag: DAG[SnapshotId]) -> t.Optional[t.Set[str]]:
-        if self._backfill_models is None:
+    def _build_models_to_backfill(
+        self, dag: DAG[SnapshotId], restatements: t.Collection[SnapshotId]
+    ) -> t.Optional[t.Set[str]]:
+        backfill_models = (
+            self._backfill_models
+            if self._backfill_models is not None
+            else [r.name for r in restatements]
+            # Only backfill models explicitly marked for restatement.
+            if self._restate_models
+            else None
+        )
+        if backfill_models is None:
             return None
         return {
             self._context_diff.snapshots[s_id].name
             for s_id in dag.subdag(
                 *[
                     self._model_fqn_to_snapshot[m].snapshot_id
-                    for m in self._backfill_models
+                    for m in backfill_models
                     if m in self._model_fqn_to_snapshot
                 ]
             ).sorted
