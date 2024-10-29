@@ -745,14 +745,25 @@ def test_restate_models(sushi_context_pre_scheduling: Context):
         ),
     }
     assert plan.requires_backfill
+    assert plan.models_to_backfill == {
+        '"memory"."sushi"."customer_revenue_by_day"',
+        '"memory"."sushi"."customer_revenue_lifetime"',
+        '"memory"."sushi"."items"',
+        '"memory"."sushi"."order_items"',
+        '"memory"."sushi"."orders"',
+        '"memory"."sushi"."top_waiters"',
+        '"memory"."sushi"."waiter_revenue_by_day"',
+    }
 
     plan = sushi_context_pre_scheduling.plan(restate_models=["unknown_model"], no_prompts=True)
     assert not plan.has_changes
     assert not plan.restatements
+    assert plan.models_to_backfill is None
 
     plan = sushi_context_pre_scheduling.plan(restate_models=["tag:unknown_tag"], no_prompts=True)
     assert not plan.has_changes
     assert not plan.restatements
+    assert plan.models_to_backfill is None
 
 
 @pytest.mark.slow
@@ -808,6 +819,13 @@ def test_restate_models_with_existing_missing_intervals(sushi_context: Context):
         ),
     ]
     assert plan.requires_backfill
+    assert plan.models_to_backfill == {
+        top_waiters_snapshot_id.name,
+        waiter_revenue_by_day_snapshot_id.name,
+        '"memory"."sushi"."items"',
+        '"memory"."sushi"."order_items"',
+        '"memory"."sushi"."orders"',
+    }
 
 
 def test_restate_symbolic_model(make_snapshot, mocker: MockerFixture):
