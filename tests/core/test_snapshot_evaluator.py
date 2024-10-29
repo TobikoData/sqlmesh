@@ -2823,43 +2823,47 @@ def test_create_managed_forward_only_with_previous_version_doesnt_clone_for_dev_
 
 
 @pytest.mark.parametrize(
-    "deployability_index,  snapshot_category, temp_table",
+    "deployability_index,  snapshot_category, versions_to_create",
     [
-        (DeployabilityIndex.all_deployable(), SnapshotChangeCategory.BREAKING, [False]),
-        (DeployabilityIndex.all_deployable(), SnapshotChangeCategory.NON_BREAKING, [False]),
-        (DeployabilityIndex.all_deployable(), SnapshotChangeCategory.FORWARD_ONLY, [True]),
-        (DeployabilityIndex.all_deployable(), SnapshotChangeCategory.INDIRECT_BREAKING, [False]),
-        (DeployabilityIndex.all_deployable(), SnapshotChangeCategory.INDIRECT_NON_BREAKING, [True]),
-        (DeployabilityIndex.all_deployable(), SnapshotChangeCategory.METADATA, [True]),
+        (DeployabilityIndex.all_deployable(), SnapshotChangeCategory.BREAKING, [True]),
+        (DeployabilityIndex.all_deployable(), SnapshotChangeCategory.NON_BREAKING, [True]),
+        (DeployabilityIndex.all_deployable(), SnapshotChangeCategory.FORWARD_ONLY, [False]),
+        (DeployabilityIndex.all_deployable(), SnapshotChangeCategory.INDIRECT_BREAKING, [True]),
+        (
+            DeployabilityIndex.all_deployable(),
+            SnapshotChangeCategory.INDIRECT_NON_BREAKING,
+            [False],
+        ),
+        (DeployabilityIndex.all_deployable(), SnapshotChangeCategory.METADATA, [False]),
         (
             DeployabilityIndex.none_deployable(),
             SnapshotChangeCategory.BREAKING,
-            [True, False],
+            [False, True],
         ),
         (
             DeployabilityIndex.none_deployable(),
             SnapshotChangeCategory.NON_BREAKING,
-            [True, False],
+            [False, True],
         ),
         (
             DeployabilityIndex.none_deployable(),
             SnapshotChangeCategory.FORWARD_ONLY,
-            [True],
+            [False],
         ),
         (
             DeployabilityIndex.none_deployable(),
             SnapshotChangeCategory.INDIRECT_BREAKING,
-            [True, False],
+            [False, True],
         ),
         (
             DeployabilityIndex.none_deployable(),
             SnapshotChangeCategory.INDIRECT_NON_BREAKING,
-            [True],
+            [False],
         ),
         (
             DeployabilityIndex.none_deployable(),
             SnapshotChangeCategory.METADATA,
-            [True],
+            [False],
         ),
     ],
 )
@@ -2868,7 +2872,7 @@ def test_create_snapshot(
     mocker: MockerFixture,
     adapter_mock,
     deployability_index: DeployabilityIndex,
-    temp_table: t.List[bool],
+    versions_to_create: t.List[bool],
     snapshot_category: SnapshotChangeCategory,
 ):
     adapter_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter")
@@ -2879,6 +2883,7 @@ def test_create_snapshot(
     evaluator._create_snapshot(
         snapshot=snapshot,
         snapshots={},
+        versions_to_create={snapshot.name: versions_to_create},
         deployability_index=deployability_index,
         on_complete=None,
         allow_destructive_snapshots=set(),
@@ -2897,11 +2902,11 @@ def test_create_snapshot(
 
     tables_created = [
         call(
-            snapshot.table_name(is_deployable=not temp),
-            column_descriptions=(None if temp else {}),
+            snapshot.table_name(is_deployable=is_deployable),
+            column_descriptions=(None if not is_deployable else {}),
             **common_kwargs,
         )
-        for temp in temp_table
+        for is_deployable in versions_to_create
     ]
 
     adapter_mock.create_table.assert_has_calls(tables_created)
