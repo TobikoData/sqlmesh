@@ -2810,6 +2810,14 @@ def test_create_managed_forward_only_with_previous_version_doesnt_clone_for_dev_
         ),
     )
 
+    adapter_mock.get_data_objects.return_value = [
+        DataObject(
+            name=f"test_schema__test_model__{snapshot.version}",
+            schema="sqlmesh__test_schema",
+            type=DataObjectType.MANAGED_TABLE,
+        ),
+    ]
+
     evaluator.create(target_snapshots=[snapshot], snapshots={})
 
     # We dont clone managed tables to create dev previews, we use normal tables
@@ -2823,7 +2831,7 @@ def test_create_managed_forward_only_with_previous_version_doesnt_clone_for_dev_
 
 
 @pytest.mark.parametrize(
-    "deployability_index,  snapshot_category, versions_to_create",
+    "deployability_index,  snapshot_category, deployability_flags",
     [
         (DeployabilityIndex.all_deployable(), SnapshotChangeCategory.BREAKING, [True]),
         (DeployabilityIndex.all_deployable(), SnapshotChangeCategory.NON_BREAKING, [True]),
@@ -2872,7 +2880,7 @@ def test_create_snapshot(
     mocker: MockerFixture,
     adapter_mock,
     deployability_index: DeployabilityIndex,
-    versions_to_create: t.List[bool],
+    deployability_flags: t.List[bool],
     snapshot_category: SnapshotChangeCategory,
 ):
     adapter_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter")
@@ -2883,7 +2891,7 @@ def test_create_snapshot(
     evaluator._create_snapshot(
         snapshot=snapshot,
         snapshots={},
-        versions_to_create={snapshot.name: versions_to_create},
+        deployability_flags={snapshot.name: deployability_flags},
         deployability_index=deployability_index,
         on_complete=None,
         allow_destructive_snapshots=set(),
@@ -2906,7 +2914,7 @@ def test_create_snapshot(
             column_descriptions=(None if not is_deployable else {}),
             **common_kwargs,
         )
-        for is_deployable in versions_to_create
+        for is_deployable in deployability_flags
     ]
 
     adapter_mock.create_table.assert_has_calls(tables_created)

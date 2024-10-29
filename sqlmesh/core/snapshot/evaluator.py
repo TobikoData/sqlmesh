@@ -263,9 +263,7 @@ class SnapshotEvaluator:
         for snapshot in target_snapshots:
             if not snapshot.is_model or snapshot.is_symbolic:
                 continue
-            deployability_flags = (
-                [True] if (not snapshot.is_managed or not snapshot.reuses_previous_version) else []
-            )
+            deployability_flags = [True]
             if (
                 snapshot.reuses_previous_version
                 or snapshot.is_managed
@@ -277,7 +275,7 @@ class SnapshotEvaluator:
                     snapshot.table_name(is_deployable), dialect=snapshot.model.dialect
                 )
                 snapshots_with_table_names[snapshot].add(table.name)
-                table_deployability[snapshot.name + table.name] = is_deployable
+                table_deployability[table.name] = is_deployable
                 tables_by_schema[d.schema_(table.db, catalog=table.catalog)].add(table.name)
 
         def _get_data_objects(schema: exp.Table) -> t.Set[str]:
@@ -295,16 +293,14 @@ class SnapshotEvaluator:
             }
 
         snapshots_to_create = []
-        versions_to_create: t.Dict[str, t.List[bool]] = defaultdict(list)
+        target_deployability_flags: t.Dict[str, t.List[bool]] = defaultdict(list)
         for snapshot, table_names in snapshots_with_table_names.items():
             missing_versions = table_names - existing_objects
             if missing_versions or (snapshot.is_seed and not snapshot.intervals):
                 snapshots_to_create.append(snapshot)
                 for version in missing_versions or table_names:
-                    versions_to_create[snapshot.name].append(
-                        table_deployability[snapshot.name + version]
-                    )
-                versions_to_create[snapshot.name].sort(key=lambda x: x)
+                    target_deployability_flags[snapshot.name].append(table_deployability[version])
+                target_deployability_flags[snapshot.name].sort()
             elif on_complete:
                 on_complete(snapshot)
 
@@ -318,7 +314,7 @@ class SnapshotEvaluator:
                 lambda s: self._create_snapshot(
                     s,
                     snapshots,
-                    versions_to_create,
+                    target_deployability_flags,
                     deployability_index,
                     on_complete,
                     allow_destructive_snapshots,
@@ -648,7 +644,7 @@ class SnapshotEvaluator:
         self,
         snapshot: Snapshot,
         snapshots: t.Dict[SnapshotId, Snapshot],
-        versions_to_create: t.Dict[str, t.List[bool]],
+        deployability_flags: t.Dict[str, t.List[bool]],
         deployability_index: t.Optional[DeployabilityIndex],
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]],
         allow_destructive_snapshots: t.Set[str],
@@ -721,8 +717,8 @@ class SnapshotEvaluator:
                 finally:
                     self.adapter.drop_table(tmp_table_name)
             else:
-                dry_run = not (len(versions_to_create[snapshot.name]) > 1)
-                for is_table_deployable in versions_to_create[snapshot.name]:
+                dry_run = not (len(deployability_flags[snapshot.name]) > 1)
+                for is_table_deployable in deployability_flags[snapshot.name]:
                     evaluation_strategy.create(
                         table_name=snapshot.table_name(is_deployable=is_table_deployable),
                         model=snapshot.model,
