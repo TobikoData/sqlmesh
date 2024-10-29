@@ -314,7 +314,7 @@ class SnapshotEvaluator:
                 lambda s: self._create_snapshot(
                     s,
                     snapshots,
-                    target_deployability_flags,
+                    target_deployability_flags[s.name],
                     deployability_index,
                     on_complete,
                     allow_destructive_snapshots,
@@ -644,7 +644,7 @@ class SnapshotEvaluator:
         self,
         snapshot: Snapshot,
         snapshots: t.Dict[SnapshotId, Snapshot],
-        deployability_flags: t.Dict[str, t.List[bool]],
+        deployability_flags: t.List[bool],
         deployability_index: t.Optional[DeployabilityIndex],
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]],
         allow_destructive_snapshots: t.Set[str],
@@ -717,8 +717,8 @@ class SnapshotEvaluator:
                 finally:
                     self.adapter.drop_table(tmp_table_name)
             else:
-                dry_run = not (len(deployability_flags[snapshot.name]) > 1)
-                for is_table_deployable in deployability_flags[snapshot.name]:
+                dry_run = not (len(deployability_flags) > 1)
+                for is_table_deployable in deployability_flags:
                     evaluation_strategy.create(
                         table_name=snapshot.table_name(is_deployable=is_table_deployable),
                         model=snapshot.model,

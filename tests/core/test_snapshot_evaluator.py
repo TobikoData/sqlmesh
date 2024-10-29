@@ -2891,7 +2891,7 @@ def test_create_snapshot(
     evaluator._create_snapshot(
         snapshot=snapshot,
         snapshots={},
-        deployability_flags={snapshot.name: deployability_flags},
+        deployability_flags=deployability_flags,
         deployability_index=deployability_index,
         on_complete=None,
         allow_destructive_snapshots=set(),
