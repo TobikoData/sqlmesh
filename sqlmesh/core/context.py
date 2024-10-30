@@ -340,7 +340,6 @@ class GenericContext(BaseContext, t.Generic[C]):
                     loader=(loader or config.loader)(**config.loader_kwargs), configs={}
                 )
             self._loaders[project_type].configs[path] = config
-            self._load_requirements(path)
 
         self.project_type = c.HYBRID if len(self._loaders) > 1 else project_type
         self._all_dialects: t.Set[str] = {self.config.dialect or ""}
@@ -536,7 +535,10 @@ class GenericContext(BaseContext, t.Generic[C]):
         load_start_ts = time.perf_counter()
 
         projects = []
+        self._requirements.clear()
         for context_loader in self._loaders.values():
+            for path in context_loader.configs:
+                self._load_requirements(path)
             with sys_path(*context_loader.configs):
                 projects.append(context_loader.loader.load(self, update_schemas))
 
@@ -2141,7 +2143,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                     other_ver = self._requirements.get(dep, ver)
                     if ver != other_ver:
                         raise SQLMeshError(
-                            "Conflicting requirement {dep}: {ver} != {other_ver}. Fix your sqlmesh.lock file."
+                            f"Conflicting requirement {dep}: {ver} != {other_ver}. Fix your {c.REQUIREMENTS} file."
                         )
                     self._requirements[dep] = ver
 
