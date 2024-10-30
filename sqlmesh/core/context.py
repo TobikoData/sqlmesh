@@ -328,6 +328,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         self._macros: UniqueKeyDict[str, ExecutableOrMacro] = UniqueKeyDict("macros")
         self._metrics: UniqueKeyDict[str, Metric] = UniqueKeyDict("metrics")
         self._jinja_macros = JinjaMacroRegistry()
+        self._requirements: t.Dict[str, str] = {}
         self._default_catalog: t.Optional[str] = None
         self._loaded: bool = False
 
@@ -534,7 +535,10 @@ class GenericContext(BaseContext, t.Generic[C]):
         load_start_ts = time.perf_counter()
 
         projects = []
+        self._requirements.clear()
         for context_loader in self._loaders.values():
+            for path in context_loader.configs:
+                self._load_requirements(path)
             with sys_path(*context_loader.configs):
                 projects.append(context_loader.loader.load(self, update_schemas))
 
@@ -2061,6 +2065,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             snapshots=snapshots or self.snapshots,
             create_from=create_from or c.PROD,
             state_reader=self.state_reader,
+            requirements=self._requirements,
             ensure_finalized_snapshots=ensure_finalized_snapshots,
         )
 
@@ -2123,6 +2128,24 @@ class GenericContext(BaseContext, t.Generic[C]):
                 with sys_path(*context_loader.configs):
                     context_loader.loader.load_signals(self)
                     context_loader.loader.load_materializations(self)
+
+    def _load_requirements(self, path: Path) -> None:
+        path = path / c.REQUIREMENTS
+        if path.is_file():
+            with open(path, "r", encoding="utf-8") as file:
+                for line in file:
+                    args = [k.strip() for k in line.split("==")]
+                    if len(args) != 2:
+                        raise SQLMeshError(
+                            f"Invalid lock file entry '{line.strip()}'. Only 'dep==ver' is supported"
+                        )
+                    dep, ver = args
+                    other_ver = self._requirements.get(dep, ver)
+                    if ver != other_ver:
+                        raise SQLMeshError(
+                            f"Conflicting requirement {dep}: {ver} != {other_ver}. Fix your {c.REQUIREMENTS} file."
+                        )
+                    self._requirements[dep] = ver
 
 
 class Context(GenericContext[Config]):

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import logging
-import sys
 import typing as t
 from dataclasses import dataclass
 from datetime import datetime
@@ -28,18 +26,7 @@ from sqlmesh.core.snapshot.definition import (
 from sqlmesh.utils.date import TimeLike, now, to_datetime, to_timestamp
 from sqlmesh.utils.pydantic import PydanticModel
 
-logger = logging.getLogger(__name__)
-
 SnapshotMapping = t.Dict[SnapshotId, t.Set[SnapshotId]]
-
-
-if sys.version_info >= (3, 12):
-    from importlib import metadata
-else:
-    import importlib_metadata as metadata  # type: ignore
-
-
-IGNORED_PACKAGES = {"sqlmesh", "sqlglot"}
 
 
 class Plan(PydanticModel, frozen=True):
@@ -99,16 +86,7 @@ class Plan(PydanticModel, frozen=True):
 
     @property
     def has_changes(self) -> bool:
-        modified_snapshot_ids = {
-            *self.context_diff.added,
-            *self.context_diff.removed_snapshots,
-            *self.context_diff.current_modified_snapshot_ids,
-        }
-        return (
-            self.context_diff.is_new_environment
-            or self.context_diff.is_unfinalized_environment
-            or bool(modified_snapshot_ids)
-        )
+        return self.context_diff.has_changes
 
     @property
     def has_unmodified_unpromoted(self) -> bool:
@@ -217,23 +195,6 @@ class Plan(PydanticModel, frozen=True):
             else self.context_diff.previous_finalized_snapshots
         )
 
-        requirements = {}
-        distributions = metadata.packages_distributions()
-
-        for snapshot in self.context_diff.snapshots.values():
-            if snapshot.is_model:
-                for executable in snapshot.model.python_env.values():
-                    if executable.kind == "import":
-                        try:
-                            start = "from " if executable.payload.startswith("from ") else "import "
-                            lib = executable.payload.split(start)[1].split()[0].split(".")[0]
-                            if lib in distributions:
-                                for dist in distributions[lib]:
-                                    if dist not in requirements and dist not in IGNORED_PACKAGES:
-                                        requirements[dist] = metadata.version(dist)
-                        except metadata.PackageNotFoundError:
-                            logger.warning("Failed to find package for %s", lib)
-
         return Environment(
             snapshots=snapshots,
             start_at=self.provided_start or self._earliest_interval_start,
@@ -243,7 +204,7 @@ class Plan(PydanticModel, frozen=True):
             expiration_ts=expiration_ts,
             promoted_snapshot_ids=promoted_snapshot_ids,
             previous_finalized_snapshots=previous_finalized_snapshots,
-            requirements=requirements,
+            requirements=self.context_diff.requirements,
             **self.environment_naming_info.dict(),
         )
 

@@ -2569,7 +2569,7 @@ def test_interval_end_per_model(make_snapshot):
     assert plan_builder.build().interval_end_per_model is None
 
 
-def test_plan_requirements():
+def test_plan_requirements(mocker):
     context = Context(paths="examples/sushi")
     model = context.get_model("sushi.items")
     model.python_env["ruamel"] = Executable(payload="import ruamel", kind="import")
@@ -2577,10 +2577,19 @@ def test_plan_requirements():
         payload="from ipywidgets.widgets.widget_media import Image", kind="import"
     )
 
-    plan = context.plan(
-        "dev", no_prompts=True, skip_tests=True, skip_backfill=True
-    ).environment.requirements
-    assert set(plan) == {"ipywidgets", "numpy", "pandas", "ruamel.yaml", "ruamel.yaml.clib"}
+    environment = context.plan(
+        "dev", no_prompts=True, skip_tests=True, skip_backfill=True, auto_apply=True
+    ).environment
+    requirements = {"ipywidgets", "numpy", "pandas", "ruamel.yaml", "ruamel.yaml.clib"}
+    assert environment.requirements["pandas"] == "2.2.2"
+    assert set(environment.requirements) == requirements
+
+    mocker.patch(
+        "sqlmesh.core.context_diff.ContextDiff.requirements", {"numpy": "2.1.2", "pandas": "2.2.1"}
+    )
+    diff = context.plan("dev", no_prompts=True, skip_tests=True, skip_backfill=True).context_diff
+    assert set(diff.previous_requirements) == requirements
+    assert set(diff.requirements) == {"numpy", "pandas"}
 
 
 def test_unaligned_start_model_with_forward_only_preview(make_snapshot):

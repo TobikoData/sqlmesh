@@ -70,6 +70,7 @@ TESTS = "tests"
 
 EXTERNAL_MODELS_YAML = "external_models.yaml"
 EXTERNAL_MODELS_DEPRECATED_YAML = "schema.yaml"
+REQUIREMENTS = "sqlmesh-requirements.lock"
 
 DEFAULT_SCHEMA = "default"
 
