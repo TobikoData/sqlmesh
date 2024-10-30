@@ -145,13 +145,13 @@ class Environment(EnvironmentNamingInfo):
 
     @property
     def snapshots(self) -> t.List[SnapshotTableInfo]:
-        return self._convert_list_to_models_and_store("snapshots_", SnapshotTableInfo)
+        return self._convert_list_to_models_and_store("snapshots_", SnapshotTableInfo) or []
 
     def snapshot_dicts(self) -> t.List[dict]:
         return self._convert_list_to_dicts(self.snapshots_)
 
     @property
-    def promoted_snapshot_ids(self) -> t.List[SnapshotId]:
+    def promoted_snapshot_ids(self) -> t.Optional[t.List[SnapshotId]]:
         return self._convert_list_to_models_and_store("promoted_snapshot_ids_", SnapshotId)
 
     def promoted_snapshot_id_dicts(self) -> t.List[dict]:
@@ -166,7 +166,7 @@ class Environment(EnvironmentNamingInfo):
         return [s for s in self.snapshots if s.snapshot_id in promoted_snapshot_ids]
 
     @property
-    def previous_finalized_snapshots(self) -> t.List[SnapshotTableInfo]:
+    def previous_finalized_snapshots(self) -> t.Optional[t.List[SnapshotTableInfo]]:
         return self._convert_list_to_models_and_store(
             "previous_finalized_snapshots_", SnapshotTableInfo
         )
@@ -197,12 +197,12 @@ class Environment(EnvironmentNamingInfo):
 
     def _convert_list_to_models_and_store(
         self, field: str, type_: t.Type[PydanticType]
-    ) -> t.List[PydanticType]:
+    ) -> t.Optional[t.List[PydanticType]]:
         value = getattr(self, field)
         if value and not isinstance(value[0], type_):
             value = [type_.parse_obj(obj) for obj in value]
             setattr(self, field, value)
-        return t.cast(t.List[PydanticType], value)
+        return value
 
     def _convert_list_to_dicts(self, value: t.Optional[t.List[t.Any]]) -> t.List[dict]:
         if not value:
