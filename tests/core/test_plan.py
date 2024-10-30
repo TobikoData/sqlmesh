@@ -695,6 +695,7 @@ def test_missing_intervals_lookback(make_snapshot, mocker: MockerFixture):
         execution_time="2022-01-05 12:00",
         is_dev=True,
         skip_backfill=False,
+        empty_backfill=False,
         no_gaps=False,
         forward_only=False,
         allow_destructive_models=set(),

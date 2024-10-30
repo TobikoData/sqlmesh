@@ -978,6 +978,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         restate_models: t.Optional[t.Iterable[str]] = None,
         no_gaps: bool = False,
         skip_backfill: bool = False,
+        empty_backfill: bool = False,
         forward_only: t.Optional[bool] = None,
         allow_destructive_models: t.Optional[t.Collection[str]] = None,
         no_prompts: t.Optional[bool] = None,
@@ -1015,6 +1016,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                 part of the target environment have no data gaps when compared against previous
                 snapshots for same models.
             skip_backfill: Whether to skip the backfill step. Default: False.
+            empty_backfill: Like skip_backfill, but also records processed intervals.
             forward_only: Whether the purpose of the plan is to make forward only changes.
             allow_destructive_models: Models whose forward-only changes are allowed to be destructive.
             no_prompts: Whether to disable interactive prompts for the backfill time range. Please note that
@@ -1047,6 +1049,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             restate_models=restate_models,
             no_gaps=no_gaps,
             skip_backfill=skip_backfill,
+            empty_backfill=empty_backfill,
             forward_only=forward_only,
             allow_destructive_models=allow_destructive_models,
             no_auto_categorization=no_auto_categorization,
@@ -1082,6 +1085,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         restate_models: t.Optional[t.Iterable[str]] = None,
         no_gaps: bool = False,
         skip_backfill: bool = False,
+        empty_backfill: bool = False,
         forward_only: t.Optional[bool] = None,
         allow_destructive_models: t.Optional[t.Collection[str]] = None,
         no_auto_categorization: t.Optional[bool] = None,
@@ -1113,6 +1117,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                 part of the target environment have no data gaps when compared against previous
                 snapshots for same models.
             skip_backfill: Whether to skip the backfill step. Default: False.
+            empty_backfill: Like skip_backfill, but also records processed intervals.
             forward_only: Whether the purpose of the plan is to make forward only changes.
             allow_destructive_models: Models whose forward-only changes are allowed to be destructive.
             no_auto_categorization: Indicates whether to disable automatic categorization of model
@@ -1246,6 +1251,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             backfill_models=backfill_models,
             no_gaps=no_gaps,
             skip_backfill=skip_backfill,
+            empty_backfill=empty_backfill,
             is_dev=is_dev,
             forward_only=(
                 forward_only if forward_only is not None else self.config.plan.forward_only

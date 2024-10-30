@@ -160,6 +160,23 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             plan: The plan to source snapshots from.
             selected_snapshots: The snapshots to backfill.
         """
+        if plan.empty_backfill:
+            intervals_to_add = []
+            for snapshot in snapshots_by_name.values():
+                intervals = [snapshot.inclusive_exclusive(plan.start, plan.end, strict=False)]
+                is_deployable = deployability_index.is_deployable(snapshot)
+                intervals_to_add.append(
+                    SnapshotIntervals(
+                        name=snapshot.name,
+                        identifier=snapshot.identifier,
+                        version=snapshot.version,
+                        intervals=intervals if is_deployable else [],
+                        dev_intervals=intervals if not is_deployable else [],
+                    )
+                )
+            self.state_sync.add_snapshots_intervals(intervals_to_add)
+            return
+
         if not plan.requires_backfill or not selected_snapshots:
             return
 

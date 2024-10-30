@@ -129,7 +129,7 @@ Consider an existing table named `my_schema.existing_table`. Migrating this tabl
 
     b. Specify the start of the first time interval SQLMesh should track in the `MODEL` DDL `start` key (example uses "2024-01-01")
 
-    c. Create the model in the SQLMesh project without backfilling any data by running `sqlmesh plan [environment name] --skip-backfill --start 2024-01-01`, replacing "[environment name]" with an environment name other than `prod` and using the same start date from the `MODEL` DDL in step 3b.
+    c. Create the model in the SQLMesh project without backfilling any data by running `sqlmesh plan [environment name] --empty-backfill --start 2024-01-01`, replacing "[environment name]" with an environment name other than `prod` and using the same start date from the `MODEL` DDL in step 3b.
 
 4. Determine the name of the model's snapshot physical table by running `sqlmesh table_name my_schema.existing_table`. For example, it might return `sqlmesh__my_schema.existing_table_123456`.
 5. Rename the original table `my_schema.existing_table_temp` to `sqlmesh__my_schema.existing_table_123456`

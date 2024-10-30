@@ -334,6 +334,11 @@ def diff(ctx: click.Context, environment: t.Optional[str] = None) -> None:
     help="Skip the backfill step and only create a virtual update for the plan.",
 )
 @click.option(
+    "--empty-backfill",
+    is_flag=True,
+    help="Produce empty backfill. Like --skip-backfill no models will be backfilled, unlike --skip-backfill missing intervals will be recorded as if they were backfilled.",
+)
+@click.option(
     "--forward-only",
     is_flag=True,
     help="Create a plan for forward-only changes.",

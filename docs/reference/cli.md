@@ -295,6 +295,10 @@ Options:
                                   matching models in the target environment.
   --skip-backfill, --dry-run      Skip the backfill step and only create a
                                   virtual update for the plan.
+  --empty-backfill                Produce empty backfill. Like --skip-backfill
+                                  no models will be backfilled, unlike --skip-
+                                  backfill missing intervals will be recorded
+                                  as if they were backfilled.
   --forward-only                  Create a plan for forward-only changes.
   --allow-destructive-model TEXT  Allow destructive forward-only changes to
                                   models whose names match the expression.

@@ -50,6 +50,7 @@ class Plan(PydanticModel, frozen=True):
 
     is_dev: bool
     skip_backfill: bool
+    empty_backfill: bool
     no_gaps: bool
     forward_only: bool
     allow_destructive_models: t.Set[str]
@@ -95,7 +96,11 @@ class Plan(PydanticModel, frozen=True):
 
     @property
     def requires_backfill(self) -> bool:
-        return not self.skip_backfill and (bool(self.restatements) or bool(self.missing_intervals))
+        return (
+            not self.skip_backfill
+            and not self.empty_backfill
+            and (bool(self.restatements) or bool(self.missing_intervals))
+        )
 
     @property
     def has_changes(self) -> bool:
@@ -264,6 +269,7 @@ class Plan(PydanticModel, frozen=True):
             environment=self.environment,
             no_gaps=self.no_gaps,
             skip_backfill=self.skip_backfill,
+            empty_backfill=self.empty_backfill,
             restatements={s.name: i for s, i in self.restatements.items()},
             is_dev=self.is_dev,
             allow_destructive_models=self.allow_destructive_models,
@@ -295,6 +301,7 @@ class EvaluatablePlan(PydanticModel):
     environment: Environment
     no_gaps: bool
     skip_backfill: bool
+    empty_backfill: bool
     restatements: t.Dict[str, Interval]
     is_dev: bool
     allow_destructive_models: t.Set[str]
