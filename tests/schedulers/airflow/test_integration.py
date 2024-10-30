@@ -104,6 +104,7 @@ def _create_evaluatable_plan(
         environment=environment,
         no_gaps=False,
         skip_backfill=False,
+        empty_backfill=False,
         restatements={},
         is_dev=is_dev,
         allow_destructive_models=set(),

@@ -50,6 +50,7 @@ class PlanBuilder:
             part of the target environment have no data gaps when compared against previous
             snapshots for same nodes.
         skip_backfill: Whether to skip the backfill step.
+        empty_backfill: Like skip_backfill, but also records processed intervals.
         is_dev: Whether this plan is for development purposes.
         forward_only: Whether the purpose of the plan is to make forward only changes.
         allow_destructive_models: A list of fully qualified model names whose forward-only changes are allowed to be destructive.
@@ -83,6 +84,7 @@ class PlanBuilder:
         backfill_models: t.Optional[t.Iterable[str]] = None,
         no_gaps: bool = False,
         skip_backfill: bool = False,
+        empty_backfill: bool = False,
         is_dev: bool = False,
         forward_only: bool = False,
         allow_destructive_models: t.Optional[t.Iterable[str]] = None,
@@ -104,6 +106,7 @@ class PlanBuilder:
         self._context_diff = context_diff
         self._no_gaps = no_gaps
         self._skip_backfill = skip_backfill
+        self._empty_backfill = empty_backfill
         self._is_dev = is_dev
         self._forward_only = forward_only
         self._allow_destructive_models = set(
@@ -251,6 +254,7 @@ class PlanBuilder:
             provided_end=self._end,
             is_dev=self._is_dev,
             skip_backfill=self._skip_backfill,
+            empty_backfill=self._empty_backfill,
             no_gaps=self._no_gaps,
             forward_only=self._forward_only,
             allow_destructive_models=t.cast(t.Set, self._allow_destructive_models),

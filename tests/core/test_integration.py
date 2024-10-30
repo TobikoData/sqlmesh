@@ -1698,6 +1698,29 @@ def test_create_environment_no_changes_with_selector(init_and_plan_context: t.Ca
     assert {o.name for o in schema_objects} == {"top_waiters"}
 
 
+@freeze_time("2023-01-08 15:00:00")
+def test_empty_bacfkill(init_and_plan_context: t.Callable):
+    context, _ = init_and_plan_context("examples/sushi")
+
+    plan = context.plan("prod", no_prompts=True, skip_tests=True, empty_backfill=True)
+    assert plan.missing_intervals
+    assert plan.empty_backfill
+    assert not plan.requires_backfill
+
+    context.apply(plan)
+
+    for model in context.models.values():
+        if model.is_seed or model.kind.is_symbolic:
+            continue
+        row_num = context.engine_adapter.fetchone(f"SELECT COUNT(*) FROM {model.name}")[0]
+        assert row_num == 0
+
+    plan = context.plan("prod", no_prompts=True, skip_tests=True)
+    assert not plan.requires_backfill
+    assert not plan.has_changes
+    assert not plan.missing_intervals
+
+
 @pytest.mark.parametrize(
     "context_fixture",
     ["sushi_context", "sushi_dbt_context", "sushi_test_dbt_context", "sushi_no_default_catalog"],

@@ -338,6 +338,11 @@ class SQLMeshMagics(Magics):
         help="Skip the backfill step and only create a virtual update for the plan.",
     )
     @argument(
+        "--empty-backfill",
+        action="store_true",
+        help="Produce empty backfill. Like --skip-backfill no models will be backfilled, unlike --skip-backfill missing intervals will be recorded as if they were backfilled.",
+    )
+    @argument(
         "--forward-only",
         action="store_true",
         help="Create a plan for forward-only changes.",
@@ -418,6 +423,7 @@ class SQLMeshMagics(Magics):
             backfill_models=args.backfill_model,
             no_gaps=args.no_gaps,
             skip_backfill=args.skip_backfill,
+            empty_backfill=args.empty_backfill,
             forward_only=args.forward_only,
             no_prompts=args.no_prompts,
             auto_apply=args.auto_apply,
