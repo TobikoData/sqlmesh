@@ -295,11 +295,13 @@ class SnapshotEvaluator:
         snapshots_to_create = []
         target_deployability_flags: t.Dict[str, t.List[bool]] = defaultdict(list)
         for snapshot, table_names in snapshots_with_table_names.items():
-            missing_versions = table_names - existing_objects
-            if missing_versions or (snapshot.is_seed and not snapshot.intervals):
+            missing_tables = table_names - existing_objects
+            if missing_tables or (snapshot.is_seed and not snapshot.intervals):
                 snapshots_to_create.append(snapshot)
-                for version in missing_versions or table_names:
-                    target_deployability_flags[snapshot.name].append(table_deployability[version])
+                for table_name in missing_tables or table_names:
+                    target_deployability_flags[snapshot.name].append(
+                        table_deployability[table_name]
+                    )
                 target_deployability_flags[snapshot.name].sort()
             elif on_complete:
                 on_complete(snapshot)
@@ -717,7 +719,7 @@ class SnapshotEvaluator:
                 finally:
                     self.adapter.drop_table(tmp_table_name)
             else:
-                dry_run = not (len(deployability_flags) > 1)
+                dry_run = len(deployability_flags) == 1
                 for is_table_deployable in deployability_flags:
                     evaluation_strategy.create(
                         table_name=snapshot.table_name(is_deployable=is_table_deployable),
