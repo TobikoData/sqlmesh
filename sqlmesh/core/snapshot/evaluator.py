@@ -259,14 +259,23 @@ class SnapshotEvaluator:
         """
         snapshots_with_table_names = defaultdict(set)
         tables_by_schema = defaultdict(set)
+        table_deployability: t.Dict[str, bool] = {}
         for snapshot in target_snapshots:
             if not snapshot.is_model or snapshot.is_symbolic:
                 continue
-            for is_deployable in (True, False):
+            deployability_flags = [True]
+            if (
+                snapshot.reuses_previous_version
+                or snapshot.is_managed
+                or (deployability_index and not deployability_index.is_deployable(snapshot))
+            ):
+                deployability_flags.append(False)
+            for is_deployable in deployability_flags:
                 table = exp.to_table(
                     snapshot.table_name(is_deployable), dialect=snapshot.model.dialect
                 )
                 snapshots_with_table_names[snapshot].add(table.name)
+                table_deployability[table.name] = is_deployable
                 tables_by_schema[d.schema_(table.db, catalog=table.catalog)].add(table.name)
 
         def _get_data_objects(schema: exp.Table) -> t.Set[str]:
@@ -284,9 +293,16 @@ class SnapshotEvaluator:
             }
 
         snapshots_to_create = []
+        target_deployability_flags: t.Dict[str, t.List[bool]] = defaultdict(list)
         for snapshot, table_names in snapshots_with_table_names.items():
-            if table_names - existing_objects or (snapshot.is_seed and not snapshot.intervals):
+            missing_tables = table_names - existing_objects
+            if missing_tables or (snapshot.is_seed and not snapshot.intervals):
                 snapshots_to_create.append(snapshot)
+                for table_name in missing_tables or table_names:
+                    target_deployability_flags[snapshot.name].append(
+                        table_deployability[table_name]
+                    )
+                target_deployability_flags[snapshot.name].sort()
             elif on_complete:
                 on_complete(snapshot)
 
@@ -298,7 +314,12 @@ class SnapshotEvaluator:
             concurrent_apply_to_snapshots(
                 snapshots_to_create,
                 lambda s: self._create_snapshot(
-                    s, snapshots, deployability_index, on_complete, allow_destructive_snapshots
+                    s,
+                    snapshots,
+                    target_deployability_flags[s.name],
+                    deployability_index,
+                    on_complete,
+                    allow_destructive_snapshots,
                 ),
                 self.ddl_concurrent_tasks,
             )
@@ -625,6 +646,7 @@ class SnapshotEvaluator:
         self,
         snapshot: Snapshot,
         snapshots: t.Dict[SnapshotId, Snapshot],
+        deployability_flags: t.List[bool],
         deployability_index: t.Optional[DeployabilityIndex],
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]],
         allow_destructive_snapshots: t.Set[str],
@@ -697,22 +719,8 @@ class SnapshotEvaluator:
                 finally:
                     self.adapter.drop_table(tmp_table_name)
             else:
-                dry_run = True
-                table_deployability_flags = (
-                    []
-                    if (
-                        is_snapshot_deployable
-                        and not snapshot.reuses_previous_version
-                        and not snapshot.is_managed
-                    )
-                    else [False]
-                )
-                if not snapshot.reuses_previous_version:
-                    table_deployability_flags.append(True)
-                    if len(table_deployability_flags) > 1:
-                        dry_run = False
-
-                for is_table_deployable in table_deployability_flags:
+                dry_run = len(deployability_flags) == 1
+                for is_table_deployable in deployability_flags:
                     evaluation_strategy.create(
                         table_name=snapshot.table_name(is_deployable=is_table_deployable),
                         model=snapshot.model,
