@@ -720,12 +720,28 @@ This is the most accurate representation of the menu based on the source data pr
 
 ### Shared Configuration Options
 
-| Name                     | Description                                                                                                                                                                        | Type                      |
-|--------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------------------------|
-| unique_key               | Unique key used for identifying rows between source and target                                                                                                                     | List of strings or string |
-| valid_from_name          | The name of the `valid_from` column to create in the target table. Default: `valid_from`                                                                                           | string                    |
-| valid_to_name            | The name of the `valid_to` column to create in the target table. Default: `valid_to`                                                                                               | string                    |
-| invalidate_hard_deletes  | If set to `true`, when a record is missing from the source table it will be marked as invalid. Default: `true`                                                                     | bool                      |
+| Name                    | Description                                                                                                    | Type                      |
+|-------------------------|----------------------------------------------------------------------------------------------------------------|---------------------------|
+| unique_key              | Unique key used for identifying rows between source and target                                                 | List of strings or string |
+| valid_from_name         | The name of the `valid_from` column to create in the target table. Default: `valid_from`                       | string                    |
+| valid_to_name           | The name of the `valid_to` column to create in the target table. Default: `valid_to`                           | string                    |
+| invalidate_hard_deletes | If set to `true`, when a record is missing from the source table it will be marked as invalid. Default: `true` | bool                      |
+
+!!! tip "Important"
+
+    If using BigQuery, the default data type of the valid_from/valid_to columns is DATETIME. If you want to use TIMESTAMP, you can specify the data type in the model definition.
+
+    ```sql linenums="1" hl_lines="5"
+    MODEL (
+      name db.menu_items,
+      kind SCD_TYPE_2_BY_TIME (
+        unique_key id,
+        time_data_type TIMESTAMP
+      )
+    );
+    ```
+
+    This could likely be used on other engines to change the expected data type but has only been tested on BigQuery. 
 
 ### SCD Type 2 By Time Configuration Options
 
