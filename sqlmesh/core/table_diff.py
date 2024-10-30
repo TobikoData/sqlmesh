@@ -253,7 +253,9 @@ class TableDiff:
             model_name=self.model_name,
         )
 
-    def row_diff(self, skip_grain_check: bool = False) -> RowDiff:
+    def row_diff(
+        self, temp_schema: t.Optional[str] = None, skip_grain_check: bool = False
+    ) -> RowDiff:
         if self._row_diff is None:
             source_schema = {
                 c: t for c, t in self.source_schema.items() if c not in self.skip_columns
@@ -399,7 +401,17 @@ class TableDiff:
             query = self.adapter.ensure_nulls_for_unmatched_after_join(
                 quote_identifiers(base_query.copy(), dialect=self.model_dialect or self.dialect)
             )
-            temp_table = exp.table_("diff", db="sqlmesh_temp", quoted=True)
+
+            if not temp_schema:
+                temp_schema = "sqlmesh_temp"
+
+            temp_schema_split = temp_schema.split(".", 1)
+            temp_table = exp.table_(
+                "diff",
+                db=temp_schema_split[1] if len(temp_schema_split) > 1 else temp_schema_split[0],
+                catalog=temp_schema_split[0] if len(temp_schema_split) > 1 else None,
+                quoted=True,
+            )
 
             with self.adapter.temp_table(query, name=temp_table) as table:
                 summary_sums = [
