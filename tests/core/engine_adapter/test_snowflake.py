@@ -145,7 +145,7 @@ def test_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture)
     assert sql_calls == [
         """CREATE TABLE IF NOT EXISTS "test_table" ("a" INT COMMENT 'a column description', "b" INT) COMMENT='table description'""",
         """CREATE TABLE IF NOT EXISTS "test_table" ("a" INT COMMENT 'a column description', "b" INT) COMMENT='table description' AS SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM (SELECT "a", "b" FROM "source_table") AS "_subquery\"""",
-        """CREATE OR REPLACE VIEW "test_view" COMMENT='table description' AS SELECT "a", "b" FROM "source_table\"""",
+        """CREATE OR REPLACE VIEW "test_view" COPY GRANTS COMMENT='table description' AS SELECT "a", "b" FROM "source_table\"""",
         """ALTER VIEW "test_view" ALTER COLUMN "a" COMMENT 'a column description'""",
         """COMMENT ON TABLE "test_table" IS 'table description'""",
         """ALTER TABLE "test_table" ALTER COLUMN "a" COMMENT 'a column description'""",
@@ -175,7 +175,7 @@ def test_multiple_column_comments(make_mocked_engine_adapter: t.Callable, mocker
     sql_calls = to_sql_calls(adapter)
     assert sql_calls == [
         """CREATE TABLE IF NOT EXISTS "test_table" ("a" INT COMMENT 'a column description', "b" INT COMMENT 'b column description')""",
-        """CREATE OR REPLACE VIEW "test_view" AS SELECT "a", "b" FROM "test_table\"""",
+        """CREATE OR REPLACE VIEW "test_view" COPY GRANTS AS SELECT "a", "b" FROM "test_table\"""",
         """ALTER VIEW "test_view" ALTER COLUMN "a" COMMENT 'a column description', COLUMN "b" COMMENT 'b column description'""",
         """ALTER TABLE "test_table" ALTER COLUMN "a" COMMENT 'a column description changed', COLUMN "b" COMMENT 'b column description changed'""",
     ]
@@ -447,7 +447,7 @@ def test_creatable_type_materialized_view_properties(make_mocked_engine_adapter:
     sql_calls = to_sql_calls(adapter)
     # https://docs.snowflake.com/en/sql-reference/sql/create-materialized-view#syntax
     assert sql_calls == [
-        'CREATE OR REPLACE MATERIALIZED VIEW "test_table" CLUSTER BY ("a") AS SELECT 1',
+        'CREATE OR REPLACE MATERIALIZED VIEW "test_table" COPY GRANTS CLUSTER BY ("a") AS SELECT 1',
     ]
 
 
@@ -465,7 +465,7 @@ def test_creatable_type_secure_view(make_mocked_engine_adapter: t.Callable):
     sql_calls = to_sql_calls(adapter)
     # https://docs.snowflake.com/en/sql-reference/sql/create-view.html
     assert sql_calls == [
-        'CREATE OR REPLACE SECURE VIEW "test_table" AS SELECT 1',
+        'CREATE OR REPLACE SECURE VIEW "test_table" COPY GRANTS AS SELECT 1',
     ]
 
 
@@ -484,7 +484,7 @@ def test_creatable_type_secure_materialized_view(make_mocked_engine_adapter: t.C
     sql_calls = to_sql_calls(adapter)
     # https://docs.snowflake.com/en/sql-reference/sql/create-view.html
     assert sql_calls == [
-        'CREATE OR REPLACE SECURE MATERIALIZED VIEW "test_table" AS SELECT 1',
+        'CREATE OR REPLACE SECURE MATERIALIZED VIEW "test_table" COPY GRANTS AS SELECT 1',
     ]
 
 
@@ -501,7 +501,7 @@ def test_creatable_type_temporary_view(make_mocked_engine_adapter: t.Callable):
 
     sql_calls = to_sql_calls(adapter)
     assert sql_calls == [
-        'CREATE OR REPLACE TEMPORARY VIEW "test_table" AS SELECT 1',
+        'CREATE OR REPLACE TEMPORARY VIEW "test_table" COPY GRANTS AS SELECT 1',
     ]
 
 

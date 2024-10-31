@@ -33,7 +33,7 @@ snowpark = optional_import("snowflake.snowpark")
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import SchemaName, SessionProperties, TableName
-    from sqlmesh.core.engine_adapter._typing import DF, Query, SnowparkSession
+    from sqlmesh.core.engine_adapter._typing import DF, Query, QueryOrDF, SnowparkSession
     from sqlmesh.core.node import IntervalUnit
 
 
@@ -154,6 +154,38 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
             column_descriptions=column_descriptions,
             table_kind=self.MANAGED_TABLE_KIND,
             **kwargs,
+        )
+
+    def create_view(
+        self,
+        view_name: TableName,
+        query_or_df: QueryOrDF,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        replace: bool = True,
+        materialized: bool = False,
+        materialized_properties: t.Optional[t.Dict[str, t.Any]] = None,
+        table_description: t.Optional[str] = None,
+        column_descriptions: t.Optional[t.Dict[str, str]] = None,
+        view_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
+        **create_kwargs: t.Any,
+    ) -> None:
+        properties = create_kwargs.pop("properties", None)
+        if not properties:
+            properties = exp.Properties(expressions=[])
+        properties.append("expressions", exp.CopyGrantsProperty())
+
+        super().create_view(
+            view_name=view_name,
+            query_or_df=query_or_df,
+            columns_to_types=columns_to_types,
+            replace=replace,
+            materialized=materialized,
+            materialized_properties=materialized_properties,
+            table_description=table_description,
+            column_descriptions=column_descriptions,
+            view_properties=view_properties,
+            properties=properties,
+            **create_kwargs,
         )
 
     def drop_managed_table(self, table_name: TableName, exists: bool = True) -> None:
