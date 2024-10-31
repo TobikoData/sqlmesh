@@ -172,7 +172,8 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
         properties = create_kwargs.pop("properties", None)
         if not properties:
             properties = exp.Properties(expressions=[])
-        properties.append("expressions", exp.CopyGrantsProperty())
+        if replace:
+            properties.append("expressions", exp.CopyGrantsProperty())
 
         super().create_view(
             view_name=view_name,

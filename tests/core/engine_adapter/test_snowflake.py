@@ -621,3 +621,16 @@ SELECT a::INT;
     assert sql_calls == [
         'CREATE TRANSIENT TABLE IF NOT EXISTS "external"."test"."table" ("a" INT) REQUIRE_PARTITION_FILTER=TRUE'
     ]
+
+
+def test_create_view(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(SnowflakeEngineAdapter)
+
+    adapter.create_view("test_view", parse_one("SELECT 1"))
+    adapter.create_view("test_view", parse_one("SELECT 1"), replace=False)
+
+    sql_calls = to_sql_calls(adapter)
+    assert sql_calls == [
+        'CREATE OR REPLACE VIEW "test_view" COPY GRANTS AS SELECT 1',
+        'CREATE VIEW "test_view" AS SELECT 1',
+    ]
