@@ -9,6 +9,17 @@ from sqlmesh.core.analytics.collector import AnalyticsCollector
 from sqlmesh.core.analytics.dispatcher import AsyncEventDispatcher, NoopEventDispatcher
 from sqlmesh.utils import str_to_bool
 
+if t.TYPE_CHECKING:
+    import sys
+
+    if sys.version_info >= (3, 10):
+        from typing import ParamSpec
+    else:
+        from typing_extensions import ParamSpec
+
+    _P = ParamSpec("_P")
+    _T = t.TypeVar("_T")
+
 
 def init_collector() -> AnalyticsCollector:
     dispatcher = (
@@ -31,9 +42,9 @@ def disable_analytics() -> None:
     collector = AnalyticsCollector(dispatcher=NoopEventDispatcher())
 
 
-def cli_analytics(func: t.Callable[..., t.Any]) -> t.Callable[..., t.Any]:
+def cli_analytics(func: t.Callable[_P, _T]) -> t.Callable[_P, _T]:
     @wraps(func)
-    def wrapper(*args: t.List[t.Any], **kwargs: t.Any) -> t.Any:
+    def wrapper(*args: _P.args, **kwargs: _P.kwargs) -> _T:
         import click
         from click.core import ParameterSource
 
@@ -73,9 +84,9 @@ def cli_analytics(func: t.Callable[..., t.Any]) -> t.Callable[..., t.Any]:
     return wrapper
 
 
-def python_api_analytics(func: t.Callable[..., t.Any]) -> t.Callable[..., t.Any]:
+def python_api_analytics(func: t.Callable[_P, _T]) -> t.Callable[_P, _T]:
     @wraps(func)
-    def wrapper(*args: t.List[t.Any], **kwargs: t.Any) -> t.Any:
+    def wrapper(*args: _P.args, **kwargs: _P.kwargs) -> _T:
         import inspect
 
         from sqlmesh import magics
