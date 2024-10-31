@@ -208,7 +208,14 @@ class EngineAdapterStateSync(StateSync):
         existing = self.snapshots_exist(snapshots_by_id)
 
         if existing:
-            raise SQLMeshError(f"Snapshots {existing} already exists.")
+            logger.error(
+                "Snapshots %s already exists. This could be due to a concurrent plan or a hash collision. If this is a hash collision, add a stamp to your model.",
+                str(existing),
+            )
+
+            for sid in tuple(snapshots_by_id):
+                if sid in existing:
+                    snapshots_by_id.pop(sid)
 
         snapshots = snapshots_by_id.values()
 

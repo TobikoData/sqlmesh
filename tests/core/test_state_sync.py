@@ -1,4 +1,5 @@
 import json
+import logging
 import re
 import typing as t
 from unittest.mock import call, patch
@@ -141,17 +142,12 @@ def test_push_snapshots(
         snapshot_b.snapshot_id: snapshot_b,
     }
 
-    with pytest.raises(
-        SQLMeshError,
-        match=r".*already exists.*",
-    ):
+    logger = logging.getLogger("sqlmesh.core.state_sync.engine_adapter")
+    with patch.object(logger, "error") as mock_logger:
         state_sync.push_snapshots([snapshot_a])
-
-    with pytest.raises(
-        SQLMeshError,
-        match=r".*already exists.*",
-    ):
+        assert str({snapshot_a.snapshot_id}) == mock_logger.call_args[0][1]
         state_sync.push_snapshots([snapshot_a, snapshot_b])
+        assert str({snapshot_a.snapshot_id, snapshot_b.snapshot_id}) == mock_logger.call_args[0][1]
 
     # test serialization
     state_sync.push_snapshots(
