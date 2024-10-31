@@ -2,6 +2,8 @@
 
 This page describes the kinds of [models](./overview.md) SQLMesh supports, which determine how the data for a model is loaded.
 
+Find information about all model kind configuration parameters in the [model configuration reference page](../../reference/model_configuration.md).
+
 ## INCREMENTAL_BY_TIME_RANGE
 
 Models of the `INCREMENTAL_BY_TIME_RANGE` kind are computed incrementally based on a time range. This is an optimal choice for datasets in which records are captured over time and represent immutable facts such as events, logs, or transactions. Using this kind for appropriate datasets typically results in significant cost and time savings.
@@ -741,7 +743,7 @@ This is the most accurate representation of the menu based on the source data pr
     );
     ```
 
-    This could likely be used on other engines to change the expected data type but has only been tested on BigQuery. 
+    This could likely be used on other engines to change the expected data type but has only been tested on BigQuery.
 
 ### SCD Type 2 By Time Configuration Options
 
