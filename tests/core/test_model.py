@@ -5945,12 +5945,12 @@ MODEL (
   dialect snowflake,
 );
 
-SELECT * FROM (@custom_macro(@foo, @bar)) AS q
+SELECT * FROM (@custom_macro(@a, @b)) AS q
     """)
 
     config = Config(
         model_defaults=ModelDefaultsConfig(dialect="duckdb"),
-        variables={"foo": "foo", "bar": "boo"},
+        variables={"a": "a", "b": "b"},
     )
     context = Context(paths=tmp_path, config=config)
 

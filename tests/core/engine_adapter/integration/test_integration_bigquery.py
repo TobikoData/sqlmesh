@@ -178,3 +178,43 @@ def test_mutating_clustered_by_forward_only(
 
     metadata = _get_data_object(target_table_1)
     assert not metadata.is_clustered
+
+
+def test_fetch_schema_of_information_schema_tables(
+    ctx: TestContext, engine_adapter: BigQueryEngineAdapter
+):
+    # We produce Table(this=Dot(this=INFORMATION_SCHEMA, expression=TABLES)) here,
+    # otherwise `db` or `catalog` wo3uld be set, which is not the right representation
+    information_schema_tables = exp.to_table("_._.INFORMATION_SCHEMA.TABLES")
+    information_schema_tables.set("db", None)
+    information_schema_tables.set("catalog", None)
+
+    source = ctx.table(information_schema_tables)
+
+    expected_columns_to_types = {
+        "table_catalog": exp.DataType.build("TEXT"),
+        "table_schema": exp.DataType.build("TEXT"),
+        "table_name": exp.DataType.build("TEXT"),
+        "table_type": exp.DataType.build("TEXT"),
+        "is_insertable_into": exp.DataType.build("TEXT"),
+        "is_typed": exp.DataType.build("TEXT"),
+        "creation_time": exp.DataType.build("TIMESTAMPTZ"),
+        "base_table_catalog": exp.DataType.build("TEXT"),
+        "base_table_schema": exp.DataType.build("TEXT"),
+        "base_table_name": exp.DataType.build("TEXT"),
+        "snapshot_time_ms": exp.DataType.build("TIMESTAMPTZ"),
+        "ddl": exp.DataType.build("TEXT"),
+        "default_collation_name": exp.DataType.build("TEXT"),
+        "upsert_stream_apply_watermark": exp.DataType.build("TIMESTAMPTZ"),
+        "replica_source_catalog": exp.DataType.build("TEXT"),
+        "replica_source_schema": exp.DataType.build("TEXT"),
+        "replica_source_name": exp.DataType.build("TEXT"),
+        "replication_status": exp.DataType.build("TEXT"),
+        "replication_error": exp.DataType.build("TEXT"),
+        "is_change_history_enabled": exp.DataType.build("TEXT"),
+        "sync_status": exp.DataType.build(
+            "STRUCT<last_completion_time TIMESTAMPTZ, error_time TIMESTAMPTZ, error STRUCT<reason TEXT, location TEXT, message TEXT>>"
+        ),
+    }
+
+    assert expected_columns_to_types == engine_adapter.columns(source.sql())
