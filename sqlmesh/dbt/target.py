@@ -526,6 +526,7 @@ class BigQueryConfig(TargetConfig):
     dataset: t.Optional[str] = None
     project: t.Optional[str] = None
     execution_project: t.Optional[str] = None
+    quota_project: t.Optional[str] = None
     location: t.Optional[str] = None
     keyfile: t.Optional[str] = None
     keyfile_json: t.Optional[t.Dict[str, t.Any]] = None
@@ -586,6 +587,7 @@ class BigQueryConfig(TargetConfig):
             method=self.method,
             project=self.database,
             execution_project=self.execution_project,
+            quota_project=self.quota_project,
             location=self.location,
             concurrent_tasks=self.threads,
             keyfile=self.keyfile,
