@@ -5,6 +5,8 @@ import typing as t
 from functools import cached_property
 
 import pandas as pd
+
+from sqlmesh.core.dialect import to_schema
 from sqlmesh.core.engine_adapter.mixins import RowDiffMixin
 from sqlglot import exp, parse_one
 from sqlglot.helper import ensure_list
@@ -405,13 +407,8 @@ class TableDiff:
             if not temp_schema:
                 temp_schema = "sqlmesh_temp"
 
-            temp_schema_split = temp_schema.split(".", 1)
-            temp_table = exp.table_(
-                "diff",
-                db=temp_schema_split[1] if len(temp_schema_split) > 1 else temp_schema_split[0],
-                catalog=temp_schema_split[0] if len(temp_schema_split) > 1 else None,
-                quoted=True,
-            )
+            schema = to_schema(temp_schema, dialect=self.dialect)
+            temp_table = exp.table_("diff", db=schema.db, catalog=schema.catalog, quoted=True)
 
             with self.adapter.temp_table(query, name=temp_table) as table:
                 summary_sums = [
