@@ -368,7 +368,7 @@ Some properties are only available in specific model kinds - see the [model conf
 :   The maximum number of [batches](#batch_size) that can run concurrently for this model. If not specified, the concurrency is only constrained by the number of concurrent tasks set in the connection settings.
 
 ### lookback
-:   Lookback is used with [incremental by time range](model_kinds.md#incremental_by_time_range) models to capture late-arriving data. It must be a positive integer and specifies the number of interval time units prior to the current interval the model should include.
+:   Lookback is used with [incremental by time range](model_kinds.md#incremental_by_time_range) and [incremental by unique key](model_kinds.md#incremental_by_unique_key) models to capture late-arriving data. It must be a positive integer and specifies the number of interval time units prior to the current interval the model should include.
 
     For example, a model with cron `@daily` and `lookback` of 7 would include the previous 7 days each time it ran, while a model with cron `@weekly` and `lookback` of 7 would include the previous 7 weeks each time it ran.
 
