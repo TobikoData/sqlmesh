@@ -172,6 +172,7 @@ select
 from other_schema.other_table;
 ```
 
+Learn more below about how SQLMesh uses [partitioned tables to improve performance](#performance-considerations).
 
 ## Settings
 
@@ -255,7 +256,7 @@ For example, consider `LEFT JOIN`ing two tables `left` and `right`, where the co
 
 In other SQL engines, those empty cells are filled with `NULL`s.
 
-In contrast, Clickhouse fills the empty cells with data type-specific default values (e.g., 0 for integer column types). It will fill the cells with `NULL`s instead if you set `join_use_nulls` to `1`.
+In contrast, Clickhouse fills the empty cells with data type-specific default values (e.g., 0 for integer column types). It will instead fill the cells with `NULL`s if you set the `join_use_nulls` setting to `1`.
 
 ^^SQLMesh^^
 
@@ -273,6 +274,98 @@ Therefore, SQLMesh uses the following procedure to ensure the model definition q
 - If the model query does not set `join_use_nulls` and the current server `join_use_nulls` value is `1`, do nothing
 - If the model query does not set `join_use_nulls` and the current server `join_use_nulls` value is `0`, add `SETTINGS join_use_nulls = 0` to the CTE model query
     - All other CTEs and the outer query will still execute with a `join_use_nulls` value of `1`
+
+## Performance considerations
+
+Clickhouse is optimized for writing/reading records, so deleting/replacing records can be extremely slow.
+
+This section describes why SQLMesh needs to delete/replace records and how the Clickhouse engine adapter works around the limitations.
+
+### Why delete or replace?
+
+SQLMesh "materializes" model kinds in a number of ways, such as:
+
+- Replacing an entire table ([`FULL` models](../../concepts/models/model_kinds.md#full))
+- Replacing records in a specific time range ([`INCREMENTAL_BY_TIME_RANGE` models](../../concepts/models/model_kinds.md#incremental_by_time_range))
+- Replacing records with specific key values ([`INCREMENTAL_BY_UNIQUE_KEY` models](../../concepts/models/model_kinds.md#incremental_by_unique_key))
+- Replacing records in specific partitions ([`INCREMENTAL_BY_PARTITION` models](../../concepts/models/model_kinds.md#incremental_by_partition))
+
+Different SQL engines provide different methods for performing record replacement.
+
+Some engines natively support updating or inserting ("upserting") records. For example, in some engines you can `merge` a new table into an existing table based on a key. Records in the new table whose keys are already in the existing table will update/replace the existing records. Records in the new table without keys in the existing table will be inserted into the existing table.
+
+Other engines do not natively support upserts, so SQLMesh replaces records in two steps: delete the records to update/replace from the existing table, then insert the new records.
+
+Clickhouse does not support upserts, and it performs the two step delete/insert operation so slowly as to be unusable. Therefore, SQLMesh uses a different method for replacing records.
+
+### Temp table swap
+
+SQLMesh uses what we call the "temp table swap" method of replacing records in Clickhouse.
+
+Because Clickhouse is optimized for writing and reading records, it is often faster to copy most of a table than to delete a small portion of its records. That is the approach used by the temp table swap method (with optional performance improvements [for partitioned tables](#partition-swap)).
+
+The temp table swap has four steps:
+
+1. Make an empty temp copy of the existing table that has the same structure (columns, data types, table engine, etc.)
+2. Insert new records into the temp table
+3. Insert the existing records that should be **kept** into the temp table
+4. Swap the table names, such that the temp table now has the existing table's name
+
+Figure 1 illustrates these four steps:
+<br></br>
+
+![Clickhouse table swap steps](./clickhouse/clickhouse_table-swap-steps.png){ loading=lazy }
+_Figure 1: steps to execute a temp table swap_
+<br></br>
+
+The weakness of this method is that it requires copying all existing rows to keep (step three), which can be problematic for large tables.
+
+To address this weakness, SQLMesh instead uses *partition* swapping if a table is partitioned.
+
+### Partition swap
+
+Clickhouse supports *partitioned* tables, which store groups of records in separate files, or "partitions."
+
+A table is partitioned based on a table column or SQL expression - the "partitioning key." All records with the same value for the partitioning key are stored together in a partition.
+
+For example, consider a table containing each record's creation date in a datetime column. If we partition the table by month, all the records whose timestamp was in January will be stored in one partition, records from February in another partition, and so on.
+
+Table partitioning provides a major benefit for improving swap performance: records can be inserted, updated, or deleted in individual partitions.
+
+SQLMesh leverages this to avoid copying large numbers of existing records into a temp table. Instead, it only copies the records that are in partitions affected by a load's newly ingested records.
+
+SQLMesh automatically uses partition swapping for any incremental model that specifies the [`partitioned_by`](../../concepts/models/overview.md#partitioned_by) key.
+
+#### Choosing a partitioning key
+
+The first step of partitioning a table is choosing its partitioning key (columns or expression). The primary consideration for a key is the total number of partitions it will generate, which affects table performance.
+
+Too many partitions can drastically decrease performance because the overhead of handling partition files swamps the benefits of copying fewer records. Too few partitions decreases swap performance because many existing records must still be copied in each incremental load.
+
+!!! question "How many partitions is too many?"
+
+    Clickhouse's documentation [specifically warns against tables having too many partitions](https://clickhouse.com/docs/en/engines/table-engines/mergetree-family/custom-partitioning-key), suggesting a maximum of 1000.
+
+The total number of partitions in a table is determined by the actual data in the table, not by the partition column/expression alone.
+
+For example, consider a table partitioned by date. If we insert records created on `2024-10-23`, the table will have one partition. If we then insert records from `2024-10-24`, the table will have two partitions. One partition is created for each unique value of the key.
+
+For each partitioned table in your project, carefully consider the number of partitions created by the combination of your partitioning expression and the characteristics of your data.
+
+#### Incremental by time models
+
+`INCREMENTAL_BY_TIME_RANGE` kind models must be partitioned by time. If the model's `time_column` is not present in any `partitioned_by` expression, SQLMesh will automatically add it as the first partitioning expression.
+
+By default, `INCREMENTAL_BY_TIME_RANGE` models partition by week, so the maximum recommended 1000 partitions corresponds to about 19 years of data. SQLMesh projects have widely varying time ranges and data sizes, so you should choose a model's partitioning key based on the data your system will process.
+
+If a model has many records in each partition, you may see additional performance benefits by including the time column in the model's [`ORDER_BY` expression](#order-by).
+
+!!! info "Partitioning by time"
+    `INCREMENTAL_BY_TIME_RANGE` models must be partitioned by time.
+
+    SQLMesh will automatically partition them by **week** unless the `partitioned_by` configuration key includes the time column or an expression based on it.
+
+    Choose a model's time partitioning granularity based on the characteristics of the data it will process, making sure the total number of partitions is 1000 or fewer.
 
 ## Local/Built-in Scheduler
 **Engine Adapter Type**: `clickhouse`
