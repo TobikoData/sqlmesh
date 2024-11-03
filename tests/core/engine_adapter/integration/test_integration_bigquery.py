@@ -184,7 +184,7 @@ def test_fetch_schema_of_information_schema_tables(
     ctx: TestContext, engine_adapter: BigQueryEngineAdapter
 ):
     # We produce Table(this=Dot(this=INFORMATION_SCHEMA, expression=TABLES)) here,
-    # otherwise `db` or `catalog` wo3uld be set, which is not the right representation
+    # otherwise `db` or `catalog` would be set, which is not the right representation
     information_schema_tables = exp.to_table("_._.INFORMATION_SCHEMA.TABLES")
     information_schema_tables.set("db", None)
     information_schema_tables.set("catalog", None)

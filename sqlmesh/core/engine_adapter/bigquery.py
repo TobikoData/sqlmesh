@@ -236,7 +236,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
         table = exp.to_table(table_name)
         if len(table.parts) > 3:
             # The client's `get_table` method can't handle paths with >3 identifiers
-            self.execute(exp.select("*").from_(table))
+            self.execute(exp.select("*").from_(table).limit(1))
             query_results = self._query_job._query_results
             columns = create_mapping_schema(query_results.schema)
         else:
