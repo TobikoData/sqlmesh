@@ -4,7 +4,6 @@ from sqlglot import exp, parse_one
 from sqlmesh.core import constants as c
 from sqlmesh.core.context import Context
 from sqlmesh.core.audit import (
-    BUILT_IN_AUDITS,
     ModelAudit,
     StandaloneAudit,
     builtin,
@@ -765,6 +764,8 @@ def test_text_diff():
 
 
 def test_non_blocking_builtin():
+    from sqlmesh.core.audit.builtin import BUILT_IN_AUDITS
+
     assert BUILT_IN_AUDITS["not_null_non_blocking"].blocking is False
     assert BUILT_IN_AUDITS["not_null_non_blocking"].name == "not_null_non_blocking"
     assert BUILT_IN_AUDITS["not_null"].query == BUILT_IN_AUDITS["not_null_non_blocking"].query
@@ -865,9 +866,9 @@ def test_load_inline_audits(assert_exp_eq):
 
     model = load_sql_based_model(expressions)
     assert len(model.audits) == 1
-    assert len(model.inline_audits) == 2
-    assert isinstance(model.inline_audits["assert_positive_id"], ModelAudit)
-    assert isinstance(model.inline_audits["does_not_exceed_threshold"], ModelAudit)
+    assert len(model.audits_with_args) == 2
+    assert isinstance(model.audit_definitions["assert_positive_id"], ModelAudit)
+    assert isinstance(model.audit_definitions["does_not_exceed_threshold"], ModelAudit)
 
 
 def test_model_inline_audits(sushi_context: Context):
@@ -876,6 +877,6 @@ def test_model_inline_audits(sushi_context: Context):
     model = sushi_context.get_snapshot(model_name, raise_if_missing=True).node
 
     assert isinstance(model, SeedModel)
-    assert len(model.inline_audits) == 3
-    assert isinstance(model.inline_audits["assert_valid_name"], ModelAudit)
-    assert model.inline_audits["assert_positive_id"].render_query(model).sql() == expected_query
+    assert len(model.audit_definitions) == 3
+    assert isinstance(model.audit_definitions["assert_valid_name"], ModelAudit)
+    assert model.audit_definitions["assert_positive_id"].render_query(model).sql() == expected_query

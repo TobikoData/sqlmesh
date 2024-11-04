@@ -27,6 +27,9 @@ from sqlmesh.utils.metaprogramming import build_env, serialize_env
 
 logger = logging.getLogger(__name__)
 
+if t.TYPE_CHECKING:
+    from sqlmesh.core.audit import ModelAudit
+
 
 class model(registry_decorator):
     """Specifies a function is a python based model."""
@@ -81,6 +84,7 @@ class model(registry_decorator):
         defaults: t.Optional[t.Dict[str, t.Any]] = None,
         macros: t.Optional[MacroRegistry] = None,
         jinja_macros: t.Optional[JinjaMacroRegistry] = None,
+        audits: t.Optional[t.Dict[str, ModelAudit]] = None,
         dialect: t.Optional[str] = None,
         time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT,
         physical_schema_mapping: t.Optional[t.Dict[re.Pattern, str]] = None,
@@ -147,6 +151,7 @@ class model(registry_decorator):
             module_path=module_path,
             macros=macros,
             jinja_macros=jinja_macros,
+            audit_definitions=audits,
             columns=self.columns,
             dialect=dialect,
             **common_kwargs,

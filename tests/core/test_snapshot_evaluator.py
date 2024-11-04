@@ -2380,8 +2380,9 @@ def test_audit_wap(adapter_mock, make_snapshot):
             ("not_null", {"columns": exp.to_column("a")}),
             ("test_audit", {}),
         ],
+        audit_definitions={custom_audit.name: custom_audit},
     )
-    snapshot = make_snapshot(model, audits={custom_audit.name: custom_audit})
+    snapshot = make_snapshot(model)
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
     wap_id = "test_wap_id"
@@ -2436,8 +2437,9 @@ def test_audit_set_blocking_at_use_site(adapter_mock, make_snapshot):
             SELECT a::int FROM tbl
             """
         ),
+        audits={always_failing_audit.name: always_failing_audit},
     )
-    snapshot = make_snapshot(model, audits={always_failing_audit.name: always_failing_audit})
+    snapshot = make_snapshot(model)
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
     # Return a non-zero count to indicate audit failure
@@ -2455,8 +2457,9 @@ def test_audit_set_blocking_at_use_site(adapter_mock, make_snapshot):
         audits=[
             ("always_fail", {"blocking": exp.true()}),
         ],
+        audit_definitions={always_failing_audit.name: always_failing_audit},
     )
-    snapshot = make_snapshot(model, audits={always_failing_audit.name: always_failing_audit})
+    snapshot = make_snapshot(model)
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
     adapter_mock.fetchone.return_value = (1,)
 

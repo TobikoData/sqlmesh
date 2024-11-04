@@ -105,6 +105,7 @@ def test_json(snapshot: Snapshot):
         "dev_intervals": [],
         "node": {
             "audits": [],
+            "audit_definitions": {},
             "clustered_by": [],
             "cron": "1 0 * * *",
             "kind": {
@@ -117,7 +118,6 @@ def test_json(snapshot: Snapshot):
                 "dialect": "spark",
             },
             "mapping_schema": {},
-            "inline_audits": {},
             "start": "2020-01-01",
             "dialect": "spark",
             "name": "name",
@@ -141,7 +141,6 @@ def test_json(snapshot: Snapshot):
             "enabled": True,
             "extract_dependencies_from_query": True,
         },
-        "audits": [],
         "name": '"name"',
         "parents": [{"name": '"parent"."tbl"', "identifier": snapshot.parents[0].identifier}],
         "previous_versions": [],
@@ -841,6 +840,8 @@ def test_fingerprint_builtin_audits(model: Model, parent_model: Model):
         {**model.dict(), "audits": [("unique_values", {"columns": exp.convert([to_column("a")])})]}
     )
     new_fingerprint = fingerprint_from_node(model, nodes={})
+    print(new_fingerprint)
+    print(fingerprint)
     assert new_fingerprint != fingerprint
 
 

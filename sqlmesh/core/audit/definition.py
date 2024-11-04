@@ -20,7 +20,7 @@ from sqlmesh.core.model.common import (
     depends_on_validator,
     expression_validator,
 )
-from sqlmesh.core.model.definition import _Model, _python_env, _single_value_or_tuple
+from sqlmesh.core.model.common import make_python_env, single_value_or_tuple
 from sqlmesh.core.node import _Node
 from sqlmesh.core.renderer import QueryRenderer
 from sqlmesh.utils.date import TimeLike
@@ -34,12 +34,12 @@ from sqlmesh.utils.metaprogramming import Executable
 from sqlmesh.utils.pydantic import (
     PydanticModel,
     field_validator,
-    get_dialect,
     model_validator,
     model_validator_v1_args,
 )
 
 if t.TYPE_CHECKING:
+    from sqlmesh.core.model.definition import _Model
     from sqlmesh.core.snapshot import DeployabilityIndex, Node, Snapshot
 
 if sys.version_info >= (3, 9):
@@ -109,8 +109,10 @@ class AuditMixin(AuditCommonMetaMixin):
         Returns:
             The rendered expression.
         """
+        from sqlmesh.core.model.definition import _Model
+
         node = snapshot_or_node if isinstance(snapshot_or_node, _Node) else snapshot_or_node.node
-        query_renderer = self._create_query_renderer(node)
+        query_renderer = self._create_query_renderer(node if isinstance(node, _Model) else None)
 
         rendered_query = query_renderer.render(
             start=start,
@@ -137,7 +139,7 @@ class AuditMixin(AuditCommonMetaMixin):
         """All macro definitions from the list of expressions."""
         return [s for s in self.expressions if isinstance(s, d.MacroDef)]
 
-    def _create_query_renderer(self, node: _Node) -> QueryRenderer:
+    def _create_query_renderer(self, model: t.Optional[_Model] = None) -> QueryRenderer:
         raise NotImplementedError
 
 
@@ -150,6 +152,8 @@ def audit_string_validator(cls: t.Type, v: t.Any) -> t.Optional[str]:
 
 @field_validator("defaults", mode="before", check_fields=False)
 def audit_map_validator(cls: t.Type, v: t.Any, values: t.Any) -> t.Dict[str, t.Any]:
+    from sqlmesh.utils.pydantic import get_dialect
+
     if isinstance(v, exp.Paren):
         return dict([_maybe_parse_arg_pair(v.unnest())])
     if isinstance(v, (exp.Tuple, exp.Array)):
@@ -205,13 +209,18 @@ class ModelAudit(PydanticModel, AuditMixin, frozen=True):
         deployability_index: t.Optional[DeployabilityIndex] = None,
         **kwargs: t.Any,
     ) -> exp.Query:
+        from sqlmesh.core.model.definition import _Model
         from sqlmesh.core.snapshot import DeployabilityIndex, Snapshot
 
         deployability_index = deployability_index or DeployabilityIndex.all_deployable()
 
         extra_kwargs = {}
 
-        node = snapshot_or_node if isinstance(snapshot_or_node, _Node) else snapshot_or_node.node
+        node = t.cast(
+            _Model,
+            snapshot_or_node if isinstance(snapshot_or_node, _Node) else snapshot_or_node.node,
+        )
+
         this_model = kwargs.pop("this_model", None) or (
             node.fqn
             if isinstance(snapshot_or_node, _Node)
@@ -227,7 +236,6 @@ class ModelAudit(PydanticModel, AuditMixin, frozen=True):
             except Exception:
                 pass
 
-        node = t.cast(_Model, node)
         if node.time_column:
             where = node.time_column.column.between(
                 node.convert_to_time_column(start or c.EPOCH, columns_to_types),
@@ -256,8 +264,8 @@ class ModelAudit(PydanticModel, AuditMixin, frozen=True):
             **{**extra_kwargs, **kwargs},
         )
 
-    def _create_query_renderer(self, node: _Node) -> QueryRenderer:
-        model = t.cast(_Model, node)
+    def _create_query_renderer(self, model: t.Optional[_Model] = None) -> QueryRenderer:
+        assert model
         return QueryRenderer(
             self.query,
             self.dialect or model.dialect,
@@ -345,7 +353,8 @@ class StandaloneAudit(_Node, AuditMixin):
         # StandaloneAudits do not have a data hash
         return hash_data("")
 
-    def metadata_hash(self, audits: t.Dict[str, ModelAudit]) -> str:
+    @property
+    def metadata_hash(self) -> str:
         """
         Computes the metadata hash for the node.
 
@@ -445,7 +454,7 @@ class StandaloneAudit(_Node, AuditMixin):
     def meta_fields(self) -> t.Iterable[str]:
         return set(AuditCommonMetaMixin.__annotations__) | set(_Node.all_field_infos())
 
-    def _create_query_renderer(self, node: _Node) -> QueryRenderer:
+    def _create_query_renderer(self, model: t.Optional[_Model] = None) -> QueryRenderer:
         return QueryRenderer(
             self.query,
             self.dialect,
@@ -456,20 +465,12 @@ class StandaloneAudit(_Node, AuditMixin):
             default_catalog=self.default_catalog,
         )
 
+    @property
+    def audits_with_args(self) -> t.List[t.Tuple[Audit, t.Dict[str, exp.Expression]]]:
+        return [(self, {})]
+
 
 Audit = t.Union[ModelAudit, StandaloneAudit]
-
-
-class AuditResult(PydanticModel):
-    audit: Audit
-    """The audit this result is for."""
-    model: t.Optional[_Model] = None
-    """The model this audit is for."""
-    count: t.Optional[int] = None
-    """The number of records returned by the audit query. This could be None if the audit was skipped."""
-    query: t.Optional[exp.Expression] = None
-    """The rendered query used by the audit. This could be None if the audit was skipped."""
-    skipped: bool = False
 
 
 def load_audit(
@@ -545,7 +546,7 @@ def load_audit(
             used_variables.update(extract_macro_references_and_variables(jinja_macro.definition)[1])
 
         extra_kwargs["jinja_macros"] = jinja_macros
-        extra_kwargs["python_env"] = _python_env(
+        extra_kwargs["python_env"] = make_python_env(
             [*statements, query],
             jinja_macro_refrences,
             module_path,
@@ -625,6 +626,6 @@ META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
     "blocking": exp.convert,
     "standalone": exp.convert,
     "depends_on_": lambda value: exp.Tuple(expressions=sorted(value)),
-    "tags": _single_value_or_tuple,
+    "tags": single_value_or_tuple,
     "default_catalog": exp.to_identifier,
 }

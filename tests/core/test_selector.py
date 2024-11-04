@@ -87,7 +87,7 @@ def test_select_models(mocker: MockerFixture, make_snapshot, default_catalog: t.
     local_models[modified_model_v2.fqn] = modified_model_v2.copy(
         update={"mapping_schema": added_model_schema}
     )
-    selector = Selector(state_reader_mock, local_models, {}, default_catalog=default_catalog)
+    selector = Selector(state_reader_mock, local_models, default_catalog=default_catalog)
 
     _assert_models_equal(
         selector.select_models(["db.added_model"], env_name),
@@ -242,7 +242,7 @@ def test_select_models_expired_environment(mocker: MockerFixture, make_snapshot)
 
     local_models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
     local_models[modified_model_v2.fqn] = modified_model_v2
-    selector = Selector(state_reader_mock, local_models, {})
+    selector = Selector(state_reader_mock, local_models)
 
     _assert_models_equal(
         selector.select_models(["*.modified_model"], env_name, fallback_env_name="prod"),
@@ -298,7 +298,7 @@ def test_select_change_schema(mocker: MockerFixture, make_snapshot):
     local_child = child.copy(update={"mapping_schema": {'"db"': {'"parent"': {"b": "INT"}}}})
     local_models[local_child.fqn] = local_child
 
-    selector = Selector(state_reader_mock, local_models, {})
+    selector = Selector(state_reader_mock, local_models)
 
     selected = selector.select_models(["db.parent"], env_name)
     assert selected[local_child.fqn].data_hash != child.data_hash
@@ -332,7 +332,7 @@ def test_select_models_missing_env(mocker: MockerFixture, make_snapshot):
     local_models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
     local_models[model.fqn] = model
 
-    selector = Selector(state_reader_mock, local_models, {})
+    selector = Selector(state_reader_mock, local_models)
 
     assert selector.select_models([model.name], "missing_env").keys() == {model.fqn}
     assert not selector.select_models(["missing"], "missing_env")
@@ -508,7 +508,7 @@ def test_expand_model_selections(
         )
         models[model.fqn] = model
 
-    selector = Selector(mocker.Mock(), models, {})
+    selector = Selector(mocker.Mock(), models)
     assert selector.expand_model_selections(selections) == output
 
 
@@ -521,7 +521,7 @@ def test_model_selection_normalized(mocker: MockerFixture, make_snapshot):
         dialect="bigquery",
     )
     models[model.fqn] = model
-    selector = Selector(mocker.Mock(), models, {}, dialect="bigquery")
+    selector = Selector(mocker.Mock(), models, dialect="bigquery")
     assert selector.expand_model_selections(["db.test_Model"]) == {'"db"."test_Model"'}
 
 
@@ -569,7 +569,7 @@ def test_expand_git_selection(
     git_client_mock.list_uncommitted_changed_files.return_value = []
     git_client_mock.list_committed_changed_files.return_value = [model_a._path, model_c._path]
 
-    selector = Selector(mocker.Mock(), models, {})
+    selector = Selector(mocker.Mock(), models)
     selector._git_client = git_client_mock
 
     assert selector.expand_model_selections(expressions) == expected_fqns
@@ -603,7 +603,7 @@ def test_select_models_with_external_parent(mocker: MockerFixture):
     local_models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
     local_models[added_model.fqn] = added_model
 
-    selector = Selector(state_reader_mock, local_models, {}, default_catalog=default_catalog)
+    selector = Selector(state_reader_mock, local_models, default_catalog=default_catalog)
 
     expanded_selections = selector.expand_model_selections(["+*added_model*"])
     assert expanded_selections == {added_model.fqn}

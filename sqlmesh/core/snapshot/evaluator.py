@@ -36,12 +36,13 @@ from sqlglot.executor import execute
 
 from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
-from sqlmesh.core.audit import Audit, AuditResult
+from sqlmesh.core.audit import Audit
 from sqlmesh.core.dialect import schema_
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.engine_adapter.shared import InsertOverwriteStrategy
 from sqlmesh.core.macros import RuntimeStage
 from sqlmesh.core.model import (
+    AuditResult,
     IncrementalUnmanagedKind,
     Model,
     SeedModel,
@@ -423,16 +424,16 @@ class SnapshotEvaluator:
 
         results = []
 
-        audits_with_args = snapshot.audits_with_args
+        audits_with_args = snapshot.node.audits_with_args
 
         if audits_with_args:
             logger.info("Auditing snapshot %s", snapshot.snapshot_id)
 
-        for audit, audit_args in snapshot.audits_with_args:
+        for audit, audit_args in audits_with_args:
             results.append(
                 self._audit(
                     audit=audit,
-                    audit_args=audit_args,
+                    audit_args=audit_args.copy(),
                     snapshot=snapshot,
                     snapshots=snapshots,
                     start=start,
@@ -894,6 +895,7 @@ class SnapshotEvaluator:
             model=snapshot.model_or_none,
             count=count,
             query=query,
+            blocking=blocking,
         )
 
     def _create_schemas(self, tables: t.Iterable[t.Union[exp.Table, str]]) -> None:

@@ -100,6 +100,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
                     "dev_intervals": [],
                     "node": {
                         "audits": [],
+                        "audit_definitions": {},
                         "clustered_by": [],
                         "cron": "@daily",
                         "dialect": "spark",
@@ -113,7 +114,6 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
                             "dialect": "spark",
                         },
                         "mapping_schema": {},
-                        "inline_audits": {},
                         "name": "test_model",
                         "partitioned_by": ["`a`"],
                         "query": "SELECT a, ds FROM tbl",
@@ -135,7 +135,6 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
                         "enabled": True,
                         "extract_dependencies_from_query": True,
                     },
-                    "audits": [],
                     "name": '"test_model"',
                     "parents": [],
                     "previous_versions": [],

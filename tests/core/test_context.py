@@ -379,9 +379,11 @@ def test_override_builtin_audit_blocking_mode():
 
     # Even though there are two builtin audits referenced in the above definition, we only
     # store the one that overrides `blocking` in the snapshot; the other one isn't needed
-    assert len(new_snapshot.audits) == 1
-    assert new_snapshot.audits[0].name == "not_null"
-    assert new_snapshot.audits[0].blocking is False
+    audits_with_args = new_snapshot.model.audits_with_args
+    assert len(audits_with_args) == 2
+    audit, args = audits_with_args[0]
+    assert audit.name == "not_null"
+    assert list(args) == ["columns", "blocking"]
 
     context = Context(config=Config())
     context.upsert_model(

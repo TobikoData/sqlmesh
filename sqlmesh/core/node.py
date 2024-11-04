@@ -21,7 +21,6 @@ from sqlmesh.utils.pydantic import (
 )
 
 if t.TYPE_CHECKING:
-    from sqlmesh.core.audit import ModelAudit
     from sqlmesh.core.snapshot import Node
 
     if sys.version_info >= (3, 11):
@@ -322,12 +321,10 @@ class _Node(PydanticModel):
     def fqn(self) -> str:
         return self.name
 
-    def metadata_hash(self, audits: t.Dict[str, ModelAudit]) -> str:
+    @property
+    def metadata_hash(self) -> str:
         """
         Computes the metadata hash for the node.
-
-        Args:
-            audits: Available audits by name.
 
         Returns:
             The metadata hash for the node.

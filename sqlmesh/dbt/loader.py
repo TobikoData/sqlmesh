@@ -4,7 +4,6 @@ import logging
 import typing as t
 from pathlib import Path
 from sqlmesh.core import constants as c
-from sqlmesh.core.audit import Audit
 from sqlmesh.core.config import (
     Config,
     ConnectionConfig,
@@ -27,6 +26,7 @@ from sqlmesh.utils.jinja import JinjaMacroRegistry
 logger = logging.getLogger(__name__)
 
 if t.TYPE_CHECKING:
+    from sqlmesh.core.audit import Audit, ModelAudit
     from sqlmesh.core.context import GenericContext
 
 
@@ -93,7 +93,7 @@ class DbtLoader(Loader):
         macros: MacroRegistry,
         jinja_macros: JinjaMacroRegistry,
         gateway: t.Optional[str],
-        audits: t.Optional[t.Dict[str, Audit]],
+        audits: UniqueKeyDict[str, ModelAudit],
     ) -> UniqueKeyDict[str, Model]:
         models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
 
