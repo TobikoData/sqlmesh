@@ -318,6 +318,7 @@ class _Model(ModelMeta, frozen=True):
         Returns:
             The rendered expression.
         """
+        # TODO: step 2 Query Rendering: Within the plan method, the render_query within render_query_or_raise methods of the model are invoked. These methods are responsible for rendering the SQL query and are defined in sqlmesh/core/model/definition.py.
         query = self.render_query(
             start=start,
             end=end,
@@ -1057,6 +1058,8 @@ class SqlModel(_SqlBasedModel):
         engine_adapter: t.Optional[EngineAdapter] = None,
         **kwargs: t.Any,
     ) -> t.Optional[exp.Query]:
+        # TODO: first render called here
+        # print("before first render call")
         query = self._query_renderer.render(
             start=start,
             end=end,
@@ -1068,6 +1071,7 @@ class SqlModel(_SqlBasedModel):
             engine_adapter=engine_adapter,
             **kwargs,
         )
+        # print("after first render call")
         return query
 
     def render_definition(
@@ -1085,6 +1089,7 @@ class SqlModel(_SqlBasedModel):
     def is_sql(self) -> bool:
         return True
 
+    # TODO: this is probably not the best way to check invocation as this is a property called multiple times
     @property
     def columns_to_types(self) -> t.Optional[t.Dict[str, exp.DataType]]:
         if self.columns_to_types_ is not None:
@@ -1109,7 +1114,7 @@ class SqlModel(_SqlBasedModel):
     def column_descriptions(self) -> t.Dict[str, str]:
         if self.column_descriptions_ is not None:
             return self.column_descriptions_
-
+        # TODO: step 2 Query Rendering: Within the plan method, the render_query or render_query_or_raise methods of the model are likely invoked. These methods are responsible for rendering the SQL query and are defined in sqlmesh/core/model/definition.py.
         query = self.render_query()
         if query is None:
             return {}
@@ -1218,6 +1223,7 @@ class SqlModel(_SqlBasedModel):
 
     @cached_property
     def _query_renderer(self) -> QueryRenderer:
+        # print("hello from sqlmesh.core.model.definition.py")
         no_quote_identifiers = self.kind.is_view and self.dialect in ("trino", "spark")
         return QueryRenderer(
             self.query,

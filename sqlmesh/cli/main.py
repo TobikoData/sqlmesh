@@ -423,6 +423,7 @@ def plan(
     allow_destructive_models = kwargs.pop("allow_destructive_model") or None
     backfill_models = kwargs.pop("backfill_model") or None
     context.console.verbose = verbose
+    # TODO: step 1- invoke plan method here
     context.plan(
         environment,
         restate_models=restate_models,

@@ -366,6 +366,7 @@ class QueryRenderer(BaseExpressionRenderer):
         super().update_schema(schema)
         self._optimized_cache = None
 
+    # TODO: main render method defined here
     def render(
         self,
         start: t.Optional[TimeLike] = None,
@@ -404,7 +405,8 @@ class QueryRenderer(BaseExpressionRenderer):
         should_cache = self._should_cache(
             runtime_stage, start, end, execution_time, *kwargs.values()
         )
-
+        # TODO: cache check prevents me from seeing the warning message multiple times in a row for the same ambiguous column which makes me change a column to verify the terminal output is working as expected
+        # TODO: I may want to invalidate the cache if the config flag is true for error_on_ambiguous_columns to keep surfacing the warning message, we'll see
         if should_cache and self._optimized_cache:
             query = self._optimized_cache
         else:
@@ -444,8 +446,10 @@ class QueryRenderer(BaseExpressionRenderer):
                 deps = d.find_tables(
                     query, default_catalog=self._default_catalog, dialect=self._dialect
                 )
-
+                # TODO: main optimize method called here
+                print("before optimize")
                 query = self._optimize_query(query, deps)
+                print("after optimize")
 
                 if should_cache:
                     self._optimized_cache = query
@@ -474,7 +478,10 @@ class QueryRenderer(BaseExpressionRenderer):
         else:
             super().update_cache(expression)
 
-    def _optimize_query(self, query: exp.Query, all_deps: t.Set[str]) -> exp.Query:
+    # TODO: add a new arg error_on_ambiguous_columns
+    def _optimize_query(
+        self, query: exp.Query, all_deps: t.Set[str], error_on_ambiguous_columns: bool = True
+    ) -> exp.Query:
         # We don't want to normalize names in the schema because that's handled by the optimizer
         original = query
         missing_deps = set()
@@ -513,10 +520,21 @@ class QueryRenderer(BaseExpressionRenderer):
                 )
         except SqlglotError as ex:
             query = original
-
-            logger.warning(
-                "%s for model '%s', the column may not exist or is ambiguous", ex, self._model_fqn
-            )
+            if error_on_ambiguous_columns:
+                logger.error(
+                    "%s for model '%s', the column may not exist or is ambiguous",
+                    ex,
+                    self._model_fqn,
+                )
+                raise SQLMeshError(
+                    "Preventing plan application due to ambiguous column(s). Set error_on_ambiguous_columns to false to make this a warning."
+                )
+            else:
+                logger.warning(
+                    "%s for model '%s', the column may not exist or is ambiguous",
+                    ex,
+                    self._model_fqn,
+                )
         except Exception as ex:
             raise_config_error(
                 f"Failed to optimize query, please file an issue at https://github.com/TobikoData/sqlmesh/issues/new. {ex}",
