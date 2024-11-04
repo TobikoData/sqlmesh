@@ -23,6 +23,7 @@ from sqlmesh.utils.pydantic import PydanticModel
 from tests.utils.pandas import compare_dataframes
 
 if t.TYPE_CHECKING:
+    from sqlmesh.core._typing import TableName
     from sqlmesh.core.engine_adapter._typing import Query
 
 TEST_SCHEMA = "test_schema"
@@ -212,12 +213,16 @@ class TestContext:
     def output_data(self, data: pd.DataFrame) -> pd.DataFrame:
         return self._format_df(data)
 
-    def table(self, table_name: str, schema: str = TEST_SCHEMA) -> exp.Table:
+    def table(self, table_name: TableName, schema: str = TEST_SCHEMA) -> exp.Table:
         schema = self.add_test_suffix(schema)
         self._schemas.append(schema)
+
+        table = exp.to_table(table_name)
+        table.set("db", exp.parse_identifier(schema, dialect=self.dialect))
+
         return exp.to_table(
             normalize_model_name(
-                ".".join([schema, table_name]),
+                table,
                 default_catalog=self.engine_adapter.default_catalog,
                 dialect=self.dialect,
             )
