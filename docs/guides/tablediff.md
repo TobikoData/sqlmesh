@@ -122,8 +122,6 @@ Under the hood, SQLMesh stores temporary data in the database to perform the com
 The default schema for these temporary tables is `sqlmesh_temp` but can be changed with the `--temp-schema` option.
 The schema can be specified as a `CATALOG.SCHEMA` or `SCHEMA`.
 
-```bash linenums="1"
-
 ## Diffing tables or views
 
 Compare specific tables or views with the SQLMesh CLI interface by using the command `sqlmesh table_diff [source table]:[target table]`.
