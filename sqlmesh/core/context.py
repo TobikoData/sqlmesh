@@ -659,7 +659,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         success = False
         interrupted = False
         done = False
-        while not done and not interrupted:
+        while not done:
             plan_id_at_start = _block_until_finalized()
 
             def _has_environment_changed() -> bool:
@@ -689,6 +689,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                 )
                 if exit_on_env_update:
                     interrupted = True
+                    done = True
             except Exception as e:
                 self.notification_target_manager.notify(
                     NotificationEvent.RUN_FAILURE, traceback.format_exc()
