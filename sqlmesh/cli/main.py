@@ -804,6 +804,11 @@ def create_external_models(obj: Context, **kwargs: t.Any) -> None:
     is_flag=True,
     help="Disable the check for a primary key (grain) that is missing or is not unique.",
 )
+@click.option(
+    "--temp-schema",
+    type=str,
+    help="Schema used for temporary tables. It can be `CATALOG.SCHEMA` or `SCHEMA`. Default: `sqlmesh_temp`",
+)
 @click.pass_obj
 @error_handler
 @cli_analytics

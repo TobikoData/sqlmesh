@@ -1430,6 +1430,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         show_sample: bool = True,
         decimals: int = 3,
         skip_grain_check: bool = False,
+        temp_schema: t.Optional[str] = None,
     ) -> TableDiff:
         """Show a diff between two tables.
 
@@ -1446,6 +1447,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             show_sample: Show the sample dataframe in the console. Requires show=True.
             decimals: The number of decimal places to keep when comparing floating point columns.
             skip_grain_check: Skip check for rows that contain null or duplicate grains.
+            temp_schema: The schema to use for temporary tables.
 
         Returns:
             The TableDiff object containing schema and summary differences.
@@ -1504,7 +1506,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         if show:
             self.console.show_schema_diff(table_diff.schema_diff())
             self.console.show_row_diff(
-                table_diff.row_diff(skip_grain_check=skip_grain_check),
+                table_diff.row_diff(temp_schema=temp_schema, skip_grain_check=skip_grain_check),
                 show_sample=show_sample,
                 skip_grain_check=skip_grain_check,
             )
