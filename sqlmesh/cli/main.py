@@ -221,6 +221,7 @@ def evaluate(
 
 
 @cli.command("format")
+@click.argument("paths", nargs=-1)
 @click.option(
     "-t",
     "--transpile",
@@ -280,12 +281,14 @@ def evaluate(
 @click.pass_context
 @error_handler
 @cli_analytics
-def format(ctx: click.Context, **kwargs: t.Any) -> None:
+def format(
+    ctx: click.Context, paths: t.Optional[t.Tuple[str, ...]] = None, **kwargs: t.Any
+) -> None:
     """Format all SQL models and audits."""
     if kwargs.pop("no_rewrite_casts", None):
         kwargs["rewrite_casts"] = False
 
-    if not ctx.obj.format(**{k: v for k, v in kwargs.items() if v is not None}):
+    if not ctx.obj.format(**{k: v for k, v in kwargs.items() if v is not None}, paths=paths):
         ctx.exit(1)
 
 
