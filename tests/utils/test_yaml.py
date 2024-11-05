@@ -1,6 +1,7 @@
 import os
 
 import pytest
+from decimal import Decimal
 
 import sqlmesh.utils.yaml as yaml
 from sqlmesh.utils.errors import SQLMeshError
@@ -41,3 +42,6 @@ def test_yaml() -> None:
     with pytest.raises(SQLMeshError) as ex:
         yaml.load("")
     assert "YAML source can't be empty." in str(ex.value)
+
+    decimal_value = Decimal(123.45)
+    assert yaml.load(yaml.dump(decimal_value)) == str(decimal_value)
