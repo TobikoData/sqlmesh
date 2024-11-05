@@ -58,6 +58,7 @@ class Config(BaseConfig):
         default_test_connection: The default connection to use for tests if one is not specified in a gateway.
         default_scheduler: The default scheduler configuration to use if one is not specified in a gateway.
         default_gateway: The default gateway.
+        cross_gateway: Whether the project sources from multiple gateways. Currently supports DuckDB and PostgreSQL.
         notification_targets: The notification targets to use.
         project: The project name of this config. Used for multi-repo setups.
         snapshot_ttl: The period of time that a model snapshot that is not a part of any environment should exist before being deleted.
@@ -93,6 +94,7 @@ class Config(BaseConfig):
     )
     default_scheduler: SchedulerConfig = BuiltInSchedulerConfig()
     default_gateway: str = ""
+    cross_gateway: bool = False
     notification_targets: t.List[NotificationTarget] = []
     project: str = ""
     snapshot_ttl: str = c.DEFAULT_SNAPSHOT_TTL

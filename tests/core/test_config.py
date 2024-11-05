@@ -25,6 +25,7 @@ from sqlmesh.core.config.loader import (
     load_config_from_paths,
     load_config_from_python_module,
 )
+from sqlmesh.core.context import Context
 from sqlmesh.core.notification_target import ConsoleNotificationTarget
 from sqlmesh.core.user import User
 from sqlmesh.utils.errors import ConfigError
@@ -702,3 +703,72 @@ model_defaults:
     assert isinstance(config.get_gateway("airflow_gateway").scheduler, AirflowSchedulerConfig)
     assert isinstance(config.get_gateway("mwaa_gateway").scheduler, MWAASchedulerConfig)
     assert isinstance(config.get_gateway("builtin_gateway").scheduler, BuiltInSchedulerConfig)
+
+
+def test_load_multiple_gateways(tmp_path):
+    config_path = tmp_path / "config_duckdb_postgres.yaml"
+    with open(config_path, "w", encoding="utf-8") as fd:
+        fd.write(
+            """
+gateways:
+    main:
+        connection:
+            type: duckdb
+            database: main.db
+    pg_1:
+        connection:
+            type: postgres
+            host: 127.0.0.1
+            port: 5432
+            user: user
+            password: password
+            database: pg_1
+    db_2:
+        connection:
+            type: duckdb
+            database: db_2.duckdb
+    pg_2:
+        connection:
+            type: postgres
+            host: 127.0.0.1
+            port: 5432
+            password: password
+            user: user
+            database: pg_2
+            
+default_gateway: main
+cross_gateway: true
+
+model_defaults:
+    dialect: ''
+        """
+        )
+
+    config = load_config_from_paths(
+        Config,
+        project_paths=[config_path],
+    )
+
+    ctx = Context(paths=tmp_path, config=config)
+    assert isinstance(ctx._connection_config, DuckDBConnectionConfig)
+    assert config.gateways["main"].connection.catalogs == ctx._connection_config.catalogs
+    assert len(ctx._connection_config.catalogs) == 4
+    assert ctx._connection_config.is_recommended_for_state_sync is True
+    assert ctx._connection_config.get_catalog() == "main"
+
+    attached_pg_1 = ctx._connection_config.catalogs.get("pg_1")
+    assert isinstance(attached_pg_1, DuckDBAttachOptions)
+    assert attached_pg_1.type == "postgres"
+    assert attached_pg_1.path == "dbname=pg_1 user=user host=127.0.0.1 password=password port=5432"
+
+    attached_pg_1.to_sql(
+        alias="pg_1"
+    ) == "ATTACH 'dbname=pg_1 user=user host=127.0.0.1 password=password port=5432' AS pg_1 (TYPE POSTGRES)"
+
+    attached_db_2 = ctx._connection_config.catalogs.get("db_2")
+    assert attached_db_2 == "db_2.duckdb"
+
+    attached_pg_2 = ctx._connection_config.catalogs.get("pg_2")
+    assert isinstance(attached_pg_2, DuckDBAttachOptions)
+    assert attached_pg_2.type == "postgres"
+    assert attached_pg_2.path == "dbname=pg_2 user=user host=127.0.0.1 password=password port=5432"

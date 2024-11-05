@@ -57,6 +57,11 @@ from sqlmesh.core import constants as c
 from sqlmesh.core.analytics import python_api_analytics
 from sqlmesh.core.audit import Audit, ModelAudit, StandaloneAudit
 from sqlmesh.core.config import CategorizerConfig, Config, load_configs
+from sqlmesh.core.config.connection import (
+    DuckDBAttachOptions,
+    DuckDBConnectionConfig,
+    PostgresConnectionConfig,
+)
 from sqlmesh.core.config.loader import C
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.context_diff import ContextDiff
@@ -362,6 +367,10 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         self._connection_config = self.config.get_connection(self.gateway)
         self.concurrent_tasks = concurrent_tasks or self._connection_config.concurrent_tasks
+
+        if self.config.cross_gateway:
+            self._load_multiple_gateways()
+
         self._engine_adapter = engine_adapter or self._connection_config.create_engine_adapter()
 
         self.console = console or get_console(dialect=self._engine_adapter.dialect)
@@ -2147,6 +2156,36 @@ class GenericContext(BaseContext, t.Generic[C]):
                             f"Conflicting requirement {dep}: {ver} != {other_ver}. Fix your {c.REQUIREMENTS} file."
                         )
                     self._requirements[dep] = ver
+
+    def _load_multiple_gateways(self) -> None:
+        # Validate there are multiple gateways and the default is duckdb
+        if (
+            len(self.config.gateways) < 2
+            or not isinstance(self._connection_config, DuckDBConnectionConfig)
+            or not self._connection_config.database
+            or self._connection_config.catalogs
+        ):
+            return
+
+        # Set the attach options for the main and additional connection gateways (Currently supported DuckDB and PostgreSQL)
+        self._connection_config.catalogs = {
+            self._connection_config.database.split(".")[0]: self._connection_config.database
+        }
+        for gateway_name, config in self.config.gateways.items():
+            if isinstance(config.connection, PostgresConnectionConfig):
+                self._connection_config.catalogs[gateway_name] = DuckDBAttachOptions(
+                    type=config.connection.type_, path=config.connection._libpq_string
+                )
+            elif (
+                isinstance(config.connection, DuckDBConnectionConfig)
+                and config.connection.database
+                and config.connection.database != self._connection_config.database
+            ):
+                self._connection_config.catalogs[config.connection.database.split(".")[0]] = (
+                    config.connection.database
+                )
+                config.connection.database = None
+        self._connection_config.database = None
 
 
 class Context(GenericContext[Config]):

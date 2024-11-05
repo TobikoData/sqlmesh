@@ -1152,6 +1152,14 @@ class PostgresConnectionConfig(ConnectionConfig):
 
         return init
 
+    @property
+    def _libpq_string(self) -> str:
+        return (
+            f"dbname={self.database} user={self.user} "
+            f"host={self.host} password={self.password} "
+            f"port={self.port}"
+        )
+
 
 class MySQLConnectionConfig(ConnectionConfig):
     host: str
