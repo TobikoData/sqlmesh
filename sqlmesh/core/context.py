@@ -971,12 +971,15 @@ class GenericContext(BaseContext, t.Generic[C]):
         append_newline: t.Optional[bool] = None,
         *,
         check: t.Optional[bool] = None,
+        paths: t.Optional[t.Tuple[t.Union[str, Path], ...]] = None,
         **kwargs: t.Any,
     ) -> bool:
         """Format all SQL models and audits."""
         format_targets = {**self._models, **self._audits}
         for target in format_targets.values():
             if target._path is None or target._path.suffix != ".sql":
+                continue
+            if paths and not any(target._path.samefile(p) for p in paths):
                 continue
 
             with open(target._path, "r+", encoding="utf-8") as file:
