@@ -916,3 +916,38 @@ def clean(obj: Context) -> None:
 def table_name(obj: Context, model_name: str, dev: bool) -> None:
     """Prints the name of the physical table for the given model."""
     print(obj.table_name(model_name, dev))
+
+
+@cli.command("dlt")
+@click.argument("pipeline", required=True)
+@click.option(
+    "-u",
+    "--update",
+    type=str,
+    multiple=True,
+    is_flag=False,
+    flag_value="UpdateAllFlag",
+    help="The dlt tables to update in the SQLMesh models. When none specified, all missing tables will be added.",
+)
+@click.option(
+    "-f",
+    "--force",
+    is_flag=True,
+    default=False,
+    help="If set it will overwrite the existing models with the new dlt tables.",
+)
+@click.pass_context
+@error_handler
+@cli_analytics
+def dlt(
+    ctx: click.Context,
+    pipeline: str,
+    force: bool,
+    update: t.List[str] = [],
+) -> None:
+    """Attaches to a DLT pipeline with the option to update specific or all models in the SQLMesh project."""
+    from sqlmesh.integrations.dlt import update_dlt_models
+
+    if update:
+        update_tables = list(update) if update[0] != "UpdateAllFlag" else []
+        ctx.obj.console.log_success(update_dlt_models(ctx.obj, pipeline, update_tables, force))

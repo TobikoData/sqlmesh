@@ -692,6 +692,36 @@ class SQLMeshMagics(Magics):
 
     @magic_arguments()
     @argument(
+        "pipeline",
+        nargs="?",
+        type=str,
+        help="The dlt pipeline to attach for this SQLMesh project.",
+    )
+    @argument(
+        "--update",
+        type=str,
+        nargs="*",
+        help="The dlt tables to update in the SQLMesh models. When none specified, all missing tables will be added.",
+    )
+    @argument(
+        "--force",
+        action="store_true",
+        help="If set it will overwrite the existing models with the new dlt tables.",
+    )
+    @line_magic
+    @pass_sqlmesh_context
+    def dlt(self, context: Context, line: str) -> None:
+        """Attaches to a DLT pipeline with the option to update specific or all models in the SQLMesh project."""
+        from sqlmesh.integrations.dlt import update_dlt_models
+
+        args = parse_argstring(self.dlt, line)
+        if args.update:
+            context.console.log_status_update(
+                update_dlt_models(context, args.pipeline, list(args.update), args.force)
+            )
+
+    @magic_arguments()
+    @argument(
         "--read",
         type=str,
         default="",
