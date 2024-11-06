@@ -217,7 +217,7 @@ class TestContext:
         schema = self.add_test_suffix(schema)
         self._schemas.append(schema)
 
-        table = exp.to_table(table_name)
+        table = exp.to_table(table_name, dialect=self.dialect)
         table.set("db", exp.parse_identifier(schema, dialect=self.dialect))
 
         return exp.to_table(
@@ -455,7 +455,9 @@ class TestContext:
         return comments
 
     def create_context(
-        self, config_mutator: t.Optional[t.Callable[[str, Config], None]] = None
+        self,
+        config_mutator: t.Optional[t.Callable[[str, Config], None]] = None,
+        path: t.Optional[pathlib.Path] = None,
     ) -> Context:
         private_sqlmesh_dir = pathlib.Path(pathlib.Path().home(), ".sqlmesh")
         config = load_config_from_paths(
@@ -486,7 +488,7 @@ class TestContext:
             # Ensure that s3_warehouse_location is propagated
             conn.s3_warehouse_location = self.engine_adapter.s3_warehouse_location
 
-        self._context = Context(paths=".", config=config, gateway=self.gateway)
+        self._context = Context(paths=path or ".", config=config, gateway=self.gateway)
         return self._context
 
     def create_catalog(self, catalog_name: str):
