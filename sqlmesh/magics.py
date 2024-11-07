@@ -699,12 +699,14 @@ class SQLMeshMagics(Magics):
     )
     @argument(
         "--update",
+        "-u",
         type=str,
         nargs="*",
         help="The dlt tables to update in the SQLMesh models. When none specified, all missing tables will be added.",
     )
     @argument(
         "--force",
+        "-f",
         action="store_true",
         help="If set it will overwrite the existing models with the new dlt tables.",
     )
@@ -715,7 +717,7 @@ class SQLMeshMagics(Magics):
         from sqlmesh.integrations.dlt import update_dlt_models
 
         args = parse_argstring(self.dlt, line)
-        if args.update:
+        if args.update is not None:
             context.console.log_status_update(
                 update_dlt_models(context, args.pipeline, list(args.update), args.force)
             )

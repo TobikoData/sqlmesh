@@ -9,8 +9,6 @@ from freezegun import freeze_time
 
 from sqlmesh.cli.example_project import ProjectTemplate, init_example_project
 from sqlmesh.cli.main import cli
-from sqlmesh.core.config.model import ModelDefaultsConfig
-from sqlmesh.core.config.root import Config
 from sqlmesh.core.context import Context
 from sqlmesh.integrations.dlt import update_dlt_models
 from sqlmesh.utils.date import yesterday_ds
@@ -734,7 +732,11 @@ WHERE
   TO_TIMESTAMP(CAST(_dlt_load_id AS DOUBLE)) BETWEEN @start_ds AND @end_ds
 """
 
-    with open(tmp_path / "models/incremental_sushi_types.sql") as file:
+    dlt_sushi_types_model_path = tmp_path / "models/incremental_sushi_types.sql"
+    dlt_loads_model_path = tmp_path / "models/incremental__dlt_loads.sql"
+    dlt_waiters_model_path = tmp_path / "models/incremental_waiters.sql"
+
+    with open(dlt_sushi_types_model_path) as file:
         incremental_model = file.read()
 
     expected_dlt_loads_model = """MODEL (
@@ -765,11 +767,14 @@ WHERE
   TO_TIMESTAMP(CAST(load_id AS DOUBLE)) BETWEEN @start_ds AND @end_ds
 """
 
-    with open(tmp_path / "models/incremental__dlt_loads.sql") as file:
+    with open(dlt_loads_model_path) as file:
         dlt_loads_model = file.read()
 
     # Validate generated config and models
     assert config == expected_config
+    assert dlt_loads_model_path.exists()
+    assert dlt_sushi_types_model_path.exists()
+    assert dlt_waiters_model_path.exists()
     assert dlt_loads_model == expected_dlt_loads_model
     assert incremental_model == expected_incremental_model
 
@@ -780,81 +785,39 @@ WHERE
 
     assert result.exit_code == 0
     assert_backfill_success(result)
-    remove(dataset_path)
 
+    # Remove and update with missing model
+    remove(dlt_waiters_model_path)
+    assert not dlt_waiters_model_path.exists()
 
-def test_update_dlt_table(tmp_path):
-    root_dir = path.abspath(getcwd())
-    pipeline_path = root_dir + "/examples/sushi_dlt/sushi_pipeline.py"
-    with open(pipeline_path) as file:
-        exec(file.read())
-
-    dataset_path = root_dir + "/sushi.duckdb"
-    init_example_project(tmp_path, "duckdb", ProjectTemplate.EMPTY)
-    ctx = Context(
-        paths=tmp_path, config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))
+    # Update with force = False will generate only the missing model
+    context = Context(paths=tmp_path)
+    assert (
+        update_dlt_models(context, "sushi", [], False)
+        == "Updated SQLMesh models:\n- sushi_dataset_sqlmesh.incremental_waiters"
     )
-    update_dlt_models(
-        context=ctx, pipeline_name="sushi", update_tables=["sushi_types"], force=False
+    assert dlt_waiters_model_path.exists()
+
+    # Remove all models
+    remove(dlt_waiters_model_path)
+    remove(dlt_loads_model_path)
+    remove(dlt_sushi_types_model_path)
+
+    # Update to generate a specific model: sushi_types
+    assert (
+        update_dlt_models(context, "sushi", ["sushi_types"], False)
+        == "Updated SQLMesh models:\n- sushi_dataset_sqlmesh.incremental_sushi_types"
     )
 
-    expected_incremental_model = """MODEL (
-  name sushi_dataset_sqlmesh.incremental_sushi_types,
-  kind INCREMENTAL_BY_TIME_RANGE (
-    time_column _dlt_load_time,
-  ),
-  columns (
-    id BIGINT,
-    name TEXT,
-    _dlt_load_id TEXT,
-    _dlt_id TEXT,
-    _dlt_load_time TIMESTAMP
-  ),
-  grain (id),
-);
+    # Only the sushi_types now should be generated
+    assert not dlt_waiters_model_path.exists()
+    assert not dlt_loads_model_path.exists()
+    assert dlt_sushi_types_model_path.exists()
 
-SELECT
-  id,
-  name,
-  _dlt_load_id,
-  _dlt_id,
-  TO_TIMESTAMP(CAST(_dlt_load_id AS DOUBLE)) as _dlt_load_time
-FROM
-  sushi_dataset.sushi_types
-WHERE
-  TO_TIMESTAMP(CAST(_dlt_load_id AS DOUBLE)) BETWEEN @start_ds AND @end_ds
-"""
+    # Update with force = True will generate all models and overwrite existing ones
+    update_dlt_models(context, "sushi", [], True)
+    assert dlt_loads_model_path.exists()
+    assert dlt_sushi_types_model_path.exists()
+    assert dlt_waiters_model_path.exists()
 
-    dlt_sushi_types_model = tmp_path / "models/incremental_sushi_types.sql"
-    dlt_loads_model = tmp_path / "models/incremental__dlt_loads.sql"
-    dlt_waiters_model = tmp_path / "models/incremental_waiters.sql"
-    assert not dlt_waiters_model.exists()
-    assert not dlt_loads_model.exists()
-    assert dlt_sushi_types_model.exists()
-
-    with open(dlt_sushi_types_model) as file:
-        incremental_model = file.read()
-    assert incremental_model == expected_incremental_model
-    remove(dataset_path)
-
-
-def test_update_all_dlt_tables(tmp_path):
-    root_dir = path.abspath(getcwd())
-    pipeline_path = root_dir + "/examples/sushi_dlt/sushi_pipeline.py"
-    with open(pipeline_path) as file:
-        exec(file.read())
-
-    dataset_path = root_dir + "/sushi.duckdb"
-    init_example_project(tmp_path, "duckdb", ProjectTemplate.EMPTY)
-    ctx = Context(
-        paths=tmp_path, config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))
-    )
-    update_dlt_models(context=ctx, pipeline_name="sushi", update_tables=[], force=True)
-
-    dlt_sushi_types_model = tmp_path / "models/incremental_sushi_types.sql"
-    dlt_loads_model = tmp_path / "models/incremental__dlt_loads.sql"
-    dlt_waiters_model = tmp_path / "models/incremental_waiters.sql"
-    assert dlt_waiters_model.exists()
-    assert dlt_loads_model.exists()
-    assert dlt_sushi_types_model.exists()
     remove(dataset_path)
