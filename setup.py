@@ -100,13 +100,12 @@ setup(
             "typing-extensions",
         ],
         "cicdtest": [
-            "dbt-clickhouse",
             "dbt-athena-community",
+            "dbt-clickhouse",
             "dbt-databricks",
             "dbt-redshift",
             "dbt-sqlserver>=1.7.0",
             "dbt-trino",
-            "dbt-clickhouse",
         ],
         "dbt": [
             "dbt-core<2",
