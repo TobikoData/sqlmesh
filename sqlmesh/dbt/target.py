@@ -916,7 +916,7 @@ class ClickhouseConfig(TargetConfig):
     check_exchange: bool = True
     use_lw_deletes: bool = False
     allow_automatic_deduplication: bool = False
-    tcp_keepalive: t.Union[bool, tuple[int, int, int], list[int]] = False
+    tcp_keepalive: t.Union[bool, t.Tuple[int, ...], t.List[int]] = False
     database: str = ""
     local_suffix: str = "local"
     local_db_prefix: str = ""
