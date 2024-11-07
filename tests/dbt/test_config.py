@@ -13,7 +13,12 @@ from sqlmesh.core.model.kind import OnDestructiveChange
 from sqlmesh.dbt.common import Dependencies
 from sqlmesh.dbt.context import DbtContext
 from sqlmesh.dbt.loader import sqlmesh_config
-from sqlmesh.dbt.model import IncrementalByUniqueKeyKind, Materialization, ModelConfig
+from sqlmesh.dbt.model import (
+    IncrementalByTimeRangeKind,
+    IncrementalByUniqueKeyKind,
+    Materialization,
+    ModelConfig,
+)
 from sqlmesh.dbt.project import Project
 from sqlmesh.dbt.relation import Policy
 from sqlmesh.dbt.source import SourceConfig
@@ -134,6 +139,24 @@ def test_model_to_sqlmesh_fields():
     bq_default_context.target = DuckDbConfig(name="target", schema="foo")
     model = model_config.to_sqlmesh(bq_default_context)
     assert model.dialect == "bigquery"
+
+    model_config = ModelConfig(
+        name="name",
+        package_name="package",
+        alias="model",
+        schema="custom",
+        database="database",
+        materialized=Materialization.INCREMENTAL,
+        sql="SELECT * FROM foo.table",
+        time_column="ds",
+        start="Jan 1 2023",
+        batch_size=5,
+        batch_concurrency=2,
+    )
+    model = model_config.to_sqlmesh(context)
+    assert isinstance(model.kind, IncrementalByTimeRangeKind)
+    assert model.kind.batch_concurrency == 2
+    assert model.kind.time_column.column.name == "ds"
 
 
 def test_test_to_sqlmesh_fields():
