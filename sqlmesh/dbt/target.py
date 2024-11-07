@@ -897,8 +897,8 @@ class ClickhouseConfig(TargetConfig):
     user: str = Field(default="default", alias="username")
     password: str = ""
     port: t.Optional[int] = None
-    secure: bool = False
     cluster: t.Optional[str] = None
+    schema_: str = Field(default="default", alias="schema")
     connect_timeout: int = 10
     send_receive_timeout: int = 300
     verify: bool = True
@@ -907,7 +907,7 @@ class ClickhouseConfig(TargetConfig):
 
     # Not used by SQLMesh
     driver: t.Optional[str] = None
-    schema_: str = "default"
+    secure: bool = False
     retries: int = 1
     database_engine: t.Optional[str] = None
     cluster_mode: bool = False
@@ -944,8 +944,8 @@ class ClickhouseConfig(TargetConfig):
             username=self.user,
             password=self.password,
             port=self.port,
-            secure=self.secure,
             cluster=self.cluster,
+            database=self.schema_,
             connect_timeout=self.connect_timeout,
             send_receive_timeout=self.send_receive_timeout,
             verify=self.verify,
