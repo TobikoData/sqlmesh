@@ -97,7 +97,7 @@ nav:
 theme:
   name: material
   logo: _readthedocs/html/sqlmesh.png
-  favicon: https://pbs.twimg.com/profile_images/1783223124743335936/uqPPe0wD_200x200.png  
+  favicon: _readthedocs/html/favicon.svg
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default
