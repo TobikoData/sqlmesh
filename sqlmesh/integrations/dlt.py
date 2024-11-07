@@ -101,10 +101,7 @@ def update_dlt_models(
     )
 
     if not update_tables and not force:
-        existing_models = [
-            ".".join(model_name.replace('"', "").split(".")[-2:])
-            for model_name in context.models.keys()
-        ]
+        existing_models = [m.name for m in context.models.values()]
         sqlmesh_models = {model for model in sqlmesh_models if model[0] not in existing_models}
 
     if sqlmesh_models:
