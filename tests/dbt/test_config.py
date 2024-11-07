@@ -1,4 +1,5 @@
 import base64
+import sys
 import typing as t
 from pathlib import Path
 from shutil import copytree
@@ -865,7 +866,6 @@ def test_db_type_to_relation_class():
     from dbt.adapters.snowflake import SnowflakeRelation
     from dbt.adapters.trino.relation import TrinoRelation
     from dbt.adapters.athena.relation import AthenaRelation
-    from dbt.adapters.clickhouse.relation import ClickHouseRelation
 
     assert (TARGET_TYPE_TO_CONFIG_CLASS["bigquery"].relation_class) == BigQueryRelation
     assert (TARGET_TYPE_TO_CONFIG_CLASS["databricks"].relation_class) == DatabricksRelation
@@ -874,7 +874,12 @@ def test_db_type_to_relation_class():
     assert (TARGET_TYPE_TO_CONFIG_CLASS["snowflake"].relation_class) == SnowflakeRelation
     assert (TARGET_TYPE_TO_CONFIG_CLASS["trino"].relation_class) == TrinoRelation
     assert (TARGET_TYPE_TO_CONFIG_CLASS["athena"].relation_class) == AthenaRelation
-    assert (TARGET_TYPE_TO_CONFIG_CLASS["clickhouse"].relation_class) == ClickHouseRelation
+
+    # typing chokes on dbt-clickhouse if python < 3.9
+    if sys.version_info >= (3, 9):
+        from dbt.adapters.clickhouse.relation import ClickHouseRelation
+
+        assert (TARGET_TYPE_TO_CONFIG_CLASS["clickhouse"].relation_class) == ClickHouseRelation
 
 
 @pytest.mark.cicdonly
@@ -885,7 +890,6 @@ def test_db_type_to_column_class():
     from dbt.adapters.sqlserver.sqlserver_column import SQLServerColumn
     from dbt.adapters.trino.column import TrinoColumn
     from dbt.adapters.athena.column import AthenaColumn
-    from dbt.adapters.clickhouse.column import ClickHouseColumn
 
     assert (TARGET_TYPE_TO_CONFIG_CLASS["bigquery"].column_class) == BigQueryColumn
     assert (TARGET_TYPE_TO_CONFIG_CLASS["databricks"].column_class) == DatabricksColumn
@@ -894,7 +898,12 @@ def test_db_type_to_column_class():
     assert (TARGET_TYPE_TO_CONFIG_CLASS["sqlserver"].column_class) == SQLServerColumn
     assert (TARGET_TYPE_TO_CONFIG_CLASS["trino"].column_class) == TrinoColumn
     assert (TARGET_TYPE_TO_CONFIG_CLASS["athena"].column_class) == AthenaColumn
-    assert (TARGET_TYPE_TO_CONFIG_CLASS["clickhouse"].column_class) == ClickHouseColumn
+
+    # typing chokes on dbt-clickhouse if python < 3.9
+    if sys.version_info >= (3, 9):
+        from dbt.adapters.clickhouse.column import ClickHouseColumn
+
+        assert (TARGET_TYPE_TO_CONFIG_CLASS["clickhouse"].column_class) == ClickHouseColumn
 
 
 def test_db_type_to_quote_policy():
