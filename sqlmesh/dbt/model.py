@@ -114,6 +114,7 @@ class ModelConfig(BaseModelConfig):
     engine: t.Optional[str] = None
     order_by: t.Optional[t.Union[t.List[str], str]] = None
     primary_key: t.Optional[t.Union[t.List[str], str]] = None
+    sharding_key: t.Optional[t.Union[t.List[str], str]] = None
     ttl: t.Optional[t.Union[t.List[str], str]] = None
     settings: t.Optional[t.Dict[str, t.Any]] = None
     query_settings: t.Optional[t.Dict[str, t.Any]] = None
@@ -439,15 +440,21 @@ class ModelConfig(BaseModelConfig):
                 }
 
         if context.target.dialect == "clickhouse":
-            if self.materialized in [
+            unsupported_materializations = [
                 "dictionary",
                 "distributed_table",
                 "distributed_incremental",
                 "materialized_view",
-            ]:
-                raise ConfigError(
-                    f"SQLMesh does not support the '{self.materialized}' materialization."
-                )
+            ]
+            if self.materialized in unsupported_materializations:
+                fallback = self.materialized.split("_")
+                msg = f"SQLMesh does not support the '{self.materialized}' model materialization."
+                if len(fallback) == 1:
+                    # dictionary materialization
+                    raise ConfigError(msg)
+                else:
+                    logger.warning(f"{msg} Falling back to the '{fallback[1]}' materialization.")
+                    self.materialized = fallback[1]
 
             if self.model_materialization == Materialization.INCREMENTAL:
                 if self.incremental_strategy in ["delete+insert", "append", "insert_overwrite"]:
@@ -455,28 +462,47 @@ class ModelConfig(BaseModelConfig):
                         f"The '{self.incremental_strategy}' incremental strategy is not supported - SQLMesh uses the temp table/partition swap strategy for all incremental models."
                     )
 
-            if self.inserts_only:
-                # old alias for incremental_strategy == "append"
-                logger.warning(
-                    "The 'inserts_only' incremental strategy is not supported - SQLMesh uses the temp table/partition swap strategy for all incremental models."
-                )
+                if self.inserts_only:
+                    # old alias for incremental_strategy == "append"
+                    logger.warning(
+                        "The 'inserts_only' incremental strategy is not supported - SQLMesh uses the temp table/partition swap strategy for all incremental models."
+                    )
 
-            if self.incremental_predicates:
-                logger.warning("SQLMesh does not support `incremental_predicates`.")
+                if self.incremental_predicates:
+                    logger.warning(
+                        "SQLMesh does not support 'incremental_predicates' - they will not be applied."
+                    )
 
             if self.query_settings:
                 logger.warning(
-                    "SQLMesh does not support the `query_settings` model configuration parameter. Specify the query settings directly in the model query."
+                    "SQLMesh does not support the 'query_settings' model configuration parameter. Specify the query settings directly in the model query."
                 )
 
             if self.engine:
                 optional_kwargs["storage_format"] = self.engine
 
             if self.order_by:
-                physical_properties["order_by"] = self.order_by
+                order_by = []
+                for o in self.order_by:
+                    try:
+                        order_by.append(d.parse_one(o, dialect=model_dialect))
+                    except SqlglotError as e:
+                        raise ConfigError(f"Failed to parse 'order_by' field '{o}': {e}") from e
+                physical_properties["order_by"] = order_by
 
             if self.primary_key:
-                physical_properties["primary_key"] = self.primary_key
+                primary_key = []
+                for p in self.primary_key:
+                    try:
+                        primary_key.append(d.parse_one(p, dialect=model_dialect))
+                    except SqlglotError as e:
+                        raise ConfigError(f"Failed to parse 'primary_key' field '{p}': {e}") from e
+                physical_properties["primary_key"] = primary_key
+
+            if self.sharding_key:
+                logger.warning(
+                    "SQLMesh does not support the 'sharding_key' model configuration parameter or distributed materializations."
+                )
 
             if self.ttl:
                 physical_properties["ttl"] = self.ttl
