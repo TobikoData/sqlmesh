@@ -299,7 +299,8 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         environment = plan.environment
 
         self.console.start_promotion_progress(
-            len(promotion_result.added) + len(promotion_result.removed),
+            list(promotion_result.added),
+            list(promotion_result.removed),
             environment.naming_info,
             self.default_catalog,
         )

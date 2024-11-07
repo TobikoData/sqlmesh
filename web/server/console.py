@@ -148,10 +148,12 @@ class ApiConsole(TerminalConsole):
 
     def start_promotion_progress(
         self,
-        total_tasks: int,
+        promotions_added: t.List[SnapshotInfoLike],
+        promotions_removed: t.List[SnapshotInfoLike],
         environment_naming_info: EnvironmentNamingInfo,
         default_catalog: t.Optional[str],
     ) -> None:
+        total_tasks = len(promotions_added) + len(promotions_removed)
         if self.plan_apply_stage_tracker:
             self.plan_apply_stage_tracker.add_stage(
                 models.PlanStage.promote,

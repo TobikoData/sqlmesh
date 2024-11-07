@@ -136,7 +136,8 @@ class Console(abc.ABC):
     @abc.abstractmethod
     def start_promotion_progress(
         self,
-        total_tasks: int,
+        promotions_added: t.List[SnapshotInfoLike],
+        promotions_removed: t.List[SnapshotInfoLike],
         environment_naming_info: EnvironmentNamingInfo,
         default_catalog: t.Optional[str],
     ) -> None:
@@ -491,11 +492,13 @@ class TerminalConsole(Console):
 
     def start_promotion_progress(
         self,
-        total_tasks: int,
+        promotions_added: t.List[SnapshotInfoLike],
+        promotions_removed: t.List[SnapshotInfoLike],
         environment_naming_info: EnvironmentNamingInfo,
         default_catalog: t.Optional[str],
     ) -> None:
         """Indicates that a new snapshot promotion progress has begun."""
+        total_tasks = len(promotions_added) + len(promotions_removed)
         if self.promotion_progress is None:
             self.promotion_progress = Progress(
                 TextColumn(
@@ -1842,11 +1845,13 @@ class DatabricksMagicConsole(CaptureTerminalConsole):
 
     def start_promotion_progress(
         self,
-        total_tasks: int,
+        promotions_added: t.List[SnapshotInfoLike],
+        promotions_removed: t.List[SnapshotInfoLike],
         environment_naming_info: EnvironmentNamingInfo,
         default_catalog: t.Optional[str],
     ) -> None:
         """Indicates that a new snapshot promotion progress has begun."""
+        total_tasks = len(promotions_added) + len(promotions_removed)
         self.promotion_status = (0, total_tasks)
         print(f"Virtually Updating '{environment_naming_info.name}'")
 
@@ -1965,10 +1970,12 @@ class DebuggerTerminalConsole(TerminalConsole):
 
     def start_promotion_progress(
         self,
-        total_tasks: int,
+        promotions_added: t.List[SnapshotInfoLike],
+        promotions_removed: t.List[SnapshotInfoLike],
         environment_naming_info: EnvironmentNamingInfo,
         default_catalog: t.Optional[str],
     ) -> None:
+        total_tasks = len(promotions_added) + len(promotions_removed)
         self._write(f"Starting promotion for {total_tasks} snapshots")
 
     def update_promotion_progress(self, snapshot: SnapshotInfoLike, promoted: bool) -> None:
