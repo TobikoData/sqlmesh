@@ -74,6 +74,7 @@ class ModelConfig(BaseModelConfig):
     cron: t.Optional[str] = None
     interval_unit: t.Optional[str] = None
     batch_size: t.Optional[int] = None
+    batch_concurrency: t.Optional[int] = None
     lookback: t.Optional[int] = None
     forward_only: bool = True
     disable_restatement: t.Optional[bool] = None
@@ -208,7 +209,7 @@ class ModelConfig(BaseModelConfig):
             incremental_materialization_kwargs: t.Dict[str, t.Any] = {
                 "dialect": self.dialect(context)
             }
-            for field in ("batch_size", "lookback", "forward_only"):
+            for field in ("batch_size", "batch_concurrency", "lookback", "forward_only"):
                 field_val = getattr(self, field, None) or self.meta.get(field, None)
                 if field_val:
                     incremental_materialization_kwargs[field] = field_val
