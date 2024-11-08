@@ -371,12 +371,12 @@ class Scheduler:
         for error in errors:
             if isinstance(error.__cause__, CircuitBreakerError):
                 raise error.__cause__
-            sid = error.node[0]
-            formatted_exception = "".join(format_exception(error.__cause__ or error))
-            log_message = f"FAILED processing snapshot {sid}\n{formatted_exception}"
-            self.console.log_error(log_message)
-            # Log with INFO level to prevent duplicate messages in the console.
-            logger.info(log_message)
+            # sid = error.node[0]
+            # formatted_exception = "".join(format_exception(error.__cause__ or error))
+            # log_message = f"FAILED processing snapshot {sid}\n{formatted_exception}"
+            # self.console.log_error(log_message)
+            # # Log with INFO level to prevent duplicate messages in the console.
+            # logger.info(log_message)
 
         return not errors
 

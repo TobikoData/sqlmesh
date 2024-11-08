@@ -488,7 +488,7 @@ def print_exception(
             )
         )
 
-    out.write(os.linesep.join(tb))
+    out.write(f"\033[31m{os.linesep.join(tb)}\033[0m")
 
 
 def import_python_file(path: Path, relative_base: Path = Path()) -> types.ModuleType:
