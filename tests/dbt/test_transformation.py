@@ -38,7 +38,7 @@ from sqlmesh.dbt.model import Materialization, ModelConfig
 from sqlmesh.dbt.project import Project
 from sqlmesh.dbt.relation import Policy
 from sqlmesh.dbt.seed import SeedConfig, Integer
-from sqlmesh.dbt.target import BigQueryConfig, DuckDbConfig, SnowflakeConfig
+from sqlmesh.dbt.target import BigQueryConfig, DuckDbConfig, SnowflakeConfig, ClickhouseConfig
 from sqlmesh.dbt.test import TestConfig
 from sqlmesh.utils.errors import ConfigError, MacroEvalError, SQLMeshError
 
@@ -1138,6 +1138,63 @@ def test_bigquery_physical_properties(sushi_test_project: Project, mocker: Mocke
     ).physical_properties == {
         "partition_expiration_days": exp.convert(7),
     }
+
+
+@pytest.mark.xdist_group("dbt_manifest")
+def test_clickhouse_properties(mocker: MockerFixture):
+    context = DbtContext(target_name="production")
+    context._project_name = "Foo"
+    context._target = ClickhouseConfig(name="production")
+    model_config = ModelConfig(
+        name="model",
+        alias="model",
+        schema="test",
+        package_name="package",
+        materialized="incremental",
+        incremental_strategy="delete+insert",
+        inserts_only="True",
+        incremental_predicates=["ds > (SELECT MAX(ds) FROM model)"],
+        query_settings={"QUERY_SETTING": "value"},
+        sharding_key="rand()",
+        engine="MergeTree()",
+        partition_by=["toMonday(ds)", "partition_col"],
+        order_by=["toStartOfWeek(ds)", "order_col"],
+        primary_key=["ds", "primary_key_col"],
+        ttl="time + INTERVAL 1 WEEK",
+        settings={"SETTING": "value"},
+        sql="""SELECT 1 AS one, ds FROM foo""",
+    )
+
+    logger = logging.getLogger("sqlmesh.dbt.model")
+    with patch.object(logger, "warning") as mock_logger:
+        model_to_sqlmesh = model_config.to_sqlmesh(context)
+
+    assert [call[0][0] for call in mock_logger.call_args_list] == [
+        "The 'delete+insert' incremental strategy is not supported - SQLMesh uses the temp table/partition swap strategy for all incremental models.",
+        "The 'inserts_only'/'append' incremental strategy is not supported - SQLMesh uses the temp table/partition swap strategy for all incremental models.",
+        "SQLMesh does not support 'incremental_predicates' - they will not be applied.",
+        "SQLMesh does not support the 'query_settings' model configuration parameter. Specify the query settings directly in the model query.",
+        "SQLMesh does not support the 'sharding_key' model configuration parameter or distributed materializations.",
+        "Using unmanaged incremental materialization for model '%s'. Some features might not be available. Consider adding either a time_column (%s) or a unique_key (%s) configuration to mitigate this",
+    ]
+
+    assert [e.sql("clickhouse") for e in model_to_sqlmesh.partitioned_by] == [
+        'toMonday("ds")',
+        '"partition_col"',
+    ]
+    assert model_to_sqlmesh.storage_format == "MergeTree()"
+
+    physical_properties = model_to_sqlmesh.physical_properties
+    assert [e.sql("clickhouse", identify=True) for e in physical_properties["order_by"]] == [
+        'toStartOfWeek("ds")',
+        '"order_col"',
+    ]
+    assert [e.sql("clickhouse", identify=True) for e in physical_properties["primary_key"]] == [
+        '"ds"',
+        '"primary_key_col"',
+    ]
+    assert physical_properties["ttl"].sql("clickhouse") == "time + INTERVAL 1 WEEK"
+    assert physical_properties["SETTING"].sql("clickhouse") == "value"
 
 
 @pytest.mark.xdist_group("dbt_manifest")

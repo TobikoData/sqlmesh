@@ -465,7 +465,7 @@ class ModelConfig(BaseModelConfig):
                 if self.inserts_only:
                     # old alias for incremental_strategy == "append"
                     logger.warning(
-                        "The 'inserts_only' incremental strategy is not supported - SQLMesh uses the temp table/partition swap strategy for all incremental models."
+                        "The 'inserts_only'/'append' incremental strategy is not supported - SQLMesh uses the temp table/partition swap strategy for all incremental models."
                     )
 
                 if self.incremental_predicates:
@@ -483,7 +483,7 @@ class ModelConfig(BaseModelConfig):
 
             if self.order_by:
                 order_by = []
-                for o in self.order_by:
+                for o in self.order_by if isinstance(self.order_by, list) else [self.order_by]:
                     try:
                         order_by.append(d.parse_one(o, dialect=model_dialect))
                     except SqlglotError as e:
@@ -505,10 +505,12 @@ class ModelConfig(BaseModelConfig):
                 )
 
             if self.ttl:
-                physical_properties["ttl"] = self.ttl
+                physical_properties["ttl"] = exp.var(
+                    self.ttl[0] if isinstance(self.ttl, list) else self.ttl
+                )
 
             if self.settings:
-                physical_properties.update(self.settings)
+                physical_properties.update({k: exp.var(v) for k, v in self.settings.items()})
 
             if physical_properties:
                 model_kwargs["physical_properties"] = physical_properties
