@@ -1152,7 +1152,6 @@ def test_clickhouse_properties(mocker: MockerFixture):
         package_name="package",
         materialized="incremental",
         incremental_strategy="delete+insert",
-        inserts_only="True",
         incremental_predicates=["ds > (SELECT MAX(ds) FROM model)"],
         query_settings={"QUERY_SETTING": "value"},
         sharding_key="rand()",

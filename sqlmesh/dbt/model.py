@@ -457,6 +457,11 @@ class ModelConfig(BaseModelConfig):
                     self.materialized = fallback[1]
 
             if self.model_materialization == Materialization.INCREMENTAL:
+                # `inserts_only` overrides incremental_strategy setting (if present)
+                # https://github.com/ClickHouse/dbt-clickhouse/blob/065f3a724fa09205446ecadac7a00d92b2d8c646/README.md?plain=1#L108
+                if self.inserts_only:
+                    self.incremental_strategy = "append"
+
                 if self.incremental_strategy == "delete+insert":
                     logger.warning(
                         f"The '{self.incremental_strategy}' incremental strategy is not supported - SQLMesh will use the temp table/partition swap strategy."
