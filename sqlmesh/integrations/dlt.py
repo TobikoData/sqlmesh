@@ -9,7 +9,7 @@ from sqlmesh.utils.date import yesterday_ds
 
 
 def generate_dlt_models_and_settings(
-    pipeline_name: str, dialect: str, update_tables: t.Optional[t.List[str]] = None
+    pipeline_name: str, dialect: str, tables: t.Optional[t.List[str]] = None
 ) -> t.Tuple[t.Set[t.Tuple[str, str]], str, str]:
     """This function attaches to a DLT pipeline and retrieves the connection configs and
     SQLMesh models based on the tables present in the pipeline's default schema.
@@ -47,7 +47,7 @@ def generate_dlt_models_and_settings(
             (has_table_seen_data(table) and not name.startswith(schema._dlt_tables_prefix))
             or name == schema.loads_table_name
         )
-        and (name in update_tables if update_tables else True)
+        and (name in tables if tables else True)
     }
 
     sqlmesh_models = set()
@@ -89,27 +89,25 @@ def generate_dlt_models_and_settings(
     return sqlmesh_models, format_config(configs, db_type), get_start_date(storage_ids)
 
 
-def update_dlt_models(
-    context: Context, pipeline_name: str, update_tables: t.List[str], force: bool
-) -> str:
+def generate_dlt_models(
+    context: Context, pipeline_name: str, tables: t.List[str], force: bool
+) -> t.List[str]:
     from sqlmesh.cli.example_project import _create_models
 
     sqlmesh_models, _, _ = generate_dlt_models_and_settings(
         pipeline_name=pipeline_name,
         dialect=context.config.dialect or "",
-        update_tables=update_tables if update_tables else None,
+        tables=tables if tables else None,
     )
 
-    if not update_tables and not force:
+    if not tables and not force:
         existing_models = [m.name for m in context.models.values()]
         sqlmesh_models = {model for model in sqlmesh_models if model[0] not in existing_models}
 
     if sqlmesh_models:
         _create_models(models_path=context.path / "models", models=sqlmesh_models)
-        model_names = "\n".join([f"- {model[0]}" for model in sqlmesh_models])
-        return f"Updated SQLMesh models:\n{model_names}"
-    else:
-        return "All SQLMesh models are up to date."
+        return [model[0] for model in sqlmesh_models]
+    return []
 
 
 def generate_incremental_model(

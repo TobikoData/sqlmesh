@@ -10,7 +10,7 @@ from freezegun import freeze_time
 from sqlmesh.cli.example_project import ProjectTemplate, init_example_project
 from sqlmesh.cli.main import cli
 from sqlmesh.core.context import Context
-from sqlmesh.integrations.dlt import update_dlt_models
+from sqlmesh.integrations.dlt import generate_dlt_models
 from sqlmesh.utils.date import yesterday_ds
 
 FREEZE_TIME = "2023-01-01 00:00:00"
@@ -792,10 +792,9 @@ WHERE
 
     # Update with force = False will generate only the missing model
     context = Context(paths=tmp_path)
-    assert (
-        update_dlt_models(context, "sushi", [], False)
-        == "Updated SQLMesh models:\n- sushi_dataset_sqlmesh.incremental_waiters"
-    )
+    assert generate_dlt_models(context, "sushi", [], False) == [
+        "sushi_dataset_sqlmesh.incremental_waiters"
+    ]
     assert dlt_waiters_model_path.exists()
 
     # Remove all models
@@ -804,18 +803,17 @@ WHERE
     remove(dlt_sushi_types_model_path)
 
     # Update to generate a specific model: sushi_types
-    assert (
-        update_dlt_models(context, "sushi", ["sushi_types"], False)
-        == "Updated SQLMesh models:\n- sushi_dataset_sqlmesh.incremental_sushi_types"
-    )
+    assert generate_dlt_models(context, "sushi", ["sushi_types"], False) == [
+        "sushi_dataset_sqlmesh.incremental_sushi_types"
+    ]
 
-    # Only the sushi_types now should be generated
+    # Only the sushi_types should be generated now
     assert not dlt_waiters_model_path.exists()
     assert not dlt_loads_model_path.exists()
     assert dlt_sushi_types_model_path.exists()
 
     # Update with force = True will generate all models and overwrite existing ones
-    update_dlt_models(context, "sushi", [], True)
+    generate_dlt_models(context, "sushi", [], True)
     assert dlt_loads_model_path.exists()
     assert dlt_sushi_types_model_path.exists()
     assert dlt_waiters_model_path.exists()

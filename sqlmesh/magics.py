@@ -698,29 +698,33 @@ class SQLMeshMagics(Magics):
         help="The dlt pipeline to attach for this SQLMesh project.",
     )
     @argument(
-        "--update",
-        "-u",
+        "--table",
+        "-t",
         type=str,
         nargs="*",
-        help="The dlt tables to update in the SQLMesh models. When none specified, all missing tables will be added.",
+        help="The specific dlt tables to refresh in the SQLMesh models.",
     )
     @argument(
         "--force",
         "-f",
         action="store_true",
-        help="If set it will overwrite the existing models with the new dlt tables.",
+        help="If set, existing models are overwritten with the new DLT tables.",
     )
     @line_magic
     @pass_sqlmesh_context
-    def dlt(self, context: Context, line: str) -> None:
-        """Attaches to a DLT pipeline with the option to update specific or all models in the SQLMesh project."""
-        from sqlmesh.integrations.dlt import update_dlt_models
+    def dlt_refresh(self, context: Context, line: str) -> None:
+        """Attaches to a DLT pipeline with the option to update specific or all missing tables in the SQLMesh project."""
+        from sqlmesh.integrations.dlt import generate_dlt_models
 
-        args = parse_argstring(self.dlt, line)
-        if args.update is not None:
-            context.console.log_status_update(
-                update_dlt_models(context, args.pipeline, list(args.update), args.force)
-            )
+        args = parse_argstring(self.dlt_refresh, line)
+        sqlmesh_models = generate_dlt_models(
+            context, args.pipeline, list(args.table or []), args.force
+        )
+        if sqlmesh_models:
+            model_names = "\n".join([f"- {model_name}" for model_name in sqlmesh_models])
+            context.console.log_success(f"Updated SQLMesh project with models:\n{model_names}")
+        else:
+            context.console.log_success("All SQLMesh models are up to date.")
 
     @magic_arguments()
     @argument(

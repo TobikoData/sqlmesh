@@ -28,6 +28,28 @@ This will create the configuration file and directories, which are found in all 
 
 SQLMesh will also automatically generate models to ingest data from the pipeline incrementally. Incremental loading is ideal for large datasets where recomputing entire tables is resource-intensive. In this case utilizing the [`INCREMENTAL_BY_TIME_RANGE` model kind](../concepts/models/model_kinds.md#incremental_by_time_range). However, these model definitions can be customized to meet your specific project needs.
 
+### Generating models on demand
+
+To update the models in your SQLMesh project on demand, use the `dlt_refresh` command. This allows you to either specify individual tables to generate incremental models from or update all models at once.
+
+- **Generate all missing tables**:
+  
+```bash
+$ sqlmesh dlt_refresh <pipeline-name>
+```
+
+- **Generate all missing tables and overwrite existing ones** (use with `--force` or `-f`):
+  
+```bash
+$ sqlmesh dlt_refresh <pipeline-name> --force
+```
+
+- **Generate specific dlt tables** (using `--table` or `-t`):
+
+```bash
+$ sqlmesh dlt_refresh <pipeline-name> --table <dlt-table>
+```
+
 #### Configuration
 
 SQLMesh will retrieve the data warehouse connection credentials from your dlt project to configure the `config.yaml` file. This configuration can be modified or customized as needed. For more details, refer to the [configuration guide](../guides/configuration.md).

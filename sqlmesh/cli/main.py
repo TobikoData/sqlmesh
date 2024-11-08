@@ -918,36 +918,37 @@ def table_name(obj: Context, model_name: str, dev: bool) -> None:
     print(obj.table_name(model_name, dev))
 
 
-@cli.command("dlt")
+@cli.command("dlt_refresh")
 @click.argument("pipeline", required=True)
 @click.option(
-    "-u",
-    "--update",
+    "-t",
+    "--table",
     type=str,
     multiple=True,
-    is_flag=False,
-    flag_value="UpdateAllFlag",
-    help="The dlt tables to update in the SQLMesh models. When none specified, all missing tables will be added.",
+    help="The specific dlt tables to refresh in the SQLMesh models.",
 )
 @click.option(
     "-f",
     "--force",
     is_flag=True,
     default=False,
-    help="If set it will overwrite the existing models with the new dlt tables.",
+    help="If set, existing models are overwritten with the new DLT tables.",
 )
 @click.pass_context
 @error_handler
 @cli_analytics
-def dlt(
+def dlt_refresh(
     ctx: click.Context,
     pipeline: str,
     force: bool,
-    update: t.List[str] = [],
+    table: t.List[str] = [],
 ) -> None:
-    """Attaches to a DLT pipeline with the option to update specific or all models in the SQLMesh project."""
-    from sqlmesh.integrations.dlt import update_dlt_models
+    """Attaches to a DLT pipeline with the option to update specific or all missing tables in the SQLMesh project."""
+    from sqlmesh.integrations.dlt import generate_dlt_models
 
-    if update:
-        update_tables = list(update) if update[0] != "UpdateAllFlag" else []
-        ctx.obj.console.log_success(update_dlt_models(ctx.obj, pipeline, update_tables, force))
+    sqlmesh_models = generate_dlt_models(ctx.obj, pipeline, list(table or []), force)
+    if sqlmesh_models:
+        model_names = "\n".join([f"- {model_name}" for model_name in sqlmesh_models])
+        ctx.obj.console.log_success(f"Updatde SQLMesh project with models:\n{model_names}")
+    else:
+        ctx.obj.console.log_success("All SQLMesh models are up to date.")
