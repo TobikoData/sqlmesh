@@ -1,7 +1,12 @@
 import { isFalse, isNil, isNotNil } from '../utils'
+import { getUrlPrefix } from './instance'
 
 type ChannelCallback<TData = any> = (data: TData) => void
-interface Channel {
+export type EventSourceChannel = <TData = any>(
+  topic: string,
+  callback?: ChannelCallback<TData>,
+) => Channel
+export interface Channel {
   subscribe: () => void
   unsubscribe: () => void
 }
@@ -120,12 +125,16 @@ class EventSourceConnection {
   }
 }
 
-const Connection = new EventSourceConnection('/api/events', DELAY_AND_RECONNECT)
+let Connection: EventSourceConnection
 
 export function useChannelEvents(): <TData = any>(
   topic: string,
   callback?: ChannelCallback<TData>,
 ) => Channel {
+  if (isNil(Connection)) {
+    Connection = new EventSourceConnection(`${getUrlPrefix()}api/events`)
+  }
+
   return (topic, callback) => ({
     subscribe() {
       if (

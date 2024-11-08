@@ -1,8 +1,6 @@
-import { useEffect, Suspense } from 'react'
+import { useEffect, Suspense, lazy } from 'react'
 import { RouterProvider } from 'react-router-dom'
 import { Divider } from '@components/divider/Divider'
-import Header from './library/pages/root/Header'
-import Footer from './library/pages/root/Footer'
 import { getBrowserRouter } from './routes'
 import { useApiModules } from './api'
 import { useStoreContext } from '@context/context'
@@ -11,6 +9,13 @@ import {
   EnumErrorKey,
   useNotificationCenter,
 } from './library/pages/root/context/notificationCenter'
+import { isNotNil } from './utils'
+
+const IS_HEADLESS: boolean = Boolean((window as any).__IS_HEADLESS__ ?? false)
+const Header: Optional<React.LazyExoticComponent<() => JSX.Element>> =
+  IS_HEADLESS ? undefined : lazy(() => import('./library/pages/root/Header'))
+const Footer: Optional<React.LazyExoticComponent<() => JSX.Element>> =
+  IS_HEADLESS ? undefined : lazy(() => import('./library/pages/root/Footer'))
 
 export default function App(): JSX.Element {
   const { addError } = useNotificationCenter()
@@ -38,8 +43,12 @@ export default function App(): JSX.Element {
 
   return (
     <>
-      <Header />
-      <Divider />
+      {isNotNil(Header) && (
+        <>
+          <Header />
+          <Divider />
+        </>
+      )}
       <main className="h-full overflow-hidden relative">
         {isFetching && (
           <LoadingSegment className="absolute w-full h-full bg-theme z-10">
@@ -50,8 +59,12 @@ export default function App(): JSX.Element {
           <RouterProvider router={router} />
         </Suspense>
       </main>
-      <Divider />
-      <Footer />
+      {isNotNil(Footer) && (
+        <>
+          <Divider />
+          <Footer />
+        </>
+      )}
     </>
   )
 }

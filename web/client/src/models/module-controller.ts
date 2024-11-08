@@ -40,6 +40,10 @@ export class ModelModuleController extends ModelInitial {
     return this.modules.size === 2 && this.hasProjectEditor
   }
 
+  get hasOnlyDocs(): boolean {
+    return this.modules.size === 1 && this.hasDocs
+  }
+
   get hasProjectEditorAndModule(): boolean {
     return (
       this.modules.size === 3 &&
@@ -97,7 +101,8 @@ export class ModelModuleController extends ModelInitial {
       this.isEmpty ||
       this.hasSingleModule ||
       this.hasOnlyProjectEditor ||
-      this.hasModuleAndErrors
+      this.hasModuleAndErrors ||
+      this.hasOnlyDocs
     )
       return false
     if (this.hasProjectEditorAndModule) return true
@@ -106,8 +111,13 @@ export class ModelModuleController extends ModelInitial {
   }
 
   get showHistoryNavigation(): boolean {
+    if (
+      this.hasOnlyProjectEditor ||
+      this.hasModuleAndErrors ||
+      this.hasOnlyDocs
+    )
+      return false
     if (this.hasProjectEditorAndModule || this.hasDocs) return true
-    if (this.hasOnlyProjectEditor || this.hasModuleAndErrors) return false
 
     return isFalse(this.isEmpty)
   }

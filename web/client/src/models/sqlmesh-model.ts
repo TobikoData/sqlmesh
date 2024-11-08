@@ -6,6 +6,7 @@ import {
   type ModelSql,
   ModelType,
   type ModelDefaultCatalog,
+  ModelDefinition,
 } from '@api/client'
 import { type Lineage } from '@context/editor'
 import { ModelInitial } from './initial'
@@ -30,6 +31,7 @@ export class ModelSQLMeshModel<
   default_catalog?: ModelDefaultCatalog
   description?: ModelDescription
   sql?: ModelSql
+  definition?: ModelDefinition
   hash: string
 
   constructor(initial?: T | ModelSQLMeshModel) {
@@ -51,6 +53,7 @@ export class ModelSQLMeshModel<
     this.dialect = this.initial.dialect
     this.description = this.initial.description
     this.sql = this.initial.sql
+    this.definition = this.initial.definition
     this.columns = this.initial.columns ?? []
     this.type = this.initial.type
     this.hash = this.initial.hash
