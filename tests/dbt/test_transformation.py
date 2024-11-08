@@ -1170,8 +1170,7 @@ def test_clickhouse_properties(mocker: MockerFixture):
         model_to_sqlmesh = model_config.to_sqlmesh(context)
 
     assert [call[0][0] for call in mock_logger.call_args_list] == [
-        "The 'delete+insert' incremental strategy is not supported - SQLMesh uses the temp table/partition swap strategy for all incremental models.",
-        "The 'inserts_only'/'append' incremental strategy is not supported - SQLMesh uses the temp table/partition swap strategy for all incremental models.",
+        "The 'delete+insert' incremental strategy is not supported - SQLMesh will use the temp table/partition swap strategy.",
         "SQLMesh does not support 'incremental_predicates' - they will not be applied.",
         "SQLMesh does not support the 'query_settings' model configuration parameter. Specify the query settings directly in the model query.",
         "SQLMesh does not support the 'sharding_key' model configuration parameter or distributed materializations.",

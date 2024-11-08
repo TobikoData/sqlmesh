@@ -457,15 +457,9 @@ class ModelConfig(BaseModelConfig):
                     self.materialized = fallback[1]
 
             if self.model_materialization == Materialization.INCREMENTAL:
-                if self.incremental_strategy in ["delete+insert", "append", "insert_overwrite"]:
+                if self.incremental_strategy == "delete+insert":
                     logger.warning(
-                        f"The '{self.incremental_strategy}' incremental strategy is not supported - SQLMesh uses the temp table/partition swap strategy for all incremental models."
-                    )
-
-                if self.inserts_only:
-                    # old alias for incremental_strategy == "append"
-                    logger.warning(
-                        "The 'inserts_only'/'append' incremental strategy is not supported - SQLMesh uses the temp table/partition swap strategy for all incremental models."
+                        f"The '{self.incremental_strategy}' incremental strategy is not supported - SQLMesh will use the temp table/partition swap strategy."
                     )
 
                 if self.incremental_predicates:
