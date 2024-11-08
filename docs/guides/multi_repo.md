@@ -179,3 +179,24 @@ gateways:
 
 Even if you do not have a need for multiple repos now, consider adding a `project` key so that you can easily support multiple repos in the future.
 
+## Multi-Repo dbt projects
+
+SQLMesh also supports multiple repos for dbt projects, allowing it to correctly detect changes and orchestrate backfills even when changes span multiple dbt projects. 
+
+You can watch a [quick demo](https://www.loom.com/share/69c083428bb348da8911beb2cd4d30b2) of this setup or experiment with the [multi-repo dbt example](https://github.com/TobikoData/sqlmesh/tree/main/examples/multi_dbt) yourself.
+
+## Multi-repo mixed projects
+
+Native SQLMesh projects can be used alongside dbt projects in a multi-repo setup. 
+
+This allows managing and sourcing tables from either project type within the same multi-repo project and facilitates a gradual migration from dbt to SQLMesh.
+
+Use the same syntax as SQLMesh-only multi-repo projects to execute a multi-repo project with either dbt or a combination of dbt and SQLMesh projects:
+
+```
+$ sqlmesh -p examples/multi_hybrid/dbt_repo -p examples/multi_hybrid/sqlmesh_repo plan
+```
+
+SQLMesh will automatically detect dependencies and lineage across both SQLMesh and dbt projects, even when models are sourcing from different project types. 
+
+Additionally, macros can be reused across both project types. For an example of this setup, refer to the [mixed SQLMesh and dbt example](https://github.com/TobikoData/sqlmesh/tree/main/examples/multi_hybrid).
