@@ -202,6 +202,7 @@ Usage: sqlmesh info [OPTIONS]
   data warehouse.
 
 Options:
+  --skip-connection  Skip the connection test.
   --help  Show this message and exit.
 ```
 
