@@ -945,7 +945,6 @@ class ClickhouseConfig(TargetConfig):
             password=self.password,
             port=self.port,
             cluster=self.cluster,
-            database=self.schema_,
             connect_timeout=self.connect_timeout,
             send_receive_timeout=self.send_receive_timeout,
             verify=self.verify,
