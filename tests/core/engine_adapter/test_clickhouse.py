@@ -369,7 +369,7 @@ def test_partitioned_by_expr(make_mocked_engine_adapter: t.Callable):
         )
     )
 
-    assert model.partitioned_by == [exp.func("toMonday", '"ds"')]
+    assert model.partitioned_by[0].sql("clickhouse") == "toMonday(CAST(ds AS DateTime64))"
 
     model = load_sql_based_model(
         parse(
@@ -391,7 +391,10 @@ def test_partitioned_by_expr(make_mocked_engine_adapter: t.Callable):
         )
     )
 
-    assert model.partitioned_by == [exp.func("toMonday", '"ds"'), exp.column("x", quoted=True)]
+    assert [p.sql("clickhouse") for p in model.partitioned_by] == [
+        "toMonday(CAST(ds AS DateTime64))",
+        '"x"',
+    ]
 
     model = load_sql_based_model(
         parse(
