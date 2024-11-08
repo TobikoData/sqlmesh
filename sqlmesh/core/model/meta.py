@@ -485,6 +485,6 @@ class ModelMeta(_Node):
 #   INCREMENTAL_BY_TIME_RANGE models
 TIME_COL_PARTITION_FUNC = {
     "clickhouse": lambda x: exp.func(
-        "toMonday", exp.cast("ds", exp.DataType.build("DateTime64", dialect="clickhouse"))
+        "toMonday", exp.cast(x, exp.DataType.build("DateTime64", dialect="clickhouse"))
     )
 }
