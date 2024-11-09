@@ -916,3 +916,39 @@ def clean(obj: Context) -> None:
 def table_name(obj: Context, model_name: str, dev: bool) -> None:
     """Prints the name of the physical table for the given model."""
     print(obj.table_name(model_name, dev))
+
+
+@cli.command("dlt_refresh")
+@click.argument("pipeline", required=True)
+@click.option(
+    "-t",
+    "--table",
+    type=str,
+    multiple=True,
+    help="The specific dlt tables to refresh in the SQLMesh models.",
+)
+@click.option(
+    "-f",
+    "--force",
+    is_flag=True,
+    default=False,
+    help="If set, existing models are overwritten with the new DLT tables.",
+)
+@click.pass_context
+@error_handler
+@cli_analytics
+def dlt_refresh(
+    ctx: click.Context,
+    pipeline: str,
+    force: bool,
+    table: t.List[str] = [],
+) -> None:
+    """Attaches to a DLT pipeline with the option to update specific or all missing tables in the SQLMesh project."""
+    from sqlmesh.integrations.dlt import generate_dlt_models
+
+    sqlmesh_models = generate_dlt_models(ctx.obj, pipeline, list(table or []), force)
+    if sqlmesh_models:
+        model_names = "\n".join([f"- {model_name}" for model_name in sqlmesh_models])
+        ctx.obj.console.log_success(f"Updatde SQLMesh project with models:\n{model_names}")
+    else:
+        ctx.obj.console.log_success("All SQLMesh models are up to date.")

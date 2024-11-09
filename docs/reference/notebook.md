@@ -230,6 +230,17 @@ options:
   --file FILE, -f FILE  An optional file path to write the HTML output to.
 ```
 
+#### dlt_refresh
+```
+%dlt_refresh PIPELINE [--table] TABLE [--force]
+
+Attaches to a DLT pipeline with the option to update specific or all models of the SQLMesh project.
+
+options:
+  --table TABLE, -t TABLE  The DLT tables to generate SQLMesh models from. When none specified, all new missing tables will be generated.
+  --force, -f              If set it will overwrite existing models with the new generated models from the DLT tables.
+```
+
 #### fetchdf
 ```
 %%fetchdf [df_var]

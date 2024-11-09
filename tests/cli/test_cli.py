@@ -10,6 +10,7 @@ from freezegun import freeze_time
 from sqlmesh.cli.example_project import ProjectTemplate, init_example_project
 from sqlmesh.cli.main import cli
 from sqlmesh.core.context import Context
+from sqlmesh.integrations.dlt import generate_dlt_models
 from sqlmesh.utils.date import yesterday_ds
 
 FREEZE_TIME = "2023-01-01 00:00:00"
@@ -731,7 +732,11 @@ WHERE
   TO_TIMESTAMP(CAST(_dlt_load_id AS DOUBLE)) BETWEEN @start_ds AND @end_ds
 """
 
-    with open(tmp_path / "models/incremental_sushi_types.sql") as file:
+    dlt_sushi_types_model_path = tmp_path / "models/incremental_sushi_types.sql"
+    dlt_loads_model_path = tmp_path / "models/incremental__dlt_loads.sql"
+    dlt_waiters_model_path = tmp_path / "models/incremental_waiters.sql"
+
+    with open(dlt_sushi_types_model_path) as file:
         incremental_model = file.read()
 
     expected_dlt_loads_model = """MODEL (
@@ -762,11 +767,14 @@ WHERE
   TO_TIMESTAMP(CAST(load_id AS DOUBLE)) BETWEEN @start_ds AND @end_ds
 """
 
-    with open(tmp_path / "models/incremental__dlt_loads.sql") as file:
+    with open(dlt_loads_model_path) as file:
         dlt_loads_model = file.read()
 
     # Validate generated config and models
     assert config == expected_config
+    assert dlt_loads_model_path.exists()
+    assert dlt_sushi_types_model_path.exists()
+    assert dlt_waiters_model_path.exists()
     assert dlt_loads_model == expected_dlt_loads_model
     assert incremental_model == expected_incremental_model
 
@@ -777,4 +785,37 @@ WHERE
 
     assert result.exit_code == 0
     assert_backfill_success(result)
+
+    # Remove and update with missing model
+    remove(dlt_waiters_model_path)
+    assert not dlt_waiters_model_path.exists()
+
+    # Update with force = False will generate only the missing model
+    context = Context(paths=tmp_path)
+    assert generate_dlt_models(context, "sushi", [], False) == [
+        "sushi_dataset_sqlmesh.incremental_waiters"
+    ]
+    assert dlt_waiters_model_path.exists()
+
+    # Remove all models
+    remove(dlt_waiters_model_path)
+    remove(dlt_loads_model_path)
+    remove(dlt_sushi_types_model_path)
+
+    # Update to generate a specific model: sushi_types
+    assert generate_dlt_models(context, "sushi", ["sushi_types"], False) == [
+        "sushi_dataset_sqlmesh.incremental_sushi_types"
+    ]
+
+    # Only the sushi_types should be generated now
+    assert not dlt_waiters_model_path.exists()
+    assert not dlt_loads_model_path.exists()
+    assert dlt_sushi_types_model_path.exists()
+
+    # Update with force = True will generate all models and overwrite existing ones
+    generate_dlt_models(context, "sushi", [], True)
+    assert dlt_loads_model_path.exists()
+    assert dlt_sushi_types_model_path.exists()
+    assert dlt_waiters_model_path.exists()
+
     remove(dataset_path)

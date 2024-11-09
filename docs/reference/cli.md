@@ -121,6 +121,18 @@ Options:
   --help               Show this message and exit.
 ```
 
+## dlt_refresh
+
+```
+Usage: dlt_refresh PIPELINE [OPTIONS]
+
+  Attaches to a DLT pipeline with the option to update specific or all models of the SQLMesh project.
+
+Options:
+  -t, --table TEXT  The DLT tables to generate SQLMesh models from. When none specified, all new missing tables will be generated.
+  -f, --force       If set it will overwrite existing models with the new generated models from the DLT tables.
+```
+
 ## diff
 
 ```
