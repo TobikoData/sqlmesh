@@ -345,6 +345,49 @@ test_foo:
         ),
     )
 
+    model_sql = """
+SELECT
+    ARRAY_AGG(DISTINCT id_contact_b ORDER BY id_contact_b) AS aggregated_duplicates
+FROM
+    source
+GROUP BY
+    id_contact_a
+ORDER BY
+    id_contact_a
+    """
+
+    _check_successful_or_raise(
+        _create_test(
+            body=load_yaml(
+                """
+test_array_order:
+  model: test
+  inputs:
+    source:
+    - id_contact_a: a
+      id_contact_b: b
+    - id_contact_a: a
+      id_contact_b: c
+  outputs:
+    query:
+    - aggregated_duplicates:
+      - c
+      - b
+                """
+            ),
+            test_name="test_array_order",
+            model=_create_model(model_sql),
+            context=Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))),
+        ).run(),
+        expected_msg=(
+            """AssertionError: Data mismatch (exp: expected, act: actual)\n\n"""
+            "  aggregated_duplicates        \n"
+            "                    exp     act\n"
+            "0                (c, b)  (b, c)\n"
+        ),
+    )
+
+
 
 @pytest.mark.parametrize(
     "waiter_names_input",

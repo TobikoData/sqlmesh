@@ -237,10 +237,11 @@ class ModelTest(unittest.TestCase):
                 return tuple((k, _to_hashable(v)) for k, v in x.items())
             return str(x) if not isinstance(x, t.Hashable) else x
 
+        actual = actual.apply(lambda col: col.map(_to_hashable))
+        expected = expected.apply(lambda col: col.map(_to_hashable))
+
         if sort:
-            actual = actual.apply(lambda col: col.map(_to_hashable))
             actual = actual.sort_values(by=actual.columns.to_list()).reset_index(drop=True)
-            expected = expected.apply(lambda col: col.map(_to_hashable))
             expected = expected.sort_values(by=expected.columns.to_list()).reset_index(drop=True)
 
         try:
