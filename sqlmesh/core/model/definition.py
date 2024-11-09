@@ -2319,7 +2319,13 @@ def _parse_dependencies(
                 # Check whether the gateway attribute is referenced.
                 variables.add(c.GATEWAY)
             elif isinstance(node, ast.FunctionDef) and node.name == entrypoint:
-                variables.update([arg.arg for arg in node.args.args if arg.arg != "context"])
+                variables.update(
+                    [
+                        arg.arg
+                        for arg in [*node.args.args, *node.args.kwonlyargs]
+                        if arg.arg != "context"
+                    ]
+                )
 
     return depends_on, variables
 
