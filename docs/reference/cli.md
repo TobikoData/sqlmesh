@@ -92,7 +92,7 @@ Usage: sqlmesh create_test [OPTIONS] MODEL
 
 Options:
   -q, --query <TEXT TEXT>...  Queries that will be used to generate data for
-                              the model's dependencies.  [required]
+                              the model's dependencies.
   -o, --overwrite             When true, the fixture file will be overwritten
                               in case it already exists.
   -v, --var <TEXT TEXT>...    Key-value pairs that will define variables

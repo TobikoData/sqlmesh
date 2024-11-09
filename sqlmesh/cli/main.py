@@ -530,7 +530,7 @@ def dag(ctx: click.Context, file: str, select_model: t.List[str]) -> None:
     "queries",
     type=(str, str),
     multiple=True,
-    required=True,
+    default=[],
     help="Queries that will be used to generate data for the model's dependencies.",
 )
 @click.option(

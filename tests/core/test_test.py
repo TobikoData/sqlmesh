@@ -1450,12 +1450,12 @@ test_foo:
         )
 
 
-def test_pyspark_python_model() -> None:
+def test_pyspark_python_model(tmp_path: Path) -> None:
     spark_connection_config = SparkConnectionConfig(
         config={
             "spark.master": "local",
-            "spark.sql.warehouse.dir": "/tmp/data_dir",
-            "spark.driver.extraJavaOptions": "-Dderby.system.home=/tmp/derby_dir",
+            "spark.sql.warehouse.dir": f"{tmp_path}/data_dir",
+            "spark.driver.extraJavaOptions": f"-Dderby.system.home={tmp_path}/derby_dir",
         },
     )
     config = Config(
@@ -1569,6 +1569,100 @@ test_foo:
             call('SELECT 1 AS "a"'),
             call('DROP SCHEMA IF EXISTS "memory"."my_schema" CASCADE'),
         ]
+    )
+
+
+def test_complicated_recursive_cte() -> None:
+    model_sql = """
+WITH
+    RECURSIVE
+    chained_contacts AS (
+        -- Start with the initial set of contacts and their immediate nodes
+        SELECT
+            id_contact_a,
+            id_contact_b
+        FROM
+            source
+
+        UNION ALL
+
+        -- Recursive step to find further connected nodes
+        SELECT
+            chained_contacts.id_contact_a,
+            unfactorized_duplicates.id_contact_b
+        FROM
+            chained_contacts
+                JOIN source AS unfactorized_duplicates
+                     ON chained_contacts.id_contact_b = unfactorized_duplicates.id_contact_a
+    ),
+    id_contact_a_with_aggregated_id_contact_bs AS (
+        SELECT
+            id_contact_a,
+            ARRAY_AGG(DISTINCT id_contact_b ORDER BY id_contact_b) AS aggregated_id_contact_bs
+        FROM
+            chained_contacts
+        GROUP BY
+            id_contact_a
+    )
+SELECT
+    ARRAY_CONCAT([id_contact_a], aggregated_id_contact_bs) AS aggregated_duplicates
+FROM
+    id_contact_a_with_aggregated_id_contact_bs
+WHERE
+    id_contact_a NOT IN (
+        SELECT DISTINCT
+            id_contact_b
+        FROM
+            source
+    )
+ORDER BY
+    id_contact_a
+    """
+
+    _check_successful_or_raise(
+        _create_test(
+            body=load_yaml(
+                """
+test_recursive_ctes:
+  model: test
+  inputs:
+    source:
+      rows:
+        - id_contact_a: "a"
+          id_contact_b: "b"
+        - id_contact_a: "b"
+          id_contact_b: "c"
+        - id_contact_a: "c"
+          id_contact_b: "d"
+        - id_contact_a: "a"
+          id_contact_b: "g"
+        - id_contact_a: "b"
+          id_contact_b: "e"
+        - id_contact_a: "c"
+          id_contact_b: "f"
+        - id_contact_a: "x"
+          id_contact_b: "y"
+  outputs:
+    ctes:
+      id_contact_a_with_aggregated_id_contact_bs:
+        - id_contact_a: a
+          aggregated_id_contact_bs: [b, c, d, e, f, g]
+        - id_contact_a: x
+          aggregated_id_contact_bs: [y]
+        - id_contact_a: b
+          aggregated_id_contact_bs: [c, d, e, f]
+        - id_contact_a: c
+          aggregated_id_contact_bs: [d, f]
+    query:
+      rows:
+        - aggregated_duplicates: [a, b, c, d, e, f, g]
+        - aggregated_duplicates: [x, y]
+                """
+            ),
+            test_name="test_recursive_ctes",
+            model=_create_model(model_sql),
+            context=Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))),
+        ).run()
     )
 
 
@@ -1789,3 +1883,35 @@ def test_test_generation_with_decimal(tmp_path: Path, mocker: MockerFixture) -> 
     assert "test_foo" in test
     assert test["test_foo"]["inputs"] == {"sqlmesh_example.bar": [{"dec_col": "1.23"}]}
     assert test["test_foo"]["outputs"] == {"query": [{"dec_col": "1.23"}]}
+
+
+def test_test_generation_with_recursive_ctes(tmp_path: Path) -> None:
+    init_example_project(tmp_path, dialect="duckdb")
+
+    config = Config(
+        default_connection=DuckDBConnectionConfig(),
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+    )
+    foo_sql_file = tmp_path / "models" / "foo.sql"
+    foo_sql_file.write_text(
+        "MODEL (name sqlmesh_example.foo);"
+        "WITH RECURSIVE t AS (SELECT 1 AS c UNION ALL SELECT c + 1 FROM t WHERE c < 3) SELECT c FROM t"
+    )
+
+    context = Context(paths=tmp_path, config=config)
+    context.plan(auto_apply=True)
+
+    context.create_test("sqlmesh_example.foo", input_queries={}, overwrite=True, include_ctes=True)
+
+    test = load_yaml(context.path / c.TESTS / "test_foo.yaml")
+    assert len(test) == 1
+    assert "test_foo" in test
+    assert test["test_foo"]["inputs"] == {}
+    assert test["test_foo"]["outputs"] == {
+        "query": [{"c": 1}, {"c": 2}, {"c": 3}],
+        "ctes": {
+            "t": [{"c": 1}, {"c": 2}, {"c": 3}],
+        },
+    }
+
+    _check_successful_or_raise(context.test())
