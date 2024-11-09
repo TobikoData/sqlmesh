@@ -858,7 +858,7 @@ class SQLMeshMagics(Magics):
         "-q",
         type=str,
         nargs="+",
-        required=True,
+        default=[],
         help="Queries that will be used to generate data for the model's dependencies.",
     )
     @argument(

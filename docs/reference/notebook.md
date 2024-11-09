@@ -366,8 +366,9 @@ options:
 
 #### create_test
 ```
-%create_test --query QUERY [QUERY ...] [--overwrite]
+%create_test [--query QUERY [QUERY ...]] [--overwrite]
                    [--var VAR [VAR ...]] [--path PATH] [--name NAME]
+                   [--include-ctes]
                    model
 
 Generate a unit test fixture for a given model.
