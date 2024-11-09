@@ -388,7 +388,6 @@ test_array_order:
     )
 
 
-
 @pytest.mark.parametrize(
     "waiter_names_input",
     [
