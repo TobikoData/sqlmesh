@@ -1895,7 +1895,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             return
         sensitive_fields = self.get_sensitive_fields()
 
-        for field_name, value in config.model_dump().items():
+        for field_name, value in config.dict().items():
             if self.is_sensitive_field(field_name, sensitive_fields):
                 masked_value = self.mask_sensitive_value(value)
                 console.log_status_update(f"{field_name}: {masked_value}")
