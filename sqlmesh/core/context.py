@@ -47,6 +47,7 @@ from io import StringIO
 from pathlib import Path
 from shutil import rmtree
 from types import MappingProxyType, SimpleNamespace
+from typing import Any, Set
 
 import pandas as pd
 from sqlglot import Dialect, exp
@@ -57,6 +58,7 @@ from sqlmesh.core import constants as c
 from sqlmesh.core.analytics import python_api_analytics
 from sqlmesh.core.audit import Audit, ModelAudit, StandaloneAudit
 from sqlmesh.core.config import CategorizerConfig, Config, load_configs
+from sqlmesh.core.config.connection import ConnectionConfig
 from sqlmesh.core.config.loader import C
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.context_diff import ContextDiff
@@ -1846,15 +1848,77 @@ class GenericContext(BaseContext, t.Generic[C]):
                 strict=strict,
             )
 
+    def get_sensitive_fields(self) -> Set[str]:
+        """Returns a set of common sensitive field names"""
+        return {
+            "password",
+            "secret",
+            "key",
+            "token",
+            "api_key",
+            "private_key",
+            "access_token",
+            "refresh_token",
+            "auth_token",
+            "credentials",
+            "client_secret",
+            "certificate",
+            "ssh_key",
+        }
+
+    def is_sensitive_field(self, field_name: str, sensitive_fields: Set[str]) -> bool:
+        """
+        Check if a field name contains any sensitive keywords
+        """
+        field_lower = field_name.lower()
+        return any(sensitive in field_lower for sensitive in sensitive_fields)
+
+    def mask_sensitive_value(self, value: Any) -> str:
+        """
+        Mask sensitive values with a placeholder
+        Returns '****' for non-empty values and '' for empty ones
+        """
+        if value and str(value).strip():
+            return "*" * len(str(value))
+        return "None"
+
+    def print_config(self, config: ConnectionConfig | None, console: Any) -> None:
+        """
+        Print configuration while masking sensitive information
+
+        Args:
+            config: Pydantic model containing configuration
+            console: Console object with log_status_update method
+        """
+        if not config:
+            console.log_status_update("No connection configuration found.")
+            return
+        sensitive_fields = self.get_sensitive_fields()
+
+        for field_name, value in config.model_dump().items():
+            if self.is_sensitive_field(field_name, sensitive_fields):
+                masked_value = self.mask_sensitive_value(value)
+                console.log_status_update(f"{field_name}: {masked_value}")
+            else:
+                console.log_status_update(f"{field_name}: {value}")
+
     @python_api_analytics
     def print_info(self, skip_connection: bool = False) -> None:
         """Prints information about connections, models, macros, etc. to the console."""
         self.console.log_status_update(f"Models: {len(self.models)}")
         self.console.log_status_update(f"Macros: {len(self._macros) - len(macro.get_registry())}")
 
+        self.console.log_status_update("\n\nConnection:")
+        self.print_config(self.config.get_connection(self.gateway), self.console)
+
+        self.console.log_status_update("\n\nTest Connection:")
+        self.print_config(self.config.get_test_connection(self.gateway), self.console)
+
+        self.console.log_status_update("\n\nState Connection:")
+        self.print_config(self.config.get_state_connection(self.gateway), self.console)
+        self.console.log_status_update("\n")
         if skip_connection:
             return
-
         self._try_connection("data warehouse", self._engine_adapter.ping)
 
         state_connection = self.config.get_state_connection(self.gateway)

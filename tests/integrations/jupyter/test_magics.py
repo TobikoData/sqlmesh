@@ -547,62 +547,58 @@ def test_info(notebook, sushi_context, convert_all_html_output_to_text, get_all_
 
     assert not output.stdout
     assert not output.stderr
-    assert len(output.outputs) == 3
+    assert len(output.outputs) == 24
     assert convert_all_html_output_to_text(output) == [
         "Models: 17",
         "Macros: 6",
+        "Connection:",
+        "type_: duckdb",
+        "concurrent_tasks: 1",
+        "register_comments: True",
+        "pre_ping: False",
+        "extensions: []",
+        "connector_config: {}",
+        "database: None",
+        "catalogs: None",
+        "Test Connection:",
+        "type_: duckdb",
+        "concurrent_tasks: 1",
+        "register_comments: True",
+        "pre_ping: False",
+        "extensions: []",
+        "connector_config: {}",
+        "database: None",
+        "catalogs: None",
+        "State Connection:",
+        "No connection configuration found.",
+        "",
         "Data warehouse connection succeeded",
     ]
     assert get_all_html_output(output) == [
-        str(
-            h(
-                "pre",
-                {"style": RICH_PRE_STYLE},
-                "Models: "
-                + str(
-                    h(
-                        "span",
-                        # "color: #008000; text-decoration-color: #008000"
-                        {"style": f"{NEUTRAL_STYLE}; font-weight: bold"},
-                        "17",
-                        autoescape=False,
-                    )
-                ),
-                autoescape=False,
-            )
-        ),
-        str(
-            h(
-                "pre",
-                {"style": RICH_PRE_STYLE},
-                "Macros: "
-                + str(
-                    h(
-                        "span",
-                        {"style": f"{NEUTRAL_STYLE}; font-weight: bold"},
-                        "6",
-                        autoescape=False,
-                    )
-                ),
-                autoescape=False,
-            )
-        ),
-        str(
-            h(
-                "pre",
-                {"style": RICH_PRE_STYLE},
-                "Data warehouse connection "
-                + str(
-                    h(
-                        "span",
-                        {"style": SUCCESS_STYLE},
-                        "succeeded",
-                        autoescape=False,
-                    )
-                ),
-                autoescape=False,
-            )
-        ),
+        "<pre style=\"white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace\">Models: <span style=\"color: #008080; text-decoration-color: #008080; font-weight: bold\">17</span></pre>",
+        "<pre style=\"white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace\">Macros: <span style=\"color: #008080; text-decoration-color: #008080; font-weight: bold\">6</span></pre>",
+        "<pre style=\"white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace\">Connection:</pre>",
+        "<pre style=\"white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace\">type_: duckdb</pre>",
+        "<pre style=\"white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace\">concurrent_tasks: <span style=\"color: #008080; text-decoration-color: #008080; font-weight: bold\">1</span></pre>",
+        "<pre style=\"white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace\">register_comments: <span style=\"color: #00ff00; text-decoration-color: #00ff00; font-style: italic\">True</span></pre>",
+        "<pre style=\"white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace\">pre_ping: <span style=\"color: #ff0000; text-decoration-color: #ff0000; font-style: italic\">False</span></pre>",
+        "<pre style=\"white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace\">extensions: <span style=\"font-weight: bold\">[]</span></pre>",
+        "<pre style=\"white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace\">connector_config: <span style=\"font-weight: bold\">{}</span></pre>",
+        "<pre style=\"white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace\">database: <span style=\"color: #800080; text-decoration-color: #800080; font-style: italic\">None</span></pre>",
+        "<pre style=\"white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace\">catalogs: <span style=\"color: #800080; text-decoration-color: #800080; font-style: italic\">None</span></pre>",
+        "<pre style=\"white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace\">Test Connection:</pre>",
+        "<pre style=\"white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace\">type_: duckdb</pre>",
+        "<pre style=\"white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace\">concurrent_tasks: <span style=\"color: #008080; text-decoration-color: #008080; font-weight: bold\">1</span></pre>",
+        "<pre style=\"white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace\">register_comments: <span style=\"color: #00ff00; text-decoration-color: #00ff00; font-style: italic\">True</span></pre>",
+        "<pre style=\"white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace\">pre_ping: <span style=\"color: #ff0000; text-decoration-color: #ff0000; font-style: italic\">False</span></pre>",
+        "<pre style=\"white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace\">extensions: <span style=\"font-weight: bold\">[]</span></pre>",
+        "<pre style=\"white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace\">connector_config: <span style=\"font-weight: bold\">{}</span></pre>",
+        "<pre style=\"white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace\">database: <span style=\"color: #800080; text-decoration-color: #800080; font-style: italic\">None</span></pre>",
+        "<pre style=\"white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace\">catalogs: <span style=\"color: #800080; text-decoration-color: #800080; font-style: italic\">None</span></pre>",
+        "<pre style=\"white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace\">State Connection:</pre>",
+        "<pre style=\"white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace\">No connection configuration found.</pre>",
+        "<pre style=\"white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace\"></pre>",
+        "<pre style=\"white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace\">Data warehouse connection <span style=\"color: #008000; text-decoration-color: #008000\">succeeded</span></pre>",
     ]
 
 
