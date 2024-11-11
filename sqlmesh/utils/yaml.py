@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import typing as t
+from decimal import Decimal
 from os import getenv
 from pathlib import Path
 
@@ -15,7 +16,18 @@ JINJA_METHODS = {
     "env_var": lambda key, default=None: getenv(key, default),
 }
 
-YAML = lambda: yaml.YAML(typ="safe")  # noqa: E731
+
+def YAML(typ: t.Optional[str] = "safe") -> yaml.YAML:
+    yaml_obj = yaml.YAML(typ=typ)
+
+    # Ruamel doesn't know how to serialize Decimal values. This is problematic when,
+    # e.g., we're trying to auto-generate a unit test whose body contains Decimal data.
+    # This is a best-effort approach to solve this by serializing them as strings.
+    yaml_obj.representer.add_representer(
+        Decimal, lambda dumper, data: dumper.represent_str(str(data))
+    )
+
+    return yaml_obj
 
 
 def load(
@@ -64,8 +76,5 @@ def dump(value: t.Any) -> str: ...
 def dump(value: t.Any, stream: t.Optional[io.IOBase] = None) -> t.Optional[str]:
     """Dumps a ruamel.yaml loaded object and converts it into a string or writes it to a stream."""
     result = io.StringIO()
-    yaml.YAML().dump(value, stream or result)
-
-    if stream:
-        return None
-    return result.getvalue()
+    YAML(typ=None).dump(value, stream or result)
+    return None if stream else result.getvalue()

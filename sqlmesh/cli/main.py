@@ -221,6 +221,7 @@ def evaluate(
 
 
 @cli.command("format")
+@click.argument("paths", nargs=-1)
 @click.option(
     "-t",
     "--transpile",
@@ -280,12 +281,14 @@ def evaluate(
 @click.pass_context
 @error_handler
 @cli_analytics
-def format(ctx: click.Context, **kwargs: t.Any) -> None:
+def format(
+    ctx: click.Context, paths: t.Optional[t.Tuple[str, ...]] = None, **kwargs: t.Any
+) -> None:
     """Format all SQL models and audits."""
     if kwargs.pop("no_rewrite_casts", None):
         kwargs["rewrite_casts"] = False
 
-    if not ctx.obj.format(**{k: v for k, v in kwargs.items() if v is not None}):
+    if not ctx.obj.format(**{k: v for k, v in kwargs.items() if v is not None}, paths=paths):
         ctx.exit(1)
 
 
@@ -527,7 +530,7 @@ def dag(ctx: click.Context, file: str, select_model: t.List[str]) -> None:
     "queries",
     type=(str, str),
     multiple=True,
-    required=True,
+    default=[],
     help="Queries that will be used to generate data for the model's dependencies.",
 )
 @click.option(
@@ -804,6 +807,11 @@ def create_external_models(obj: Context, **kwargs: t.Any) -> None:
     is_flag=True,
     help="Disable the check for a primary key (grain) that is missing or is not unique.",
 )
+@click.option(
+    "--temp-schema",
+    type=str,
+    help="Schema used for temporary tables. It can be `CATALOG.SCHEMA` or `SCHEMA`. Default: `sqlmesh_temp`",
+)
 @click.pass_obj
 @error_handler
 @cli_analytics
@@ -908,3 +916,39 @@ def clean(obj: Context) -> None:
 def table_name(obj: Context, model_name: str, dev: bool) -> None:
     """Prints the name of the physical table for the given model."""
     print(obj.table_name(model_name, dev))
+
+
+@cli.command("dlt_refresh")
+@click.argument("pipeline", required=True)
+@click.option(
+    "-t",
+    "--table",
+    type=str,
+    multiple=True,
+    help="The specific dlt tables to refresh in the SQLMesh models.",
+)
+@click.option(
+    "-f",
+    "--force",
+    is_flag=True,
+    default=False,
+    help="If set, existing models are overwritten with the new DLT tables.",
+)
+@click.pass_context
+@error_handler
+@cli_analytics
+def dlt_refresh(
+    ctx: click.Context,
+    pipeline: str,
+    force: bool,
+    table: t.List[str] = [],
+) -> None:
+    """Attaches to a DLT pipeline with the option to update specific or all missing tables in the SQLMesh project."""
+    from sqlmesh.integrations.dlt import generate_dlt_models
+
+    sqlmesh_models = generate_dlt_models(ctx.obj, pipeline, list(table or []), force)
+    if sqlmesh_models:
+        model_names = "\n".join([f"- {model_name}" for model_name in sqlmesh_models])
+        ctx.obj.console.log_success(f"Updatde SQLMesh project with models:\n{model_names}")
+    else:
+        ctx.obj.console.log_success("All SQLMesh models are up to date.")

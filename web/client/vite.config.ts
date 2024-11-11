@@ -2,8 +2,12 @@ import path from 'path'
 import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react-swc'
 
+const BASE_URL = process.env.BASE_URL ?? ''
+const BASE = BASE_URL ?? '/'
+
 // https://vitejs.dev/config/
 export default defineConfig({
+  base: BASE,
   resolve: {
     alias: [
       { find: '~', replacement: path.resolve(__dirname, './src') },
@@ -25,6 +29,10 @@ export default defineConfig({
   build: {
     outDir: 'dist',
   },
+  define: {
+    __BASE_URL__: JSON.stringify(BASE_URL),
+    __IS_HEADLESS__: JSON.stringify(Boolean(process.env.IS_HEADLESS ?? false)),
+  },
   plugins: [react()],
   test: {
     globals: true,
@@ -37,20 +45,21 @@ export default defineConfig({
       ? {}
       : {
           proxy: {
-            '/api': {
+            [`${BASE_URL}/api`]: {
               target: 'http://api:8000',
+              rewrite: path => path.replace(`${BASE_URL}/api`, '/api'),
             },
-            '/docs': {
+            [`${BASE_URL}/docs`]: {
               target: 'http://app:8001',
-              rewrite: path => '/',
+              rewrite: path => BASE,
             },
-            '/data': {
+            [`${BASE_URL}/data`]: {
               target: 'http://app:8001',
-              rewrite: path => '/',
+              rewrite: path => BASE,
             },
-            '/lineage': {
+            [`${BASE_URL}/lineage`]: {
               target: 'http://app:8001',
-              rewrite: path => '/',
+              rewrite: path => BASE,
             },
           },
         },

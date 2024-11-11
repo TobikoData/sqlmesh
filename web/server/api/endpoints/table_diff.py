@@ -20,6 +20,7 @@ def get_table_diff(
     on: t.Optional[str] = None,
     model_or_snapshot: t.Optional[str] = None,
     where: t.Optional[str] = None,
+    temp_schema: t.Optional[str] = None,
     limit: int = 20,
     context: Context = Depends(get_loaded_context),
 ) -> TableDiff:
@@ -34,7 +35,7 @@ def get_table_diff(
         show=False,
     )
     _schema_diff = diff.schema_diff()
-    _row_diff = diff.row_diff()
+    _row_diff = diff.row_diff(temp_schema=temp_schema)
     schema_diff = SchemaDiff(
         source=_schema_diff.source,
         target=_schema_diff.target,

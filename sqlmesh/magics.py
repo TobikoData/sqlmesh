@@ -692,6 +692,42 @@ class SQLMeshMagics(Magics):
 
     @magic_arguments()
     @argument(
+        "pipeline",
+        nargs="?",
+        type=str,
+        help="The dlt pipeline to attach for this SQLMesh project.",
+    )
+    @argument(
+        "--table",
+        "-t",
+        type=str,
+        nargs="*",
+        help="The specific dlt tables to refresh in the SQLMesh models.",
+    )
+    @argument(
+        "--force",
+        "-f",
+        action="store_true",
+        help="If set, existing models are overwritten with the new DLT tables.",
+    )
+    @line_magic
+    @pass_sqlmesh_context
+    def dlt_refresh(self, context: Context, line: str) -> None:
+        """Attaches to a DLT pipeline with the option to update specific or all missing tables in the SQLMesh project."""
+        from sqlmesh.integrations.dlt import generate_dlt_models
+
+        args = parse_argstring(self.dlt_refresh, line)
+        sqlmesh_models = generate_dlt_models(
+            context, args.pipeline, list(args.table or []), args.force
+        )
+        if sqlmesh_models:
+            model_names = "\n".join([f"- {model_name}" for model_name in sqlmesh_models])
+            context.console.log_success(f"Updated SQLMesh project with models:\n{model_names}")
+        else:
+            context.console.log_success("All SQLMesh models are up to date.")
+
+    @magic_arguments()
+    @argument(
         "--read",
         type=str,
         default="",
@@ -822,7 +858,7 @@ class SQLMeshMagics(Magics):
         "-q",
         type=str,
         nargs="+",
-        required=True,
+        default=[],
         help="Queries that will be used to generate data for the model's dependencies.",
     )
     @argument(

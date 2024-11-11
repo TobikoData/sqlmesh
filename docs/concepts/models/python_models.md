@@ -93,7 +93,7 @@ For example, pre/post-statements might modify settings or create indexes. Howeve
 You can set the `pre_statements` and `post_statements` arguments to a list of SQL strings, SQLGlot expressions, or macro calls to define the model's pre/post-statements.
 
 ``` python linenums="1" hl_lines="8-12"
-@model( 
+@model(
     "db.test_model",
     kind="full",
     columns={
@@ -193,6 +193,29 @@ def execute(
 
     # ignored due to @model dependency "upstream_dependency"
     context.table("docs_example.another_dependency")
+```
+
+
+## Returning empty dataframes
+
+Python models may not return an empty dataframe.
+
+If your model could possibly return an empty dataframe, conditionally `yield` the dataframe or an empty generator instead of `return`ing:
+
+```python linenums="1" hl_lines="10-13"
+@model(
+    "my_model.empty_df"
+)
+def execute(
+    context: ExecutionContext,
+) -> pd.DataFrame:
+
+    [...code creating df...]
+
+    if df.empty:
+        yield from ()
+    else:
+        yield df
 ```
 
 

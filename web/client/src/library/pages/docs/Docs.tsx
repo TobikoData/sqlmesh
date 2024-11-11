@@ -7,7 +7,7 @@ import NotFound from '../root/NotFound'
 import { EnumRoutes } from '~/routes'
 import LineageFlowProvider from '@components/graph/context'
 import { type ErrorIDE } from '../root/context/notificationCenter'
-import { isFalse, isNil } from '@utils/index'
+import { isFalse, isNil, isNotNil } from '@utils/index'
 import {
   CodeEditorRemoteFile,
   CodeEditorDefault,
@@ -25,6 +25,8 @@ import {
 import clsx from 'clsx'
 import { EnumSize, EnumVariant } from '~/types/enum'
 import { useApiModel } from '@api/index'
+import Loading from '@components/loading/Loading'
+import Spinner from '@components/logo/Spinner'
 
 export default function PageDocs(): JSX.Element {
   const { modelName = '' } = useParams()
@@ -138,46 +140,75 @@ export default function PageDocs(): JSX.Element {
                       <ArrowsPointingOutIcon className="w-4 h-4" />
                     )}
                   </Button>
-                  <CodeEditorRemoteFile path={model.path}>
-                    {({ file }) => (
-                      <Tab.Group>
-                        <TabList
-                          list={
-                            [
-                              'Source Code',
-                              model.isModelSQL && 'Compiled Query',
-                            ].filter(Boolean) as string[]
-                          }
-                          disabled={isFetchingModel}
-                          className="justify-center"
-                        />
-                        <Tab.Panels className="h-full w-full overflow-hidden text-xs">
-                          <Tab.Panel
-                            unmount={false}
-                            className="w-full h-full"
-                          >
-                            <CodeEditorDefault
-                              content={file.content}
-                              type={file.extension}
-                              extensions={modelExtensions}
-                            />
-                          </Tab.Panel>
-                          {model.isModelSQL && (
-                            <Tab.Panel
-                              unmount={false}
-                              className="w-full h-full"
-                            >
+                  <Tab.Group>
+                    <TabList
+                      list={
+                        [
+                          'Source Code',
+                          model.isModelSQL && 'Compiled Query',
+                        ].filter(Boolean) as string[]
+                      }
+                      disabled={isFetchingModel}
+                      className="justify-center"
+                    />
+                    <Tab.Panels className="h-full w-full overflow-hidden text-xs">
+                      <Tab.Panel
+                        unmount={false}
+                        className="w-full h-full"
+                      >
+                        {isFetchingModel ? (
+                          <div className="flex justify-center items-center w-full h-full">
+                            <Loading className="inline-block">
+                              <Spinner className="w-5 h-5 border border-neutral-10 mr-4" />
+                              <h3 className="text-xl">Waiting for Model...</h3>
+                            </Loading>
+                          </div>
+                        ) : isNil(model.definition) && isNotNil(model.path) ? (
+                          <CodeEditorRemoteFile path={model.path}>
+                            {({ file }) => (
                               <CodeEditorDefault
-                                type={EnumFileExtensions.SQL}
-                                content={model.sql ?? ''}
+                                content={file.content}
+                                type={file.extension}
                                 extensions={modelExtensions}
                               />
-                            </Tab.Panel>
-                          )}
-                        </Tab.Panels>
-                      </Tab.Group>
-                    )}
-                  </CodeEditorRemoteFile>
+                            )}
+                          </CodeEditorRemoteFile>
+                        ) : (
+                          <>
+                            {isNil(model.definition) ? (
+                              <div className="flex justify-center items-center w-full h-full">
+                                <h3 className="text-xl">
+                                  Definition Not Found
+                                </h3>
+                              </div>
+                            ) : (
+                              <CodeEditorDefault
+                                content={model.definition}
+                                type={
+                                  model.isModelPython
+                                    ? EnumFileExtensions.PY
+                                    : EnumFileExtensions.SQL
+                                }
+                                extensions={modelExtensions}
+                              />
+                            )}
+                          </>
+                        )}
+                      </Tab.Panel>
+                      {model.isModelSQL && (
+                        <Tab.Panel
+                          unmount={false}
+                          className="w-full h-full"
+                        >
+                          <CodeEditorDefault
+                            type={EnumFileExtensions.SQL}
+                            content={model.sql ?? ''}
+                            extensions={modelExtensions}
+                          />
+                        </Tab.Panel>
+                      )}
+                    </Tab.Panels>
+                  </Tab.Group>
                 </div>
                 <div className="flex flex-col h-full relative overflow-hidden">
                   <Button
@@ -203,10 +234,7 @@ export default function PageDocs(): JSX.Element {
               </SplitPane>
             </div>
             <div className="flex flex-col h-full">
-              <Documentation
-                model={model}
-                withQuery={model.isModelSQL}
-              />
+              <Documentation model={model} />
             </div>
           </SplitPane>
         </LineageFlowProvider>

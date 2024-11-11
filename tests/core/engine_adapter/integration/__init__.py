@@ -23,6 +23,7 @@ from sqlmesh.utils.pydantic import PydanticModel
 from tests.utils.pandas import compare_dataframes
 
 if t.TYPE_CHECKING:
+    from sqlmesh.core._typing import TableName
     from sqlmesh.core.engine_adapter._typing import Query
 
 TEST_SCHEMA = "test_schema"
@@ -212,12 +213,16 @@ class TestContext:
     def output_data(self, data: pd.DataFrame) -> pd.DataFrame:
         return self._format_df(data)
 
-    def table(self, table_name: str, schema: str = TEST_SCHEMA) -> exp.Table:
+    def table(self, table_name: TableName, schema: str = TEST_SCHEMA) -> exp.Table:
         schema = self.add_test_suffix(schema)
         self._schemas.append(schema)
+
+        table = exp.to_table(table_name, dialect=self.dialect)
+        table.set("db", exp.parse_identifier(schema, dialect=self.dialect))
+
         return exp.to_table(
             normalize_model_name(
-                ".".join([schema, table_name]),
+                table,
                 default_catalog=self.engine_adapter.default_catalog,
                 dialect=self.dialect,
             )
@@ -450,7 +455,9 @@ class TestContext:
         return comments
 
     def create_context(
-        self, config_mutator: t.Optional[t.Callable[[str, Config], None]] = None
+        self,
+        config_mutator: t.Optional[t.Callable[[str, Config], None]] = None,
+        path: t.Optional[pathlib.Path] = None,
     ) -> Context:
         private_sqlmesh_dir = pathlib.Path(pathlib.Path().home(), ".sqlmesh")
         config = load_config_from_paths(
@@ -481,7 +488,7 @@ class TestContext:
             # Ensure that s3_warehouse_location is propagated
             conn.s3_warehouse_location = self.engine_adapter.s3_warehouse_location
 
-        self._context = Context(paths=".", config=config, gateway=self.gateway)
+        self._context = Context(paths=path or ".", config=config, gateway=self.gateway)
         return self._context
 
     def create_catalog(self, catalog_name: str):

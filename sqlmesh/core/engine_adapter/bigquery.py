@@ -223,17 +223,35 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
                 return "JSON"
             return kind.name
 
-        table = self._get_table(table_name)
-        columns = {
-            field.name: exp.DataType.build(
-                dtype_to_sql(field.to_standard_sql().type), dialect=self.dialect
-            )
-            for field in table.schema
-        }
-        if include_pseudo_columns and table.time_partitioning and not table.time_partitioning.field:
-            columns["_PARTITIONTIME"] = exp.DataType.build("TIMESTAMP")
-            if table.time_partitioning.type_ == "DAY":
-                columns["_PARTITIONDATE"] = exp.DataType.build("DATE")
+        def create_mapping_schema(
+            schema: t.Sequence[bigquery.SchemaField],
+        ) -> t.Dict[str, exp.DataType]:
+            return {
+                field.name: exp.DataType.build(
+                    dtype_to_sql(field.to_standard_sql().type), dialect=self.dialect
+                )
+                for field in schema
+            }
+
+        table = exp.to_table(table_name)
+        if len(table.parts) == 3 and "." in table.name:
+            # The client's `get_table` method can't handle paths with >3 identifiers
+            self.execute(exp.select("*").from_(table).limit(1))
+            query_results = self._query_job._query_results
+            columns = create_mapping_schema(query_results.schema)
+        else:
+            bq_table = self._get_table(table)
+            columns = create_mapping_schema(bq_table.schema)
+
+            if (
+                include_pseudo_columns
+                and bq_table.time_partitioning
+                and not bq_table.time_partitioning.field
+            ):
+                columns["_PARTITIONTIME"] = exp.DataType.build("TIMESTAMP")
+                if bq_table.time_partitioning.type_ == "DAY":
+                    columns["_PARTITIONDATE"] = exp.DataType.build("DATE")
+
         return columns
 
     def alter_table(

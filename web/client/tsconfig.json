@@ -33,10 +33,10 @@
   "include": [
     "**/*.ts",
     "**/*.tsx",
-    "./.eslintrc.js",
-    "./.prettierrc.js",
-    "./postcss.config.js",
-    "./tailwind.config.js"
+    ".eslintrc.cjs",
+    ".prettierrc.cjs",
+    "postcss.config.cjs",
+    "tailwind.config.cjs"
   ],
   "exclude": ["node_modules"]
 }

@@ -97,6 +97,7 @@ nav:
 theme:
   name: material
   logo: _readthedocs/html/sqlmesh.png
+  favicon: _readthedocs/html/favicon.svg
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default

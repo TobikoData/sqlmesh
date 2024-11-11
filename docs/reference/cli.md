@@ -92,7 +92,7 @@ Usage: sqlmesh create_test [OPTIONS] MODEL
 
 Options:
   -q, --query <TEXT TEXT>...  Queries that will be used to generate data for
-                              the model's dependencies.  [required]
+                              the model's dependencies.
   -o, --overwrite             When true, the fixture file will be overwritten
                               in case it already exists.
   -v, --var <TEXT TEXT>...    Key-value pairs that will define variables
@@ -119,6 +119,18 @@ Usage: sqlmesh dag [OPTIONS] FILE
 Options:
   --select-model TEXT  Select specific models to include in the dag.
   --help               Show this message and exit.
+```
+
+## dlt_refresh
+
+```
+Usage: dlt_refresh PIPELINE [OPTIONS]
+
+  Attaches to a DLT pipeline with the option to update specific or all models of the SQLMesh project.
+
+Options:
+  -t, --table TEXT  The DLT tables to generate SQLMesh models from. When none specified, all new missing tables will be generated.
+  -f, --force       If set it will overwrite existing models with the new generated models from the DLT tables.
 ```
 
 ## diff
@@ -202,6 +214,7 @@ Usage: sqlmesh info [OPTIONS]
   data warehouse.
 
 Options:
+  --skip-connection  Skip the connection test.
   --help  Show this message and exit.
 ```
 

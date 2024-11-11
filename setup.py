@@ -47,7 +47,7 @@ setup(
         "requests",
         "rich[jupyter]",
         "ruamel.yaml",
-        "sqlglot[rs]~=25.28.0",
+        "sqlglot[rs]~=25.30.0",
         "tenacity",
     ],
     extras_require={
@@ -61,6 +61,7 @@ setup(
         "dev": [
             "agate==1.7.1",
             f"apache-airflow=={os.environ.get('AIRFLOW_VERSION', '2.9.1')}",
+            "opentelemetry-proto==1.27.0",  # pip was having trouble resolving this transitive dependency of airflow
             "beautifulsoup4",
             "clickhouse-connect",
             "cryptography~=42.0.4",

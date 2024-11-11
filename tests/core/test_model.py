@@ -4708,6 +4708,30 @@ def test_named_variables_python_model(mocker: MockerFixture) -> None:
     assert df.to_dict(orient="records") == [{"a": "test_value", "b": None, "start": to_ds(c.EPOCH)}]
 
 
+def test_named_variables_kw_only_python_model(mocker: MockerFixture) -> None:
+    @model(
+        "test_named_variables_python_model",
+        kind="full",
+        columns={"a": "string"},
+    )
+    def model_with_named_kw_only_variables(
+        context, start: TimeLike, *, test_var_a: str = "", **kwargs: t.Any
+    ):
+        return pd.DataFrame([{"a": test_var_a}])
+
+    python_model = model.get_registry()["test_named_variables_python_model"].model(
+        module_path=Path("."),
+        path=Path("."),
+        variables={"test_var_a": "test_value"},
+    )
+
+    assert python_model.python_env[c.SQLMESH_VARS] == Executable.value({"test_var_a": "test_value"})
+
+    context = ExecutionContext(mocker.Mock(), {}, None, None)
+    df = list(python_model.render(context=context))[0]
+    assert df.to_dict(orient="records") == [{"a": "test_value"}]
+
+
 def test_gateway_macro() -> None:
     model = load_sql_based_model(
         parse(
@@ -5945,12 +5969,12 @@ MODEL (
   dialect snowflake,
 );
 
-SELECT * FROM (@custom_macro(@foo, @bar)) AS q
+SELECT * FROM (@custom_macro(@a, @b)) AS q
     """)
 
     config = Config(
         model_defaults=ModelDefaultsConfig(dialect="duckdb"),
-        variables={"foo": "foo", "bar": "boo"},
+        variables={"a": "a", "b": "b"},
     )
     context = Context(paths=tmp_path, config=config)
 

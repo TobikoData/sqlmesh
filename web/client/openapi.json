@@ -697,9 +697,9 @@
     },
     "/api/modules": {
       "get": {
-        "summary": "Get Api Meta",
+        "summary": "Get Api Modules",
         "description": "Get the modules",
-        "operationId": "get_api_meta_api_modules_get",
+        "operationId": "get_api_modules_api_modules_get",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -708,7 +708,7 @@
                 "schema": {
                   "items": { "$ref": "#/components/schemas/Modules" },
                   "type": "array",
-                  "title": "Response Get Api Meta Api Modules Get"
+                  "title": "Response Get Api Modules Api Modules Get"
                 }
               }
             }
@@ -1205,13 +1205,19 @@
           "previous_finalized_snapshots": {
             "anyOf": [{ "items": {}, "type": "array" }, { "type": "null" }],
             "title": "Previous Finalized Snapshots"
+          },
+          "requirements": {
+            "additionalProperties": { "type": "string" },
+            "type": "object",
+            "title": "Requirements",
+            "default": {}
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": ["snapshots", "start_at", "plan_id"],
         "title": "Environment",
-        "description": "Represents an isolated environment.\n\nEnvironments are isolated workspaces that hold pointers to physical tables.\n\nArgs:\n    snapshots: The snapshots that are part of this environment.\n    start_at: The start time of the environment.\n    end_at: The end time of the environment.\n    plan_id: The ID of the plan that last updated this environment.\n    previous_plan_id: The ID of the previous plan that updated this environment.\n    expiration_ts: The timestamp when this environment will expire.\n    finalized_ts: The timestamp when this environment was finalized.\n    promoted_snapshot_ids: The IDs of the snapshots that are promoted in this environment\n        (i.e. for which the views are created). If not specified, all snapshots are promoted.\n    previous_finalized_snapshots: Snapshots that were part of this environment last time it was finalized."
+        "description": "Represents an isolated environment.\n\nEnvironments are isolated workspaces that hold pointers to physical tables.\n\nArgs:\n    snapshots: The snapshots that are part of this environment.\n    start_at: The start time of the environment.\n    end_at: The end time of the environment.\n    plan_id: The ID of the plan that last updated this environment.\n    previous_plan_id: The ID of the previous plan that updated this environment.\n    expiration_ts: The timestamp when this environment will expire.\n    finalized_ts: The timestamp when this environment was finalized.\n    promoted_snapshot_ids: The IDs of the snapshots that are promoted in this environment\n        (i.e. for which the views are created). If not specified, all snapshots are promoted.\n    previous_finalized_snapshots: Snapshots that were part of this environment last time it was finalized.\n    requirements: A mapping of library versions for all the snapshots in this environment."
       },
       "EnvironmentSuffixTarget": {
         "type": "string",
@@ -1404,6 +1410,10 @@
             "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Sql"
           },
+          "definition": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Definition"
+          },
           "default_catalog": {
             "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Default Catalog"
@@ -1466,6 +1476,10 @@
           "retention": {
             "anyOf": [{ "type": "integer" }, { "type": "null" }],
             "title": "Retention"
+          },
+          "table_format": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Table Format"
           },
           "storage_format": {
             "anyOf": [{ "type": "string" }, { "type": "null" }],

@@ -10,7 +10,6 @@ import {
   useNotificationCenter,
 } from './context/notificationCenter'
 import { type Tests, useStoreProject } from '@context/project'
-import { useChannelEvents } from '@api/channels'
 import {
   useApiEnvironments,
   useApiFiles,
@@ -53,22 +52,13 @@ import { type PlanApplyTracker } from '@models/tracker-plan-apply'
 import { type PlanCancelTracker } from '@models/tracker-plan-cancel'
 import { type EnvironmentName } from '@models/environment'
 import { EnumPlanAction, ModelPlanAction } from '@models/plan-action'
+import { useChannelEvents, type EventSourceChannel } from '@api/channels'
 
 export default function Root(): JSX.Element {
   const location = useLocation()
   const navigate = useNavigate()
 
   const { removeError, addError } = useNotificationCenter()
-
-  const channel = useChannelEvents()
-
-  const planApply = useStorePlan(s => s.planApply)
-  const planOverview = useStorePlan(s => s.planOverview)
-  const planCancel = useStorePlan(s => s.planCancel)
-  const setPlanApply = useStorePlan(s => s.setPlanApply)
-  const setPlanOverview = useStorePlan(s => s.setPlanOverview)
-  const setPlanCancel = useStorePlan(s => s.setPlanCancel)
-  const setPlanAction = useStorePlan(s => s.setPlanAction)
 
   const modules = useStoreContext(s => s.modules)
   const environment = useStoreContext(s => s.environment)
@@ -81,6 +71,19 @@ export default function Root(): JSX.Element {
   const addRemoteEnvironments = useStoreContext(s => s.addRemoteEnvironments)
   const addLocalEnvironment = useStoreContext(s => s.addLocalEnvironment)
   const setEnvironment = useStoreContext(s => s.setEnvironment)
+  let channel: EventSourceChannel
+
+  if (isFalse(modules.hasOnlyDocs)) {
+    channel = useChannelEvents()
+  }
+
+  const planApply = useStorePlan(s => s.planApply)
+  const planOverview = useStorePlan(s => s.planOverview)
+  const planCancel = useStorePlan(s => s.planCancel)
+  const setPlanApply = useStorePlan(s => s.setPlanApply)
+  const setPlanOverview = useStorePlan(s => s.setPlanOverview)
+  const setPlanCancel = useStorePlan(s => s.setPlanCancel)
+  const setPlanAction = useStorePlan(s => s.setPlanAction)
 
   const files = useStoreProject(s => s.files)
   const selectedFile = useStoreProject(s => s.selectedFile)
@@ -316,19 +319,19 @@ export default function Root(): JSX.Element {
 
     void getModels().then(({ data }) => updateModels(data as Model[]))
 
-    const channelErrors = channel('errors', displayErrors)
-    const channelTests = channel('tests', updateTests)
-    const channelModels = channel('models', updateModels)
+    const channelErrors = channel?.('errors', displayErrors)
+    const channelTests = channel?.('tests', updateTests)
+    const channelModels = channel?.('models', updateModels)
 
-    channelModels.subscribe()
+    channelModels?.subscribe()
 
     if (modules.hasPlans) {
-      channelTests.subscribe()
+      channelTests?.subscribe()
       void getEnvironments().then(({ data }) => updateEnviroments(data))
     }
 
     if (modules.hasErrors) {
-      channelErrors.subscribe()
+      channelErrors?.subscribe()
     }
 
     if (modules.hasFiles) {
@@ -348,7 +351,7 @@ export default function Root(): JSX.Element {
       void cancelRequestMeta()
       void cancelRequestModels()
 
-      channelModels.unsubscribe()
+      channelModels?.unsubscribe()
 
       if (modules.hasPlans) {
         cancelRequestEnvironments()
@@ -370,57 +373,54 @@ export default function Root(): JSX.Element {
   }, [])
 
   useEffect(() => {
-    const channelPlanApply = channel('plan-apply', updatePlanApplyTracker)
+    const channelPlanApply = channel?.('plan-apply', updatePlanApplyTracker)
 
     if (modules.hasPlans) {
-      channelPlanApply.subscribe()
+      channelPlanApply?.subscribe()
     }
 
     return () => {
       if (modules.hasPlans) {
-        channelPlanApply.unsubscribe()
+        channelPlanApply?.unsubscribe()
       }
     }
   }, [updatePlanApplyTracker])
 
   useEffect(() => {
-    const channelPlanOverview = channel<any>(
+    const channelPlanOverview = channel?.(
       'plan-overview',
       updatePlanOverviewTracker,
     )
 
     if (modules.hasPlans) {
-      channelPlanOverview.subscribe()
+      channelPlanOverview?.subscribe()
     }
 
     return () => {
       if (modules.hasPlans) {
-        channelPlanOverview.unsubscribe()
+        channelPlanOverview?.unsubscribe()
       }
     }
   }, [updatePlanOverviewTracker])
 
   useEffect(() => {
-    const channelPlanCancel = channel<any>(
-      'plan-cancel',
-      updatePlanCancelTracker,
-    )
+    const channelPlanCancel = channel?.('plan-cancel', updatePlanCancelTracker)
 
     if (modules.hasPlans) {
-      channelPlanCancel.subscribe()
+      channelPlanCancel?.subscribe()
     }
 
     return () => {
       if (modules.hasPlans) {
-        channelPlanCancel.unsubscribe()
+        channelPlanCancel?.unsubscribe()
       }
     }
   }, [updatePlanCancelTracker])
 
   useEffect(() => {
-    const channelFile = channel('file', updateFiles)
+    const channelFile = channel?.('file', updateFiles)
 
-    channelFile.subscribe()
+    channelFile?.subscribe()
 
     return () => {
       channelFile?.unsubscribe()
@@ -428,9 +428,9 @@ export default function Root(): JSX.Element {
   }, [updateFiles])
 
   useEffect(() => {
-    const channelFormatFile = channel('format-file', formatFile)
+    const channelFormatFile = channel?.('format-file', formatFile)
 
-    channelFormatFile.subscribe()
+    channelFormatFile?.subscribe()
 
     return () => {
       channelFormatFile?.unsubscribe()

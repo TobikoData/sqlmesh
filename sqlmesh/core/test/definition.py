@@ -5,6 +5,7 @@ import typing as t
 import unittest
 from collections import Counter
 from contextlib import AbstractContextManager, nullcontext
+from itertools import chain
 from pathlib import Path
 from unittest.mock import patch
 
@@ -126,25 +127,25 @@ class ModelTest(unittest.TestCase):
 
         for name, values in self.body.get("inputs", {}).items():
             all_types_are_known = False
-            known_columns_to_types: t.Dict[str, exp.DataType] = {}
+            columns_to_known_types: t.Dict[str, exp.DataType] = {}
 
             model = self.models.get(name)
             if model:
                 inferred_columns_to_types = model.columns_to_types or {}
-                known_columns_to_types = {
+                columns_to_known_types = {
                     c: t for c, t in inferred_columns_to_types.items() if type_is_known(t)
                 }
                 all_types_are_known = bool(inferred_columns_to_types) and (
-                    len(known_columns_to_types) == len(inferred_columns_to_types)
+                    len(columns_to_known_types) == len(inferred_columns_to_types)
                 )
 
             # Types specified in the test will override the corresponding inferred ones
-            known_columns_to_types.update(values.get("columns", {}))
+            columns_to_known_types.update(values.get("columns", {}))
 
             rows = values.get("rows")
             if not all_types_are_known and rows:
                 for col, value in rows[0].items():
-                    if col not in known_columns_to_types:
+                    if col not in columns_to_known_types:
                         v_type = annotate_types(exp.convert(value)).type or type(value).__name__
                         v_type = exp.maybe_parse(
                             v_type, into=exp.DataType, dialect=self._test_adapter_dialect
@@ -159,21 +160,21 @@ class ModelTest(unittest.TestCase):
                                 self.path,
                             )
 
-                        known_columns_to_types[col] = v_type
+                        columns_to_known_types[col] = v_type
 
             if rows is None:
                 query_or_df: exp.Query | pd.DataFrame = self._add_missing_columns(
-                    values["query"], known_columns_to_types
+                    values["query"], columns_to_known_types
                 )
-                if known_columns_to_types:
-                    known_columns_to_types = {
-                        col: known_columns_to_types[col] for col in query_or_df.named_selects
+                if columns_to_known_types:
+                    columns_to_known_types = {
+                        col: columns_to_known_types[col] for col in query_or_df.named_selects
                     }
             else:
-                query_or_df = self._create_df(values, columns=known_columns_to_types)
+                query_or_df = self._create_df(values, columns=columns_to_known_types)
 
             self.engine_adapter.create_view(
-                self._test_fixture_table(name), query_or_df, known_columns_to_types
+                self._test_fixture_table(name), query_or_df, columns_to_known_types
             )
 
     def tearDown(self) -> None:
@@ -236,10 +237,11 @@ class ModelTest(unittest.TestCase):
                 return tuple((k, _to_hashable(v)) for k, v in x.items())
             return str(x) if not isinstance(x, t.Hashable) else x
 
+        actual = actual.apply(lambda col: col.map(_to_hashable))
+        expected = expected.apply(lambda col: col.map(_to_hashable))
+
         if sort:
-            actual = actual.apply(lambda col: col.map(_to_hashable))
             actual = actual.sort_values(by=actual.columns.to_list()).reset_index(drop=True)
-            expected = expected.apply(lambda col: col.map(_to_hashable))
             expected = expected.sort_values(by=expected.columns.to_list()).reset_index(drop=True)
 
         try:
@@ -525,7 +527,7 @@ class ModelTest(unittest.TestCase):
 
 
 class SqlModelTest(ModelTest):
-    def test_ctes(self, ctes: t.Dict[str, exp.Expression]) -> None:
+    def test_ctes(self, ctes: t.Dict[str, exp.Expression], recursive: bool = False) -> None:
         """Run CTE queries and compare output to expected output"""
         for cte_name, values in self.body["outputs"].get("ctes", {}).items():
             with self.subTest(cte=cte_name):
@@ -535,11 +537,13 @@ class SqlModelTest(ModelTest):
                     )
 
                 cte_query = ctes[cte_name].this
-                for alias, cte in ctes.items():
-                    cte_query = cte_query.with_(alias, cte.this)
 
-                partial = values.get("partial")
                 sort = cte_query.args.get("order") is None
+                partial = values.get("partial")
+
+                cte_query = exp.select(*_projection_identifiers(cte_query)).from_(cte_name)
+                for alias, cte in ctes.items():
+                    cte_query = cte_query.with_(alias, cte.this, recursive=recursive)
 
                 actual = self._execute(cte_query)
                 expected = self._create_df(values, columns=cte_query.named_selects, partial=partial)
@@ -548,13 +552,16 @@ class SqlModelTest(ModelTest):
 
     def runTest(self) -> None:
         query = self._render_model_query()
+        with_clause = query.args.get("with")
 
-        self.test_ctes(
-            {
-                self._normalize_model_name(cte.alias, with_default_catalog=False): cte
-                for cte in query.ctes
-            }
-        )
+        if with_clause:
+            self.test_ctes(
+                {
+                    self._normalize_model_name(cte.alias, with_default_catalog=False): cte
+                    for cte in query.ctes
+                },
+                recursive=with_clause.recursive,
+            )
 
         values = self.body["outputs"].get("query")
         if values is not None:
@@ -732,14 +739,23 @@ def generate_test(
     if isinstance(model, SqlModel):
         assert isinstance(test, SqlModelTest)
         model_query = test._render_model_query()
+        with_clause = model_query.args.get("with")
 
-        if include_ctes:
+        if with_clause and include_ctes:
             ctes = {}
+            recursive = with_clause.recursive
             previous_ctes: t.List[exp.CTE] = []
+
             for cte in model_query.ctes:
                 cte_query = cte.this
-                for prev in previous_ctes:
-                    cte_query = cte_query.with_(prev.alias, prev.this)
+                cte_identifier = cte.args["alias"].this
+
+                cte_query = exp.select(*_projection_identifiers(cte_query)).from_(cte_identifier)
+
+                for prev in chain(previous_ctes, [cte]):
+                    cte_query = cte_query.with_(
+                        prev.args["alias"].this, prev.this, recursive=recursive
+                    )
 
                 cte_output = test._execute(cte_query)
                 ctes[cte.alias] = (
@@ -773,6 +789,19 @@ def generate_test(
     fixture_path.parent.mkdir(exist_ok=True, parents=True)
     with open(fixture_path, "w", encoding="utf-8") as file:
         yaml.dump({test_name: test_body}, file)
+
+
+def _projection_identifiers(query: exp.Query) -> t.List[str | exp.Identifier]:
+    identifiers: t.List[str | exp.Identifier] = []
+    for select in query.selects:
+        if isinstance(select, exp.Alias):
+            identifiers.append(select.args["alias"])
+        elif isinstance(select, exp.Column):
+            identifiers.append(select.this)
+        else:
+            identifiers.append(select.output_name)
+
+    return identifiers
 
 
 def _raise_if_unexpected_columns(

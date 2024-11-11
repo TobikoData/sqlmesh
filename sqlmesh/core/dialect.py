@@ -1133,10 +1133,12 @@ def transform_values(
         yield _transform_value(col_value, col_type)
 
 
-def to_schema(sql_path: str | exp.Table) -> exp.Table:
+def to_schema(sql_path: str | exp.Table, dialect: DialectType = None) -> exp.Table:
     if isinstance(sql_path, exp.Table) and sql_path.this is None:
         return sql_path
-    table = exp.to_table(sql_path.copy() if isinstance(sql_path, exp.Table) else sql_path)
+    table = exp.to_table(
+        sql_path.copy() if isinstance(sql_path, exp.Table) else sql_path, dialect=dialect
+    )
     table.set("catalog", table.args.get("db"))
     table.set("db", table.args.get("this"))
     table.set("this", None)

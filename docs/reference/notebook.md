@@ -230,6 +230,17 @@ options:
   --file FILE, -f FILE  An optional file path to write the HTML output to.
 ```
 
+#### dlt_refresh
+```
+%dlt_refresh PIPELINE [--table] TABLE [--force]
+
+Attaches to a DLT pipeline with the option to update specific or all models of the SQLMesh project.
+
+options:
+  --table TABLE, -t TABLE  The DLT tables to generate SQLMesh models from. When none specified, all new missing tables will be generated.
+  --force, -f              If set it will overwrite existing models with the new generated models from the DLT tables.
+```
+
 #### fetchdf
 ```
 %%fetchdf [df_var]
@@ -273,6 +284,7 @@ Create a schema file containing external model schemas.
 %table_diff [--on [ON ...]] [--skip-columns [SKIP_COLUMNS ...]]
                 [--model MODEL] [--where WHERE] [--limit LIMIT]
                 [--show-sample] [--decimals DECIMALS] [--skip-grain-check]
+                [--temp-schema SCHEMA]
                 SOURCE:TARGET
 
 Show the diff between two tables.
@@ -298,6 +310,7 @@ options:
                         floating point columns. Default: 3
   --skip-grain-check    Disable the check for a primary key (grain) that is
                         missing or is not unique.
+  --temp-schema SCHEMA  The schema to use for temporary tables.
 ```
 
 #### model
@@ -353,8 +366,9 @@ options:
 
 #### create_test
 ```
-%create_test --query QUERY [QUERY ...] [--overwrite]
+%create_test [--query QUERY [QUERY ...]] [--overwrite]
                    [--var VAR [VAR ...]] [--path PATH] [--name NAME]
+                   [--include-ctes]
                    model
 
 Generate a unit test fixture for a given model.

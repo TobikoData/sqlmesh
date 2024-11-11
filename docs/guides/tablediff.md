@@ -118,6 +118,10 @@ Grain should have unique and not-null audits for accurate results.
 
 ```
 
+Under the hood, SQLMesh stores temporary data in the database to perform the comparison.
+The default schema for these temporary tables is `sqlmesh_temp` but can be changed with the `--temp-schema` option.
+The schema can be specified as a `CATALOG.SCHEMA` or `SCHEMA`.
+
 ## Diffing tables or views
 
 Compare specific tables or views with the SQLMesh CLI interface by using the command `sqlmesh table_diff [source table]:[target table]`.
