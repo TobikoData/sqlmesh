@@ -346,7 +346,9 @@ class ModelConfig(BaseModelConfig):
         try:
             field = d.parse_one(raw_field, dialect="bigquery")
         except SqlglotError as e:
-            raise ConfigError(f"Failed to parse partition_by field '{raw_field}': {e}") from e
+            raise ConfigError(
+                f"Failed to parse model '{self.canonical_name(context)}' partition_by field '{raw_field}' in '{self.path}': {e}"
+            ) from e
 
         if data_type == "date" and self.partition_by["granularity"].lower() == "day":
             return field
@@ -393,7 +395,9 @@ class ModelConfig(BaseModelConfig):
                     try:
                         partitioned_by.append(d.parse_one(p, dialect=model_dialect))
                     except SqlglotError as e:
-                        raise ConfigError(f"Failed to parse partition_by field '{p}': {e}") from e
+                        raise ConfigError(
+                            f"Failed to parse model '{self.canonical_name(context)}' partition_by field '{p}' in '{self.path}': {e}"
+                        ) from e
             else:
                 partitioned_by.append(self._big_query_partition_by_expr(context))
             optional_kwargs["partitioned_by"] = partitioned_by
@@ -404,7 +408,9 @@ class ModelConfig(BaseModelConfig):
                 try:
                     clustered_by.append(d.parse_one(c, dialect=model_dialect).name)
                 except SqlglotError as e:
-                    raise ConfigError(f"Failed to parse cluster_by field '{c}': {e}") from e
+                    raise ConfigError(
+                        f"Failed to parse model '{self.canonical_name(context)}' cluster_by field '{c}' in '{self.path}': {e}"
+                    ) from e
             optional_kwargs["clustered_by"] = clustered_by
 
         model_kwargs = self.sqlmesh_model_kwargs(context)
@@ -486,7 +492,9 @@ class ModelConfig(BaseModelConfig):
                     try:
                         order_by.append(d.parse_one(o, dialect=model_dialect))
                     except SqlglotError as e:
-                        raise ConfigError(f"Failed to parse 'order_by' field '{o}': {e}") from e
+                        raise ConfigError(
+                            f"Failed to parse model '{self.canonical_name(context)}' 'order_by' field '{o}' in '{self.path}': {e}"
+                        ) from e
                 physical_properties["order_by"] = order_by
 
             if self.primary_key:
@@ -495,7 +503,9 @@ class ModelConfig(BaseModelConfig):
                     try:
                         primary_key.append(d.parse_one(p, dialect=model_dialect))
                     except SqlglotError as e:
-                        raise ConfigError(f"Failed to parse 'primary_key' field '{p}': {e}") from e
+                        raise ConfigError(
+                            f"Failed to parse model '{self.canonical_name(context)}' 'primary_key' field '{p}' in '{self.path}': {e}"
+                        ) from e
                 physical_properties["primary_key"] = primary_key
 
             if self.sharding_key:

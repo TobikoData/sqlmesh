@@ -154,6 +154,30 @@ from other_schema.other_table;
 
 Note that there is an `=` between the `primary_key` key name and value `col1`.
 
+### TTL
+
+Clickhouse tables accept a [TTL expression that triggers actions](https://clickhouse.com/docs/en/guides/developer/ttl) like deleting rows after a certain amount of time has passed.
+
+Similar to `ORDER_BY` and `PRIMARY_KEY`, specify a TTL key in the model DDL's `physical_properties` dictionary. For example:
+
+``` sql linenums="1" hl_lines="6"
+MODEL (
+    name my_schema.my_log_table,
+    kind full,
+    physical_properties (
+        order_by = (col1, col2),
+        primary_key = col1,
+        ttl = timestamp + INTERVAL 1 WEEK
+    )
+);
+
+select
+    *
+from other_schema.other_table;
+```
+
+Note that there is an `=` between the `ttl` key name and value `timestamp + INTERVAL 1 WEEK`.
+
 ### Partitioning
 
 Some Clickhouse table engines support partitioning. Specify the partitioning columns/expressions in the model DDL's `partitioned_by` key.
