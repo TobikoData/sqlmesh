@@ -373,8 +373,16 @@ class ModelMeta(_Node):
         if self.time_column and self.time_column.column not in [
             col for col in self._partition_by_columns
         ]:
+            # get `Model` superclass columns_to_types if available
+            try:
+                columns_to_types = self.columns_to_types  # type: ignore
+            except AttributeError:
+                columns_to_types = self.columns_to_types_
+
             return [
-                TIME_COL_PARTITION_FUNC.get(self.dialect, lambda x: x)(self.time_column.column),
+                TIME_COL_PARTITION_FUNC.get(self.dialect, lambda x, y: x)(
+                    self.time_column.column, columns_to_types
+                ),
                 *self.partitioned_by_,
             ]
         return self.partitioned_by_
@@ -480,10 +488,41 @@ class ModelMeta(_Node):
         return getattr(self.kind, "on_destructive_change", OnDestructiveChange.ALLOW)
 
 
-# function applied to time column when automatically used for partitioning in
-#   INCREMENTAL_BY_TIME_RANGE models
-TIME_COL_PARTITION_FUNC = {
-    "clickhouse": lambda x: exp.func(
-        "toMonday", exp.cast(x, exp.DataType.build("DateTime64", dialect="clickhouse"))
+# function applied to time column when automatically used for partitioning in INCREMENTAL_BY_TIME_RANGE models
+def clickhouse_partition_func(
+    column: exp.Expression, columns_to_types: t.Dict[str, exp.DataType]
+) -> exp.Expression:
+    # `toMonday()` function accepts a Date or DateTime type column
+
+    col_type_present = columns_to_types and column.name in columns_to_types
+    col_type_is_conformable = col_type_present and columns_to_types[column.name].is_type(
+        exp.DataType.Type.DATE,
+        exp.DataType.Type.DATE32,
+        exp.DataType.Type.DATETIME,
+        exp.DataType.Type.DATETIME64,
     )
-}
+
+    #  if input column is already a conformable type, just pass the column
+    if col_type_is_conformable:
+        return exp.func("toMonday", column)
+
+    # if input column type is not known, cast input to DateTime64
+    if not col_type_present or (
+        col_type_present and columns_to_types[column.name].is_type(exp.DataType.Type.UNKNOWN)
+    ):
+        return exp.func(
+            "toMonday",
+            exp.cast(column, exp.DataType.build("DateTime64('UTC')", dialect="clickhouse")),
+        )
+
+    # if input column type is known but not conformable, cast input to DateTime64 and cast output back to original type
+    return exp.cast(
+        exp.func(
+            "toMonday",
+            exp.cast(column, exp.DataType.build("DateTime64('UTC')", dialect="clickhouse")),
+        ),
+        columns_to_types[column.name],
+    )
+
+
+TIME_COL_PARTITION_FUNC = {"clickhouse": lambda x, y: clickhouse_partition_func(x, y)}

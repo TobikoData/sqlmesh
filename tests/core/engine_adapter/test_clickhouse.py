@@ -350,6 +350,7 @@ def test_model_properties(adapter: ClickhouseEngineAdapter):
 
 
 def test_partitioned_by_expr(make_mocked_engine_adapter: t.Callable):
+    # user doesn't specify, unknown time column type
     model = load_sql_based_model(
         parse(
             """
@@ -369,8 +370,11 @@ def test_partitioned_by_expr(make_mocked_engine_adapter: t.Callable):
         )
     )
 
-    assert model.partitioned_by[0].sql("clickhouse") == 'toMonday(CAST("ds" AS DateTime64))'
+    assert (
+        model.partitioned_by[0].sql("clickhouse") == """toMonday(CAST("ds" AS DateTime64('UTC')))"""
+    )
 
+    # user specifies without time column, unknown time column type
     model = load_sql_based_model(
         parse(
             """
@@ -392,10 +396,58 @@ def test_partitioned_by_expr(make_mocked_engine_adapter: t.Callable):
     )
 
     assert [p.sql("clickhouse") for p in model.partitioned_by] == [
-        'toMonday(CAST("ds" AS DateTime64))',
+        """toMonday(CAST("ds" AS DateTime64('UTC')))""",
         '"x"',
     ]
 
+    # user doesn't specify, conformable date/datetime time column type
+    model = load_sql_based_model(
+        parse(
+            """
+        MODEL (
+            name foo,
+            dialect clickhouse,
+            kind INCREMENTAL_BY_TIME_RANGE(
+              time_column ds
+            )
+        );
+
+        select
+            ds::DATE as ds
+        from bar;
+        """,
+            default_dialect="clickhouse",
+        )
+    )
+
+    assert model.partitioned_by[0].sql("clickhouse") == 'toMonday("ds")'
+
+    # user doesn't specify, non-conformable time column type
+    model = load_sql_based_model(
+        parse(
+            """
+        MODEL (
+            name foo,
+            dialect clickhouse,
+            kind INCREMENTAL_BY_TIME_RANGE(
+              time_column ds
+            )
+        );
+
+        select
+            ds::String as ds
+        from bar;
+        """,
+            default_dialect="clickhouse",
+        )
+    )
+
+    assert (
+        model.partitioned_by[0].sql("clickhouse")
+        == """CAST(toMonday(CAST("ds" AS DateTime64('UTC'))) AS String)"""
+    )
+
+    # user specifies partitioned_by with time column
     model = load_sql_based_model(
         parse(
             """
