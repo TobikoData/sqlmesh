@@ -1,7 +1,8 @@
 from typing import Any, Optional, Set
 
 from sqlmesh.core.config.connection import ConnectionConfig
-import yaml
+from sqlmesh.utils import yaml
+
 
 # Fields that should be excluded from the configuration hash
 excluded_fields: Set[str] = {
@@ -64,14 +65,14 @@ def print_config(config: Optional[ConnectionConfig], console: Any, title: str) -
         console.log_status_update("No connection configuration found.")
         return
 
-    configDict = config.dict(mode="json")
+    config_dict = config.dict(mode="json")
 
-    for field_name in configDict:
+    for field_name in config_dict:
         if is_sensitive_field(field_name, sensitive_fields):
-            configDict[field_name] = mask_sensitive_value(configDict[field_name])
+            config_dict[field_name] = mask_sensitive_value(config_dict[field_name])
 
-    configWithTitle = {title: configDict}
-    yaml_output = yaml.dump(configWithTitle, default_flow_style=False)
+    configWithTitle = {title: config_dict}
+    yaml_output = yaml.dump(configWithTitle)
 
     console.log_status_update("\n\n")
     console.log_status_update(yaml_output)
