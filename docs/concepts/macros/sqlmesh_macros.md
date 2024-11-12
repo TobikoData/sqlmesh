@@ -498,6 +498,10 @@ SELECT
 FROM table
 ```
 
+[Macro rendering](#sqlmesh-macro-approach) occurs before the `@IF` condition is evaluated. For example, SQLMesh doesn't evaluate the condition `my_column > @my_value` until it has first substituted the number `@my_value` represents.
+
+Your macro might do things besides returning a value, such as printing a message or executing a statement (i.e., the macro "has side effects"). The side effect code will always run during the rendering step. To prevent this, modify the macro code to condition the side effects on the evaluation stage.
+
 #### Pre/post-statements
 
 `@IF` may be used to conditionally execute pre/post-statements:
