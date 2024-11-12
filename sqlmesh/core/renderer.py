@@ -447,9 +447,9 @@ class QueryRenderer(BaseExpressionRenderer):
                     query, default_catalog=self._default_catalog, dialect=self._dialect
                 )
                 # TODO: main optimize method called here
-                print("before optimize")
+                # print("before optimize")
                 query = self._optimize_query(query, deps)
-                print("after optimize")
+                # print("after optimize")
 
                 if should_cache:
                     self._optimized_cache = query
@@ -521,6 +521,10 @@ class QueryRenderer(BaseExpressionRenderer):
         except SqlglotError as ex:
             query = original
             if error_on_ambiguous_columns:
+                # TODO: remove cache here for the query
+                # self._optimized_cache = None
+                # self.update_cache(None)
+                query = original
                 logger.error(
                     "%s for model '%s', the column may not exist or is ambiguous",
                     ex,
