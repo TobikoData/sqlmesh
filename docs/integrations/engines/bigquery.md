@@ -21,7 +21,7 @@ Instead of installing just SQLMesh core we will specify the BigQuery engine
 ```
 pip install "sqlmesh[bigquery]"
 ```
-### Install Google Cloud SDK (Optional)
+### Install Google Cloud SDK 
 
 Follow these steps to install the Google Cloud SDK to the new environment that you just made:
 
@@ -59,12 +59,12 @@ default_gateway: bigquery
 
 In bigquery, navigate to the dashboard and select project your going to work with to get your project ID and copy that into the SQLMesh config.yaml
 
-![BigQuery Dashboard](bigquery/bigquery-1.png)
+![BigQuery Dashboard](./bigquery/bigquery-1.png)
 
 - Docs-Demo is the one we will use
-    - the project ID for this example is: healthy-life-440919-s0
+    - the project ID for this example is: `healthy-life-440919-s0`
 
-![BigQuery Dashboard: selecting your project](bigquery/bigquery-2.png)
+![BigQuery Dashboard: selecting your project](./bigquery/bigquery-2.png)
 
 ## Usage
 
@@ -78,19 +78,19 @@ sqlmesh info
 
 The output will look something like this 
 
-![Terminal Output](bigquery/bigquery-3.png)
+![Terminal Output](./bigquery/bigquery-3.png)
 
 - **Set quota project (optional)**
     
     If you get a bunch of warnings when you run `sqlmesh info` , something like the screen shot below: 
     
-    ![Terminal Output with warnings](bigquery/bigquery-4.png)
+    ![Terminal Output with warnings](./bigquery/bigquery-4.png)
     
     You can avoid these warnings about quota projects, by running:
     
     ```bash
     gcloud auth application-default set-quota-project <your_project_id> 
-    gcloud config set project <your_project_id>;
+    gcloud config set project <your_project_id>
     ```
     
 
@@ -106,11 +106,11 @@ sqlmesh plan
 
 Navigate to the BigQuery Studio Console
 
-![Steps to the Studio](bigquery/bigquery-5.png)
+![Steps to the Studio](./bigquery/bigquery-5.png)
 
 Use the left sidebar to find your project and the newly created models
 
-![New Models](bigquery/bigquery-6.png)
+![New Models](./bigquery/bigquery-6.png)
 
 ## Local/Built-in Scheduler
 
