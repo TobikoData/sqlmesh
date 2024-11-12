@@ -468,9 +468,9 @@ def test_create_test(notebook, sushi_context):
     assert (
         test_file.read_text()
         == """test_top_waiters:
-  model: sushi.top_waiters
+  model: '"memory"."sushi"."top_waiters"'
   inputs:
-    sushi.waiter_revenue_by_day:
+    '"memory"."sushi"."waiter_revenue_by_day"':
     - waiter_id: 1
   outputs:
     query: []

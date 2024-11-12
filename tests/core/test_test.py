@@ -1854,7 +1854,7 @@ def test_test_generation_with_data_structures(tmp_path: Path, column: str, expec
     bar_sql_file.write_text("MODEL (name sqlmesh_example.bar); SELECT col FROM external_table;")
 
     test = create_test(Context(paths=tmp_path, config=config), f"SELECT {column} AS col")
-    assert test["test_foo"]["inputs"] == {"sqlmesh_example.bar": expected}
+    assert test["test_foo"]["inputs"] == {'"memory"."sqlmesh_example"."bar"': expected}
     assert test["test_foo"]["outputs"] == {"query": expected}
 
 
@@ -1884,7 +1884,9 @@ def test_test_generation_with_timestamp(tmp_path: Path) -> None:
     assert len(test) == 1
     assert "test_foo" in test
     assert test["test_foo"]["inputs"] == {
-        "sqlmesh_example.bar": [{"ts_col": datetime.datetime(2024, 9, 20, 11, 30, 0, 123456)}]
+        '"memory"."sqlmesh_example"."bar"': [
+            {"ts_col": datetime.datetime(2024, 9, 20, 11, 30, 0, 123456)}
+        ]
     }
     assert test["test_foo"]["outputs"] == {
         "query": [{"ts_col": datetime.datetime(2024, 9, 20, 11, 30, 0, 123456)}]
@@ -1908,7 +1910,9 @@ def test_test_generation_with_decimal(tmp_path: Path, mocker: MockerFixture) -> 
     bar_sql_file.write_text("MODEL (name sqlmesh_example.bar); SELECT dec_col FROM external_table;")
 
     context = Context(paths=tmp_path, config=config)
-    input_queries = {"sqlmesh_example.bar": "SELECT CAST(1.23 AS DECIMAL(10,2)) AS dec_col"}
+    input_queries = {
+        '"memory"."sqlmesh_example"."bar"': "SELECT CAST(1.23 AS DECIMAL(10,2)) AS dec_col"
+    }
 
     # DuckDB actually returns a numpy.float64, even though the value is cast into a DECIMAL,
     # but other engines don't behave the same. E.g. BigQuery returns a proper Decimal value.
@@ -1923,7 +1927,7 @@ def test_test_generation_with_decimal(tmp_path: Path, mocker: MockerFixture) -> 
 
     assert len(test) == 1
     assert "test_foo" in test
-    assert test["test_foo"]["inputs"] == {"sqlmesh_example.bar": [{"dec_col": "1.23"}]}
+    assert test["test_foo"]["inputs"] == {'"memory"."sqlmesh_example"."bar"': [{"dec_col": "1.23"}]}
     assert test["test_foo"]["outputs"] == {"query": [{"dec_col": "1.23"}]}
 
 
