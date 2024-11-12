@@ -35,7 +35,7 @@ if sys.version_info >= (3, 9):
 else:
     from typing_extensions import Literal
 
-from sqlmesh.utils.info import sensitive_fields, excluded_fields
+from sqlmesh.utils.config import sensitive_fields, excluded_fields
 
 logger = logging.getLogger(__name__)
 

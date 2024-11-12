@@ -116,7 +116,7 @@ from sqlmesh.utils.errors import (
     SQLMeshError,
     UncategorizedPlanError,
 )
-from sqlmesh.utils.info import print_config
+from sqlmesh.utils.config import print_config
 from sqlmesh.utils.jinja import JinjaMacroRegistry
 
 if t.TYPE_CHECKING:
