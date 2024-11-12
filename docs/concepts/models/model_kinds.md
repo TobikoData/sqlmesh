@@ -211,7 +211,7 @@ product_usage AS (
     feature_utilization_score,
     user_segment
   FROM sqlmesh-public-demo.tcloud_raw_data.product_usage
-  WHERE user_segment IN (SELECT user_segment FROM partitions_to_update)
+  WHERE user_segment IN (SELECT user_segment FROM partitions_to_update) -- partition filter applied here
 )
 
 SELECT
