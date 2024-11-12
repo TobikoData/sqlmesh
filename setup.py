@@ -96,6 +96,7 @@ setup(
             "types-dateparser",
             "types-python-dateutil",
             "types-pytz",
+            "types-PyYAML",
             "types-requests==2.28.8",
             "typing-extensions",
         ],

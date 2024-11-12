@@ -1,6 +1,7 @@
 from typing import Any, Optional, Set
 
 from sqlmesh.core.config.connection import ConnectionConfig
+import yaml
 
 # Fields that should be excluded from the configuration hash
 excluded_fields: Set[str] = {
@@ -47,11 +48,11 @@ def mask_sensitive_value(value: Any) -> str:
     Returns '****' for non-empty values and '' for empty ones
     """
     if value and str(value).strip():
-        return "*" * len(str(value))
+        return "****"
     return "None"
 
 
-def print_config(config: Optional[ConnectionConfig], console: Any) -> None:
+def print_config(config: Optional[ConnectionConfig], console: Any, title: str) -> None:
     """
     Print configuration while masking sensitive information
 
@@ -63,9 +64,14 @@ def print_config(config: Optional[ConnectionConfig], console: Any) -> None:
         console.log_status_update("No connection configuration found.")
         return
 
-    for field_name, value in config.dict().items():
+    configDict = config.dict(mode="json")
+
+    for field_name in configDict:
         if is_sensitive_field(field_name, sensitive_fields):
-            masked_value = mask_sensitive_value(value)
-            console.log_status_update(f"{field_name}: {masked_value}")
-        else:
-            console.log_status_update(f"{field_name}: {value}")
+            configDict[field_name] = mask_sensitive_value(configDict[field_name])
+
+    configWithTitle = {title: configDict}
+    yaml_output = yaml.dump(configWithTitle, default_flow_style=False)
+
+    console.log_status_update("\n\n")
+    console.log_status_update(yaml_output)

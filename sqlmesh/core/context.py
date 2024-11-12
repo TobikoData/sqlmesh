@@ -1853,14 +1853,11 @@ class GenericContext(BaseContext, t.Generic[C]):
         self.console.log_status_update(f"Models: {len(self.models)}")
         self.console.log_status_update(f"Macros: {len(self._macros) - len(macro.get_registry())}")
 
-        self.console.log_status_update("\n\nConnection:")
-        print_config(self.config.get_connection(self.gateway), self.console)
-
-        self.console.log_status_update("\n\nTest Connection:")
-        print_config(self.config.get_test_connection(self.gateway), self.console)
-
-        self.console.log_status_update("\n\nState Connection:")
-        print_config(self.config.get_state_connection(self.gateway), self.console)
+        print_config(self.config.get_connection(self.gateway), self.console, "Connection")
+        print_config(self.config.get_test_connection(self.gateway), self.console, "Test Connection")
+        print_config(
+            self.config.get_state_connection(self.gateway), self.console, "State Connection"
+        )
         self.console.log_status_update("\n")
         if skip_connection:
             return
