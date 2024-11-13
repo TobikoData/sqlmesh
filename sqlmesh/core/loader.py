@@ -101,6 +101,10 @@ class Loader(abc.ABC):
         for model in models.values():
             self._add_model_to_dag(model)
 
+        # This topologically sorts the DAG & caches the result in-memory for later;
+        # we do it here to detect any cycles as early as possible and fail if needed
+        self._dag.sorted
+
         if update_schemas:
             update_model_schemas(
                 self._dag,
