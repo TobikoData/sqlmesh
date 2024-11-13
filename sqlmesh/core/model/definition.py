@@ -19,13 +19,11 @@ from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 from sqlglot.schema import MappingSchema, nested_set
 from sqlglot.time import format_time
 
-from sqlmesh.core.dialect import extract_audit
 from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
 from sqlmesh.core.audit import Audit, ModelAudit
 from sqlmesh.core.macros import MacroRegistry, macro
 from sqlmesh.core.model.common import (
-    add_variables_to_python_env,
     expression_validator,
     make_python_env,
     parse_dependencies,
@@ -121,7 +119,7 @@ class _Model(ModelMeta, frozen=True):
         physical_schema_override: The desired physical schema name override.
     """
 
-    python_env_: t.Optional[t.Dict[str, Executable]] = Field(default=None, alias="python_env")
+    python_env: t.Dict[str, Executable] = {}
     jinja_macros: JinjaMacroRegistry = JinjaMacroRegistry()
     audit_definitions: t.Dict[str, ModelAudit] = {}
     mapping_schema: t.Dict[str, t.Any] = {}
@@ -660,10 +658,6 @@ class _Model(ModelMeta, frozen=True):
     @property
     def view_name(self) -> str:
         return self.fully_qualified_table.name
-
-    @property
-    def python_env(self) -> t.Dict[str, Executable]:
-        return self.python_env_ or {}
 
     @property
     def schema_name(self) -> str:
@@ -1577,13 +1571,10 @@ def load_sql_based_model(
         expressions.insert(0, meta)
 
     unrendered_signals = None
-    model_audits = []
+
     for prop in meta.expressions:
         if prop.name.lower() == "signals":
             unrendered_signals = prop.args.get("value")
-
-        if prop.name.lower() == "audits":
-            model_audits = prop.args.get("value")
 
     meta_renderer = _meta_renderer(
         expression=meta,
@@ -1641,34 +1632,6 @@ def load_sql_based_model(
             path,
         )
 
-    jinja_macro_references, used_variables = extract_macro_references_and_variables(
-        *(gen(e) for e in pre_statements),
-        *(gen(e) for e in post_statements),
-        *([gen(query_or_seed_insert)] if query_or_seed_insert is not None else []),
-    )
-
-    jinja_macros = (jinja_macros or JinjaMacroRegistry()).trim(jinja_macro_references)
-
-    for jinja_macro in jinja_macros.root_macros.values():
-        used_variables.update(extract_macro_references_and_variables(jinja_macro.definition)[1])
-
-    audits = audits or {}
-    audit_names = {audit_name for audit_name, _ in default_audits or []}
-
-    if model_audits:
-        if isinstance(model_audits, (exp.Tuple, exp.Array)):
-            audit_names.update(extract_audit(i)[0] for i in model_audits.expressions)
-        elif isinstance(model_audits, exp.Paren):
-            audit_names.add(extract_audit(model_audits.this)[0])
-        elif isinstance(model_audits, exp.Expression):
-            audit_names.add(extract_audit(model_audits)[0])
-
-    used_audits = inline_audits
-
-    for audit_name in audit_names:
-        if audit_name in audits and audit_name not in used_audits:
-            used_audits[audit_name] = audits[audit_name]
-
     common_kwargs = dict(
         pre_statements=pre_statements,
         post_statements=post_statements,
@@ -1678,12 +1641,11 @@ def load_sql_based_model(
         macros=macros,
         python_env=python_env,
         jinja_macros=jinja_macros,
-        jinja_macro_references=jinja_macro_references,
         physical_schema_mapping=physical_schema_mapping,
         default_catalog=default_catalog,
         variables=variables,
-        used_variables=used_variables,
-        audit_definitions=used_audits,
+        default_audits=default_audits,
+        inline_audits=inline_audits,
         **meta_fields,
     )
 
@@ -1703,42 +1665,23 @@ def load_sql_based_model(
             **common_kwargs,
         )
     else:
+        seed_properties = {
+            p.name.lower(): p.args.get("value") for p in common_kwargs.pop("kind").expressions
+        }
         try:
-            seed_properties = {
-                p.name.lower(): p.args.get("value") for p in common_kwargs.pop("kind").expressions
-            }
             return create_seed_model(
                 name,
                 SeedKind(**seed_properties),
                 **common_kwargs,
             )
         except Exception as ex:
-            raise_config_error(
-                f"The model definition must either have a SELECT query, a JINJA_QUERY block, or a valid Seed kind. {ex}.",
-                path,
-            )
+            raise_config_error(str(ex), path)
             raise
 
 
 def create_sql_model(
     name: TableName,
     query: exp.Expression,
-    *,
-    pre_statements: t.Optional[t.List[exp.Expression]] = None,
-    post_statements: t.Optional[t.List[exp.Expression]] = None,
-    audit_definitions: t.Optional[t.Dict[str, ModelAudit]] = None,
-    defaults: t.Optional[t.Dict[str, t.Any]] = None,
-    path: Path = Path(),
-    module_path: Path = Path(),
-    time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT,
-    macros: t.Optional[MacroRegistry] = None,
-    python_env: t.Optional[t.Dict[str, Executable]] = None,
-    jinja_macros: t.Optional[JinjaMacroRegistry] = None,
-    jinja_macro_references: t.Optional[t.Set[MacroReference]] = None,
-    dialect: t.Optional[str] = None,
-    physical_schema_mapping: t.Optional[t.Dict[re.Pattern, str]] = None,
-    variables: t.Optional[t.Dict[str, t.Any]] = None,
-    used_variables: t.Optional[t.Set[str]] = None,
     **kwargs: t.Any,
 ) -> Model:
     """Creates a SQL model.
@@ -1747,87 +1690,22 @@ def create_sql_model(
         name: The name of the model, which is of the form [catalog].[db].table.
             The catalog and db are optional.
         query: The model's logic in a form of a SELECT query.
-        pre_statements: The list of SQL statements that precede the model's query.
-        post_statements: The list of SQL statements that follow after the model's query.
-        defaults: Definition default values.
-        path: An optional path to the model definition file.
-        module_path: The python module path to serialize macros for.
-        time_column_format: The default time column format to use if no model time column is configured.
-            The format must adhere to Python's strftime codes.
-        macros: The custom registry of macros. If not provided the default registry will be used.
-        python_env: The custom Python environment for macros. If not provided the environment will be constructed
-            from the macro registry.
-        jinja_macros: The registry of Jinja macros.
-        jinja_macro_references: The set of Jinja macros referenced by this model.
-        dialect: The default dialect if no model dialect is configured.
-        physical_schema_mapping: A mapping of regular expressions to match against the model schema to produce the corresponding physical schema
-        variables: User-defined variables.
-        used_variables: The set of variable names used by this model.
     """
     if not isinstance(query, (exp.Query, d.JinjaQuery, d.MacroFunc)):
         raise_config_error(
             "A query is required and must be a SELECT statement, a UNION statement, or a JINJA_QUERY block",
-            path,
+            kwargs.get("path"),
         )
 
-    pre_statements = pre_statements or []
-    post_statements = post_statements or []
-    audit_definitions = audit_definitions or {}
-
-    if not python_env:
-        python_env = make_python_env(
-            [
-                *pre_statements,
-                query,
-                *post_statements,
-                *(audit.query for audit in audit_definitions.values()),
-            ],
-            jinja_macro_references,
-            module_path,
-            macros or macro.get_registry(),
-            variables=variables,
-            used_variables=used_variables,
-            path=path,
-        )
-    else:
-        python_env = add_variables_to_python_env(python_env, used_variables, variables)
-
-    return _create_model(
-        SqlModel,
-        name,
-        defaults=defaults,
-        path=path,
-        time_column_format=time_column_format,
-        python_env=python_env,
-        jinja_macros=jinja_macros,
-        dialect=dialect,
-        query=query,
-        pre_statements=pre_statements,
-        post_statements=post_statements,
-        physical_schema_mapping=physical_schema_mapping,
-        audit_definitions=audit_definitions,
-        **kwargs,
-    )
+    return _create_model(SqlModel, name, query=query, **kwargs)
 
 
 def create_seed_model(
     name: TableName,
     seed_kind: SeedKind,
     *,
-    dialect: t.Optional[str] = None,
-    pre_statements: t.Optional[t.List[exp.Expression]] = None,
-    post_statements: t.Optional[t.List[exp.Expression]] = None,
-    audit_definitions: t.Optional[t.Dict[str, ModelAudit]] = None,
-    defaults: t.Optional[t.Dict[str, t.Any]] = None,
     path: Path = Path(),
     module_path: Path = Path(),
-    macros: t.Optional[MacroRegistry] = None,
-    python_env: t.Optional[t.Dict[str, Executable]] = None,
-    jinja_macros: t.Optional[JinjaMacroRegistry] = None,
-    jinja_macro_references: t.Optional[t.Set[MacroReference]] = None,
-    physical_schema_mapping: t.Optional[t.Dict[re.Pattern, str]] = None,
-    variables: t.Optional[t.Dict[str, t.Any]] = None,
-    used_variables: t.Optional[t.Set[str]] = None,
     **kwargs: t.Any,
 ) -> Model:
     """Creates a Seed model.
@@ -1836,19 +1714,8 @@ def create_seed_model(
         name: The name of the model, which is of the form [catalog].[db].table.
             The catalog and db are optional.
         seed_kind: The information about the location of a seed and other related configuration.
-        dialect: The default dialect if no model dialect is configured.
-        pre_statements: The list of SQL statements that precede the insertion of the seed's content.
-        post_statements: The list of SQL statements that follow after the insertion of the seed's content.
-        defaults: Definition default values.
         path: An optional path to the model definition file.
-        macros: The custom registry of macros. If not provided the default registry will be used.
-        python_env: The custom Python environment for macros. If not provided the environment will be constructed
             from the macro registry.
-        jinja_macros: The registry of Jinja macros.
-        jinja_macro_references: The set of Jinja macros referenced by this model.
-        physical_schema_mapping: A mapping of regular expressions to match against the model schema to produce the corresponding physical schema
-        variables: User-defined variables.
-        used_variables: The set of variable names used by this model.
     """
     seed_path = Path(seed_kind.path)
     marker, *subdirs = seed_path.parts
@@ -1860,42 +1727,14 @@ def create_seed_model(
 
     seed = create_seed(seed_path)
 
-    pre_statements = pre_statements or []
-    post_statements = post_statements or []
-    audit_definitions = audit_definitions or {}
-
-    if not python_env:
-        python_env = make_python_env(
-            [
-                *pre_statements,
-                *post_statements,
-                *(audit.query for audit in audit_definitions.values()),
-            ],
-            jinja_macro_references,
-            module_path,
-            macros or macro.get_registry(),
-            variables=variables,
-            used_variables=used_variables,
-            path=path,
-        )
-    else:
-        python_env = add_variables_to_python_env(python_env, used_variables, variables)
-
     return _create_model(
         SeedModel,
         name,
-        dialect=dialect,
-        defaults=defaults,
         path=path,
         seed=seed,
         kind=seed_kind,
         depends_on=kwargs.pop("depends_on", None),
-        python_env=python_env,
-        jinja_macros=jinja_macros,
-        pre_statements=pre_statements,
-        post_statements=post_statements,
-        physical_schema_mapping=physical_schema_mapping,
-        audit_definitions=audit_definitions,
+        module_path=module_path,
         **kwargs,
     )
 
@@ -1907,13 +1746,9 @@ def create_python_model(
     *,
     macros: t.Optional[MacroRegistry] = None,
     jinja_macros: t.Optional[JinjaMacroRegistry] = None,
-    audit_definitions: t.Optional[t.Dict[str, ModelAudit]] = None,
-    defaults: t.Optional[t.Dict[str, t.Any]] = None,
     path: Path = Path(),
     module_path: Path = Path(),
-    time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT,
     depends_on: t.Optional[t.Set[str]] = None,
-    physical_schema_mapping: t.Optional[t.Dict[re.Pattern, str]] = None,
     variables: t.Optional[t.Dict[str, t.Any]] = None,
     **kwargs: t.Any,
 ) -> Model:
@@ -1924,39 +1759,11 @@ def create_python_model(
             The catalog and db are optional.
         entrypoint: The name of a Python function which contains the data fetching / transformation logic.
         python_env: The Python environment of all objects referenced by the model implementation.
-        defaults: Definition default values.
         path: An optional path to the model definition file.
-        time_column_format: The default time column format to use if no model time column is configured.
         depends_on: The custom set of model's upstream dependencies.
     """
     # Find dependencies for python models by parsing code if they are not explicitly defined
     # Also remove self-references that are found
-
-    audit_definitions = audit_definitions or {}
-    pre_statements = kwargs.get("pre_statements", None) or []
-    post_statements = kwargs.get("post_statements", None) or []
-
-    if pre_statements or post_statements:
-        jinja_macro_references, used_variables = extract_macro_references_and_variables(
-            *(gen(e) for e in pre_statements),
-            *(gen(e) for e in post_statements),
-        )
-
-        jinja_macros = (jinja_macros or JinjaMacroRegistry()).trim(jinja_macro_references)
-        for jinja_macro in jinja_macros.root_macros.values():
-            used_variables.update(extract_macro_references_and_variables(jinja_macro.definition)[1])
-
-        python_env.update(
-            make_python_env(
-                [*pre_statements, *post_statements],
-                jinja_macro_references,
-                module_path,
-                macros or macro.get_registry(),
-                variables=variables,
-                used_variables=used_variables,
-                path=path,
-            )
-        )
 
     dialect = kwargs.get("dialect")
     name_renderer = _meta_renderer(
@@ -1978,25 +1785,20 @@ def create_python_model(
         depends_on = parsed_depends_on - {name}
 
     variables = {k: v for k, v in (variables or {}).items() if k in referenced_variables}
+
     if variables:
         python_env[c.SQLMESH_VARS] = Executable.value(variables)
 
     return _create_model(
         PythonModel,
         name,
-        defaults=defaults,
         path=path,
-        time_column_format=time_column_format,
         depends_on=depends_on,
         entrypoint=entrypoint,
         python_env=python_env,
         jinja_macros=jinja_macros,
-        audit_definitions={
-            audit_name: audit_definitions[audit_name]
-            for audit_name, _ in (kwargs.get("audits") or [])
-            if audit_name in audit_definitions
-        },
-        physical_schema_mapping=physical_schema_mapping,
+        module_path=module_path,
+        variables=variables,
         **kwargs,
     )
 
@@ -2043,6 +1845,13 @@ def _create_model(
     depends_on: t.Optional[t.Set[str]] = None,
     dialect: t.Optional[str] = None,
     physical_schema_mapping: t.Optional[t.Dict[re.Pattern, str]] = None,
+    python_env: t.Optional[t.Dict[str, Executable]] = None,
+    audit_definitions: t.Optional[t.Dict[str, ModelAudit]] = None,
+    default_audits: t.Optional[t.List[AuditReference]] = None,
+    inline_audits: t.Optional[t.Dict[str, ModelAudit]] = None,
+    module_path: Path = Path(),
+    macros: t.Optional[MacroRegistry] = None,
+    variables: t.Optional[t.Dict[str, t.Any]] = None,
     **kwargs: t.Any,
 ) -> Model:
     _validate_model_fields(klass, {"name", *kwargs} - {"grain", "table_properties"}, path)
@@ -2068,6 +1877,29 @@ def _create_model(
 
     defaults = {k: v for k, v in (defaults or {}).items() if k in klass.all_fields()}
 
+    statements = []
+
+    if "pre_statements" in kwargs:
+        statements.extend(kwargs["pre_statements"])
+    if "query" in kwargs:
+        statements.append(kwargs["query"])
+    if "post_statements" in kwargs:
+        statements.extend(kwargs["post_statements"])
+
+    jinja_macro_references, used_variables = extract_macro_references_and_variables(
+        *(gen(e) for e in statements)
+    )
+
+    if jinja_macros:
+        jinja_macros = (
+            jinja_macros if jinja_macros.trimmed else jinja_macros.trim(jinja_macro_references)
+        )
+    else:
+        jinja_macros = JinjaMacroRegistry()
+
+    for jinja_macro in jinja_macros.root_macros.values():
+        used_variables.update(extract_macro_references_and_variables(jinja_macro.definition)[1])
+
     try:
         model = klass(
             name=name,
@@ -2084,6 +1916,39 @@ def _create_model(
         raise_config_error(str(ex), location=path)
         raise
 
+    audit_definitions = audit_definitions or {}
+    inline_audits = inline_audits or {}
+    audit_definitions = {**audit_definitions, **inline_audits}
+
+    used_audits = set(inline_audits)
+    used_audits.update(audit_name for audit_name, _ in default_audits or [])
+    used_audits.update(audit_name for audit_name, _ in model.audits)
+
+    audit_definitions = {
+        audit_name: audit_definitions[audit_name]
+        for audit_name in used_audits
+        if audit_name in audit_definitions
+    }
+
+    model.audit_definitions.update(audit_definitions)
+
+    statements.extend(audit.query for audit in audit_definitions.values())
+
+    python_env = python_env or {}
+
+    python_env.update(
+        make_python_env(
+            statements,
+            jinja_macro_references,
+            module_path,
+            macros or macro.get_registry(),
+            variables=variables,
+            used_variables=used_variables,
+            path=path,
+        )
+    )
+
+    model.python_env.update(python_env)
     model._path = path
     model.set_time_format(time_column_format)
 
@@ -2188,155 +2053,6 @@ def _validate_model_fields(klass: t.Type[_Model], provided_fields: t.Set[str], p
     extra_fields = klass.extra_fields(provided_fields)
     if extra_fields:
         raise_config_error(f"Invalid extra fields {extra_fields} in the model definition", path)
-
-
-def _python_env(
-    expressions: t.Union[exp.Expression, t.List[exp.Expression]],
-    jinja_macro_references: t.Optional[t.Set[MacroReference]],
-    module_path: Path,
-    macros: MacroRegistry,
-    variables: t.Optional[t.Dict[str, t.Any]] = None,
-    used_variables: t.Optional[t.Set[str]] = None,
-    path: t.Optional[str | Path] = None,
-) -> t.Dict[str, Executable]:
-    python_env: t.Dict[str, Executable] = {}
-    variables = variables or {}
-
-    used_macros = {}
-    used_variables = (used_variables or set()).copy()
-    serialized_env = {}
-
-    expressions = ensure_list(expressions)
-    for expression in expressions:
-        if not isinstance(expression, d.Jinja):
-            for macro_func_or_var in expression.find_all(d.MacroFunc, d.MacroVar, exp.Identifier):
-                if macro_func_or_var.__class__ is d.MacroFunc:
-                    name = macro_func_or_var.this.name.lower()
-                    if name in macros:
-                        used_macros[name] = macros[name]
-                        if name == c.VAR:
-                            args = macro_func_or_var.this.expressions
-                            if len(args) < 1:
-                                raise_config_error("Macro VAR requires at least one argument", path)
-                            if not args[0].is_string:
-                                raise_config_error(
-                                    f"The variable name must be a string literal, '{args[0].sql()}' was given instead",
-                                    path,
-                                )
-                            used_variables.add(args[0].this.lower())
-                elif macro_func_or_var.__class__ is d.MacroVar:
-                    name = macro_func_or_var.name.lower()
-                    if name in macros:
-                        used_macros[name] = macros[name]
-                    elif name in variables:
-                        used_variables.add(name)
-                elif (
-                    isinstance(macro_func_or_var, (exp.Identifier, d.MacroStrReplace, d.MacroSQL))
-                ) and "@" in macro_func_or_var.name:
-                    for _, identifier, braced_identifier, _ in MacroStrTemplate.pattern.findall(
-                        macro_func_or_var.name
-                    ):
-                        var_name = braced_identifier or identifier
-                        if var_name in variables:
-                            used_variables.add(var_name)
-
-    for macro_ref in jinja_macro_references or set():
-        if macro_ref.package is None and macro_ref.name in macros:
-            used_macros[macro_ref.name] = macros[macro_ref.name]
-
-    for name, used_macro in used_macros.items():
-        if isinstance(used_macro, Executable):
-            serialized_env[name] = used_macro
-        elif not hasattr(used_macro, c.SQLMESH_BUILTIN):
-            build_env(used_macro.func, env=python_env, name=name, path=module_path)
-
-    serialized_env.update(serialize_env(python_env, path=module_path))
-    return _add_variables_to_python_env(serialized_env, used_variables, variables)
-
-
-def _add_variables_to_python_env(
-    python_env: t.Dict[str, Executable],
-    used_variables: t.Optional[t.Set[str]],
-    variables: t.Optional[t.Dict[str, t.Any]],
-) -> t.Dict[str, Executable]:
-    _, python_used_variables = _parse_dependencies(python_env, None)
-    used_variables = (used_variables or set()) | python_used_variables
-
-    variables = {k: v for k, v in (variables or {}).items() if k in used_variables}
-    if variables:
-        python_env[c.SQLMESH_VARS] = Executable.value(variables)
-
-    return python_env
-
-
-def _parse_dependencies(
-    python_env: t.Dict[str, Executable], entrypoint: t.Optional[str]
-) -> t.Tuple[t.Set[str], t.Set[str]]:
-    """Parses the source of a model function and finds upstream table dependencies and referenced variables based on calls to context / evaluator.
-
-    Args:
-        python_env: A dictionary of Python definitions.
-
-    Returns:
-        A tuple containing the set of upstream table dependencies and the set of referenced variables.
-    """
-    env = prepare_env(python_env)
-    depends_on = set()
-    variables = set()
-
-    for executable in python_env.values():
-        if not executable.is_definition:
-            continue
-        for node in ast.walk(ast.parse(executable.payload)):
-            if isinstance(node, ast.Call):
-                func = node.func
-                if not isinstance(func, ast.Attribute) or not isinstance(func.value, ast.Name):
-                    continue
-
-                def get_first_arg(keyword_arg_name: str) -> t.Any:
-                    if node.args:
-                        first_arg: t.Optional[ast.expr] = node.args[0]
-                    else:
-                        first_arg = next(
-                            (
-                                keyword.value
-                                for keyword in node.keywords
-                                if keyword.arg == keyword_arg_name
-                            ),
-                            None,
-                        )
-
-                    try:
-                        expression = to_source(first_arg)
-                        return eval(expression, env)
-                    except Exception:
-                        raise ConfigError(
-                            f"Error resolving dependencies for '{executable.path}'. Argument '{expression.strip()}' must be resolvable at parse time."
-                        )
-
-                # TODO: remove "table" when it is deprecated
-                if func.value.id == "context" and func.attr in ("table", "resolve_table"):
-                    depends_on.add(get_first_arg("model_name"))
-                elif func.value.id in ("context", "evaluator") and func.attr == c.VAR:
-                    variables.add(get_first_arg("var_name").lower())
-            elif (
-                isinstance(node, ast.Attribute)
-                and isinstance(node.value, ast.Name)
-                and node.value.id in ("context", "evaluator")
-                and node.attr == c.GATEWAY
-            ):
-                # Check whether the gateway attribute is referenced.
-                variables.add(c.GATEWAY)
-            elif isinstance(node, ast.FunctionDef) and node.name == entrypoint:
-                variables.update(
-                    [
-                        arg.arg
-                        for arg in [*node.args.args, *node.args.kwonlyargs]
-                        if arg.arg != "context"
-                    ]
-                )
-
-    return depends_on, variables
 
 
 def _list_of_calls_to_exp(value: t.List[t.Tuple[str, t.Dict[str, t.Any]]]) -> exp.Expression:

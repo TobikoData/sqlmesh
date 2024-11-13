@@ -20,6 +20,7 @@ from sqlmesh.dbt.basemodel import BaseModelConfig
 from sqlmesh.dbt.column import ColumnConfig
 
 if t.TYPE_CHECKING:
+    from sqlmesh.core.audit.definition import ModelAudit
     from sqlmesh.dbt.context import DbtContext
 
 
@@ -36,7 +37,9 @@ class SeedConfig(BaseModelConfig):
     column_types: t.Optional[t.Dict[str, str]] = None
     quote_columns: t.Optional[bool] = False
 
-    def to_sqlmesh(self, context: DbtContext) -> Model:
+    def to_sqlmesh(
+        self, context: DbtContext, audit_definitions: t.Optional[t.Dict[str, ModelAudit]] = None
+    ) -> Model:
         """Converts the dbt seed into a SQLMesh model."""
         seed_path = self.path.absolute().as_posix()
 
@@ -79,6 +82,7 @@ class SeedConfig(BaseModelConfig):
             self.canonical_name(context),
             SeedKind(path=seed_path),
             dialect=self.dialect(context),
+            audit_definitions=audit_definitions,
             **kwargs,
         )
 

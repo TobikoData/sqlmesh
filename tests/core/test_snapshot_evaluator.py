@@ -2437,7 +2437,7 @@ def test_audit_set_blocking_at_use_site(adapter_mock, make_snapshot):
             SELECT a::int FROM tbl
             """
         ),
-        audits={always_failing_audit.name: always_failing_audit},
+        audit_definitions={always_failing_audit.name: always_failing_audit},
     )
     snapshot = make_snapshot(model)
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)

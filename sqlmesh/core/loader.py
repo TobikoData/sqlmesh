@@ -185,7 +185,11 @@ class Loader(abc.ABC):
     def _load_metrics(self) -> UniqueKeyDict[str, MetricMeta]:
         return UniqueKeyDict("metrics")
 
-    def _load_external_models(self, gateway: t.Optional[str] = None) -> UniqueKeyDict[str, Model]:
+    def _load_external_models(
+        self,
+        audits: UniqueKeyDict[str, ModelAudit],
+        gateway: t.Optional[str] = None,
+    ) -> UniqueKeyDict[str, Model]:
         models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
         for context_path, config in self._context.configs.items():
             external_models_yaml = Path(context_path / c.EXTERNAL_MODELS_YAML)
@@ -211,6 +215,7 @@ class Loader(abc.ABC):
                             defaults=config.model_defaults.dict(),
                             path=path,
                             project=config.project,
+                            audit_definitions=audits,
                             **{
                                 "dialect": config.model_defaults.dialect,
                                 "default_catalog": self._context.default_catalog,
@@ -323,7 +328,7 @@ class SqlMeshLoader(Loader):
         audits into a Dict and creates the dag
         """
         models = self._load_sql_models(macros, jinja_macros, audits)
-        models.update(self._load_external_models(gateway))
+        models.update(self._load_external_models(audits, gateway))
         models.update(self._load_python_models(macros, jinja_macros, audits))
 
         return models
@@ -366,7 +371,7 @@ class SqlMeshLoader(Loader):
                         defaults=config.model_defaults.dict(),
                         macros=macros,
                         jinja_macros=jinja_macros,
-                        audits=audits,
+                        audit_definitions=audits,
                         default_audits=config.model_defaults.audits,
                         path=Path(path).absolute(),
                         module_path=context_path,
@@ -429,7 +434,7 @@ class SqlMeshLoader(Loader):
                             default_catalog=self._context.default_catalog,
                             variables=variables,
                             infer_names=config.model_naming.infer_names,
-                            audits=audits,
+                            audit_definitions=audits,
                         )
                         if model.enabled:
                             models[model.fqn] = model

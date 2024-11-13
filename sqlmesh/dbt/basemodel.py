@@ -30,6 +30,7 @@ from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import field_validator
 
 if t.TYPE_CHECKING:
+    from sqlmesh.core.audit.definition import ModelAudit
     from sqlmesh.dbt.context import DbtContext
 
 
@@ -299,7 +300,6 @@ class BaseModelConfig(GeneralConfig):
         jinja_macros = model_context.jinja_macros.trim(
             self.dependencies.macros, package=self.package_name
         )
-
         model_node: AttributeDict[str, t.Any] = AttributeDict(
             {
                 k: v
@@ -340,5 +340,7 @@ class BaseModelConfig(GeneralConfig):
         }
 
     @abstractmethod
-    def to_sqlmesh(self, context: DbtContext) -> Model:
+    def to_sqlmesh(
+        self, context: DbtContext, audit_definitions: t.Optional[t.Dict[str, ModelAudit]] = None
+    ) -> Model:
         """Convert DBT model into sqlmesh Model"""

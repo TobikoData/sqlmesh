@@ -81,10 +81,10 @@ def make_python_env(
             build_env(used_macro.func, env=python_env, name=name, path=module_path)
 
     serialized_env.update(serialize_env(python_env, path=module_path))
-    return add_variables_to_python_env(serialized_env, used_variables, variables)
+    return _add_variables_to_python_env(serialized_env, used_variables, variables)
 
 
-def add_variables_to_python_env(
+def _add_variables_to_python_env(
     python_env: t.Dict[str, Executable],
     used_variables: t.Optional[t.Set[str]],
     variables: t.Optional[t.Dict[str, t.Any]],
@@ -157,7 +157,13 @@ def parse_dependencies(
                 # Check whether the gateway attribute is referenced.
                 variables.add(c.GATEWAY)
             elif isinstance(node, ast.FunctionDef) and node.name == entrypoint:
-                variables.update([arg.arg for arg in node.args.args if arg.arg != "context"])
+                variables.update(
+                    [
+                        arg.arg
+                        for arg in [*node.args.args, *node.args.kwonlyargs]
+                        if arg.arg != "context"
+                    ]
+                )
 
     return depends_on, variables
 

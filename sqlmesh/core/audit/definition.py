@@ -300,7 +300,7 @@ class StandaloneAudit(_Node, AuditMixin):
     jinja_macros: JinjaMacroRegistry = JinjaMacroRegistry()
     default_catalog: t.Optional[str] = None
     depends_on_: t.Optional[t.Set[str]] = Field(default=None, alias="depends_on")
-    python_env_: t.Optional[t.Dict[str, Executable]] = Field(default=None, alias="python_env")
+    python_env: t.Dict[str, Executable] = {}
 
     source_type: Literal["audit"] = "audit"
 
@@ -332,10 +332,6 @@ class StandaloneAudit(_Node, AuditMixin):
 
         depends_on -= {self.name}
         return depends_on
-
-    @property
-    def python_env(self) -> t.Dict[str, Executable]:
-        return self.python_env_ or {}
 
     @property
     def sorted_python_env(self) -> t.List[t.Tuple[str, Executable]]:

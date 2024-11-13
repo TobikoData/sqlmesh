@@ -123,6 +123,7 @@ def test_json(snapshot: Snapshot):
             "name": "name",
             "partitioned_by": [],
             "project": "",
+            "python_env": {},
             "owner": "owner",
             "query": "SELECT @EACH([1, 2], x -> x), ds FROM parent.tbl",
             "jinja_macros": {

@@ -117,7 +117,7 @@ class ModelMeta(_Node):
 
             return audits
 
-        return v
+        return v or []
 
     @field_validator("tags", mode="before")
     @field_validator_v1_args
