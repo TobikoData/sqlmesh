@@ -396,14 +396,7 @@ class SnapshotEvaluator:
             kwargs: Additional kwargs to pass to the renderer.
         """
         deployability_index = deployability_index or DeployabilityIndex.all_deployable()
-        if not deployability_index.is_deployable(snapshot) and not (
-            # audit forward-only cloned preview tables
-            snapshot.is_forward_only
-            and snapshot.is_materialized
-            and snapshot.previous_versions
-            and self.adapter.SUPPORTS_CLONING
-            and not snapshot.is_managed
-        ):
+        if not deployability_index.is_deployable(snapshot) and not self.adapter.SUPPORTS_CLONING:
             # We can't audit a temporary table.
             return []
 
