@@ -62,6 +62,7 @@ class SparkEngineAdapter(
     WAP_PREFIX = "wap_"
     BRANCH_PREFIX = "branch_"
     SCHEMA_DIFFER = SchemaDiffer(
+        dialect=DIALECT,
         parameterized_type_defaults={
             # default decimal precision varies across backends
             exp.DataType.build("DECIMAL", dialect=DIALECT).this: [(), (0,)],

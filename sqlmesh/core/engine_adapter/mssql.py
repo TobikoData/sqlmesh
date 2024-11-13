@@ -52,6 +52,7 @@ class MSSQLEngineAdapter(
     COMMENT_CREATION_VIEW = CommentCreationView.UNSUPPORTED
     SUPPORTS_REPLACE_TABLE = False
     SCHEMA_DIFFER = SchemaDiffer(
+        dialect=DIALECT,
         parameterized_type_defaults={
             exp.DataType.build("DECIMAL", dialect=DIALECT).this: [(18, 0), (0,)],
             exp.DataType.build("BINARY", dialect=DIALECT).this: [(1,)],

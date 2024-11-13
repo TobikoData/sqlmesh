@@ -6,6 +6,7 @@ from collections import defaultdict
 from enum import Enum, auto
 from sqlglot import exp
 from sqlglot.helper import ensure_list, seq_get
+from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
 from sqlmesh.utils import columns_to_types_to_struct
 from sqlmesh.utils.pydantic import PydanticModel
@@ -321,6 +322,7 @@ class SchemaDiffer(PydanticModel):
             parameterized type can ALTER to its unlimited length version, along with different types in some engines.
     """
 
+    dialect: str = ""
     support_positional_add: bool = False
     support_nested_operations: bool = False
     support_nested_drop: bool = False
@@ -655,7 +657,10 @@ class SchemaDiffer(PydanticModel):
         """
         return [
             op.expression(table_name, self.array_element_selector)
-            for op in self._from_structs(current, new)
+            for op in self._from_structs(
+                normalize_identifiers(current, dialect=self.dialect),
+                normalize_identifiers(new, dialect=self.dialect),
+            )
         ]
 
     def compare_columns(

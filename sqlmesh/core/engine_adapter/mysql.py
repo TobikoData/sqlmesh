@@ -40,6 +40,7 @@ class MySQLEngineAdapter(
     MAX_COLUMN_COMMENT_LENGTH = 1024
     SUPPORTS_REPLACE_TABLE = False
     SCHEMA_DIFFER = SchemaDiffer(
+        dialect=DIALECT,
         parameterized_type_defaults={
             exp.DataType.build("BIT", dialect=DIALECT).this: [(1,)],
             exp.DataType.build("BINARY", dialect=DIALECT).this: [(1,)],

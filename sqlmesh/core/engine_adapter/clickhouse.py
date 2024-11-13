@@ -35,7 +35,7 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
     SUPPORTS_REPLACE_TABLE = False
     COMMENT_CREATION_VIEW = CommentCreationView.COMMENT_COMMAND_ONLY
 
-    SCHEMA_DIFFER = SchemaDiffer()
+    SCHEMA_DIFFER = SchemaDiffer(dialect=DIALECT)
 
     DEFAULT_TABLE_ENGINE = "MergeTree"
     ORDER_BY_TABLE_ENGINE_REGEX = "^.*?MergeTree.*$"

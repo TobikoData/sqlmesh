@@ -53,6 +53,7 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
     CATALOG_SUPPORT = CatalogSupport.FULL_SUPPORT
     CURRENT_CATALOG_EXPRESSION = exp.func("current_database")
     SCHEMA_DIFFER = SchemaDiffer(
+        dialect=DIALECT,
         parameterized_type_defaults={
             exp.DataType.build("BINARY", dialect=DIALECT).this: [(8388608,)],
             exp.DataType.build("VARBINARY", dialect=DIALECT).this: [(8388608,)],

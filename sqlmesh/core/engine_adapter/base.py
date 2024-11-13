@@ -118,6 +118,7 @@ class EngineAdapter:
         **kwargs: t.Any,
     ):
         self.dialect = dialect.lower() or self.DIALECT
+        self.SCHEMA_DIFFER.dialect = self.dialect
         self._connection_pool = create_connection_pool(
             connection_factory, multithreaded, cursor_kwargs=cursor_kwargs, cursor_init=cursor_init
         )

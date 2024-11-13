@@ -35,6 +35,7 @@ class PostgresEngineAdapter(
     CURRENT_CATALOG_EXPRESSION = exp.column("current_catalog")
     SUPPORTS_REPLACE_TABLE = False
     SCHEMA_DIFFER = SchemaDiffer(
+        dialect=DIALECT,
         parameterized_type_defaults={
             # DECIMAL without precision is "up to 131072 digits before the decimal point; up to 16383 digits after the decimal point"
             exp.DataType.build("DECIMAL", dialect=DIALECT).this: [(131072 + 16383, 16383), (0,)],

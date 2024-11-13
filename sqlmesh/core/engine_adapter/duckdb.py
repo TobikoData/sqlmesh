@@ -32,6 +32,7 @@ class DuckDBEngineAdapter(LogicalMergeMixin, GetCurrentCatalogFromFunctionMixin,
     SUPPORTS_TRANSACTIONS = False
     CATALOG_SUPPORT = CatalogSupport.FULL_SUPPORT
     SCHEMA_DIFFER = SchemaDiffer(
+        dialect=DIALECT,
         parameterized_type_defaults={
             exp.DataType.build("DECIMAL", dialect=DIALECT).this: [(18, 3), (0,)],
         },

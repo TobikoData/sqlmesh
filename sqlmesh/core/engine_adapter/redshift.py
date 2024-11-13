@@ -46,6 +46,7 @@ class RedshiftEngineAdapter(
     COMMENT_CREATION_VIEW = CommentCreationView.UNSUPPORTED
     SUPPORTS_REPLACE_TABLE = False
     SCHEMA_DIFFER = SchemaDiffer(
+        dialect=DIALECT,
         parameterized_type_defaults={
             exp.DataType.build("VARBYTE", dialect=DIALECT).this: [(64000,)],
             exp.DataType.build("DECIMAL", dialect=DIALECT).this: [(18, 0), (0,)],

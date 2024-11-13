@@ -38,6 +38,7 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
     SUPPORTS_MATERIALIZED_VIEWS = True
     SUPPORTS_MATERIALIZED_VIEW_SCHEMA = True
     SCHEMA_DIFFER = SchemaDiffer(
+        dialect=DIALECT,
         support_positional_add=True,
         support_nested_operations=True,
         support_nested_drop=True,

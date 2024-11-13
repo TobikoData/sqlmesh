@@ -64,6 +64,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
     MAX_COLUMN_COMMENT_LENGTH = 1024
 
     SCHEMA_DIFFER = SchemaDiffer(
+        dialect=DIALECT,
         compatible_types={
             exp.DataType.build("INT64", dialect=DIALECT): {
                 exp.DataType.build("NUMERIC", dialect=DIALECT),

@@ -53,6 +53,7 @@ class TrinoEngineAdapter(
     DEFAULT_CATALOG_TYPE = "hive"
     QUOTE_IDENTIFIERS_IN_VIEWS = False
     SCHEMA_DIFFER = SchemaDiffer(
+        dialect=DIALECT,
         parameterized_type_defaults={
             # default decimal precision varies across backends
             exp.DataType.build("DECIMAL", dialect=DIALECT).this: [(), (0,)],

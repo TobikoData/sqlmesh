@@ -45,6 +45,43 @@ def test_schema_diff_calculate():
     ]
 
 
+    "dialect, alter_expression_list",
+    [
+        ("", []),
+        (
+            "mysql",
+            [
+                "ALTER TABLE apply_to_table DROP COLUMN id",
+                "ALTER TABLE apply_to_table ADD COLUMN Id INT",
+            ],
+        ),
+        ("duckdb", []),
+    ],
+)
+def test_schema_diff_case_sensitivity(dialect, alter_expression_list):
+    alter_expressions = SchemaDiffer(
+        **{
+            "dialect": dialect,
+            "array_element_selector": "",
+            "compatible_types": {
+                exp.DataType.build("STRING"): {exp.DataType.build("INT")},
+            },
+        }
+    ).compare_columns(
+        "apply_to_table",
+        {
+            "id": exp.DataType.build("INT"),
+            "name": exp.DataType.build("STRING"),
+        },
+        {
+            "Id": exp.DataType.build("INT"),
+            "name": exp.DataType.build("STRING"),
+        },
+    )
+
+    assert [x.sql() for x in alter_expressions] == alter_expression_list
+
+
 def test_schema_diff_calculate_type_transitions():
     alter_expressions = SchemaDiffer(
         **{
