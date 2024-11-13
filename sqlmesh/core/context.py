@@ -116,6 +116,7 @@ from sqlmesh.utils.errors import (
     SQLMeshError,
     UncategorizedPlanError,
 )
+from sqlmesh.utils.config import print_config
 from sqlmesh.utils.jinja import JinjaMacroRegistry
 
 if t.TYPE_CHECKING:
@@ -1852,9 +1853,14 @@ class GenericContext(BaseContext, t.Generic[C]):
         self.console.log_status_update(f"Models: {len(self.models)}")
         self.console.log_status_update(f"Macros: {len(self._macros) - len(macro.get_registry())}")
 
+        print_config(self.config.get_connection(self.gateway), self.console, "Connection")
+        print_config(self.config.get_test_connection(self.gateway), self.console, "Test Connection")
+        print_config(
+            self.config.get_state_connection(self.gateway), self.console, "State Connection"
+        )
+        self.console.log_status_update("\n")
         if skip_connection:
             return
-
         self._try_connection("data warehouse", self._engine_adapter.ping)
 
         state_connection = self.config.get_state_connection(self.gateway)

@@ -35,6 +35,7 @@ if sys.version_info >= (3, 9):
 else:
     from typing_extensions import Literal
 
+from sqlmesh.utils.config import sensitive_fields, excluded_fields
 
 logger = logging.getLogger(__name__)
 
@@ -107,23 +108,7 @@ class _EngineAdapterStateSyncSchedulerConfig(SchedulerConfig):
             [
                 state_connection.json(
                     sort_keys=True,
-                    exclude={
-                        "access_token",
-                        "concurrent_tasks",
-                        "user",
-                        "password",
-                        "keytab",
-                        "keyfile",
-                        "keyfile_json",
-                        "pre_ping",
-                        "principal",
-                        "private_key",
-                        "private_key_passphrase",
-                        "private_key_path",
-                        "refresh_token",
-                        "register_comments",
-                        "token",
-                    },
+                    exclude=sensitive_fields.union(excluded_fields),
                 )
             ]
         )
