@@ -298,6 +298,7 @@ class SchemaDiffer(PydanticModel):
     1. Support column moves. Databricks Delta supports moves and would allow exact matches.
 
     Args:
+        dialect: The dialect of the engine to normalise the columns accordingly to the case sensitivity.
         support_positional_add: Whether the engine for which the diff is being computed supports adding columns in a
             specific position in the set of existing columns.
         support_nested_operations: Whether the engine for which the diff is being computed supports modifications to
