@@ -484,7 +484,7 @@ def test_forward_only_model_on_destructive_change(
 
     with pytest.raises(
         PlanError,
-        match="""Plan results in a destructive change to forward-only model '"a"'s schema.""",
+        match="""Plan results in a destructive change to forward-only model '"a"'s schema that drops columns 'one', 'two'.""",
     ):
         PlanBuilder(context_diff_1, schema_differ).build()
 
