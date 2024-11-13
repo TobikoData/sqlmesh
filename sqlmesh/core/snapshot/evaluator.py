@@ -49,7 +49,7 @@ from sqlmesh.core.model import (
     SCDType2ByTimeKind,
     ViewKind,
 )
-from sqlmesh.core.schema_diff import has_drop_alteration
+from sqlmesh.core.schema_diff import has_drop_alteration, get_dropped_column_name
 from sqlmesh.core.snapshot import (
     DeployabilityIndex,
     Intervals,
@@ -1855,9 +1855,11 @@ def _check_destructive_schema_change(
     if snapshot.needs_destructive_check(allow_destructive_snapshots) and has_drop_alteration(
         alter_expressions
     ):
-        warning_msg = (
-            f"Plan results in a destructive change to forward-only table '{snapshot.name}'s schema."
+        dropped_column_name = get_dropped_column_name(alter_expressions)
+        dropped_column_msg = (
+            f" that drops column '{dropped_column_name}'" if dropped_column_name else ""
         )
+        warning_msg = f"Plan results in a destructive change to forward-only table '{snapshot.name}'s schema{dropped_column_msg}."
         if snapshot.model.on_destructive_change.is_warn:
             logger.warning(warning_msg)
             return

@@ -17,7 +17,7 @@ from sqlmesh.core.config import (
 from sqlmesh.core.context_diff import ContextDiff
 from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.plan.definition import Plan, SnapshotMapping, earliest_interval_start
-from sqlmesh.core.schema_diff import SchemaDiffer, has_drop_alteration
+from sqlmesh.core.schema_diff import SchemaDiffer, has_drop_alteration, get_dropped_column_name
 from sqlmesh.core.snapshot import (
     DeployabilityIndex,
     Snapshot,
@@ -464,7 +464,11 @@ class PlanBuilder:
                 )
 
                 if has_drop_alteration(schema_diff):
-                    warning_msg = f"Plan results in a destructive change to forward-only model '{snapshot.name}'s schema"
+                    dropped_column_name = get_dropped_column_name(schema_diff)
+                    dropped_column_msg = (
+                        f" that drops column '{dropped_column_name}'" if dropped_column_name else ""
+                    )
+                    warning_msg = f"Plan results in a destructive change to forward-only model '{snapshot.name}'s schema{dropped_column_msg}."
                     if snapshot.model.on_destructive_change.is_warn:
                         logger.warning(warning_msg)
                     else:

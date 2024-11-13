@@ -1550,7 +1550,7 @@ def test_on_destructive_change_runtime_check(
         evaluator.migrate([snapshot], {})
         assert (
             mock_logger.call_args[0][0]
-            == """Plan results in a destructive change to forward-only table '"test_schema"."test_model"'s schema."""
+            == """Plan results in a destructive change to forward-only table '"test_schema"."test_model"'s schema that drops column 'b'."""
         )
 
     # allow destructive
