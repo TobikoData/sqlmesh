@@ -714,7 +714,7 @@ Note these aspects of the rendered query:
 
 ### @GENERATE_SURROGATE_KEY
 
-`@GENERATE_SURROGATE_KEY` generates a surrogate key from a set of columns. The surrogate key is a sequence of alphanumeric digits returned by the [`MD5` hash function](https://en.wikipedia.org/wiki/MD5) on the concatenated column values.
+`@GENERATE_SURROGATE_KEY` generates a surrogate key from a set of columns. The surrogate key is a sequence of alphanumeric digits returned by a hash function, such as [`MD5`](https://en.wikipedia.org/wiki/MD5), on the concatenated column values.
 
 The surrogate key is created by:
 1. `CAST`ing each column's value to `TEXT` (or the SQL engine's equivalent type)
@@ -726,7 +726,7 @@ For example, the following query:
 
 ```sql linenums="1"
 SELECT
-  @GENERATE_SURROGATE_KEY(a, b, c)
+  @GENERATE_SURROGATE_KEY(a, b, c) AS col
 FROM foo
 ```
 
@@ -736,14 +736,38 @@ would be rendered as:
 SELECT
   MD5(
     CONCAT(
-      COALESCE(CAST(a AS TEXT), '_sqlmesh_surrogate_key_null_'),
+      COALESCE(CAST("a" AS TEXT), '_sqlmesh_surrogate_key_null_'),
       '|',
-      COALESCE(CAST(b AS TEXT), '_sqlmesh_surrogate_key_null_'),
+      COALESCE(CAST("b" AS TEXT), '_sqlmesh_surrogate_key_null_'),
       '|',
-      COALESCE(CAST(c AS TEXT), '_sqlmesh_surrogate_key_null_')
+      COALESCE(CAST("c" AS TEXT), '_sqlmesh_surrogate_key_null_')
     )
-  )
+  ) AS "col"
+FROM "foo" AS "foo"
+```
+
+By default, the `MD5` function is used, but this behavior can change by setting the `hash_function` argument as follows:
+
+```sql linenums="1"
+SELECT
+  @GENERATE_SURROGATE_KEY(a, b, c, hash_function := 'SHA256') AS col
 FROM foo
+```
+
+This query will similarly be rendered as:
+
+```sql linenums="1"
+SELECT
+  SHA256(
+    CONCAT(
+      COALESCE(CAST("a" AS TEXT), '_sqlmesh_surrogate_key_null_'),
+      '|',
+      COALESCE(CAST("b" AS TEXT), '_sqlmesh_surrogate_key_null_'),
+      '|',
+      COALESCE(CAST("c" AS TEXT), '_sqlmesh_surrogate_key_null_')
+    )
+  ) AS "col"
+FROM "foo" AS "foo"
 ```
 
 ### @SAFE_ADD
