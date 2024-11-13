@@ -56,7 +56,11 @@ from sqlmesh.core import analytics
 from sqlmesh.core import constants as c
 from sqlmesh.core.analytics import python_api_analytics
 from sqlmesh.core.audit import Audit, ModelAudit, StandaloneAudit
-from sqlmesh.core.config import CategorizerConfig, Config, load_configs
+from sqlmesh.core.config import (
+    CategorizerConfig,
+    Config,
+    load_configs,
+)
 from sqlmesh.core.config.loader import C
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.context_diff import ContextDiff
@@ -372,6 +376,18 @@ class GenericContext(BaseContext, t.Generic[C]):
         self.concurrent_tasks = concurrent_tasks or self._connection_config.concurrent_tasks
         self._engine_adapter = engine_adapter or self._connection_config.create_engine_adapter()
 
+        self._snapshot_evaluators: UniqueKeyDict[str, SnapshotEvaluator] = UniqueKeyDict(
+            "evaluators"
+        )
+        for gateway_name in self.config.gateways:
+            connection = self.config.get_connection(gateway_name)
+            adapter = connection.create_engine_adapter()
+            evaluator = SnapshotEvaluator(
+                adapter.with_log_level(logging.INFO),
+                ddl_concurrent_tasks=connection.concurrent_tasks,
+            )
+            self._snapshot_evaluators[gateway_name] = evaluator
+
         self.console = console or get_console(dialect=self._engine_adapter.dialect)
 
         self._test_connection_config = self.config.get_test_connection(
@@ -511,6 +527,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             max_workers=self.concurrent_tasks,
             console=self.console,
             notification_target_manager=self.notification_target_manager,
+            snapshot_evaluators=self._snapshot_evaluators,
         )
 
     @property

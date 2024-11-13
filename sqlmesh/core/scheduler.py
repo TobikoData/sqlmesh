@@ -26,7 +26,7 @@ from sqlmesh.core.snapshot import (
 from sqlmesh.core.snapshot.definition import Interval, expand_range
 from sqlmesh.core.snapshot.definition import SnapshotId, merge_intervals
 from sqlmesh.core.state_sync import StateSync
-from sqlmesh.utils import format_exception
+from sqlmesh.utils import UniqueKeyDict, format_exception
 from sqlmesh.utils.concurrency import concurrent_apply_to_dag, NodeExecutionFailedError
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import (
@@ -118,11 +118,12 @@ class Scheduler:
 
     Args:
         snapshots: A collection of snapshots.
-        snapshot_evaluator: The snapshot evaluator to execute queries.
+        snapshot_evaluator: The default snapshot evaluator to execute queries.
         state_sync: The state sync to pull saved snapshots.
         max_workers: The maximum number of parallel queries to run.
         console: The rich instance used for printing scheduling information.
         signal_factory: A factory method for building Signal instances from model signal configuration.
+        snapshot_evaluators: The snapshot evaluators to execute queries if multiple are defined.
     """
 
     def __init__(
@@ -135,12 +136,14 @@ class Scheduler:
         console: t.Optional[Console] = None,
         notification_target_manager: t.Optional[NotificationTargetManager] = None,
         signal_factory: t.Optional[SignalFactory] = None,
+        snapshot_evaluators: t.Optional[UniqueKeyDict[str, SnapshotEvaluator]] = None,
     ):
         self.state_sync = state_sync
         self.snapshots = {s.snapshot_id: s for s in snapshots}
         self.snapshot_per_version = _resolve_one_snapshot_per_version(self.snapshots.values())
         self.default_catalog = default_catalog
         self.snapshot_evaluator = snapshot_evaluator
+        self.snapshot_evaluators = snapshot_evaluators
         self.max_workers = max_workers
         self.console = console or get_console()
         self.notification_target_manager = (
@@ -230,7 +233,17 @@ class Scheduler:
 
         is_deployable = deployability_index.is_deployable(snapshot)
 
-        wap_id = self.snapshot_evaluator.evaluate(
+        evaluator = self.snapshot_evaluator
+        if (
+            snapshot.is_model
+            and not snapshot.is_seed
+            and self.snapshot_evaluators
+            and snapshot.model.gateway
+        ):
+            if snapshot_evaluator := self.snapshot_evaluators.get(snapshot.model.gateway):
+                evaluator = snapshot_evaluator
+
+        wap_id = evaluator.evaluate(
             snapshot,
             start=start,
             end=end,
@@ -240,7 +253,7 @@ class Scheduler:
             batch_index=batch_index,
             **kwargs,
         )
-        audit_results = self.snapshot_evaluator.audit(
+        audit_results = evaluator.audit(
             snapshot=snapshot,
             start=start,
             end=end,
@@ -259,7 +272,7 @@ class Scheduler:
                 model=snapshot.model_or_none,
                 count=t.cast(int, audit_result.count),
                 query=t.cast(exp.Query, audit_result.query),
-                adapter_dialect=self.snapshot_evaluator.adapter.dialect,
+                adapter_dialect=evaluator.adapter.dialect,
             )
             self.notification_target_manager.notify(NotificationEvent.AUDIT_FAILURE, error)
             if is_deployable and snapshot.node.owner:

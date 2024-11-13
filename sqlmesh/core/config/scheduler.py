@@ -148,6 +148,7 @@ class BuiltInSchedulerConfig(_EngineAdapterStateSyncSchedulerConfig, BaseConfig)
         return BuiltInPlanEvaluator(
             state_sync=context.state_sync,
             snapshot_evaluator=context.snapshot_evaluator,
+            snapshot_evaluators=context._snapshot_evaluators,
             create_scheduler=context.create_scheduler,
             default_catalog=self.get_default_catalog(context),
             console=context.console,

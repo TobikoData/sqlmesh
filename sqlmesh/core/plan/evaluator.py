@@ -42,6 +42,7 @@ from sqlmesh.core.user import User
 from sqlmesh.schedulers.airflow import common as airflow_common
 from sqlmesh.schedulers.airflow.client import AirflowClient, BaseAirflowClient
 from sqlmesh.schedulers.airflow.mwaa_client import MWAAClient
+from sqlmesh.utils import UniqueKeyDict
 from sqlmesh.utils.errors import SQLMeshError
 
 logger = logging.getLogger(__name__)
@@ -72,9 +73,11 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         create_scheduler: t.Callable[[t.Iterable[Snapshot]], Scheduler],
         default_catalog: t.Optional[str],
         console: t.Optional[Console] = None,
+        snapshot_evaluators: t.Optional[UniqueKeyDict[str, SnapshotEvaluator]] = None,
     ):
         self.state_sync = state_sync
         self.snapshot_evaluator = snapshot_evaluator
+        self.snapshot_evaluators = snapshot_evaluators
         self.create_scheduler = create_scheduler
         self.default_catalog = default_catalog
         self.console = console or get_console()
@@ -230,13 +233,30 @@ class BuiltInPlanEvaluator(PlanEvaluator):
 
         completed = False
         try:
-            self.snapshot_evaluator.create(
-                snapshots_to_create,
-                snapshots,
-                allow_destructive_snapshots=plan.allow_destructive_models,
-                deployability_index=deployability_index,
-                on_complete=self.console.update_creation_progress,
-            )
+            gateways: t.Dict[str, t.List[Snapshot]] = {}
+            for snapshot in snapshots_to_create:
+                gateway = snapshot.model.gateway or "default"
+                gateways.setdefault(gateway, []).append(snapshot)
+
+            if not self.snapshot_evaluators or len(gateways) == 1:
+                self.snapshot_evaluator.create(
+                    snapshots_to_create,
+                    snapshots,
+                    allow_destructive_snapshots=plan.allow_destructive_models,
+                    deployability_index=deployability_index,
+                    on_complete=self.console.update_creation_progress,
+                )
+            else:
+                for gateway, snapshots_to_create_list in gateways.items():
+                    evaluator = self.snapshot_evaluators.get(gateway, self.snapshot_evaluator)
+                    evaluator.create(
+                        snapshots_to_create_list,
+                        snapshots,
+                        allow_destructive_snapshots=plan.allow_destructive_models,
+                        deployability_index=deployability_index,
+                        on_complete=self.console.update_creation_progress,
+                    )
+
             completed = True
         finally:
             self.console.stop_creation_progress(success=completed)
