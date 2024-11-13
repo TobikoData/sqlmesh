@@ -687,13 +687,14 @@ def has_drop_alteration(alter_expressions: t.List[exp.Alter]) -> bool:
     )
 
 
-def get_dropped_column_name(alter_expressions: t.List[exp.Alter]) -> t.Optional[str]:
+def get_dropped_column_names(alter_expressions: t.List[exp.Alter]) -> t.List[str]:
+    dropped_columns = []
     for actions in alter_expressions:
         for action in actions.args.get("actions", []):
             if isinstance(action, exp.Drop):
                 if action.kind == "COLUMN":
-                    return action.alias_or_name
-    return None
+                    dropped_columns.append(action.alias_or_name)
+    return dropped_columns
 
 
 def _get_name_and_type(struct: exp.ColumnDef) -> t.Tuple[exp.Identifier, exp.DataType]:

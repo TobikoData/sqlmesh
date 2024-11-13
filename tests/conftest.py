@@ -366,8 +366,8 @@ def make_snapshot() -> t.Callable:
 def make_snapshot_on_destructive_change(make_snapshot: t.Callable) -> t.Callable:
     def _make_function(
         name: str = "a",
-        old_query: str = "select '1' as one, '2022-01-01' ds",
-        new_query: str = "select 1 as one, '2022-01-01' ds",
+        old_query: str = "select '1' as one, '2' as two, '2022-01-01' ds",
+        new_query: str = "select 1 as one, 2 as two, '2022-01-01' ds",
         on_destructive_change: OnDestructiveChange = OnDestructiveChange.ERROR,
     ) -> t.Tuple[Snapshot, Snapshot]:
         snapshot_old = make_snapshot(
