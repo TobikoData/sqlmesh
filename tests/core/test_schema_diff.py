@@ -45,6 +45,7 @@ def test_schema_diff_calculate():
     ]
 
 
+@pytest.mark.parametrize(
     "dialect, alter_expression_list",
     [
         ("", []),
