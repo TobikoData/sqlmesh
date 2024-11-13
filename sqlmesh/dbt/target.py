@@ -924,6 +924,8 @@ class ClickhouseConfig(TargetConfig):
     type: Literal["clickhouse"] = "clickhouse"
 
     def default_incremental_strategy(self, kind: IncrementalKind) -> str:
+        # dbt-clickhouse name for temp table swap. That is sqlmesh's default
+        #   strategy so doesn't require special handling during conversion.
         return "legacy"
 
     @classproperty

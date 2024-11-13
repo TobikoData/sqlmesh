@@ -69,6 +69,28 @@ def test_model_name():
     )
 
 
+def test_materialization():
+    context = DbtContext()
+    context.project_name = "Test"
+    context.target = DuckDbConfig(name="target", schema="foo")
+
+    logger = logging.getLogger("sqlmesh.dbt.model")
+    with patch.object(logger, "warning") as mock_logger:
+        model_config = ModelConfig(
+            name="model", alias="model", schema="schema", materialized="materialized_view"
+        )
+
+    assert (
+        "SQLMesh does not support the 'materialized_view' model materialization. Falling back to the 'view' materialization."
+        in mock_logger.call_args[0][0]
+    )
+    assert model_config.materialized == "view"
+
+    # clickhouse "dictionary" materialization
+    with pytest.raises(ConfigError):
+        ModelConfig(name="model", alias="model", schema="schema", materialized="dictionary")
+
+
 def test_model_kind():
     context = DbtContext()
     context.project_name = "Test"

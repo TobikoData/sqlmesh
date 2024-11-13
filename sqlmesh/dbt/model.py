@@ -170,6 +170,27 @@ class ModelConfig(BaseModelConfig):
             return {"data_type": "date", "granularity": "day", **v}
         raise ConfigError(f"Invalid format for partition_by '{v}'")
 
+    @field_validator("materialized", mode="before")
+    @classmethod
+    def _validate_materialized(cls, v: str) -> str:
+        unsupported_materializations = [
+            "materialized_view",  # multiple engines
+            "dictionary",  # clickhouse only
+            "distributed_table",  # clickhouse only
+            "distributed_incremental",  # clickhouse only
+        ]
+        if v in unsupported_materializations:
+            fallback = v.split("_")
+            msg = f"SQLMesh does not support the '{v}' model materialization."
+            if len(fallback) == 1:
+                # dictionary materialization
+                raise ConfigError(msg)
+            else:
+                logger.warning(f"{msg} Falling back to the '{fallback[1]}' materialization.")
+
+            return fallback[1]
+        return v
+
     _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {
         **BaseModelConfig._FIELD_UPDATE_STRATEGY,
         **{
@@ -446,22 +467,6 @@ class ModelConfig(BaseModelConfig):
                 }
 
         if context.target.dialect == "clickhouse":
-            unsupported_materializations = [
-                "dictionary",
-                "distributed_table",
-                "distributed_incremental",
-                "materialized_view",
-            ]
-            if self.materialized in unsupported_materializations:
-                fallback = self.materialized.split("_")
-                msg = f"SQLMesh does not support the '{self.materialized}' model materialization."
-                if len(fallback) == 1:
-                    # dictionary materialization
-                    raise ConfigError(msg)
-                else:
-                    logger.warning(f"{msg} Falling back to the '{fallback[1]}' materialization.")
-                    self.materialized = fallback[1]
-
             if self.model_materialization == Materialization.INCREMENTAL:
                 # `inserts_only` overrides incremental_strategy setting (if present)
                 # https://github.com/ClickHouse/dbt-clickhouse/blob/065f3a724fa09205446ecadac7a00d92b2d8c646/README.md?plain=1#L108
