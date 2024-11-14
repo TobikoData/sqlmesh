@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import glob
 import os
 import typing as t
 from pathlib import Path
@@ -25,9 +26,9 @@ def load_configs(
 ) -> t.Dict[Path, C]:
     sqlmesh_path = sqlmesh_path or c.SQLMESH_PATH
     config = config or "config"
-    
-    absolute_paths = expand_paths(paths)
-    print(absolute_paths)
+
+    absolute_paths = [Path(t.cast(t.Union[str, Path], p)).absolute() for path in ensure_list(paths) for p in glob.glob(str(path))]
+
     if not isinstance(config, str):
         if type(config) != config_type:
             config = convert_config_type(config, config_type)
@@ -190,18 +191,3 @@ def convert_config_type(
     config_type: t.Type[C],
 ) -> C:
     return config_type.parse_obj(config_obj.dict())
-
-def expand_paths(paths: t.Union[str, t.List[str]]) -> t.List[Path]:
-    expanded_paths = []
-    
-    for path in ensure_list(paths):
-        p = Path(t.cast(t.Union[str, Path], path))
-        if p.is_absolute():
-            # Handle absolute paths
-            expanded_paths.append(p.absolute())
-        else:
-            # Handle relative paths
-            expanded_paths.extend(Path().glob(str(p)))
-    # Convert to absolute paths
-    absolute_paths = [path.absolute() for path in expanded_paths]
-    return absolute_paths
