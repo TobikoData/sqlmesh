@@ -27,7 +27,7 @@ def load_configs(
     config = config or "config"
     
     absolute_paths = expand_paths(paths)
-
+    print(absolute_paths)
     if not isinstance(config, str):
         if type(config) != config_type:
             config = convert_config_type(config, config_type)
@@ -193,11 +193,12 @@ def convert_config_type(
 
 def expand_paths(paths: t.Union[str, t.List[str]]) -> t.List[Path]:
     expanded_paths = []
+    
     for path in ensure_list(paths):
         p = Path(t.cast(t.Union[str, Path], path))
         if p.is_absolute():
             # Handle absolute paths
-            expanded_paths.extend(p.parent.glob(p.name))
+            expanded_paths.append(p.absolute())
         else:
             # Handle relative paths
             expanded_paths.extend(Path().glob(str(p)))
