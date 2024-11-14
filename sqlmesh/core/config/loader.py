@@ -27,7 +27,11 @@ def load_configs(
     sqlmesh_path = sqlmesh_path or c.SQLMESH_PATH
     config = config or "config"
 
-    absolute_paths = [Path(t.cast(t.Union[str, Path], p)).absolute() for path in ensure_list(paths) for p in glob.glob(str(path))]
+    absolute_paths = [
+        Path(t.cast(t.Union[str, Path], p)).absolute()
+        for path in ensure_list(paths)
+        for p in glob.glob(str(path))
+    ]
 
     if not isinstance(config, str):
         if type(config) != config_type:
