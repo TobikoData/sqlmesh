@@ -30,7 +30,7 @@ def load_configs(
     absolute_paths = [
         Path(t.cast(t.Union[str, Path], p)).absolute()
         for path in ensure_list(paths)
-        for p in glob.glob(str(path))
+        for p in (glob.glob(str(path)) or [path])
     ]
 
     if not isinstance(config, str):
