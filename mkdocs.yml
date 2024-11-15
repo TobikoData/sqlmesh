@@ -26,7 +26,6 @@ nav:
     - Project content:
       - guides/models.md
       - guides/incremental_time.md
-      - guides/incremental_time_full_walkthrough.md
       - guides/testing.md
       - guides/model_selection.md
     - SQLMesh tools:
@@ -60,6 +59,8 @@ nav:
       - concepts/architecture/snapshots.md
       - concepts/architecture/serialization.md
     - concepts/glossary.md
+  - Examples:
+    - examples/incremental_time_full_walkthrough.md
   - Integrations:
     - "Overview": integrations/overview.md
     - Tools:
