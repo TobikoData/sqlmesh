@@ -2,62 +2,76 @@
 
 ## Introduction
 
-This guide provides step-by-step instructions on how to use SQLMesh with the BigQuery SQL engine. It assumes you have an existing BigQuery project with CLI/API access enabled and billing configured. The guide will walk you through the steps of installing SQLMesh for BigQuery locally and connecting the Quickstart project tables.
+This guide provides step-by-step instructions on how to connect SQLMesh to the BigQuery SQL engine.
+
+It will walk you through the steps of installing SQLMesh and BigQuery connection libraries locally, configuring the connection in SQLMesh, and running the [quickstart project](../../quick_start.md).
 
 ## Prerequisites
 
-- Existing BigQuery project
-- [CLI/API access enabled](https://cloud.google.com/sdk/gcloud/reference/init)
-- [Billing configured](https://console.cloud.google.com/billing) (i.e. its not a sandbox project)
-- User account with permissions to execute commands against the project
+This guide assumes the following about the BigQuery project being used with SQLMesh:
+
+- The project already exists
+- Project [CLI/API access is enabled](https://cloud.google.com/endpoints/docs/openapi/enable-api)
+- Project [billing is configured](https://cloud.google.com/billing/docs/how-to/manage-billing-account) (i.e. it's not a sandbox project)
+- SQLMesh can authenticate using an account with permissions to execute commands against the project
 
 ## Installation
 
-### Follow the Quickstart guide
+Follow the [quickstart installation guide](../../installation.md) up to the step that [installs SQLMesh](../../installation.md#install-sqlmesh-core), where we deviate to also install the necessary BigQuery libraries.
 
-Up to the installing the [sqlmesh core step](https://sqlmesh.readthedocs.io/en/stable/installation/#install-sqlmesh-core), this is where we will deviate slightly 
+Instead of installing just SQLMesh core, we will also include the BigQuery engine libraries:
 
-Instead of installing just SQLMesh core we will specify the BigQuery engine
+```bash
+> pip install "sqlmesh[bigquery]"
 ```
-pip install "sqlmesh[bigquery]"
-```
-### Install Google Cloud SDK 
 
-Follow these steps to install the Google Cloud SDK to the new environment that you just made:
+### Install Google Cloud SDK
 
-- Download the appropriate package for your system from [Google Cloud installation guide](https://cloud.google.com/sdk/docs/install)
-- Unpack the downloaded file:
-    
+SQLMesh connects to BigQuery via the Python [`google-cloud-bigquery` library](https://pypi.org/project/google-cloud-bigquery/), which uses the [Google Cloud SDK `gcloud` tool](https://cloud.google.com/sdk/docs) for [authenticating with BigQuery](https://googleapis.dev/python/google-api-core/latest/auth.html).
+
+Follow these steps to install and configure the Google Cloud SDK on your computer:
+
+- Download the appropriate installer for your system from the [Google Cloud installation guide](https://cloud.google.com/sdk/docs/install)
+- Unpack the downloaded file with the `tar` command:
+
     ```bash
-    tar -xzvf google-cloud-cli-darwin-{SYSTEM_SPECIFIC_INFO}.tar.gz
+    > tar -xzvf google-cloud-cli-{SYSTEM_SPECIFIC_INFO}.tar.gz
     ```
-    
+
 - Run the installation script:
-    
+
     ```bash
-    ./google-cloud-sdk/install.sh
+    > ./google-cloud-sdk/install.sh
     ```
-    
+
 - Reload your shell profile (e.g., for zsh):
-```
-source $HOME/.zshrc
-```
+
+    ```bash
+    > source $HOME/.zshrc
+    ```
+
+- Run [`gcloud init` to setup authentication](https://cloud.google.com/sdk/gcloud/reference/init)
+
 ## Configuration
 
 ### Configure SQLMesh for BigQuery
 
-Add the following to your SQLMesh config.yaml file:
+Add the following gateway specification to your SQLMesh project's `config.yaml` file:
 
 ```yaml
 bigquery:
   connection:
     type: bigquery
-    project: <your_project_id> 
+    project: <your_project_id>
 
 default_gateway: bigquery
 ```
 
-In bigquery, navigate to the dashboard and select project your going to work with to get your project ID and copy that into the SQLMesh config.yaml
+This creates a gateway named `bigquery` and makes it your project's default gateway.
+
+It uses the [`oauth` authentication method](#authentication-methods), which does not specify a username or other information directly in the connection configuration. Other authentication methods are [described below](#authentication-methods).
+
+In BigQuery, navigate to the dashboard and select the BigQuery project your SQLMesh project will use in the drop-down. Now we can identify the project ID needed in the `config.yaml` gateway specification above:
 
 ![BigQuery Dashboard](./bigquery/bigquery-1.png)
 
@@ -70,47 +84,51 @@ In bigquery, navigate to the dashboard and select project your going to work wit
 
 ### Test the connection
 
-Run the following command to verify your BigQuery connection:
+Run the following command to verify that SQLMesh can connect to BigQuery:
 
 ```bash
-sqlmesh info
+> sqlmesh info
 ```
 
-The output will look something like this 
+The output will look something like this:
 
 ![Terminal Output](./bigquery/bigquery-3.png)
 
 - **Set quota project (optional)**
-    
-    If you get a bunch of warnings when you run `sqlmesh info` , something like the screen shot below: 
-    
+
+    You may see warnings like this when you run `sqlmesh info`:
+
     ![Terminal Output with warnings](./bigquery/bigquery-4.png)
-    
-    You can avoid these warnings about quota projects, by running:
-    
+
+    You can avoid these warnings about quota projects by running:
+
     ```bash
-    gcloud auth application-default set-quota-project <your_project_id> 
-    gcloud config set project <your_project_id>
+    > gcloud auth application-default set-quota-project <your_project_id>
+    > gcloud config set project <your_project_id>
     ```
-    
+
 
 ### Create and run a plan
 
-To create and execute a plan in BigQuery:
+We've verified our connection, so we're ready to create and execute a plan in BigQuery:
 
 ```bash
-sqlmesh plan
+> sqlmesh plan
 ```
 
 ### View results in BigQuery Console
 
-Navigate to the BigQuery Studio Console
+Let's confirm that our project models are as expected.
+
+First, navigate to the BigQuery Studio Console:
 
 ![Steps to the Studio](./bigquery/bigquery-5.png)
 
-Use the left sidebar to find your project and the newly created models
+Then use the left sidebar to find your project and the newly created models:
 
 ![New Models](./bigquery/bigquery-6.png)
+
+We have confirmed that our SQLMesh project is running properly in BigQuery!
 
 ## Local/Built-in Scheduler
 
@@ -188,7 +206,7 @@ sqlmesh_airflow = SQLMeshAirflow(
 )
 ```
 
-## Connection Methods
+## Authentication Methods
 - [oauth](https://google-auth.readthedocs.io/en/master/reference/google.auth.html#google.auth.default) (default)
     - Related Credential Configuration:
         - `scopes` (Optional)
