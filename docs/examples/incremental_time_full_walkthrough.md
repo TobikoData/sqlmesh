@@ -1211,7 +1211,7 @@ OK
 
 Now that I’ve done all this great work, how do I get this promoted into production?
 
-Typically, I will open a pull request combined with the [SQLMesh GitHub CI/CD bot](https://sqlmesh.readthedocs.io/en/stable/integrations/github/) as I mentioned earlier in this guide. But to keep it simple, I’ll run `sqlmesh plan` as I did above.
+Typically, I will open a pull request combined with the [SQLMesh GitHub CI/CD bot](../integrations/github.md) as I mentioned earlier in this guide. But to keep it simple, I’ll run `sqlmesh plan` as I did above.
 
 This time because it it’s promoting a forward-only dev model into prod, it’s a virtual update to the SQL definition.
 
