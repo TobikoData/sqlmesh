@@ -50,6 +50,8 @@ You’ll be following this general sequence of actions when working with SQLMesh
 8. `sqlmesh test`: run those unit tests
 9. `sqlmesh plan`: promote dev to prod
 
+> Note: If this is the first time you're running SQLMesh, I recommend following the [CLI Quickstart](../quickstart/cli.md) first and then coming back to this example.
+
 ## Setup
 
 Let’s start with some demo data coupled with an existing SQLMesh project with models already in production.
@@ -164,7 +166,7 @@ We have data like the below that gets ingested into our data warehouse on a dail
         ('TX-015', 'PROD-102', 'CUST-003', 149.99, TIMESTAMP '2024-10-27 16:50:00+00:00', 'credit_card', 'USD');
     ```
 
-## Model configuration
+## Model Configuration
 
 I can answer some of the questions above by walking through the model's config, coupled with the business logic/code I prepared ahead of time.
 
@@ -623,7 +625,7 @@ When I click on a column in `demo.incrementals_demo`, it will trace the column t
 
 ![image.png](./ui/column_level_audit_trail.png)
 
-Now, typically, I will promote these changes to production using SQLMesh’s open source GitHub CICD bot as shown in this demo PR: [https://github.com/TobikoData/tobiko-cloud-demo/pull/4](https://github.com/TobikoData/tobiko-cloud-demo/pull/4), but to keep this guide simpler, let’s run `sqlmesh plan` directly.
+Now, typically, I will promote these changes to production using SQLMesh’s open source GitHub CICD bot as shown in this demo pull request: [https://github.com/TobikoData/tobiko-cloud-demo/pull/4](https://github.com/TobikoData/tobiko-cloud-demo/pull/4), but to keep this guide simpler, let’s run `sqlmesh plan` directly.
 
 This is where I feel the claim “data transformation without the waste” feels tangible. I did all this great work in my dev environment, and I’m used to reprocessing and duplicating storage in production. However, by default SQLMesh will bypass all that and create new views to point to the same physical tables created in `dev`! You can see for yourself in the query history.
 
@@ -1081,7 +1083,7 @@ Now, here, I may think through this question during development:
 
 Data audits are great, but they only verify basic things like primary key integrity. They don’t validate my SQL logic is doing exactly what I want.
 
-I know SQLMesh has unit tests, but the quiet part out loud is that I dislike writing so much yaml by hand. Thankfully, I don’t have to.
+I know SQLMesh has unit tests, but the quiet part out loud is that I dislike writing so much `yaml` by hand. Thankfully, I don’t have to.
 
 I can use the `sqlmesh create_test` command to generate the unit test configuration file for me, using SQL queries to select and store the data the tests will run on.
 
