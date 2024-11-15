@@ -13,7 +13,7 @@ import NotificationCenterProvider, {
 } from './library/pages/root/context/notificationCenter'
 import { isNotNil } from './utils'
 
-import './index.css'
+import './styles/index.css'
 
 export interface PropsComponent extends HTMLAttributes<HTMLElement> {}
 
