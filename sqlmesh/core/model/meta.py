@@ -483,4 +483,8 @@ class ModelMeta(_Node):
 
 # function applied to time column when automatically used for partitioning in
 #   INCREMENTAL_BY_TIME_RANGE models
-TIME_COL_PARTITION_FUNC = {"clickhouse": lambda x: exp.func("toMonday", x)}
+TIME_COL_PARTITION_FUNC = {
+    "clickhouse": lambda x: exp.func(
+        "toMonday", exp.cast(x, exp.DataType.build("DateTime64", dialect="clickhouse"))
+    )
+}
