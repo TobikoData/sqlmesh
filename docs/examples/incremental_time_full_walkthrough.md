@@ -625,7 +625,7 @@ When I click on a column in `demo.incrementals_demo`, it will trace the column t
 
 ![image.png](../guides/ui/column_level_audit_trail.png)
 
-Now, typically, I will promote these changes to production using SQLMesh’s open source GitHub CICD bot as shown in this demo pull request: [https://github.com/TobikoData/tobiko-cloud-demo/pull/4](https://github.com/TobikoData/tobiko-cloud-demo/pull/4), but to keep this guide simpler, let’s run `sqlmesh plan` directly.
+Now, typically, I will promote these changes to production using SQLMesh’s open source GitHub CICD bot as shown in [this demo pull request](https://github.com/TobikoData/tobiko-cloud-demo/pull/4), but to keep this guide simpler, let’s run `sqlmesh plan` directly.
 
 This is where I feel the claim “data transformation without the waste” feels tangible. I did all this great work in my dev environment, and I’m used to reprocessing and duplicating storage in production. However, by default SQLMesh will bypass all that and create new views to point to the same physical tables created in `dev`! You can see for yourself in the query history.
 
