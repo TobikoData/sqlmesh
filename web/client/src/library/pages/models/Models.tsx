@@ -14,15 +14,21 @@ import SearchList from '@components/search/SearchList'
 import { EnumSize } from '~/types/enum'
 import { EnumRoutes, type Routes } from '~/routes'
 import Page from '../root/Page'
-import SourceList from '@components/sourceList/SourceList'
 import { getModelNodeTypeTitle } from '@components/graph/help'
 import { Divider } from '@components/divider/Divider'
 import NotFound from '../root/NotFound'
 import { useStoreProject } from '@context/project'
 import LoadingSegment from '@components/loading/LoadingSegment'
 import { useApiModels } from '@api/index'
-import { type LineageNodeModelType } from '@components/graph/ModelNode'
-import SourceListItem from '@components/sourceList/SourceListItem'
+import {
+  TBKResizeObserver,
+  TBKBadge,
+  TBKSourceList,
+  TBKSourceListItem,
+  TBKSourceListSection,
+  TBKModelName,
+} from '~/utils/additional-components'
+import { ModelName } from '~/utils/tbk-components'
 
 export default function PageModels({
   route = EnumRoutes.Home,
@@ -71,32 +77,52 @@ export default function PageModels({
     <Page
       sidebar={
         isArrayEmpty(list) ? undefined : (
-          <SourceList<ModelSQLMeshModel>
-            keyId="displayName"
-            keyName="displayName"
-            to={to}
-            items={list}
-            isActive={id => `${to}/${id}` === pathname}
-            types={list.reduce(
-              (acc: Record<string, string>, it) =>
-                Object.assign(acc, {
-                  [it.name]: getModelNodeTypeTitle(
-                    it.type as LineageNodeModelType,
-                  ),
-                }),
-              {},
-            )}
-            listItem={({ to, name, description, text, disabled = false }) => (
-              <SourceListItem
-                to={to}
-                name={name}
-                text={text}
-                description={description}
-                disabled={disabled}
-              />
-            )}
-            disabled={isFetchingModels}
-          />
+          <TBKResizeObserver update-selector="tbk-model-name">
+            <TBKSourceList
+              selectable
+              onChange={(e: CustomEvent) => navigate(e.detail.value)}
+              className="pt-3 px-2"
+            >
+              {Object.entries(
+                ModelName.categorize(list) as Record<
+                  string,
+                  ModelSQLMeshModel[]
+                >,
+              ).map(([namespace, models]) => (
+                <TBKSourceListSection
+                  key={namespace}
+                  headline={namespace}
+                  open
+                >
+                  {models.map((model: ModelSQLMeshModel) => (
+                    <TBKSourceListItem
+                      key={model.name}
+                      size="xs"
+                      hide-icon
+                      active={pathname === `${to}/${model.name}`}
+                      value={`${to}/${model.name}`}
+                      search-value={model.name}
+                      compact
+                    >
+                      <TBKModelName
+                        hide-schema
+                        hide-catalog
+                        hide-tooltip
+                        text={model.name}
+                      >
+                        <TBKBadge
+                          size="2xs"
+                          slot="after"
+                        >
+                          {getModelNodeTypeTitle(model.type)}
+                        </TBKBadge>
+                      </TBKModelName>
+                    </TBKSourceListItem>
+                  ))}
+                </TBKSourceListSection>
+              ))}
+            </TBKSourceList>
+          </TBKResizeObserver>
         )
       }
       content={
