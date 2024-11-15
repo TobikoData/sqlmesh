@@ -211,6 +211,28 @@ def generate_source(sources: t.Dict[str, t.Any], api: Api) -> t.Callable:
         if relation_info is None:
             logger.debug("Could not resolve source package='%s' name='%s'", package, name)
             return None
+
+        # Clickhouse uses a 2-level schema.table naming scheme, where the second level is called
+        # a "database" (instead of "schema" as one would reasonably assume). This can lead to confusion
+        # because it is not clear how Clickhouse identifiers map onto dbt's "database" and "schema" fields.
+        #
+        # This confusion can occur in source resolution. If a source's `schema` is not explicitly specified,
+        # the source name is used as the schema by default.
+        #
+        # If a source specified the `database` field and the schema has defaulted to the source name,
+        # we follow dbt-clickhouse in assuming that the user intended for the `database` field to be the
+        # second level identifier.
+        # https://github.com/ClickHouse/dbt-clickhouse/blob/065f3a724fa09205446ecadac7a00d92b2d8c646/dbt/adapters/clickhouse/relation.py#L112
+        #
+        # NOTE: determining relation class based on name so we don't introduce a dependency on dbt-clickhouse
+        if (
+            api.Relation.__name__ == "ClickHouseRelation"
+            and relation_info.schema == package
+            and relation_info.database
+        ):
+            relation_info["schema"] = relation_info["database"]
+            relation_info["database"] = ""
+
         return _relation_info_to_relation(relation_info, api.Relation, api.quote_policy)
 
     return source

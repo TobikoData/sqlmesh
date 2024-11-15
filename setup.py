@@ -101,6 +101,7 @@ setup(
         ],
         "cicdtest": [
             "dbt-athena-community",
+            "dbt-clickhouse",
             "dbt-databricks",
             "dbt-redshift",
             "dbt-sqlserver>=1.7.0",

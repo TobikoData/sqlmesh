@@ -5959,13 +5959,17 @@ from sqlmesh import macro
 @macro()
 def custom_macro(evaluator, arg1, arg2):
     return "SELECT 1 AS c"
+
+@macro()
+def get_model_name(evaluator):
+    return f"sqlmesh_example.{evaluator._path.stem}"
     """)
 
     new_snowflake_model_file = tmp_path / "models/new_model.sql"
     new_snowflake_model_file.parent.mkdir(parents=True, exist_ok=True)
     new_snowflake_model_file.write_text("""
 MODEL (
-  name sqlmesh_example.test,
+  name @get_model_name(),
   dialect snowflake,
 );
 
@@ -5978,7 +5982,7 @@ SELECT * FROM (@custom_macro(@a, @b)) AS q
     )
     context = Context(paths=tmp_path, config=config)
 
-    query = context.get_model("sqlmesh_example.test").render_query()
+    query = context.get_model("sqlmesh_example.new_model").render_query()
 
     assert (
         t.cast(exp.Query, query).sql("snowflake")

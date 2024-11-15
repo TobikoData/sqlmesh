@@ -343,6 +343,11 @@ def test_model_properties(adapter: ClickhouseEngineAdapter):
         == "ENGINE=MergeTree ORDER BY (\"a\", timestamp WITH FILL TO toStartOfDay(toDateTime64('2024-07-11', 3)) STEP toIntervalDay(1) INTERPOLATE (price AS price))"
     )
 
+    assert (
+        build_properties_sql(properties="TTL = time + INTERVAL 1 WEEK")
+        == "ENGINE=MergeTree ORDER BY () TTL time + INTERVAL '1' WEEK"
+    )
+
 
 def test_partitioned_by_expr(make_mocked_engine_adapter: t.Callable):
     model = load_sql_based_model(
@@ -364,7 +369,7 @@ def test_partitioned_by_expr(make_mocked_engine_adapter: t.Callable):
         )
     )
 
-    assert model.partitioned_by == [exp.func("toMonday", '"ds"')]
+    assert model.partitioned_by[0].sql("clickhouse") == 'toMonday(CAST("ds" AS DateTime64))'
 
     model = load_sql_based_model(
         parse(
@@ -386,7 +391,10 @@ def test_partitioned_by_expr(make_mocked_engine_adapter: t.Callable):
         )
     )
 
-    assert model.partitioned_by == [exp.func("toMonday", '"ds"'), exp.column("x", quoted=True)]
+    assert [p.sql("clickhouse") for p in model.partitioned_by] == [
+        'toMonday(CAST("ds" AS DateTime64))',
+        '"x"',
+    ]
 
     model = load_sql_based_model(
         parse(
