@@ -477,7 +477,7 @@ def _parse_table_parts(
             or "{" in name
             or (
                 self._curr
-                and self._prev.token_type == TokenType.L_PAREN
+                and self._prev.token_type in (TokenType.L_PAREN, TokenType.R_PAREN)
                 and self._curr.text.upper() not in ("FILE_FORMAT", "PATTERN")
             )
         ):
