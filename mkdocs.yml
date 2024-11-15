@@ -26,6 +26,7 @@ nav:
     - Project content:
       - guides/models.md
       - guides/incremental_time.md
+      - guides/incremental_time_full_walkthrough.md
       - guides/testing.md
       - guides/model_selection.md
     - SQLMesh tools:
