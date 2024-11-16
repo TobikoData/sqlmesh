@@ -60,7 +60,7 @@ class ModelMeta(_Node):
     table_format: t.Optional[str] = None
     storage_format: t.Optional[str] = None
     partitioned_by_: t.List[exp.Expression] = Field(default=[], alias="partitioned_by")
-    clustered_by: t.List[str] = []
+    clustered_by_: t.List[exp.Expression] = Field(default=[], alias="clustered_by")
     default_catalog: t.Optional[str] = None
     depends_on_: t.Optional[t.Set[str]] = Field(default=None, alias="depends_on")
     columns_to_types_: t.Optional[t.Dict[str, exp.DataType]] = Field(default=None, alias="columns")
@@ -123,11 +123,6 @@ class ModelMeta(_Node):
     def _value_or_tuple_validator(cls, v: t.Any, values: t.Dict[str, t.Any]) -> t.Any:
         return ensure_list(cls._validate_value_or_tuple(v, values))
 
-    @field_validator("clustered_by", mode="before")
-    @field_validator_v1_args
-    def _normalized_value_or_tuple_validator(cls, v: t.Any, values: t.Dict[str, t.Any]) -> t.Any:
-        return ensure_list(cls._validate_value_or_tuple(v, values, normalize=True))
-
     @classmethod
     def _validate_value_or_tuple(
         cls, v: t.Dict[str, t.Any], values: t.Dict[str, t.Any], normalize: bool = False
@@ -166,15 +161,15 @@ class ModelMeta(_Node):
         dialect = str_or_exp_to_str(v)
         return dialect and dialect.lower()
 
-    @field_validator("partitioned_by_", mode="before")
+    @field_validator("partitioned_by_", "clustered_by_", mode="before")
     @field_validator_v1_args
-    def _partition_by_validator(
+    def _partition_and_cluster_validator(
         cls, v: t.Any, values: t.Dict[str, t.Any]
     ) -> t.List[exp.Expression]:
-        partitions = list_of_fields_validator(v, values)
+        expressions = list_of_fields_validator(v, values)
 
-        for partition in partitions:
-            num_cols = len(list(partition.find_all(exp.Column)))
+        for expression in expressions:
+            num_cols = len(list(expression.find_all(exp.Column)))
 
             error_msg: t.Optional[str] = None
             if num_cols == 0:
@@ -183,9 +178,9 @@ class ModelMeta(_Node):
                 error_msg = "contains multiple columns"
 
             if error_msg:
-                raise ConfigError(f"partitioned_by field '{partition}' {error_msg}")
+                raise ConfigError(f"Field '{expression}' {error_msg}")
 
-        return partitions
+        return expressions
 
     @field_validator(
         "columns_to_types_", "derived_columns_to_types", mode="before", check_fields=False
@@ -348,13 +343,13 @@ class ModelMeta(_Node):
     def _kind_validator(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
         kind = values.get("kind")
         if kind:
-            for field in ("partitioned_by_", "clustered_by"):
+            for field in ("partitioned_by_", "clustered_by_"):
                 if (
                     values.get(field)
                     and not kind.is_materialized
                     and not (kind.is_view and kind.materialized)
                 ):
-                    raise ValueError(f"{field} field cannot be set for {kind} models")
+                    raise ValueError(f"{field[:-1]} field cannot be set for {kind} models")
             if kind.is_incremental_by_partition and not values.get("partitioned_by_"):
                 raise ValueError(f"partitioned_by field is required for {kind.name} models")
         return values
@@ -383,6 +378,10 @@ class ModelMeta(_Node):
                 *self.partitioned_by_,
             ]
         return self.partitioned_by_
+
+    @property
+    def clustered_by(self) -> t.List[exp.Expression]:
+        return self.clustered_by_ or []
 
     @property
     def column_descriptions(self) -> t.Dict[str, str]:

@@ -113,7 +113,7 @@ class _Model(ModelMeta, frozen=True):
         storage_format: The storage format used to store the physical table, only applicable in certain engines.
             (eg. 'parquet', 'orc')
         partitioned_by: The partition columns or engine specific expressions, only applicable in certain engines. (eg. (ds, hour))
-        clustered_by: The cluster columns, only applicable in certain engines. (eg. (ds, hour))
+        clustered_by: The cluster columns or engine specific expressions, only applicable in certain engines. (eg. (ds, hour))
         python_env: Dictionary containing all global variables needed to render the model's macros.
         mapping_schema: The schema of table names to column and types.
         extract_dependencies_from_query: Whether to extract additional dependencies from the rendered model's query.
@@ -764,7 +764,7 @@ class _Model(ModelMeta, frozen=True):
 
                 if len(values) != len(unique_keys):
                     raise_config_error(
-                        "All keys in '{field}' must be unique in the model definition",
+                        f"All keys in '{field}' must be unique in the model definition",
                         self._path,
                     )
 
@@ -836,7 +836,7 @@ class _Model(ModelMeta, frozen=True):
             self.storage_format,
             str(self.lookback),
             *(gen(expr) for expr in (self.partitioned_by or [])),
-            *(self.clustered_by or []),
+            *(gen(expr) for expr in (self.clustered_by or [])),
             self.stamp,
             self.physical_schema,
             self.interval_unit.value if self.interval_unit is not None else None,
@@ -2433,7 +2433,7 @@ META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
     "start": lambda value: exp.Literal.string(value),
     "cron": lambda value: exp.Literal.string(value),
     "partitioned_by_": _single_expr_or_tuple,
-    "clustered_by": _single_value_or_tuple,
+    "clustered_by_": _single_expr_or_tuple,
     "depends_on_": lambda value: exp.Tuple(expressions=sorted(value)),
     "pre": _list_of_calls_to_exp,
     "post": _list_of_calls_to_exp,

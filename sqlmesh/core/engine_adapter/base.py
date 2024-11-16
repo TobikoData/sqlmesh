@@ -474,7 +474,7 @@ class EngineAdapter:
         query: Query,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         partitioned_by: t.Optional[t.List[exp.Expression]] = None,
-        clustered_by: t.Optional[t.List[str]] = None,
+        clustered_by: t.Optional[t.List[exp.Expression]] = None,
         table_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
@@ -489,7 +489,7 @@ class EngineAdapter:
             query: The SQL query for the engine to base the managed table on
             columns_to_types: A mapping between the column name and its data type.
             partitioned_by: The partition columns or engine specific expressions, only applicable in certain engines. (eg. (ds, hour))
-            clustered_by: The cluster columns, only applicable in certain engines. (eg. (ds, hour))
+            clustered_by: The cluster columns or engine specific expressions, only applicable in certain engines. (eg. (ds, hour))
             table_properties: Optional mapping of engine-specific properties to be set on the managed table
             table_description: Optional table description from MODEL DDL.
             column_descriptions: Optional column descriptions from model query.
@@ -2136,7 +2136,7 @@ class EngineAdapter:
 
     def _build_clustered_by_exp(
         self,
-        clustered_by: t.List[str],
+        clustered_by: t.List[exp.Expression],
         **kwargs: t.Any,
     ) -> t.Optional[exp.Cluster]:
         return None
@@ -2148,7 +2148,7 @@ class EngineAdapter:
         storage_format: t.Optional[str] = None,
         partitioned_by: t.Optional[t.List[exp.Expression]] = None,
         partition_interval_unit: t.Optional[IntervalUnit] = None,
-        clustered_by: t.Optional[t.List[str]] = None,
+        clustered_by: t.Optional[t.List[exp.Expression]] = None,
         table_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         table_description: t.Optional[str] = None,
