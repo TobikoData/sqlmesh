@@ -5990,3 +5990,28 @@ SELECT * FROM (@custom_macro(@a, @b)) AS q
     )
 
     context.plan(no_prompts=True, auto_apply=True)
+
+
+def test_jinja_resolve_table(make_snapshot: t.Callable):
+    expressions = d.parse(
+        """
+        MODEL (name child);
+
+        SELECT c FROM parent
+
+        JINJA_STATEMENT_BEGIN;
+          {{ resolve_table('parent') }}
+        JINJA_END;
+    """
+    )
+    child = load_sql_based_model(expressions)
+    parent = load_sql_based_model(d.parse("MODEL (name parent); SELECT 1 AS c"))
+
+    parent_snapshot = make_snapshot(parent)
+    parent_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    version = parent_snapshot.version
+
+    post_statements = child.render_post_statements(snapshots={'"parent"': parent_snapshot})
+
+    assert len(post_statements) == 1
+    assert post_statements[0].sql() == f'"sqlmesh__default"."parent__{version}" /* parent */'
