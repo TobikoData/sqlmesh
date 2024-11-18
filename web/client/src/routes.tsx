@@ -419,7 +419,5 @@ export function getBrowserRouter(
     },
   ].filter(Boolean) as RouteObject[]
 
-  console.log('routes', routes, getUrlPrefix())
-
   return createBrowserRouter(routes, { basename: getUrlPrefix() })
 }
