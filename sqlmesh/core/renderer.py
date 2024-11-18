@@ -135,6 +135,15 @@ class BaseExpressionRenderer:
             deployability_index=deployability_index,
             default_catalog=self._default_catalog,
             runtime_stage=runtime_stage.value,
+            resolve_table=lambda table_name: exp.replace_tables(
+                exp.maybe_parse(table_name, into=exp.Table, dialect=self._dialect),
+                {
+                    **self._to_table_mapping((snapshots or {}).values(), deployability_index),
+                    **(table_mapping or {}),
+                },
+                dialect=self._dialect,
+                copy=False,
+            ).sql(dialect=self._dialect),
         )
 
         if isinstance(self._expression, d.Jinja):
