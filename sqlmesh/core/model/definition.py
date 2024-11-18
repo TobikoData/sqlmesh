@@ -2508,4 +2508,4 @@ def clickhouse_partition_func(
     )
 
 
-TIME_COL_PARTITION_FUNC = {"clickhouse": lambda x, y: clickhouse_partition_func(x, y)}
+TIME_COL_PARTITION_FUNC = {"clickhouse": clickhouse_partition_func}
