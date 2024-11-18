@@ -2473,11 +2473,13 @@ def get_model_name(path: Path) -> str:
 
 # function applied to time column when automatically used for partitioning in INCREMENTAL_BY_TIME_RANGE models
 def clickhouse_partition_func(
-    column: exp.Expression, columns_to_types: t.Dict[str, exp.DataType]
+    column: exp.Expression, columns_to_types: t.Optional[t.Dict[str, exp.DataType]]
 ) -> exp.Expression:
     # `toMonday()` function accepts a Date or DateTime type column
 
-    col_type = columns_to_types.get(column.name) or exp.DataType.build("UNKNOWN")
+    col_type = (columns_to_types and columns_to_types.get(column.name)) or exp.DataType.build(
+        "UNKNOWN"
+    )
     col_type_is_conformable = col_type.is_type(
         exp.DataType.Type.DATE,
         exp.DataType.Type.DATE32,
@@ -2487,15 +2489,14 @@ def clickhouse_partition_func(
 
     #  if input column is already a conformable type, just pass the column
     if col_type_is_conformable:
-        return exp.func("toMonday", column)
+        return exp.func("toMonday", column, dialect="clickhouse")
 
     # if input column type is not known, cast input to DateTime64
-    if not col_type_present or (
-        col_type_present and columns_to_types[column.name].is_type(exp.DataType.Type.UNKNOWN)
-    ):
+    if col_type.is_type(exp.DataType.Type.UNKNOWN):
         return exp.func(
             "toMonday",
             exp.cast(column, exp.DataType.build("DateTime64('UTC')", dialect="clickhouse")),
+            dialect="clickhouse",
         )
 
     # if input column type is known but not conformable, cast input to DateTime64 and cast output back to original type
@@ -2503,8 +2504,9 @@ def clickhouse_partition_func(
         exp.func(
             "toMonday",
             exp.cast(column, exp.DataType.build("DateTime64('UTC')", dialect="clickhouse")),
+            dialect="clickhouse",
         ),
-        columns_to_types[column.name],
+        col_type,
     )
 
 
