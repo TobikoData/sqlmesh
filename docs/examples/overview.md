@@ -20,9 +20,9 @@ This page links to a few different types of examples:
 
 ## Walkthroughs
 
-We're proud to present our very first walkthrough, an in-depth description of incremental by time models:
+We're proud to present our very first walkthrough, an in-depth description of incremental by time range models:
 
-- [Incremental by time: full walkthrough](./incremental_time_full_walkthrough.md) (BigQuery SQL engine)
+- [Incremental by Time Range: Full Walkthrough](./incremental_time_full_walkthrough.md) (BigQuery SQL engine)
 
 ## Projects
 
