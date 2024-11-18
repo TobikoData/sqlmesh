@@ -368,18 +368,6 @@ class ModelMeta(_Node):
         return []
 
     @property
-    def partitioned_by(self) -> t.List[exp.Expression]:
-        """Columns to partition the model by, including the time column if it is not already included."""
-        if self.time_column and self.time_column.column not in [
-            col for col in self._partition_by_columns
-        ]:
-            return [
-                TIME_COL_PARTITION_FUNC.get(self.dialect, lambda x: x)(self.time_column.column),
-                *self.partitioned_by_,
-            ]
-        return self.partitioned_by_
-
-    @property
     def clustered_by(self) -> t.List[exp.Expression]:
         return self.clustered_by_ or []
 
@@ -447,10 +435,6 @@ class ModelMeta(_Node):
         ]
 
     @property
-    def _partition_by_columns(self) -> t.List[exp.Column]:
-        return [col for expr in self.partitioned_by_ for col in expr.find_all(exp.Column)]
-
-    @property
     def managed_columns(self) -> t.Dict[str, exp.DataType]:
         return getattr(self.kind, "managed_columns", {})
 
@@ -478,12 +462,3 @@ class ModelMeta(_Node):
     @property
     def on_destructive_change(self) -> OnDestructiveChange:
         return getattr(self.kind, "on_destructive_change", OnDestructiveChange.ALLOW)
-
-
-# function applied to time column when automatically used for partitioning in
-#   INCREMENTAL_BY_TIME_RANGE models
-TIME_COL_PARTITION_FUNC = {
-    "clickhouse": lambda x: exp.func(
-        "toMonday", exp.cast(x, exp.DataType.build("DateTime64", dialect="clickhouse"))
-    )
-}
