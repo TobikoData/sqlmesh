@@ -53,7 +53,7 @@ export class ModelModuleController extends ModelInitial {
   }
 
   get hasDocs(): boolean {
-    return this.modules.has(Modules.docs)
+    return this.modules.has(Modules.catalog)
   }
 
   get hasPlans(): boolean {
@@ -132,7 +132,7 @@ export class ModelModuleController extends ModelInitial {
 
   defaultNavigationRoute(): Routes {
     if (this.hasEditor) return EnumRoutes.Editor
-    if (this.hasDocs) return EnumRoutes.Docs
+    if (this.hasDocs) return EnumRoutes.Catalog
     if (this.hasPlans) return EnumRoutes.Plan
 
     return EnumRoutes.NotFound

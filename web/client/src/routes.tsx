@@ -24,8 +24,8 @@ const Welcome = lazy(() => import('./library/components/banner/Welcome'))
 export const EnumRoutes = {
   Home: '/',
   Editor: '/editor',
-  Docs: '/docs',
-  DocsModels: '/docs/models',
+  Catalog: '/catalog',
+  CatalogModels: '/catalog/models',
   Data: '/data',
   DataModels: '/data/models',
   Lineage: '/lineage',
@@ -67,8 +67,8 @@ export function getBrowserRouter(
           element: <Editor />,
         },
         {
-          path: 'docs',
-          element: <Models route={EnumRoutes.Docs} />,
+          path: 'catalog',
+          element: <Models route={EnumRoutes.Catalog} />,
           children: [
             {
               index: true,
@@ -83,7 +83,7 @@ export function getBrowserRouter(
               path: '*',
               element: (
                 <NotFound
-                  link={EnumRoutes.Docs}
+                  link={EnumRoutes.Catalog}
                   message="Back To Docs"
                 />
               ),
@@ -104,7 +104,7 @@ export function getBrowserRouter(
                   path: '*',
                   element: (
                     <NotFound
-                      link={EnumRoutes.Docs}
+                      link={EnumRoutes.Catalog}
                       message="Back To Docs"
                     />
                   ),
@@ -418,6 +418,8 @@ export function getBrowserRouter(
       ),
     },
   ].filter(Boolean) as RouteObject[]
+
+  console.log('routes', routes, getUrlPrefix())
 
   return createBrowserRouter(routes, { basename: getUrlPrefix() })
 }

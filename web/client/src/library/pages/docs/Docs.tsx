@@ -76,7 +76,7 @@ export default function PageDocs(): JSX.Element {
 
     if (isNil(model)) return
 
-    navigate(EnumRoutes.DocsModels + '/' + model.name)
+    navigate(EnumRoutes.CatalogModels + '/' + model.name)
   }
 
   function handleError(error: ErrorIDE): void {
@@ -87,7 +87,7 @@ export default function PageDocs(): JSX.Element {
     <div className="flex overflow-auto w-full h-full">
       {isNil(model) ? (
         <NotFound
-          link={EnumRoutes.Docs}
+          link={EnumRoutes.Catalog}
           description={
             isNil(modelName) ? undefined : `Model ${modelName} Does Not Exist`
           }

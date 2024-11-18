@@ -762,6 +762,15 @@
             }
           },
           {
+            "name": "temp_schema",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [{ "type": "string" }, { "type": "null" }],
+              "title": "Temp Schema"
+            }
+          },
+          {
             "name": "limit",
             "in": "query",
             "required": false,
@@ -1583,7 +1592,7 @@
         "enum": [
           "editor",
           "files",
-          "docs",
+          "catalog",
           "plans",
           "tests",
           "audits",

@@ -1,5 +1,11 @@
-import { isNil } from '@utils/index'
+import { isNil, isStringEmptyOrNil } from '@utils/index'
 import { tableFromIPC } from 'apache-arrow'
+
+declare global {
+  interface Window {
+    __BASE_URL__?: string
+  }
+}
 
 export interface ResponseWithDetail {
   ok: boolean
@@ -121,7 +127,7 @@ function toRequestBody(obj: unknown): BodyInit {
 }
 
 export function getUrlPrefix(): string {
-  return (window as any).__BASE_URL__ ?? '/'
+  return isStringEmptyOrNil(window.__BASE_URL__) ? '/' : window.__BASE_URL__
 }
 
 export default fetchAPI
