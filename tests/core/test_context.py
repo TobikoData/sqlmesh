@@ -997,3 +997,10 @@ def post_statement(evaluator):
 
     context = Context(paths=tmp_path, config=Config())
     context.plan(auto_apply=True, no_prompts=True)
+
+
+def test_wildcard(copy_to_temp_path: t.Callable):
+    parent_path = copy_to_temp_path("examples/multi")[0]
+
+    context = Context(paths=f"{parent_path}/*")
+    assert len(context.models) == 4

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import glob
 import os
 import typing as t
 from pathlib import Path
@@ -27,7 +28,9 @@ def load_configs(
     config = config or "config"
 
     absolute_paths = [
-        Path(t.cast(t.Union[str, Path], path)).absolute() for path in ensure_list(paths)
+        Path(t.cast(t.Union[str, Path], p)).absolute()
+        for path in ensure_list(paths)
+        for p in (glob.glob(str(path)) or [str(path)])
     ]
 
     if not isinstance(config, str):
