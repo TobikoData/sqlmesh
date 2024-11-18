@@ -2477,8 +2477,8 @@ def clickhouse_partition_func(
 ) -> exp.Expression:
     # `toMonday()` function accepts a Date or DateTime type column
 
-    col_type_present = columns_to_types and column.name in columns_to_types
-    col_type_is_conformable = col_type_present and columns_to_types[column.name].is_type(
+    col_type = columns_to_types.get(column.name) or exp.DataType.build("UNKNOWN")
+    col_type_is_conformable = col_type.is_type(
         exp.DataType.Type.DATE,
         exp.DataType.Type.DATE32,
         exp.DataType.Type.DATETIME,
