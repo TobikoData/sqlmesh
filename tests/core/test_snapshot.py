@@ -841,8 +841,6 @@ def test_fingerprint_builtin_audits(model: Model, parent_model: Model):
         {**model.dict(), "audits": [("unique_values", {"columns": exp.convert([to_column("a")])})]}
     )
     new_fingerprint = fingerprint_from_node(model, nodes={})
-    print(new_fingerprint)
-    print(fingerprint)
     assert new_fingerprint != fingerprint
 
 

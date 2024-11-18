@@ -28,13 +28,13 @@ def make_python_env(
     variables: t.Optional[t.Dict[str, t.Any]] = None,
     used_variables: t.Optional[t.Set[str]] = None,
     path: t.Optional[str | Path] = None,
+    python_env: t.Optional[t.Dict[str, Executable]] = None,
 ) -> t.Dict[str, Executable]:
-    python_env: t.Dict[str, Executable] = {}
+    python_env = {} if python_env is None else python_env
     variables = variables or {}
-
+    env: t.Dict[str, t.Any] = {}
     used_macros = {}
     used_variables = (used_variables or set()).copy()
-    serialized_env = {}
 
     expressions = ensure_list(expressions)
     for expression in expressions:
@@ -76,12 +76,12 @@ def make_python_env(
 
     for name, used_macro in used_macros.items():
         if isinstance(used_macro, Executable):
-            serialized_env[name] = used_macro
-        elif not hasattr(used_macro, c.SQLMESH_BUILTIN):
-            build_env(used_macro.func, env=python_env, name=name, path=module_path)
+            python_env[name] = used_macro
+        elif not hasattr(used_macro, c.SQLMESH_BUILTIN) and name not in python_env:
+            build_env(used_macro.func, env=env, name=name, path=module_path)
 
-    serialized_env.update(serialize_env(python_env, path=module_path))
-    return _add_variables_to_python_env(serialized_env, used_variables, variables)
+    python_env.update(serialize_env(env, path=module_path))
+    return _add_variables_to_python_env(python_env, used_variables, variables)
 
 
 def _add_variables_to_python_env(

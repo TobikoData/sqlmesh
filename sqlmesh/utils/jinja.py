@@ -210,9 +210,9 @@ class JinjaMacroRegistry(PydanticModel):
     create_builtins_module: t.Optional[str] = SQLMESH_JINJA_PACKAGE
     root_package_name: t.Optional[str] = None
     top_level_packages: t.List[str] = []
-    trimmed: bool = False
 
     _parser_cache: t.Dict[t.Tuple[t.Optional[str], str], Template] = {}
+    _trimmed: bool = False
     __environment: t.Optional[Environment] = None
 
     def __getstate__(self) -> t.Dict[t.Any, t.Any]:
@@ -249,6 +249,10 @@ class JinjaMacroRegistry(PydanticModel):
             return {k: _convert(v) if isinstance(v, AttributeDict) else v for k, v in val.items()}
 
         return _convert(value)
+
+    @property
+    def trimmed(self) -> bool:
+        return self._trimmed
 
     def add_macros(self, macros: t.Dict[str, MacroInfo], package: t.Optional[str] = None) -> None:
         """Adds macros to the target package.
@@ -355,10 +359,11 @@ class JinjaMacroRegistry(PydanticModel):
             create_builtins_module=self.create_builtins_module,
             root_package_name=self.root_package_name,
             top_level_packages=top_level_packages,
-            trimmed=True,
         )
         for package, names in dependencies_by_package.items():
             result = result.merge(self._trim_macros(names, package))
+
+        result._trimmed = True
 
         return result
 
@@ -396,7 +401,6 @@ class JinjaMacroRegistry(PydanticModel):
             create_builtins_module=self.create_builtins_module or other.create_builtins_module,
             root_package_name=self.root_package_name or other.root_package_name,
             top_level_packages=[*self.top_level_packages, *other.top_level_packages],
-            trimmed=self.trimmed or other.trimmed,
         )
 
     def to_expressions(self) -> t.List[Expression]:

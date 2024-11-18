@@ -433,7 +433,7 @@ class SnapshotEvaluator:
             results.append(
                 self._audit(
                     audit=audit,
-                    audit_args=audit_args.copy(),
+                    audit_args=audit_args,
                     snapshot=snapshot,
                     snapshots=snapshots,
                     start=start,

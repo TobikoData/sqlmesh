@@ -119,6 +119,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
                         "query": "SELECT a, ds FROM tbl",
                         "references": [],
                         "project": "",
+                        "python_env": {},
                         "storage_format": "parquet",
                         "jinja_macros": {
                             "create_builtins_module": "sqlmesh.utils.jinja",

@@ -1999,6 +1999,10 @@ class GenericContext(BaseContext, t.Generic[C]):
         local_nodes = {**(models_override or self._models), **self._standalone_audits}
         nodes = local_nodes.copy()
 
+        for name, snapshot in remote_snapshots.items():
+            if name not in nodes and snapshot.node.project not in projects:
+                nodes[name] = snapshot.node
+
         def _nodes_to_snapshots(nodes: t.Dict[str, Node]) -> t.Dict[str, Snapshot]:
             snapshots: t.Dict[str, Snapshot] = {}
             fingerprint_cache: t.Dict[str, SnapshotFingerprint] = {}

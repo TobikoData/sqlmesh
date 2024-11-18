@@ -957,7 +957,7 @@ class _Model(ModelMeta, frozen=True):
         audits_with_args = {}
 
         for audit_name, audit_args in self.audits:
-            audits_with_args[audit_name] = (audits_by_name[audit_name], audit_args)
+            audits_with_args[audit_name] = (audits_by_name[audit_name], audit_args.copy())
 
         for audit_name in self.audit_definitions:
             if audit_name not in audits_with_args:
@@ -1936,16 +1936,15 @@ def _create_model(
 
     python_env = python_env or {}
 
-    python_env.update(
-        make_python_env(
-            statements,
-            jinja_macro_references,
-            module_path,
-            macros or macro.get_registry(),
-            variables=variables,
-            used_variables=used_variables,
-            path=path,
-        )
+    make_python_env(
+        statements,
+        jinja_macro_references,
+        module_path,
+        macros or macro.get_registry(),
+        variables=variables,
+        used_variables=used_variables,
+        path=path,
+        python_env=python_env,
     )
 
     model.python_env.update(python_env)
