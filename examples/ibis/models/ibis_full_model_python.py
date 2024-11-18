@@ -28,7 +28,7 @@ def execute(
     **kwargs: t.Any,
 ) -> pd.DataFrame:
     # get physical table name
-    upstream_model = exp.to_table(context.table("ibis.incremental_model"))
+    upstream_model = exp.to_table(context.resolve_table("ibis.incremental_model"))
     # connect ibis to database
     con = ibis.duckdb.connect(DB_PATH)
 

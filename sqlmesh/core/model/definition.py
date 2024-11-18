@@ -2306,7 +2306,8 @@ def _parse_dependencies(
                             f"Error resolving dependencies for '{executable.path}'. Argument '{expression.strip()}' must be resolvable at parse time."
                         )
 
-                if func.value.id == "context" and func.attr == "table":
+                # TODO: remove "table" when it is deprecated
+                if func.value.id == "context" and func.attr in ("table", "resolve_table"):
                     depends_on.add(get_first_arg("model_name"))
                 elif func.value.id in ("context", "evaluator") and func.attr == c.VAR:
                     variables.add(get_first_arg("var_name").lower())
