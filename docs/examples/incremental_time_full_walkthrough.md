@@ -1,4 +1,4 @@
-# Incremental by Time Range: Full Walkthrough
+# Incremental by Time Range
 
 SQLMesh incremental models are a powerful feature that come in many flavors and configurations so you can fine tune your query performance and scheduled runs **exactly** how you want with a plethora of guardrails.
 
@@ -100,7 +100,7 @@ We have data like the below that gets ingested into our data warehouse on a dail
 
 ??? "Code to load the data into BigQuery"
 
-    If you want to follow along, here are BigQuery SQL queries to make it easier for you! Just run it directly in the query console. Feel free to adjust for your data warehouse.
+    If you want to follow along, here are BigQuery SQL queries to make it easier for you! Just run them directly in the query console. Feel free to adjust for your data warehouse.
 
     ```sql
     -- Create the product_usage table with appropriate schema
@@ -619,11 +619,11 @@ INFO:     Application startup complete.
 INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
 ```
 
-![image.png](../guides/ui/node_level_audit_trail.png)
+![image.png](./incremental_time/node_level_audit_trail.png)
 
 When I click on a column in `demo.incrementals_demo`, it will trace the column to the source!
 
-![image.png](../guides/ui/column_level_audit_trail.png)
+![image.png](./incremental_time/column_level_audit_trail.png)
 
 Now, typically, I will promote these changes to production using SQLMesh’s open source GitHub CICD bot as shown in [this demo pull request](https://github.com/TobikoData/tobiko-cloud-demo/pull/4), but to keep this guide simpler, let’s run `sqlmesh plan` directly.
 
@@ -1213,7 +1213,7 @@ Now that I’ve done all this great work, how do I get this promoted into produc
 
 Typically, I will open a pull request combined with the [SQLMesh GitHub CI/CD bot](../integrations/github.md) as I mentioned earlier in this guide. But to keep it simple, I’ll run `sqlmesh plan` as I did above.
 
-This time because it it’s promoting a forward-only dev model into prod, it’s a virtual update to the SQL definition.
+This time because it’s promoting a forward-only dev model into prod, it’s a virtual update to the SQL definition.
 
 We run a bunch of metadata queries to version tables. More queries (read: 15/15 in the progress bar) are run in this forward-only model promotion to track schema evolution, if it appears, between the old and new schema.
 
