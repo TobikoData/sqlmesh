@@ -261,7 +261,7 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
         storage_format: t.Optional[str] = None,
         partitioned_by: t.Optional[t.List[exp.Expression]] = None,
         partition_interval_unit: t.Optional[IntervalUnit] = None,
-        clustered_by: t.Optional[t.List[str]] = None,
+        clustered_by: t.Optional[t.List[exp.Expression]] = None,
         table_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         table_description: t.Optional[str] = None,
@@ -280,10 +280,10 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
             table_kind=table_kind,
         )
         if clustered_by:
-            cluster_key = exp.maybe_parse(
-                f"({','.join(clustered_by)})", into=exp.Ordered, dialect=self.dialect
+            # Databricks expects wrapped CLUSTER BY expressions
+            clustered_by_exp = exp.Cluster(
+                expressions=[exp.Tuple(expressions=[c.copy() for c in clustered_by])]
             )
-            clustered_by_exp = exp.Cluster(expressions=[cluster_key])
             expressions = properties.expressions if properties else []
             expressions.append(clustered_by_exp)
             properties = exp.Properties(expressions=expressions)

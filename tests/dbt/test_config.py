@@ -119,7 +119,7 @@ def test_model_to_sqlmesh_fields():
     )
     assert model.start == "Jan 1 2023"
     assert [col.sql() for col in model.partitioned_by] == ['"a"']
-    assert model.clustered_by == ["a", "b"]
+    assert [col.sql() for col in model.clustered_by] == ['"a"', '"b"']
     assert model.cron == "@hourly"
     assert model.interval_unit.value == "five_minute"
     assert model.stamp == "bar"
@@ -139,6 +139,7 @@ def test_model_to_sqlmesh_fields():
     )
     bq_default_context.project_name = "Foo"
     bq_default_context.target = DuckDbConfig(name="target", schema="foo")
+    model_config.cluster_by = ["a", "`b`"]
     model = model_config.to_sqlmesh(bq_default_context)
     assert model.dialect == "bigquery"
 

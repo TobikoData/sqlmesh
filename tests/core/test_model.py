@@ -116,7 +116,7 @@ def test_load(assert_exp_eq):
     assert model.table_format is None
     assert model.storage_format == "iceberg"
     assert [col.sql() for col in model.partitioned_by] == ['"a"', '"d"']
-    assert model.clustered_by == ["e"]
+    assert [col.sql() for col in model.clustered_by] == ['"e"']
     assert model.columns_to_types == {
         "a": exp.DataType.build("int"),
         "b": exp.DataType.build("double"),
@@ -324,7 +324,7 @@ def test_partitioned_by(
     )
 
     model = load_sql_based_model(expressions)
-    assert model.clustered_by == ["c", "d"]
+    assert model.clustered_by == [exp.to_column('"c"'), exp.to_column('"d"')]
     if expected_exception:
         with pytest.raises(expected_exception):
             model.validate_definition()
@@ -2752,7 +2752,7 @@ def test_model_normalization():
     assert model.partitioned_by[0].sql(dialect="snowflake") == '"A"'
     assert model.partitioned_by[1].sql(dialect="snowflake") == 'FOO("ds")'
     assert model.tags == ["pii", "fact"]
-    assert model.clustered_by == ["A"]
+    assert model.clustered_by == [exp.to_column('"A"')]
     assert model.depends_on == {'"BLA"'}
 
     # Check possible variations of unique_key definitions
@@ -2814,7 +2814,7 @@ def test_model_normalization():
     assert model.time_column.column == exp.column("A", quoted=True)
     assert model.columns_to_types["A"].sql(dialect="snowflake") == "INT"
     assert model.tags == ["pii", "fact"]
-    assert model.clustered_by == ["A"]
+    assert model.clustered_by == [exp.to_column('"A"')]
     assert model.depends_on == {'"BLA"'}
 
     model = create_sql_model(
@@ -2826,7 +2826,7 @@ def test_model_normalization():
         tags=["pii", "fact"],
         clustered_by=[exp.column("a"), exp.column("b")],
     )
-    assert model.clustered_by == ["A", "B"]
+    assert model.clustered_by == [exp.to_column('"A"'), exp.to_column('"B"')]
 
     model = create_sql_model(
         "foo",
@@ -2837,7 +2837,7 @@ def test_model_normalization():
         tags=["pii", "fact"],
         clustered_by=["a", "b"],
     )
-    assert model.clustered_by == ["A", "B"]
+    assert model.clustered_by == [exp.to_column('"A"'), exp.to_column('"B"')]
 
 
 def test_incremental_unmanaged_validation():
@@ -3398,7 +3398,7 @@ def test_view_materialized_partition_by_clustered_by():
     )
     materialized_view_model = load_sql_based_model(materialized_view_model_expressions)
     assert materialized_view_model.partitioned_by == [exp.column("ds", quoted=True)]
-    assert materialized_view_model.clustered_by == ["a"]
+    assert materialized_view_model.clustered_by == [exp.to_column('"a"')]
 
 
 def test_view_non_materialized_partition_by():
@@ -3412,7 +3412,7 @@ def test_view_non_materialized_partition_by():
         SELECT 1;
         """
     )
-    with pytest.raises(ConfigError, match=r".*partitioned_by_ field cannot be set for ViewKind.*"):
+    with pytest.raises(ConfigError, match=r".*partitioned_by field cannot be set for ViewKind.*"):
         load_sql_based_model(view_model_expressions)
 
 
@@ -6015,3 +6015,23 @@ def test_jinja_resolve_table(make_snapshot: t.Callable):
 
     assert len(post_statements) == 1
     assert post_statements[0].sql() == f'"sqlmesh__default"."parent__{version}" /* parent */'
+
+
+def test_cluster_with_complex_expression():
+    expressions = d.parse(
+        """
+        MODEL (
+          name test,
+          dialect snowflake,
+          kind full,
+          clustered_by (to_date(cluster_col))
+        );
+
+        SELECT
+          1 AS c,
+          CAST('2020-01-01 12:05:03' AS TIMESTAMPTZ) AS cluster_col
+    """
+    )
+
+    model = load_sql_based_model(expressions)
+    assert [expr.sql("snowflake") for expr in model.clustered_by] == ['(TO_DATE("CLUSTER_COL"))']

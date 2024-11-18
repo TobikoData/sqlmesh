@@ -149,7 +149,7 @@ def test_materialized_view_properties(make_mocked_engine_adapter: t.Callable):
         materialized_properties={
             "partitioned_by": [exp.column("ds")],
             # Clustered by is not supported so we are confirming it is ignored
-            "clustered_by": ["a"],
+            "clustered_by": [exp.column("a")],
             "partition_interval_unit": IntervalUnit.DAY,
         },
     )
@@ -171,7 +171,7 @@ def test_create_table_clustered_by(make_mocked_engine_adapter: t.Callable):
     adapter.create_table(
         "test_table",
         columns_to_types,
-        clustered_by=["cola"],
+        clustered_by=[exp.column("cola")],
     )
 
     sql_calls = to_sql_calls(adapter)
