@@ -435,10 +435,6 @@ class ModelMeta(_Node):
         ]
 
     @property
-    def _partition_by_columns(self) -> t.List[exp.Column]:
-        return [col for expr in self.partitioned_by_ for col in expr.find_all(exp.Column)]
-
-    @property
     def managed_columns(self) -> t.Dict[str, exp.DataType]:
         return getattr(self.kind, "managed_columns", {})
 

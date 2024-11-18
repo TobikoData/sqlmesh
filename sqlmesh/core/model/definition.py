@@ -985,9 +985,9 @@ class _Model(ModelMeta, frozen=True):
     @property
     def partitioned_by(self) -> t.List[exp.Expression]:
         """Columns to partition the model by, including the time column if it is not already included."""
-        if self.time_column and self.time_column.column not in [
-            col for col in self._partition_by_columns
-        ]:
+        if self.time_column and self.time_column.column not in {
+            col for expr in self.partitioned_by_ for col in expr.find_all(exp.Column)
+        }:
             return [
                 TIME_COL_PARTITION_FUNC.get(self.dialect, lambda x, y: x)(
                     self.time_column.column, self.columns_to_types
