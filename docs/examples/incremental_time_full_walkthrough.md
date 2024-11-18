@@ -1213,7 +1213,7 @@ Now that I’ve done all this great work, how do I get this promoted into produc
 
 Typically, I will open a pull request combined with the [SQLMesh GitHub CI/CD bot](../integrations/github.md) as I mentioned earlier in this guide. But to keep it simple, I’ll run `sqlmesh plan` as I did above.
 
-This time because it it’s promoting a forward-only dev model into prod, it’s a virtual update to the SQL definition.
+This time because it’s promoting a forward-only dev model into prod, it’s a virtual update to the SQL definition.
 
 We run a bunch of metadata queries to version tables. More queries (read: 15/15 in the progress bar) are run in this forward-only model promotion to track schema evolution, if it appears, between the old and new schema.
 
