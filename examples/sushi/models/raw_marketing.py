@@ -35,7 +35,7 @@ def execute(
     **kwargs: t.Any,
 ) -> pd.DataFrame:
     # Generate query with sqlglot dialect/quoting
-    existing_table = context.table("sushi.raw_marketing")
+    existing_table = context.resolve_table("sushi.raw_marketing")
     engine_dialect = context.engine_adapter.dialect
 
     df_existing = context.fetchdf(

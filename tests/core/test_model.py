@@ -1826,8 +1826,8 @@ def test_python_model(assert_exp_eq) -> None:
         enabled=True,
     )
     def my_model(context, **kwargs):
-        context.table("foo")
-        context.table(model_name=CONST + ".baz")
+        context.resolve_table("foo")
+        context.resolve_table(model_name=CONST + ".baz")
 
         # This checks that built-in functions are serialized properly
         a = reduce(lambda x, y: x + y, [1, 2, 3, 4])  # noqa: F841
@@ -1870,16 +1870,16 @@ def test_python_model_depends_on() -> None:
         depends_on={"foo.bar"},
     )
     def my_model(context, **kwargs):
-        context.table("foo")
-        context.table(model_name=CONST + ".baz")
+        context.resolve_table("foo")
+        context.resolve_table(model_name=CONST + ".baz")
 
     m = model.get_registry()["model_with_depends_on"].model(
         module_path=Path("."),
         path=Path("."),
     )
 
-    # We are not expecting the context.table() calls to be reflected in the model's depends_on since we
-    # explicitly specified the depends_on argument.
+    # We are not expecting the context.resolve_table() calls to be reflected in the
+    # model's depends_on since we explicitly specified the depends_on argument.
     assert m.depends_on == {'"foo"."bar"'}
 
 
@@ -1891,7 +1891,7 @@ def test_python_model_with_session_properties():
         session_properties={"some_string": "string_prop", "some_bool": True, "some_float": 1.0},
     )
     def python_model_prop(context, **kwargs):
-        context.table("foo")
+        context.resolve_table("foo")
 
     m = model.get_registry()["python_model_prop"].model(
         module_path=Path("."),
@@ -4117,11 +4117,11 @@ def test_default_catalog_sql(assert_exp_eq):
 
 
 def test_default_catalog_python():
-    HASH_WITH_CATALOG = "753636858"
+    HASH_WITH_CATALOG = "3773005315"
 
     @model(name="db.table", kind="full", columns={'"COL"': "int"})
     def my_model(context, **kwargs):
-        context.table("dependency.table")
+        context.resolve_table("dependency.table")
 
     m = model.get_registry()["db.table"].model(
         module_path=Path("."),
@@ -4146,14 +4146,15 @@ def test_default_catalog_python():
     assert m.fqn == '"catalog"."db"."table"'
     assert m.depends_on == {'"catalog"."dependency"."table"'}
 
-    # This ideally would be `m.data_hash == HASH_WITH_CATALOG`. The reason it is not is because when we hash
-    # the python function we make the hash out of the actual logic of the function which means `context.table("dependency.table")`
-    # is used when really is should be `context.table("catalog.dependency.table")`.
+    # This ideally would be `m.data_hash == HASH_WITH_CATALOG`. The reason it is not is
+    # because when we hash the python function we make the hash out of the actual logic
+    # of the function which means `context.resolve_table("dependency.table")` is used
+    # when really is should be `context.resolve_table("catalog.dependency.table")`.
     assert m.data_hash != HASH_WITH_CATALOG
 
     @model(name="catalog.db.table", kind="full", columns={'"COL"': "int"})
     def my_model(context, **kwargs):
-        context.table("catalog.dependency.table")
+        context.resolve_table("catalog.dependency.table")
 
     m = model.get_registry()["catalog.db.table"].model(
         module_path=Path("."),
@@ -4170,7 +4171,7 @@ def test_default_catalog_python():
 
     @model(name="catalog.db.table2", kind="full", columns={'"COL"': "int"})
     def my_model(context, **kwargs):
-        context.table("dependency.table")
+        context.resolve_table("dependency.table")
 
     m = model.get_registry()["catalog.db.table2"].model(
         module_path=Path("."),
@@ -4187,7 +4188,7 @@ def test_default_catalog_python():
 
     @model(name="table", kind="full", columns={'"COL"': "int"})
     def my_model(context, **kwargs):
-        context.table("table2")
+        context.resolve_table("table2")
 
     m = model.get_registry()["table"].model(
         module_path=Path("."),
@@ -4266,13 +4267,13 @@ def test_user_cannot_set_default_catalog():
 
         @model(name="db.table", kind="full", columns={'"COL"': "int"}, default_catalog="catalog")
         def my_model(context, **kwargs):
-            context.table("dependency.table")
+            context.resolve_table("dependency.table")
 
 
 def test_depends_on_default_catalog_python():
     @model(name="some.table", kind="full", columns={'"COL"': "int"}, depends_on={"other.table"})
     def my_model(context, **kwargs):
-        context.table("dependency.table")
+        context.resolve_table("dependency.table")
 
     m = model.get_registry()["some.table"].model(
         module_path=Path("."),
@@ -4601,7 +4602,7 @@ def test_load_external_model_python(sushi_context) -> None:
         kind={"name": ModelKindName.FULL},
     )
     def external_model_python(context, **kwargs):
-        demographics_table = context.table("memory.raw.demographics")
+        demographics_table = context.resolve_table("memory.raw.demographics")
         return context.fetchdf(
             exp.select("customer_id", "zip").from_(demographics_table),
         )
@@ -5992,29 +5993,35 @@ SELECT * FROM (@custom_macro(@a, @b)) AS q
     context.plan(no_prompts=True, auto_apply=True)
 
 
-def test_jinja_resolve_table(make_snapshot: t.Callable):
-    expressions = d.parse(
-        """
-        MODEL (name child);
+def test_resolve_table(make_snapshot: t.Callable):
+    @macro()
+    def resolve_parent(evaluator, name):
+        return evaluator.resolve_table(name.name)
 
-        SELECT c FROM parent
+    for post_statement in (
+        "JINJA_STATEMENT_BEGIN; {{ resolve_table('parent') }}; JINJA_END;",
+        "@resolve_parent('parent')",
+    ):
+        expressions = d.parse(
+            f"""
+            MODEL (name child);
 
-        JINJA_STATEMENT_BEGIN;
-          {{ resolve_table('parent') }}
-        JINJA_END;
-    """
-    )
-    child = load_sql_based_model(expressions)
-    parent = load_sql_based_model(d.parse("MODEL (name parent); SELECT 1 AS c"))
+            SELECT c FROM parent;
 
-    parent_snapshot = make_snapshot(parent)
-    parent_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
-    version = parent_snapshot.version
+            {post_statement}
+            """
+        )
+        child = load_sql_based_model(expressions)
+        parent = load_sql_based_model(d.parse("MODEL (name parent); SELECT 1 AS c"))
 
-    post_statements = child.render_post_statements(snapshots={'"parent"': parent_snapshot})
+        parent_snapshot = make_snapshot(parent)
+        parent_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+        version = parent_snapshot.version
 
-    assert len(post_statements) == 1
-    assert post_statements[0].sql() == f'"sqlmesh__default"."parent__{version}" /* parent */'
+        post_statements = child.render_post_statements(snapshots={'"parent"': parent_snapshot})
+
+        assert len(post_statements) == 1
+        assert post_statements[0].sql() == f'"sqlmesh__default"."parent__{version}"'
 
 
 def test_cluster_with_complex_expression():

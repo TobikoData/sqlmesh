@@ -16,7 +16,7 @@ ITEMS = "sushi.items"
 
 
 def get_items_table(context: ExecutionContext) -> str:
-    return context.table(ITEMS)
+    return context.resolve_table(ITEMS)
 
 
 @model(
@@ -49,7 +49,7 @@ def execute(
     execution_time: datetime,
     **kwargs: t.Any,
 ) -> t.Generator[pd.DataFrame, None, None]:
-    orders_table = context.table("sushi.orders")
+    orders_table = context.resolve_table("sushi.orders")
     engine_dialect = context.engine_adapter.dialect
 
     items_table = get_items_table(context)

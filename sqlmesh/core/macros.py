@@ -150,6 +150,7 @@ class MacroEvaluator:
         jinja_env: t.Optional[Environment] = None,
         schema: t.Optional[MappingSchema] = None,
         runtime_stage: RuntimeStage = RuntimeStage.LOADING,
+        resolve_table: t.Optional[t.Callable[[str | exp.Expression], str]] = None,
         resolve_tables: t.Optional[t.Callable[[exp.Expression], exp.Expression]] = None,
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         default_catalog: t.Optional[str] = None,
@@ -171,6 +172,7 @@ class MacroEvaluator:
         self._jinja_env: t.Optional[Environment] = jinja_env
         self.macros = {normalize_macro_name(k): v.func for k, v in macro.get_registry().items()}
         self._schema = schema
+        self._resolve_table = resolve_table
         self._resolve_tables = resolve_tables
         self.columns_to_types_called = False
         self._snapshots = snapshots if snapshots is not None else {}
@@ -452,6 +454,14 @@ class MacroEvaluator:
                 dialect=self.dialect,
             )
         )
+
+    def resolve_table(self, table: str | exp.Expression) -> str:
+        """Gets the physical table name for a given model."""
+        if not self._resolve_table:
+            raise SQLMeshError(
+                "Macro evaluator not properly initialized with resolve_table lambda."
+            )
+        return self._resolve_table(table)
 
     def resolve_tables(self, query: exp.Expression) -> exp.Expression:
         """Resolves queries with references to SQLMesh model names to their physical tables."""
