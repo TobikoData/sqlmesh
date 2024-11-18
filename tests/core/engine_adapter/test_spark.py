@@ -580,16 +580,16 @@ def test_scd_type_2_by_time(
             """WITH `source` AS (
   SELECT
     `_exists`,
-    id,
-    name,
-    price,
+    `id`,
+    `name`,
+    `price`,
     `test_updated_at`
   FROM (
     SELECT
       TRUE AS `_exists`,
-      `id` AS id,
-      `name` AS name,
-      `price` AS price,
+      `id` AS `id`,
+      `name` AS `name`,
+      `price` AS `price`,
       CAST(`test_updated_at` AS TIMESTAMP) AS `test_updated_at`,
       ROW_NUMBER() OVER (PARTITION BY COALESCE(`id`, '') ORDER BY COALESCE(`id`, '')) AS _row_number
     FROM (
