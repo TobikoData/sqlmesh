@@ -872,7 +872,7 @@ def star(
         for excluded in exclude.expressions or except_.expressions
     }
     quoted = quote_identifiers.this
-    table_identifier = normalize_identifiers(alias or relation, dialect=evaluator.dialect).name
+    table_identifier = normalize_identifiers(alias or relation, dialect=evaluator.dialect)
 
     columns_to_types = {
         k: v for k, v in evaluator.columns_to_types(relation).items() if k not in excluded_names
