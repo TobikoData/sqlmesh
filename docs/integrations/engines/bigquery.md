@@ -71,14 +71,15 @@ This creates a gateway named `bigquery` and makes it your project's default gate
 
 It uses the [`oauth` authentication method](#authentication-methods), which does not specify a username or other information directly in the connection configuration. Other authentication methods are [described below](#authentication-methods).
 
-In BigQuery, navigate to the dashboard and select the BigQuery project your SQLMesh project will use in the drop-down. Now we can identify the project ID needed in the `config.yaml` gateway specification above:
+In BigQuery, navigate to the dashboard and select the BigQuery project your SQLMesh project will use. From the Google Cloud dashboard, use the arrow to open the pop-up menu:  
 
 ![BigQuery Dashboard](./bigquery/bigquery-1.png)
 
-- Docs-Demo is the one we will use
-    - the project ID for this example is: `healthy-life-440919-s0`
+Now we can identify the project ID needed in the `config.yaml` gateway specification above. Select the project that you want to work with, the project ID that you need to add to your yaml file is the ID label from the pop-up menu. 
 
 ![BigQuery Dashboard: selecting your project](./bigquery/bigquery-2.png)
+
+For this guide, the Docs-Demo is the one we will use, thus the project ID for this example is `healthy-life-440919-s0`. 
 
 ## Usage
 
