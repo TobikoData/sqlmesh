@@ -116,7 +116,7 @@ def test_load(assert_exp_eq):
     assert model.table_format is None
     assert model.storage_format == "iceberg"
     assert [col.sql() for col in model.partitioned_by] == ['"a"', '"d"']
-    assert model.clustered_by == ["e"]
+    assert [col.sql() for col in model.clustered_by] == ['"e"']
     assert model.columns_to_types == {
         "a": exp.DataType.build("int"),
         "b": exp.DataType.build("double"),
@@ -324,7 +324,7 @@ def test_partitioned_by(
     )
 
     model = load_sql_based_model(expressions)
-    assert model.clustered_by == ["c", "d"]
+    assert model.clustered_by == [exp.to_column('"c"'), exp.to_column('"d"')]
     if expected_exception:
         with pytest.raises(expected_exception):
             model.validate_definition()
@@ -1826,8 +1826,8 @@ def test_python_model(assert_exp_eq) -> None:
         enabled=True,
     )
     def my_model(context, **kwargs):
-        context.table("foo")
-        context.table(model_name=CONST + ".baz")
+        context.resolve_table("foo")
+        context.resolve_table(model_name=CONST + ".baz")
 
         # This checks that built-in functions are serialized properly
         a = reduce(lambda x, y: x + y, [1, 2, 3, 4])  # noqa: F841
@@ -1870,16 +1870,16 @@ def test_python_model_depends_on() -> None:
         depends_on={"foo.bar"},
     )
     def my_model(context, **kwargs):
-        context.table("foo")
-        context.table(model_name=CONST + ".baz")
+        context.resolve_table("foo")
+        context.resolve_table(model_name=CONST + ".baz")
 
     m = model.get_registry()["model_with_depends_on"].model(
         module_path=Path("."),
         path=Path("."),
     )
 
-    # We are not expecting the context.table() calls to be reflected in the model's depends_on since we
-    # explicitly specified the depends_on argument.
+    # We are not expecting the context.resolve_table() calls to be reflected in the
+    # model's depends_on since we explicitly specified the depends_on argument.
     assert m.depends_on == {'"foo"."bar"'}
 
 
@@ -1891,7 +1891,7 @@ def test_python_model_with_session_properties():
         session_properties={"some_string": "string_prop", "some_bool": True, "some_float": 1.0},
     )
     def python_model_prop(context, **kwargs):
-        context.table("foo")
+        context.resolve_table("foo")
 
     m = model.get_registry()["python_model_prop"].model(
         module_path=Path("."),
@@ -2752,7 +2752,7 @@ def test_model_normalization():
     assert model.partitioned_by[0].sql(dialect="snowflake") == '"A"'
     assert model.partitioned_by[1].sql(dialect="snowflake") == 'FOO("ds")'
     assert model.tags == ["pii", "fact"]
-    assert model.clustered_by == ["A"]
+    assert model.clustered_by == [exp.to_column('"A"')]
     assert model.depends_on == {'"BLA"'}
 
     # Check possible variations of unique_key definitions
@@ -2814,7 +2814,7 @@ def test_model_normalization():
     assert model.time_column.column == exp.column("A", quoted=True)
     assert model.columns_to_types["A"].sql(dialect="snowflake") == "INT"
     assert model.tags == ["pii", "fact"]
-    assert model.clustered_by == ["A"]
+    assert model.clustered_by == [exp.to_column('"A"')]
     assert model.depends_on == {'"BLA"'}
 
     model = create_sql_model(
@@ -2826,7 +2826,7 @@ def test_model_normalization():
         tags=["pii", "fact"],
         clustered_by=[exp.column("a"), exp.column("b")],
     )
-    assert model.clustered_by == ["A", "B"]
+    assert model.clustered_by == [exp.to_column('"A"'), exp.to_column('"B"')]
 
     model = create_sql_model(
         "foo",
@@ -2837,7 +2837,7 @@ def test_model_normalization():
         tags=["pii", "fact"],
         clustered_by=["a", "b"],
     )
-    assert model.clustered_by == ["A", "B"]
+    assert model.clustered_by == [exp.to_column('"A"'), exp.to_column('"B"')]
 
 
 def test_incremental_unmanaged_validation():
@@ -3398,7 +3398,7 @@ def test_view_materialized_partition_by_clustered_by():
     )
     materialized_view_model = load_sql_based_model(materialized_view_model_expressions)
     assert materialized_view_model.partitioned_by == [exp.column("ds", quoted=True)]
-    assert materialized_view_model.clustered_by == ["a"]
+    assert materialized_view_model.clustered_by == [exp.to_column('"a"')]
 
 
 def test_view_non_materialized_partition_by():
@@ -3412,7 +3412,7 @@ def test_view_non_materialized_partition_by():
         SELECT 1;
         """
     )
-    with pytest.raises(ConfigError, match=r".*partitioned_by_ field cannot be set for ViewKind.*"):
+    with pytest.raises(ConfigError, match=r".*partitioned_by field cannot be set for ViewKind.*"):
         load_sql_based_model(view_model_expressions)
 
 
@@ -4117,11 +4117,11 @@ def test_default_catalog_sql(assert_exp_eq):
 
 
 def test_default_catalog_python():
-    HASH_WITH_CATALOG = "753636858"
+    HASH_WITH_CATALOG = "3773005315"
 
     @model(name="db.table", kind="full", columns={'"COL"': "int"})
     def my_model(context, **kwargs):
-        context.table("dependency.table")
+        context.resolve_table("dependency.table")
 
     m = model.get_registry()["db.table"].model(
         module_path=Path("."),
@@ -4146,14 +4146,15 @@ def test_default_catalog_python():
     assert m.fqn == '"catalog"."db"."table"'
     assert m.depends_on == {'"catalog"."dependency"."table"'}
 
-    # This ideally would be `m.data_hash == HASH_WITH_CATALOG`. The reason it is not is because when we hash
-    # the python function we make the hash out of the actual logic of the function which means `context.table("dependency.table")`
-    # is used when really is should be `context.table("catalog.dependency.table")`.
+    # This ideally would be `m.data_hash == HASH_WITH_CATALOG`. The reason it is not is
+    # because when we hash the python function we make the hash out of the actual logic
+    # of the function which means `context.resolve_table("dependency.table")` is used
+    # when really is should be `context.resolve_table("catalog.dependency.table")`.
     assert m.data_hash != HASH_WITH_CATALOG
 
     @model(name="catalog.db.table", kind="full", columns={'"COL"': "int"})
     def my_model(context, **kwargs):
-        context.table("catalog.dependency.table")
+        context.resolve_table("catalog.dependency.table")
 
     m = model.get_registry()["catalog.db.table"].model(
         module_path=Path("."),
@@ -4170,7 +4171,7 @@ def test_default_catalog_python():
 
     @model(name="catalog.db.table2", kind="full", columns={'"COL"': "int"})
     def my_model(context, **kwargs):
-        context.table("dependency.table")
+        context.resolve_table("dependency.table")
 
     m = model.get_registry()["catalog.db.table2"].model(
         module_path=Path("."),
@@ -4187,7 +4188,7 @@ def test_default_catalog_python():
 
     @model(name="table", kind="full", columns={'"COL"': "int"})
     def my_model(context, **kwargs):
-        context.table("table2")
+        context.resolve_table("table2")
 
     m = model.get_registry()["table"].model(
         module_path=Path("."),
@@ -4266,13 +4267,13 @@ def test_user_cannot_set_default_catalog():
 
         @model(name="db.table", kind="full", columns={'"COL"': "int"}, default_catalog="catalog")
         def my_model(context, **kwargs):
-            context.table("dependency.table")
+            context.resolve_table("dependency.table")
 
 
 def test_depends_on_default_catalog_python():
     @model(name="some.table", kind="full", columns={'"COL"': "int"}, depends_on={"other.table"})
     def my_model(context, **kwargs):
-        context.table("dependency.table")
+        context.resolve_table("dependency.table")
 
     m = model.get_registry()["some.table"].model(
         module_path=Path("."),
@@ -4601,7 +4602,7 @@ def test_load_external_model_python(sushi_context) -> None:
         kind={"name": ModelKindName.FULL},
     )
     def external_model_python(context, **kwargs):
-        demographics_table = context.table("memory.raw.demographics")
+        demographics_table = context.resolve_table("memory.raw.demographics")
         return context.fetchdf(
             exp.select("customer_id", "zip").from_(demographics_table),
         )
@@ -5990,3 +5991,54 @@ SELECT * FROM (@custom_macro(@a, @b)) AS q
     )
 
     context.plan(no_prompts=True, auto_apply=True)
+
+
+def test_resolve_table(make_snapshot: t.Callable):
+    @macro()
+    def resolve_parent(evaluator, name):
+        return evaluator.resolve_table(name.name)
+
+    for post_statement in (
+        "JINJA_STATEMENT_BEGIN; {{ resolve_table('parent') }}; JINJA_END;",
+        "@resolve_parent('parent')",
+    ):
+        expressions = d.parse(
+            f"""
+            MODEL (name child);
+
+            SELECT c FROM parent;
+
+            {post_statement}
+            """
+        )
+        child = load_sql_based_model(expressions)
+        parent = load_sql_based_model(d.parse("MODEL (name parent); SELECT 1 AS c"))
+
+        parent_snapshot = make_snapshot(parent)
+        parent_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+        version = parent_snapshot.version
+
+        post_statements = child.render_post_statements(snapshots={'"parent"': parent_snapshot})
+
+        assert len(post_statements) == 1
+        assert post_statements[0].sql() == f'"sqlmesh__default"."parent__{version}"'
+
+
+def test_cluster_with_complex_expression():
+    expressions = d.parse(
+        """
+        MODEL (
+          name test,
+          dialect snowflake,
+          kind full,
+          clustered_by (to_date(cluster_col))
+        );
+
+        SELECT
+          1 AS c,
+          CAST('2020-01-01 12:05:03' AS TIMESTAMPTZ) AS cluster_col
+    """
+    )
+
+    model = load_sql_based_model(expressions)
+    assert [expr.sql("snowflake") for expr in model.clustered_by] == ['(TO_DATE("CLUSTER_COL"))']

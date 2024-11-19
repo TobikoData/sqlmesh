@@ -427,7 +427,7 @@ class ModelConfig(BaseModelConfig):
             clustered_by = []
             for c in self.cluster_by:
                 try:
-                    clustered_by.append(d.parse_one(c, dialect=model_dialect).name)
+                    clustered_by.append(d.parse_one(c, dialect=model_dialect))
                 except SqlglotError as e:
                     raise ConfigError(
                         f"Failed to parse model '{self.canonical_name(context)}' cluster_by field '{c}' in '{self.path}': {e}"

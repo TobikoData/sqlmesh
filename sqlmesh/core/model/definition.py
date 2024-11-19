@@ -113,7 +113,7 @@ class _Model(ModelMeta, frozen=True):
         storage_format: The storage format used to store the physical table, only applicable in certain engines.
             (eg. 'parquet', 'orc')
         partitioned_by: The partition columns or engine specific expressions, only applicable in certain engines. (eg. (ds, hour))
-        clustered_by: The cluster columns, only applicable in certain engines. (eg. (ds, hour))
+        clustered_by: The cluster columns or engine specific expressions, only applicable in certain engines. (eg. (ds, hour))
         python_env: Dictionary containing all global variables needed to render the model's macros.
         mapping_schema: The schema of table names to column and types.
         extract_dependencies_from_query: Whether to extract additional dependencies from the rendered model's query.
@@ -381,7 +381,7 @@ class _Model(ModelMeta, frozen=True):
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         execution_time: t.Optional[TimeLike] = None,
-        snapshots: t.Optional[t.Collection[Snapshot]] = None,
+        snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         expand: t.Iterable[str] = tuple(),
         deployability_index: t.Optional[DeployabilityIndex] = None,
         engine_adapter: t.Optional[EngineAdapter] = None,
@@ -764,7 +764,7 @@ class _Model(ModelMeta, frozen=True):
 
                 if len(values) != len(unique_keys):
                     raise_config_error(
-                        "All keys in '{field}' must be unique in the model definition",
+                        f"All keys in '{field}' must be unique in the model definition",
                         self._path,
                     )
 
@@ -836,7 +836,7 @@ class _Model(ModelMeta, frozen=True):
             self.storage_format,
             str(self.lookback),
             *(gen(expr) for expr in (self.partitioned_by or [])),
-            *(self.clustered_by or []),
+            *(gen(expr) for expr in (self.clustered_by or [])),
             self.stamp,
             self.physical_schema,
             self.interval_unit.value if self.interval_unit is not None else None,
@@ -981,6 +981,20 @@ class _Model(ModelMeta, frozen=True):
             self._full_depends_on = depends_on
 
         return self._full_depends_on
+
+    @property
+    def partitioned_by(self) -> t.List[exp.Expression]:
+        """Columns to partition the model by, including the time column if it is not already included."""
+        if self.time_column and self.time_column.column not in {
+            col for expr in self.partitioned_by_ for col in expr.find_all(exp.Column)
+        }:
+            return [
+                TIME_COL_PARTITION_FUNC.get(self.dialect, lambda x, y: x)(
+                    self.time_column.column, self.columns_to_types
+                ),
+                *self.partitioned_by_,
+            ]
+        return self.partitioned_by_
 
 
 class _SqlBasedModel(_Model):
@@ -2306,7 +2320,8 @@ def _parse_dependencies(
                             f"Error resolving dependencies for '{executable.path}'. Argument '{expression.strip()}' must be resolvable at parse time."
                         )
 
-                if func.value.id == "context" and func.attr == "table":
+                # TODO: remove "table" when it is deprecated
+                if func.value.id == "context" and func.attr in ("table", "resolve_table"):
                     depends_on.add(get_first_arg("model_name"))
                 elif func.value.id in ("context", "evaluator") and func.attr == c.VAR:
                     variables.add(get_first_arg("var_name").lower())
@@ -2433,7 +2448,7 @@ META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
     "start": lambda value: exp.Literal.string(value),
     "cron": lambda value: exp.Literal.string(value),
     "partitioned_by_": _single_expr_or_tuple,
-    "clustered_by": _single_value_or_tuple,
+    "clustered_by_": _single_expr_or_tuple,
     "depends_on_": lambda value: exp.Tuple(expressions=sorted(value)),
     "pre": _list_of_calls_to_exp,
     "post": _list_of_calls_to_exp,
@@ -2455,3 +2470,45 @@ META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
 def get_model_name(path: Path) -> str:
     path_parts = list(path.parts[path.parts.index("models") + 1 : -1]) + [path.stem]
     return ".".join(path_parts[-3:])
+
+
+# function applied to time column when automatically used for partitioning in INCREMENTAL_BY_TIME_RANGE models
+def clickhouse_partition_func(
+    column: exp.Expression, columns_to_types: t.Optional[t.Dict[str, exp.DataType]]
+) -> exp.Expression:
+    # `toMonday()` function accepts a Date or DateTime type column
+
+    col_type = (columns_to_types and columns_to_types.get(column.name)) or exp.DataType.build(
+        "UNKNOWN"
+    )
+    col_type_is_conformable = col_type.is_type(
+        exp.DataType.Type.DATE,
+        exp.DataType.Type.DATE32,
+        exp.DataType.Type.DATETIME,
+        exp.DataType.Type.DATETIME64,
+    )
+
+    #  if input column is already a conformable type, just pass the column
+    if col_type_is_conformable:
+        return exp.func("toMonday", column, dialect="clickhouse")
+
+    # if input column type is not known, cast input to DateTime64
+    if col_type.is_type(exp.DataType.Type.UNKNOWN):
+        return exp.func(
+            "toMonday",
+            exp.cast(column, exp.DataType.build("DateTime64('UTC')", dialect="clickhouse")),
+            dialect="clickhouse",
+        )
+
+    # if input column type is known but not conformable, cast input to DateTime64 and cast output back to original type
+    return exp.cast(
+        exp.func(
+            "toMonday",
+            exp.cast(column, exp.DataType.build("DateTime64('UTC')", dialect="clickhouse")),
+            dialect="clickhouse",
+        ),
+        col_type,
+    )
+
+
+TIME_COL_PARTITION_FUNC = {"clickhouse": clickhouse_partition_func}

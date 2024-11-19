@@ -61,23 +61,20 @@ def generate_dlt_models_and_settings(
             if col.get("primary_key"):
                 primary_key.append(str(col["name"]))
 
+        column_types = [
+            exp.cast(column, data_type, dialect=dialect).as_(column).sql(dialect=dialect)
+            for column, data_type in dlt_columns.items()
+            if isinstance(column, str)
+        ]
         select_columns = (
-            ",\n".join(f"  {column_name}" for column_name in dlt_columns) if dlt_columns else ""
+            ",\n".join(f"  {column_name}" for column_name in column_types) if column_types else ""
         )
-
-        dlt_columns["_dlt_load_time"] = exp.DataType.build("TIMESTAMP", dialect=dialect)
-        columns_str = ",".join(
-            f"\n    {name} {data_type.sql(dialect=dialect)}"
-            for name, data_type in dlt_columns.items()
-        )
-        model_def_columns = f"\n  columns ({columns_str}\n  )," if columns_str else ""
 
         grain = f"\n  grain ({', '.join(primary_key)})," if primary_key else ""
         incremental_model_name = f"{dataset}_sqlmesh.incremental_{table_name}"
 
         incremental_model_sql = generate_incremental_model(
             incremental_model_name,
-            model_def_columns,
             select_columns,
             grain,
             dataset + "." + table_name,
@@ -112,7 +109,6 @@ def generate_dlt_models(
 
 def generate_incremental_model(
     model_name: str,
-    model_def_columns: str,
     select_columns: str,
     grain: str,
     from_table: str,
@@ -127,7 +123,7 @@ def generate_incremental_model(
   name {model_name},
   kind INCREMENTAL_BY_TIME_RANGE (
     time_column _dlt_load_time,
-  ),{model_def_columns}{grain}
+  ),{grain}
 );
 
 SELECT

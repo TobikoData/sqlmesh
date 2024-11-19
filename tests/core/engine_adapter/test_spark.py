@@ -579,17 +579,17 @@ def test_scd_type_2_by_time(
         parse_one(
             """WITH `source` AS (
   SELECT
-    TRUE AS `_exists`,
+    `_exists`,
     `id`,
     `name`,
     `price`,
-    CAST(`test_updated_at` AS TIMESTAMP) AS `test_updated_at`
+    `test_updated_at`
   FROM (
     SELECT
       TRUE AS `_exists`,
-      `id`,
-      `name`,
-      `price`,
+      `id` AS `id`,
+      `name` AS `name`,
+      `price` AS `price`,
       CAST(`test_updated_at` AS TIMESTAMP) AS `test_updated_at`,
       ROW_NUMBER() OVER (PARTITION BY COALESCE(`id`, '') ORDER BY COALESCE(`id`, '')) AS _row_number
     FROM (

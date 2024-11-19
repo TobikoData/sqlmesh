@@ -78,7 +78,9 @@ def test_generate_table_name_in_dialect(mocker: MockerFixture):
         "sqlmesh.core.context.GenericContext._model_tables",
         PropertyMock(return_value={'"project-id"."dataset"."table"': '"project-id".dataset.table'}),
     )
-    assert context.table('"project-id"."dataset"."table"') == "`project-id`.`dataset`.`table`"
+    assert (
+        context.resolve_table('"project-id"."dataset"."table"') == "`project-id`.`dataset`.`table`"
+    )
 
 
 def test_config_not_found(copy_to_temp_path: t.Callable):
@@ -900,9 +902,20 @@ def test_load_external_models(copy_to_temp_path):
     assert "prod_raw.model1" not in external_model_names
 
     # get physical table names of external models using table
-    assert context.table("raw.model1") == '"memory"."raw"."model1"'
-    assert context.table("raw.demographics") == '"memory"."raw"."demographics"'
-    assert context.table("raw.model2") == '"memory"."raw"."model2"'
+    assert context.resolve_table("raw.model1") == '"memory"."raw"."model1"'
+    assert context.resolve_table("raw.demographics") == '"memory"."raw"."demographics"'
+    assert context.resolve_table("raw.model2") == '"memory"."raw"."model2"'
+
+    logger = logging.getLogger("sqlmesh.core.context")
+    with patch.object(logger, "warning") as mock_logger:
+        context.table("raw.model1") == '"memory"."raw"."model1"'
+
+        assert mock_logger.mock_calls == [
+            call(
+                "The SQLMesh context's `table` method is deprecated and will be removed "
+                "in a future release. Please use the `resolve_table` method instead."
+            )
+        ]
 
 
 def test_load_gateway_specific_external_models(copy_to_temp_path):
@@ -997,3 +1010,10 @@ def post_statement(evaluator):
 
     context = Context(paths=tmp_path, config=Config())
     context.plan(auto_apply=True, no_prompts=True)
+
+
+def test_wildcard(copy_to_temp_path: t.Callable):
+    parent_path = copy_to_temp_path("examples/multi")[0]
+
+    context = Context(paths=f"{parent_path}/*")
+    assert len(context.models) == 4

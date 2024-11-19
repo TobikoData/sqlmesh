@@ -169,6 +169,13 @@ class BaseContext(abc.ABC):
         raise NotImplementedError
 
     def table(self, model_name: str) -> str:
+        logger.warning(
+            "The SQLMesh context's `table` method is deprecated and will be removed "
+            "in a future release. Please use the `resolve_table` method instead."
+        )
+        return self.resolve_table(model_name)
+
+    def resolve_table(self, model_name: str) -> str:
         """Gets the physical table name for a given model.
 
         Args:

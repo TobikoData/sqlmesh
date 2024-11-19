@@ -253,7 +253,7 @@ def test_create_managed_table(make_mocked_engine_adapter: t.Callable, mocker: Mo
         table_properties={
             "target_lag": exp.Literal.string("20 minutes"),
         },
-        clustered_by=["a"],
+        clustered_by=[exp.column("a")],
         partitioned_by=["b"],
     )
 
@@ -439,7 +439,7 @@ def test_creatable_type_materialized_view_properties(make_mocked_engine_adapter:
         materialized_properties={
             # Partitioned by is not supported so we are confirming it is ignored
             "partitioned_by": [exp.column("ds")],
-            "clustered_by": ["a"],
+            "clustered_by": [exp.column("a")],
             "partition_interval_unit": IntervalUnit.DAY,
         },
     )

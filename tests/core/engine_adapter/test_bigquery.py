@@ -322,7 +322,7 @@ def test_create_table_date_partition(
         {"a": exp.DataType.build("int"), "b": exp.DataType.build("int")},
         partitioned_by=partition_by_cols,
         partition_interval_unit=IntervalUnit.DAY,
-        clustered_by=["b"],
+        clustered_by=[exp.column("b")],
     )
 
     sql_calls = _to_sql_calls(execute_mock)
@@ -795,7 +795,7 @@ def test_materialized_view_properties(
         materialized=True,
         materialized_properties={
             "partitioned_by": [exp.column("ds")],
-            "clustered_by": ["a"],
+            "clustered_by": [exp.column("a")],
             "partition_interval_unit": IntervalUnit.DAY,
         },
     )

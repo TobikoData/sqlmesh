@@ -71,7 +71,11 @@ def serialize_model(context: Context, model: Model, render_query: bool = False) 
         if model.partitioned_by
         else None
     )
-    clustered_by = ", ".join(model.clustered_by) if model.clustered_by else None
+    clustered_by = (
+        ", ".join([c.sql(dialect=model.dialect) for c in model.clustered_by])
+        if model.clustered_by
+        else None
+    )
     lookback = model.lookback if model.lookback > 0 else None
     columns_to_types = model.columns_to_types or {}
 

@@ -1308,7 +1308,7 @@ def test_model_cluster_by():
         sql="SELECT * FROM baz",
         materialized=Materialization.TABLE.value,
     )
-    assert model.to_sqlmesh(context).clustered_by == ["BAR"]
+    assert model.to_sqlmesh(context).clustered_by == [exp.to_column('"BAR"')]
 
     model = ModelConfig(
         name="model",
@@ -1319,7 +1319,10 @@ def test_model_cluster_by():
         sql="SELECT * FROM baz",
         materialized=Materialization.TABLE.value,
     )
-    assert model.to_sqlmesh(context).clustered_by == ["BAR", "QUX"]
+    assert model.to_sqlmesh(context).clustered_by == [
+        exp.to_column('"BAR"'),
+        exp.to_column('"QUX"'),
+    ]
 
 
 def test_snowflake_dynamic_table():
