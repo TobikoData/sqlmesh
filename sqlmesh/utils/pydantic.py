@@ -89,7 +89,7 @@ def get_dialect(values: t.Any) -> str:
     from sqlmesh.core.model import model
 
     dialect = (values if isinstance(values, dict) else values.data).get("dialect")
-    return model._dialect if dialect is None else dialect
+    return model._dialect if dialect is None else dialect  # type: ignore
 
 
 def _expression_encoder(e: exp.Expression) -> str:

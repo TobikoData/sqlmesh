@@ -1235,7 +1235,7 @@ class DeployabilityIndex(PydanticModel, frozen=True):
         return frozenset(
             {
                 (
-                    cls._snapshot_id_key(snapshot_id)
+                    cls._snapshot_id_key(snapshot_id)  # type: ignore
                     if isinstance(snapshot_id, SnapshotId)
                     else snapshot_id
                 )
