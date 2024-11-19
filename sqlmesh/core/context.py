@@ -982,7 +982,11 @@ class GenericContext(BaseContext, t.Generic[C]):
             limit: A limit applied to the model.
         """
         snapshot = self.get_snapshot(model_or_snapshot, raise_if_missing=True)
-        evaluator = self._snapshot_evaluators.get(snapshot.model.gateway, self.snapshot_evaluator)
+        evaluator = (
+            self._snapshot_evaluators.get(snapshot.model.gateway, self.snapshot_evaluator)
+            if snapshot.model.gateway
+            else self.snapshot_evaluator
+        )
         df = evaluator.evaluate_and_fetch(
             snapshot,
             start=start,
@@ -1652,8 +1656,12 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         try:
             model_to_test = self.get_model(model, raise_if_missing=True)
-            connection_config = self._test_connection_configs.get(
-                model_to_test.gateway, self._test_connection_config
+            connection_config = (
+                self._test_connection_configs.get(
+                    model_to_test.gateway, self._test_connection_config
+                )
+                if model_to_test.gateway
+                else self._test_connection_config
             )
             test_adapter = connection_config.create_engine_adapter(register_comments_override=False)
             generate_test(
@@ -1759,8 +1767,10 @@ class GenericContext(BaseContext, t.Generic[C]):
         errors = []
         skipped_count = 0
         for snapshot in snapshots:
-            evaluator = self._snapshot_evaluators.get(
-                snapshot.model.gateway, self.snapshot_evaluator
+            evaluator = (
+                self._snapshot_evaluators.get(snapshot.model.gateway, self.snapshot_evaluator)
+                if snapshot.model.gateway
+                else self.snapshot_evaluator
             )
             for audit_result in evaluator.audit(
                 snapshot=snapshot,
