@@ -23,6 +23,7 @@ from rich.syntax import Syntax
 from rich.table import Table
 from rich.tree import Tree
 
+from sqlmesh.core import constants as c
 from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.snapshot import (
     Snapshot,
@@ -613,19 +614,36 @@ class TerminalConsole(Console):
             no_diff: Hide the actual SQL differences.
         """
         if context_diff.is_new_environment:
-            self._print(
-                Tree(
-                    f"[bold]New environment `{context_diff.environment}` will be created from `{context_diff.create_from}`"
+            if context_diff.environment == c.PROD:
+                base_msg = f"Initializing `{c.PROD}` environment"
+                from_msg = ""
+            else:
+                base_msg = f"Creating new environment `{context_diff.environment}`"
+                from_msg = (
+                    f" from `{context_diff.create_from}`"
+                    if context_diff.create_from != c.PROD
+                    else ""
                 )
-            )
+            self._print(Tree(f"[bold]{base_msg}{from_msg}\n"))
             if not context_diff.has_snapshot_changes:
                 return
 
         if not context_diff.has_changes:
-            self._print(Tree(f"[bold]No differences when compared to `{context_diff.environment}`"))
+            self._print(
+                Tree(
+                    f"[bold]No changes to plan: project files match the `{context_diff.environment}` environment"
+                )
+            )
             return
 
-        self._print(Tree(f"[bold]Summary of differences against `{context_diff.environment}`:"))
+        if (
+            context_diff.environment != c.PROD
+            and context_diff.create_from != c.PROD
+            and context_diff.environment != context_diff.create_from
+        ):
+            self._print(
+                Tree(f"[bold]Differences from the `{context_diff.create_from}` environment:\n")
+            )
 
         if context_diff.has_requirement_changes:
             self._print(f"Requirements:\n{context_diff.requirements_diff()}")

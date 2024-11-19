@@ -117,7 +117,17 @@ def assert_duckdb_test(result) -> None:
 
 
 def assert_new_env(result, new_env="prod", from_env="prod") -> None:
-    assert f"New environment `{new_env}` will be created from `{from_env}`" in result.output
+    env_msg = (
+        "Initializing `prod` environment"
+        if new_env == "prod"
+        else f"Creating new environment `{new_env}`"
+    )
+    from_msg = (
+        f" from `{from_env}`"
+        if new_env != "prod" and from_env != "prod" and new_env != from_env
+        else ""
+    )
+    assert f"{env_msg}{from_msg}" in result.output
 
 
 def assert_model_versions_created(result) -> None:
@@ -211,7 +221,7 @@ def test_plan_restate_model(runner, tmp_path):
     )
     assert result.exit_code == 0
     assert_duckdb_test(result)
-    assert "No differences when compared to `prod`" in result.output
+    assert "No changes to plan: project files match the `prod` environment" in result.output
     assert "sqlmesh_example.full_model evaluated in" in result.output
     assert_backfill_success(result)
 
@@ -304,7 +314,7 @@ def test_plan_dev_end_date(runner, tmp_path):
     assert "sqlmesh_example__dev.incremental_model: 2020-01-01 - 2023-01-01" in result.output
 
 
-def test_plan_dev_create_from(runner, tmp_path):
+def test_plan_dev_create_from_virtual(runner, tmp_path):
     create_example_project(tmp_path)
 
     # create dev environment and backfill
@@ -344,6 +354,48 @@ def test_plan_dev_create_from(runner, tmp_path):
     assert_model_versions_created(result)
     assert_target_env_updated(result)
     assert_virtual_update(result)
+
+
+def test_plan_dev_create_from(runner, tmp_path):
+    create_example_project(tmp_path)
+
+    # create dev environment and backfill
+    runner.invoke(
+        cli,
+        [
+            "--log-file-dir",
+            tmp_path,
+            "--paths",
+            tmp_path,
+            "plan",
+            "dev",
+            "--no-prompts",
+            "--auto-apply",
+        ],
+    )
+    # make model change
+    update_incremental_model(tmp_path)
+
+    # create dev2 environment from dev
+    result = runner.invoke(
+        cli,
+        [
+            "--log-file-dir",
+            tmp_path,
+            "--paths",
+            tmp_path,
+            "plan",
+            "dev2",
+            "--create-from",
+            "dev",
+            "--no-prompts",
+            "--auto-apply",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert_new_env(result, "dev2", "dev")
+    assert "Differences from the `dev` environment:" in result.output
 
 
 def test_plan_dev_no_prompts(runner, tmp_path):
@@ -409,7 +461,6 @@ def test_plan_nonbreaking(runner, tmp_path):
         cli, ["--log-file-dir", tmp_path, "--paths", tmp_path, "plan"], input="y\n"
     )
     assert result.exit_code == 0
-    assert "Summary of differences against `prod`" in result.output
     assert "+  'a' AS new_col" in result.output
     assert "Directly Modified: sqlmesh_example.incremental_model (Non-breaking)" in result.output
     assert "sqlmesh_example.full_model (Indirect Non-breaking)" in result.output
