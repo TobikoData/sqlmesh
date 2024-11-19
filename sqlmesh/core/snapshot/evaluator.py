@@ -267,6 +267,7 @@ class SnapshotEvaluator:
             if (
                 snapshot.reuses_previous_version
                 or snapshot.is_managed
+                or (snapshot.is_model and snapshot.model.forward_only)
                 or (deployability_index and not deployability_index.is_deployable(snapshot))
             ):
                 deployability_flags.append(False)
@@ -741,15 +742,14 @@ class SnapshotEvaluator:
         snapshots: t.Dict[SnapshotId, Snapshot],
         allow_destructive_snapshots: t.Set[str],
     ) -> None:
-        if (
-            not snapshot.is_paused
-            or snapshot.change_category
-            not in (
-                SnapshotChangeCategory.FORWARD_ONLY,
-                SnapshotChangeCategory.INDIRECT_NON_BREAKING,
-            )
-            or not snapshot.is_model
-        ):
+        if not snapshot.is_paused or not snapshot.is_model:
+            return
+
+        needs_migration = snapshot.model.forward_only or snapshot.change_category in (
+            SnapshotChangeCategory.FORWARD_ONLY,
+            SnapshotChangeCategory.INDIRECT_NON_BREAKING,
+        )
+        if not needs_migration:
             return
 
         parent_snapshots_by_name = {

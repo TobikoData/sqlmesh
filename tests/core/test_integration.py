@@ -5,6 +5,7 @@ from collections import Counter
 from datetime import timedelta
 from unittest import mock
 
+import numpy as np
 import pandas as pd
 import pytest
 from pathlib import Path
@@ -1643,6 +1644,98 @@ def test_plan_against_expired_environment(init_and_plan_context: t.Callable):
     assert set(plan.context_diff.modified_snapshots) == modified_models
     assert not plan.missing_intervals
     context.apply(plan)
+
+
+@freeze_time("2023-01-08 15:00:00")
+def test_new_forward_only_model_concurrent_versions(init_and_plan_context: t.Callable):
+    context, plan = init_and_plan_context("examples/sushi")
+    context.apply(plan)
+
+    new_model_expr = d.parse(
+        """
+        MODEL (
+            name memory.sushi.new_model,
+            kind INCREMENTAL_BY_TIME_RANGE (
+                time_column ds,
+                forward_only TRUE,
+                on_destructive_change 'allow',
+            ),
+        );
+
+        SELECT '2023-01-07' AS ds, 1 AS a;
+        """
+    )
+    new_model = load_sql_based_model(new_model_expr)
+
+    # Add the first version of the model and apply it to dev_a.
+    context.upsert_model(new_model)
+    snapshot_a = context.get_snapshot(new_model.name)
+    plan_a = context.plan("dev_a", no_prompts=True)
+    snapshot_a = plan_a.snapshots[snapshot_a.snapshot_id]
+
+    assert snapshot_a.snapshot_id in plan_a.context_diff.new_snapshots
+    assert snapshot_a.snapshot_id in plan_a.context_diff.added
+    assert snapshot_a.change_category == SnapshotChangeCategory.BREAKING
+
+    context.apply(plan_a)
+
+    new_model_alt_expr = d.parse(
+        """
+        MODEL (
+            name memory.sushi.new_model,
+            kind INCREMENTAL_BY_TIME_RANGE (
+                time_column ds,
+                forward_only TRUE,
+                on_destructive_change 'allow',
+            ),
+        );
+
+        SELECT '2023-01-07' AS ds, 1 AS b;
+        """
+    )
+    new_model_alt = load_sql_based_model(new_model_alt_expr)
+
+    # Add the second version of the model and apply it to dev_b.
+    context.upsert_model(new_model_alt)
+    snapshot_b = context.get_snapshot(new_model_alt.name)
+    plan_b = context.plan("dev_b", no_prompts=True)
+    snapshot_b = plan_b.snapshots[snapshot_b.snapshot_id]
+
+    assert snapshot_b.snapshot_id in plan_b.context_diff.new_snapshots
+    assert snapshot_b.snapshot_id in plan_b.context_diff.added
+    assert snapshot_b.change_category == SnapshotChangeCategory.BREAKING
+
+    assert snapshot_b.fingerprint != snapshot_a.fingerprint
+    assert snapshot_b.version == snapshot_a.version
+
+    context.apply(plan_b)
+
+    # Apply the 1st version to prod
+    context.upsert_model(new_model)
+    plan_prod_a = context.plan("prod", no_prompts=True)
+    assert snapshot_a.snapshot_id in plan_prod_a.snapshots
+    assert (
+        plan_prod_a.snapshots[snapshot_a.snapshot_id].change_category
+        == SnapshotChangeCategory.BREAKING
+    )
+    context.apply(plan_prod_a)
+
+    df = context.fetchdf("SELECT * FROM memory.sushi.new_model")
+    assert df.to_dict() == {"ds": {0: "2023-01-07"}, "a": {0: 1}}
+
+    # Apply the 2nd version to prod
+    context.upsert_model(new_model_alt)
+    plan_prod_b = context.plan("prod", no_prompts=True)
+    assert snapshot_b.snapshot_id in plan_prod_b.snapshots
+    assert (
+        plan_prod_b.snapshots[snapshot_b.snapshot_id].change_category
+        == SnapshotChangeCategory.BREAKING
+    )
+    assert not plan_prod_b.requires_backfill
+    context.apply(plan_prod_b)
+
+    df = context.fetchdf("SELECT * FROM memory.sushi.new_model").replace({np.nan: None})
+    assert df.to_dict() == {"ds": {0: "2023-01-07"}, "b": {0: None}}
 
 
 def test_plan_twice_with_star_macro_yields_no_diff(tmp_path: Path):
