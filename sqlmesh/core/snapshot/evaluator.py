@@ -36,7 +36,7 @@ from sqlglot.executor import execute
 
 from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
-from sqlmesh.core.audit import Audit
+from sqlmesh.core.audit import Audit, StandaloneAudit
 from sqlmesh.core.dialect import schema_
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.engine_adapter.shared import InsertOverwriteStrategy
@@ -862,17 +862,24 @@ class SnapshotEvaluator:
         blocking = audit_args.pop("blocking", None)
         blocking = blocking == exp.true() if blocking else audit.blocking
 
-        query = audit.render_query(
-            snapshot,
-            start=start,
-            end=end,
-            execution_time=execution_time,
-            snapshots=snapshots,
-            deployability_index=deployability_index,
-            engine_adapter=self.adapter,
+        kwargs = {
+            "start": start,
+            "end": end,
+            "execution_time": execution_time,
+            "snapshots": snapshots,
+            "deployability_index": deployability_index,
+            "engine_adapter": self.adapter,
             **audit_args,
             **kwargs,
-        )
+        }
+
+        if snapshot.is_model:
+            query = snapshot.model.render_audit_query(audit, **kwargs)
+        elif isinstance(audit, StandaloneAudit):
+            query = audit.render_audit_query(**kwargs)
+        else:
+            raise SQLMeshError("Expected model or standalone audit. {snapshot}: {audit}")
+
         count, *_ = self.adapter.fetchone(
             select("COUNT(*)").from_(query.subquery("audit")),
             quote_identifiers=True,

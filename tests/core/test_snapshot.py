@@ -1876,7 +1876,8 @@ def test_missing_intervals_node_start_end(make_snapshot):
 def test_external_model_audits(sushi_context):
     snapshot = sushi_context.get_snapshot("raw.demographics")
     assert snapshot.evaluatable
-    assert len(snapshot.model.audits) == 2
+    assert len(snapshot.model.audits) == 3
+    assert len(snapshot.model.audit_definitions) == 1
     assert snapshot.intervals
 
 

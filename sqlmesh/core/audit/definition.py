@@ -8,10 +8,8 @@ from pathlib import Path
 
 from pydantic import Field
 from sqlglot import exp
-from sqlglot.optimizer.qualify_columns import quote_identifiers
 from sqlglot.optimizer.simplify import gen
 
-from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
 from sqlmesh.core.macros import MacroRegistry, macro
 from sqlmesh.core.model.common import (
@@ -39,7 +37,6 @@ from sqlmesh.utils.pydantic import (
 )
 
 if t.TYPE_CHECKING:
-    from sqlmesh.core.model.definition import _Model
     from sqlmesh.core.snapshot import DeployabilityIndex, Node, Snapshot
 
 if sys.version_info >= (3, 9):
@@ -83,53 +80,6 @@ class AuditMixin(AuditCommonMetaMixin):
     expressions_: t.Optional[t.List[exp.Expression]]
     jinja_macros: JinjaMacroRegistry
 
-    def render_query(
-        self,
-        snapshot_or_node: t.Union[Snapshot, _Node],
-        *,
-        start: t.Optional[TimeLike] = None,
-        end: t.Optional[TimeLike] = None,
-        execution_time: t.Optional[TimeLike] = None,
-        snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
-        deployability_index: t.Optional[DeployabilityIndex] = None,
-        **kwargs: t.Any,
-    ) -> exp.Query:
-        """Renders the audit's query.
-
-        Args:
-            snapshot_or_node: The snapshot or node which is being audited.
-            start: The start datetime to render. Defaults to epoch start.
-            end: The end datetime to render. Defaults to epoch start.
-            execution_time: The date/time time reference to use for execution time.
-            snapshots: All snapshots (by name) to use for mapping of physical locations.
-            audit_name: The name of audit if the query to render is for an audit.
-            deployability_index: Determines snapshots that are deployable in the context of this render.
-            kwargs: Additional kwargs to pass to the renderer.
-
-        Returns:
-            The rendered expression.
-        """
-        from sqlmesh.core.model.definition import _Model
-
-        node = snapshot_or_node if isinstance(snapshot_or_node, _Node) else snapshot_or_node.node
-        query_renderer = self._create_query_renderer(node if isinstance(node, _Model) else None)
-
-        rendered_query = query_renderer.render(
-            start=start,
-            end=end,
-            execution_time=execution_time,
-            snapshots=snapshots,
-            deployability_index=deployability_index,
-            **{**self.defaults, **kwargs},  # type: ignore
-        )
-
-        if rendered_query is None:
-            raise SQLMeshError(
-                f"Failed to render query for audit '{self.name}', node '{node.name}'."
-            )
-
-        return rendered_query
-
     @property
     def expressions(self) -> t.List[exp.Expression]:
         return self.expressions_ or []
@@ -138,9 +88,6 @@ class AuditMixin(AuditCommonMetaMixin):
     def macro_definitions(self) -> t.List[d.MacroDef]:
         """All macro definitions from the list of expressions."""
         return [s for s in self.expressions if isinstance(s, d.MacroDef)]
-
-    def _create_query_renderer(self, model: t.Optional[_Model] = None) -> QueryRenderer:
-        raise NotImplementedError
 
 
 @field_validator("name", "dialect", mode="before", check_fields=False)
@@ -198,85 +145,6 @@ class ModelAudit(PydanticModel, AuditMixin, frozen=True):
     _string_validator = audit_string_validator
     _map_validator = audit_map_validator
 
-    def render_query(
-        self,
-        snapshot_or_node: t.Union[Snapshot, _Node],
-        *,
-        start: t.Optional[TimeLike] = None,
-        end: t.Optional[TimeLike] = None,
-        execution_time: t.Optional[TimeLike] = None,
-        snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
-        deployability_index: t.Optional[DeployabilityIndex] = None,
-        **kwargs: t.Any,
-    ) -> exp.Query:
-        from sqlmesh.core.model.definition import _Model
-        from sqlmesh.core.snapshot import DeployabilityIndex, Snapshot
-
-        deployability_index = deployability_index or DeployabilityIndex.all_deployable()
-
-        extra_kwargs = {}
-
-        node = t.cast(
-            _Model,
-            snapshot_or_node if isinstance(snapshot_or_node, _Node) else snapshot_or_node.node,
-        )
-
-        this_model = kwargs.pop("this_model", None) or (
-            node.fqn
-            if isinstance(snapshot_or_node, _Node)
-            else t.cast(Snapshot, snapshot_or_node).table_name(
-                deployability_index.is_deployable(snapshot_or_node)
-            )
-        )
-
-        columns_to_types: t.Optional[t.Dict[str, t.Any]] = None
-        if "engine_adapter" in kwargs:
-            try:
-                columns_to_types = kwargs["engine_adapter"].columns(this_model)
-            except Exception:
-                pass
-
-        if node.time_column:
-            where = node.time_column.column.between(
-                node.convert_to_time_column(start or c.EPOCH, columns_to_types),
-                node.convert_to_time_column(end or c.EPOCH, columns_to_types),
-            )
-        else:
-            where = None
-
-        # The model's name is already normalized, but in case of snapshots we also prepend a
-        # case-sensitive physical schema name, so we quote here to ensure that we won't have
-        # a broken schema reference after the resulting query is normalized in `render`.
-        quoted_model_name = quote_identifiers(
-            exp.to_table(this_model, dialect=self.dialect), dialect=self.dialect
-        )
-        extra_kwargs["this_model"] = (
-            exp.select("*").from_(quoted_model_name).where(where).subquery()
-        )
-
-        return super().render_query(
-            snapshot_or_node,
-            start=start,
-            end=end,
-            execution_time=execution_time,
-            snapshots=snapshots,
-            deployability_index=deployability_index,
-            **{**extra_kwargs, **kwargs},
-        )
-
-    def _create_query_renderer(self, model: t.Optional[_Model] = None) -> QueryRenderer:
-        assert model
-        return QueryRenderer(
-            self.query,
-            self.dialect or model.dialect,
-            self.macro_definitions,
-            path=self._path or Path(),
-            jinja_macro_registry=self.jinja_macros,
-            python_env=model.python_env,
-            only_execution_time=model.kind.only_execution_time,
-            default_catalog=model.default_catalog,
-        )
-
     def __str__(self) -> str:
         path = f": {self._path.name}" if self._path else ""
         return f"{self.__class__.__name__}<{self.name}{path}>"
@@ -320,11 +188,58 @@ class StandaloneAudit(_Node, AuditMixin):
             raise AuditConfigError(f"Standalone audits cannot be blocking: '{name}'.")
         return values
 
+    def render_audit_query(
+        self,
+        *,
+        start: t.Optional[TimeLike] = None,
+        end: t.Optional[TimeLike] = None,
+        execution_time: t.Optional[TimeLike] = None,
+        snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
+        deployability_index: t.Optional[DeployabilityIndex] = None,
+        **kwargs: t.Any,
+    ) -> exp.Query:
+        """Renders the audit's query.
+
+        Args:
+            start: The start datetime to render. Defaults to epoch start.
+            end: The end datetime to render. Defaults to epoch start.
+            execution_time: The date/time time reference to use for execution time.
+            snapshots: All snapshots (by name) to use for mapping of physical locations.
+            deployability_index: Determines snapshots that are deployable in the context of this render.
+            kwargs: Additional kwargs to pass to the renderer.
+
+        Returns:
+            The rendered expression.
+        """
+        query_renderer = QueryRenderer(
+            self.query,
+            self.dialect,
+            self.macro_definitions,
+            path=self._path or Path(),
+            jinja_macro_registry=self.jinja_macros,
+            python_env=self.python_env,
+            default_catalog=self.default_catalog,
+        )
+
+        rendered_query = query_renderer.render(
+            start=start,
+            end=end,
+            execution_time=execution_time,
+            snapshots=snapshots,
+            deployability_index=deployability_index,
+            **{**self.defaults, **kwargs},  # type: ignore
+        )
+
+        if rendered_query is None:
+            raise SQLMeshError(f"Failed to render query for audit '{self.name}'.")
+
+        return rendered_query
+
     @cached_property
     def depends_on(self) -> t.Set[str]:
         depends_on = self.depends_on_ or set()
 
-        query = self.render_query(self)
+        query = self.render_audit_query()
         if query is not None:
             depends_on |= d.find_tables(
                 query, default_catalog=self.default_catalog, dialect=self.dialect
@@ -369,7 +284,7 @@ class StandaloneAudit(_Node, AuditMixin):
                 self.stamp,
             ]
 
-            query = self.render_query(self) or self.query
+            query = self.render_audit_query() or self.query
             data.append(gen(query))
             self._metadata_hash = hash_data(data)
         return self._metadata_hash
@@ -449,17 +364,6 @@ class StandaloneAudit(_Node, AuditMixin):
     @property
     def meta_fields(self) -> t.Iterable[str]:
         return set(AuditCommonMetaMixin.__annotations__) | set(_Node.all_field_infos())
-
-    def _create_query_renderer(self, model: t.Optional[_Model] = None) -> QueryRenderer:
-        return QueryRenderer(
-            self.query,
-            self.dialect,
-            self.macro_definitions,
-            path=self._path or Path(),
-            jinja_macro_registry=self.jinja_macros,
-            python_env=self.python_env,
-            default_catalog=self.default_catalog,
-        )
 
     @property
     def audits_with_args(self) -> t.List[t.Tuple[Audit, t.Dict[str, exp.Expression]]]:

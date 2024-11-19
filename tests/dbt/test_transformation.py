@@ -721,7 +721,7 @@ def test_test_this(assert_exp_eq, sushi_test_project: Project):
     context = sushi_test_project.context
     audit = t.cast(StandaloneAudit, test_config.to_sqlmesh(context))
     assert_exp_eq(
-        audit.render_query(audit).sql(),
+        audit.render_audit_query().sql(),
         'SELECT 1 AS "one" FROM "test" AS "test"',
     )
 
@@ -741,12 +741,12 @@ def test_test_dialect(assert_exp_eq, sushi_test_project: Project):
     # can't parse test sql without specifying bigquery as default dialect
     with pytest.raises(ConfigError):
         audit = t.cast(StandaloneAudit, test_config.to_sqlmesh(context))
-        audit.render_query(audit).sql()
+        audit.render_audit_query().sql()
 
     test_config.dialect_ = "bigquery"
     audit = t.cast(StandaloneAudit, test_config.to_sqlmesh(context))
     assert_exp_eq(
-        audit.render_query(audit).sql(),
+        audit.render_audit_query().sql(),
         'SELECT 1 AS "one" FROM "test" AS "test"',
     )
 

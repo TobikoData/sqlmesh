@@ -14,6 +14,7 @@ import numpy as np
 from pydantic import Field
 from sqlglot import diff, exp
 from sqlglot.diff import Insert
+from sqlglot.optimizer.qualify_columns import quote_identifiers
 from sqlglot.optimizer.simplify import gen
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 from sqlglot.schema import MappingSchema, nested_set
@@ -416,6 +417,81 @@ class _Model(ModelMeta, frozen=True):
             engine_adapter=engine_adapter,
             **kwargs,
         )
+
+    def render_audit_query(
+        self,
+        audit: Audit,
+        *,
+        start: t.Optional[TimeLike] = None,
+        end: t.Optional[TimeLike] = None,
+        execution_time: t.Optional[TimeLike] = None,
+        snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
+        deployability_index: t.Optional[DeployabilityIndex] = None,
+        **kwargs: t.Any,
+    ) -> exp.Query:
+        from sqlmesh.core.snapshot import DeployabilityIndex
+
+        deployability_index = deployability_index or DeployabilityIndex.all_deployable()
+        snapshot = (snapshots or {}).get(self.fqn)
+
+        this_model = kwargs.pop("this_model", None) or (
+            snapshot.table_name(deployability_index.is_deployable(snapshot))
+            if snapshot
+            else self.fqn
+        )
+
+        columns_to_types: t.Optional[t.Dict[str, t.Any]] = None
+        if "engine_adapter" in kwargs:
+            try:
+                columns_to_types = kwargs["engine_adapter"].columns(this_model)
+            except Exception:
+                pass
+
+        if self.time_column:
+            where = self.time_column.column.between(
+                self.convert_to_time_column(start or c.EPOCH, columns_to_types),
+                self.convert_to_time_column(end or c.EPOCH, columns_to_types),
+            )
+        else:
+            where = None
+
+        # The model's name is already normalized, but in case of snapshots we also prepend a
+        # case-sensitive physical schema name, so we quote here to ensure that we won't have
+        # a broken schema reference after the resulting query is normalized in `render`.
+        quoted_model_name = quote_identifiers(
+            exp.to_table(this_model, dialect=self.dialect), dialect=self.dialect
+        )
+
+        query_renderer = QueryRenderer(
+            audit.query,
+            audit.dialect,
+            audit.macro_definitions,
+            path=audit._path or Path(),
+            jinja_macro_registry=audit.jinja_macros,
+            python_env=self.python_env,
+            only_execution_time=self.kind.only_execution_time,
+            default_catalog=self.default_catalog,
+        )
+
+        rendered_query = query_renderer.render(
+            start=start,
+            end=end,
+            execution_time=execution_time,
+            snapshots=snapshots,
+            deployability_index=deployability_index,
+            **{
+                **audit.defaults,
+                "this_model": exp.select("*").from_(quoted_model_name).where(where).subquery(),
+                **kwargs,
+            },  # type: ignore
+        )
+
+        if rendered_query is None:
+            raise SQLMeshError(
+                f"Failed to render query for audit '{audit.name}', model '{self.name}'."
+            )
+
+        return rendered_query
 
     @property
     def pre_statements(self) -> t.List[exp.Expression]:
@@ -866,7 +942,7 @@ class _Model(ModelMeta, frozen=True):
                 else:
                     audit = self.audit_definitions[audit_name]
                     query = (
-                        audit.render_query(self, **t.cast(t.Dict[str, t.Any], audit_args))
+                        self.render_audit_query(audit, **t.cast(t.Dict[str, t.Any], audit_args))
                         or audit.query
                     )
                     metadata.extend(
@@ -1785,7 +1861,6 @@ def create_python_model(
         depends_on = parsed_depends_on - {name}
 
     variables = {k: v for k, v in (variables or {}).items() if k in referenced_variables}
-
     if variables:
         python_env[c.SQLMESH_VARS] = Executable.value(variables)
 

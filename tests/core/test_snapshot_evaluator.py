@@ -2326,7 +2326,7 @@ def test_standalone_audit(mocker: MockerFixture, adapter_mock, make_snapshot):
     adapter_mock.fetchone.return_value = (0,)
     evaluator.audit(snapshot=snapshot, snapshots={})
 
-    query = audit.render_query(snapshot)
+    query = audit.render_audit_query()
     adapter_mock.fetchone.assert_called_once_with(
         select("COUNT(*)").from_(query.subquery("audit")), quote_identifiers=True
     )

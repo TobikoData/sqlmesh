@@ -300,6 +300,7 @@ class BaseModelConfig(GeneralConfig):
         jinja_macros = model_context.jinja_macros.trim(
             self.dependencies.macros, package=self.package_name
         )
+
         model_node: AttributeDict[str, t.Any] = AttributeDict(
             {
                 k: v
