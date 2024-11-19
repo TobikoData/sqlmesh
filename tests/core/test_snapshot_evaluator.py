@@ -1646,10 +1646,19 @@ def test_create_scd_type_2_by_time(adapter_mock, make_snapshot):
         table_description=None,
     )
 
-    adapter_mock.create_table.assert_called_once_with(
-        snapshot.table_name(),
-        column_descriptions={},
-        **common_kwargs,
+    adapter_mock.create_table.assert_has_calls(
+        [
+            call(
+                snapshot.table_name(is_deployable=False),
+                column_descriptions=None,
+                **common_kwargs,
+            ),
+            call(
+                snapshot.table_name(),
+                column_descriptions={},
+                **common_kwargs,
+            ),
+        ]
     )
 
 
@@ -1692,8 +1701,17 @@ def test_create_ctas_scd_type_2_by_time(adapter_mock, make_snapshot):
         table_description=None,
     )
 
-    adapter_mock.ctas.assert_called_once_with(
-        snapshot.table_name(), query, None, column_descriptions={}, **common_kwargs
+    adapter_mock.ctas.assert_has_calls(
+        [
+            call(
+                snapshot.table_name(is_deployable=False),
+                query,
+                None,
+                column_descriptions=None,
+                **common_kwargs,
+            ),
+            call(snapshot.table_name(), query, None, column_descriptions={}, **common_kwargs),
+        ]
     )
 
 
@@ -1800,8 +1818,14 @@ def test_create_scd_type_2_by_column(adapter_mock, make_snapshot):
         table_description=None,
     )
 
-    adapter_mock.create_table.assert_called_once_with(
-        snapshot.table_name(), **{**common_kwargs, "column_descriptions": {}}
+    adapter_mock.create_table.assert_has_calls(
+        [
+            call(
+                snapshot.table_name(is_deployable=False),
+                **{**common_kwargs, "column_descriptions": None},
+            ),
+            call(snapshot.table_name(), **{**common_kwargs, "column_descriptions": {}}),
+        ]
     )
 
 
@@ -1843,8 +1867,18 @@ def test_create_ctas_scd_type_2_by_column(adapter_mock, make_snapshot):
         table_description=None,
     )
 
-    adapter_mock.ctas.assert_called_once_with(
-        snapshot.table_name(), query, None, **{**common_kwargs, "column_descriptions": {}}
+    adapter_mock.ctas.assert_has_calls(
+        [
+            call(
+                snapshot.table_name(is_deployable=False),
+                query,
+                None,
+                **{**common_kwargs, "column_descriptions": None},
+            ),
+            call(
+                snapshot.table_name(), query, None, **{**common_kwargs, "column_descriptions": {}}
+            ),
+        ]
     )
 
 
