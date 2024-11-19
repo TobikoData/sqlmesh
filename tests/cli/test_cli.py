@@ -710,21 +710,14 @@ model_defaults:
   kind INCREMENTAL_BY_TIME_RANGE (
     time_column _dlt_load_time,
   ),
-  columns (
-    id BIGINT,
-    name TEXT,
-    _dlt_load_id TEXT,
-    _dlt_id TEXT,
-    _dlt_load_time TIMESTAMP
-  ),
   grain (id),
 );
 
 SELECT
-  id,
-  name,
-  _dlt_load_id,
-  _dlt_id,
+  CAST(id AS BIGINT) AS id,
+  CAST(name AS TEXT) AS name,
+  CAST(_dlt_load_id AS TEXT) AS _dlt_load_id,
+  CAST(_dlt_id AS TEXT) AS _dlt_id,
   TO_TIMESTAMP(CAST(_dlt_load_id AS DOUBLE)) as _dlt_load_time
 FROM
   sushi_dataset.sushi_types
@@ -744,22 +737,14 @@ WHERE
   kind INCREMENTAL_BY_TIME_RANGE (
     time_column _dlt_load_time,
   ),
-  columns (
-    load_id TEXT,
-    schema_name TEXT,
-    status BIGINT,
-    inserted_at TIMESTAMP,
-    schema_version_hash TEXT,
-    _dlt_load_time TIMESTAMP
-  ),
 );
 
 SELECT
-  load_id,
-  schema_name,
-  status,
-  inserted_at,
-  schema_version_hash,
+  CAST(load_id AS TEXT) AS load_id,
+  CAST(schema_name AS TEXT) AS schema_name,
+  CAST(status AS BIGINT) AS status,
+  CAST(inserted_at AS TIMESTAMP) AS inserted_at,
+  CAST(schema_version_hash AS TEXT) AS schema_version_hash,
   TO_TIMESTAMP(CAST(load_id AS DOUBLE)) as _dlt_load_time
 FROM
   sushi_dataset._dlt_loads
