@@ -386,23 +386,24 @@ class GenericContext(BaseContext, t.Generic[C]):
             "test_configs"
         )
 
-        for gateway_name in self.config.gateways:
-            connection = self.config.get_connection(gateway_name)
-            adapter = (
-                connection.create_engine_adapter()
-                if gateway_name != self.config.default_gateway
-                else self._engine_adapter
-            )
-            evaluator = SnapshotEvaluator(
-                adapter.with_log_level(logging.INFO),
-                ddl_concurrent_tasks=connection.concurrent_tasks,
-            )
-            self._snapshot_evaluators[gateway_name] = evaluator
-            if self.config.default_gateway == gateway_name:
-                self._default_evaluator = evaluator
-            self._test_connection_configs[gateway_name] = self.config.get_test_connection(
-                gateway_name, adapter.default_catalog, default_catalog_dialect=adapter.DIALECT
-            )
+        if not gateway:
+            for gateway_name in self.config.gateways:
+                connection = self.config.get_connection(gateway_name)
+                adapter = (
+                    connection.create_engine_adapter()
+                    if gateway_name != self.config.default_gateway
+                    else self._engine_adapter
+                )
+                evaluator = SnapshotEvaluator(
+                    adapter.with_log_level(logging.INFO),
+                    ddl_concurrent_tasks=connection.concurrent_tasks,
+                )
+                self._snapshot_evaluators[gateway_name] = evaluator
+                if self.config.default_gateway == gateway_name:
+                    self._default_evaluator = evaluator
+                self._test_connection_configs[gateway_name] = self.config.get_test_connection(
+                    gateway_name, adapter.default_catalog, default_catalog_dialect=adapter.DIALECT
+                )
 
         self.console = console or get_console(dialect=self._engine_adapter.dialect)
 

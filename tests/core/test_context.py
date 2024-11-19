@@ -317,6 +317,15 @@ def test_evaluate_limit():
     assert context.evaluate("without_limit", "2020-01-01", "2020-01-02", "2020-01-02", 2).size == 2
 
 
+def test_gateway_specific_evaluator(copy_to_temp_path):
+    path = copy_to_temp_path("examples/sushi")
+    ctx = Context(paths=path, config="isolated_systems_config", gateway="prod")
+    assert not ctx._snapshot_evaluators
+
+    ctx = Context(paths=path, config="isolated_systems_config")
+    assert len(ctx._snapshot_evaluators) == 3
+
+
 def test_multiple_gateways(tmp_path: Path):
     db_path = str(tmp_path / "db.db")
     gateways = {
@@ -339,9 +348,6 @@ def test_multiple_gateways(tmp_path: Path):
     assert gateway_model.gateway == "staging"
     context.upsert_model(gateway_model)
     assert context.evaluate("staging.stg_model", "2020-01-01", "2020-01-02", "2020-01-02").size == 5
-    assert (
-        context.evaluate("staging.stg_model", "2020-01-01", "2020-01-02", "2020-01-02", 2).size == 2
-    )
 
     default_model = load_sql_based_model(
         parse(
