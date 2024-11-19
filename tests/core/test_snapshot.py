@@ -105,6 +105,7 @@ def test_json(snapshot: Snapshot):
         "dev_intervals": [],
         "node": {
             "audits": [],
+            "audit_definitions": {},
             "clustered_by": [],
             "cron": "1 0 * * *",
             "kind": {
@@ -117,12 +118,12 @@ def test_json(snapshot: Snapshot):
                 "dialect": "spark",
             },
             "mapping_schema": {},
-            "inline_audits": {},
             "start": "2020-01-01",
             "dialect": "spark",
             "name": "name",
             "partitioned_by": [],
             "project": "",
+            "python_env": {},
             "owner": "owner",
             "query": "SELECT @EACH([1, 2], x -> x), ds FROM parent.tbl",
             "jinja_macros": {
@@ -141,7 +142,6 @@ def test_json(snapshot: Snapshot):
             "enabled": True,
             "extract_dependencies_from_query": True,
         },
-        "audits": [],
         "name": '"name"',
         "parents": [{"name": '"parent"."tbl"', "identifier": snapshot.parents[0].identifier}],
         "previous_versions": [],
@@ -1876,7 +1876,8 @@ def test_missing_intervals_node_start_end(make_snapshot):
 def test_external_model_audits(sushi_context):
     snapshot = sushi_context.get_snapshot("raw.demographics")
     assert snapshot.evaluatable
-    assert len(snapshot.model.audits) == 2
+    assert len(snapshot.model.audits) == 3
+    assert len(snapshot.model.audit_definitions) == 1
     assert snapshot.intervals
 
 

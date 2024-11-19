@@ -9,6 +9,7 @@
       column: zip
       min_v: "'00000'"
       max_v: "'99999'"
+    - name: assert_raw_demographics
   columns:
     customer_id: int
     zip: text

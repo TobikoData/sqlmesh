@@ -45,7 +45,7 @@ def test_format_files(tmp_path: pathlib.Path):
     assert context.get_model("other.model").query.sql() == "SELECT 2 AS another_column"  # type: ignore
     assert context.get_model("audit.model").query.sql() == "SELECT 3 AS item_id"  # type: ignore
     assert (
-        context.get_model("audit.model").inline_audits["inline_audit"].query.sql()
+        context.get_model("audit.model").audit_definitions["inline_audit"].query.sql()
         == "SELECT * FROM @this_model WHERE item_id < 0"
     )
     assert (

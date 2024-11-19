@@ -33,7 +33,6 @@ from sqlglot.helper import seq_get
 
 from sqlmesh.core import analytics
 from sqlmesh.core import constants as c
-from sqlmesh.core.audit import ModelAudit
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.environment import Environment
@@ -1401,7 +1400,6 @@ class EngineAdapterStateSync(StateSync):
             node_seen = set()
             node_queue = {snapshot_id}
             nodes: t.Dict[str, Node] = {}
-            audits: t.Dict[str, ModelAudit] = {}
             while node_queue:
                 next_snapshot_id = node_queue.pop()
                 next_snapshot = parsed_snapshots.get(next_snapshot_id)
@@ -1411,16 +1409,13 @@ class EngineAdapterStateSync(StateSync):
 
                 node_seen.add(next_snapshot_id)
                 node_queue.update(next_snapshot.parents)
-
                 nodes[next_snapshot.name] = next_snapshot.node
-                audits.update({a.name: a for a in next_snapshot.audits})
 
             new_snapshot = deepcopy(snapshot)
             try:
                 new_snapshot.fingerprint = fingerprint_from_node(
                     node,
                     nodes=nodes,
-                    audits=audits,
                     cache=fingerprint_cache,
                 )
                 new_snapshot.parents = tuple(
@@ -1429,7 +1424,6 @@ class EngineAdapterStateSync(StateSync):
                         identifier=fingerprint_from_node(
                             parent_node,
                             nodes=nodes,
-                            audits=audits,
                             cache=fingerprint_cache,
                         ).to_identifier(),
                     )

@@ -212,6 +212,7 @@ class JinjaMacroRegistry(PydanticModel):
     top_level_packages: t.List[str] = []
 
     _parser_cache: t.Dict[t.Tuple[t.Optional[str], str], Template] = {}
+    _trimmed: bool = False
     __environment: t.Optional[Environment] = None
 
     def __getstate__(self) -> t.Dict[t.Any, t.Any]:
@@ -248,6 +249,10 @@ class JinjaMacroRegistry(PydanticModel):
             return {k: _convert(v) if isinstance(v, AttributeDict) else v for k, v in val.items()}
 
         return _convert(value)
+
+    @property
+    def trimmed(self) -> bool:
+        return self._trimmed
 
     def add_macros(self, macros: t.Dict[str, MacroInfo], package: t.Optional[str] = None) -> None:
         """Adds macros to the target package.
@@ -357,6 +362,8 @@ class JinjaMacroRegistry(PydanticModel):
         )
         for package, names in dependencies_by_package.items():
             result = result.merge(self._trim_macros(names, package))
+
+        result._trimmed = True
 
         return result
 

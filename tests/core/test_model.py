@@ -1169,17 +1169,18 @@ def test_enable_audits_from_model_defaults():
 
     model = load_sql_based_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
     assert len(model.audits) == 0
-    assert len(model.inline_audits) == 1
 
     config = Config(
         model_defaults=ModelDefaultsConfig(dialect="duckdb", audits=["assert_positive_order_ids"])
     )
     assert config.model_defaults.audits[0] == ("assert_positive_order_ids", {})
 
-    snapshot = Snapshot.from_node(model, nodes={}, config=config)
-    assert len(snapshot.audits) == 1
-    assert type(snapshot.audits[0]) == ModelAudit
-    assert snapshot.audits[0].query.sql() == "SELECT * FROM @this_model WHERE id < 0"
+    audits_with_args = model.audits_with_args
+    assert len(audits_with_args) == 1
+    audit, args = audits_with_args[0]
+    assert type(audit) == ModelAudit
+    assert args == {}
+    assert audit.query.sql() == "SELECT * FROM @this_model WHERE id < 0"
 
 
 def test_description(sushi_context):
@@ -4677,6 +4678,8 @@ def test_columns_python_sql_model() -> None:
 
 
 def test_named_variables_python_model(mocker: MockerFixture) -> None:
+    model.set_registry({})  # type: ignore
+
     @model(
         "test_named_variables_python_model",
         kind="full",
@@ -4710,6 +4713,8 @@ def test_named_variables_python_model(mocker: MockerFixture) -> None:
 
 
 def test_named_variables_kw_only_python_model(mocker: MockerFixture) -> None:
+    model.set_registry({})  # type: ignore
+
     @model(
         "test_named_variables_python_model",
         kind="full",
@@ -5010,15 +5015,19 @@ def test_macro_references_in_audits():
         model_defaults=ModelDefaultsConfig(dialect="duckdb", audits=["assert_not_zero"])
     )
     model = load_sql_based_model(
-        model_expression, audits=audits, default_audits=config.model_defaults.audits
+        model_expression,
+        audits=audits,
+        default_audits=config.model_defaults.audits,
+        audit_definitions=audits,
     )
 
     assert len(model.audits) == 2
-    assert len(model.inline_audits) == 1
+    audits_with_args = model.audits_with_args
+    assert len(audits_with_args) == 3
     assert len(model.python_env) == 3
     assert config.model_defaults.audits == [("assert_not_zero", {})]
     assert model.audits == [("assert_max_value", {}), ("assert_positive_ids", {})]
-    assert isinstance(model.inline_audits["assert_positive_ids"], ModelAudit)
+    assert isinstance(audits_with_args[0][0], ModelAudit)
     assert isinstance(model.python_env["min_value"], Executable)
     assert isinstance(model.python_env["max_value"], Executable)
     assert isinstance(model.python_env["zero_value"], Executable)
@@ -5732,7 +5741,7 @@ materialized TRUE
     [True, False],
 )
 def test_macro_func_hash(metadata_only):
-    macro.set_registry({})
+    macro.set_registry({})  # type: ignore
 
     @macro(metadata_only=metadata_only)
     def noop(evaluator) -> None:
@@ -5767,12 +5776,12 @@ def test_macro_func_hash(metadata_only):
         assert "noop" not in new_model._data_hash_values[0]
         assert "noop" in new_model._additional_metadata[0]
         assert model.data_hash == new_model.data_hash
-        assert model.metadata_hash(audits={}) != new_model.metadata_hash(audits={})
+        assert model.metadata_hash != new_model.metadata_hash
     else:
         assert "noop" in new_model._data_hash_values[0]
         assert not new_model._additional_metadata
         assert model.data_hash != new_model.data_hash
-        assert model.metadata_hash(audits={}) == new_model.metadata_hash(audits={})
+        assert model.metadata_hash == new_model.metadata_hash
 
     @macro(metadata_only=metadata_only)
     def noop(evaluator) -> None:
@@ -5786,12 +5795,12 @@ def test_macro_func_hash(metadata_only):
         assert "print" not in new_model._additional_metadata[0]
         assert "print" in updated_model._additional_metadata[0]
         assert new_model.data_hash == updated_model.data_hash
-        assert new_model.metadata_hash(audits={}) != updated_model.metadata_hash(audits={})
+        assert new_model.metadata_hash != updated_model.metadata_hash
     else:
         assert "print" not in new_model._data_hash_values[0]
         assert "print" in updated_model._data_hash_values[0]
         assert new_model.data_hash != updated_model.data_hash
-        assert new_model.metadata_hash(audits={}) == updated_model.metadata_hash(audits={})
+        assert new_model.metadata_hash == updated_model.metadata_hash
 
 
 def test_managed_kind_sql():
