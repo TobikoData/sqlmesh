@@ -77,6 +77,7 @@ class ModelMeta(_Node):
     allow_partials: bool = False
     signals: t.List[exp.Tuple] = []
     enabled: bool = True
+    physical_version: t.Optional[str] = None
 
     _bool_validator = bool_validator
     _model_kind_validator = model_kind_validator
@@ -160,6 +161,12 @@ class ModelMeta(_Node):
         # so this ensures they'll be stored as lowercase
         dialect = str_or_exp_to_str(v)
         return dialect and dialect.lower()
+
+    @field_validator("physical_version", mode="before")
+    def _physical_version_validator(cls, v: t.Any) -> t.Optional[str]:
+        if v is None:
+            return v
+        return str_or_exp_to_str(v)
 
     @field_validator("partitioned_by_", "clustered_by_", mode="before")
     @field_validator_v1_args

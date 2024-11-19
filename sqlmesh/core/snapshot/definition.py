@@ -918,7 +918,10 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             SnapshotChangeCategory.INDIRECT_NON_BREAKING,
             SnapshotChangeCategory.METADATA,
         )
-        if reuse_previous_version and self.previous_version:
+        if self.is_model and self.model.physical_version:
+            # If the model has a pinned version then use that.
+            self.version = self.model.physical_version
+        elif reuse_previous_version and self.previous_version:
             previous_version = self.previous_version
             self.version = previous_version.data_version.version
             self.physical_schema_ = previous_version.physical_schema
@@ -928,6 +931,9 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
                     previous_version.data_version.temp_version
                     or previous_version.fingerprint.to_version()
                 )
+        elif self.is_model and self.model.forward_only and not self.previous_version:
+            # If this is a new model then use a deterministic version, independent of the fingerprint.
+            self.version = hash_data([self.name, *self.model.kind.data_hash_values])
         else:
             self.version = self.fingerprint.to_version()
 
