@@ -197,13 +197,6 @@ MODEL (
   -- Good documentation for the primary key
   grain transaction_id,
 
-  -- What tradeoffs am I willing to make for fresh data?
-  --   I'm okay with allowing partial intervals to be processed for things
-  --   like logging data, but for sales and product data I want to make sure
-  --   complete intervals are processed so end users don't confuse incomplete
-  --   data with incorrect data.
-  allow_partials false, -- NOTE: false is default value
-
   -- How do I test this data?
   --   Validate that the `transaction_id` primary key values are both unique
   --   and non-null. Data audit tests only run for the processed intervals,
