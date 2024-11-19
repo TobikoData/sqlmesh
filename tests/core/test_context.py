@@ -317,6 +317,69 @@ def test_evaluate_limit():
     assert context.evaluate("without_limit", "2020-01-01", "2020-01-02", "2020-01-02", 2).size == 2
 
 
+def test_multiple_gateways(tmp_path: Path):
+    db_path = str(tmp_path / "db.db")
+    gateways = {
+        "staging": GatewayConfig(connection=DuckDBConnectionConfig(database=db_path)),
+        "final": GatewayConfig(connection=DuckDBConnectionConfig(database=db_path)),
+    }
+
+    config = Config(gateways=gateways, default_gateway="final")
+    context = Context(config=config)
+
+    gateway_model = load_sql_based_model(
+        parse(
+            """
+    MODEL(name staging.stg_model, start '2024-01-01',kind FULL, gateway staging);
+    SELECT t.v as v FROM (VALUES (1), (2), (3), (4), (5)) AS t(v)"""
+        ),
+        default_catalog="db",
+    )
+
+    assert gateway_model.gateway == "staging"
+    context.upsert_model(gateway_model)
+    assert context.evaluate("staging.stg_model", "2020-01-01", "2020-01-02", "2020-01-02").size == 5
+    assert (
+        context.evaluate("staging.stg_model", "2020-01-01", "2020-01-02", "2020-01-02", 2).size == 2
+    )
+
+    default_model = load_sql_based_model(
+        parse(
+            """
+    MODEL(name main.final_model, start '2024-01-01',kind FULL);
+    SELECT v FROM staging.stg_model"""
+        ),
+        default_catalog="db",
+    )
+
+    assert not default_model.gateway
+    context.upsert_model(default_model)
+
+    context.plan(
+        execution_time="2024-01-02",
+        auto_apply=True,
+        no_prompts=True,
+    )
+
+    physical_schemas = [snapshot.physical_schema for snapshot in sorted(context.snapshots.values())]
+    view_schemas = [
+        snapshot.qualified_view_name.schema_name for snapshot in sorted(context.snapshots.values())
+    ]
+
+    assert physical_schemas == ["sqlmesh__main", "sqlmesh__staging"]
+    assert view_schemas == ["main", "staging"]
+    assert (
+        str(context.fetchdf("select * from staging.stg_model"))
+        == "   v\n0  1\n1  2\n2  3\n3  4\n4  5"
+    )
+    assert str(context.fetchdf("select * from final_model")) == "   v\n0  1\n1  2\n2  3\n3  4\n4  5"
+    assert (
+        context.snapshots['"db"."main"."final_model"'].parents[0].name
+        == '"db"."staging"."stg_model"'
+    )
+    assert context.dag._sorted == ['"db"."staging"."stg_model"', '"db"."main"."final_model"']
+
+
 def test_plan_execution_time():
     context = Context(config=Config())
     context.upsert_model(

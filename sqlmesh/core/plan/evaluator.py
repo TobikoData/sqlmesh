@@ -238,24 +238,20 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                 gateway = snapshot.model.gateway or "default"
                 gateways.setdefault(gateway, []).append(snapshot)
 
-            if not self.snapshot_evaluators or len(gateways) == 1:
-                self.snapshot_evaluator.create(
-                    snapshots_to_create,
+            evaluators = (
+                self.snapshot_evaluators
+                if self.snapshot_evaluators
+                else {"default": self.snapshot_evaluator}
+            )
+            for gateway, snapshots_to_create_list in gateways.items():
+                evaluator = evaluators.get(gateway, self.snapshot_evaluator)
+                evaluator.create(
+                    snapshots_to_create_list,
                     snapshots,
                     allow_destructive_snapshots=plan.allow_destructive_models,
                     deployability_index=deployability_index,
                     on_complete=self.console.update_creation_progress,
                 )
-            else:
-                for gateway, snapshots_to_create_list in gateways.items():
-                    evaluator = self.snapshot_evaluators.get(gateway, self.snapshot_evaluator)
-                    evaluator.create(
-                        snapshots_to_create_list,
-                        snapshots,
-                        allow_destructive_snapshots=plan.allow_destructive_models,
-                        deployability_index=deployability_index,
-                        on_complete=self.console.update_creation_progress,
-                    )
 
             completed = True
         finally:

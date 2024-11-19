@@ -74,7 +74,7 @@ def test_varchar_size_workaround(make_mocked_engine_adapter: t.Callable, mocker:
     )
 
     assert to_sql_calls(adapter) == [
-        'CREATE VIEW "__temp_ctas_test_random_id" AS SELECT "char", "char1" + 1 AS "char1", "char2" AS "char2", "varchar", "varchar256", "varchar2" FROM (SELECT * FROM "table")',
+        'CREATE VIEW "__temp_ctas_test_random_id" AS SELECT "char", "char1" + 1 AS "char1", "char2" AS "char2", "varchar", "varchar256", "varchar2" FROM (SELECT * FROM "table") WITH NO SCHEMA BINDING',
         'DROP VIEW IF EXISTS "__temp_ctas_test_random_id" CASCADE',
         'CREATE TABLE "test_schema"."test_table" ("char" CHAR, "char1" CHAR(max), "char2" CHAR(2), "varchar" VARCHAR, "varchar256" VARCHAR(max), "varchar2" VARCHAR(2))',
     ]
@@ -113,7 +113,7 @@ def test_create_table_from_query_exists_no_if_not_exists(
     )
 
     assert to_sql_calls(adapter) == [
-        'CREATE VIEW "__temp_ctas_test_random_id" AS SELECT "a", "b", "x" + 1 AS "c", "d" AS "d", "e" FROM (SELECT * FROM "table")',
+        'CREATE VIEW "__temp_ctas_test_random_id" AS SELECT "a", "b", "x" + 1 AS "c", "d" AS "d", "e" FROM (SELECT * FROM "table") WITH NO SCHEMA BINDING',
         'DROP VIEW IF EXISTS "__temp_ctas_test_random_id" CASCADE',
         'CREATE TABLE "test_schema"."test_table" ("a" VARCHAR(MAX), "b" VARCHAR(60), "c" VARCHAR(MAX), "d" VARCHAR(MAX), "e" TIMESTAMP)',
     ]

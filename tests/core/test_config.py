@@ -18,13 +18,16 @@ from sqlmesh.core.config import (
     MWAASchedulerConfig,
     AirflowSchedulerConfig,
 )
-from sqlmesh.core.config.connection import DuckDBAttachOptions
+from sqlmesh.core.config.connection import DuckDBAttachOptions, RedshiftConnectionConfig
 from sqlmesh.core.config.feature_flag import DbtFeatureFlag, FeatureFlag
 from sqlmesh.core.config.loader import (
     load_config_from_env,
     load_config_from_paths,
     load_config_from_python_module,
 )
+from sqlmesh.core.context import Context
+from sqlmesh.core.engine_adapter.athena import AthenaEngineAdapter
+from sqlmesh.core.engine_adapter.redshift import RedshiftEngineAdapter
 from sqlmesh.core.notification_target import ConsoleNotificationTarget
 from sqlmesh.core.user import User
 from sqlmesh.utils.errors import ConfigError
@@ -702,3 +705,53 @@ model_defaults:
     assert isinstance(config.get_gateway("airflow_gateway").scheduler, AirflowSchedulerConfig)
     assert isinstance(config.get_gateway("mwaa_gateway").scheduler, MWAASchedulerConfig)
     assert isinstance(config.get_gateway("builtin_gateway").scheduler, BuiltInSchedulerConfig)
+
+
+def test_multi_gateway_config(tmp_path):
+    config_path = tmp_path / "config_athena_redshift.yaml"
+    with open(config_path, "w", encoding="utf-8") as fd:
+        fd.write(
+            """
+gateways:
+    redshift:  
+        connection:
+            type: redshift
+            user: user
+            password: '1234'
+            host: host
+            database: db
+        test_connection:
+            type: redshift
+            database: test_db
+        state_connection:
+            type: duckdb
+            database: state.db
+    athena:
+        connection:
+            type: athena
+            aws_access_key_id: '1234'
+            aws_secret_access_key: accesskey
+            work_group: group
+            s3_warehouse_location: s3://location
+            
+default_gateway: redshift
+
+model_defaults:
+    dialect: redshift
+        """
+        )
+
+    config = load_config_from_paths(
+        Config,
+        project_paths=[config_path],
+    )
+
+    ctx = Context(paths=tmp_path, config=config)
+
+    assert isinstance(ctx._connection_config, RedshiftConnectionConfig)
+    assert len(ctx._snapshot_evaluators) == 2
+    assert isinstance(ctx._snapshot_evaluators["athena"].adapter, AthenaEngineAdapter)
+    assert isinstance(ctx._snapshot_evaluators["redshift"].adapter, RedshiftEngineAdapter)
+    assert len(ctx._test_connection_configs) == 2
+    assert ctx._test_connection_configs["athena"].type_ == "duckdb"
+    assert ctx._test_connection_configs["redshift"].type_ == "redshift"
