@@ -798,8 +798,15 @@ class _Model(ModelMeta, frozen=True):
             # TODO: would this sort of logic be better off moved into the Kind?
             if self.dialect == "snowflake" and "target_lag" not in self.physical_properties:
                 raise_config_error(
-                    "Snowflake managed tables must specify the 'target_lag' physical property"
+                    "Snowflake managed tables must specify the 'target_lag' physical property",
+                    self._path,
                 )
+
+        if self.physical_version is not None and not self.forward_only:
+            raise_config_error(
+                "Pinning a physical version is only supported for forward only models",
+                self._path,
+            )
 
     def is_breaking_change(self, previous: Model) -> t.Optional[bool]:
         """Determines whether this model is a breaking change in relation to the `previous` model.
@@ -839,6 +846,7 @@ class _Model(ModelMeta, frozen=True):
             *(gen(expr) for expr in (self.clustered_by or [])),
             self.stamp,
             self.physical_schema,
+            self.physical_version,
             self.interval_unit.value if self.interval_unit is not None else None,
         ]
 

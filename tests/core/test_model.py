@@ -3951,7 +3951,7 @@ def test_default_catalog_sql(assert_exp_eq):
     The system is not designed to actually support having an engine that doesn't support default catalog
     to start supporting it or the reverse of that. If that did happen then bugs would occur.
     """
-    HASH_WITH_CATALOG = "1833514724"
+    HASH_WITH_CATALOG = "933919826"
 
     # Test setting default catalog doesn't change hash if it matches existing logic
     expressions = d.parse(
@@ -4117,7 +4117,7 @@ def test_default_catalog_sql(assert_exp_eq):
 
 
 def test_default_catalog_python():
-    HASH_WITH_CATALOG = "3773005315"
+    HASH_WITH_CATALOG = "1790191459"
 
     @model(name="db.table", kind="full", columns={'"COL"': "int"})
     def my_model(context, **kwargs):
@@ -4209,7 +4209,7 @@ def test_default_catalog_external_model():
     Since external models fqns are the only thing affected by default catalog, and when they change new snapshots
     are made, the hash will be the same across different names.
     """
-    EXPECTED_HASH = "4263688522"
+    EXPECTED_HASH = "4189607012"
 
     model = create_external_model("db.table", columns={"a": "int", "limit": "int"})
     assert model.default_catalog is None
@@ -5849,6 +5849,46 @@ def test_managed_kind_python():
         model.get_registry()["test_managed_python_model"].model(
             module_path=Path("."),
             path=Path("."),
+        ).validate_definition()
+
+
+def test_physical_version():
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.table,
+            kind INCREMENTAL_BY_TIME_RANGE(
+                time_column a,
+                forward_only TRUE,
+            ),
+            physical_version '1234',
+        );
+
+        SELECT a, b
+        """
+    )
+
+    model = load_sql_based_model(expressions)
+    assert model.physical_version == "1234"
+
+    with pytest.raises(
+        ConfigError,
+        match=r"Pinning a physical version is only supported for forward only models at.*",
+    ):
+        load_sql_based_model(
+            d.parse(
+                """
+            MODEL (
+                name db.table,
+                kind INCREMENTAL_BY_TIME_RANGE(
+                    time_column a,
+                ),
+                physical_version '1234',
+            );
+
+            SELECT a, b
+            """
+            )
         ).validate_definition()
 
 

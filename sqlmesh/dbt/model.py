@@ -79,6 +79,7 @@ class ModelConfig(BaseModelConfig):
     forward_only: bool = True
     disable_restatement: t.Optional[bool] = None
     allow_partials: t.Optional[bool] = None
+    physical_version: t.Optional[str] = None
 
     # DBT configuration fields
     cluster_by: t.Optional[t.List[str]] = None
@@ -399,7 +400,12 @@ class ModelConfig(BaseModelConfig):
 
     @property
     def sqlmesh_config_fields(self) -> t.Set[str]:
-        return super().sqlmesh_config_fields | {"cron", "interval_unit", "allow_partials"}
+        return super().sqlmesh_config_fields | {
+            "cron",
+            "interval_unit",
+            "allow_partials",
+            "physical_version",
+        }
 
     def to_sqlmesh(self, context: DbtContext) -> Model:
         """Converts the dbt model into a SQLMesh model."""
