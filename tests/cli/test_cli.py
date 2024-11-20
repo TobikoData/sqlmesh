@@ -426,7 +426,7 @@ def test_plan_dev_no_changes(runner, tmp_path):
     result = runner.invoke(cli, ["--log-file-dir", tmp_path, "--paths", tmp_path, "plan", "dev"])
     assert result.exit_code == 1
     assert (
-        "Error: No changes to plan: project files match the `prod` environment. Make a change or use the --include-unmodified flag to create a new environment without changes."
+        "Error: Creating a new environment requires a change, but project files match the `prod` environment. Make a change or use the --include-unmodified flag to create a new environment without changes."
         in result.output
     )
 

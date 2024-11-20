@@ -661,7 +661,7 @@ class PlanBuilder:
             and not self._backfill_models
         ):
             raise NoChangesPlanError(
-                f"No changes to plan: project files match the `{self._context_diff.create_from}` environment. Make a change or use the --include-unmodified flag to create a new environment without changes."
+                f"Creating a new environment requires a change, but project files match the `{self._context_diff.create_from}` environment. Make a change or use the --include-unmodified flag to create a new environment without changes."
             )
 
     @cached_property
