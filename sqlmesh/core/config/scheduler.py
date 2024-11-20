@@ -279,10 +279,6 @@ class YCAirflowSchedulerConfig(_BaseAirflowSchedulerConfig, BaseConfig):
     dag_creation_poll_interval_secs: int = 30
     dag_creation_max_retry_attempts: int = 10
 
-    backfill_concurrent_tasks: int = 4
-    ddl_concurrent_tasks: int = 4
-
-    max_snapshot_ids_per_request: t.Optional[int] = None
     use_state_connection: bool = False
 
     default_catalog_override: t.Optional[str] = None
