@@ -279,14 +279,16 @@ class YCAirflowSchedulerConfig(_BaseAirflowSchedulerConfig, BaseConfig):
     dag_creation_poll_interval_secs: int = 30
     dag_creation_max_retry_attempts: int = 10
 
+    backfill_concurrent_tasks: int = 4
+    ddl_concurrent_tasks: int = 4
+
     use_state_connection: bool = False
 
     default_catalog_override: t.Optional[str] = None
 
-    type_: Literal["yc_airflow"] = Field(alias="type", default="yc_airflow")
-
     _concurrent_tasks_validator = concurrent_tasks_validator
-    _max_snapshot_ids_per_request_validator = max_snapshot_ids_per_request_validator
+
+    type_: Literal["yc_airflow"] = Field(alias="type", default="yc_airflow")
 
     def get_client(self, console: t.Optional[Console] = None) -> AirflowClient:
         session = Session()
