@@ -25,12 +25,17 @@ MODE_TO_MODULES = {
     models.Mode.IDE: {
         models.Modules.EDITOR,
         models.Modules.FILES,
-        models.Modules.CATALOG,
+        models.Modules.DATA_CATALOG,
         models.Modules.ERRORS,
         models.Modules.PLANS,
     },
-    models.Mode.CATALOG: {models.Modules.CATALOG, models.Modules.ERRORS},
-    models.Mode.PLAN: {models.Modules.PLANS, models.Modules.LINEAGE, models.Modules.ERRORS},
+    models.Mode.CATALOG: {models.Modules.DATA_CATALOG},
+    models.Mode.PLAN: {
+        models.Modules.PLANS,
+        models.Modules.DATA_CATALOG,
+        models.Modules.LINEAGE,
+        models.Modules.ERRORS,
+    },
 }
 
 

@@ -54,7 +54,11 @@ import { type EnvironmentName } from '@models/environment'
 import { EnumPlanAction, ModelPlanAction } from '@models/plan-action'
 import { useChannelEvents, type EventSourceChannel } from '@api/channels'
 
-export default function Root(): JSX.Element {
+export default function Root({
+  content,
+}: {
+  content?: React.ReactNode
+}): JSX.Element {
   const location = useLocation()
   const navigate = useNavigate()
 
@@ -73,7 +77,7 @@ export default function Root(): JSX.Element {
   const setEnvironment = useStoreContext(s => s.setEnvironment)
   let channel: EventSourceChannel
 
-  if (isFalse(modules.hasOnlyDocs)) {
+  if (isFalse(modules.hasOnlyDataCatalog)) {
     channel = useChannelEvents()
   }
 
@@ -438,7 +442,7 @@ export default function Root(): JSX.Element {
   }, [formatFile])
 
   useEffect(() => {
-    if (location.pathname === EnumRoutes.Home) {
+    if (location.pathname === EnumRoutes.Home || location.pathname === '') {
       navigate(modules.defaultNavigationRoute(), { replace: true })
     }
   }, [location])
@@ -498,7 +502,7 @@ export default function Root(): JSX.Element {
             <Divider />
           </>
         )}
-        <Outlet />
+        {content ?? <Outlet />}
         <ModalConfirmation
           show={showConfirmation}
           onClose={() => {

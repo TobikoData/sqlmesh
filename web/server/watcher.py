@@ -96,7 +96,7 @@ async def watch_project() -> None:
         if settings.modules.intersection(
             {
                 models.Modules.FILES,
-                models.Modules.CATALOG,
+                models.Modules.DATA_CATALOG,
                 models.Modules.PLANS,
                 models.Modules.LINEAGE,
             }

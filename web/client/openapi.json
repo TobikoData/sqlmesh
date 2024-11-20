@@ -1592,7 +1592,7 @@
         "enum": [
           "editor",
           "files",
-          "catalog",
+          "data-catalog",
           "plans",
           "tests",
           "audits",

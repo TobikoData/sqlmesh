@@ -49,7 +49,7 @@ export default defineConfig({
               target: 'http://api:8000',
               rewrite: path => path.replace(`${BASE_URL}/api`, '/api'),
             },
-            [`${BASE_URL}/catalog`]: {
+            [`${BASE_URL}/data-catalog`]: {
               target: 'http://app:8001',
               rewrite: path => BASE,
             },

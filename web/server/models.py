@@ -54,7 +54,7 @@ class EventName(str, enum.Enum):
 class Modules(str, enum.Enum):
     EDITOR = "editor"  # include ability to edit files and run queries
     FILES = "files"  # include projects files
-    CATALOG = "catalog"  # include docs
+    DATA_CATALOG = "data-catalog"  # include data-catalog
     PLANS = "plans"  # include ability to run/apply plans
     TESTS = "tests"  # include ability to run tests
     AUDITS = "audits"  # include ability to run audits
