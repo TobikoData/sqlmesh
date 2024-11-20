@@ -4,7 +4,6 @@ from sqlglot import exp, parse_one
 from sqlmesh.core import constants as c
 from sqlmesh.core.context import Context
 from sqlmesh.core.audit import (
-    BUILT_IN_AUDITS,
     ModelAudit,
     StandaloneAudit,
     builtin,
@@ -166,7 +165,7 @@ def test_load_standalone_default_catalog(assert_exp_eq):
     """,
     )
     assert_exp_eq(
-        audit.render_query(audit),
+        audit.render_audit_query(),
         """
     SELECT
         *
@@ -402,8 +401,8 @@ def test_macro(model: Model):
         query="JINJA_QUERY_BEGIN; SELECT * FROM {{ this_model }} WHERE a IS NULL; JINJA_END;",
     )
 
-    assert audit.render_query(model).sql() == expected_query
-    assert audit_jinja.render_query(model).sql() == expected_query
+    assert model.render_audit_query(audit).sql() == expected_query
+    assert model.render_audit_query(audit_jinja).sql() == expected_query
 
 
 def test_load_with_defaults(model, assert_exp_eq):
@@ -437,14 +436,14 @@ def test_load_with_defaults(model, assert_exp_eq):
         "field4": exp.Literal.string("some string"),
     }
     assert_exp_eq(
-        audit.render_query(model, field4=exp.Literal.string("overridden")),
+        model.render_audit_query(audit, field4=exp.Literal.string("overridden")),
         'SELECT * FROM "db"."table" AS "table" WHERE TRUE AND \'overridden\' IN (\'some string\', \'other string\') AND "some_column" = 3 AND "other_column" <> \'overridden\'',
     )
 
 
 def test_not_null_audit(model: Model):
-    rendered_query_a = builtin.not_null_audit.render_query(
-        model,
+    rendered_query_a = model.render_audit_query(
+        builtin.not_null_audit,
         columns=[exp.to_column("a")],
     )
     assert (
@@ -452,8 +451,8 @@ def test_not_null_audit(model: Model):
         == """SELECT * FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" BETWEEN '1970-01-01' AND '1970-01-01') AS "_q_0" WHERE "a" IS NULL AND TRUE"""
     )
 
-    rendered_query_a_and_b = builtin.not_null_audit.render_query(
-        model,
+    rendered_query_a_and_b = model.render_audit_query(
+        builtin.not_null_audit,
         columns=[exp.to_column("a"), exp.to_column("b")],
     )
     assert (
@@ -463,8 +462,8 @@ def test_not_null_audit(model: Model):
 
 
 def test_not_null_audit_default_catalog(model_default_catalog: Model):
-    rendered_query_a = builtin.not_null_audit.render_query(
-        model_default_catalog,
+    rendered_query_a = model_default_catalog.render_audit_query(
+        builtin.not_null_audit,
         columns=[exp.to_column("a")],
     )
     assert (
@@ -472,8 +471,8 @@ def test_not_null_audit_default_catalog(model_default_catalog: Model):
         == """SELECT * FROM (SELECT * FROM "test_catalog"."db"."test_model" AS "test_model" WHERE "ds" BETWEEN '1970-01-01' AND '1970-01-01') AS "_q_0" WHERE "a" IS NULL AND TRUE"""
     )
 
-    rendered_query_a_and_b = builtin.not_null_audit.render_query(
-        model_default_catalog,
+    rendered_query_a_and_b = model_default_catalog.render_audit_query(
+        builtin.not_null_audit,
         columns=[exp.to_column("a"), exp.to_column("b")],
     )
     assert (
@@ -483,16 +482,16 @@ def test_not_null_audit_default_catalog(model_default_catalog: Model):
 
 
 def test_unique_values_audit(model: Model):
-    rendered_query_a = builtin.unique_values_audit.render_query(
-        model, columns=[exp.to_column("a")], condition=parse_one("b IS NULL")
+    rendered_query_a = model.render_audit_query(
+        builtin.unique_values_audit, columns=[exp.to_column("a")], condition=parse_one("b IS NULL")
     )
     assert (
         rendered_query_a.sql()
         == 'SELECT * FROM (SELECT ROW_NUMBER() OVER (PARTITION BY "a" ORDER BY "a") AS "rank_a" FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" BETWEEN \'1970-01-01\' AND \'1970-01-01\') AS "_q_0" WHERE "b" IS NULL) AS "_q_1" WHERE "rank_a" > 1'
     )
 
-    rendered_query_a_and_b = builtin.unique_values_audit.render_query(
-        model, columns=[exp.to_column("a"), exp.to_column("b")]
+    rendered_query_a_and_b = model.render_audit_query(
+        builtin.unique_values_audit, columns=[exp.to_column("a"), exp.to_column("b")]
     )
     assert (
         rendered_query_a_and_b.sql()
@@ -501,8 +500,8 @@ def test_unique_values_audit(model: Model):
 
 
 def test_accepted_values_audit(model: Model):
-    rendered_query = builtin.accepted_values_audit.render_query(
-        model,
+    rendered_query = model.render_audit_query(
+        builtin.accepted_values_audit,
         column=exp.to_column("a"),
         is_in=["value_a", "value_b"],
     )
@@ -513,8 +512,8 @@ def test_accepted_values_audit(model: Model):
 
 
 def test_number_of_rows_audit(model: Model):
-    rendered_query = builtin.number_of_rows_audit.render_query(
-        model,
+    rendered_query = model.render_audit_query(
+        builtin.number_of_rows_audit,
         threshold=0,
     )
     assert (
@@ -524,8 +523,8 @@ def test_number_of_rows_audit(model: Model):
 
 
 def test_forall_audit(model: Model):
-    rendered_query_a = builtin.forall_audit.render_query(
-        model,
+    rendered_query_a = model.render_audit_query(
+        builtin.forall_audit,
         criteria=[parse_one("a >= b")],
     )
     assert (
@@ -533,8 +532,8 @@ def test_forall_audit(model: Model):
         == """SELECT * FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" BETWEEN '1970-01-01' AND '1970-01-01') AS "_q_0" WHERE NOT ("a" >= "b") AND TRUE"""
     )
 
-    rendered_query_a = builtin.forall_audit.render_query(
-        model,
+    rendered_query_a = model.render_audit_query(
+        builtin.forall_audit,
         criteria=[parse_one("a >= b"), parse_one("c + d - e < 1.0")],
     )
     assert (
@@ -542,8 +541,8 @@ def test_forall_audit(model: Model):
         == """SELECT * FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" BETWEEN '1970-01-01' AND '1970-01-01') AS "_q_0" WHERE (NOT ("a" >= "b") OR NOT ("c" + "d" - "e" < 1.0)) AND TRUE"""
     )
 
-    rendered_query_a = builtin.forall_audit.render_query(
-        model,
+    rendered_query_a = model.render_audit_query(
+        builtin.forall_audit,
         criteria=[parse_one("a >= b"), parse_one("c + d - e < 1.0")],
         condition=parse_one("f = 42"),
     )
@@ -554,22 +553,22 @@ def test_forall_audit(model: Model):
 
 
 def test_accepted_range_audit(model: Model):
-    rendered_query = builtin.accepted_range_audit.render_query(
-        model, column=exp.to_column("a"), min_v=0
+    rendered_query = model.render_audit_query(
+        builtin.accepted_range_audit, column=exp.to_column("a"), min_v=0
     )
     assert (
         rendered_query.sql()
         == 'SELECT * FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" BETWEEN \'1970-01-01\' AND \'1970-01-01\') AS "_q_0" WHERE "a" < 0 AND TRUE'
     )
-    rendered_query = builtin.accepted_range_audit.render_query(
-        model, column=exp.to_column("a"), max_v=100, inclusive=exp.false()
+    rendered_query = model.render_audit_query(
+        builtin.accepted_range_audit, column=exp.to_column("a"), max_v=100, inclusive=exp.false()
     )
     assert (
         rendered_query.sql()
         == 'SELECT * FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" BETWEEN \'1970-01-01\' AND \'1970-01-01\') AS "_q_0" WHERE "a" >= 100 AND TRUE'
     )
-    rendered_query = builtin.accepted_range_audit.render_query(
-        model, column=exp.to_column("a"), min_v=100, max_v=100
+    rendered_query = model.render_audit_query(
+        builtin.accepted_range_audit, column=exp.to_column("a"), min_v=100, max_v=100
     )
     assert (
         rendered_query.sql()
@@ -578,8 +577,8 @@ def test_accepted_range_audit(model: Model):
 
 
 def test_at_least_one_audit(model: Model):
-    rendered_query = builtin.at_least_one_audit.render_query(
-        model,
+    rendered_query = model.render_audit_query(
+        builtin.at_least_one_audit,
         column=exp.to_column("a"),
     )
     assert (
@@ -589,8 +588,8 @@ def test_at_least_one_audit(model: Model):
 
 
 def test_mutually_exclusive_ranges_audit(model: Model):
-    rendered_query = builtin.mutually_exclusive_ranges_audit.render_query(
-        model,
+    rendered_query = model.render_audit_query(
+        builtin.mutually_exclusive_ranges_audit,
         lower_bound_column=exp.to_column("a"),
         upper_bound_column=exp.to_column("a"),
     )
@@ -601,8 +600,8 @@ def test_mutually_exclusive_ranges_audit(model: Model):
 
 
 def test_sequential_values_audit(model: Model):
-    rendered_query = builtin.sequential_values_audit.render_query(
-        model,
+    rendered_query = model.render_audit_query(
+        builtin.sequential_values_audit,
         column=exp.to_column("a"),
     )
     assert (
@@ -612,8 +611,8 @@ def test_sequential_values_audit(model: Model):
 
 
 def test_chi_square_audit(model: Model):
-    rendered_query = builtin.chi_square_audit.render_query(
-        model,
+    rendered_query = model.render_audit_query(
+        builtin.chi_square_audit,
         column_a=exp.to_column("a"),
         column_b=exp.to_column("b"),
         critical_value=exp.convert(9.48773),
@@ -625,8 +624,8 @@ def test_chi_square_audit(model: Model):
 
 
 def test_pattern_audits(model: Model):
-    rendered_query = builtin.match_regex_pattern_list_audit.render_query(
-        model,
+    rendered_query = model.render_audit_query(
+        builtin.match_regex_pattern_list_audit,
         column=exp.to_column("a"),
         patterns=[r"^\d.*", ".*!$"],
     )
@@ -635,8 +634,8 @@ def test_pattern_audits(model: Model):
         == """SELECT * FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" BETWEEN \'1970-01-01\' AND \'1970-01-01\') AS "_q_0" WHERE (NOT REGEXP_LIKE("a", \'^\\d.*\') AND NOT REGEXP_LIKE("a", \'.*!$\')) AND TRUE"""
     )
 
-    rendered_query = builtin.not_match_regex_pattern_list_audit.render_query(
-        model,
+    rendered_query = model.render_audit_query(
+        builtin.not_match_regex_pattern_list_audit,
         column=exp.to_column("a"),
         patterns=[r"^\d.*", ".*!$"],
     )
@@ -645,8 +644,8 @@ def test_pattern_audits(model: Model):
         == """SELECT * FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" BETWEEN \'1970-01-01\' AND \'1970-01-01\') AS "_q_0" WHERE (REGEXP_LIKE("a", \'^\\d.*\') OR REGEXP_LIKE("a", \'.*!$\')) AND TRUE"""
     )
 
-    rendered_query = builtin.match_like_pattern_list.render_query(
-        model,
+    rendered_query = model.render_audit_query(
+        builtin.match_like_pattern_list,
         column=exp.to_column("a"),
         patterns=["jim%", "pam%"],
     )
@@ -655,8 +654,8 @@ def test_pattern_audits(model: Model):
         == """SELECT * FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" BETWEEN \'1970-01-01\' AND \'1970-01-01\') AS "_q_0" WHERE (NOT "a" LIKE \'jim%\' AND NOT "a" LIKE \'pam%\') AND TRUE"""
     )
 
-    rendered_query = builtin.not_match_like_pattern_list_audit.render_query(
-        model,
+    rendered_query = model.render_audit_query(
+        builtin.not_match_like_pattern_list_audit,
         column=exp.to_column("a"),
         patterns=["jim%", "pam%"],
     )
@@ -673,7 +672,7 @@ def test_standalone_audit(model: Model, assert_exp_eq):
 
     assert audit.depends_on == {model.fqn}
 
-    rendered_query = audit.render_query(audit)
+    rendered_query = audit.render_audit_query()
     assert_exp_eq(
         rendered_query, """SELECT * FROM "db"."test_model" AS "test_model" WHERE "col" IS NULL"""
     )
@@ -765,14 +764,16 @@ def test_text_diff():
 
 
 def test_non_blocking_builtin():
+    from sqlmesh.core.audit.builtin import BUILT_IN_AUDITS
+
     assert BUILT_IN_AUDITS["not_null_non_blocking"].blocking is False
     assert BUILT_IN_AUDITS["not_null_non_blocking"].name == "not_null_non_blocking"
     assert BUILT_IN_AUDITS["not_null"].query == BUILT_IN_AUDITS["not_null_non_blocking"].query
 
 
 def test_string_length_between_audit(model: Model):
-    rendered_query = builtin.string_length_between_audit.render_query(
-        model,
+    rendered_query = model.render_audit_query(
+        builtin.string_length_between_audit,
         column=exp.column("x"),
         min_v=1,
         max_v=5,
@@ -784,8 +785,8 @@ def test_string_length_between_audit(model: Model):
 
 
 def test_not_constant_audit(model: Model):
-    rendered_query = builtin.not_constant_audit.render_query(
-        model, column=exp.column("x"), condition=exp.condition("x > 1")
+    rendered_query = model.render_audit_query(
+        builtin.not_constant_audit, column=exp.column("x"), condition=exp.condition("x > 1")
     )
     assert (
         rendered_query.sql()
@@ -794,8 +795,8 @@ def test_not_constant_audit(model: Model):
 
 
 def test_condition_with_macro_var(model: Model):
-    rendered_query = builtin.not_null_audit.render_query(
-        model,
+    rendered_query = model.render_audit_query(
+        builtin.not_null_audit,
         columns=[exp.column("x")],
         condition=exp.condition("dt BETWEEN @start_dt AND @end_dt"),
     )
@@ -831,7 +832,7 @@ def test_variables(assert_exp_eq):
     )
     assert audit.python_env[c.SQLMESH_VARS] == Executable.value({"test_var": "test_val"})
     assert (
-        audit.render_query(audit).sql(dialect="bigquery")
+        audit.render_audit_query().sql(dialect="bigquery")
         == "SELECT * FROM `db`.`table` AS `table` WHERE `col` = 'test_val'"
     )
 
@@ -865,9 +866,9 @@ def test_load_inline_audits(assert_exp_eq):
 
     model = load_sql_based_model(expressions)
     assert len(model.audits) == 1
-    assert len(model.inline_audits) == 2
-    assert isinstance(model.inline_audits["assert_positive_id"], ModelAudit)
-    assert isinstance(model.inline_audits["does_not_exceed_threshold"], ModelAudit)
+    assert len(model.audits_with_args) == 2
+    assert isinstance(model.audit_definitions["assert_positive_id"], ModelAudit)
+    assert isinstance(model.audit_definitions["does_not_exceed_threshold"], ModelAudit)
 
 
 def test_model_inline_audits(sushi_context: Context):
@@ -876,6 +877,6 @@ def test_model_inline_audits(sushi_context: Context):
     model = sushi_context.get_snapshot(model_name, raise_if_missing=True).node
 
     assert isinstance(model, SeedModel)
-    assert len(model.inline_audits) == 3
-    assert isinstance(model.inline_audits["assert_valid_name"], ModelAudit)
-    assert model.inline_audits["assert_positive_id"].render_query(model).sql() == expected_query
+    assert len(model.audit_definitions) == 3
+    assert isinstance(model.audit_definitions["assert_valid_name"], ModelAudit)
+    model.render_audit_query(model.audit_definitions["assert_positive_id"]).sql() == expected_query

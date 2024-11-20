@@ -3,12 +3,12 @@ import typing as t
 import pytest
 from pytest_mock.plugin import MockerFixture
 from sqlglot import parse_one, parse
+from sqlglot.helper import first
 
-from sqlmesh.core.audit import AuditResult
 from sqlmesh.core.context import Context
 from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.model import load_sql_based_model
-from sqlmesh.core.model.definition import SqlModel
+from sqlmesh.core.model.definition import AuditResult, SqlModel
 from sqlmesh.core.model.kind import (
     FullKind,
     IncrementalByTimeRangeKind,
@@ -581,7 +581,7 @@ def test_audit_failure_notifications(
     notify_mock = mocker.Mock()
     mocker.patch("sqlmesh.core.notification_target.NotificationTargetManager.notify", notify_mock)
 
-    audit = next(iter(waiter_names.audits))
+    audit = first(waiter_names.model.audit_definitions.values())
 
     def _evaluate():
         scheduler.evaluate(
@@ -609,9 +609,8 @@ def test_audit_failure_notifications(
     assert notify_user_mock.call_count == 0
     assert notify_mock.call_count == 0
 
-    audit = audit.copy(update={"blocking": False})
     evaluator_audit_mock.return_value = [
-        AuditResult(audit=audit, model=waiter_names.model, count=1, skipped=False)
+        AuditResult(audit=audit, model=waiter_names.model, count=1, skipped=False, blocking=False)
     ]
     _evaluate()
     assert notify_user_mock.call_count == 1
@@ -619,7 +618,6 @@ def test_audit_failure_notifications(
     notify_user_mock.reset_mock()
     notify_mock.reset_mock()
 
-    audit = audit.copy(update={"blocking": True})
     evaluator_audit_mock.return_value = [
         AuditResult(audit=audit, model=waiter_names.model, count=1, skipped=False)
     ]

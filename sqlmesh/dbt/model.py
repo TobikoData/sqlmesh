@@ -29,6 +29,7 @@ from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import field_validator
 
 if t.TYPE_CHECKING:
+    from sqlmesh.core.audit.definition import ModelAudit
     from sqlmesh.dbt.context import DbtContext
 
 
@@ -79,6 +80,7 @@ class ModelConfig(BaseModelConfig):
     forward_only: bool = True
     disable_restatement: t.Optional[bool] = None
     allow_partials: t.Optional[bool] = None
+    physical_version: t.Optional[str] = None
 
     # DBT configuration fields
     cluster_by: t.Optional[t.List[str]] = None
@@ -399,9 +401,16 @@ class ModelConfig(BaseModelConfig):
 
     @property
     def sqlmesh_config_fields(self) -> t.Set[str]:
-        return super().sqlmesh_config_fields | {"cron", "interval_unit", "allow_partials"}
+        return super().sqlmesh_config_fields | {
+            "cron",
+            "interval_unit",
+            "allow_partials",
+            "physical_version",
+        }
 
-    def to_sqlmesh(self, context: DbtContext) -> Model:
+    def to_sqlmesh(
+        self, context: DbtContext, audit_definitions: t.Optional[t.Dict[str, ModelAudit]] = None
+    ) -> Model:
         """Converts the dbt model into a SQLMesh model."""
         model_dialect = self.dialect(context)
         query = d.jinja_query(self.sql_no_config)
@@ -535,6 +544,7 @@ class ModelConfig(BaseModelConfig):
             dialect=model_dialect,
             kind=self.model_kind(context),
             start=self.start,
+            audit_definitions=audit_definitions,
             # This ensures that we bypass query rendering that would otherwise be required to extract additional
             # dependencies from the model's SQL.
             # Note: any table dependencies that are not referenced using the `ref` macro will not be included.

@@ -344,6 +344,11 @@ Learn more about these properties and their default values in the [model configu
 ### enabled
 :   Whether the model is enabled. This attribute is `true` by default. Setting it to `false` causes SQLMesh to ignore this model when loading the project.
 
+### physical_version
+:   Pins the version of this model's physical table to the given value.
+
+    NOTE: This can only be set for forward-only models.
+
 ## Incremental Model Properties
 
 These properties can be specified in an incremental model's `kind` definition.

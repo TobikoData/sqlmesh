@@ -270,7 +270,7 @@ class Scheduler:
                 self.notification_target_manager.notify_user(
                     NotificationEvent.AUDIT_FAILURE, snapshot.node.owner, error
                 )
-            if audit_result.audit.blocking:
+            if audit_result.blocking:
                 audit_error_to_raise = error
 
         if audit_error_to_raise:

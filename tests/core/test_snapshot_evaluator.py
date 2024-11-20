@@ -538,7 +538,7 @@ def test_evaluate_materialized_view_with_partitioned_by_cluster_by(
         [
             call("CREATE SCHEMA IF NOT EXISTS `sqlmesh__test_schema`"),
             call(
-                "CREATE MATERIALIZED VIEW `sqlmesh__test_schema`.`test_schema__test_model__1984886695` PARTITION BY `a` CLUSTER BY `b` AS SELECT `a` AS `a`, `b` AS `b` FROM `tbl` AS `tbl`"
+                "CREATE MATERIALIZED VIEW `sqlmesh__test_schema`.`test_schema__test_model__3414391032` PARTITION BY `a` CLUSTER BY `b` AS SELECT `a` AS `a`, `b` AS `b` FROM `tbl` AS `tbl`"
             ),
         ]
     )
@@ -1646,10 +1646,19 @@ def test_create_scd_type_2_by_time(adapter_mock, make_snapshot):
         table_description=None,
     )
 
-    adapter_mock.create_table.assert_called_once_with(
-        snapshot.table_name(),
-        column_descriptions={},
-        **common_kwargs,
+    adapter_mock.create_table.assert_has_calls(
+        [
+            call(
+                snapshot.table_name(is_deployable=False),
+                column_descriptions=None,
+                **common_kwargs,
+            ),
+            call(
+                snapshot.table_name(),
+                column_descriptions={},
+                **common_kwargs,
+            ),
+        ]
     )
 
 
@@ -1692,8 +1701,17 @@ def test_create_ctas_scd_type_2_by_time(adapter_mock, make_snapshot):
         table_description=None,
     )
 
-    adapter_mock.ctas.assert_called_once_with(
-        snapshot.table_name(), query, None, column_descriptions={}, **common_kwargs
+    adapter_mock.ctas.assert_has_calls(
+        [
+            call(
+                snapshot.table_name(is_deployable=False),
+                query,
+                None,
+                column_descriptions=None,
+                **common_kwargs,
+            ),
+            call(snapshot.table_name(), query, None, column_descriptions={}, **common_kwargs),
+        ]
     )
 
 
@@ -1800,8 +1818,14 @@ def test_create_scd_type_2_by_column(adapter_mock, make_snapshot):
         table_description=None,
     )
 
-    adapter_mock.create_table.assert_called_once_with(
-        snapshot.table_name(), **{**common_kwargs, "column_descriptions": {}}
+    adapter_mock.create_table.assert_has_calls(
+        [
+            call(
+                snapshot.table_name(is_deployable=False),
+                **{**common_kwargs, "column_descriptions": None},
+            ),
+            call(snapshot.table_name(), **{**common_kwargs, "column_descriptions": {}}),
+        ]
     )
 
 
@@ -1843,8 +1867,18 @@ def test_create_ctas_scd_type_2_by_column(adapter_mock, make_snapshot):
         table_description=None,
     )
 
-    adapter_mock.ctas.assert_called_once_with(
-        snapshot.table_name(), query, None, **{**common_kwargs, "column_descriptions": {}}
+    adapter_mock.ctas.assert_has_calls(
+        [
+            call(
+                snapshot.table_name(is_deployable=False),
+                query,
+                None,
+                **{**common_kwargs, "column_descriptions": None},
+            ),
+            call(
+                snapshot.table_name(), query, None, **{**common_kwargs, "column_descriptions": {}}
+            ),
+        ]
     )
 
 
@@ -2292,7 +2326,7 @@ def test_standalone_audit(mocker: MockerFixture, adapter_mock, make_snapshot):
     adapter_mock.fetchone.return_value = (0,)
     evaluator.audit(snapshot=snapshot, snapshots={})
 
-    query = audit.render_query(snapshot)
+    query = audit.render_audit_query()
     adapter_mock.fetchone.assert_called_once_with(
         select("COUNT(*)").from_(query.subquery("audit")), quote_identifiers=True
     )
@@ -2346,8 +2380,9 @@ def test_audit_wap(adapter_mock, make_snapshot):
             ("not_null", {"columns": exp.to_column("a")}),
             ("test_audit", {}),
         ],
+        audit_definitions={custom_audit.name: custom_audit},
     )
-    snapshot = make_snapshot(model, audits={custom_audit.name: custom_audit})
+    snapshot = make_snapshot(model)
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
     wap_id = "test_wap_id"
@@ -2402,8 +2437,9 @@ def test_audit_set_blocking_at_use_site(adapter_mock, make_snapshot):
             SELECT a::int FROM tbl
             """
         ),
+        audit_definitions={always_failing_audit.name: always_failing_audit},
     )
-    snapshot = make_snapshot(model, audits={always_failing_audit.name: always_failing_audit})
+    snapshot = make_snapshot(model)
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
     # Return a non-zero count to indicate audit failure
@@ -2421,8 +2457,9 @@ def test_audit_set_blocking_at_use_site(adapter_mock, make_snapshot):
         audits=[
             ("always_fail", {"blocking": exp.true()}),
         ],
+        audit_definitions={always_failing_audit.name: always_failing_audit},
     )
-    snapshot = make_snapshot(model, audits={always_failing_audit.name: always_failing_audit})
+    snapshot = make_snapshot(model)
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
     adapter_mock.fetchone.return_value = (1,)
 
@@ -2773,10 +2810,10 @@ def test_cleanup_managed(adapter_mock, make_snapshot, mocker: MockerFixture):
     evaluator.cleanup(target_snapshots=[cleanup_task])
 
     adapter_mock.drop_table.assert_called_once_with(
-        "sqlmesh__test_schema.test_schema__test_model__2898537538__temp"
+        "sqlmesh__test_schema.test_schema__test_model__2319802374__temp"
     )
     adapter_mock.drop_managed_table.assert_called_once_with(
-        "sqlmesh__test_schema.test_schema__test_model__2898537538"
+        "sqlmesh__test_schema.test_schema__test_model__2319802374"
     )
 
 

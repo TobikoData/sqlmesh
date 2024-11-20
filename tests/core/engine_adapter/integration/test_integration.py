@@ -2098,10 +2098,10 @@ def test_managed_model_upstream_forward_only(ctx: TestContext):
     assert plan_1.snapshot_for(model_a).model.view_name in plan_1.schema_metadata.views
     assert plan_1.snapshot_for(model_b).model.view_name in plan_1.schema_metadata.views
 
-    assert len(plan_1.internal_schema_metadata.tables) == 2
+    assert len(plan_1.internal_schema_metadata.tables) == 3
 
     assert plan_1.table_name_for(model_a) in plan_1.internal_schema_metadata.tables
-    assert plan_1.dev_table_name_for(model_a) not in plan_1.internal_schema_metadata.tables
+    assert plan_1.dev_table_name_for(model_a) in plan_1.internal_schema_metadata.tables
     assert (
         plan_1.table_name_for(model_b) not in plan_1.internal_schema_metadata.tables
     )  # because its a managed table

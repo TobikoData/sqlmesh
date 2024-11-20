@@ -372,16 +372,18 @@ def test_override_builtin_audit_blocking_mode():
             call(
                 "Audit 'not_null' for model 'db.x' failed.\n"
                 "Got 1 results, expected 0.\n"
-                'SELECT * FROM (SELECT * FROM "sqlmesh__db"."db__x__829001280" AS "db__x__829001280") AS "_q_0" WHERE "c" IS NULL AND TRUE\n'
+                'SELECT * FROM (SELECT * FROM "sqlmesh__db"."db__x__2457047842" AS "db__x__2457047842") AS "_q_0" WHERE "c" IS NULL AND TRUE\n'
                 "Audit is warn only so proceeding with execution."
             )
         ]
 
     # Even though there are two builtin audits referenced in the above definition, we only
     # store the one that overrides `blocking` in the snapshot; the other one isn't needed
-    assert len(new_snapshot.audits) == 1
-    assert new_snapshot.audits[0].name == "not_null"
-    assert new_snapshot.audits[0].blocking is False
+    audits_with_args = new_snapshot.model.audits_with_args
+    assert len(audits_with_args) == 2
+    audit, args = audits_with_args[0]
+    assert audit.name == "not_null"
+    assert list(args) == ["columns", "blocking"]
 
     context = Context(config=Config())
     context.upsert_model(
