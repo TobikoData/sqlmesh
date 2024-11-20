@@ -147,7 +147,9 @@ def test_star(assert_exp_eq) -> None:
     assert_exp_eq(evaluator.transform(parse_one(sql, read="tsql")), expected_sql, dialect="tsql")
 
     sql = """SELECT @STAR(foo) FROM foo"""
-    expected_sql = """SELECT CAST("FOO"."A" AS DATE) AS "A", CAST("FOO"."B" AS INTEGER) AS "B" FROM foo"""
+    expected_sql = (
+        """SELECT CAST("FOO"."A" AS DATE) AS "A", CAST("FOO"."B" AS INTEGER) AS "B" FROM foo"""
+    )
     schema = MappingSchema(
         {
             "foo": {
@@ -158,10 +160,14 @@ def test_star(assert_exp_eq) -> None:
         dialect="snowflake",
     )
     evaluator = MacroEvaluator(schema=schema, dialect="snowflake")
-    assert_exp_eq(evaluator.transform(parse_one(sql, read="snowflake")), expected_sql, dialect="snowflake")
+    assert_exp_eq(
+        evaluator.transform(parse_one(sql, read="snowflake")), expected_sql, dialect="snowflake"
+    )
 
     sql = """SELECT @STAR("foo") FROM "foo" """
-    expected_sql = """SELECT CAST("foo"."A" AS DATE) AS "A", CAST("foo"."B" AS INTEGER) AS "B" FROM "foo" """
+    expected_sql = (
+        """SELECT CAST("foo"."A" AS DATE) AS "A", CAST("foo"."B" AS INTEGER) AS "B" FROM "foo" """
+    )
     schema = MappingSchema(
         {
             '"foo"': {
@@ -172,7 +178,9 @@ def test_star(assert_exp_eq) -> None:
         dialect="snowflake",
     )
     evaluator = MacroEvaluator(schema=schema, dialect="snowflake")
-    assert_exp_eq(evaluator.transform(parse_one(sql, read="snowflake")), expected_sql, dialect="snowflake")
+    assert_exp_eq(
+        evaluator.transform(parse_one(sql, read="snowflake")), expected_sql, dialect="snowflake"
+    )
 
     sql = """SELECT @STAR(foo, alias := "bar") FROM foo "bar" """
     expected_sql = """SELECT CAST("bar"."A" AS DATE) AS "A", CAST("bar"."B" AS INTEGER) AS "B" FROM foo "bar" """
@@ -186,7 +194,9 @@ def test_star(assert_exp_eq) -> None:
         dialect="snowflake",
     )
     evaluator = MacroEvaluator(schema=schema, dialect="snowflake")
-    assert_exp_eq(evaluator.transform(parse_one(sql, read="snowflake")), expected_sql, dialect="snowflake")
+    assert_exp_eq(
+        evaluator.transform(parse_one(sql, read="snowflake")), expected_sql, dialect="snowflake"
+    )
 
 
 def test_start_no_column_types(assert_exp_eq) -> None:
