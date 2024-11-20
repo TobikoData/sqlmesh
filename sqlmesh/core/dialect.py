@@ -552,11 +552,15 @@ def _create_parser(parser_type: t.Type[exp.Expression], table_keys: t.List[str])
             elif key == "columns":
                 value = self._parse_schema()
             elif key == "kind":
-                id_var = self._parse_id_var(any_token=True)
-                if not id_var:
-                    value = None
+                if self._match(TokenType.PARAMETER):
+                    field = _parse_macro(self)
                 else:
-                    kind = ModelKindName[id_var.name.upper()]
+                    field = self._parse_id_var(any_token=True)
+
+                if not field or isinstance(field, (MacroVar, MacroFunc)):
+                    value = field
+                else:
+                    kind = ModelKindName[field.name.upper()]
 
                     if kind in (
                         ModelKindName.INCREMENTAL_BY_TIME_RANGE,
@@ -573,11 +577,7 @@ def _create_parser(parser_type: t.Type[exp.Expression], table_keys: t.List[str])
                     else:
                         props = None
 
-                    value = self.expression(
-                        ModelKind,
-                        this=kind.value,
-                        expressions=props,
-                    )
+                    value = self.expression(ModelKind, this=kind.value, expressions=props)
             elif key == "expression":
                 value = self._parse_conjunction()
             else:
