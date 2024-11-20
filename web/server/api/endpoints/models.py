@@ -82,12 +82,10 @@ def serialize_model(context: Context, model: Model, render_query: bool = False) 
     columns = []
 
     for name, data_type in columns_to_types.items():
-        if name in model.column_descriptions:
-            description: t.Optional[str] = model.column_descriptions[name]
-        elif render_query:
-            description = column_description(context, model.name, name)
-        else:
-            description = None
+        description = model.column_descriptions.get(name)
+        if not description and render_query:
+            # The column name is already normalized in `columns_to_types`, so we need to quote it
+            description = column_description(context, model.name, name, quote_column=True)
 
         columns.append(models.Column(name=name, type=str(data_type), description=description))
 

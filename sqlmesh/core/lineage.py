@@ -69,7 +69,9 @@ def lineage(
     )
 
 
-def column_dependencies(context: Context, model_name: str, column: str) -> t.Dict[str, t.Set[str]]:
+def column_dependencies(
+    context: Context, model_name: str, column: str | exp.Column
+) -> t.Dict[str, t.Set[str]]:
     model = context.get_model(model_name)
     parents = defaultdict(set)
 
@@ -86,7 +88,9 @@ def column_dependencies(context: Context, model_name: str, column: str) -> t.Dic
     return dict(parents)
 
 
-def column_description(context: Context, model_name: str, column: str) -> t.Optional[str]:
+def column_description(
+    context: Context, model_name: str, column: str, quote_column: bool = False
+) -> t.Optional[str]:
     """Returns a column's description, inferring if needed."""
     model = context.get_model(model_name)
 
@@ -96,7 +100,7 @@ def column_description(context: Context, model_name: str, column: str) -> t.Opti
     if column in model.column_descriptions:
         return model.column_descriptions[column]
 
-    dependencies = column_dependencies(context, model_name, column)
+    dependencies = column_dependencies(context, model_name, exp.column(column, quoted=quote_column))
 
     if len(dependencies) != 1:
         return None
