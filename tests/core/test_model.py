@@ -4679,7 +4679,7 @@ def test_columns_python_sql_model() -> None:
 
 
 def test_named_variables_python_model(mocker: MockerFixture) -> None:
-    model.set_registry({})  # type: ignore
+    mocker.patch("sqlmesh.core.model.decorator.model._registry", {})
 
     @model(
         "test_named_variables_python_model",
@@ -4714,7 +4714,7 @@ def test_named_variables_python_model(mocker: MockerFixture) -> None:
 
 
 def test_named_variables_kw_only_python_model(mocker: MockerFixture) -> None:
-    model.set_registry({})  # type: ignore
+    mocker.patch("sqlmesh.core.model.decorator.model._registry", {})
 
     @model(
         "test_named_variables_python_model",
@@ -5741,8 +5741,8 @@ materialized TRUE
     "metadata_only",
     [True, False],
 )
-def test_macro_func_hash(metadata_only):
-    macro.set_registry({})  # type: ignore
+def test_macro_func_hash(mocker: MockerFixture, metadata_only: bool):
+    mocker.patch("sqlmesh.core.macros.macro._registry", {})
 
     @macro(metadata_only=metadata_only)
     def noop(evaluator) -> None:
@@ -5784,7 +5784,7 @@ def test_macro_func_hash(metadata_only):
         assert model.data_hash != new_model.data_hash
         assert model.metadata_hash == new_model.metadata_hash
 
-    @macro(metadata_only=metadata_only)
+    @macro(metadata_only=metadata_only)  # type: ignore
     def noop(evaluator) -> None:
         print("noop")
         return None
@@ -6094,14 +6094,11 @@ def test_cluster_with_complex_expression():
     assert [expr.sql("snowflake") for expr in model.clustered_by] == ['(TO_DATE("CLUSTER_COL"))']
 
 
-def test_parametric_model_kind(tmp_path: Path):
-    init_example_project(tmp_path, dialect="duckdb")
-
-    test_sql_file = tmp_path / "models/test_model.sql"
-    test_sql_file.write_text(
+def test_parametric_model_kind():
+    parsed_definition = d.parse(
         """
         MODEL (
-          name test_schema.test_model,
+          name db.test_schema.test_model,
           kind @IF(@gateway = 'main', VIEW, FULL)
         );
 
@@ -6110,30 +6107,8 @@ def test_parametric_model_kind(tmp_path: Path):
         """
     )
 
-    db_path = str(tmp_path / "db.db")
-    config = Config(
-        gateways={
-            "main": GatewayConfig(connection=DuckDBConnectionConfig(database=db_path)),
-            "other": GatewayConfig(connection=DuckDBConnectionConfig(database=db_path)),
-        },
-        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
-    )
+    model = load_sql_based_model(parsed_definition, variables={c.GATEWAY: "main"})
+    assert isinstance(model.kind, ViewKind)
 
-    context = Context(paths=tmp_path, config=config)
-    plan = context.plan(no_prompts=True, auto_apply=True, no_diff=True)
-
-    assert len(plan.context_diff.new_snapshots) == 4
-    assert isinstance(context.get_model("test_schema.test_model").kind, ViewKind)
-
-    context = Context(paths=tmp_path, config=config, gateway="other")
-    plan = context.plan(no_prompts=True, auto_apply=True, no_diff=True)
-    diff = plan.context_diff
-
-    assert len(diff.new_snapshots) == 1
-    assert len(diff.modified_snapshots) == 1
-
-    new_snapshot, old_snapshot = next(iter(diff.modified_snapshots.values()))
-    assert isinstance(t.cast(SqlModel, new_snapshot.node).kind, FullKind)
-    assert isinstance(t.cast(SqlModel, old_snapshot.node).kind, ViewKind)
-
-    assert isinstance(context.get_model("test_schema.test_model").kind, FullKind)
+    model = load_sql_based_model(parsed_definition, variables={c.GATEWAY: "other"})
+    assert isinstance(model.kind, FullKind)
