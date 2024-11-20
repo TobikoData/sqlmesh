@@ -2192,7 +2192,7 @@ META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
     "start": lambda value: exp.Literal.string(value),
     "cron": lambda value: exp.Literal.string(value),
     "partitioned_by_": _single_expr_or_tuple,
-    "clustered_by_": _single_expr_or_tuple,
+    "clustered_by": _single_expr_or_tuple,
     "depends_on_": lambda value: exp.Tuple(expressions=sorted(value)),
     "pre": _list_of_calls_to_exp,
     "post": _list_of_calls_to_exp,
