@@ -289,7 +289,7 @@ class SnapshotEvaluator:
                 table_deployability[table.name] = is_deployable
                 tables_by_schema[d.schema_(table.db, catalog=table.catalog)].add(table.name)
                 gateway_per_schema[d.schema_(table.db, catalog=table.catalog)] = (
-                    snapshot.model.gateway
+                    snapshot.model.gateway or ""
                 )
 
         def _get_data_objects(schema: exp.Table, gateway: t.Optional[str] = None) -> t.Set[str]:
