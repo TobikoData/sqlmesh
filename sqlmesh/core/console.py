@@ -614,33 +614,24 @@ class TerminalConsole(Console):
             no_diff: Hide the actual SQL differences.
         """
         if context_diff.is_new_environment:
-            if context_diff.environment == c.PROD:
-                base_msg = f"Initializing `{c.PROD}` environment"
-                from_msg = ""
-            else:
-                base_msg = f"Creating new environment `{context_diff.environment}`"
-                from_msg = (
-                    f" from `{context_diff.create_from}`"
-                    if context_diff.create_from != c.PROD
-                    else ""
-                )
-            self._print(Tree(f"[bold]{base_msg}{from_msg}\n"))
+            msg = (
+                f"Initializing `{c.PROD}` environment"
+                if context_diff.environment == c.PROD
+                else f"Creating new environment `{context_diff.environment}` from `{context_diff.create_from}`"
+            )
+            self._print(Tree(f"[bold]{msg}\n"))
             if not context_diff.has_snapshot_changes:
                 return
 
         if not context_diff.has_changes:
             self._print(
                 Tree(
-                    f"[bold]No changes to plan: project files match the `{context_diff.environment}` environment"
+                    f"[bold]No changes to plan: project files match the `{context_diff.create_from}` environment\n"
                 )
             )
             return
 
-        if (
-            context_diff.environment != c.PROD
-            and context_diff.create_from != c.PROD
-            and context_diff.environment != context_diff.create_from
-        ):
+        if context_diff.environment != c.PROD:
             self._print(
                 Tree(f"[bold]Differences from the `{context_diff.create_from}` environment:\n")
             )

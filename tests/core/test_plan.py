@@ -1427,7 +1427,7 @@ def test_new_environment_no_changes(make_snapshot, mocker: MockerFixture):
     )
 
     schema_differ = DuckDBEngineAdapter.SCHEMA_DIFFER
-    with pytest.raises(PlanError, match="No changes were detected.*"):
+    with pytest.raises(PlanError, match="No changes to plan: project files match the.*"):
         PlanBuilder(context_diff, schema_differ, is_dev=True).build()
 
     assert (

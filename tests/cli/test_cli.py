@@ -117,17 +117,11 @@ def assert_duckdb_test(result) -> None:
 
 
 def assert_new_env(result, new_env="prod", from_env="prod") -> None:
-    env_msg = (
+    assert (
         "Initializing `prod` environment"
         if new_env == "prod"
-        else f"Creating new environment `{new_env}`"
+        else f"Creating new environment `{new_env}` from `{from_env}`" in result.output
     )
-    from_msg = (
-        f" from `{from_env}`"
-        if new_env != "prod" and from_env != "prod" and new_env != from_env
-        else ""
-    )
-    assert f"{env_msg}{from_msg}" in result.output
 
 
 def assert_model_versions_created(result) -> None:
@@ -221,7 +215,6 @@ def test_plan_restate_model(runner, tmp_path):
     )
     assert result.exit_code == 0
     assert_duckdb_test(result)
-    assert "No changes to plan: project files match the `prod` environment" in result.output
     assert "sqlmesh_example.full_model evaluated in" in result.output
     assert_backfill_success(result)
 
@@ -433,7 +426,7 @@ def test_plan_dev_no_changes(runner, tmp_path):
     result = runner.invoke(cli, ["--log-file-dir", tmp_path, "--paths", tmp_path, "plan", "dev"])
     assert result.exit_code == 1
     assert (
-        "Error: No changes were detected. Make a change or run with --include-unmodified"
+        "Error: No changes to plan: project files match the `prod` environment. Make a change or use the --include-unmodified flag to create a new environment without changes."
         in result.output
     )
 
