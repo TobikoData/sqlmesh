@@ -381,11 +381,9 @@ class GenericContext(BaseContext, t.Generic[C]):
         self.concurrent_tasks = concurrent_tasks or self._connection_config.concurrent_tasks
         self._engine_adapter = engine_adapter or self._connection_config.create_engine_adapter()
 
-        self._engine_adapters: UniqueKeyDict[str, EngineAdapter] = UniqueKeyDict("engine_adapters")
+        self._engine_adapters: t.Dict[str, EngineAdapter] = {}
         self._snapshot_evaluator: t.Optional[SnapshotEvaluator] = None
-        self._test_connection_configs: UniqueKeyDict[str, ConnectionConfig] = UniqueKeyDict(
-            "test_configs"
-        )
+        self._test_connection_configs: t.Dict[str, ConnectionConfig] = {}
 
         self._test_connection_configs[self.config.default_gateway] = (
             self.config.get_test_connection(
@@ -1651,10 +1649,9 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         try:
             model_to_test = self.get_model(model, raise_if_missing=True)
-            connection_config = self._test_connection_configs.get(
+            connection_config = self._test_connection_configs[
                 model_to_test.gateway or self.config.default_gateway
-            )
-            assert connection_config
+            ]
             test_adapter = connection_config.create_engine_adapter(register_comments_override=False)
             generate_test(
                 model=model_to_test,

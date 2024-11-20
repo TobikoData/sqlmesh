@@ -267,7 +267,7 @@ class SnapshotEvaluator:
         """
         snapshots_with_table_names = defaultdict(set)
         tables_by_schema = defaultdict(set)
-        gateway_per_schema: t.Dict[exp.Table, str] = {}
+        gateway_by_schema: t.Dict[exp.Table, str] = {}
 
         table_deployability: t.Dict[str, bool] = {}
         for snapshot in target_snapshots:
@@ -287,10 +287,9 @@ class SnapshotEvaluator:
                 )
                 snapshots_with_table_names[snapshot].add(table.name)
                 table_deployability[table.name] = is_deployable
-                tables_by_schema[d.schema_(table.db, catalog=table.catalog)].add(table.name)
-                gateway_per_schema[d.schema_(table.db, catalog=table.catalog)] = (
-                    snapshot.model.gateway or ""
-                )
+                table_schema = d.schema_(table.db, catalog=table.catalog)
+                tables_by_schema[table_schema].add(table.name)
+                gateway_by_schema[table_schema] = snapshot.model.gateway or ""
 
         def _get_data_objects(schema: exp.Table, gateway: t.Optional[str] = None) -> t.Set[str]:
             logger.info("Listing data objects in schema %s", schema.sql())
@@ -304,7 +303,7 @@ class SnapshotEvaluator:
                 obj
                 for objs in concurrent_apply_to_values(
                     list(tables_by_schema),
-                    lambda s: _get_data_objects(s, gateway_per_schema[s]),
+                    lambda s: _get_data_objects(s, gateway_by_schema[s]),
                     self.ddl_concurrent_tasks,
                 )
                 for obj in objs
@@ -327,7 +326,7 @@ class SnapshotEvaluator:
         if not snapshots_to_create:
             return
 
-        self._create_schemas(tables_by_schema, gateway_per_schema)
+        self._create_schemas(tables_by_schema, gateway_by_schema)
         with self.concurrent_context():
             concurrent_apply_to_snapshots(
                 snapshots_to_create,
