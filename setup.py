@@ -42,6 +42,7 @@ setup(
         "importlib-metadata; python_version<'3.12'",
         "ipywidgets",
         "jinja2",
+        "more-itertools",
         "pandas",
         "pydantic",
         "requests",
