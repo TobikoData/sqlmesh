@@ -749,9 +749,9 @@ model_defaults:
     ctx = Context(paths=tmp_path, config=config)
 
     assert isinstance(ctx._connection_config, RedshiftConnectionConfig)
-    assert len(ctx._snapshot_evaluators) == 2
-    assert isinstance(ctx._snapshot_evaluators["athena"].adapter, AthenaEngineAdapter)
-    assert isinstance(ctx._snapshot_evaluators["redshift"].adapter, RedshiftEngineAdapter)
+    assert len(ctx._engine_adapters) == 2
+    assert isinstance(ctx._engine_adapters["athena"], AthenaEngineAdapter)
+    assert isinstance(ctx._engine_adapters["redshift"], RedshiftEngineAdapter)
     assert len(ctx._test_connection_configs) == 2
     assert ctx._test_connection_configs["athena"].type_ == "duckdb"
     assert ctx._test_connection_configs["redshift"].type_ == "redshift"

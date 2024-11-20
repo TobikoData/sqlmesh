@@ -96,7 +96,6 @@ from sqlmesh.core.snapshot import (
     SnapshotFingerprint,
     to_table_mapping,
 )
-from sqlmesh.core.snapshot.definition import SnapshotTableCleanupTask
 from sqlmesh.core.state_sync import (
     CachingStateSync,
     StateReader,
@@ -234,6 +233,7 @@ class ExecutionContext(BaseContext):
         engine_adapter: The engine adapter to execute queries against.
         snapshots: All upstream snapshots (by model name) to use for expansion and mapping of physical locations.
         deployability_index: Determines snapshots that are deployable in the context of this evaluation.
+        engine_adapters: Optional dictionary of multiple engine adapters.
     """
 
     def __init__(
@@ -243,12 +243,14 @@ class ExecutionContext(BaseContext):
         deployability_index: t.Optional[DeployabilityIndex] = None,
         default_dialect: t.Optional[str] = None,
         default_catalog: t.Optional[str] = None,
+        engine_adapters: t.Optional[t.Dict[str, EngineAdapter]] = None,
         variables: t.Optional[t.Dict[str, t.Any]] = None,
     ):
         self.snapshots = snapshots
         self.deployability_index = deployability_index
         self._engine_adapter = engine_adapter
         self._default_catalog = default_catalog
+        self._engine_adapters = engine_adapters
         self._default_dialect = default_dialect
         self._variables = variables or {}
 
@@ -287,6 +289,7 @@ class ExecutionContext(BaseContext):
             self.deployability_index,
             self._default_dialect,
             self._default_catalog,
+            self._engine_adapters,
             variables=variables,
         )
 
@@ -378,38 +381,35 @@ class GenericContext(BaseContext, t.Generic[C]):
         self.concurrent_tasks = concurrent_tasks or self._connection_config.concurrent_tasks
         self._engine_adapter = engine_adapter or self._connection_config.create_engine_adapter()
 
-        self._snapshot_evaluators: UniqueKeyDict[str, SnapshotEvaluator] = UniqueKeyDict(
-            "evaluators"
-        )
-        self._default_evaluator: t.Optional[SnapshotEvaluator] = None
+        self._engine_adapters: UniqueKeyDict[str, EngineAdapter] = UniqueKeyDict("engine_adapters")
+        self._snapshot_evaluator: t.Optional[SnapshotEvaluator] = None
         self._test_connection_configs: UniqueKeyDict[str, ConnectionConfig] = UniqueKeyDict(
             "test_configs"
         )
 
+        self._test_connection_configs[self.config.default_gateway] = (
+            self.config.get_test_connection(
+                self.gateway,
+                self.default_catalog,
+                default_catalog_dialect=self.engine_adapter.DIALECT,
+            )
+        )
+
         if not gateway:
             for gateway_name in self.config.gateways:
-                connection = self.config.get_connection(gateway_name)
-                adapter = (
-                    connection.create_engine_adapter()
-                    if gateway_name != self.config.default_gateway
-                    else self._engine_adapter
-                )
-                evaluator = SnapshotEvaluator(
-                    adapter.with_log_level(logging.INFO),
-                    ddl_concurrent_tasks=connection.concurrent_tasks,
-                )
-                self._snapshot_evaluators[gateway_name] = evaluator
-                if self.config.default_gateway == gateway_name:
-                    self._default_evaluator = evaluator
-                self._test_connection_configs[gateway_name] = self.config.get_test_connection(
-                    gateway_name, adapter.default_catalog, default_catalog_dialect=adapter.DIALECT
-                )
+                if gateway_name == self.config.default_gateway:
+                    connection = self._connection_config
+                    adapter = self._engine_adapter
+                else:
+                    connection = self.config.get_connection(gateway_name)
+                    adapter = connection.create_engine_adapter()
+                    self._test_connection_configs[gateway_name] = self.config.get_test_connection(
+                        gateway_name, self.default_catalog, default_catalog_dialect=adapter.DIALECT
+                    )
+                    self.concurrent_tasks = min(self.concurrent_tasks, connection.concurrent_tasks)
+                self._engine_adapters[gateway_name] = adapter
 
         self.console = console or get_console(dialect=self._engine_adapter.dialect)
-
-        self._test_connection_config = self.config.get_test_connection(
-            self.gateway, self.default_catalog, default_catalog_dialect=self.engine_adapter.DIALECT
-        )
 
         self._provided_state_sync: t.Optional[StateSync] = state_sync
         self._state_sync: t.Optional[StateSync] = None
@@ -442,12 +442,13 @@ class GenericContext(BaseContext, t.Generic[C]):
 
     @property
     def snapshot_evaluator(self) -> SnapshotEvaluator:
-        if not self._default_evaluator:
-            self._default_evaluator = SnapshotEvaluator(
+        if not self._snapshot_evaluator:
+            self._snapshot_evaluator = SnapshotEvaluator(
                 self.engine_adapter.with_log_level(logging.INFO),
                 ddl_concurrent_tasks=self.concurrent_tasks,
+                engine_adapters=self._engine_adapters,
             )
-        return self._default_evaluator
+        return self._snapshot_evaluator
 
     def execution_context(
         self, deployability_index: t.Optional[DeployabilityIndex] = None
@@ -542,7 +543,6 @@ class GenericContext(BaseContext, t.Generic[C]):
             max_workers=self.concurrent_tasks,
             console=self.console,
             notification_target_manager=self.notification_target_manager,
-            snapshot_evaluators=self._snapshot_evaluators,
         )
 
     @property
@@ -982,12 +982,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             limit: A limit applied to the model.
         """
         snapshot = self.get_snapshot(model_or_snapshot, raise_if_missing=True)
-        evaluator = (
-            self._snapshot_evaluators.get(snapshot.model.gateway, self.snapshot_evaluator)
-            if snapshot.model.gateway
-            else self.snapshot_evaluator
-        )
-        df = evaluator.evaluate_and_fetch(
+        df = self.snapshot_evaluator.evaluate_and_fetch(
             snapshot,
             start=start,
             end=end,
@@ -1656,13 +1651,10 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         try:
             model_to_test = self.get_model(model, raise_if_missing=True)
-            connection_config = (
-                self._test_connection_configs.get(
-                    model_to_test.gateway, self._test_connection_config
-                )
-                if model_to_test.gateway
-                else self._test_connection_config
+            connection_config = self._test_connection_configs.get(
+                model_to_test.gateway or self.config.default_gateway
             )
+            assert connection_config
             test_adapter = connection_config.create_engine_adapter(register_comments_override=False)
             generate_test(
                 model=model_to_test,
@@ -1767,12 +1759,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         errors = []
         skipped_count = 0
         for snapshot in snapshots:
-            evaluator = (
-                self._snapshot_evaluators.get(snapshot.model.gateway, self.snapshot_evaluator)
-                if snapshot.model.gateway
-                else self.snapshot_evaluator
-            )
-            for audit_result in evaluator.audit(
+            for audit_result in self.snapshot_evaluator.audit(
                 snapshot=snapshot,
                 start=start,
                 end=end,
@@ -1921,9 +1908,8 @@ class GenericContext(BaseContext, t.Generic[C]):
 
     def close(self) -> None:
         """Releases all resources allocated by this context."""
-        if self._snapshot_evaluators:
-            for evaluator in self._snapshot_evaluators.values():
-                evaluator.close()
+        if self._snapshot_evaluator:
+            self._snapshot_evaluator.close()
         if self._state_sync:
             self._state_sync.close()
 
@@ -2006,7 +1992,11 @@ class GenericContext(BaseContext, t.Generic[C]):
             result, test_output = self._run_tests()
             if result.testsRun > 0:
                 self.console.log_test_results(
-                    result, test_output, self._test_connection_config._engine_adapter.DIALECT
+                    result,
+                    test_output,
+                    self._test_connection_configs[
+                        self.config.default_gateway
+                    ]._engine_adapter.DIALECT,
                 )
             if not result.wasSuccessful():
                 raise PlanError(
@@ -2132,18 +2122,9 @@ class GenericContext(BaseContext, t.Generic[C]):
     def _run_janitor(self, ignore_ttl: bool = False) -> None:
         self._cleanup_environments()
         expired_snapshots = self.state_sync.delete_expired_snapshots(ignore_ttl=ignore_ttl)
-
-        gateways: t.Dict[str, t.List[SnapshotTableCleanupTask]] = {}
-        for snapshot_cleanup_task in expired_snapshots:
-            snapshot_name = snapshot_cleanup_task.snapshot.name
-            gateway = self.snapshots[snapshot_name].model.gateway or "default"
-            gateways.setdefault(gateway, []).append(snapshot_cleanup_task)
-
-        for gateway, snapshots_cleanup_tasks in gateways.items():
-            evaluator = self._snapshot_evaluators.get(gateway, self.snapshot_evaluator)
-            evaluator.cleanup(
-                snapshots_cleanup_tasks, on_complete=self.console.update_cleanup_progress
-            )
+        self.snapshot_evaluator.cleanup(
+            expired_snapshots, on_complete=self.console.update_cleanup_progress
+        )
 
         self.state_sync.compact_intervals()
 

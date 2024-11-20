@@ -672,7 +672,11 @@ class GithubController:
                 # Clear out console
                 self._console.consume_captured_output()
                 self._console.log_test_results(
-                    result, output, self._context._test_connection_config._engine_adapter.DIALECT
+                    result,
+                    output,
+                    self._context._test_connection_configs[
+                        self._context.config.default_gateway
+                    ]._engine_adapter.DIALECT,
                 )
                 test_summary = self._console.consume_captured_output()
                 test_title = "Tests Passed" if result.wasSuccessful() else "Tests Failed"

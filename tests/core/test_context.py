@@ -320,10 +320,10 @@ def test_evaluate_limit():
 def test_gateway_specific_evaluator(copy_to_temp_path):
     path = copy_to_temp_path("examples/sushi")
     ctx = Context(paths=path, config="isolated_systems_config", gateway="prod")
-    assert not ctx._snapshot_evaluators
+    assert not ctx._engine_adapters
 
     ctx = Context(paths=path, config="isolated_systems_config")
-    assert len(ctx._snapshot_evaluators) == 3
+    assert len(ctx._engine_adapters) == 3
 
 
 def test_multiple_gateways(tmp_path: Path):
