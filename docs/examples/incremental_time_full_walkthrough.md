@@ -292,7 +292,10 @@ Keep pressing enter on the date prompts, as we want to backfill all of history s
 ======================================================================
 Successfully Ran 2 tests against duckdb
 ----------------------------------------------------------------------
-Summary of differences against `dev`:
+Creating new environment `dev` from `prod`
+
+Differences from the `prod` environment:
+
 Models:
 └── Added:
     └── demo__dev.incrementals_demo
@@ -629,7 +632,8 @@ This is where I feel the claim “data transformation without the waste” feels
 ======================================================================
 Successfully Ran 2 tests against duckdb
 ----------------------------------------------------------------------
-Summary of differences against `prod`:
+Differences from the `prod` environment:
+
 Models:
 ├── Added:
     ├── demo.incrementals_demo
@@ -701,7 +705,8 @@ sqlmesh plan dev --forward-only
 ======================================================================
 Successfully Ran 2 tests against duckdb
 ----------------------------------------------------------------------
-Summary of differences against `dev`:
+Differences from the `dev` environment:
+
 Models:
 └── Directly Modified:
     └── demo__dev.incrementals_demo
@@ -1218,12 +1223,13 @@ Next time it’s run, it’ll backfill new data with this new definition of ‘P
 sqlmesh plan
 ```
 
-```sql
+```bash
 (venv) ➜  sqlmesh-demos git:(incremental-demo) ✗ sqlmesh plan
 ======================================================================
 Successfully Ran 3 tests against duckdb
 ----------------------------------------------------------------------
-Summary of differences against `prod`:
+Differences from the `prod` environment:
+
 Models:
 └── Directly Modified:
     └── demo.incrementals_demo

@@ -235,11 +235,25 @@ def test_diff(sushi_context, notebook, convert_all_html_output_to_text, get_all_
 
     assert not output.stdout
     assert not output.stderr
-    assert len(output.outputs) == 1
+    assert len(output.outputs) == 2
     assert convert_all_html_output_to_text(output) == [
+        "Differences from the `prod` environment:",
         "Models:\n└── Directly Modified:\n    └── sqlmesh_example.test",
     ]
     assert get_all_html_output(output) == [
+        str(
+            h(
+                "pre",
+                {"style": RICH_PRE_STYLE},
+                h(
+                    "span",
+                    {"style": "font-weight: bold"},
+                    "Differences from the `prod` environment:",
+                    autoescape=False,
+                ),
+                autoescape=False,
+            )
+        ),
         str(
             h(
                 "pre",

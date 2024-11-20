@@ -158,8 +158,8 @@ When we run the project's first plan, we see that SQLMesh correctly detected a d
 ======================================================================
 Successfully Ran 1 tests against duckdb
 ----------------------------------------------------------------------
-New environment `prod` will be created from `prod`
-Summary of differences against `prod`:
+Initializing `prod` environment
+
 Models:
 └── Added:
     ├── sqlmesh_example.full_model
@@ -184,8 +184,10 @@ We then execute `sqlmesh plan dev` to create the new `dev` environment:
 ======================================================================
 Successfully Ran 1 tests against duckdb
 ----------------------------------------------------------------------
-New environment `dev` will be created from `prod`
-Summary of differences against `dev`:
+Creating new environment `dev` from `prod`
+
+Differences from the `prod` environment:
+
 Models:
 ├── Directly Modified:
 │   ├── sqlmesh_example__dev.start_end_model
@@ -224,8 +226,10 @@ Because the command's `--start` of 2024-09-24 is after `start_end_model`'s start
 ======================================================================
 Successfully Ran 1 tests against duckdb
 ----------------------------------------------------------------------
-New environment `dev` will be created from `prod`
-Summary of differences against `dev`:
+Creating new environment `dev` from `prod`
+
+Differences from the `prod` environment:
+
 Models:
 ├── Directly Modified:
 │   ├── sqlmesh_example__dev.start_end_model
