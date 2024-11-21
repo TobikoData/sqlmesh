@@ -3068,3 +3068,126 @@ def test_migrate_managed(adapter_mock, make_snapshot, mocker: MockerFixture):
     adapter_mock.create_table.assert_not_called()
     adapter_mock.ctas.assert_not_called()
     adapter_mock.create_managed_table.assert_not_called()
+
+
+def test_multiple_engine_promotion(mocker: MockerFixture, adapter_mock, make_snapshot):
+    connection_mock = mocker.NonCallableMock()
+    cursor_mock = mocker.Mock()
+    connection_mock.cursor.return_value = cursor_mock
+    adapter = EngineAdapter(lambda: connection_mock, "")
+    engine_adapters = {"one": adapter, "two": adapter_mock}
+
+    def columns(table_name):
+        return {
+            "a": exp.DataType.build("int"),
+        }
+
+    adapter.columns = columns  # type: ignore
+
+    model = SqlModel(
+        name="test_schema.test_model",
+        kind=IncrementalByTimeRangeKind(time_column="a"),
+        gateway="one",
+        query=parse_one("SELECT a FROM tbl WHERE ds BETWEEN @start_ds and @end_ds"),
+    )
+
+    evaluator = SnapshotEvaluator(adapter_mock, engine_adapters=engine_adapters)
+    snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    evaluator.evaluate(
+        snapshot,
+        start="2020-01-01",
+        end="2020-01-02",
+        execution_time="2020-01-02",
+        snapshots={},
+    )
+
+    evaluator.promote([snapshot], EnvironmentNamingInfo(name="test_env"))
+
+    # Verify that the model was evaluated using the gateway specific adapter "one"
+    cursor_mock.execute.assert_has_calls(
+        [
+            call(
+                'DELETE FROM "sqlmesh__test_schema"."test_schema__test_model__201843948" WHERE "a" BETWEEN 2020-01-01 00:00:00+00:00 AND 2020-01-02 23:59:59.999999+00:00'
+            ),
+            call(
+                'INSERT INTO "sqlmesh__test_schema"."test_schema__test_model__201843948" ("a") SELECT "a" FROM (SELECT "a" AS "a" FROM "tbl" AS "tbl" WHERE "ds" BETWEEN \'2020-01-01\' AND \'2020-01-02\') AS "_subquery" WHERE "a" BETWEEN 2020-01-01 00:00:00+00:00 AND 2020-01-02 23:59:59.999999+00:00'
+            ),
+        ]
+    )
+
+    # Verify that the snapshot was promoted using the default adapter "two" (adapter_mock in this case)
+    adapter_mock.create_schema.assert_called_once_with(schema_("test_schema__test_env"))
+    adapter_mock.create_view.assert_called_once_with(
+        "test_schema__test_env.test_model",
+        parse_one(
+            f"SELECT * FROM sqlmesh__test_schema.test_schema__test_model__{snapshot.version}"
+        ),
+        table_description=None,
+        column_descriptions=None,
+        view_properties={},
+    )
+
+
+def test_multiple_engine_migration(mocker: MockerFixture, adapter_mock, make_snapshot):
+    connection_mock = mocker.NonCallableMock()
+    cursor_mock = mocker.Mock()
+    connection_mock.cursor.return_value = cursor_mock
+    adapter = EngineAdapter(lambda: connection_mock, "")
+    engine_adapters = {"one": adapter, "two": adapter_mock}
+
+    current_table = "sqlmesh__test_schema.test_schema__test_model__1"
+
+    def columns(table_name):
+        if table_name == current_table:
+            return {
+                "c": exp.DataType.build("int"),
+                "b": exp.DataType.build("int"),
+            }
+        else:
+            return {
+                "c": exp.DataType.build("int"),
+                "a": exp.DataType.build("int"),
+            }
+
+    adapter.columns = columns  # type: ignore
+    adapter_mock.columns = columns  # type: ignore
+
+    evaluator = SnapshotEvaluator(adapter, engine_adapters=engine_adapters)
+
+    model = SqlModel(
+        name="test_schema.test_model",
+        kind=IncrementalByTimeRangeKind(
+            time_column="a", on_destructive_change=OnDestructiveChange.ALLOW
+        ),
+        query=parse_one("SELECT c FROM tbl WHERE ds BETWEEN @start_ds and @end_ds"),
+    )
+    snapshot_1 = make_snapshot(model, version="1")
+    snapshot_1.change_category = SnapshotChangeCategory.FORWARD_ONLY
+    model = SqlModel(
+        name="test_schema.test_model_2",
+        kind=IncrementalByTimeRangeKind(
+            time_column="a", on_destructive_change=OnDestructiveChange.ALLOW
+        ),
+        gateway="two",
+        query=parse_one("SELECT c FROM tbl WHERE ds BETWEEN @start_ds and @end_ds"),
+    )
+    snapshot_2 = make_snapshot(model, version="1")
+    snapshot_2.change_category = SnapshotChangeCategory.FORWARD_ONLY
+    evaluator.migrate([snapshot_1, snapshot_2], {})
+
+    cursor_mock.execute.assert_has_calls(
+        [
+            call('ALTER TABLE "sqlmesh__test_schema"."test_schema__test_model__1" DROP COLUMN "b"'),
+            call(
+                'ALTER TABLE "sqlmesh__test_schema"."test_schema__test_model__1" ADD COLUMN "a" INT'
+            ),
+        ]
+    )
+
+    # The second mock adapter has to be called once only for the gateway-specific model
+    adapter_mock.get_alter_expressions.assert_called_once_with(
+        "sqlmesh__test_schema.test_schema__test_model_2__1",
+        "sqlmesh__test_schema.test_schema__test_model_2__237083607__temp",
+    )

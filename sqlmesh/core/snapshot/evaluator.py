@@ -354,10 +354,20 @@ class SnapshotEvaluator:
             snapshots: Mapping of snapshot ID to snapshot.
             allow_destructive_snapshots: Set of snapshots that are allowed to have destructive schema changes.
         """
+
+        snapshot_to_adapter = {
+            t.name: self._get_engine_adapter(t.model.gateway)
+            if t.model_or_none and t.model.gateway
+            else self.adapter
+            for t in target_snapshots
+        }
+
         with self.concurrent_context():
             concurrent_apply_to_snapshots(
                 target_snapshots,
-                lambda s: self._migrate_snapshot(s, snapshots, allow_destructive_snapshots),
+                lambda s: self._migrate_snapshot(
+                    s, snapshots, allow_destructive_snapshots, snapshot_to_adapter[s.name]
+                ),
                 self.ddl_concurrent_tasks,
             )
 
@@ -503,8 +513,7 @@ class SnapshotEvaluator:
             if self.engine_adapters:
                 for adapter in self.engine_adapters.values():
                     adapter.recycle()
-            else:
-                self.adapter.recycle()
+            self.adapter.recycle()
         except Exception:
             logger.exception("Failed to recycle Snapshot Evaluator")
 
@@ -514,8 +523,7 @@ class SnapshotEvaluator:
             if self.engine_adapters:
                 for adapter in self.engine_adapters.values():
                     adapter.close()
-            else:
-                self.adapter.close()
+            self.adapter.close()
         except Exception:
             logger.exception("Failed to close Snapshot Evaluator")
 
@@ -787,6 +795,7 @@ class SnapshotEvaluator:
         snapshot: Snapshot,
         snapshots: t.Dict[SnapshotId, Snapshot],
         allow_destructive_snapshots: t.Set[str],
+        adapter: EngineAdapter,
     ) -> None:
         if not snapshot.is_paused or not snapshot.is_model:
             return
@@ -805,7 +814,7 @@ class SnapshotEvaluator:
 
         tmp_table_name = snapshot.table_name(is_deployable=False)
         target_table_name = snapshot.table_name()
-        _evaluation_strategy(snapshot, self.adapter).migrate(
+        _evaluation_strategy(snapshot, adapter).migrate(
             target_table_name=target_table_name,
             source_table_name=tmp_table_name,
             snapshot=snapshot,
