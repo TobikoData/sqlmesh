@@ -1643,6 +1643,25 @@ def missing_intervals(
 
 
 @lru_cache(maxsize=None)
+def expand_range(start_ts: int, end_ts: int, interval_unit: IntervalUnit) -> t.List[int]:
+    croniter = interval_unit.croniter(start_ts)
+    timestamps = [start_ts]
+
+    while True:
+        ts = to_timestamp(croniter.get_next(estimate=True))
+
+        if ts > end_ts:
+            if len(timestamps) > 1:
+                timestamps[-1] = end_ts
+            else:
+                timestamps.append(end_ts)
+            break
+
+        timestamps.append(ts)
+    return timestamps
+
+
+@lru_cache(maxsize=None)
 def compute_missing_intervals(
     interval_unit: IntervalUnit,
     intervals: t.Tuple[Interval, ...],
@@ -1667,21 +1686,7 @@ def compute_missing_intervals(
     if start_ts == end_ts:
         return []
 
-    croniter = interval_unit.croniter(start_ts)
-    timestamps = [start_ts]
-
-    while True:
-        ts = to_timestamp(croniter.get_next(estimate=True))
-
-        if ts > end_ts:
-            if len(timestamps) > 1:
-                timestamps[-1] = end_ts
-            else:
-                timestamps.append(end_ts)
-            break
-
-        timestamps.append(ts)
-
+    timestamps = expand_range(start_ts, end_ts, interval_unit)
     missing = set()
 
     for current_ts, next_ts in zip(timestamps, timestamps[1:]):
