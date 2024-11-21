@@ -152,7 +152,7 @@ setup(
             "trino",
         ],
         "web": [
-            "fastapi==0.110.2",
+            "fastapi==0.115.5",
             "watchfiles>=0.19.0",
             "uvicorn[standard]==0.22.0",
             "sse-starlette>=0.2.2",
