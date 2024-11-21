@@ -1211,7 +1211,7 @@ class MSSQLConnectionConfig(ConnectionConfig):
     charset: t.Optional[str] = "UTF-8"
     appname: t.Optional[str] = None
     port: t.Optional[int] = 1433
-    conn_properties: t.Optional[t.Union[t.Iterable[str], str]] = None
+    conn_properties: t.Optional[t.Union[t.List[str], str]] = None
     autocommit: t.Optional[bool] = False
     tds_version: t.Optional[str] = None
 
