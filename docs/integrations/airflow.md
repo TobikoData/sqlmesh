@@ -156,6 +156,6 @@ default_scheduler:
   environment: <The MWAA Environment Name>
 ```
 
-### Yandex Cloud
+### YC Airflow
 
-Yandex Cloud offers [managed Airflow instances](https://yandex.cloud/en/services/managed-airflow), and SQLMesh fully supports Airflow hosted by Yandex Cloud.
+SQLMesh fully supports Airflow hosted on Yandex [managed Airflow instances](https://yandex.cloud/en/services/managed-airflow) - see the [configuration reference page](../reference/configuration.md#yc-airflow) for more information.
