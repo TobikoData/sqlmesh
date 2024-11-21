@@ -1846,21 +1846,25 @@ class GenericContext(BaseContext, t.Generic[C]):
             )
 
     @python_api_analytics
-    def print_info(self, skip_connection: bool = False) -> None:
+    def print_info(self, skip_connection: bool = False, verbose: bool = False) -> None:
         """Prints information about connections, models, macros, etc. to the console."""
         self.console.log_status_update(f"Models: {len(self.models)}")
         self.console.log_status_update(f"Macros: {len(self._macros) - len(macro.get_registry())}")
 
-        print_config(self.config.get_connection(self.gateway), self.console, "Connection")
-        print_config(self.config.get_test_connection(self.gateway), self.console, "Test Connection")
-        print_config(
-            self.config.get_state_connection(self.gateway), self.console, "State Connection"
-        )
-        self.console.log_status_update("\n")
         if skip_connection:
             return
-        self._try_connection("data warehouse", self._engine_adapter.ping)
 
+        if verbose:
+            self.console.log_status_update("")
+            print_config(self.config.get_connection(self.gateway), self.console, "Connection")
+            print_config(
+                self.config.get_test_connection(self.gateway), self.console, "Test Connection"
+            )
+            print_config(
+                self.config.get_state_connection(self.gateway), self.console, "State Connection"
+            )
+
+        self._try_connection("data warehouse", self._engine_adapter.ping)
         state_connection = self.config.get_state_connection(self.gateway)
         if state_connection:
             self._try_connection("state backend", state_connection.connection_validator())
