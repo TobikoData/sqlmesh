@@ -543,20 +543,17 @@ def test_fetchdf(notebook, sushi_context):
 
 def test_info(notebook, sushi_context, convert_all_html_output_to_text, get_all_html_output):
     with capture_output() as output:
-        notebook.run_line_magic(magic_name="info", line="")
+        notebook.run_line_magic(magic_name="info", line="--verbose")
 
     assert not output.stdout
     assert not output.stderr
-    assert len(output.outputs) == 9
+    assert len(output.outputs) == 6
     assert convert_all_html_output_to_text(output) == [
         "Models: 17",
         "Macros: 6",
         "",
         "Connection:\n  type: duckdb\n  concurrent_tasks: 1\n  register_comments: true\n  pre_ping: false\n  extensions: []\n  connector_config: {}",
-        "",
         "Test Connection:\n  type: duckdb\n  concurrent_tasks: 1\n  register_comments: true\n  pre_ping: false\n  extensions: []\n  connector_config: {}",
-        "No connection configuration found.",
-        "",
         "Data warehouse connection succeeded",
     ]
     assert get_all_html_output(output) == [
@@ -564,10 +561,7 @@ def test_info(notebook, sushi_context, convert_all_html_output_to_text, get_all_
         "<pre style=\"white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace\">Macros: <span style=\"color: #008080; text-decoration-color: #008080; font-weight: bold\">6</span></pre>",
         "<pre style=\"white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace\"></pre>",
         '<pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,\'DejaVu Sans Mono\',consolas,\'Courier New\',monospace">Connection:  type: duckdb  concurrent_tasks: <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">1</span>  register_comments: true  pre_ping: false  extensions: <span style="font-weight: bold">[]</span>  connector_config: <span style="font-weight: bold">{}</span></pre>',
-        "<pre style=\"white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace\"></pre>",
         '<pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,\'DejaVu Sans Mono\',consolas,\'Courier New\',monospace">Test Connection:  type: duckdb  concurrent_tasks: <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">1</span>  register_comments: true  pre_ping: false  extensions: <span style="font-weight: bold">[]</span>  connector_config: <span style="font-weight: bold">{}</span></pre>',
-        "<pre style=\"white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace\">No connection configuration found.</pre>",
-        "<pre style=\"white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace\"></pre>",
         "<pre style=\"white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace\">Data warehouse connection <span style=\"color: #008000; text-decoration-color: #008000\">succeeded</span></pre>",
     ]
 

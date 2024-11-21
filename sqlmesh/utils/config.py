@@ -62,7 +62,6 @@ def print_config(config: Optional[ConnectionConfig], console: Any, title: str) -
         console: Console object with log_status_update method
     """
     if not config:
-        console.log_status_update("No connection configuration found.")
         return
 
     config_dict = config.dict(mode="json")
@@ -74,5 +73,4 @@ def print_config(config: Optional[ConnectionConfig], console: Any, title: str) -
     configWithTitle = {title: config_dict}
     yaml_output = yaml.dump(configWithTitle)
 
-    console.log_status_update("\n\n")
     console.log_status_update(yaml_output)

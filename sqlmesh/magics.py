@@ -960,12 +960,13 @@ class SQLMeshMagics(Magics):
         help="Skip the connection test.",
         default=False,
     )
+    @argument("--verbose", "-v", action="store_true", help="Verbose output.")
     @line_magic
     @pass_sqlmesh_context
     def info(self, context: Context, line: str) -> None:
         """Display SQLMesh project information."""
         args = parse_argstring(self.info, line)
-        context.print_info(skip_connection=args.skip_connection)
+        context.print_info(skip_connection=args.skip_connection, verbose=args.verbose)
 
     @magic_arguments()
     @line_magic
