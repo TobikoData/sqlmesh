@@ -268,8 +268,8 @@ class SnapshotEvaluator:
         snapshots_with_table_names = defaultdict(set)
         tables_by_schema = defaultdict(set)
         gateway_by_schema: t.Dict[exp.Table, str] = {}
-
         table_deployability: t.Dict[str, bool] = {}
+
         for snapshot in target_snapshots:
             if not snapshot.is_model or snapshot.is_symbolic:
                 continue
@@ -364,6 +364,7 @@ class SnapshotEvaluator:
     def cleanup(
         self,
         target_snapshots: t.Iterable[SnapshotTableCleanupTask],
+        snapshot_gateways: t.Optional[t.Dict[str, str]] = None,
         on_complete: t.Optional[t.Callable[[str], None]] = None,
     ) -> None:
         """Cleans up the given snapshots by removing its table
@@ -375,11 +376,24 @@ class SnapshotEvaluator:
         snapshots_to_dev_table_only = {
             t.snapshot.snapshot_id: t.dev_table_only for t in target_snapshots
         }
+
+        snapshot_to_adapter = {
+            t.snapshot.snapshot_id: self._get_engine_adapter(
+                snapshot_gateways.get(t.snapshot.snapshot_id.name)
+            )
+            if snapshot_gateways
+            else self.adapter
+            for t in target_snapshots
+        }
+
         with self.concurrent_context():
             concurrent_apply_to_snapshots(
                 [t.snapshot for t in target_snapshots],
                 lambda s: self._cleanup_snapshot(
-                    s, snapshots_to_dev_table_only[s.snapshot_id], on_complete
+                    s,
+                    snapshots_to_dev_table_only[s.snapshot_id],
+                    snapshot_to_adapter[s.snapshot_id],
+                    on_complete,
                 ),
                 self.ddl_concurrent_tasks,
                 reverse_order=True,
@@ -839,6 +853,7 @@ class SnapshotEvaluator:
         self,
         snapshot: SnapshotInfoLike,
         dev_table_only: bool,
+        adapter: EngineAdapter,
         on_complete: t.Optional[t.Callable[[str], None]],
     ) -> None:
         snapshot = snapshot.table_info
@@ -847,8 +862,7 @@ class SnapshotEvaluator:
         if not dev_table_only:
             table_names.append((True, snapshot.table_name(is_deployable=True)))
 
-        evaluation_strategy = _evaluation_strategy(snapshot, self.adapter)
-
+        evaluation_strategy = _evaluation_strategy(snapshot, adapter)
         for is_table_deployable, table_name in table_names:
             evaluation_strategy.delete(
                 table_name,

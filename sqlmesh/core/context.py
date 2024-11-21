@@ -380,8 +380,8 @@ class GenericContext(BaseContext, t.Generic[C]):
         self._connection_config = self.config.get_connection(self.gateway)
         self.concurrent_tasks = concurrent_tasks or self._connection_config.concurrent_tasks
         self._engine_adapter = engine_adapter or self._connection_config.create_engine_adapter()
-
         self._engine_adapters: t.Dict[str, EngineAdapter] = {}
+        self._min_concurrent_tasks = self.concurrent_tasks
         self._snapshot_evaluator: t.Optional[SnapshotEvaluator] = None
         self._test_connection_configs: t.Dict[str, ConnectionConfig] = {}
 
@@ -404,7 +404,9 @@ class GenericContext(BaseContext, t.Generic[C]):
                     self._test_connection_configs[gateway_name] = self.config.get_test_connection(
                         gateway_name, self.default_catalog, default_catalog_dialect=adapter.DIALECT
                     )
-                    self.concurrent_tasks = min(self.concurrent_tasks, connection.concurrent_tasks)
+                    self._min_concurrent_tasks = min(
+                        self._min_concurrent_tasks, connection.concurrent_tasks
+                    )
                 self._engine_adapters[gateway_name] = adapter
 
         self.console = console or get_console(dialect=self._engine_adapter.dialect)
@@ -443,7 +445,9 @@ class GenericContext(BaseContext, t.Generic[C]):
         if not self._snapshot_evaluator:
             self._snapshot_evaluator = SnapshotEvaluator(
                 self.engine_adapter.with_log_level(logging.INFO),
-                ddl_concurrent_tasks=self.concurrent_tasks,
+                ddl_concurrent_tasks=self._min_concurrent_tasks
+                if self._snapshot_gateways
+                else self.concurrent_tasks,
                 engine_adapters=self._engine_adapters,
             )
         return self._snapshot_evaluator
@@ -2023,6 +2027,16 @@ class GenericContext(BaseContext, t.Generic[C]):
             for fqn, snapshot in self.snapshots.items()
         }
 
+    @property
+    def _snapshot_gateways(self) -> t.Dict[str, str]:
+        """Mapping of snapshot name to the gateway if specified in the model."""
+
+        return {
+            fqn: snapshot.model.gateway
+            for fqn, snapshot in self.snapshots.items()
+            if snapshot.model_or_none and snapshot.model.gateway
+        }
+
     def _snapshots(
         self, models_override: t.Optional[UniqueKeyDict[str, Model]] = None
     ) -> t.Dict[str, Snapshot]:
@@ -2120,7 +2134,9 @@ class GenericContext(BaseContext, t.Generic[C]):
         self._cleanup_environments()
         expired_snapshots = self.state_sync.delete_expired_snapshots(ignore_ttl=ignore_ttl)
         self.snapshot_evaluator.cleanup(
-            expired_snapshots, on_complete=self.console.update_cleanup_progress
+            expired_snapshots,
+            self._snapshot_gateways,
+            on_complete=self.console.update_cleanup_progress,
         )
 
         self.state_sync.compact_intervals()
