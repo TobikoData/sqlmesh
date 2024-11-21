@@ -1662,14 +1662,6 @@ def expand_range(start_ts: int, end_ts: int, interval_unit: IntervalUnit) -> t.L
 
 
 @lru_cache(maxsize=None)
-def expand_range_as_interval(
-    start_ts: int, end_ts: int, interval_unit: IntervalUnit
-) -> t.List[Interval]:
-    values = expand_range(start_ts, end_ts, interval_unit)
-    return [(values[i], values[i + 1]) for i in range(len(values) - 1)]
-
-
-@lru_cache(maxsize=None)
 def compute_missing_intervals(
     interval_unit: IntervalUnit,
     intervals: t.Tuple[Interval, ...],

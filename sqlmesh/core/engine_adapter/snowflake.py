@@ -325,7 +325,7 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
             # pandas will fail (Ex: `SHOW TERSE OBJECTS IN SCHEMA`). Therefore we manually convert
             # the result into a DataFrame when this happens.
             rows = self.cursor.fetchall()
-            columns = self.cursor._result_set.merged_missing_intervals[0].column_names
+            columns = self.cursor._result_set.batches[0].column_names
             return pd.DataFrame([dict(zip(columns, row)) for row in rows])
 
     def _get_data_objects(

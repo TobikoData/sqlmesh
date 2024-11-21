@@ -29,7 +29,6 @@ from sqlmesh.core.macros import macro
 from sqlmesh.core.model import IncrementalByTimeRangeKind, SqlModel, model
 from sqlmesh.core.model.kind import OnDestructiveChange
 from sqlmesh.core.plan import BuiltInPlanEvaluator, Plan
-from sqlmesh.core.scheduler import Scheduler, SnapshotToIntervals
 from sqlmesh.core.snapshot import (
     Node,
     Snapshot,
@@ -486,19 +485,3 @@ def make_temp_table_name(mocker: MockerFixture) -> t.Callable:
         return temp_table
 
     return _make_function
-
-
-@pytest.fixture
-def get_batched_missing_intervals() -> (
-    t.Callable[[Scheduler, TimeLike, TimeLike, t.Optional[TimeLike]], SnapshotToIntervals]
-):
-    def _get_batched_missing_intervals(
-        scheduler: Scheduler,
-        start: TimeLike,
-        end: TimeLike,
-        execution_time: t.Optional[TimeLike] = None,
-    ) -> SnapshotToIntervals:
-        merged_intervals = scheduler.merged_missing_intervals(start, end, execution_time)
-        return scheduler._batch_intervals(merged_intervals, start, end, execution_time)
-
-    return _get_batched_missing_intervals

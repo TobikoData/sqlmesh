@@ -22,6 +22,7 @@ from sqlmesh.core.scheduler import (
     compute_interval_params,
     signal_factory,
     Signal,
+    SnapshotToIntervals,
 )
 from sqlmesh.core.snapshot import (
     Snapshot,
@@ -29,7 +30,7 @@ from sqlmesh.core.snapshot import (
     SnapshotChangeCategory,
     DeployabilityIndex,
 )
-from sqlmesh.utils.date import to_datetime, to_timestamp, DatetimeRanges
+from sqlmesh.utils.date import to_datetime, to_timestamp, DatetimeRanges, TimeLike
 from sqlmesh.utils.errors import CircuitBreakerError, AuditError
 
 
@@ -64,6 +65,22 @@ def test_interval_params(scheduler: Scheduler, sushi_context_fixed_date: Context
             (to_timestamp(start_ds), to_timestamp("2022-02-06")),
         ],
     }
+
+
+@pytest.fixture
+def get_batched_missing_intervals() -> (
+    t.Callable[[Scheduler, TimeLike, TimeLike, t.Optional[TimeLike]], SnapshotToIntervals]
+):
+    def _get_batched_missing_intervals(
+        scheduler: Scheduler,
+        start: TimeLike,
+        end: TimeLike,
+        execution_time: t.Optional[TimeLike] = None,
+    ) -> SnapshotToIntervals:
+        merged_intervals = scheduler.merged_missing_intervals(start, end, execution_time)
+        return scheduler.batch_intervals(merged_intervals, start, end, execution_time)
+
+    return _get_batched_missing_intervals
 
 
 def test_interval_params_nonconsecutive(scheduler: Scheduler, orders: Snapshot):
@@ -503,7 +520,8 @@ def test_contiguous_intervals():
 
 
 def test_check_ready_intervals(mocker: MockerFixture):
-    from sqlmesh.core.scheduler import _check_ready_intervals, Interval
+    from sqlmesh.core.scheduler import _check_ready_intervals
+    from sqlmesh.core.snapshot.definition import Interval
 
     def const_signal(const):
         signal_mock = mocker.Mock()

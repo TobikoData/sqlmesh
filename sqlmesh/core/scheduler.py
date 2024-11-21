@@ -5,12 +5,12 @@ import logging
 import traceback
 import typing as t
 
-from more_itertools import flatten
 from sqlglot import exp
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.environment import EnvironmentNamingInfo
+from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.notification_target import (
     NotificationEvent,
     NotificationTargetManager,
@@ -21,8 +21,9 @@ from sqlmesh.core.snapshot import (
     SnapshotEvaluator,
     earliest_start_date,
     missing_intervals,
+    Intervals,
 )
-from sqlmesh.core.snapshot.definition import expand_range_as_interval
+from sqlmesh.core.snapshot.definition import Interval, expand_range
 from sqlmesh.core.snapshot.definition import SnapshotId, merge_intervals
 from sqlmesh.core.state_sync import StateSync
 from sqlmesh.utils import format_exception
@@ -40,8 +41,6 @@ from sqlmesh.utils.date import (
 from sqlmesh.utils.errors import AuditError, CircuitBreakerError, SQLMeshError
 
 logger = logging.getLogger(__name__)
-Interval = t.Tuple[int, int]
-Intervals = t.List[Interval]
 SnapshotToIntervals = t.Dict[Snapshot, Intervals]
 # we store snapshot name instead of snapshots/snapshotids because pydantic
 # is extremely slow to hash. snapshot names should be unique within a dag run
@@ -374,27 +373,30 @@ class Scheduler:
 
         return not errors
 
-    def _batch_intervals(
+    def batch_intervals(
         self,
         merged_intervals: SnapshotToIntervals,
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         execution_time: t.Optional[TimeLike] = None,
     ) -> t.Dict[Snapshot, Intervals]:
+        def expand_range_as_interval(
+            start_ts: int, end_ts: int, interval_unit: IntervalUnit
+        ) -> t.List[Interval]:
+            values = expand_range(start_ts, end_ts, interval_unit)
+            return [(values[i], values[i + 1]) for i in range(len(values) - 1)]
+
         dag = DAG[str]()
 
         for snapshot in merged_intervals:
             dag.add(snapshot.name, [p.name for p in snapshot.parents])
 
         snapshot_intervals = {
-            snapshot: list(
-                flatten(
-                    [
-                        expand_range_as_interval(*interval, snapshot.node.interval_unit)
-                        for interval in intervals
-                    ]
-                )
-            )
+            snapshot: [
+                i
+                for interval in intervals
+                for i in expand_range_as_interval(*interval, snapshot.node.interval_unit)
+            ]
             for snapshot, intervals in merged_intervals.items()
         }
         snapshot_batches = {}
@@ -463,7 +465,7 @@ class Scheduler:
         Returns:
             A tuple of errors and skipped intervals.
         """
-        batched_intervals = self._batch_intervals(merged_intervals, start, end, execution_time)
+        batched_intervals = self.batch_intervals(merged_intervals, start, end, execution_time)
 
         self.console.start_evaluation_progress(
             {snapshot: len(intervals) for snapshot, intervals in batched_intervals.items()},
@@ -616,7 +618,7 @@ def compute_interval_params(
         end_bounded=end_bounded,
     ).items():
         contiguous_batch = []
-        next_batch: t.List[t.Tuple[int, int]] = []
+        next_batch: Intervals = []
 
         for interval in intervals:
             if next_batch and interval[0] != next_batch[-1][-1]:
