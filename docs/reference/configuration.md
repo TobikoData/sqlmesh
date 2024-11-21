@@ -227,6 +227,17 @@ See [Airflow Integration Guide](../integrations/airflow.md) for information abou
 
 The Google Cloud Composer scheduler type shares the same configuration options as the `airflow` type, except for `username` and `password`. Cloud Composer relies on `gcloud` authentication, so the `username` and `password` options are not required.
 
+#### YC Airflow
+
+**Type:** `yc_airflow`
+
+Yandex Managed Airflow shares similar configuration options with the standard `airflow` type, with the following exceptions:
+
+- `max_snapshot_ids_per_request`: This option is deprecated and not supported.
+- Authentication: YC Airflow requires additional credentials, including both a `token` and a combination of `username` and `password`.
+
+Unlike the `airflow` type, YC Airflow leverages Yandex Cloud's internal authentication mechanisms. Therefore, all requests to the Airflow API must include a valid Yandex Cloud IAM-token for authentication.
+
 ## Gateway/connection defaults
 
 The default gateway and connection keys specify what should happen when gateways or connections are not explicitly specified. Find additional details in the configuration overview page [gateway/connection defaults section](../guides/configuration.md#gatewayconnection-defaults).

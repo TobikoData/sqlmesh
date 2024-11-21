@@ -37,4 +37,5 @@ from sqlmesh.core.config.scheduler import (
     BuiltInSchedulerConfig as BuiltInSchedulerConfig,
     CloudComposerSchedulerConfig as CloudComposerSchedulerConfig,
     MWAASchedulerConfig as MWAASchedulerConfig,
+    YCAirflowSchedulerConfig as YCAirflowSchedulerConfig,
 )

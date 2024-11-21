@@ -251,6 +251,58 @@ class AirflowSchedulerConfig(_BaseAirflowSchedulerConfig, BaseConfig):
         )
 
 
+class YCAirflowSchedulerConfig(_BaseAirflowSchedulerConfig, BaseConfig):
+    """The Yandex Cloud Managed Airflow Scheduler configuration.
+
+    Args:
+        airflow_url: The URL of the Airflow Webserver.
+        username: The Airflow username.
+        password: The Airflow password.
+        dag_run_poll_interval_secs: Determines how often a running DAG can be polled (in seconds).
+        dag_creation_poll_interval_secs: Determines how often SQLMesh should check whether a DAG has been created (in seconds).
+        dag_creation_max_retry_attempts: Determines the maximum number of attempts that SQLMesh will make while checking for
+            whether a DAG has been created.
+        backfill_concurrent_tasks: The number of concurrent tasks used for model backfilling during plan application.
+        ddl_concurrent_tasks: The number of concurrent tasks used for DDL operations (table / view creation, deletion, etc).
+        max_snapshot_ids_per_request: The maximum number of snapshot IDs that can be sent in a single HTTP GET request to the Airflow Webserver (Deprecated).
+        use_state_connection: Whether to use the `state_connection` configuration to access the SQLMesh state.
+        default_catalog_override: Overrides the default catalog value for this project. If specified, this value takes precedence
+            over the default catalog value set on the Airflow side.
+        token: The IAM-token for API authentification.
+    """
+
+    airflow_url: str
+    username: str
+    password: str
+    token: str
+    dag_run_poll_interval_secs: int = 10
+    dag_creation_poll_interval_secs: int = 30
+    dag_creation_max_retry_attempts: int = 10
+
+    backfill_concurrent_tasks: int = 4
+    ddl_concurrent_tasks: int = 4
+
+    use_state_connection: bool = False
+
+    default_catalog_override: t.Optional[str] = None
+
+    _concurrent_tasks_validator = concurrent_tasks_validator
+
+    type_: Literal["yc_airflow"] = Field(alias="type", default="yc_airflow")
+
+    def get_client(self, console: t.Optional[Console] = None) -> AirflowClient:
+        session = Session()
+
+        session.auth = (self.username, self.password)
+        session.headers.update({"X-Cloud-Authorization": f"Bearer {self.token}"})
+
+        return AirflowClient(
+            session=session,
+            airflow_url=self.airflow_url,
+            console=console,
+        )
+
+
 class CloudComposerSchedulerConfig(_BaseAirflowSchedulerConfig, BaseConfig, extra="allow"):
     """The Google Cloud Composer configuration.
 
