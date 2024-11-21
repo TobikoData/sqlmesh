@@ -442,10 +442,13 @@ export default function Root({
   }, [formatFile])
 
   useEffect(() => {
-    if (location.pathname === EnumRoutes.Home || location.pathname === '') {
+    if (
+      (isFalse(modules.isEmpty) && location.pathname === EnumRoutes.Home) ||
+      location.pathname === ''
+    ) {
       navigate(modules.defaultNavigationRoute(), { replace: true })
     }
-  }, [location])
+  }, [location, modules.list])
 
   useEffect(() => {
     setShowConfirmation(confirmations.length > 0)
