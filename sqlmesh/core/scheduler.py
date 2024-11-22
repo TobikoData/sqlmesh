@@ -465,6 +465,8 @@ class Scheduler:
         Returns:
             A tuple of errors and skipped intervals.
         """
+        execution_time = execution_time or now()
+
         batched_intervals = self.batch_intervals(merged_intervals, start, end, execution_time)
 
         self.console.start_evaluation_progress(
