@@ -865,22 +865,22 @@ def test_db_type_to_relation_class():
     from dbt.adapters.duckdb.relation import DuckDBRelation
     from dbt.adapters.redshift import RedshiftRelation
     from dbt.adapters.snowflake import SnowflakeRelation
-    from dbt.adapters.trino.relation import TrinoRelation
-    from dbt.adapters.athena.relation import AthenaRelation
 
     assert (TARGET_TYPE_TO_CONFIG_CLASS["bigquery"].relation_class) == BigQueryRelation
     assert (TARGET_TYPE_TO_CONFIG_CLASS["databricks"].relation_class) == DatabricksRelation
     assert (TARGET_TYPE_TO_CONFIG_CLASS["duckdb"].relation_class) == DuckDBRelation
     assert (TARGET_TYPE_TO_CONFIG_CLASS["redshift"].relation_class) == RedshiftRelation
     assert (TARGET_TYPE_TO_CONFIG_CLASS["snowflake"].relation_class) == SnowflakeRelation
-    assert (TARGET_TYPE_TO_CONFIG_CLASS["trino"].relation_class) == TrinoRelation
-    assert (TARGET_TYPE_TO_CONFIG_CLASS["athena"].relation_class) == AthenaRelation
 
     # typing chokes on dbt-clickhouse if python < 3.9
     if sys.version_info >= (3, 9):
         from dbt.adapters.clickhouse.relation import ClickHouseRelation
+        from dbt.adapters.trino.relation import TrinoRelation
+        from dbt.adapters.athena.relation import AthenaRelation
 
         assert (TARGET_TYPE_TO_CONFIG_CLASS["clickhouse"].relation_class) == ClickHouseRelation
+        assert (TARGET_TYPE_TO_CONFIG_CLASS["trino"].relation_class) == TrinoRelation
+        assert (TARGET_TYPE_TO_CONFIG_CLASS["athena"].relation_class) == AthenaRelation
 
 
 @pytest.mark.cicdonly
@@ -889,22 +889,22 @@ def test_db_type_to_column_class():
     from dbt.adapters.databricks.column import DatabricksColumn
     from dbt.adapters.snowflake import SnowflakeColumn
     from dbt.adapters.sqlserver.sqlserver_column import SQLServerColumn
-    from dbt.adapters.trino.column import TrinoColumn
-    from dbt.adapters.athena.column import AthenaColumn
 
     assert (TARGET_TYPE_TO_CONFIG_CLASS["bigquery"].column_class) == BigQueryColumn
     assert (TARGET_TYPE_TO_CONFIG_CLASS["databricks"].column_class) == DatabricksColumn
     assert (TARGET_TYPE_TO_CONFIG_CLASS["duckdb"].column_class) == Column
     assert (TARGET_TYPE_TO_CONFIG_CLASS["snowflake"].column_class) == SnowflakeColumn
     assert (TARGET_TYPE_TO_CONFIG_CLASS["sqlserver"].column_class) == SQLServerColumn
-    assert (TARGET_TYPE_TO_CONFIG_CLASS["trino"].column_class) == TrinoColumn
-    assert (TARGET_TYPE_TO_CONFIG_CLASS["athena"].column_class) == AthenaColumn
 
     # typing chokes on dbt-clickhouse if python < 3.9
     if sys.version_info >= (3, 9):
         from dbt.adapters.clickhouse.column import ClickHouseColumn
+        from dbt.adapters.trino.column import TrinoColumn
+        from dbt.adapters.athena.column import AthenaColumn
 
         assert (TARGET_TYPE_TO_CONFIG_CLASS["clickhouse"].column_class) == ClickHouseColumn
+        assert (TARGET_TYPE_TO_CONFIG_CLASS["trino"].column_class) == TrinoColumn
+        assert (TARGET_TYPE_TO_CONFIG_CLASS["athena"].column_class) == AthenaColumn
 
 
 def test_db_type_to_quote_policy():
