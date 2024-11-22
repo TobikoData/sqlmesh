@@ -1494,7 +1494,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         adapter = self.engine_adapter
         if model_or_snapshot:
             model = self.get_model(model_or_snapshot, raise_if_missing=True)
-            if model:
+            if model and model.gateway:
                 adapter = self._engine_adapters.get(model.gateway) or adapter
             source_env = self.state_reader.get_environment(source)
             target_env = self.state_reader.get_environment(target)
