@@ -149,7 +149,7 @@ def test_incremental_by_unique_key_kind_dag(
             query=parse_one("SELECT id FROM VALUES (1), (2) AS t(id)"),
         ),
     )
-    snapshot_evaluator = SnapshotEvaluator(adapter=mocker.MagicMock(), ddl_concurrent_tasks=1)
+    snapshot_evaluator = SnapshotEvaluator(adapters=mocker.MagicMock(), ddl_concurrent_tasks=1)
     mock_state_sync = mocker.MagicMock()
     scheduler = Scheduler(
         snapshots=[unique_by_key_snapshot],
@@ -191,7 +191,7 @@ def test_incremental_time_self_reference_dag(
     incremental_self_snapshot.add_interval("2023-01-02", "2023-01-02")
     incremental_self_snapshot.add_interval("2023-01-05", "2023-01-05")
 
-    snapshot_evaluator = SnapshotEvaluator(adapter=mocker.MagicMock(), ddl_concurrent_tasks=1)
+    snapshot_evaluator = SnapshotEvaluator(adapters=mocker.MagicMock(), ddl_concurrent_tasks=1)
     scheduler = Scheduler(
         snapshots=[incremental_self_snapshot],
         snapshot_evaluator=snapshot_evaluator,
@@ -382,7 +382,7 @@ def test_incremental_batch_concurrency(
         ),
     )
 
-    snapshot_evaluator = SnapshotEvaluator(adapter=mocker.MagicMock(), ddl_concurrent_tasks=1)
+    snapshot_evaluator = SnapshotEvaluator(adapters=mocker.MagicMock(), ddl_concurrent_tasks=1)
     mock_state_sync = mocker.MagicMock()
     scheduler = Scheduler(
         snapshots=[snapshot],
@@ -423,7 +423,7 @@ def test_intervals_with_end_date_on_model(
         )
     )
 
-    snapshot_evaluator = SnapshotEvaluator(adapter=mocker.MagicMock(), ddl_concurrent_tasks=1)
+    snapshot_evaluator = SnapshotEvaluator(adapters=mocker.MagicMock(), ddl_concurrent_tasks=1)
     scheduler = Scheduler(
         snapshots=[snapshot],
         snapshot_evaluator=snapshot_evaluator,
@@ -485,7 +485,7 @@ def test_external_model_audit(mocker, make_snapshot):
     snapshot = make_snapshot(model)
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
-    evaluator = SnapshotEvaluator(adapter=mocker.MagicMock())
+    evaluator = SnapshotEvaluator(adapters=mocker.MagicMock())
     spy = mocker.spy(evaluator, "_audit")
 
     scheduler = Scheduler(
@@ -683,7 +683,7 @@ def test_signal_factory(mocker: MockerFixture, make_snapshot):
             signals=[{"kind": "foo"}],
         ),
     )
-    snapshot_evaluator = SnapshotEvaluator(adapter=mocker.MagicMock(), ddl_concurrent_tasks=1)
+    snapshot_evaluator = SnapshotEvaluator(adapters=mocker.MagicMock(), ddl_concurrent_tasks=1)
     scheduler = Scheduler(
         snapshots=[snapshot],
         snapshot_evaluator=snapshot_evaluator,

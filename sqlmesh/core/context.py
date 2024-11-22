@@ -243,14 +243,12 @@ class ExecutionContext(BaseContext):
         deployability_index: t.Optional[DeployabilityIndex] = None,
         default_dialect: t.Optional[str] = None,
         default_catalog: t.Optional[str] = None,
-        engine_adapters: t.Optional[t.Dict[str, EngineAdapter]] = None,
         variables: t.Optional[t.Dict[str, t.Any]] = None,
     ):
         self.snapshots = snapshots
         self.deployability_index = deployability_index
         self._engine_adapter = engine_adapter
         self._default_catalog = default_catalog
-        self._engine_adapters = engine_adapters
         self._default_dialect = default_dialect
         self._variables = variables or {}
 
@@ -289,7 +287,6 @@ class ExecutionContext(BaseContext):
             self.deployability_index,
             self._default_dialect,
             self._default_catalog,
-            self._engine_adapters,
             variables=variables,
         )
 
@@ -379,13 +376,18 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         self._connection_config = self.config.get_connection(self.gateway)
         self.concurrent_tasks = concurrent_tasks or self._connection_config.concurrent_tasks
-        self._engine_adapter = engine_adapter or self._connection_config.create_engine_adapter()
-        self._engine_adapters: t.Dict[str, EngineAdapter] = {}
+
+        self._engine_adapters: t.Dict[str, EngineAdapter] = {
+            self.config.default_gateway_name: engine_adapter
+            or self._connection_config.create_engine_adapter()
+        }
         self._min_concurrent_tasks = self.concurrent_tasks
         self._snapshot_evaluator: t.Optional[SnapshotEvaluator] = None
         self._test_connection_configs: t.Dict[str, ConnectionConfig] = {}
 
-        self._test_connection_configs[self.config.default_gateway] = (
+        self.console = console or get_console(dialect=self.engine_adapter.dialect)
+
+        self._test_connection_configs[self.config.default_gateway_name] = (
             self.config.get_test_connection(
                 self.gateway,
                 self.default_catalog,
@@ -395,10 +397,7 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         if not gateway:
             for gateway_name in self.config.gateways:
-                if gateway_name == self.config.default_gateway:
-                    connection = self._connection_config
-                    adapter = self._engine_adapter
-                else:
+                if gateway_name != self.config.default_gateway_name:
                     connection = self.config.get_connection(gateway_name)
                     adapter = connection.create_engine_adapter()
                     self._test_connection_configs[gateway_name] = self.config.get_test_connection(
@@ -407,9 +406,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                     self._min_concurrent_tasks = min(
                         self._min_concurrent_tasks, connection.concurrent_tasks
                     )
-                self._engine_adapters[gateway_name] = adapter
-
-        self.console = console or get_console(dialect=self._engine_adapter.dialect)
+                    self._engine_adapters[gateway_name] = adapter
 
         self._provided_state_sync: t.Optional[StateSync] = state_sync
         self._state_sync: t.Optional[StateSync] = None
@@ -437,18 +434,20 @@ class GenericContext(BaseContext, t.Generic[C]):
 
     @property
     def engine_adapter(self) -> EngineAdapter:
-        """Returns an engine adapter."""
-        return self._engine_adapter
+        """Returns the default engine adapter."""
+        return self._engine_adapters[self.config.default_gateway_name]
 
     @property
     def snapshot_evaluator(self) -> SnapshotEvaluator:
         if not self._snapshot_evaluator:
             self._snapshot_evaluator = SnapshotEvaluator(
-                self.engine_adapter.with_log_level(logging.INFO),
+                {
+                    gateway: adapter.with_log_level(logging.INFO)
+                    for gateway, adapter in self._engine_adapters.items()
+                },
                 ddl_concurrent_tasks=self._min_concurrent_tasks
                 if self._snapshot_gateways
                 else self.concurrent_tasks,
-                engine_adapters=self._engine_adapters,
             )
         return self._snapshot_evaluator
 
@@ -457,7 +456,7 @@ class GenericContext(BaseContext, t.Generic[C]):
     ) -> ExecutionContext:
         """Returns an execution context."""
         return ExecutionContext(
-            engine_adapter=self._engine_adapter,
+            engine_adapter=self.engine_adapter,
             snapshots=self.snapshots,
             deployability_index=deployability_index,
             default_dialect=self.default_dialect,
@@ -659,7 +658,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             NotificationEvent.RUN_START, environment=environment
         )
         analytics_run_id = analytics.collector.on_run_start(
-            engine_type=self.snapshot_evaluator.adapter.dialect,
+            engine_type=self.snapshot_evaluator.adapter().dialect,
             state_sync_type=self.state_sync.state_type(),
         )
         self._load_materializations_and_signals()
@@ -1492,8 +1491,10 @@ class GenericContext(BaseContext, t.Generic[C]):
         """
         source_alias, target_alias = source, target
 
+        adapter = self.engine_adapter
         if model_or_snapshot:
             model = self.get_model(model_or_snapshot, raise_if_missing=True)
+            adapter = self._engine_adapters.get(model.gateway) or adapter
             source_env = self.state_reader.get_environment(source)
             target_env = self.state_reader.get_environment(target)
 
@@ -1528,7 +1529,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             )
 
         table_diff = TableDiff(
-            adapter=self._engine_adapter,
+            adapter=adapter,
             source=source,
             target=target,
             on=on,
@@ -1654,14 +1655,17 @@ class GenericContext(BaseContext, t.Generic[C]):
         try:
             model_to_test = self.get_model(model, raise_if_missing=True)
             connection_config = self._test_connection_configs[
-                model_to_test.gateway or self.config.default_gateway
+                model_to_test.gateway or self.config.default_gateway_name
+            ]
+            adapter = self._engine_adapters[
+                model_to_test.gateway or self.config.default_gateway_name
             ]
             test_adapter = connection_config.create_engine_adapter(register_comments_override=False)
             generate_test(
                 model=model_to_test,
                 input_queries=input_queries,
                 models=self._models,
-                engine_adapter=self._engine_adapter,
+                engine_adapter=adapter,
                 test_engine_adapter=test_adapter,
                 project_path=self.path,
                 overwrite=overwrite,
@@ -1793,7 +1797,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             self.console.log_status_update(f"Got {error.count} results, expected 0.")
             if error.query:
                 self.console.show_sql(
-                    f"{error.query.sql(dialect=self.snapshot_evaluator.adapter.dialect)}"
+                    f"{error.query.sql(dialect=self.snapshot_evaluator.adapter().dialect)}"
                 )
 
         self.console.log_status_update("Done.")
@@ -1875,7 +1879,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                         if self.config_for_node(model) is config
                     },
                 ),
-                adapter=self._engine_adapter,
+                adapter=self.engine_adapter,
                 state_reader=self.state_reader,
                 dialect=config.model_defaults.dialect,
                 gateway=self.gateway,
@@ -1891,6 +1895,7 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         if skip_connection:
             return
+        self._try_connection("data warehouse", self.engine_adapter.ping)
 
         if verbose:
             self.console.log_status_update("")
@@ -1996,7 +2001,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                     result,
                     test_output,
                     self._test_connection_configs[
-                        self.config.default_gateway
+                        self.config.default_gateway_name
                     ]._engine_adapter.DIALECT,
                 )
             if not result.wasSuccessful():
@@ -2034,7 +2039,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         return {
             fqn: snapshot.model.gateway
             for fqn, snapshot in self.snapshots.items()
-            if snapshot.model_or_none and snapshot.model.gateway
+            if snapshot.is_model and snapshot.model.gateway
         }
 
     def _snapshots(

@@ -3075,7 +3075,7 @@ def test_multiple_engine_promotion(mocker: MockerFixture, adapter_mock, make_sna
     cursor_mock = mocker.Mock()
     connection_mock.cursor.return_value = cursor_mock
     adapter = EngineAdapter(lambda: connection_mock, "")
-    engine_adapters = {"one": adapter, "two": adapter_mock}
+    engine_adapters = {"default": adapter_mock, "secondary": adapter}
 
     def columns(table_name):
         return {
@@ -3087,11 +3087,11 @@ def test_multiple_engine_promotion(mocker: MockerFixture, adapter_mock, make_sna
     model = SqlModel(
         name="test_schema.test_model",
         kind=IncrementalByTimeRangeKind(time_column="a"),
-        gateway="one",
+        gateway="secondary",
         query=parse_one("SELECT a FROM tbl WHERE ds BETWEEN @start_ds and @end_ds"),
     )
 
-    evaluator = SnapshotEvaluator(adapter_mock, engine_adapters=engine_adapters)
+    evaluator = SnapshotEvaluator(engine_adapters)
     snapshot = make_snapshot(model)
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
@@ -3105,7 +3105,7 @@ def test_multiple_engine_promotion(mocker: MockerFixture, adapter_mock, make_sna
 
     evaluator.promote([snapshot], EnvironmentNamingInfo(name="test_env"))
 
-    # Verify that the model was evaluated using the gateway specific adapter "one"
+    # Verify that the model was evaluated using the gateway specific adapter "secondary"
     cursor_mock.execute.assert_has_calls(
         [
             call(
@@ -3117,7 +3117,7 @@ def test_multiple_engine_promotion(mocker: MockerFixture, adapter_mock, make_sna
         ]
     )
 
-    # Verify that the snapshot was promoted using the default adapter "two" (adapter_mock in this case)
+    # Verify that the snapshot was promoted using the default adapter "default" (adapter_mock in this case)
     adapter_mock.create_schema.assert_called_once_with(schema_("test_schema__test_env"))
     adapter_mock.create_view.assert_called_once_with(
         "test_schema__test_env.test_model",
@@ -3154,7 +3154,7 @@ def test_multiple_engine_migration(mocker: MockerFixture, adapter_mock, make_sna
     adapter.columns = columns  # type: ignore
     adapter_mock.columns = columns  # type: ignore
 
-    evaluator = SnapshotEvaluator(adapter, engine_adapters=engine_adapters)
+    evaluator = SnapshotEvaluator(engine_adapters)
 
     model = SqlModel(
         name="test_schema.test_model",

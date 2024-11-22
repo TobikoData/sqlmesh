@@ -87,7 +87,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         self.console.start_plan_evaluation(plan)
         analytics.collector.on_plan_apply_start(
             plan=plan,
-            engine_type=self.snapshot_evaluator.adapter.dialect,
+            engine_type=self.snapshot_evaluator.adapter().dialect,
             state_sync_type=self.state_sync.state_type(),
             scheduler_type=c.BUILTIN,
         )

@@ -320,7 +320,7 @@ def test_evaluate_limit():
 def test_gateway_specific_evaluator(copy_to_temp_path):
     path = copy_to_temp_path("examples/sushi")
     ctx = Context(paths=path, config="isolated_systems_config", gateway="prod")
-    assert not ctx._engine_adapters
+    assert len(ctx._engine_adapters) == 1
 
     ctx = Context(paths=path, config="isolated_systems_config")
     assert len(ctx._engine_adapters) == 3
@@ -777,7 +777,7 @@ def test_janitor(sushi_context, mocker: MockerFixture) -> None:
             previous_plan_id="test_plan_id",
         ),
     ]
-    sushi_context._engine_adapter = adapter_mock
+    sushi_context._engine_adapters = {sushi_context.config.default_gateway: adapter_mock}
     sushi_context._state_sync = state_sync_mock
     sushi_context._run_janitor()
     # Assert that the schemas are dropped just twice for the schema based environment
