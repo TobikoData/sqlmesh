@@ -98,18 +98,18 @@ nav:
     - Configuration:
       - reference/configuration.md
       - reference/model_configuration.md
-  - Tobiko Cloud: 
-    - "Overview": cloud/cloud_index.md
-    - "Quickstart": cloud/quickstart.md
-    - Cloud Features:
-      - "Alerts & Notifications": cloud/features/alerts_notifications.md
-      - cloud/features/dag_debugger.md
-      - cloud/features/data_catalog.md
-      - cloud/features/model_freshness.md
-      - cloud/features/scheduler.md
-      - Observability:
-        - cloud/observability/monitoring.md
-        - "Measures & Dashboards": cloud/observability/measures_dashboards.md
+#  - Tobiko Cloud: 
+#    - "Overview": cloud/cloud_index.md
+#    - "Quickstart": cloud/quickstart.md
+#    - Cloud Features:
+#      - "Alerts & Notifications": cloud/features/alerts_notifications.md
+#      - cloud/features/dag_debugger.md
+#      - cloud/features/data_catalog.md
+#      - cloud/features/model_freshness.md
+#      - cloud/features/scheduler.md
+#      - Observability:
+#        - cloud/observability/monitoring.md
+#        - "Measures & Dashboards": cloud/observability/measures_dashboards.md
 theme:
   name: material
   logo: _readthedocs/html/sqlmesh.png
