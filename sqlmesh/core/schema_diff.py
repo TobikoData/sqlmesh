@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import logging
 import typing as t
-from collections import defaultdict
 from enum import Enum, auto
+from collections import defaultdict
+from pydantic import Field
 from sqlglot import exp
 from sqlglot.helper import ensure_list, seq_get
 
@@ -305,6 +306,11 @@ class SchemaDiffer(PydanticModel):
             columns of nested STRUCTs.
         compatible_types: Types that are compatible and automatically coerced in actions like UNION ALL. Dict key is data
             type, and value is the set of types that are compatible with it.
+        coerceable_types: The mapping from a current type to all types that can be safely coerced to the current one without
+            altering the column type. NOTE: usually callers should not specify this attribute manually and set the
+            `support_coercing_compatible_types` flag instead. Some engines are inconsistent about their type coercion rules.
+            For example, in BigQuery a BIGNUMERIC column can't be altered to be FLOAT64, while BIGNUMERIC values can be inserted
+            into a FLOAT64 column just fine.
         support_coercing_compatible_types: Whether or not the engine for which the diff is being computed supports direct
             coercion of compatible types.
         parameterized_type_defaults: Default values for parameterized data types. Dict key is a sqlglot exp.DataType.Type,
@@ -326,6 +332,9 @@ class SchemaDiffer(PydanticModel):
     support_nested_drop: bool = False
     array_element_selector: str = ""
     compatible_types: t.Dict[exp.DataType, t.Set[exp.DataType]] = {}
+    coerceable_types_: t.Dict[exp.DataType, t.Set[exp.DataType]] = Field(
+        default_factory=dict, alias="coerceable_types"
+    )
     support_coercing_compatible_types: bool = False
     parameterized_type_defaults: t.Dict[
         exp.DataType.Type, t.List[t.Tuple[t.Union[int, float], ...]]
@@ -339,8 +348,9 @@ class SchemaDiffer(PydanticModel):
     def coerceable_types(self) -> t.Dict[exp.DataType, t.Set[exp.DataType]]:
         if not self._coerceable_types:
             if not self.support_coercing_compatible_types or not self.compatible_types:
-                return {}
-            coerceable_types = defaultdict(set)
+                return self.coerceable_types_
+            coerceable_types: t.Dict[exp.DataType, t.Set[exp.DataType]] = defaultdict(set)
+            coerceable_types.update(self.coerceable_types_)
             for source_type, target_types in self.compatible_types.items():
                 for target_type in target_types:
                     coerceable_types[target_type].add(source_type)
@@ -361,8 +371,6 @@ class SchemaDiffer(PydanticModel):
         return False
 
     def _is_coerceable_type(self, current_type: exp.DataType, new_type: exp.DataType) -> bool:
-        if not self.support_coercing_compatible_types:
-            return False
         if current_type in self.coerceable_types:
             is_coerceable = new_type in self.coerceable_types[current_type]
             if is_coerceable:

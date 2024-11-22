@@ -78,6 +78,11 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
                 exp.DataType.build("DATETIME", dialect=DIALECT),
             },
         },
+        coerceable_types={
+            exp.DataType.build("FLOAT64", dialect=DIALECT): {
+                exp.DataType.build("BIGNUMERIC", dialect=DIALECT),
+            },
+        },
         support_coercing_compatible_types=True,
         parameterized_type_defaults={
             exp.DataType.build("DECIMAL", dialect=DIALECT).this: [(38, 9), (0,)],
