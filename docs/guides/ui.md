@@ -56,7 +56,7 @@ The UI modules are:
 
 - [Code editor](#editor-module)
 - [Plan builder](#plan-module)
-- [Data catalog](#docs-module)
+- [Data catalog](#data-catalog-module)
 - [Table and column lineage](#lineage-module)
 
 The screenshots in most examples below use the default `editor` mode.
@@ -234,7 +234,6 @@ The UI modes contain these modules:
 
 - `editor`: code editor, plan builder, data catalog, table and column lineage
 - `plan`: plan builder, data catalog, table and column lineage
-- `docs`: data catalog, table and column lineage
 - `catalog`: data catalog, table and column lineage
 
 ### Working with an IDE
