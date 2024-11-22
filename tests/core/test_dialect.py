@@ -213,6 +213,47 @@ SELECT
   CAST(1 AS INT) AS bla"""
     )
 
+    x = format_model_expressions(
+        parse(
+            """
+            MODEL(name test, dialect bigquery);
+            SELECT JSON_VALUE(j, '$.bar')::NUMERIC AS bar
+            """
+        ),
+        dialect="bigquery",
+    )
+    assert (
+        x
+        == """MODEL (
+  name test,
+  dialect bigquery
+);
+
+SELECT
+  JSON_VALUE(j, '$.bar')::NUMERIC AS bar"""
+    )
+
+    x = format_model_expressions(
+        parse(
+            """
+            MODEL(name test, dialect duckdb);
+            SELECT JSON_EXTRACT('{"x": 1}', '$.x')::INT AS foo
+            """
+        ),
+        dialect="duckdb",
+    )
+    assert (
+        x
+        == """MODEL (
+  name test,
+  dialect duckdb
+);
+
+SELECT
+  CAST('{"x": 1}' -> '$.x' AS INT) AS foo"""
+    )
+
+
 
 def test_macro_format():
     assert parse_one("@EACH(ARRAY(1,2), x -> x)").sql() == "@EACH(ARRAY(1, 2), x -> x)"

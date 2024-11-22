@@ -13,7 +13,7 @@ from functools import lru_cache
 import pandas as pd
 from sqlglot import Dialect, Generator, ParseError, Parser, Tokenizer, TokenType, exp
 from sqlglot.dialects.dialect import DialectType
-from sqlglot.dialects.snowflake import Snowflake
+from sqlglot.dialects import Databricks, DuckDB, MySQL, Postgres, Snowflake
 from sqlglot.helper import seq_get
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 from sqlglot.optimizer.qualify_columns import quote_identifiers
@@ -656,7 +656,7 @@ def _override(klass: t.Type[Tokenizer | Parser], func: t.Callable) -> None:
 
 def format_model_expressions(
     expressions: t.List[exp.Expression],
-    dialect: t.Optional[str] = None,
+    dialect: DialectType = None,
     rewrite_casts: bool = True,
     **kwargs: t.Any,
 ) -> str:
@@ -677,6 +677,7 @@ def format_model_expressions(
     *statements, query = expressions
 
     if rewrite_casts:
+        dialect = Dialect.get_or_raise(dialect)
 
         def cast_to_colon(node: exp.Expression) -> exp.Expression:
             if isinstance(node, exp.Cast) and not any(
@@ -688,7 +689,9 @@ def format_model_expressions(
             ):
                 this = node.this
 
-                if not isinstance(this, (exp.Binary, exp.Unary)) or isinstance(this, exp.Paren):
+                if not isinstance(this, (exp.Binary, exp.Unary)) or isinstance(
+                    this, getattr(dialect, "DCOLON_CASTABLE_EXPRESSIONS", exp.Paren)
+                ):
                     cast = DColonCast(this=this, to=node.to)
                     cast.comments = node.comments
                     node = cast
@@ -857,6 +860,10 @@ def parse(
     return expressions
 
 
+# These dialects use the arrow (`->`, `->>`) operators to extract values from JSON documents
+ARROW_JSON_EXTRACT_DIALECTS = {Databricks, DuckDB, MySQL, Postgres}
+
+
 def extend_sqlglot() -> None:
     """Extend SQLGlot with SQLMesh's custom macro aware dialect."""
     tokenizers = {Tokenizer}
@@ -870,6 +877,13 @@ def extend_sqlglot() -> None:
             parsers.add(dialect.Parser)
         if hasattr(dialect, "Generator"):
             generators.add(dialect.Generator)
+
+        if dialect in ARROW_JSON_EXTRACT_DIALECTS:
+            dcolon_castables: t.Tuple[t.Type[exp.Expression], ...] = (exp.Paren,)
+        else:
+            dcolon_castables = (exp.Paren, exp.JSONExtract, exp.JSONExtractScalar)
+
+        setattr(dialect, "DCOLON_CASTABLE_EXPRESSIONS", dcolon_castables)
 
     for tokenizer in tokenizers:
         tokenizer.VAR_SINGLE_TOKENS.update(SQLMESH_MACRO_PREFIX)
