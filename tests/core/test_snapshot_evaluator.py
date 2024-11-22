@@ -3093,6 +3093,70 @@ def test_migrate_managed(adapter_mock, make_snapshot, mocker: MockerFixture):
     adapter_mock.create_managed_table.assert_not_called()
 
 
+def test_multiple_engine_creation(snapshot: Snapshot, adapters, make_snapshot):
+    engine_adapters = {"default": adapters[0], "secondary": adapters[1], "third": adapters[2]}
+    evaluator = SnapshotEvaluator(engine_adapters)
+
+    model = load_sql_based_model(
+        parse(  # type: ignore
+            """
+            MODEL (
+                name test_schema.test_model,
+                kind FULL,
+                gateway secondary,
+                dialect postgres,
+            );
+            CREATE INDEX IF NOT EXISTS test_idx ON test_schema.test_model(a);
+            SELECT a::int FROM tbl;
+            CREATE INDEX IF NOT EXISTS test_idx ON test_schema.test_model(a);
+            """
+        ),
+    )
+
+    snapshot_2 = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    snapshot_2.categorize_as(SnapshotChangeCategory.BREAKING)
+    expected_call = f'CREATE INDEX IF NOT EXISTS "test_idx" ON "sqlmesh__test_schema"."test_schema__test_model__{snapshot_2.version}" /* test_schema.test_model */("a" NULLS FIRST)'
+    evaluator.create([snapshot_2, snapshot], {}, DeployabilityIndex.all_deployable())
+
+    # Default gateway adapter
+    create_args = engine_adapters["default"].create_table.call_args_list
+    assert len(create_args) == 1
+    assert create_args[0][0] == ("sqlmesh__db.db__model__3365306936",)
+
+    # Secondary gateway for gateway-specicied model
+    create_args_2 = engine_adapters["secondary"].create_table.call_args_list
+    assert len(create_args_2) == 1
+    assert create_args_2[0][0] == ("sqlmesh__test_schema.test_schema__test_model__2544594192",)
+
+    engine_adapters["third"].create_table.assert_not_called()
+    evaluator.promote([snapshot, snapshot_2], EnvironmentNamingInfo(name="test_env"))
+
+    # Virtual layer will use the default adapter
+    engine_adapters["secondary"].create_view.assert_not_called()
+    engine_adapters["third"].create_view.assert_not_called()
+    view_args = engine_adapters["default"].create_view.call_args_list
+    assert len(view_args) == 2
+    assert view_args[0][0][0] == "db__test_env.model"
+    assert view_args[1][0][0] == "test_schema__test_env.test_model"
+
+    call_args = engine_adapters["secondary"].execute.call_args_list
+    pre_calls = call_args[0][0][0]
+    assert len(pre_calls) == 1
+    assert pre_calls[0].sql(dialect="postgres") == expected_call
+
+    post_calls = call_args[1][0][0]
+    assert len(post_calls) == 1
+    assert post_calls[0].sql(dialect="postgres") == expected_call
+
+    evaluator.demote([snapshot_2], EnvironmentNamingInfo(name="test_env"))
+    engine_adapters["secondary"].drop_view.assert_not_called()
+    engine_adapters["default"].drop_view.assert_called_once_with(
+        "test_schema__test_env.test_model",
+        cascade=False,
+    )
+
+
 def test_multiple_engine_promotion(mocker: MockerFixture, adapter_mock, make_snapshot):
     connection_mock = mocker.NonCallableMock()
     cursor_mock = mocker.Mock()
