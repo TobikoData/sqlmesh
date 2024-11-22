@@ -784,7 +784,7 @@ def test_signal_intervals(mocker: MockerFixture, make_snapshot, get_batched_miss
         nodes={a.name: a.model, b.name: b.model, c.name: c.model},
     )
 
-    snapshot_evaluator = SnapshotEvaluator(adapter=mocker.MagicMock(), ddl_concurrent_tasks=1)
+    snapshot_evaluator = SnapshotEvaluator(adapters=mocker.MagicMock(), ddl_concurrent_tasks=1)
     scheduler = Scheduler(
         snapshots=[a, b, c, d],
         snapshot_evaluator=snapshot_evaluator,

@@ -3122,12 +3122,14 @@ def test_multiple_engine_creation(snapshot: Snapshot, adapters, make_snapshot):
     # Default gateway adapter
     create_args = engine_adapters["default"].create_table.call_args_list
     assert len(create_args) == 1
-    assert create_args[0][0] == ("sqlmesh__db.db__model__3365306936",)
+    assert create_args[0][0] == (f"sqlmesh__db.db__model__{snapshot.version}",)
 
     # Secondary gateway for gateway-specicied model
     create_args_2 = engine_adapters["secondary"].create_table.call_args_list
     assert len(create_args_2) == 1
-    assert create_args_2[0][0] == ("sqlmesh__test_schema.test_schema__test_model__2544594192",)
+    assert create_args_2[0][0] == (
+        f"sqlmesh__test_schema.test_schema__test_model__{snapshot_2.version}",
+    )
 
     engine_adapters["third"].create_table.assert_not_called()
     evaluator.promote([snapshot, snapshot_2], EnvironmentNamingInfo(name="test_env"))
@@ -3196,10 +3198,10 @@ def test_multiple_engine_promotion(mocker: MockerFixture, adapter_mock, make_sna
     cursor_mock.execute.assert_has_calls(
         [
             call(
-                'DELETE FROM "sqlmesh__test_schema"."test_schema__test_model__201843948" WHERE "a" BETWEEN 2020-01-01 00:00:00+00:00 AND 2020-01-02 23:59:59.999999+00:00'
+                f'DELETE FROM "sqlmesh__test_schema"."test_schema__test_model__{snapshot.version}" WHERE "a" BETWEEN 2020-01-01 00:00:00+00:00 AND 2020-01-02 23:59:59.999999+00:00'
             ),
             call(
-                'INSERT INTO "sqlmesh__test_schema"."test_schema__test_model__201843948" ("a") SELECT "a" FROM (SELECT "a" AS "a" FROM "tbl" AS "tbl" WHERE "ds" BETWEEN \'2020-01-01\' AND \'2020-01-02\') AS "_subquery" WHERE "a" BETWEEN 2020-01-01 00:00:00+00:00 AND 2020-01-02 23:59:59.999999+00:00'
+                f'INSERT INTO "sqlmesh__test_schema"."test_schema__test_model__{snapshot.version}" ("a") SELECT "a" FROM (SELECT "a" AS "a" FROM "tbl" AS "tbl" WHERE "ds" BETWEEN \'2020-01-01\' AND \'2020-01-02\') AS "_subquery" WHERE "a" BETWEEN 2020-01-01 00:00:00+00:00 AND 2020-01-02 23:59:59.999999+00:00'
             ),
         ]
     )
@@ -3252,7 +3254,7 @@ def test_multiple_engine_migration(mocker: MockerFixture, adapter_mock, make_sna
     )
     snapshot_1 = make_snapshot(model, version="1")
     snapshot_1.change_category = SnapshotChangeCategory.FORWARD_ONLY
-    model = SqlModel(
+    model_2 = SqlModel(
         name="test_schema.test_model_2",
         kind=IncrementalByTimeRangeKind(
             time_column="a", on_destructive_change=OnDestructiveChange.ALLOW
@@ -3260,7 +3262,7 @@ def test_multiple_engine_migration(mocker: MockerFixture, adapter_mock, make_sna
         gateway="two",
         query=parse_one("SELECT c FROM tbl WHERE ds BETWEEN @start_ds and @end_ds"),
     )
-    snapshot_2 = make_snapshot(model, version="1")
+    snapshot_2 = make_snapshot(model_2, version="1")
     snapshot_2.change_category = SnapshotChangeCategory.FORWARD_ONLY
     evaluator.migrate([snapshot_1, snapshot_2], {})
 
@@ -3273,8 +3275,7 @@ def test_multiple_engine_migration(mocker: MockerFixture, adapter_mock, make_sna
         ]
     )
 
-    # The second mock adapter has to be called once only for the gateway-specific model
+    # The second mock adapter has to be called only for the gateway-specific model
     adapter_mock.get_alter_expressions.assert_called_once_with(
-        "sqlmesh__test_schema.test_schema__test_model_2__1",
-        "sqlmesh__test_schema.test_schema__test_model_2__237083607__temp",
+        snapshot_2.table_name(True), snapshot_2.table_name(False)
     )

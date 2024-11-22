@@ -1887,7 +1887,6 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         if skip_connection:
             return
-        self._try_connection("data warehouse", self.engine_adapter.ping)
 
         if verbose:
             self.console.log_status_update("")
@@ -1899,7 +1898,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                 self.config.get_state_connection(self.gateway), self.console, "State Connection"
             )
 
-        self._try_connection("data warehouse", self._engine_adapter.ping)
+        self._try_connection("data warehouse", self.engine_adapter.ping)
         state_connection = self.config.get_state_connection(self.gateway)
         if state_connection:
             self._try_connection("state backend", state_connection.connection_validator())

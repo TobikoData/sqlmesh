@@ -77,6 +77,7 @@ class ModelMeta(_Node):
     allow_partials: bool = False
     signals: t.List[exp.Tuple] = []
     enabled: bool = True
+    physical_version: t.Optional[str] = None
     gateway: t.Optional[str] = None
 
     _bool_validator = bool_validator
@@ -175,7 +176,7 @@ class ModelMeta(_Node):
         gateway = str_or_exp_to_str(v)
         return gateway and gateway.lower()
 
-    @field_validator("partitioned_by_", "clustered_by_", mode="before")
+    @field_validator("partitioned_by_", "clustered_by", mode="before")
     @field_validator_v1_args
     def _partition_and_cluster_validator(
         cls, v: t.Any, values: t.Dict[str, t.Any]
