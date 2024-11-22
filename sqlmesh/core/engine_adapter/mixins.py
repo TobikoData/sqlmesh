@@ -300,11 +300,8 @@ class VarcharSizeWorkaroundMixin(EngineAdapter):
 
             temp_view_name = self._get_temp_table("ctas")
 
-            # to handle external tables that are not supported in views in Redshift
-            no_schema_binding = True if self.dialect == "redshift" else False
-
             self.create_view(
-                temp_view_name, select_statement, replace=False, no_schema_binding=no_schema_binding
+                temp_view_name, select_statement, replace=False, no_schema_binding=False
             )
             try:
                 columns_to_types_from_view = self._default_precision_to_max(

@@ -1113,6 +1113,10 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         return None
 
     @property
+    def model_gateway(self) -> t.Optional[str]:
+        return self.model.gateway if self.is_model else None
+
+    @property
     def audit(self) -> StandaloneAudit:
         if self.is_audit:
             return t.cast(StandaloneAudit, self.node)

@@ -259,7 +259,7 @@ class Scheduler:
                 model=snapshot.model_or_none,
                 count=t.cast(int, audit_result.count),
                 query=t.cast(exp.Query, audit_result.query),
-                adapter_dialect=self.snapshot_evaluator.adapter().dialect,
+                adapter_dialect=self.snapshot_evaluator.adapter.dialect,
             )
             self.notification_target_manager.notify(NotificationEvent.AUDIT_FAILURE, error)
             if is_deployable and snapshot.node.owner:

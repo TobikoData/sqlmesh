@@ -100,12 +100,16 @@ class SnapshotEvaluator:
         ddl_concurrent_tasks: int = 1,
     ):
         self.adapters = adapters if isinstance(adapters, t.Dict) else {"": adapters}
+        self.adapter = self.adapters[next(iter(self.adapters))]
         self.ddl_concurrent_tasks = ddl_concurrent_tasks
 
-    def adapter(self, gateway: t.Optional[str] = None) -> EngineAdapter:
+    def _get_adapter(self, gateway: t.Optional[str] = None) -> EngineAdapter:
         """Returns the adapter for the specified gateway or the default adapter if none is provided."""
-        default_gateway = next(iter(self.adapters))
-        return self.adapters.get(gateway or default_gateway, self.adapters[default_gateway])
+        if gateway:
+            if adapter := self.adapters.get(gateway):
+                return adapter
+            raise SQLMeshError(f"Gateway '{gateway}' not found in the available engine adapters.")
+        return self.adapter
 
     def evaluate(
         self,
@@ -212,7 +216,7 @@ class SnapshotEvaluator:
         self._create_schemas(
             [
                 s.qualified_view_name.table_for_environment(
-                    environment_naming_info, dialect=self.adapter().dialect
+                    environment_naming_info, dialect=self.adapter.dialect
                 )
                 for s in target_snapshots
                 if s.is_model and not s.is_symbolic
@@ -296,7 +300,7 @@ class SnapshotEvaluator:
 
         def _get_data_objects(schema: exp.Table, gateway: t.Optional[str] = None) -> t.Set[str]:
             logger.info("Listing data objects in schema %s", schema.sql())
-            objs = self.adapter(gateway).get_data_objects(schema, tables_by_schema[schema])
+            objs = self._get_adapter(gateway).get_data_objects(schema, tables_by_schema[schema])
             return {obj.name for obj in objs}
 
         with self.concurrent_context():
@@ -356,16 +360,11 @@ class SnapshotEvaluator:
             allow_destructive_snapshots: Set of snapshots that are allowed to have destructive schema changes.
         """
 
-        snapshot_to_adapter = {
-            snapshot.name: self.adapter(snapshot.model.gateway if snapshot.is_model else None)
-            for snapshot in target_snapshots
-        }
-
         with self.concurrent_context():
             concurrent_apply_to_snapshots(
                 target_snapshots,
                 lambda s: self._migrate_snapshot(
-                    s, snapshots, allow_destructive_snapshots, snapshot_to_adapter[s.name]
+                    s, snapshots, allow_destructive_snapshots, self._get_adapter(s.model_gateway)
                 ),
                 self.ddl_concurrent_tasks,
             )
@@ -386,20 +385,15 @@ class SnapshotEvaluator:
             t.snapshot.snapshot_id: t.dev_table_only for t in target_snapshots
         }
 
-        snapshot_to_adapter = {
-            s.snapshot.snapshot_id: self.adapter(
-                snapshot_gateways.get(s.snapshot.snapshot_id.name) if snapshot_gateways else None
-            )
-            for s in target_snapshots
-        }
-
         with self.concurrent_context():
             concurrent_apply_to_snapshots(
                 [t.snapshot for t in target_snapshots],
                 lambda s: self._cleanup_snapshot(
                     s,
                     snapshots_to_dev_table_only[s.snapshot_id],
-                    snapshot_to_adapter[s.snapshot_id],
+                    self._get_adapter(
+                        snapshot_gateways.get(s.snapshot_id.name) if snapshot_gateways else None
+                    ),
                     on_complete,
                 ),
                 self.ddl_concurrent_tasks,
@@ -434,7 +428,7 @@ class SnapshotEvaluator:
             kwargs: Additional kwargs to pass to the renderer.
         """
         deployability_index = deployability_index or DeployabilityIndex.all_deployable()
-        adapter = self.adapter(snapshot.model.gateway if snapshot.is_model else None)
+        adapter = self._get_adapter(snapshot.model_gateway)
         if not deployability_index.is_deployable(snapshot) and not adapter.SUPPORTS_CLONING:
             # We can't audit a temporary table.
             return []
@@ -556,7 +550,7 @@ class SnapshotEvaluator:
             else snapshot.table_name(is_deployable=deployability_index.is_deployable(snapshot))
         )
 
-        adapter = self.adapter(model.gateway)
+        adapter = self._get_adapter(model.gateway)
         evaluation_strategy = _evaluation_strategy(snapshot, adapter)
 
         # https://github.com/TobikoData/sqlmesh/issues/2609
@@ -704,7 +698,7 @@ class SnapshotEvaluator:
 
         deployability_index = deployability_index or DeployabilityIndex.all_deployable()
 
-        adapter = self.adapter(snapshot.model.gateway)
+        adapter = self._get_adapter(snapshot.model.gateway)
         common_render_kwargs: t.Dict[str, t.Any] = dict(
             engine_adapter=adapter,
             snapshots=parent_snapshots_by_name,
@@ -819,11 +813,12 @@ class SnapshotEvaluator:
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]],
     ) -> None:
         if snapshot.is_model:
+            adapter = self.adapter
             table_name = snapshot.table_name(deployability_index.is_representative(snapshot))
             view_name = snapshot.qualified_view_name.for_environment(
-                environment_naming_info, dialect=self.adapter().dialect
+                environment_naming_info, dialect=adapter.dialect
             )
-            _evaluation_strategy(snapshot, self.adapter()).promote(
+            _evaluation_strategy(snapshot, adapter).promote(
                 table_name=table_name,
                 view_name=view_name,
                 model=snapshot.model,
@@ -839,10 +834,11 @@ class SnapshotEvaluator:
         environment_naming_info: EnvironmentNamingInfo,
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]],
     ) -> None:
+        adapter = self.adapter
         view_name = snapshot.qualified_view_name.for_environment(
-            environment_naming_info, dialect=self.adapter().dialect
+            environment_naming_info, dialect=adapter.dialect
         )
-        _evaluation_strategy(snapshot, self.adapter()).demote(view_name)
+        _evaluation_strategy(snapshot, adapter).demote(view_name)
 
         if on_complete is not None:
             on_complete(snapshot)
@@ -879,7 +875,7 @@ class SnapshotEvaluator:
     ) -> None:
         deployability_index = deployability_index or DeployabilityIndex.all_deployable()
         table_name = snapshot.table_name(is_deployable=deployability_index.is_deployable(snapshot))
-        adapter = self.adapter(snapshot.model.gateway if snapshot.is_model else None)
+        adapter = self._get_adapter(snapshot.model_gateway)
         adapter.wap_publish(table_name, wap_id)
 
     def _audit(
@@ -906,7 +902,7 @@ class SnapshotEvaluator:
         blocking = audit_args.pop("blocking", None)
         blocking = blocking == exp.true() if blocking else audit.blocking
 
-        adapter = self.adapter(snapshot.model.gateway if snapshot.is_model else None)
+        adapter = self._get_adapter(snapshot.model_gateway)
 
         kwargs = {
             "start": start,
@@ -963,7 +959,7 @@ class SnapshotEvaluator:
         for schema_name, catalog in unique_schemas:
             schema = schema_(schema_name, catalog)
             logger.info("Creating schema '%s'", schema)
-            adapter = self.adapter(gateways.get(schema)) if gateways else self.adapter()
+            adapter = self._get_adapter(gateways.get(schema)) if gateways else self.adapter
             adapter.create_schema(schema)
 
 

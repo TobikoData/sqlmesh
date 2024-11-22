@@ -295,7 +295,6 @@ class GenericContext(BaseContext, t.Generic[C]):
     """Encapsulates a SQLMesh environment supplying convenient functions to perform various tasks.
 
     Args:
-        engine_adapter: The default engine adapter to use.
         notification_targets: The notification target to use. Defaults to what is defined in config.
         paths: The directories containing SQLMesh files.
         config: A Config object or the name of a Config object in config.py.
@@ -317,7 +316,6 @@ class GenericContext(BaseContext, t.Generic[C]):
 
     def __init__(
         self,
-        engine_adapter: t.Optional[EngineAdapter] = None,
         notification_targets: t.Optional[t.List[NotificationTarget]] = None,
         state_sync: t.Optional[StateSync] = None,
         paths: t.Union[str | Path, t.Iterable[str | Path]] = "",
@@ -378,22 +376,19 @@ class GenericContext(BaseContext, t.Generic[C]):
         self.concurrent_tasks = concurrent_tasks or self._connection_config.concurrent_tasks
 
         self._engine_adapters: t.Dict[str, EngineAdapter] = {
-            self.config.default_gateway_name: engine_adapter
-            or self._connection_config.create_engine_adapter()
+            self.config.default_gateway_name: self._connection_config.create_engine_adapter()
         }
         self._min_concurrent_tasks = self.concurrent_tasks
         self._snapshot_evaluator: t.Optional[SnapshotEvaluator] = None
-        self._test_connection_configs: t.Dict[str, ConnectionConfig] = {}
 
         self.console = console or get_console(dialect=self.engine_adapter.dialect)
-
-        self._test_connection_configs[self.config.default_gateway_name] = (
-            self.config.get_test_connection(
+        self._test_connection_configs: t.Dict[str, ConnectionConfig] = {
+            self.config.default_gateway_name: self.config.get_test_connection(
                 self.gateway,
                 self.default_catalog,
                 default_catalog_dialect=self.engine_adapter.DIALECT,
             )
-        )
+        }
 
         if not gateway:
             for gateway_name in self.config.gateways:
@@ -658,7 +653,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             NotificationEvent.RUN_START, environment=environment
         )
         analytics_run_id = analytics.collector.on_run_start(
-            engine_type=self.snapshot_evaluator.adapter().dialect,
+            engine_type=self.snapshot_evaluator.adapter.dialect,
             state_sync_type=self.state_sync.state_type(),
         )
         self._load_materializations_and_signals()
@@ -1494,8 +1489,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         adapter = self.engine_adapter
         if model_or_snapshot:
             model = self.get_model(model_or_snapshot, raise_if_missing=True)
-            if model and model.gateway:
-                adapter = self._engine_adapters.get(model.gateway) or adapter
+            adapter = self._get_engine_adapter(model.gateway)
             source_env = self.state_reader.get_environment(source)
             target_env = self.state_reader.get_environment(target)
 
@@ -1658,15 +1652,12 @@ class GenericContext(BaseContext, t.Generic[C]):
             connection_config = self._test_connection_configs[
                 model_to_test.gateway or self.config.default_gateway_name
             ]
-            adapter = self._engine_adapters[
-                model_to_test.gateway or self.config.default_gateway_name
-            ]
             test_adapter = connection_config.create_engine_adapter(register_comments_override=False)
             generate_test(
                 model=model_to_test,
                 input_queries=input_queries,
                 models=self._models,
-                engine_adapter=adapter,
+                engine_adapter=self._get_engine_adapter(model_to_test.gateway),
                 test_engine_adapter=test_adapter,
                 project_path=self.path,
                 overwrite=overwrite,
@@ -1798,7 +1789,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             self.console.log_status_update(f"Got {error.count} results, expected 0.")
             if error.query:
                 self.console.show_sql(
-                    f"{error.query.sql(dialect=self.snapshot_evaluator.adapter().dialect)}"
+                    f"{error.query.sql(dialect=self.snapshot_evaluator.adapter.dialect)}"
                 )
 
         self.console.log_status_update("Done.")
@@ -2042,6 +2033,13 @@ class GenericContext(BaseContext, t.Generic[C]):
             for fqn, snapshot in self.snapshots.items()
             if snapshot.is_model and snapshot.model.gateway
         }
+
+    def _get_engine_adapter(self, gateway: t.Optional[str] = None) -> EngineAdapter:
+        if gateway:
+            if adapter := self._engine_adapters.get(gateway):
+                return adapter
+            raise SQLMeshError(f"Gateway '{gateway}' not found in the available engine adapters.")
+        return self.engine_adapter
 
     def _snapshots(
         self, models_override: t.Optional[UniqueKeyDict[str, Model]] = None

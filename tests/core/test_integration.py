@@ -823,7 +823,7 @@ def test_non_breaking_change_after_forward_only_in_dev(
     init_and_plan_context: t.Callable, has_view_binding: bool
 ):
     context, plan = init_and_plan_context("examples/sushi")
-    context.snapshot_evaluator.adapter().HAS_VIEW_BINDING = has_view_binding
+    context.snapshot_evaluator.adapter.HAS_VIEW_BINDING = has_view_binding
     context.apply(plan)
 
     model = context.get_model("sushi.waiter_revenue_by_day")
@@ -2337,12 +2337,6 @@ def test_multi(mocker):
     assert len(plan.new_snapshots) == 4
     context.apply(plan)
 
-    context = Context(
-        paths=["examples/multi/repo_1"],
-        engine_adapter=context.engine_adapter,
-        state_sync=context.state_sync,
-        gateway="memory",
-    )
     model = context.get_model("bronze.a")
     assert model.project == "repo_1"
     context.upsert_model(model.copy(update={"query": model.query.select("'c' AS c")}))
