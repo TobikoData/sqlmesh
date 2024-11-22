@@ -597,7 +597,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         ignore_cron: bool = False,
         select_models: t.Optional[t.Collection[str]] = None,
         exit_on_env_update: t.Optional[int] = None,
-        no_force_upstream: bool = False,
+        no_auto_upstream: bool = False,
     ) -> bool:
         """Run the entire dag through the scheduler.
 
@@ -612,7 +612,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                 upstream dependencies of selected models will also be evaluated.
             exit_on_env_update: If set, exits with the provided code if the run is interrupted by an update
                 to the target environment.
-            no_force_upstream: Whether to not force upstream models to run. Only applicable when using `select_models`.
+            no_auto_upstream: Whether to not force upstream models to run. Only applicable when using `select_models`.
 
         Returns:
             True if the run was successful, False otherwise.
@@ -681,7 +681,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                     ignore_cron=ignore_cron,
                     select_models=select_models,
                     circuit_breaker=_has_environment_changed,
-                    no_force_upstream=no_force_upstream,
+                    no_auto_upstream=no_auto_upstream,
                 )
                 done = True
             except CircuitBreakerError:
@@ -1889,7 +1889,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         ignore_cron: bool,
         select_models: t.Optional[t.Collection[str]],
         circuit_breaker: t.Optional[t.Callable[[], bool]],
-        no_force_upstream: bool,
+        no_auto_upstream: bool,
     ) -> bool:
         scheduler = self.scheduler(environment=environment)
         snapshots = scheduler.snapshots
@@ -1903,7 +1903,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                 dag.add(fqn, model.depends_on)
             model_selector = self._new_selector(models=models, dag=dag)
             select_models = set(model_selector.expand_model_selections(select_models))
-            if not no_force_upstream:
+            if not no_auto_upstream:
                 select_models = set(dag.subdag(*select_models))
 
         return scheduler.run(

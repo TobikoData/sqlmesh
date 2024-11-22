@@ -458,9 +458,9 @@ def plan(
     help="If set, the command will exit with the specified code if the run is interrupted by an update to the target environment.",
 )
 @click.option(
-    "--no-force-upstream",
+    "--no-auto-upstream",
     is_flag=True,
-    help="Do not force upstream models to run. Only applicable when --select-model is used. Note: this may result in missing / invalid data for the selected models.",
+    help="Do not automatically include upstream models. Only applicable when --select-model is used. Note: this may result in missing / invalid data for the selected models.",
 )
 @click.pass_context
 @error_handler

@@ -463,9 +463,9 @@ class SQLMeshMagics(Magics):
         help="If set, the command will exit with the specified code if the run is interrupted by an update to the target environment.",
     )
     @argument(
-        "--no-force-upstream",
+        "--no-auto-upstream",
         action="store_true",
-        help="Do not force upstream models to run. Only applicable when --select-model is used. Note: this may result in missing / invalid data for the selected models.",
+        help="Do not automatically include upstream models. Only applicable when --select-model is used. Note: this may result in missing / invalid data for the selected models.",
     )
     @line_magic
     @pass_sqlmesh_context
@@ -481,7 +481,7 @@ class SQLMeshMagics(Magics):
             ignore_cron=args.ignore_cron,
             select_models=args.select_model,
             exit_on_env_update=args.exit_on_env_update,
-            no_force_upstream=args.no_force_upstream,
+            no_auto_upstream=args.no_auto_upstream,
         )
         if not success:
             raise SQLMeshError("Error Running DAG. Check logs for details.")

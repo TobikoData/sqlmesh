@@ -1160,7 +1160,7 @@ def test_run_with_select_models(
 
 
 @freeze_time("2023-01-08 15:00:00")
-def test_run_with_select_models_no_force_upstream(
+def test_run_with_select_models_no_auto_upstream(
     init_and_plan_context: t.Callable,
 ):
     context, _ = init_and_plan_context("examples/sushi")
@@ -1172,7 +1172,7 @@ def test_run_with_select_models_no_force_upstream(
     context.plan("prod", no_prompts=True, skip_tests=True, auto_apply=True)
 
     with freeze_time("2023-01-09 00:00:00"):
-        assert context.run(select_models=["*waiter_revenue_by_day"], no_force_upstream=True)
+        assert context.run(select_models=["*waiter_revenue_by_day"], no_auto_upstream=True)
 
         snapshots = context.state_sync.state_sync.get_snapshots(context.snapshots.values())
         # Only waiter_revenue_by_day should be backfilled up to 2023-01-09.
