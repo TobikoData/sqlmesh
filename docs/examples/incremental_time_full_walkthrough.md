@@ -1,5 +1,7 @@
 # Incremental by Time Range
 
+<div style="position: relative; padding-bottom: 56.25%; height: 0;"><iframe src="https://www.loom.com/embed/adbedbe48a6547a5b0837c9393209604?sid=5bb751e4-9299-4106-9cb9-22677fc42dee" frameborder="0" webkitallowfullscreen mozallowfullscreen allowfullscreen style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"></iframe></div>
+
 SQLMesh incremental models are a powerful feature that come in many flavors and configurations so you can fine tune your query performance and scheduled runs **exactly** how you want with a plethora of guardrails.
 
 However, we recognize with all this power comes a responsibility to make sure you’re equipped to succeed confidently.
