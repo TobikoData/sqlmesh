@@ -4,6 +4,12 @@ import types
 import typing as t
 import unittest
 
+if t.TYPE_CHECKING:
+    ErrorType = t.Union[
+        t.Tuple[type[BaseException], BaseException, types.TracebackType],
+        t.Tuple[None, None, None],
+    ]
+
 
 class ModelTextTestResult(unittest.TextTestResult):
     successes: t.List[unittest.TestCase]
@@ -12,13 +18,28 @@ class ModelTextTestResult(unittest.TextTestResult):
         super().__init__(*args, **kwargs)
         self.successes = []
 
-    def addFailure(
+    def addSubTest(
         self,
         test: unittest.TestCase,
-        err: (
-            tuple[type[BaseException], BaseException, types.TracebackType] | tuple[None, None, None]
-        ),
+        subtest: unittest.TestCase,
+        err: t.Optional[ErrorType],
     ) -> None:
+        """Called at the end of a subtest.
+
+        The traceback is suppressed because it is redundant and not useful.
+
+        Args:
+            test: The test case.
+            subtest: The subtest instance.
+            err: A tuple of the form returned by sys.exc_info(), i.e., (type, value, traceback).
+        """
+        if err:
+            exctype, value, tb = err
+            err = (exctype, value, None)  # type: ignore
+
+        super().addSubTest(test, subtest, err)
+
+    def addFailure(self, test: unittest.TestCase, err: ErrorType) -> None:
         """Called when the test case test signals a failure.
 
         The traceback is suppressed because it is redundant and not useful.

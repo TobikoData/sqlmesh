@@ -195,9 +195,9 @@ class SparkEngineAdapter(
                     else partial(sqlglot_complex_to_spark_complex, data_type)
                 )
                 if is_struct:
-                    expressions.append(spark_types.StructField(col_name, type_func()))
+                    expressions.append(spark_types.StructField(col_name, type_func()))  # type: ignore
                 else:
-                    expressions.append(type_func())
+                    expressions.append(type_func())  # type: ignore
             klass = cls._sqlglot_to_spark_complex_mapping[complex_type.this]
             if is_struct:
                 return klass(expressions)

@@ -705,7 +705,7 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
         storage_format: t.Optional[str] = None,
         partitioned_by: t.Optional[t.List[exp.Expression]] = None,
         partition_interval_unit: t.Optional[IntervalUnit] = None,
-        clustered_by: t.Optional[t.List[str]] = None,
+        clustered_by: t.Optional[t.List[exp.Expression]] = None,
         table_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         table_description: t.Optional[str] = None,
@@ -733,7 +733,7 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
             if ordered_by_raw:
                 ordered_by_vals = []
 
-                if isinstance(ordered_by_raw, exp.Tuple):
+                if isinstance(ordered_by_raw, (exp.Tuple, exp.Array)):
                     ordered_by_vals = ordered_by_raw.expressions
                 if isinstance(ordered_by_raw, exp.Paren):
                     ordered_by_vals = [ordered_by_raw.this]
@@ -759,7 +759,7 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
         primary_key = table_properties_copy.pop("PRIMARY_KEY", None)
         if mergetree_engine and primary_key:
             primary_key_vals = []
-            if isinstance(primary_key, exp.Tuple):
+            if isinstance(primary_key, (exp.Tuple, exp.Array)):
                 primary_key_vals = primary_key.expressions
             if isinstance(ordered_by_raw, exp.Paren):
                 primary_key_vals = [primary_key.this]
@@ -773,6 +773,14 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
                         exp.to_column(k.name if isinstance(k, exp.Literal) else k)
                         for k in primary_key_vals
                     ]
+                )
+            )
+
+        ttl = table_properties_copy.pop("TTL", None)
+        if ttl:
+            properties.append(
+                exp.MergeTreeTTL(
+                    expressions=[ttl if isinstance(ttl, exp.Expression) else exp.var(ttl)]
                 )
             )
 
@@ -842,7 +850,7 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
         truncated_comment = self._truncate_table_comment(table_comment)
         comment_sql = exp.Literal.string(truncated_comment).sql(dialect=self.dialect)
 
-        return f"ALTER TABLE {table_sql}{self._on_cluster_sql()}MODIFY COMMENT {comment_sql}"
+        return f"ALTER TABLE {table_sql}{self._on_cluster_sql()} MODIFY COMMENT {comment_sql}"
 
     def _build_create_comment_column_exp(
         self,
@@ -858,7 +866,7 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
         truncated_comment = self._truncate_table_comment(column_comment)
         comment_sql = exp.Literal.string(truncated_comment).sql(dialect=self.dialect)
 
-        return f"ALTER TABLE {table_sql}{self._on_cluster_sql()}COMMENT COLUMN {column_sql} {comment_sql}"
+        return f"ALTER TABLE {table_sql}{self._on_cluster_sql()} COMMENT COLUMN {column_sql} {comment_sql}"
 
     def _on_cluster_sql(self) -> str:
         if self.engine_run_mode.is_cluster:

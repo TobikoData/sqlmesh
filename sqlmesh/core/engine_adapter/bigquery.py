@@ -234,7 +234,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
             }
 
         table = exp.to_table(table_name)
-        if len(table.parts) > 3:
+        if len(table.parts) == 3 and "." in table.name:
             # The client's `get_table` method can't handle paths with >3 identifiers
             self.execute(exp.select("*").from_(table).limit(1))
             query_results = self._query_job._query_results
@@ -716,7 +716,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
         storage_format: t.Optional[str] = None,
         partitioned_by: t.Optional[t.List[exp.Expression]] = None,
         partition_interval_unit: t.Optional[IntervalUnit] = None,
-        clustered_by: t.Optional[t.List[str]] = None,
+        clustered_by: t.Optional[t.List[exp.Expression]] = None,
         table_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         table_description: t.Optional[str] = None,

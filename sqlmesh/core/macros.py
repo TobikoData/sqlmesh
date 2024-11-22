@@ -150,6 +150,7 @@ class MacroEvaluator:
         jinja_env: t.Optional[Environment] = None,
         schema: t.Optional[MappingSchema] = None,
         runtime_stage: RuntimeStage = RuntimeStage.LOADING,
+        resolve_table: t.Optional[t.Callable[[str | exp.Expression], str]] = None,
         resolve_tables: t.Optional[t.Callable[[exp.Expression], exp.Expression]] = None,
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         default_catalog: t.Optional[str] = None,
@@ -171,6 +172,7 @@ class MacroEvaluator:
         self._jinja_env: t.Optional[Environment] = jinja_env
         self.macros = {normalize_macro_name(k): v.func for k, v in macro.get_registry().items()}
         self._schema = schema
+        self._resolve_table = resolve_table
         self._resolve_tables = resolve_tables
         self.columns_to_types_called = False
         self._snapshots = snapshots if snapshots is not None else {}
@@ -452,6 +454,14 @@ class MacroEvaluator:
                 dialect=self.dialect,
             )
         )
+
+    def resolve_table(self, table: str | exp.Expression) -> str:
+        """Gets the physical table name for a given model."""
+        if not self._resolve_table:
+            raise SQLMeshError(
+                "Macro evaluator not properly initialized with resolve_table lambda."
+            )
+        return self._resolve_table(table)
 
     def resolve_tables(self, query: exp.Expression) -> exp.Expression:
         """Resolves queries with references to SQLMesh model names to their physical tables."""
@@ -872,7 +882,9 @@ def star(
         for excluded in exclude.expressions or except_.expressions
     }
     quoted = quote_identifiers.this
-    table_identifier = alias.name or relation.name
+    table_identifier = normalize_identifiers(
+        alias if alias.name else relation, dialect=evaluator.dialect
+    ).name
 
     columns_to_types = {
         k: v for k, v in evaluator.columns_to_types(relation).items() if k not in excluded_names
@@ -895,15 +907,24 @@ def star(
 
 
 @macro()
-def generate_surrogate_key(evaluator: MacroEvaluator, *fields: exp.Expression) -> exp.Func:
+def generate_surrogate_key(
+    evaluator: MacroEvaluator,
+    *fields: exp.Expression,
+    hash_function: exp.Literal = exp.Literal.string("MD5"),
+) -> exp.Func:
     """Generates a surrogate key for the given fields.
 
     Example:
         >>> from sqlglot import parse_one
         >>> from sqlmesh.core.macros import MacroEvaluator
+        >>>
         >>> sql = "SELECT @GENERATE_SURROGATE_KEY(a, b, c) FROM foo"
         >>> MacroEvaluator(dialect="bigquery").transform(parse_one(sql, dialect="bigquery")).sql("bigquery")
         "SELECT MD5(CONCAT(COALESCE(CAST(a AS STRING), '_sqlmesh_surrogate_key_null_'), '|', COALESCE(CAST(b AS STRING), '_sqlmesh_surrogate_key_null_'), '|', COALESCE(CAST(c AS STRING), '_sqlmesh_surrogate_key_null_'))) FROM foo"
+        >>>
+        >>> sql = "SELECT @GENERATE_SURROGATE_KEY(a, b, c, hash_function := 'SHA256') FROM foo"
+        >>> MacroEvaluator(dialect="bigquery").transform(parse_one(sql, dialect="bigquery")).sql("bigquery")
+        "SELECT SHA256(CONCAT(COALESCE(CAST(a AS STRING), '_sqlmesh_surrogate_key_null_'), '|', COALESCE(CAST(b AS STRING), '_sqlmesh_surrogate_key_null_'), '|', COALESCE(CAST(c AS STRING), '_sqlmesh_surrogate_key_null_'))) FROM foo"
     """
     string_fields: t.List[exp.Expression] = []
     for i, field in enumerate(fields):
@@ -916,7 +937,11 @@ def generate_surrogate_key(evaluator: MacroEvaluator, *fields: exp.Expression) -
                 exp.Literal.string("_sqlmesh_surrogate_key_null_"),
             )
         )
-    return exp.func("MD5", exp.func("CONCAT", *string_fields), dialect=evaluator.dialect)
+    return exp.func(
+        hash_function.name,
+        exp.func("CONCAT", *string_fields),
+        dialect=evaluator.dialect,
+    )
 
 
 @macro()

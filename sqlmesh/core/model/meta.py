@@ -60,7 +60,7 @@ class ModelMeta(_Node):
     table_format: t.Optional[str] = None
     storage_format: t.Optional[str] = None
     partitioned_by_: t.List[exp.Expression] = Field(default=[], alias="partitioned_by")
-    clustered_by: t.List[str] = []
+    clustered_by: t.List[exp.Expression] = []
     default_catalog: t.Optional[str] = None
     depends_on_: t.Optional[t.Set[str]] = Field(default=None, alias="depends_on")
     columns_to_types_: t.Optional[t.Dict[str, exp.DataType]] = Field(default=None, alias="columns")
@@ -77,6 +77,7 @@ class ModelMeta(_Node):
     allow_partials: bool = False
     signals: t.List[exp.Tuple] = []
     enabled: bool = True
+    physical_version: t.Optional[str] = None
 
     _bool_validator = bool_validator
     _model_kind_validator = model_kind_validator
@@ -116,17 +117,12 @@ class ModelMeta(_Node):
 
             return audits
 
-        return v
+        return v or []
 
     @field_validator("tags", mode="before")
     @field_validator_v1_args
     def _value_or_tuple_validator(cls, v: t.Any, values: t.Dict[str, t.Any]) -> t.Any:
         return ensure_list(cls._validate_value_or_tuple(v, values))
-
-    @field_validator("clustered_by", mode="before")
-    @field_validator_v1_args
-    def _normalized_value_or_tuple_validator(cls, v: t.Any, values: t.Dict[str, t.Any]) -> t.Any:
-        return ensure_list(cls._validate_value_or_tuple(v, values, normalize=True))
 
     @classmethod
     def _validate_value_or_tuple(
@@ -166,15 +162,21 @@ class ModelMeta(_Node):
         dialect = str_or_exp_to_str(v)
         return dialect and dialect.lower()
 
-    @field_validator("partitioned_by_", mode="before")
+    @field_validator("physical_version", mode="before")
+    def _physical_version_validator(cls, v: t.Any) -> t.Optional[str]:
+        if v is None:
+            return v
+        return str_or_exp_to_str(v)
+
+    @field_validator("partitioned_by_", "clustered_by", mode="before")
     @field_validator_v1_args
-    def _partition_by_validator(
+    def _partition_and_cluster_validator(
         cls, v: t.Any, values: t.Dict[str, t.Any]
     ) -> t.List[exp.Expression]:
-        partitions = list_of_fields_validator(v, values)
+        expressions = list_of_fields_validator(v, values)
 
-        for partition in partitions:
-            num_cols = len(list(partition.find_all(exp.Column)))
+        for expression in expressions:
+            num_cols = len(list(expression.find_all(exp.Column)))
 
             error_msg: t.Optional[str] = None
             if num_cols == 0:
@@ -183,9 +185,9 @@ class ModelMeta(_Node):
                 error_msg = "contains multiple columns"
 
             if error_msg:
-                raise ConfigError(f"partitioned_by field '{partition}' {error_msg}")
+                raise ConfigError(f"Field '{expression}' {error_msg}")
 
-        return partitions
+        return expressions
 
     @field_validator(
         "columns_to_types_", "derived_columns_to_types", mode="before", check_fields=False
@@ -354,7 +356,8 @@ class ModelMeta(_Node):
                     and not kind.is_materialized
                     and not (kind.is_view and kind.materialized)
                 ):
-                    raise ValueError(f"{field} field cannot be set for {kind} models")
+                    name = field[:-1] if field.endswith("_") else field
+                    raise ValueError(f"{name} field cannot be set for {kind} models")
             if kind.is_incremental_by_partition and not values.get("partitioned_by_"):
                 raise ValueError(f"partitioned_by field is required for {kind.name} models")
         return values
@@ -371,18 +374,6 @@ class ModelMeta(_Node):
         ):
             return self.kind.unique_key
         return []
-
-    @property
-    def partitioned_by(self) -> t.List[exp.Expression]:
-        """Columns to partition the model by, including the time column if it is not already included."""
-        if self.time_column and self.time_column.column not in [
-            col for col in self._partition_by_columns
-        ]:
-            return [
-                TIME_COL_PARTITION_FUNC.get(self.dialect, lambda x: x)(self.time_column.column),
-                *self.partitioned_by_,
-            ]
-        return self.partitioned_by_
 
     @property
     def column_descriptions(self) -> t.Dict[str, str]:
@@ -448,10 +439,6 @@ class ModelMeta(_Node):
         ]
 
     @property
-    def _partition_by_columns(self) -> t.List[exp.Column]:
-        return [col for expr in self.partitioned_by_ for col in expr.find_all(exp.Column)]
-
-    @property
     def managed_columns(self) -> t.Dict[str, exp.DataType]:
         return getattr(self.kind, "managed_columns", {})
 
@@ -479,8 +466,3 @@ class ModelMeta(_Node):
     @property
     def on_destructive_change(self) -> OnDestructiveChange:
         return getattr(self.kind, "on_destructive_change", OnDestructiveChange.ALLOW)
-
-
-# function applied to time column when automatically used for partitioning in
-#   INCREMENTAL_BY_TIME_RANGE models
-TIME_COL_PARTITION_FUNC = {"clickhouse": lambda x: exp.func("toMonday", x)}

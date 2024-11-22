@@ -105,6 +105,7 @@ def test_json(snapshot: Snapshot):
         "dev_intervals": [],
         "node": {
             "audits": [],
+            "audit_definitions": {},
             "clustered_by": [],
             "cron": "1 0 * * *",
             "kind": {
@@ -117,12 +118,12 @@ def test_json(snapshot: Snapshot):
                 "dialect": "spark",
             },
             "mapping_schema": {},
-            "inline_audits": {},
             "start": "2020-01-01",
             "dialect": "spark",
             "name": "name",
             "partitioned_by": [],
             "project": "",
+            "python_env": {},
             "owner": "owner",
             "query": "SELECT @EACH([1, 2], x -> x), ds FROM parent.tbl",
             "jinja_macros": {
@@ -141,7 +142,6 @@ def test_json(snapshot: Snapshot):
             "enabled": True,
             "extract_dependencies_from_query": True,
         },
-        "audits": [],
         "name": '"name"',
         "parents": [{"name": '"parent"."tbl"', "identifier": snapshot.parents[0].identifier}],
         "previous_versions": [],
@@ -703,7 +703,7 @@ def test_fingerprint(model: Model, parent_model: Model):
     fingerprint = fingerprint_from_node(model, nodes={})
 
     original_fingerprint = SnapshotFingerprint(
-        data_hash="720070643",
+        data_hash="3956407993",
         metadata_hash="2793463216",
     )
 
@@ -763,7 +763,7 @@ def test_fingerprint_seed_model():
     )
 
     expected_fingerprint = SnapshotFingerprint(
-        data_hash="2233743260",
+        data_hash="784003130",
         metadata_hash="3403817841",
     )
 
@@ -802,7 +802,7 @@ def test_fingerprint_jinja_macros(model: Model):
         }
     )
     original_fingerprint = SnapshotFingerprint(
-        data_hash="1896101134",
+        data_hash="3936160747",
         metadata_hash="2793463216",
     )
 
@@ -1876,7 +1876,8 @@ def test_missing_intervals_node_start_end(make_snapshot):
 def test_external_model_audits(sushi_context):
     snapshot = sushi_context.get_snapshot("raw.demographics")
     assert snapshot.evaluatable
-    assert len(snapshot.model.audits) == 2
+    assert len(snapshot.model.audits) == 3
+    assert len(snapshot.model.audit_definitions) == 1
     assert snapshot.intervals
 
 
@@ -2047,3 +2048,110 @@ def test_missing_intervals_interval_end_per_model(make_snapshot):
         snapshot_a: [(to_timestamp("2023-01-08"), to_timestamp("2023-01-09"))],
         snapshot_b: [(to_timestamp("2023-01-08"), to_timestamp("2023-01-09"))],
     }
+
+
+def test_physical_version_pin(make_snapshot):
+    snapshot = make_snapshot(
+        SqlModel(
+            name="a",
+            kind=dict(
+                time_column="ds", name=ModelKindName.INCREMENTAL_BY_TIME_RANGE, forward_only=True
+            ),
+            query=parse_one("SELECT 1, ds"),
+            physical_version="1234",
+        ),
+    )
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    assert snapshot.version == "1234"
+
+
+def test_physical_version_pin_for_new_forward_only_models(make_snapshot):
+    # A new forward-only model.
+    snapshot_a = make_snapshot(
+        SqlModel(
+            name="a",
+            kind=dict(
+                time_column="ds", name=ModelKindName.INCREMENTAL_BY_TIME_RANGE, forward_only=True
+            ),
+            query=parse_one("SELECT 1, ds"),
+        ),
+    )
+    snapshot_a.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    # Another version of the new forward-only model created independently.
+    snapshot_b = make_snapshot(
+        SqlModel(
+            name="a",
+            kind=dict(
+                time_column="ds", name=ModelKindName.INCREMENTAL_BY_TIME_RANGE, forward_only=True
+            ),
+            query=parse_one("SELECT 2, ds"),
+        ),
+    )
+    snapshot_b.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    assert snapshot_a.fingerprint != snapshot_b.fingerprint
+    assert snapshot_a.version == snapshot_b.version
+
+    # A change to the forward-only model.
+    snapshot_c = make_snapshot(
+        SqlModel(
+            name="a",
+            kind=dict(
+                time_column="ds", name=ModelKindName.INCREMENTAL_BY_TIME_RANGE, forward_only=True
+            ),
+            query=parse_one("SELECT 3, ds"),
+        ),
+    )
+    snapshot_c.previous_versions = snapshot_b.all_versions
+    snapshot_c.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+
+    assert snapshot_b.fingerprint != snapshot_c.fingerprint
+    assert snapshot_b.version == snapshot_c.version
+
+    # Make model non-forward-only.
+    snapshot_d = make_snapshot(
+        SqlModel(
+            name="a",
+            kind=dict(time_column="ds", name=ModelKindName.INCREMENTAL_BY_TIME_RANGE),
+            query=parse_one("SELECT 4, ds"),
+        ),
+    )
+    snapshot_d.previous_versions = snapshot_c.all_versions
+    snapshot_d.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    assert snapshot_c.fingerprint != snapshot_d.fingerprint
+    assert snapshot_c.version != snapshot_d.version
+
+    # Make it forward-only again.
+    snapshot_e = make_snapshot(
+        SqlModel(
+            name="a",
+            kind=dict(
+                time_column="ds", name=ModelKindName.INCREMENTAL_BY_TIME_RANGE, forward_only=True
+            ),
+            query=parse_one("SELECT 5, ds"),
+        ),
+    )
+    snapshot_e.previous_versions = snapshot_d.all_versions
+    snapshot_e.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+
+    assert snapshot_d.fingerprint != snapshot_e.fingerprint
+    assert snapshot_d.version == snapshot_e.version
+
+    # Pin the version explicitly.
+    snapshot_f = make_snapshot(
+        SqlModel(
+            name="a",
+            kind=dict(
+                time_column="ds", name=ModelKindName.INCREMENTAL_BY_TIME_RANGE, forward_only=True
+            ),
+            query=parse_one("SELECT 5, ds"),
+            physical_version="1234",
+        ),
+    )
+    snapshot_f.previous_versions = snapshot_e.all_versions
+    snapshot_f.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+
+    assert snapshot_f.version == "1234"
+    assert snapshot_f.fingerprint != snapshot_e.fingerprint

@@ -1,8 +1,16 @@
 from __future__ import annotations
 
+import inspect
+import sys
+
 from sqlglot import exp
 
-from sqlmesh.core.audit.definition import ModelAudit
+from sqlmesh.core.audit.definition import Audit, ModelAudit
+
+
+def create_non_blocking_copy(audit: Audit) -> Audit:
+    return audit.copy(update={"name": f"{audit.name}_non_blocking", "blocking": False})
+
 
 # not_null(columns=(column_1, column_2))
 not_null_audit = ModelAudit(
@@ -765,3 +773,12 @@ HAVING NOT @IF(@dependent, chi_square > @critical_value, chi_square <= @critical
 # ) AS tgt ON src.cnt >= tgt.cnt
 #     """,
 # )
+
+
+BUILT_IN_AUDITS = {
+    audit.name: audit
+    for _, model_audit in inspect.getmembers(
+        sys.modules[__name__], lambda v: isinstance(v, ModelAudit)
+    )
+    for audit in (model_audit, create_non_blocking_copy(model_audit))
+}

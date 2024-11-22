@@ -116,6 +116,7 @@ from sqlmesh.utils.errors import (
     SQLMeshError,
     UncategorizedPlanError,
 )
+from sqlmesh.utils.config import print_config
 from sqlmesh.utils.jinja import JinjaMacroRegistry
 
 if t.TYPE_CHECKING:
@@ -168,6 +169,13 @@ class BaseContext(abc.ABC):
         raise NotImplementedError
 
     def table(self, model_name: str) -> str:
+        logger.warning(
+            "The SQLMesh context's `table` method is deprecated and will be removed "
+            "in a future release. Please use the `resolve_table` method instead."
+        )
+        return self.resolve_table(model_name)
+
+    def resolve_table(self, model_name: str) -> str:
         """Gets the physical table name for a given model.
 
         Args:
@@ -453,12 +461,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             }
         )
 
-        update_model_schemas(
-            self.dag,
-            models=self._models,
-            audits=self._audits,
-            context_path=self.path,
-        )
+        update_model_schemas(self.dag, models=self._models, context_path=self.path)
 
         if model.dialect:
             self._all_dialects.add(model.dialect)
@@ -552,12 +555,8 @@ class GenericContext(BaseContext, t.Generic[C]):
             self._macros.update(project.macros)
             self._models.update(project.models)
             self._metrics.update(project.metrics)
-
-            for name, audit in project.audits.items():
-                if isinstance(audit, StandaloneAudit):
-                    self._standalone_audits[name] = audit
-                else:
-                    self._audits[name] = audit
+            self._audits.update(project.audits)
+            self._standalone_audits.update(project.standalone_audits)
 
         self.dag = DAG({k: v for project in projects for k, v in project.dag.graph.items()})
 
@@ -598,6 +597,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         ignore_cron: bool = False,
         select_models: t.Optional[t.Collection[str]] = None,
         exit_on_env_update: t.Optional[int] = None,
+        no_auto_upstream: bool = False,
     ) -> bool:
         """Run the entire dag through the scheduler.
 
@@ -612,11 +612,14 @@ class GenericContext(BaseContext, t.Generic[C]):
                 upstream dependencies of selected models will also be evaluated.
             exit_on_env_update: If set, exits with the provided code if the run is interrupted by an update
                 to the target environment.
+            no_auto_upstream: Whether to not force upstream models to run. Only applicable when using `select_models`.
 
         Returns:
             True if the run was successful, False otherwise.
         """
         environment = environment or self.config.default_target_environment
+        if not skip_janitor and environment.lower() == c.PROD:
+            self._run_janitor()
 
         self.notification_target_manager.notify(
             NotificationEvent.RUN_START, environment=environment
@@ -627,30 +630,77 @@ class GenericContext(BaseContext, t.Generic[C]):
         )
         self._load_materializations_and_signals()
 
+        env_check_attempts_num = max(
+            1,
+            self.config.run.environment_check_max_wait
+            // self.config.run.environment_check_interval,
+        )
+
+        def _block_until_finalized() -> str:
+            for _ in range(env_check_attempts_num):
+                assert environment is not None  # mypy
+                environment_state = self.state_sync.get_environment(environment)
+                if not environment_state:
+                    raise SQLMeshError(f"Environment '{environment}' was not found.")
+                if environment_state.finalized_ts:
+                    return environment_state.plan_id
+                logger.warning(
+                    "Environment '%s' is being updated by plan '%s'. Retrying in %s seconds...",
+                    environment,
+                    environment_state.plan_id,
+                    self.config.run.environment_check_interval,
+                )
+                time.sleep(self.config.run.environment_check_interval)
+            raise SQLMeshError(
+                f"Exceeded the maximum wait time for environment '{environment}' to be ready. "
+                "This means that the environment either failed to update or the update is taking longer than expected. "
+                "See https://sqlmesh.readthedocs.io/en/stable/reference/configuration/#run to adjust the timeout settings."
+            )
+
         success = False
         interrupted = False
-        try:
-            success = self._run(
-                environment=environment,
-                start=start,
-                end=end,
-                execution_time=execution_time,
-                skip_janitor=skip_janitor,
-                ignore_cron=ignore_cron,
-                select_models=select_models,
-                exit_on_env_update=exit_on_env_update is not None,
-            )
-        except CircuitBreakerError:
-            interrupted = True
-        except Exception as e:
-            self.notification_target_manager.notify(
-                NotificationEvent.RUN_FAILURE, traceback.format_exc()
-            )
-            logger.error(f"Run Failure: {traceback.format_exc()}")
-            analytics.collector.on_run_end(
-                run_id=analytics_run_id, succeeded=False, interrupted=False, error=e
-            )
-            raise e
+        done = False
+        while not done:
+            plan_id_at_start = _block_until_finalized()
+
+            def _has_environment_changed() -> bool:
+                assert environment is not None  # mypy
+                current_environment_state = self.state_sync.get_environment(environment)
+                return (
+                    not current_environment_state
+                    or current_environment_state.plan_id != plan_id_at_start
+                    or not current_environment_state.finalized_ts
+                )
+
+            try:
+                success = self._run(
+                    environment,
+                    start=start,
+                    end=end,
+                    execution_time=execution_time,
+                    ignore_cron=ignore_cron,
+                    select_models=select_models,
+                    circuit_breaker=_has_environment_changed,
+                    no_auto_upstream=no_auto_upstream,
+                )
+                done = True
+            except CircuitBreakerError:
+                logger.warning(
+                    "Environment '%s' has been modified while running. Restarting the run...",
+                    environment,
+                )
+                if exit_on_env_update:
+                    interrupted = True
+                    done = True
+            except Exception as e:
+                self.notification_target_manager.notify(
+                    NotificationEvent.RUN_FAILURE, traceback.format_exc()
+                )
+                logger.error(f"Run Failure: {traceback.format_exc()}")
+                analytics.collector.on_run_end(
+                    run_id=analytics_run_id, succeeded=False, interrupted=False, error=e
+                )
+                raise e
 
         if success or interrupted:
             self.notification_target_manager.notify(
@@ -923,12 +973,15 @@ class GenericContext(BaseContext, t.Generic[C]):
         append_newline: t.Optional[bool] = None,
         *,
         check: t.Optional[bool] = None,
+        paths: t.Optional[t.Tuple[t.Union[str, Path], ...]] = None,
         **kwargs: t.Any,
     ) -> bool:
         """Format all SQL models and audits."""
         format_targets = {**self._models, **self._audits}
         for target in format_targets.values():
             if target._path is None or target._path.suffix != ".sql":
+                continue
+            if paths and not any(target._path.samefile(p) for p in paths):
                 continue
 
             with open(target._path, "r+", encoding="utf-8") as file:
@@ -1382,6 +1435,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         show_sample: bool = True,
         decimals: int = 3,
         skip_grain_check: bool = False,
+        temp_schema: t.Optional[str] = None,
     ) -> TableDiff:
         """Show a diff between two tables.
 
@@ -1398,6 +1452,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             show_sample: Show the sample dataframe in the console. Requires show=True.
             decimals: The number of decimal places to keep when comparing floating point columns.
             skip_grain_check: Skip check for rows that contain null or duplicate grains.
+            temp_schema: The schema to use for temporary tables.
 
         Returns:
             The TableDiff object containing schema and summary differences.
@@ -1456,7 +1511,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         if show:
             self.console.show_schema_diff(table_diff.schema_diff())
             self.console.show_row_diff(
-                table_diff.row_diff(skip_grain_check=skip_grain_check),
+                table_diff.row_diff(temp_schema=temp_schema, skip_grain_check=skip_grain_check),
                 show_sample=show_sample,
                 skip_grain_check=skip_grain_check,
             )
@@ -1665,7 +1720,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             else self.snapshots.values()
         )
 
-        num_audits = sum(len(snapshot.audits_with_args) for snapshot in snapshots)
+        num_audits = sum(len(snapshot.node.audits_with_args) for snapshot in snapshots)
         self.console.log_status_update(f"Found {num_audits} audit(s).")
         errors = []
         skipped_count = 0
@@ -1794,7 +1849,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             )
 
     @python_api_analytics
-    def print_info(self, skip_connection: bool = False) -> None:
+    def print_info(self, skip_connection: bool = False, verbose: bool = False) -> None:
         """Prints information about connections, models, macros, etc. to the console."""
         self.console.log_status_update(f"Models: {len(self.models)}")
         self.console.log_status_update(f"Macros: {len(self._macros) - len(macro.get_registry())}")
@@ -1802,8 +1857,17 @@ class GenericContext(BaseContext, t.Generic[C]):
         if skip_connection:
             return
 
-        self._try_connection("data warehouse", self._engine_adapter.ping)
+        if verbose:
+            self.console.log_status_update("")
+            print_config(self.config.get_connection(self.gateway), self.console, "Connection")
+            print_config(
+                self.config.get_test_connection(self.gateway), self.console, "Test Connection"
+            )
+            print_config(
+                self.config.get_state_connection(self.gateway), self.console, "State Connection"
+            )
 
+        self._try_connection("data warehouse", self._engine_adapter.ping)
         state_connection = self.config.get_state_connection(self.gateway)
         if state_connection:
             self._try_connection("state backend", state_connection.connection_validator())
@@ -1822,41 +1886,11 @@ class GenericContext(BaseContext, t.Generic[C]):
         start: t.Optional[TimeLike],
         end: t.Optional[TimeLike],
         execution_time: t.Optional[TimeLike],
-        skip_janitor: bool,
         ignore_cron: bool,
         select_models: t.Optional[t.Collection[str]],
-        exit_on_env_update: bool,
+        circuit_breaker: t.Optional[t.Callable[[], bool]],
+        no_auto_upstream: bool,
     ) -> bool:
-        if not skip_janitor and environment.lower() == c.PROD:
-            self._run_janitor()
-
-        env_check_attempts_num = max(
-            1,
-            self.config.run.environment_check_max_wait
-            // self.config.run.environment_check_interval,
-        )
-
-        def _block_until_finalized() -> str:
-            for _ in range(env_check_attempts_num):
-                assert environment is not None  # mypy
-                environment_state = self.state_sync.get_environment(environment)
-                if not environment_state:
-                    raise SQLMeshError(f"Environment '{environment}' was not found.")
-                if environment_state.finalized_ts:
-                    return environment_state.plan_id
-                logger.warning(
-                    "Environment '%s' is being updated by plan '%s'. Retrying in %s seconds...",
-                    environment,
-                    environment_state.plan_id,
-                    self.config.run.environment_check_interval,
-                )
-                time.sleep(self.config.run.environment_check_interval)
-            raise SQLMeshError(
-                f"Exceeded the maximum wait time for environment '{environment}' to be ready. "
-                "This means that the environment either failed to update or the update is taking longer than expected. "
-                "See https://sqlmesh.readthedocs.io/en/stable/reference/configuration/#run to adjust the timeout settings."
-            )
-
         scheduler = self.scheduler(environment=environment)
         snapshots = scheduler.snapshots
 
@@ -1868,41 +1902,19 @@ class GenericContext(BaseContext, t.Generic[C]):
             for fqn, model in models.items():
                 dag.add(fqn, model.depends_on)
             model_selector = self._new_selector(models=models, dag=dag)
-            select_models = set(dag.subdag(*model_selector.expand_model_selections(select_models)))
+            select_models = set(model_selector.expand_model_selections(select_models))
+            if not no_auto_upstream:
+                select_models = set(dag.subdag(*select_models))
 
-        done = False
-        while not done:
-            plan_id_at_start = _block_until_finalized()
-
-            def _has_environment_changed() -> bool:
-                assert environment is not None  # mypy
-                current_environment_state = self.state_sync.get_environment(environment)
-                return (
-                    not current_environment_state
-                    or current_environment_state.plan_id != plan_id_at_start
-                    or not current_environment_state.finalized_ts
-                )
-
-            try:
-                success = scheduler.run(
-                    environment,
-                    start=start,
-                    end=end,
-                    execution_time=execution_time,
-                    ignore_cron=ignore_cron,
-                    circuit_breaker=_has_environment_changed,
-                    selected_snapshots=select_models,
-                )
-                done = True
-            except CircuitBreakerError:
-                logger.warning(
-                    "Environment '%s' has been modified while running. Restarting the run...",
-                    environment,
-                )
-                if exit_on_env_update:
-                    raise
-
-        return success
+        return scheduler.run(
+            environment,
+            start=start,
+            end=end,
+            execution_time=execution_time,
+            ignore_cron=ignore_cron,
+            circuit_breaker=circuit_breaker,
+            selected_snapshots=select_models,
+        )
 
     def _apply(self, plan: Plan, circuit_breaker: t.Optional[t.Callable[[], bool]]) -> None:
         self._scheduler.create_plan_evaluator(self).evaluate(
@@ -1996,15 +2008,10 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         local_nodes = {**(models_override or self._models), **self._standalone_audits}
         nodes = local_nodes.copy()
-        audits = self._audits.copy()
 
         for name, snapshot in remote_snapshots.items():
             if name not in nodes and snapshot.node.project not in projects:
                 nodes[name] = snapshot.node
-                if snapshot.is_model:
-                    for audit in snapshot.audits:
-                        if name not in audits:
-                            audits[name] = audit
 
         def _nodes_to_snapshots(nodes: t.Dict[str, Node]) -> t.Dict[str, Snapshot]:
             snapshots: t.Dict[str, Snapshot] = {}
@@ -2020,7 +2027,6 @@ class GenericContext(BaseContext, t.Generic[C]):
                 snapshot = Snapshot.from_node(
                     node,
                     nodes=nodes,
-                    audits=audits,
                     cache=fingerprint_cache,
                     ttl=ttl,
                     config=self.config_for_node(node),
@@ -2105,7 +2111,6 @@ class GenericContext(BaseContext, t.Generic[C]):
         return Selector(
             self.state_reader,
             models=models or self._models,
-            audits=self._audits,
             context_path=self.path,
             dag=dag,
             default_catalog=self.default_catalog,

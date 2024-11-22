@@ -19,10 +19,10 @@ from sqlmesh.utils import ttl_cache
 
 UTC = timezone.utc
 TimeLike = t.Union[date, datetime, str, int, float]
+DatetimeRange = t.Tuple[datetime, datetime]
+DatetimeRanges = t.List[DatetimeRange]
 DATE_INT_FMT = "%Y%m%d"
 
-if t.TYPE_CHECKING:
-    from sqlmesh.core.scheduler import Interval
 
 warnings.filterwarnings(
     "ignore",
@@ -284,7 +284,7 @@ def is_date(obj: TimeLike) -> bool:
         return False
 
 
-def make_inclusive(start: TimeLike, end: TimeLike) -> Interval:
+def make_inclusive(start: TimeLike, end: TimeLike) -> DatetimeRange:
     """Adjust start and end times to to become inclusive datetimes.
 
     SQLMesh treats start and end times as inclusive so that filters can be written as

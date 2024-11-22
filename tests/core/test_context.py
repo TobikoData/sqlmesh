@@ -78,7 +78,9 @@ def test_generate_table_name_in_dialect(mocker: MockerFixture):
         "sqlmesh.core.context.GenericContext._model_tables",
         PropertyMock(return_value={'"project-id"."dataset"."table"': '"project-id".dataset.table'}),
     )
-    assert context.table('"project-id"."dataset"."table"') == "`project-id`.`dataset`.`table`"
+    assert (
+        context.resolve_table('"project-id"."dataset"."table"') == "`project-id`.`dataset`.`table`"
+    )
 
 
 def test_config_not_found(copy_to_temp_path: t.Callable):
@@ -370,16 +372,18 @@ def test_override_builtin_audit_blocking_mode():
             call(
                 "Audit 'not_null' for model 'db.x' failed.\n"
                 "Got 1 results, expected 0.\n"
-                'SELECT * FROM (SELECT * FROM "sqlmesh__db"."db__x__829001280" AS "db__x__829001280") AS "_q_0" WHERE "c" IS NULL AND TRUE\n'
+                'SELECT * FROM (SELECT * FROM "sqlmesh__db"."db__x__2457047842" AS "db__x__2457047842") AS "_q_0" WHERE "c" IS NULL AND TRUE\n'
                 "Audit is warn only so proceeding with execution."
             )
         ]
 
     # Even though there are two builtin audits referenced in the above definition, we only
     # store the one that overrides `blocking` in the snapshot; the other one isn't needed
-    assert len(new_snapshot.audits) == 1
-    assert new_snapshot.audits[0].name == "not_null"
-    assert new_snapshot.audits[0].blocking is False
+    audits_with_args = new_snapshot.model.audits_with_args
+    assert len(audits_with_args) == 2
+    audit, args = audits_with_args[0]
+    assert audit.name == "not_null"
+    assert list(args) == ["columns", "blocking"]
 
     context = Context(config=Config())
     context.upsert_model(
@@ -900,9 +904,20 @@ def test_load_external_models(copy_to_temp_path):
     assert "prod_raw.model1" not in external_model_names
 
     # get physical table names of external models using table
-    assert context.table("raw.model1") == '"memory"."raw"."model1"'
-    assert context.table("raw.demographics") == '"memory"."raw"."demographics"'
-    assert context.table("raw.model2") == '"memory"."raw"."model2"'
+    assert context.resolve_table("raw.model1") == '"memory"."raw"."model1"'
+    assert context.resolve_table("raw.demographics") == '"memory"."raw"."demographics"'
+    assert context.resolve_table("raw.model2") == '"memory"."raw"."model2"'
+
+    logger = logging.getLogger("sqlmesh.core.context")
+    with patch.object(logger, "warning") as mock_logger:
+        context.table("raw.model1") == '"memory"."raw"."model1"'
+
+        assert mock_logger.mock_calls == [
+            call(
+                "The SQLMesh context's `table` method is deprecated and will be removed "
+                "in a future release. Please use the `resolve_table` method instead."
+            )
+        ]
 
 
 def test_load_gateway_specific_external_models(copy_to_temp_path):
@@ -997,3 +1012,10 @@ def post_statement(evaluator):
 
     context = Context(paths=tmp_path, config=Config())
     context.plan(auto_apply=True, no_prompts=True)
+
+
+def test_wildcard(copy_to_temp_path: t.Callable):
+    parent_path = copy_to_temp_path("examples/multi")[0]
+
+    context = Context(paths=f"{parent_path}/*")
+    assert len(context.models) == 4

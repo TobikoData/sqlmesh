@@ -6,7 +6,6 @@ from sqlmesh.core import constants as c
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.notification_target import NotificationTarget
 from sqlmesh.core.plan.definition import EvaluatablePlan
-from sqlmesh.core.scheduler import Interval
 from sqlmesh.core.snapshot import (
     DeployabilityIndex,
     Snapshot,
@@ -17,7 +16,7 @@ from sqlmesh.core.snapshot import (
 )
 from sqlmesh.core.user import User
 from sqlmesh.utils import sanitize_name
-from sqlmesh.utils.date import TimeLike
+from sqlmesh.utils.date import TimeLike, DatetimeRanges
 from sqlmesh.utils.pydantic import PydanticModel
 
 JANITOR_DAG_ID = "sqlmesh_janitor_dag"
@@ -35,6 +34,8 @@ AIRFLOW_LOCAL_URL = "http://localhost:8080/"
 
 SQLMESH_API_BASE_PATH: str = f"{c.SQLMESH}/api/v1"
 
+SnapshotToDatetimeRanges = t.Dict[Snapshot, DatetimeRanges]
+
 
 class PlanApplicationRequest(PydanticModel):
     plan: EvaluatablePlan
@@ -46,7 +47,7 @@ class PlanApplicationRequest(PydanticModel):
 
 class BackfillIntervalsPerSnapshot(PydanticModel):
     snapshot_id: SnapshotId
-    intervals: t.List[Interval]
+    intervals: DatetimeRanges
     before_promote: bool = True
 
 

@@ -4,13 +4,13 @@ import abc
 import logging
 import traceback
 import typing as t
-from datetime import datetime
 
 from sqlglot import exp
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.environment import EnvironmentNamingInfo
+from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.notification_target import (
     NotificationEvent,
     NotificationTargetManager,
@@ -21,9 +21,10 @@ from sqlmesh.core.snapshot import (
     SnapshotEvaluator,
     earliest_start_date,
     missing_intervals,
+    Intervals,
 )
-from sqlmesh.core.snapshot.definition import Interval as SnapshotInterval
-from sqlmesh.core.snapshot.definition import Intervals, SnapshotId, merge_intervals
+from sqlmesh.core.snapshot.definition import Interval, expand_range
+from sqlmesh.core.snapshot.definition import SnapshotId, merge_intervals
 from sqlmesh.core.state_sync import StateSync
 from sqlmesh.utils import format_exception
 from sqlmesh.utils.concurrency import concurrent_apply_to_dag, NodeExecutionFailedError
@@ -35,13 +36,12 @@ from sqlmesh.utils.date import (
     to_datetime,
     to_timestamp,
     validate_date_range,
+    DatetimeRanges,
 )
 from sqlmesh.utils.errors import AuditError, CircuitBreakerError, SQLMeshError
 
 logger = logging.getLogger(__name__)
-Interval = t.Tuple[datetime, datetime]
-Batch = t.List[Interval]
-SnapshotToBatches = t.Dict[Snapshot, Batch]
+SnapshotToIntervals = t.Dict[Snapshot, Intervals]
 # we store snapshot name instead of snapshots/snapshotids because pydantic
 # is extremely slow to hash. snapshot names should be unique within a dag run
 SchedulingUnit = t.Tuple[str, t.Tuple[Interval, int]]
@@ -49,7 +49,7 @@ SchedulingUnit = t.Tuple[str, t.Tuple[Interval, int]]
 
 class Signal(abc.ABC):
     @abc.abstractmethod
-    def check_intervals(self, batch: Batch) -> t.Union[bool, Batch]:
+    def check_intervals(self, batch: DatetimeRanges) -> t.Union[bool, DatetimeRanges]:
         """Returns which intervals are ready from a list of scheduled intervals.
 
         When SQLMesh wishes to execute a batch of intervals, say between `a` and `d`, then
@@ -148,32 +148,29 @@ class Scheduler:
         )
         self.signal_factory = signal_factory or _registered_signal_factory
 
-    def batches(
+    def merged_missing_intervals(
         self,
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         execution_time: t.Optional[TimeLike] = None,
         deployability_index: t.Optional[DeployabilityIndex] = None,
-        restatements: t.Optional[t.Dict[SnapshotId, SnapshotInterval]] = None,
+        restatements: t.Optional[t.Dict[SnapshotId, Interval]] = None,
         interval_end_per_model: t.Optional[t.Dict[str, int]] = None,
         ignore_cron: bool = False,
         end_bounded: bool = False,
         selected_snapshots: t.Optional[t.Set[str]] = None,
-    ) -> SnapshotToBatches:
-        """Find the optimal date interval paramaters based on what needs processing and maximal batch size.
+    ) -> SnapshotToIntervals:
+        """Find the largest contiguous date interval parameters based only on what is missing.
 
         For each node name, find all dependencies and look for a stored snapshot from the metastore. If a snapshot is found,
         calculate the missing intervals that need to be processed given the passed in start and end intervals.
 
-        If a snapshot's node specifies a batch size, consecutive intervals are merged into batches of a size that is less than
-        or equal to the configured one. If no batch size is specified, then it uses the intervals that correspond to the node's cron expression.
-        For example, if a node is supposed to run daily and has 70 days to backfill with a batch size set to 30, there would be 2 jobs
-        with 30 days and 1 job with 10.
+        This is a superset of what may actually get processed at runtime based on things like batch size, signal readiness, etc.
 
         Args:
             start: The start of the run. Defaults to the min node start date.
             end: The end of the run. Defaults to now.
-            execution_time: The date/time time reference to use for execution time. Defaults to now.
+            execution_time: The date/time reference to use for execution time. Defaults to now.
             deployability_index: Determines snapshots that are deployable in the context of this evaluation.
             restatements: A set of snapshot names being restated.
             interval_end_per_model: The mapping from model FQNs to target end dates.
@@ -201,7 +198,6 @@ class Scheduler:
             interval_end_per_model=interval_end_per_model,
             ignore_cron=ignore_cron,
             end_bounded=end_bounded,
-            signal_factory=self.signal_factory,
         )
 
     def evaluate(
@@ -270,7 +266,7 @@ class Scheduler:
                 self.notification_target_manager.notify_user(
                     NotificationEvent.AUDIT_FAILURE, snapshot.node.owner, error
                 )
-            if audit_result.audit.blocking:
+            if audit_result.blocking:
                 audit_error_to_raise = error
 
         if audit_error_to_raise:
@@ -285,7 +281,7 @@ class Scheduler:
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         execution_time: t.Optional[TimeLike] = None,
-        restatements: t.Optional[t.Dict[SnapshotId, SnapshotInterval]] = None,
+        restatements: t.Optional[t.Dict[SnapshotId, Interval]] = None,
         interval_end_per_model: t.Optional[t.Dict[str, int]] = None,
         ignore_cron: bool = False,
         end_bounded: bool = False,
@@ -333,7 +329,7 @@ class Scheduler:
             else DeployabilityIndex.all_deployable()
         )
         execution_time = execution_time or now()
-        batches = self.batches(
+        merged_intervals = self.merged_missing_intervals(
             start,
             end,
             execution_time,
@@ -344,20 +340,17 @@ class Scheduler:
             end_bounded=end_bounded,
             selected_snapshots=selected_snapshots,
         )
-        if not batches:
+        if not merged_intervals:
             return True
 
-        self.console.start_evaluation_progress(
-            {snapshot: len(intervals) for snapshot, intervals in batches.items()},
-            environment_naming_info,
-            self.default_catalog,
-        )
-
-        errors, skipped_intervals = self.run_batches(
-            batches=batches,
+        errors, skipped_intervals = self.run_merged_intervals(
+            merged_intervals=merged_intervals,
             deployability_index=deployability_index,
+            environment_naming_info=environment_naming_info,
             execution_time=execution_time,
             circuit_breaker=circuit_breaker,
+            start=start,
+            end=end,
         )
 
         self.console.stop_evaluation_progress(success=not errors)
@@ -380,26 +373,109 @@ class Scheduler:
 
         return not errors
 
-    def run_batches(
+    def batch_intervals(
         self,
-        batches: SnapshotToBatches,
+        merged_intervals: SnapshotToIntervals,
+        start: t.Optional[TimeLike] = None,
+        end: t.Optional[TimeLike] = None,
+        execution_time: t.Optional[TimeLike] = None,
+    ) -> t.Dict[Snapshot, Intervals]:
+        def expand_range_as_interval(
+            start_ts: int, end_ts: int, interval_unit: IntervalUnit
+        ) -> t.List[Interval]:
+            values = expand_range(start_ts, end_ts, interval_unit)
+            return [(values[i], values[i + 1]) for i in range(len(values) - 1)]
+
+        dag = DAG[str]()
+
+        for snapshot in merged_intervals:
+            dag.add(snapshot.name, [p.name for p in snapshot.parents])
+
+        snapshot_intervals = {
+            snapshot: [
+                i
+                for interval in intervals
+                for i in expand_range_as_interval(*interval, snapshot.node.interval_unit)
+            ]
+            for snapshot, intervals in merged_intervals.items()
+        }
+        snapshot_batches = {}
+        all_unready_intervals: t.Dict[str, set[Interval]] = {}
+        for snapshot, intervals in snapshot_intervals.items():
+            if self.signal_factory and snapshot.is_model:
+                unready = set(intervals)
+
+                for signal in snapshot.model.render_signals(
+                    start=start, end=end, execution_time=execution_time
+                ):
+                    intervals = _check_ready_intervals(
+                        signal=self.signal_factory(signal),
+                        intervals=intervals,
+                    )
+                unready -= set(intervals)
+            else:
+                unready = set()
+
+            for parent in snapshot.parents:
+                if parent.name in all_unready_intervals:
+                    unready.update(all_unready_intervals[parent.name])
+
+            all_unready_intervals[snapshot.name] = unready
+
+            batches = []
+            batch_size = snapshot.node.batch_size
+            next_batch: t.List[t.Tuple[int, int]] = []
+
+            for interval in interval_diff(
+                intervals, merge_intervals(unready), uninterrupted=snapshot.depends_on_past
+            ):
+                if (batch_size and len(next_batch) >= batch_size) or (
+                    next_batch and interval[0] != next_batch[-1][-1]
+                ):
+                    batches.append((next_batch[0][0], next_batch[-1][-1]))
+                    next_batch = []
+                next_batch.append(interval)
+            if next_batch:
+                batches.append((next_batch[0][0], next_batch[-1][-1]))
+            snapshot_batches[snapshot] = batches
+        return snapshot_batches
+
+    def run_merged_intervals(
+        self,
+        *,
+        merged_intervals: SnapshotToIntervals,
         deployability_index: DeployabilityIndex,
+        environment_naming_info: EnvironmentNamingInfo,
         execution_time: t.Optional[TimeLike] = None,
         circuit_breaker: t.Optional[t.Callable[[], bool]] = None,
+        start: t.Optional[TimeLike] = None,
+        end: t.Optional[TimeLike] = None,
     ) -> t.Tuple[t.List[NodeExecutionFailedError[SchedulingUnit]], t.List[SchedulingUnit]]:
         """Runs precomputed batches of missing intervals.
 
         Args:
-            batches: The batches of snapshots and intervals to evaluate.
+            merged_intervals: The snapshots and contiguous interval ranges to evaluate.
             deployability_index: Determines snapshots that are deployable in the context of this evaluation.
-            execution_time: The date/time time reference to use for execution time.
+            environment_naming_info: The environment naming info the user is targeting when applying their change.
+            execution_time: The date/time reference to use for execution time.
             circuit_breaker: An optional handler which checks if the run should be aborted.
+            start: The start of the run.
+            end: The end of the run.
 
         Returns:
             A tuple of errors and skipped intervals.
         """
         execution_time = execution_time or now()
-        dag = self._dag(batches)
+
+        batched_intervals = self.batch_intervals(merged_intervals, start, end, execution_time)
+
+        self.console.start_evaluation_progress(
+            {snapshot: len(intervals) for snapshot, intervals in batched_intervals.items()},
+            environment_naming_info,
+            self.default_catalog,
+        )
+
+        dag = self._dag(batched_intervals)
 
         snapshots_by_name = {snapshot.name: snapshot for snapshot in self.snapshots.values()}
 
@@ -438,7 +514,7 @@ class Scheduler:
         finally:
             self.state_sync.recycle()
 
-    def _dag(self, batches: SnapshotToBatches) -> DAG[SchedulingUnit]:
+    def _dag(self, batches: SnapshotToIntervals) -> DAG[SchedulingUnit]:
         """Builds a DAG of snapshot intervals to be evaluated.
 
         Args:
@@ -453,7 +529,7 @@ class Scheduler:
         }
 
         dag = DAG[SchedulingUnit]()
-        terminal_node = ((to_datetime(0), to_datetime(0)), -1)
+        terminal_node = ((to_timestamp(0), to_timestamp(0)), -1)
 
         for snapshot, intervals in batches.items():
             if not intervals:
@@ -503,29 +579,24 @@ def compute_interval_params(
     end: TimeLike,
     deployability_index: t.Optional[DeployabilityIndex] = None,
     execution_time: t.Optional[TimeLike] = None,
-    restatements: t.Optional[t.Dict[SnapshotId, SnapshotInterval]] = None,
+    restatements: t.Optional[t.Dict[SnapshotId, Interval]] = None,
     interval_end_per_model: t.Optional[t.Dict[str, int]] = None,
     ignore_cron: bool = False,
     end_bounded: bool = False,
-    signal_factory: t.Optional[SignalFactory] = None,
-) -> SnapshotToBatches:
-    """Find the optimal date interval paramaters based on what needs processing and maximal batch size.
+) -> SnapshotToIntervals:
+    """Find the largest contiguous date interval parameters based only on what is missing.
 
     For each node name, find all dependencies and look for a stored snapshot from the metastore. If a snapshot is found,
     calculate the missing intervals that need to be processed given the passed in start and end intervals.
 
-    If a snapshot's node specifies a batch size, consecutive intervals are merged into batches of a size that is less than
-    or equal to the configured one. If no batch size is specified, then it uses the intervals that correspond to the node's cron expression.
-    For example, if a node is supposed to run daily and has 70 days to backfill with a batch size set to 30, there would be 2 jobs
-    with 30 days and 1 job with 10.
+    This is a superset of what may actually get processed at runtime based on things like batch size, signal readiness, etc.
 
     Args:
         snapshots: A set of target snapshots for which intervals should be computed.
-        intervals: A list of all snapshot intervals that should be considered.
         start: Start of the interval.
         end: End of the interval.
         deployability_index: Determines snapshots that are deployable in the context of this evaluation.
-        execution_time: The date/time time reference to use for execution time.
+        execution_time: The date/time reference to use for execution time.
         restatements: A dict of snapshot names being restated and their intervals.
         interval_end_per_model: The mapping from model FQNs to target end dates.
         ignore_cron: Whether to ignore the node's cron schedule.
@@ -535,20 +606,10 @@ def compute_interval_params(
     Returns:
         A dict containing all snapshots needing to be run with their associated interval params.
     """
-    snapshot_batches = {}
-
-    snapshots_by_name = {snapshot.name: snapshot for snapshot in snapshots}
-
-    dag = DAG[str]()
-
-    for snapshot in snapshots_by_name.values():
-        dag.add(snapshot.name, [p.name for p in snapshot.parents])
-
-    all_unready_intervals: t.Dict[str, set[SnapshotInterval]] = {}
+    snapshot_merged_intervals = {}
 
     for snapshot, intervals in missing_intervals(
-        # need to iterate through missing intervals in dag order to propogate unready intervals
-        [snapshots_by_name[fqn] for fqn in dag if fqn in snapshots_by_name],
+        snapshots,
         start=start,
         end=end,
         execution_time=execution_time,
@@ -558,44 +619,19 @@ def compute_interval_params(
         ignore_cron=ignore_cron,
         end_bounded=end_bounded,
     ).items():
-        if signal_factory and snapshot.is_model:
-            unready = set(intervals)
+        contiguous_batch = []
+        next_batch: Intervals = []
 
-            for signal in snapshot.model.render_signals(
-                start=start, end=end, execution_time=execution_time
-            ):
-                intervals = _check_ready_intervals(
-                    signal=signal_factory(signal),
-                    intervals=intervals,
-                )
-            unready -= set(intervals)
-        else:
-            unready = set()
-
-        for parent in snapshot.parents:
-            if parent.name in all_unready_intervals:
-                unready.update(all_unready_intervals[parent.name])
-
-        all_unready_intervals[snapshot.name] = unready
-
-        batches = []
-        batch_size = snapshot.node.batch_size
-        next_batch: t.List[t.Tuple[int, int]] = []
-
-        for interval in interval_diff(
-            intervals, merge_intervals(unready), uninterrupted=snapshot.depends_on_past
-        ):
-            if (batch_size and len(next_batch) >= batch_size) or (
-                next_batch and interval[0] != next_batch[-1][-1]
-            ):
-                batches.append((next_batch[0][0], next_batch[-1][-1]))
+        for interval in intervals:
+            if next_batch and interval[0] != next_batch[-1][-1]:
+                contiguous_batch.append((next_batch[0][0], next_batch[-1][-1]))
                 next_batch = []
             next_batch.append(interval)
         if next_batch:
-            batches.append((next_batch[0][0], next_batch[-1][-1]))
-        snapshot_batches[snapshot] = [(to_datetime(s), to_datetime(e)) for s, e in batches]
+            contiguous_batch.append((next_batch[0][0], next_batch[-1][-1]))
+        snapshot_merged_intervals[snapshot] = contiguous_batch
 
-    return snapshot_batches
+    return snapshot_merged_intervals
 
 
 def interval_diff(
@@ -659,7 +695,7 @@ def _contiguous_intervals(
 ) -> t.List[Intervals]:
     """Given a list of intervals with gaps, returns a list of sequences of contiguous intervals."""
     contiguous_intervals = []
-    current_batch: t.List[SnapshotInterval] = []
+    current_batch: t.List[Interval] = []
     for interval in intervals:
         if len(current_batch) == 0 or interval[0] == current_batch[-1][-1]:
             current_batch.append(interval)

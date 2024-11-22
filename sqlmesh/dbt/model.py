@@ -29,6 +29,7 @@ from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import field_validator
 
 if t.TYPE_CHECKING:
+    from sqlmesh.core.audit.definition import ModelAudit
     from sqlmesh.dbt.context import DbtContext
 
 
@@ -74,10 +75,12 @@ class ModelConfig(BaseModelConfig):
     cron: t.Optional[str] = None
     interval_unit: t.Optional[str] = None
     batch_size: t.Optional[int] = None
+    batch_concurrency: t.Optional[int] = None
     lookback: t.Optional[int] = None
     forward_only: bool = True
     disable_restatement: t.Optional[bool] = None
     allow_partials: t.Optional[bool] = None
+    physical_version: t.Optional[str] = None
 
     # DBT configuration fields
     cluster_by: t.Optional[t.List[str]] = None
@@ -108,6 +111,17 @@ class ModelConfig(BaseModelConfig):
     # note: for Snowflake dynamic tables, in the DBT adapter we only support properties that DBT supports
     # which are defined here: https://docs.getdbt.com/reference/resource-configs/snowflake-configs#dynamic-tables
     target_lag: t.Optional[str] = None
+
+    # clickhouse
+    engine: t.Optional[str] = None
+    order_by: t.Optional[t.Union[t.List[str], str]] = None
+    primary_key: t.Optional[t.Union[t.List[str], str]] = None
+    sharding_key: t.Optional[t.Union[t.List[str], str]] = None
+    ttl: t.Optional[t.Union[t.List[str], str]] = None
+    settings: t.Optional[t.Dict[str, t.Any]] = None
+    query_settings: t.Optional[t.Dict[str, t.Any]] = None
+    inserts_only: t.Optional[bool] = None
+    incremental_predicates: t.Optional[t.List[str]] = None
 
     # Private fields
     _sql_embedded_config: t.Optional[SqlStr] = None
@@ -158,6 +172,27 @@ class ModelConfig(BaseModelConfig):
             return {"data_type": "date", "granularity": "day", **v}
         raise ConfigError(f"Invalid format for partition_by '{v}'")
 
+    @field_validator("materialized", mode="before")
+    @classmethod
+    def _validate_materialized(cls, v: str) -> str:
+        unsupported_materializations = [
+            "materialized_view",  # multiple engines
+            "dictionary",  # clickhouse only
+            "distributed_table",  # clickhouse only
+            "distributed_incremental",  # clickhouse only
+        ]
+        if v in unsupported_materializations:
+            fallback = v.split("_")
+            msg = f"SQLMesh does not support the '{v}' model materialization."
+            if len(fallback) == 1:
+                # dictionary materialization
+                raise ConfigError(msg)
+            else:
+                logger.warning(f"{msg} Falling back to the '{fallback[1]}' materialization.")
+
+            return fallback[1]
+        return v
+
     _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {
         **BaseModelConfig._FIELD_UPDATE_STRATEGY,
         **{
@@ -195,7 +230,7 @@ class ModelConfig(BaseModelConfig):
             on_destructive_change = OnDestructiveChange.WARN
             if on_schema_change == "sync_all_columns":
                 on_destructive_change = OnDestructiveChange.ALLOW
-            elif on_schema_change == "fail":
+            elif on_schema_change in ("fail", "append_new_columns", "ignore"):
                 on_destructive_change = OnDestructiveChange.ERROR
 
             incremental_kind_kwargs["on_destructive_change"] = on_destructive_change
@@ -208,7 +243,7 @@ class ModelConfig(BaseModelConfig):
             incremental_materialization_kwargs: t.Dict[str, t.Any] = {
                 "dialect": self.dialect(context)
             }
-            for field in ("batch_size", "lookback", "forward_only"):
+            for field in ("batch_size", "batch_concurrency", "lookback", "forward_only"):
                 field_val = getattr(self, field, None) or self.meta.get(field, None)
                 if field_val:
                     incremental_materialization_kwargs[field] = field_val
@@ -334,7 +369,9 @@ class ModelConfig(BaseModelConfig):
         try:
             field = d.parse_one(raw_field, dialect="bigquery")
         except SqlglotError as e:
-            raise ConfigError(f"Failed to parse partition_by field '{raw_field}': {e}") from e
+            raise ConfigError(
+                f"Failed to parse model '{self.canonical_name(context)}' partition_by field '{raw_field}' in '{self.path}': {e}"
+            ) from e
 
         if data_type == "date" and self.partition_by["granularity"].lower() == "day":
             return field
@@ -364,29 +401,46 @@ class ModelConfig(BaseModelConfig):
 
     @property
     def sqlmesh_config_fields(self) -> t.Set[str]:
-        return super().sqlmesh_config_fields | {"cron", "interval_unit", "allow_partials"}
+        return super().sqlmesh_config_fields | {
+            "cron",
+            "interval_unit",
+            "allow_partials",
+            "physical_version",
+        }
 
-    def to_sqlmesh(self, context: DbtContext) -> Model:
+    def to_sqlmesh(
+        self, context: DbtContext, audit_definitions: t.Optional[t.Dict[str, ModelAudit]] = None
+    ) -> Model:
         """Converts the dbt model into a SQLMesh model."""
         model_dialect = self.dialect(context)
         query = d.jinja_query(self.sql_no_config)
 
         optional_kwargs: t.Dict[str, t.Any] = {}
+        physical_properties: t.Dict[str, t.Any] = {}
 
         if self.partition_by:
-            optional_kwargs["partitioned_by"] = (
-                [exp.to_column(val, dialect=model_dialect) for val in self.partition_by]
-                if isinstance(self.partition_by, list)
-                else self._big_query_partition_by_expr(context)
-            )
+            partitioned_by = []
+            if isinstance(self.partition_by, list):
+                for p in self.partition_by:
+                    try:
+                        partitioned_by.append(d.parse_one(p, dialect=model_dialect))
+                    except SqlglotError as e:
+                        raise ConfigError(
+                            f"Failed to parse model '{self.canonical_name(context)}' partition_by field '{p}' in '{self.path}': {e}"
+                        ) from e
+            else:
+                partitioned_by.append(self._big_query_partition_by_expr(context))
+            optional_kwargs["partitioned_by"] = partitioned_by
 
         if self.cluster_by:
             clustered_by = []
             for c in self.cluster_by:
                 try:
-                    clustered_by.append(d.parse_one(c, dialect=model_dialect).name)
+                    clustered_by.append(d.parse_one(c, dialect=model_dialect))
                 except SqlglotError as e:
-                    raise ConfigError(f"Failed to parse cluster_by field '{c}': {e}") from e
+                    raise ConfigError(
+                        f"Failed to parse model '{self.canonical_name(context)}' cluster_by field '{c}' in '{self.path}': {e}"
+                    ) from e
             optional_kwargs["clustered_by"] = clustered_by
 
         model_kwargs = self.sqlmesh_model_kwargs(context)
@@ -398,7 +452,6 @@ class ModelConfig(BaseModelConfig):
             if dbt_max_partition_blob:
                 model_kwargs["pre_statements"].append(d.jinja_statement(dbt_max_partition_blob))
 
-            physical_properties = {}
             if self.partition_expiration_days is not None:
                 physical_properties["partition_expiration_days"] = self.partition_expiration_days
             if self.require_partition_filter is not None:
@@ -422,12 +475,76 @@ class ModelConfig(BaseModelConfig):
                     "target_lag": self.target_lag,
                 }
 
+        if context.target.dialect == "clickhouse":
+            if self.model_materialization == Materialization.INCREMENTAL:
+                # `inserts_only` overrides incremental_strategy setting (if present)
+                # https://github.com/ClickHouse/dbt-clickhouse/blob/065f3a724fa09205446ecadac7a00d92b2d8c646/README.md?plain=1#L108
+                if self.inserts_only:
+                    self.incremental_strategy = "append"
+
+                if self.incremental_strategy == "delete+insert":
+                    logger.warning(
+                        f"The '{self.incremental_strategy}' incremental strategy is not supported - SQLMesh will use the temp table/partition swap strategy."
+                    )
+
+                if self.incremental_predicates:
+                    logger.warning(
+                        "SQLMesh does not support 'incremental_predicates' - they will not be applied."
+                    )
+
+            if self.query_settings:
+                logger.warning(
+                    "SQLMesh does not support the 'query_settings' model configuration parameter. Specify the query settings directly in the model query."
+                )
+
+            if self.engine:
+                optional_kwargs["storage_format"] = self.engine
+
+            if self.order_by:
+                order_by = []
+                for o in self.order_by if isinstance(self.order_by, list) else [self.order_by]:
+                    try:
+                        order_by.append(d.parse_one(o, dialect=model_dialect))
+                    except SqlglotError as e:
+                        raise ConfigError(
+                            f"Failed to parse model '{self.canonical_name(context)}' 'order_by' field '{o}' in '{self.path}': {e}"
+                        ) from e
+                physical_properties["order_by"] = order_by
+
+            if self.primary_key:
+                primary_key = []
+                for p in self.primary_key:
+                    try:
+                        primary_key.append(d.parse_one(p, dialect=model_dialect))
+                    except SqlglotError as e:
+                        raise ConfigError(
+                            f"Failed to parse model '{self.canonical_name(context)}' 'primary_key' field '{p}' in '{self.path}': {e}"
+                        ) from e
+                physical_properties["primary_key"] = primary_key
+
+            if self.sharding_key:
+                logger.warning(
+                    "SQLMesh does not support the 'sharding_key' model configuration parameter or distributed materializations."
+                )
+
+            if self.ttl:
+                physical_properties["ttl"] = exp.var(
+                    self.ttl[0] if isinstance(self.ttl, list) else self.ttl
+                )
+
+            if self.settings:
+                physical_properties.update({k: exp.var(v) for k, v in self.settings.items()})
+
+            if physical_properties:
+                model_kwargs["physical_properties"] = physical_properties
+
         model = create_sql_model(
             self.canonical_name(context),
             query,
             dialect=model_dialect,
             kind=self.model_kind(context),
             start=self.start,
+            audit_definitions=audit_definitions,
             # This ensures that we bypass query rendering that would otherwise be required to extract additional
             # dependencies from the model's SQL.
             # Note: any table dependencies that are not referenced using the `ref` macro will not be included.

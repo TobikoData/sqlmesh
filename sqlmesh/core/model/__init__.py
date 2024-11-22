@@ -4,6 +4,7 @@ from sqlmesh.core.model.cache import (
 )
 from sqlmesh.core.model.decorator import model as model
 from sqlmesh.core.model.definition import (
+    AuditResult as AuditResult,
     ExternalModel as ExternalModel,
     Model as Model,
     PythonModel as PythonModel,

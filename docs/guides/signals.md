@@ -46,7 +46,9 @@ The method returns `True` (indicating that all intervals are ready for evaluatio
 ```python linenums="1"
 import random
 import typing as t
-from sqlmesh.core.scheduler import signal_factory, Batch, Signal
+from sqlmesh.core.scheduler import signal_factory, Signal
+from sqlmesh.utils.date import DatetimeRanges
+
 
 class RandomSignal(Signal):
     def __init__(
@@ -55,7 +57,7 @@ class RandomSignal(Signal):
     ):
         self.signal_metadata = signal_metadata
 
-    def check_intervals(self, batch: Batch) -> t.Union[bool, Batch]:
+    def check_intervals(self, batch: DatetimeRanges) -> t.Union[bool, DatetimeRanges]:
         threshold = self.signal_metadata["threshold"]
         return random.random() > threshold
 ```
@@ -69,7 +71,9 @@ We can now add a factory function that returns the `RandomSignal` sub-class. Not
 ```python linenums="1" hl_lines="8-10"
 import random
 import typing as t
-from sqlmesh.core.scheduler import signal_factory, Batch, Signal
+from sqlmesh.core.scheduler import signal_factory, Signal
+from sqlmesh.utils.date import DatetimeRanges
+
 
 class RandomSignal(Signal):
     def __init__(
@@ -78,9 +82,10 @@ class RandomSignal(Signal):
     ):
         self.signal_metadata = signal_metadata
 
-    def check_intervals(self, batch: Batch) -> t.Union[bool, Batch]:
+    def check_intervals(self, batch: DatetimeRanges) -> t.Union[bool, DatetimeRanges]:
         threshold = self.signal_metadata["threshold"]
         return random.random() > threshold
+
 
 @signal_factory
 def my_signal_factory(signal_metadata: t.Dict[str, t.Union[str, int, float, bool]]) -> Signal:
@@ -122,13 +127,13 @@ In this example, there are two signals.
 import typing as t
 from datetime import datetime
 
-from sqlmesh.core.scheduler import signal_factory, Batch, Signal
-from sqlmesh.utils.date import to_datetime
+from sqlmesh.core.scheduler import signal_factory, Signal
+from sqlmesh.utils.date import DatetimeRanges, to_datetime
 
 
 class AlwaysReady(Signal):
     # signal that indicates every interval is always ready
-    def check_intervals(self, batch: Batch) -> t.Union[bool, Batch]:
+    def check_intervals(self, batch: DatetimeRanges) -> t.Union[bool, DatetimeRanges]:
         return True
 
 
@@ -137,7 +142,7 @@ class OneweekAgo(Signal):
         self.dt = dt
 
     # signal that returns only intervals that are <= 1 week ago
-    def check_intervals(self, batch: Batch) -> t.Union[bool, Batch]:
+    def check_intervals(self, batch: DatetimeRanges) -> t.Union[bool, DatetimeRanges]:
         return [
             (start, end)
             for start, end in batch

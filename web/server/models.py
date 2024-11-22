@@ -185,6 +185,7 @@ class Model(PydanticModel):
     description: t.Optional[str] = None
     details: t.Optional[ModelDetails] = None
     sql: t.Optional[str] = None
+    definition: t.Optional[str] = None
     default_catalog: t.Optional[str] = None
     hash: str
 

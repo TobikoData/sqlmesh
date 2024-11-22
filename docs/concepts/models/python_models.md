@@ -93,7 +93,7 @@ For example, pre/post-statements might modify settings or create indexes. Howeve
 You can set the `pre_statements` and `post_statements` arguments to a list of SQL strings, SQLGlot expressions, or macro calls to define the model's pre/post-statements.
 
 ``` python linenums="1" hl_lines="8-12"
-@model( 
+@model(
     "db.test_model",
     kind="full",
     columns={
@@ -165,14 +165,14 @@ def execute(
 ```
 
 ## Dependencies
-In order to fetch data from an upstream model, you first get the table name using `context`'s `table` method. This returns the appropriate table name for the current runtime [environment](../environments.md):
+In order to fetch data from an upstream model, you first get the table name using `context`'s `resolve_table` method. This returns the appropriate table name for the current runtime [environment](../environments.md):
 
 ```python linenums="1"
-table = context.table("docs_example.upstream_model")
+table = context.resolve_table("docs_example.upstream_model")
 df = context.fetchdf(f"SELECT * FROM {table}")
 ```
 
-The `table` method will automatically add the referenced model to the Python model's dependencies.
+The `resolve_table` method will automatically add the referenced model to the Python model's dependencies.
 
 The only other way to set dependencies of models in Python models is to define them explicitly in the `@model` decorator using the keyword `depends_on`. The dependencies defined in the model decorator take precedence over any dynamic references inside the function.
 
@@ -192,7 +192,30 @@ def execute(
 ) -> pd.DataFrame:
 
     # ignored due to @model dependency "upstream_dependency"
-    context.table("docs_example.another_dependency")
+    context.resolve_table("docs_example.another_dependency")
+```
+
+
+## Returning empty dataframes
+
+Python models may not return an empty dataframe.
+
+If your model could possibly return an empty dataframe, conditionally `yield` the dataframe or an empty generator instead of `return`ing:
+
+```python linenums="1" hl_lines="10-13"
+@model(
+    "my_model.empty_df"
+)
+def execute(
+    context: ExecutionContext,
+) -> pd.DataFrame:
+
+    [...code creating df...]
+
+    if df.empty:
+        yield from ()
+    else:
+        yield df
 ```
 
 
@@ -300,7 +323,7 @@ def execute(
     **kwargs: t.Any,
 ) -> pd.DataFrame:
     # get the upstream model's name and register it as a dependency
-    table = context.table("upstream_model")
+    table = context.resolve_table("upstream_model")
 
     # fetch data from the model as a pandas DataFrame
     # if the engine is spark, this returns a spark DataFrame
@@ -339,7 +362,7 @@ def execute(
     **kwargs: t.Any,
 ) -> DataFrame:
     # get the upstream model's name and register it as a dependency
-    table = context.table("upstream_model")
+    table = context.resolve_table("upstream_model")
 
     # use the spark DataFrame api to add the country column
     df = context.spark.table(table).withColumn("country", functions.lit("USA"))
@@ -404,7 +427,7 @@ def execute(
     **kwargs: t.Any,
 ) -> pd.DataFrame:
     # get the upstream model's table name
-    table = context.table("upstream_model")
+    table = context.resolve_table("upstream_model")
 
     for i in range(3):
         # run 3 queries to get chunks of data and not run out of memory

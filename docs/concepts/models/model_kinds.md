@@ -183,6 +183,53 @@ MODEL (
 );
 ```
 
+This is a fuller example of how you would use this model kind in practice to avoid backfilling too many partitions and/or limiting the partitions to backfill based on time ranges. 
+
+```sql linenums="1"
+MODEL (
+  name demo.incremental_by_partition_demo,
+  kind INCREMENTAL_BY_PARTITION, 
+  partitioned_by user_segment,
+);
+
+-- This is the source of truth for what partitions need to be updated and will join to the product usage data
+-- This could be an INCREMENTAL_BY_TIME_RANGE model that reads in the user_segment values last updated in the past 30 days to reduce scope
+-- Use this strategy to reduce full restatements
+WITH partitions_to_update AS (
+  SELECT DISTINCT
+    user_segment
+  FROM demo.incremental_by_time_range_demo  -- upstream table tracking which user segments to update
+  WHERE last_updated_at BETWEEN DATE_SUB(@start_dt, INTERVAL 30 DAY) AND @end_dt
+),
+
+product_usage AS (
+  SELECT
+    product_id,
+    customer_id,
+    last_usage_date,
+    usage_count,
+    feature_utilization_score,
+    user_segment
+  FROM sqlmesh-public-demo.tcloud_raw_data.product_usage
+  WHERE user_segment IN (SELECT user_segment FROM partitions_to_update) -- partition filter applied here
+)
+
+SELECT
+  product_id,
+  customer_id,
+  last_usage_date,
+  usage_count,
+  feature_utilization_score,
+  user_segment,
+  CASE 
+    WHEN usage_count > 100 AND feature_utilization_score > 0.7 THEN 'Power User'
+    WHEN usage_count > 50 THEN 'Regular User'
+    WHEN usage_count IS NULL THEN 'New User'
+    ELSE 'Light User'
+  END as user_type
+FROM product_usage
+```
+
 **Note**: Partial data [restatement](../plans.md#restatement-plans) is not supported for this model kind, which means that the entire table will be recreated from scratch if restated. This may lead to data loss, so data restatement is disabled for models of this kind by default.
 
 ### Materialization strategy

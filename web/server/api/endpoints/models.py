@@ -71,19 +71,21 @@ def serialize_model(context: Context, model: Model, render_query: bool = False) 
         if model.partitioned_by
         else None
     )
-    clustered_by = ", ".join(model.clustered_by) if model.clustered_by else None
+    clustered_by = (
+        ", ".join([c.sql(dialect=model.dialect) for c in model.clustered_by])
+        if model.clustered_by
+        else None
+    )
     lookback = model.lookback if model.lookback > 0 else None
     columns_to_types = model.columns_to_types or {}
 
     columns = []
 
     for name, data_type in columns_to_types.items():
-        if name in model.column_descriptions:
-            description: t.Optional[str] = model.column_descriptions[name]
-        elif render_query:
-            description = column_description(context, model.name, name)
-        else:
-            description = None
+        description = model.column_descriptions.get(name)
+        if not description and render_query:
+            # The column name is already normalized in `columns_to_types`, so we need to quote it
+            description = column_description(context, model.name, name, quote_column=True)
 
         columns.append(models.Column(name=name, type=str(data_type), description=description))
 

@@ -2,6 +2,7 @@ import agate
 from datetime import datetime
 import json
 import logging
+import sys
 import typing as t
 from pathlib import Path
 from unittest.mock import patch
@@ -38,7 +39,7 @@ from sqlmesh.dbt.model import Materialization, ModelConfig
 from sqlmesh.dbt.project import Project
 from sqlmesh.dbt.relation import Policy
 from sqlmesh.dbt.seed import SeedConfig, Integer
-from sqlmesh.dbt.target import BigQueryConfig, DuckDbConfig, SnowflakeConfig
+from sqlmesh.dbt.target import BigQueryConfig, DuckDbConfig, SnowflakeConfig, ClickhouseConfig
 from sqlmesh.dbt.test import TestConfig
 from sqlmesh.utils.errors import ConfigError, MacroEvalError, SQLMeshError
 
@@ -66,6 +67,28 @@ def test_model_name():
         ).canonical_name(context)
         == "other.foo.baz"
     )
+
+
+def test_materialization():
+    context = DbtContext()
+    context.project_name = "Test"
+    context.target = DuckDbConfig(name="target", schema="foo")
+
+    logger = logging.getLogger("sqlmesh.dbt.model")
+    with patch.object(logger, "warning") as mock_logger:
+        model_config = ModelConfig(
+            name="model", alias="model", schema="schema", materialized="materialized_view"
+        )
+
+    assert (
+        "SQLMesh does not support the 'materialized_view' model materialization. Falling back to the 'view' materialization."
+        in mock_logger.call_args[0][0]
+    )
+    assert model_config.materialized == "view"
+
+    # clickhouse "dictionary" materialization
+    with pytest.raises(ConfigError):
+        ModelConfig(name="model", alias="model", schema="schema", materialized="dictionary")
 
 
 def test_model_kind():
@@ -698,7 +721,7 @@ def test_test_this(assert_exp_eq, sushi_test_project: Project):
     context = sushi_test_project.context
     audit = t.cast(StandaloneAudit, test_config.to_sqlmesh(context))
     assert_exp_eq(
-        audit.render_query(audit).sql(),
+        audit.render_audit_query().sql(),
         'SELECT 1 AS "one" FROM "test" AS "test"',
     )
 
@@ -718,12 +741,12 @@ def test_test_dialect(assert_exp_eq, sushi_test_project: Project):
     # can't parse test sql without specifying bigquery as default dialect
     with pytest.raises(ConfigError):
         audit = t.cast(StandaloneAudit, test_config.to_sqlmesh(context))
-        audit.render_query(audit).sql()
+        audit.render_audit_query().sql()
 
     test_config.dialect_ = "bigquery"
     audit = t.cast(StandaloneAudit, test_config.to_sqlmesh(context))
     assert_exp_eq(
-        audit.render_query(audit).sql(),
+        audit.render_audit_query().sql(),
         'SELECT 1 AS "one" FROM "test" AS "test"',
     )
 
@@ -1092,7 +1115,7 @@ def test_dbt_max_partition(sushi_test_project: Project, assert_exp_eq, mocker: M
 JINJA_STATEMENT_BEGIN;
 {% if is_incremental() %}
   DECLARE _dbt_max_partition DATETIME DEFAULT (
-    COALESCE((SELECT MAX(PARSE_DATETIME('%Y%m', partition_id)) FROM `{{ target.database }}`.`{{ adapter.resolve_schema(this) }}`.INFORMATION_SCHEMA.PARTITIONS WHERE table_name = '{{ adapter.resolve_identifier(this) }}' AND NOT partition_id IS NULL AND partition_id <> '__NULL__'), CAST('1970-01-01' AS DATETIME))
+    COALESCE((SELECT MAX(PARSE_DATETIME('%Y%m', partition_id)) FROM `{{ target.database }}`.`{{ adapter.resolve_schema(this) }}`.`INFORMATION_SCHEMA.PARTITIONS` AS PARTITIONS WHERE table_name = '{{ adapter.resolve_identifier(this) }}' AND NOT partition_id IS NULL AND partition_id <> '__NULL__'), CAST('1970-01-01' AS DATETIME))
   );
 {% endif %}
 JINJA_END;""".strip()
@@ -1138,6 +1161,63 @@ def test_bigquery_physical_properties(sushi_test_project: Project, mocker: Mocke
     ).physical_properties == {
         "partition_expiration_days": exp.convert(7),
     }
+
+
+@pytest.mark.xdist_group("dbt_manifest")
+def test_clickhouse_properties(mocker: MockerFixture):
+    # dbt-clickhouse typing errors on python 3.8
+    if sys.version_info >= (3, 9):
+        context = DbtContext(target_name="production")
+        context._project_name = "Foo"
+        context._target = ClickhouseConfig(name="production")
+        model_config = ModelConfig(
+            name="model",
+            alias="model",
+            schema="test",
+            package_name="package",
+            materialized="incremental",
+            incremental_strategy="delete+insert",
+            incremental_predicates=["ds > (SELECT MAX(ds) FROM model)"],
+            query_settings={"QUERY_SETTING": "value"},
+            sharding_key="rand()",
+            engine="MergeTree()",
+            partition_by=["toMonday(ds)", "partition_col"],
+            order_by=["toStartOfWeek(ds)", "order_col"],
+            primary_key=["ds", "primary_key_col"],
+            ttl="time + INTERVAL 1 WEEK",
+            settings={"SETTING": "value"},
+            sql="""SELECT 1 AS one, ds FROM foo""",
+        )
+
+        logger = logging.getLogger("sqlmesh.dbt.model")
+        with patch.object(logger, "warning") as mock_logger:
+            model_to_sqlmesh = model_config.to_sqlmesh(context)
+
+        assert [call[0][0] for call in mock_logger.call_args_list] == [
+            "The 'delete+insert' incremental strategy is not supported - SQLMesh will use the temp table/partition swap strategy.",
+            "SQLMesh does not support 'incremental_predicates' - they will not be applied.",
+            "SQLMesh does not support the 'query_settings' model configuration parameter. Specify the query settings directly in the model query.",
+            "SQLMesh does not support the 'sharding_key' model configuration parameter or distributed materializations.",
+            "Using unmanaged incremental materialization for model '%s'. Some features might not be available. Consider adding either a time_column (%s) or a unique_key (%s) configuration to mitigate this",
+        ]
+
+        assert [e.sql("clickhouse") for e in model_to_sqlmesh.partitioned_by] == [
+            'toMonday("ds")',
+            '"partition_col"',
+        ]
+        assert model_to_sqlmesh.storage_format == "MergeTree()"
+
+        physical_properties = model_to_sqlmesh.physical_properties
+        assert [e.sql("clickhouse", identify=True) for e in physical_properties["order_by"]] == [
+            'toStartOfWeek("ds")',
+            '"order_col"',
+        ]
+        assert [e.sql("clickhouse", identify=True) for e in physical_properties["primary_key"]] == [
+            '"ds"',
+            '"primary_key_col"',
+        ]
+        assert physical_properties["ttl"].sql("clickhouse") == "time + INTERVAL 1 WEEK"
+        assert physical_properties["SETTING"].sql("clickhouse") == "value"
 
 
 @pytest.mark.xdist_group("dbt_manifest")
@@ -1228,7 +1308,7 @@ def test_model_cluster_by():
         sql="SELECT * FROM baz",
         materialized=Materialization.TABLE.value,
     )
-    assert model.to_sqlmesh(context).clustered_by == ["BAR"]
+    assert model.to_sqlmesh(context).clustered_by == [exp.to_column('"BAR"')]
 
     model = ModelConfig(
         name="model",
@@ -1239,7 +1319,10 @@ def test_model_cluster_by():
         sql="SELECT * FROM baz",
         materialized=Materialization.TABLE.value,
     )
-    assert model.to_sqlmesh(context).clustered_by == ["BAR", "QUX"]
+    assert model.to_sqlmesh(context).clustered_by == [
+        exp.to_column('"BAR"'),
+        exp.to_column('"QUX"'),
+    ]
 
 
 def test_snowflake_dynamic_table():

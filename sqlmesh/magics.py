@@ -462,6 +462,11 @@ class SQLMeshMagics(Magics):
         type=int,
         help="If set, the command will exit with the specified code if the run is interrupted by an update to the target environment.",
     )
+    @argument(
+        "--no-auto-upstream",
+        action="store_true",
+        help="Do not automatically include upstream models. Only applicable when --select-model is used. Note: this may result in missing / invalid data for the selected models.",
+    )
     @line_magic
     @pass_sqlmesh_context
     def run_dag(self, context: Context, line: str) -> None:
@@ -476,6 +481,7 @@ class SQLMeshMagics(Magics):
             ignore_cron=args.ignore_cron,
             select_models=args.select_model,
             exit_on_env_update=args.exit_on_env_update,
+            no_auto_upstream=args.no_auto_upstream,
         )
         if not success:
             raise SQLMeshError("Error Running DAG. Check logs for details.")
@@ -692,6 +698,42 @@ class SQLMeshMagics(Magics):
 
     @magic_arguments()
     @argument(
+        "pipeline",
+        nargs="?",
+        type=str,
+        help="The dlt pipeline to attach for this SQLMesh project.",
+    )
+    @argument(
+        "--table",
+        "-t",
+        type=str,
+        nargs="*",
+        help="The specific dlt tables to refresh in the SQLMesh models.",
+    )
+    @argument(
+        "--force",
+        "-f",
+        action="store_true",
+        help="If set, existing models are overwritten with the new DLT tables.",
+    )
+    @line_magic
+    @pass_sqlmesh_context
+    def dlt_refresh(self, context: Context, line: str) -> None:
+        """Attaches to a DLT pipeline with the option to update specific or all missing tables in the SQLMesh project."""
+        from sqlmesh.integrations.dlt import generate_dlt_models
+
+        args = parse_argstring(self.dlt_refresh, line)
+        sqlmesh_models = generate_dlt_models(
+            context, args.pipeline, list(args.table or []), args.force
+        )
+        if sqlmesh_models:
+            model_names = "\n".join([f"- {model_name}" for model_name in sqlmesh_models])
+            context.console.log_success(f"Updated SQLMesh project with models:\n{model_names}")
+        else:
+            context.console.log_success("All SQLMesh models are up to date.")
+
+    @magic_arguments()
+    @argument(
         "--read",
         type=str,
         default="",
@@ -822,7 +864,7 @@ class SQLMeshMagics(Magics):
         "-q",
         type=str,
         nargs="+",
-        required=True,
+        default=[],
         help="Queries that will be used to generate data for the model's dependencies.",
     )
     @argument(
@@ -924,12 +966,13 @@ class SQLMeshMagics(Magics):
         help="Skip the connection test.",
         default=False,
     )
+    @argument("--verbose", "-v", action="store_true", help="Verbose output.")
     @line_magic
     @pass_sqlmesh_context
     def info(self, context: Context, line: str) -> None:
         """Display SQLMesh project information."""
         args = parse_argstring(self.info, line)
-        context.print_info(skip_connection=args.skip_connection)
+        context.print_info(skip_connection=args.skip_connection, verbose=args.verbose)
 
     @magic_arguments()
     @line_magic

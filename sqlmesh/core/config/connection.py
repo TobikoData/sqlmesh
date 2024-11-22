@@ -13,6 +13,7 @@ from functools import partial
 from pydantic import Field
 from sqlglot import exp
 from sqlglot.helper import subclasses
+
 from sqlmesh.core import engine_adapter
 from sqlmesh.core.config.base import BaseConfig
 from sqlmesh.core.config.common import (
@@ -1210,7 +1211,7 @@ class MSSQLConnectionConfig(ConnectionConfig):
     charset: t.Optional[str] = "UTF-8"
     appname: t.Optional[str] = None
     port: t.Optional[int] = 1433
-    conn_properties: t.Optional[t.Union[t.Iterable[str], str]] = None
+    conn_properties: t.Optional[t.Union[t.List[str], str]] = None
     autocommit: t.Optional[bool] = False
     tds_version: t.Optional[str] = None
 

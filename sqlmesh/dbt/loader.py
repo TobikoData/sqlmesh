@@ -4,7 +4,6 @@ import logging
 import typing as t
 from pathlib import Path
 from sqlmesh.core import constants as c
-from sqlmesh.core.audit import Audit
 from sqlmesh.core.config import (
     Config,
     ConnectionConfig,
@@ -27,6 +26,7 @@ from sqlmesh.utils.jinja import JinjaMacroRegistry
 logger = logging.getLogger(__name__)
 
 if t.TYPE_CHECKING:
+    from sqlmesh.core.audit import Audit, ModelAudit
     from sqlmesh.core.context import GenericContext
 
 
@@ -93,9 +93,13 @@ class DbtLoader(Loader):
         macros: MacroRegistry,
         jinja_macros: JinjaMacroRegistry,
         gateway: t.Optional[str],
-        audits: t.Optional[t.Dict[str, Audit]],
+        audits: UniqueKeyDict[str, ModelAudit],
     ) -> UniqueKeyDict[str, Model]:
         models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
+
+        def _to_sqlmesh(config: BMC, context: DbtContext) -> Model:
+            logger.debug("Converting '%s' to sqlmesh format", config.canonical_name(context))
+            return config.to_sqlmesh(context, audit_definitions=audits)
 
         for project in self._load_projects():
             context = project.context.copy()
@@ -123,12 +127,12 @@ class DbtLoader(Loader):
                         )
                         continue
                     sqlmesh_model = cache.get_or_load_model(
-                        model.path, loader=lambda: self._to_sqlmesh(model, context)
+                        model.path, loader=lambda: _to_sqlmesh(model, context)
                     )
 
                     models[sqlmesh_model.fqn] = sqlmesh_model
 
-            models.update(self._load_external_models())
+            models.update(self._load_external_models(audits))
 
         return models
 
@@ -167,7 +171,7 @@ class DbtLoader(Loader):
 
                 self._projects.append(project)
 
-                if project.context.target.database != self._context.default_catalog:
+                if project.context.target.database != (self._context.default_catalog or ""):
                     raise ConfigError(
                         "Project default catalog does not match context default catalog"
                     )
@@ -196,11 +200,6 @@ class DbtLoader(Loader):
                 self._macros_max_mtime = max(macros_mtimes) if macros_mtimes else None
 
         return self._projects
-
-    @classmethod
-    def _to_sqlmesh(cls, config: BMC, context: DbtContext) -> Model:
-        logger.debug("Converting '%s' to sqlmesh format", config.canonical_name(context))
-        return config.to_sqlmesh(context)
 
     def _compute_yaml_max_mtime_per_subfolder(self, root: Path) -> t.Dict[Path, float]:
         if not root.is_dir():

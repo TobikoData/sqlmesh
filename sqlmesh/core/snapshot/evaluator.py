@@ -36,12 +36,13 @@ from sqlglot.executor import execute
 
 from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
-from sqlmesh.core.audit import Audit, AuditResult
+from sqlmesh.core.audit import Audit, StandaloneAudit
 from sqlmesh.core.dialect import schema_
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.engine_adapter.shared import InsertOverwriteStrategy
 from sqlmesh.core.macros import RuntimeStage
 from sqlmesh.core.model import (
+    AuditResult,
     IncrementalUnmanagedKind,
     Model,
     SeedModel,
@@ -49,7 +50,7 @@ from sqlmesh.core.model import (
     SCDType2ByTimeKind,
     ViewKind,
 )
-from sqlmesh.core.schema_diff import has_drop_alteration
+from sqlmesh.core.schema_diff import has_drop_alteration, get_dropped_column_names
 from sqlmesh.core.snapshot import (
     DeployabilityIndex,
     Intervals,
@@ -267,6 +268,7 @@ class SnapshotEvaluator:
             if (
                 snapshot.reuses_previous_version
                 or snapshot.is_managed
+                or (snapshot.is_model and snapshot.model.forward_only)
                 or (deployability_index and not deployability_index.is_deployable(snapshot))
             ):
                 deployability_flags.append(False)
@@ -396,7 +398,7 @@ class SnapshotEvaluator:
             kwargs: Additional kwargs to pass to the renderer.
         """
         deployability_index = deployability_index or DeployabilityIndex.all_deployable()
-        if not deployability_index.is_deployable(snapshot):
+        if not deployability_index.is_deployable(snapshot) and not self.adapter.SUPPORTS_CLONING:
             # We can't audit a temporary table.
             return []
 
@@ -422,12 +424,12 @@ class SnapshotEvaluator:
 
         results = []
 
-        audits_with_args = snapshot.audits_with_args
+        audits_with_args = snapshot.node.audits_with_args
 
         if audits_with_args:
             logger.info("Auditing snapshot %s", snapshot.snapshot_id)
 
-        for audit, audit_args in snapshot.audits_with_args:
+        for audit, audit_args in audits_with_args:
             results.append(
                 self._audit(
                     audit=audit,
@@ -741,15 +743,14 @@ class SnapshotEvaluator:
         snapshots: t.Dict[SnapshotId, Snapshot],
         allow_destructive_snapshots: t.Set[str],
     ) -> None:
-        if (
-            not snapshot.is_paused
-            or snapshot.change_category
-            not in (
-                SnapshotChangeCategory.FORWARD_ONLY,
-                SnapshotChangeCategory.INDIRECT_NON_BREAKING,
-            )
-            or not snapshot.is_model
-        ):
+        if not snapshot.is_paused or not snapshot.is_model:
+            return
+
+        needs_migration = snapshot.model.forward_only or snapshot.change_category in (
+            SnapshotChangeCategory.FORWARD_ONLY,
+            SnapshotChangeCategory.INDIRECT_NON_BREAKING,
+        )
+        if not needs_migration:
             return
 
         parent_snapshots_by_name = {
@@ -861,17 +862,24 @@ class SnapshotEvaluator:
         blocking = audit_args.pop("blocking", None)
         blocking = blocking == exp.true() if blocking else audit.blocking
 
-        query = audit.render_query(
-            snapshot,
-            start=start,
-            end=end,
-            execution_time=execution_time,
-            snapshots=snapshots,
-            deployability_index=deployability_index,
-            engine_adapter=self.adapter,
+        kwargs = {
+            "start": start,
+            "end": end,
+            "execution_time": execution_time,
+            "snapshots": snapshots,
+            "deployability_index": deployability_index,
+            "engine_adapter": self.adapter,
             **audit_args,
             **kwargs,
-        )
+        }
+
+        if snapshot.is_model:
+            query = snapshot.model.render_audit_query(audit, **kwargs)
+        elif isinstance(audit, StandaloneAudit):
+            query = audit.render_audit_query(**kwargs)
+        else:
+            raise SQLMeshError("Expected model or standalone audit. {snapshot}: {audit}")
+
         count, *_ = self.adapter.fetchone(
             select("COUNT(*)").from_(query.subquery("audit")),
             quote_identifiers=True,
@@ -894,6 +902,7 @@ class SnapshotEvaluator:
             model=snapshot.model_or_none,
             count=count,
             query=query,
+            blocking=blocking,
         )
 
     def _create_schemas(self, tables: t.Iterable[t.Union[exp.Table, str]]) -> None:
@@ -1855,9 +1864,14 @@ def _check_destructive_schema_change(
     if snapshot.needs_destructive_check(allow_destructive_snapshots) and has_drop_alteration(
         alter_expressions
     ):
-        warning_msg = (
-            f"Plan results in a destructive change to forward-only table '{snapshot.name}'s schema."
+        dropped_column_names = get_dropped_column_names(alter_expressions)
+        dropped_column_str = "', '".join(dropped_column_names) if dropped_column_names else None
+        dropped_column_msg = (
+            f" that drops column{'s' if dropped_column_names and len(dropped_column_names) > 1 else ''} '{dropped_column_str}'"
+            if dropped_column_str
+            else ""
         )
+        warning_msg = f"Plan results in a destructive change to forward-only table '{snapshot.name}'s schema{dropped_column_msg}."
         if snapshot.model.on_destructive_change.is_warn:
             logger.warning(warning_msg)
             return

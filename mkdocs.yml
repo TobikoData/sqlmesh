@@ -59,6 +59,10 @@ nav:
       - concepts/architecture/snapshots.md
       - concepts/architecture/serialization.md
     - concepts/glossary.md
+  - Examples:
+    - examples/overview.md
+    - Walkthroughs:
+      - examples/incremental_time_full_walkthrough.md
   - Integrations:
     - "Overview": integrations/overview.md
     - Tools:
@@ -97,6 +101,7 @@ nav:
 theme:
   name: material
   logo: _readthedocs/html/sqlmesh.png
+  favicon: _readthedocs/html/favicon.svg
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default

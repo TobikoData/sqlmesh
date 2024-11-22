@@ -477,7 +477,7 @@ def _parse_table_parts(
             or "{" in name
             or (
                 self._curr
-                and self._prev.token_type == TokenType.L_PAREN
+                and self._prev.token_type in (TokenType.L_PAREN, TokenType.R_PAREN)
                 and self._curr.text.upper() not in ("FILE_FORMAT", "PATTERN")
             )
         ):
@@ -552,11 +552,15 @@ def _create_parser(parser_type: t.Type[exp.Expression], table_keys: t.List[str])
             elif key == "columns":
                 value = self._parse_schema()
             elif key == "kind":
-                id_var = self._parse_id_var(any_token=True)
-                if not id_var:
-                    value = None
+                if self._match(TokenType.PARAMETER):
+                    field = _parse_macro(self)
                 else:
-                    kind = ModelKindName[id_var.name.upper()]
+                    field = self._parse_id_var(any_token=True)
+
+                if not field or isinstance(field, (MacroVar, MacroFunc)):
+                    value = field
+                else:
+                    kind = ModelKindName[field.name.upper()]
 
                     if kind in (
                         ModelKindName.INCREMENTAL_BY_TIME_RANGE,
@@ -573,11 +577,7 @@ def _create_parser(parser_type: t.Type[exp.Expression], table_keys: t.List[str])
                     else:
                         props = None
 
-                    value = self.expression(
-                        ModelKind,
-                        this=kind.value,
-                        expressions=props,
-                    )
+                    value = self.expression(ModelKind, this=kind.value, expressions=props)
             elif key == "expression":
                 value = self._parse_conjunction()
             else:
@@ -1133,10 +1133,12 @@ def transform_values(
         yield _transform_value(col_value, col_type)
 
 
-def to_schema(sql_path: str | exp.Table) -> exp.Table:
+def to_schema(sql_path: str | exp.Table, dialect: DialectType = None) -> exp.Table:
     if isinstance(sql_path, exp.Table) and sql_path.this is None:
         return sql_path
-    table = exp.to_table(sql_path.copy() if isinstance(sql_path, exp.Table) else sql_path)
+    table = exp.to_table(
+        sql_path.copy() if isinstance(sql_path, exp.Table) else sql_path, dialect=dialect
+    )
     table.set("catalog", table.args.get("db"))
     table.set("db", table.args.get("this"))
     table.set("this", None)

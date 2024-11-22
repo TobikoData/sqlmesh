@@ -41,8 +41,8 @@ def execute(
     end: datetime,
     **kwargs: t.Any,
 ) -> pd.DataFrame:
-    item_d_table_name = context.table("db.item_d")
-    order_item_f_table_name = context.table("db.order_item_f")
+    item_d_table_name = context.resolve_table("db.item_d")
+    order_item_f_table_name = context.resolve_table("db.order_item_f")
 
     # We use parse_one here instead of a raw string because this is a multi-dialect
     # project and we want to ensure that the resulting query is properly quoted in

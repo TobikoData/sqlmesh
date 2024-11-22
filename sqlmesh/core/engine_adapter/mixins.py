@@ -149,7 +149,7 @@ class HiveMetastoreTablePropertiesMixin(EngineAdapter):
         storage_format: t.Optional[str] = None,
         partitioned_by: t.Optional[t.List[exp.Expression]] = None,
         partition_interval_unit: t.Optional[IntervalUnit] = None,
-        clustered_by: t.Optional[t.List[str]] = None,
+        clustered_by: t.Optional[t.List[exp.Expression]] = None,
         table_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         table_description: t.Optional[str] = None,
@@ -329,10 +329,10 @@ class VarcharSizeWorkaroundMixin(EngineAdapter):
 class ClusteredByMixin(EngineAdapter):
     def _build_clustered_by_exp(
         self,
-        clustered_by: t.List[str],
+        clustered_by: t.List[exp.Expression],
         **kwargs: t.Any,
     ) -> t.Optional[exp.Cluster]:
-        return exp.Cluster(expressions=[exp.column(col) for col in clustered_by])
+        return exp.Cluster(expressions=[c.copy() for c in clustered_by])
 
     def _parse_clustering_key(self, clustering_key: t.Optional[str]) -> t.List[exp.Expression]:
         if not clustering_key:

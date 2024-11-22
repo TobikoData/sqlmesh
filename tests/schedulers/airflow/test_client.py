@@ -100,6 +100,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
                     "dev_intervals": [],
                     "node": {
                         "audits": [],
+                        "audit_definitions": {},
                         "clustered_by": [],
                         "cron": "@daily",
                         "dialect": "spark",
@@ -113,12 +114,12 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
                             "dialect": "spark",
                         },
                         "mapping_schema": {},
-                        "inline_audits": {},
                         "name": "test_model",
                         "partitioned_by": ["`a`"],
                         "query": "SELECT a, ds FROM tbl",
                         "references": [],
                         "project": "",
+                        "python_env": {},
                         "storage_format": "parquet",
                         "jinja_macros": {
                             "create_builtins_module": "sqlmesh.utils.jinja",
@@ -135,7 +136,6 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
                         "enabled": True,
                         "extract_dependencies_from_query": True,
                     },
-                    "audits": [],
                     "name": '"test_model"',
                     "parents": [],
                     "previous_versions": [],
@@ -184,7 +184,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
             "models_to_backfill": ['"test_model"'],
             "end_bounded": False,
             "ensure_finalized_snapshots": False,
-            "directly_modified_snapshots": [{"identifier": "4011362914", "name": '"test_model"'}],
+            "directly_modified_snapshots": [{"identifier": "3403909186", "name": '"test_model"'}],
             "indirectly_modified_snapshots": {},
             "removed_snapshots": [],
             "restatements": {

@@ -38,6 +38,7 @@ from sqlmesh.core.model import (
     SqlModel,
     TimeColumn,
     ExternalKind,
+    ViewKind,
     create_external_model,
     create_seed_model,
     create_sql_model,
@@ -116,7 +117,7 @@ def test_load(assert_exp_eq):
     assert model.table_format is None
     assert model.storage_format == "iceberg"
     assert [col.sql() for col in model.partitioned_by] == ['"a"', '"d"']
-    assert model.clustered_by == ["e"]
+    assert [col.sql() for col in model.clustered_by] == ['"e"']
     assert model.columns_to_types == {
         "a": exp.DataType.build("int"),
         "b": exp.DataType.build("double"),
@@ -324,7 +325,7 @@ def test_partitioned_by(
     )
 
     model = load_sql_based_model(expressions)
-    assert model.clustered_by == ["c", "d"]
+    assert model.clustered_by == [exp.to_column('"c"'), exp.to_column('"d"')]
     if expected_exception:
         with pytest.raises(expected_exception):
             model.validate_definition()
@@ -1169,17 +1170,18 @@ def test_enable_audits_from_model_defaults():
 
     model = load_sql_based_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
     assert len(model.audits) == 0
-    assert len(model.inline_audits) == 1
 
     config = Config(
         model_defaults=ModelDefaultsConfig(dialect="duckdb", audits=["assert_positive_order_ids"])
     )
     assert config.model_defaults.audits[0] == ("assert_positive_order_ids", {})
 
-    snapshot = Snapshot.from_node(model, nodes={}, config=config)
-    assert len(snapshot.audits) == 1
-    assert type(snapshot.audits[0]) == ModelAudit
-    assert snapshot.audits[0].query.sql() == "SELECT * FROM @this_model WHERE id < 0"
+    audits_with_args = model.audits_with_args
+    assert len(audits_with_args) == 1
+    audit, args = audits_with_args[0]
+    assert type(audit) == ModelAudit
+    assert args == {}
+    assert audit.query.sql() == "SELECT * FROM @this_model WHERE id < 0"
 
 
 def test_description(sushi_context):
@@ -1826,8 +1828,8 @@ def test_python_model(assert_exp_eq) -> None:
         enabled=True,
     )
     def my_model(context, **kwargs):
-        context.table("foo")
-        context.table(model_name=CONST + ".baz")
+        context.resolve_table("foo")
+        context.resolve_table(model_name=CONST + ".baz")
 
         # This checks that built-in functions are serialized properly
         a = reduce(lambda x, y: x + y, [1, 2, 3, 4])  # noqa: F841
@@ -1870,16 +1872,16 @@ def test_python_model_depends_on() -> None:
         depends_on={"foo.bar"},
     )
     def my_model(context, **kwargs):
-        context.table("foo")
-        context.table(model_name=CONST + ".baz")
+        context.resolve_table("foo")
+        context.resolve_table(model_name=CONST + ".baz")
 
     m = model.get_registry()["model_with_depends_on"].model(
         module_path=Path("."),
         path=Path("."),
     )
 
-    # We are not expecting the context.table() calls to be reflected in the model's depends_on since we
-    # explicitly specified the depends_on argument.
+    # We are not expecting the context.resolve_table() calls to be reflected in the
+    # model's depends_on since we explicitly specified the depends_on argument.
     assert m.depends_on == {'"foo"."bar"'}
 
 
@@ -1891,7 +1893,7 @@ def test_python_model_with_session_properties():
         session_properties={"some_string": "string_prop", "some_bool": True, "some_float": 1.0},
     )
     def python_model_prop(context, **kwargs):
-        context.table("foo")
+        context.resolve_table("foo")
 
     m = model.get_registry()["python_model_prop"].model(
         module_path=Path("."),
@@ -2752,7 +2754,7 @@ def test_model_normalization():
     assert model.partitioned_by[0].sql(dialect="snowflake") == '"A"'
     assert model.partitioned_by[1].sql(dialect="snowflake") == 'FOO("ds")'
     assert model.tags == ["pii", "fact"]
-    assert model.clustered_by == ["A"]
+    assert model.clustered_by == [exp.to_column('"A"')]
     assert model.depends_on == {'"BLA"'}
 
     # Check possible variations of unique_key definitions
@@ -2814,7 +2816,7 @@ def test_model_normalization():
     assert model.time_column.column == exp.column("A", quoted=True)
     assert model.columns_to_types["A"].sql(dialect="snowflake") == "INT"
     assert model.tags == ["pii", "fact"]
-    assert model.clustered_by == ["A"]
+    assert model.clustered_by == [exp.to_column('"A"')]
     assert model.depends_on == {'"BLA"'}
 
     model = create_sql_model(
@@ -2826,7 +2828,7 @@ def test_model_normalization():
         tags=["pii", "fact"],
         clustered_by=[exp.column("a"), exp.column("b")],
     )
-    assert model.clustered_by == ["A", "B"]
+    assert model.clustered_by == [exp.to_column('"A"'), exp.to_column('"B"')]
 
     model = create_sql_model(
         "foo",
@@ -2837,7 +2839,7 @@ def test_model_normalization():
         tags=["pii", "fact"],
         clustered_by=["a", "b"],
     )
-    assert model.clustered_by == ["A", "B"]
+    assert model.clustered_by == [exp.to_column('"A"'), exp.to_column('"B"')]
 
 
 def test_incremental_unmanaged_validation():
@@ -3398,7 +3400,7 @@ def test_view_materialized_partition_by_clustered_by():
     )
     materialized_view_model = load_sql_based_model(materialized_view_model_expressions)
     assert materialized_view_model.partitioned_by == [exp.column("ds", quoted=True)]
-    assert materialized_view_model.clustered_by == ["a"]
+    assert materialized_view_model.clustered_by == [exp.to_column('"a"')]
 
 
 def test_view_non_materialized_partition_by():
@@ -3412,7 +3414,7 @@ def test_view_non_materialized_partition_by():
         SELECT 1;
         """
     )
-    with pytest.raises(ConfigError, match=r".*partitioned_by_ field cannot be set for ViewKind.*"):
+    with pytest.raises(ConfigError, match=r".*partitioned_by field cannot be set for ViewKind.*"):
         load_sql_based_model(view_model_expressions)
 
 
@@ -3951,7 +3953,7 @@ def test_default_catalog_sql(assert_exp_eq):
     The system is not designed to actually support having an engine that doesn't support default catalog
     to start supporting it or the reverse of that. If that did happen then bugs would occur.
     """
-    HASH_WITH_CATALOG = "1833514724"
+    HASH_WITH_CATALOG = "933919826"
 
     # Test setting default catalog doesn't change hash if it matches existing logic
     expressions = d.parse(
@@ -4117,11 +4119,11 @@ def test_default_catalog_sql(assert_exp_eq):
 
 
 def test_default_catalog_python():
-    HASH_WITH_CATALOG = "753636858"
+    HASH_WITH_CATALOG = "1790191459"
 
     @model(name="db.table", kind="full", columns={'"COL"': "int"})
     def my_model(context, **kwargs):
-        context.table("dependency.table")
+        context.resolve_table("dependency.table")
 
     m = model.get_registry()["db.table"].model(
         module_path=Path("."),
@@ -4146,14 +4148,15 @@ def test_default_catalog_python():
     assert m.fqn == '"catalog"."db"."table"'
     assert m.depends_on == {'"catalog"."dependency"."table"'}
 
-    # This ideally would be `m.data_hash == HASH_WITH_CATALOG`. The reason it is not is because when we hash
-    # the python function we make the hash out of the actual logic of the function which means `context.table("dependency.table")`
-    # is used when really is should be `context.table("catalog.dependency.table")`.
+    # This ideally would be `m.data_hash == HASH_WITH_CATALOG`. The reason it is not is
+    # because when we hash the python function we make the hash out of the actual logic
+    # of the function which means `context.resolve_table("dependency.table")` is used
+    # when really is should be `context.resolve_table("catalog.dependency.table")`.
     assert m.data_hash != HASH_WITH_CATALOG
 
     @model(name="catalog.db.table", kind="full", columns={'"COL"': "int"})
     def my_model(context, **kwargs):
-        context.table("catalog.dependency.table")
+        context.resolve_table("catalog.dependency.table")
 
     m = model.get_registry()["catalog.db.table"].model(
         module_path=Path("."),
@@ -4170,7 +4173,7 @@ def test_default_catalog_python():
 
     @model(name="catalog.db.table2", kind="full", columns={'"COL"': "int"})
     def my_model(context, **kwargs):
-        context.table("dependency.table")
+        context.resolve_table("dependency.table")
 
     m = model.get_registry()["catalog.db.table2"].model(
         module_path=Path("."),
@@ -4187,7 +4190,7 @@ def test_default_catalog_python():
 
     @model(name="table", kind="full", columns={'"COL"': "int"})
     def my_model(context, **kwargs):
-        context.table("table2")
+        context.resolve_table("table2")
 
     m = model.get_registry()["table"].model(
         module_path=Path("."),
@@ -4208,7 +4211,7 @@ def test_default_catalog_external_model():
     Since external models fqns are the only thing affected by default catalog, and when they change new snapshots
     are made, the hash will be the same across different names.
     """
-    EXPECTED_HASH = "4263688522"
+    EXPECTED_HASH = "4189607012"
 
     model = create_external_model("db.table", columns={"a": "int", "limit": "int"})
     assert model.default_catalog is None
@@ -4266,13 +4269,13 @@ def test_user_cannot_set_default_catalog():
 
         @model(name="db.table", kind="full", columns={'"COL"': "int"}, default_catalog="catalog")
         def my_model(context, **kwargs):
-            context.table("dependency.table")
+            context.resolve_table("dependency.table")
 
 
 def test_depends_on_default_catalog_python():
     @model(name="some.table", kind="full", columns={'"COL"': "int"}, depends_on={"other.table"})
     def my_model(context, **kwargs):
-        context.table("dependency.table")
+        context.resolve_table("dependency.table")
 
     m = model.get_registry()["some.table"].model(
         module_path=Path("."),
@@ -4601,7 +4604,7 @@ def test_load_external_model_python(sushi_context) -> None:
         kind={"name": ModelKindName.FULL},
     )
     def external_model_python(context, **kwargs):
-        demographics_table = context.table("memory.raw.demographics")
+        demographics_table = context.resolve_table("memory.raw.demographics")
         return context.fetchdf(
             exp.select("customer_id", "zip").from_(demographics_table),
         )
@@ -4676,6 +4679,8 @@ def test_columns_python_sql_model() -> None:
 
 
 def test_named_variables_python_model(mocker: MockerFixture) -> None:
+    mocker.patch("sqlmesh.core.model.decorator.model._registry", {})
+
     @model(
         "test_named_variables_python_model",
         kind="full",
@@ -4706,6 +4711,32 @@ def test_named_variables_python_model(mocker: MockerFixture) -> None:
     context = ExecutionContext(mocker.Mock(), {}, None, None)
     df = list(python_model.render(context=context))[0]
     assert df.to_dict(orient="records") == [{"a": "test_value", "b": None, "start": to_ds(c.EPOCH)}]
+
+
+def test_named_variables_kw_only_python_model(mocker: MockerFixture) -> None:
+    mocker.patch("sqlmesh.core.model.decorator.model._registry", {})
+
+    @model(
+        "test_named_variables_python_model",
+        kind="full",
+        columns={"a": "string"},
+    )
+    def model_with_named_kw_only_variables(
+        context, start: TimeLike, *, test_var_a: str = "", **kwargs: t.Any
+    ):
+        return pd.DataFrame([{"a": test_var_a}])
+
+    python_model = model.get_registry()["test_named_variables_python_model"].model(
+        module_path=Path("."),
+        path=Path("."),
+        variables={"test_var_a": "test_value"},
+    )
+
+    assert python_model.python_env[c.SQLMESH_VARS] == Executable.value({"test_var_a": "test_value"})
+
+    context = ExecutionContext(mocker.Mock(), {}, None, None)
+    df = list(python_model.render(context=context))[0]
+    assert df.to_dict(orient="records") == [{"a": "test_value"}]
 
 
 def test_gateway_macro() -> None:
@@ -4985,15 +5016,19 @@ def test_macro_references_in_audits():
         model_defaults=ModelDefaultsConfig(dialect="duckdb", audits=["assert_not_zero"])
     )
     model = load_sql_based_model(
-        model_expression, audits=audits, default_audits=config.model_defaults.audits
+        model_expression,
+        audits=audits,
+        default_audits=config.model_defaults.audits,
+        audit_definitions=audits,
     )
 
     assert len(model.audits) == 2
-    assert len(model.inline_audits) == 1
+    audits_with_args = model.audits_with_args
+    assert len(audits_with_args) == 3
     assert len(model.python_env) == 3
     assert config.model_defaults.audits == [("assert_not_zero", {})]
     assert model.audits == [("assert_max_value", {}), ("assert_positive_ids", {})]
-    assert isinstance(model.inline_audits["assert_positive_ids"], ModelAudit)
+    assert isinstance(audits_with_args[0][0], ModelAudit)
     assert isinstance(model.python_env["min_value"], Executable)
     assert isinstance(model.python_env["max_value"], Executable)
     assert isinstance(model.python_env["zero_value"], Executable)
@@ -5706,8 +5741,8 @@ materialized TRUE
     "metadata_only",
     [True, False],
 )
-def test_macro_func_hash(metadata_only):
-    macro.set_registry({})
+def test_macro_func_hash(mocker: MockerFixture, metadata_only: bool):
+    mocker.patch("sqlmesh.core.macros.macro._registry", {})
 
     @macro(metadata_only=metadata_only)
     def noop(evaluator) -> None:
@@ -5742,14 +5777,14 @@ def test_macro_func_hash(metadata_only):
         assert "noop" not in new_model._data_hash_values[0]
         assert "noop" in new_model._additional_metadata[0]
         assert model.data_hash == new_model.data_hash
-        assert model.metadata_hash(audits={}) != new_model.metadata_hash(audits={})
+        assert model.metadata_hash != new_model.metadata_hash
     else:
         assert "noop" in new_model._data_hash_values[0]
         assert not new_model._additional_metadata
         assert model.data_hash != new_model.data_hash
-        assert model.metadata_hash(audits={}) == new_model.metadata_hash(audits={})
+        assert model.metadata_hash == new_model.metadata_hash
 
-    @macro(metadata_only=metadata_only)
+    @macro(metadata_only=metadata_only)  # type: ignore
     def noop(evaluator) -> None:
         print("noop")
         return None
@@ -5761,12 +5796,12 @@ def test_macro_func_hash(metadata_only):
         assert "print" not in new_model._additional_metadata[0]
         assert "print" in updated_model._additional_metadata[0]
         assert new_model.data_hash == updated_model.data_hash
-        assert new_model.metadata_hash(audits={}) != updated_model.metadata_hash(audits={})
+        assert new_model.metadata_hash != updated_model.metadata_hash
     else:
         assert "print" not in new_model._data_hash_values[0]
         assert "print" in updated_model._data_hash_values[0]
         assert new_model.data_hash != updated_model.data_hash
-        assert new_model.metadata_hash(audits={}) == updated_model.metadata_hash(audits={})
+        assert new_model.metadata_hash == updated_model.metadata_hash
 
 
 def test_managed_kind_sql():
@@ -5824,6 +5859,46 @@ def test_managed_kind_python():
         model.get_registry()["test_managed_python_model"].model(
             module_path=Path("."),
             path=Path("."),
+        ).validate_definition()
+
+
+def test_physical_version():
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.table,
+            kind INCREMENTAL_BY_TIME_RANGE(
+                time_column a,
+                forward_only TRUE,
+            ),
+            physical_version '1234',
+        );
+
+        SELECT a, b
+        """
+    )
+
+    model = load_sql_based_model(expressions)
+    assert model.physical_version == "1234"
+
+    with pytest.raises(
+        ConfigError,
+        match=r"Pinning a physical version is only supported for forward only models at.*",
+    ):
+        load_sql_based_model(
+            d.parse(
+                """
+            MODEL (
+                name db.table,
+                kind INCREMENTAL_BY_TIME_RANGE(
+                    time_column a,
+                ),
+                physical_version '1234',
+            );
+
+            SELECT a, b
+            """
+            )
         ).validate_definition()
 
 
@@ -5935,13 +6010,17 @@ from sqlmesh import macro
 @macro()
 def custom_macro(evaluator, arg1, arg2):
     return "SELECT 1 AS c"
+
+@macro()
+def get_model_name(evaluator):
+    return f"sqlmesh_example.{evaluator._path.stem}"
     """)
 
     new_snowflake_model_file = tmp_path / "models/new_model.sql"
     new_snowflake_model_file.parent.mkdir(parents=True, exist_ok=True)
     new_snowflake_model_file.write_text("""
 MODEL (
-  name sqlmesh_example.test,
+  name @get_model_name(),
   dialect snowflake,
 );
 
@@ -5954,7 +6033,7 @@ SELECT * FROM (@custom_macro(@a, @b)) AS q
     )
     context = Context(paths=tmp_path, config=config)
 
-    query = context.get_model("sqlmesh_example.test").render_query()
+    query = context.get_model("sqlmesh_example.new_model").render_query()
 
     assert (
         t.cast(exp.Query, query).sql("snowflake")
@@ -5962,3 +6041,74 @@ SELECT * FROM (@custom_macro(@a, @b)) AS q
     )
 
     context.plan(no_prompts=True, auto_apply=True)
+
+
+def test_resolve_table(make_snapshot: t.Callable):
+    @macro()
+    def resolve_parent(evaluator, name):
+        return evaluator.resolve_table(name.name)
+
+    for post_statement in (
+        "JINJA_STATEMENT_BEGIN; {{ resolve_table('parent') }}; JINJA_END;",
+        "@resolve_parent('parent')",
+    ):
+        expressions = d.parse(
+            f"""
+            MODEL (name child);
+
+            SELECT c FROM parent;
+
+            {post_statement}
+            """
+        )
+        child = load_sql_based_model(expressions)
+        parent = load_sql_based_model(d.parse("MODEL (name parent); SELECT 1 AS c"))
+
+        parent_snapshot = make_snapshot(parent)
+        parent_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+        version = parent_snapshot.version
+
+        post_statements = child.render_post_statements(snapshots={'"parent"': parent_snapshot})
+
+        assert len(post_statements) == 1
+        assert post_statements[0].sql() == f'"sqlmesh__default"."parent__{version}"'
+
+
+def test_cluster_with_complex_expression():
+    expressions = d.parse(
+        """
+        MODEL (
+          name test,
+          dialect snowflake,
+          kind full,
+          clustered_by (to_date(cluster_col))
+        );
+
+        SELECT
+          1 AS c,
+          CAST('2020-01-01 12:05:03' AS TIMESTAMPTZ) AS cluster_col
+    """
+    )
+
+    model = load_sql_based_model(expressions)
+    assert [expr.sql("snowflake") for expr in model.clustered_by] == ['(TO_DATE("CLUSTER_COL"))']
+
+
+def test_parametric_model_kind():
+    parsed_definition = d.parse(
+        """
+        MODEL (
+          name db.test_schema.test_model,
+          kind @IF(@gateway = 'main', VIEW, FULL)
+        );
+
+        SELECT
+          1 AS c
+        """
+    )
+
+    model = load_sql_based_model(parsed_definition, variables={c.GATEWAY: "main"})
+    assert isinstance(model.kind, ViewKind)
+
+    model = load_sql_based_model(parsed_definition, variables={c.GATEWAY: "other"})
+    assert isinstance(model.kind, FullKind)

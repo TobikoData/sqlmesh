@@ -4,11 +4,12 @@ from datetime import datetime, timedelta, timezone
 from pydantic import ValidationError
 from sqlglot import exp, parse_one
 from sqlmesh.core.config.connection import parse_connection_config
+from sqlmesh.core.context import Context
 from sqlmesh.utils.date import yesterday_ds
 
 
 def generate_dlt_models_and_settings(
-    pipeline_name: str, dialect: str
+    pipeline_name: str, dialect: str, tables: t.Optional[t.List[str]] = None
 ) -> t.Tuple[t.Set[t.Tuple[str, str]], str, str]:
     """This function attaches to a DLT pipeline and retrieves the connection configs and
     SQLMesh models based on the tables present in the pipeline's default schema.
@@ -42,8 +43,11 @@ def generate_dlt_models_and_settings(
     dlt_tables = {
         name: table
         for name, table in schema.tables.items()
-        if (has_table_seen_data(table) and not name.startswith(schema._dlt_tables_prefix))
-        or name == schema.loads_table_name
+        if (
+            (has_table_seen_data(table) and not name.startswith(schema._dlt_tables_prefix))
+            or name == schema.loads_table_name
+        )
+        and (name in tables if tables else True)
     }
 
     sqlmesh_models = set()
@@ -57,23 +61,20 @@ def generate_dlt_models_and_settings(
             if col.get("primary_key"):
                 primary_key.append(str(col["name"]))
 
+        column_types = [
+            exp.cast(column, data_type, dialect=dialect).as_(column).sql(dialect=dialect)
+            for column, data_type in dlt_columns.items()
+            if isinstance(column, str)
+        ]
         select_columns = (
-            ",\n".join(f"  {column_name}" for column_name in dlt_columns) if dlt_columns else ""
+            ",\n".join(f"  {column_name}" for column_name in column_types) if column_types else ""
         )
-
-        dlt_columns["_dlt_load_time"] = exp.DataType.build("TIMESTAMP", dialect=dialect)
-        columns_str = ",".join(
-            f"\n    {name} {data_type.sql(dialect=dialect)}"
-            for name, data_type in dlt_columns.items()
-        )
-        model_def_columns = f"\n  columns ({columns_str}\n  )," if columns_str else ""
 
         grain = f"\n  grain ({', '.join(primary_key)})," if primary_key else ""
         incremental_model_name = f"{dataset}_sqlmesh.incremental_{table_name}"
 
         incremental_model_sql = generate_incremental_model(
             incremental_model_name,
-            model_def_columns,
             select_columns,
             grain,
             dataset + "." + table_name,
@@ -85,9 +86,29 @@ def generate_dlt_models_and_settings(
     return sqlmesh_models, format_config(configs, db_type), get_start_date(storage_ids)
 
 
+def generate_dlt_models(
+    context: Context, pipeline_name: str, tables: t.List[str], force: bool
+) -> t.List[str]:
+    from sqlmesh.cli.example_project import _create_models
+
+    sqlmesh_models, _, _ = generate_dlt_models_and_settings(
+        pipeline_name=pipeline_name,
+        dialect=context.config.dialect or "",
+        tables=tables if tables else None,
+    )
+
+    if not tables and not force:
+        existing_models = [m.name for m in context.models.values()]
+        sqlmesh_models = {model for model in sqlmesh_models if model[0] not in existing_models}
+
+    if sqlmesh_models:
+        _create_models(models_path=context.path / "models", models=sqlmesh_models)
+        return [model[0] for model in sqlmesh_models]
+    return []
+
+
 def generate_incremental_model(
     model_name: str,
-    model_def_columns: str,
     select_columns: str,
     grain: str,
     from_table: str,
@@ -102,7 +123,7 @@ def generate_incremental_model(
   name {model_name},
   kind INCREMENTAL_BY_TIME_RANGE (
     time_column _dlt_load_time,
-  ),{model_def_columns}{grain}
+  ),{grain}
 );
 
 SELECT

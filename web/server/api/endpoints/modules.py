@@ -15,7 +15,7 @@ router = APIRouter()
     response_model=t.List[models.Modules],
     response_model_exclude_unset=True,
 )
-def get_api_meta(
+def get_api_modules(
     settings: Settings = Depends(get_settings),
 ) -> t.List[models.Modules]:
     """Get the modules"""

@@ -1,8 +1,6 @@
 import { isNil } from '@utils/index'
 import { tableFromIPC } from 'apache-arrow'
 
-const baseURL = window.location.origin
-
 export interface ResponseWithDetail {
   ok: boolean
   detail?: string
@@ -36,10 +34,12 @@ export async function fetchAPI<T = any, B extends object = any>(
 ): Promise<T & ResponseWithDetail> {
   const { url, method, params, data, headers, credentials, mode, cache } =
     config
-
   const hasSearchParams = Object.keys({ ...params }).length > 0
   const fullUrl = url.replace(/([^:]\/)\/+/g, '$1')
-  const input = new URL(fullUrl, baseURL)
+  const input = new URL(
+    `${getUrlPrefix()}${fullUrl}`.replaceAll('//', '/'),
+    window.location.origin,
+  )
 
   if (hasSearchParams) {
     const searchParams: Record<string, string> = Object.entries({
@@ -118,6 +118,10 @@ function toRequestBody(obj: unknown): BodyInit {
   } catch (error) {
     return ''
   }
+}
+
+export function getUrlPrefix(): string {
+  return (window as any).__BASE_URL__ ?? '/'
 }
 
 export default fetchAPI
