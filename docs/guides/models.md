@@ -65,7 +65,7 @@ $ sqlmesh plan dev
 ======================================================================
 Successfully Ran 1 tests against duckdb
 ----------------------------------------------------------------------
-Creating new environment `dev` from `prod`
+New environment `dev` will be created from `prod`
 
 Differences from the `prod` environment:
 

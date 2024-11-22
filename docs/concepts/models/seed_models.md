@@ -99,7 +99,7 @@ $ sqlmesh plan
 ======================================================================
 Successfully Ran 0 tests against duckdb
 ----------------------------------------------------------------------
-Initializing `prod` environment
+`prod` environment will be initialized
 
 Models
 └── Added:

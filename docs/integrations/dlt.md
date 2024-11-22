@@ -76,7 +76,7 @@ Then the SQLMesh project is all set up. You can then proceed to run the SQLMesh 
 
 ```bash
 $ sqlmesh plan
-Initializing `prod` environment
+`prod` environment will be initialized
 
 Models:
 └── Added:

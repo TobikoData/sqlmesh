@@ -14,7 +14,7 @@ $ sqlmesh -p examples/multi/repo_1 -p examples/multi/repo_2/ plan
 ======================================================================
 Successfully Ran 0 tests against duckdb
 ----------------------------------------------------------------------
-Initializing `prod` environment
+`prod` environment will be initialized
 
 Models
 └── Added:

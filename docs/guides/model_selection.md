@@ -100,7 +100,7 @@ If we run a `plan` without selecting specific models, SQLMesh includes the two d
 
 ```bash
 ❯ sqlmesh plan dev
-Creating new environment `dev` from `prod`
+New environment `dev` will be created from `prod`
 
 Differences from the `prod` environment:
 
@@ -121,7 +121,7 @@ If we specify the `--select-model` option to select `"sushi.order_items"`, the d
 
 ```bash
 ❯ sqlmesh plan dev --select-model "sushi.order_items"
-Creating new environment `dev` from `prod`
+New environment `dev` will be created from `prod`
 
 Differences from the `prod` environment:
 
@@ -141,7 +141,7 @@ If we specify the `--select-model` option with the upstream `+` to select `"+sus
 
 ```bash
 ❯ sqlmesh plan dev --select-model "+sushi.order_items"
-Creating new environment `dev` from `prod`
+New environment `dev` will be created from `prod`
 
 Differences from the `prod` environment:
 
@@ -164,7 +164,7 @@ However, it does classify `sushi.order_items` as indirectly modified. Its direct
 
 ```bash hl_lines="10"
 ❯ sqlmesh plan dev --select-model "sushi.items"
-Creating new environment `dev` from `prod`
+New environment `dev` will be created from `prod`
 
 Differences from the `prod` environment:
 
@@ -185,7 +185,7 @@ If we specify the `--select-model` option with the downstream `+` to select `"su
 
 ```bash
 ❯ sqlmesh plan dev --select-model "sushi.items+"
-Creating new environment `dev` from `prod`
+New environment `dev` will be created from `prod`
 
 Differences from the `prod` environment:
 
@@ -206,7 +206,7 @@ If we specify the `--select-model` option with the wildcard `*` to select `"sush
 
 ```bash
 ❯ sqlmesh plan dev --select-model "sushi.*items"
-Creating new environment `dev` from `prod`
+New environment `dev` will be created from `prod`
 
 Differences from the `prod` environment:
 

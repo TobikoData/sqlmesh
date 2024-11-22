@@ -292,7 +292,7 @@ Keep pressing enter on the date prompts, as we want to backfill all of history s
 ======================================================================
 Successfully Ran 2 tests against duckdb
 ----------------------------------------------------------------------
-Creating new environment `dev` from `prod`
+New environment `dev` will be created from `prod`
 
 Differences from the `prod` environment:
 
