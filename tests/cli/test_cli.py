@@ -118,9 +118,9 @@ def assert_duckdb_test(result) -> None:
 
 def assert_new_env(result, new_env="prod", from_env="prod") -> None:
     assert (
-        "Initializing `prod` environment"
-        if new_env == "prod"
-        else f"Creating new environment `{new_env}` from `{from_env}`" in result.output
+        f"New environment `{new_env}` will be created from `{from_env}`"
+        if new_env != "prod"
+        else "`prod` environment will be initialized" in result.output
     )
 
 

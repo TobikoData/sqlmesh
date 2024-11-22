@@ -615,9 +615,9 @@ class TerminalConsole(Console):
         """
         if context_diff.is_new_environment:
             msg = (
-                f"Initializing `{c.PROD}` environment"
+                f"`{c.PROD}` environment will be initialized"
                 if context_diff.environment == c.PROD
-                else f"Creating new environment `{context_diff.environment}` from `{context_diff.create_from}`"
+                else f"New environment `{context_diff.environment}` will be created from `{context_diff.create_from}`"
             )
             self._print(Tree(f"[bold]{msg}\n"))
             if not context_diff.has_snapshot_changes:
