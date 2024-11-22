@@ -230,7 +230,7 @@ class ModelConfig(BaseModelConfig):
             on_destructive_change = OnDestructiveChange.WARN
             if on_schema_change == "sync_all_columns":
                 on_destructive_change = OnDestructiveChange.ALLOW
-            elif on_schema_change == "fail":
+            elif on_schema_change in ("fail", "append_new_columns", "ignore"):
                 on_destructive_change = OnDestructiveChange.ERROR
 
             incremental_kind_kwargs["on_destructive_change"] = on_destructive_change
