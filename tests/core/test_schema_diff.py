@@ -1108,6 +1108,34 @@ def test_schema_diff_calculate_type_transitions():
                 },
             ),
         ),
+        (
+            "STRUCT<id INT, name STRING, revenue FLOAT>",
+            "STRUCT<id INT, name STRING, revenue INT>",
+            [],
+            dict(
+                support_positional_add=True,
+                support_nested_operations=True,
+                coerceable_types={
+                    exp.DataType.build("FLOAT"): {exp.DataType.build("INT")},
+                },
+            ),
+        ),
+        (
+            "STRUCT<id INT, name STRING, revenue FLOAT>",
+            "STRUCT<id INT, name INT, revenue INT>",
+            [],
+            dict(
+                support_positional_add=True,
+                support_nested_operations=True,
+                support_coercing_compatible_types=True,
+                compatible_types={
+                    exp.DataType.build("INT"): {exp.DataType.build("FLOAT")},
+                },
+                coerceable_types={
+                    exp.DataType.build("STRING"): {exp.DataType.build("INT")},
+                },
+            ),
+        ),
         # Coercion with an alter results in a single alter
         (
             "STRUCT<id INT, name STRING, revenue FLOAT, total INT>",
