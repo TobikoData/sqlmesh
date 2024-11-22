@@ -374,7 +374,7 @@ export default function Root({
         cancelRequestFile()
       }
     }
-  }, [])
+  }, [modules])
 
   useEffect(() => {
     const channelPlanApply = channel?.('plan-apply', updatePlanApplyTracker)
@@ -388,7 +388,7 @@ export default function Root({
         channelPlanApply?.unsubscribe()
       }
     }
-  }, [updatePlanApplyTracker])
+  }, [updatePlanApplyTracker, modules])
 
   useEffect(() => {
     const channelPlanOverview = channel?.(
@@ -405,7 +405,7 @@ export default function Root({
         channelPlanOverview?.unsubscribe()
       }
     }
-  }, [updatePlanOverviewTracker])
+  }, [updatePlanOverviewTracker, modules])
 
   useEffect(() => {
     const channelPlanCancel = channel?.('plan-cancel', updatePlanCancelTracker)
@@ -419,7 +419,7 @@ export default function Root({
         channelPlanCancel?.unsubscribe()
       }
     }
-  }, [updatePlanCancelTracker])
+  }, [updatePlanCancelTracker, modules])
 
   useEffect(() => {
     const channelFile = channel?.('file', updateFiles)
@@ -448,7 +448,7 @@ export default function Root({
     ) {
       navigate(modules.defaultNavigationRoute(), { replace: true })
     }
-  }, [location, modules.list])
+  }, [location, modules])
 
   useEffect(() => {
     setShowConfirmation(confirmations.length > 0)
