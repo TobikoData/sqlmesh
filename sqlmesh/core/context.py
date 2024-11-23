@@ -371,19 +371,20 @@ class GenericContext(BaseContext, t.Generic[C]):
         self.environment_ttl = self.config.environment_ttl
         self.pinned_environments = Environment.sanitize_names(self.config.pinned_environments)
         self.auto_categorize_changes = self.config.plan.auto_categorize_changes
+        self.default_gateway = gateway or self.config.default_gateway_name
 
         self._connection_config = self.config.get_connection(self.gateway)
         self.concurrent_tasks = concurrent_tasks or self._connection_config.concurrent_tasks
 
         self._engine_adapters: t.Dict[str, EngineAdapter] = {
-            self.config.default_gateway_name: self._connection_config.create_engine_adapter()
+            self.default_gateway: self._connection_config.create_engine_adapter()
         }
         self._min_concurrent_tasks = self.concurrent_tasks
         self._snapshot_evaluator: t.Optional[SnapshotEvaluator] = None
 
         self.console = console or get_console(dialect=self.engine_adapter.dialect)
         self._test_connection_configs: t.Dict[str, ConnectionConfig] = {
-            self.config.default_gateway_name: self.config.get_test_connection(
+            self.default_gateway: self.config.get_test_connection(
                 self.gateway,
                 self.default_catalog,
                 default_catalog_dialect=self.engine_adapter.DIALECT,
@@ -392,7 +393,7 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         if not gateway:
             for gateway_name in self.config.gateways:
-                if gateway_name != self.config.default_gateway_name:
+                if gateway_name != self.default_gateway:
                     connection = self.config.get_connection(gateway_name)
                     adapter = connection.create_engine_adapter()
                     self._test_connection_configs[gateway_name] = self.config.get_test_connection(
@@ -430,7 +431,7 @@ class GenericContext(BaseContext, t.Generic[C]):
     @property
     def engine_adapter(self) -> EngineAdapter:
         """Returns the default engine adapter."""
-        return self._engine_adapters[self.config.default_gateway_name]
+        return self._engine_adapters[self.default_gateway]
 
     @property
     def snapshot_evaluator(self) -> SnapshotEvaluator:
@@ -1650,7 +1651,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         try:
             model_to_test = self.get_model(model, raise_if_missing=True)
             connection_config = self._test_connection_configs[
-                model_to_test.gateway or self.config.default_gateway_name
+                model_to_test.gateway or self.default_gateway
             ]
             test_adapter = connection_config.create_engine_adapter(register_comments_override=False)
             generate_test(
@@ -1991,9 +1992,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                 self.console.log_test_results(
                     result,
                     test_output,
-                    self._test_connection_configs[
-                        self.config.default_gateway_name
-                    ]._engine_adapter.DIALECT,
+                    self._test_connection_configs[self.default_gateway]._engine_adapter.DIALECT,
                 )
             if not result.wasSuccessful():
                 raise PlanError(

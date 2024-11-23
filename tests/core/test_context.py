@@ -321,9 +321,15 @@ def test_gateway_specific_evaluator(copy_to_temp_path):
     path = copy_to_temp_path("examples/sushi")
     ctx = Context(paths=path, config="isolated_systems_config", gateway="prod")
     assert len(ctx._engine_adapters) == 1
+    assert ctx.engine_adapter == ctx._engine_adapters["prod"]
+    with pytest.raises(SQLMeshError):
+        assert ctx._get_engine_adapter("dev")
 
     ctx = Context(paths=path, config="isolated_systems_config")
     assert len(ctx._engine_adapters) == 3
+    assert ctx.engine_adapter == ctx._engine_adapters["dev"]
+    assert ctx._get_engine_adapter("prod") == ctx._engine_adapters["prod"]
+    assert ctx._get_engine_adapter("test") == ctx._engine_adapters["test"]
 
 
 def test_multiple_gateways(tmp_path: Path):

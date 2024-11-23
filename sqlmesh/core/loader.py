@@ -516,7 +516,7 @@ class SqlMeshLoader(Loader):
         return metrics
 
     def _variables(self, config: Config) -> t.Dict[str, t.Any]:
-        gateway_name = self._context.gateway or self._context.config.default_gateway_name
+        gateway_name = self._context.default_gateway
         try:
             gateway = config.get_gateway(gateway_name)
         except ConfigError:

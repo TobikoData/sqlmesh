@@ -3285,3 +3285,50 @@ def test_multiple_engine_migration(mocker: MockerFixture, adapter_mock, make_sna
     adapter_mock.get_alter_expressions.assert_called_once_with(
         snapshot_2.table_name(True), snapshot_2.table_name(False)
     )
+
+
+def test_multiple_engine_cleanup(snapshot: Snapshot, adapters, make_snapshot):
+    engine_adapters = {"default": adapters[0], "secondary": adapters[1]}
+    evaluator = SnapshotEvaluator(engine_adapters)
+
+    model = load_sql_based_model(
+        parse(  # type: ignore
+            """
+            MODEL (
+                name test_schema.test_model,
+                kind FULL,
+                gateway secondary,
+            );
+            SELECT a::int FROM tbl;
+            """
+        ),
+    )
+
+    snapshot_2 = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    snapshot_2.categorize_as(SnapshotChangeCategory.BREAKING)
+    evaluator.create([snapshot_2, snapshot], {}, DeployabilityIndex.all_deployable())
+
+    assert engine_adapters["default"].create_table.call_args_list[0][0] == (
+        f"sqlmesh__db.db__model__{snapshot.version}",
+    )
+    assert engine_adapters["secondary"].create_table.call_args_list[0][0] == (
+        f"sqlmesh__test_schema.test_schema__test_model__{snapshot_2.version}",
+    )
+
+    snapshot_gateways = {snapshot.name: "default", snapshot_2.name: "secondary"}
+    evaluator.cleanup(
+        [
+            SnapshotTableCleanupTask(snapshot=snapshot.table_info, dev_table_only=True),
+            SnapshotTableCleanupTask(snapshot=snapshot_2.table_info, dev_table_only=True),
+        ],
+        snapshot_gateways,
+    )
+
+    # The clean up will happen using the specific gateway the model was created with
+    engine_adapters["default"].drop_table.assert_called_once_with(
+        f"sqlmesh__db.db__model__{snapshot.version}__temp"
+    )
+    engine_adapters["secondary"].drop_table.assert_called_once_with(
+        f"sqlmesh__test_schema.test_schema__test_model__{snapshot_2.version}__temp"
+    )
