@@ -7,17 +7,19 @@ Tobiko Cloud is a data platform that extends SQLMesh to make it easy to manage d
 - Connect Tobiko Cloud to your data warehouse
 - Verify Tobiko Cloud interacts with your data warehouse as expected
 
-## Prerequisites:
+## Prerequisites
 
 Onboarding requires the below steps from the Tobiko team to be completed before Tobiko Cloud can be used.
   
 The Solutions Architect will:
+
 - Set up a 1 hour meeting with you to fully onboard
 - Request a new Tobiko Cloud account will be created for you (single tenant by default)
 - Share a temporary password link that expires in 7 days
 - Make sure you save the password in your own password manager
 
 For SQLMesh (open source) to Tobiko Cloud Migrations Only:
+
 - Solutions Architect will send you a script to extract your current state to send to the Tobiko Cloud engineers to validate before migration
 - After testing, Solutions Architect will schedule a migration date and call to move your state to Tobiko Cloud. There will be some downtime if you are running SQLMesh in a production environment.
 
@@ -166,7 +168,11 @@ Data warehouse connection succeeded
 State backend connection succeeded
 ```
 
-You are now fully onboarded with Tobiko Cloud! We recommend reviewing the helpful links below to get familiar with SQLMesh and Tobiko Cloud.
+You should see your tcloud project directory look and feel like the below. From here, if you have an existing SQLMesh project, you can copy over your existing models and macros to the `models` and `macros` directories along with others as needed.
+
+TODO: add screenshot of project directory
+
+You are now fully onboarded with Tobiko Cloud. We recommend reviewing the helpful links below to get familiar with SQLMesh and Tobiko Cloud. Here's to having data transformation without the waste!
 
 ### Helpful Links
 - [Walkthrough Example](https://sqlmesh.readthedocs.io/en/stable/examples/incremental_time_full_walkthrough/)
