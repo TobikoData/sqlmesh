@@ -173,6 +173,10 @@ State backend connection succeeded
 
 Run `sqlmesh plan` to verify everything is working as expected. Enter `y` to apply the changes. Example output below:
 
+```bash
+sqlmesh plan
+```
+
 ```shell
 (.venv) ➜  tcloud_project git:(main) ✗ sqlmesh plan
 ======================================================================
