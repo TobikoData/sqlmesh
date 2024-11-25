@@ -15,6 +15,7 @@ nav:
       - guides/projects.md
       - guides/multi_repo.md
       - guides/isolated_systems.md
+      - guides/multi_engine.md
     - Project setup:
       - guides/configuration.md
       - guides/connections.md
