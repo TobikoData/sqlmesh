@@ -19,7 +19,8 @@ The Solutions Architect will:
 - Make sure you save the password in your own password manager
 
 You will need to:
-- Ensure you have data warehouse permissions to update permissions and create new users with create/update/delete permissions on a specific database (ex: `database.schema.table`)
+
+- Ensure you have data warehouse admin rights to update permissions and create new users with create/update/delete permissions on a specific database (ex: `database.schema.table`)
 
 For SQLMesh (open source) to Tobiko Cloud Migrations Only:
 
