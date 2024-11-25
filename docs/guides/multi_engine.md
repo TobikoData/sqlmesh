@@ -37,6 +37,8 @@ Meanwhile, the DuckDB's [attach](https://duckdb.org/docs/sql/statements/attach.h
             main_db:
               type: postgres
               path: 'dbname=main_db user=postgres host=127.0.0.1'
+          extensions:
+            - name: iceberg
       postgres:
         connection:
           type: postgres
@@ -71,7 +73,8 @@ Meanwhile, the DuckDB's [attach](https://duckdb.org/docs/sql/statements/attach.h
                             type="postgres",
                             path="dbname=main_db user=postgres host=127.0.0.1"
                         ),
-                    }
+                    },
+                    extensions=["iceberg"],
                 )
             ),
             "postgres": GatewayConfig(
@@ -92,9 +95,18 @@ By specifying the `duckdb` gateway in a particular model, we explicitly set Duck
 
 ```sql linenums="1"
 MODEL (
-  name sushi.customer_total_revenue,
+  name orders.order_ship_date,
+  kind FULL,
   gateway duckdb,
 );
+
+SELECT
+  l_orderkey, 
+  l_shipdate
+FROM 
+  iceberg_scan('data/bucket/lineitem_iceberg', allow_moved_paths = true);
 ```
 
-The DuckDB engine is used to create the table in the PostgreSQL database, while the PostgreSQL engine creates the view.
+This way, the DuckDB engine can be used to scan and load data from an iceberg table and create the physical table in the PostgreSQL database. 
+
+While the PostgreSQL engine is responsible for creating the model's view for the virtual layer.
