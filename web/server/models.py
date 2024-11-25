@@ -68,6 +68,7 @@ class ModelType(str, enum.Enum):
     SQL = "sql"
     SEED = "seed"
     EXTERNAL = "external"
+    SOURCE = "source"
 
 
 class ArtifactType(str, enum.Enum):
@@ -392,7 +393,11 @@ class SchemaDiff(PydanticModel):
     @classmethod
     def validate_schema(
         cls,
-        v: t.Union[t.Dict[str, exp.DataType], t.List[t.Tuple[str, exp.DataType]], t.Dict[str, str]],
+        v: t.Union[
+            t.Dict[str, exp.DataType],
+            t.List[t.Tuple[str, exp.DataType]],
+            t.Dict[str, str],
+        ],
     ) -> t.Dict[str, str]:
         if isinstance(v, dict):
             return {k: str(v) for k, v in v.items()}
