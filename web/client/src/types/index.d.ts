@@ -10,6 +10,11 @@ declare module '~/utils/tbk-components' {
   export const SourceListSection: any
   export const ModelName: any
   export const ResizeObserver: any
+  export const Metadata: any
+  export const MetadataItem: any
+  export const MetadataSection: any
+  export const Scroll: any
+  export const SplitPane: any
 }
 declare module '~/utils/additional-components' {
   export const TBKBadge: any
@@ -18,6 +23,11 @@ declare module '~/utils/additional-components' {
   export const TBKSourceListSection: any
   export const TBKModelName: any
   export const TBKResizeObserver: any
+  export const TBKMetadata: any
+  export const TBKMetadataItem: any
+  export const TBKMetadataSection: any
+  export const TBKScroll: any
+  export const TBKSplitPane: any
 }
 
 type Subset<T, S extends T> = S
