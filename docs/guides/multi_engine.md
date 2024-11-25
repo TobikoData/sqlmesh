@@ -37,7 +37,6 @@ Meanwhile, the DuckDB's [attach](https://duckdb.org/docs/sql/statements/attach.h
             main_db:
               type: postgres
               path: 'dbname=main_db user=postgres host=127.0.0.1'
-              read_only: true
       postgres:
         connection:
           type: postgres
