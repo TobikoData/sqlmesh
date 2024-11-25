@@ -215,6 +215,7 @@ def test_plan_restate_model(runner, tmp_path):
     )
     assert result.exit_code == 0
     assert_duckdb_test(result)
+    assert "No changes to plan: project files match the `prod` environment" in result.output
     assert "sqlmesh_example.full_model evaluated in" in result.output
     assert_backfill_success(result)
 
@@ -454,6 +455,7 @@ def test_plan_nonbreaking(runner, tmp_path):
         cli, ["--log-file-dir", tmp_path, "--paths", tmp_path, "plan"], input="y\n"
     )
     assert result.exit_code == 0
+    assert "Differences from the `prod` environment" in result.output
     assert "+  'a' AS new_col" in result.output
     assert "Directly Modified: sqlmesh_example.incremental_model (Non-breaking)" in result.output
     assert "sqlmesh_example.full_model (Indirect Non-breaking)" in result.output
