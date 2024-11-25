@@ -46,7 +46,7 @@ TODO: add screenshot of populated home page
   
 ```txt
 # source: https://pypi.org/project/tcloud/
-tcloud==1.2.0
+tcloud==1.3.0
 ```
 
 - Run these commands in your terminal:
