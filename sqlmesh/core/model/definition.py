@@ -877,6 +877,7 @@ class _Model(ModelMeta, frozen=True):
             self.stamp,
             self.physical_schema,
             self.physical_version,
+            self.gateway,
             self.interval_unit.value if self.interval_unit is not None else None,
         ]
 
