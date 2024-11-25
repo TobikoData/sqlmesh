@@ -17,6 +17,7 @@ from sqlmesh.core.plan import (
     BuiltInPlanEvaluator,
     MWAAPlanEvaluator,
     PlanEvaluator,
+    EvaluatablePlan,
 )
 from sqlmesh.core.state_sync import EngineAdapterStateSync, StateSync
 from sqlmesh.schedulers.airflow.client import AirflowClient
@@ -44,11 +45,14 @@ class SchedulerConfig(abc.ABC):
     """Abstract base class for Scheduler configurations."""
 
     @abc.abstractmethod
-    def create_plan_evaluator(self, context: GenericContext) -> PlanEvaluator:
+    def create_plan_evaluator(
+        self, context: GenericContext, plan: EvaluatablePlan
+    ) -> PlanEvaluator:
         """Creates a Plan Evaluator instance.
 
         Args:
             context: The SQLMesh Context.
+            plan: The Evaluatable Plan.
         """
 
     @abc.abstractmethod
@@ -119,13 +123,16 @@ class BuiltInSchedulerConfig(_EngineAdapterStateSyncSchedulerConfig, BaseConfig)
 
     type_: Literal["builtin"] = Field(alias="type", default="builtin")
 
-    def create_plan_evaluator(self, context: GenericContext) -> PlanEvaluator:
+    def create_plan_evaluator(
+        self, context: GenericContext, plan: EvaluatablePlan
+    ) -> PlanEvaluator:
         return BuiltInPlanEvaluator(
             state_sync=context.state_sync,
             snapshot_evaluator=context.snapshot_evaluator,
             create_scheduler=context.create_scheduler,
             default_catalog=self.get_default_catalog(context),
             console=context.console,
+            plan=plan,
         )
 
     def get_default_catalog(self, context: GenericContext) -> t.Optional[str]:
@@ -166,7 +173,9 @@ class _BaseAirflowSchedulerConfig(_EngineAdapterStateSyncSchedulerConfig):
             return super().state_sync_fingerprint(context)
         return md5([self.airflow_url])
 
-    def create_plan_evaluator(self, context: GenericContext) -> PlanEvaluator:
+    def create_plan_evaluator(
+        self, context: GenericContext, plan: EvaluatablePlan
+    ) -> PlanEvaluator:
         return AirflowPlanEvaluator(
             airflow_client=self.get_client(context.console),
             dag_run_poll_interval_secs=self.dag_run_poll_interval_secs,
@@ -178,6 +187,7 @@ class _BaseAirflowSchedulerConfig(_EngineAdapterStateSyncSchedulerConfig):
             ddl_concurrent_tasks=self.ddl_concurrent_tasks,
             users=context.users,
             state_sync=context.state_sync if self.use_state_connection else None,
+            plan=plan,
         )
 
     def get_default_catalog(self, context: GenericContext) -> t.Optional[str]:
@@ -405,7 +415,9 @@ class MWAASchedulerConfig(_EngineAdapterStateSyncSchedulerConfig, BaseConfig):
     def get_client(self, console: t.Optional[Console] = None) -> MWAAClient:
         return MWAAClient(self.environment, console=console)
 
-    def create_plan_evaluator(self, context: GenericContext) -> PlanEvaluator:
+    def create_plan_evaluator(
+        self, context: GenericContext, plan: EvaluatablePlan
+    ) -> PlanEvaluator:
         return MWAAPlanEvaluator(
             client=self.get_client(context.console),
             state_sync=context.state_sync,
@@ -417,6 +429,7 @@ class MWAASchedulerConfig(_EngineAdapterStateSyncSchedulerConfig, BaseConfig):
             backfill_concurrent_tasks=self.backfill_concurrent_tasks,
             ddl_concurrent_tasks=self.ddl_concurrent_tasks,
             users=context.users,
+            plan=plan,
         )
 
     def get_default_catalog(self, context: GenericContext) -> t.Optional[str]:

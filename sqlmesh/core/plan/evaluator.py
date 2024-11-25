@@ -46,9 +46,7 @@ logger = logging.getLogger(__name__)
 
 class PlanEvaluator(abc.ABC):
     @abc.abstractmethod
-    def evaluate(
-        self, plan: EvaluatablePlan, circuit_breaker: t.Optional[t.Callable[[], bool]] = None
-    ) -> None:
+    def evaluate(self, circuit_breaker: t.Optional[t.Callable[[], bool]] = None) -> None:
         """Evaluates a plan by pushing snapshots and backfilling data.
 
         Given a plan, it pushes snapshots into the state and then kicks off
@@ -60,6 +58,11 @@ class PlanEvaluator(abc.ABC):
             plan: The plan to evaluate.
         """
 
+    @abc.abstractmethod
+    def get_plan_id(self) -> str:
+        """Returns the plan ID."""
+        ...
+
 
 class BuiltInPlanEvaluator(PlanEvaluator):
     def __init__(
@@ -68,19 +71,24 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         snapshot_evaluator: SnapshotEvaluator,
         create_scheduler: t.Callable[[t.Iterable[Snapshot]], Scheduler],
         default_catalog: t.Optional[str],
+        plan: EvaluatablePlan,
         console: t.Optional[Console] = None,
     ):
         self.state_sync = state_sync
         self.snapshot_evaluator = snapshot_evaluator
         self.create_scheduler = create_scheduler
         self.default_catalog = default_catalog
+        self.plan = plan
         self.console = console or get_console()
+
+    def get_plan_id(self) -> str:
+        return self.plan.plan_id
 
     def evaluate(
         self,
-        plan: EvaluatablePlan,
         circuit_breaker: t.Optional[t.Callable[[], bool]] = None,
     ) -> None:
+        plan = self.plan
         self.console.start_plan_evaluation(plan)
         analytics.collector.on_plan_apply_start(
             plan=plan,
@@ -341,16 +349,17 @@ class BaseAirflowPlanEvaluator(PlanEvaluator):
         dag_run_poll_interval_secs: int,
         dag_creation_poll_interval_secs: int,
         dag_creation_max_retry_attempts: int,
+        plan: EvaluatablePlan,
     ):
         self.blocking = blocking
         self.dag_run_poll_interval_secs = dag_run_poll_interval_secs
         self.dag_creation_poll_interval_secs = dag_creation_poll_interval_secs
         self.dag_creation_max_retry_attempts = dag_creation_max_retry_attempts
+        self.plan = plan
         self.console = console or get_console()
 
-    def evaluate(
-        self, plan: EvaluatablePlan, circuit_breaker: t.Optional[t.Callable[[], bool]] = None
-    ) -> None:
+    def evaluate(self, circuit_breaker: t.Optional[t.Callable[[], bool]] = None) -> None:
+        plan = self.plan
         plan_request_id = plan.plan_id
         self._apply_plan(plan, plan_request_id)
 
@@ -427,6 +436,7 @@ class AirflowPlanEvaluator(StateBasedAirflowPlanEvaluator):
     def __init__(
         self,
         airflow_client: AirflowClient,
+        plan: EvaluatablePlan,
         console: t.Optional[Console] = None,
         blocking: bool = True,
         dag_run_poll_interval_secs: int = 10,
@@ -444,6 +454,7 @@ class AirflowPlanEvaluator(StateBasedAirflowPlanEvaluator):
             dag_run_poll_interval_secs,
             dag_creation_poll_interval_secs,
             dag_creation_max_retry_attempts,
+            plan,
         )
         self._airflow_client = airflow_client
         self.notification_targets = notification_targets or []
@@ -452,6 +463,9 @@ class AirflowPlanEvaluator(StateBasedAirflowPlanEvaluator):
         self.users = users or []
 
         self._state_sync = state_sync
+
+    def get_plan_id(self) -> str:
+        return self.plan.plan_id
 
     @property
     def client(self) -> BaseAirflowClient:
@@ -482,6 +496,7 @@ class MWAAPlanEvaluator(StateBasedAirflowPlanEvaluator):
         self,
         client: MWAAClient,
         state_sync: StateSync,
+        plan: EvaluatablePlan,
         console: t.Optional[Console] = None,
         blocking: bool = True,
         dag_run_poll_interval_secs: int = 10,
@@ -498,6 +513,7 @@ class MWAAPlanEvaluator(StateBasedAirflowPlanEvaluator):
             dag_run_poll_interval_secs,
             dag_creation_poll_interval_secs,
             dag_creation_max_retry_attempts,
+            plan,
         )
         self._mwaa_client = client
         self._state_sync = state_sync
@@ -505,6 +521,9 @@ class MWAAPlanEvaluator(StateBasedAirflowPlanEvaluator):
         self.backfill_concurrent_tasks = backfill_concurrent_tasks
         self.ddl_concurrent_tasks = ddl_concurrent_tasks
         self.users = users or []
+
+    def get_plan_id(self) -> str:
+        return self.plan.plan_id
 
     @property
     def client(self) -> BaseAirflowClient:

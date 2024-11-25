@@ -244,6 +244,7 @@ def push_plan(context: Context, plan: Plan) -> None:
         context.snapshot_evaluator,
         context.create_scheduler,
         context.default_catalog,
+        plan.to_evaluatable(),
     )
     plan_evaluator._push(plan.to_evaluatable(), plan.snapshots)
     promotion_result = plan_evaluator._promote(plan.to_evaluatable(), plan.snapshots)

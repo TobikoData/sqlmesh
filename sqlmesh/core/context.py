@@ -1917,8 +1917,8 @@ class GenericContext(BaseContext, t.Generic[C]):
         )
 
     def _apply(self, plan: Plan, circuit_breaker: t.Optional[t.Callable[[], bool]]) -> None:
-        self._scheduler.create_plan_evaluator(self).evaluate(
-            plan.to_evaluatable(), circuit_breaker=circuit_breaker
+        self._scheduler.create_plan_evaluator(self, plan.to_evaluatable()).evaluate(
+            circuit_breaker=circuit_breaker
         )
 
     @python_api_analytics

@@ -70,6 +70,7 @@ def test_builtin_evaluator_push(sushi_context: Context, make_snapshot):
         sushi_context.create_scheduler,
         sushi_context.default_catalog,
         console=sushi_context.console,
+        plan=plan.to_evaluatable(),
     )
     evaluator._push(plan.to_evaluatable(), plan.snapshots)
 
@@ -88,8 +89,8 @@ def test_airflow_evaluator(sushi_plan: Plan, mocker: MockerFixture):
 
     evaluatable_plan = sushi_plan.to_evaluatable()
 
-    evaluator = AirflowPlanEvaluator(airflow_client_mock)
-    evaluator.evaluate(evaluatable_plan)
+    evaluator = AirflowPlanEvaluator(airflow_client_mock, evaluatable_plan)
+    evaluator.evaluate()
 
     airflow_client_mock.apply_plan.assert_called_once_with(
         evaluatable_plan,
@@ -108,10 +109,10 @@ def test_airflow_evaluator_plan_application_dag_fails(sushi_plan: Plan, mocker: 
     airflow_client_mock.wait_for_dag_run_completion.return_value = False
     airflow_client_mock.wait_for_first_dag_run.return_value = "test_plan_application_dag_run_id"
 
-    evaluator = AirflowPlanEvaluator(airflow_client_mock)
+    evaluator = AirflowPlanEvaluator(airflow_client_mock, sushi_plan.to_evaluatable())
 
     with pytest.raises(SQLMeshError):
-        evaluator.evaluate(sushi_plan.to_evaluatable())
+        evaluator.evaluate()
 
     airflow_client_mock.apply_plan.assert_called_once()
     airflow_client_mock.wait_for_dag_run_completion.assert_called_once()
@@ -137,8 +138,8 @@ def test_mwaa_evaluator(sushi_plan: Plan, mocker: MockerFixture):
         return_value=plan_dag_state_mock,
     )
 
-    evaluator = MWAAPlanEvaluator(mwaa_client_mock, state_sync_mock)
-    evaluator.evaluate(sushi_plan.to_evaluatable())
+    evaluator = MWAAPlanEvaluator(mwaa_client_mock, state_sync_mock, sushi_plan.to_evaluatable())
+    evaluator.evaluate()
 
     plan_dag_state_mock.add_dag_spec.assert_called_once_with(plan_dag_spec_mock)
 
@@ -211,8 +212,8 @@ def test_state_based_airflow_evaluator_with_restatements(
         return_value=plan_dag_state_mock,
     )
 
-    evaluator = MWAAPlanEvaluator(mwaa_client_mock, state_sync_mock)
-    evaluator.evaluate(plan.to_evaluatable())
+    evaluator = MWAAPlanEvaluator(mwaa_client_mock, state_sync_mock, plan.to_evaluatable())
+    evaluator.evaluate()
 
     plan_application_request = create_plan_dag_spec_mock.call_args[0][0]
     assert plan_application_request.plan.restatements.keys() == {model_fqn, downstream_model_fqn}

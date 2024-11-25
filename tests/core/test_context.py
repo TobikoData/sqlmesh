@@ -254,17 +254,18 @@ def test_diff(sushi_context: Context, mocker: MockerFixture):
     yesterday = yesterday_ds()
     success = sushi_context.run(start=yesterday, end=yesterday)
 
+    plan = PlanBuilder(
+        context_diff=sushi_context._context_diff("prod"),
+        engine_schema_differ=sushi_context.engine_adapter.SCHEMA_DIFFER,
+    ).build()
+
     plan_evaluator = BuiltInPlanEvaluator(
         sushi_context.state_sync,
         sushi_context.snapshot_evaluator,
         sushi_context.create_scheduler,
         sushi_context.default_catalog,
+        plan.to_evaluatable(),
     )
-
-    plan = PlanBuilder(
-        context_diff=sushi_context._context_diff("prod"),
-        engine_schema_differ=sushi_context.engine_adapter.SCHEMA_DIFFER,
-    ).build()
 
     # stringify used to trigger an unhashable exception due to
     # https://github.com/pydantic/pydantic/issues/8016
