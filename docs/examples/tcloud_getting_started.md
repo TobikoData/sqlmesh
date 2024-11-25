@@ -18,6 +18,9 @@ The Solutions Architect will:
 - Share a temporary password link that expires in 7 days
 - Make sure you save the password in your own password manager
 
+You will need to:
+- Ensure you have data warehouse permissions to update permissions and create new users with create/update/delete permissions on a specific database (ex: `database.schema.table`)
+
 For SQLMesh (open source) to Tobiko Cloud Migrations Only:
 
 - Solutions Architect will send you a script to extract your current state to send to the Tobiko Cloud engineers to validate before migration
@@ -87,7 +90,7 @@ export TCLOUD_TOKEN=<your token> # ex: export TCLOUD_TOKEN='jiaowjifeoawj$22fe'
 - Initialize a new SQLMesh project:
 
 ```bash
-sqlmesh init # or `tcloud sqlmesh init` if you did NOT alias the tcloud cli for familiar UX
+sqlmesh init <your data warehouse> # or `tcloud sqlmesh init` if you did NOT alias the tcloud cli for familiar UX
 ```
 
 - In your project directory, update your `config.yaml` with your data warehouse configs, example below:
@@ -112,7 +115,7 @@ model_defaults:
     start: 2024-08-19 # TODO: I recommend updating this to an earlier date representing the historical data you want to backfill
 
 # make Tobiko Cloud only allow deploying to dev environments, use env var to override in CI/CD
-allow_prod_deploy: {{ env_var('ALLOW_PROD_DEPLOY', 'false') }}
+# allow_prod_deploy: {{ env_var('ALLOW_PROD_DEPLOY', 'false') }}
 
 # enables synchronized deployments to prod when a pull request is merged
 cicd_bot:
@@ -166,6 +169,42 @@ Models: 3
 Macros: 0
 Data warehouse connection succeeded
 State backend connection succeeded
+```
+
+Run `sqlmesh plan` to verify everything is working as expected. Enter `y` to apply the changes. Example output below:
+
+```shell
+(.venv) ➜  tcloud_project git:(main) ✗ sqlmesh plan
+======================================================================
+Successfully Ran 1 tests against duckdb
+----------------------------------------------------------------------
+New environment `prod` will be created from `prod`
+Summary of differences against `prod`:
+Models:
+└── Added:
+    ├── sqlmesh_example.full_model
+    ├── sqlmesh_example.incremental_model
+    └── sqlmesh_example.seed_model
+Models needing backfill (missing dates):
+├── sqlmesh_example.full_model: 2024-11-24 - 2024-11-24
+├── sqlmesh_example.incremental_model: 2020-01-01 - 2024-11-24
+└── sqlmesh_example.seed_model: 2024-11-24 - 2024-11-24
+Apply - Backfill Tables [y/n]: y
+Creating physical tables ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 3/3 • 0:00:00
+
+All model versions have been created successfully
+
+[1/1] sqlmesh_example.seed_model evaluated in 0.00s
+[1/1] sqlmesh_example.incremental_model evaluated in 0.01s
+[1/1] sqlmesh_example.full_model evaluated in 0.01s
+Evaluating models ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 3/3 • 0:00:00  
+                                                                                   
+
+All model batches have been executed successfully
+
+Virtually Updating 'prod' ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 0:00:00
+
+The target environment has been updated successfully
 ```
 
 You should see your tcloud project directory look and feel like the below. From here, if you have an existing SQLMesh project, you can copy over your existing models and macros to the `models` and `macros` directories along with others as needed.
