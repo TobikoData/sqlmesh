@@ -141,6 +141,8 @@ users:
     - required_approver
 ```
 
+Based on your data warehouse, we will walk through instructions live to create a new `tcloud` user with the necessary permissions. This user will be used to create, update, and delete tables in your data warehouse. You can scope it to a specific database if needed.
+
 We recommend creating a `.env` file in your root project directory to store your environment variables and verify it is in your `.gitignore` file to prevent it from being committed and exposed in plain text.
 
 ```text
