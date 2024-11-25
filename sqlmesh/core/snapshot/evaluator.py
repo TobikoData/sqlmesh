@@ -89,7 +89,8 @@ class SnapshotEvaluator:
 
     Args:
         adapters: A single EngineAdapter or a dictionary of EngineAdapters where
-            the key is the gateway name of the connection.
+            the key is the gateway name. When a dictionary is provided, its first
+            item is treated as the default adapter and used for the virtual layer.
         ddl_concurrent_tasks: The number of concurrent tasks used for DDL
             operations (table / view creation, deletion, etc). Default: 1.
     """
