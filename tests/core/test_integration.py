@@ -2337,10 +2337,19 @@ def test_multi(mocker):
     assert len(plan.new_snapshots) == 4
     context.apply(plan)
 
+    adapter = context.engine_adapter
+    context = Context(
+        paths=["examples/multi/repo_1"],
+        state_sync=context.state_sync,
+        gateway="memory",
+    )
+    context._engine_adapters["memory"] = adapter
+
     model = context.get_model("bronze.a")
     assert model.project == "repo_1"
     context.upsert_model(model.copy(update={"query": model.query.select("'c' AS c")}))
     plan = context.plan()
+
     assert set(snapshot.name for snapshot in plan.directly_modified) == {
         '"memory"."bronze"."a"',
         '"memory"."bronze"."b"',

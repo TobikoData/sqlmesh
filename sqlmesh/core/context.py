@@ -429,11 +429,13 @@ class GenericContext(BaseContext, t.Generic[C]):
         return self._snapshot_evaluator
 
     def execution_context(
-        self, deployability_index: t.Optional[DeployabilityIndex] = None
+        self,
+        deployability_index: t.Optional[DeployabilityIndex] = None,
+        engine_adapter: t.Optional[EngineAdapter] = None,
     ) -> ExecutionContext:
         """Returns an execution context."""
         return ExecutionContext(
-            engine_adapter=self.engine_adapter,
+            engine_adapter=engine_adapter or self.engine_adapter,
             snapshots=self.snapshots,
             deployability_index=deployability_index,
             default_dialect=self.default_dialect,
@@ -915,7 +917,9 @@ class GenericContext(BaseContext, t.Generic[C]):
         if model.is_seed:
             df = next(
                 model.render(
-                    context=self.execution_context(),
+                    context=self.execution_context(
+                        engine_adapter=self._get_engine_adapter(model.gateway)
+                    ),
                     start=start,
                     end=end,
                     execution_time=execution_time,
@@ -934,7 +938,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             snapshots=snapshots,
             expand=expand,
             deployability_index=deployability_index,
-            engine_adapter=self.engine_adapter,
+            engine_adapter=self._get_engine_adapter(model.gateway),
             **kwargs,
         )
 
