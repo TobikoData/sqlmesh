@@ -39,7 +39,7 @@ export default function App(): JSX.Element {
     }
   }, [])
 
-  const router = getBrowserRouter(modules.list)
+  const router = getBrowserRouter(modules)
 
   return (
     <>

@@ -166,7 +166,7 @@ The SQLMesh UI default view contains five panes:
 
 It also contains nine buttons:
 
-1. Toggle Editor/Docs/Errors toggles among the Code Editor (default), Docs, and Errors views. Errors view is only available if an error has occurred.
+1. Toggle Editor/Data Catalog/Errors toggles among the Code Editor (default), Data Catalog, and Errors views. Errors view is only available if an error has occurred.
 2. History navigation returns to previous views, similar to the back button in a web browser.
 3. Add new tab opens a new code editor window.
 4. Run plan command executes the [`sqlmesh plan` command](../reference/cli.md#plan).
