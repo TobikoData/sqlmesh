@@ -40,8 +40,8 @@ export class ModelModuleController extends ModelInitial {
     return this.modules.size === 2 && this.hasProjectEditor
   }
 
-  get hasOnlyDocs(): boolean {
-    return this.modules.size === 1 && this.hasDocs
+  get hasOnlyDataCatalog(): boolean {
+    return this.modules.size === 1 && this.hasDataCatalog
   }
 
   get hasProjectEditorAndModule(): boolean {
@@ -52,8 +52,8 @@ export class ModelModuleController extends ModelInitial {
     )
   }
 
-  get hasDocs(): boolean {
-    return this.modules.has(Modules.docs)
+  get hasDataCatalog(): boolean {
+    return this.modules.has(Modules['data-catalog'])
   }
 
   get hasPlans(): boolean {
@@ -102,7 +102,7 @@ export class ModelModuleController extends ModelInitial {
       this.hasSingleModule ||
       this.hasOnlyProjectEditor ||
       this.hasModuleAndErrors ||
-      this.hasOnlyDocs
+      this.hasOnlyDataCatalog
     )
       return false
     if (this.hasProjectEditorAndModule) return true
@@ -114,10 +114,10 @@ export class ModelModuleController extends ModelInitial {
     if (
       this.hasOnlyProjectEditor ||
       this.hasModuleAndErrors ||
-      this.hasOnlyDocs
+      this.hasOnlyDataCatalog
     )
       return false
-    if (this.hasProjectEditorAndModule || this.hasDocs) return true
+    if (this.hasProjectEditorAndModule || this.hasDataCatalog) return true
 
     return isFalse(this.isEmpty)
   }
@@ -132,8 +132,8 @@ export class ModelModuleController extends ModelInitial {
 
   defaultNavigationRoute(): Routes {
     if (this.hasEditor) return EnumRoutes.Editor
-    if (this.hasDocs) return EnumRoutes.Docs
     if (this.hasPlans) return EnumRoutes.Plan
+    if (this.hasDataCatalog) return EnumRoutes.DataCatalog
 
     return EnumRoutes.NotFound
   }

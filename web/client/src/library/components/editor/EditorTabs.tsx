@@ -70,7 +70,7 @@ export default function EditorTabs(): JSX.Element {
     }
 
     selectTab(newTab)
-  }, [selectedFile])
+  }, [selectedFile, modules])
 
   useEffect(() => {
     if (isNil(lastSelectedModel)) return
@@ -132,7 +132,6 @@ function Tab({ tab, title }: { tab: EditorTab; title: string }): JSX.Element {
   const setSelectedFile = useStoreProject(s => s.setSelectedFile)
 
   const activeTab = useStoreEditor(s => s.tab)
-  const selectTab = useStoreEditor(s => s.selectTab)
   const closeTab = useStoreEditor(s => s.closeTab)
 
   useEffect(() => {
@@ -178,7 +177,6 @@ function Tab({ tab, title }: { tab: EditorTab; title: string }): JSX.Element {
       onClick={(e: MouseEvent) => {
         e.stopPropagation()
 
-        selectTab(tab)
         setSelectedFile(tab.file)
       }}
     >

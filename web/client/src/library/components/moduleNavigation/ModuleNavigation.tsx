@@ -46,10 +46,10 @@ export default function ModuleNavigation({
           iconActive={<FolderIcon className="min-w-6 w-6" />}
         />
       )}
-      {modules.hasDocs && (
+      {modules.hasDataCatalog && (
         <ModuleLink
-          title="Docs"
-          to={EnumRoutes.Docs}
+          title="Data Catalog"
+          to={EnumRoutes.DataCatalog}
           icon={<OutlineDocumentTextIcon className="min-w-6 w-6" />}
           iconActive={<DocumentTextIcon className="min-w-6 w-6" />}
           className="relative rounded-xl my-1 px-2 py-1 h-10 hover:bg-neutral-5 dark:hover:bg-neutral-10 text-neutral-600 dark:text-neutral-300"

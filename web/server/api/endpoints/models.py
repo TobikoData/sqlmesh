@@ -141,6 +141,4 @@ def _get_model_type(model: Model) -> str:
         return models.ModelType.SQL
     if model.is_python:
         return models.ModelType.PYTHON
-    if model.is_seed:
-        return models.ModelType.SEED
-    return models.ModelType.EXTERNAL
+    return models.ModelType.SOURCE

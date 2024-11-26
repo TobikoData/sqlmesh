@@ -32,7 +32,7 @@ SUPPORTED_EXTENSIONS = {".py", ".sql", ".yaml", ".yml", ".csv"}
 class Mode(str, enum.Enum):
     IDE = "ide"  # Allow all modules
     DOCS = "docs"  # Only docs module
-    DEFAULT = "default"  # Allow docs and plan
+    CATALOG = "catalog"  # Only docs module
     PLAN = "plan"  # Allow plan
 
 
@@ -54,7 +54,7 @@ class EventName(str, enum.Enum):
 class Modules(str, enum.Enum):
     EDITOR = "editor"  # include ability to edit files and run queries
     FILES = "files"  # include projects files
-    DOCS = "docs"  # include docs
+    DATA_CATALOG = "data-catalog"  # include data-catalog
     PLANS = "plans"  # include ability to run/apply plans
     TESTS = "tests"  # include ability to run tests
     AUDITS = "audits"  # include ability to run audits
@@ -68,6 +68,7 @@ class ModelType(str, enum.Enum):
     SQL = "sql"
     SEED = "seed"
     EXTERNAL = "external"
+    SOURCE = "source"
 
 
 class ArtifactType(str, enum.Enum):
@@ -392,7 +393,11 @@ class SchemaDiff(PydanticModel):
     @classmethod
     def validate_schema(
         cls,
-        v: t.Union[t.Dict[str, exp.DataType], t.List[t.Tuple[str, exp.DataType]], t.Dict[str, str]],
+        v: t.Union[
+            t.Dict[str, exp.DataType],
+            t.List[t.Tuple[str, exp.DataType]],
+            t.Dict[str, str],
+        ],
     ) -> t.Dict[str, str]:
         if isinstance(v, dict):
             return {k: str(v) for k, v in v.items()}
