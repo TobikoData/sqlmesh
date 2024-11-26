@@ -317,7 +317,7 @@ def test_evaluate_limit():
     assert context.evaluate("without_limit", "2020-01-01", "2020-01-02", "2020-01-02", 2).size == 2
 
 
-def test_gateway_specific_evaluator(copy_to_temp_path):
+def test_gateway_specific_adapters(copy_to_temp_path):
     path = copy_to_temp_path("examples/sushi")
     ctx = Context(paths=path, config="isolated_systems_config", gateway="prod")
     assert len(ctx._engine_adapters) == 1
@@ -326,10 +326,12 @@ def test_gateway_specific_evaluator(copy_to_temp_path):
         assert ctx._get_engine_adapter("dev")
 
     ctx = Context(paths=path, config="isolated_systems_config")
-    assert len(ctx._engine_adapters) == 3
+    assert len(ctx._engine_adapters) == 1
     assert ctx.engine_adapter == ctx._engine_adapters["dev"]
-    assert ctx._get_engine_adapter("prod") == ctx._engine_adapters["prod"]
-    assert ctx._get_engine_adapter("test") == ctx._engine_adapters["test"]
+
+    ctx = Context(paths=path, config="isolated_systems_config")
+    ctx._create_engine_adapters()
+    assert len(ctx._engine_adapters) == 3
 
 
 def test_multiple_gateways(tmp_path: Path):

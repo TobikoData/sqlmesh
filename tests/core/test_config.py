@@ -747,6 +747,7 @@ model_defaults:
     )
 
     ctx = Context(paths=tmp_path, config=config)
+    ctx._create_engine_adapters()
 
     assert isinstance(ctx._connection_config, RedshiftConnectionConfig)
     assert len(ctx._engine_adapters) == 2

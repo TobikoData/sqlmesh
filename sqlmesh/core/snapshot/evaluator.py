@@ -101,7 +101,7 @@ class SnapshotEvaluator:
         ddl_concurrent_tasks: int = 1,
     ):
         self.adapters = adapters if isinstance(adapters, t.Dict) else {"": adapters}
-        self.adapter = self.adapters[next(iter(self.adapters))]
+        self.adapter = next(iter(self.adapters.values()))
         self.ddl_concurrent_tasks = ddl_concurrent_tasks
 
     def _get_adapter(self, gateway: t.Optional[str] = None) -> EngineAdapter:

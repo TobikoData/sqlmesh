@@ -391,19 +391,6 @@ class GenericContext(BaseContext, t.Generic[C]):
             )
         }
 
-        if not gateway:
-            for gateway_name in self.config.gateways:
-                if gateway_name != self.default_gateway:
-                    connection = self.config.get_connection(gateway_name)
-                    adapter = connection.create_engine_adapter()
-                    self._test_connection_configs[gateway_name] = self.config.get_test_connection(
-                        gateway_name, self.default_catalog, default_catalog_dialect=adapter.DIALECT
-                    )
-                    self._min_concurrent_tasks = min(
-                        self._min_concurrent_tasks, connection.concurrent_tasks
-                    )
-                    self._engine_adapters[gateway_name] = adapter
-
         self._provided_state_sync: t.Optional[StateSync] = state_sync
         self._state_sync: t.Optional[StateSync] = None
 
@@ -436,14 +423,15 @@ class GenericContext(BaseContext, t.Generic[C]):
     @property
     def snapshot_evaluator(self) -> SnapshotEvaluator:
         if not self._snapshot_evaluator:
+            if self._snapshot_gateways:
+                self._create_engine_adapters()
+                self.concurrent_tasks = self._min_concurrent_tasks
             self._snapshot_evaluator = SnapshotEvaluator(
                 {
                     gateway: adapter.with_log_level(logging.INFO)
                     for gateway, adapter in self._engine_adapters.items()
                 },
-                ddl_concurrent_tasks=self._min_concurrent_tasks
-                if self._snapshot_gateways
-                else self.concurrent_tasks,
+                ddl_concurrent_tasks=self.concurrent_tasks,
             )
         return self._snapshot_evaluator
 
@@ -2031,6 +2019,21 @@ class GenericContext(BaseContext, t.Generic[C]):
             for fqn, snapshot in self.snapshots.items()
             if snapshot.is_model and snapshot.model.gateway
         }
+
+    def _create_engine_adapters(self) -> None:
+        """Creates and stores engine adapters for all gateway connections."""
+
+        for gateway_name in self.config.gateways:
+            if gateway_name != self.default_gateway:
+                connection = self.config.get_connection(gateway_name)
+                adapter = connection.create_engine_adapter()
+                self._test_connection_configs[gateway_name] = self.config.get_test_connection(
+                    gateway_name, self.default_catalog, default_catalog_dialect=adapter.DIALECT
+                )
+                self._min_concurrent_tasks = min(
+                    self._min_concurrent_tasks, connection.concurrent_tasks
+                )
+                self._engine_adapters[gateway_name] = adapter
 
     def _get_engine_adapter(self, gateway: t.Optional[str] = None) -> EngineAdapter:
         if gateway:
