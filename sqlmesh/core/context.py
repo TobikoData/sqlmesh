@@ -61,7 +61,6 @@ from sqlmesh.core.config import (
     Config,
     load_configs,
 )
-from sqlmesh.core.config.connection import ConnectionConfig
 from sqlmesh.core.config.loader import C
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.context_diff import ContextDiff
@@ -233,7 +232,6 @@ class ExecutionContext(BaseContext):
         engine_adapter: The engine adapter to execute queries against.
         snapshots: All upstream snapshots (by model name) to use for expansion and mapping of physical locations.
         deployability_index: Determines snapshots that are deployable in the context of this evaluation.
-        engine_adapters: Optional dictionary of multiple engine adapters.
     """
 
     def __init__(
@@ -383,13 +381,9 @@ class GenericContext(BaseContext, t.Generic[C]):
         self._snapshot_evaluator: t.Optional[SnapshotEvaluator] = None
 
         self.console = console or get_console(dialect=self.engine_adapter.dialect)
-        self._test_connection_configs: t.Dict[str, ConnectionConfig] = {
-            self.default_gateway: self.config.get_test_connection(
-                self.gateway,
-                self.default_catalog,
-                default_catalog_dialect=self.engine_adapter.DIALECT,
-            )
-        }
+        self._test_connection_config = self.config.get_test_connection(
+            self.gateway, self.default_catalog, default_catalog_dialect=self.engine_adapter.DIALECT
+        )
 
         self._provided_state_sync: t.Optional[StateSync] = state_sync
         self._state_sync: t.Optional[StateSync] = None
@@ -425,7 +419,6 @@ class GenericContext(BaseContext, t.Generic[C]):
         if not self._snapshot_evaluator:
             if self._snapshot_gateways:
                 self._create_engine_adapters()
-                self.concurrent_tasks = self._min_concurrent_tasks
             self._snapshot_evaluator = SnapshotEvaluator(
                 {
                     gateway: adapter.with_log_level(logging.INFO)
@@ -1638,10 +1631,9 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         try:
             model_to_test = self.get_model(model, raise_if_missing=True)
-            connection_config = self._test_connection_configs[
-                model_to_test.gateway or self.default_gateway
-            ]
-            test_adapter = connection_config.create_engine_adapter(register_comments_override=False)
+            test_adapter = self._test_connection_config.create_engine_adapter(
+                register_comments_override=False
+            )
             generate_test(
                 model=model_to_test,
                 input_queries=input_queries,
@@ -1980,7 +1972,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                 self.console.log_test_results(
                     result,
                     test_output,
-                    self._test_connection_configs[self.default_gateway]._engine_adapter.DIALECT,
+                    self._test_connection_config._engine_adapter.DIALECT,
                 )
             if not result.wasSuccessful():
                 raise PlanError(
@@ -2027,12 +2019,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             if gateway_name != self.default_gateway:
                 connection = self.config.get_connection(gateway_name)
                 adapter = connection.create_engine_adapter()
-                self._test_connection_configs[gateway_name] = self.config.get_test_connection(
-                    gateway_name, self.default_catalog, default_catalog_dialect=adapter.DIALECT
-                )
-                self._min_concurrent_tasks = min(
-                    self._min_concurrent_tasks, connection.concurrent_tasks
-                )
+                self.concurrent_tasks = min(self.concurrent_tasks, connection.concurrent_tasks)
                 self._engine_adapters[gateway_name] = adapter
 
     def _get_engine_adapter(self, gateway: t.Optional[str] = None) -> EngineAdapter:

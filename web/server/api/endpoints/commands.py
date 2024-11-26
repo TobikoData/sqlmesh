@@ -156,7 +156,7 @@ async def test(
     context.console.log_test_results(
         result,
         test_output.getvalue(),
-        context._test_connection_configs[context.config.default_gateway]._engine_adapter.DIALECT,
+        context._test_connection_config._engine_adapter.DIALECT,
     )
     return models.TestResult(
         errors=[

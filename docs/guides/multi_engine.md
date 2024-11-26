@@ -15,7 +15,7 @@ To configure a SQLMesh project with multiple engines, simply include all require
 
 Next, specify the appropriate `gateway` in the `MODEL` DDL for each model. If no gateway is explicitly defined, the default gateway will be used.
 
-The virtual layer will use the `default_gateway` specified in the configuration to build the views.
+The [virtual layer](../concepts/glossary.md#virtual-layer) will be created within the engine corresponding to the default gateway.
 
 ### Example
 
@@ -91,7 +91,9 @@ Meanwhile, the DuckDB's [attach](https://duckdb.org/docs/sql/statements/attach.h
     )
     ```
 
-By specifying the `duckdb` gateway in a particular model, we explicitly set DuckDB to be used for the operations related to that model's physical tables.
+By using the special value `:memory:`, which stands for DuckDB's in-memory mode, the PostgreSQL `main_db` catalog will be treated as the default.
+
+This way when specifying the `duckdb` gateway in a particular model, we explicitly set DuckDB to be used for the operations related to that model's physical tables, that will be materialized in the PostrgreSQL catalog.
 
 ```sql linenums="1"
 MODEL (
@@ -110,3 +112,11 @@ FROM
 This way, the DuckDB engine can be used to scan and load data from an iceberg table and create the physical table in the PostgreSQL database. 
 
 While the PostgreSQL engine is responsible for creating the model's view for the virtual layer.
+
+### Multiple Engines with Separate Data Catalogs
+
+There are cases where, even though the data catalog isn't shared, an engine may provide native integrations or plugins that allow federated queries across catalogs.
+
+One example is using DuckDB as the default gateway while connecting to multiple Postgres catalogs. In this setup, DuckDB can create views for these catalogs for the virtual layer.
+
+While these use cases can be handled with the new multi-engine feature, it’s advisable to proceed with caution, as the behavior varies depending on the engines involved and their support of cross-database interactions.

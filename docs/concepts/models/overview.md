@@ -352,7 +352,7 @@ Learn more about these properties and their default values in the [model configu
     NOTE: This can only be set for forward-only models.
 
 ### gateway
-:   Specifies the gateway connection to execute this model with the corresponding engine. When the gateway isn't specified, the default gateway is used.
+:   Specifies the gateway to use for the execution of this model. When not specified, the default gateway is used.
 
 ## Incremental Model Properties
 

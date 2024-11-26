@@ -46,9 +46,9 @@ def _create_test(
         test_name=test_name,
         model=model,
         models=context._models,
-        engine_adapter=context._test_connection_configs[
-            context.config.default_gateway
-        ].create_engine_adapter(register_comments_override=False),
+        engine_adapter=context._test_connection_config.create_engine_adapter(
+            register_comments_override=False
+        ),
         dialect=context.config.dialect,
         path=None,
         default_catalog=context.default_catalog,

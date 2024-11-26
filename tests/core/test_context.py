@@ -332,6 +332,8 @@ def test_gateway_specific_adapters(copy_to_temp_path):
     ctx = Context(paths=path, config="isolated_systems_config")
     ctx._create_engine_adapters()
     assert len(ctx._engine_adapters) == 3
+    assert ctx.engine_adapter == ctx._get_engine_adapter()
+    assert ctx._get_engine_adapter("test") == ctx._engine_adapters["test"]
 
 
 def test_multiple_gateways(tmp_path: Path):
@@ -375,18 +377,20 @@ def test_multiple_gateways(tmp_path: Path):
         no_prompts=True,
     )
 
-    physical_schemas = [snapshot.physical_schema for snapshot in sorted(context.snapshots.values())]
-    view_schemas = [
-        snapshot.qualified_view_name.schema_name for snapshot in sorted(context.snapshots.values())
-    ]
+    sorted_snapshots = sorted(context.snapshots.values())
 
+    physical_schemas = [snapshot.physical_schema for snapshot in sorted_snapshots]
     assert physical_schemas == ["sqlmesh__main", "sqlmesh__staging"]
+
+    view_schemas = [snapshot.qualified_view_name.schema_name for snapshot in sorted_snapshots]
     assert view_schemas == ["main", "staging"]
+
     assert (
         str(context.fetchdf("select * from staging.stg_model"))
         == "   v\n0  1\n1  2\n2  3\n3  4\n4  5"
     )
     assert str(context.fetchdf("select * from final_model")) == "   v\n0  1\n1  2\n2  3\n3  4\n4  5"
+
     assert (
         context.snapshots['"db"."main"."final_model"'].parents[0].name
         == '"db"."staging"."stg_model"'
@@ -450,11 +454,12 @@ def test_override_builtin_audit_blocking_mode():
         plan = context.plan(auto_apply=True, no_prompts=True)
         new_snapshot = next(iter(plan.context_diff.new_snapshots.values()))
 
+        version = new_snapshot.fingerprint.to_version()
         assert mock_logger.mock_calls == [
             call(
                 "Audit 'not_null' for model 'db.x' failed.\n"
                 "Got 1 results, expected 0.\n"
-                'SELECT * FROM (SELECT * FROM "sqlmesh__db"."db__x__1949820056" AS "db__x__1949820056") AS "_q_0" WHERE "c" IS NULL AND TRUE\n'
+                f'SELECT * FROM (SELECT * FROM "sqlmesh__db"."db__x__{version}" AS "db__x__{version}") AS "_q_0" WHERE "c" IS NULL AND TRUE\n'
                 "Audit is warn only so proceeding with execution."
             )
         ]

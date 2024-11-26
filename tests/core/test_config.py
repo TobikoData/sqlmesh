@@ -753,6 +753,4 @@ model_defaults:
     assert len(ctx._engine_adapters) == 2
     assert isinstance(ctx._engine_adapters["athena"], AthenaEngineAdapter)
     assert isinstance(ctx._engine_adapters["redshift"], RedshiftEngineAdapter)
-    assert len(ctx._test_connection_configs) == 2
-    assert ctx._test_connection_configs["athena"].type_ == "duckdb"
-    assert ctx._test_connection_configs["redshift"].type_ == "redshift"
+    assert ctx.engine_adapter == ctx._get_engine_adapter("redshift")
