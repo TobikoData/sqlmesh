@@ -3332,3 +3332,82 @@ def test_multiple_engine_cleanup(snapshot: Snapshot, adapters, make_snapshot):
     engine_adapters["secondary"].drop_table.assert_called_once_with(
         f"sqlmesh__test_schema.test_schema__test_model__{snapshot_2.version}__temp"
     )
+
+
+def test_multi_engine_python_model_with_macros(adapters, make_snapshot):
+    engine_adapters = {"default": adapters[0], "secondary": adapters[1]}
+    evaluator = SnapshotEvaluator(engine_adapters)
+
+    @macro()
+    def create_index(
+        evaluator: MacroEvaluator,
+        index_name: str,
+        model_name: str,
+        column: str,
+    ):
+        if evaluator.runtime_stage == "creating":
+            # To validate the model-specified gateway is used for the evaluator
+            evaluator.engine_adapter.get_catalog_type()
+            return f"CREATE INDEX IF NOT EXISTS {index_name} ON {model_name}({column});"
+
+    @model(
+        "db.test_model",
+        kind="full",
+        gateway="secondary",
+        columns={"id": "string", "name": "string"},
+        pre_statements=["@CREATE_INDEX(idx, db.test_model, id)"],
+        post_statements=["@CREATE_INDEX(idx, db.test_model, id)"],
+    )
+    def model_with_statements(context, **kwargs):
+        return pd.DataFrame(
+            [
+                {
+                    "id": context.var("1"),
+                    "name": context.var("var"),
+                }
+            ]
+        )
+
+    python_model = model.get_registry()["db.test_model"].model(
+        module_path=Path("."),
+        path=Path("."),
+        macros=macro.get_registry(),
+        dialect="postgres",
+    )
+
+    assert len(python_model.python_env) == 3
+    assert isinstance(python_model.python_env["create_index"], Executable)
+
+    snapshot = make_snapshot(python_model)
+    assert snapshot.model_gateway == "secondary"
+    assert evaluator.adapter == engine_adapters["default"]
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    evaluator.create([snapshot], {}, DeployabilityIndex.all_deployable())
+
+    # Validate model-specific gateway usage during table creation
+    create_args = engine_adapters["secondary"].create_table.call_args_list
+    assert len(create_args) == 1
+    assert create_args[0][0] == (f"sqlmesh__db.db__test_model__{snapshot.version}",)
+
+    evaluator.promote([snapshot], EnvironmentNamingInfo(name="test_env"))
+
+    # Verify that the default gateway creates the view for the virtual layer
+    engine_adapters["secondary"].create_view.assert_not_called()
+    view_args = engine_adapters["default"].create_view.call_args_list
+    assert len(view_args) == 1
+    assert view_args[0][0][0] == "db__test_env.test_model"
+
+    # For the pre/post statements verify the model-specific gateway was used
+    expected_call = f'CREATE INDEX IF NOT EXISTS "idx" ON "sqlmesh__db"."db__test_model__{snapshot.version}" /* db.test_model */("id")'
+    engine_adapters["default"].execute.assert_not_called()
+    call_args = engine_adapters["secondary"].execute.call_args_list
+    pre_calls = call_args[0][0][0]
+    assert pre_calls[0].sql(dialect="postgres") == expected_call
+
+    post_calls = call_args[1][0][0]
+    assert post_calls[0].sql(dialect="postgres") == expected_call
+
+    # Validate that the get_catalog_type method was called only on the secondary engine from the macro evaluator
+    engine_adapters["default"].get_catalog_type.assert_not_called()
+    assert len(engine_adapters["secondary"].get_catalog_type.call_args_list) == 2
