@@ -550,7 +550,7 @@ class QueryRenderer(BaseExpressionRenderer):
                     self._model_fqn,
                 )
                 raise SQLMeshError(
-                    "Preventing plan application due to ambiguous column(s). Set error_on_ambiguous_columns to false to make this a warning."
+                    "ambiguous column(s). Set `--error_on_ambiguous_columns false` to make this a warning"
                 )
             else:
                 logger.warning(
