@@ -702,9 +702,9 @@ def info(obj: Context, skip_connection: bool, verbose: bool) -> None:
 )
 @click.option(
     "--mode",
-    type=click.Choice(["ide", "default", "docs", "plan"], case_sensitive=False),
-    default="default",
-    help="Mode to start the UI in. Default: default",
+    type=click.Choice(["ide", "catalog", "docs", "plan"], case_sensitive=False),
+    default="ide",
+    help="Mode to start the UI in. Default: ide",
 )
 @click.pass_context
 @error_handler

@@ -3,7 +3,7 @@ import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react-swc'
 
 const BASE_URL = process.env.BASE_URL ?? ''
-const BASE = BASE_URL ?? '/'
+const BASE = BASE_URL == null || BASE_URL === '' ? '/' : BASE_URL
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -49,7 +49,7 @@ export default defineConfig({
               target: 'http://api:8000',
               rewrite: path => path.replace(`${BASE_URL}/api`, '/api'),
             },
-            [`${BASE_URL}/docs`]: {
+            [`${BASE_URL}/data-catalog`]: {
               target: 'http://app:8001',
               rewrite: path => BASE,
             },

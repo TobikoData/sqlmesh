@@ -37,7 +37,7 @@ export default function Content(): JSX.Element {
               ? undefined
               : `Environment ${environmentName} Does Not Exist`
           }
-          message="Back To Docs"
+          message="Back To Data Catalog"
         />
       ) : (
         <Plan />

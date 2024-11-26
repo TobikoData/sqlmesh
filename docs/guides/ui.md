@@ -56,7 +56,7 @@ The UI modules are:
 
 - [Code editor](#editor-module)
 - [Plan builder](#plan-module)
-- [Project documentation](#docs-module)
+- [Data catalog](#data-catalog-module)
 - [Table and column lineage](#lineage-module)
 
 The screenshots in most examples below use the default `editor` mode.
@@ -75,7 +75,7 @@ The `editor` module will appear by default if the UI is started without specifyi
 
 It also contains nine buttons:
 
-1. Toggle Editor/Docs/Errors/Plan toggles among the editor module (default), docs module, errors view, and plan module. Errors view is only available if an error has occurred.
+1. Toggle Editor/Data Catalog/Errors/Plan toggles among the editor module (default), data catalog module, errors view, and plan module. Errors view is only available if an error has occurred.
 2. History navigation returns to previous views, similar to the back button in a web browser.
 3. Add new tab opens a new code editor window.
 4. Plan opens the plan module.
@@ -194,19 +194,19 @@ Click the blue `Apply Changes And Backfill` button to apply the plan and execute
 
 ![Plan after applying updated plan with modified model](./ui/ui-quickstart_apply-plan-dev-modified.png){ loading=lazy }
 
-### Docs module
+### Data Catalog module
 
-The docs module displays information about all your project's models in one interface.
+The data catalog module displays information about all your project's models in one interface.
 
 A list of all models is displayed in the left-hand pane. You can filter models by name by typing in the field at the top of the pane.
 
 When you choose a model, its query, lineage, and attributes are displayed. This example shows information from the [quickstart project](../quick_start.md) incremental model:
 
-![Docs with incremental model selected](./ui/ui-guide_docs.png){ loading=lazy }
+![Data Catalog with incremental model selected](./ui/ui-guide_docs.png){ loading=lazy }
 
 By default, the model definition source code is displayed. If you toggle to `Compiled Query`, it will display an example of the model query rendered with macro values substituted:
 
-![Docs with compiled incremental model query](./ui/ui-guide_docs-compiled-query.png){ loading=lazy }
+![Data Catalog with compiled incremental model query](./ui/ui-guide_docs-compiled-query.png){ loading=lazy }
 
 ### Lineage module
 
@@ -232,9 +232,9 @@ You may specify the UI mode as an option when you [start the UI on the command l
 
 The UI modes contain these modules:
 
-- `editor`: code editor, plan builder, project documentation, table and column lineage
-- `plan`: plan builder, project documentation, table and column lineage
-- `docs`: project documentation, table and column lineage
+- `editor`: code editor, plan builder, data catalog, table and column lineage
+- `plan`: plan builder, data catalog, table and column lineage
+- `catalog`: data catalog, table and column lineage
 
 ### Working with an IDE
 

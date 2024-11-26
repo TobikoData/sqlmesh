@@ -728,6 +728,7 @@ function getModelNodeTypeTitle(type: LineageNodeModelType): string {
   if (type === EnumLineageNodeModelType.seed) return 'SEED'
   if (type === EnumLineageNodeModelType.cte) return 'CTE'
   if (type === EnumLineageNodeModelType.external) return 'EXTERNAL'
+  if (type === EnumLineageNodeModelType.source) return 'SOURCE'
 
   return 'UNKNOWN'
 }
