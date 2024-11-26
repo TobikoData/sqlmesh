@@ -42,9 +42,15 @@ Technical Requirements:
 
 ## Install the `tcloud` CLI
 
-- Create a new project directory and navigate into it.
 - Open your terminal within your terminal/IDE (ex: VSCode)
 - Follow the below steps to install the `tcloud` CLI
+
+- Create a new project directory and navigate into it:
+
+```bash
+mkdir tcloud_project
+cd tcloud_project
+```
 
 - Create a new file called `requirements.txt` and add the below:
   
