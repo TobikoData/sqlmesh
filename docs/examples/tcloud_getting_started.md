@@ -38,7 +38,7 @@ Technical Requirements:
 2. Leave the username blank and use the temporary password you received from the Solutions Architect in the temporary password link
 3. Once logged in, you should see the home page. Your view should be empty, but the below is a populated example with Tobiko Cloud running in production.
 
-TODO: add screenshot of populated home page
+![tcloud home page](./tcloud_home_page.png)
 
 ## Install the `tcloud` CLI
 
@@ -141,7 +141,7 @@ users:
     - required_approver
 ```
 
-Based on your data warehouse, we will walk through instructions live to create a new `tcloud` user with the necessary permissions. This user will be used to create, update, and delete tables in your data warehouse. You can scope it to a specific database if needed.
+Based on your data warehouse, we will walk through instructions live to create a new `tcloud` user with the necessary permissions. This user will be used to create, update, and delete tables in your data warehouse. You can scope it to a specific database if needed. You'll see data warehouse specific instructions here: [Data Warehouse Integrations](../../docs/integrations/overview.md)
 
 We recommend creating a `.env` file in your root project directory to store your environment variables and verify it is in your `.gitignore` file to prevent it from being committed and exposed in plain text.
 
@@ -150,6 +150,7 @@ We recommend creating a `.env` file in your root project directory to store your
 DATA_WAREHOUSE_CREDENTIALS=<your data warehouse credentials>
 TCLOUD_TOKEN=<your tcloud token>
 ```
+
 Run these commands to set your environment variables:
 Pro tip: you can include these in a `Makefile` to make it easier to run commands.
 
@@ -216,7 +217,7 @@ The target environment has been updated successfully
 
 You should see your tcloud project directory look and feel like the below. From here, if you have an existing SQLMesh project, you can copy over your existing models and macros to the `models` and `macros` directories along with others as needed.
 
-TODO: add screenshot of project directory
+![tcloud project directory](./tcloud_project_dir.png)
 
 You are now fully onboarded with Tobiko Cloud. We recommend reviewing the helpful links below to get familiar with SQLMesh and Tobiko Cloud. Here's to having data transformation without the waste!
 
