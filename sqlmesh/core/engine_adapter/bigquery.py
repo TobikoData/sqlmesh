@@ -996,6 +996,9 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
     def _normalize_decimal_value(self, col: exp.Expression, precision: int) -> exp.Expression:
         return exp.func("FORMAT", exp.Literal.string(f"%.{precision}f"), col)
 
+    def _normalize_nested_value(self, col: exp.Expression) -> exp.Expression:
+        return exp.func("TO_JSON_STRING", col, dialect=self.dialect)
+
     @property
     def _query_data(self) -> t.Any:
         return self._connection_pool.get_attribute("query_data")
