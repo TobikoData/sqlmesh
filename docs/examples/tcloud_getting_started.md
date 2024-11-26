@@ -30,6 +30,7 @@ For SQLMesh (open source) to Tobiko Cloud Migrations Only:
 > Note: if you must be on VPN to access your data warehouse or have specific security requirements, please let us know and we can discuss options to ensure Tobiko Cloud can securely connect.
 
 Technical Requirements:
+
 - Python 3.10+
 
 ## Login to Tobiko Cloud
