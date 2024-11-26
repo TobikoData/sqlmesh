@@ -304,3 +304,21 @@ def test_create_view(adapter: t.Callable):
         'DROP VIEW IF EXISTS "test_view" CASCADE',
         'CREATE VIEW "test_view" ("a", "b") AS SELECT "cola" FROM "table" WITH NO SCHEMA BINDING',
     ]
+
+
+def test_alter_table_drop_column_cascade(adapter: t.Callable):
+    current_table_name = "test_table"
+    target_table_name = "target_table"
+
+    def table_columns(table_name: str) -> t.Dict[str, exp.DataType]:
+        if table_name == current_table_name:
+            return {"id": exp.DataType.build("int"), "test_column": exp.DataType.build("int")}
+        else:
+            return {"id": exp.DataType.build("int")}
+
+    adapter.columns = table_columns
+
+    adapter.alter_table(adapter.get_alter_expressions(current_table_name, target_table_name))
+    assert to_sql_calls(adapter) == [
+        'ALTER TABLE "test_table" DROP COLUMN "test_column" CASCADE',
+    ]
