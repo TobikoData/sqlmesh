@@ -12,6 +12,7 @@ from sqlmesh.core.engine_adapter.shared import DataObject
 import sqlmesh.core.dialect as d
 from sqlmesh.core.model import SqlModel, load_sql_based_model
 from sqlmesh.core.plan import Plan
+from sqlmesh.core.table_diff import TableDiff
 from tests.core.engine_adapter.integration import TestContext
 
 pytestmark = [pytest.mark.engine, pytest.mark.remote, pytest.mark.bigquery]
@@ -275,3 +276,96 @@ def test_information_schema_view_external_model(ctx: TestContext, tmp_path: Path
         "  `tables`.`sync_status` AS `sync_status`\n"
         f"FROM {dependency} AS `tables`"
     )
+
+
+def test_compare_nested_values_in_table_diff(ctx: TestContext):
+    src_table = ctx.table("source")
+    target_table = ctx.table("target")
+
+    query: exp.Query = exp.maybe_parse(
+        """
+        SELECT
+          1 AS id,
+          STRUCT(
+            'Main String' AS top_level_string,
+            [1, 2, 3, 4] AS top_level_array,
+            STRUCT(
+              'Nested String' AS nested_string,
+              [STRUCT(
+                'Inner Struct String 1' AS inner_string,
+                [10, 20, 30] AS inner_array
+              ), STRUCT(
+                'Inner Struct String 2' AS inner_string,
+                [40, 50, 60] AS inner_array
+              )] AS nested_array_of_structs
+            ) AS nested_struct,
+            [STRUCT(
+              'Array Struct String 1' AS array_struct_string,
+              STRUCT(
+                'Deeper Nested String' AS deeper_nested_string,
+                [100, 200] AS deeper_nested_array
+              ) AS deeper_nested_struct
+            ), STRUCT(
+              'Array Struct String 2' AS array_struct_string,
+              STRUCT(
+                'Another Nested String' AS deeper_nested_string,
+                [300, 400] AS deeper_nested_array
+              ) AS deeper_nested_struct
+            )] AS array_of_structs_with_nested_structs,
+            ARRAY(
+              SELECT STRUCT(
+                CONCAT('Dynamic String ', CAST(num AS STRING)) AS dynamic_string,
+                ARRAY(
+                  SELECT CAST(num * multiplier AS INT64)
+                  FROM UNNEST([1, 2, 3]) AS multiplier
+                ) AS dynamic_array
+              )
+              FROM UNNEST([1, 2, 3]) AS num
+            ) AS dynamically_generated_struct_array
+          ) AS nested_value
+        """,
+        dialect="bigquery",
+    )
+
+    ctx.engine_adapter.ctas(src_table, query)
+    ctx.engine_adapter.ctas(target_table, query)
+
+    table_diff = TableDiff(
+        adapter=ctx.engine_adapter,
+        source=exp.table_name(src_table),
+        target=exp.table_name(target_table),
+        on=["id"],
+    )
+    row_diff = table_diff.row_diff()
+
+    assert row_diff.stats["join_count"] == 1
+    assert row_diff.full_match_count == 1
+
+    ctx.engine_adapter.drop_table(src_table)
+    ctx.engine_adapter.drop_table(target_table)
+
+    query1: exp.Query = exp.maybe_parse(
+        "SELECT 0 as id, [STRUCT(0 as struct_id, 'value1' as struct_value), STRUCT(1 as struct_id, 'value2' as struct_value)] as struct_array",
+        dialect="bigquery",
+    )
+    query2: exp.Query = exp.maybe_parse(
+        "SELECT 0 as id, [STRUCT(0 as struct_id, 'value2' as struct_value), STRUCT(1 as struct_id, 'value1' as struct_value)] as struct_array",
+        dialect="bigquery",
+    )
+
+    ctx.engine_adapter.ctas(src_table, query1)
+    ctx.engine_adapter.ctas(target_table, query2)
+
+    table_diff = TableDiff(
+        adapter=ctx.engine_adapter,
+        source=exp.table_name(src_table),
+        target=exp.table_name(target_table),
+        on=["id"],
+    )
+    row_diff = table_diff.row_diff()
+
+    assert row_diff.stats["join_count"] == 1
+    assert row_diff.full_match_count == 0
+
+    ctx.engine_adapter.drop_table(src_table)
+    ctx.engine_adapter.drop_table(target_table)

@@ -282,11 +282,15 @@ class TableDiff:
             t_index_names = [t.name for t in t_index]
 
             def _column_expr(name: str, table: str) -> exp.Expression:
-                if matched_columns[name].this in exp.DataType.FLOAT_TYPES:
-                    return exp.func(
-                        "ROUND", exp.column(name, table), exp.Literal.number(self.decimals)
-                    )
-                return exp.column(name, table)
+                column_type = matched_columns[name]
+                qualified_column = exp.column(name, table)
+
+                if column_type.is_type(*exp.DataType.FLOAT_TYPES):
+                    return exp.func("ROUND", qualified_column, exp.Literal.number(self.decimals))
+                if column_type.is_type(*exp.DataType.NESTED_TYPES):
+                    return self.adapter._normalize_nested_value(qualified_column)
+
+                return qualified_column
 
             comparisons = [
                 exp.Case()
