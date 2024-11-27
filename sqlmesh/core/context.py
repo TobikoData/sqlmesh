@@ -418,7 +418,7 @@ class GenericContext(BaseContext, t.Generic[C]):
     def snapshot_evaluator(self) -> SnapshotEvaluator:
         if not self._snapshot_evaluator:
             if self._snapshot_gateways:
-                self._create_engine_adapters()
+                self._create_engine_adapters(set(self._snapshot_gateways.values()))
             self._snapshot_evaluator = SnapshotEvaluator(
                 {
                     gateway: adapter.with_log_level(logging.INFO)
@@ -2019,11 +2019,13 @@ class GenericContext(BaseContext, t.Generic[C]):
             if snapshot.is_model and snapshot.model.gateway
         }
 
-    def _create_engine_adapters(self) -> None:
-        """Creates and stores engine adapters for all gateway connections."""
+    def _create_engine_adapters(self, gateways: t.Optional[t.Set] = None) -> None:
+        """Create engine adapters for the gateways, when none provided include all defined in the configs."""
 
         for gateway_name in self.config.gateways:
-            if gateway_name != self.default_gateway:
+            if gateway_name != self.default_gateway and (
+                gateways is None or gateway_name in gateways
+            ):
                 connection = self.config.get_connection(gateway_name)
                 adapter = connection.create_engine_adapter()
                 self.concurrent_tasks = min(self.concurrent_tasks, connection.concurrent_tasks)

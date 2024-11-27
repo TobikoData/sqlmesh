@@ -109,11 +109,3 @@ FROM
 In this model, the DuckDB engine can be used to scan and load data from an iceberg table and create the physical table in the PostgreSQL database. 
 
 While the PostgreSQL engine is responsible for creating the model's view for the virtual layer.
-
-### Multiple Engines with Separate Data Catalogs
-
-There are cases where, even though the data catalog isn't shared, an engine may provide native integrations or plugins that allow federated queries across catalogs.
-
-One example is using DuckDB as the default gateway while connecting to multiple Postgres catalogs. In this setup, DuckDB can create views for the external catalogs for the virtual layer.
-
-While these use cases can be handled with the new multi-engine feature, it’s advisable to proceed with caution, as the behavior varies depending on the engines involved and their support of cross-database interactions.

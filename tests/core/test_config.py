@@ -5,6 +5,7 @@ from pathlib import Path
 from unittest import mock
 
 import pytest
+from pytest_mock import MockerFixture
 from sqlglot import exp
 
 from sqlmesh.core.config import (
@@ -707,7 +708,7 @@ model_defaults:
     assert isinstance(config.get_gateway("builtin_gateway").scheduler, BuiltInSchedulerConfig)
 
 
-def test_multi_gateway_config(tmp_path):
+def test_multi_gateway_config(tmp_path, mocker: MockerFixture):
     config_path = tmp_path / "config_athena_redshift.yaml"
     with open(config_path, "w", encoding="utf-8") as fd:
         fd.write(
@@ -747,6 +748,13 @@ model_defaults:
     )
 
     ctx = Context(paths=tmp_path, config=config)
+
+    mocker.patch.object(
+        Context,
+        "_snapshot_gateways",
+        new_callable=mocker.PropertyMock(return_value={"snapshot": "athena"}),
+    )
+
     ctx._create_engine_adapters()
 
     assert isinstance(ctx._connection_config, RedshiftConnectionConfig)

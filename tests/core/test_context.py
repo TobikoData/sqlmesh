@@ -317,7 +317,7 @@ def test_evaluate_limit():
     assert context.evaluate("without_limit", "2020-01-01", "2020-01-02", "2020-01-02", 2).size == 2
 
 
-def test_gateway_specific_adapters(copy_to_temp_path):
+def test_gateway_specific_adapters(copy_to_temp_path, mocker):
     path = copy_to_temp_path("examples/sushi")
     ctx = Context(paths=path, config="isolated_systems_config", gateway="prod")
     assert len(ctx._engine_adapters) == 1
@@ -329,9 +329,16 @@ def test_gateway_specific_adapters(copy_to_temp_path):
     assert len(ctx._engine_adapters) == 1
     assert ctx.engine_adapter == ctx._engine_adapters["dev"]
 
+    mocker.patch.object(
+        Context,
+        "_snapshot_gateways",
+        new_callable=mocker.PropertyMock(return_value={"test_snapshot": "test"}),
+    )
+
     ctx = Context(paths=path, config="isolated_systems_config")
-    ctx._create_engine_adapters()
-    assert len(ctx._engine_adapters) == 3
+
+    ctx._create_engine_adapters({"test"})
+    assert len(ctx._engine_adapters) == 2
     assert ctx.engine_adapter == ctx._get_engine_adapter()
     assert ctx._get_engine_adapter("test") == ctx._engine_adapters["test"]
 
