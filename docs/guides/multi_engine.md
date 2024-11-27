@@ -89,7 +89,8 @@ Meanwhile, the DuckDB's [attach](https://duckdb.org/docs/sql/statements/attach.h
     )
     ```
 
-When specifying the `duckdb` gateway in a particular model, we explicitly set DuckDB to be used for the operations related to that model's physical tables, which will be materialized in the PostgreSQL `main_db` catalog.
+Given this configuration, when a model’s gateway is set to duckdb, it will be materialized within the PostgreSQL `main_db` catalog, but it will be evaluated using DuckDB’s engine.
+
 
 ```sql linenums="1"
 MODEL (
