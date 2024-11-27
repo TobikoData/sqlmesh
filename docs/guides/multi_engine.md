@@ -33,7 +33,6 @@ Meanwhile, the DuckDB's [attach](https://duckdb.org/docs/sql/statements/attach.h
         connection:
           type: duckdb
           catalogs:
-            memory: ':memory:'
             main_db:
               type: postgres
               path: 'dbname=main_db user=postgres host=127.0.0.1'
@@ -68,7 +67,6 @@ Meanwhile, the DuckDB's [attach](https://duckdb.org/docs/sql/statements/attach.h
             "duckdb": GatewayConfig(
                 connection=DuckDBConnectionConfig(
                     catalogs={
-                        "memory": ":memory:",
                         "main_db": DuckDBAttachOptions(
                             type="postgres",
                             path="dbname=main_db user=postgres host=127.0.0.1"
@@ -91,9 +89,7 @@ Meanwhile, the DuckDB's [attach](https://duckdb.org/docs/sql/statements/attach.h
     )
     ```
 
-By using the special value `:memory:`, which stands for DuckDB's in-memory mode, the PostgreSQL `main_db` catalog will be treated as the default.
-
-This way when specifying the `duckdb` gateway in a particular model, we explicitly set DuckDB to be used for the operations related to that model's physical tables, that will be materialized in the PostrgreSQL catalog.
+When specifying the `duckdb` gateway in a particular model, we explicitly set DuckDB to be used for the operations related to that model's physical tables, which will be materialized in the PostrgreSQL `main_db` catalog.
 
 ```sql linenums="1"
 MODEL (
@@ -109,7 +105,7 @@ FROM
   iceberg_scan('data/bucket/lineitem_iceberg', allow_moved_paths = true);
 ```
 
-This way, the DuckDB engine can be used to scan and load data from an iceberg table and create the physical table in the PostgreSQL database. 
+In this model, the DuckDB engine can be used to scan and load data from an iceberg table and create the physical table in the PostgreSQL database. 
 
 While the PostgreSQL engine is responsible for creating the model's view for the virtual layer.
 

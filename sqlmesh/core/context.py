@@ -1883,10 +1883,13 @@ class GenericContext(BaseContext, t.Generic[C]):
                 self.config.get_state_connection(self.gateway), self.console, "State Connection"
             )
 
-        self._try_connection("data warehouse", self.engine_adapter.ping)
+        self._create_engine_adapters()
+        self._try_connection(
+            "data warehouse", [adapter.ping for adapter in self._engine_adapters.values()]
+        )
         state_connection = self.config.get_state_connection(self.gateway)
         if state_connection:
-            self._try_connection("state backend", state_connection.connection_validator())
+            self._try_connection("state backend", [state_connection.connection_validator()])
 
     def close(self) -> None:
         """Releases all resources allocated by this context."""
@@ -2141,10 +2144,13 @@ class GenericContext(BaseContext, t.Generic[C]):
         expired_environments = self.state_sync.delete_expired_environments()
         cleanup_expired_views(self.engine_adapter, expired_environments, console=self.console)
 
-    def _try_connection(self, connection_name: str, validator: t.Callable[[], None]) -> None:
+    def _try_connection(
+        self, connection_name: str, validators: t.List[t.Callable[[], None]]
+    ) -> None:
         connection_name = connection_name.capitalize()
         try:
-            validator()
+            for validator in validators:
+                validator()
             self.console.log_status_update(f"{connection_name} connection [green]succeeded[/green]")
         except Exception as ex:
             self.console.log_error(f"{connection_name} connection failed. {ex}")
