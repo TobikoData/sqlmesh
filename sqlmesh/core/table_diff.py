@@ -455,7 +455,7 @@ class TableDiff:
                                     )
                                     / exp.func("COUNT", name(c))
                                 ),
-                                1,
+                                9,
                             ).as_(c.alias)
                             for c in comparisons
                         )
