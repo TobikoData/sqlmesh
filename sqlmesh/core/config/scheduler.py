@@ -109,8 +109,7 @@ class _EngineAdapterStateSyncSchedulerConfig(SchedulerConfig):
                     + f"multi threaded mode with {warehouse_connection.concurrent_tasks} concurrent tasks."
                     + " This can cause SQLMesh to hang. Overriding the duckdb state connection config to use multi threaded mode"
                 )
-                # this triggers multithreaded mode and will raise an error if the user hasnt set a local DB file
-                # (since multithreaded mode doesnt work on in-memory DuckDB databases)
+                # this triggers multithreaded mode
                 state_connection.concurrent_tasks = warehouse_connection.concurrent_tasks
 
         schema = context.config.get_state_schema(context.gateway)

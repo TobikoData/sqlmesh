@@ -87,7 +87,9 @@ def test_type(request):
                 pytest.mark.duckdb,
                 pytest.mark.engine,
                 pytest.mark.slow,
-                # duckdb does not support concurrency against its ':memory:' catalog so we run the tests sequentially
+                # the duckdb tests cannot run concurrently because many of them point at the same files
+                # and duckdb does not support multi process read/write on the same files
+                # ref: https://duckdb.org/docs/connect/concurrency.html#writing-to-duckdb-from-multiple-processes
                 pytest.mark.xdist_group("engine_integration_duckdb"),
             ],
         ),
