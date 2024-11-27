@@ -1871,6 +1871,7 @@ def create_python_model(
         depends_on=depends_on,
         entrypoint=entrypoint,
         python_env=python_env,
+        macros=macros,
         jinja_macros=jinja_macros,
         module_path=module_path,
         variables=variables,
