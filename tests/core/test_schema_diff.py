@@ -45,6 +45,32 @@ def test_schema_diff_calculate():
     ]
 
 
+def test_schema_diff_drop_cascade():
+    alter_expressions = SchemaDiffer(
+        **{
+            "support_positional_add": False,
+            "support_nested_operations": False,
+            "array_element_selector": "",
+            "drop_cascade": True,
+        }
+    ).compare_columns(
+        "apply_to_table",
+        {
+            "id": exp.DataType.build("INT"),
+            "name": exp.DataType.build("STRING"),
+            "price": exp.DataType.build("DOUBLE"),
+        },
+        {
+            "id": exp.DataType.build("INT"),
+            "name": exp.DataType.build("STRING"),
+        },
+    )
+
+    assert [x.sql() for x in alter_expressions] == [
+        """ALTER TABLE apply_to_table DROP COLUMN price CASCADE"""
+    ]
+
+
 def test_schema_diff_calculate_type_transitions():
     alter_expressions = SchemaDiffer(
         **{
