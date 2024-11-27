@@ -18,6 +18,7 @@ from sqlmesh.core.plan import (
     MWAAPlanEvaluator,
     PlanEvaluator,
 )
+from sqlmesh.core.config import DuckDBConnectionConfig
 from sqlmesh.core.state_sync import EngineAdapterStateSync, StateSync
 from sqlmesh.schedulers.airflow.client import AirflowClient
 from sqlmesh.schedulers.airflow.mwaa_client import MWAAClient
@@ -95,6 +96,23 @@ class _EngineAdapterStateSyncSchedulerConfig(SchedulerConfig):
                 f"The {state_connection.type_} engine is not recommended for storing SQLMesh state in production deployments. Please see"
                 + " https://sqlmesh.readthedocs.io/en/stable/guides/configuration/#state-connection for a list of recommended engines and more information."
             )
+
+        if (
+            isinstance(state_connection, DuckDBConnectionConfig)
+            and state_connection.concurrent_tasks <= 1
+        ):
+            # If we are using DuckDB, ensure that multithreaded mode gets enabled if necessary
+            warehouse_connection = context.config.get_connection(context.gateway)
+            if warehouse_connection.concurrent_tasks > 1:
+                logger.warning(
+                    "The duckdb state connection is configured for single threaded mode but the warehouse connection is configured for "
+                    + f"multi threaded mode with {warehouse_connection.concurrent_tasks} concurrent tasks."
+                    + " This can cause SQLMesh to hang. Overriding the duckdb state connection config to use multi threaded mode"
+                )
+                # this triggers multithreaded mode and will raise an error if the user hasnt set a local DB file
+                # (since multithreaded mode doesnt work on in-memory DuckDB databases)
+                state_connection.concurrent_tasks = warehouse_connection.concurrent_tasks
+
         schema = context.config.get_state_schema(context.gateway)
         return EngineAdapterStateSync(
             engine_adapter, schema=schema, context_path=context.path, console=context.console

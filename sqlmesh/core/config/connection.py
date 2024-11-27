@@ -8,8 +8,9 @@ import pathlib
 import sys
 import typing as t
 from enum import Enum
-from functools import partial
+from functools import partial, lru_cache
 
+import pydantic
 from pydantic import Field
 from sqlglot import exp
 from sqlglot.helper import subclasses
@@ -39,7 +40,7 @@ else:
 
 logger = logging.getLogger(__name__)
 
-RECOMMENDED_STATE_SYNC_ENGINES = {"postgres", "gcp_postgres", "mysql", "duckdb", "mssql"}
+RECOMMENDED_STATE_SYNC_ENGINES = {"postgres", "gcp_postgres", "mysql", "mssql"}
 FORBIDDEN_STATE_SYNC_ENGINES = {
     # Do not support row-level operations
     "spark",
@@ -153,7 +154,7 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
     extensions: t.List[t.Union[str, t.Dict[str, t.Any]]] = []
     connector_config: t.Dict[str, t.Any] = {}
 
-    concurrent_tasks: Literal[1] = 1
+    concurrent_tasks: int = 1
     register_comments: bool = True
     pre_ping: Literal[False] = False
 
@@ -164,6 +165,13 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
     @property
     def _connection_factory(self) -> t.Callable:
         import duckdb
+
+        if self.concurrent_tasks > 1:
+            # ensures a single connection instance is used across threads
+            # rather than a new connection being established per thread
+            # this is in line with https://duckdb.org/docs/guides/python/multiple_threads.html
+            # the important thing is that the *cursor*'s are per thread, but the connection should be shared
+            return lru_cache(duckdb.connect)
 
         return duckdb.connect
 

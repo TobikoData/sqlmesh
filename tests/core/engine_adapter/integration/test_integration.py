@@ -87,7 +87,7 @@ def test_type(request):
                 pytest.mark.duckdb,
                 pytest.mark.engine,
                 pytest.mark.slow,
-                # duckdb does not support concurrency so we run the tests sequentially
+                # duckdb does not support concurrency against its ':memory:' catalog so we run the tests sequentially
                 pytest.mark.xdist_group("engine_integration_duckdb"),
             ],
         ),
@@ -1314,8 +1314,6 @@ def test_sushi(ctx: TestContext, tmp_path_factory: pytest.TempPathFactory):
 
     current_gateway_config = config.gateways[ctx.gateway]
     current_gateway_config.state_schema = sushi_state_schema
-    if (sc := current_gateway_config.state_connection) and sc.type_ == "duckdb":
-        current_gateway_config.connection.concurrent_tasks = 1  # duckdb cant handle parallelism
 
     if ctx.dialect == "athena":
         # Ensure that this test is using the same s3_warehouse_location as TestContext (which includes the testrun_id)
@@ -1716,8 +1714,6 @@ def test_init_project(ctx: TestContext, tmp_path: pathlib.Path):
         config.model_defaults = config.model_defaults.copy(update={"dialect": ctx.dialect})
 
     current_gateway_config = config.gateways[ctx.gateway]
-    if (sc := current_gateway_config.state_connection) and sc.type_ == "duckdb":
-        current_gateway_config.connection.concurrent_tasks = 1  # duckdb cant handle parallelism
 
     if ctx.dialect == "athena":
         # Ensure that this test is using the same s3_warehouse_location as TestContext (which includes the testrun_id)
