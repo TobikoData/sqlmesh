@@ -7,7 +7,7 @@ import pyarrow as pa  # type: ignore
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from httpx import AsyncClient
+from httpx import ASGITransport, AsyncClient
 from pytest_mock.plugin import MockerFixture
 
 from sqlmesh.core.context import Context
@@ -363,7 +363,8 @@ def test_plan_test_failures(
 @pytest.mark.asyncio
 async def test_cancel(client: TestClient) -> None:
     client.app.state.circuit_breaker = threading.Event()  # type: ignore
-    async with AsyncClient(app=client.app, base_url="http://testserver") as _client:
+    transport = ASGITransport(client.app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as _client:
         await _client.post("/api/plan", json={"environment": "dev"})
         response = await _client.post("/api/plan/cancel")
     assert response.status_code == 204
