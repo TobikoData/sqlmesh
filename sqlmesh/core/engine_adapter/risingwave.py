@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import logging
-import re
 import typing as t
-from typing import List
 
 
 from sqlglot import exp, Dialect
@@ -23,7 +21,7 @@ from sqlmesh.core.schema_diff import SchemaDiffer
 
 
 if t.TYPE_CHECKING:
-    from sqlmesh.core._typing import TableName, SessionProperties
+    from sqlmesh.core._typing import SessionProperties
     from sqlmesh.core.engine_adapter._typing import DF
 
 logger = logging.getLogger(__name__)
@@ -74,7 +72,7 @@ class RisingwaveEngineAdapter(
             },
         },
     )
-    
+
     def _set_flush(self) -> None:
         sql = "SET RW_IMPLICIT_FLUSH TO true;"
         self._execute(sql)

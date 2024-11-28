@@ -220,6 +220,14 @@ def test_type(request):
                 pytest.mark.athena,
             ],
         ),
+        pytest.param(
+            "risingwave",
+            marks=[
+                pytest.mark.docker,
+                pytest.mark.engine,
+                pytest.mark.risingwave,
+            ],
+        ),
     ]
 )
 def mark_gateway(request) -> t.Tuple[str, str]:

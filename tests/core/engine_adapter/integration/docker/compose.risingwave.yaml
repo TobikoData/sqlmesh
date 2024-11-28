@@ -1,0 +1,7 @@
+services:
+  risingwave:
+    image: risingwavelabs/risingwave:v2.0.1
+    ports:
+      - '5432:5432'
+    environment:
+      RISINGWAVE_PASSWORD: risingwave
