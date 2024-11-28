@@ -30,7 +30,12 @@ from sqlmesh.utils.date import now, to_date, to_time_column
 from sqlmesh.core.table_diff import TableDiff
 from sqlmesh.utils.pydantic import PydanticModel
 from tests.conftest import SushiDataValidator
-from tests.core.engine_adapter.integration import TestContext, MetadataResults, TEST_SCHEMA
+from tests.core.engine_adapter.integration import (
+    TestContext,
+    MetadataResults,
+    TEST_SCHEMA,
+    wait_until,
+)
 
 DATA_TYPE = exp.DataType.Type
 VARCHAR_100 = exp.DataType.build("varchar(100)")
@@ -739,6 +744,11 @@ def test_insert_overwrite_by_time_partition(ctx: TestContext):
     assert len(results.materialized_views) == 0
     assert len(results.tables) == len(results.non_temp_tables) == 1
     assert results.non_temp_tables[0] == table.name
+
+    if ctx.dialect == "trino":
+        # trino has some lag between partitions being registered and data showing up
+        wait_until(lambda: len(ctx.get_current_data(table)) > 0)
+
     ctx.compare_with_current(table, input_data.iloc[1:])
 
     if ctx.test_type == "df":
@@ -763,6 +773,10 @@ def test_insert_overwrite_by_time_partition(ctx: TestContext):
         assert len(results.materialized_views) == 0
         assert len(results.tables) == len(results.non_temp_tables) == 1
         assert results.non_temp_tables[0] == table.name
+
+        if ctx.dialect == "trino":
+            wait_until(lambda: len(ctx.get_current_data(table)) > 2)
+
         ctx.compare_with_current(
             table,
             pd.DataFrame(

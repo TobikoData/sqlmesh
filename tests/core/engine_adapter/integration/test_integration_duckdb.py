@@ -12,6 +12,8 @@ pytestmark = [pytest.mark.duckdb, pytest.mark.engine, pytest.mark.slow]
 
 @pytest.mark.parametrize("database", [None, "db.db"])
 def test_multithread_concurrency(tmp_path, database: t.Optional[str]):
+    num_threads = 100
+
     if database:
         database = str(tmp_path / database)
 
@@ -52,7 +54,7 @@ def test_multithread_concurrency(tmp_path, database: t.Optional[str]):
 
     threads = []
 
-    for i in range(50):
+    for i in range(num_threads):
         threads.append(Thread(target=write_from_thread, name=f"write_thread_{i}"))
         threads.append(Thread(target=read_from_thread, name=f"read_thread_{i}"))
 
@@ -65,8 +67,8 @@ def test_multithread_concurrency(tmp_path, database: t.Optional[str]):
     for thread in threads:
         thread.join()
 
-    assert len(read_results) == 50
-    assert len(write_results) == 50
+    assert len(read_results) == num_threads
+    assert len(write_results) == num_threads
 
     tables = adapter.fetchall("show tables")
-    assert len(tables) == 51
+    assert len(tables) == num_threads + 1
