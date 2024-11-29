@@ -1,4 +1,4 @@
-"""Use LONGTEXT type for blob fields in MySQL."""
+"""Duplicate of v0033, Use LONGTEXT type for blob fields in MySQL."""
 
 from sqlglot import exp
 
@@ -24,6 +24,8 @@ def migrate(state_sync, **kwargs):  # type: ignore
 
     targets = [
         (environments_table, "snapshots"),
+        (environments_table, "previous_finalized_snapshots"),
+        (environments_table, "requirements"),
         (snapshots_table, "snapshot"),
         (seeds_table, "content"),
         (plan_dags_table, "dag_spec"),

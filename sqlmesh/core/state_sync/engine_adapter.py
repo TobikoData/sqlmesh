@@ -72,6 +72,7 @@ from sqlmesh.utils import major_minor, random_id, unique
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import TimeLike, now, now_timestamp, time_like_to_str, to_timestamp
 from sqlmesh.utils.errors import ConflictingPlanError, SQLMeshError
+from sqlmesh.utils.migration import blob_text_type, index_text_type
 
 logger = logging.getLogger(__name__)
 
@@ -125,10 +126,12 @@ class EngineAdapterStateSync(StateSync):
         self.plan_dags_table = exp.table_("_plan_dags", db=self.schema)
         self.versions_table = exp.table_("_versions", db=self.schema)
 
+        index_type = index_text_type(engine_adapter.dialect)
+        blob_type = blob_text_type(engine_adapter.dialect)
         self._snapshot_columns_to_types = {
-            "name": exp.DataType.build("text"),
-            "identifier": exp.DataType.build("text"),
-            "version": exp.DataType.build("text"),
+            "name": exp.DataType.build(index_type),
+            "identifier": exp.DataType.build(index_type),
+            "version": exp.DataType.build(index_type),
             "snapshot": exp.DataType.build("text"),
             "kind_name": exp.DataType.build("text"),
             "updated_ts": exp.DataType.build("bigint"),
@@ -138,8 +141,8 @@ class EngineAdapterStateSync(StateSync):
         }
 
         self._environment_columns_to_types = {
-            "name": exp.DataType.build("text"),
-            "snapshots": exp.DataType.build("text"),
+            "name": exp.DataType.build(index_type),
+            "snapshots": exp.DataType.build(blob_type),
             "start_at": exp.DataType.build("text"),
             "end_at": exp.DataType.build("text"),
             "plan_id": exp.DataType.build("text"),
@@ -149,15 +152,15 @@ class EngineAdapterStateSync(StateSync):
             "promoted_snapshot_ids": exp.DataType.build("text"),
             "suffix_target": exp.DataType.build("text"),
             "catalog_name_override": exp.DataType.build("text"),
-            "previous_finalized_snapshots": exp.DataType.build("text"),
+            "previous_finalized_snapshots": exp.DataType.build(blob_type),
             "normalize_name": exp.DataType.build("boolean"),
-            "requirements": exp.DataType.build("text"),
+            "requirements": exp.DataType.build(blob_type),
         }
 
         self._interval_columns_to_types = {
-            "id": exp.DataType.build("text"),
+            "id": exp.DataType.build(index_type),
             "created_ts": exp.DataType.build("bigint"),
-            "name": exp.DataType.build("text"),
+            "name": exp.DataType.build(index_type),
             "identifier": exp.DataType.build("text"),
             "version": exp.DataType.build("text"),
             "start_ts": exp.DataType.build("bigint"),
@@ -169,8 +172,8 @@ class EngineAdapterStateSync(StateSync):
 
         self._version_columns_to_types = {
             "schema_version": exp.DataType.build("int"),
-            "sqlglot_version": exp.DataType.build("text"),
-            "sqlmesh_version": exp.DataType.build("text"),
+            "sqlglot_version": exp.DataType.build(index_type),
+            "sqlmesh_version": exp.DataType.build(index_type),
         }
 
         self._snapshot_cache = SnapshotCache(context_path / c.CACHE)
