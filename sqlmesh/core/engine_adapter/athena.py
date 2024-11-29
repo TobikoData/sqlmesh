@@ -509,7 +509,7 @@ class AthenaEngineAdapter(PandasNativeFetchDFSupportMixin, RowDiffMixin):
             response = self._glue_client.batch_get_partition(
                 DatabaseName=table.db,
                 TableName=table.name,
-                PartitionsToGet=[{"Values": v} for v in partition_values],
+                PartitionsToGet=[{"Values": [str(v) for v in lst]} for lst in partition_values],
             )
             return sorted(
                 [(p["Values"], p["StorageDescriptor"]["Location"]) for p in response["Partitions"]]
