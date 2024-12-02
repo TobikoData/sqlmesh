@@ -48,7 +48,7 @@ def migrate(state_sync, **kwargs):  # type: ignore
         "previous_plan_id": exp.DataType.build("text"),
         "expiration_ts": exp.DataType.build("bigint"),
         "finalized_ts": exp.DataType.build("bigint"),
-        "promoted_snapshot_ids": exp.DataType.build("text"),
+        "promoted_snapshot_ids": exp.DataType.build(blob_type),
         "suffix_target": exp.DataType.build("text"),
         "catalog_name_override": exp.DataType.build("text"),
         "previous_finalized_snapshots": exp.DataType.build(blob_type),

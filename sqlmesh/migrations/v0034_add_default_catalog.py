@@ -249,7 +249,7 @@ def migrate(state_sync, default_catalog: t.Optional[str], **kwargs):  # type: ig
                 "previous_plan_id": exp.DataType.build("text"),
                 "expiration_ts": exp.DataType.build("bigint"),
                 "finalized_ts": exp.DataType.build("bigint"),
-                "promoted_snapshot_ids": exp.DataType.build("text"),
+                "promoted_snapshot_ids": exp.DataType.build(blob_type),
                 "suffix_target": exp.DataType.build("text"),
             },
         )
