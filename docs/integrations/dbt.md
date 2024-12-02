@@ -2,7 +2,40 @@
 
 SQLMesh has native support for running dbt projects with its dbt adapter.
 
+!!! tip
+
+    If you've never used SQLMesh before, learn the basics of how it works in the [SQLMesh Quickstart](../quick_start.md)!
+
 ## Getting started
+
+### Installing SQLMesh
+
+SQLMesh is a Python library you install with the `pip` command. We recommend running your SQLMesh projects in a [Python virtual environment](../installation.md#python-virtual-environment), which must be created and activated before running any `pip` commands.
+
+Most people do not use all of SQLMesh's functionality. For example, most projects only run on one [SQL execution engine](../integrations/overview.md#execution-engines).
+
+Therefore, SQLMesh is packaged with multiple "extras," which you may optionally install based on the functionality your project needs. You may specify all your project's extras in a single `pip` call.
+
+At minimum, using the SQLMesh dbt adapter requires installing the dbt extra:
+
+```bash
+> pip install "sqlmesh[dbt]"
+```
+
+If your project uses any SQL execution engine other than DuckDB, you must install the extra for that engine. For example, if your project runs on the Postgres SQL engine:
+
+```bash
+> pip install "sqlmesh[dbt,postgres]"
+```
+
+If you would like to use the [SQLMesh Browser UI](../guides/ui.md) to view column-level lineage, include the `web` extra:
+
+```bash
+> pip install "sqlmesh[dbt,web]"
+```
+
+Learn more about [SQLMesh installation and extras here](../installation.md#install-extras).
+
 ### Reading a dbt project
 
 Prepare an existing dbt project to be run by SQLMesh by executing the `sqlmesh init` command *within the dbt project root directory* and with the `dbt` template option:
