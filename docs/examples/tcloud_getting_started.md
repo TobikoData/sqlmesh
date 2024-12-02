@@ -1,6 +1,6 @@
 # Tobiko Cloud: Getting Started
 
-Tobiko Cloud is a data platform that extends SQLMesh to make it easy to manage data at scale. We're here to make it easy to get started and feel confident that everything is working as expected. After you've completed the steps below, you'll have achieved the following:
+Tobiko Cloud is a data platform that extends SQLMesh to make it easy to manage data at scale without the waste. We're here to make it easy to get started and feel confident that everything is working as expected. After you've completed the steps below, you'll have achieved the following:
 
 - Login to Tobiko Cloud via the browser
 - Connect Tobiko Cloud to your local machine via the CLI
@@ -31,7 +31,7 @@ For SQLMesh (open source) to Tobiko Cloud Migrations Only:
 
 Technical Requirements:
 
-- Python 3.10+
+- Python 3.9+
 
 ## Login to Tobiko Cloud
 
@@ -73,6 +73,8 @@ which tcloud # verify the tcloud CLI is installed in the venv in the path above
 ```bash
 # you can alias the tcloud cli in your shell for UX familiarity: alias sqlmesh='tcloud sqlmesh'
 # save this to your shell profile file (ex: ~/.zshrc or ~/.bashrc) so you don't have to run this command every time
+# the alias is optional, but recommended for familiarity
+# the rest of the commands will NOT use the alias to avoid confusion with the open source SQLMesh CLI
 alias sqlmesh='tcloud sqlmesh'
 ```
 
@@ -98,7 +100,7 @@ export TCLOUD_TOKEN=<your token> # ex: export TCLOUD_TOKEN='jiaowjifeoawj$22fe'
 - Initialize a new SQLMesh project:
 
 ```bash
-sqlmesh init <your data warehouse> # or `tcloud sqlmesh init` if you did NOT alias the tcloud cli for familiar UX
+tcloud sqlmesh init <your data warehouse>
 ```
 
 - In your project directory, update your `config.yaml` with your data warehouse configs, example below:
@@ -125,7 +127,7 @@ model_defaults:
 # make Tobiko Cloud only allow deploying to dev environments, use env var to override in CI/CD
 # allow_prod_deploy: {{ env_var('ALLOW_PROD_DEPLOY', 'false') }}
 
-# enables synchronized deployments to prod when a pull request is merged
+# enables synchronized deployments to prod when a pull request gets a `/deploy` command or is approved by a required approver
 cicd_bot:
     type: github
     merge_method: squash
@@ -142,7 +144,7 @@ plan:
 
 # list of users that are allowed to approve PRs for synchronized deployments
 users:
-- username: sung_sqlmesh_demo
+- username: sung_tcloud_demo
   github_username: sungchun12
   roles:
     - required_approver
@@ -153,13 +155,13 @@ Based on your data warehouse, we will walk through instructions live to create a
 We recommend creating a `.env` file in your root project directory to store your environment variables and verify it is in your `.gitignore` file to prevent it from being committed and exposed in plain text.
 
 ```text
+# .env
 # TODO: add any other environment variables such as username, ports, etc. based on your data warehouse
 DATA_WAREHOUSE_CREDENTIALS=<your data warehouse credentials>
 TCLOUD_TOKEN=<your tcloud token>
 ```
 
 Run these commands to set your environment variables:
-Pro tip: you can include these in a `Makefile` to make it easier to run commands.
 
 ```bash
 set -a        # Turn on auto-export
@@ -167,29 +169,37 @@ source .env   # Read the file, all variables are automatically exported
 set +a        # Turn off auto-export
 ```
 
+Pro tip: you can include these in a `.bashrc` or `.zshrc` file as exported environment variables so you don't have to run the `set -a` and `source .env` commands every time you open a new terminal.
+
+```bash
+# .bashrc or .zshrc
+export DATA_WAREHOUSE_CREDENTIALS=<your data warehouse credentials>
+export TCLOUD_TOKEN=<your tcloud token>
+```
+
 - Verify the connection to your data warehouse and the state is synced:
 
 ```bash
-sqlmesh info
+tcloud sqlmesh info
 ```
 
 ```shell
 # example output
-(.venv) ➜  tcloud_project git:(main) ✗ sqlmesh info
+(.venv) ➜  tcloud_project git:(main) ✗ tcloud sqlmesh info
 Models: 3
 Macros: 0
 Data warehouse connection succeeded
 State backend connection succeeded
 ```
 
-Run `sqlmesh plan` to verify everything is working as expected. Enter `y` to apply the changes. Example output below:
+Run `tcloud sqlmesh plan` to verify everything is working as expected. Enter `y` to apply the changes. Example output below:
 
 ```bash
-sqlmesh plan
+tcloud sqlmesh plan
 ```
 
 ```shell
-(.venv) ➜  tcloud_project git:(main) ✗ sqlmesh plan
+(.venv) ➜  tcloud_project git:(main) ✗ tcloud sqlmesh plan
 ======================================================================
 Successfully Ran 1 tests against duckdb
 ----------------------------------------------------------------------
