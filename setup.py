@@ -106,6 +106,7 @@ setup(
             "dbt-databricks",
             "dbt-redshift",
             "dbt-sqlserver>=1.7.0",
+            "dbt-fabric!=1.8.8",  # Broken API, https://github.com/microsoft/dbt-fabric/compare/v1.8.7...v1.8.8 L183
             "dbt-trino",
         ],
         "dbt": [
