@@ -65,6 +65,7 @@ nav:
     - Walkthroughs:
       - examples/incremental_time_full_walkthrough.md
       - examples/tcloud_getting_started.md
+      - examples/debugger_view.md
   - Integrations:
     - "Overview": integrations/overview.md
     - Tools:
