@@ -177,7 +177,9 @@ This table lists each engine's support for `TABLE` and `VIEW` object comments:
 
 | Engine        | `TABLE` comments | `VIEW` comments |
 | ------------- | ---------------- | --------------- |
+| Athena        | N                | N               |
 | BigQuery      | Y                | Y               |
+| ClickHouse    | Y                | Y               |
 | Databricks    | Y                | Y               |
 | DuckDB <=0.9  | N                | N               |
 | DuckDB >=0.10 | Y                | Y               |
