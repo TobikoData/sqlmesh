@@ -54,9 +54,10 @@ cd tcloud_project
 ```
 
 - Create a new file called `requirements.txt` and add the below:
-  
+
+> Source: [tcloud](https://pypi.org/project/tcloud/)
+
 ```txt
-# source: https://pypi.org/project/tcloud/
 tcloud==1.3.0
 ```
 
@@ -92,6 +93,8 @@ default_project: public-demo # TODO: update this for the project name in the URL
 ```
 
 - Export the token from the Solutions Architect in your shell
+
+> Note: always include the single quotes ' ' around your token
 
 ```bash
 export TCLOUD_TOKEN=<your token> # ex: export TCLOUD_TOKEN='jiaowjifeoawj$22fe'
