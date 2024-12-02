@@ -1,4 +1,6 @@
-FROM docker.io/bitnami/spark:3.5
+# Pinned to a specific version due to PySpark Pandas requiring distutils which dissappears in python 3.12
+# Should be fixed in v4 https://issues.apache.org/jira/browse/SPARK-45390
+FROM docker.io/bitnami/spark:3.5.2-debian-12-r0
 USER root
 RUN install_packages curl
 USER 1001
