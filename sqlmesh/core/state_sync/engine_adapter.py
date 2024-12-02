@@ -1308,7 +1308,13 @@ class EngineAdapterStateSync(StateSync):
         versions = self.get_versions(validate=False)
         migrations = MIGRATIONS[versions.schema_version :]
 
-        migrate_rows = migrations or major_minor(SQLGLOT_VERSION) != versions.minor_sqlglot_version
+        migrate_rows = any(
+            [
+                migrations,
+                major_minor(SQLGLOT_VERSION) != versions.minor_sqlglot_version,
+                major_minor(SQLMESH_VERSION) != versions.minor_sqlmesh_version,
+            ]
+        )
         if not skip_backup and migrate_rows:
             self._backup_state()
 
