@@ -14,6 +14,7 @@ from pytest_mock.plugin import MockerFixture
 from sqlglot import exp, parse_one
 from sqlglot.errors import SchemaError
 
+from sqlmesh.core.config.gateway import GatewayConfig
 import sqlmesh.core.constants
 import sqlmesh.core.dialect as d
 from sqlmesh.core.config import (
@@ -26,10 +27,14 @@ from sqlmesh.core.config import (
 )
 from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import parse, schema_
+from sqlmesh.core.engine_adapter.duckdb import DuckDBEngineAdapter
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import load_sql_based_model, model
 from sqlmesh.core.model.kind import ModelKindName
 from sqlmesh.core.plan import BuiltInPlanEvaluator, PlanBuilder
+from sqlmesh.core.state_sync.cache import CachingStateSync
+from sqlmesh.core.state_sync.engine_adapter import EngineAdapterStateSync
+from sqlmesh.utils.connection_pool import SingletonConnectionPool, ThreadLocalConnectionPool
 from sqlmesh.utils.date import (
     make_inclusive_end,
     now,
@@ -1019,3 +1024,43 @@ def test_wildcard(copy_to_temp_path: t.Callable):
 
     context = Context(paths=f"{parent_path}/*")
     assert len(context.models) == 4
+
+
+def test_duckdb_state_connection_automatic_multithreaded_mode(tmp_path):
+    single_threaded_config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        default_gateway="duckdb",
+        gateways={
+            "duckdb": GatewayConfig(
+                connection=DuckDBConnectionConfig(concurrent_tasks=1),
+                state_connection=DuckDBConnectionConfig(concurrent_tasks=1),
+            )
+        },
+    )
+
+    # main connection 4 concurrent tasks, state connection 1 concurrent task,
+    # context should adjust concurrent tasks on state connection to match main connection
+    multi_threaded_config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        default_gateway="duckdb",
+        gateways={
+            "duckdb": GatewayConfig(
+                connection=DuckDBConnectionConfig(concurrent_tasks=4),
+                state_connection=DuckDBConnectionConfig(concurrent_tasks=1),
+            )
+        },
+    )
+
+    context = Context(paths=[tmp_path], config=single_threaded_config)
+    assert isinstance(context.state_sync, CachingStateSync)
+    state_sync = context.state_sync.state_sync
+    assert isinstance(state_sync, EngineAdapterStateSync)
+    assert isinstance(state_sync.engine_adapter, DuckDBEngineAdapter)
+    assert isinstance(state_sync.engine_adapter._connection_pool, SingletonConnectionPool)
+
+    context = Context(paths=[tmp_path], config=multi_threaded_config)
+    assert isinstance(context.state_sync, CachingStateSync)
+    state_sync = context.state_sync.state_sync
+    assert isinstance(state_sync, EngineAdapterStateSync)
+    assert isinstance(state_sync.engine_adapter, DuckDBEngineAdapter)
+    assert isinstance(state_sync.engine_adapter._connection_pool, ThreadLocalConnectionPool)
