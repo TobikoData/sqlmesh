@@ -912,7 +912,7 @@ def generate_surrogate_key(
     *fields: exp.Expression,
     hash_function: exp.Literal = exp.Literal.string("MD5"),
 ) -> exp.Func:
-    """Generates a surrogate key for the given fields.
+    """Generates a surrogate key (string) for the given fields.
 
     Example:
         >>> from sqlglot import parse_one
@@ -920,7 +920,7 @@ def generate_surrogate_key(
         >>>
         >>> sql = "SELECT @GENERATE_SURROGATE_KEY(a, b, c) FROM foo"
         >>> MacroEvaluator(dialect="bigquery").transform(parse_one(sql, dialect="bigquery")).sql("bigquery")
-        "SELECT MD5(CONCAT(COALESCE(CAST(a AS STRING), '_sqlmesh_surrogate_key_null_'), '|', COALESCE(CAST(b AS STRING), '_sqlmesh_surrogate_key_null_'), '|', COALESCE(CAST(c AS STRING), '_sqlmesh_surrogate_key_null_'))) FROM foo"
+        "SELECT TO_HEX(MD5(CONCAT(COALESCE(CAST(a AS STRING), '_sqlmesh_surrogate_key_null_'), '|', COALESCE(CAST(b AS STRING), '_sqlmesh_surrogate_key_null_'), '|', COALESCE(CAST(c AS STRING), '_sqlmesh_surrogate_key_null_')))) FROM foo"
         >>>
         >>> sql = "SELECT @GENERATE_SURROGATE_KEY(a, b, c, hash_function := 'SHA256') FROM foo"
         >>> MacroEvaluator(dialect="bigquery").transform(parse_one(sql, dialect="bigquery")).sql("bigquery")
@@ -937,11 +937,16 @@ def generate_surrogate_key(
                 exp.Literal.string("_sqlmesh_surrogate_key_null_"),
             )
         )
-    return exp.func(
+
+    func = exp.func(
         hash_function.name,
         exp.func("CONCAT", *string_fields),
         dialect=evaluator.dialect,
     )
+    if isinstance(func, exp.MD5Digest):
+        func = exp.MD5(this=func.this)
+
+    return func
 
 
 @macro()
