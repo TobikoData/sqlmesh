@@ -13,12 +13,45 @@ import {
   MetadataSection,
   Scroll,
   SplitPane,
+  Details,
+  Datetime,
+  Tab,
+  Tabs,
+  TabPanel,
 } from '~/utils/tbk-components'
 
+export const TBKDatetime = createComponent({
+  tagName: 'tbk-datetime',
+  elementClass: Datetime,
+  react: React,
+})
+export const TBKDetails = createComponent({
+  tagName: 'tbk-details',
+  elementClass: Details,
+  react: React,
+})
+export const TBKTabs = createComponent({
+  tagName: 'tbk-tabs',
+  elementClass: Tabs,
+  react: React,
+})
+export const TBKTab = createComponent({
+  tagName: 'tbk-tab',
+  elementClass: Tab,
+  react: React,
+})
+export const TBKTabPanel = createComponent({
+  tagName: 'tbk-tab-panel',
+  elementClass: TabPanel,
+  react: React,
+})
 export const TBKSplitPane = createComponent({
   tagName: 'tbk-split-pane',
   elementClass: SplitPane,
   react: React,
+  events: {
+    onChange: 'sl-reposition',
+  },
 })
 export const TBKScroll = createComponent({
   tagName: 'tbk-scroll',
