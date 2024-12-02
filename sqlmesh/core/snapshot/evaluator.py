@@ -89,8 +89,9 @@ class SnapshotEvaluator:
 
     Args:
         adapters: A single EngineAdapter or a dictionary of EngineAdapters where
-            the key is the gateway name. When a dictionary is provided, its first
-            item is treated as the default adapter and used for the virtual layer.
+            the key is the gateway name. When a dictionary is provided, and not an
+            explicit default gateway its first item is treated as the default
+            adapter and used for the virtual layer.
         ddl_concurrent_tasks: The number of concurrent tasks used for DDL
             operations (table / view creation, deletion, etc). Default: 1.
     """
@@ -99,18 +100,17 @@ class SnapshotEvaluator:
         self,
         adapters: EngineAdapter | t.Dict[str, EngineAdapter],
         ddl_concurrent_tasks: int = 1,
+        default_gateway: t.Optional[str] = None,
     ):
-        self.adapters = adapters if isinstance(adapters, t.Dict) else {"": adapters}
-        self.adapter = next(iter(self.adapters.values()))
+        self.adapters = (
+            adapters if isinstance(adapters, t.Dict) else {default_gateway or "": adapters}
+        )
+        self.adapter = (
+            next(iter(self.adapters.values()))
+            if not default_gateway
+            else self.adapters[default_gateway]
+        )
         self.ddl_concurrent_tasks = ddl_concurrent_tasks
-
-    def _get_adapter(self, gateway: t.Optional[str] = None) -> EngineAdapter:
-        """Returns the adapter for the specified gateway or the default adapter if none is provided."""
-        if gateway:
-            if adapter := self.adapters.get(gateway):
-                return adapter
-            raise SQLMeshError(f"Gateway '{gateway}' not found in the available engine adapters.")
-        return self.adapter
 
     def evaluate(
         self,
@@ -962,6 +962,14 @@ class SnapshotEvaluator:
             logger.info("Creating schema '%s'", schema)
             adapter = self._get_adapter(gateways.get(schema)) if gateways else self.adapter
             adapter.create_schema(schema)
+
+    def _get_adapter(self, gateway: t.Optional[str] = None) -> EngineAdapter:
+        """Returns the adapter for the specified gateway or the default adapter if none is provided."""
+        if gateway:
+            if adapter := self.adapters.get(gateway):
+                return adapter
+            raise SQLMeshError(f"Gateway '{gateway}' not found in the available engine adapters.")
+        return self.adapter
 
 
 def _evaluation_strategy(snapshot: SnapshotInfoLike, adapter: EngineAdapter) -> EvaluationStrategy:
