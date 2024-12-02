@@ -1223,15 +1223,18 @@ class EngineAdapterStateSync(StateSync):
         migration_start_ts = time.perf_counter()
 
         try:
-            migrate_rows = self._apply_migrations(default_catalog, skip_backup)
+            migrate_snapshots_and_environments = self._apply_migrations(
+                default_catalog, skip_backup
+            )
 
-            if not migrate_rows and major_minor(SQLMESH_VERSION) == versions.minor_sqlmesh_version:
+            if not migrate_snapshots_and_environments:
+                if major_minor(SQLMESH_VERSION) != versions.minor_sqlmesh_version:
+                    self._update_versions()
                 return
 
-            if migrate_rows:
-                self._migrate_rows(promoted_snapshots_only)
-                # Cleanup plan DAGs since we currently don't migrate snapshot records that are in there.
-                self.engine_adapter.delete_from(self.plan_dags_table, "TRUE")
+            self._migrate_rows(promoted_snapshots_only)
+            # Cleanup plan DAGs since we currently don't migrate snapshot records that are in there.
+            self.engine_adapter.delete_from(self.plan_dags_table, "TRUE")
             self._update_versions()
 
             analytics.collector.on_migration_end(
@@ -1307,22 +1310,24 @@ class EngineAdapterStateSync(StateSync):
     ) -> bool:
         versions = self.get_versions(validate=False)
         migrations = MIGRATIONS[versions.schema_version :]
-
-        migrate_rows = any(
+        should_backup = any(
             [
                 migrations,
                 major_minor(SQLGLOT_VERSION) != versions.minor_sqlglot_version,
                 major_minor(SQLMESH_VERSION) != versions.minor_sqlmesh_version,
             ]
         )
-        if not skip_backup and migrate_rows:
+        if not skip_backup and should_backup:
             self._backup_state()
 
         for migration in migrations:
             logger.info(f"Applying migration {migration}")
             migration.migrate(self, default_catalog=default_catalog)
 
-        return bool(migrate_rows)
+        migrate_snapshots_and_environments = (
+            bool(migrations) or major_minor(SQLGLOT_VERSION) != versions.minor_sqlglot_version
+        )
+        return migrate_snapshots_and_environments
 
     def _migrate_rows(self, promoted_snapshots_only: bool) -> None:
         logger.info("Fetching environments")
