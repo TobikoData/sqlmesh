@@ -30,7 +30,7 @@
   --color-salmon: hsla(345, 92%, 81%, 1);
 
   /* Colors: Base */
-  --color-white: hsla(0, 0%, 98%, 1);
+  --color-white: hsla(0, 0%, 100%, 1);
   --color-black: hsla(0, 0%, 5%, 1);
   --color-cyan: hsla(198, 100%, 63%, 1);
   --color-deep-blue: hsla(210, 100%, 50%, 1);
@@ -199,8 +199,6 @@
   --color-gray-900: hsl(226, 8%, 4%);
 
   /* Colors: Semantic */
-  --color-white: hsl(0, 0%, 100%);
-  --color-black: hsl(0, 0%, 0%);
   --color-background: hsl(30, 12%, 97%);
   --color-light: hsl(30, 12%, 97%);
   --color-dark: hsl(226, 24%, 8%);
@@ -340,6 +338,7 @@
   --step-10: calc(var(--base) * 10);
   --step-11: calc(var(--base) * 11);
   --step-12: calc(var(--base) * 12);
+  --step-15: calc(var(--base) * 15);
   --step-16: calc(var(--base) * 16);
   --step-20: calc(var(--base) * 20);
   --step-24: calc(var(--base) * 24);
