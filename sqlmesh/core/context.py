@@ -1835,7 +1835,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             if not external_models_gateway:
                 # can happen if there was no --gateway defined and the default_gateway is ''
                 # which means that the single gateway syntax is being used which means there is
-                # no named gateway which means we shuld not put `gateway: ` on the external models
+                # no named gateway which means we should not stamp `gateway:` on the external models
                 external_models_gateway = None
 
             create_external_models_file(
