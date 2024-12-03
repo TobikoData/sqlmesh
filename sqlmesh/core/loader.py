@@ -103,9 +103,7 @@ class Loader(abc.ABC):
             else:
                 standalone_audits[name] = audit
 
-        models = self._load_models(
-            macros, jinja_macros, context.gateway or context.config.default_gateway, audits
-        )
+        models = self._load_models(macros, jinja_macros, context.selected_gateway, audits)
 
         for model in models.values():
             self._add_model_to_dag(model)
@@ -516,7 +514,7 @@ class SqlMeshLoader(Loader):
         return metrics
 
     def _variables(self, config: Config) -> t.Dict[str, t.Any]:
-        gateway_name = self._context.default_gateway
+        gateway_name = self._context.selected_gateway
         try:
             gateway = config.get_gateway(gateway_name)
         except ConfigError:

@@ -369,13 +369,13 @@ class GenericContext(BaseContext, t.Generic[C]):
         self.environment_ttl = self.config.environment_ttl
         self.pinned_environments = Environment.sanitize_names(self.config.pinned_environments)
         self.auto_categorize_changes = self.config.plan.auto_categorize_changes
-        self.default_gateway = gateway or self.config.default_gateway_name
+        self.selected_gateway = gateway or self.config.default_gateway_name
 
         self._connection_config = self.config.get_connection(self.gateway)
         self.concurrent_tasks = concurrent_tasks or self._connection_config.concurrent_tasks
 
         self._engine_adapters: t.Dict[str, EngineAdapter] = {
-            self.default_gateway: self._connection_config.create_engine_adapter()
+            self.selected_gateway: self._connection_config.create_engine_adapter()
         }
         self._min_concurrent_tasks = self.concurrent_tasks
         self._snapshot_evaluator: t.Optional[SnapshotEvaluator] = None
@@ -412,7 +412,7 @@ class GenericContext(BaseContext, t.Generic[C]):
     @property
     def engine_adapter(self) -> EngineAdapter:
         """Returns the default engine adapter."""
-        return self._engine_adapters[self.default_gateway]
+        return self._engine_adapters[self.selected_gateway]
 
     @property
     def snapshot_evaluator(self) -> SnapshotEvaluator:
@@ -425,7 +425,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                     for gateway, adapter in self._engine_adapters.items()
                 },
                 ddl_concurrent_tasks=self.concurrent_tasks,
-                default_gateway=self.default_gateway,
+                selected_gateway=self.selected_gateway,
             )
         return self._snapshot_evaluator
 
@@ -1884,13 +1884,10 @@ class GenericContext(BaseContext, t.Generic[C]):
                 self.config.get_state_connection(self.gateway), self.console, "State Connection"
             )
 
-        self._create_engine_adapters()
-        self._try_connection(
-            "data warehouse", [adapter.ping for adapter in self._engine_adapters.values()]
-        )
+        self._try_connection("data warehouse", self.engine_adapter.ping)
         state_connection = self.config.get_state_connection(self.gateway)
         if state_connection:
-            self._try_connection("state backend", [state_connection.connection_validator()])
+            self._try_connection("state backend", state_connection.connection_validator())
 
     def close(self) -> None:
         """Releases all resources allocated by this context."""
@@ -2024,7 +2021,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         """Create engine adapters for the gateways, when none provided include all defined in the configs."""
 
         for gateway_name in self.config.gateways:
-            if gateway_name != self.default_gateway and (
+            if gateway_name != self.selected_gateway and (
                 gateways is None or gateway_name in gateways
             ):
                 connection = self.config.get_connection(gateway_name)
@@ -2147,13 +2144,10 @@ class GenericContext(BaseContext, t.Generic[C]):
         expired_environments = self.state_sync.delete_expired_environments()
         cleanup_expired_views(self.engine_adapter, expired_environments, console=self.console)
 
-    def _try_connection(
-        self, connection_name: str, validators: t.List[t.Callable[[], None]]
-    ) -> None:
+    def _try_connection(self, connection_name: str, validator: t.Callable[[], None]) -> None:
         connection_name = connection_name.capitalize()
         try:
-            for validator in validators:
-                validator()
+            validator()
             self.console.log_status_update(f"{connection_name} connection [green]succeeded[/green]")
         except Exception as ex:
             self.console.log_error(f"{connection_name} connection failed. {ex}")

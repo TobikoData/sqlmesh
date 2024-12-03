@@ -100,15 +100,15 @@ class SnapshotEvaluator:
         self,
         adapters: EngineAdapter | t.Dict[str, EngineAdapter],
         ddl_concurrent_tasks: int = 1,
-        default_gateway: t.Optional[str] = None,
+        selected_gateway: t.Optional[str] = None,
     ):
         self.adapters = (
-            adapters if isinstance(adapters, t.Dict) else {default_gateway or "": adapters}
+            adapters if isinstance(adapters, t.Dict) else {selected_gateway or "": adapters}
         )
         self.adapter = (
             next(iter(self.adapters.values()))
-            if not default_gateway
-            else self.adapters[default_gateway]
+            if not selected_gateway
+            else self.adapters[selected_gateway]
         )
         self.ddl_concurrent_tasks = ddl_concurrent_tasks
 
