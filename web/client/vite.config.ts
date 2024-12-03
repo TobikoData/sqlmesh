@@ -1,6 +1,7 @@
 import path from 'path'
 import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react-swc'
+import cssInjectedByJsPlugin from 'vite-plugin-css-injected-by-js'
 
 const BASE_URL = process.env.BASE_URL ?? ''
 const BASE = BASE_URL == null || BASE_URL === '' ? '/' : BASE_URL
@@ -28,12 +29,13 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
+    modulePreload: false,
   },
   define: {
     __BASE_URL__: JSON.stringify(BASE_URL),
     __IS_HEADLESS__: JSON.stringify(Boolean(process.env.IS_HEADLESS ?? false)),
   },
-  plugins: [react()],
+  plugins: [react(), cssInjectedByJsPlugin()],
   test: {
     globals: true,
     environment: 'jsdom',
