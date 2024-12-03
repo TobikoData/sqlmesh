@@ -54,7 +54,11 @@ import { type EnvironmentName } from '@models/environment'
 import { EnumPlanAction, ModelPlanAction } from '@models/plan-action'
 import { useChannelEvents, type EventSourceChannel } from '@api/channels'
 
-export default function Root(): JSX.Element {
+export default function Root({
+  content,
+}: {
+  content?: React.ReactNode
+}): JSX.Element {
   const location = useLocation()
   const navigate = useNavigate()
 
@@ -73,7 +77,7 @@ export default function Root(): JSX.Element {
   const setEnvironment = useStoreContext(s => s.setEnvironment)
   let channel: EventSourceChannel
 
-  if (isFalse(modules.hasOnlyDocs)) {
+  if (isFalse(modules.hasOnlyDataCatalog)) {
     channel = useChannelEvents()
   }
 
@@ -370,7 +374,7 @@ export default function Root(): JSX.Element {
         cancelRequestFile()
       }
     }
-  }, [])
+  }, [modules])
 
   useEffect(() => {
     const channelPlanApply = channel?.('plan-apply', updatePlanApplyTracker)
@@ -384,7 +388,7 @@ export default function Root(): JSX.Element {
         channelPlanApply?.unsubscribe()
       }
     }
-  }, [updatePlanApplyTracker])
+  }, [updatePlanApplyTracker, modules])
 
   useEffect(() => {
     const channelPlanOverview = channel?.(
@@ -401,7 +405,7 @@ export default function Root(): JSX.Element {
         channelPlanOverview?.unsubscribe()
       }
     }
-  }, [updatePlanOverviewTracker])
+  }, [updatePlanOverviewTracker, modules])
 
   useEffect(() => {
     const channelPlanCancel = channel?.('plan-cancel', updatePlanCancelTracker)
@@ -415,7 +419,7 @@ export default function Root(): JSX.Element {
         channelPlanCancel?.unsubscribe()
       }
     }
-  }, [updatePlanCancelTracker])
+  }, [updatePlanCancelTracker, modules])
 
   useEffect(() => {
     const channelFile = channel?.('file', updateFiles)
@@ -438,10 +442,13 @@ export default function Root(): JSX.Element {
   }, [formatFile])
 
   useEffect(() => {
-    if (location.pathname === EnumRoutes.Home) {
+    if (
+      (isFalse(modules.isEmpty) && location.pathname === EnumRoutes.Home) ||
+      location.pathname === ''
+    ) {
       navigate(modules.defaultNavigationRoute(), { replace: true })
     }
-  }, [location])
+  }, [location, modules])
 
   useEffect(() => {
     setShowConfirmation(confirmations.length > 0)
@@ -498,7 +505,7 @@ export default function Root(): JSX.Element {
             <Divider />
           </>
         )}
-        <Outlet />
+        {content ?? <Outlet />}
         <ModalConfirmation
           show={showConfirmation}
           onClose={() => {

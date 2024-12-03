@@ -6,6 +6,7 @@ import pandas as pd
 from sqlglot import exp
 
 from sqlmesh.utils.migration import index_text_type
+from sqlmesh.utils.migration import blob_text_type
 
 
 def migrate(state_sync, **kwargs):  # type: ignore
@@ -53,6 +54,7 @@ def migrate(state_sync, **kwargs):  # type: ignore
         engine_adapter.delete_from(plan_dags_table, "TRUE")
 
         index_type = index_text_type(engine_adapter.dialect)
+        blob_type = blob_text_type(engine_adapter.dialect)
 
         engine_adapter.insert_append(
             plan_dags_table,
@@ -60,6 +62,6 @@ def migrate(state_sync, **kwargs):  # type: ignore
             columns_to_types={
                 "request_id": exp.DataType.build(index_type),
                 "dag_id": exp.DataType.build(index_type),
-                "dag_spec": exp.DataType.build("text"),
+                "dag_spec": exp.DataType.build(blob_type),
             },
         )

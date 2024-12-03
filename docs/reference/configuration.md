@@ -173,7 +173,9 @@ Most parameters are specific to the connection engine `type` - see [below](#engi
 
 These pages describe the connection configuration options for each execution engine.
 
+* [Athena](../integrations/engines/athena.md)
 * [BigQuery](../integrations/engines/bigquery.md)
+* [ClickHouse](../integrations/engines/clickhouse.md)
 * [Databricks](../integrations/engines/databricks.md)
 * [DuckDB](../integrations/engines/duckdb.md)
 * [MotherDuck](../integrations/engines/motherduck.md)

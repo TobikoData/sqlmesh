@@ -25,18 +25,16 @@ MODE_TO_MODULES = {
     models.Mode.IDE: {
         models.Modules.EDITOR,
         models.Modules.FILES,
-        models.Modules.DOCS,
+        models.Modules.DATA_CATALOG,
         models.Modules.ERRORS,
         models.Modules.PLANS,
     },
-    models.Mode.DOCS: {models.Modules.DOCS, models.Modules.ERRORS},
-    models.Mode.PLAN: {models.Modules.PLANS, models.Modules.LINEAGE, models.Modules.ERRORS},
-    models.Mode.DEFAULT: {
-        models.Modules.DOCS,
+    models.Mode.CATALOG: {models.Modules.DATA_CATALOG},
+    models.Mode.PLAN: {
         models.Modules.PLANS,
+        models.Modules.DATA_CATALOG,
+        models.Modules.LINEAGE,
         models.Modules.ERRORS,
-        models.Modules.EDITOR,
-        models.Modules.FILES,
     },
 }
 
@@ -48,12 +46,14 @@ class Settings(PydanticModel):
     config: str = Field(default_factory=lambda: os.getenv("CONFIG", ""))
     gateway: t.Optional[str] = Field(default_factory=lambda: os.getenv("GATEWAY"))
     ui_mode: Mode = Field(
-        default_factory=lambda: Mode[os.getenv("UI_MODE", Mode.DEFAULT.value).upper()]
+        default_factory=lambda: Mode[os.getenv("UI_MODE", Mode.IDE.value).upper()]
     )
 
     @property
     def modules(self) -> t.Set[models.Modules]:
-        return MODE_TO_MODULES[self.ui_mode]
+        return MODE_TO_MODULES[
+            models.Mode.CATALOG if self.ui_mode == models.Mode.DOCS else self.ui_mode
+        ]
 
 
 @lru_cache()

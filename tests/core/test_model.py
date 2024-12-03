@@ -690,6 +690,20 @@ def test_model_pre_post_statements():
     assert model.render_post_statements() == expected_post
     assert "exp" in model.python_env
 
+    expressions = d.parse(
+        """
+        MODEL (name db.table);
+
+        SELECT 1 AS col;
+
+        CREATE TABLE db.other AS SELECT * FROM @this_model;
+        """
+    )
+    model = load_sql_based_model(expressions)
+
+    expected_post = d.parse('CREATE TABLE "db"."other" AS SELECT * FROM "db"."table" AS "table";')
+    assert model.render_post_statements() == expected_post
+
 
 def test_seed_hydration():
     expressions = d.parse(

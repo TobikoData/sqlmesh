@@ -61,6 +61,7 @@ class PostgresEngineAdapter(
                 exp.DataType.build("BPCHAR", dialect=DIALECT).this
             },
         },
+        drop_cascade=True,
     )
 
     def _fetch_native_df(

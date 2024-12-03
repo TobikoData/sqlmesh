@@ -762,6 +762,15 @@
             }
           },
           {
+            "name": "temp_schema",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [{ "type": "string" }, { "type": "null" }],
+              "title": "Temp Schema"
+            }
+          },
+          {
             "name": "limit",
             "in": "query",
             "required": false,
@@ -1550,7 +1559,7 @@
       },
       "ModelType": {
         "type": "string",
-        "enum": ["python", "sql", "seed", "external"],
+        "enum": ["python", "sql", "seed", "external", "source"],
         "title": "ModelType"
       },
       "ModelsDiff": {
@@ -1583,7 +1592,7 @@
         "enum": [
           "editor",
           "files",
-          "docs",
+          "data-catalog",
           "plans",
           "tests",
           "audits",

@@ -28,7 +28,7 @@ import { useApiModel } from '@api/index'
 import Loading from '@components/loading/Loading'
 import Spinner from '@components/logo/Spinner'
 
-export default function PageDocs(): JSX.Element {
+export default function PageDataCatalog(): JSX.Element {
   const { modelName = '' } = useParams()
 
   const navigate = useNavigate()
@@ -76,7 +76,7 @@ export default function PageDocs(): JSX.Element {
 
     if (isNil(model)) return
 
-    navigate(EnumRoutes.DocsModels + '/' + model.name)
+    navigate(`${EnumRoutes.DataCatalogModels}/${model.name}`)
   }
 
   function handleError(error: ErrorIDE): void {
@@ -87,11 +87,11 @@ export default function PageDocs(): JSX.Element {
     <div className="flex overflow-auto w-full h-full">
       {isNil(model) ? (
         <NotFound
-          link={EnumRoutes.Docs}
+          link={EnumRoutes.DataCatalog}
           description={
             isNil(modelName) ? undefined : `Model ${modelName} Does Not Exist`
           }
-          message="Back To Docs"
+          message="Back To Data Catalog"
         />
       ) : (
         <LineageFlowProvider

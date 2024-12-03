@@ -565,6 +565,26 @@ def test_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture)
         ),
         (
             {
+                "coerceable_types": {
+                    exp.DataType.build("FLOAT"): {exp.DataType.build("INT")},
+                },
+            },
+            {
+                "a": "FLOAT",
+                "b": "TEXT",
+            },
+            {
+                "a": "INT",
+                "b": "TEXT",
+            },
+            {
+                "a": "FLOAT",
+                "b": "TEXT",
+            },
+            [],
+        ),
+        (
+            {
                 "support_nested_operations": True,
                 "array_element_selector": "element",
             },
@@ -865,6 +885,8 @@ def test_alter_table(
         current_struct: exp.DataType, new_struct: exp.DataType
     ) -> t.List[TableAlterOperation]:
         operations = original_from_structs(current_struct, new_struct)
+        if not operations:
+            return operations
         assert (
             operations[-1].expected_table_struct.sql()
             == columns_to_types_to_struct(expected_final_structure).sql()

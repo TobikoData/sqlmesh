@@ -1,5 +1,11 @@
-import { isNil } from '@utils/index'
+import { isNil, isStringEmptyOrNil } from '@utils/index'
 import { tableFromIPC } from 'apache-arrow'
+
+declare global {
+  interface Window {
+    __BASE_URL__?: string
+  }
+}
 
 export interface ResponseWithDetail {
   ok: boolean
@@ -36,10 +42,7 @@ export async function fetchAPI<T = any, B extends object = any>(
     config
   const hasSearchParams = Object.keys({ ...params }).length > 0
   const fullUrl = url.replace(/([^:]\/)\/+/g, '$1')
-  const input = new URL(
-    `${getUrlPrefix()}${fullUrl}`.replaceAll('//', '/'),
-    window.location.origin,
-  )
+  const input = new URL(getUrlWithPrefix(fullUrl), window.location.origin)
 
   if (hasSearchParams) {
     const searchParams: Record<string, string> = Object.entries({
@@ -120,8 +123,16 @@ function toRequestBody(obj: unknown): BodyInit {
   }
 }
 
-export function getUrlPrefix(): string {
-  return (window as any).__BASE_URL__ ?? '/'
+export function getUrlWithPrefix(url: string = '/'): string {
+  let urlWithPrefix = `${
+    isStringEmptyOrNil(window.__BASE_URL__) ? '/' : window.__BASE_URL__
+  }/${url}`
+
+  while (urlWithPrefix.includes('//')) {
+    urlWithPrefix = urlWithPrefix.replaceAll('//', '/')
+  }
+
+  return urlWithPrefix
 }
 
 export default fetchAPI

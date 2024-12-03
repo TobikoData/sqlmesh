@@ -484,10 +484,15 @@ class RowDiffMixin(EngineAdapter):
                 value = self._normalize_decimal_value(expr, decimal_precision)
         elif type.is_type(*exp.DataType.TEMPORAL_TYPES):
             value = self._normalize_timestamp_value(expr, type, timestamp_precision)
+        elif type.is_type(*exp.DataType.NESTED_TYPES):
+            value = self._normalize_nested_value(expr)
         else:
             value = expr
 
         return exp.cast(value, to=exp.DataType.build("VARCHAR"))
+
+    def _normalize_nested_value(self, expr: exp.Expression) -> exp.Expression:
+        return expr
 
     def _normalize_timestamp_value(
         self, expr: exp.Expression, type: exp.DataType, precision: int

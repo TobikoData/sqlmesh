@@ -457,6 +457,11 @@ def plan(
     type=int,
     help="If set, the command will exit with the specified code if the run is interrupted by an update to the target environment.",
 )
+@click.option(
+    "--no-auto-upstream",
+    is_flag=True,
+    help="Do not automatically include upstream models. Only applicable when --select-model is used. Note: this may result in missing / invalid data for the selected models.",
+)
 @click.pass_context
 @error_handler
 @cli_analytics
@@ -697,9 +702,9 @@ def info(obj: Context, skip_connection: bool, verbose: bool) -> None:
 )
 @click.option(
     "--mode",
-    type=click.Choice(["ide", "default", "docs", "plan"], case_sensitive=False),
-    default="default",
-    help="Mode to start the UI in. Default: default",
+    type=click.Choice(["ide", "catalog", "docs", "plan"], case_sensitive=False),
+    default="ide",
+    help="Mode to start the UI in. Default: ide",
 )
 @click.pass_context
 @error_handler

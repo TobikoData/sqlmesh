@@ -4,6 +4,7 @@ import os
 import pathlib
 import sys
 import typing as t
+import time
 
 import pandas as pd
 import pytest
@@ -540,3 +541,15 @@ class TestContext:
         assert isinstance(model, SqlModel)
         self._context.upsert_model(model)
         return self._context, model
+
+
+def wait_until(fn: t.Callable[..., bool], attempts=3, wait=5) -> None:
+    current_attempt = 0
+    while current_attempt < attempts:
+        current_attempt += 1
+        result = fn()
+        if result:
+            return
+        time.sleep(wait)
+
+    raise Exception(f"Wait function did not return True after {attempts} attempts")

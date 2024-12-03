@@ -6,6 +6,7 @@
       unique_key='id',
       strategy='timestamp',
       updated_at='ds',
+      on_schema_change='sync_all_columns',
     )
 }}
 
