@@ -2,6 +2,7 @@ import logging
 from contextlib import contextmanager
 from os import getcwd, path, remove
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from click.testing import CliRunner
@@ -413,28 +414,30 @@ def test_plan_dev_bad_create_from(runner, tmp_path):
     update_incremental_model(tmp_path)
 
     # create dev2 environment from non-existent dev3
-    result = runner.invoke(
-        cli,
-        [
-            "--log-file-dir",
-            tmp_path,
-            "--paths",
-            tmp_path,
-            "plan",
-            "dev2",
-            "--create-from",
-            "dev3",
-            "--no-prompts",
-            "--auto-apply",
-        ],
-    )
+    logger = logging.getLogger("sqlmesh.core.context_diff")
+    with patch.object(logger, "warning") as mock_logger:
+        result = runner.invoke(
+            cli,
+            [
+                "--log-file-dir",
+                tmp_path,
+                "--paths",
+                tmp_path,
+                "plan",
+                "dev2",
+                "--create-from",
+                "dev3",
+                "--no-prompts",
+                "--auto-apply",
+            ],
+        )
 
-    assert result.exit_code == 0
-    assert_new_env(result, "dev2", "dev")
-    assert (
-        "WARNING - The environment name 'dev3' was passed to the `plan` command's `--create-from` argument, but 'dev3' does not exist. Initializing new environment 'dev2' from scratch."
-        in result.output
-    )
+        assert result.exit_code == 0
+        assert_new_env(result, "dev2", "dev")
+        assert (
+            mock_logger.call_args[0][0]
+            == "The environment name 'dev3' was passed to the `plan` command's `--create-from` argument, but 'dev3' does not exist. Initializing new environment 'dev2' from scratch."
+        )
 
 
 def test_plan_dev_no_prompts(runner, tmp_path):
