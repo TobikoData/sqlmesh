@@ -60,12 +60,16 @@ To preview changes using `plan`:
 1. Enter the `sqlmesh plan <environment name>` command.
 2. Enter `1` to classify the changes as `Breaking`, or enter `2` to classify the changes as `Non-Breaking`. In this example, the changes are classified as `Non-Breaking`:
 
-```hl_lines="23 24"
+```bash linenums="1" hl_lines="27-28"
 $ sqlmesh plan dev
 ======================================================================
 Successfully Ran 1 tests against duckdb
 ----------------------------------------------------------------------
-Summary of differences against `dev`:
+New environment `dev` will be created from `prod`
+
+Differences from the `prod` environment:
+
+Models
 ├── Directly Modified:
 │   └── sqlmesh_example.incremental_model
 └── Indirectly Modified:
@@ -115,12 +119,14 @@ To revert your change:
 1. Open the model file you wish to edit in your preferred editor, and undo a change you made earlier. For this example, we'll remove the column we added in the [quickstart](../quick_start.md) example.
 2. Run `sqlmesh plan` and apply your changes. Enter `y` to run a Virtual Update.
 
-```hl_lines="24"
+```bash linenums="1" hl_lines="26"
 $ sqlmesh plan dev
 ======================================================================
 Successfully Ran 1 tests against duckdb
 ----------------------------------------------------------------------
-Summary of differences against `dev`:
+Differences from the `dev` environment:
+
+Models
 ├── Directly Modified:
 │   └── sqlmesh_example.incremental_model
 └── Indirectly Modified:
@@ -187,7 +193,9 @@ To delete a model:
         ======================================================================
         Successfully Ran 0 tests against duckdb
         ----------------------------------------------------------------------
-        Summary of differences against `dev`:
+        Differences from the `dev` environment:
+
+        Models
         └── Removed Models:
             └── sqlmesh_example.full_model
         Apply - Virtual Update [y/n]: y
@@ -203,12 +211,14 @@ To delete a model:
 
 3. Plan and apply your changes to production, and enter `y` for the Virtual Update. By default, the `sqlmesh plan` command targets your production environment:
 
-        ```
+        ```bash linenums="1"
         $ sqlmesh plan
         ======================================================================
         Successfully Ran 0 tests against duckdb
         ----------------------------------------------------------------------
-        Summary of differences against `prod`:
+        Differences from the `prod` environment:
+
+        Models
         └── Removed Models:
             └── sqlmesh_example.full_model
         Apply - Virtual Update [y/n]: y

@@ -100,7 +100,10 @@ If we run a `plan` without selecting specific models, SQLMesh includes the two d
 
 ```bash
 ❯ sqlmesh plan dev
-Summary of differences against `dev`:
+New environment `dev` will be created from `prod`
+
+Differences from the `prod` environment:
+
 Models:
 ├── Directly Modified:
 │   ├── sushi.order_items
@@ -118,7 +121,10 @@ If we specify the `--select-model` option to select `"sushi.order_items"`, the d
 
 ```bash
 ❯ sqlmesh plan dev --select-model "sushi.order_items"
-Summary of differences against `dev`:
+New environment `dev` will be created from `prod`
+
+Differences from the `prod` environment:
+
 Models:
 ├── Directly Modified:
 │   └── sushi.order_items
@@ -135,7 +141,10 @@ If we specify the `--select-model` option with the upstream `+` to select `"+sus
 
 ```bash
 ❯ sqlmesh plan dev --select-model "+sushi.order_items"
-Summary of differences against `dev`:
+New environment `dev` will be created from `prod`
+
+Differences from the `prod` environment:
+
 Models:
 ├── Directly Modified:
 │   ├── sushi.items
@@ -153,9 +162,12 @@ If we specify the `--select-model` option to select `"sushi.items"`, SQLMesh doe
 
 However, it does classify `sushi.order_items` as indirectly modified. Its direct modification is excluded by the model selection, but it is indirectly modified by being downstream of the selected `sushi.items` model:
 
-```bash hl_lines="7"
+```bash hl_lines="10"
 ❯ sqlmesh plan dev --select-model "sushi.items"
-Summary of differences against `dev`:
+New environment `dev` will be created from `prod`
+
+Differences from the `prod` environment:
+
 Models:
 ├── Directly Modified:
 │   └── sushi.items
@@ -173,7 +185,10 @@ If we specify the `--select-model` option with the downstream `+` to select `"su
 
 ```bash
 ❯ sqlmesh plan dev --select-model "sushi.items+"
-Summary of differences against `dev`:
+New environment `dev` will be created from `prod`
+
+Differences from the `prod` environment:
+
 Models:
 ├── Directly Modified:
 │   ├── sushi.items
@@ -191,7 +206,10 @@ If we specify the `--select-model` option with the wildcard `*` to select `"sush
 
 ```bash
 ❯ sqlmesh plan dev --select-model "sushi.*items"
-Summary of differences against `dev`:
+New environment `dev` will be created from `prod`
+
+Differences from the `prod` environment:
+
 Models:
 ├── Directly Modified:
 │   ├── sushi.order_items
