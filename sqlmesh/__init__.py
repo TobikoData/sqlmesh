@@ -24,6 +24,7 @@ from sqlmesh.core.context import Context as Context, ExecutionContext as Executi
 from sqlmesh.core.engine_adapter import EngineAdapter as EngineAdapter
 from sqlmesh.core.macros import SQL as SQL, macro as macro
 from sqlmesh.core.model import Model as Model, model as model
+from sqlmesh.core.signal import signal as signal
 from sqlmesh.core.snapshot import Snapshot as Snapshot
 from sqlmesh.core.snapshot.evaluator import (
     CustomMaterialization as CustomMaterialization,
@@ -32,6 +33,7 @@ from sqlmesh.utils import (
     debug_mode_enabled as debug_mode_enabled,
     enable_debug_mode as enable_debug_mode,
 )
+from sqlmesh.utils.date import DatetimeRanges as DatetimeRanges
 
 try:
     from sqlmesh._version import __version__ as __version__, __version_tuple__ as __version_tuple__
@@ -171,8 +173,8 @@ def configure_logging(
             os.remove(path)
 
     if debug:
+        from signal import SIGUSR1
         import faulthandler
-        import signal
 
         enable_debug_mode()
 
@@ -180,4 +182,4 @@ def configure_logging(
         faulthandler.enable()
         # Windows doesn't support register so we check for it here
         if hasattr(faulthandler, "register"):
-            faulthandler.register(signal.SIGUSR1.value)
+            faulthandler.register(SIGUSR1.value)

@@ -49,6 +49,7 @@ from sqlmesh.core.model.common import parse_expression
 from sqlmesh.core.model.kind import ModelKindName, _model_kind_validator
 from sqlmesh.core.model.seed import CsvSettings
 from sqlmesh.core.node import IntervalUnit, _Node
+from sqlmesh.core.signal import signal
 from sqlmesh.core.snapshot import Snapshot, SnapshotChangeCategory
 from sqlmesh.utils.date import TimeLike, to_datetime, to_ds, to_timestamp
 from sqlmesh.utils.errors import ConfigError, SQLMeshError
@@ -3820,9 +3821,25 @@ def test_signals():
         MODEL (
             name db.table,
             signals [
+                (arg = 1),
+            ],
+        );
+        SELECT 1;
+        """
+    )
+
+    model = load_sql_based_model(expressions)
+    assert model.signals[0][1] == {"arg": exp.Literal.number(1)}
+
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.table,
+            signals [
+                my_signal(arg = 1),
                 (
-                    table_name = 'table_a',
-                    ds = @end_ds,
+                    table_name := 'table_a',
+                    ds := @end_ds,
                 ),
                 (
                     table_name = 'table_b',
@@ -3843,26 +3860,35 @@ def test_signals():
 
     model = load_sql_based_model(expressions)
     assert model.signals == [
-        exp.Tuple(
-            expressions=[
-                exp.to_column("table_name").eq("table_a"),
-                exp.to_column("ds").eq(d.MacroVar(this="end_ds")),
-            ]
+        (
+            "my_signal",
+            {
+                "arg": exp.Literal.number(1),
+            },
         ),
-        exp.Tuple(
-            expressions=[
-                exp.to_column("table_name").eq("table_b"),
-                exp.to_column("ds").eq(d.MacroVar(this="end_ds")),
-                exp.to_column("hour").eq(d.MacroVar(this="end_hour")),
-            ]
+        (
+            "",
+            {
+                "table_name": exp.Literal.string("table_a"),
+                "ds": d.MacroVar(this="end_ds"),
+            },
         ),
-        exp.Tuple(
-            expressions=[
-                exp.to_column("bool_key").eq(True),
-                exp.to_column("int_key").eq(1),
-                exp.to_column("float_key").eq(1.0),
-                exp.to_column("string_key").eq("string"),
-            ]
+        (
+            "",
+            {
+                "table_name": exp.Literal.string("table_b"),
+                "ds": d.MacroVar(this="end_ds"),
+                "hour": d.MacroVar(this="end_hour"),
+            },
+        ),
+        (
+            "",
+            {
+                "bool_key": exp.true(),
+                "int_key": exp.Literal.number(1),
+                "float_key": exp.Literal.number(1.0),
+                "string_key": exp.Literal.string("string"),
+            },
         ),
     ]
 
@@ -3874,7 +3900,7 @@ def test_signals():
     ]
 
     assert (
-        "signals ((table_name = 'table_a', ds = @end_ds), (table_name = 'table_b', ds = @end_ds, hour = @end_hour), (bool_key = TRUE, int_key = 1, float_key = 1.0, string_key = 'string')"
+        "signals (MY_SIGNAL(arg := 1), (table_name = 'table_a', ds = @end_ds), (table_name = 'table_b', ds = @end_ds, hour = @end_hour), (bool_key = TRUE, int_key = 1, float_key = 1.0, string_key = 'string'))"
         in model.render_definition()[0].sql()
     )
 
@@ -6126,3 +6152,39 @@ def test_parametric_model_kind():
 
     model = load_sql_based_model(parsed_definition, variables={c.GATEWAY: "other"})
     assert isinstance(model.kind, FullKind)
+
+
+def test_fingerprint_signals():
+    @signal()
+    def test_signal_hash(batch):
+        return True
+
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.table,
+            signals [
+                test_signal_hash(arg = 1),
+            ],
+        );
+        SELECT 1;
+        """
+    )
+
+    model = load_sql_based_model(expressions, signal_definitions=signal.get_registry())
+    metadata_hash = model.metadata_hash
+    data_hash = model.data_hash
+
+    def assert_metadata_only():
+        model._metadata_hash = None
+        model._data_hash = None
+        assert model.metadata_hash != metadata_hash
+        assert model.data_hash == data_hash
+
+    executable = model.python_env["test_signal_hash"]
+    model.python_env["test_signal_hash"].payload = executable.payload.replace("True", "False")
+    assert_metadata_only()
+
+    model = load_sql_based_model(expressions, signal_definitions=signal.get_registry())
+    model.signals.clear()
+    assert_metadata_only()

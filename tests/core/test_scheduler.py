@@ -10,7 +10,6 @@ from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.model import load_sql_based_model
 from sqlmesh.core.model.definition import AuditResult, SqlModel
 from sqlmesh.core.model.kind import (
-    FullKind,
     IncrementalByTimeRangeKind,
     IncrementalByUniqueKeyKind,
     TimeColumn,
@@ -20,10 +19,9 @@ from sqlmesh.core.scheduler import (
     Scheduler,
     interval_diff,
     compute_interval_params,
-    signal_factory,
-    Signal,
     SnapshotToIntervals,
 )
+from sqlmesh.core.signal import signal
 from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotEvaluator,
@@ -506,95 +504,6 @@ def test_external_model_audit(mocker, make_snapshot):
     spy.assert_called_once()
 
 
-def test_contiguous_intervals():
-    from sqlmesh.core.scheduler import _contiguous_intervals as ci
-
-    assert ci([]) == []
-    assert ci([(0, 1)]) == [[(0, 1)]]
-    assert ci([(0, 1), (1, 2), (2, 3)]) == [[(0, 1), (1, 2), (2, 3)]]
-    assert ci([(0, 1), (3, 4), (4, 5), (6, 7)]) == [
-        [(0, 1)],
-        [(3, 4), (4, 5)],
-        [(6, 7)],
-    ]
-
-
-def test_check_ready_intervals(mocker: MockerFixture):
-    from sqlmesh.core.scheduler import _check_ready_intervals
-    from sqlmesh.core.snapshot.definition import Interval
-
-    def const_signal(const):
-        signal_mock = mocker.Mock()
-        signal_mock.check_intervals = mocker.MagicMock(return_value=const)
-        return signal_mock
-
-    def assert_always_signal(intervals):
-        _check_ready_intervals(const_signal(True), intervals) == intervals
-
-    assert_always_signal([])
-    assert_always_signal([(0, 1)])
-    assert_always_signal([(0, 1), (1, 2)])
-    assert_always_signal([(0, 1), (2, 3)])
-
-    def assert_never_signal(intervals):
-        _check_ready_intervals(const_signal(False), intervals) == []
-
-    assert_never_signal([])
-    assert_never_signal([(0, 1)])
-    assert_never_signal([(0, 1), (1, 2)])
-    assert_never_signal([(0, 1), (2, 3)])
-
-    def to_intervals(values: t.List[t.Tuple[int, int]]) -> t.List[Interval]:
-        return [(to_datetime(s), to_datetime(e)) for s, e in values]
-
-    def assert_check_intervals(
-        intervals: t.List[t.Tuple[int, int]],
-        ready: t.List[t.List[t.Tuple[int, int]]],
-        expected: t.List[t.Tuple[int, int]],
-    ):
-        signal_mock = mocker.Mock()
-        signal_mock.check_intervals = mocker.MagicMock(side_effect=[to_intervals(r) for r in ready])
-        _check_ready_intervals(signal_mock, intervals) == expected
-
-    assert_check_intervals([], [], [])
-    assert_check_intervals([(0, 1)], [[]], [])
-    assert_check_intervals(
-        [(0, 1)],
-        [[(0, 1)]],
-        [(0, 1)],
-    )
-    assert_check_intervals(
-        [(0, 1), (1, 2)],
-        [[(0, 1)]],
-        [(0, 1)],
-    )
-    assert_check_intervals(
-        [(0, 1), (1, 2)],
-        [[(1, 2)]],
-        [(1, 2)],
-    )
-    assert_check_intervals(
-        [(0, 1), (1, 2)],
-        [[(0, 1), (1, 2)]],
-        [(0, 1), (1, 2)],
-    )
-    assert_check_intervals(
-        [(0, 1), (1, 2), (3, 4)],
-        [[], []],
-        [],
-    )
-    assert_check_intervals(
-        [(0, 1), (1, 2), (3, 4)],
-        [[(0, 1)], []],
-        [(0, 1)],
-    )
-    assert_check_intervals(
-        [(0, 1), (1, 2), (3, 4)],
-        [[(0, 1)], [(3, 4)]],
-        [(0, 1), (3, 4)],
-    )
-
-
 def test_audit_failure_notifications(
     scheduler: Scheduler, waiter_names: Snapshot, mocker: MockerFixture
 ):
@@ -661,56 +570,6 @@ def test_audit_failure_notifications(
     assert notify_mock.call_count == 1
 
 
-def test_signal_factory(mocker: MockerFixture, make_snapshot):
-    class AlwaysReadySignal(Signal):
-        def check_intervals(self, batch: DatetimeRanges):
-            return True
-
-    signal_factory_invoked = 0
-
-    @signal_factory
-    def factory(signal_metadata):
-        nonlocal signal_factory_invoked
-        signal_factory_invoked += 1
-        assert signal_metadata.get("kind") == "foo"
-        return AlwaysReadySignal()
-
-    start = to_datetime("2023-01-01")
-    end = to_datetime("2023-01-07")
-    snapshot: Snapshot = make_snapshot(
-        SqlModel(
-            name="name",
-            kind=FullKind(),
-            owner="owner",
-            dialect="",
-            cron="@daily",
-            start=start,
-            query=parse_one("SELECT id FROM VALUES (1), (2) AS t(id)"),
-            signals=[{"kind": "foo"}],
-        ),
-    )
-    snapshot_evaluator = SnapshotEvaluator(adapters=mocker.MagicMock(), ddl_concurrent_tasks=1)
-    scheduler = Scheduler(
-        snapshots=[snapshot],
-        snapshot_evaluator=snapshot_evaluator,
-        state_sync=mocker.MagicMock(),
-        max_workers=2,
-        default_catalog=None,
-        console=mocker.MagicMock(),
-    )
-    merged_intervals = scheduler.merged_missing_intervals(start, end, end)
-    assert len(merged_intervals) == 1
-    scheduler.run_merged_intervals(
-        merged_intervals=merged_intervals,
-        deployability_index=DeployabilityIndex.all_deployable(),
-        environment_naming_info=EnvironmentNamingInfo(),
-        start=start,
-        end=end,
-    )
-
-    assert signal_factory_invoked > 0
-
-
 def test_interval_diff():
     assert interval_diff([(1, 2)], []) == [(1, 2)]
     assert interval_diff([(1, 2)], [(1, 2)]) == []
@@ -741,51 +600,85 @@ def test_interval_diff():
 
 
 def test_signal_intervals(mocker: MockerFixture, make_snapshot, get_batched_missing_intervals):
-    class TestSignal(Signal):
-        def __init__(self, signal: t.Dict):
-            self.name = signal["kind"]
+    @signal()
+    def signal_a(batch: DatetimeRanges):
+        return [batch[0], batch[1]]
 
-        def check_intervals(self, batch: DatetimeRanges):
-            if self.name == "a":
-                return [batch[0], batch[1]]
-            if self.name == "b":
-                return batch[-49:]
+    @signal()
+    def signal_b(batch: DatetimeRanges):
+        return batch[-49:]
+
+    signals = signal.get_registry()
 
     a = make_snapshot(
-        SqlModel(
-            name="a",
-            kind="full",
-            start="2023-01-01",
-            query=parse_one("SELECT 1 x"),
-            signals=[{"kind": "a"}],
+        load_sql_based_model(
+            parse(  # type: ignore
+                """
+                MODEL (
+                    name a,
+                    kind FULL,
+                    start '2023-01-01',
+                    signals SIGNAL_A(),
+                );
+
+                SELECT 1 x;
+                """
+            ),
+            signal_definitions=signals,
         ),
     )
+
     b = make_snapshot(
-        SqlModel(
-            name="b",
-            kind="full",
-            start="2023-01-01",
-            cron="@hourly",
-            query=parse_one("SELECT 2 x"),
-            signals=[{"kind": "b"}],
+        load_sql_based_model(
+            parse(  # type: ignore
+                """
+                MODEL (
+                    name b,
+                    kind FULL,
+                    cron '@hourly',
+                    start '2023-01-01',
+                    signals SIGNAL_B(),
+                );
+
+                SELECT 2 x;
+                """
+            ),
+            signal_definitions=signals,
         ),
         nodes={a.name: a.model},
     )
+
     c = make_snapshot(
-        SqlModel(
-            name="c",
-            kind="full",
-            start="2023-01-01",
-            query=parse_one("select * from a union select * from b"),
+        load_sql_based_model(
+            parse(  # type: ignore
+                """
+                MODEL (
+                    name c,
+                    kind FULL,
+                    start '2023-01-01',
+                );
+
+                SELECT * FROM a UNION SELECT * FROM b
+                """
+            ),
+            signal_definitions=signals,
         ),
         nodes={a.name: a.model, b.name: b.model},
     )
     d = make_snapshot(
-        SqlModel(
-            name="d",
-            kind="full",
-            start="2023-01-01",
-            query=parse_one("select * from c union all select * from d"),
+        load_sql_based_model(
+            parse(  # type: ignore
+                """
+                MODEL (
+                    name d,
+                    kind FULL,
+                    start '2023-01-01',
+                );
+
+                SELECT * FROM c UNION SELECT * FROM d
+                """
+            ),
+            signal_definitions=signals,
         ),
         nodes={a.name: a.model, b.name: b.model, c.name: c.model},
     )
@@ -797,7 +690,6 @@ def test_signal_intervals(mocker: MockerFixture, make_snapshot, get_batched_miss
         state_sync=mocker.MagicMock(),
         max_workers=2,
         default_catalog=None,
-        signal_factory=lambda signal: TestSignal(signal),
     )
 
     batches = get_batched_missing_intervals(scheduler, "2023-01-01", "2023-01-03", None)
