@@ -1223,18 +1223,15 @@ class EngineAdapterStateSync(StateSync):
         migration_start_ts = time.perf_counter()
 
         try:
-            migrate_snapshots_and_environments = self._apply_migrations(
-                default_catalog, skip_backup
-            )
+            migrate_rows = self._apply_migrations(default_catalog, skip_backup)
 
-            if not migrate_snapshots_and_environments:
-                if major_minor(SQLMESH_VERSION) != versions.minor_sqlmesh_version:
-                    self._update_versions()
+            if not migrate_rows and major_minor(SQLMESH_VERSION) == versions.minor_sqlmesh_version:
                 return
 
-            self._migrate_rows(promoted_snapshots_only)
-            # Cleanup plan DAGs since we currently don't migrate snapshot records that are in there.
-            self.engine_adapter.delete_from(self.plan_dags_table, "TRUE")
+            if migrate_rows:
+                self._migrate_rows(promoted_snapshots_only)
+                # Cleanup plan DAGs since we currently don't migrate snapshot records that are in there.
+                self.engine_adapter.delete_from(self.plan_dags_table, "TRUE")
             self._update_versions()
 
             analytics.collector.on_migration_end(
