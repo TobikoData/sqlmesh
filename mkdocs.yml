@@ -64,7 +64,6 @@ nav:
     - examples/overview.md
     - Walkthroughs:
       - examples/incremental_time_full_walkthrough.md
-      - examples/tcloud_getting_started.md
   - Integrations:
     - "Overview": integrations/overview.md
     - Tools:
@@ -102,7 +101,7 @@ nav:
       - reference/model_configuration.md
   # - Tobiko Cloud:
   #   - "Overview": cloud/cloud_index.md
-  #   - "Quickstart": cloud/quickstart.md
+  #   - "Quickstart": cloud/tcloud_getting_started.md
   #   - Cloud Features:
   #     - "Alerts & Notifications": cloud/features/alerts_notifications.md
   #     - cloud/features/dag_debugger.md
