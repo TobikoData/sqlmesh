@@ -3820,9 +3820,10 @@ def test_signals():
         MODEL (
             name db.table,
             signals [
+                my_signal(arg = 1),
                 (
-                    table_name = 'table_a',
-                    ds = @end_ds,
+                    table_name := 'table_a',
+                    ds := @end_ds,
                 ),
                 (
                     table_name = 'table_b',
@@ -3843,26 +3844,35 @@ def test_signals():
 
     model = load_sql_based_model(expressions)
     assert model.signals == [
-        exp.Tuple(
-            expressions=[
-                exp.to_column("table_name").eq("table_a"),
-                exp.to_column("ds").eq(d.MacroVar(this="end_ds")),
-            ]
+        (
+            "my_signal",
+            {
+                "arg": exp.Literal.number(1),
+            },
         ),
-        exp.Tuple(
-            expressions=[
-                exp.to_column("table_name").eq("table_b"),
-                exp.to_column("ds").eq(d.MacroVar(this="end_ds")),
-                exp.to_column("hour").eq(d.MacroVar(this="end_hour")),
-            ]
+        (
+            "",
+            {
+                "table_name": exp.Literal.string("table_a"),
+                "ds": d.MacroVar(this="end_ds"),
+            },
         ),
-        exp.Tuple(
-            expressions=[
-                exp.to_column("bool_key").eq(True),
-                exp.to_column("int_key").eq(1),
-                exp.to_column("float_key").eq(1.0),
-                exp.to_column("string_key").eq("string"),
-            ]
+        (
+            "",
+            {
+                "table_name": exp.Literal.string("table_b"),
+                "ds": d.MacroVar(this="end_ds"),
+                "hour": d.MacroVar(this="end_hour"),
+            },
+        ),
+        (
+            "",
+            {
+                "bool_key": exp.true(),
+                "int_key": exp.Literal.number(1),
+                "float_key": exp.Literal.number(1.0),
+                "string_key": exp.Literal.string("string"),
+            },
         ),
     ]
 
@@ -3874,7 +3884,7 @@ def test_signals():
     ]
 
     assert (
-        "signals ((table_name = 'table_a', ds = @end_ds), (table_name = 'table_b', ds = @end_ds, hour = @end_hour), (bool_key = TRUE, int_key = 1, float_key = 1.0, string_key = 'string')"
+        "signals (MY_SIGNAL(arg := 1), (table_name = 'table_a', ds = @end_ds), (table_name = 'table_b', ds = @end_ds, hour = @end_hour), (bool_key = TRUE, int_key = 1, float_key = 1.0, string_key = 'string'))"
         in model.render_definition()[0].sql()
     )
 
