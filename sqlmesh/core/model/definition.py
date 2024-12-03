@@ -464,7 +464,7 @@ class _Model(ModelMeta, frozen=True):
 
         query_renderer = QueryRenderer(
             audit.query,
-            audit.dialect,
+            audit.dialect or self.dialect,
             audit.macro_definitions,
             path=audit._path or Path(),
             jinja_macro_registry=audit.jinja_macros,
