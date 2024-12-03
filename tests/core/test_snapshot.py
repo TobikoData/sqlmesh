@@ -47,9 +47,13 @@ from sqlmesh.core.snapshot import (
 )
 from sqlmesh.core.snapshot.cache import SnapshotCache
 from sqlmesh.core.snapshot.categorizer import categorize_change
-from sqlmesh.core.snapshot.definition import display_name
+from sqlmesh.core.snapshot.definition import (
+    display_name,
+    _check_ready_intervals,
+    _contiguous_intervals,
+)
 from sqlmesh.utils import AttributeDict
-from sqlmesh.utils.date import to_date, to_datetime, to_timestamp
+from sqlmesh.utils.date import DatetimeRanges, to_date, to_datetime, to_timestamp
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroInfo
 
@@ -2155,3 +2159,82 @@ def test_physical_version_pin_for_new_forward_only_models(make_snapshot):
 
     assert snapshot_f.version == "1234"
     assert snapshot_f.fingerprint != snapshot_e.fingerprint
+
+
+def test_contiguous_intervals():
+    assert _contiguous_intervals([]) == []
+    assert _contiguous_intervals([(0, 1)]) == [[(0, 1)]]
+    assert _contiguous_intervals([(0, 1), (1, 2), (2, 3)]) == [[(0, 1), (1, 2), (2, 3)]]
+    assert _contiguous_intervals([(0, 1), (3, 4), (4, 5), (6, 7)]) == [
+        [(0, 1)],
+        [(3, 4), (4, 5)],
+        [(6, 7)],
+    ]
+
+
+def test_check_ready_intervals(mocker: MockerFixture):
+    def assert_always_signal(intervals):
+        _check_ready_intervals(lambda _: True, intervals) == intervals
+
+    assert_always_signal([])
+    assert_always_signal([(0, 1)])
+    assert_always_signal([(0, 1), (1, 2)])
+    assert_always_signal([(0, 1), (2, 3)])
+
+    def assert_never_signal(intervals):
+        _check_ready_intervals(lambda _: False, intervals) == []
+
+    assert_never_signal([])
+    assert_never_signal([(0, 1)])
+    assert_never_signal([(0, 1), (1, 2)])
+    assert_never_signal([(0, 1), (2, 3)])
+
+    def to_intervals(values: t.List[t.Tuple[int, int]]) -> DatetimeRanges:
+        return [(to_datetime(s), to_datetime(e)) for s, e in values]
+
+    def assert_check_intervals(
+        intervals: t.List[t.Tuple[int, int]],
+        ready: t.List[t.List[t.Tuple[int, int]]],
+        expected: t.List[t.Tuple[int, int]],
+    ):
+        mock = mocker.Mock()
+        mock.side_effect = [to_intervals(r) for r in ready]
+        _check_ready_intervals(mock, intervals) == expected
+
+    assert_check_intervals([], [], [])
+    assert_check_intervals([(0, 1)], [[]], [])
+    assert_check_intervals(
+        [(0, 1)],
+        [[(0, 1)]],
+        [(0, 1)],
+    )
+    assert_check_intervals(
+        [(0, 1), (1, 2)],
+        [[(0, 1)]],
+        [(0, 1)],
+    )
+    assert_check_intervals(
+        [(0, 1), (1, 2)],
+        [[(1, 2)]],
+        [(1, 2)],
+    )
+    assert_check_intervals(
+        [(0, 1), (1, 2)],
+        [[(0, 1), (1, 2)]],
+        [(0, 1), (1, 2)],
+    )
+    assert_check_intervals(
+        [(0, 1), (1, 2), (3, 4)],
+        [[], []],
+        [],
+    )
+    assert_check_intervals(
+        [(0, 1), (1, 2), (3, 4)],
+        [[(0, 1)], []],
+        [(0, 1)],
+    )
+    assert_check_intervals(
+        [(0, 1), (1, 2), (3, 4)],
+        [[(0, 1)], [(3, 4)]],
+        [(0, 1), (3, 4)],
+    )

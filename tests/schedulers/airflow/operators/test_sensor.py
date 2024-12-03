@@ -122,12 +122,15 @@ def test_external_sensor(mocker: MockerFixture, make_snapshot, set_airflow_as_li
             name="this",
             query=parse_one("select 1"),
             signals=[
-                {"table_name": "test_table_name_a", "ds": parse_one("@end_ds")},
-                {
-                    "table_name": "test_table_name_b",
-                    "ds": parse_one("@end_ds"),
-                    "hour": parse_one("@end_hour"),
-                },
+                ("", {"table_name": "test_table_name_a", "ds": parse_one("@end_ds")}),
+                (
+                    "",
+                    {
+                        "table_name": "test_table_name_b",
+                        "ds": parse_one("@end_ds"),
+                        "hour": parse_one("@end_hour"),
+                    },
+                ),
             ],
         )
     )

@@ -21,7 +21,7 @@ from sqlmesh.utils import format_exception, unique
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
 
-IGNORE_DECORATORS = {"macro", "model"}
+IGNORE_DECORATORS = {"macro", "model", "signal"}
 
 
 def _is_relative_to(path: t.Optional[Path | str], other: t.Optional[Path | str]) -> bool:

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import typing as t
 
-from sqlmesh.core.dialect import parse_one, extract_audit
+from sqlmesh.core.dialect import parse_one, extract_func_call
 from sqlmesh.core.config.base import BaseConfig
 from sqlmesh.core.model.kind import (
     ModelKind,
@@ -11,7 +11,7 @@ from sqlmesh.core.model.kind import (
     on_destructive_change_validator,
 )
 from sqlmesh.utils.date import TimeLike
-from sqlmesh.core.model.meta import AuditReference
+from sqlmesh.core.model.meta import FunctionCall
 from sqlmesh.utils.pydantic import field_validator
 
 
@@ -44,7 +44,7 @@ class ModelDefaultsConfig(BaseConfig):
     storage_format: t.Optional[str] = None
     on_destructive_change: t.Optional[OnDestructiveChange] = None
     session_properties: t.Optional[t.Dict[str, t.Any]] = None
-    audits: t.Optional[t.List[AuditReference]] = None
+    audits: t.Optional[t.List[FunctionCall]] = None
 
     _model_kind_validator = model_kind_validator
     _on_destructive_change_validator = on_destructive_change_validator
@@ -52,6 +52,6 @@ class ModelDefaultsConfig(BaseConfig):
     @field_validator("audits", mode="before")
     def _audits_validator(cls, v: t.Any) -> t.Any:
         if isinstance(v, list):
-            return [extract_audit(parse_one(audit)) for audit in v]
+            return [extract_func_call(parse_one(audit)) for audit in v]
 
         return v
