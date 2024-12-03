@@ -289,7 +289,7 @@ Virtually Updating 'prod' ━━━━━━━━━━━━━━━━━━
 The target environment has been updated successfully
 ```
 
-SQLMesh is working!
+Tobiko Cloud and SQLMesh are working!
 
 ## Next steps
 
