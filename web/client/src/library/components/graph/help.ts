@@ -1,4 +1,4 @@
-import ELK, { type ElkNode } from 'elkjs/lib/elk-api'
+import ELK, { type ElkNode } from 'elkjs/lib/elk.bundled.js'
 import {
   isArrayNotEmpty,
   isFalse,
@@ -55,12 +55,7 @@ function createGraphLayout({
   terminate: () => void
 } {
   // https://eclipse.dev/elk/reference/options.html
-  const elk: any = new ELK({
-    workerUrl: new URL(
-      '/node_modules/elkjs/lib/elk-worker.min.js',
-      import.meta.url,
-    ).href,
-  })
+  const elk: any = new ELK()
 
   return {
     terminate: () => elk.worker.terminate(),

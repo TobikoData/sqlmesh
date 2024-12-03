@@ -1,5 +1,5 @@
 import { isFalse, isNil, isNotNil } from '../utils'
-import { getUrlPrefix } from './instance'
+import { getUrlWithPrefix } from './instance'
 
 type ChannelCallback<TData = any> = (data: TData) => void
 export type EventSourceChannel = <TData = any>(
@@ -132,7 +132,7 @@ export function useChannelEvents(): <TData = any>(
   callback?: ChannelCallback<TData>,
 ) => Channel {
   if (isNil(Connection)) {
-    Connection = new EventSourceConnection(`${getUrlPrefix()}api/events`)
+    Connection = new EventSourceConnection(getUrlWithPrefix('/api/events'))
   }
 
   return (topic, callback) => ({
