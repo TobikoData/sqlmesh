@@ -5,7 +5,7 @@ import Loading from '@components/loading/Loading'
 import Spinner from '@components/logo/Spinner'
 import { isArrayNotEmpty, isNil } from './utils'
 import { Modules } from '@api/client'
-import { getUrlPrefix } from '@api/instance'
+import { getUrlWithPrefix } from '@api/instance'
 import { type ModelModuleController } from '@models/module-controller'
 
 const Root = lazy(() => import('./library/pages/root/Root'))
@@ -424,5 +424,5 @@ export function getBrowserRouter(
     }),
   ].filter(Boolean) as RouteObject[]
 
-  return createBrowserRouter(routes, { basename: getUrlPrefix() })
+  return createBrowserRouter(routes, { basename: getUrlWithPrefix() })
 }
