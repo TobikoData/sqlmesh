@@ -26,6 +26,7 @@ def migrate(state_sync, **kwargs):  # type: ignore
 
     targets = [
         (environments_table, "snapshots"),
+        (environments_table, "promoted_snapshot_ids"),
         (environments_table, "previous_finalized_snapshots"),
         (environments_table, "requirements"),
         (snapshots_table, "snapshot"),
