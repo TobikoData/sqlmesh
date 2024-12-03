@@ -1,12 +1,14 @@
+from __future__ import annotations
+
 import logging
 import typing as t
 from threading import get_ident
 
-from pyspark.errors import PySparkAttributeError
-from pyspark.sql import DataFrame, SparkSession
-from pyspark.sql.types import Row
-
 from sqlmesh.engines.spark.db_api.errors import NotSupportedError, ProgrammingError
+
+if t.TYPE_CHECKING:
+    from pyspark.sql import DataFrame, SparkSession
+    from pyspark.sql.types import Row
 
 logger = logging.getLogger(__name__)
 
@@ -88,6 +90,8 @@ class SparkSessionConnection:
             )
 
     def cursor(self) -> SparkSessionCursor:
+        from pyspark.errors import PySparkAttributeError
+
         try:
             self.spark.sparkContext.setLocalProperty("spark.scheduler.pool", f"pool_{get_ident()}")
             self.spark.conf.set("spark.sql.sources.partitionOverwriteMode", "dynamic")
