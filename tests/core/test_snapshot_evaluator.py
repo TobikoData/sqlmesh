@@ -103,6 +103,29 @@ def adapter_mock(mocker: MockerFixture):
     return adapter_mock
 
 
+@pytest.fixture
+def adapters(mocker: MockerFixture):
+    adapters = []
+    for i in range(3):
+        transaction_mock = mocker.Mock()
+        transaction_mock.__enter__ = mocker.Mock()
+        transaction_mock.__exit__ = mocker.Mock()
+
+        session_mock = mocker.Mock()
+        session_mock.__enter__ = mocker.Mock()
+        session_mock.__exit__ = mocker.Mock()
+
+        adapter_mock = mocker.Mock()
+        adapter_mock.transaction.return_value = transaction_mock
+        adapter_mock.session.return_value = session_mock
+        adapter_mock.dialect = "duckdb"
+        adapter_mock.HAS_VIEW_BINDING = False
+        adapter_mock.wap_supported.return_value = False
+        adapter_mock.get_data_objects.return_value = []
+        adapters.append(adapter_mock)
+    return adapters
+
+
 def test_evaluate(mocker: MockerFixture, adapter_mock, make_snapshot):
     evaluator = SnapshotEvaluator(adapter_mock)
 
@@ -538,7 +561,7 @@ def test_evaluate_materialized_view_with_partitioned_by_cluster_by(
         [
             call("CREATE SCHEMA IF NOT EXISTS `sqlmesh__test_schema`"),
             call(
-                "CREATE MATERIALIZED VIEW `sqlmesh__test_schema`.`test_schema__test_model__3414391032` PARTITION BY `a` CLUSTER BY `b` AS SELECT `a` AS `a`, `b` AS `b` FROM `tbl` AS `tbl`"
+                "CREATE MATERIALIZED VIEW `sqlmesh__test_schema`.`test_schema__test_model__3674208014` PARTITION BY `a` CLUSTER BY `b` AS SELECT `a` AS `a`, `b` AS `b` FROM `tbl` AS `tbl`"
             ),
         ]
     )
@@ -2810,10 +2833,10 @@ def test_cleanup_managed(adapter_mock, make_snapshot, mocker: MockerFixture):
     evaluator.cleanup(target_snapshots=[cleanup_task])
 
     adapter_mock.drop_table.assert_called_once_with(
-        "sqlmesh__test_schema.test_schema__test_model__2319802374__temp"
+        "sqlmesh__test_schema.test_schema__test_model__14485873__temp"
     )
     adapter_mock.drop_managed_table.assert_called_once_with(
-        "sqlmesh__test_schema.test_schema__test_model__2319802374"
+        "sqlmesh__test_schema.test_schema__test_model__14485873"
     )
 
 
@@ -3068,3 +3091,323 @@ def test_migrate_managed(adapter_mock, make_snapshot, mocker: MockerFixture):
     adapter_mock.create_table.assert_not_called()
     adapter_mock.ctas.assert_not_called()
     adapter_mock.create_managed_table.assert_not_called()
+
+
+def test_multiple_engine_creation(snapshot: Snapshot, adapters, make_snapshot):
+    engine_adapters = {"default": adapters[0], "secondary": adapters[1], "third": adapters[2]}
+    evaluator = SnapshotEvaluator(engine_adapters)
+
+    assert len(evaluator.adapters) == 3
+    assert evaluator.adapter == engine_adapters["default"]
+    assert evaluator._get_adapter() == engine_adapters["default"]
+    assert evaluator._get_adapter("third") == engine_adapters["third"]
+    assert evaluator._get_adapter("secondary") == engine_adapters["secondary"]
+
+    model = load_sql_based_model(
+        parse(  # type: ignore
+            """
+            MODEL (
+                name test_schema.test_model,
+                kind FULL,
+                gateway secondary,
+                dialect postgres,
+            );
+            CREATE INDEX IF NOT EXISTS test_idx ON test_schema.test_model(a);
+            SELECT a::int FROM tbl;
+            CREATE INDEX IF NOT EXISTS test_idx ON test_schema.test_model(a);
+            """
+        ),
+    )
+
+    snapshot_2 = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    snapshot_2.categorize_as(SnapshotChangeCategory.BREAKING)
+    expected_call = f'CREATE INDEX IF NOT EXISTS "test_idx" ON "sqlmesh__test_schema"."test_schema__test_model__{snapshot_2.version}" /* test_schema.test_model */("a" NULLS FIRST)'
+    evaluator.create([snapshot_2, snapshot], {}, DeployabilityIndex.all_deployable())
+
+    # Default gateway adapter
+    create_args = engine_adapters["default"].create_table.call_args_list
+    assert len(create_args) == 1
+    assert create_args[0][0] == (f"sqlmesh__db.db__model__{snapshot.version}",)
+
+    # Secondary gateway for gateway-specicied model
+    create_args_2 = engine_adapters["secondary"].create_table.call_args_list
+    assert len(create_args_2) == 1
+    assert create_args_2[0][0] == (
+        f"sqlmesh__test_schema.test_schema__test_model__{snapshot_2.version}",
+    )
+
+    engine_adapters["third"].create_table.assert_not_called()
+    evaluator.promote([snapshot, snapshot_2], EnvironmentNamingInfo(name="test_env"))
+
+    # Virtual layer will use the default adapter
+    engine_adapters["secondary"].create_view.assert_not_called()
+    engine_adapters["third"].create_view.assert_not_called()
+    view_args = engine_adapters["default"].create_view.call_args_list
+    assert len(view_args) == 2
+    assert view_args[0][0][0] == "db__test_env.model"
+    assert view_args[1][0][0] == "test_schema__test_env.test_model"
+
+    call_args = engine_adapters["secondary"].execute.call_args_list
+    pre_calls = call_args[0][0][0]
+    assert len(pre_calls) == 1
+    assert pre_calls[0].sql(dialect="postgres") == expected_call
+
+    post_calls = call_args[1][0][0]
+    assert len(post_calls) == 1
+    assert post_calls[0].sql(dialect="postgres") == expected_call
+
+    evaluator.demote([snapshot_2], EnvironmentNamingInfo(name="test_env"))
+    engine_adapters["secondary"].drop_view.assert_not_called()
+    engine_adapters["default"].drop_view.assert_called_once_with(
+        "test_schema__test_env.test_model",
+        cascade=False,
+    )
+
+
+def test_multiple_engine_promotion(mocker: MockerFixture, adapter_mock, make_snapshot):
+    connection_mock = mocker.NonCallableMock()
+    cursor_mock = mocker.Mock()
+    connection_mock.cursor.return_value = cursor_mock
+    adapter = EngineAdapter(lambda: connection_mock, "")
+    engine_adapters = {"default": adapter_mock, "secondary": adapter}
+
+    def columns(table_name):
+        return {
+            "a": exp.DataType.build("int"),
+        }
+
+    adapter.columns = columns  # type: ignore
+
+    model = SqlModel(
+        name="test_schema.test_model",
+        kind=IncrementalByTimeRangeKind(time_column="a"),
+        gateway="secondary",
+        query=parse_one("SELECT a FROM tbl WHERE ds BETWEEN @start_ds and @end_ds"),
+    )
+
+    evaluator = SnapshotEvaluator(engine_adapters)
+    snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    evaluator.evaluate(
+        snapshot,
+        start="2020-01-01",
+        end="2020-01-02",
+        execution_time="2020-01-02",
+        snapshots={},
+    )
+
+    evaluator.promote([snapshot], EnvironmentNamingInfo(name="test_env"))
+
+    # Verify that the model was evaluated using the gateway specific adapter "secondary"
+    cursor_mock.execute.assert_has_calls(
+        [
+            call(
+                f'DELETE FROM "sqlmesh__test_schema"."test_schema__test_model__{snapshot.version}" WHERE "a" BETWEEN 2020-01-01 00:00:00+00:00 AND 2020-01-02 23:59:59.999999+00:00'
+            ),
+            call(
+                f'INSERT INTO "sqlmesh__test_schema"."test_schema__test_model__{snapshot.version}" ("a") SELECT "a" FROM (SELECT "a" AS "a" FROM "tbl" AS "tbl" WHERE "ds" BETWEEN \'2020-01-01\' AND \'2020-01-02\') AS "_subquery" WHERE "a" BETWEEN 2020-01-01 00:00:00+00:00 AND 2020-01-02 23:59:59.999999+00:00'
+            ),
+        ]
+    )
+
+    # Verify that the snapshot was promoted using the default adapter "default" (adapter_mock in this case)
+    adapter_mock.create_schema.assert_called_once_with(schema_("test_schema__test_env"))
+    adapter_mock.create_view.assert_called_once_with(
+        "test_schema__test_env.test_model",
+        parse_one(
+            f"SELECT * FROM sqlmesh__test_schema.test_schema__test_model__{snapshot.version}"
+        ),
+        table_description=None,
+        column_descriptions=None,
+        view_properties={},
+    )
+
+
+def test_multiple_engine_migration(mocker: MockerFixture, adapter_mock, make_snapshot):
+    connection_mock = mocker.NonCallableMock()
+    cursor_mock = mocker.Mock()
+    connection_mock.cursor.return_value = cursor_mock
+    adapter = EngineAdapter(lambda: connection_mock, "")
+    engine_adapters = {"one": adapter, "two": adapter_mock}
+
+    current_table = "sqlmesh__test_schema.test_schema__test_model__1"
+
+    def columns(table_name):
+        if table_name == current_table:
+            return {
+                "c": exp.DataType.build("int"),
+                "b": exp.DataType.build("int"),
+            }
+        else:
+            return {
+                "c": exp.DataType.build("int"),
+                "a": exp.DataType.build("int"),
+            }
+
+    adapter.columns = columns  # type: ignore
+    adapter_mock.columns = columns  # type: ignore
+
+    evaluator = SnapshotEvaluator(engine_adapters)
+
+    model = SqlModel(
+        name="test_schema.test_model",
+        kind=IncrementalByTimeRangeKind(
+            time_column="a", on_destructive_change=OnDestructiveChange.ALLOW
+        ),
+        query=parse_one("SELECT c FROM tbl WHERE ds BETWEEN @start_ds and @end_ds"),
+    )
+    snapshot_1 = make_snapshot(model, version="1")
+    snapshot_1.change_category = SnapshotChangeCategory.FORWARD_ONLY
+    model_2 = SqlModel(
+        name="test_schema.test_model_2",
+        kind=IncrementalByTimeRangeKind(
+            time_column="a", on_destructive_change=OnDestructiveChange.ALLOW
+        ),
+        gateway="two",
+        query=parse_one("SELECT c FROM tbl WHERE ds BETWEEN @start_ds and @end_ds"),
+    )
+    snapshot_2 = make_snapshot(model_2, version="1")
+    snapshot_2.change_category = SnapshotChangeCategory.FORWARD_ONLY
+    evaluator.migrate([snapshot_1, snapshot_2], {})
+
+    cursor_mock.execute.assert_has_calls(
+        [
+            call('ALTER TABLE "sqlmesh__test_schema"."test_schema__test_model__1" DROP COLUMN "b"'),
+            call(
+                'ALTER TABLE "sqlmesh__test_schema"."test_schema__test_model__1" ADD COLUMN "a" INT'
+            ),
+        ]
+    )
+
+    # The second mock adapter has to be called only for the gateway-specific model
+    adapter_mock.get_alter_expressions.assert_called_once_with(
+        snapshot_2.table_name(True), snapshot_2.table_name(False)
+    )
+
+
+def test_multiple_engine_cleanup(snapshot: Snapshot, adapters, make_snapshot):
+    engine_adapters = {"default": adapters[0], "secondary": adapters[1]}
+    evaluator = SnapshotEvaluator(engine_adapters)
+
+    model = load_sql_based_model(
+        parse(  # type: ignore
+            """
+            MODEL (
+                name test_schema.test_model,
+                kind FULL,
+                gateway secondary,
+            );
+            SELECT a::int FROM tbl;
+            """
+        ),
+    )
+
+    snapshot_2 = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    snapshot_2.categorize_as(SnapshotChangeCategory.BREAKING)
+    evaluator.create([snapshot_2, snapshot], {}, DeployabilityIndex.all_deployable())
+
+    assert engine_adapters["default"].create_table.call_args_list[0][0] == (
+        f"sqlmesh__db.db__model__{snapshot.version}",
+    )
+    assert engine_adapters["secondary"].create_table.call_args_list[0][0] == (
+        f"sqlmesh__test_schema.test_schema__test_model__{snapshot_2.version}",
+    )
+
+    snapshot_gateways = {snapshot.name: "default", snapshot_2.name: "secondary"}
+    evaluator.cleanup(
+        [
+            SnapshotTableCleanupTask(snapshot=snapshot.table_info, dev_table_only=True),
+            SnapshotTableCleanupTask(snapshot=snapshot_2.table_info, dev_table_only=True),
+        ],
+        snapshot_gateways,
+    )
+
+    # The clean up will happen using the specific gateway the model was created with
+    engine_adapters["default"].drop_table.assert_called_once_with(
+        f"sqlmesh__db.db__model__{snapshot.version}__temp"
+    )
+    engine_adapters["secondary"].drop_table.assert_called_once_with(
+        f"sqlmesh__test_schema.test_schema__test_model__{snapshot_2.version}__temp"
+    )
+
+
+def test_multi_engine_python_model_with_macros(adapters, make_snapshot):
+    engine_adapters = {"default": adapters[0], "secondary": adapters[1]}
+    evaluator = SnapshotEvaluator(engine_adapters)
+
+    @macro()
+    def create_index(
+        evaluator: MacroEvaluator,
+        index_name: str,
+        model_name: str,
+        column: str,
+    ):
+        if evaluator.runtime_stage == "creating":
+            # To validate the model-specified gateway is used for the evaluator
+            evaluator.engine_adapter.get_catalog_type()
+            return f"CREATE INDEX IF NOT EXISTS {index_name} ON {model_name}({column});"
+
+    @model(
+        "db.test_model",
+        kind="full",
+        gateway="secondary",
+        columns={"id": "string", "name": "string"},
+        pre_statements=["@CREATE_INDEX(idx, db.test_model, id)"],
+        post_statements=["@CREATE_INDEX(idx, db.test_model, id)"],
+    )
+    def model_with_statements(context, **kwargs):
+        return pd.DataFrame(
+            [
+                {
+                    "id": context.var("1"),
+                    "name": context.var("var"),
+                }
+            ]
+        )
+
+    python_model = model.get_registry()["db.test_model"].model(
+        module_path=Path("."),
+        path=Path("."),
+        macros=macro.get_registry(),
+        dialect="postgres",
+    )
+
+    assert len(python_model.python_env) == 3
+    assert isinstance(python_model.python_env["create_index"], Executable)
+
+    snapshot = make_snapshot(python_model)
+    assert snapshot.model_gateway == "secondary"
+    assert evaluator.adapter == engine_adapters["default"]
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    evaluator.create([snapshot], {}, DeployabilityIndex.all_deployable())
+
+    # Validate model-specific gateway usage during table creation
+    create_args = engine_adapters["secondary"].create_table.call_args_list
+    assert len(create_args) == 1
+    assert create_args[0][0] == (f"sqlmesh__db.db__test_model__{snapshot.version}",)
+
+    evaluator.promote([snapshot], EnvironmentNamingInfo(name="test_env"))
+
+    # Verify that the default gateway creates the view for the virtual layer
+    engine_adapters["secondary"].create_view.assert_not_called()
+    view_args = engine_adapters["default"].create_view.call_args_list
+    assert len(view_args) == 1
+    assert view_args[0][0][0] == "db__test_env.test_model"
+
+    # For the pre/post statements verify the model-specific gateway was used
+    expected_call = f'CREATE INDEX IF NOT EXISTS "idx" ON "sqlmesh__db"."db__test_model__{snapshot.version}" /* db.test_model */("id")'
+    engine_adapters["default"].execute.assert_not_called()
+    call_args = engine_adapters["secondary"].execute.call_args_list
+    pre_calls = call_args[0][0][0]
+    assert pre_calls[0].sql(dialect="postgres") == expected_call
+
+    post_calls = call_args[1][0][0]
+    assert post_calls[0].sql(dialect="postgres") == expected_call
+
+    # Validate that the get_catalog_type method was called only on the secondary engine from the macro evaluator
+    engine_adapters["default"].get_catalog_type.assert_not_called()
+    assert len(engine_adapters["secondary"].get_catalog_type.call_args_list) == 2

@@ -877,6 +877,7 @@ class _Model(ModelMeta, frozen=True):
             self.stamp,
             self.physical_schema,
             self.physical_version,
+            self.gateway,
             self.interval_unit.value if self.interval_unit is not None else None,
         ]
 
@@ -1558,7 +1559,6 @@ class ExternalModel(_Model):
     """The model definition which represents an external source/table."""
 
     source_type: Literal["external"] = "external"
-    gateway: t.Optional[str] = None
 
     def is_breaking_change(self, previous: Model) -> t.Optional[bool]:
         if not isinstance(previous, ExternalModel):

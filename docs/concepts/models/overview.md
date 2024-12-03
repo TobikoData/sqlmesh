@@ -351,6 +351,9 @@ Learn more about these properties and their default values in the [model configu
 
     NOTE: This can only be set for forward-only models.
 
+### gateway
+:   Specifies the gateway to use for the execution of this model. When not specified, the default gateway is used.
+
 ## Incremental Model Properties
 
 These properties can be specified in an incremental model's `kind` definition.

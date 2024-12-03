@@ -3967,7 +3967,7 @@ def test_default_catalog_sql(assert_exp_eq):
     The system is not designed to actually support having an engine that doesn't support default catalog
     to start supporting it or the reverse of that. If that did happen then bugs would occur.
     """
-    HASH_WITH_CATALOG = "933919826"
+    HASH_WITH_CATALOG = "368216481"
 
     # Test setting default catalog doesn't change hash if it matches existing logic
     expressions = d.parse(
@@ -4133,7 +4133,7 @@ def test_default_catalog_sql(assert_exp_eq):
 
 
 def test_default_catalog_python():
-    HASH_WITH_CATALOG = "1790191459"
+    HASH_WITH_CATALOG = "663490914"
 
     @model(name="db.table", kind="full", columns={'"COL"': "int"})
     def my_model(context, **kwargs):
@@ -4225,7 +4225,7 @@ def test_default_catalog_external_model():
     Since external models fqns are the only thing affected by default catalog, and when they change new snapshots
     are made, the hash will be the same across different names.
     """
-    EXPECTED_HASH = "4189607012"
+    EXPECTED_HASH = "627688262"
 
     model = create_external_model("db.table", columns={"a": "int", "limit": "int"})
     assert model.default_catalog is None

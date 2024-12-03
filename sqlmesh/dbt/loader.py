@@ -155,7 +155,7 @@ class DbtLoader(Loader):
 
     def _load_projects(self) -> t.List[Project]:
         if not self._projects:
-            target_name = self._context.gateway or self._context.config.default_gateway
+            target_name = self._context.selected_gateway
 
             self._projects = []
 
