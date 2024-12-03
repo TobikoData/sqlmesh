@@ -377,7 +377,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         self._engine_adapters: t.Dict[str, EngineAdapter] = {
             self.selected_gateway: self._connection_config.create_engine_adapter()
         }
-        
+
         self._snapshot_evaluator: t.Optional[SnapshotEvaluator] = None
 
         self.console = console or get_console(dialect=self.engine_adapter.dialect)
