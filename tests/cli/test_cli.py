@@ -116,12 +116,12 @@ def assert_duckdb_test(result) -> None:
     assert "Successfully Ran 1 tests against duckdb" in result.output
 
 
-def assert_new_env(result, new_env="prod", from_env="prod") -> None:
+def assert_new_env(result, new_env="prod", from_env="prod", initialize=True) -> None:
     assert (
-        "`prod` environment will be initialized"
-        if new_env == "prod"
-        else f"New environment `{new_env}` will be created from `{from_env}`" in result.output
-    )
+        f"`{new_env}` environment will be initialized"
+        if initialize
+        else f"New environment `{new_env}` will be created from `{from_env}`"
+    ) in result.output
 
 
 def assert_model_versions_created(result) -> None:
@@ -344,7 +344,7 @@ def test_plan_dev_create_from_virtual(runner, tmp_path):
         input="y\n",
     )
     assert result.exit_code == 0
-    assert_new_env(result, "dev2", "dev")
+    assert_new_env(result, "dev2", "dev", initialize=False)
     assert_model_versions_created(result)
     assert_target_env_updated(result)
     assert_virtual_update(result)
@@ -388,8 +388,53 @@ def test_plan_dev_create_from(runner, tmp_path):
     )
 
     assert result.exit_code == 0
-    assert_new_env(result, "dev2", "dev")
+    assert_new_env(result, "dev2", "dev", initialize=False)
     assert "Differences from the `dev` environment:" in result.output
+
+
+def test_plan_dev_bad_create_from(runner, tmp_path):
+    create_example_project(tmp_path)
+
+    # create dev environment and backfill
+    runner.invoke(
+        cli,
+        [
+            "--log-file-dir",
+            tmp_path,
+            "--paths",
+            tmp_path,
+            "plan",
+            "dev",
+            "--no-prompts",
+            "--auto-apply",
+        ],
+    )
+    # make model change
+    update_incremental_model(tmp_path)
+
+    # create dev2 environment from non-existent dev3
+    result = runner.invoke(
+        cli,
+        [
+            "--log-file-dir",
+            tmp_path,
+            "--paths",
+            tmp_path,
+            "plan",
+            "dev2",
+            "--create-from",
+            "dev3",
+            "--no-prompts",
+            "--auto-apply",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert_new_env(result, "dev2", "dev")
+    assert (
+        "WARNING - The environment name 'dev3' was passed to the `plan` command's `--create-from` argument, but 'dev3' does not exist. Initializing new environment 'dev2' from scratch."
+        in result.output
+    )
 
 
 def test_plan_dev_no_prompts(runner, tmp_path):
@@ -439,7 +484,7 @@ def test_plan_dev_no_changes(runner, tmp_path):
         input="y\n",
     )
     assert result.exit_code == 0
-    assert_new_env(result, "dev")
+    assert_new_env(result, "dev", initialize=False)
     assert_target_env_updated(result)
     assert_virtual_update(result)
 
@@ -586,7 +631,7 @@ def test_plan_dev_backfill(runner, tmp_path):
         input="\n\ny\n",
     )
     assert result.exit_code == 0
-    assert_new_env(result, "dev")
+    assert_new_env(result, "dev", initialize=False)
     # both model diffs present
     assert "+  item_id + 1 AS item_id," in result.output
     assert "Directly Modified: sqlmesh_example__dev.full_model (Breaking)" in result.output

@@ -293,7 +293,7 @@ def test_plan(
     # the models and how long it took
     assert len(output.stdout.strip().split("\n")) == 22
     assert not output.stderr
-    assert len(output.outputs) == 4
+    assert len(output.outputs) == 5
     text_output = convert_all_html_output_to_text(output)
     # TODO: Is this what we expect?
     # This has minor differences between CI/CD and local.
@@ -303,10 +303,12 @@ def test_plan(
     )
     # TODO: Is this what we expect?
     assert text_output[2] == ""
-    assert text_output[3] == "The target environment has been updated successfully"
+    assert text_output[3] == ""
+    assert text_output[4] == "The target environment has been updated successfully"
     assert convert_all_html_output_to_tags(output) == [
         ["pre", "span"],
         ["pre"] + ["span"] * 4,
+        ["pre"],
         ["pre"],
         ["pre", "span"],
     ]

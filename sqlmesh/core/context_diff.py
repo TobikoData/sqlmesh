@@ -17,7 +17,7 @@ import sys
 import typing as t
 from difflib import ndiff
 from functools import cached_property
-
+from sqlmesh.core import constants as c
 from sqlmesh.core.snapshot import Snapshot, SnapshotId, SnapshotTableInfo
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
@@ -54,6 +54,8 @@ class ContextDiff(PydanticModel):
     """Whether the environment name should be normalized."""
     create_from: str
     """The name of the environment the target environment will be created from if new."""
+    create_from_env_exists: bool
+    """Whether the create_from environment already exists at plan time."""
     added: t.Set[SnapshotId]
     """New nodes."""
     removed_snapshots: t.Dict[SnapshotId, SnapshotTableInfo]
@@ -104,9 +106,17 @@ class ContextDiff(PydanticModel):
         environment = environment.lower()
         env = state_reader.get_environment(environment)
 
+        create_from_env_exists = False
         if env is None or env.expired:
             env = state_reader.get_environment(create_from.lower())
+
+            if not env and create_from != c.PROD:
+                logger.warning(
+                    f"The environment name '{create_from}' was passed to the `plan` command's `--create-from` argument, but '{create_from}' does not exist. Initializing new environment '{environment}' from scratch."
+                )
+
             is_new_environment = True
+            create_from_env_exists = env is not None
             previously_promoted_snapshot_ids = set()
         else:
             is_new_environment = False
@@ -183,6 +193,7 @@ class ContextDiff(PydanticModel):
             is_unfinalized_environment=bool(env and not env.finalized_ts),
             normalize_environment_name=is_new_environment or bool(env and env.normalize_name),
             create_from=create_from,
+            create_from_env_exists=create_from_env_exists,
             added=added,
             removed_snapshots=removed,
             modified_snapshots=modified_snapshots,
@@ -218,6 +229,7 @@ class ContextDiff(PydanticModel):
             is_unfinalized_environment=False,
             normalize_environment_name=env.normalize_name,
             create_from="",
+            create_from_env_exists=False,
             added=set(),
             removed_snapshots={},
             modified_snapshots={},

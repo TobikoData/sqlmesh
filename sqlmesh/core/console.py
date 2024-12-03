@@ -23,7 +23,6 @@ from rich.syntax import Syntax
 from rich.table import Table
 from rich.tree import Tree
 
-from sqlmesh.core import constants as c
 from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.snapshot import (
     Snapshot,
@@ -615,8 +614,8 @@ class TerminalConsole(Console):
         """
         if context_diff.is_new_environment:
             msg = (
-                f"`{c.PROD}` environment will be initialized"
-                if context_diff.environment == c.PROD
+                f"`{context_diff.environment}` environment will be initialized"
+                if not context_diff.create_from_env_exists
                 else f"New environment `{context_diff.environment}` will be created from `{context_diff.create_from}`"
             )
             self._print(Tree(f"[bold]{msg}\n"))
@@ -634,7 +633,9 @@ class TerminalConsole(Console):
             )
             return
 
-        if not (context_diff.is_new_environment and context_diff.environment == c.PROD):
+        if not context_diff.is_new_environment or (
+            context_diff.is_new_environment and context_diff.create_from_env_exists
+        ):
             self._print(
                 Tree(
                     f"[bold]Differences from the `{context_diff.create_from if context_diff.is_new_environment else context_diff.environment}` environment:\n"
