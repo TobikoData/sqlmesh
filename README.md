@@ -129,7 +129,7 @@ Write SQL in any dialect and SQLMesh will transpile it to your target SQL dialec
 
 * Debug transformation errors *before* you run them in your warehouse in [10+ different SQL dialects](https://sqlmesh.readthedocs.io/en/stable/integrations/overview/#execution-engines)
 * Definitions using [simply SQL](https://sqlmesh.readthedocs.io/en/stable/concepts/models/sql_models/#sql-based-definition) (no need for redundant and confusing `Jinja` + `YAML`)
-* See impact of changes before you run them in your warehouse with column-level impact analysis
+* See impact of changes before you run them in your warehouse with column-level lineage
 
 For more information, check out the [website](https://sqlmesh.com) and [documentation](https://sqlmesh.readthedocs.io/en/stable/).
 
