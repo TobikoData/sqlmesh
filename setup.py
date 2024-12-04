@@ -70,7 +70,7 @@ setup(
             "databricks-sql-connector",
             "dbt-bigquery",
             "dbt-core",
-            "dbt-duckdb>=1.7.1",
+            "dbt-duckdb>=1.7.1,!=1.9.1",
             "dbt-snowflake",
             "Faker",
             "google-auth",
