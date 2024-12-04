@@ -267,7 +267,7 @@ class Scheduler:
             if audit_result.blocking:
                 audit_error_to_raise = error
             else:
-                logger.warning(f"{error}\nAudit is warn only so proceeding with execution.")
+                logger.warning(f"{error}\nAudit is non-blocking so proceeding with execution.")
 
         if audit_error_to_raise:
             raise audit_error_to_raise
