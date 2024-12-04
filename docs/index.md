@@ -66,52 +66,52 @@ It is more than just a [dbt alternative](https://tobikodata.com/reduce_costs_wit
     inputs:
         tcloud_demo.seed_raw_payments:
         - id: 66
-        order_id: 58
-        payment_method: coupon
-        amount: 1800
+          order_id: 58
+          payment_method: coupon
+          amount: 1800
         - id: 27
-        order_id: 24
-        payment_method: coupon
-        amount: 2600
+          order_id: 24
+          payment_method: coupon
+          amount: 2600
         - id: 30
-        order_id: 25
-        payment_method: coupon
-        amount: 1600
+          order_id: 25
+          payment_method: coupon
+          amount: 1600
         - id: 109
-        order_id: 95
-        payment_method: coupon
-        amount: 2400
+          order_id: 95
+          payment_method: coupon
+          amount: 2400
         - id: 3
-        order_id: 3
-        payment_method: coupon
-        amount: 100
+          order_id: 3
+          payment_method: coupon
+          amount: 100
     outputs:
         query:
         - payment_id: 66
-        order_id: 58
-        payment_method: coupon
-        amount: 18.0
-        new_column: new_column
+          order_id: 58
+          payment_method: coupon
+          amount: 18.0
+          new_column: new_column
         - payment_id: 27
-        order_id: 24
-        payment_method: coupon
-        amount: 26.0
-        new_column: new_column
+          order_id: 24
+          payment_method: coupon
+          amount: 26.0
+          new_column: new_column
         - payment_id: 30
-        order_id: 25
-        payment_method: coupon
-        amount: 16.0
-        new_column: new_column
+          order_id: 25
+          payment_method: coupon
+          amount: 16.0
+          new_column: new_column
         - payment_id: 109
-        order_id: 95
-        payment_method: coupon
-        amount: 24.0
-        new_column: new_column
+          order_id: 95
+          payment_method: coupon
+          amount: 24.0
+          new_column: new_column
         - payment_id: 3
-        order_id: 3
-        payment_method: coupon
-        amount: 1.0
-        new_column: new_column
+          order_id: 3
+          payment_method: coupon
+          amount: 1.0
+          new_column: new_column
     ```
 
 * Never build a table [more than once](https://tobikodata.com/simplicity-or-efficiency-how-dbt-makes-you-choose.html)
