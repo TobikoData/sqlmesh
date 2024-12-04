@@ -150,7 +150,7 @@ Follow the [quickstart guide](https://sqlmesh.readthedocs.io/en/stable/quickstar
 Follow this [example](https://sqlmesh.readthedocs.io/en/stable/examples/incremental_time_full_walkthrough/) to learn how to use SQLMesh in a full walkthrough.
 
 ## Join Our Community
-Together, we want build data transformation without the waste. Connect with us in the following ways:
+Together, we want to build data transformation without the waste. Connect with us in the following ways:
 
 * Join the [Tobiko Slack Community](https://tobikodata.com/slack) to ask questions, or just to say hi!
 * File an issue on our [GitHub](https://github.com/TobikoData/sqlmesh/issues/new)
