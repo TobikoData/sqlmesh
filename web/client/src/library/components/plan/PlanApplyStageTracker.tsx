@@ -514,8 +514,8 @@ function StagePromote(): JSX.Element {
               </TasksOverview.TaskInfo>
               <TasksOverview.DetailsProgress>
                 <TasksOverview.TaskSize
-                  completed={planApply.stagePromote.total_tasks}
-                  total={planApply.stagePromote.num_tasks}
+                  completed={planApply.stagePromote.num_tasks}
+                  total={planApply.stagePromote.total_tasks}
                   unit="task"
                 />
                 <TasksOverview.TaskDivider />
