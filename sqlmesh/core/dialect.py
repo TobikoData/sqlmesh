@@ -674,8 +674,6 @@ def format_model_expressions(
     if len(expressions) == 1 and is_meta_expression(expressions[0]):
         return expressions[0].sql(pretty=True, dialect=dialect)
 
-    *statements, query = expressions
-
     if rewrite_casts:
 
         def cast_to_colon(node: exp.Expression) -> exp.Expression:
@@ -696,14 +694,16 @@ def format_model_expressions(
             exp.replace_children(node, cast_to_colon)
             return node
 
-        query = query.copy()
-        exp.replace_children(query, cast_to_colon)
+        new_expressions = []
+        for expression in expressions:
+            expression = expression.copy()
+            exp.replace_children(expression, cast_to_colon)
+            new_expressions.append(expression)
+
+        expressions = new_expressions
 
     return ";\n\n".join(
-        [
-            *(statement.sql(pretty=True, dialect=dialect, **kwargs) for statement in statements),
-            query.sql(pretty=True, dialect=dialect, **kwargs),
-        ]
+        expression.sql(pretty=True, dialect=dialect, **kwargs) for expression in expressions
     ).strip()
 
 
