@@ -10,7 +10,7 @@ import typing as t
 from enum import Enum
 from functools import partial
 
-from pydantic import Field
+from pydantic import BaseModel, Field, RootModel, root_validator
 from sqlglot import exp
 from sqlglot.helper import subclasses
 
@@ -1701,7 +1701,6 @@ def _connection_config_validator(
         return v
     return parse_connection_config(v)
 
-
 connection_config_validator = field_validator(
     "connection",
     "state_connection",
@@ -1712,6 +1711,24 @@ connection_config_validator = field_validator(
     check_fields=False,
 )(_connection_config_validator)
 
+
+class AnyConnectionConfig(RootModel):
+    root: t.Union[
+        MotherDuckConnectionConfig,
+        DuckDBConnectionConfig,
+        SnowflakeConnectionConfig,
+        DatabricksConnectionConfig,
+        BigQueryConnectionConfig,
+        GCPPostgresConnectionConfig,
+        RedshiftConnectionConfig,
+        PostgresConnectionConfig,
+        MySQLConnectionConfig,
+        MSSQLConnectionConfig,
+        SparkConnectionConfig,
+        TrinoConnectionConfig,
+        ClickhouseConnectionConfig,
+        AthenaConnectionConfig,
+] = Field(discriminator='type_')
 
 if t.TYPE_CHECKING:
     # TypeAlias hasn't been introduced until Python 3.10 which means that we can't use it
@@ -1724,3 +1741,12 @@ elif PYDANTIC_MAJOR_VERSION >= 2:
     SerializableConnectionConfig = pydantic.SerializeAsAny[ConnectionConfig]  # type: ignore
 else:
     SerializableConnectionConfig = ConnectionConfig  # type: ignore
+
+
+# main to write the json_schema of any connection config
+if __name__ == "__main__":
+    import json
+
+    schema = AnyConnectionConfig.model_json_schema()
+    with open("connection_config_schema.json", "w") as f:
+        json.dump(schema, f, indent=2)

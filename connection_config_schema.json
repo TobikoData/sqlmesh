@@ -1,0 +1,2277 @@
+{
+  "$defs": {
+    "AthenaConnectionConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "athena",
+          "default": "athena",
+          "title": "Type"
+        },
+        "concurrent_tasks": {
+          "default": 4,
+          "title": "Concurrent Tasks",
+          "type": "integer"
+        },
+        "register_comments": {
+          "const": false,
+          "default": false,
+          "title": "Register Comments"
+        },
+        "pre_ping": {
+          "const": false,
+          "default": false,
+          "title": "Pre Ping"
+        },
+        "aws_access_key_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Aws Access Key Id"
+        },
+        "aws_secret_access_key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Aws Secret Access Key"
+        },
+        "role_arn": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Role Arn"
+        },
+        "role_session_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Role Session Name"
+        },
+        "region_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Region Name"
+        },
+        "work_group": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Work Group"
+        },
+        "s3_staging_dir": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "S3 Staging Dir"
+        },
+        "schema_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Schema Name"
+        },
+        "catalog_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Catalog Name"
+        },
+        "s3_warehouse_location": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "S3 Warehouse Location"
+        }
+      },
+      "title": "AthenaConnectionConfig",
+      "type": "object"
+    },
+    "BigQueryConnectionConfig": {
+      "additionalProperties": false,
+      "description": "BigQuery Connection Configuration.",
+      "properties": {
+        "type": {
+          "const": "bigquery",
+          "default": "bigquery",
+          "title": "Type"
+        },
+        "concurrent_tasks": {
+          "default": 1,
+          "title": "Concurrent Tasks",
+          "type": "integer"
+        },
+        "register_comments": {
+          "default": true,
+          "title": "Register Comments",
+          "type": "boolean"
+        },
+        "pre_ping": {
+          "const": false,
+          "default": false,
+          "title": "Pre Ping"
+        },
+        "method": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/BigQueryConnectionMethod"
+            }
+          ],
+          "default": "oauth"
+        },
+        "project": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Project"
+        },
+        "execution_project": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Execution Project"
+        },
+        "quota_project": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Quota Project"
+        },
+        "location": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Location"
+        },
+        "keyfile": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Keyfile"
+        },
+        "keyfile_json": {
+          "anyOf": [
+            {
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Keyfile Json"
+        },
+        "token": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Token"
+        },
+        "refresh_token": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Refresh Token"
+        },
+        "client_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Client Id"
+        },
+        "client_secret": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Client Secret"
+        },
+        "token_uri": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Token Uri"
+        },
+        "scopes": {
+          "default": [
+            "https://www.googleapis.com/auth/bigquery"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "title": "Scopes",
+          "type": "array"
+        },
+        "job_creation_timeout_seconds": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Job Creation Timeout Seconds"
+        },
+        "job_execution_timeout_seconds": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Job Execution Timeout Seconds"
+        },
+        "job_retries": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": 1,
+          "title": "Job Retries"
+        },
+        "job_retry_deadline_seconds": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Job Retry Deadline Seconds"
+        },
+        "priority": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BigQueryPriority"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "maximum_bytes_billed": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Maximum Bytes Billed"
+        }
+      },
+      "title": "BigQueryConnectionConfig",
+      "type": "object"
+    },
+    "BigQueryConnectionMethod": {
+      "enum": [
+        "oauth",
+        "oauth-secrets",
+        "service-account",
+        "service-account-json"
+      ],
+      "title": "BigQueryConnectionMethod",
+      "type": "string"
+    },
+    "BigQueryPriority": {
+      "enum": [
+        "batch",
+        "interactive"
+      ],
+      "title": "BigQueryPriority",
+      "type": "string"
+    },
+    "ClickhouseConnectionConfig": {
+      "additionalProperties": false,
+      "description": "Clickhouse Connection Configuration.\n\nProperty reference: https://clickhouse.com/docs/en/integrations/python#client-initialization",
+      "properties": {
+        "type": {
+          "const": "clickhouse",
+          "default": "clickhouse",
+          "title": "Type"
+        },
+        "concurrent_tasks": {
+          "default": 1,
+          "title": "Concurrent Tasks",
+          "type": "integer"
+        },
+        "register_comments": {
+          "default": true,
+          "title": "Register Comments",
+          "type": "boolean"
+        },
+        "pre_ping": {
+          "default": false,
+          "title": "Pre Ping",
+          "type": "boolean"
+        },
+        "host": {
+          "title": "Host",
+          "type": "string"
+        },
+        "username": {
+          "title": "Username",
+          "type": "string"
+        },
+        "password": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Password"
+        },
+        "port": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Port"
+        },
+        "cluster": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cluster"
+        },
+        "connect_timeout": {
+          "default": 10,
+          "title": "Connect Timeout",
+          "type": "integer"
+        },
+        "send_receive_timeout": {
+          "default": 300,
+          "title": "Send Receive Timeout",
+          "type": "integer"
+        },
+        "verify": {
+          "default": true,
+          "title": "Verify",
+          "type": "boolean"
+        },
+        "query_limit": {
+          "default": 0,
+          "title": "Query Limit",
+          "type": "integer"
+        },
+        "use_compression": {
+          "default": true,
+          "title": "Use Compression",
+          "type": "boolean"
+        },
+        "compression_method": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Compression Method"
+        },
+        "connection_settings": {
+          "anyOf": [
+            {
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Connection Settings"
+        },
+        "connection_pool_options": {
+          "anyOf": [
+            {
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Connection Pool Options"
+        }
+      },
+      "required": [
+        "host",
+        "username"
+      ],
+      "title": "ClickhouseConnectionConfig",
+      "type": "object"
+    },
+    "DatabricksConnectionConfig": {
+      "additionalProperties": false,
+      "description": "Databricks connection that uses the SQL connector for SQL models and then Databricks Connect for Dataframe operations\n\nArg Source: https://github.com/databricks/databricks-sql-python/blob/main/src/databricks/sql/client.py#L39\nOAuth ref: https://docs.databricks.com/en/dev-tools/python-sql-connector.html#oauth-machine-to-machine-m2m-authentication\n\nArgs:\n    server_hostname: Databricks instance host name.\n    http_path: Http path either to a DBSQL endpoint (e.g. /sql/1.0/endpoints/1234567890abcdef)\n        or to a DBR interactive cluster (e.g. /sql/protocolv1/o/1234567890123456/1234-123456-slid123)\n    access_token: Http Bearer access token, e.g. Databricks Personal Access Token.\n    auth_type: Set to 'databricks-oauth' or 'azure-oauth' to trigger OAuth (or dont set at all to use `access_token`)\n    oauth_client_id: Client ID to use when auth_type is set to one of the 'oauth' types\n    oauth_client_secret: Client Secret to use when auth_type is set to one of the 'oauth' types\n    catalog: Default catalog to use for SQL models. Defaults to None which means it will use the default set in\n        the Databricks cluster (most likely `hive_metastore`).\n    http_headers: An optional list of (k, v) pairs that will be set as Http headers on every request\n    session_configuration: An optional dictionary of Spark session parameters.\n        Execute the SQL command `SET -v` to get a full list of available commands.\n    databricks_connect_server_hostname: The hostname to use when establishing a connecting using Databricks Connect.\n        Defaults to the `server_hostname` value.\n    databricks_connect_access_token: The access token to use when establishing a connecting using Databricks Connect.\n        Defaults to the `access_token` value.\n    databricks_connect_cluster_id: The cluster id to use when establishing a connecting using Databricks Connect.\n        Defaults to deriving the cluster id from the `http_path` value.\n    force_databricks_connect: Force all queries to run using Databricks Connect instead of the SQL connector.\n    disable_databricks_connect: Even if databricks connect is installed, do not use it.\n    disable_spark_session: Do not use SparkSession if it is available (like when running in a notebook).\n    pre_ping: Whether or not to pre-ping the connection before starting a new transaction to ensure it is still alive.",
+      "properties": {
+        "type": {
+          "const": "databricks",
+          "default": "databricks",
+          "title": "Type"
+        },
+        "concurrent_tasks": {
+          "default": 1,
+          "title": "Concurrent Tasks",
+          "type": "integer"
+        },
+        "register_comments": {
+          "default": true,
+          "title": "Register Comments",
+          "type": "boolean"
+        },
+        "pre_ping": {
+          "const": false,
+          "default": false,
+          "title": "Pre Ping"
+        },
+        "server_hostname": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Server Hostname"
+        },
+        "http_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Http Path"
+        },
+        "access_token": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Access Token"
+        },
+        "auth_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Auth Type"
+        },
+        "oauth_client_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Oauth Client Id"
+        },
+        "oauth_client_secret": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Oauth Client Secret"
+        },
+        "catalog": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Catalog"
+        },
+        "http_headers": {
+          "anyOf": [
+            {
+              "items": {
+                "maxItems": 2,
+                "minItems": 2,
+                "prefixItems": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "string"
+                  }
+                ],
+                "type": "array"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Http Headers"
+        },
+        "session_configuration": {
+          "anyOf": [
+            {
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Session Configuration"
+        },
+        "databricks_connect_server_hostname": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Databricks Connect Server Hostname"
+        },
+        "databricks_connect_access_token": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Databricks Connect Access Token"
+        },
+        "databricks_connect_cluster_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Databricks Connect Cluster Id"
+        },
+        "databricks_connect_use_serverless": {
+          "default": false,
+          "title": "Databricks Connect Use Serverless",
+          "type": "boolean"
+        },
+        "force_databricks_connect": {
+          "default": false,
+          "title": "Force Databricks Connect",
+          "type": "boolean"
+        },
+        "disable_databricks_connect": {
+          "default": false,
+          "title": "Disable Databricks Connect",
+          "type": "boolean"
+        },
+        "disable_spark_session": {
+          "default": false,
+          "title": "Disable Spark Session",
+          "type": "boolean"
+        }
+      },
+      "title": "DatabricksConnectionConfig",
+      "type": "object"
+    },
+    "DuckDBAttachOptions": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "title": "Type",
+          "type": "string"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "read_only": {
+          "default": false,
+          "title": "Read Only",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "type",
+        "path"
+      ],
+      "title": "DuckDBAttachOptions",
+      "type": "object"
+    },
+    "DuckDBConnectionConfig": {
+      "additionalProperties": false,
+      "description": "Configuration for the DuckDB connection.\n\nArgs:\n    database: The optional database name. If not specified, the in-memory database will be used.\n    catalogs: Key is the name of the catalog and value is the path.",
+      "properties": {
+        "type": {
+          "const": "duckdb",
+          "default": "duckdb",
+          "title": "Type"
+        },
+        "concurrent_tasks": {
+          "const": 1,
+          "default": 1,
+          "title": "Concurrent Tasks"
+        },
+        "register_comments": {
+          "default": true,
+          "title": "Register Comments",
+          "type": "boolean"
+        },
+        "pre_ping": {
+          "const": false,
+          "default": false,
+          "title": "Pre Ping"
+        },
+        "extensions": {
+          "default": [],
+          "items": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "object"
+              }
+            ]
+          },
+          "title": "Extensions",
+          "type": "array"
+        },
+        "connector_config": {
+          "default": {},
+          "title": "Connector Config",
+          "type": "object"
+        },
+        "database": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Database"
+        },
+        "catalogs": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "$ref": "#/$defs/DuckDBAttachOptions"
+                  }
+                ]
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Catalogs"
+        }
+      },
+      "title": "DuckDBConnectionConfig",
+      "type": "object"
+    },
+    "GCPPostgresConnectionConfig": {
+      "additionalProperties": false,
+      "description": "Postgres Connection Configuration for GCP.\n\nArgs:\n    instance_connection_string: Connection name for the postgres instance.\n    user: Postgres or IAM user's name\n    password: The postgres user's password. Only needed when the user is a postgres user.\n    enable_iam_auth: Set to True when user is an IAM user.\n    db: Name of the db to connect to.\n    keyfile: string path to json service account credentials file\n    keyfile_json: dict service account credentials info\n    pre_ping: Whether or not to pre-ping the connection before starting a new transaction to ensure it is still alive.",
+      "properties": {
+        "type": {
+          "const": "gcp_postgres",
+          "default": "gcp_postgres",
+          "title": "Type"
+        },
+        "concurrent_tasks": {
+          "default": 4,
+          "title": "Concurrent Tasks",
+          "type": "integer"
+        },
+        "register_comments": {
+          "default": true,
+          "title": "Register Comments",
+          "type": "boolean"
+        },
+        "pre_ping": {
+          "default": true,
+          "title": "Pre Ping",
+          "type": "boolean"
+        },
+        "instance_connection_string": {
+          "title": "Instance Connection String",
+          "type": "string"
+        },
+        "user": {
+          "title": "User",
+          "type": "string"
+        },
+        "password": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Password"
+        },
+        "enable_iam_auth": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Enable Iam Auth"
+        },
+        "db": {
+          "title": "Db",
+          "type": "string"
+        },
+        "keyfile": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Keyfile"
+        },
+        "keyfile_json": {
+          "anyOf": [
+            {
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Keyfile Json"
+        },
+        "timeout": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timeout"
+        },
+        "scopes": {
+          "default": [
+            "https://www.googleapis.com/auth/sqlservice.admin"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "title": "Scopes",
+          "type": "array"
+        },
+        "driver": {
+          "default": "pg8000",
+          "title": "Driver",
+          "type": "string"
+        }
+      },
+      "required": [
+        "instance_connection_string",
+        "user",
+        "db"
+      ],
+      "title": "GCPPostgresConnectionConfig",
+      "type": "object"
+    },
+    "MSSQLConnectionConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "mssql",
+          "default": "mssql",
+          "title": "Type"
+        },
+        "concurrent_tasks": {
+          "default": 4,
+          "title": "Concurrent Tasks",
+          "type": "integer"
+        },
+        "register_comments": {
+          "default": true,
+          "title": "Register Comments",
+          "type": "boolean"
+        },
+        "pre_ping": {
+          "default": true,
+          "title": "Pre Ping",
+          "type": "boolean"
+        },
+        "host": {
+          "title": "Host",
+          "type": "string"
+        },
+        "user": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "User"
+        },
+        "password": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Password"
+        },
+        "database": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": "",
+          "title": "Database"
+        },
+        "timeout": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": 0,
+          "title": "Timeout"
+        },
+        "login_timeout": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": 60,
+          "title": "Login Timeout"
+        },
+        "charset": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": "UTF-8",
+          "title": "Charset"
+        },
+        "appname": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Appname"
+        },
+        "port": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": 1433,
+          "title": "Port"
+        },
+        "conn_properties": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Conn Properties"
+        },
+        "autocommit": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": false,
+          "title": "Autocommit"
+        },
+        "tds_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tds Version"
+        }
+      },
+      "required": [
+        "host"
+      ],
+      "title": "MSSQLConnectionConfig",
+      "type": "object"
+    },
+    "MotherDuckConnectionConfig": {
+      "additionalProperties": false,
+      "description": "Configuration for the MotherDuck connection.\n\nArgs:\n    database: The database name.\n    token: The optional MotherDuck token. If not specified, the user will be prompted to login with their web browser.",
+      "properties": {
+        "type": {
+          "const": "motherduck",
+          "default": "motherduck",
+          "title": "Type"
+        },
+        "concurrent_tasks": {
+          "const": 1,
+          "default": 1,
+          "title": "Concurrent Tasks"
+        },
+        "register_comments": {
+          "default": true,
+          "title": "Register Comments",
+          "type": "boolean"
+        },
+        "pre_ping": {
+          "const": false,
+          "default": false,
+          "title": "Pre Ping"
+        },
+        "extensions": {
+          "default": [],
+          "items": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "object"
+              }
+            ]
+          },
+          "title": "Extensions",
+          "type": "array"
+        },
+        "connector_config": {
+          "default": {},
+          "title": "Connector Config",
+          "type": "object"
+        },
+        "database": {
+          "title": "Database",
+          "type": "string"
+        },
+        "token": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Token"
+        }
+      },
+      "required": [
+        "database"
+      ],
+      "title": "MotherDuckConnectionConfig",
+      "type": "object"
+    },
+    "MySQLConnectionConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "mysql",
+          "default": "mysql",
+          "title": "Type"
+        },
+        "concurrent_tasks": {
+          "default": 4,
+          "title": "Concurrent Tasks",
+          "type": "integer"
+        },
+        "register_comments": {
+          "default": true,
+          "title": "Register Comments",
+          "type": "boolean"
+        },
+        "pre_ping": {
+          "default": true,
+          "title": "Pre Ping",
+          "type": "boolean"
+        },
+        "host": {
+          "title": "Host",
+          "type": "string"
+        },
+        "user": {
+          "title": "User",
+          "type": "string"
+        },
+        "password": {
+          "title": "Password",
+          "type": "string"
+        },
+        "port": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Port"
+        },
+        "charset": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Charset"
+        },
+        "ssl_disabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ssl Disabled"
+        }
+      },
+      "required": [
+        "host",
+        "user",
+        "password"
+      ],
+      "title": "MySQLConnectionConfig",
+      "type": "object"
+    },
+    "PostgresConnectionConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "postgres",
+          "default": "postgres",
+          "title": "Type"
+        },
+        "concurrent_tasks": {
+          "default": 4,
+          "title": "Concurrent Tasks",
+          "type": "integer"
+        },
+        "register_comments": {
+          "default": true,
+          "title": "Register Comments",
+          "type": "boolean"
+        },
+        "pre_ping": {
+          "default": true,
+          "title": "Pre Ping",
+          "type": "boolean"
+        },
+        "host": {
+          "title": "Host",
+          "type": "string"
+        },
+        "user": {
+          "title": "User",
+          "type": "string"
+        },
+        "password": {
+          "title": "Password",
+          "type": "string"
+        },
+        "port": {
+          "title": "Port",
+          "type": "integer"
+        },
+        "database": {
+          "title": "Database",
+          "type": "string"
+        },
+        "keepalives_idle": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Keepalives Idle"
+        },
+        "connect_timeout": {
+          "default": 10,
+          "title": "Connect Timeout",
+          "type": "integer"
+        },
+        "role": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Role"
+        },
+        "sslmode": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sslmode"
+        }
+      },
+      "required": [
+        "host",
+        "user",
+        "password",
+        "port",
+        "database"
+      ],
+      "title": "PostgresConnectionConfig",
+      "type": "object"
+    },
+    "RedshiftConnectionConfig": {
+      "additionalProperties": false,
+      "description": "Redshift Connection Configuration.\n\nArg Source: https://github.com/aws/amazon-redshift-python-driver/blob/master/redshift_connector/__init__.py#L146\nNote: A subset of properties were selected. Please open an issue/PR if you want to see more supported.\n\nArgs:\n    user: The username to use for authentication with the Amazon Redshift cluster.\n    password: The password to use for authentication with the Amazon Redshift cluster.\n    database: The name of the database instance to connect to.\n    host: The hostname of the Amazon Redshift cluster.\n    port: The port number of the Amazon Redshift cluster. Default value is 5439.\n    source_address: No description provided\n    unix_sock: No description provided\n    ssl: Is SSL enabled. Default value is ``True``. SSL must be enabled when authenticating using IAM.\n    sslmode: The security of the connection to the Amazon Redshift cluster. 'verify-ca' and 'verify-full' are supported.\n    timeout: The number of seconds before the connection to the server will timeout. By default there is no timeout.\n    tcp_keepalive: Is `TCP keepalive <https://en.wikipedia.org/wiki/Keepalive#TCP_keepalive>`_ used. The default value is ``True``.\n    application_name: Sets the application name. The default value is None.\n    preferred_role: The IAM role preferred for the current connection.\n    principal_arn: The ARN of the IAM entity (user or role) for which you are generating a policy.\n    credentials_provider: The class name of the IdP that will be used for authenticating with the Amazon Redshift cluster.\n    region: The AWS region where the Amazon Redshift cluster is located.\n    cluster_identifier: The cluster identifier of the Amazon Redshift cluster.\n    iam: If IAM authentication is enabled. Default value is False. IAM must be True when authenticating using an IdP.\n    is_serverless: Redshift end-point is serverless or provisional. Default value false.\n    serverless_acct_id: The account ID of the serverless. Default value None\n    serverless_work_group: The name of work group for serverless end point. Default value None.\n    pre_ping: Whether or not to pre-ping the connection before starting a new transaction to ensure it is still alive.",
+      "properties": {
+        "type": {
+          "const": "redshift",
+          "default": "redshift",
+          "title": "Type"
+        },
+        "concurrent_tasks": {
+          "default": 4,
+          "title": "Concurrent Tasks",
+          "type": "integer"
+        },
+        "register_comments": {
+          "default": true,
+          "title": "Register Comments",
+          "type": "boolean"
+        },
+        "pre_ping": {
+          "default": false,
+          "title": "Pre Ping",
+          "type": "boolean"
+        },
+        "user": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "User"
+        },
+        "password": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Password"
+        },
+        "database": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Database"
+        },
+        "host": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Host"
+        },
+        "port": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Port"
+        },
+        "source_address": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Address"
+        },
+        "unix_sock": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Unix Sock"
+        },
+        "ssl": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ssl"
+        },
+        "sslmode": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sslmode"
+        },
+        "timeout": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timeout"
+        },
+        "tcp_keepalive": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tcp Keepalive"
+        },
+        "application_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Application Name"
+        },
+        "preferred_role": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Preferred Role"
+        },
+        "principal_arn": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Principal Arn"
+        },
+        "credentials_provider": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Credentials Provider"
+        },
+        "region": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Region"
+        },
+        "cluster_identifier": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cluster Identifier"
+        },
+        "iam": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Iam"
+        },
+        "is_serverless": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Is Serverless"
+        },
+        "serverless_acct_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Serverless Acct Id"
+        },
+        "serverless_work_group": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Serverless Work Group"
+        }
+      },
+      "title": "RedshiftConnectionConfig",
+      "type": "object"
+    },
+    "SnowflakeConnectionConfig": {
+      "additionalProperties": false,
+      "description": "Configuration for the Snowflake connection.\n\nArgs:\n    account: The Snowflake account name.\n    user: The Snowflake username.\n    password: The Snowflake password.\n    warehouse: The optional warehouse name.\n    database: The optional database name.\n    role: The optional role name.\n    concurrent_tasks: The maximum number of tasks that can use this connection concurrently.\n    authenticator: The optional authenticator name. Defaults to username/password authentication (\"snowflake\").\n                   Options: https://github.com/snowflakedb/snowflake-connector-python/blob/e937591356c067a77f34a0a42328907fda792c23/src/snowflake/connector/network.py#L178-L183\n    token: The optional oauth access token to use for authentication when authenticator is set to \"oauth\".\n    private_key: The optional private key to use for authentication. Key can be Base64-encoded DER format (representing the key bytes), a plain-text PEM format, or bytes (Python config only). https://docs.snowflake.com/en/developer-guide/python-connector/python-connector-connect#using-key-pair-authentication-key-pair-rotation\n    private_key_path: The optional path to the private key to use for authentication. This would be used instead of `private_key`.\n    private_key_passphrase: The optional passphrase to use to decrypt `private_key` or `private_key_path`. Keys can be created without encryption so only provide this if needed.\n    register_comments: Whether or not to register model comments with the SQL engine.\n    pre_ping: Whether or not to pre-ping the connection before starting a new transaction to ensure it is still alive.\n    session_parameters: The optional session parameters to set for the connection.",
+      "properties": {
+        "type": {
+          "const": "snowflake",
+          "default": "snowflake",
+          "title": "Type"
+        },
+        "concurrent_tasks": {
+          "default": 4,
+          "title": "Concurrent Tasks",
+          "type": "integer"
+        },
+        "register_comments": {
+          "default": true,
+          "title": "Register Comments",
+          "type": "boolean"
+        },
+        "pre_ping": {
+          "default": false,
+          "title": "Pre Ping",
+          "type": "boolean"
+        },
+        "account": {
+          "title": "Account",
+          "type": "string"
+        },
+        "user": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "User"
+        },
+        "password": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Password"
+        },
+        "warehouse": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Warehouse"
+        },
+        "database": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Database"
+        },
+        "role": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Role"
+        },
+        "authenticator": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Authenticator"
+        },
+        "token": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Token"
+        },
+        "private_key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "format": "binary",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Private Key"
+        },
+        "private_key_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Private Key Path"
+        },
+        "private_key_passphrase": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Private Key Passphrase"
+        },
+        "session_parameters": {
+          "anyOf": [
+            {
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Session Parameters"
+        }
+      },
+      "required": [
+        "account"
+      ],
+      "title": "SnowflakeConnectionConfig",
+      "type": "object"
+    },
+    "SparkConnectionConfig": {
+      "additionalProperties": false,
+      "description": "Vanilla Spark Connection Configuration. Use `DatabricksConnectionConfig` for Databricks.",
+      "properties": {
+        "type": {
+          "const": "spark",
+          "default": "spark",
+          "title": "Type"
+        },
+        "concurrent_tasks": {
+          "default": 4,
+          "title": "Concurrent Tasks",
+          "type": "integer"
+        },
+        "register_comments": {
+          "default": true,
+          "title": "Register Comments",
+          "type": "boolean"
+        },
+        "pre_ping": {
+          "const": false,
+          "default": false,
+          "title": "Pre Ping"
+        },
+        "config_dir": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Config Dir"
+        },
+        "catalog": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Catalog"
+        },
+        "config": {
+          "default": {},
+          "title": "Config",
+          "type": "object"
+        }
+      },
+      "title": "SparkConnectionConfig",
+      "type": "object"
+    },
+    "TrinoAuthenticationMethod": {
+      "enum": [
+        "no-auth",
+        "basic",
+        "ldap",
+        "kerberos",
+        "jwt",
+        "certificate",
+        "oauth"
+      ],
+      "title": "TrinoAuthenticationMethod",
+      "type": "string"
+    },
+    "TrinoConnectionConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "trino",
+          "default": "trino",
+          "title": "Type"
+        },
+        "concurrent_tasks": {
+          "default": 4,
+          "title": "Concurrent Tasks",
+          "type": "integer"
+        },
+        "register_comments": {
+          "default": true,
+          "title": "Register Comments",
+          "type": "boolean"
+        },
+        "pre_ping": {
+          "const": false,
+          "default": false,
+          "title": "Pre Ping"
+        },
+        "method": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/TrinoAuthenticationMethod"
+            }
+          ],
+          "default": "no-auth"
+        },
+        "host": {
+          "title": "Host",
+          "type": "string"
+        },
+        "user": {
+          "title": "User",
+          "type": "string"
+        },
+        "catalog": {
+          "title": "Catalog",
+          "type": "string"
+        },
+        "port": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Port"
+        },
+        "http_scheme": {
+          "default": "https",
+          "enum": [
+            "http",
+            "https"
+          ],
+          "title": "Http Scheme",
+          "type": "string"
+        },
+        "roles": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Roles"
+        },
+        "http_headers": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Http Headers"
+        },
+        "session_properties": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Session Properties"
+        },
+        "retries": {
+          "default": 3,
+          "title": "Retries",
+          "type": "integer"
+        },
+        "timezone": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timezone"
+        },
+        "password": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Password"
+        },
+        "verify": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Verify"
+        },
+        "impersonation_user": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Impersonation User"
+        },
+        "keytab": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Keytab"
+        },
+        "krb5_config": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Krb5 Config"
+        },
+        "principal": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Principal"
+        },
+        "service_name": {
+          "default": "trino",
+          "title": "Service Name",
+          "type": "string"
+        },
+        "hostname_override": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Hostname Override"
+        },
+        "mutual_authentication": {
+          "default": false,
+          "title": "Mutual Authentication",
+          "type": "boolean"
+        },
+        "force_preemptive": {
+          "default": false,
+          "title": "Force Preemptive",
+          "type": "boolean"
+        },
+        "sanitize_mutual_error_response": {
+          "default": true,
+          "title": "Sanitize Mutual Error Response",
+          "type": "boolean"
+        },
+        "delegate": {
+          "default": false,
+          "title": "Delegate",
+          "type": "boolean"
+        },
+        "jwt_token": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Jwt Token"
+        },
+        "client_certificate": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Client Certificate"
+        },
+        "client_private_key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Client Private Key"
+        },
+        "cert": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cert"
+        }
+      },
+      "required": [
+        "host",
+        "user",
+        "catalog"
+      ],
+      "title": "TrinoConnectionConfig",
+      "type": "object"
+    }
+  },
+  "discriminator": {
+    "mapping": {
+      "athena": "#/$defs/AthenaConnectionConfig",
+      "bigquery": "#/$defs/BigQueryConnectionConfig",
+      "clickhouse": "#/$defs/ClickhouseConnectionConfig",
+      "databricks": "#/$defs/DatabricksConnectionConfig",
+      "duckdb": "#/$defs/DuckDBConnectionConfig",
+      "gcp_postgres": "#/$defs/GCPPostgresConnectionConfig",
+      "motherduck": "#/$defs/MotherDuckConnectionConfig",
+      "mssql": "#/$defs/MSSQLConnectionConfig",
+      "mysql": "#/$defs/MySQLConnectionConfig",
+      "postgres": "#/$defs/PostgresConnectionConfig",
+      "redshift": "#/$defs/RedshiftConnectionConfig",
+      "snowflake": "#/$defs/SnowflakeConnectionConfig",
+      "spark": "#/$defs/SparkConnectionConfig",
+      "trino": "#/$defs/TrinoConnectionConfig"
+    },
+    "propertyName": "type"
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/MotherDuckConnectionConfig"
+    },
+    {
+      "$ref": "#/$defs/DuckDBConnectionConfig"
+    },
+    {
+      "$ref": "#/$defs/SnowflakeConnectionConfig"
+    },
+    {
+      "$ref": "#/$defs/DatabricksConnectionConfig"
+    },
+    {
+      "$ref": "#/$defs/BigQueryConnectionConfig"
+    },
+    {
+      "$ref": "#/$defs/GCPPostgresConnectionConfig"
+    },
+    {
+      "$ref": "#/$defs/RedshiftConnectionConfig"
+    },
+    {
+      "$ref": "#/$defs/PostgresConnectionConfig"
+    },
+    {
+      "$ref": "#/$defs/MySQLConnectionConfig"
+    },
+    {
+      "$ref": "#/$defs/MSSQLConnectionConfig"
+    },
+    {
+      "$ref": "#/$defs/SparkConnectionConfig"
+    },
+    {
+      "$ref": "#/$defs/TrinoConnectionConfig"
+    },
+    {
+      "$ref": "#/$defs/ClickhouseConnectionConfig"
+    },
+    {
+      "$ref": "#/$defs/AthenaConnectionConfig"
+    }
+  ],
+  "title": "AnyConnectionConfig"
+}
