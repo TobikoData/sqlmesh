@@ -51,7 +51,7 @@ from sqlmesh.core.snapshot import (
 from sqlmesh.core.snapshot.evaluator import CustomMaterialization
 from sqlmesh.utils.concurrency import NodeExecutionFailedError
 from sqlmesh.utils.date import to_timestamp
-from sqlmesh.utils.errors import AuditError, ConfigError, SQLMeshError
+from sqlmesh.utils.errors import ConfigError, SQLMeshError
 from sqlmesh.utils.metaprogramming import Executable
 
 
@@ -2468,10 +2468,10 @@ def test_audit_set_blocking_at_use_site(adapter_mock, make_snapshot):
     # Return a non-zero count to indicate audit failure
     adapter_mock.fetchone.return_value = (1,)
 
-    logger = logging.getLogger("sqlmesh.core.snapshot.evaluator")
-    with patch.object(logger, "warning") as mock_logger:
-        evaluator.audit(snapshot, snapshots={})
-        assert "Audit is warn only so proceeding with execution." in mock_logger.call_args[0][0]
+    results = evaluator.audit(snapshot, snapshots={})
+    assert len(results) == 1
+    assert results[0].count == 1
+    assert not results[0].blocking
 
     model = SqlModel(
         name="test_schema.test_table",
@@ -2486,11 +2486,10 @@ def test_audit_set_blocking_at_use_site(adapter_mock, make_snapshot):
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
     adapter_mock.fetchone.return_value = (1,)
 
-    with pytest.raises(
-        AuditError,
-        match="Audit 'always_fail' for model 'test_schema.test_table' failed.",
-    ):
-        evaluator.audit(snapshot, snapshots={})
+    results = evaluator.audit(snapshot, snapshots={})
+    assert len(results) == 1
+    assert results[0].count == 1
+    assert results[0].blocking
 
 
 def test_create_post_statements_use_deployable_table(

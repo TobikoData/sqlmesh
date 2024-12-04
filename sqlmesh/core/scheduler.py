@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import abc
 import logging
-import traceback
 import typing as t
 
 from sqlglot import exp
@@ -245,7 +244,6 @@ class Scheduler:
             start=start,
             end=end,
             execution_time=execution_time,
-            raise_exception=False,
             snapshots=snapshots,
             deployability_index=deployability_index,
             wap_id=wap_id,
@@ -268,9 +266,10 @@ class Scheduler:
                 )
             if audit_result.blocking:
                 audit_error_to_raise = error
+            else:
+                logger.warning(f"{error}\nAudit is warn only so proceeding with execution.")
 
         if audit_error_to_raise:
-            logger.error(f"Audit Failure: {traceback.format_exc()}")
             raise audit_error_to_raise
 
         self.state_sync.add_interval(snapshot, start, end, is_dev=not is_deployable)

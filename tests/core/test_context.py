@@ -456,7 +456,7 @@ def test_override_builtin_audit_blocking_mode():
         )
     )
 
-    logger = logging.getLogger("sqlmesh.core.snapshot.evaluator")
+    logger = logging.getLogger("sqlmesh.core.scheduler")
     with patch.object(logger, "warning") as mock_logger:
         plan = context.plan(auto_apply=True, no_prompts=True)
         new_snapshot = next(iter(plan.context_diff.new_snapshots.values()))

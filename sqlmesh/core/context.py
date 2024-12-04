@@ -1747,7 +1747,6 @@ class GenericContext(BaseContext, t.Generic[C]):
                 start=start,
                 end=end,
                 snapshots=self.snapshots,
-                raise_exception=False,
             ):
                 audit_id = f"{audit_result.audit.name}"
                 if audit_result.model:

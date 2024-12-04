@@ -66,7 +66,7 @@ from sqlmesh.utils.concurrency import (
     concurrent_apply_to_values,
 )
 from sqlmesh.utils.date import TimeLike, now
-from sqlmesh.utils.errors import AuditError, ConfigError, SQLMeshError
+from sqlmesh.utils.errors import ConfigError, SQLMeshError
 
 if sys.version_info >= (3, 12):
     from importlib import metadata
@@ -430,7 +430,6 @@ class SnapshotEvaluator:
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         execution_time: t.Optional[TimeLike] = None,
-        raise_exception: bool = True,
         deployability_index: t.Optional[DeployabilityIndex] = None,
         wap_id: t.Optional[str] = None,
         **kwargs: t.Any,
@@ -443,8 +442,6 @@ class SnapshotEvaluator:
             start: The start datetime to audit. Defaults to epoch start.
             end: The end datetime to audit. Defaults to epoch start.
             execution_time: The date/time time reference to use for execution time.
-            raise_exception: Whether to raise an exception if the audit fails. Blocking rules determine if an
-                AuditError is thrown or if we just warn with logger
             deployability_index: Determines snapshots that are deployable in the context of this evaluation.
             wap_id: The WAP ID if applicable, None otherwise.
             kwargs: Additional kwargs to pass to the renderer.
@@ -494,7 +491,6 @@ class SnapshotEvaluator:
                     start=start,
                     end=end,
                     execution_time=execution_time,
-                    raise_exception=raise_exception,
                     deployability_index=deployability_index,
                     **kwargs,
                 )
@@ -914,7 +910,6 @@ class SnapshotEvaluator:
         start: t.Optional[TimeLike],
         end: t.Optional[TimeLike],
         execution_time: t.Optional[TimeLike],
-        raise_exception: bool,
         deployability_index: t.Optional[DeployabilityIndex],
         **kwargs: t.Any,
     ) -> AuditResult:
@@ -953,18 +948,6 @@ class SnapshotEvaluator:
             select("COUNT(*)").from_(query.subquery("audit")),
             quote_identifiers=True,
         )  # type: ignore
-        if count:
-            audit_error = AuditError(
-                audit_name=audit.name,
-                model=snapshot.model_or_none,
-                count=count,
-                query=query,
-                adapter_dialect=adapter.dialect,
-            )
-            if raise_exception and blocking:
-                raise audit_error
-            else:
-                logger.warning(f"{audit_error}\nAudit is warn only so proceeding with execution.")
 
         return AuditResult(
             audit=audit,
