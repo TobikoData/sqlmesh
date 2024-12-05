@@ -331,8 +331,26 @@ class SnapshotEvaluator:
 
         if not snapshots_to_create:
             return
-
         self._create_schemas(tables_by_schema, gateway_by_schema)
+        self._create_snapshots(
+            snapshots_to_create,
+            snapshots,
+            target_deployability_flags,
+            deployability_index,
+            on_complete,
+            allow_destructive_snapshots,
+        )
+
+    def _create_snapshots(
+        self,
+        snapshots_to_create: t.Iterable[Snapshot],
+        snapshots: t.Dict[SnapshotId, Snapshot],
+        target_deployability_flags: t.Dict[str, t.List[bool]],
+        deployability_index: t.Optional[DeployabilityIndex],
+        on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]],
+        allow_destructive_snapshots: t.Set[str],
+    ) -> None:
+        """Internal method to create tables in parrallel."""
         with self.concurrent_context():
             concurrent_apply_to_snapshots(
                 snapshots_to_create,
@@ -365,7 +383,10 @@ class SnapshotEvaluator:
             concurrent_apply_to_snapshots(
                 target_snapshots,
                 lambda s: self._migrate_snapshot(
-                    s, snapshots, allow_destructive_snapshots, self._get_adapter(s.model_gateway)
+                    s,
+                    snapshots,
+                    allow_destructive_snapshots,
+                    self._get_adapter(s.model_gateway),
                 ),
                 self.ddl_concurrent_tasks,
             )
@@ -446,7 +467,9 @@ class SnapshotEvaluator:
             )
             wap_table_name = adapter.wap_table_name(original_table_name, wap_id)
             logger.info(
-                "Auditing WAP table '%s', snapshot %s", wap_table_name, snapshot.snapshot_id
+                "Auditing WAP table '%s', snapshot %s",
+                wap_table_name,
+                snapshot.snapshot_id,
             )
 
             table_mapping = kwargs.get("table_mapping") or {}
@@ -659,7 +682,10 @@ class SnapshotEvaluator:
             # and not SQL expressions.
             elif (
                 adapter.INSERT_OVERWRITE_STRATEGY
-                in (InsertOverwriteStrategy.INSERT_OVERWRITE, InsertOverwriteStrategy.REPLACE_WHERE)
+                in (
+                    InsertOverwriteStrategy.INSERT_OVERWRITE,
+                    InsertOverwriteStrategy.REPLACE_WHERE,
+                )
                 and snapshot.is_incremental_by_time_range
             ):
                 query_or_df = reduce(
@@ -1712,7 +1738,9 @@ class ViewStrategy(PromotableStrategy):
         self.adapter.create_view(
             target_table_name,
             model.render_query_or_raise(
-                execution_time=now(), snapshots=kwargs["snapshots"], engine_adapter=self.adapter
+                execution_time=now(),
+                snapshots=kwargs["snapshots"],
+                engine_adapter=self.adapter,
             ),
             model.columns_to_types,
             materialized=self._is_materialized_view(model),
@@ -1864,7 +1892,9 @@ class EngineManagedStrategy(MaterializableStrategy):
             # Snapshot isnt deployable; update the preview table instead
             # If the snapshot was deployable, then data would have already been loaded in create() because a managed table would have been created
             logger.info(
-                "Updating preview table: %s (for managed model: %s)", table_name, model.name
+                "Updating preview table: %s (for managed model: %s)",
+                table_name,
+                model.name,
             )
             self._replace_query_for_model(model=model, name=table_name, query_or_df=query_or_df)
 
