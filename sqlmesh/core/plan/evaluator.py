@@ -42,7 +42,7 @@ from sqlmesh.core.user import User
 from sqlmesh.schedulers.airflow import common as airflow_common
 from sqlmesh.schedulers.airflow.client import AirflowClient, BaseAirflowClient
 from sqlmesh.schedulers.airflow.mwaa_client import MWAAClient
-from sqlmesh.utils.errors import SQLMeshError
+from sqlmesh.utils.errors import PlanError, SQLMeshError
 
 logger = logging.getLogger(__name__)
 
@@ -200,7 +200,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             interval_end_per_model=plan.interval_end_per_model,
         )
         if not is_run_successful:
-            raise SQLMeshError("Plan application failed.")
+            raise PlanError("Plan application failed.")
 
     def _push(
         self,
@@ -418,7 +418,7 @@ class BaseAirflowPlanEvaluator(PlanEvaluator):
                 self.dag_run_poll_interval_secs,
             )
             if not plan_application_succeeded:
-                raise SQLMeshError("Plan application failed.")
+                raise PlanError("Plan application failed.")
 
             self.console.log_success("The plan has been applied successfully")
 
