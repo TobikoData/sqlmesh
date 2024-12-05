@@ -1,10 +1,16 @@
-# **Welcome to Tobiko Cloud:**
+# **Welcome to Tobiko Cloud**
 
-**What it is:** Tobiko Cloud is a cutting-edge data transformation platform that enhances speed, accuracy, and efficiency in managing data pipelines, offering features like virtual environments, data validation, and seamless integrations.
+**What it is:** 
 
-**Who it’s for:** It is designed for developers, data engineers, and enterprises looking to scale their data operations without compromising productivity or precision.
+Tobiko Cloud is a cutting-edge data transformation platform that enhances speed, accuracy, and efficiency in managing data pipelines, offering features like virtual environments, data validation, and seamless integrations.
 
-**Why we made it:** Tobiko Cloud was created to solve common challenges in data management, such as slow builds, redundant processes, and debugging inefficiencies, empowering teams to deliver reliable data faster. 
+**Who it’s for:** 
+
+It is designed for developers, data engineers, and enterprises looking to scale their data operations without compromising productivity or precision.
+
+**Why we made it:** 
+
+Tobiko Cloud was created to solve common challenges in data management, such as slow builds, redundant processes, and debugging inefficiencies, empowering teams to deliver reliable data faster. 
 
 ### How is it different?
 
@@ -21,6 +27,9 @@ Tobiko Cloud extends SQLMesh by eliminating setup complexity and offering manage
 
 ### Learn more
 
-Ready to unlock a faster, smarter, and more efficient way to manage your data pipelines? Book a call with the Tobiko Cloud team today! Discover how their managed SQLMesh platform will empower your team to scale effortlessly, optimize costs, and deliver accurate, actionable data faster—all while freeing your team from infrastructure headaches. Whether you're a data engineer, developer, or decision-maker, Tobiko Cloud offers the tools and insights to elevate your data strategy. Don’t wait—let Tobiko transform the way you work with data!
+Ready to unlock a faster, smarter, and more efficient way to manage your data pipelines? Book a call with the Tobiko Cloud team today! 
 
-<insert embedded cal link>
+Discover how their managed SQLMesh platform will empower your team to scale effortlessly, optimize costs, and deliver accurate, actionable data faster—all while freeing your team from infrastructure headaches. Whether you're a data engineer, developer, or decision-maker, Tobiko Cloud offers the tools and insights to elevate your data strategy. Don’t wait—let Tobiko transform the way you work with data!
+
+<div class="calendly-inline-widget" data-url="https://calendly.com/d/cp8k-4jm-m6p/tobiko-cloud-intros" style="min-width:320px;height:630px;"></div>
+<script type="text/javascript" src="https://assets.calendly.com/assets/external/widget.js"></script>
