@@ -365,8 +365,8 @@ function StageCreation({ isOpen }: { isOpen?: boolean }): JSX.Element {
             </TasksOverview.TaskInfo>
             <TasksOverview.DetailsProgress>
               <TasksOverview.TaskSize
-                completed={planApply.stageCreation.total_tasks}
-                total={planApply.stageCreation.num_tasks}
+                completed={planApply.stageCreation.num_tasks}
+                total={planApply.stageCreation.total_tasks}
                 unit="task"
               />
               <TasksOverview.TaskDivider />
@@ -514,8 +514,8 @@ function StagePromote(): JSX.Element {
               </TasksOverview.TaskInfo>
               <TasksOverview.DetailsProgress>
                 <TasksOverview.TaskSize
-                  completed={planApply.stagePromote.total_tasks}
-                  total={planApply.stagePromote.num_tasks}
+                  completed={planApply.stagePromote.num_tasks}
+                  total={planApply.stagePromote.total_tasks}
                   unit="task"
                 />
                 <TasksOverview.TaskDivider />
