@@ -104,7 +104,7 @@ nav:
   #   - "Quickstart": cloud/tcloud_getting_started.md
   #   - Cloud Features:
   #     - "Alerts & Notifications": cloud/features/alerts_notifications.md
-  #     - cloud/features/dag_debugger.md
+  #     - cloud/features/debugger_view.md
   #     - cloud/features/data_catalog.md
   #     - cloud/features/model_freshness.md
   #     - cloud/features/scheduler.md
