@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import abc
 import logging
-import sys
 import typing as t
 
 from pydantic import Field
@@ -30,11 +29,6 @@ if t.TYPE_CHECKING:
     from google.auth.transport.requests import AuthorizedSession
 
     from sqlmesh.core.context import GenericContext
-
-if sys.version_info >= (3, 9):
-    from typing import Literal
-else:
-    from typing_extensions import Literal
 
 from sqlmesh.utils.config import sensitive_fields, excluded_fields
 
@@ -142,7 +136,7 @@ class _EngineAdapterStateSyncSchedulerConfig(SchedulerConfig):
 class BuiltInSchedulerConfig(_EngineAdapterStateSyncSchedulerConfig, BaseConfig):
     """The Built-In Scheduler configuration."""
 
-    type_: Literal["builtin"] = Field(alias="type", default="builtin")
+    type_: t.Literal["builtin"] = Field(alias="type", default="builtin")
 
     def create_plan_evaluator(self, context: GenericContext) -> PlanEvaluator:
         return BuiltInPlanEvaluator(
@@ -257,7 +251,7 @@ class AirflowSchedulerConfig(_BaseAirflowSchedulerConfig, BaseConfig):
 
     default_catalog_override: t.Optional[str] = None
 
-    type_: Literal["airflow"] = Field(alias="type", default="airflow")
+    type_: t.Literal["airflow"] = Field(alias="type", default="airflow")
 
     _concurrent_tasks_validator = concurrent_tasks_validator
     _max_snapshot_ids_per_request_validator = max_snapshot_ids_per_request_validator
@@ -313,7 +307,7 @@ class YCAirflowSchedulerConfig(_BaseAirflowSchedulerConfig, BaseConfig):
 
     _concurrent_tasks_validator = concurrent_tasks_validator
 
-    type_: Literal["yc_airflow"] = Field(alias="type", default="yc_airflow")
+    type_: t.Literal["yc_airflow"] = Field(alias="type", default="yc_airflow")
 
     def get_client(self, console: t.Optional[Console] = None) -> AirflowClient:
         session = Session()
@@ -358,7 +352,7 @@ class CloudComposerSchedulerConfig(_BaseAirflowSchedulerConfig, BaseConfig, extr
 
     default_catalog_override: t.Optional[str] = None
 
-    type_: Literal["cloud_composer"] = Field(alias="type", default="cloud_composer")
+    type_: t.Literal["cloud_composer"] = Field(alias="type", default="cloud_composer")
 
     _concurrent_tasks_validator = concurrent_tasks_validator
     _max_snapshot_ids_per_request_validator = max_snapshot_ids_per_request_validator
@@ -423,7 +417,7 @@ class MWAASchedulerConfig(_EngineAdapterStateSyncSchedulerConfig, BaseConfig):
 
     default_catalog_override: t.Optional[str] = None
 
-    type_: Literal["mwaa"] = Field(alias="type", default="mwaa")
+    type_: t.Literal["mwaa"] = Field(alias="type", default="mwaa")
 
     _concurrent_tasks_validator = concurrent_tasks_validator
 

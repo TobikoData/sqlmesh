@@ -87,7 +87,7 @@ setup(
             "pytest",
             "pytest-asyncio<0.23.0",
             "pytest-mock",
-            "pytest-retry; python_version>='3.9'",
+            "pytest-retry",
             "pytest-xdist",
             "pytz",
             "ruff~=0.7.0",

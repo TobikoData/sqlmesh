@@ -1,4 +1,3 @@
-import sys
 import typing as t
 from enum import Enum
 
@@ -9,11 +8,6 @@ from sqlmesh.core.config.base import BaseConfig
 from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.pydantic import model_validator, model_validator_v1_args
 
-if sys.version_info >= (3, 9):
-    from typing import Literal
-else:
-    from typing_extensions import Literal
-
 
 class MergeMethod(str, Enum):
     MERGE = "merge"
@@ -22,7 +16,7 @@ class MergeMethod(str, Enum):
 
 
 class GithubCICDBotConfig(BaseConfig):
-    type_: Literal["github"] = Field(alias="type", default="github")
+    type_: t.Literal["github"] = Field(alias="type", default="github")
 
     invalidate_environment_after_deploy: bool = True
     enable_deploy_command: bool = False
