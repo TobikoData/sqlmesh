@@ -5,7 +5,6 @@ import base64
 import logging
 import os
 import pathlib
-import sys
 import typing as t
 from enum import Enum
 from functools import partial, lru_cache
@@ -31,12 +30,6 @@ from sqlmesh.utils.pydantic import (
     field_validator_v1_args,
 )
 from sqlmesh.utils.aws import validate_s3_uri
-
-if sys.version_info >= (3, 9):
-    from typing import Literal
-else:
-    from typing_extensions import Literal
-
 
 logger = logging.getLogger(__name__)
 
@@ -156,7 +149,7 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
 
     concurrent_tasks: int = 1
     register_comments: bool = True
-    pre_ping: Literal[False] = False
+    pre_ping: t.Literal[False] = False
 
     @property
     def _engine_adapter(self) -> t.Type[EngineAdapter]:
@@ -239,7 +232,7 @@ class MotherDuckConnectionConfig(BaseDuckDBConnectionConfig):
     database: str
     token: t.Optional[str] = None
 
-    type_: Literal["motherduck"] = Field(alias="type", default="motherduck")
+    type_: t.Literal["motherduck"] = Field(alias="type", default="motherduck")
 
     @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
@@ -287,7 +280,7 @@ class DuckDBConnectionConfig(BaseDuckDBConnectionConfig):
     database: t.Optional[str] = None
     catalogs: t.Optional[t.Dict[str, t.Union[str, DuckDBAttachOptions]]] = None
 
-    type_: Literal["duckdb"] = Field(alias="type", default="duckdb")
+    type_: t.Literal["duckdb"] = Field(alias="type", default="duckdb")
 
     _data_file_to_adapter: t.ClassVar[t.Dict[str, EngineAdapter]] = {}
 
@@ -424,7 +417,7 @@ class SnowflakeConnectionConfig(ConnectionConfig):
 
     session_parameters: t.Optional[dict] = None
 
-    type_: Literal["snowflake"] = Field(alias="type", default="snowflake")
+    type_: t.Literal["snowflake"] = Field(alias="type", default="snowflake")
 
     _concurrent_tasks_validator = concurrent_tasks_validator
 
@@ -611,9 +604,9 @@ class DatabricksConnectionConfig(ConnectionConfig):
 
     concurrent_tasks: int = 1
     register_comments: bool = True
-    pre_ping: Literal[False] = False
+    pre_ping: t.Literal[False] = False
 
-    type_: Literal["databricks"] = Field(alias="type", default="databricks")
+    type_: t.Literal["databricks"] = Field(alias="type", default="databricks")
 
     _concurrent_tasks_validator = concurrent_tasks_validator
     _http_headers_validator = http_headers_validator
@@ -859,9 +852,9 @@ class BigQueryConnectionConfig(ConnectionConfig):
 
     concurrent_tasks: int = 1
     register_comments: bool = True
-    pre_ping: Literal[False] = False
+    pre_ping: t.Literal[False] = False
 
-    type_: Literal["bigquery"] = Field(alias="type", default="bigquery")
+    type_: t.Literal["bigquery"] = Field(alias="type", default="bigquery")
 
     @field_validator("execution_project")
     @field_validator_v1_args
@@ -990,7 +983,7 @@ class GCPPostgresConnectionConfig(ConnectionConfig):
     timeout: t.Optional[int] = None
     scopes: t.Tuple[str, ...] = ("https://www.googleapis.com/auth/sqlservice.admin",)
     driver: str = "pg8000"
-    type_: Literal["gcp_postgres"] = Field(alias="type", default="gcp_postgres")
+    type_: t.Literal["gcp_postgres"] = Field(alias="type", default="gcp_postgres")
     concurrent_tasks: int = 4
     register_comments: bool = True
     pre_ping: bool = True
@@ -1108,7 +1101,7 @@ class RedshiftConnectionConfig(ConnectionConfig):
     register_comments: bool = True
     pre_ping: bool = False
 
-    type_: Literal["redshift"] = Field(alias="type", default="redshift")
+    type_: t.Literal["redshift"] = Field(alias="type", default="redshift")
 
     @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
@@ -1162,7 +1155,7 @@ class PostgresConnectionConfig(ConnectionConfig):
     register_comments: bool = True
     pre_ping: bool = True
 
-    type_: Literal["postgres"] = Field(alias="type", default="postgres")
+    type_: t.Literal["postgres"] = Field(alias="type", default="postgres")
 
     @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
@@ -1210,7 +1203,7 @@ class MySQLConnectionConfig(ConnectionConfig):
     register_comments: bool = True
     pre_ping: bool = True
 
-    type_: Literal["mysql"] = Field(alias="type", default="mysql")
+    type_: t.Literal["mysql"] = Field(alias="type", default="mysql")
 
     @property
     def _cursor_kwargs(self) -> t.Optional[t.Dict[str, t.Any]]:
@@ -1263,7 +1256,7 @@ class MSSQLConnectionConfig(ConnectionConfig):
     register_comments: bool = True
     pre_ping: bool = True
 
-    type_: Literal["mssql"] = Field(alias="type", default="mssql")
+    type_: t.Literal["mssql"] = Field(alias="type", default="mssql")
 
     @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
@@ -1304,9 +1297,9 @@ class SparkConnectionConfig(ConnectionConfig):
 
     concurrent_tasks: int = 4
     register_comments: bool = True
-    pre_ping: Literal[False] = False
+    pre_ping: t.Literal[False] = False
 
-    type_: Literal["spark"] = Field(alias="type", default="spark")
+    type_: t.Literal["spark"] = Field(alias="type", default="spark")
 
     @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
@@ -1387,7 +1380,7 @@ class TrinoConnectionConfig(ConnectionConfig):
     user: str
     catalog: str
     port: t.Optional[int] = None
-    http_scheme: Literal["http", "https"] = "https"
+    http_scheme: t.Literal["http", "https"] = "https"
     # General Optional
     roles: t.Optional[t.Dict[str, str]] = None
     http_headers: t.Optional[t.Dict[str, str]] = None
@@ -1418,9 +1411,9 @@ class TrinoConnectionConfig(ConnectionConfig):
 
     concurrent_tasks: int = 4
     register_comments: bool = True
-    pre_ping: Literal[False] = False
+    pre_ping: t.Literal[False] = False
 
-    type_: Literal["trino"] = Field(alias="type", default="trino")
+    type_: t.Literal["trino"] = Field(alias="type", default="trino")
 
     @model_validator(mode="after")
     @model_validator_v1_args
@@ -1556,7 +1549,7 @@ class ClickhouseConnectionConfig(ConnectionConfig):
     # * https://clickhouse.com/docs/en/integrations/python#customizing-the-http-connection-pool
     connection_pool_options: t.Optional[t.Dict[str, t.Any]] = None
 
-    type_: Literal["clickhouse"] = Field(alias="type", default="clickhouse")
+    type_: t.Literal["clickhouse"] = Field(alias="type", default="clickhouse")
 
     @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
@@ -1655,12 +1648,12 @@ class AthenaConnectionConfig(ConnectionConfig):
     # SQLMesh options
     s3_warehouse_location: t.Optional[str] = None
     concurrent_tasks: int = 4
-    register_comments: Literal[False] = (
+    register_comments: t.Literal[False] = (
         False  # because Athena doesnt support comments in most cases
     )
-    pre_ping: Literal[False] = False
+    pre_ping: t.Literal[False] = False
 
-    type_: Literal["athena"] = Field(alias="type", default="athena")
+    type_: t.Literal["athena"] = Field(alias="type", default="athena")
 
     @model_validator(mode="after")
     @model_validator_v1_args

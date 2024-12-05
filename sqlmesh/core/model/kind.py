@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import sys
 import typing as t
 from enum import Enum
 
@@ -30,11 +29,6 @@ from sqlmesh.utils.pydantic import (
     get_dialect,
     validate_string,
 )
-
-if sys.version_info >= (3, 9):
-    from typing import Annotated, Literal
-else:
-    from typing_extensions import Annotated, Literal
 
 
 if t.TYPE_CHECKING:
@@ -402,7 +396,9 @@ class _IncrementalBy(_Incremental):
 
 
 class IncrementalByTimeRangeKind(_IncrementalBy):
-    name: Literal[ModelKindName.INCREMENTAL_BY_TIME_RANGE] = ModelKindName.INCREMENTAL_BY_TIME_RANGE
+    name: t.Literal[ModelKindName.INCREMENTAL_BY_TIME_RANGE] = (
+        ModelKindName.INCREMENTAL_BY_TIME_RANGE
+    )
     time_column: TimeColumn
 
     _time_column_validator = TimeColumn.validator()
@@ -423,10 +419,12 @@ class IncrementalByTimeRangeKind(_IncrementalBy):
 
 
 class IncrementalByUniqueKeyKind(_IncrementalBy):
-    name: Literal[ModelKindName.INCREMENTAL_BY_UNIQUE_KEY] = ModelKindName.INCREMENTAL_BY_UNIQUE_KEY
+    name: t.Literal[ModelKindName.INCREMENTAL_BY_UNIQUE_KEY] = (
+        ModelKindName.INCREMENTAL_BY_UNIQUE_KEY
+    )
     unique_key: SQLGlotListOfFields
     when_matched: t.Optional[t.List[exp.When]] = None
-    batch_concurrency: Literal[1] = 1
+    batch_concurrency: t.Literal[1] = 1
 
     @field_validator("when_matched", mode="before")
     @field_validator_v1_args
@@ -493,12 +491,12 @@ class IncrementalByUniqueKeyKind(_IncrementalBy):
 
 
 class IncrementalByPartitionKind(_Incremental):
-    name: Literal[ModelKindName.INCREMENTAL_BY_PARTITION] = ModelKindName.INCREMENTAL_BY_PARTITION
-    forward_only: Literal[True] = True
+    name: t.Literal[ModelKindName.INCREMENTAL_BY_PARTITION] = ModelKindName.INCREMENTAL_BY_PARTITION
+    forward_only: t.Literal[True] = True
     disable_restatement: SQLGlotBool = True
 
     @field_validator("forward_only", mode="before")
-    def _forward_only_validator(cls, v: t.Union[bool, exp.Expression]) -> Literal[True]:
+    def _forward_only_validator(cls, v: t.Union[bool, exp.Expression]) -> t.Literal[True]:
         if v is not True:
             raise ConfigError(
                 "Do not specify the `forward_only` configuration key - INCREMENTAL_BY_PARTITION models are always forward_only."
@@ -530,7 +528,7 @@ class IncrementalByPartitionKind(_Incremental):
 
 
 class IncrementalUnmanagedKind(_Incremental):
-    name: Literal[ModelKindName.INCREMENTAL_UNMANAGED] = ModelKindName.INCREMENTAL_UNMANAGED
+    name: t.Literal[ModelKindName.INCREMENTAL_UNMANAGED] = ModelKindName.INCREMENTAL_UNMANAGED
     insert_overwrite: SQLGlotBool = False
     forward_only: SQLGlotBool = True
     disable_restatement: SQLGlotBool = True
@@ -565,7 +563,7 @@ class IncrementalUnmanagedKind(_Incremental):
 
 
 class ViewKind(_ModelKind):
-    name: Literal[ModelKindName.VIEW] = ModelKindName.VIEW
+    name: t.Literal[ModelKindName.VIEW] = ModelKindName.VIEW
     materialized: SQLGlotBool = False
 
     @property
@@ -588,7 +586,7 @@ class ViewKind(_ModelKind):
 
 
 class SeedKind(_ModelKind):
-    name: Literal[ModelKindName.SEED] = ModelKindName.SEED
+    name: t.Literal[ModelKindName.SEED] = ModelKindName.SEED
     path: SQLGlotString
     batch_size: SQLGlotPositiveInt = 1000
     csv_settings: t.Optional[CsvSettings] = None
@@ -636,7 +634,7 @@ class SeedKind(_ModelKind):
 
 
 class FullKind(_ModelKind):
-    name: Literal[ModelKindName.FULL] = ModelKindName.FULL
+    name: t.Literal[ModelKindName.FULL] = ModelKindName.FULL
 
 
 class _SCDType2Kind(_Incremental):
@@ -719,7 +717,7 @@ class _SCDType2Kind(_Incremental):
 
 
 class SCDType2ByTimeKind(_SCDType2Kind):
-    name: Literal[ModelKindName.SCD_TYPE_2, ModelKindName.SCD_TYPE_2_BY_TIME] = (
+    name: t.Literal[ModelKindName.SCD_TYPE_2, ModelKindName.SCD_TYPE_2_BY_TIME] = (
         ModelKindName.SCD_TYPE_2_BY_TIME
     )
     updated_at_name: SQLGlotColumn = Field(exp.column("updated_at"), validate_default=True)
@@ -755,7 +753,7 @@ class SCDType2ByTimeKind(_SCDType2Kind):
 
 
 class SCDType2ByColumnKind(_SCDType2Kind):
-    name: Literal[ModelKindName.SCD_TYPE_2_BY_COLUMN] = ModelKindName.SCD_TYPE_2_BY_COLUMN
+    name: t.Literal[ModelKindName.SCD_TYPE_2_BY_COLUMN] = ModelKindName.SCD_TYPE_2_BY_COLUMN
     columns: SQLGlotListOfColumnsOrStar
     execution_time_as_valid_from: SQLGlotBool = False
 
@@ -787,7 +785,7 @@ class SCDType2ByColumnKind(_SCDType2Kind):
 
 
 class ManagedKind(_ModelKind):
-    name: Literal[ModelKindName.MANAGED] = ModelKindName.MANAGED
+    name: t.Literal[ModelKindName.MANAGED] = ModelKindName.MANAGED
     disable_restatement: t.Literal[True] = True
 
     @property
@@ -796,7 +794,7 @@ class ManagedKind(_ModelKind):
 
 
 class EmbeddedKind(_ModelKind):
-    name: Literal[ModelKindName.EMBEDDED] = ModelKindName.EMBEDDED
+    name: t.Literal[ModelKindName.EMBEDDED] = ModelKindName.EMBEDDED
     disable_restatement: t.Literal[True] = True
 
     @property
@@ -805,12 +803,12 @@ class EmbeddedKind(_ModelKind):
 
 
 class ExternalKind(_ModelKind):
-    name: Literal[ModelKindName.EXTERNAL] = ModelKindName.EXTERNAL
+    name: t.Literal[ModelKindName.EXTERNAL] = ModelKindName.EXTERNAL
     disable_restatement: t.Literal[True] = True
 
 
 class CustomKind(_ModelKind):
-    name: Literal[ModelKindName.CUSTOM] = ModelKindName.CUSTOM
+    name: t.Literal[ModelKindName.CUSTOM] = ModelKindName.CUSTOM
     materialization: str
     materialization_properties_: t.Optional[exp.Tuple] = Field(
         default=None, alias="materialization_properties"
@@ -880,7 +878,7 @@ class CustomKind(_ModelKind):
         )
 
 
-ModelKind = Annotated[
+ModelKind = t.Annotated[
     t.Union[
         EmbeddedKind,
         ExternalKind,

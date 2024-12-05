@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import pathlib
-import sys
 import typing as t
 from functools import cached_property
 from pathlib import Path
@@ -38,11 +37,6 @@ from sqlmesh.utils.pydantic import (
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.snapshot import DeployabilityIndex, Node, Snapshot
-
-if sys.version_info >= (3, 9):
-    from typing import Literal
-else:
-    from typing_extensions import Literal
 
 
 class AuditCommonMetaMixin:
@@ -131,7 +125,7 @@ class ModelAudit(PydanticModel, AuditMixin, frozen=True):
     dialect: str = ""
     skip: bool = False
     blocking: bool = True
-    standalone: Literal[False] = False
+    standalone: t.Literal[False] = False
     query: t.Union[exp.Query, d.JinjaQuery]
     defaults: t.Dict[str, exp.Expression] = {}
     expressions_: t.Optional[t.List[exp.Expression]] = Field(default=None, alias="expressions")
@@ -161,7 +155,7 @@ class StandaloneAudit(_Node, AuditMixin):
     dialect: str = ""
     skip: bool = False
     blocking: bool = False
-    standalone: Literal[True] = True
+    standalone: t.Literal[True] = True
     query: t.Union[exp.Query, d.JinjaQuery]
     defaults: t.Dict[str, exp.Expression] = {}
     expressions_: t.Optional[t.List[exp.Expression]] = Field(default=None, alias="expressions")
@@ -170,7 +164,7 @@ class StandaloneAudit(_Node, AuditMixin):
     depends_on_: t.Optional[t.Set[str]] = Field(default=None, alias="depends_on")
     python_env: t.Dict[str, Executable] = {}
 
-    source_type: Literal["audit"] = "audit"
+    source_type: t.Literal["audit"] = "audit"
 
     # Validators
     _query_validator = expression_validator

@@ -25,7 +25,6 @@ IGNORE_DECORATORS = {"macro", "model"}
 
 
 def _is_relative_to(path: t.Optional[Path | str], other: t.Optional[Path | str]) -> bool:
-    """path.is_relative_to compatibility, was only supported >= 3.9"""
     if path is None or other is None:
         return False
 

@@ -60,11 +60,6 @@ if t.TYPE_CHECKING:
     else:
         from typing_extensions import Self
 
-if sys.version_info >= (3, 9):
-    from typing import Literal
-else:
-    from typing_extensions import Literal
-
 logger = logging.getLogger(__name__)
 
 
@@ -1053,7 +1048,7 @@ class SqlModel(_Model):
     """
 
     query: t.Union[exp.Query, d.JinjaQuery, d.MacroFunc]
-    source_type: Literal["sql"] = "sql"
+    source_type: t.Literal["sql"] = "sql"
 
     _columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
 
@@ -1287,7 +1282,7 @@ class SeedModel(_Model):
     column_hashes_: t.Optional[t.Dict[str, str]] = Field(default=None, alias="column_hashes")
     derived_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
     is_hydrated: bool = True
-    source_type: Literal["seed"] = "seed"
+    source_type: t.Literal["seed"] = "seed"
 
     def __getstate__(self) -> t.Dict[t.Any, t.Any]:
         state = super().__getstate__()
@@ -1485,7 +1480,7 @@ class PythonModel(_Model):
 
     kind: ModelKind = FullKind()
     entrypoint: str
-    source_type: Literal["python"] = "python"
+    source_type: t.Literal["python"] = "python"
 
     def validate_definition(self) -> None:
         super().validate_definition()
@@ -1558,7 +1553,7 @@ class PythonModel(_Model):
 class ExternalModel(_Model):
     """The model definition which represents an external source/table."""
 
-    source_type: Literal["external"] = "external"
+    source_type: t.Literal["external"] = "external"
 
     def is_breaking_change(self, previous: Model) -> t.Optional[bool]:
         if not isinstance(previous, ExternalModel):
