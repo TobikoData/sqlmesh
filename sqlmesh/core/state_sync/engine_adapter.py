@@ -1307,16 +1307,24 @@ class EngineAdapterStateSync(StateSync):
     ) -> bool:
         versions = self.get_versions(validate=False)
         migrations = MIGRATIONS[versions.schema_version :]
-
-        migrate_rows = migrations or major_minor(SQLGLOT_VERSION) != versions.minor_sqlglot_version
-        if not skip_backup and migrate_rows:
+        should_backup = any(
+            [
+                migrations,
+                major_minor(SQLGLOT_VERSION) != versions.minor_sqlglot_version,
+                major_minor(SQLMESH_VERSION) != versions.minor_sqlmesh_version,
+            ]
+        )
+        if not skip_backup and should_backup:
             self._backup_state()
 
         for migration in migrations:
             logger.info(f"Applying migration {migration}")
             migration.migrate(self, default_catalog=default_catalog)
 
-        return bool(migrate_rows)
+        migrate_snapshots_and_environments = (
+            bool(migrations) or major_minor(SQLGLOT_VERSION) != versions.minor_sqlglot_version
+        )
+        return migrate_snapshots_and_environments
 
     def _migrate_rows(self, promoted_snapshots_only: bool) -> None:
         logger.info("Fetching environments")

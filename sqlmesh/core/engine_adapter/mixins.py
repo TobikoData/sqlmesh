@@ -299,6 +299,7 @@ class VarcharSizeWorkaroundMixin(EngineAdapter):
                 select_or_union.set("where", None)
 
             temp_view_name = self._get_temp_table("ctas")
+
             self.create_view(
                 temp_view_name, select_statement, replace=False, no_schema_binding=False
             )

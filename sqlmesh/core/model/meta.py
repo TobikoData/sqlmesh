@@ -78,6 +78,7 @@ class ModelMeta(_Node):
     signals: t.List[exp.Tuple] = []
     enabled: bool = True
     physical_version: t.Optional[str] = None
+    gateway: t.Optional[str] = None
 
     _bool_validator = bool_validator
     _model_kind_validator = model_kind_validator
@@ -167,6 +168,13 @@ class ModelMeta(_Node):
         if v is None:
             return v
         return str_or_exp_to_str(v)
+
+    @field_validator("gateway", mode="before")
+    def _gateway_validator(cls, v: t.Any) -> t.Optional[str]:
+        if v is None:
+            return None
+        gateway = str_or_exp_to_str(v)
+        return gateway and gateway.lower()
 
     @field_validator("partitioned_by_", "clustered_by", mode="before")
     @field_validator_v1_args
