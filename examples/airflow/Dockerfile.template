@@ -1,6 +1,6 @@
 FROM apache/spark:3.5.0-python3 AS spark
 
-FROM apache/airflow:$AIRFLOW_VERSION-python3.8
+FROM apache/airflow:$AIRFLOW_VERSION-python3.9
 
 USER root
 
@@ -60,7 +60,7 @@ RUN pip install apache-airflow-providers-apache-spark==4.8.0 --no-deps
 RUN pip install apache-airflow-providers-databricks==6.4.0 \
                 apache-airflow-providers-github==2.6.0 \
                 apache-airflow-providers-common-sql==1.13.0 \
-                pandas==1.5.2  # python 3.8 spark 3.4 and pandas 2.0 have issues with casting timestamp
+                pandas==1.5.2  # spark 3.4 and pandas 2.0 have issues with casting timestamp
 
 # Install Deps
 USER root
