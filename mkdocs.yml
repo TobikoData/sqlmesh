@@ -133,6 +133,7 @@ theme:
   features:
     - content.tabs.link
     - content.code.copy
+    - navigation.expand ## expands navigation bar by default
     - navigation.tracking
     - navigation.tabs
     - navigation.sections
