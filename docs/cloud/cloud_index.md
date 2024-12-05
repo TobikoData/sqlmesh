@@ -21,8 +21,7 @@ Tobiko Cloud was created to solve common challenges in data management, such as 
 3. **Ease of Use**: Tobiko Cloud integrates SQLMesh with an accessible user interface for developing SQL workflows, managing dependencies, and understanding column-level data lineage. The standalone SQLMesh, while efficient and developer-friendly, relies more heavily on command-line interfaces and direct configuration files.
 4. **Cost and Efficiency**: SQLMesh's built-in features like incremental models and virtual data environments reduce computational costs and improve processing speeds. These are available in both the open-source and cloud versions. However, Tobiko Cloud packages these benefits with additional enterprise-level services and support, making it a turnkey solution for companies.
 
-Tobiko Cloud extends SQLMesh by eliminating setup complexity and offering managed services tailored for organizations looking to scale data workflows without the overhead of managing technical infrastructure. Use the table comparison below to clearly see the difference in the features set between the OS platform and our Cloud product: 
-
+Tobiko Cloud extends SQLMesh by eliminating setup complexity and offering managed services tailored for organizations looking to scale data workflows without the overhead of managing technical infrastructure. <Use the table comparison below to clearly see the difference in the features set between the OS platform and our Cloud product: >
 <insert complete table here>
 
 ### Learn more
