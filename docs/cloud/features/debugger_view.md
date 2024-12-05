@@ -8,19 +8,18 @@ Fixing data pipelines in production is a stressful, time-consuming process, so w
 
 > Note: the debugger view is only available for models that have been executed in your data warehouse via the `tcloud sqlmesh plan` or `tcloud sqlmesh run` commands.
 
+## Using the Debugger View
 
-## How to Use the Debugger View
+Step 1: On the Tobiko Cloud home page, click any bar in the `Runs Daily` chart to open the debugger view. It doesn't matter whether the bar is green or red.
 
-Step 1: Click on any bar within the run history chart to open the debugger view. It doesn't matter whether the bar is green or red.
-
-![debugger_view_step_1](./debugger_view_step_1.png)
+![debugger_view_step_1](./debugger_view/debugger_view_step_1.png)
 
 <br></br>
 Step 2: Click on the "Explore Executions" tab (bubble 1) to see specific execution details about the run, by model.
 
 Then choose a model to view. We clicked on the `orders` model (bubble 2) - notice that it shows you a focused view of the DAG (think: lineage) centered on whichever model you clicked.
 
-![debugger_view_step_2](./debugger_view_step_2.png)
+![debugger_view_step_2](./debugger_view/debugger_view_step_2.png)
 
 From here, you can explore the execution details of the run with a model's focused tabs (bubble 3).
 
@@ -37,7 +36,7 @@ See a summary of the model's characteristics and behavior during current and his
 - Click on the "Previous Run" tile to explore the details of the previous run. This is useful if you want to compare the previous run to the current one if you notice duration is shorter or longer than expected.
 - Click on the "Last Plan" tile to explore the details of the last plan that was applied. This is useful to see if the model's code was changed in a way that sped up or elongated the duration of the run. It's also helpful to verify if the schema changed in a way that might be causing an issue.
 
-![overview](./overview.png)
+![overview](./debugger_view/overview.png)
 
 ### Impact
 
@@ -45,7 +44,7 @@ See the current model's downstream and upstream models in a list format.
 
 This is useful if lots of models are in the DAG view and you want to see the model's full impact at a glance.
 
-![impact](./impact.png)
+![impact](./debugger_view/impact.png)
 
 
 ### Definition
@@ -54,7 +53,7 @@ See the exact code that was executed during the run.
 
 This is useful if you want to determine whether the code changed in a way that might be causing an issue.
 
-![definition](./definition.png)
+![definition](./debugger_view/definition.png)
 
 ### Schema
 
@@ -62,7 +61,7 @@ See the current model's schema.
 
 This is useful to determine whether the schema changed in a way that might be causing an issue.
 
-![schema](./schema.png)
+![schema](./debugger_view/schema.png)
 
 ### Intervals
 
@@ -70,7 +69,7 @@ See the specific time intervals that were processed during the run.
 
 This is useful to see which exact time intervals succeeded or failed. Also, it's useful to determine whether time intervals changed in a way that might be causing an issue such as longer run duration.
 
-![intervals](./intervals.png)
+![intervals](./debugger_view/intervals.png)
 
 ### Log
 
@@ -78,4 +77,4 @@ See all the SQLMesh logs from the run.
 
 You can filter for multiple levels of logs: `info`, `warning`, `error`, etc.
 
-![log](./log.png)
+![log](./debugger_view/log.png)
