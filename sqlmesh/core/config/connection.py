@@ -268,7 +268,7 @@ class DuckDBAttachOptions(BaseConfig):
             options.append(f"TYPE {self.type.upper()}")
         if self.read_only:
             options.append("READ_ONLY")
-        if self.schema and self.type == 'postgres':
+        if self.schema and self.type == "postgres":
             options.append(f"SCHEMA '{self.schema}'")
         options_sql = f" ({', '.join(options)})" if options else ""
         return f"ATTACH '{self.path}' AS {alias}{options_sql}"
@@ -311,11 +311,12 @@ class DuckDBConnectionConfig(BaseDuckDBConnectionConfig):
         if not self.motherduck_config:
             return super()._static_connection_kwargs
         from sqlmesh import __version__
+
         connection_str = "md:"
 
-        if md_database := self.motherduck_config.get('database'):
+        if md_database := self.motherduck_config.get("database"):
             connection_str += md_database
-        if md_token := self.motherduck_config.get('token'):
+        if md_token := self.motherduck_config.get("token"):
             connection_str += f"?motherduck_token={md_token}"
 
         return {
