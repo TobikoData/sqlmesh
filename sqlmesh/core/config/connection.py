@@ -282,6 +282,7 @@ class DuckDBConnectionConfig(BaseDuckDBConnectionConfig):
 
     database: t.Optional[str] = None
     catalogs: t.Optional[t.Dict[str, t.Union[str, DuckDBAttachOptions]]] = None
+    motherduck_config: t.Optional[t.Dict[str, t.Any]] = None
 
     type_: t.Literal["duckdb"] = Field(alias="type", default="duckdb")
 
@@ -301,6 +302,24 @@ class DuckDBConnectionConfig(BaseDuckDBConnectionConfig):
     @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
         return {"database"}
+
+    @property
+    def _static_connection_kwargs(self) -> t.Dict[str, t.Any]:
+        """kwargs that are for execution config only"""
+        if not self.motherduck_config:
+            return super()._static_connection_kwargs
+        from sqlmesh import __version__
+        connection_str = "md:"
+
+        if md_database := self.motherduck_config.get('database'):
+            connection_str += md_database
+        if md_token := self.motherduck_config.get('token'):
+            connection_str += f"?motherduck_token={md_token}"
+
+        return {
+            "database": connection_str,
+            "config": {"custom_user_agent": f"SQLMesh/{__version__}"},
+        }
 
     @property
     def _connection_factory(self) -> t.Callable:
