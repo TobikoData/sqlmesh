@@ -438,7 +438,7 @@ During the evaluation of a model of this kind, the view will be replaced or recr
 ## EMBEDDED
 Embedded models are a way to share common logic between different models of other kinds.
 
-There are no data assets (tables or views) associated with `EMBEDDED` models in the data warehouse. Instead, an `EMBEDDED` model's query is injected directly into the query of each downstream model that references it.
+There are no data assets (tables or views) associated with `EMBEDDED` models in the data warehouse. Instead, an `EMBEDDED` model's query is injected directly into the query of each downstream model that references it, as a subquery.
 
 This example specifies a `EMBEDDED` model kind:
 ```sql linenums="1" hl_lines="3"
@@ -469,7 +469,7 @@ There are two ways to tracking changes: By Time (Recommended) or By Column.
 
 ### SCD Type 2 By Time (Recommended)
 
-SCD Type 2 By Time supports sourcing from tables that have an "Updated At" timestamp defined in the table that tells you when a given was last updated.
+SCD Type 2 By Time supports sourcing from tables that have an "Updated At" timestamp defined in the table that tells you when a given record was last updated.
 This is the recommended way since this "Updated At" gives you a precise time when the record was last updated and therefore improves the accuracy of the SCD Type 2 table that is produced.
 
 This example specifies a `SCD_TYPE_2_BY_TIME` model kind:

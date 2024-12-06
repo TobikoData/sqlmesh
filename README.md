@@ -158,7 +158,7 @@ Together, we want to build data transformation without the waste. Connect with u
 * Read our [blog](https://tobikodata.com/blog)
 
 ## Contribution
-Contributions in the form of issues or pull requests are greatly appreciated. 
+Contributions in the form of issues or pull requests (from fork) are greatly appreciated. 
 
 [Read more](https://sqlmesh.readthedocs.io/en/stable/development/) on how to contribute to SQLMesh open source.
 
