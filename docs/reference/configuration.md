@@ -164,10 +164,11 @@ Most parameters are specific to the connection engine `type` - see [below](#engi
 
 | Option              | Description                                                                                                                                                             | Type | Required |
 |---------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------|:----:|:--------:|
-| `type`              | The engine type name, listed in engine-specific configuration pages below.                                                                                              | str  | Y        |
-| `concurrent_tasks`  | The maximum number of concurrent tasks that will be run by SQLMesh. (Default: 4 for engines that support concurrent tasks.)                                             | int  | N        |
-| `register_comments` | Whether SQLMesh should register model comments with the SQL engine (if the engine supports it). (Default: `true`.)                                                      | bool | N        |
-| `pre_ping`          | Whether or not to pre-ping the connection before starting a new transaction to ensure it is still alive. This can only be enabled for engines with transaction support. | bool | N        |
+| `type`              | The engine type name, listed in engine-specific configuration pages below.                                                                                              | str  |    Y     |
+| `concurrent_tasks`  | The maximum number of concurrent tasks that will be run by SQLMesh. (Default: 4 for engines that support concurrent tasks.)                                             | int  |    N     |
+| `register_comments` | Whether SQLMesh should register model comments with the SQL engine (if the engine supports it). (Default: `true`.)                                                      | bool |    N     |
+| `pre_ping`          | Whether or not to pre-ping the connection before starting a new transaction to ensure it is still alive. This can only be enabled for engines with transaction support. | bool |    N     |
+| `pretty_sql`        | If SQL should be formatted before being executed, not recommended in a production setting. (Default: `false`.)                                                          | bool |    N     |
 
 #### Engine-specific
 
