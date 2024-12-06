@@ -469,7 +469,7 @@ There are two ways to tracking changes: By Time (Recommended) or By Column.
 
 ### SCD Type 2 By Time (Recommended)
 
-SCD Type 2 By Time supports sourcing from tables that have an "Updated At" timestamp defined in the table that tells you when a given was last updated.
+SCD Type 2 By Time supports sourcing from tables that have an "Updated At" timestamp defined in the table that tells you when a given record was last updated.
 This is the recommended way since this "Updated At" gives you a precise time when the record was last updated and therefore improves the accuracy of the SCD Type 2 table that is produced.
 
 This example specifies a `SCD_TYPE_2_BY_TIME` model kind:
