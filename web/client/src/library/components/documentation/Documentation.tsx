@@ -134,7 +134,7 @@ const Documentation = function Documentation({
             limit={10}
           />
         </TBKDetails>
-        <TBKDetails summary="Descritpion">
+        <TBKDetails summary="Description">
           <Markdown>{model.description ?? 'No description'}</Markdown>
         </TBKDetails>
       </div>
