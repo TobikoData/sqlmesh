@@ -438,7 +438,7 @@ During the evaluation of a model of this kind, the view will be replaced or recr
 ## EMBEDDED
 Embedded models are a way to share common logic between different models of other kinds.
 
-There are no data assets (tables or views) associated with `EMBEDDED` models in the data warehouse. Instead, an `EMBEDDED` model's query is injected directly into the query of each downstream model that references it.
+There are no data assets (tables or views) associated with `EMBEDDED` models in the data warehouse. Instead, an `EMBEDDED` model's query is injected directly into the query of each downstream model that references it, as a subquery.
 
 This example specifies a `EMBEDDED` model kind:
 ```sql linenums="1" hl_lines="3"
