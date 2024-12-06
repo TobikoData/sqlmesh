@@ -258,6 +258,7 @@ class DuckDBAttachOptions(BaseConfig):
     type: str
     path: str
     read_only: bool = False
+    schema: t.Optional[str] = None  # Only used for postgres
 
     def to_sql(self, alias: str) -> str:
         options = []
@@ -267,6 +268,8 @@ class DuckDBAttachOptions(BaseConfig):
             options.append(f"TYPE {self.type.upper()}")
         if self.read_only:
             options.append("READ_ONLY")
+        if self.schema and self.type == 'postgres':
+            options.append(f"SCHEMA '{self.schema}'")
         options_sql = f" ({', '.join(options)})" if options else ""
         return f"ATTACH '{self.path}' AS {alias}{options_sql}"
 
