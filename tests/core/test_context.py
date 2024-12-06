@@ -456,7 +456,7 @@ def test_override_builtin_audit_blocking_mode():
         )
     )
 
-    logger = logging.getLogger("sqlmesh.core.snapshot.evaluator")
+    logger = logging.getLogger("sqlmesh.core.scheduler")
     with patch.object(logger, "warning") as mock_logger:
         plan = context.plan(auto_apply=True, no_prompts=True)
         new_snapshot = next(iter(plan.context_diff.new_snapshots.values()))
@@ -467,7 +467,7 @@ def test_override_builtin_audit_blocking_mode():
                 "Audit 'not_null' for model 'db.x' failed.\n"
                 "Got 1 results, expected 0.\n"
                 f'SELECT * FROM (SELECT * FROM "sqlmesh__db"."db__x__{version}" AS "db__x__{version}") AS "_q_0" WHERE "c" IS NULL AND TRUE\n'
-                "Audit is warn only so proceeding with execution."
+                "Audit is non-blocking so proceeding with execution."
             )
         ]
 
