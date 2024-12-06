@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import CodeMirror from '@uiw/react-codemirror'
-import { type EditorView, type KeyBinding, keymap } from '@codemirror/view'
+import { EditorView, type KeyBinding, keymap } from '@codemirror/view'
 import { type ChangeSpec, type Extension } from '@codemirror/state'
 import { useApiFileByPath, useMutationApiSaveFile } from '~/api'
 import { debounceSync, isNil, isNotNil } from '~/utils'
@@ -26,7 +26,6 @@ import { dracula, tomorrow } from 'thememirror'
 import { python } from '@codemirror/lang-python'
 import { StreamLanguage } from '@codemirror/language'
 import { yaml } from '@codemirror/legacy-modes/mode/yaml'
-import './Editor.css'
 import {
   SQLMeshDialect,
   SQLMeshDialectCleanUp,
@@ -34,6 +33,7 @@ import {
 import { indentMore, defaultKeymap, historyKeymap } from '@codemirror/commands'
 import { EMPTY_STRING } from '@components/search/help'
 import { diffChars } from 'diff'
+import './Editor.css'
 
 export { CodeEditorDefault, CodeEditorRemoteFile }
 
@@ -139,6 +139,7 @@ function CodeEditorDefault({
   )
   const extensionsAll = useMemo(() => {
     return [
+      EditorView.lineWrapping,
       ...extensionsDefault,
       extensions,
       type === EnumFileExtensions.SQL &&

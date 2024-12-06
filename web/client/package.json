@@ -26,6 +26,7 @@
     "@codemirror/view": "^6.28.1",
     "@headlessui/react": "^1.7.17",
     "@heroicons/react": "^2.0.18",
+    "@lit/react": "^1.0.6",
     "@radix-ui/react-context-menu": "^2.1.4",
     "@radix-ui/react-select": "^1.2.2",
     "@tailwindcss/container-queries": "^0.1.1",
