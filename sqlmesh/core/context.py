@@ -1846,6 +1846,14 @@ class GenericContext(BaseContext, t.Generic[C]):
             external_models_yaml = (
                 path / c.EXTERNAL_MODELS_YAML if not deprecated_yaml.exists() else deprecated_yaml
             )
+
+            external_models_gateway: t.Optional[str] = self.gateway or self.config.default_gateway
+            if not external_models_gateway:
+                # can happen if there was no --gateway defined and the default_gateway is ''
+                # which means that the single gateway syntax is being used which means there is
+                # no named gateway which means we should not stamp `gateway:` on the external models
+                external_models_gateway = None
+
             create_external_models_file(
                 path=external_models_yaml,
                 models=UniqueKeyDict(
@@ -1859,7 +1867,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                 adapter=self.engine_adapter,
                 state_reader=self.state_reader,
                 dialect=config.model_defaults.dialect,
-                gateway=self.gateway,
+                gateway=external_models_gateway,
                 max_workers=self.concurrent_tasks,
                 strict=strict,
             )

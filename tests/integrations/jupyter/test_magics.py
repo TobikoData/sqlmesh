@@ -622,6 +622,7 @@ def test_create_external_models(notebook, loaded_sushi_context):
   columns:
     customer_id: INT
     zip: TEXT
+  gateway: duckdb
 """
     )
 
