@@ -214,7 +214,7 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
 
             return _factory
 
-        return super()._connection_factory
+        return duckdb.connect
 
     @property
     def _cursor_init(self) -> t.Optional[t.Callable[[t.Any], None]]:
