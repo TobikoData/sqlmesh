@@ -165,9 +165,7 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
         cls, values: t.Dict[str, t.Optional[str]]
     ) -> t.Dict[str, t.Optional[str]]:
         if not (values.get("database") or values.get("catalogs")):
-            raise ConfigError(
-                "At least one of `database` or `catalogs` must be specified."
-            )
+            raise ConfigError("At least one of `database` or `catalogs` must be specified.")
         return values
 
     @property
@@ -299,7 +297,7 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
             key = data_file if isinstance(data_file, str) else data_file.path
             BaseDuckDBConnectionConfig._data_file_to_adapter[key] = adapter
         return adapter
-    
+
     def get_catalog(self) -> t.Optional[str]:
         if self.database:
             # Remove `:` from the database name in order to handle if `:memory:` is passed in
@@ -356,7 +354,7 @@ class DuckDBAttachOptions(BaseConfig):
             options.append("READ_ONLY")
         if self.schema_name and self.type == "postgres":
             options.append(f"SCHEMA '{self.schema_name}'")
-        alias_sql += f" AS {alias}" if self.type != "motherduck" else ""
+        alias_sql = f" AS {alias}" if self.type != "motherduck" else ""
         options_sql = f" ({', '.join(options)})" if options else ""
         return f"ATTACH '{self.path}'{alias_sql}{options_sql}"
 
