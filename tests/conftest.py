@@ -19,7 +19,7 @@ from sqlglot.dialects.dialect import DialectType
 from sqlglot.helper import ensure_list
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
-from sqlmesh.core.config import DuckDBConnectionConfig
+from sqlmesh.core.config import BaseDuckDBConnectionConfig
 from sqlmesh.core.context import Context
 from sqlmesh.core.engine_adapter import MSSQLEngineAdapter, SparkEngineAdapter
 from sqlmesh.core.engine_adapter.base import EngineAdapter
@@ -218,7 +218,7 @@ def rescope_global_models(request):
 
 @pytest.fixture(scope="function", autouse=True)
 def rescope_duckdb_classvar(request):
-    DuckDBConnectionConfig._data_file_to_adapter = {}
+    BaseDuckDBConnectionConfig._data_file_to_adapter = {}
     yield
 
 
