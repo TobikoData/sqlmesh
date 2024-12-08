@@ -1139,10 +1139,15 @@ class EvaluationStrategy(abc.ABC):
             name: The name of the target table.
             query_or_df: The query or DataFrame to replace the target table with.
         """
+        # Source columns from the underlying table to prevent unintentional table schema changes during restatement of incremental models.
+        columns_to_types = (
+            model.columns_to_types
+            if (model.is_seed or model.kind.is_full) and model.annotated
+            else self.adapter.columns(name)
+        )
         self.adapter.replace_query(
             name,
             query_or_df,
-            columns_to_types=model.columns_to_types if model.annotated else None,
             table_format=model.table_format,
             storage_format=model.storage_format,
             partitioned_by=model.partitioned_by,
@@ -1151,6 +1156,7 @@ class EvaluationStrategy(abc.ABC):
             table_properties=model.physical_properties,
             table_description=model.description,
             column_descriptions=model.column_descriptions,
+            columns_to_types=columns_to_types,
         )
 
 
@@ -1532,6 +1538,8 @@ class SCDType2Strategy(MaterializableStrategy):
         is_first_insert: bool,
         **kwargs: t.Any,
     ) -> None:
+        # Source columns from the underlying table to prevent unintentional table schema changes during the insert.
+        columns_to_types = self.adapter.columns(table_name)
         if isinstance(model.kind, SCDType2ByTimeKind):
             self.adapter.scd_type_2_by_time(
                 target_table=table_name,
@@ -1543,7 +1551,7 @@ class SCDType2Strategy(MaterializableStrategy):
                 updated_at_col=model.kind.updated_at_name,
                 invalidate_hard_deletes=model.kind.invalidate_hard_deletes,
                 updated_at_as_valid_from=model.kind.updated_at_as_valid_from,
-                columns_to_types=model.columns_to_types,
+                columns_to_types=columns_to_types,
                 table_description=model.description,
                 column_descriptions=model.column_descriptions,
                 truncate=is_first_insert,
@@ -1559,7 +1567,7 @@ class SCDType2Strategy(MaterializableStrategy):
                 check_columns=model.kind.columns,
                 invalidate_hard_deletes=model.kind.invalidate_hard_deletes,
                 execution_time_as_valid_from=model.kind.execution_time_as_valid_from,
-                columns_to_types=model.columns_to_types,
+                columns_to_types=columns_to_types,
                 table_description=model.description,
                 column_descriptions=model.column_descriptions,
                 truncate=is_first_insert,
@@ -1576,6 +1584,8 @@ class SCDType2Strategy(MaterializableStrategy):
         model: Model,
         **kwargs: t.Any,
     ) -> None:
+        # Source columns from the underlying table to prevent unintentional table schema changes during the insert.
+        columns_to_types = self.adapter.columns(table_name)
         if isinstance(model.kind, SCDType2ByTimeKind):
             self.adapter.scd_type_2_by_time(
                 target_table=table_name,
@@ -1586,7 +1596,7 @@ class SCDType2Strategy(MaterializableStrategy):
                 updated_at_col=model.kind.updated_at_name,
                 invalidate_hard_deletes=model.kind.invalidate_hard_deletes,
                 updated_at_as_valid_from=model.kind.updated_at_as_valid_from,
-                columns_to_types=model.columns_to_types,
+                columns_to_types=columns_to_types,
                 table_description=model.description,
                 column_descriptions=model.column_descriptions,
                 **kwargs,
@@ -1599,7 +1609,7 @@ class SCDType2Strategy(MaterializableStrategy):
                 valid_from_col=model.kind.valid_from_name,
                 valid_to_col=model.kind.valid_to_name,
                 check_columns=model.kind.columns,
-                columns_to_types=model.columns_to_types,
+                columns_to_types=columns_to_types,
                 invalidate_hard_deletes=model.kind.invalidate_hard_deletes,
                 execution_time_as_valid_from=model.kind.execution_time_as_valid_from,
                 table_description=model.description,
