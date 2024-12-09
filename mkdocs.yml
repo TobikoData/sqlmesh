@@ -32,7 +32,6 @@ nav:
     - SQLMesh tools:
       - guides/ui.md
       - guides/tablediff.md
-      - guides/observer.md
   - Concepts:
     - concepts/overview.md
     - Development:
@@ -110,7 +109,8 @@ nav:
   #     - cloud/features/scheduler.md
   #     - Observability:
   #       - cloud/observability/monitoring.md
-  #       - "Measures & Dashboards": cloud/observability/measures_dashboards.md
+  #       - cloud/observability/measures.md
+  #       - cloud/observability/custom_dashboards.md
 theme:
   name: material
   logo: _readthedocs/html/sqlmesh.png
