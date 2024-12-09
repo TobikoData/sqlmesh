@@ -168,6 +168,11 @@ def test_gateway_specific_external_models(tmp_path: Path):
 
 
 def test_gateway_specific_external_models_mixed_with_others(tmp_path: Path):
+    def _init_db(ctx: Context):
+        ctx.engine_adapter.execute("create schema landing")
+        ctx.engine_adapter.execute("create table landing.source_table as select 1")
+        ctx.engine_adapter.execute("create schema lake")
+
     gateways = {
         "dev": GatewayConfig(connection=DuckDBConnectionConfig()),
         "prod": GatewayConfig(connection=DuckDBConnectionConfig()),
@@ -192,10 +197,9 @@ def test_gateway_specific_external_models_mixed_with_others(tmp_path: Path):
 
     ctx = Context(paths=[tmp_path], config=config)  # note: No explicitly defined gateway
     assert ctx.gateway is None
+    assert ctx.selected_gateway == "dev"
 
-    ctx.engine_adapter.execute("create schema landing")
-    ctx.engine_adapter.execute("create table landing.source_table as select 1")
-    ctx.engine_adapter.execute("create schema lake")
+    _init_db(ctx)
 
     ctx.load()
     assert len(ctx.models) == 1
@@ -214,8 +218,14 @@ def test_gateway_specific_external_models_mixed_with_others(tmp_path: Path):
     assert '"memory"."landing"."source_table"' in ctx.models
     assert '"memory"."lake"."table"' in ctx.models
 
-    ctx.gateway = "prod"  # explicitly set --gateway prod
-    ctx.create_external_models()
+    # explicitly set --gateway prod
+    prod_ctx = Context(paths=[tmp_path], config=config, gateway="prod")
+    assert prod_ctx.gateway == "prod"
+    assert prod_ctx.selected_gateway == "prod"
+
+    _init_db(prod_ctx)
+
+    prod_ctx.create_external_models()
 
     # there should now be 2 external models with the same name - one with a gateway=dev and one with gateway=prod
     contents = yaml.load(external_models_filename)
@@ -224,9 +234,9 @@ def test_gateway_specific_external_models_mixed_with_others(tmp_path: Path):
     assert contents[0]["name"] == contents[1]["name"]
 
     # check that this doesnt present a problem on load
-    ctx.load()
+    prod_ctx.load()
 
-    external_models = [m for _, m in ctx.models.items() if type(m) == ExternalModel]
+    external_models = [m for _, m in prod_ctx.models.items() if type(m) == ExternalModel]
     assert len(external_models) == 1
     assert external_models[0].name == '"memory"."landing"."source_table"'
     assert external_models[0].gateway == "prod"
