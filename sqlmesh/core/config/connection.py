@@ -354,7 +354,9 @@ class DuckDBAttachOptions(BaseConfig):
             options.append("READ_ONLY")
         if self.schema_name and self.type == "postgres":
             options.append(f"SCHEMA '{self.schema_name}'")
-        alias_sql = f" AS {alias}" if not (self.type == "motherduck" or self.type.startswith("md:")) else ""
+        alias_sql = (
+            f" AS {alias}" if not (self.type == "motherduck" or self.type.startswith("md:")) else ""
+        )
         options_sql = f" ({', '.join(options)})" if options else ""
         return f"ATTACH '{self.path}'{alias_sql}{options_sql}"
 
