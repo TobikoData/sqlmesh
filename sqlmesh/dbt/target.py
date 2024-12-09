@@ -224,6 +224,7 @@ class SnowflakeConfig(TargetConfig):
         private_key_path: Key pair authentication: Path to the private key, used instead of private_key
         private_key_passphrase: Key pair authentication: passphrase used to decrypt private key (if encrypted)
         token: OAuth authentication: The Snowflake OAuth 2.0 access token
+        application: Identifying tag for Snowflake usage patterns
     """
 
     type: t.Literal["snowflake"] = "snowflake"
@@ -245,6 +246,8 @@ class SnowflakeConfig(TargetConfig):
 
     # oauth access token
     token: t.Optional[str] = None
+
+    application: str = 'Tobiko_SQLMesh'
 
     # Optional
     warehouse: t.Optional[str] = None
@@ -296,6 +299,7 @@ class SnowflakeConfig(TargetConfig):
             role=self.role,
             concurrent_tasks=self.threads,
             token=self.token,
+            application=self.application,
             private_key=self.private_key,
             private_key_path=self.private_key_path,
             private_key_passphrase=self.private_key_passphrase,

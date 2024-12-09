@@ -685,7 +685,7 @@ model_defaults:
         assert snowflake_connection.account == "abc123"
         assert snowflake_connection.user == "ABC"
         assert snowflake_connection.password == "XYZ"
-
+        assert snowflake_connection.application == "Tobiko_SQLMesh"
 
 @pytest.mark.slow
 def test_physical_schema_override(copy_to_temp_path: t.Callable) -> None:
