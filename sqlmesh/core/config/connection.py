@@ -349,13 +349,15 @@ class DuckDBAttachOptions(BaseConfig):
         options = []
         # 'duckdb' is actually not a supported type, but we'd like to allow it for
         # fully qualified attach options or integration testing, similar to duckdb-dbt
-        if self.type != "duckdb":
+        if self.type not in ("duckdb", "motherduck"):
             options.append(f"TYPE {self.type.upper()}")
         if self.read_only:
             options.append("READ_ONLY")
         if self.schema_name and self.type == "postgres":
             options.append(f"SCHEMA '{self.schema_name}'")
-        alias_sql = f" AS {alias}" if self.type != "motherduck" else ""
+        alias_sql = (
+            f" AS {alias}" if not (self.type == "motherduck" or self.type.startswith("md:")) else ""
+        )
         options_sql = f" ({', '.join(options)})" if options else ""
         return f"ATTACH '{self.path}'{alias_sql}{options_sql}"
 
