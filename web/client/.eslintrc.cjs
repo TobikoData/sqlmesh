@@ -43,6 +43,7 @@ module.exports = {
   },
   ignorePatterns: [
     'src/api/client.ts',
+    'src/utils/tbk-components.js',
     'test-results',
     'playwright',
     'playwright-report',
