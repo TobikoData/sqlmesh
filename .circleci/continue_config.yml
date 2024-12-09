@@ -339,16 +339,16 @@ workflows:
           matrix:
             parameters:
               engine:
-                #- snowflake
-                #- databricks
+                - snowflake
+                - databricks
                 - redshift
-                #- bigquery
-                #- clickhouse-cloud
-                #- athena
-          #filters:
-          # branches:
-          #   only:
-          #     - main
+                - bigquery
+                - clickhouse-cloud
+                - athena
+          filters:
+           branches:
+             only:
+               - main
       - trigger_private_tests:
           requires:
             - style_and_slow_tests
