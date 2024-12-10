@@ -193,6 +193,9 @@ spark-test: engine-spark-up
 trino-test: engine-trino-up
 	pytest -n auto -x -m "trino or trino_iceberg or trino_delta" --retries 3 --junitxml=test-results/junit-trino.xml
 
+risingwave-test: engine-risingwave-up
+	pytest -n auto -x -m "risingwave" --retries 3 --junitxml=test-results/junit-risingwave.xml
+
 #################
 # Cloud Engines #
 #################
