@@ -691,16 +691,25 @@ def test_model_pre_post_statements():
     assert model.render_post_statements() == expected_post
     assert "exp" in model.python_env
 
+    @macro()
+    def this_model_is_quoted_table(evaluator):
+        this_model = evaluator.locals.get("this_model")
+        return not this_model or (
+            isinstance(this_model, exp.Table)
+            and this_model.sql(dialect=evaluator.dialect, comments=False) == '"db"."table"'
+        )
+
     expressions = d.parse(
         """
         MODEL (name db.table);
 
-        SELECT 1 AS col;
+        SELECT 1 AS col, @this_model_is_quoted_table() AS this_model_is_quoted_table;
 
         CREATE TABLE db.other AS SELECT * FROM @this_model;
         """
     )
     model = load_sql_based_model(expressions)
+    assert str(model.render_query()) == 'SELECT 1 AS "col", TRUE AS "this_model_is_quoted_table"'
 
     expected_post = d.parse('CREATE TABLE "db"."other" AS SELECT * FROM "db"."table" AS "table";')
     assert model.render_post_statements() == expected_post
