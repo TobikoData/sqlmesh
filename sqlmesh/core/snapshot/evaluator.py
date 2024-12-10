@@ -65,7 +65,7 @@ from sqlmesh.utils.concurrency import (
     concurrent_apply_to_snapshots,
     concurrent_apply_to_values,
 )
-from sqlmesh.utils.date import TimeLike, now
+from sqlmesh.utils.date import TimeLike, now, time_like_to_str
 from sqlmesh.utils.errors import ConfigError, SQLMeshError
 
 if sys.version_info >= (3, 12):
@@ -592,7 +592,12 @@ class SnapshotEvaluator:
                     execution_time=execution_time,
                 )
             else:
-                logger.info("Inserting batch (%s, %s) into %s'", start, end, table_name)
+                logger.info(
+                    "Inserting batch (%s, %s) into %s'",
+                    time_like_to_str(start),
+                    time_like_to_str(end),
+                    table_name,
+                )
                 evaluation_strategy.insert(
                     table_name=table_name,
                     query_or_df=query_or_df,
