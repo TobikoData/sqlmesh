@@ -40,7 +40,7 @@ Ready to unlock a faster, smarter, and more efficient way to manage your data pi
 
 Discover how Tobiko's managed SQLMesh platform will empower your team to scale effortlessly, optimize costs, and deliver accurate data faster — all while freeing your team from infrastructure headaches.
 
-Whether you're a data engineer, developer, or decision-maker, Tobiko Cloud offers the tools and insights to elevate your data strategy. Don’t wait — let Tobiko transform the way you work with data!
+Whether you're a data engineer, or decision-maker, Tobiko Cloud gives you data transformation without the waste. Let's talk!
 
 <div class="calendly-inline-widget" data-url="https://calendly.com/d/cp8k-4jm-m6p/tobiko-cloud-intros" style="min-width:320px;height:630px;"></div>
 <script type="text/javascript" src="https://assets.calendly.com/assets/external/widget.js"></script>
