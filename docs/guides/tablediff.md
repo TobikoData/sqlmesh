@@ -162,7 +162,7 @@ The output matches, with the exception of the column labels in the `COMMON ROWS 
 
 !!! info "Tobiko Cloud Feature"
 
-    Cross-database table diffing is available in [Tobiko Cloud](./observer.md#installation).
+    Cross-database table diffing is available in [Tobiko Cloud](../cloud/cloud_index.md).
 
 SQLMesh executes a project's models with a single database system, specified as a [gateway](../guides/connections.md#overview) in the project configuration.
 
