@@ -904,6 +904,46 @@ GROUP BY
   id
 ```
 
+### Reset SCD Type 2 Model (clearing history)
+
+SCD Type 2 models are designed by default to protect the data that has been captured because it is not possible to recreate the history once it has been lost. 
+However, there are cases where you may want to clear the history and start fresh.
+For this use use case you will want to start by setting `disable_restatement` to `false` in the model definition.
+
+```sql linenums="1" hl_lines="5"
+MODEL (
+  name db.menu_items,
+  kind SCD_TYPE_2_BY_TIME (
+    unique_key id,
+    disable_restatement false
+  )
+);
+```
+
+Plan/apply this change to production. 
+Then you will want to [restate the model](../plans.md#restatement-plans).
+    
+```bash
+sqlmesh plan --restate-model db.menu_items
+```
+
+!!! warning
+
+    This will remove the historical data on the model which in most situations cannot be recovered.
+
+Once complete you will want to remove `disable_restatement` on the model definition which will set it back to `true` and prevent accidental data loss.
+
+```sql linenums="1"
+MODEL (
+  name db.menu_items,
+  kind SCD_TYPE_2_BY_TIME (
+    unique_key id,
+  )
+);
+```
+
+Plan/apply this change to production.
+
 ## EXTERNAL
 
 The EXTERNAL model kind is used to specify [external models](./external_models.md) that store metadata about external tables. External models are special; they are not specified in .sql files like the other model kinds. They are optional but useful for propagating column and type information for external tables queried in your SQLMesh project.
