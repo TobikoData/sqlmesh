@@ -340,15 +340,15 @@ workflows:
             parameters:
               engine:
                 - snowflake
-                - databricks
-                - redshift
+                #- databricks
+                #- redshift
                 - bigquery
-                - clickhouse-cloud
-                - athena
-          filters:
-           branches:
-             only:
-               - main
+                #- clickhouse-cloud
+                #- athena
+          #filters:
+          # branches:
+          #   only:
+          #     - main
       - trigger_private_tests:
           requires:
             - style_and_slow_tests

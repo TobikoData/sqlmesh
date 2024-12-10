@@ -18,6 +18,11 @@ from sqlmesh.utils import AttributeDict
 pytestmark = [pytest.mark.bigquery, pytest.mark.engine]
 
 
+@pytest.fixture
+def adapter(make_mocked_engine_adapter: t.Callable) -> BigQueryEngineAdapter:
+    return make_mocked_engine_adapter(BigQueryEngineAdapter)
+
+
 def test_insert_overwrite_by_time_partition_query(
     make_mocked_engine_adapter: t.Callable, mocker: MockerFixture
 ):
@@ -893,3 +898,41 @@ def test_nested_fields_update(make_mocked_engine_adapter: t.Callable, mocker: Mo
         bigquery.SchemaField("details", "STRING", "REPEATED"),
     ]
     assert adapter._build_nested_fields(current_schema, new_nested_fields) == expected
+
+
+def test_get_alter_expressions_includes_catalog(
+    adapter: BigQueryEngineAdapter, mocker: MockerFixture
+):
+    adapter._default_catalog = "test_project"
+
+    columns_mock = mocker.patch(
+        "sqlmesh.core.engine_adapter.bigquery.BigQueryEngineAdapter.columns"
+    )
+    columns_mock.return_value = {
+        "a": exp.DataType.build("int"),
+    }
+
+    get_data_objects_mock = mocker.patch(
+        "sqlmesh.core.engine_adapter.bigquery.BigQueryEngineAdapter.get_data_objects"
+    )
+    get_data_objects_mock.return_value = []
+
+    adapter.get_alter_expressions("catalog1.foo.bar", "catalog2.bar.bing")
+
+    assert get_data_objects_mock.call_count == 2
+
+    schema, tables = get_data_objects_mock.call_args_list[0][0]
+    assert isinstance(schema, exp.Table)
+    assert isinstance(tables, set)
+    assert schema.catalog == "catalog1"
+    assert schema.db == "foo"
+    assert schema.sql(dialect="bigquery") == "catalog1.foo"
+    assert tables == {"bar"}
+
+    schema, tables = get_data_objects_mock.call_args_list[1][0]
+    assert isinstance(schema, exp.Table)
+    assert isinstance(tables, set)
+    assert schema.catalog == "catalog2"
+    assert schema.db == "bar"
+    assert schema.sql(dialect="bigquery") == "catalog2.bar"
+    assert tables == {"bing"}
