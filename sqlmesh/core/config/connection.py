@@ -316,7 +316,7 @@ class MotherDuckConnectionConfig(BaseDuckDBConnectionConfig):
         token: The optional MotherDuck token. If not specified, the user will be prompted to login with their web browser.
     """
 
-    database: str
+    database: t.Optional[str] = None
     token: t.Optional[str] = None
 
     type_: t.Literal["motherduck"] = Field(alias="type", default="motherduck")
@@ -330,7 +330,7 @@ class MotherDuckConnectionConfig(BaseDuckDBConnectionConfig):
         """kwargs that are for execution config only"""
         from sqlmesh import __version__
 
-        connection_str = f"md:{self.database}"
+        connection_str = f"md:{self.database or ''}"
         if self.token:
             connection_str += f"?motherduck_token={self.token}"
         return {
@@ -356,7 +356,7 @@ class DuckDBAttachOptions(BaseConfig):
         if self.schema_name and self.type == "postgres":
             options.append(f"SCHEMA '{self.schema_name}'")
         alias_sql = (
-            f" AS {alias}" if not (self.type == "motherduck" or self.type.startswith("md:")) else ""
+            f" AS {alias}" if not (self.type == "motherduck" or self.path.startswith("md:")) else ""
         )
         options_sql = f" ({', '.join(options)})" if options else ""
         return f"ATTACH '{self.path}'{alias_sql}{options_sql}"
