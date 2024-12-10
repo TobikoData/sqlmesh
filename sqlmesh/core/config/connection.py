@@ -165,8 +165,10 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
     def _validate_database_catalogs(
         cls, values: t.Dict[str, t.Optional[str]]
     ) -> t.Dict[str, t.Optional[str]]:
-        if not (values.get("database") or values.get("catalogs")):
-            raise ConfigError("At least one of `database` or `catalogs` must be specified.")
+        if values.get("database") and values.get("catalogs"):
+            raise ConfigError(
+                "Cannot specify both `database` and `catalogs`. Define all your catalogs in `catalogs` and have the first entry be the default catalog"
+            )
         return values
 
     @property
@@ -302,7 +304,7 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
     def get_catalog(self) -> t.Optional[str]:
         if self.database:
             # Remove `:` from the database name in order to handle if `:memory:` is passed in
-            return pathlib.Path(self.database.replace(":", "")).stem
+            return pathlib.Path(self.database.replace(":memory:", "memory")).stem
         if self.catalogs:
             return list(self.catalogs)[0]
         return None
@@ -312,11 +314,9 @@ class MotherDuckConnectionConfig(BaseDuckDBConnectionConfig):
     """Configuration for the MotherDuck connection.
 
     Args:
-        database: The database name.
         token: The optional MotherDuck token. If not specified, the user will be prompted to login with their web browser.
     """
 
-    database: t.Optional[str] = None
     token: t.Optional[str] = None
 
     type_: t.Literal["motherduck"] = Field(alias="type", default="motherduck")
@@ -356,6 +356,7 @@ class DuckDBAttachOptions(BaseConfig):
         if self.schema_name and self.type == "postgres":
             options.append(f"SCHEMA '{self.schema_name}'")
         alias_sql = (
+            # MotherDuck does not support aliasing
             f" AS {alias}" if not (self.type == "motherduck" or self.path.startswith("md:")) else ""
         )
         options_sql = f" ({', '.join(options)})" if options else ""
@@ -363,28 +364,9 @@ class DuckDBAttachOptions(BaseConfig):
 
 
 class DuckDBConnectionConfig(BaseDuckDBConnectionConfig):
-    """Configuration for the DuckDB connection.
-
-    Args:
-        database: The optional database name. If not specified, the in-memory database will be used.
-        catalogs: Key is the name of the catalog and value is the path.
-    """
-
-    database: t.Optional[str] = None
-    catalogs: t.Optional[t.Dict[str, t.Union[str, DuckDBAttachOptions]]] = None
+    """Configuration for the DuckDB connection."""
 
     type_: t.Literal["duckdb"] = Field(alias="type", default="duckdb")
-
-    @model_validator(mode="before")
-    @model_validator_v1_args
-    def _validate_database_catalogs(
-        cls, values: t.Dict[str, t.Optional[str]]
-    ) -> t.Dict[str, t.Optional[str]]:
-        if values.get("database") and values.get("catalogs"):
-            raise ConfigError(
-                "Cannot specify both `database` and `catalogs`. Define all your catalogs in `catalogs` and have the first entry be the default catalog"
-            )
-        return values
 
     @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
