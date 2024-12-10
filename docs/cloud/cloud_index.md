@@ -28,7 +28,7 @@ Here’s a comparison:
 
 4. **Efficiency**: SQLMesh's built-in features like virtual data environments and automatic change classification reduce computational costs and improve processing speeds.
 
-    Tobiko Cloud's enhanced change classification identifies even more scenarios when code changes don't require rerunning downstream models.
+    Tobiko Cloud's enhanced change classification identifies even more scenarios where code changes don't require rerunning downstream models.
 
 4. **Cost monitoring**: Tobiko Cloud automatically tracks costs per model execution for BigQuery and Snowflake.
 
