@@ -8,7 +8,11 @@ MODEL (
   audits (
     not_null(columns := (waiter_id)),
     forall(criteria := (LENGTH(waiter_name) > 0))
-  )
+  ),
+  signals (
+    test_signal(arg := 1)
+  ),
+
 );
 
 JINJA_QUERY_BEGIN;
