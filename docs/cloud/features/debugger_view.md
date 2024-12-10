@@ -27,6 +27,8 @@ The rest of this page describes those tabs.
 
 > Pro tip: you can toggle whether timestamps are in UTC or your local timezone in the page's upper right corner.
 
+## Debugger View Tabs
+
 ### Overview
 
 See a summary of the model's characteristics and behavior during current and historical runs.

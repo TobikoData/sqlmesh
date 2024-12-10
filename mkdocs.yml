@@ -99,12 +99,12 @@ nav:
     - Configuration:
       - reference/configuration.md
       - reference/model_configuration.md
-  # - Tobiko Cloud:
-  #   - "Overview": cloud/cloud_index.md
-  #   - "Quickstart": cloud/tcloud_getting_started.md
-  #   - Cloud Features:
+  - Tobiko Cloud:
+    - "Overview": cloud/cloud_index.md
+    - "Getting Started": cloud/tcloud_getting_started.md
+    - Cloud Features:
   #     - "Alerts & Notifications": cloud/features/alerts_notifications.md
-  #     - cloud/features/debugger_view.md
+      - cloud/features/debugger_view.md
   #     - cloud/features/data_catalog.md
   #     - cloud/features/model_freshness.md
   #     - cloud/features/scheduler.md
@@ -134,6 +134,7 @@ theme:
   features:
     - content.tabs.link
     - content.code.copy
+    - navigation.expand ## expands navigation bar by default
     - navigation.tracking
     - navigation.tabs
     - navigation.sections
