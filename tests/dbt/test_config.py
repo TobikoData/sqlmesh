@@ -472,7 +472,7 @@ def test_duckdb_threads(tmp_path):
 
 
 def test_snowflake_config():
-    _test_warehouse_config(
+    config = _test_warehouse_config(
         """
         sushi:
           target: dev
@@ -494,6 +494,8 @@ def test_snowflake_config():
         "outputs",
         "dev",
     )
+    sqlmesh_config = config.to_sqlmesh()
+    assert sqlmesh_config.application == "Tobiko_SQLMesh"
 
 
 def test_snowflake_config_private_key_path():
