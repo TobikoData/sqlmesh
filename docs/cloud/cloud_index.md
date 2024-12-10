@@ -10,6 +10,8 @@ Tobiko Cloud is designed for companies who want to:
 - Rapidly detect and debug problems with their pipelines
 - Monitor cloud costs over time, by model (BigQuery and Snowflake engines only)
 
+![Tobiko Cloud](./cloud_index/tobiko-cloud.png)
+
 ## How is Tobiko Cloud different from SQLMesh?
 
 Tobiko Cloud complements SQLMesh, supporting companies that need enterprise-level features like scalability, observability, and cost optimization.
