@@ -402,6 +402,49 @@ Some properties are only available in specific model kinds - see the [model conf
 ### disable_restatement
 :   Set this to true to indicate that [data restatement](../plans.md#restatement-plans) is disabled for this model.
 
+### auto_restatement_cron
+:   A cron expression that determines when SQLMesh should automatically restate this model. Restatement means re-evaluating either a number of last intervals (controlled by [`auto_restatement_intervals`](#auto_restatement_intervals)) for model kinds that support it or the entire model for model kinds that don't. Downstream models that depend on this model will also be restated. The auto-restatement is only applied when running the `sqlmesh run` command against the production environment.
+
+    A common use case for auto-restatement is to periodically re-evaluate a model (less frequently than the model's cron) to account for late-arriving data or dimension changes. However, relying on this feature is generally not recommended, as it often indicates an underlying issue with the data model or dependency chain. Instead, users should prefer setting the [`lookback`](#lookback) property to handle late-arriving data more effectively.
+
+    Unlike the [`lookback`](#lookback) property, which only controls the time range of data scanned, auto-restatement rewrites all previously processed data for this model in the target table.
+
+    For model kinds that don't support [`auto_restatement_intervals`](#auto_restatement_intervals) the table will be re-created from scratch.
+
+    Models with [`disable_restatement`](#disable_restatement) set to `true` will not be restated automatically even if this property is set.
+
+    **NOTE**: Models with this property set can only be [previewed](../plans.md#data-preview-for-forward-only-changes) in development environments, which means that the data computed in those environments will not be reused in production.
+
+    ```sql linenums="1" hl_lines="6"
+    MODEL (
+      name test_db.national_holidays,
+      cron '@daily',
+      kind INCREMENTAL_BY_UNIQUE_KEY (
+        unique_key key,
+        auto_restatement_cron '@weekly',
+      )
+    );
+    ```
+
+### auto_restatement_intervals
+:   The number of last intervals to restate automatically. This is only applied in conjunction with [`auto_restatement_cron`](#auto_restatement_cron).
+
+    If not specified, the entire model will be restated.
+
+    This property is only supported for the `INCREMENTAL_BY_TIME_RANGE` model kind.
+
+    ```sql linenums="1" hl_lines="7"
+    MODEL (
+      name test_db.national_holidays,
+      cron '@daily',
+      kind INCREMENTAL_BY_TIME_RANGE (
+        time_column event_ts,
+        auto_restatement_cron '@weekly',
+        auto_restatement_intervals 7, -- automatically restate the last 7 days of data
+      )
+    );
+    ```
+
 ## Macros
 Macros can be used for passing in parameterized arguments such as dates, as well as for making SQL less repetitive. By default, SQLMesh provides several predefined macro variables that can be used. Macros are used by prefixing with the `@` symbol. For more information, refer to [macros](../macros/overview.md).
 

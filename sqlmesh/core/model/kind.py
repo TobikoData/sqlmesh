@@ -22,6 +22,7 @@ from sqlmesh.utils.pydantic import (
     SQLGlotListOfFields,
     SQLGlotPositiveInt,
     SQLGlotString,
+    SQLGlotCron,
     column_validator,
     field_validator,
     field_validator_v1_args,
@@ -325,6 +326,7 @@ kind_dialect_validator = field_validator("dialect", mode="before", always=True)(
 
 class _Incremental(_ModelKind):
     on_destructive_change: OnDestructiveChange = OnDestructiveChange.ERROR
+    auto_restatement_cron: t.Optional[SQLGlotCron] = None
 
     _on_destructive_change_validator = on_destructive_change_validator
 
@@ -333,6 +335,7 @@ class _Incremental(_ModelKind):
         return [
             *super().metadata_hash_values,
             str(self.on_destructive_change),
+            self.auto_restatement_cron,
         ]
 
     def to_expression(
@@ -341,8 +344,11 @@ class _Incremental(_ModelKind):
         return super().to_expression(
             expressions=[
                 *(expressions or []),
-                _property(
-                    "on_destructive_change", exp.Literal.string(self.on_destructive_change.value)
+                *_properties(
+                    {
+                        "on_destructive_change": self.on_destructive_change.value,
+                        "auto_restatement_cron": self.auto_restatement_cron,
+                    }
                 ),
             ],
         )
@@ -399,6 +405,7 @@ class IncrementalByTimeRangeKind(_IncrementalBy):
         ModelKindName.INCREMENTAL_BY_TIME_RANGE
     )
     time_column: TimeColumn
+    auto_restatement_intervals: t.Optional[SQLGlotPositiveInt] = None
 
     _time_column_validator = TimeColumn.validator()
 
@@ -409,12 +416,26 @@ class IncrementalByTimeRangeKind(_IncrementalBy):
             expressions=[
                 *(expressions or []),
                 self.time_column.to_property(kwargs.get("dialect") or ""),
+                *(
+                    [_property("auto_restatement_intervals", self.auto_restatement_intervals)]
+                    if self.auto_restatement_intervals is not None
+                    else []
+                ),
             ]
         )
 
     @property
     def data_hash_values(self) -> t.List[t.Optional[str]]:
         return [*super().data_hash_values, gen(self.time_column.column), self.time_column.format]
+
+    @property
+    def metadata_hash_values(self) -> t.List[t.Optional[str]]:
+        return [
+            *super().metadata_hash_values,
+            str(self.auto_restatement_intervals)
+            if self.auto_restatement_intervals is not None
+            else None,
+        ]
 
 
 class IncrementalByUniqueKeyKind(_IncrementalBy):
@@ -807,6 +828,8 @@ class CustomKind(_ModelKind):
     batch_size: t.Optional[SQLGlotPositiveInt] = None
     batch_concurrency: t.Optional[SQLGlotPositiveInt] = None
     lookback: t.Optional[SQLGlotPositiveInt] = None
+    auto_restatement_cron: t.Optional[SQLGlotCron] = None
+    auto_restatement_intervals: t.Optional[SQLGlotPositiveInt] = None
 
     _properties_validator = properties_validator
 
@@ -844,6 +867,10 @@ class CustomKind(_ModelKind):
             str(self.batch_concurrency) if self.batch_concurrency is not None else None,
             str(self.forward_only),
             str(self.disable_restatement),
+            self.auto_restatement_cron,
+            str(self.auto_restatement_intervals)
+            if self.auto_restatement_intervals is not None
+            else None,
         ]
 
     def to_expression(
@@ -861,6 +888,8 @@ class CustomKind(_ModelKind):
                         "batch_size": self.batch_size,
                         "batch_concurrency": self.batch_concurrency,
                         "lookback": self.lookback,
+                        "auto_restatement_cron": self.auto_restatement_cron,
+                        "auto_restatement_intervals": self.auto_restatement_intervals,
                     }
                 ),
             ],

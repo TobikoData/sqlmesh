@@ -374,6 +374,19 @@ def list_of_columns_or_star_validator(
     return t.cast(t.List[exp.Column], expressions)
 
 
+def cron_validator(v: t.Any) -> str:
+    if isinstance(v, exp.Expression):
+        v = v.name
+
+    from croniter import CroniterBadCronError, croniter
+
+    try:
+        croniter(v)
+    except CroniterBadCronError:
+        raise ValueError(f"Invalid cron expression '{v}'")
+    return v
+
+
 if t.TYPE_CHECKING:
     SQLGlotListOfStrings = t.List[str]
     SQLGlotString = str
@@ -382,6 +395,7 @@ if t.TYPE_CHECKING:
     SQLGlotColumn = exp.Column
     SQLGlotListOfFields = t.List[exp.Expression]
     SQLGlotListOfColumnsOrStar = t.Union[t.List[exp.Column], exp.Star]
+    SQLGlotCron = str
 elif PYDANTIC_MAJOR_VERSION >= 2:
     from pydantic.functional_validators import BeforeValidator  # type: ignore
 
@@ -396,6 +410,7 @@ elif PYDANTIC_MAJOR_VERSION >= 2:
     SQLGlotListOfColumnsOrStar = t.Annotated[
         t.Union[t.List[exp.Column], exp.Star], BeforeValidator(list_of_columns_or_star_validator)
     ]
+    SQLGlotCron = t.Annotated[str, BeforeValidator(cron_validator)]
 else:
 
     class PydanticTypeProxy(t.Generic[T]):
@@ -425,3 +440,6 @@ else:
 
     class SQLGlotListOfColumnsOrStar(PydanticTypeProxy[t.Union[exp.Star, t.List[exp.Column]]]):
         validate = list_of_columns_or_star_validator
+
+    class SQLGlotCron(PydanticTypeProxy[str]):
+        validate = cron_validator

@@ -15,6 +15,7 @@ from sqlmesh.core.snapshot.definition import (
     SnapshotNameVersionLike as SnapshotNameVersionLike,
     SnapshotTableCleanupTask as SnapshotTableCleanupTask,
     SnapshotTableInfo as SnapshotTableInfo,
+    apply_auto_restatements as apply_auto_restatements,
     earliest_start_date as earliest_start_date,
     fingerprint_from_node as fingerprint_from_node,
     has_paused_forward_only as has_paused_forward_only,

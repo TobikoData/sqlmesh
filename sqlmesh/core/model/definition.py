@@ -30,12 +30,13 @@ from sqlmesh.core.model.common import (
     parse_dependencies,
     single_value_or_tuple,
 )
-from sqlmesh.core.model.kind import ModelKindName, SeedKind, ModelKind, FullKind, create_model_kind
 from sqlmesh.core.model.meta import ModelMeta, FunctionCall
+from sqlmesh.core.model.kind import ModelKindName, SeedKind, ModelKind, FullKind, create_model_kind
 from sqlmesh.core.model.seed import CsvSeedReader, Seed, create_seed
 from sqlmesh.core.renderer import ExpressionRenderer, QueryRenderer
 from sqlmesh.core.signal import SignalRegistry
 from sqlmesh.utils import columns_to_types_all_known, str_to_bool, UniqueKeyDict
+from sqlmesh.utils.cron import CroniterCache
 from sqlmesh.utils.date import TimeLike, make_inclusive, to_datetime, to_time_column
 from sqlmesh.utils.errors import ConfigError, SQLMeshError, raise_config_error
 from sqlmesh.utils.hashing import hash_data
@@ -769,6 +770,20 @@ class _Model(ModelMeta, frozen=True):
     @property
     def disable_restatement(self) -> bool:
         return getattr(self.kind, "disable_restatement", False)
+
+    @property
+    def auto_restatement_intervals(self) -> t.Optional[int]:
+        return getattr(self.kind, "auto_restatement_intervals", None)
+
+    @property
+    def auto_restatement_cron(self) -> t.Optional[str]:
+        return getattr(self.kind, "auto_restatement_cron", None)
+
+    def auto_restatement_croniter(self, value: TimeLike) -> CroniterCache:
+        cron = self.auto_restatement_cron
+        if cron is None:
+            raise SQLMeshError("Auto restatement cron is not set.")
+        return CroniterCache(cron, value)
 
     @property
     def wap_supported(self) -> bool:

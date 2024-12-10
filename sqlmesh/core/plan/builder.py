@@ -131,7 +131,9 @@ class PlanBuilder:
         self._choices: t.Dict[SnapshotId, SnapshotChangeCategory] = {}
 
         self._start = start
-        if not self._start and self._forward_only_preview_needed:
+        if not self._start and (
+            self._forward_only_preview_needed or self._auto_restatement_preview_needed
+        ):
             self._start = default_start or yesterday_ds()
 
         self._plan_id: str = random_id()
@@ -673,8 +675,25 @@ class PlanBuilder:
                 self._enable_preview
                 and any(
                     snapshot.model.forward_only
-                    for snapshot, _ in self._context_diff.modified_snapshots.values()
+                    for snapshot in self._modified_and_added_snapshots
                     if snapshot.is_model
                 )
             )
         )
+
+    @cached_property
+    def _auto_restatement_preview_needed(self) -> bool:
+        return self._is_dev and any(
+            snapshot.model.auto_restatement_cron is not None
+            for snapshot in self._modified_and_added_snapshots
+            if snapshot.is_model
+        )
+
+    @cached_property
+    def _modified_and_added_snapshots(self) -> t.List[Snapshot]:
+        return [
+            snapshot
+            for snapshot in self._context_diff.snapshots.values()
+            if snapshot.name in self._context_diff.modified_snapshots
+            or snapshot.snapshot_id in self._context_diff.added
+        ]

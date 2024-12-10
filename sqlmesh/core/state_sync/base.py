@@ -17,6 +17,7 @@ from sqlmesh.core.snapshot import (
     SnapshotInfoLike,
     SnapshotTableCleanupTask,
     SnapshotTableInfo,
+    SnapshotNameVersion,
 )
 from sqlmesh.core.snapshot.definition import Interval, SnapshotIntervals
 from sqlmesh.utils import major_minor
@@ -170,6 +171,16 @@ class StateReader(abc.ABC):
     @abc.abstractmethod
     def state_type(self) -> str:
         """Returns the type of state sync."""
+
+    @abc.abstractmethod
+    def update_auto_restatements(
+        self, next_auto_restatement_ts: t.Dict[SnapshotNameVersion, t.Optional[int]]
+    ) -> None:
+        """Updates the next auto restatement timestamp for the snapshots.
+
+        Args:
+            next_auto_restatement_ts: A dictionary of snapshot name / version pairs to the next auto restatement timestamp.
+        """
 
     def get_versions(self, validate: bool = True) -> Versions:
         """Get the current versions of the SQLMesh schema and libraries.

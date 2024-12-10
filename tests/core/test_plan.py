@@ -2549,7 +2549,6 @@ def test_plan_start_when_preview_enabled(make_snapshot, mocker: MockerFixture):
 
     default_start_for_preview = "2024-06-09"
 
-    # When a model is added SQLMesh should not consider the backfill to be a preview.
     plan_builder = PlanBuilder(
         context_diff,
         DuckDBEngineAdapter.SCHEMA_DIFFER,
@@ -2557,7 +2556,7 @@ def test_plan_start_when_preview_enabled(make_snapshot, mocker: MockerFixture):
         is_dev=True,
         enable_preview=True,
     )
-    assert plan_builder.build().start == to_timestamp(model_start)
+    assert plan_builder.build().start == default_start_for_preview
 
     # When a model is modified then the backfill should be a preview.
     snapshot = make_snapshot(model)
