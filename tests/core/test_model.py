@@ -691,29 +691,6 @@ def test_model_pre_post_statements():
     assert model.render_post_statements() == expected_post
     assert "exp" in model.python_env
 
-    @macro()
-    def this_model_is_quoted_table(evaluator):
-        this_model = evaluator.locals.get("this_model")
-        return not this_model or (
-            isinstance(this_model, exp.Table)
-            and this_model.sql(dialect=evaluator.dialect, comments=False) == '"db"."table"'
-        )
-
-    expressions = d.parse(
-        """
-        MODEL (name db.table);
-
-        SELECT 1 AS col, @this_model_is_quoted_table() AS this_model_is_quoted_table;
-
-        CREATE TABLE db.other AS SELECT * FROM @this_model;
-        """
-    )
-    model = load_sql_based_model(expressions)
-    assert str(model.render_query()) == 'SELECT 1 AS "col", TRUE AS "this_model_is_quoted_table"'
-
-    expected_post = d.parse('CREATE TABLE "db"."other" AS SELECT * FROM "db"."table" AS "table";')
-    assert model.render_post_statements() == expected_post
-
 
 def test_seed_hydration():
     expressions = d.parse(
@@ -4961,6 +4938,57 @@ def test_this_model() -> None:
             snapshots={snapshot.name: snapshot},
         ).sql(dialect="bigquery")
         == f"SELECT '`sqlmesh__project-1`.`project_1__table__{snapshot.version}`' AS `x`"
+    )
+
+    @macro()
+    def this_model_resolves_to_quoted_table(evaluator):
+        this_model = evaluator.locals.get("this_model")
+        if not this_model:
+            return True
+
+        this_snapshot = evaluator.get_snapshot("db.table")
+        if this_snapshot and this_snapshot.version:
+            # If the table wasn't quoted, we'd break the `sqlmesh_DB` reference by
+            # normalizing it twice
+            expected_name = f'"sqlmesh__DB"."DB__TABLE__{this_snapshot.version}"'
+        else:
+            expected_name = '"DB"."TABLE"'
+
+        return not this_model or (
+            isinstance(this_model, exp.Table)
+            and this_model.sql(dialect=evaluator.dialect, comments=False) == expected_name
+        )
+
+    expressions = d.parse(
+        """
+        MODEL (name db.table, dialect snowflake);
+
+        SELECT
+          1 AS col,
+          @this_model_resolves_to_quoted_table() AS this_model_resolves_to_quoted_table;
+
+        CREATE TABLE db.other AS SELECT * FROM @this_model AS x;
+        """
+    )
+    model = load_sql_based_model(expressions)
+
+    expected_post = d.parse('CREATE TABLE "DB"."OTHER" AS SELECT * FROM "DB"."TABLE" AS "X";')
+    assert model.render_post_statements() == expected_post
+
+    snapshot = Snapshot.from_node(model, nodes={})
+    assert (
+        model.render_query_or_raise(snapshots={snapshot.name: snapshot}, start="2020-01-01").sql(
+            dialect="snowflake"
+        )
+        == 'SELECT 1 AS "COL", TRUE AS "THIS_MODEL_RESOLVES_TO_QUOTED_TABLE"'
+    )
+
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    assert (
+        model.render_query_or_raise(snapshots={snapshot.name: snapshot}, start="2021-01-01").sql(
+            dialect="snowflake"
+        )
+        == 'SELECT 1 AS "COL", TRUE AS "THIS_MODEL_RESOLVES_TO_QUOTED_TABLE"'
     )
 
 
