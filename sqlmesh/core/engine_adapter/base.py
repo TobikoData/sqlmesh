@@ -1337,20 +1337,13 @@ class EngineAdapter:
         target_table: TableName,
         query: Query,
         on: exp.Expression,
-        match_expressions: t.List[exp.When],
+        whens: exp.Whens,
     ) -> None:
         this = exp.alias_(exp.to_table(target_table), alias=MERGE_TARGET_ALIAS, table=True)
         using = exp.alias_(
             exp.Subquery(this=query), alias=MERGE_SOURCE_ALIAS, copy=False, table=True
         )
-        self.execute(
-            exp.Merge(
-                this=this,
-                using=using,
-                on=on,
-                expressions=match_expressions,
-            )
-        )
+        self.execute(exp.Merge(this=this, using=using, on=on, whens=whens))
 
     def scd_type_2_by_time(
         self,
@@ -1807,7 +1800,7 @@ class EngineAdapter:
         source_table: QueryOrDF,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
         unique_key: t.Sequence[exp.Expression],
-        when_matched: t.Optional[t.Union[exp.When, t.List[exp.When]]] = None,
+        when_matched: t.Optional[exp.Whens] = None,
     ) -> None:
         source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
             source_table, columns_to_types, target_table=target_table
@@ -1820,17 +1813,23 @@ class EngineAdapter:
             )
         )
         if not when_matched:
-            when_matched = exp.When(
-                matched=True,
-                source=False,
-                then=exp.Update(
-                    expressions=[
-                        exp.column(col, MERGE_TARGET_ALIAS).eq(exp.column(col, MERGE_SOURCE_ALIAS))
-                        for col in columns_to_types
-                    ],
+            when_matched = exp.Whens()
+            when_matched.append(
+                "expressions",
+                exp.When(
+                    matched=True,
+                    source=False,
+                    then=exp.Update(
+                        expressions=[
+                            exp.column(col, MERGE_TARGET_ALIAS).eq(
+                                exp.column(col, MERGE_SOURCE_ALIAS)
+                            )
+                            for col in columns_to_types
+                        ],
+                    ),
                 ),
             )
-        when_matched = ensure_list(when_matched)
+
         when_not_matched = exp.When(
             matched=False,
             source=False,
@@ -1841,14 +1840,15 @@ class EngineAdapter:
                 ),
             ),
         )
-        match_expressions = when_matched + [when_not_matched]
+        when_matched.append("expressions", when_not_matched)
+
         for source_query in source_queries:
             with source_query as query:
                 self._merge(
                     target_table=target_table,
                     query=query,
                     on=on,
-                    match_expressions=match_expressions,
+                    whens=when_matched,
                 )
 
     def rename_table(

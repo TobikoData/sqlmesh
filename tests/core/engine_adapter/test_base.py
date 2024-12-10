@@ -1014,20 +1014,26 @@ def test_merge_when_matched(make_mocked_engine_adapter: t.Callable, assert_exp_e
             "val": exp.DataType.build("int"),
         },
         unique_key=[exp.to_identifier("ID", quoted=True)],
-        when_matched=exp.When(
-            matched=True,
-            source=False,
-            then=exp.Update(
-                expressions=[
-                    exp.column("val", "__MERGE_TARGET__").eq(exp.column("val", "__MERGE_SOURCE__")),
-                    exp.column("ts", "__MERGE_TARGET__").eq(
-                        exp.Coalesce(
-                            this=exp.column("ts", "__MERGE_SOURCE__"),
-                            expressions=[exp.column("ts", "__MERGE_TARGET__")],
-                        )
+        when_matched=exp.Whens(
+            expressions=[
+                exp.When(
+                    matched=True,
+                    source=False,
+                    then=exp.Update(
+                        expressions=[
+                            exp.column("val", "__MERGE_TARGET__").eq(
+                                exp.column("val", "__MERGE_SOURCE__")
+                            ),
+                            exp.column("ts", "__MERGE_TARGET__").eq(
+                                exp.Coalesce(
+                                    this=exp.column("ts", "__MERGE_SOURCE__"),
+                                    expressions=[exp.column("ts", "__MERGE_TARGET__")],
+                                )
+                            ),
+                        ],
                     ),
-                ],
-            ),
+                )
+            ]
         ),
     )
 
@@ -1061,42 +1067,44 @@ def test_merge_when_matched_multiple(make_mocked_engine_adapter: t.Callable, ass
             "val": exp.DataType.build("int"),
         },
         unique_key=[exp.to_identifier("ID", quoted=True)],
-        when_matched=[
-            exp.When(
-                matched=True,
-                condition=exp.column("ID", "__MERGE_SOURCE__").eq(exp.Literal.number(1)),
-                then=exp.Update(
-                    expressions=[
-                        exp.column("val", "__MERGE_TARGET__").eq(
-                            exp.column("val", "__MERGE_SOURCE__")
-                        ),
-                        exp.column("ts", "__MERGE_TARGET__").eq(
-                            exp.Coalesce(
-                                this=exp.column("ts", "__MERGE_SOURCE__"),
-                                expressions=[exp.column("ts", "__MERGE_TARGET__")],
-                            )
-                        ),
-                    ],
+        when_matched=exp.Whens(
+            expressions=[
+                exp.When(
+                    matched=True,
+                    condition=exp.column("ID", "__MERGE_SOURCE__").eq(exp.Literal.number(1)),
+                    then=exp.Update(
+                        expressions=[
+                            exp.column("val", "__MERGE_TARGET__").eq(
+                                exp.column("val", "__MERGE_SOURCE__")
+                            ),
+                            exp.column("ts", "__MERGE_TARGET__").eq(
+                                exp.Coalesce(
+                                    this=exp.column("ts", "__MERGE_SOURCE__"),
+                                    expressions=[exp.column("ts", "__MERGE_TARGET__")],
+                                )
+                            ),
+                        ],
+                    ),
                 ),
-            ),
-            exp.When(
-                matched=True,
-                source=False,
-                then=exp.Update(
-                    expressions=[
-                        exp.column("val", "__MERGE_TARGET__").eq(
-                            exp.column("val", "__MERGE_SOURCE__")
-                        ),
-                        exp.column("ts", "__MERGE_TARGET__").eq(
-                            exp.Coalesce(
-                                this=exp.column("ts", "__MERGE_SOURCE__"),
-                                expressions=[exp.column("ts", "__MERGE_TARGET__")],
-                            )
-                        ),
-                    ],
+                exp.When(
+                    matched=True,
+                    source=False,
+                    then=exp.Update(
+                        expressions=[
+                            exp.column("val", "__MERGE_TARGET__").eq(
+                                exp.column("val", "__MERGE_SOURCE__")
+                            ),
+                            exp.column("ts", "__MERGE_TARGET__").eq(
+                                exp.Coalesce(
+                                    this=exp.column("ts", "__MERGE_SOURCE__"),
+                                    expressions=[exp.column("ts", "__MERGE_TARGET__")],
+                                )
+                            ),
+                        ],
+                    ),
                 ),
-            ),
-        ],
+            ]
+        ),
     )
 
     assert_exp_eq(

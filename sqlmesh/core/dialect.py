@@ -409,13 +409,12 @@ def _parse_props(self: Parser) -> t.Optional[exp.Expression]:
         return None
 
     name = key.name.lower()
-    if name == "when_matched":
-        value: t.Optional[t.Union[exp.Expression, t.List[exp.Expression]]] = (
-            self._parse_when_matched()  # type: ignore
-        )
-    elif name == "time_data_type":
+    if name == "time_data_type":
         # TODO: if we make *_data_type a convention to parse things into exp.DataType, we could make this more generic
         value = self._parse_types(schema=True)
+    elif name == "when_matched":
+        # Parentheses around the WHEN clauses can be used to disambiguate them from other properties
+        value = self._parse_wrapped(self._parse_when_matched, optional=True)
     elif self._match(TokenType.L_PAREN):
         value = self.expression(exp.Tuple, expressions=self._parse_csv(self._parse_equality))
         self._match_r_paren()
@@ -605,15 +604,11 @@ def _props_sql(self: Generator, expressions: t.List[exp.Expression]) -> str:
     size = len(expressions)
 
     for i, prop in enumerate(expressions):
-        value = prop.args.get("value")
-        if prop.name == "when_matched" and isinstance(value, list):
-            output_value = ", ".join(self.sql(v) for v in value)
-        else:
-            output_value = self.sql(prop, "value")
-        sql = self.indent(f"{prop.name} {output_value}")
+        sql = self.indent(f"{prop.name} {self.sql(prop, 'value')}")
 
         if i < size - 1:
             sql += ","
+
         props.append(self.maybe_comment(sql, expression=prop))
 
     return "\n".join(props)
@@ -646,6 +641,15 @@ def _macro_func_sql(self: Generator, expression: MacroFunc) -> str:
     else:
         sql = f"@{name}({self.format_args(*expression.expressions)})"
     return self.maybe_comment(sql, expression)
+
+
+def _whens_sql(self: Generator, expression: exp.Whens) -> str:
+    if isinstance(expression.parent, exp.Merge):
+        return self.whens_sql(expression)
+
+    # If the `WHEN` clauses aren't part of a MERGE statement (e.g. they
+    # appear in the `MODEL` DDL), then we will wrap them with parentheses.
+    return self.wrap(self.expressions(expression, sep=" ", indent=False))
 
 
 def _override(klass: t.Type[Tokenizer | Parser], func: t.Callable) -> None:
@@ -901,6 +905,7 @@ def extend_sqlglot() -> None:
                     ModelKind: _model_kind_sql,
                     PythonCode: lambda self, e: self.expressions(e, sep="\n", indent=False),
                     StagedFilePath: lambda self, e: self.table_sql(e),
+                    exp.Whens: _whens_sql,
                 }
             )
 

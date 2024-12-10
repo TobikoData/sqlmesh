@@ -320,7 +320,9 @@ MODEL (
   name db.employees,
   kind INCREMENTAL_BY_UNIQUE_KEY (
     unique_key name,
-    when_matched WHEN MATCHED THEN UPDATE SET target.salary = COALESCE(source.salary, target.salary)
+    when_matched (
+      WHEN MATCHED THEN UPDATE SET target.salary = COALESCE(source.salary, target.salary)
+    )
   )
 );
 ```
@@ -334,8 +336,10 @@ MODEL (
   name db.employees,
   kind INCREMENTAL_BY_UNIQUE_KEY (
     unique_key name,
-    when_matched WHEN MATCHED AND source.value IS NULL THEN UPDATE SET target.salary = COALESCE(source.salary, target.salary),
-    WHEN MATCHED THEN UPDATE SET target.title = COALESCE(source.title, target.title)
+    when_matched (
+      WHEN MATCHED AND source.value IS NULL THEN UPDATE SET target.salary = COALESCE(source.salary, target.salary)
+      WHEN MATCHED THEN UPDATE SET target.title = COALESCE(source.title, target.title)
+    )
   )
 );
 ```

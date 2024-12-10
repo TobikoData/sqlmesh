@@ -30,7 +30,7 @@ class LogicalMergeMixin(EngineAdapter):
         source_table: QueryOrDF,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
         unique_key: t.Sequence[exp.Expression],
-        when_matched: t.Optional[t.Union[exp.When, t.List[exp.When]]] = None,
+        when_matched: t.Optional[exp.Whens] = None,
     ) -> None:
         logical_merge(
             self,
@@ -105,7 +105,9 @@ class InsertOverwriteWithMergeMixin(EngineAdapter):
                     target_table=table_name,
                     query=query,
                     on=exp.false(),
-                    match_expressions=[when_not_matched_by_source, when_not_matched_by_target],
+                    whens=exp.Whens(
+                        expressions=[when_not_matched_by_source, when_not_matched_by_target]
+                    ),
                 )
 
 
@@ -406,7 +408,7 @@ def logical_merge(
     source_table: QueryOrDF,
     columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
     unique_key: t.Sequence[exp.Expression],
-    when_matched: t.Optional[t.Union[exp.When, t.List[exp.When]]] = None,
+    when_matched: t.Optional[exp.Whens] = None,
 ) -> None:
     """
     Merge implementation for engine adapters that do not support merge natively.
