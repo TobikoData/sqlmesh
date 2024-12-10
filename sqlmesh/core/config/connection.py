@@ -407,7 +407,7 @@ class SnowflakeConnectionConfig(ConnectionConfig):
     role: t.Optional[str] = None
     authenticator: t.Optional[str] = None
     token: t.Optional[str] = None
-    application: t.ClassVar[str] = "Tobiko_SQLMesh"
+    application: t.Literal["Tobiko_SQLMesh"] = "Tobiko_SQLMesh"
 
     # Private Key Auth
     private_key: t.Optional[t.Union[str, bytes]] = None
