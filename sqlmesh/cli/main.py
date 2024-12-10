@@ -40,11 +40,13 @@ def _sqlmesh_version() -> str:
     "--gateway",
     type=str,
     help="The name of the gateway.",
+    envvar="SQLMESH_GATEWAY",
 )
 @click.option(
     "--ignore-warnings",
     is_flag=True,
     help="Ignore warnings.",
+    envvar="SQLMESH_IGNORE_WARNINGS",
 )
 @click.option(
     "--debug",
