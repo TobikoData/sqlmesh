@@ -407,6 +407,7 @@ class SnowflakeConnectionConfig(ConnectionConfig):
     role: t.Optional[str] = None
     authenticator: t.Optional[str] = None
     token: t.Optional[str] = None
+    application: t.ClassVar[str] = "Tobiko_SQLMesh"
 
     # Private Key Auth
     private_key: t.Optional[t.Union[str, bytes]] = None
@@ -548,10 +549,6 @@ class SnowflakeConnectionConfig(ConnectionConfig):
     @property
     def _static_connection_kwargs(self) -> t.Dict[str, t.Any]:
         return {"autocommit": False}
-
-    @property
-    def application(self) -> str:
-        return "Tobiko_SQLMesh"
 
     @property
     def _connection_factory(self) -> t.Callable:
