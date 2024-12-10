@@ -64,7 +64,7 @@ MODEL (
   name example.signal_model,
   kind FULL,
   signals [
-    random_signal(threshold = 0.5), # specify threshold value
+    random_signal(threshold := 0.5), # specify threshold value
   ]
 );
 
