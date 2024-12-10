@@ -240,7 +240,7 @@ class BaseExpressionRenderer:
         table_mapping: t.Optional[t.Dict[str, str]] = None,
         deployability_index: t.Optional[DeployabilityIndex] = None,
     ) -> exp.Table:
-        return exp.replace_tables(
+        table = exp.replace_tables(
             exp.maybe_parse(table_name, into=exp.Table, dialect=self._dialect),
             {
                 **self._to_table_mapping((snapshots or {}).values(), deployability_index),
@@ -248,6 +248,11 @@ class BaseExpressionRenderer:
             },
             dialect=self._dialect,
             copy=False,
+        )
+        # We quote the table here to mimic the behavior of _resolve_tables, otherwise we may end
+        # up normalizing twice, because _to_table_mapping returns the mapped names unquoted.
+        return (
+            d.quote_identifiers(table, dialect=self._dialect) if self._quote_identifiers else table
         )
 
     def _resolve_tables(

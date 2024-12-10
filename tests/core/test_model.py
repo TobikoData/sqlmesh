@@ -49,6 +49,7 @@ from sqlmesh.core.model.common import parse_expression
 from sqlmesh.core.model.kind import ModelKindName, _model_kind_validator
 from sqlmesh.core.model.seed import CsvSettings
 from sqlmesh.core.node import IntervalUnit, _Node
+from sqlmesh.core.signal import signal
 from sqlmesh.core.snapshot import Snapshot, SnapshotChangeCategory
 from sqlmesh.utils.date import TimeLike, to_datetime, to_ds, to_timestamp
 from sqlmesh.utils.errors import ConfigError, SQLMeshError
@@ -689,20 +690,6 @@ def test_model_pre_post_statements():
     )
     assert model.render_post_statements() == expected_post
     assert "exp" in model.python_env
-
-    expressions = d.parse(
-        """
-        MODEL (name db.table);
-
-        SELECT 1 AS col;
-
-        CREATE TABLE db.other AS SELECT * FROM @this_model;
-        """
-    )
-    model = load_sql_based_model(expressions)
-
-    expected_post = d.parse('CREATE TABLE "db"."other" AS SELECT * FROM "db"."table" AS "table";')
-    assert model.render_post_statements() == expected_post
 
 
 def test_seed_hydration():
@@ -3820,9 +3807,25 @@ def test_signals():
         MODEL (
             name db.table,
             signals [
+                (arg = 1),
+            ],
+        );
+        SELECT 1;
+        """
+    )
+
+    model = load_sql_based_model(expressions)
+    assert model.signals[0][1] == {"arg": exp.Literal.number(1)}
+
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.table,
+            signals [
+                my_signal(arg = 1),
                 (
-                    table_name = 'table_a',
-                    ds = @end_ds,
+                    table_name := 'table_a',
+                    ds := @end_ds,
                 ),
                 (
                     table_name = 'table_b',
@@ -3843,26 +3846,35 @@ def test_signals():
 
     model = load_sql_based_model(expressions)
     assert model.signals == [
-        exp.Tuple(
-            expressions=[
-                exp.to_column("table_name").eq("table_a"),
-                exp.to_column("ds").eq(d.MacroVar(this="end_ds")),
-            ]
+        (
+            "my_signal",
+            {
+                "arg": exp.Literal.number(1),
+            },
         ),
-        exp.Tuple(
-            expressions=[
-                exp.to_column("table_name").eq("table_b"),
-                exp.to_column("ds").eq(d.MacroVar(this="end_ds")),
-                exp.to_column("hour").eq(d.MacroVar(this="end_hour")),
-            ]
+        (
+            "",
+            {
+                "table_name": exp.Literal.string("table_a"),
+                "ds": d.MacroVar(this="end_ds"),
+            },
         ),
-        exp.Tuple(
-            expressions=[
-                exp.to_column("bool_key").eq(True),
-                exp.to_column("int_key").eq(1),
-                exp.to_column("float_key").eq(1.0),
-                exp.to_column("string_key").eq("string"),
-            ]
+        (
+            "",
+            {
+                "table_name": exp.Literal.string("table_b"),
+                "ds": d.MacroVar(this="end_ds"),
+                "hour": d.MacroVar(this="end_hour"),
+            },
+        ),
+        (
+            "",
+            {
+                "bool_key": exp.true(),
+                "int_key": exp.Literal.number(1),
+                "float_key": exp.Literal.number(1.0),
+                "string_key": exp.Literal.string("string"),
+            },
         ),
     ]
 
@@ -3874,7 +3886,7 @@ def test_signals():
     ]
 
     assert (
-        "signals ((table_name = 'table_a', ds = @end_ds), (table_name = 'table_b', ds = @end_ds, hour = @end_hour), (bool_key = TRUE, int_key = 1, float_key = 1.0, string_key = 'string')"
+        "signals (MY_SIGNAL(arg := 1), (table_name = 'table_a', ds = @end_ds), (table_name = 'table_b', ds = @end_ds, hour = @end_hour), (bool_key = TRUE, int_key = 1, float_key = 1.0, string_key = 'string'))"
         in model.render_definition()[0].sql()
     )
 
@@ -4926,6 +4938,57 @@ def test_this_model() -> None:
             snapshots={snapshot.name: snapshot},
         ).sql(dialect="bigquery")
         == f"SELECT '`sqlmesh__project-1`.`project_1__table__{snapshot.version}`' AS `x`"
+    )
+
+    @macro()
+    def this_model_resolves_to_quoted_table(evaluator):
+        this_model = evaluator.locals.get("this_model")
+        if not this_model:
+            return True
+
+        this_snapshot = evaluator.get_snapshot("db.table")
+        if this_snapshot and this_snapshot.version:
+            # If the table wasn't quoted, we'd break the `sqlmesh_DB` reference by
+            # normalizing it twice
+            expected_name = f'"sqlmesh__DB"."DB__TABLE__{this_snapshot.version}"'
+        else:
+            expected_name = '"DB"."TABLE"'
+
+        return not this_model or (
+            isinstance(this_model, exp.Table)
+            and this_model.sql(dialect=evaluator.dialect, comments=False) == expected_name
+        )
+
+    expressions = d.parse(
+        """
+        MODEL (name db.table, dialect snowflake);
+
+        SELECT
+          1 AS col,
+          @this_model_resolves_to_quoted_table() AS this_model_resolves_to_quoted_table;
+
+        CREATE TABLE db.other AS SELECT * FROM @this_model AS x;
+        """
+    )
+    model = load_sql_based_model(expressions)
+
+    expected_post = d.parse('CREATE TABLE "DB"."OTHER" AS SELECT * FROM "DB"."TABLE" AS "X";')
+    assert model.render_post_statements() == expected_post
+
+    snapshot = Snapshot.from_node(model, nodes={})
+    assert (
+        model.render_query_or_raise(snapshots={snapshot.name: snapshot}, start="2020-01-01").sql(
+            dialect="snowflake"
+        )
+        == 'SELECT 1 AS "COL", TRUE AS "THIS_MODEL_RESOLVES_TO_QUOTED_TABLE"'
+    )
+
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    assert (
+        model.render_query_or_raise(snapshots={snapshot.name: snapshot}, start="2021-01-01").sql(
+            dialect="snowflake"
+        )
+        == 'SELECT 1 AS "COL", TRUE AS "THIS_MODEL_RESOLVES_TO_QUOTED_TABLE"'
     )
 
 
@@ -6126,3 +6189,39 @@ def test_parametric_model_kind():
 
     model = load_sql_based_model(parsed_definition, variables={c.GATEWAY: "other"})
     assert isinstance(model.kind, FullKind)
+
+
+def test_fingerprint_signals():
+    @signal()
+    def test_signal_hash(batch):
+        return True
+
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.table,
+            signals [
+                test_signal_hash(arg = 1),
+            ],
+        );
+        SELECT 1;
+        """
+    )
+
+    model = load_sql_based_model(expressions, signal_definitions=signal.get_registry())
+    metadata_hash = model.metadata_hash
+    data_hash = model.data_hash
+
+    def assert_metadata_only():
+        model._metadata_hash = None
+        model._data_hash = None
+        assert model.metadata_hash != metadata_hash
+        assert model.data_hash == data_hash
+
+    executable = model.python_env["test_signal_hash"]
+    model.python_env["test_signal_hash"].payload = executable.payload.replace("True", "False")
+    assert_metadata_only()
+
+    model = load_sql_based_model(expressions, signal_definitions=signal.get_registry())
+    model.signals.clear()
+    assert_metadata_only()

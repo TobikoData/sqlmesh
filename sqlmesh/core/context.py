@@ -2187,7 +2187,6 @@ class GenericContext(BaseContext, t.Generic[C]):
         if not self._loaded:
             for context_loader in self._loaders.values():
                 with sys_path(*context_loader.configs):
-                    context_loader.loader.load_signals(self)
                     context_loader.loader.load_materializations(self)
 
     def _select_models_for_run(

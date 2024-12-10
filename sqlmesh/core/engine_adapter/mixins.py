@@ -9,6 +9,7 @@ from sqlglot.helper import seq_get
 from sqlmesh.core.engine_adapter.base import EngineAdapter
 from sqlmesh.core.engine_adapter.shared import InsertOverwriteStrategy, SourceQuery
 from sqlmesh.core.node import IntervalUnit
+from sqlmesh.core.dialect import schema_
 from sqlmesh.utils.errors import SQLMeshError
 
 if t.TYPE_CHECKING:
@@ -356,10 +357,15 @@ class ClusteredByMixin(EngineAdapter):
         current_table = exp.to_table(current_table_name)
         target_table = exp.to_table(target_table_name)
 
+        current_table_schema = schema_(current_table.db, catalog=current_table.catalog)
+        target_table_schema = schema_(target_table.db, catalog=target_table.catalog)
+
         current_table_info = seq_get(
-            self.get_data_objects(current_table.db, {current_table.name}), 0
+            self.get_data_objects(current_table_schema, {current_table.name}), 0
         )
-        target_table_info = seq_get(self.get_data_objects(target_table.db, {target_table.name}), 0)
+        target_table_info = seq_get(
+            self.get_data_objects(target_table_schema, {target_table.name}), 0
+        )
 
         if current_table_info and target_table_info:
             if target_table_info.is_clustered:

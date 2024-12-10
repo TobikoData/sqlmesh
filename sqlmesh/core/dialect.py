@@ -1205,7 +1205,9 @@ def interpret_key_value_pairs(
     return {i.this.name: interpret_expression(i.expression) for i in e.expressions}
 
 
-def extract_audit(v: exp.Expression) -> t.Tuple[str, t.Dict[str, exp.Expression]]:
+def extract_func_call(
+    v: exp.Expression, allow_tuples: bool = False
+) -> t.Tuple[str, t.Dict[str, exp.Expression]]:
     kwargs = {}
 
     if isinstance(v, exp.Anonymous):
@@ -1214,6 +1216,15 @@ def extract_audit(v: exp.Expression) -> t.Tuple[str, t.Dict[str, exp.Expression]
     elif isinstance(v, exp.Func):
         func = v.sql_name()
         args = list(v.args.values())
+    elif isinstance(v, exp.Paren):
+        func = ""
+        args = [v.this]
+    elif isinstance(v, exp.Tuple):  # airflow only
+        if not allow_tuples:
+            raise ConfigError("Audit name is missing (eg. MY_AUDIT())")
+
+        func = ""
+        args = v.expressions
     else:
         return v.name.lower(), {}
 

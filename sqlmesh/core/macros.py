@@ -39,6 +39,7 @@ from sqlmesh.utils import (
     columns_to_types_all_known,
     registry_decorator,
 )
+from sqlmesh.utils.date import DatetimeRanges
 from sqlmesh.utils.errors import MacroEvalError, SQLMeshError
 from sqlmesh.utils.jinja import JinjaMacroRegistry, has_jinja
 from sqlmesh.utils.metaprogramming import Executable, prepare_env, print_exception
@@ -79,6 +80,7 @@ SUPPORTED_TYPES = {
     "List": t.List,
     "Tuple": t.Tuple,
     "Union": t.Union,
+    "DatetimeRanges": DatetimeRanges,
 }
 
 for klass in sqlglot.Parser.EXPRESSION_PARSERS:
@@ -197,38 +199,7 @@ class MacroEvaluator:
             raise SQLMeshError(f"Macro '{name}' does not exist.")
 
         try:
-            # Bind the macro's actual parameters to its formal parameters
-            sig = inspect.signature(func)
-            bound = sig.bind(self, *args, **kwargs)
-            bound.apply_defaults()
-        except Exception as e:
-            print_exception(e, self.python_env)
-            raise MacroEvalError("Error trying to eval macro.") from e
-
-        try:
-            annotations = t.get_type_hints(func, localns=SUPPORTED_TYPES)
-        except NameError:  # forward references aren't handled
-            annotations = {}
-
-        # If the macro is annotated, we try coerce the actual parameters to the corresponding types
-        if annotations:
-            for arg, value in bound.arguments.items():
-                typ = annotations.get(arg)
-                if not typ:
-                    continue
-
-                # Changes to bound.arguments will reflect in bound.args and bound.kwargs
-                # https://docs.python.org/3/library/inspect.html#inspect.BoundArguments.arguments
-                param = sig.parameters[arg]
-                if param.kind is inspect.Parameter.VAR_POSITIONAL:
-                    bound.arguments[arg] = tuple(self._coerce(v, typ) for v in value)
-                elif param.kind is inspect.Parameter.VAR_KEYWORD:
-                    bound.arguments[arg] = {k: self._coerce(v, typ) for k, v in value.items()}
-                else:
-                    bound.arguments[arg] = self._coerce(value, typ)
-
-        try:
-            return func(*bound.args, **bound.kwargs)
+            return call_macro(func, self.dialect, self._path, self, *args, **kwargs)  # type: ignore
         except Exception as e:
             print_exception(e, self.python_env)
             raise MacroEvalError("Error trying to eval macro.") from e
@@ -497,78 +468,7 @@ class MacroEvaluator:
 
     def _coerce(self, expr: exp.Expression, typ: t.Any, strict: bool = False) -> t.Any:
         """Coerces the given expression to the specified type on a best-effort basis."""
-        base_err_msg = f"Failed to coerce expression '{expr}' to type '{typ}'."
-        try:
-            if typ is None or typ is t.Any:
-                return expr
-            base = t.get_origin(typ) or typ
-
-            # We need to handle Union and TypeVars first since we cannot use isinstance with it
-            if base in UNION_TYPES:
-                for branch in t.get_args(typ):
-                    try:
-                        return self._coerce(expr, branch, True)
-                    except Exception:
-                        pass
-                raise SQLMeshError(base_err_msg)
-            if base is SQL and isinstance(expr, exp.Expression):
-                return expr.sql(self.dialect)
-
-            if isinstance(expr, base):
-                return expr
-            if issubclass(base, exp.Expression):
-                d = Dialect.get_or_raise(self.dialect)
-                into = base if base in d.parser_class.EXPRESSION_PARSERS else None
-                if into is None:
-                    if isinstance(expr, exp.Literal):
-                        coerced = parse_one(expr.this)
-                    else:
-                        raise SQLMeshError(
-                            f"{base_err_msg} Coercion to {base} requires a literal expression."
-                        )
-                else:
-                    coerced = parse_one(
-                        expr.this if isinstance(expr, exp.Literal) else expr.sql(), into=into
-                    )
-                if isinstance(coerced, base):
-                    return coerced
-                raise SQLMeshError(base_err_msg)
-
-            if base in (int, float, str) and isinstance(expr, exp.Literal):
-                return base(expr.this)
-            if base is str and isinstance(expr, exp.Column) and not expr.table:
-                return expr.name
-            if base is bool and isinstance(expr, exp.Boolean):
-                return expr.this
-            # if base is str and isinstance(expr, exp.Expression):
-            #    return expr.sql(self.dialect)
-            if base is tuple and isinstance(expr, (exp.Tuple, exp.Array)):
-                generic = t.get_args(typ)
-                if not generic:
-                    return tuple(expr.expressions)
-                if generic[-1] is ...:
-                    return tuple(self._coerce(expr, generic[0]) for expr in expr.expressions)
-                elif len(generic) == len(expr.expressions):
-                    return tuple(
-                        self._coerce(expr, generic[i]) for i, expr in enumerate(expr.expressions)
-                    )
-                raise SQLMeshError(f"{base_err_msg} Expected {len(generic)} items.")
-            if base is list and isinstance(expr, (exp.Array, exp.Tuple)):
-                generic = t.get_args(typ)
-                if not generic:
-                    return expr.expressions
-                return [self._coerce(expr, generic[0]) for expr in expr.expressions]
-            raise SQLMeshError(base_err_msg)
-        except Exception:
-            if strict:
-                raise
-            logger.error(
-                "Coercion of expression '%s' to type '%s' failed. Using non coerced expression at '%s'",
-                expr,
-                typ,
-                self._path,
-            )
-            return expr
+        return _coerce(expr, typ, self.dialect, self._path, strict)
 
 
 class macro(registry_decorator):
@@ -1284,3 +1184,121 @@ def normalize_macro_name(name: str) -> str:
 
 for m in macro.get_registry().values():
     setattr(m, c.SQLMESH_BUILTIN, True)
+
+
+def call_macro(
+    func: t.Callable,
+    dialect: DialectType,
+    path: Path,
+    *args: t.Any,
+    **kwargs: t.Any,
+) -> t.Any:
+    # Bind the macro's actual parameters to its formal parameters
+    sig = inspect.signature(func)
+    bound = sig.bind(*args, **kwargs)
+    bound.apply_defaults()
+
+    try:
+        annotations = t.get_type_hints(func, localns=SUPPORTED_TYPES)
+    except (NameError, TypeError):  # forward references aren't handled
+        annotations = {}
+
+    # If the macro is annotated, we try coerce the actual parameters to the corresponding types
+    if annotations:
+        for arg, value in bound.arguments.items():
+            typ = annotations.get(arg)
+            if not typ:
+                continue
+
+            # Changes to bound.arguments will reflect in bound.args and bound.kwargs
+            # https://docs.python.org/3/library/inspect.html#inspect.BoundArguments.arguments
+            param = sig.parameters[arg]
+            if param.kind is inspect.Parameter.VAR_POSITIONAL:
+                bound.arguments[arg] = tuple(_coerce(v, typ, dialect, path) for v in value)
+            elif param.kind is inspect.Parameter.VAR_KEYWORD:
+                bound.arguments[arg] = {k: _coerce(v, typ, dialect, path) for k, v in value.items()}
+            else:
+                bound.arguments[arg] = _coerce(value, typ, dialect, path)
+
+    return func(*bound.args, **bound.kwargs)
+
+
+def _coerce(
+    expr: exp.Expression,
+    typ: t.Any,
+    dialect: DialectType,
+    path: Path,
+    strict: bool = False,
+) -> t.Any:
+    """Coerces the given expression to the specified type on a best-effort basis."""
+    base_err_msg = f"Failed to coerce expression '{expr}' to type '{typ}'."
+    try:
+        if typ is None or typ is t.Any:
+            return expr
+        base = t.get_origin(typ) or typ
+
+        # We need to handle Union and TypeVars first since we cannot use isinstance with it
+        if base in UNION_TYPES:
+            for branch in t.get_args(typ):
+                try:
+                    return _coerce(expr, branch, dialect, path, strict=True)
+                except Exception:
+                    pass
+            raise SQLMeshError(base_err_msg)
+        if base is SQL and isinstance(expr, exp.Expression):
+            return expr.sql(dialect)
+
+        if isinstance(expr, base):
+            return expr
+        if issubclass(base, exp.Expression):
+            d = Dialect.get_or_raise(dialect)
+            into = base if base in d.parser_class.EXPRESSION_PARSERS else None
+            if into is None:
+                if isinstance(expr, exp.Literal):
+                    coerced = parse_one(expr.this)
+                else:
+                    raise SQLMeshError(
+                        f"{base_err_msg} Coercion to {base} requires a literal expression."
+                    )
+            else:
+                coerced = parse_one(
+                    expr.this if isinstance(expr, exp.Literal) else expr.sql(), into=into
+                )
+            if isinstance(coerced, base):
+                return coerced
+            raise SQLMeshError(base_err_msg)
+
+        if base in (int, float, str) and isinstance(expr, exp.Literal):
+            return base(expr.this)
+        if base is str and isinstance(expr, exp.Column) and not expr.table:
+            return expr.name
+        if base is bool and isinstance(expr, exp.Boolean):
+            return expr.this
+        if base is tuple and isinstance(expr, (exp.Tuple, exp.Array)):
+            generic = t.get_args(typ)
+            if not generic:
+                return tuple(expr.expressions)
+            if generic[-1] is ...:
+                return tuple(_coerce(expr, generic[0], dialect, path) for expr in expr.expressions)
+            elif len(generic) == len(expr.expressions):
+                return tuple(
+                    _coerce(expr, generic[i], dialect, path)
+                    for i, expr in enumerate(expr.expressions)
+                )
+            raise SQLMeshError(f"{base_err_msg} Expected {len(generic)} items.")
+        if base is list and isinstance(expr, (exp.Array, exp.Tuple)):
+            generic = t.get_args(typ)
+            if not generic:
+                return expr.expressions
+            return [_coerce(expr, generic[0], dialect, path) for expr in expr.expressions]
+        raise SQLMeshError(base_err_msg)
+    except Exception:
+        if strict:
+            raise
+        logger.error(
+            "Coercion of expression '%s' to type '%s' failed. Using non coerced expression at '%s'",
+            expr,
+            typ,
+            path,
+        )
+        return expr
