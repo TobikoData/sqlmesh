@@ -397,7 +397,6 @@ class SnowflakeConnectionConfig(ConnectionConfig):
         register_comments: Whether or not to register model comments with the SQL engine.
         pre_ping: Whether or not to pre-ping the connection before starting a new transaction to ensure it is still alive.
         session_parameters: The optional session parameters to set for the connection.
-        application: Identifying tag for Snowflake usage patterns
     """
 
     account: str
@@ -408,7 +407,6 @@ class SnowflakeConnectionConfig(ConnectionConfig):
     role: t.Optional[str] = None
     authenticator: t.Optional[str] = None
     token: t.Optional[str] = None
-    application: str = 'Tobiko_SQLMesh'
 
     # Private Key Auth
     private_key: t.Optional[t.Union[str, bytes]] = None
@@ -550,6 +548,10 @@ class SnowflakeConnectionConfig(ConnectionConfig):
     @property
     def _static_connection_kwargs(self) -> t.Dict[str, t.Any]:
         return {"autocommit": False}
+
+    @property
+    def application(self) -> str:
+        return "Tobiko_SQLMesh"
 
     @property
     def _connection_factory(self) -> t.Callable:
