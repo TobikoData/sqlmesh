@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import sys
 import typing as t
 from collections import defaultdict
 from datetime import datetime, timedelta
@@ -38,11 +37,6 @@ from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.hashing import hash_data
 from sqlmesh.utils.pydantic import PydanticModel, field_validator
 
-if sys.version_info >= (3, 9):
-    from typing import Annotated
-else:
-    from typing_extensions import Annotated
-
 if t.TYPE_CHECKING:
     from sqlglot.dialects.dialect import DialectType
     from sqlmesh.core.environment import EnvironmentNamingInfo
@@ -51,7 +45,7 @@ if t.TYPE_CHECKING:
 Interval = t.Tuple[int, int]
 Intervals = t.List[Interval]
 
-Node = Annotated[t.Union[Model, StandaloneAudit], Field(descriminator="source_type")]
+Node = t.Annotated[t.Union[Model, StandaloneAudit], Field(descriminator="source_type")]
 
 
 class SnapshotChangeCategory(IntEnum):

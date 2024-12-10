@@ -51,7 +51,7 @@ from sqlmesh.core.snapshot import (
 from sqlmesh.core.snapshot.evaluator import CustomMaterialization
 from sqlmesh.utils.concurrency import NodeExecutionFailedError
 from sqlmesh.utils.date import to_timestamp
-from sqlmesh.utils.errors import AuditError, ConfigError, SQLMeshError
+from sqlmesh.utils.errors import ConfigError, SQLMeshError
 from sqlmesh.utils.metaprogramming import Executable
 
 
@@ -654,12 +654,15 @@ def test_evaluate_incremental_unmanaged_no_intervals(
 ):
     model = SqlModel(
         name="test_schema.test_model",
-        query=parse_one("SELECT 1, ds FROM tbl_a"),
+        query=parse_one("SELECT 1 as one, ds FROM tbl_a"),
         kind=IncrementalUnmanagedKind(insert_overwrite=insert_overwrite),
         partitioned_by=["ds"],
     )
     snapshot = make_snapshot(model)
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    table_columns = {"one": exp.DataType.build("int"), "ds": exp.DataType.build("timestamp")}
+    adapter_mock.columns.return_value = table_columns
 
     evaluator = SnapshotEvaluator(adapter_mock)
     evaluator.evaluate(
@@ -675,7 +678,7 @@ def test_evaluate_incremental_unmanaged_no_intervals(
         model.render_query(),
         clustered_by=[],
         column_descriptions={},
-        columns_to_types=None,
+        columns_to_types=table_columns,
         partition_interval_unit=model.interval_unit,
         partitioned_by=model.partitioned_by,
         table_format=None,
@@ -683,6 +686,7 @@ def test_evaluate_incremental_unmanaged_no_intervals(
         table_description=None,
         table_properties={},
     )
+    adapter_mock.columns.assert_called_once_with(snapshot.table_name())
 
 
 def test_create_prod_table_exists(mocker: MockerFixture, adapter_mock, make_snapshot):
@@ -1768,6 +1772,16 @@ def test_insert_into_scd_type_2_by_time(
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
     snapshot.intervals = intervals
 
+    table_columns = {
+        "id": exp.DataType.build("INT"),
+        "name": exp.DataType.build("STRING"),
+        "updated_at": exp.DataType.build("TIMESTAMP"),
+        # Make sure that the call includes these extra columns
+        "valid_from": exp.DataType.build("TIMESTAMP"),
+        "valid_to": exp.DataType.build("TIMESTAMP"),
+    }
+    adapter_mock.columns.return_value = table_columns
+
     evaluator.evaluate(
         snapshot,
         start="2020-01-01",
@@ -1779,14 +1793,7 @@ def test_insert_into_scd_type_2_by_time(
     adapter_mock.scd_type_2_by_time.assert_called_once_with(
         target_table=snapshot.table_name(),
         source_table=model.render_query(),
-        columns_to_types={
-            "id": exp.DataType.build("INT"),
-            "name": exp.DataType.build("STRING"),
-            "updated_at": exp.DataType.build("TIMESTAMP"),
-            # Make sure that the call includes these extra columns
-            "valid_from": exp.DataType.build("TIMESTAMP"),
-            "valid_to": exp.DataType.build("TIMESTAMP"),
-        },
+        columns_to_types=table_columns,
         unique_key=[exp.to_column("id", quoted=True)],
         valid_from_col=exp.column("valid_from", quoted=True),
         valid_to_col=exp.column("valid_to", quoted=True),
@@ -1798,6 +1805,7 @@ def test_insert_into_scd_type_2_by_time(
         updated_at_as_valid_from=False,
         truncate=truncate,
     )
+    adapter_mock.columns.assert_called_once_with(snapshot.table_name())
 
 
 def test_create_scd_type_2_by_column(adapter_mock, make_snapshot):
@@ -1936,6 +1944,15 @@ def test_insert_into_scd_type_2_by_column(
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
     snapshot.intervals = intervals
 
+    table_columns = {
+        "id": exp.DataType.build("INT"),
+        "name": exp.DataType.build("STRING"),
+        # Make sure that the call includes these extra columns
+        "valid_from": exp.DataType.build("TIMESTAMP"),
+        "valid_to": exp.DataType.build("TIMESTAMP"),
+    }
+    adapter_mock.columns.return_value = table_columns
+
     evaluator.evaluate(
         snapshot,
         start="2020-01-01",
@@ -1947,13 +1964,7 @@ def test_insert_into_scd_type_2_by_column(
     adapter_mock.scd_type_2_by_column.assert_called_once_with(
         target_table=snapshot.table_name(),
         source_table=model.render_query(),
-        columns_to_types={
-            "id": exp.DataType.build("INT"),
-            "name": exp.DataType.build("STRING"),
-            # Make sure that the call includes these extra columns
-            "valid_from": exp.DataType.build("TIMESTAMP"),
-            "valid_to": exp.DataType.build("TIMESTAMP"),
-        },
+        columns_to_types=table_columns,
         unique_key=[exp.to_column("id", quoted=True)],
         check_columns=exp.Star(),
         valid_from_col=exp.column("valid_from", quoted=True),
@@ -1965,6 +1976,7 @@ def test_insert_into_scd_type_2_by_column(
         column_descriptions={},
         truncate=truncate,
     )
+    adapter_mock.columns.assert_called_once_with(snapshot.table_name())
 
 
 def test_create_incremental_by_unique_key_updated_at_exp(adapter_mock, make_snapshot):
@@ -2127,6 +2139,13 @@ def test_create_incremental_by_unique_no_intervals(adapter_mock, make_snapshot):
     snapshot = make_snapshot(model)
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
+    table_columns = {
+        "id": exp.DataType.build("int"),
+        "name": exp.DataType.build("string"),
+        "updated_at": exp.DataType.build("timestamp"),
+    }
+    adapter_mock.columns.return_value = table_columns
+
     evaluator.evaluate(
         snapshot,
         start="2020-01-01",
@@ -2140,7 +2159,7 @@ def test_create_incremental_by_unique_no_intervals(adapter_mock, make_snapshot):
         model.render_query(),
         clustered_by=[],
         column_descriptions={},
-        columns_to_types=model.columns_to_types,
+        columns_to_types=table_columns,
         partition_interval_unit=model.interval_unit,
         partitioned_by=model.partitioned_by,
         table_format=None,
@@ -2148,6 +2167,7 @@ def test_create_incremental_by_unique_no_intervals(adapter_mock, make_snapshot):
         table_description=None,
         table_properties={},
     )
+    adapter_mock.columns.assert_called_once_with(snapshot.table_name())
 
 
 def test_create_seed(mocker: MockerFixture, adapter_mock, make_snapshot):
@@ -2468,10 +2488,10 @@ def test_audit_set_blocking_at_use_site(adapter_mock, make_snapshot):
     # Return a non-zero count to indicate audit failure
     adapter_mock.fetchone.return_value = (1,)
 
-    logger = logging.getLogger("sqlmesh.core.snapshot.evaluator")
-    with patch.object(logger, "warning") as mock_logger:
-        evaluator.audit(snapshot, snapshots={})
-        assert "Audit is warn only so proceeding with execution." in mock_logger.call_args[0][0]
+    results = evaluator.audit(snapshot, snapshots={})
+    assert len(results) == 1
+    assert results[0].count == 1
+    assert not results[0].blocking
 
     model = SqlModel(
         name="test_schema.test_table",
@@ -2486,11 +2506,10 @@ def test_audit_set_blocking_at_use_site(adapter_mock, make_snapshot):
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
     adapter_mock.fetchone.return_value = (1,)
 
-    with pytest.raises(
-        AuditError,
-        match="Audit 'always_fail' for model 'test_schema.test_table' failed.",
-    ):
-        evaluator.audit(snapshot, snapshots={})
+    results = evaluator.audit(snapshot, snapshots={})
+    assert len(results) == 1
+    assert results[0].count == 1
+    assert results[0].blocking
 
 
 def test_create_post_statements_use_deployable_table(
@@ -2777,6 +2796,12 @@ def test_evaluate_managed(adapter_mock, make_snapshot, mocker: MockerFixture):
     adapter_mock.reset_mock()
     adapter_mock.assert_not_called()
 
+    table_colmns = {
+        "a": exp.DataType.build("int"),
+        "b": exp.DataType.build("string"),
+    }
+    adapter_mock.columns.return_value = table_colmns
+
     evaluator.evaluate(
         snapshot,
         start="2020-01-01",
@@ -2788,9 +2813,9 @@ def test_evaluate_managed(adapter_mock, make_snapshot, mocker: MockerFixture):
 
     adapter_mock.create_managed_table.assert_not_called()
     adapter_mock.replace_query.assert_called_with(
-        f"{snapshot.table_name()}__temp",
+        snapshot.table_name(is_deployable=False),
         mocker.ANY,
-        columns_to_types=None,
+        columns_to_types=table_colmns,
         table_format=model.table_format,
         storage_format=model.storage_format,
         partitioned_by=model.partitioned_by,
@@ -2800,6 +2825,7 @@ def test_evaluate_managed(adapter_mock, make_snapshot, mocker: MockerFixture):
         table_description=model.description,
         column_descriptions=model.column_descriptions,
     )
+    adapter_mock.columns.assert_called_once_with(snapshot.table_name(is_deployable=False))
 
 
 def test_cleanup_managed(adapter_mock, make_snapshot, mocker: MockerFixture):

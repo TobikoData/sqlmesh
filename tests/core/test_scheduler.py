@@ -610,6 +610,7 @@ def test_audit_failure_notifications(
     mocker.patch("sqlmesh.core.notification_target.NotificationTargetManager.notify", notify_mock)
 
     audit = first(waiter_names.model.audit_definitions.values())
+    query = waiter_names.model.render_query()
 
     def _evaluate():
         scheduler.evaluate(
@@ -620,25 +621,30 @@ def test_audit_failure_notifications(
             DeployabilityIndex.all_deployable(),
             0,
         )
-        _, kwargs = evaluator_audit_mock.call_args_list[0]
-        assert not kwargs["raise_exception"]
 
     evaluator_audit_mock.return_value = [
-        AuditResult(audit=audit, model=waiter_names.model, count=0, skipped=False)
+        AuditResult(audit=audit, model=waiter_names.model, query=query, count=0, skipped=False)
     ]
     _evaluate()
     assert notify_user_mock.call_count == 0
     assert notify_mock.call_count == 0
 
     evaluator_audit_mock.return_value = [
-        AuditResult(audit=audit, model=waiter_names.model, count=None, skipped=True)
+        AuditResult(audit=audit, model=waiter_names.model, query=query, count=None, skipped=True)
     ]
     _evaluate()
     assert notify_user_mock.call_count == 0
     assert notify_mock.call_count == 0
 
     evaluator_audit_mock.return_value = [
-        AuditResult(audit=audit, model=waiter_names.model, count=1, skipped=False, blocking=False)
+        AuditResult(
+            audit=audit,
+            model=waiter_names.model,
+            query=query,
+            count=1,
+            skipped=False,
+            blocking=False,
+        )
     ]
     _evaluate()
     assert notify_user_mock.call_count == 1
@@ -647,7 +653,7 @@ def test_audit_failure_notifications(
     notify_mock.reset_mock()
 
     evaluator_audit_mock.return_value = [
-        AuditResult(audit=audit, model=waiter_names.model, count=1, skipped=False)
+        AuditResult(audit=audit, model=waiter_names.model, query=query, count=1, skipped=False)
     ]
     with pytest.raises(AuditError):
         _evaluate()

@@ -1614,6 +1614,34 @@ test_foo:
     )
 
 
+def test_pretty_query(mocker: MockerFixture) -> None:
+    test = _create_test(
+        body=load_yaml(
+            """
+test_foo:
+  model: xyz
+  schema: my_schema
+  outputs:
+    query:
+      - a: 1
+            """
+        ),
+        test_name="test_foo",
+        model=_create_model("SELECT 1 AS a"),
+        context=Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))),
+    )
+    test.engine_adapter._pretty_sql = True
+    spy_execute = mocker.spy(test.engine_adapter, "_execute")
+    _check_successful_or_raise(test.run())
+    spy_execute.assert_has_calls(
+        [
+            call('CREATE SCHEMA IF NOT EXISTS "memory"."my_schema"'),
+            call('SELECT\n  1 AS "a"'),
+            call('DROP SCHEMA IF EXISTS "memory"."my_schema" CASCADE'),
+        ]
+    )
+
+
 def test_complicated_recursive_cte() -> None:
     model_sql = """
 WITH

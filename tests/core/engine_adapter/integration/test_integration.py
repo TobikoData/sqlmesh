@@ -1687,9 +1687,11 @@ def test_sushi(ctx: TestContext, tmp_path_factory: pytest.TempPathFactory):
         ctx._schemas.append(schema)
 
 
-def test_init_project(ctx: TestContext, tmp_path: pathlib.Path):
+def test_init_project(ctx: TestContext, tmp_path_factory: pytest.TempPathFactory):
     if ctx.test_type != "query":
         pytest.skip("Init example project end-to-end tests only need to run for query")
+
+    tmp_path = tmp_path_factory.mktemp(f"init_project_{ctx.test_id}")
 
     schema_name = ctx.add_test_suffix(TEST_SCHEMA)
     state_schema = ctx.add_test_suffix("sqlmesh_state")

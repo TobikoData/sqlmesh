@@ -48,7 +48,7 @@ setup(
         "rich[jupyter]",
         "ruamel.yaml",
         "setuptools; python_version>='3.12'",
-        "sqlglot[rs]~=25.32.1",
+        "sqlglot[rs]~=25.34.0",
         "tenacity",
     ],
     extras_require={
@@ -87,7 +87,7 @@ setup(
             "pytest",
             "pytest-asyncio<0.23.0",
             "pytest-mock",
-            "pytest-retry; python_version>='3.9'",
+            "pytest-retry",
             "pytest-xdist",
             "pytz",
             "ruff~=0.7.0",

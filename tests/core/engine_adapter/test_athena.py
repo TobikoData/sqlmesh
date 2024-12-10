@@ -365,3 +365,42 @@ def test_create_state_table(adapter: AthenaEngineAdapter):
     assert to_sql_calls(adapter) == [
         "CREATE TABLE IF NOT EXISTS `_snapshots` (`name` STRING) LOCATION 's3://base/_snapshots/' TBLPROPERTIES ('table_type'='iceberg')"
     ]
+
+
+def test_drop_partitions_from_metastore_uses_batches(
+    adapter: AthenaEngineAdapter, mocker: MockerFixture
+):
+    glue_client_mock = mocker.patch.object(AthenaEngineAdapter, "_glue_client", autospec=True)
+
+    glue_client_mock.batch_delete_partition.assert_not_called()
+
+    partition_values = []
+
+    for i in range(63):
+        partition_values.append([str(i)])
+
+    adapter._drop_partitions_from_metastore(
+        table=exp.table_("foo"), partition_values=partition_values
+    )
+
+    glue_client_mock.batch_delete_partition.assert_called()
+
+    # should have been called in batches of 25
+    calls = glue_client_mock.batch_delete_partition.call_args_list
+    assert len(calls) == 3
+
+    assert len(calls[0][1]["PartitionsToDelete"]) == 25
+    assert len(calls[1][1]["PartitionsToDelete"]) == 25
+    assert len(calls[2][1]["PartitionsToDelete"]) == 13
+
+    # first call 0-24
+    assert calls[0][1]["PartitionsToDelete"][0]["Values"][0] == "0"
+    assert calls[0][1]["PartitionsToDelete"][-1]["Values"][0] == "24"
+
+    # second call 25-49
+    assert calls[1][1]["PartitionsToDelete"][0]["Values"][0] == "25"
+    assert calls[1][1]["PartitionsToDelete"][-1]["Values"][0] == "49"
+
+    # third call 50-62
+    assert calls[2][1]["PartitionsToDelete"][0]["Values"][0] == "50"
+    assert calls[2][1]["PartitionsToDelete"][-1]["Values"][0] == "62"

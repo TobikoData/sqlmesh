@@ -1747,7 +1747,6 @@ class GenericContext(BaseContext, t.Generic[C]):
                 start=start,
                 end=end,
                 snapshots=self.snapshots,
-                raise_exception=False,
             ):
                 audit_id = f"{audit_result.audit.name}"
                 if audit_result.model:
@@ -1847,6 +1846,14 @@ class GenericContext(BaseContext, t.Generic[C]):
             external_models_yaml = (
                 path / c.EXTERNAL_MODELS_YAML if not deprecated_yaml.exists() else deprecated_yaml
             )
+
+            external_models_gateway: t.Optional[str] = self.gateway or self.config.default_gateway
+            if not external_models_gateway:
+                # can happen if there was no --gateway defined and the default_gateway is ''
+                # which means that the single gateway syntax is being used which means there is
+                # no named gateway which means we should not stamp `gateway:` on the external models
+                external_models_gateway = None
+
             create_external_models_file(
                 path=external_models_yaml,
                 models=UniqueKeyDict(
@@ -1860,7 +1867,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                 adapter=self.engine_adapter,
                 state_reader=self.state_reader,
                 dialect=config.model_defaults.dialect,
-                gateway=self.gateway,
+                gateway=external_models_gateway,
                 max_workers=self.concurrent_tasks,
                 strict=strict,
             )
@@ -1912,16 +1919,9 @@ class GenericContext(BaseContext, t.Generic[C]):
         snapshots = scheduler.snapshots
 
         if select_models is not None:
-            models: UniqueKeyDict[str, Model] = UniqueKeyDict(
-                "models", **{s.name: s.model for s in snapshots.values() if s.is_model}
+            select_models = self._select_models_for_run(
+                select_models, no_auto_upstream, snapshots.values()
             )
-            dag: DAG[str] = DAG()
-            for fqn, model in models.items():
-                dag.add(fqn, model.depends_on)
-            model_selector = self._new_selector(models=models, dag=dag)
-            select_models = set(model_selector.expand_model_selections(select_models))
-            if not no_auto_upstream:
-                select_models = set(dag.subdag(*select_models))
 
         return scheduler.run(
             environment,
@@ -2189,6 +2189,24 @@ class GenericContext(BaseContext, t.Generic[C]):
                 with sys_path(*context_loader.configs):
                     context_loader.loader.load_signals(self)
                     context_loader.loader.load_materializations(self)
+
+    def _select_models_for_run(
+        self,
+        select_models: t.Collection[str],
+        no_auto_upstream: bool,
+        snapshots: t.Collection[Snapshot],
+    ) -> t.Set[str]:
+        models: UniqueKeyDict[str, Model] = UniqueKeyDict(
+            "models", **{s.name: s.model for s in snapshots if s.is_model}
+        )
+        dag: DAG[str] = DAG()
+        for fqn, model in models.items():
+            dag.add(fqn, model.depends_on)
+        model_selector = self._new_selector(models=models, dag=dag)
+        result = set(model_selector.expand_model_selections(select_models))
+        if not no_auto_upstream:
+            result = set(dag.subdag(*result))
+        return result
 
     def _load_requirements(self, path: Path) -> None:
         path = path / c.REQUIREMENTS

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import sys
 import typing as t
 
 from sqlmesh.core.model import SeedModel
@@ -14,11 +13,6 @@ from sqlmesh.core.snapshot import (
 from sqlmesh.core.snapshot.definition import Interval, SnapshotIntervals
 from sqlmesh.core.state_sync.base import DelegatingStateSync, StateSync
 from sqlmesh.utils.date import TimeLike, now_timestamp
-
-if sys.version_info >= (3, 8):
-    from typing import Literal
-else:
-    from typing_extensions import Literal
 
 
 class CachingStateSync(DelegatingStateSync):
@@ -35,15 +29,15 @@ class CachingStateSync(DelegatingStateSync):
         # False means that the snapshot does not exist in the state sync but has been requested before
         # None means that the snapshot has not been requested.
         self.snapshot_cache: t.Dict[
-            SnapshotId, t.Tuple[t.Optional[Snapshot | Literal[False]], int]
+            SnapshotId, t.Tuple[t.Optional[Snapshot | t.Literal[False]], int]
         ] = {}
 
         self.ttl = ttl
 
     def _from_cache(
         self, snapshot_id: SnapshotId, now: int
-    ) -> t.Optional[Snapshot | Literal[False]]:
-        snapshot: t.Optional[Snapshot | Literal[False]] = None
+    ) -> t.Optional[Snapshot | t.Literal[False]]:
+        snapshot: t.Optional[Snapshot | t.Literal[False]] = None
         snapshot_expiration = self.snapshot_cache.get(snapshot_id)
 
         if snapshot_expiration and snapshot_expiration[1] >= now:

@@ -34,7 +34,11 @@ PANDAS_TYPE_MAPPINGS = {
 def columns_to_types_from_df(df: pd.DataFrame) -> t.Dict[str, exp.DataType]:
     result = {}
     for column_name, column_type in df.dtypes.items():
-        exp_type = PANDAS_TYPE_MAPPINGS.get(column_type)
+        exp_type: t.Optional[exp.DataType] = None
+        if hasattr(pd, "DatetimeTZDtype") and isinstance(column_type, pd.DatetimeTZDtype):
+            exp_type = exp.DataType.build("timestamptz")
+        else:
+            exp_type = PANDAS_TYPE_MAPPINGS.get(column_type)
         if not exp_type:
             raise ValueError(f"Unsupported pandas type '{column_type}'")
         result[str(column_name)] = exp_type
