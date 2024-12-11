@@ -6,6 +6,8 @@ from sqlmesh.core.engine_adapter.base import (
     EngineAdapter,
     EngineAdapterWithIndexSupport,
 )
+from sqlmesh.core.engine_adapter.athena import AthenaEngineAdapter
+from sqlmesh.core.engine_adapter.azuresql import AzureSQLEngineAdapter  # noqa: F401
 from sqlmesh.core.engine_adapter.bigquery import BigQueryEngineAdapter
 from sqlmesh.core.engine_adapter.clickhouse import ClickhouseEngineAdapter
 from sqlmesh.core.engine_adapter.databricks import DatabricksEngineAdapter
@@ -17,7 +19,6 @@ from sqlmesh.core.engine_adapter.redshift import RedshiftEngineAdapter
 from sqlmesh.core.engine_adapter.snowflake import SnowflakeEngineAdapter
 from sqlmesh.core.engine_adapter.spark import SparkEngineAdapter
 from sqlmesh.core.engine_adapter.trino import TrinoEngineAdapter
-from sqlmesh.core.engine_adapter.athena import AthenaEngineAdapter
 
 DIALECT_TO_ENGINE_ADAPTER = {
     "hive": SparkEngineAdapter,

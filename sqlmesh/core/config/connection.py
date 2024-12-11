@@ -1290,6 +1290,14 @@ class MSSQLConnectionConfig(ConnectionConfig):
         return pymssql.connect
 
 
+class AzureSQLConnectionConfig(MSSQLConnectionConfig):
+    type_: t.Literal["azuresql"] = Field(alias="type", default="azuresql")  # type: ignore
+
+    @property
+    def _engine_adapter(self) -> t.Type[EngineAdapter]:
+        return engine_adapter.AzureSQLEngineAdapter
+
+
 class SparkConnectionConfig(ConnectionConfig):
     """
     Vanilla Spark Connection Configuration. Use `DatabricksConnectionConfig` for Databricks.
