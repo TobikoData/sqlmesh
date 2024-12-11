@@ -150,6 +150,7 @@ plugins:
   - include-markdown
   - search:
       separator: '[\s\-,:!=\[\]()"/_]+'
+  - glightbox
 markdown_extensions:
   - def_list
   - tables
