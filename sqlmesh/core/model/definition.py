@@ -216,6 +216,7 @@ class _Model(ModelMeta, frozen=True):
                     "default_catalog",
                     "enabled",
                     "inline_audits",
+                    "optimize",
                 ):
                     expressions.append(
                         exp.Property(
@@ -1269,6 +1270,7 @@ class SqlModel(_Model):
             only_execution_time=self.kind.only_execution_time,
             default_catalog=self.default_catalog,
             quote_identifiers=not no_quote_identifiers,
+            optimize=self.optimize,
         )
 
     @property
@@ -1948,6 +1950,9 @@ def _create_model(
     physical_schema_mapping = physical_schema_mapping or {}
     model_schema_name = exp.to_table(name, dialect=dialect).db
     physical_schema_override: t.Optional[str] = None
+
+    if not defaults:
+        kwargs["optimize"] = True
 
     for re_pattern, override_schema in physical_schema_mapping.items():
         if re.match(re_pattern, model_schema_name):

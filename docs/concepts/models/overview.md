@@ -354,6 +354,11 @@ Learn more about these properties and their default values in the [model configu
 ### gateway
 :   Specifies the gateway to use for the execution of this model. When not specified, the default gateway is used.
 
+### optimize
+:   Whether the model's SQL should be optimized. This attribute is `true` by default. Setting it
+to `false` causes SQLMesh to disable query canonicalization & simplification. This should be turned off only if the optimized query leads to errors such as surpassing text limit.
+
+
 ## Incremental Model Properties
 
 These properties can be specified in an incremental model's `kind` definition.

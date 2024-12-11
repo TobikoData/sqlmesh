@@ -51,6 +51,7 @@ class BaseExpressionRenderer:
         quote_identifiers: bool = True,
         model_fqn: t.Optional[str] = None,
         normalize_identifiers: bool = True,
+        optimize: t.Optional[bool] = True,
     ):
         self._expression = expression
         self._dialect = dialect
@@ -65,6 +66,7 @@ class BaseExpressionRenderer:
         self.update_schema({} if schema is None else schema)
         self._cache: t.List[t.Optional[exp.Expression]] = []
         self._model_fqn = model_fqn
+        self._optimize = True if optimize is None else optimize
 
     def update_schema(self, schema: t.Dict[str, t.Any]) -> None:
         self.schema = d.normalize_mapping_schema(schema, dialect=self._dialect)
@@ -437,6 +439,8 @@ class QueryRenderer(BaseExpressionRenderer):
         should_cache = self._should_cache(
             runtime_stage, start, end, execution_time, *kwargs.values()
         )
+
+        needs_optimization = needs_optimization and self._optimize
 
         if should_cache and self._optimized_cache:
             query = self._optimized_cache

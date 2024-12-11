@@ -301,6 +301,7 @@ bool_validator = field_validator(
     "insert_overwrite",
     "allow_partials",
     "enabled",
+    "optimize",
     mode="before",
     check_fields=False,
 )(parse_bool)

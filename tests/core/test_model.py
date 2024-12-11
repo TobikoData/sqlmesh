@@ -6266,3 +6266,60 @@ def test_fingerprint_signals():
     model = load_sql_based_model(expressions, signal_definitions=signal.get_registry())
     model.signals.clear()
     assert_metadata_only()
+
+
+def test_model_optimize(assert_exp_eq):
+    defaults = [ModelDefaultsConfig().dict(), ModelDefaultsConfig(optimize=False).dict()]
+    non_optimized_sql = 'SELECT 1 + 2 AS "new_col"'
+    optimized_sql = 'SELECT 3 AS "new_col"'
+
+    # Model flag is False, overriding defaults
+    disabled_opt = d.parse(
+        """
+        MODEL (
+            name test,
+            optimize False,
+        );
+
+        SELECT 1 + 2 AS new_col
+        """
+    )
+
+    for default in defaults:
+        model = load_sql_based_model(disabled_opt, defaults=default)
+        assert_exp_eq(model.render_query(), non_optimized_sql)
+
+    # Model flag is True, overriding defaults
+    enabled_opt = d.parse(
+        """
+        MODEL (
+            name test,
+            optimize True,
+        );
+
+        SELECT 1 + 2 AS new_col
+        """
+    )
+
+    for default in defaults:
+        model = load_sql_based_model(enabled_opt, defaults=default)
+        assert_exp_eq(model.render_query(), optimized_sql)
+
+    # Model flag is not defined, behavior is set according to the defaults
+    none_opt = d.parse(
+        """
+        MODEL (
+            name test,
+        );
+
+        SELECT 1 + 2 AS new_col
+        """
+    )
+
+    true_default, false_default = defaults
+    assert_exp_eq(
+        load_sql_based_model(none_opt, defaults=true_default).render_query(), optimized_sql
+    )
+    assert_exp_eq(
+        load_sql_based_model(none_opt, defaults=false_default).render_query(), non_optimized_sql
+    )
