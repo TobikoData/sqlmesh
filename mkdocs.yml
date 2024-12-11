@@ -109,8 +109,13 @@ nav:
   #     - cloud/features/model_freshness.md
   #     - cloud/features/scheduler.md
   #     - Observability:
-  #       - cloud/observability/monitoring.md
-  #       - "Measures & Dashboards": cloud/observability/measures_dashboards.md
+  #       - cloud/features/observability/overview.md
+  #       - cloud/features/observability/prod_environment.md 
+  #       - cloud/features/observability/development_environment.md 
+  #       - cloud/features/observability/plan.md
+  #       - cloud/features/observability/run.md
+  #       - cloud/features/observability/model.md
+  #       - "Measures & Dashboards": cloud/features/observability/measures_dashboards.md
 theme:
   name: material
   logo: _readthedocs/html/sqlmesh.png
@@ -145,7 +150,6 @@ plugins:
   - include-markdown
   - search:
       separator: '[\s\-,:!=\[\]()"/_]+'
-  - glightbox
 markdown_extensions:
   - def_list
   - tables
