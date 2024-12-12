@@ -2334,6 +2334,8 @@ def test_value_normalization(
                     )
                 ],
             )
+    if ctx.dialect == "tsql" and column_type == exp.DataType.Type.DATETIME:
+        full_column_type = exp.DataType.build("DATETIME2", dialect="tsql")
 
     columns_to_types = {
         "_idx": exp.DataType.build(DATA_TYPE.INT),

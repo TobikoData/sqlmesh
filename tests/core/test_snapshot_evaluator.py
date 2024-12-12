@@ -2018,25 +2018,27 @@ def test_create_incremental_by_unique_key_updated_at_exp(adapter_mock, make_snap
             "updated_at": exp.DataType.build("TIMESTAMP"),
         },
         unique_key=[exp.to_column("id", quoted=True)],
-        when_matched=[
-            exp.When(
-                matched=True,
-                source=False,
-                then=exp.Update(
-                    expressions=[
-                        exp.column("name", MERGE_TARGET_ALIAS).eq(
-                            exp.column("name", MERGE_SOURCE_ALIAS)
-                        ),
-                        exp.column("updated_at", MERGE_TARGET_ALIAS).eq(
-                            exp.Coalesce(
-                                this=exp.column("updated_at", MERGE_SOURCE_ALIAS),
-                                expressions=[exp.column("updated_at", MERGE_TARGET_ALIAS)],
-                            )
-                        ),
-                    ],
-                ),
-            )
-        ],
+        when_matched=exp.Whens(
+            expressions=[
+                exp.When(
+                    matched=True,
+                    source=False,
+                    then=exp.Update(
+                        expressions=[
+                            exp.column("name", MERGE_TARGET_ALIAS).eq(
+                                exp.column("name", MERGE_SOURCE_ALIAS)
+                            ),
+                            exp.column("updated_at", MERGE_TARGET_ALIAS).eq(
+                                exp.Coalesce(
+                                    this=exp.column("updated_at", MERGE_SOURCE_ALIAS),
+                                    expressions=[exp.column("updated_at", MERGE_TARGET_ALIAS)],
+                                )
+                            ),
+                        ],
+                    ),
+                )
+            ]
+        ),
     )
 
 
@@ -2080,42 +2082,44 @@ def test_create_incremental_by_unique_key_multiple_updated_at_exp(adapter_mock, 
             "updated_at": exp.DataType.build("TIMESTAMP"),
         },
         unique_key=[exp.to_column("id", quoted=True)],
-        when_matched=[
-            exp.When(
-                matched=True,
-                condition=exp.column("id", MERGE_SOURCE_ALIAS).eq(exp.Literal.number(1)),
-                then=exp.Update(
-                    expressions=[
-                        exp.column("name", MERGE_TARGET_ALIAS).eq(
-                            exp.column("name", MERGE_SOURCE_ALIAS)
-                        ),
-                        exp.column("updated_at", MERGE_TARGET_ALIAS).eq(
-                            exp.Coalesce(
-                                this=exp.column("updated_at", MERGE_SOURCE_ALIAS),
-                                expressions=[exp.column("updated_at", MERGE_TARGET_ALIAS)],
-                            )
-                        ),
-                    ],
+        when_matched=exp.Whens(
+            expressions=[
+                exp.When(
+                    matched=True,
+                    condition=exp.column("id", MERGE_SOURCE_ALIAS).eq(exp.Literal.number(1)),
+                    then=exp.Update(
+                        expressions=[
+                            exp.column("name", MERGE_TARGET_ALIAS).eq(
+                                exp.column("name", MERGE_SOURCE_ALIAS)
+                            ),
+                            exp.column("updated_at", MERGE_TARGET_ALIAS).eq(
+                                exp.Coalesce(
+                                    this=exp.column("updated_at", MERGE_SOURCE_ALIAS),
+                                    expressions=[exp.column("updated_at", MERGE_TARGET_ALIAS)],
+                                )
+                            ),
+                        ],
+                    ),
                 ),
-            ),
-            exp.When(
-                matched=True,
-                source=False,
-                then=exp.Update(
-                    expressions=[
-                        exp.column("name", MERGE_TARGET_ALIAS).eq(
-                            exp.column("name", MERGE_SOURCE_ALIAS)
-                        ),
-                        exp.column("updated_at", MERGE_TARGET_ALIAS).eq(
-                            exp.Coalesce(
-                                this=exp.column("updated_at", MERGE_SOURCE_ALIAS),
-                                expressions=[exp.column("updated_at", MERGE_TARGET_ALIAS)],
-                            )
-                        ),
-                    ],
+                exp.When(
+                    matched=True,
+                    source=False,
+                    then=exp.Update(
+                        expressions=[
+                            exp.column("name", MERGE_TARGET_ALIAS).eq(
+                                exp.column("name", MERGE_SOURCE_ALIAS)
+                            ),
+                            exp.column("updated_at", MERGE_TARGET_ALIAS).eq(
+                                exp.Coalesce(
+                                    this=exp.column("updated_at", MERGE_SOURCE_ALIAS),
+                                    expressions=[exp.column("updated_at", MERGE_TARGET_ALIAS)],
+                                )
+                            ),
+                        ],
+                    ),
                 ),
-            ),
-        ],
+            ],
+        ),
     )
 
 

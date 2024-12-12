@@ -3930,15 +3930,54 @@ def test_when_matched():
     """
     )
 
-    expected_when_matched = "WHEN MATCHED THEN UPDATE SET __MERGE_TARGET__.salary = COALESCE(__MERGE_SOURCE__.salary, __MERGE_TARGET__.salary)"
+    expected_when_matched = "(WHEN MATCHED THEN UPDATE SET __MERGE_TARGET__.salary = COALESCE(__MERGE_SOURCE__.salary, __MERGE_TARGET__.salary))"
 
     model = load_sql_based_model(expressions, dialect="hive")
-    assert len(model.kind.when_matched) == 1
-    assert model.kind.when_matched[0].sql() == expected_when_matched
+    assert model.kind.when_matched.sql() == expected_when_matched
 
     model = SqlModel.parse_raw(model.json())
-    assert len(model.kind.when_matched) == 1
-    assert model.kind.when_matched[0].sql() == expected_when_matched
+    assert model.kind.when_matched.sql() == expected_when_matched
+
+    expressions = d.parse(
+        """
+        MODEL (
+          name @{macro_val}.test,
+          kind INCREMENTAL_BY_UNIQUE_KEY (
+            unique_key purchase_order_id,
+            when_matched (
+              WHEN MATCHED AND source._operation = 1 THEN DELETE
+              WHEN MATCHED AND source._operation <> 1 THEN UPDATE SET target.purchase_order_id = 1
+            )
+          )
+        );
+
+        SELECT
+          purchase_order_id
+        FROM @{macro_val}.upstream
+        """
+    )
+
+    model = SqlModel.parse_raw(load_sql_based_model(expressions).json())
+    assert d.format_model_expressions(model.render_definition()) == (
+        """MODEL (
+  name @{macro_val}.test,
+  kind INCREMENTAL_BY_UNIQUE_KEY (
+    unique_key ("purchase_order_id"),
+    when_matched (
+      WHEN MATCHED AND __MERGE_SOURCE__._operation = 1 THEN DELETE
+      WHEN MATCHED AND __MERGE_SOURCE__._operation <> 1 THEN UPDATE SET __MERGE_TARGET__.purchase_order_id = 1
+    ),
+    batch_concurrency 1,
+    forward_only FALSE,
+    disable_restatement FALSE,
+    on_destructive_change 'ERROR'
+  )
+);
+
+SELECT
+  purchase_order_id
+FROM @{macro_val}.upstream"""
+    )
 
 
 def test_when_matched_multiple():
@@ -3963,14 +4002,16 @@ def test_when_matched_multiple():
     ]
 
     model = load_sql_based_model(expressions, dialect="hive", variables={"schema": "db"})
-    assert len(model.kind.when_matched) == 2
-    assert model.kind.when_matched[0].sql() == expected_when_matched[0]
-    assert model.kind.when_matched[1].sql() == expected_when_matched[1]
+    whens = model.kind.when_matched
+    assert len(whens.expressions) == 2
+    assert whens.expressions[0].sql() == expected_when_matched[0]
+    assert whens.expressions[1].sql() == expected_when_matched[1]
 
     model = SqlModel.parse_raw(model.json())
-    assert len(model.kind.when_matched) == 2
-    assert model.kind.when_matched[0].sql() == expected_when_matched[0]
-    assert model.kind.when_matched[1].sql() == expected_when_matched[1]
+    whens = model.kind.when_matched
+    assert len(whens.expressions) == 2
+    assert whens.expressions[0].sql() == expected_when_matched[0]
+    assert whens.expressions[1].sql() == expected_when_matched[1]
 
 
 def test_default_catalog_sql(assert_exp_eq):
@@ -5586,7 +5627,7 @@ on_destructive_change 'ERROR'
         .sql()
         == """INCREMENTAL_BY_UNIQUE_KEY (
 unique_key ("a"),
-when_matched ARRAY(WHEN MATCHED THEN UPDATE SET __MERGE_TARGET__.b = COALESCE(__MERGE_SOURCE__.b, __MERGE_TARGET__.b)),
+when_matched (WHEN MATCHED THEN UPDATE SET __MERGE_TARGET__.b = COALESCE(__MERGE_SOURCE__.b, __MERGE_TARGET__.b)),
 batch_concurrency 1,
 forward_only FALSE,
 disable_restatement FALSE,
@@ -5614,7 +5655,7 @@ on_destructive_change 'ERROR'
         .sql()
         == """INCREMENTAL_BY_UNIQUE_KEY (
 unique_key ("a"),
-when_matched ARRAY(WHEN MATCHED AND __MERGE_SOURCE__.x = 1 THEN UPDATE SET __MERGE_TARGET__.b = COALESCE(__MERGE_SOURCE__.b, __MERGE_TARGET__.b), WHEN MATCHED THEN UPDATE SET __MERGE_TARGET__.b = COALESCE(__MERGE_SOURCE__.b, __MERGE_TARGET__.b)),
+when_matched (WHEN MATCHED AND __MERGE_SOURCE__.x = 1 THEN UPDATE SET __MERGE_TARGET__.b = COALESCE(__MERGE_SOURCE__.b, __MERGE_TARGET__.b) WHEN MATCHED THEN UPDATE SET __MERGE_TARGET__.b = COALESCE(__MERGE_SOURCE__.b, __MERGE_TARGET__.b)),
 batch_concurrency 1,
 forward_only FALSE,
 disable_restatement FALSE,

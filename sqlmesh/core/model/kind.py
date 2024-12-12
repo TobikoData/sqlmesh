@@ -5,7 +5,6 @@ from enum import Enum
 
 from pydantic import Field
 from sqlglot import exp
-from sqlglot.helper import ensure_list
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 from sqlglot.optimizer.qualify_columns import quote_identifiers
 from sqlglot.optimizer.simplify import gen
@@ -423,48 +422,38 @@ class IncrementalByUniqueKeyKind(_IncrementalBy):
         ModelKindName.INCREMENTAL_BY_UNIQUE_KEY
     )
     unique_key: SQLGlotListOfFields
-    when_matched: t.Optional[t.List[exp.When]] = None
+    when_matched: t.Optional[exp.Whens] = None
     batch_concurrency: t.Literal[1] = 1
 
     @field_validator("when_matched", mode="before")
     @field_validator_v1_args
     def _when_matched_validator(
         cls,
-        v: t.Optional[t.Union[exp.When, str, t.List[exp.When], t.List[str]]],
+        v: t.Optional[t.Union[str, exp.Whens]],
         values: t.Dict[str, t.Any],
-    ) -> t.Optional[t.List[exp.When]]:
+    ) -> t.Optional[exp.Whens]:
         def replace_table_references(expression: exp.Expression) -> exp.Expression:
-            from sqlmesh.core.engine_adapter.base import (
-                MERGE_SOURCE_ALIAS,
-                MERGE_TARGET_ALIAS,
-            )
+            from sqlmesh.core.engine_adapter.base import MERGE_SOURCE_ALIAS, MERGE_TARGET_ALIAS
 
             if isinstance(expression, exp.Column):
                 if expression.table.lower() == "target":
-                    expression.set(
-                        "table",
-                        exp.to_identifier(MERGE_TARGET_ALIAS),
-                    )
+                    expression.set("table", exp.to_identifier(MERGE_TARGET_ALIAS))
                 elif expression.table.lower() == "source":
-                    expression.set(
-                        "table",
-                        exp.to_identifier(MERGE_SOURCE_ALIAS),
-                    )
+                    expression.set("table", exp.to_identifier(MERGE_SOURCE_ALIAS))
+
             return expression
 
-        if not v:
-            return v  # type: ignore
+        if v is None:
+            return v
+        if isinstance(v, str):
+            # Whens wrap the WHEN clauses, but the parentheses aren't parsed by sqlglot
+            v = v.strip()
+            if v.startswith("("):
+                v = v[1:-1]
 
-        result = []
-        list_v = ensure_list(v)
-        for value in ensure_list(list_v):
-            if isinstance(value, str):
-                result.append(
-                    t.cast(exp.When, d.parse_one(value, into=exp.When, dialect=get_dialect(values)))
-                )
-            else:
-                result.append(t.cast(exp.When, value.transform(replace_table_references)))  # type: ignore
-        return result
+            return t.cast(exp.Whens, d.parse_one(v, into=exp.Whens, dialect=get_dialect(values)))
+
+        return t.cast(exp.Whens, v.transform(replace_table_references))
 
     @property
     def data_hash_values(self) -> t.List[t.Optional[str]]:
