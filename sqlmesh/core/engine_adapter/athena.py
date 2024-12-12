@@ -33,10 +33,6 @@ class AthenaEngineAdapter(PandasNativeFetchDFSupportMixin, RowDiffMixin):
     DIALECT = "athena"
     SUPPORTS_TRANSACTIONS = False
     SUPPORTS_REPLACE_TABLE = False
-    # Athena has the concept of catalogs but the current catalog is set in the connection parameters with no way to query or change it after that
-    # It also cant create new catalogs, you have to configure them in AWS. Typically, catalogs that are not "awsdatacatalog"
-    # are pointers to the "awsdatacatalog" of other AWS accounts
-    CATALOG_SUPPORT = CatalogSupport.SINGLE_CATALOG_ONLY
     # Athena's support for table and column comments is too patchy to consider "supported"
     # Hive tables: Table + Column comments are supported
     # Iceberg tables: Column comments only
@@ -73,6 +69,13 @@ class AthenaEngineAdapter(PandasNativeFetchDFSupportMixin, RowDiffMixin):
             return location
 
         raise SQLMeshError("s3_warehouse_location was expected to be populated; it isnt")
+
+    @property
+    def catalog_support(self) -> CatalogSupport:
+        # Athena has the concept of catalogs but the current catalog is set in the connection parameters with no way to query or change it after that
+        # It also cant create new catalogs, you have to configure them in AWS. Typically, catalogs that are not "awsdatacatalog"
+        # are pointers to the "awsdatacatalog" of other AWS accounts
+        return CatalogSupport.SINGLE_CATALOG_ONLY
 
     def create_state_table(
         self,

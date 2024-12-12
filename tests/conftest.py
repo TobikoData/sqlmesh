@@ -21,7 +21,7 @@ from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
 from sqlmesh.core.config import DuckDBConnectionConfig
 from sqlmesh.core.context import Context
-from sqlmesh.core.engine_adapter import SparkEngineAdapter
+from sqlmesh.core.engine_adapter import MSSQLEngineAdapter, SparkEngineAdapter
 from sqlmesh.core.engine_adapter.base import EngineAdapter
 from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core import lineage
@@ -38,6 +38,7 @@ from sqlmesh.core.snapshot import (
 )
 from sqlmesh.utils import random_id
 from sqlmesh.utils.date import TimeLike, to_date
+from sqlmesh.core.engine_adapter.shared import CatalogSupport
 
 pytest_plugins = ["tests.common_fixtures"]
 
@@ -440,6 +441,11 @@ def make_mocked_engine_adapter(mocker: MockerFixture) -> t.Callable:
             mocker.patch(
                 "sqlmesh.engines.spark.db_api.spark_session.SparkSessionConnection._spark_major_minor",
                 new_callable=PropertyMock(return_value=(3, 5)),
+            )
+        if isinstance(adapter, MSSQLEngineAdapter):
+            mocker.patch(
+                "sqlmesh.core.engine_adapter.mssql.MSSQLEngineAdapter.catalog_support",
+                new_callable=PropertyMock(return_value=CatalogSupport.REQUIRES_SET_CATALOG),
             )
         return adapter
 

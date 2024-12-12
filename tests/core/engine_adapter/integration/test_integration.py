@@ -249,8 +249,8 @@ def test_connection(ctx: TestContext):
 
 def test_catalog_operations(ctx: TestContext):
     if (
-        ctx.engine_adapter.CATALOG_SUPPORT.is_unsupported
-        or ctx.engine_adapter.CATALOG_SUPPORT.is_single_catalog_only
+        ctx.engine_adapter.catalog_support.is_unsupported
+        or ctx.engine_adapter.catalog_support.is_single_catalog_only
     ):
         pytest.skip(
             f"Engine adapter {ctx.engine_adapter.dialect} doesn't support catalog operations"
@@ -306,7 +306,7 @@ def test_drop_schema_catalog(ctx: TestContext, caplog):
         assert len(results.materialized_views) == 0
         assert len(results.non_temp_tables) == 2
 
-    if ctx.engine_adapter.CATALOG_SUPPORT.is_unsupported:
+    if ctx.engine_adapter.catalog_support.is_unsupported:
         pytest.skip(
             f"Engine adapter {ctx.engine_adapter.dialect} doesn't support catalog operations"
         )
@@ -326,7 +326,7 @@ def test_drop_schema_catalog(ctx: TestContext, caplog):
     ctx.create_catalog(catalog_name)
 
     schema = ctx.schema("drop_schema_catalog_test", catalog_name)
-    if ctx.engine_adapter.CATALOG_SUPPORT.is_single_catalog_only:
+    if ctx.engine_adapter.catalog_support.is_single_catalog_only:
         drop_schema_and_validate(schema)
         assert "requires that all catalog operations be against a single catalog" in caplog.text
         return

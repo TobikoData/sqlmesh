@@ -296,7 +296,7 @@ def set_catalog(override_mapping: t.Optional[t.Dict[str, CatalogSupport]] = None
             # Need to convert args to list in order to later do assignment to the object
             list_args = list(args)
             engine_adapter = list_args[0]
-            catalog_support = override or engine_adapter.CATALOG_SUPPORT
+            catalog_support = override or engine_adapter.catalog_support
             # If there is full catalog support then we have nothing to do
             if catalog_support.is_full_support:
                 return func(*list_args, **kwargs)

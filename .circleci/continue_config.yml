@@ -313,10 +313,10 @@ workflows:
       - airflow_docker_tests:
           requires:
             - style_and_slow_tests
-          filters:
-            branches:
-              only:
-                - main
+          # filters:
+          #   branches:
+          #     only:
+          #       - main
       - engine_tests_docker:
           name: engine_<< matrix.engine >>
           matrix:
@@ -334,8 +334,8 @@ workflows:
           name: cloud_engine_<< matrix.engine >>
           context:
             - sqlmesh_cloud_database_integration
-          requires:
-            - engine_tests_docker
+          # requires:
+          #   - engine_tests_docker
           matrix:
             parameters:
               engine:
@@ -345,10 +345,10 @@ workflows:
                 - bigquery
                 - clickhouse-cloud
                 - athena
-          filters:
-           branches:
-             only:
-               - main
+          # filters:
+          #  branches:
+          #    only:
+          #      - main
       - trigger_private_tests:
           requires:
             - style_and_slow_tests

@@ -97,7 +97,6 @@ class EngineAdapter:
     SUPPORTS_MANAGED_MODELS = False
     SCHEMA_DIFFER = SchemaDiffer()
     SUPPORTS_TUPLE_IN = True
-    CATALOG_SUPPORT = CatalogSupport.UNSUPPORTED
     HAS_VIEW_BINDING = False
     SUPPORTS_REPLACE_TABLE = True
     DEFAULT_CATALOG_TYPE = DIALECT
@@ -165,6 +164,10 @@ class EngineAdapter:
     def comments_enabled(self) -> bool:
         return self._register_comments and self.COMMENT_CREATION_TABLE.is_supported
 
+    @property
+    def catalog_support(self) -> CatalogSupport:
+        return CatalogSupport.UNSUPPORTED
+
     @classmethod
     def _casted_columns(cls, columns_to_types: t.Dict[str, exp.DataType]) -> t.List[exp.Alias]:
         return [
@@ -174,7 +177,7 @@ class EngineAdapter:
 
     @property
     def default_catalog(self) -> t.Optional[str]:
-        if self.CATALOG_SUPPORT.is_unsupported:
+        if self.catalog_support.is_unsupported:
             return None
         default_catalog = self._default_catalog or self.get_current_catalog()
         if not default_catalog:
@@ -293,7 +296,7 @@ class EngineAdapter:
         """Intended to be overridden for data virtualization systems like Trino that,
         depending on the target catalog, require slightly different properties to be set when creating / updating tables
         """
-        if self.CATALOG_SUPPORT.is_unsupported:
+        if self.catalog_support.is_unsupported:
             raise UnsupportedCatalogOperationError(
                 f"{self.dialect} does not support catalogs and a catalog was provided: {catalog}"
             )

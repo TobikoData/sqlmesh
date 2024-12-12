@@ -41,7 +41,6 @@ class TrinoEngineAdapter(
 ):
     DIALECT = "trino"
     INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.INTO_IS_OVERWRITE
-    CATALOG_SUPPORT = CatalogSupport.FULL_SUPPORT
     # Trino does technically support transactions but it doesn't work correctly with partition overwrite so we
     # disable transactions. If we need to get them enabled again then we would need to disable auto commit on the
     # connector and then figure out how to get insert/overwrite to work correctly without it.
@@ -63,6 +62,10 @@ class TrinoEngineAdapter(
     # some catalogs support microsecond (precision 6) but it has to be specifically enabled (Hive) or just isnt available (Delta / TIMESTAMP WITH TIME ZONE)
     # and even if you have a TIMESTAMP(6) the date formatting functions still only support millisecond precision
     MAX_TIMESTAMP_PRECISION = 3
+
+    @property
+    def catalog_support(self) -> CatalogSupport:
+        return CatalogSupport.FULL_SUPPORT
 
     def set_current_catalog(self, catalog: str) -> None:
         """Sets the catalog name of the current connection."""
