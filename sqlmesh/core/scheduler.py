@@ -116,12 +116,9 @@ class Scheduler:
         validate_date_range(start, end)
 
         snapshots: t.Collection[Snapshot] = self.snapshot_per_version.values()
-        if selected_snapshots is not None:
-            snapshots = [s for s in snapshots if s.name in selected_snapshots]
-
         self.state_sync.refresh_snapshot_intervals(snapshots)
 
-        return compute_interval_params(
+        snapshots_to_intervals = compute_interval_params(
             snapshots,
             start=start or earliest_start_date(snapshots),
             end=end or now(),
@@ -132,6 +129,13 @@ class Scheduler:
             ignore_cron=ignore_cron,
             end_bounded=end_bounded,
         )
+        # Filtering snapshots after computing missing intervals because we need all snapshots in order
+        # to correctly infer start dates.
+        if selected_snapshots is not None:
+            snapshots_to_intervals = {
+                s: i for s, i in snapshots_to_intervals.items() if s.name in selected_snapshots
+            }
+        return snapshots_to_intervals
 
     def evaluate(
         self,
