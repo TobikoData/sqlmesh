@@ -1774,6 +1774,72 @@ def test_new_forward_only_model_concurrent_versions(init_and_plan_context: t.Cal
     assert df.to_dict() == {"ds": {0: "2023-01-07"}, "b": {0: None}}
 
 
+@freeze_time("2023-01-08 15:00:00")
+def test_new_forward_only_model_same_dev_environment(init_and_plan_context: t.Callable):
+    context, plan = init_and_plan_context("examples/sushi")
+    context.apply(plan)
+
+    new_model_expr = d.parse(
+        """
+        MODEL (
+            name memory.sushi.new_model,
+            kind INCREMENTAL_BY_TIME_RANGE (
+                time_column ds,
+                forward_only TRUE,
+                on_destructive_change 'allow',
+            ),
+        );
+
+        SELECT '2023-01-07' AS ds, 1 AS a;
+        """
+    )
+    new_model = load_sql_based_model(new_model_expr)
+
+    # Add the first version of the model and apply it to dev.
+    context.upsert_model(new_model)
+    snapshot_a = context.get_snapshot(new_model.name)
+    plan_a = context.plan("dev", no_prompts=True)
+    snapshot_a = plan_a.snapshots[snapshot_a.snapshot_id]
+
+    assert snapshot_a.snapshot_id in plan_a.context_diff.new_snapshots
+    assert snapshot_a.snapshot_id in plan_a.context_diff.added
+    assert snapshot_a.change_category == SnapshotChangeCategory.BREAKING
+
+    context.apply(plan_a)
+
+    df = context.fetchdf("SELECT * FROM memory.sushi__dev.new_model")
+    assert df.to_dict() == {"ds": {0: "2023-01-07"}, "a": {0: 1}}
+
+    new_model_alt_expr = d.parse(
+        """
+        MODEL (
+            name memory.sushi.new_model,
+            kind INCREMENTAL_BY_TIME_RANGE (
+                time_column ds,
+                forward_only TRUE,
+                on_destructive_change 'allow',
+            ),
+        );
+
+        SELECT '2023-01-07' AS ds, 1 AS b;
+        """
+    )
+    new_model_alt = load_sql_based_model(new_model_alt_expr)
+
+    # Add the second version of the model and apply it to the same environment.
+    context.upsert_model(new_model_alt)
+    snapshot_b = context.get_snapshot(new_model_alt.name)
+
+    context.invalidate_environment("dev", sync=True)
+    plan_b = context.plan("dev", no_prompts=True)
+    snapshot_b = plan_b.snapshots[snapshot_b.snapshot_id]
+
+    context.apply(plan_b)
+
+    df = context.fetchdf("SELECT * FROM memory.sushi__dev.new_model").replace({np.nan: None})
+    assert df.to_dict() == {"ds": {0: "2023-01-07"}, "b": {0: 1}}
+
+
 def test_plan_twice_with_star_macro_yields_no_diff(tmp_path: Path):
     init_example_project(tmp_path, dialect="duckdb")
 
@@ -2561,7 +2627,7 @@ def test_environment_catalog_mapping(init_and_plan_context: t.Callable):
     ) = get_default_catalog_and_non_tables(metadata, context.default_catalog)
     assert len(prod_views) == 13
     assert len(dev_views) == 0
-    assert len(user_default_tables) == 13
+    assert len(user_default_tables) == 16
     assert state_metadata.schemas == ["sqlmesh"]
     assert {x.sql() for x in state_metadata.qualified_tables}.issuperset(
         {
@@ -2580,7 +2646,7 @@ def test_environment_catalog_mapping(init_and_plan_context: t.Callable):
     ) = get_default_catalog_and_non_tables(metadata, context.default_catalog)
     assert len(prod_views) == 13
     assert len(dev_views) == 13
-    assert len(user_default_tables) == 13
+    assert len(user_default_tables) == 16
     assert len(non_default_tables) == 0
     assert state_metadata.schemas == ["sqlmesh"]
     assert {x.sql() for x in state_metadata.qualified_tables}.issuperset(
@@ -2600,7 +2666,7 @@ def test_environment_catalog_mapping(init_and_plan_context: t.Callable):
     ) = get_default_catalog_and_non_tables(metadata, context.default_catalog)
     assert len(prod_views) == 13
     assert len(dev_views) == 26
-    assert len(user_default_tables) == 13
+    assert len(user_default_tables) == 16
     assert len(non_default_tables) == 0
     assert state_metadata.schemas == ["sqlmesh"]
     assert {x.sql() for x in state_metadata.qualified_tables}.issuperset(
@@ -2621,7 +2687,7 @@ def test_environment_catalog_mapping(init_and_plan_context: t.Callable):
     ) = get_default_catalog_and_non_tables(metadata, context.default_catalog)
     assert len(prod_views) == 13
     assert len(dev_views) == 13
-    assert len(user_default_tables) == 13
+    assert len(user_default_tables) == 16
     assert len(non_default_tables) == 0
     assert state_metadata.schemas == ["sqlmesh"]
     assert {x.sql() for x in state_metadata.qualified_tables}.issuperset(

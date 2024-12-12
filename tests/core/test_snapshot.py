@@ -1730,17 +1730,15 @@ def test_deployability_index_categorized_forward_only_model(make_snapshot):
     snapshot_b.parents = (snapshot_a.snapshot_id,)
     snapshot_b.categorize_as(SnapshotChangeCategory.METADATA)
 
-    # The fact that the model is forward only should be ignored if an actual category
-    # has been assigned.
     deployability_index = DeployabilityIndex.create(
         {s.snapshot_id: s for s in [snapshot_a, snapshot_b]}
     )
 
-    assert deployability_index.is_deployable(snapshot_a)
-    assert deployability_index.is_deployable(snapshot_b)
+    assert not deployability_index.is_deployable(snapshot_a)
+    assert not deployability_index.is_deployable(snapshot_b)
 
-    assert deployability_index.is_representative(snapshot_a)
-    assert deployability_index.is_representative(snapshot_b)
+    assert not deployability_index.is_representative(snapshot_a)
+    assert not deployability_index.is_representative(snapshot_b)
 
 
 def test_deployability_index_missing_parent(make_snapshot):
