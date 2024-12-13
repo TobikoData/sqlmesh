@@ -183,6 +183,10 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
         return engine_adapter.DuckDBEngineAdapter
 
     @property
+    def _connection_kwargs_keys(self) -> t.Set[str]:
+        return {"database"}
+
+    @property
     def _connection_factory(self) -> t.Callable:
         import duckdb
 
@@ -295,7 +299,8 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
         if self.database:
             if isinstance(self, MotherDuckConnectionConfig):
                 data_files.add(
-                    f"md:{self.database}" + f"?motherduck_token={self.token}" if self.token else ""
+                    f"md:{self.database}"
+                    + (f"?motherduck_token={self.token}" if self.token else "")
                 )
             else:
                 data_files.add(self.database)
@@ -379,10 +384,6 @@ class DuckDBConnectionConfig(BaseDuckDBConnectionConfig):
     """Configuration for the DuckDB connection."""
 
     type_: t.Literal["duckdb"] = Field(alias="type", default="duckdb")
-
-    @property
-    def _connection_kwargs_keys(self) -> t.Set[str]:
-        return {"database"}
 
 
 class SnowflakeConnectionConfig(ConnectionConfig):
