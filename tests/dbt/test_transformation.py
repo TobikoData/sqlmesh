@@ -9,7 +9,7 @@ from unittest.mock import patch
 import pytest
 from dbt.adapters.base import BaseRelation
 from dbt.exceptions import CompilationError
-from freezegun import freeze_time
+import time_machine
 from pytest_mock.plugin import MockerFixture
 from sqlglot import exp
 from sqlmesh.core import dialect as d
@@ -1233,7 +1233,7 @@ def test_snapshot_json_payload():
 
 
 @pytest.mark.xdist_group("dbt_manifest")
-@freeze_time("2023-01-08 00:00:00")
+@time_machine.travel("2023-01-08 00:00:00 UTC")
 def test_dbt_package_macros(sushi_test_project: Project):
     context = sushi_test_project.context
 

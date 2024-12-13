@@ -8,7 +8,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 from dbt.cli.main import dbtRunner
-from freezegun import freeze_time
+import time_machine
 
 from sqlmesh import Context
 from sqlmesh.core.config.connection import DuckDBConnectionConfig
@@ -289,7 +289,7 @@ test_config = config"""
         adapter.create_schema("sushi")
         if test_type.is_sqlmesh_runtime:
             self._replace_source_table(adapter, [])
-            with freeze_time("2019-12-31 00:00:00"):
+            with time_machine.travel("2019-12-31 00:00:00"):
                 context.plan("prod", auto_apply=True, no_prompts=True)  # type: ignore
         return run, adapter, context
 
@@ -316,7 +316,7 @@ test_config = config"""
                 t.List[t.Tuple[int, str, str]], t.List[t.Tuple[int, str, str, str, t.Optional[str]]]
             ],
         ] = {
-            "2020-01-01 00:00:00": (
+            "2020-01-01 00:00:00 UTC": (
                 [
                     (1, "a", "2020-01-01 00:00:00"),
                     (2, "b", "2020-01-01 00:00:00"),
@@ -328,7 +328,7 @@ test_config = config"""
                     (3, "c", "2020-01-01 00:00:00", "2020-01-01 00:00:00", None),
                 ],
             ),
-            "2020-01-02 00:00:00": (
+            "2020-01-02 00:00:00 UTC": (
                 [
                     # Update to "x"
                     (1, "x", "2020-01-02 00:00:00"),
@@ -353,7 +353,7 @@ test_config = config"""
                     (4, "d", "2020-01-02 00:00:00", "2020-01-02 00:00:00", None),
                 ],
             ),
-            "2020-01-04 00:00:00": (
+            "2020-01-04 00:00:00 UTC": (
                 [
                     # Update to "y"
                     (1, "y", "2020-01-03 00:00:00"),
@@ -399,7 +399,7 @@ test_config = config"""
         time_start_end_mapping = {}
         for time, (starting_source_data, expected_table_data) in time_expected_mapping.items():
             self._replace_source_table(adapter, starting_source_data)
-            with freeze_time(time):
+            with time_machine.travel(time):
                 start_time = self._get_duckdb_now(adapter)
                 run()
                 end_time = self._get_duckdb_now(adapter)
@@ -437,7 +437,7 @@ test_config = config"""
                 t.List[t.Tuple[int, str, str]], t.List[t.Tuple[int, str, str, str, t.Optional[str]]]
             ],
         ] = {
-            "2020-01-01 00:00:00": (
+            "2020-01-01 00:00:00 UTC": (
                 [
                     (1, "a", "2020-01-01 00:00:00"),
                     (2, "b", "2020-01-01 00:00:00"),
@@ -449,7 +449,7 @@ test_config = config"""
                     (3, "c", "2020-01-01 00:00:00", "2020-01-01 00:00:00", None),
                 ],
             ),
-            "2020-01-02 00:00:00": (
+            "2020-01-02 00:00:00 UTC": (
                 [
                     # Update to "x"
                     (1, "x", "2020-01-02 00:00:00"),
@@ -474,7 +474,7 @@ test_config = config"""
                     (4, "d", "2020-01-02 00:00:00", "2020-01-02 00:00:00", None),
                 ],
             ),
-            "2020-01-04 00:00:00": (
+            "2020-01-04 00:00:00 UTC": (
                 [
                     # Update to "y"
                     (1, "y", "2020-01-03 00:00:00"),
@@ -516,7 +516,7 @@ test_config = config"""
         time_start_end_mapping = {}
         for time, (starting_source_data, expected_table_data) in time_expected_mapping.items():
             self._replace_source_table(adapter, starting_source_data)
-            with freeze_time(time):
+            with time_machine.travel(time, tick=False):
                 start_time = self._get_duckdb_now(adapter)
                 run()
                 end_time = self._get_duckdb_now(adapter)
