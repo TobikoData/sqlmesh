@@ -71,6 +71,8 @@ class DbtLoader(Loader):
     def __init__(self) -> None:
         self._projects: t.List[Project] = []
         self._macros_max_mtime: t.Optional[float] = None
+        self._audits_max_mtime: t.Optional[float] = None
+
         super().__init__()
 
     def load(self, context: GenericContext, update_schemas: bool = True) -> LoadedProject:
@@ -142,6 +144,7 @@ class DbtLoader(Loader):
         self, macros: MacroRegistry, jinja_macros: JinjaMacroRegistry
     ) -> UniqueKeyDict[str, Audit]:
         audits: UniqueKeyDict = UniqueKeyDict("audits")
+        audits_max_mtime: t.Optional[float] = None
 
         for project in self._load_projects():
             context = project.context
@@ -153,6 +156,13 @@ class DbtLoader(Loader):
                     logger.debug("Converting '%s' to sqlmesh format", test.name)
                     audits[test.name] = test.to_sqlmesh(context)
 
+                    audit_mtime = self._path_mtimes.get(test.path)
+                    if audit_mtime:
+                        audits_max_mtime = (
+                            max(audit_mtime, audits_max_mtime) if audits_max_mtime else audit_mtime
+                        )
+
+        self._audits_max_mtime = audits_max_mtime
         return audits
 
     def _load_projects(self) -> t.List[Project]:
