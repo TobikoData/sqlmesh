@@ -6269,7 +6269,10 @@ def test_fingerprint_signals():
 
 
 def test_model_optimize(assert_exp_eq):
-    defaults = [ModelDefaultsConfig().dict(), ModelDefaultsConfig(optimize=False).dict()]
+    defaults = [
+        ModelDefaultsConfig(optimize=True).dict(),
+        ModelDefaultsConfig(optimize=False).dict(),
+    ]
     non_optimized_sql = 'SELECT 1 + 2 AS "new_col"'
     optimized_sql = 'SELECT 3 AS "new_col"'
 
@@ -6316,10 +6319,10 @@ def test_model_optimize(assert_exp_eq):
         """
     )
 
-    true_default, false_default = defaults
+    assert_exp_eq(load_sql_based_model(none_opt).render_query(), optimized_sql)
     assert_exp_eq(
-        load_sql_based_model(none_opt, defaults=true_default).render_query(), optimized_sql
+        load_sql_based_model(none_opt, defaults=defaults[0]).render_query(), optimized_sql
     )
     assert_exp_eq(
-        load_sql_based_model(none_opt, defaults=false_default).render_query(), non_optimized_sql
+        load_sql_based_model(none_opt, defaults=defaults[1]).render_query(), non_optimized_sql
     )

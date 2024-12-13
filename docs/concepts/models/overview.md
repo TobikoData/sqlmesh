@@ -358,6 +358,7 @@ Learn more about these properties and their default values in the [model configu
 :   Whether the model's SQL should be optimized. This attribute is `true` by default. Setting it
 to `false` causes SQLMesh to disable query canonicalization & simplification. This should be turned off only if the optimized query leads to errors such as surpassing text limit.
 
+  NOTE: Turning off the optimizer will also disable column-level lineage, unless the query is manually qualified and all `SELECT` stars are expanded.
 
 ## Incremental Model Properties
 

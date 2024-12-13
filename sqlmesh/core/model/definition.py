@@ -935,6 +935,7 @@ class _Model(ModelMeta, frozen=True):
                 self.project,
                 str(self.allow_partials),
                 gen(self.session_properties_) if self.session_properties_ else None,
+                str(self.optimize) if self.optimize is not None else None,
             ]
 
             for audit_name, audit_args in sorted(self.audits, key=lambda a: a[0]):
@@ -1950,9 +1951,6 @@ def _create_model(
     physical_schema_mapping = physical_schema_mapping or {}
     model_schema_name = exp.to_table(name, dialect=dialect).db
     physical_schema_override: t.Optional[str] = None
-
-    if not defaults:
-        kwargs["optimize"] = True
 
     for re_pattern, override_schema in physical_schema_mapping.items():
         if re.match(re_pattern, model_schema_name):
