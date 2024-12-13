@@ -85,7 +85,7 @@ from sqlmesh.core.notification_target import (
 )
 from sqlmesh.core.plan import Plan, PlanBuilder
 from sqlmesh.core.reference import ReferenceGraph
-from sqlmesh.core.scheduler import Scheduler
+from sqlmesh.core.scheduler import Scheduler, CompletionStatus
 from sqlmesh.core.schema_loader import create_external_models_file
 from sqlmesh.core.selector import Selector
 from sqlmesh.core.snapshot import (
@@ -611,7 +611,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         select_models: t.Optional[t.Collection[str]] = None,
         exit_on_env_update: t.Optional[int] = None,
         no_auto_upstream: bool = False,
-    ) -> bool:
+    ) -> CompletionStatus:
         """Run the entire dag through the scheduler.
 
         Args:
@@ -686,7 +686,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                 )
 
             try:
-                success = self._run(
+                completion_status = self._run(
                     environment,
                     start=start,
                     end=end,
@@ -715,12 +715,12 @@ class GenericContext(BaseContext, t.Generic[C]):
                 )
                 raise e
 
-        if success or interrupted:
+        if completion_status.is_success or interrupted:
             self.notification_target_manager.notify(
                 NotificationEvent.RUN_END, environment=environment
             )
             self.console.log_success(f"Run finished for environment '{environment}'")
-        else:
+        elif completion_status.is_failure:
             self.notification_target_manager.notify(
                 NotificationEvent.RUN_FAILURE, "See console logs for details."
             )
@@ -732,7 +732,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         if interrupted and exit_on_env_update is not None:
             sys.exit(exit_on_env_update)
 
-        return success
+        return completion_status
 
     @python_api_analytics
     def run_janitor(self, ignore_ttl: bool) -> bool:
@@ -1915,7 +1915,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         select_models: t.Optional[t.Collection[str]],
         circuit_breaker: t.Optional[t.Callable[[], bool]],
         no_auto_upstream: bool,
-    ) -> bool:
+    ) -> CompletionStatus:
         scheduler = self.scheduler(environment=environment)
         snapshots = scheduler.snapshots
 

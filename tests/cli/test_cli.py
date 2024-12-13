@@ -685,7 +685,10 @@ def test_run_cron_not_elapsed(runner, tmp_path, caplog):
     with disable_logging():
         result = runner.invoke(cli, ["--log-file-dir", tmp_path, "--paths", tmp_path, "run"])
     assert result.exit_code == 0
-    assert result.output.strip() == "Run finished for environment 'prod'"
+    assert (
+        result.output.strip()
+        == "No models are ready to run. Please wait until a model `cron` interval has \nelapsed.\n\nNext run will be ready at 2023-01-01 6:00PM CST (2023-01-02 12:00AM UTC)."
+    )
 
 
 def test_run_cron_elapsed(runner, tmp_path):

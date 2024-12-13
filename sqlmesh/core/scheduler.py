@@ -1,8 +1,8 @@
 from __future__ import annotations
-
+from enum import Enum
 import logging
 import typing as t
-
+from datetime import datetime, timedelta
 from sqlglot import exp
 
 from sqlmesh.core import constants as c
@@ -33,6 +33,7 @@ from sqlmesh.utils.date import (
     TimeLike,
     now,
     now_timestamp,
+    to_datetime,
     to_timestamp,
     validate_date_range,
 )
@@ -43,6 +44,24 @@ SnapshotToIntervals = t.Dict[Snapshot, Intervals]
 # we store snapshot name instead of snapshots/snapshotids because pydantic
 # is extremely slow to hash. snapshot names should be unique within a dag run
 SchedulingUnit = t.Tuple[str, t.Tuple[Interval, int]]
+
+
+class CompletionStatus(Enum):
+    SUCCESS = "success"
+    FAILURE = "failure"
+    NOTHING_TO_DO = "nothing_to_do"
+
+    @property
+    def is_success(self) -> bool:
+        return self == CompletionStatus.SUCCESS
+
+    @property
+    def is_failure(self) -> bool:
+        return self == CompletionStatus.FAILURE
+
+    @property
+    def is_nothing_to_do(self) -> bool:
+        return self == CompletionStatus.NOTHING_TO_DO
 
 
 class Scheduler:
@@ -227,7 +246,7 @@ class Scheduler:
         circuit_breaker: t.Optional[t.Callable[[], bool]] = None,
         deployability_index: t.Optional[DeployabilityIndex] = None,
         auto_restatement_enabled: bool = False,
-    ) -> bool:
+    ) -> CompletionStatus:
         """Concurrently runs all snapshots in topological order.
 
         Args:
@@ -289,8 +308,47 @@ class Scheduler:
             end_bounded=end_bounded,
             selected_snapshots=selected_snapshots,
         )
+
         if not merged_intervals:
-            return True
+            processed_interval_ends = []
+            interval_unit_seconds = []
+            for snapshot in self.snapshots.values():
+                if snapshot.is_model and not snapshot.is_symbolic and not snapshot.is_seed:
+                    if snapshot.intervals:
+                        processed_interval_ends.append(to_timestamp(snapshot.intervals[-1][1]))
+                        interval_unit_seconds.append(snapshot.node.interval_unit.seconds)
+
+            window_start = max(processed_interval_ends)
+            window_end = now() + timedelta(seconds=max(interval_unit_seconds))
+
+            next_ready_intervals = missing_intervals(
+                self.snapshots.values(),
+                start=window_start,
+                end=window_end,
+                execution_time=window_end,
+            )
+
+            next_ready_interval_start = to_datetime(
+                min(
+                    [
+                        # earliest next interval end for each snapshot
+                        min([interval[1] for interval in intervals])
+                        for intervals in next_ready_intervals.values()
+                    ]
+                )
+            )
+
+            time_format_str = "%Y-%m-%d %-I:%M%p %Z"  # Example: 2024-01-01 6:00AM UTC
+            utc_time = next_ready_interval_start.strftime(time_format_str)
+            local_timezone = datetime.now().astimezone().tzinfo
+            local_time = next_ready_interval_start.astimezone(local_timezone).strftime(
+                time_format_str
+            )
+
+            self.console.log_status_update(
+                f"No models are ready to run. Please wait until a model `cron` interval has elapsed.\n\nNext run will be ready at {local_time} ({utc_time})."
+            )
+            return CompletionStatus.NOTHING_TO_DO
 
         errors, skipped_intervals = self.run_merged_intervals(
             merged_intervals=merged_intervals,
@@ -321,7 +379,7 @@ class Scheduler:
             # Log with INFO level to prevent duplicate messages in the console.
             logger.info(log_message)
 
-        return not errors
+        return CompletionStatus.FAILURE if errors else CompletionStatus.SUCCESS
 
     def batch_intervals(
         self,
