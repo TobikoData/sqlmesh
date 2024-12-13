@@ -343,7 +343,8 @@ class DuckDBAttachOptions(BaseConfig):
     type: str
     path: str
     read_only: bool = False
-    schema_name: t.Optional[str] = None  # Only used for postgres
+    token: t.Optional[str] = None
+    # schema: t.Optional[str] = None  # Only used for postgres
 
     def to_sql(self, alias: str) -> str:
         options = []
@@ -353,14 +354,16 @@ class DuckDBAttachOptions(BaseConfig):
             options.append(f"TYPE {self.type.upper()}")
         if self.read_only:
             options.append("READ_ONLY")
-        if self.schema_name and self.type == "postgres":
-            options.append(f"SCHEMA '{self.schema_name}'")
+        # TODO: Add support for Postgres schema. Currently adding it blocks access to the information_schema
+        # if self.schema_name and self.type == "postgres":
+        #     options.append(f"SCHEMA '{self.schema_name}'")
         alias_sql = (
             # MotherDuck does not support aliasing
             f" AS {alias}" if not (self.type == "motherduck" or self.path.startswith("md:")) else ""
         )
         options_sql = f" ({', '.join(options)})" if options else ""
-        return f"ATTACH '{self.path}'{alias_sql}{options_sql}"
+        token_sql = "?" + self.token if self.token else ""
+        return f"ATTACH '{self.path}{token_sql}'{alias_sql}{options_sql}"
 
 
 class DuckDBConnectionConfig(BaseDuckDBConnectionConfig):
