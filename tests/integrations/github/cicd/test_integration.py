@@ -161,9 +161,9 @@ def test_merge_pr_has_non_breaking_change(
 **Directly Modified:**
 - `sushi.waiter_revenue_by_day`
 ```diff
----
+--- 
 
-+++
++++ 
 
 @@ -15,7 +15,8 @@
 
@@ -358,9 +358,9 @@ def test_merge_pr_has_non_breaking_change_diff_start(
 **Directly Modified:**
 - `sushi.waiter_revenue_by_day`
 ```diff
----
+--- 
 
-+++
++++ 
 
 @@ -15,7 +15,8 @@
 
@@ -864,9 +864,9 @@ def test_no_merge_since_no_deploy_signal(
 **Directly Modified:**
 - `sushi.waiter_revenue_by_day`
 ```diff
----
+--- 
 
-+++
++++ 
 
 @@ -15,7 +15,8 @@
 
@@ -1045,9 +1045,9 @@ def test_no_merge_since_no_deploy_signal_no_approvers_defined(
 **Directly Modified:**
 - `sushi.waiter_revenue_by_day`
 ```diff
----
+--- 
 
-+++
++++ 
 
 @@ -15,7 +15,8 @@
 
@@ -1215,9 +1215,9 @@ def test_deploy_comment_pre_categorized(
 **Directly Modified:**
 - `sushi.waiter_revenue_by_day`
 ```diff
----
+--- 
 
-+++
++++ 
 
 @@ -15,7 +15,8 @@
 
@@ -1554,9 +1554,9 @@ def test_overlapping_changes_models(
 **Directly Modified:**
 - `sushi.customers`
 ```diff
----
+--- 
 
-+++
++++ 
 
 @@ -25,7 +25,8 @@
 
