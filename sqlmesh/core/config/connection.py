@@ -147,6 +147,7 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
         concurrent_tasks: The maximum number of tasks that can use this connection concurrently.
         register_comments: Whether or not to register model comments with the SQL engine.
         pre_ping: Whether or not to pre-ping the connection before starting a new transaction to ensure it is still alive.
+        token: The optional MotherDuck token. If not specified and a MotherDuck path is in the catalog, the user will be prompted to login with their web browser.
     """
 
     database: t.Optional[str] = None
@@ -158,6 +159,8 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
     register_comments: bool = True
     pre_ping: t.Literal[False] = False
 
+    token: t.Optional[str] = None
+
     _data_file_to_adapter: t.ClassVar[t.Dict[str, EngineAdapter]] = {}
 
     @model_validator(mode="before")
@@ -165,9 +168,13 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
     def _validate_database_catalogs(
         cls, values: t.Dict[str, t.Optional[str]]
     ) -> t.Dict[str, t.Optional[str]]:
-        if values.get("database") and values.get("catalogs"):
+        if db_path := values.get("database") and values.get("catalogs"):
             raise ConfigError(
                 "Cannot specify both `database` and `catalogs`. Define all your catalogs in `catalogs` and have the first entry be the default catalog"
+            )
+        if isinstance(db_path, str) and db_path.startswith("md:"):
+            raise ConfigError(
+                "Please use the MotherDuckConnectionConfig without the `md:` prefix if you want to use a MotherDuck database as the single `database`."
             )
         return values
 
@@ -257,11 +264,14 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
                     identify=True, dialect="duckdb"
                 )
                 try:
-                    query = (
-                        path_options.to_sql(alias)
-                        if isinstance(path_options, DuckDBAttachOptions)
-                        else f"ATTACH '{path_options}' AS {alias}"
-                    )
+                    if isinstance(path_options, DuckDBAttachOptions):
+                        query = path_options.to_sql(alias)
+                    else:
+                        query = f"ATTACH '{path_options}'"
+                        if not path_options.startswith("md:"):
+                            query += f" AS {alias}"
+                        elif self.token:
+                            query += f"?motherduck_token={self.token}"
                     cursor.execute(query)
                 except BinderException as e:
                     # If a user tries to create a catalog pointing at `:memory:` and with the name `memory`
@@ -283,7 +293,12 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
         associated with the new adapter will be ignored."""
         data_files = set((self.catalogs or {}).values())
         if self.database:
-            data_files.add(self.database)
+            if isinstance(self, MotherDuckConnectionConfig):
+                data_files.add(
+                    f"md:{self.database}" + f"?motherduck_token={self.token}" if self.token else ""
+                )
+            else:
+                data_files.add(self.database)
         data_files.discard(":memory:")
         for data_file in data_files:
             key = data_file if isinstance(data_file, str) else data_file.path
@@ -311,13 +326,7 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
 
 
 class MotherDuckConnectionConfig(BaseDuckDBConnectionConfig):
-    """Configuration for the MotherDuck connection.
-
-    Args:
-        token: The optional MotherDuck token. If not specified, the user will be prompted to login with their web browser.
-    """
-
-    token: t.Optional[str] = None
+    """Configuration for the MotherDuck connection."""
 
     type_: t.Literal["motherduck"] = Field(alias="type", default="motherduck")
 
@@ -330,13 +339,13 @@ class MotherDuckConnectionConfig(BaseDuckDBConnectionConfig):
         """kwargs that are for execution config only"""
         from sqlmesh import __version__
 
+        custom_user_agent_config = {"custom_user_agent": f"SQLMesh/{__version__}"}
+        if not self.database:
+            return {"config": custom_user_agent_config}
         connection_str = f"md:{self.database or ''}"
         if self.token:
             connection_str += f"?motherduck_token={self.token}"
-        return {
-            "database": connection_str,
-            "config": {"custom_user_agent": f"SQLMesh/{__version__}"},
-        }
+        return {"database": connection_str, "config": custom_user_agent_config}
 
 
 class DuckDBAttachOptions(BaseConfig):
