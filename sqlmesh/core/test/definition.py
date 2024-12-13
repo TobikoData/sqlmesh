@@ -12,7 +12,7 @@ from unittest.mock import patch
 import numpy as np
 import pandas as pd
 from io import StringIO
-from freezegun import freeze_time
+import time_machine
 from pandas.api.types import is_object_dtype
 from sqlglot import Dialect, exp
 from sqlglot.optimizer.annotate_types import annotate_types
@@ -649,7 +649,9 @@ class PythonModelTest(ModelTest):
 
     def _execute_model(self) -> pd.DataFrame:
         """Executes the python model and returns a DataFrame."""
-        time_ctx = freeze_time(self._execution_time) if self._execution_time else nullcontext()
+        time_ctx = (
+            time_machine.travel(self._execution_time) if self._execution_time else nullcontext()
+        )
         with patch.dict(self._test_adapter_dialect.generator_class.TRANSFORMS, self._transforms):
             with t.cast(AbstractContextManager, time_ctx):
                 variables = self.body.get("vars", {}).copy()
