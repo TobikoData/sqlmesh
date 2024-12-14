@@ -37,6 +37,7 @@ setup(
         "croniter",
         "duckdb!=0.10.3",
         "dateparser",
+        "freezegun",
         "hyperscript>=0.1.0",
         "importlib-metadata; python_version<'3.12'",
         "ipywidgets",
@@ -49,7 +50,6 @@ setup(
         "setuptools; python_version>='3.12'",
         "sqlglot[rs]~=26.0.0",
         "tenacity",
-        "time-machine",
     ],
     extras_require={
         "athena": ["PyAthena[Pandas]"],
@@ -94,6 +94,7 @@ setup(
             "ruff~=0.7.0",
             "snowflake-connector-python[pandas,secure-local-storage]>=3.0.2",
             "sqlalchemy-stubs",
+            "time-machine",
             "types-croniter",
             "types-dateparser",
             "types-python-dateutil",
