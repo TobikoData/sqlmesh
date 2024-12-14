@@ -396,7 +396,7 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         if (
             self.config.environment_catalog_mapping
-            and not self.engine_adapter.CATALOG_SUPPORT.is_multi_catalog_supported
+            and not self.engine_adapter.catalog_support.is_multi_catalog_supported
         ):
             raise SQLMeshError(
                 "Environment catalog mapping is only supported for engine adapters that support multiple catalogs"

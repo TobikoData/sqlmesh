@@ -51,7 +51,6 @@ class SparkEngineAdapter(
     DIALECT = "spark"
     SUPPORTS_TRANSACTIONS = False
     INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.INSERT_OVERWRITE
-    CATALOG_SUPPORT = CatalogSupport.FULL_SUPPORT
     COMMENT_CREATION_TABLE = CommentCreationTable.IN_SCHEMA_DEF_NO_CTAS
     COMMENT_CREATION_VIEW = CommentCreationView.IN_SCHEMA_DEF_NO_COMMANDS
     # Note: Some formats (like Delta and Iceberg) support REPLACE TABLE but since we don't
@@ -83,6 +82,10 @@ class SparkEngineAdapter(
     @property
     def use_serverless(self) -> bool:
         return False
+
+    @property
+    def catalog_support(self) -> CatalogSupport:
+        return CatalogSupport.FULL_SUPPORT
 
     @classproperty
     def _sqlglot_to_spark_primitive_mapping(self) -> t.Dict[t.Any, t.Any]:

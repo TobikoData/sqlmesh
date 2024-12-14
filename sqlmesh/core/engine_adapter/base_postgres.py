@@ -22,7 +22,6 @@ if t.TYPE_CHECKING:
 
 class BasePostgresEngineAdapter(EngineAdapter):
     DEFAULT_BATCH_SIZE = 400
-    CATALOG_SUPPORT = CatalogSupport.SINGLE_CATALOG_ONLY
     COMMENT_CREATION_TABLE = CommentCreationTable.COMMENT_COMMAND_ONLY
     COMMENT_CREATION_VIEW = CommentCreationView.COMMENT_COMMAND_ONLY
 
@@ -59,6 +58,10 @@ class BasePostgresEngineAdapter(EngineAdapter):
             column_name: exp.DataType.build(data_type, dialect=self.dialect, udt=True)
             for column_name, data_type in resp
         }
+
+    @property
+    def catalog_support(self) -> CatalogSupport:
+        return CatalogSupport.SINGLE_CATALOG_ONLY
 
     def table_exists(self, table_name: TableName) -> bool:
         """

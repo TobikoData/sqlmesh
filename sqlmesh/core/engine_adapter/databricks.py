@@ -46,7 +46,6 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
             exp.DataType.build("DECIMAL", dialect=DIALECT).this: [(10, 0), (0,)],
         },
     )
-    CATALOG_SUPPORT = CatalogSupport.FULL_SUPPORT
 
     def __init__(self, *args: t.Any, **kwargs: t.Any):
         super().__init__(*args, **kwargs)
@@ -138,6 +137,10 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
             if catalog:
                 self.set_current_catalog(catalog)
         return self._spark
+
+    @property
+    def catalog_support(self) -> CatalogSupport:
+        return CatalogSupport.FULL_SUPPORT
 
     def _df_to_source_queries(
         self,

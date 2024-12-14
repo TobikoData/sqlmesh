@@ -20,6 +20,7 @@ from sqlmesh.core.config.common import (
     concurrent_tasks_validator,
     http_headers_validator,
 )
+from sqlmesh.core.engine_adapter.shared import CatalogSupport
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import (
@@ -1288,6 +1289,18 @@ class MSSQLConnectionConfig(ConnectionConfig):
         import pymssql
 
         return pymssql.connect
+
+    @property
+    def _extra_engine_config(self) -> t.Dict[str, t.Any]:
+        return {"catalog_support": CatalogSupport.REQUIRES_SET_CATALOG}
+
+
+class AzureSQLConnectionConfig(MSSQLConnectionConfig):
+    type_: t.Literal["azuresql"] = Field(alias="type", default="azuresql")  # type: ignore
+
+    @property
+    def _extra_engine_config(self) -> t.Dict[str, t.Any]:
+        return {"catalog_support": CatalogSupport.SINGLE_CATALOG_ONLY}
 
 
 class SparkConnectionConfig(ConnectionConfig):
