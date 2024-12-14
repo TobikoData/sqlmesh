@@ -650,7 +650,9 @@ class PythonModelTest(ModelTest):
     def _execute_model(self) -> pd.DataFrame:
         """Executes the python model and returns a DataFrame."""
         time_ctx = (
-            time_machine.travel(self._execution_time) if self._execution_time else nullcontext()
+            time_machine.travel(self._execution_time, tick=False)
+            if self._execution_time
+            else nullcontext()
         )
         with patch.dict(self._test_adapter_dialect.generator_class.TRANSFORMS, self._transforms):
             with t.cast(AbstractContextManager, time_ctx):
