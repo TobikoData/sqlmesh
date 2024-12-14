@@ -14,7 +14,7 @@ from sqlmesh.core.context import Context
 from sqlmesh.integrations.dlt import generate_dlt_models
 from sqlmesh.utils.date import yesterday_ds
 
-FREEZE_TIME = "2023-01-01 00:00:00"
+FREEZE_TIME = "2023-01-01 00:00:00 UTC"
 
 pytestmark = pytest.mark.slow
 

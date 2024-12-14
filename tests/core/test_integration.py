@@ -75,7 +75,7 @@ def plan_choice(plan_builder: PlanBuilder, choice: SnapshotChangeCategory) -> No
             plan_builder.set_choice(snapshot, choice)
 
 
-@time_machine.travel("2023-01-08 15:00:00")
+@time_machine.travel("2023-01-08 15:00:00 UTC")
 @pytest.mark.parametrize(
     "context_fixture",
     ["sushi_context", "sushi_no_default_catalog"],
@@ -215,7 +215,7 @@ def test_forward_only_plan_with_effective_date(context_fixture: Context, request
     ]
 
 
-@time_machine.travel("2023-01-08 15:00:00")
+@time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_forward_only_model_regular_plan(init_and_plan_context: t.Callable):
     context, plan = init_and_plan_context("examples/sushi")
     context.apply(plan)
@@ -308,7 +308,7 @@ def test_forward_only_model_regular_plan(init_and_plan_context: t.Callable):
     assert not prod_df["event_date"].tolist()
 
 
-@time_machine.travel("2023-01-08 15:00:00")
+@time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_forward_only_model_regular_plan_preview_enabled(init_and_plan_context: t.Callable):
     context, plan = init_and_plan_context("examples/sushi")
     context.apply(plan)
@@ -358,7 +358,7 @@ def test_forward_only_model_regular_plan_preview_enabled(init_and_plan_context: 
     assert dev_df["event_date"].tolist() == [pd.to_datetime("2023-01-07")]
 
 
-@time_machine.travel("2023-01-08 15:00:00")
+@time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_full_history_restatement_model_regular_plan_preview_enabled(
     init_and_plan_context: t.Callable,
 ):
@@ -431,7 +431,7 @@ def test_full_history_restatement_model_regular_plan_preview_enabled(
     context.apply(plan)
 
 
-@time_machine.travel("2023-01-08 15:00:00")
+@time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_metadata_changed_regular_plan_preview_enabled(init_and_plan_context: t.Callable):
     context, plan = init_and_plan_context("examples/sushi")
     context.apply(plan)
@@ -459,7 +459,7 @@ def test_metadata_changed_regular_plan_preview_enabled(init_and_plan_context: t.
     assert not plan.restatements
 
 
-@time_machine.travel("2023-01-08 15:00:00")
+@time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_hourly_model_with_lookback_no_backfill_in_dev(init_and_plan_context: t.Callable):
     context, plan = init_and_plan_context("examples/sushi")
 
@@ -551,7 +551,7 @@ def test_parent_cron_after_child(init_and_plan_context: t.Callable):
         ]
 
 
-@time_machine.travel("2023-01-08 00:00:00")
+@time_machine.travel("2023-01-08 00:00:00 UTC")
 @pytest.mark.parametrize(
     "forward_only, expected_intervals",
     [
@@ -606,7 +606,7 @@ def test_cron_not_aligned_with_day_boundary(
         "sushi.waiter_revenue_by_day", raise_if_missing=True
     )
 
-    with time_machine.travel("2023-01-08 00:10:00"):  # Past model's cron.
+    with time_machine.travel("2023-01-08 00:10:00 UTC"):  # Past model's cron.
         plan = context.plan(
             "dev", select_models=[model.name], no_prompts=True, skip_tests=True, enable_preview=True
         )
@@ -618,7 +618,7 @@ def test_cron_not_aligned_with_day_boundary(
         ]
 
 
-@time_machine.travel("2023-01-08 15:00:00")
+@time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_forward_only_parent_created_in_dev_child_created_in_prod(
     init_and_plan_context: t.Callable,
 ):
@@ -672,7 +672,7 @@ def test_forward_only_parent_created_in_dev_child_created_in_prod(
     context.apply(plan)
 
 
-@time_machine.travel("2023-01-08 15:00:00")
+@time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_plan_set_choice_is_reflected_in_missing_intervals(init_and_plan_context: t.Callable):
     context, plan = init_and_plan_context("examples/sushi")
     context.apply(plan)
@@ -933,7 +933,7 @@ def test_non_breaking_change_after_forward_only_in_dev(
     assert prod_df.empty
 
 
-@time_machine.travel("2023-01-08 15:00:00")
+@time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_indirect_non_breaking_change_after_forward_only_in_dev(init_and_plan_context: t.Callable):
     context, plan = init_and_plan_context("examples/sushi")
     context.apply(plan)
@@ -1055,7 +1055,7 @@ def test_indirect_non_breaking_change_after_forward_only_in_dev(init_and_plan_co
     assert not context.plan("prod", no_prompts=True, skip_tests=True).requires_backfill
 
 
-@time_machine.travel("2023-01-08 15:00:00")
+@time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_forward_only_precedence_over_indirect_non_breaking(init_and_plan_context: t.Callable):
     context, plan = init_and_plan_context("examples/sushi")
     context.apply(plan)
@@ -1128,14 +1128,14 @@ def test_forward_only_precedence_over_indirect_non_breaking(init_and_plan_contex
     assert not context.plan("prod", no_prompts=True, skip_tests=True).requires_backfill
 
 
-@time_machine.travel("2023-01-08 15:00:00")
+@time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_run_with_select_models(
     init_and_plan_context: t.Callable,
 ):
     context, plan = init_and_plan_context("examples/sushi")
     context.apply(plan)
 
-    with time_machine.travel("2023-01-09 00:00:00"):
+    with time_machine.travel("2023-01-09 00:00:00 UTC"):
         assert context.run(select_models=["*waiter_revenue_by_day"])
 
         snapshots = context.state_sync.state_sync.get_snapshots(context.snapshots.values())
@@ -1159,7 +1159,7 @@ def test_run_with_select_models(
         }
 
 
-@time_machine.travel("2023-01-08 15:00:00")
+@time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_run_with_select_models_no_auto_upstream(
     init_and_plan_context: t.Callable,
 ):
@@ -1195,7 +1195,7 @@ def test_run_with_select_models_no_auto_upstream(
         }
 
 
-@time_machine.travel("2023-01-08 15:00:00")
+@time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_select_models(init_and_plan_context: t.Callable):
     context, plan = init_and_plan_context("examples/sushi")
     context.apply(plan)
@@ -1273,7 +1273,7 @@ def test_select_models(init_and_plan_context: t.Callable):
     )
 
 
-@time_machine.travel("2023-01-08 15:00:00")
+@time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_select_unchanged_model_for_backfill(init_and_plan_context: t.Callable):
     context, plan = init_and_plan_context("examples/sushi")
     context.apply(plan)
@@ -1347,14 +1347,14 @@ def test_select_unchanged_model_for_backfill(init_and_plan_context: t.Callable):
     assert {o.name for o in schema_objects} == {"waiter_revenue_by_day", "top_waiters"}
 
 
-@time_machine.travel("2023-01-08 15:00:00")
+@time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_max_interval_end_per_model_not_applied_when_end_is_provided(
     init_and_plan_context: t.Callable,
 ):
     context, plan = init_and_plan_context("examples/sushi")
     context.apply(plan)
 
-    with time_machine.travel("2023-01-09 00:00:00"):
+    with time_machine.travel("2023-01-09 00:00:00 UTC"):
         context.run()
 
         plan = context.plan(
@@ -1363,7 +1363,7 @@ def test_max_interval_end_per_model_not_applied_when_end_is_provided(
         context.apply(plan)
 
 
-@time_machine.travel("2023-01-08 15:00:00")
+@time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_select_models_for_backfill(init_and_plan_context: t.Callable):
     context, _ = init_and_plan_context("examples/sushi")
 
@@ -1431,7 +1431,7 @@ def test_select_models_for_backfill(init_and_plan_context: t.Callable):
     )
 
 
-@time_machine.travel("2023-01-08 15:00:00")
+@time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_dbt_select_star_is_directly_modified(sushi_test_dbt_context: Context):
     context = sushi_test_dbt_context
 
@@ -1476,7 +1476,7 @@ def test_model_attr(sushi_test_dbt_context: Context, assert_exp_eq):
     )
 
 
-@time_machine.travel("2023-01-08 15:00:00")
+@time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_incremental_by_partition(init_and_plan_context: t.Callable):
     context, plan = init_and_plan_context("examples/sushi")
     context.apply(plan)
@@ -1530,7 +1530,7 @@ def test_incremental_by_partition(init_and_plan_context: t.Callable):
     ]
 
 
-@time_machine.travel("2023-01-08 15:00:00")
+@time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_custom_materialization(init_and_plan_context: t.Callable):
     context, _ = init_and_plan_context("examples/sushi")
 
@@ -1565,7 +1565,7 @@ def test_custom_materialization(init_and_plan_context: t.Callable):
     assert custom_insert_called
 
 
-@time_machine.travel("2023-01-08 15:00:00")
+@time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_unaligned_start_snapshot_with_non_deployable_downstream(init_and_plan_context: t.Callable):
     context, _ = init_and_plan_context("examples/sushi")
 
@@ -1620,7 +1620,7 @@ def test_unaligned_start_snapshot_with_non_deployable_downstream(init_and_plan_c
         assert snapshot_interval.intervals[0][0] == to_timestamp("2023-01-07")
 
 
-@time_machine.travel("2023-01-08 15:00:00")
+@time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_restatement_plan_ignores_changes(init_and_plan_context: t.Callable):
     context, plan = init_and_plan_context("examples/sushi")
     context.apply(plan)
@@ -1651,7 +1651,7 @@ def test_restatement_plan_ignores_changes(init_and_plan_context: t.Callable):
     context.apply(plan)
 
 
-@time_machine.travel("2023-01-08 15:00:00")
+@time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_plan_against_expired_environment(init_and_plan_context: t.Callable):
     context, plan = init_and_plan_context("examples/sushi")
     context.apply(plan)
@@ -1682,7 +1682,7 @@ def test_plan_against_expired_environment(init_and_plan_context: t.Callable):
     context.apply(plan)
 
 
-@time_machine.travel("2023-01-08 15:00:00")
+@time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_new_forward_only_model_concurrent_versions(init_and_plan_context: t.Callable):
     context, plan = init_and_plan_context("examples/sushi")
     context.apply(plan)
@@ -1774,7 +1774,7 @@ def test_new_forward_only_model_concurrent_versions(init_and_plan_context: t.Cal
     assert df.to_dict() == {"ds": {0: "2023-01-07"}, "b": {0: None}}
 
 
-@time_machine.travel("2023-01-08 15:00:00")
+@time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_new_forward_only_model_same_dev_environment(init_and_plan_context: t.Callable):
     context, plan = init_and_plan_context("examples/sushi")
     context.apply(plan)
@@ -1877,7 +1877,7 @@ def test_plan_twice_with_star_macro_yields_no_diff(tmp_path: Path):
     assert not new_plan.new_snapshots
 
 
-@time_machine.travel("2023-01-08 15:00:00")
+@time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_create_environment_no_changes_with_selector(init_and_plan_context: t.Callable):
     context, plan = init_and_plan_context("examples/sushi")
     context.apply(plan)
@@ -1893,7 +1893,7 @@ def test_create_environment_no_changes_with_selector(init_and_plan_context: t.Ca
     assert {o.name for o in schema_objects} == {"top_waiters"}
 
 
-@time_machine.travel("2023-01-08 15:00:00")
+@time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_empty_bacfkill(init_and_plan_context: t.Callable):
     context, _ = init_and_plan_context("examples/sushi")
 

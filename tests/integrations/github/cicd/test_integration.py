@@ -52,7 +52,7 @@ def get_columns(
     return controller._context.engine_adapter.columns(table)
 
 
-@time_machine.travel("2023-01-01 15:00:00")
+@time_machine.travel("2023-01-01 15:00:00 UTC")
 def test_merge_pr_has_non_breaking_change(
     github_client,
     make_controller,
@@ -248,7 +248,7 @@ def test_merge_pr_has_non_breaking_change(
         )
 
 
-@time_machine.travel("2023-01-01 15:00:00")
+@time_machine.travel("2023-01-01 15:00:00 UTC")
 def test_merge_pr_has_non_breaking_change_diff_start(
     github_client,
     make_controller,
@@ -447,7 +447,7 @@ def test_merge_pr_has_non_breaking_change_diff_start(
         )
 
 
-@time_machine.travel("2023-01-01 15:00:00")
+@time_machine.travel("2023-01-01 15:00:00 UTC")
 def test_merge_pr_has_non_breaking_change_no_categorization(
     github_client,
     make_controller,
@@ -757,7 +757,7 @@ def test_merge_pr_has_no_changes(
         )
 
 
-@time_machine.travel("2023-01-01 15:00:00")
+@time_machine.travel("2023-01-01 15:00:00 UTC")
 def test_no_merge_since_no_deploy_signal(
     github_client,
     make_controller,
@@ -938,7 +938,7 @@ def test_no_merge_since_no_deploy_signal(
         )
 
 
-@time_machine.travel("2023-01-01 15:00:00")
+@time_machine.travel("2023-01-01 15:00:00 UTC")
 def test_no_merge_since_no_deploy_signal_no_approvers_defined(
     github_client,
     make_controller,
@@ -1098,7 +1098,7 @@ def test_no_merge_since_no_deploy_signal_no_approvers_defined(
         )
 
 
-@time_machine.travel("2023-01-01 15:00:00")
+@time_machine.travel("2023-01-01 15:00:00 UTC")
 def test_deploy_comment_pre_categorized(
     github_client,
     make_controller,
@@ -1285,7 +1285,7 @@ def test_deploy_comment_pre_categorized(
         )
 
 
-@time_machine.travel("2023-01-01 15:00:00")
+@time_machine.travel("2023-01-01 15:00:00 UTC")
 def test_error_msg_when_applying_plan_with_bug(
     github_client,
     make_controller,
@@ -1438,7 +1438,7 @@ def test_error_msg_when_applying_plan_with_bug(
         )
 
 
-@time_machine.travel("2023-01-01 15:00:00")
+@time_machine.travel("2023-01-01 15:00:00 UTC")
 def test_overlapping_changes_models(
     github_client,
     make_controller,
@@ -1644,7 +1644,7 @@ def test_overlapping_changes_models(
         )
 
 
-@time_machine.travel("2023-01-01 15:00:00")
+@time_machine.travel("2023-01-01 15:00:00 UTC")
 def test_pr_delete_model(
     github_client,
     make_controller,

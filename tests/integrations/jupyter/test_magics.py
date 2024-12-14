@@ -23,7 +23,7 @@ SUSHI_EXAMPLE_PATH = pathlib.Path("./examples/sushi")
 SUCCESS_STYLE = "color: #008000; text-decoration-color: #008000"
 NEUTRAL_STYLE = "color: #008080; text-decoration-color: #008080"
 RICH_PRE_STYLE = "white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace"
-FREEZE_TIME = "2023-01-01 00:00:00"
+FREEZE_TIME = "2023-01-01 00:00:00 UTC"
 
 pytestmark = pytest.mark.jupyter
 
@@ -313,7 +313,7 @@ def test_plan(
 
 
 @pytest.mark.slow
-@time_machine.travel("2023-01-03 00:00:00")
+@time_machine.travel("2023-01-03 00:00:00 UTC")
 def test_run_dag(
     notebook, loaded_sushi_context, convert_all_html_output_to_text, get_all_html_output
 ):

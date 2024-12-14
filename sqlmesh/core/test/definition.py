@@ -649,9 +649,7 @@ class PythonModelTest(ModelTest):
 
     def _execute_model(self) -> pd.DataFrame:
         """Executes the python model and returns a DataFrame."""
-        time_ctx = (
-            freeze_time(self._execution_time, tick=False) if self._execution_time else nullcontext()
-        )
+        time_ctx = freeze_time(self._execution_time) if self._execution_time else nullcontext()
         with patch.dict(self._test_adapter_dialect.generator_class.TRANSFORMS, self._transforms):
             with t.cast(AbstractContextManager, time_ctx):
                 variables = self.body.get("vars", {}).copy()

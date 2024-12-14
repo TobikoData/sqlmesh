@@ -850,7 +850,7 @@ def test_plan_default_end(sushi_context_pre_scheduling: Context):
 @pytest.mark.slow
 def test_plan_start_ahead_of_end(copy_to_temp_path):
     path = copy_to_temp_path("examples/sushi")
-    with time_machine.travel("2024-01-02 00:00:00"):
+    with time_machine.travel("2024-01-02 00:00:00 UTC"):
         context = Context(paths=path, gateway="duckdb_persistent")
         context.plan("prod", no_prompts=True, auto_apply=True)
         assert all(
@@ -858,7 +858,7 @@ def test_plan_start_ahead_of_end(copy_to_temp_path):
             for i in context.state_sync.max_interval_end_per_model("prod").values()
         )
         context.close()
-    with time_machine.travel("2024-01-03 00:00:00"):
+    with time_machine.travel("2024-01-03 00:00:00 UTC"):
         context = Context(paths=path, gateway="duckdb_persistent")
         expression = d.parse(
             """

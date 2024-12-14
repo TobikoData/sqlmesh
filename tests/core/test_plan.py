@@ -1,6 +1,6 @@
 import logging
 import typing as t
-from datetime import datetime, timedelta
+from datetime import timedelta
 from unittest.mock import patch
 
 import pytest
@@ -727,7 +727,7 @@ def test_missing_intervals_lookback(make_snapshot, mocker: MockerFixture):
 
 
 @pytest.mark.slow
-@time_machine.travel(datetime.now(), tick=False)
+@time_machine.travel(now(), tick=False)
 def test_restate_models(sushi_context_pre_scheduling: Context):
     plan = sushi_context_pre_scheduling.plan(
         restate_models=["sushi.waiter_revenue_by_day", "tag:expensive"], no_prompts=True
@@ -781,7 +781,7 @@ def test_restate_models(sushi_context_pre_scheduling: Context):
 
 
 @pytest.mark.slow
-@time_machine.travel(datetime.now(), tick=False)
+@time_machine.travel(now(), tick=False)
 def test_restate_models_with_existing_missing_intervals(sushi_context: Context):
     yesterday_ts = to_timestamp(yesterday_ds())
 

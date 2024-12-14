@@ -289,7 +289,7 @@ test_config = config"""
         adapter.create_schema("sushi")
         if test_type.is_sqlmesh_runtime:
             self._replace_source_table(adapter, [])
-            with time_machine.travel("2019-12-31 00:00:00"):
+            with time_machine.travel("2019-12-31 00:00:00 UTC"):
                 context.plan("prod", auto_apply=True, no_prompts=True)  # type: ignore
         return run, adapter, context
 
