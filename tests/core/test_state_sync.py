@@ -2221,16 +2221,17 @@ def test_snapshot_batching(state_sync, mocker, make_snapshot):
         )
     )
     calls = mock.delete_from.call_args_list
+    identifiers = sorted([snapshot_a.identifier, snapshot_b.identifier, snapshot_c.identifier])
     assert mock.delete_from.call_args_list == [
         call(
             exp.to_table("sqlmesh._snapshots"),
             where=parse_one(
-                f"(name, identifier) in (('\"a\"', '{snapshot_a.identifier}'), ('\"a\"', '{snapshot_b.identifier}'))"
+                f"(name, identifier) in (('\"a\"', '{identifiers[0]}'), ('\"a\"', '{identifiers[1]}'))"
             ),
         ),
         call(
             exp.to_table("sqlmesh._snapshots"),
-            where=parse_one(f"(name, identifier) in (('\"a\"', '{snapshot_c.identifier}'))"),
+            where=parse_one(f"(name, identifier) in (('\"a\"', '{identifiers[2]}'))"),
         ),
     ]
 

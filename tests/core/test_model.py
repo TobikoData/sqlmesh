@@ -6268,7 +6268,7 @@ def test_fingerprint_signals():
     assert_metadata_only()
 
 
-def test_model_optimize(assert_exp_eq):
+def test_model_optimize(tmp_path: Path, assert_exp_eq):
     defaults = [
         ModelDefaultsConfig(optimize=True).dict(),
         ModelDefaultsConfig(optimize=False).dict(),
@@ -6326,3 +6326,9 @@ def test_model_optimize(assert_exp_eq):
     assert_exp_eq(
         load_sql_based_model(none_opt, defaults=defaults[1]).render_query(), non_optimized_sql
     )
+
+    # Ensure that plan works as expected (optimize flag affects the model's data hash)
+    for parsed_model in [enabled_opt, disabled_opt, none_opt]:
+        context = Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb")))
+        context.upsert_model(load_sql_based_model(parsed_model))
+        context.plan(auto_apply=True, no_prompts=True)
