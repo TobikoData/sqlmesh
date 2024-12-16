@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import pytest
 from click.testing import CliRunner
-from freezegun import freeze_time
+import time_machine
 
 from sqlmesh.cli.example_project import ProjectTemplate, init_example_project
 from sqlmesh.cli.main import cli
@@ -14,7 +14,7 @@ from sqlmesh.core.context import Context
 from sqlmesh.integrations.dlt import generate_dlt_models
 from sqlmesh.utils.date import yesterday_ds
 
-FREEZE_TIME = "2023-01-01 00:00:00"
+FREEZE_TIME = "2023-01-01 00:00:00 UTC"
 
 pytestmark = pytest.mark.slow
 
@@ -658,7 +658,7 @@ def test_run_no_prod(runner, tmp_path):
 
 
 @pytest.mark.parametrize("flag", ["--skip-backfill", "--dry-run"])
-@freeze_time(FREEZE_TIME)
+@time_machine.travel(FREEZE_TIME)
 def test_run_dev(runner, tmp_path, flag):
     create_example_project(tmp_path)
 
@@ -676,7 +676,7 @@ def test_run_dev(runner, tmp_path, flag):
     assert_model_batches_executed(result)
 
 
-@freeze_time(FREEZE_TIME)
+@time_machine.travel(FREEZE_TIME)
 def test_run_cron_not_elapsed(runner, tmp_path, caplog):
     create_example_project(tmp_path)
     init_prod_and_backfill(runner, tmp_path)
@@ -692,11 +692,12 @@ def test_run_cron_elapsed(runner, tmp_path):
     create_example_project(tmp_path)
 
     # Create and backfill `prod` environment
-    with freeze_time("2023-01-01 23:59:00"):
+    with time_machine.travel("2023-01-01 23:59:00 UTC", tick=False) as traveler:
+        runner = CliRunner()
         init_prod_and_backfill(runner, tmp_path)
 
-    # Run `prod` environment with daily cron elapsed
-    with freeze_time("2023-01-02 00:01:00"):
+        # Run `prod` environment with daily cron elapsed
+        traveler.move_to("2023-01-02 00:01:00 UTC")
         result = runner.invoke(cli, ["--log-file-dir", tmp_path, "--paths", tmp_path, "run"])
 
     assert result.exit_code == 0
