@@ -287,6 +287,7 @@ expression_validator = field_validator(
     "expressions_",
     "pre_statements_",
     "post_statements_",
+    "on_virtual_update_",
     "unique_key",
     mode="before",
     check_fields=False,
