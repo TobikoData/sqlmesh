@@ -1,0 +1,11 @@
+gateways:
+  local:
+    connection:
+      type: duckdb
+      database: db.db
+
+default_gateway: local
+
+model_defaults:
+  dialect: duckdb
+  start: 2024-12-15
