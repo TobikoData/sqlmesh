@@ -882,6 +882,7 @@ class _Model(ModelMeta, frozen=True):
             self.physical_version,
             self.gateway,
             self.interval_unit.value if self.interval_unit is not None else None,
+            self.optimize,
         ]
 
         for column_name, column_type in (self.columns_to_types_ or {}).items():
@@ -935,7 +936,6 @@ class _Model(ModelMeta, frozen=True):
                 self.project,
                 str(self.allow_partials),
                 gen(self.session_properties_) if self.session_properties_ else None,
-                str(self.optimize) if self.optimize is not None else None,
             ]
 
             for audit_name, audit_args in sorted(self.audits, key=lambda a: a[0]):

@@ -355,10 +355,11 @@ Learn more about these properties and their default values in the [model configu
 :   Specifies the gateway to use for the execution of this model. When not specified, the default gateway is used.
 
 ### optimize
-:   Whether the model's SQL should be optimized. This attribute is `true` by default. Setting it
+:   Whether the model's SQL should be optimized. All models are optimized by default. Setting this
 to `false` causes SQLMesh to disable query canonicalization & simplification. This should be turned off only if the optimized query leads to errors such as surpassing text limit.
 
-  NOTE: Turning off the optimizer will also disable column-level lineage, unless the query is manually qualified and all `SELECT` stars are expanded.
+!!! warning
+    Turning off the optimizer may prevent column-level lineage from working for the affected model and its descendants, unless all columns in the model's query are qualified and it contains no star projections (e.g. `SELECT *`).
 
 ## Incremental Model Properties
 

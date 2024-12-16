@@ -66,7 +66,7 @@ class BaseExpressionRenderer:
         self.update_schema({} if schema is None else schema)
         self._cache: t.List[t.Optional[exp.Expression]] = []
         self._model_fqn = model_fqn
-        self._optimize = True if optimize is None else optimize
+        self._optimize = optimize is not False
 
     def update_schema(self, schema: t.Dict[str, t.Any]) -> None:
         self.schema = d.normalize_mapping_schema(schema, dialect=self._dialect)
