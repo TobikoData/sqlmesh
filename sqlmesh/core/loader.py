@@ -313,7 +313,9 @@ class SqlMeshLoader(Loader):
                     else macro_file_mtime
                 )
                 with open(path, "r", encoding="utf-8") as file:
-                    jinja_macros.add_macros(extractor.extract(file.read()))
+                    jinja_macros.add_macros(
+                        extractor.extract(file.read(), dialect=config.model_defaults.dialect)
+                    )
 
         self._macros_max_mtime = macros_max_mtime
 
