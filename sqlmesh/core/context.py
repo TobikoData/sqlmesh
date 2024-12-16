@@ -1653,7 +1653,8 @@ class GenericContext(BaseContext, t.Generic[C]):
                 include_ctes=include_ctes,
             )
         finally:
-            test_adapter.close()
+            if test_adapter:
+                test_adapter.close()
 
     @python_api_analytics
     def test(
