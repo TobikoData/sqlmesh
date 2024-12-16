@@ -561,7 +561,7 @@ def test_evaluate_materialized_view_with_partitioned_by_cluster_by(
         [
             call("CREATE SCHEMA IF NOT EXISTS `sqlmesh__test_schema`"),
             call(
-                "CREATE MATERIALIZED VIEW `sqlmesh__test_schema`.`test_schema__test_model__1459498906` PARTITION BY `a` CLUSTER BY `b` AS SELECT `a` AS `a`, `b` AS `b` FROM `tbl` AS `tbl`"
+                "CREATE MATERIALIZED VIEW `sqlmesh__test_schema`.`test_schema__test_model__2190756674` PARTITION BY `a` CLUSTER BY `b` AS SELECT `a` AS `a`, `b` AS `b` FROM `tbl` AS `tbl`"
             ),
         ]
     )
@@ -2863,10 +2863,10 @@ def test_cleanup_managed(adapter_mock, make_snapshot, mocker: MockerFixture):
     evaluator.cleanup(target_snapshots=[cleanup_task])
 
     adapter_mock.drop_table.assert_called_once_with(
-        "sqlmesh__test_schema.test_schema__test_model__3545706913__temp"
+        "sqlmesh__test_schema.test_schema__test_model__1827466311__temp"
     )
     adapter_mock.drop_managed_table.assert_called_once_with(
-        "sqlmesh__test_schema.test_schema__test_model__3545706913"
+        "sqlmesh__test_schema.test_schema__test_model__1827466311"
     )
 
 

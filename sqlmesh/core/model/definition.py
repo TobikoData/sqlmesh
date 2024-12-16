@@ -882,7 +882,7 @@ class _Model(ModelMeta, frozen=True):
             self.physical_version,
             self.gateway,
             self.interval_unit.value if self.interval_unit is not None else None,
-            self.optimize,
+            str(self.optimize),
         ]
 
         for column_name, column_type in (self.columns_to_types_ or {}).items():
