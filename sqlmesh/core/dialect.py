@@ -61,6 +61,10 @@ class JinjaStatement(Jinja):
     pass
 
 
+class VirtualStatement(exp.Expression):
+    pass
+
+
 class ModelKind(exp.Expression):
     arg_types = {"this": True, "expressions": False}
 
@@ -772,6 +776,8 @@ def _is_command_statement(command: str, tokens: t.List[Token], pos: int) -> bool
 JINJA_QUERY_BEGIN = "JINJA_QUERY_BEGIN"
 JINJA_STATEMENT_BEGIN = "JINJA_STATEMENT_BEGIN"
 JINJA_END = "JINJA_END"
+ON_VIRTUAL_UPDATE_BEGIN = "ON_VIRTUAL_UPDATE_BEGIN"
+ON_VIRTUAL_UPDATE_END = "ON_VIRTUAL_UPDATE_END"
 
 
 def _is_jinja_statement_begin(tokens: t.List[Token], pos: int) -> bool:
@@ -794,10 +800,24 @@ def jinja_statement(statement: str) -> JinjaStatement:
     return JinjaStatement(this=exp.Literal.string(statement.strip()))
 
 
+def _is_virtual_statement_begin(tokens: t.List[Token], pos: int) -> bool:
+    return _is_command_statement(ON_VIRTUAL_UPDATE_BEGIN, tokens, pos)
+
+
+def _is_virtual_statement_end(tokens: t.List[Token], pos: int) -> bool:
+    return _is_command_statement(ON_VIRTUAL_UPDATE_END, tokens, pos)
+
+
+def virtual_statement(statement: exp.Expression) -> VirtualStatement:
+    return VirtualStatement(this=statement)
+
+
 class ChunkType(Enum):
     JINJA_QUERY = auto()
     JINJA_STATEMENT = auto()
     SQL = auto()
+    VIRTUAL_STATEMENT = auto()
+    VIRTUAL_JINJA_STATEMENT = auto()
 
 
 def parse_one(
@@ -837,9 +857,14 @@ def parse(
     total = len(tokens)
 
     pos = 0
+    virtual = False
     while pos < total:
         token = tokens[pos]
-        if _is_jinja_end(tokens, pos) or (
+        if _is_virtual_statement_end(tokens, pos):
+            pos += 2
+            virtual = False
+            chunks.append(([], ChunkType.SQL))
+        elif _is_jinja_end(tokens, pos) or (
             chunks[-1][1] == ChunkType.SQL
             and token.token_type == TokenType.SEMICOLON
             and pos < total - 1
@@ -850,13 +875,32 @@ def parse(
                 # Jinja end statement
                 chunks[-1][0].append(token)
                 pos += 2
-            chunks.append(([], ChunkType.SQL))
+            if virtual and tokens[pos] != ON_VIRTUAL_UPDATE_END:
+                # This is required for nested Jinja statements that precede
+                # SQL statements within an ON_VIRTUAL_UPDATE block
+                chunks.append(
+                    (
+                        [Token(TokenType.VAR, text=ON_VIRTUAL_UPDATE_BEGIN)],
+                        ChunkType.VIRTUAL_STATEMENT,
+                    )
+                )
+            else:
+                chunks.append(([], ChunkType.SQL))
         elif _is_jinja_query_begin(tokens, pos):
             chunks.append(([token], ChunkType.JINJA_QUERY))
             pos += 2
         elif _is_jinja_statement_begin(tokens, pos):
-            chunks.append(([token], ChunkType.JINJA_STATEMENT))
+            chunks.append(
+                (
+                    [token],
+                    ChunkType.VIRTUAL_JINJA_STATEMENT if virtual else ChunkType.JINJA_STATEMENT,
+                )
+            )
             pos += 2
+        elif _is_virtual_statement_begin(tokens, pos):
+            chunks.append(([token], ChunkType.VIRTUAL_STATEMENT))
+            pos += 2
+            virtual = True
         else:
             chunks[-1][0].append(token)
             pos += 1
@@ -873,13 +917,23 @@ def parse(
                 if expression:
                     expression.meta["sql"] = parser._find_sql(chunk[0], chunk[-1])
                     expressions.append(expression)
+        elif chunk_type == ChunkType.VIRTUAL_STATEMENT:
+            sql_chunk = chunk[1:-1]
+            for expression in parser.parse(sql_chunk, sql):
+                if expression:
+                    expression.meta["sql"] = expression.sql(dialect=dialect)
+                    expressions.append(virtual_statement(expression))
         else:
             start, *_, end = chunk
             segment = sql[start.end + 2 : end.start - 1]
             factory = jinja_query if chunk_type == ChunkType.JINJA_QUERY else jinja_statement
             expression = factory(segment.strip())
             expression.meta["sql"] = sql[start.start : end.end + 1]
-            expressions.append(expression)
+            expressions.append(
+                virtual_statement(expression)
+                if chunk_type == ChunkType.VIRTUAL_JINJA_STATEMENT
+                else expression
+            )
 
     return expressions
 

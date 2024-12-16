@@ -1662,6 +1662,21 @@ def to_table_mapping(
     }
 
 
+def to_view_mapping(
+    snapshots: t.Iterable[Snapshot],
+    environment_naming_info: EnvironmentNamingInfo,
+    default_catalog: t.Optional[str] = None,
+    dialect: t.Optional[str] = None,
+) -> t.Dict[str, str]:
+    return {
+        snapshot.name: snapshot.display_name(
+            environment_naming_info, default_catalog=default_catalog, dialect=dialect
+        )
+        for snapshot in snapshots
+        if snapshot.is_model
+    }
+
+
 def has_paused_forward_only(
     targets: t.Iterable[SnapshotIdLike],
     snapshots: t.Union[t.List[Snapshot], t.Dict[SnapshotId, Snapshot]],

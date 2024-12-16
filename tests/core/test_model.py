@@ -6689,3 +6689,172 @@ def test_gateway_specific_render(assert_exp_eq) -> None:
     )
     assert isinstance(context._get_engine_adapter("duckdb"), DuckDBEngineAdapter)
     assert len(context._engine_adapters) == 2
+def test_model_on_virtual_update(make_snapshot: t.Callable):
+    # Macro to test resolution within virtual statement
+    @macro()
+    def resolve_parent_name(evaluator, name):
+        return evaluator.resolve_table(name.name)
+
+    expressions = d.parse(
+        """
+        MODEL (
+            name demo_db.table,
+            owner owner_name,
+        );
+
+        SELECT id from parent;
+
+        ON_VIRTUAL_UPDATE_BEGIN;
+
+        CREATE OR REPLACE VIEW test_view FROM demo_db.table;
+        GRANT SELECT ON VIEW @this_model TO ROLE owner_name;
+        JINJA_STATEMENT_BEGIN;
+        GRANT SELECT ON VIEW {{this_model}} TO ROLE admin;
+        JINJA_END;
+        GRANT REFERENCES, SELECT ON FUTURE VIEWS IN DATABASE demo_db TO ROLE owner_name;
+        @resolve_parent_name('parent');
+        GRANT SELECT ON VIEW demo_db.table /* sqlglot.meta replace=false */ TO ROLE admin; 
+
+        ON_VIRTUAL_UPDATE_END;
+
+    """
+    )
+
+    parent_expressions = d.parse(
+        """
+        MODEL (
+            name parent,
+        );
+
+        SELECT 1 from id;
+
+        ON_VIRTUAL_UPDATE_BEGIN;
+        JINJA_STATEMENT_BEGIN;
+        GRANT SELECT ON VIEW {{this_model}} TO ROLE admin;
+        JINJA_END;
+        ON_VIRTUAL_UPDATE_END;
+
+    """
+    )
+
+    model = load_sql_based_model(expressions)
+    parent = load_sql_based_model(parent_expressions)
+
+    parent_snapshot = make_snapshot(parent)
+    parent_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    version = parent_snapshot.version
+
+    expected_virtual_statements = [
+        *d.parse("CREATE OR REPLACE VIEW test_view FROM demo_db.table;"),
+        *d.parse("GRANT SELECT ON VIEW @this_model TO ROLE owner_name;"),
+        *d.parse(
+            "JINJA_STATEMENT_BEGIN; GRANT SELECT ON VIEW {{this_model}} TO ROLE admin; JINJA_END;"
+        ),
+        *d.parse(
+            "GRANT REFERENCES, SELECT ON FUTURE VIEWS IN DATABASE demo_db TO ROLE owner_name;"
+        ),
+        *d.parse("@resolve_parent_name('parent')"),
+        *d.parse(
+            "GRANT SELECT ON VIEW demo_db.table /* sqlglot.meta replace=false */ TO ROLE admin;"
+        ),
+    ]
+
+    assert model.on_virtual_update == expected_virtual_statements
+
+    assert parent.on_virtual_update == [
+        *d.parse(
+            "JINJA_STATEMENT_BEGIN; GRANT SELECT ON VIEW {{this_model}} TO ROLE admin; JINJA_END;"
+        )
+    ]
+
+    table_mapping = {'"demo_db"."table"': "demo_db__dev.table"}
+    snapshots = {'"parent"': parent_snapshot}
+
+    rendered_statements = model._render_statements(
+        model.on_virtual_update, snapshots=snapshots, table_mapping=table_mapping
+    )
+
+    assert len(rendered_statements) == 6
+    assert (
+        rendered_statements[0].sql()
+        == 'CREATE OR REPLACE VIEW "test_view" AS SELECT * FROM "demo_db__dev"."table" AS "table" /* demo_db.table */'
+    )
+    assert (
+        rendered_statements[1].sql()
+        == 'GRANT SELECT ON VIEW "demo_db__dev"."table" /* demo_db.table */ TO ROLE "owner_name"'
+    )
+    assert (
+        rendered_statements[3].sql()
+        == "GRANT REFERENCES, SELECT ON FUTURE VIEWS IN DATABASE demo_db TO ROLE owner_name"
+    )
+    assert rendered_statements[4].sql() == f'"sqlmesh__default"."parent__{version}"'
+
+    # When replace=false the table should remain as is
+    assert (
+        rendered_statements[5].sql()
+        == 'GRANT SELECT ON VIEW "demo_db"."table" /* sqlglot.meta replace=false */ TO ROLE "admin"'
+    )
+
+    rendered_parent_statements = model._render_statements(
+        parent.on_virtual_update, snapshots=snapshots, table_mapping=table_mapping
+    )
+    assert (
+        rendered_statements[2].sql()
+        == rendered_parent_statements[0].sql()
+        == 'GRANT SELECT ON VIEW "demo_db__dev"."table" /* demo_db.table */ TO ROLE "admin"'
+    )
+
+
+def test_python_model_on_virtual_update():
+    macros = """
+    {% macro index_name(v) %}{{ v }}{% endmacro %}
+    """
+
+    jinja_macros = JinjaMacroRegistry()
+    jinja_macros.add_macros(MacroExtractor().extract(macros))
+
+    @model(
+        "db.test_model",
+        kind="full",
+        columns={"id": "string", "name": "string"},
+        on_virtual_update=[
+            "JINJA_STATEMENT_BEGIN;\nCREATE INDEX {{index_name('id_index')}} ON db.test_model(id);\nJINJA_END;",
+            parse_one("GRANT SELECT ON VIEW @this_model TO ROLE dev_role;"),
+            "GRANT REFERENCES, SELECT ON FUTURE VIEWS IN DATABASE db TO ROLE dev_role;",
+        ],
+    )
+    def model_with_virtual_statements(context, **kwargs):
+        return pd.DataFrame(
+            [
+                {
+                    "id": context.var("1"),
+                    "name": context.var("var"),
+                }
+            ]
+        )
+
+    python_model = model.get_registry()["db.test_model"].model(
+        module_path=Path("."), path=Path("."), dialect="duckdb", jinja_macros=jinja_macros
+    )
+
+    assert len(jinja_macros.root_macros) == 1
+    assert len(python_model.jinja_macros.root_macros) == 1
+    assert "index_name" in python_model.jinja_macros.root_macros
+    assert len(python_model.on_virtual_update) == 3
+
+    rendered_statements = python_model._render_statements(
+        python_model.on_virtual_update, table_mapping={'"db"."test_model"': "db.test_model"}
+    )
+
+    assert (
+        rendered_statements[0].sql()
+        == 'CREATE INDEX "id_index" ON "db"."test_model" /* db.test_model */("id" NULLS LAST)'
+    )
+    assert (
+        rendered_statements[1].sql()
+        == 'GRANT SELECT ON VIEW "db"."test_model" /* db.test_model */ TO ROLE "dev_role"'
+    )
+    assert (
+        rendered_statements[2].sql()
+        == "GRANT REFERENCES, SELECT ON FUTURE VIEWS IN DATABASE db TO ROLE dev_role"
+    )

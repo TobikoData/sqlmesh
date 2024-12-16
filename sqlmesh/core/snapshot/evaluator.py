@@ -60,6 +60,7 @@ from sqlmesh.core.snapshot import (
     SnapshotInfoLike,
     SnapshotTableCleanupTask,
 )
+from sqlmesh.core.snapshot.definition import to_view_mapping
 from sqlmesh.utils import random_id
 from sqlmesh.utils.concurrency import (
     concurrent_apply_to_snapshots,
@@ -986,6 +987,47 @@ class SnapshotEvaluator:
                 return adapter
             raise SQLMeshError(f"Gateway '{gateway}' not found in the available engine adapters.")
         return self.adapter
+
+    def _execute_virtual_statements(
+        self,
+        target_snapshots: t.Iterable[Snapshot],
+        snapshots: t.Dict[SnapshotId, Snapshot],
+        start: TimeLike,
+        end: TimeLike,
+        execution_time: TimeLike,
+        environment_naming_info: EnvironmentNamingInfo,
+        default_catalog: t.Optional[str] = None,
+        deployability_index: t.Optional[DeployabilityIndex] = None,
+    ) -> None:
+        """
+        Executes virtual statements for the provided target snapshots.
+        """
+
+        # Resolving the tables to their qualified view names.
+        table_mapping = to_view_mapping(
+            snapshots.values(),
+            environment_naming_info,
+            default_catalog=default_catalog,
+            dialect=self.adapter.dialect,
+        )
+
+        for snapshot in target_snapshots:
+            adapter = self._get_adapter(snapshot.model_gateway)
+            snapshot_deps = {snapshots[p_sid].name: snapshots[p_sid] for p_sid in snapshot.parents}
+            snapshot_deps[snapshot.name] = snapshot
+            if virtual_statements := snapshot.model.on_virtual_update:
+                adapter.execute(
+                    snapshot.model._render_statements(
+                        virtual_statements,
+                        start=start,
+                        end=end,
+                        execution_time=execution_time,
+                        snapshots=snapshots,
+                        deployability_index=deployability_index,
+                        engine_adapter=adapter,
+                        table_mapping=table_mapping,
+                    )
+                )
 
 
 def _evaluation_strategy(snapshot: SnapshotInfoLike, adapter: EngineAdapter) -> EvaluationStrategy:

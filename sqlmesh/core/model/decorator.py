@@ -135,7 +135,7 @@ class model(registry_decorator):
             **self.kwargs,
         }
 
-        for key in ("pre_statements", "post_statements"):
+        for key in ("pre_statements", "post_statements", "on_virtual_update"):
             statements = common_kwargs.get(key)
             if statements:
                 common_kwargs[key] = [

@@ -134,6 +134,9 @@ class _Model(ModelMeta, frozen=True):
     post_statements_: t.Optional[t.List[exp.Expression]] = Field(
         default=None, alias="post_statements"
     )
+    on_virtual_update_: t.Optional[t.List[exp.Expression]] = Field(
+        default=None, alias="on_virtual_update"
+    )
 
     _expressions_validator = expression_validator
 
@@ -502,9 +505,17 @@ class _Model(ModelMeta, frozen=True):
         return self.post_statements_ or []
 
     @property
+    def on_virtual_update(self) -> t.List[exp.Expression]:
+        return self.on_virtual_update_ or []
+
+    @property
     def macro_definitions(self) -> t.List[d.MacroDef]:
         """All macro definitions from the list of expressions."""
-        return [s for s in self.pre_statements + self.post_statements if isinstance(s, d.MacroDef)]
+        return [
+            s
+            for s in self.pre_statements + self.post_statements + self.on_virtual_update
+            if isinstance(s, d.MacroDef)
+        ]
 
     def _render_statements(
         self,
@@ -933,7 +944,7 @@ class _Model(ModelMeta, frozen=True):
             data.append(key)
             data.append(gen(value))
 
-        for statement in (*self.pre_statements, *self.post_statements):
+        for statement in (*self.pre_statements, *self.post_statements, *self.on_virtual_update):
             statement_exprs: t.List[exp.Expression] = []
             if not isinstance(statement, d.MacroDef):
                 rendered = self._statement_renderer(statement).render()
@@ -1026,7 +1037,7 @@ class _Model(ModelMeta, frozen=True):
         if metadata_only_macros:
             additional_metadata.append(str(metadata_only_macros))
 
-        for statement in (*self.pre_statements, *self.post_statements):
+        for statement in (*self.pre_statements, *self.post_statements, *self.on_virtual_update):
             if self._is_metadata_statement(statement):
                 additional_metadata.append(gen(statement))
 
@@ -1098,6 +1109,7 @@ class SqlModel(_Model):
         query: The main query representing the model.
         pre_statements: The list of SQL statements that precede the model's query.
         post_statements: The list of SQL statements that follow after the model's query.
+        on_virtual_update: The list of SQL statements to be executed after virtual update.
     """
 
     query: t.Union[exp.Query, d.JinjaQuery, d.MacroFunc]
@@ -1159,6 +1171,7 @@ class SqlModel(_Model):
         result.extend(self.pre_statements)
         result.append(self.query)
         result.extend(self.post_statements)
+        result.extend(self.on_virtual_update)
         return result
 
     @property
@@ -1733,7 +1746,7 @@ def load_sql_based_model(
     rendered_meta = rendered_meta_exprs[0]
 
     # Extract the query and any pre/post statements
-    query_or_seed_insert, pre_statements, post_statements, inline_audits = (
+    query_or_seed_insert, pre_statements, post_statements, on_virtual_update, inline_audits = (
         _split_sql_model_statements(expressions[1:], path, dialect=dialect)
     )
 
@@ -1776,6 +1789,7 @@ def load_sql_based_model(
     common_kwargs = dict(
         pre_statements=pre_statements,
         post_statements=post_statements,
+        on_virtual_update=on_virtual_update,
         defaults=defaults,
         path=path,
         module_path=module_path,
@@ -2027,6 +2041,8 @@ def _create_model(
         statements.append(kwargs["query"])
     if "post_statements" in kwargs:
         statements.extend(kwargs["post_statements"])
+    if "on_virtual_update" in kwargs:
+        statements.extend(kwargs["on_virtual_update"])
 
     jinja_macro_references, used_variables = extract_macro_references_and_variables(
         *(gen(e) for e in statements)
@@ -2116,6 +2132,7 @@ def _split_sql_model_statements(
     t.Optional[exp.Expression],
     t.List[exp.Expression],
     t.List[exp.Expression],
+    t.List[exp.Expression],
     UniqueKeyDict[str, ModelAudit],
 ]:
     """Extracts the SELECT query from a sequence of expressions.
@@ -2134,6 +2151,7 @@ def _split_sql_model_statements(
 
     query_positions = []
     sql_statements = []
+    on_virtual_update = []
     inline_audits: UniqueKeyDict[str, ModelAudit] = UniqueKeyDict("inline_audits")
 
     idx = 0
@@ -2145,7 +2163,9 @@ def _split_sql_model_statements(
             loaded_audit = load_audit([expr, expressions[idx + 1]], dialect=dialect)
             assert isinstance(loaded_audit, ModelAudit)
             inline_audits[loaded_audit.name] = loaded_audit
-            idx += 2
+            idx += 1
+        elif isinstance(expr, d.VirtualStatement):
+            on_virtual_update.append(expr.this)
         else:
             if (
                 isinstance(expr, (exp.Query, d.JinjaQuery))
@@ -2157,16 +2177,16 @@ def _split_sql_model_statements(
             ):
                 query_positions.append((expr, idx))
             sql_statements.append(expr)
-            idx += 1
+        idx += 1
 
     if not query_positions:
-        return None, sql_statements, [], inline_audits
+        return None, sql_statements, [], on_virtual_update, inline_audits
 
     elif len(query_positions) > 1:
         raise_config_error("Only one SELECT query is allowed per model", path)
 
     query, pos = query_positions[0]
-    return query, sql_statements[:pos], sql_statements[pos + 1 :], inline_audits
+    return query, sql_statements[:pos], sql_statements[pos + 1 :], on_virtual_update, inline_audits
 
 
 def _resolve_session_properties(
