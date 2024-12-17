@@ -193,19 +193,31 @@ def extract_fields(query: sqlglot.exp.Expression, model: SqlModel) -> list[dict]
         # First get CTE information to use for type inference
         cte_info = extract_cte_info(query)
         
+        # Get table alias mapping
+        table_aliases = extract_table_aliases(query)
+        
         # Build a map of CTE fields for faster lookup
         cte_field_map = {}
         for cte_name, cte_fields in cte_info.items():
             for field_name, field_info in cte_fields.items():
                 cte_field_map[f"{cte_name}.{field_name}"] = field_info
-                # Add CTE fields to the output
-                fields.append({
-                    "name": field_name,
-                    "type": field_info["type"],
-                    "sql": field_info["sql"],
-                    "is_agg": field_info["is_agg"]
-                })
-        
+                # Add CTE fields to the output with real table alias
+                base_table = table_aliases.get(cte_name)
+                if base_table:
+                    fields.append({
+                        "name": f"{base_table}.{field_name}",
+                        "type": field_info["type"],
+                        "sql": field_info["sql"],
+                        "is_agg": field_info["is_agg"]
+                    })
+                else:
+                    fields.append({
+                        "name": field_name,
+                        "type": field_info["type"],
+                        "sql": field_info["sql"],
+                        "is_agg": field_info["is_agg"]
+                    })
+
         # Get the model's column types
         column_types = model.columns_to_types_or_raise
         
@@ -298,18 +310,7 @@ def extract_fields(query: sqlglot.exp.Expression, model: SqlModel) -> list[dict]
                         col_name = col.this.this if isinstance(col.this, sqlglot.exp.Identifier) else str(col.this)
                         if col_name in column_types:
                             base_type = column_types[col_name]
-                            if base_type.is_type(*sqlglot.exp.DataType.INTEGER_TYPES):
-                                data_type = clean_type(str(base_type.this).upper())
-                            elif base_type.is_type(*sqlglot.exp.DataType.REAL_TYPES):
-                                if base_type.this == sqlglot.exp.DataType.Type.DECIMAL:
-                                    params = [p.this for p in base_type.find_all(sqlglot.exp.DataTypeParam)]
-                                    data_type = f"DECIMAL({','.join(map(str, params))})" if params else "DECIMAL"
-                                else:
-                                    data_type = clean_type(str(base_type.this).upper())
-                            elif base_type.is_type(*sqlglot.exp.DataType.TEMPORAL_TYPES):
-                                data_type = clean_type(str(base_type.this).upper())
-                            else:
-                                data_type = clean_type(str(base_type.this).upper())
+                            data_type = clean_type(str(base_type.this).upper())
                     elif isinstance(expr.this, sqlglot.exp.Binary):
                         # For binary operations (e.g. division), check if either operand is an aggregate
                         is_agg = any(isinstance(node, (sqlglot.exp.Count, sqlglot.exp.Sum, sqlglot.exp.Avg))
@@ -360,16 +361,47 @@ def extract_fields(query: sqlglot.exp.Expression, model: SqlModel) -> list[dict]
                         data_type = clean_type(str(base_type.this).upper())
             
             if field_name and data_type != "UNKNOWN":
+                # Get the base table name if this field is from a CTE
+                base_table = None
+                if isinstance(expr.this, sqlglot.exp.Column) and hasattr(expr.this, 'table') and expr.this.table:
+                    table_name = expr.this.table.this if isinstance(expr.this.table, sqlglot.exp.Identifier) else str(expr.this.table)
+                    base_table = table_aliases.get(table_name)
+
                 # Only add non-CTE fields here since we already added CTE fields above
                 if not any(f["name"] == field_name for f in fields):
                     fields.append({
-                        "name": field_name,
+                        "name": f"{base_table}.{field_name}" if base_table else field_name,
                         "type": data_type,
                         "sql": sql_expr,
                         "is_agg": is_agg
                     })
     
     return fields
+
+
+def extract_table_aliases(query: sqlglot.exp.Expression) -> dict:
+    """Extract mapping of CTE names to their base table aliases."""
+    alias_map = {}
+    
+    if isinstance(query, sqlglot.exp.Select):
+        # First get CTE base tables
+        for cte in query.find_all(sqlglot.exp.CTE):
+            cte_name = cte.alias.this if isinstance(cte.alias, sqlglot.exp.Identifier) else str(cte.alias)
+            base_table = extract_base_table_from_cte(cte)
+            if base_table:
+                alias_map[cte_name] = base_table
+        
+        # Then get table aliases from joins
+        for join in query.find_all(sqlglot.exp.Join):
+            if join.this:
+                table = join.this
+                if isinstance(table, sqlglot.exp.Table):
+                    table_name = table.this.this if isinstance(table.this, sqlglot.exp.Identifier) else str(table.this)
+                    if hasattr(table, 'alias') and table.alias:
+                        alias = table.alias.this if isinstance(table.alias, sqlglot.exp.Identifier) else str(table.alias)
+                        alias_map[alias] = table_name
+    
+    return alias_map
 
 
 def extract_model_info(query: sqlglot.exp.Expression, model: SqlModel) -> dict:
