@@ -2,7 +2,11 @@ MODEL (
   name ecommerce.gold.customer_metrics,
   kind FULL,
   grain [customer_id],
-  references [ecommerce.silver.customers, ecommerce.silver.orders]
+  tags ['gold'],
+  references [
+    ecommerce.silver.customers,
+    ecommerce.silver.orders
+  ]
 );
 
 SELECT

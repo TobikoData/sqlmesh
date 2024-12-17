@@ -2,6 +2,7 @@ MODEL (
   name ecommerce.gold.shipping_performance_metrics,
   kind FULL,
   grain [carrier_id],
+  tags ['gold'],
   references [ecommerce.silver.shipments, ecommerce.silver.customer_addresses]
 );
 

@@ -2,6 +2,7 @@ MODEL (
   name ecommerce.gold.supplier_performance_metrics,
   kind FULL,
   grain [supplier_id],
+  tags ['gold'],
   references [ecommerce.silver.suppliers, ecommerce.silver.products, ecommerce.silver.order_items]
 );
 

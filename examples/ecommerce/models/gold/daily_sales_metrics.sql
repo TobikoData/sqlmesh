@@ -2,6 +2,7 @@ MODEL (
   name ecommerce.gold.daily_sales_metrics,
   kind FULL,
   grain [date],
+  tags ['gold'],
   references [ecommerce.silver.orders, ecommerce.silver.order_items]
 );
 

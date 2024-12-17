@@ -3,6 +3,7 @@ MODEL (
   kind INCREMENTAL_BY_UNIQUE_KEY (
     unique_key [category_id]
   ),
+  tags ['silver'],
   references [ecommerce.bronze.raw_product_categories]
 );
 

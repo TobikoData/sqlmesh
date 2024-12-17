@@ -3,6 +3,7 @@ MODEL (
   kind INCREMENTAL_BY_UNIQUE_KEY (
     unique_key [order_item_id]
   ),
+  tags ['silver'],
   references [ecommerce.bronze.raw_order_items]
 );
 
