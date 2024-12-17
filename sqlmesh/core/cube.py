@@ -10,6 +10,13 @@ from sqlmesh.core.config.loader import load_config_from_yaml
 import sqlglot
 
 
+def clean_type(type_str: str) -> str:
+    """Remove TYPE. prefix from type strings if present."""
+    if isinstance(type_str, str) and type_str.startswith("TYPE."):
+        return type_str[5:]
+    return type_str
+
+
 def extract_table_from_expr(expr: sqlglot.exp.Expression) -> str:
     """Extract the actual table name from an expression."""
     if isinstance(expr, sqlglot.exp.Table):
@@ -147,26 +154,30 @@ def extract_cte_info(query: sqlglot.exp.Expression) -> dict:
                             field_name = expr.alias.this if isinstance(expr.alias, sqlglot.exp.Identifier) else str(expr.alias)
                             sql_expr = expr.this.sql(pretty=True)
                             # Infer type and check for aggregation
-                            if isinstance(expr.this, sqlglot.exp.Count):
-                                field_type = "BIGINT"
+                            if isinstance(expr.this, (sqlglot.exp.Count, sqlglot.exp.Sum, sqlglot.exp.Avg)):
                                 is_agg = True
-                            elif isinstance(expr.this, sqlglot.exp.Sum):
-                                field_type = "DECIMAL"
-                                is_agg = True
-                            elif isinstance(expr.this, sqlglot.exp.Avg):
-                                field_type = "DOUBLE"
-                                is_agg = True
-                                sql_expr = expr.this.sql(pretty=True)  # Preserve the AVG calculation
+                                if isinstance(expr.this, sqlglot.exp.Count):
+                                    field_type = "BIGINT"
+                                elif isinstance(expr.this, sqlglot.exp.Sum):
+                                    field_type = "DECIMAL"
+                                elif isinstance(expr.this, sqlglot.exp.Avg):
+                                    field_type = "DOUBLE"
                             elif isinstance(expr.this, sqlglot.exp.Cast):
-                                field_type = str(expr.this.args["to"].this).upper()
-                            elif isinstance(expr.this, sqlglot.exp.DateTrunc) or isinstance(expr.this, sqlglot.exp.Date):
+                                field_type = clean_type(str(expr.this.args["to"].this).upper())
+                            elif isinstance(expr.this, (sqlglot.exp.DateTrunc, sqlglot.exp.Date)):
                                 field_type = "DATE"
+                            # Check for expressions containing aggregates
+                            elif any(isinstance(node, (sqlglot.exp.Count, sqlglot.exp.Sum, sqlglot.exp.Avg)) 
+                                   for node in expr.this.find_all((sqlglot.exp.Count, sqlglot.exp.Sum, sqlglot.exp.Avg))):
+                                is_agg = True
+                                field_type = "DECIMAL"  # Default to DECIMAL for complex aggregates
                         
                         if field_name:
                             cte_fields[field_name] = {
                                 "type": field_type,
                                 "sql": sql_expr,
-                                "is_agg": is_agg
+                                "is_agg": is_agg,
+                                "original_cte": cte_name  # Track which CTE this field came from
                             }
                 
                 cte_info[cte_name] = cte_fields
@@ -178,15 +189,22 @@ def extract_fields(query: sqlglot.exp.Expression, model: SqlModel) -> list[dict]
     """Extract all fields from a query."""
     fields = []
     
-    def clean_type(type_str: str) -> str:
-        """Remove TYPE. prefix from type strings if present."""
-        if type_str.startswith("TYPE."):
-            return type_str[5:]
-        return type_str
-
     if isinstance(query, sqlglot.exp.Select):
         # First get CTE information to use for type inference
         cte_info = extract_cte_info(query)
+        
+        # Build a map of CTE fields for faster lookup
+        cte_field_map = {}
+        for cte_name, cte_fields in cte_info.items():
+            for field_name, field_info in cte_fields.items():
+                cte_field_map[f"{cte_name}.{field_name}"] = field_info
+                # Add CTE fields to the output
+                fields.append({
+                    "name": field_name,
+                    "type": field_info["type"],
+                    "sql": field_info["sql"],
+                    "is_agg": field_info["is_agg"]
+                })
         
         # Get the model's column types
         column_types = model.columns_to_types_or_raise
@@ -201,23 +219,48 @@ def extract_fields(query: sqlglot.exp.Expression, model: SqlModel) -> list[dict]
                 field_name = expr.alias.this if isinstance(expr.alias, sqlglot.exp.Identifier) else str(expr.alias)
                 
                 # Try to get the original SQL expression from CTE if available
-                table_name = None
-                col_name = None
                 if isinstance(expr.this, sqlglot.exp.Column):
+                    table_name = None
                     if hasattr(expr.this, 'table') and expr.this.table:
                         table_name = expr.this.table.this if isinstance(expr.this.table, sqlglot.exp.Identifier) else str(expr.this.table)
                     col_name = expr.this.this.this if isinstance(expr.this.this, sqlglot.exp.Identifier) else str(expr.this.this)
-                    if table_name in cte_info and col_name in cte_info[table_name]:
-                        cte_field = cte_info[table_name][col_name]
-                        sql_expr = cte_field["sql"]
-                        data_type = cte_field["type"]
-                        is_agg = cte_field.get("is_agg", False)
+                    
+                    # Check if this is a CTE field reference
+                    if table_name:
+                        cte_field_key = f"{table_name}.{col_name}"
+                        if cte_field_key in cte_field_map:
+                            cte_field = cte_field_map[cte_field_key]
+                            sql_expr = cte_field["sql"]
+                            data_type = cte_field["type"]
+                            is_agg = cte_field["is_agg"]  # Preserve aggregation status from CTE
                 
                 if not sql_expr:
                     sql_expr = expr.this.sql(pretty=True)
-                    # Check if this is an aggregation
+                    # Check if this is an aggregation or contains aggregations
                     if isinstance(expr.this, (sqlglot.exp.Count, sqlglot.exp.Sum, sqlglot.exp.Avg)):
                         is_agg = True
+                    elif isinstance(expr.this, sqlglot.exp.Binary) and any(isinstance(node, (sqlglot.exp.Count, sqlglot.exp.Sum, sqlglot.exp.Avg)) 
+                                                                      for node in expr.this.find_all((sqlglot.exp.Count, sqlglot.exp.Sum, sqlglot.exp.Avg))):
+                        is_agg = True  # Binary operation with aggregates is also an aggregate
+                    else:
+                        # Check for nested aggregations in the expression
+                        is_agg = any(isinstance(node, (sqlglot.exp.Count, sqlglot.exp.Sum, sqlglot.exp.Avg))
+                                   for node in expr.this.find_all((sqlglot.exp.Count, sqlglot.exp.Sum, sqlglot.exp.Avg)))
+                        
+                        # Check if this is a calculation using aggregated CTE fields
+                        for col in expr.this.find_all(sqlglot.exp.Column):
+                            table_name = None
+                            if hasattr(col, 'table') and col.table:
+                                table_name = col.table.this if isinstance(col.table, sqlglot.exp.Identifier) else str(col.table)
+                            col_name = col.this.this if isinstance(col.this, sqlglot.exp.Identifier) else str(col.this)
+                            
+                            if table_name:
+                                cte_field_key = f"{table_name}.{col_name}"
+                                if cte_field_key in cte_field_map:
+                                    cte_field = cte_field_map[cte_field_key]
+                                    if cte_field["is_agg"]:
+                                        is_agg = True
+                                        break
                 
                 # If type not found in CTE, try to infer from expression
                 if data_type == "UNKNOWN":
@@ -267,51 +310,65 @@ def extract_fields(query: sqlglot.exp.Expression, model: SqlModel) -> list[dict]
                                 data_type = clean_type(str(base_type.this).upper())
                             else:
                                 data_type = clean_type(str(base_type.this).upper())
+                    elif isinstance(expr.this, sqlglot.exp.Binary):
+                        # For binary operations (e.g. division), check if either operand is an aggregate
+                        is_agg = any(isinstance(node, (sqlglot.exp.Count, sqlglot.exp.Sum, sqlglot.exp.Avg))
+                                   for node in expr.this.find_all((sqlglot.exp.Count, sqlglot.exp.Sum, sqlglot.exp.Avg)))
+                        
+                        # Check if either operand references an aggregated CTE field
+                        for col in expr.this.find_all(sqlglot.exp.Column):
+                            table_name = None
+                            if hasattr(col, 'table') and col.table:
+                                table_name = col.table.this if isinstance(col.table, sqlglot.exp.Identifier) else str(col.table)
+                            col_name = col.this.this if isinstance(col.this, sqlglot.exp.Identifier) else str(col.this)
+                            
+                            if table_name:
+                                cte_field_key = f"{table_name}.{col_name}"
+                                if cte_field_key in cte_field_map:
+                                    cte_field = cte_field_map[cte_field_key]
+                                    if cte_field["is_agg"]:
+                                        is_agg = True
+                                        break
+                        
+                        # For division operations, default to DOUBLE type
+                        if isinstance(expr.this, sqlglot.exp.Div):
+                            data_type = "DOUBLE"
+                        else:
+                            data_type = "DECIMAL"  # Default for other binary operations
+                    
+                    # If we still don't have a type but it's an aggregation, default to DECIMAL
+                    if data_type == "UNKNOWN" and is_agg:
+                        data_type = "DECIMAL"
             else:
                 if isinstance(expr, sqlglot.exp.Column):
                     field_name = expr.this.this if isinstance(expr.this, sqlglot.exp.Identifier) else str(expr.this)
-                else:
-                    field_name = str(expr)
-                
-                # Try to get the original SQL expression from CTE if available
-                table_name = None
-                if isinstance(expr, sqlglot.exp.Column):
+                    sql_expr = expr.sql(pretty=True)
+                    
+                    # Try to get the original SQL expression from CTE if available
+                    table_name = None
                     if hasattr(expr, 'table') and expr.table:
                         table_name = expr.table.this if isinstance(expr.table, sqlglot.exp.Identifier) else str(expr.table)
-                    if table_name in cte_info and field_name in cte_info[table_name]:
-                        cte_field = cte_info[table_name][field_name]
-                        sql_expr = cte_field["sql"]
-                        data_type = cte_field["type"]
-                        is_agg = cte_field.get("is_agg", False)
-                
-                if not sql_expr:
-                    sql_expr = expr.sql(pretty=True)
-                
-                # If not found in CTE, try model's column types
-                if data_type == "UNKNOWN" and field_name in column_types:
-                    base_type = column_types[field_name]
-                    if base_type.is_type(*sqlglot.exp.DataType.INTEGER_TYPES):
+                    if table_name:
+                        cte_field_key = f"{table_name}.{field_name}"
+                        if cte_field_key in cte_field_map:
+                            cte_field = cte_field_map[cte_field_key]
+                            sql_expr = cte_field["sql"]
+                            data_type = cte_field["type"]
+                            is_agg = cte_field["is_agg"]  # Preserve aggregation status from CTE
+                    elif field_name in column_types:
+                        base_type = column_types[field_name]
                         data_type = clean_type(str(base_type.this).upper())
-                    elif base_type.is_type(*sqlglot.exp.DataType.REAL_TYPES):
-                        if base_type.this == sqlglot.exp.DataType.Type.DECIMAL:
-                            params = [p.this for p in base_type.find_all(sqlglot.exp.DataTypeParam)]
-                            data_type = f"DECIMAL({','.join(map(str, params))})" if params else "DECIMAL"
-                        else:
-                            data_type = clean_type(str(base_type.this).upper())
-                    elif base_type.is_type(*sqlglot.exp.DataType.TEMPORAL_TYPES):
-                        data_type = clean_type(str(base_type.this).upper())
-                    else:
-                        data_type = clean_type(str(base_type.this).upper())
-
-            if field_name:
-                field_info = {
-                    "name": field_name,
-                    "sql": sql_expr or field_name,
-                    "type": data_type,
-                    "is_agg": is_agg
-                }
-                fields.append(field_info)
-
+            
+            if field_name and data_type != "UNKNOWN":
+                # Only add non-CTE fields here since we already added CTE fields above
+                if not any(f["name"] == field_name for f in fields):
+                    fields.append({
+                        "name": field_name,
+                        "type": data_type,
+                        "sql": sql_expr,
+                        "is_agg": is_agg
+                    })
+    
     return fields
 
 
