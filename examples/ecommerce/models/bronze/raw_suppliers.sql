@@ -1,12 +1,12 @@
 MODEL (
-  name ecommerce.bronze.raw_suppliers,
+  name bronze.raw_suppliers,
   kind INCREMENTAL_BY_TIME_RANGE (
     time_column updated_at
   ),
   grain [supplier_id],
   tags ['bronze'],
   columns (
-    supplier_id INTEGER,
+    supplier_id INT,
     company_name TEXT,
     contact_name TEXT,
     contact_email TEXT,
@@ -20,11 +20,12 @@ MODEL (
     updated_at TIMESTAMP,
     _loaded_at TIMESTAMP,
     _file_name TEXT
-  )
+  ),
+  references [source_ecommerce.raw_suppliers]
 );
 
 SELECT
-  id as supplier_id,
+  id AS supplier_id,
   company_name,
   contact_name,
   contact_email,
@@ -39,5 +40,5 @@ SELECT
   _loaded_at,
   _file_name
 FROM source_ecommerce.raw_suppliers
-WHERE _loaded_at >= @start_date
-  AND _loaded_at < @end_date
+WHERE
+  _loaded_at >= @start_date AND _loaded_at < @end_date

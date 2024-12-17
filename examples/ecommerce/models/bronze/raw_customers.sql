@@ -1,12 +1,12 @@
 MODEL (
-  name ecommerce.bronze.raw_customers,
+  name bronze.raw_customers,
   kind INCREMENTAL_BY_TIME_RANGE (
     time_column updated_at
   ),
   grain [customer_id],
   tags ['bronze'],
   columns (
-    customer_id INTEGER,
+    customer_id INT,
     email TEXT,
     first_name TEXT,
     last_name TEXT,
@@ -15,11 +15,12 @@ MODEL (
     updated_at TIMESTAMP,
     _loaded_at TIMESTAMP,
     _file_name TEXT
-  )
+  ),
+  references [source_ecommerce.raw_customers]
 );
 
 SELECT
-  id as customer_id,
+  id AS customer_id,
   email,
   first_name,
   last_name,
@@ -29,5 +30,5 @@ SELECT
   _loaded_at,
   _file_name
 FROM source_ecommerce.raw_customers
-WHERE _loaded_at >= @start_date
-  AND _loaded_at < @end_date
+WHERE
+  _loaded_at >= @start_date AND _loaded_at < @end_date

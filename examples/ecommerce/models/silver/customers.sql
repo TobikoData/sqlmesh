@@ -1,35 +1,33 @@
 MODEL (
-  name ecommerce.silver.customers,
+  name silver.customers,
   kind INCREMENTAL_BY_UNIQUE_KEY (
     unique_key [customer_id]
   ),
   tags ['silver'],
-  references [ecommerce.bronze.raw_customers]
+  columns (
+    customer_id INT,
+    email TEXT,
+    first_name TEXT,
+    last_name TEXT,
+    full_name TEXT,
+    phone_number TEXT,
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP,
+    _loaded_at TIMESTAMP,
+    _file_name TEXT
+  ),
+  references [bronze.raw_customers]
 );
-
-WITH latest_customers AS (
-  SELECT *
-  FROM ecommerce.bronze.raw_customers
-  WHERE _loaded_at >= @start_date
-    AND _loaded_at < @end_date
-  QUALIFY ROW_NUMBER() OVER (
-    PARTITION BY customer_id 
-    ORDER BY _loaded_at DESC
-  ) = 1
-)
 
 SELECT
   customer_id,
   email,
   first_name,
   last_name,
+  first_name || ' ' || last_name AS full_name,
   phone_number,
-  address,
-  city,
-  state,
-  postal_code,
-  country,
   created_at,
   updated_at,
-  _loaded_at
-FROM latest_customers
+  _loaded_at,
+  _file_name
+FROM bronze.raw_customers

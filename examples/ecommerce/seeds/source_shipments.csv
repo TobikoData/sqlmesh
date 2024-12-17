@@ -1,0 +1,6 @@
+id,order_id,carrier_id,tracking_number,status,shipping_address_id,estimated_delivery_date,actual_delivery_date,created_at,updated_at,_loaded_at,_file_name
+1,1,1,TRACK001,delivered,1,2024-01-03,2024-01-03,2024-01-01 12:30:00,2024-01-03 14:00:00,2024-01-03 14:30:00,shipments_batch_1.csv
+2,2,1,TRACK002,in_transit,1,2024-01-04,null,2024-01-02 13:30:00,2024-01-02 13:30:00,2024-01-02 14:00:00,shipments_batch_2.csv
+3,3,2,TRACK003,delivered,3,2024-01-04,2024-01-04,2024-01-02 14:30:00,2024-01-04 15:00:00,2024-01-04 15:30:00,shipments_batch_2.csv
+4,4,2,TRACK004,processing,4,2024-01-05,null,2024-01-03 10:30:00,2024-01-03 10:30:00,2024-01-03 11:00:00,shipments_batch_3.csv
+5,5,1,TRACK005,in_transit,5,2024-01-05,null,2024-01-03 11:30:00,2024-01-03 11:30:00,2024-01-03 12:00:00,shipments_batch_3.csv

@@ -1,23 +1,21 @@
 MODEL (
-  name ecommerce.silver.suppliers,
+  name silver.suppliers,
   kind INCREMENTAL_BY_UNIQUE_KEY (
     unique_key [supplier_id]
   ),
   tags ['silver'],
-  references [ecommerce.bronze.raw_suppliers]
+  references [bronze.raw_suppliers]
 );
 
 WITH latest_suppliers AS (
-  SELECT *
-  FROM ecommerce.bronze.raw_suppliers
-  WHERE _loaded_at >= @start_date
-    AND _loaded_at < @end_date
-  QUALIFY ROW_NUMBER() OVER (
-    PARTITION BY supplier_id 
-    ORDER BY _loaded_at DESC
-  ) = 1
+  SELECT
+    *
+  FROM bronze.raw_suppliers
+  WHERE
+    _loaded_at >= @start_date AND _loaded_at < @end_date
+  QUALIFY
+    ROW_NUMBER() OVER (PARTITION BY supplier_id ORDER BY _loaded_at DESC) = 1
 )
-
 SELECT
   supplier_id,
   company_name,

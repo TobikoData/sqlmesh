@@ -1,0 +1,4 @@
+id,company_name,contact_name,contact_email,contact_phone,address,city,state,postal_code,country,created_at,updated_at,_loaded_at,_file_name
+1,Fashion Corp,John Manager,john@fashioncorp.com,+1-555-1001,100 Fashion Ave,New York,NY,10001,USA,2024-01-01 09:00:00,2024-01-01 09:00:00,2024-01-01 09:30:00,suppliers_batch_1.csv
+2,Sports Gear Inc,Sarah Director,sarah@sportsgear.com,+1-555-1002,200 Athletic Dr,Los Angeles,CA,90001,USA,2024-01-02 09:00:00,2024-01-02 09:00:00,2024-01-02 09:30:00,suppliers_batch_2.csv
+3,Fitness Equipment Co,Mike Supplier,mike@fitequip.com,+1-555-1003,300 Fitness Blvd,Chicago,IL,60601,USA,2024-01-03 09:00:00,2024-01-03 09:00:00,2024-01-03 09:30:00,suppliers_batch_3.csv

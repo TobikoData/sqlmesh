@@ -1,0 +1,6 @@
+id,customer_id,address_type,street_address,city,state,postal_code,country,is_default,created_at,updated_at,_loaded_at,_file_name
+1,1,home,123 Main St,San Francisco,CA,94105,USA,true,2024-01-01 10:00:00,2024-01-01 10:00:00,2024-01-01 10:30:00,addresses_batch_1.csv
+2,1,work,456 Market St,San Francisco,CA,94105,USA,false,2024-01-01 10:00:00,2024-01-01 10:00:00,2024-01-01 10:30:00,addresses_batch_1.csv
+3,2,home,789 Oak Ave,San Jose,CA,95110,USA,true,2024-01-02 11:00:00,2024-01-02 11:00:00,2024-01-02 11:30:00,addresses_batch_2.csv
+4,3,home,321 Pine St,Oakland,CA,94601,USA,true,2024-01-02 12:00:00,2024-01-02 12:00:00,2024-01-02 12:30:00,addresses_batch_2.csv
+5,4,home,654 Elm St,Berkeley,CA,94701,USA,true,2024-01-03 09:00:00,2024-01-03 09:00:00,2024-01-03 09:30:00,addresses_batch_3.csv

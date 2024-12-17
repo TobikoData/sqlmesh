@@ -149,6 +149,7 @@ examples/airflow/warehouse
 
 *.duckdb
 *.duckdb.wal
+*.db
 
 # UI
 **/.DS_Store

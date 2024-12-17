@@ -1,0 +1,6 @@
+id,sku,name,description,category_id,supplier_id,unit_price,stock_quantity,created_at,updated_at,_loaded_at,_file_name
+1,SKU001,Basic T-Shirt,Comfortable cotton t-shirt,1,1,49.99,100,2024-01-01 09:00:00,2024-01-01 09:00:00,2024-01-01 09:30:00,products_batch_1.csv
+2,SKU002,Premium Hoodie,Warm and stylish hoodie,1,1,149.99,50,2024-01-01 09:00:00,2024-01-01 09:00:00,2024-01-01 09:30:00,products_batch_1.csv
+3,SKU003,Running Shoes,Lightweight running shoes,2,2,99.99,75,2024-01-02 09:00:00,2024-01-02 09:00:00,2024-01-02 09:30:00,products_batch_2.csv
+4,SKU004,Yoga Mat,Non-slip exercise mat,3,2,75.50,200,2024-01-02 09:00:00,2024-01-02 09:00:00,2024-01-02 09:30:00,products_batch_2.csv
+5,SKU005,Dumbbell Set,10lb weight set,3,3,129.99,30,2024-01-03 09:00:00,2024-01-03 09:00:00,2024-01-03 09:30:00,products_batch_3.csv

@@ -1,0 +1,7 @@
+id,order_id,product_id,quantity,unit_price,created_at,_loaded_at,_file_name
+1,1,1,2,49.99,2024-01-01 12:00:00,2024-01-01 12:30:00,order_items_batch_1.csv
+2,2,2,1,149.99,2024-01-02 13:00:00,2024-01-02 13:30:00,order_items_batch_2.csv
+3,3,1,2,49.99,2024-01-02 14:00:00,2024-01-02 14:30:00,order_items_batch_2.csv
+4,3,3,1,99.99,2024-01-02 14:00:00,2024-01-02 14:30:00,order_items_batch_2.csv
+5,4,4,1,75.50,2024-01-03 10:00:00,2024-01-03 10:30:00,order_items_batch_3.csv
+6,5,2,2,149.99,2024-01-03 11:00:00,2024-01-03 11:30:00,order_items_batch_3.csv

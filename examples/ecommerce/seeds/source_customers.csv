@@ -1,0 +1,6 @@
+id,email,first_name,last_name,phone_number,created_at,updated_at,_loaded_at,_file_name
+1,john.doe@email.com,John,Doe,+1-555-0101,2024-01-01 10:00:00,2024-01-01 10:00:00,2024-01-01 10:30:00,customers_batch_1.csv
+2,jane.smith@email.com,Jane,Smith,+1-555-0102,2024-01-01 11:00:00,2024-01-01 11:00:00,2024-01-01 11:30:00,customers_batch_1.csv
+3,bob.wilson@email.com,Bob,Wilson,+1-555-0103,2024-01-02 09:00:00,2024-01-02 09:00:00,2024-01-02 09:30:00,customers_batch_2.csv
+4,alice.brown@email.com,Alice,Brown,+1-555-0104,2024-01-02 10:00:00,2024-01-02 10:00:00,2024-01-02 10:30:00,customers_batch_2.csv
+5,charlie.davis@email.com,Charlie,Davis,+1-555-0105,2024-01-03 09:00:00,2024-01-03 09:00:00,2024-01-03 09:30:00,customers_batch_3.csv

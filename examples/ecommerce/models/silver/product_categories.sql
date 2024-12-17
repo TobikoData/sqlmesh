@@ -1,23 +1,21 @@
 MODEL (
-  name ecommerce.silver.product_categories,
+  name silver.product_categories,
   kind INCREMENTAL_BY_UNIQUE_KEY (
     unique_key [category_id]
   ),
   tags ['silver'],
-  references [ecommerce.bronze.raw_product_categories]
+  references [bronze.raw_product_categories]
 );
 
 WITH latest_categories AS (
-  SELECT *
-  FROM ecommerce.bronze.raw_product_categories
-  WHERE _loaded_at >= @start_date
-    AND _loaded_at < @end_date
-  QUALIFY ROW_NUMBER() OVER (
-    PARTITION BY category_id 
-    ORDER BY _loaded_at DESC
-  ) = 1
+  SELECT
+    *
+  FROM bronze.raw_product_categories
+  WHERE
+    _loaded_at >= @start_date AND _loaded_at < @end_date
+  QUALIFY
+    ROW_NUMBER() OVER (PARTITION BY category_id ORDER BY _loaded_at DESC) = 1
 )
-
 SELECT
   category_id,
   category_name,
