@@ -174,7 +174,7 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
             )
         if isinstance(db_path, str) and db_path.startswith("md:"):
             raise ConfigError(
-                "Please use the MotherDuckConnectionConfig without the `md:` prefix if you want to use a MotherDuck database as the single `database`."
+                "Please use connection type 'motherduck' without the `md:` prefix if you want to use a MotherDuck database as the single `database`."
             )
         return values
 
@@ -358,7 +358,6 @@ class DuckDBAttachOptions(BaseConfig):
     path: str
     read_only: bool = False
     token: t.Optional[str] = None
-    # schema: t.Optional[str] = None  # Only used for postgres
 
     def to_sql(self, alias: str) -> str:
         options = []
@@ -369,8 +368,6 @@ class DuckDBAttachOptions(BaseConfig):
         if self.read_only:
             options.append("READ_ONLY")
         # TODO: Add support for Postgres schema. Currently adding it blocks access to the information_schema
-        # if self.schema_name and self.type == "postgres":
-        #     options.append(f"SCHEMA '{self.schema_name}'")
         alias_sql = (
             # MotherDuck does not support aliasing
             f" AS {alias}" if not (self.type == "motherduck" or self.path.startswith("md:")) else ""
