@@ -1171,7 +1171,7 @@ def test_run_with_select_models_no_auto_upstream(
 
     context.plan("prod", no_prompts=True, skip_tests=True, auto_apply=True)
 
-    with time_machine.travel("2023-01-09 00:00:00"):
+    with time_machine.travel("2023-01-09 00:00:00 UTC"):
         assert context.run(select_models=["*waiter_revenue_by_day"], no_auto_upstream=True)
 
         snapshots = context.state_sync.state_sync.get_snapshots(context.snapshots.values())
