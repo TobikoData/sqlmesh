@@ -94,6 +94,7 @@ setup(
             "ruff~=0.7.0",
             "snowflake-connector-python[pandas,secure-local-storage]>=3.0.2",
             "sqlalchemy-stubs",
+            "time-machine",
             "types-croniter",
             "types-dateparser",
             "types-python-dateutil",
