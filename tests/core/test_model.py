@@ -5050,6 +5050,7 @@ def test_this_model() -> None:
         return not this_model or (
             isinstance(this_model, exp.Table)
             and this_model.sql(dialect=evaluator.dialect, comments=False) == expected_name
+            and evaluator.this_model == expected_name
         )
 
     expressions = d.parse(
