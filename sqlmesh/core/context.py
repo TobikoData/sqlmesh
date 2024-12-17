@@ -917,6 +917,7 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         expand = self.dag.upstream(model.fqn) if expand is True else expand or []
 
+        self._create_engine_adapters()
         if model.is_seed:
             df = next(
                 model.render(
@@ -1476,6 +1477,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         source_alias, target_alias = source, target
 
         adapter = self.engine_adapter
+        self._create_engine_adapters()
         if model_or_snapshot:
             model = self.get_model(model_or_snapshot, raise_if_missing=True)
             adapter = self._get_engine_adapter(model.gateway)
@@ -1641,6 +1643,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             test_adapter = self._test_connection_config.create_engine_adapter(
                 register_comments_override=False
             )
+            self._create_engine_adapters()
             generate_test(
                 model=model_to_test,
                 input_queries=input_queries,
