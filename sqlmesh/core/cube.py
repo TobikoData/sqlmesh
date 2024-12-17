@@ -7,23 +7,23 @@ from sqlmesh.core.model import SqlModel
 from sqlmesh.core.loader import SqlMeshLoader
 from sqlmesh.core.config import Config, ModelDefaultsConfig
 from sqlmesh.core.config.loader import load_config_from_yaml
-from sqlglot import exp
+import sqlglot
 
 
-def extract_joins(query: exp.Expression) -> list[dict]:
+def extract_joins(query: sqlglot.exp.Expression) -> list[dict]:
     """Extract all joins from a query."""
     joins = []
     
     # Find the FROM clause to get the base table
     base_table = None
     
-    if isinstance(query, exp.Select) and query.args.get('from'):
+    if isinstance(query, sqlglot.exp.Select) and query.args.get('from'):
         from_expr = query.args['from']
-        if isinstance(from_expr, exp.From) and from_expr.this:
+        if isinstance(from_expr, sqlglot.exp.From) and from_expr.this:
             base_table = from_expr.this.sql(pretty=True)
     
     # Then find all joins
-    for join in query.find_all(exp.Join):
+    for join in query.find_all(sqlglot.exp.Join):
         # For the first join, use the base table as the left side
         # For subsequent joins, use the previous right side as the left side
         join_info = {
@@ -38,12 +38,52 @@ def extract_joins(query: exp.Expression) -> list[dict]:
     return joins
 
 
+def extract_fields(query: sqlglot.exp.Expression) -> list[dict]:
+    """Extract all fields from a query."""
+    fields = []
+    
+    if isinstance(query, sqlglot.exp.Select):
+        for expr in query.expressions:
+            # Get the field name (either from alias or column name)
+            field_name = None
+            sql_expr = None
+            
+            if isinstance(expr, sqlglot.exp.Alias):
+                if isinstance(expr.alias, sqlglot.exp.Identifier):
+                    field_name = expr.alias.this
+                else:
+                    field_name = str(expr.alias)
+                sql_expr = expr.this.sql(pretty=True)
+            else:
+                if isinstance(expr, sqlglot.exp.Column):
+                    field_name = expr.this.this if isinstance(expr.this, sqlglot.exp.Identifier) else str(expr.this)
+                else:
+                    field_name = str(expr)
+                sql_expr = expr.sql(pretty=True)
+            
+            fields.append({
+                "name": field_name,
+                "sql": sql_expr
+            })
+    
+    return fields
+
+
+def extract_model_info(query: sqlglot.exp.Expression) -> dict:
+    """Extract both joins and fields from a query."""
+    return {
+        "joins": extract_joins(query),
+        "fields": extract_fields(query)
+    }
+
+
 def generate_model_lineage(model: SqlModel) -> dict:
     """Generate join information for a model."""
-    joins = extract_joins(model.query)
+    query = model.query
+    model_info = extract_model_info(query)
     return {
         "model": model.name,
-        "joins": joins
+        **model_info
     }
 
 
