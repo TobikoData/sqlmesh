@@ -273,63 +273,6 @@ def extract_fields(query: sqlglot.exp.Expression, model: SqlModel) -> list[dict]
                                     if cte_field["is_agg"]:
                                         is_agg = True
                                         break
-                
-                # If type not found in CTE, try to infer from expression
-                if data_type == "UNKNOWN":
-                    if isinstance(expr.this, sqlglot.exp.Count):
-                        data_type = "BIGINT"
-                        is_agg = True
-                    elif isinstance(expr.this, sqlglot.exp.Sum):
-                        if expr.this.this and isinstance(expr.this.this, sqlglot.exp.Column):
-                            col = expr.this.this
-                            col_name = col.this.this if isinstance(col.this, sqlglot.exp.Identifier) else str(col.this)
-                            if col_name in column_types:
-                                base_type = column_types[col_name]
-                                if base_type.is_type(*sqlglot.exp.DataType.INTEGER_TYPES):
-                                    data_type = clean_type(str(base_type.this).upper())
-                                elif base_type.is_type(*sqlglot.exp.DataType.REAL_TYPES):
-                                    if base_type.this == sqlglot.exp.DataType.Type.DECIMAL:
-                                        params = [p.this for p in base_type.find_all(sqlglot.exp.DataTypeParam)]
-                                        data_type = f"DECIMAL({','.join(map(str, params))})" if params else "DECIMAL"
-                                    else:
-                                        data_type = clean_type(str(base_type.this).upper())
-                                else:
-                                    data_type = "DECIMAL"
-                            else:
-                                data_type = "DECIMAL"
-                        else:
-                            data_type = "DECIMAL"
-                        is_agg = True
-                    elif isinstance(expr.this, sqlglot.exp.Avg):
-                        data_type = "DOUBLE"
-                        is_agg = True
-                    elif isinstance(expr.this, sqlglot.exp.Cast):
-                        data_type = clean_type(str(expr.this.args["to"].this).upper())
-                    elif isinstance(expr.this, sqlglot.exp.Column):
-                        col = expr.this
-                        col_name = col.this.this if isinstance(col.this, sqlglot.exp.Identifier) else str(col.this)
-                        if col_name in column_types:
-                            base_type = column_types[col_name]
-                            data_type = clean_type(str(base_type.this).upper())
-                    elif isinstance(expr.this, sqlglot.exp.Binary):
-                        # For binary operations (e.g. division), check if either operand is an aggregate
-                        is_agg = any(isinstance(node, (sqlglot.exp.Count, sqlglot.exp.Sum, sqlglot.exp.Avg))
-                                   for node in expr.this.find_all((sqlglot.exp.Count, sqlglot.exp.Sum, sqlglot.exp.Avg)))
-                        
-                        # Check if either operand references an aggregated CTE field
-                        for col in expr.this.find_all(sqlglot.exp.Column):
-                            table_name = None
-                            if hasattr(col, 'table') and col.table:
-                                table_name = col.table.this if isinstance(col.table, sqlglot.exp.Identifier) else str(col.table)
-                            col_name = col.this.this if isinstance(col.this, sqlglot.exp.Identifier) else str(col.this)
-                            
-                            if table_name:
-                                cte_field_key = f"{table_name}.{col_name}"
-                                if cte_field_key in cte_field_map:
-                                    cte_field = cte_field_map[cte_field_key]
-                                    if cte_field["is_agg"]:
-                                        is_agg = True
-                                        break
                         
                         # For division operations, default to DOUBLE type
                         if isinstance(expr.this, sqlglot.exp.Div):
@@ -471,8 +414,10 @@ def main(model_dir: Path, output_file: t.Optional[Path] = None, models: t.Option
             in the directory will be loaded.
         tag: Optional tag to filter models by
     """
-    if models is None:
+    if models is None and model_dir:
         models = load_models_from_directory(model_dir, tag)
+    if not models:
+        return
     cube_data = generate_cube_data(models)
     write_cube_data(cube_data, output_file)
 
