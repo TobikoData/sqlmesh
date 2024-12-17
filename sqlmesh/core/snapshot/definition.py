@@ -48,7 +48,7 @@ if t.TYPE_CHECKING:
 Interval = t.Tuple[int, int]
 Intervals = t.List[Interval]
 
-Node = t.Annotated[t.Union[Model, StandaloneAudit], Field(descriminator="source_type")]
+Node = t.Annotated[t.Union[Model, StandaloneAudit], Field(discriminator="source_type")]
 
 
 class SnapshotChangeCategory(IntEnum):
