@@ -27,7 +27,7 @@ from sqlmesh.core.snapshot.categorizer import categorize_change
 from sqlmesh.core.snapshot.definition import Interval, SnapshotId
 from sqlmesh.utils import columns_to_types_all_known, random_id
 from sqlmesh.utils.dag import DAG
-from sqlmesh.utils.date import TimeLike, now, to_datetime, yesterday_ds
+from sqlmesh.utils.date import TimeLike, now, to_datetime, yesterday_ds, to_timestamp
 from sqlmesh.utils.errors import NoChangesPlanError, PlanError, SQLMeshError
 
 logger = logging.getLogger(__name__)
@@ -343,6 +343,7 @@ class PlanBuilder:
             for downstream_s_id in dag.downstream(snapshot.snapshot_id):
                 if is_restateable_snapshot(self._context_diff.snapshots[downstream_s_id]):
                     restatements[downstream_s_id] = dummy_interval
+
         # Get restatement intervals for all restated snapshots and make sure that if a snapshot expands it's
         # restatement range that it's downstream dependencies all expand their restatement ranges as well.
         for s_id in dag:
@@ -364,7 +365,20 @@ class PlanBuilder:
             ] + [interval]
             snapshot_start = min(i[0] for i in possible_intervals)
             snapshot_end = max(i[1] for i in possible_intervals)
+
+            # We may be tasked with restating a time range smaller than the target snapshot interval unit
+            # For example, restating an hour of Hourly Model A, which has a downstream dependency of Daily Model B
+            # we need to ensure the whole affected day in Model B is restated
+            floored_snapshot_start = snapshot.node.interval_unit.cron_floor(snapshot_start)
+            floored_snapshot_end = snapshot.node.interval_unit.cron_floor(snapshot_end)
+            if floored_snapshot_end <= floored_snapshot_start:
+                snapshot_start = to_timestamp(floored_snapshot_start)
+                snapshot_end = to_timestamp(
+                    snapshot.node.interval_unit.cron_next(floored_snapshot_end)
+                )
+
             restatements[s_id] = (snapshot_start, snapshot_end)
+
         return restatements
 
     def _build_directly_and_indirectly_modified(
