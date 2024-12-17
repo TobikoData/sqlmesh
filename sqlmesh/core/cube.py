@@ -10,32 +10,168 @@ from sqlmesh.core.config.loader import load_config_from_yaml
 import sqlglot
 
 
-def extract_joins(query: sqlglot.exp.Expression) -> list[dict]:
-    """Extract all joins from a query."""
+def extract_table_from_expr(expr: sqlglot.exp.Expression) -> str:
+    """Extract the actual table name from an expression."""
+    if isinstance(expr, sqlglot.exp.Table):
+        return expr.sql(pretty=True)
+    elif isinstance(expr, sqlglot.exp.Alias):
+        if isinstance(expr.this, sqlglot.exp.Table):
+            return expr.this.sql(pretty=True)
+        elif isinstance(expr.this, sqlglot.exp.Select):
+            # For subqueries, try to get the base table
+            if expr.this.args.get('from'):
+                from_expr = expr.this.args['from']
+                if isinstance(from_expr, sqlglot.exp.From) and from_expr.this:
+                    return extract_table_from_expr(from_expr.this)
+    return None
+
+
+def extract_base_table_from_cte(cte: sqlglot.exp.CTE) -> str:
+    """Extract the base table from a CTE."""
+    if isinstance(cte.this, sqlglot.exp.Select) and cte.this.args.get('from'):
+        from_expr = cte.this.args['from']
+        if isinstance(from_expr, sqlglot.exp.From) and from_expr.this:
+            return extract_table_from_expr(from_expr.this)
+    return None
+
+
+def extract_joins_recursive(query: sqlglot.exp.Expression) -> list[dict]:
+    """Extract all joins from a query recursively, including CTEs."""
     joins = []
+    cte_tables = {}  # Map CTE names to their base tables
     
-    # Find the FROM clause to get the base table
+    # First get base tables from CTEs
+    if isinstance(query, sqlglot.exp.Select) and query.args.get('with'):
+        with_clause = query.args['with']
+        for cte in with_clause.expressions:
+            if isinstance(cte, sqlglot.exp.CTE):
+                cte_name = cte.alias.this if isinstance(cte.alias, sqlglot.exp.Identifier) else str(cte.alias)
+                base_table = extract_base_table_from_cte(cte)
+                if base_table:
+                    cte_tables[cte_name] = base_table
+                    # Get joins within the CTE
+                    cte_query = cte.this
+                    if isinstance(cte_query, sqlglot.exp.Select):
+                        for join in cte_query.find_all(sqlglot.exp.Join):
+                            right_table = extract_table_from_expr(join.this)
+                            if right_table:
+                                join_info = {
+                                    "type": join.args.get("side", "INNER"),
+                                    "left": base_table,
+                                    "right": right_table,
+                                    "condition": join.args.get("on", "").sql(pretty=True) if join.args.get("on") else None
+                                }
+                                joins.append(join_info)
+                                base_table = right_table  # Update for next join
+    
+    # Then handle the main query
     base_table = None
-    
     if isinstance(query, sqlglot.exp.Select) and query.args.get('from'):
         from_expr = query.args['from']
         if isinstance(from_expr, sqlglot.exp.From) and from_expr.this:
-            base_table = from_expr.this.sql(pretty=True)
+            table_expr = from_expr.this
+            if isinstance(table_expr, sqlglot.exp.Alias):
+                table_name = table_expr.alias.this if isinstance(table_expr.alias, sqlglot.exp.Identifier) else str(table_expr.alias)
+                # If it's a CTE reference, use its base table
+                if table_name in cte_tables:
+                    base_table = cte_tables[table_name]
+                else:
+                    base_table = extract_table_from_expr(table_expr)
+            else:
+                base_table = extract_table_from_expr(table_expr)
     
-    # Then find all joins
-    for join in query.find_all(sqlglot.exp.Join):
-        # For the first join, use the base table as the left side
-        # For subsequent joins, use the previous right side as the left side
-        join_info = {
-            "type": join.args.get("side", "INNER"),  # JOIN type (LEFT, RIGHT, INNER, etc.)
-            "left": base_table,  # Left side of join (base table or previous join)
-            "right": join.this.sql(pretty=True),  # Right side of join (table being joined)
-            "condition": join.args.get("on", "").sql(pretty=True) if join.args.get("on") else None  # Join condition
-        }
-        joins.append(join_info)
-        # Update base_table for subsequent joins
-        base_table = join.this.sql(pretty=True)
+    if base_table:
+        for join in query.find_all(sqlglot.exp.Join):
+            table_expr = join.this
+            right_table = None
+            if isinstance(table_expr, sqlglot.exp.Alias):
+                table_name = table_expr.alias.this if isinstance(table_expr.alias, sqlglot.exp.Identifier) else str(table_expr.alias)
+                # If it's a CTE reference, use its base table
+                if table_name in cte_tables:
+                    right_table = cte_tables[table_name]
+                else:
+                    right_table = extract_table_from_expr(table_expr)
+            else:
+                right_table = extract_table_from_expr(table_expr)
+            
+            if right_table:
+                # If both sides are CTEs, check the parent node for the left table
+                parent = join.find_ancestor(sqlglot.exp.From)
+                if parent and isinstance(parent.this, sqlglot.exp.Alias):
+                    left_name = parent.this.alias.this if isinstance(parent.this.alias, sqlglot.exp.Identifier) else str(parent.this.alias)
+                    if left_name in cte_tables:
+                        base_table = cte_tables[left_name]
+                
+                # Remove CTE aliases and use base tables
+                left_table = base_table.split(" AS ")[0] if base_table else base_table
+                right_table = right_table.split(" AS ")[0] if right_table else right_table
+                
+                # If either side is a CTE name, replace it with its base table
+                if left_table in cte_tables:
+                    left_table = cte_tables[left_table]
+                if right_table in cte_tables:
+                    right_table = cte_tables[right_table]
+                
+                join_info = {
+                    "type": join.args.get("side", "INNER"),
+                    "left": left_table,
+                    "right": right_table,
+                    "condition": join.args.get("on", "").sql(pretty=True) if join.args.get("on") else None
+                }
+                joins.append(join_info)
+                base_table = right_table
+    
     return joins
+
+
+def extract_cte_info(query: sqlglot.exp.Expression) -> dict:
+    """Extract information from CTEs including types and aggregations."""
+    cte_info = {}
+    
+    if isinstance(query, sqlglot.exp.Select) and query.args.get('with'):
+        with_clause = query.args['with']
+        for cte in with_clause.expressions:
+            if isinstance(cte, sqlglot.exp.CTE):
+                cte_name = cte.alias.this if isinstance(cte.alias, sqlglot.exp.Identifier) else str(cte.alias)
+                cte_query = cte.this
+                cte_fields = {}
+                
+                if isinstance(cte_query, sqlglot.exp.Select):
+                    for expr in cte_query.expressions:
+                        field_name = None
+                        field_type = "UNKNOWN"
+                        sql_expr = None
+                        is_agg = False
+                        
+                        if isinstance(expr, sqlglot.exp.Alias):
+                            field_name = expr.alias.this if isinstance(expr.alias, sqlglot.exp.Identifier) else str(expr.alias)
+                            sql_expr = expr.this.sql(pretty=True)
+                            # Infer type and check for aggregation
+                            if isinstance(expr.this, sqlglot.exp.Count):
+                                field_type = "BIGINT"
+                                is_agg = True
+                            elif isinstance(expr.this, sqlglot.exp.Sum):
+                                field_type = "DECIMAL"
+                                is_agg = True
+                            elif isinstance(expr.this, sqlglot.exp.Avg):
+                                field_type = "DOUBLE"
+                                is_agg = True
+                                sql_expr = expr.this.sql(pretty=True)  # Preserve the AVG calculation
+                            elif isinstance(expr.this, sqlglot.exp.Cast):
+                                field_type = str(expr.this.args["to"].this).upper()
+                            elif isinstance(expr.this, sqlglot.exp.DateTrunc) or isinstance(expr.this, sqlglot.exp.Date):
+                                field_type = "DATE"
+                        
+                        if field_name:
+                            cte_fields[field_name] = {
+                                "type": field_type,
+                                "sql": sql_expr,
+                                "is_agg": is_agg
+                            }
+                
+                cte_info[cte_name] = cte_fields
+    
+    return cte_info
 
 
 def extract_fields(query: sqlglot.exp.Expression, model: SqlModel) -> list[dict]:
@@ -49,28 +185,73 @@ def extract_fields(query: sqlglot.exp.Expression, model: SqlModel) -> list[dict]
         return type_str
 
     if isinstance(query, sqlglot.exp.Select):
+        # First get CTE information to use for type inference
+        cte_info = extract_cte_info(query)
+        
         # Get the model's column types
         column_types = model.columns_to_types_or_raise
         
         for expr in query.expressions:
-            # Get the field name (either from alias or column name)
             field_name = None
             sql_expr = None
             data_type = "UNKNOWN"
+            is_agg = False
             
             if isinstance(expr, sqlglot.exp.Alias):
-                if isinstance(expr.alias, sqlglot.exp.Identifier):
-                    field_name = expr.alias.this
-                else:
-                    field_name = str(expr.alias)
-                sql_expr = expr.this.sql(pretty=True)
-                # Try to infer type from expression
-                if isinstance(expr.this, sqlglot.exp.Count):
-                    data_type = "BIGINT"
-                elif isinstance(expr.this, sqlglot.exp.Sum):
-                    # For SUM, try to get the type from the column being summed
-                    if expr.this.this and isinstance(expr.this.this, sqlglot.exp.Column):
-                        col = expr.this.this
+                field_name = expr.alias.this if isinstance(expr.alias, sqlglot.exp.Identifier) else str(expr.alias)
+                
+                # Try to get the original SQL expression from CTE if available
+                table_name = None
+                col_name = None
+                if isinstance(expr.this, sqlglot.exp.Column):
+                    if hasattr(expr.this, 'table') and expr.this.table:
+                        table_name = expr.this.table.this if isinstance(expr.this.table, sqlglot.exp.Identifier) else str(expr.this.table)
+                    col_name = expr.this.this.this if isinstance(expr.this.this, sqlglot.exp.Identifier) else str(expr.this.this)
+                    if table_name in cte_info and col_name in cte_info[table_name]:
+                        cte_field = cte_info[table_name][col_name]
+                        sql_expr = cte_field["sql"]
+                        data_type = cte_field["type"]
+                        is_agg = cte_field.get("is_agg", False)
+                
+                if not sql_expr:
+                    sql_expr = expr.this.sql(pretty=True)
+                    # Check if this is an aggregation
+                    if isinstance(expr.this, (sqlglot.exp.Count, sqlglot.exp.Sum, sqlglot.exp.Avg)):
+                        is_agg = True
+                
+                # If type not found in CTE, try to infer from expression
+                if data_type == "UNKNOWN":
+                    if isinstance(expr.this, sqlglot.exp.Count):
+                        data_type = "BIGINT"
+                        is_agg = True
+                    elif isinstance(expr.this, sqlglot.exp.Sum):
+                        if expr.this.this and isinstance(expr.this.this, sqlglot.exp.Column):
+                            col = expr.this.this
+                            col_name = col.this.this if isinstance(col.this, sqlglot.exp.Identifier) else str(col.this)
+                            if col_name in column_types:
+                                base_type = column_types[col_name]
+                                if base_type.is_type(*sqlglot.exp.DataType.INTEGER_TYPES):
+                                    data_type = clean_type(str(base_type.this).upper())
+                                elif base_type.is_type(*sqlglot.exp.DataType.REAL_TYPES):
+                                    if base_type.this == sqlglot.exp.DataType.Type.DECIMAL:
+                                        params = [p.this for p in base_type.find_all(sqlglot.exp.DataTypeParam)]
+                                        data_type = f"DECIMAL({','.join(map(str, params))})" if params else "DECIMAL"
+                                    else:
+                                        data_type = clean_type(str(base_type.this).upper())
+                                else:
+                                    data_type = "DECIMAL"
+                            else:
+                                data_type = "DECIMAL"
+                        else:
+                            data_type = "DECIMAL"
+                        is_agg = True
+                    elif isinstance(expr.this, sqlglot.exp.Avg):
+                        data_type = "DOUBLE"
+                        is_agg = True
+                    elif isinstance(expr.this, sqlglot.exp.Cast):
+                        data_type = clean_type(str(expr.this.args["to"].this).upper())
+                    elif isinstance(expr.this, sqlglot.exp.Column):
+                        col = expr.this
                         col_name = col.this.this if isinstance(col.this, sqlglot.exp.Identifier) else str(col.this)
                         if col_name in column_types:
                             base_type = column_types[col_name]
@@ -86,55 +267,28 @@ def extract_fields(query: sqlglot.exp.Expression, model: SqlModel) -> list[dict]
                                 data_type = clean_type(str(base_type.this).upper())
                             else:
                                 data_type = clean_type(str(base_type.this).upper())
-                    else:
-                        data_type = "DECIMAL"
-                elif isinstance(expr.this, sqlglot.exp.Avg):
-                    data_type = "DOUBLE"
-                elif isinstance(expr.this, sqlglot.exp.DateDiff):
-                    data_type = "INT"
-                elif isinstance(expr.this, sqlglot.exp.Cast):
-                    data_type = clean_type(str(expr.this.args["to"].this).upper())
-                elif isinstance(expr.this, sqlglot.exp.Column):
-                    col = expr.this
-                    col_name = col.this.this if isinstance(col.this, sqlglot.exp.Identifier) else str(col.this)
-                    if col_name in column_types:
-                        base_type = column_types[col_name]
-                        if base_type.is_type(*sqlglot.exp.DataType.INTEGER_TYPES):
-                            data_type = clean_type(str(base_type.this).upper())
-                        elif base_type.is_type(*sqlglot.exp.DataType.REAL_TYPES):
-                            if base_type.this == sqlglot.exp.DataType.Type.DECIMAL:
-                                params = [p.this for p in base_type.find_all(sqlglot.exp.DataTypeParam)]
-                                data_type = f"DECIMAL({','.join(map(str, params))})" if params else "DECIMAL"
-                            else:
-                                data_type = clean_type(str(base_type.this).upper())
-                        elif base_type.is_type(*sqlglot.exp.DataType.TEMPORAL_TYPES):
-                            data_type = clean_type(str(base_type.this).upper())
-                        else:
-                            data_type = clean_type(str(base_type.this).upper())
-                elif field_name in column_types:
-                    # For direct column references, use the model's type
-                    base_type = column_types[field_name]
-                    if base_type.is_type(*sqlglot.exp.DataType.INTEGER_TYPES):
-                        data_type = clean_type(str(base_type.this).upper())
-                    elif base_type.is_type(*sqlglot.exp.DataType.REAL_TYPES):
-                        if base_type.this == sqlglot.exp.DataType.Type.DECIMAL:
-                            params = [p.this for p in base_type.find_all(sqlglot.exp.DataTypeParam)]
-                            data_type = f"DECIMAL({','.join(map(str, params))})" if params else "DECIMAL"
-                        else:
-                            data_type = clean_type(str(base_type.this).upper())
-                    elif base_type.is_type(*sqlglot.exp.DataType.TEMPORAL_TYPES):
-                        data_type = clean_type(str(base_type.this).upper())
-                    else:
-                        data_type = clean_type(str(base_type.this).upper())
             else:
                 if isinstance(expr, sqlglot.exp.Column):
                     field_name = expr.this.this if isinstance(expr.this, sqlglot.exp.Identifier) else str(expr.this)
                 else:
                     field_name = str(expr)
-                sql_expr = expr.sql(pretty=True)
-
-                if field_name in column_types:
-                    # For direct column references, use the model's type
+                
+                # Try to get the original SQL expression from CTE if available
+                table_name = None
+                if isinstance(expr, sqlglot.exp.Column):
+                    if hasattr(expr, 'table') and expr.table:
+                        table_name = expr.table.this if isinstance(expr.table, sqlglot.exp.Identifier) else str(expr.table)
+                    if table_name in cte_info and field_name in cte_info[table_name]:
+                        cte_field = cte_info[table_name][field_name]
+                        sql_expr = cte_field["sql"]
+                        data_type = cte_field["type"]
+                        is_agg = cte_field.get("is_agg", False)
+                
+                if not sql_expr:
+                    sql_expr = expr.sql(pretty=True)
+                
+                # If not found in CTE, try model's column types
+                if data_type == "UNKNOWN" and field_name in column_types:
                     base_type = column_types[field_name]
                     if base_type.is_type(*sqlglot.exp.DataType.INTEGER_TYPES):
                         data_type = clean_type(str(base_type.this).upper())
@@ -153,7 +307,8 @@ def extract_fields(query: sqlglot.exp.Expression, model: SqlModel) -> list[dict]
                 field_info = {
                     "name": field_name,
                     "sql": sql_expr or field_name,
-                    "type": data_type
+                    "type": data_type,
+                    "is_agg": is_agg
                 }
                 fields.append(field_info)
 
@@ -163,7 +318,7 @@ def extract_fields(query: sqlglot.exp.Expression, model: SqlModel) -> list[dict]
 def extract_model_info(query: sqlglot.exp.Expression, model: SqlModel) -> dict:
     """Extract both joins and fields from a query."""
     return {
-        "joins": extract_joins(query),
+        "joins": extract_joins_recursive(query),
         "fields": extract_fields(query, model)
     }
 
