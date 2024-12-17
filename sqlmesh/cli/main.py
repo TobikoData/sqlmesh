@@ -961,3 +961,22 @@ def dlt_refresh(
         ctx.obj.console.log_success(f"Updatde SQLMesh project with models:\n{model_names}")
     else:
         ctx.obj.console.log_success("All SQLMesh models are up to date.")
+
+
+@cli.command("cube_generate")
+@click.argument("model_dir", type=click.Path(exists=True, file_okay=False, dir_okay=True))
+@click.option(
+    "--output", "-o",
+    type=click.Path(dir_okay=False),
+    help="Output file path. If not provided, prints to stdout.",
+)
+@click.pass_obj
+@error_handler
+@cli_analytics
+def cube_generate(obj: Context, model_dir: str, output: t.Optional[str] = None) -> None:
+    """Generate cube data for SQL models in a directory.
+    
+    This command analyzes SQL models in the specified directory and generates cube data
+    representing the relationships and dependencies between models.
+    """
+    obj.cube_generate(model_dir, output)

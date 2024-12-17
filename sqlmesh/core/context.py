@@ -64,6 +64,7 @@ from sqlmesh.core.config import (
 from sqlmesh.core.config.loader import C
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.context_diff import ContextDiff
+from sqlmesh.core.cube import main as cube_main
 from sqlmesh.core.dialect import (
     format_model_expressions,
     is_meta_expression,
@@ -1073,7 +1074,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             environment: The environment to diff and plan against.
             start: The start date of the backfill if there is one.
             end: The end date of the backfill if there is one.
-            execution_time: The date/time reference to use for execution time. Defaults to now.
+            execution_time: The date/time time reference to use for execution time. Defaults to now.
             create_from: The environment to create the target environment from if it
                 doesn't exist. If not specified, the "prod" environment will be used.
             skip_tests: Unit tests are run by default so this will skip them if enabled
@@ -1109,102 +1110,6 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         Returns:
             The populated Plan object.
-        """
-        plan_builder = self.plan_builder(
-            environment,
-            start=start,
-            end=end,
-            execution_time=execution_time,
-            create_from=create_from,
-            skip_tests=skip_tests,
-            restate_models=restate_models,
-            no_gaps=no_gaps,
-            skip_backfill=skip_backfill,
-            empty_backfill=empty_backfill,
-            forward_only=forward_only,
-            allow_destructive_models=allow_destructive_models,
-            no_auto_categorization=no_auto_categorization,
-            effective_from=effective_from,
-            include_unmodified=include_unmodified,
-            select_models=select_models,
-            backfill_models=backfill_models,
-            categorizer_config=categorizer_config,
-            enable_preview=enable_preview,
-            run=run,
-        )
-
-        self.console.plan(
-            plan_builder,
-            auto_apply if auto_apply is not None else self.config.plan.auto_apply,
-            self.default_catalog,
-            no_diff=no_diff if no_diff is not None else self.config.plan.no_diff,
-            no_prompts=no_prompts if no_prompts is not None else self.config.plan.no_prompts,
-        )
-
-        return plan_builder.build()
-
-    @python_api_analytics
-    def plan_builder(
-        self,
-        environment: t.Optional[str] = None,
-        *,
-        start: t.Optional[TimeLike] = None,
-        end: t.Optional[TimeLike] = None,
-        execution_time: t.Optional[TimeLike] = None,
-        create_from: t.Optional[str] = None,
-        skip_tests: bool = False,
-        restate_models: t.Optional[t.Iterable[str]] = None,
-        no_gaps: bool = False,
-        skip_backfill: bool = False,
-        empty_backfill: bool = False,
-        forward_only: t.Optional[bool] = None,
-        allow_destructive_models: t.Optional[t.Collection[str]] = None,
-        no_auto_categorization: t.Optional[bool] = None,
-        effective_from: t.Optional[TimeLike] = None,
-        include_unmodified: t.Optional[bool] = None,
-        select_models: t.Optional[t.Collection[str]] = None,
-        backfill_models: t.Optional[t.Collection[str]] = None,
-        categorizer_config: t.Optional[CategorizerConfig] = None,
-        enable_preview: t.Optional[bool] = None,
-        run: bool = False,
-    ) -> PlanBuilder:
-        """Creates a plan builder.
-
-        Args:
-            environment: The environment to diff and plan against.
-            start: The start date of the backfill if there is one.
-            end: The end date of the backfill if there is one.
-            execution_time: The date/time reference to use for execution time. Defaults to now.
-            create_from: The environment to create the target environment from if it
-                doesn't exist. If not specified, the "prod" environment will be used.
-            skip_tests: Unit tests are run by default so this will skip them if enabled
-            restate_models: A list of either internal or external models, or tags, that need to be restated
-                for the given plan interval. If the target environment is a production environment,
-                ALL snapshots that depended on these upstream tables will have their intervals deleted
-                (even ones not in this current environment). Only the snapshots in this environment will
-                be backfilled whereas others need to be recovered on a future plan application. For development
-                environments only snapshots that are part of this plan will be affected.
-            no_gaps:  Whether to ensure that new snapshots for models that are already a
-                part of the target environment have no data gaps when compared against previous
-                snapshots for same models.
-            skip_backfill: Whether to skip the backfill step. Default: False.
-            empty_backfill: Like skip_backfill, but also records processed intervals.
-            forward_only: Whether the purpose of the plan is to make forward only changes.
-            allow_destructive_models: Models whose forward-only changes are allowed to be destructive.
-            no_auto_categorization: Indicates whether to disable automatic categorization of model
-                changes (breaking / non-breaking). If not provided, then the corresponding configuration
-                option determines the behavior.
-            categorizer_config: The configuration for the categorizer. Uses the categorizer configuration defined in the
-                project config by default.
-            effective_from: The effective date from which to apply forward-only changes on production.
-            include_unmodified: Indicates whether to include unmodified models in the target development environment.
-            select_models: A list of model selection strings to filter the models that should be included into this plan.
-            backfill_models: A list of model selection strings to filter the models for which the data should be backfilled.
-            enable_preview: Indicates whether to enable preview for forward-only models in development environments.
-            run: Whether to run latest intervals as part of the plan application.
-
-        Returns:
-            The plan builder.
         """
         environment = environment or self.config.default_target_environment
         environment = Environment.sanitize_name(environment)
@@ -1908,9 +1813,9 @@ class GenericContext(BaseContext, t.Generic[C]):
         self,
         environment: str,
         *,
-        start: t.Optional[TimeLike],
-        end: t.Optional[TimeLike],
-        execution_time: t.Optional[TimeLike],
+        start: t.Optional[TimeLike] = None,
+        end: t.Optional[TimeLike] = None,
+        execution_time: t.Optional[TimeLike] = None,
         ignore_cron: bool,
         select_models: t.Optional[t.Collection[str]],
         circuit_breaker: t.Optional[t.Callable[[], bool]],
@@ -2226,6 +2131,26 @@ class GenericContext(BaseContext, t.Generic[C]):
                         )
                     self._requirements[dep] = ver
 
+    @python_api_analytics
+    def cube_generate(
+        self,
+        model_dir: str,
+        output: t.Optional[str] = None,
+    ) -> None:
+        """Generate cube data for models in the specified directory."""
+        from sqlmesh.core import cube
+        cube.main(Path(model_dir), output and Path(output))
+
 
 class Context(GenericContext[Config]):
     CONFIG_TYPE = Config
+
+    @python_api_analytics
+    def cube_generate(
+        self,
+        model_dir: str,
+        output: t.Optional[str] = None,
+    ) -> None:
+        """Generate cube data for models in the specified directory."""
+        from sqlmesh.core import cube
+        cube.main(Path(model_dir), output and Path(output))
