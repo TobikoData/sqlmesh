@@ -4,7 +4,18 @@ MODEL (
     time_column updated_at
   ),
   grain [customer_id],
-  tags ['bronze']
+  tags ['bronze'],
+  columns (
+    customer_id INTEGER,
+    email TEXT,
+    first_name TEXT,
+    last_name TEXT,
+    phone_number TEXT,
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP,
+    _loaded_at TIMESTAMP,
+    _file_name TEXT
+  )
 );
 
 SELECT

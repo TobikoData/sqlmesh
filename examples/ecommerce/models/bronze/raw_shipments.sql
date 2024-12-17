@@ -4,7 +4,21 @@ MODEL (
     time_column created_at
   ),
   grain [shipment_id],
-  tags ['bronze']
+  tags ['bronze'],
+  columns (
+    shipment_id INTEGER,
+    order_id INTEGER,
+    carrier_id INTEGER,
+    tracking_number TEXT,
+    status TEXT,
+    shipping_address_id INTEGER,
+    estimated_delivery_date TIMESTAMP,
+    actual_delivery_date TIMESTAMP,
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP,
+    _loaded_at TIMESTAMP,
+    _file_name TEXT
+  )
 );
 
 SELECT

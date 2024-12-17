@@ -4,7 +4,17 @@ MODEL (
     time_column updated_at
   ),
   grain [category_id],
-  tags ['bronze']
+  tags ['bronze'],
+  columns (
+    category_id INTEGER,
+    category_name TEXT,
+    parent_category_id INTEGER,
+    description TEXT,
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP,
+    _loaded_at TIMESTAMP,
+    _file_name TEXT
+  )
 );
 
 SELECT

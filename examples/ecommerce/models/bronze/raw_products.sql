@@ -4,7 +4,21 @@ MODEL (
     time_column updated_at
   ),
   grain [product_id],
-  tags ['bronze']
+  tags ['bronze'],
+  columns (
+    product_id INTEGER,
+    sku TEXT,
+    product_name TEXT,
+    description TEXT,
+    category_id INTEGER,
+    supplier_id INTEGER,
+    unit_price DECIMAL(10,2),
+    stock_quantity INTEGER,
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP,
+    _loaded_at TIMESTAMP,
+    _file_name TEXT
+  )
 );
 
 SELECT

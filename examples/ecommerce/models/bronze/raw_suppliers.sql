@@ -4,7 +4,23 @@ MODEL (
     time_column updated_at
   ),
   grain [supplier_id],
-  tags ['bronze']
+  tags ['bronze'],
+  columns (
+    supplier_id INTEGER,
+    company_name TEXT,
+    contact_name TEXT,
+    contact_email TEXT,
+    contact_phone TEXT,
+    address TEXT,
+    city TEXT,
+    state TEXT,
+    postal_code TEXT,
+    country TEXT,
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP,
+    _loaded_at TIMESTAMP,
+    _file_name TEXT
+  )
 );
 
 SELECT

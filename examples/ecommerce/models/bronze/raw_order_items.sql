@@ -4,7 +4,17 @@ MODEL (
     time_column order_timestamp
   ),
   grain [order_item_id],
-  tags ['bronze']
+  tags ['bronze'],
+  columns (
+    order_item_id INTEGER,
+    order_id INTEGER,
+    product_id INTEGER,
+    quantity INTEGER,
+    unit_price DECIMAL(10,2),
+    order_timestamp TIMESTAMP,
+    _loaded_at TIMESTAMP,
+    _file_name TEXT
+  )
 );
 
 SELECT
