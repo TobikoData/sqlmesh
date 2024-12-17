@@ -3,89 +3,48 @@ from __future__ import annotations
 import json
 import typing as t
 from pathlib import Path
-
-from sqlglot import parse
-from sqlmesh.core.dialect import parse_one
-from sqlmesh.core.lineage import lineage
 from sqlmesh.core.model import SqlModel
 from sqlmesh.core.loader import SqlMeshLoader
 from sqlmesh.core.config import Config, ModelDefaultsConfig
-from sqlmesh.core.config.connection import DuckDBConnectionConfig
 from sqlmesh.core.config.loader import load_config_from_yaml
+from sqlglot import exp
 
 
-def get_column_lineage(model: SqlModel, column: str) -> dict:
-    """Get lineage information for a single column."""
-    try:
-        node = lineage(column, model)
-        sources = set()
-        references = set()
-
-        if hasattr(node, 'expressions'):
-            for expr in node.expressions:
-                if hasattr(expr, 'table') and hasattr(expr, 'name'):
-                    table_name = expr.table.name if expr.table else None
-                    column_name = expr.name
-                    if table_name and column_name:
-                        sources.add(f"{table_name}.{column_name}")
-                        references.add(table_name)
-
-        return {
-            "sources": list(sources),
-            "references": list(references),
-            "is_derived": bool(sources) or any(expr.is_aggregate for expr in node.expressions) if hasattr(node, 'expressions') else False,
-            "expression": str(node.expression) if hasattr(node, 'expression') else None,
-            "data_type": str(model.columns_to_types.get(column)) if hasattr(model, 'columns_to_types') else None,
-            "description": model.column_descriptions.get(column) if hasattr(model, 'column_descriptions') else None,
+def extract_joins(query: exp.Expression) -> list[dict]:
+    """Extract all joins from a query."""
+    joins = []
+    
+    # Find the FROM clause to get the base table
+    base_table = None
+    
+    if isinstance(query, exp.Select) and query.args.get('from'):
+        from_expr = query.args['from']
+        if isinstance(from_expr, exp.From) and from_expr.this:
+            base_table = from_expr.this.sql(pretty=True)
+    
+    # Then find all joins
+    for join in query.find_all(exp.Join):
+        # For the first join, use the base table as the left side
+        # For subsequent joins, use the previous right side as the left side
+        join_info = {
+            "type": join.args.get("side", "INNER"),  # JOIN type (LEFT, RIGHT, INNER, etc.)
+            "left": base_table,  # Left side of join (base table or previous join)
+            "right": join.this.sql(pretty=True),  # Right side of join (table being joined)
+            "condition": join.args.get("on", "").sql(pretty=True) if join.args.get("on") else None  # Join condition
         }
-    except Exception as e:
-        return {
-            "sources": [],
-            "references": [],
-            "is_derived": False,
-            "error": str(e)
-        }
-
-
-def get_model_dependencies(model: SqlModel) -> dict:
-    """Get model-level dependencies."""
-    depends_on = set()
-    referenced_by = set()
-
-    # Extract dependencies from references
-    if hasattr(model, 'references'):
-        depends_on.update(str(ref) for ref in model.references)
-
-    return {
-        "depends_on": list(depends_on),
-        "referenced_by": list(referenced_by)  # This would need to be populated by scanning other models
-    }
+        joins.append(join_info)
+        # Update base_table for subsequent joins
+        base_table = join.this.sql(pretty=True)
+    return joins
 
 
 def generate_model_lineage(model: SqlModel) -> dict:
-    """Generate comprehensive lineage information for a single model."""
-    model_deps = get_model_dependencies(model)
-    columns = {}
-
-    for column in model.columns_to_types.keys():
-        columns[column] = get_column_lineage(model, column)
-    
-    lineage_data = {
+    """Generate join information for a model."""
+    joins = extract_joins(model.query)
+    return {
         "model": model.name,
-        "dialect": str(model.dialect),
-        "depends_on": model_deps["depends_on"],
-        "referenced_by": model_deps["referenced_by"],
-        "columns": columns,
-        "query": str(model.query),
-        "metadata": {
-            "tags": list(model.tags) if hasattr(model, 'tags') else [],
-            "grain": model.grain if hasattr(model, 'grain') else None,
-            "description": model.description if hasattr(model, 'description') else None,
-            "owners": model.owners if hasattr(model, 'owners') else []
-        }
+        "joins": joins
     }
-
-    return lineage_data
 
 
 def generate_cube_data(models: t.List[SqlModel]) -> t.List[dict]:
@@ -93,8 +52,22 @@ def generate_cube_data(models: t.List[SqlModel]) -> t.List[dict]:
     return [generate_model_lineage(model) for model in models]
 
 
-def load_models_from_directory(directory_path: Path) -> t.List[SqlModel]:
-    """Load SQL models from a directory."""
+def write_cube_data(cube_data: t.List[dict], output_file: t.Optional[Path] = None) -> None:
+    """Write cube data to a file or stdout."""
+    if output_file:
+        with open(output_file, "w") as f:
+            json.dump(cube_data, f, indent=2)
+    else:
+        print(json.dumps(cube_data, indent=2))
+
+
+def load_models_from_directory(directory_path: Path, tag: t.Optional[str] = None) -> t.List[SqlModel]:
+    """Load SQL models from a directory.
+    
+    Args:
+        directory_path: Path to the directory containing models
+        tag: Optional tag to filter models by
+    """
     # Create a context with the project config
     from sqlmesh.core.context import Context
 
@@ -105,20 +78,15 @@ def load_models_from_directory(directory_path: Path) -> t.List[SqlModel]:
         project_root = project_root.parent
 
     context = Context(paths=[project_root])
-    return [model for model in context.models.values() if isinstance(model, SqlModel)]
+    models = [model for model in context.models.values() if isinstance(model, SqlModel)]
+    
+    if tag:
+        models = [model for model in models if hasattr(model, 'tags') and tag in model.tags]
+    
+    return models
 
 
-def write_cube_data(cube_data: t.List[dict], output_file: t.Optional[Path] = None) -> None:
-    """Write cube data to a file or stdout."""
-    json_str = json.dumps(cube_data, indent=2)
-    if output_file:
-        with open(output_file, "w") as f:
-            f.write(json_str)
-    else:
-        print(json_str)
-
-
-def main(model_dir: Path, output_file: t.Optional[Path] = None, models: t.Optional[t.List[SqlModel]] = None) -> None:
+def main(model_dir: Path, output_file: t.Optional[Path] = None, models: t.Optional[t.List[SqlModel]] = None, tag: t.Optional[str] = None) -> None:
     """Main function to generate cube data.
     
     Args:
@@ -126,19 +94,22 @@ def main(model_dir: Path, output_file: t.Optional[Path] = None, models: t.Option
         output_file: Optional output file path. If not provided, prints to stdout.
         models: Optional list of pre-filtered SQL models. If not provided, all models
             in the directory will be loaded.
+        tag: Optional tag to filter models by
     """
     if models is None:
-        models = load_models_from_directory(model_dir)
+        models = load_models_from_directory(model_dir, tag)
     cube_data = generate_cube_data(models)
     write_cube_data(cube_data, output_file)
 
 
 if __name__ == "__main__":
     import sys
-    if len(sys.argv) < 2:
-        print("Usage: python -m sqlmesh.core.cube <model_dir> [output_file]")
-        sys.exit(1)
-    
-    model_dir = Path(sys.argv[1])
-    output_file = Path(sys.argv[2]) if len(sys.argv) > 2 else None
-    main(model_dir, output_file)
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Generate cube data from SQL models")
+    parser.add_argument("model_dir", type=Path, help="Directory containing SQL models")
+    parser.add_argument("--output", "-o", type=Path, help="Output file path")
+    parser.add_argument("--tag", "-t", help="Filter models by tag")
+
+    args = parser.parse_args()
+    main(args.model_dir, args.output, tag=args.tag)
