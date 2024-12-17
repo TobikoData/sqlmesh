@@ -38,15 +38,25 @@ def extract_joins(query: sqlglot.exp.Expression) -> list[dict]:
     return joins
 
 
-def extract_fields(query: sqlglot.exp.Expression) -> list[dict]:
+def extract_fields(query: sqlglot.exp.Expression, model: SqlModel) -> list[dict]:
     """Extract all fields from a query."""
     fields = []
     
+    def clean_type(type_str: str) -> str:
+        """Remove TYPE. prefix from type strings if present."""
+        if type_str.startswith("TYPE."):
+            return type_str[5:]
+        return type_str
+
     if isinstance(query, sqlglot.exp.Select):
+        # Get the model's column types
+        column_types = model.columns_to_types_or_raise
+        
         for expr in query.expressions:
             # Get the field name (either from alias or column name)
             field_name = None
             sql_expr = None
+            data_type = "UNKNOWN"
             
             if isinstance(expr, sqlglot.exp.Alias):
                 if isinstance(expr.alias, sqlglot.exp.Identifier):
@@ -54,33 +64,114 @@ def extract_fields(query: sqlglot.exp.Expression) -> list[dict]:
                 else:
                     field_name = str(expr.alias)
                 sql_expr = expr.this.sql(pretty=True)
+                # Try to infer type from expression
+                if isinstance(expr.this, sqlglot.exp.Count):
+                    data_type = "BIGINT"
+                elif isinstance(expr.this, sqlglot.exp.Sum):
+                    # For SUM, try to get the type from the column being summed
+                    if expr.this.this and isinstance(expr.this.this, sqlglot.exp.Column):
+                        col = expr.this.this
+                        col_name = col.this.this if isinstance(col.this, sqlglot.exp.Identifier) else str(col.this)
+                        if col_name in column_types:
+                            base_type = column_types[col_name]
+                            if base_type.is_type(*sqlglot.exp.DataType.INTEGER_TYPES):
+                                data_type = clean_type(str(base_type.this).upper())
+                            elif base_type.is_type(*sqlglot.exp.DataType.REAL_TYPES):
+                                if base_type.this == sqlglot.exp.DataType.Type.DECIMAL:
+                                    params = [p.this for p in base_type.find_all(sqlglot.exp.DataTypeParam)]
+                                    data_type = f"DECIMAL({','.join(map(str, params))})" if params else "DECIMAL"
+                                else:
+                                    data_type = clean_type(str(base_type.this).upper())
+                            elif base_type.is_type(*sqlglot.exp.DataType.TEMPORAL_TYPES):
+                                data_type = clean_type(str(base_type.this).upper())
+                            else:
+                                data_type = clean_type(str(base_type.this).upper())
+                    else:
+                        data_type = "DECIMAL"
+                elif isinstance(expr.this, sqlglot.exp.Avg):
+                    data_type = "DOUBLE"
+                elif isinstance(expr.this, sqlglot.exp.DateDiff):
+                    data_type = "INT"
+                elif isinstance(expr.this, sqlglot.exp.Cast):
+                    data_type = clean_type(str(expr.this.args["to"].this).upper())
+                elif isinstance(expr.this, sqlglot.exp.Column):
+                    col = expr.this
+                    col_name = col.this.this if isinstance(col.this, sqlglot.exp.Identifier) else str(col.this)
+                    if col_name in column_types:
+                        base_type = column_types[col_name]
+                        if base_type.is_type(*sqlglot.exp.DataType.INTEGER_TYPES):
+                            data_type = clean_type(str(base_type.this).upper())
+                        elif base_type.is_type(*sqlglot.exp.DataType.REAL_TYPES):
+                            if base_type.this == sqlglot.exp.DataType.Type.DECIMAL:
+                                params = [p.this for p in base_type.find_all(sqlglot.exp.DataTypeParam)]
+                                data_type = f"DECIMAL({','.join(map(str, params))})" if params else "DECIMAL"
+                            else:
+                                data_type = clean_type(str(base_type.this).upper())
+                        elif base_type.is_type(*sqlglot.exp.DataType.TEMPORAL_TYPES):
+                            data_type = clean_type(str(base_type.this).upper())
+                        else:
+                            data_type = clean_type(str(base_type.this).upper())
+                elif field_name in column_types:
+                    # For direct column references, use the model's type
+                    base_type = column_types[field_name]
+                    if base_type.is_type(*sqlglot.exp.DataType.INTEGER_TYPES):
+                        data_type = clean_type(str(base_type.this).upper())
+                    elif base_type.is_type(*sqlglot.exp.DataType.REAL_TYPES):
+                        if base_type.this == sqlglot.exp.DataType.Type.DECIMAL:
+                            params = [p.this for p in base_type.find_all(sqlglot.exp.DataTypeParam)]
+                            data_type = f"DECIMAL({','.join(map(str, params))})" if params else "DECIMAL"
+                        else:
+                            data_type = clean_type(str(base_type.this).upper())
+                    elif base_type.is_type(*sqlglot.exp.DataType.TEMPORAL_TYPES):
+                        data_type = clean_type(str(base_type.this).upper())
+                    else:
+                        data_type = clean_type(str(base_type.this).upper())
             else:
                 if isinstance(expr, sqlglot.exp.Column):
                     field_name = expr.this.this if isinstance(expr.this, sqlglot.exp.Identifier) else str(expr.this)
                 else:
                     field_name = str(expr)
                 sql_expr = expr.sql(pretty=True)
-            
-            fields.append({
-                "name": field_name,
-                "sql": sql_expr
-            })
-    
+
+                if field_name in column_types:
+                    # For direct column references, use the model's type
+                    base_type = column_types[field_name]
+                    if base_type.is_type(*sqlglot.exp.DataType.INTEGER_TYPES):
+                        data_type = clean_type(str(base_type.this).upper())
+                    elif base_type.is_type(*sqlglot.exp.DataType.REAL_TYPES):
+                        if base_type.this == sqlglot.exp.DataType.Type.DECIMAL:
+                            params = [p.this for p in base_type.find_all(sqlglot.exp.DataTypeParam)]
+                            data_type = f"DECIMAL({','.join(map(str, params))})" if params else "DECIMAL"
+                        else:
+                            data_type = clean_type(str(base_type.this).upper())
+                    elif base_type.is_type(*sqlglot.exp.DataType.TEMPORAL_TYPES):
+                        data_type = clean_type(str(base_type.this).upper())
+                    else:
+                        data_type = clean_type(str(base_type.this).upper())
+
+            if field_name:
+                field_info = {
+                    "name": field_name,
+                    "sql": sql_expr or field_name,
+                    "type": data_type
+                }
+                fields.append(field_info)
+
     return fields
 
 
-def extract_model_info(query: sqlglot.exp.Expression) -> dict:
+def extract_model_info(query: sqlglot.exp.Expression, model: SqlModel) -> dict:
     """Extract both joins and fields from a query."""
     return {
         "joins": extract_joins(query),
-        "fields": extract_fields(query)
+        "fields": extract_fields(query, model)
     }
 
 
 def generate_model_lineage(model: SqlModel) -> dict:
     """Generate join information for a model."""
     query = model.query
-    model_info = extract_model_info(query)
+    model_info = extract_model_info(query, model)
     return {
         "model": model.name,
         **model_info

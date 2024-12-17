@@ -964,7 +964,6 @@ def dlt_refresh(
 
 
 @cli.command("cube_generate")
-@click.argument("model_dir", type=click.Path(exists=True, file_okay=False, dir_okay=True))
 @click.option(
     "--output", "-o",
     type=click.Path(dir_okay=False),
@@ -980,13 +979,12 @@ def dlt_refresh(
 @cli_analytics
 def cube_generate(
     obj: Context, 
-    model_dir: str, 
     output: t.Optional[str] = None,
     select_models: t.Optional[t.Tuple[str, ...]] = None,
 ) -> None:
-    """Generate cube data for SQL models in a directory.
+    """Generate cube data for SQL models in the current project.
     
-    This command analyzes SQL models in the specified directory and generates cube data
+    This command analyzes SQL models in the project and generates cube data
     representing the relationships and dependencies between models.
     
     Models can be filtered using selection patterns:
@@ -994,4 +992,4 @@ def cube_generate(
     - Tags: '@daily' matches models with the 'daily' tag
     - Full names: 'my_project.silver.my_model'
     """
-    obj.cube_generate(model_dir, output, select_models=select_models)
+    obj.cube_generate(output, select_models=select_models)

@@ -2211,14 +2211,12 @@ class GenericContext(BaseContext, t.Generic[C]):
     @python_api_analytics
     def cube_generate(
         self,
-        model_dir: str,
         output: t.Optional[str] = None,
         select_models: t.Optional[t.Collection[str]] = None,
     ) -> None:
-        """Generate cube data for models in the specified directory.
+        """Generate cube data for models in the current project.
         
         Args:
-            model_dir: Directory containing SQL models
             output: Optional output file path. If not provided, prints to stdout.
             select_models: Optional collection of model selection patterns to filter models.
                 Supports wildcards (e.g., 'silver.*') and tags (e.g., '@daily').
@@ -2240,7 +2238,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         # Only include SQL models
         sql_models = [model for model in models.values() if isinstance(model, SqlModel)]
         
-        cube.main(Path(model_dir), output and Path(output), sql_models)
+        cube.main(self.path, output and Path(output), sql_models)
 
     def _load_requirements(self, path: Path) -> None:
         path = path / c.REQUIREMENTS
