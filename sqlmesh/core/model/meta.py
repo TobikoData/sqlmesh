@@ -78,7 +78,7 @@ class ModelMeta(_Node):
     enabled: bool = True
     physical_version: t.Optional[str] = None
     gateway: t.Optional[str] = None
-    optimize: t.Optional[bool] = None
+    optimize_query: t.Optional[bool] = None
 
     _bool_validator = bool_validator
     _model_kind_validator = model_kind_validator

@@ -216,7 +216,7 @@ class _Model(ModelMeta, frozen=True):
                     "default_catalog",
                     "enabled",
                     "inline_audits",
-                    "optimize",
+                    "optimize_query",
                 ):
                     expressions.append(
                         exp.Property(
@@ -841,6 +841,12 @@ class _Model(ModelMeta, frozen=True):
                 self._path,
             )
 
+        if not self.is_sql and self.optimize_query is not None:
+            raise_config_error(
+                "SQLMesh query optimizer can only be enabled/disabled for SQLModels",
+                self._path,
+            )
+
     def is_breaking_change(self, previous: Model) -> t.Optional[bool]:
         """Determines whether this model is a breaking change in relation to the `previous` model.
 
@@ -882,7 +888,7 @@ class _Model(ModelMeta, frozen=True):
             self.physical_version,
             self.gateway,
             self.interval_unit.value if self.interval_unit is not None else None,
-            str(self.optimize),
+            str(self.optimize_query) if self.optimize_query is not None else None,
         ]
 
         for column_name, column_type in (self.columns_to_types_ or {}).items():
@@ -1271,7 +1277,7 @@ class SqlModel(_Model):
             only_execution_time=self.kind.only_execution_time,
             default_catalog=self.default_catalog,
             quote_identifiers=not no_quote_identifiers,
-            optimize=self.optimize,
+            optimize_query=self.optimize_query,
         )
 
     @property

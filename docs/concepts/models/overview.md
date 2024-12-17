@@ -354,8 +354,8 @@ Learn more about these properties and their default values in the [model configu
 ### gateway
 :   Specifies the gateway to use for the execution of this model. When not specified, the default gateway is used.
 
-### optimize
-:   Whether the model's SQL should be optimized. All models are optimized by default. Setting this
+### optimize_query
+:   Whether the model's query should be optimized. All SQL models are optimized by default. Setting this
 to `false` causes SQLMesh to disable query canonicalization & simplification. This should be turned off only if the optimized query leads to errors such as surpassing text limit.
 
 !!! warning
