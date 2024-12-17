@@ -1,7 +1,8 @@
 services:
   risingwave:
-    image: risingwavelabs/risingwave:v2.0.1
+    image: risingwavelabs/risingwave:nightly-20241216
     ports:
-      - '5432:5432'
-    environment:
-      RISINGWAVE_PASSWORD: risingwave
+      - "4566:4566"
+    # environment:
+    #   - RUST_BACKTRACE=1
+    #   - RW_LOG_LEVEL=debug

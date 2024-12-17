@@ -2062,6 +2062,7 @@ class EngineAdapter:
         logger.log(self._execute_log_level, "Executing SQL: %s", sql)
 
     def _execute(self, sql: str, **kwargs: t.Any) -> None:
+        logger.warning("Executing SQL: %s", sql)
         self.cursor.execute(sql, **kwargs)
 
     @contextlib.contextmanager

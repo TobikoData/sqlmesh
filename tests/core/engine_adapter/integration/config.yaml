@@ -92,11 +92,11 @@ gateways:
   inttest_risingwave:
     connection:
       type: risingwave
-      user: risingwave
+      user: root
       password: risingwave
-      database: risingwave
+      database: dev
       host: {{ env_var('DOCKER_HOSTNAME', 'localhost') }}
-      port: 5432
+      port: 4566
 
 
   # Cloud databases

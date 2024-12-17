@@ -158,6 +158,9 @@ class TestContext:
 
         if self.dialect == "athena":
             return "hive" not in self.mark
+        
+        if self.dialect == "risingwave":
+            return False
 
         return True
 
@@ -176,7 +179,7 @@ class TestContext:
 
     def _init_engine_adapter(self) -> None:
         schema = self.schema(TEST_SCHEMA)
-        self.engine_adapter.drop_schema(schema, ignore_if_not_exists=True, cascade=True)
+        self.engine_adapter.drop_schema(schema, ignore_if_not_exists=True, cascade=False)
         self.engine_adapter.create_schema(schema)
 
     def _format_df(self, data: pd.DataFrame, to_datetime: bool = True) -> pd.DataFrame:
@@ -347,6 +350,20 @@ class TestContext:
             """
         elif self.dialect == "clickhouse":
             query = f"SELECT name, comment FROM system.tables WHERE database = '{schema_name}' AND name = '{table_name}'"
+        elif self.dialect == "risingwave":
+            query = f"""
+                SELECT
+                    c.relname,
+                    d.description
+                FROM pg_class c
+                INNER JOIN pg_description d ON c.oid = d.objoid AND d.objsubid = 0
+                INNER JOIN pg_namespace n ON c.relnamespace = n.oid
+                WHERE 
+                    c.relname = '{table_name}'
+                    AND n.nspname= '{schema_name}'
+                    AND c.relkind = '{'v' if table_kind == "VIEW" else 'r'}'
+                ;
+            """
 
         result = self.engine_adapter.fetchall(query)
 
@@ -438,6 +455,24 @@ class TestContext:
                     schema_name = '{schema_name}'
                     AND table_name = '{table_name}'
             """
+        elif self.dialect == "risingwave":
+            query = f"""
+                SELECT
+                    a.attname AS column_name, d.description
+                FROM
+                    pg_class c
+                INNER JOIN pg_namespace n ON c.relnamespace = n.oid
+                INNER JOIN pg_attribute a ON c.oid = a.attrelid
+                INNER JOIN pg_description d
+                ON 
+                    a.attnum = d.objsubid
+                    AND d.objoid = c.oid
+                WHERE
+                    n.nspname = '{schema_name}'
+                    AND c.relname = '{table_name}' 
+                    AND c.relkind = '{'v' if table_kind == "VIEW" else 'r'}'
+                ;
+            """
 
         result = self.engine_adapter.fetchall(query)
 
@@ -527,6 +562,9 @@ class TestContext:
                 self._schemas.append(model.schema_name)
                 self._schemas.append(model.physical_schema)
 
+        if self.engine_adapter.DIALECT == "risingwave":
+            return
+        
         for schema_name in set(self._schemas):
             self.engine_adapter.drop_schema(
                 schema_name=schema_name, ignore_if_not_exists=True, cascade=True
