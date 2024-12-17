@@ -175,7 +175,7 @@ def test_select_models(mocker: MockerFixture, make_snapshot, default_catalog: t.
         },
     )
     _assert_models_equal(
-        selector.select_models(["tag:+tag2"], env_name),
+        selector.select_models(["+tag:tag2"], env_name),
         {
             added_model.fqn: added_model,
             modified_model_v2.fqn: modified_model_v2.copy(
@@ -375,7 +375,7 @@ def test_select_models_missing_env(mocker: MockerFixture, make_snapshot):
         # Upstream models are included
         (
             [("model1", "tag1", None), ("model2", "tag2", None), ("model3", "tag3", {"model2"})],
-            ["tag:+tag3"],
+            ["+tag:tag3"],
             {'"model2"', '"model3"'},
         ),
         # Upstream and downstream models are included
@@ -385,7 +385,7 @@ def test_select_models_missing_env(mocker: MockerFixture, make_snapshot):
                 ("model2", "tag2", {"model1"}),
                 ("model3", "tag3", {"model2"}),
             ],
-            ["tag:+tag2+"],
+            ["+tag:tag2+"],
             {'"model1"', '"model2"', '"model3"'},
         ),
         # Wildcard works with upstream and downstream models
@@ -399,7 +399,7 @@ def test_select_models_missing_env(mocker: MockerFixture, make_snapshot):
                 # Only excluded model since it doesn't match wildcard nor upstream/downstream
                 ("model6", "blah", None),
             ],
-            ["tag:+tag*+"],
+            ["+tag:tag*+"],
             {'"model1"', '"model2"', '"model3"', '"model4"', '"model5"'},
         ),
         # Multiple tags work
@@ -423,7 +423,7 @@ def test_select_models_missing_env(mocker: MockerFixture, make_snapshot):
                 ("model5", "tag5", {"model4"}),
                 ("model6", "tag6", {"model5"}),
             ],
-            ["tag:+tag3", "tag:tag5"],
+            ["+tag:tag3", "tag:tag5"],
             {'"model1"', '"model2"', '"model3"', '"model5"'},
         ),
         # Case-insensitive matching
@@ -452,7 +452,7 @@ def test_select_models_missing_env(mocker: MockerFixture, make_snapshot):
                 ("model1", "tag1", None),
                 ("model2", "tag2", None),
             ],
-            ["tag:+tag2"],
+            ["+tag:tag2"],
             {'"model2"'},
         ),
         # No matches returns empty set
@@ -461,7 +461,7 @@ def test_select_models_missing_env(mocker: MockerFixture, make_snapshot):
                 ("model1", "tag1", None),
                 ("model2", "tag2", None),
             ],
-            ["tag:+tag3*+", "tag:+tag3+"],
+            ["+tag:tag3*+", "+tag:tag3+"],
             set(),
         ),
         # Mix of models and tags
@@ -495,6 +495,22 @@ def test_select_models_missing_env(mocker: MockerFixture, make_snapshot):
             ],
             ["model1+ & tag:tag1"],
             {'"model1"', '"model2"'},
+        ),
+        # negation
+        (
+            [("model1", "tag1", None), ("model2", "tag2", None), ("model3", "tag3", None)],
+            ["^tag:tag1"],
+            {'"model2"', '"model3"'},
+        ),
+        (
+            [("model1", "tag1", None), ("model2", "tag2", None), ("model3", "tag3", None)],
+            ["^model1"],
+            {'"model2"', '"model3"'},
+        ),
+        (
+            [("model1", "tag1", None), ("model2", "tag2", None), ("model3", "tag3", None)],
+            ["model* & ^(tag:tag1 | tag:tag2)"],
+            {'"model3"'},
         ),
     ],
 )
