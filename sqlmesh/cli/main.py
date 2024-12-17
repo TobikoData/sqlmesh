@@ -970,13 +970,28 @@ def dlt_refresh(
     type=click.Path(dir_okay=False),
     help="Output file path. If not provided, prints to stdout.",
 )
+@click.option(
+    "--select-models",
+    multiple=True,
+    help="Filter models by selection pattern (e.g., 'silver.*' or '@tag'). Can be specified multiple times.",
+)
 @click.pass_obj
 @error_handler
 @cli_analytics
-def cube_generate(obj: Context, model_dir: str, output: t.Optional[str] = None) -> None:
+def cube_generate(
+    obj: Context, 
+    model_dir: str, 
+    output: t.Optional[str] = None,
+    select_models: t.Optional[t.Tuple[str, ...]] = None,
+) -> None:
     """Generate cube data for SQL models in a directory.
     
     This command analyzes SQL models in the specified directory and generates cube data
     representing the relationships and dependencies between models.
+    
+    Models can be filtered using selection patterns:
+    - Wildcards: 'silver.*' matches all models in silver folder
+    - Tags: '@daily' matches models with the 'daily' tag
+    - Full names: 'my_project.silver.my_model'
     """
-    obj.cube_generate(model_dir, output)
+    obj.cube_generate(model_dir, output, select_models=select_models)

@@ -118,9 +118,17 @@ def write_cube_data(cube_data: t.List[dict], output_file: t.Optional[Path] = Non
         print(json_str)
 
 
-def main(model_dir: Path, output_file: t.Optional[Path] = None) -> None:
-    """Main function to generate cube data."""
-    models = load_models_from_directory(model_dir)
+def main(model_dir: Path, output_file: t.Optional[Path] = None, models: t.Optional[t.List[SqlModel]] = None) -> None:
+    """Main function to generate cube data.
+    
+    Args:
+        model_dir: Directory containing SQL models
+        output_file: Optional output file path. If not provided, prints to stdout.
+        models: Optional list of pre-filtered SQL models. If not provided, all models
+            in the directory will be loaded.
+    """
+    if models is None:
+        models = load_models_from_directory(model_dir)
     cube_data = generate_cube_data(models)
     write_cube_data(cube_data, output_file)
 

@@ -2208,6 +2208,40 @@ class GenericContext(BaseContext, t.Generic[C]):
             result = set(dag.subdag(*result))
         return result
 
+    @python_api_analytics
+    def cube_generate(
+        self,
+        model_dir: str,
+        output: t.Optional[str] = None,
+        select_models: t.Optional[t.Collection[str]] = None,
+    ) -> None:
+        """Generate cube data for models in the specified directory.
+        
+        Args:
+            model_dir: Directory containing SQL models
+            output: Optional output file path. If not provided, prints to stdout.
+            select_models: Optional collection of model selection patterns to filter models.
+                Supports wildcards (e.g., 'silver.*') and tags (e.g., '@daily').
+        """
+        from sqlmesh.core import cube
+        from sqlmesh.core.model import SqlModel
+        from sqlmesh.core.selector import Selector
+
+        # Get all models
+        models = dict(self._models)
+
+        # Create a selector if we have model filters
+        selector = None
+        if select_models:
+            selector = Selector(self.state_reader, models)
+            model_names = selector.expand_model_selections(select_models)
+            models = {name: model for name, model in models.items() if name in model_names}
+
+        # Only include SQL models
+        sql_models = [model for model in models.values() if isinstance(model, SqlModel)]
+        
+        cube.main(Path(model_dir), output and Path(output), sql_models)
+
     def _load_requirements(self, path: Path) -> None:
         path = path / c.REQUIREMENTS
         if path.is_file():
@@ -2225,16 +2259,6 @@ class GenericContext(BaseContext, t.Generic[C]):
                             f"Conflicting requirement {dep}: {ver} != {other_ver}. Fix your {c.REQUIREMENTS} file."
                         )
                     self._requirements[dep] = ver
-
-    @python_api_analytics
-    def cube_generate(
-        self,
-        model_dir: str,
-        output: t.Optional[str] = None,
-    ) -> None:
-        """Generate cube data for models in the specified directory."""
-        from sqlmesh.core import cube
-        cube.main(Path(model_dir), output and Path(output))
 
 
 class Context(GenericContext[Config]):
