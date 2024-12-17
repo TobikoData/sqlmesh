@@ -3979,6 +3979,58 @@ SELECT
 FROM @{macro_val}.upstream"""
     )
 
+    @macro()
+    def fingerprint_merge(
+        evaluator: MacroEvaluator,
+        fingerprint_column: exp.Column,
+        update_columns: list[exp.Column],
+    ) -> exp.Whens:
+        fingerprint_evaluation = f"source.{fingerprint_column} <> target.{fingerprint_column}"
+        column_update = [f"target.{column} = source.{column}" for column in update_columns]
+        return exp.maybe_parse(
+            f"WHEN MATCHED AND {fingerprint_evaluation} THEN UPDATE SET {column_update}",
+            into=exp.Whens,
+        )
+
+    expressions = d.parse(
+        """
+        MODEL (
+          name test,
+          kind INCREMENTAL_BY_UNIQUE_KEY (
+            unique_key purchase_order_id,
+            when_matched (@fingerprint_merge(salary, [update_datetime, salary]))
+          )
+        );
+
+        SELECT
+          1 AS purchase_order_id,
+          1 AS salary,
+          CAST('2020-01-01 12:05:01' AS DATETIME) AS update_datetime
+        """
+    )
+
+    model = SqlModel.parse_raw(load_sql_based_model(expressions).json())
+    assert d.format_model_expressions(model.render_definition()) == (
+        """MODEL (
+  name test,
+  kind INCREMENTAL_BY_UNIQUE_KEY (
+    unique_key ("purchase_order_id"),
+    when_matched (
+      WHEN MATCHED AND __MERGE_SOURCE__.salary <> __MERGE_TARGET__.salary THEN UPDATE SET ARRAY('target.update_datetime = source.update_datetime', 'target.salary = source.salary')
+    ),
+    batch_concurrency 1,
+    forward_only FALSE,
+    disable_restatement FALSE,
+    on_destructive_change 'ERROR'
+  )
+);
+
+SELECT
+  1 AS purchase_order_id,
+  1 AS salary,
+  '2020-01-01 12:05:01'::DATETIME AS update_datetime"""
+    )
+
 
 def test_when_matched_multiple():
     expressions = d.parse(

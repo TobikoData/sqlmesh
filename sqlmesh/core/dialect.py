@@ -403,6 +403,10 @@ def _parse_limit(
     return macro
 
 
+def _parse_macro_or_clause(self: Parser, parser: t.Callable) -> t.Optional[exp.Expression]:
+    return _parse_macro(self) if self._match(TokenType.PARAMETER) else parser()
+
+
 def _parse_props(self: Parser) -> t.Optional[exp.Expression]:
     key = self._parse_id_var(any_token=True)
     if not key:
@@ -414,7 +418,10 @@ def _parse_props(self: Parser) -> t.Optional[exp.Expression]:
         value = self._parse_types(schema=True)
     elif name == "when_matched":
         # Parentheses around the WHEN clauses can be used to disambiguate them from other properties
-        value = self._parse_wrapped(self._parse_when_matched, optional=True)
+        value = self._parse_wrapped(
+            lambda: _parse_macro_or_clause(self, self._parse_when_matched),
+            optional=True,
+        )
     elif self._match(TokenType.L_PAREN):
         value = self.expression(exp.Tuple, expressions=self._parse_csv(self._parse_equality))
         self._match_r_paren()
@@ -551,10 +558,7 @@ def _create_parser(parser_type: t.Type[exp.Expression], table_keys: t.List[str])
             elif key == "columns":
                 value = self._parse_schema()
             elif key == "kind":
-                if self._match(TokenType.PARAMETER):
-                    field = _parse_macro(self)
-                else:
-                    field = self._parse_id_var(any_token=True)
+                field = _parse_macro_or_clause(self, lambda: self._parse_id_var(any_token=True))
 
                 if not field or isinstance(field, (MacroVar, MacroFunc)):
                     value = field
