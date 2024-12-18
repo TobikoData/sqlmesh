@@ -6436,6 +6436,8 @@ def test_column_description_metadata_change():
     snapshot = snapshots[0]
     assert len(snapshot.previous_versions) == 1
     assert snapshot.change_category == SnapshotChangeCategory.METADATA
+
+
 def test_model_on_virtual_update(make_snapshot: t.Callable):
     # Macro to test resolution within virtual statement
     @macro()
