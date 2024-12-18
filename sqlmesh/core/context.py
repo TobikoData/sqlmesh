@@ -2023,6 +2023,12 @@ class GenericContext(BaseContext, t.Generic[C]):
             if snapshot.is_model and snapshot.model.gateway
         }
 
+    @cached_property
+    def engine_adapters(self) -> t.Dict[str, EngineAdapter]:
+        """Returns all engine adapters for the gateways defined in the configs."""
+        self._create_engine_adapters()
+        return self._engine_adapters
+
     def _create_engine_adapters(self, gateways: t.Optional[t.Set] = None) -> None:
         """Create engine adapters for the gateways, when none provided include all defined in the configs."""
 
@@ -2037,8 +2043,7 @@ class GenericContext(BaseContext, t.Generic[C]):
 
     def _get_engine_adapter(self, gateway: t.Optional[str] = None) -> EngineAdapter:
         if gateway:
-            self._create_engine_adapters()
-            if adapter := self._engine_adapters.get(gateway):
+            if adapter := self.engine_adapters.get(gateway):
                 return adapter
             raise SQLMeshError(f"Gateway '{gateway}' not found in the available engine adapters.")
         return self.engine_adapter
