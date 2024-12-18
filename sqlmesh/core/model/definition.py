@@ -2129,7 +2129,7 @@ def _split_sql_model_statements(
             assert isinstance(loaded_audit, ModelAudit)
             inline_audits[loaded_audit.name] = loaded_audit
             idx += 1
-        elif isinstance(expr, d.VirtualStatement):
+        elif isinstance(expr, d.VirtualUpdateStatement):
             on_virtual_update.append(expr.this)
         else:
             if (
