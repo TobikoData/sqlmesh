@@ -2163,9 +2163,11 @@ def _split_sql_model_statements(
             loaded_audit = load_audit([expr, expressions[idx + 1]], dialect=dialect)
             assert isinstance(loaded_audit, ModelAudit)
             inline_audits[loaded_audit.name] = loaded_audit
-            idx += 1
+            idx += 2
         elif isinstance(expr, d.VirtualUpdateStatement):
-            on_virtual_update.append(expr.this)
+            for statement in expr.this:
+                on_virtual_update.append(statement)
+            idx += 1
         else:
             if (
                 isinstance(expr, (exp.Query, d.JinjaQuery))
@@ -2177,7 +2179,7 @@ def _split_sql_model_statements(
             ):
                 query_positions.append((expr, idx))
             sql_statements.append(expr)
-        idx += 1
+            idx += 1
 
     if not query_positions:
         return None, sql_statements, [], on_virtual_update, inline_audits
