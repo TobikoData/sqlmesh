@@ -6689,6 +6689,8 @@ def test_gateway_specific_render(assert_exp_eq) -> None:
     )
     assert isinstance(context._get_engine_adapter("duckdb"), DuckDBEngineAdapter)
     assert len(context._engine_adapters) == 2
+
+    
 def test_model_on_virtual_update(make_snapshot: t.Callable):
     # Macro to test resolution within virtual statement
     @macro()
