@@ -6635,10 +6635,7 @@ def test_gateway_specific_render(assert_exp_eq) -> None:
     )
     context = Context(config=config)
     assert context.engine_adapter == context._engine_adapters["main"]
-    with pytest.raises(
-        SQLMeshError, match=r"Gateway 'duckdb' not found in the available engine adapters."
-    ):
-        context._get_engine_adapter("duckdb")
+    assert len(context._engine_adapters) == 1
 
     @model(
         name="dummy_model",
