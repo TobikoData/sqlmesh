@@ -417,8 +417,8 @@ class GenericContext(BaseContext, t.Generic[C]):
     @property
     def snapshot_evaluator(self) -> SnapshotEvaluator:
         if not self._snapshot_evaluator:
-            if self._snapshot_gateways:
-                self._create_engine_adapters(set(self._snapshot_gateways.values()))
+            if snapshot_gateways := self._snapshot_gateways:
+                self._create_engine_adapters(set(snapshot_gateways.values()))
             self._snapshot_evaluator = SnapshotEvaluator(
                 {
                     gateway: adapter.with_log_level(logging.INFO)
@@ -1474,6 +1474,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         source_alias, target_alias = source, target
 
         adapter = self.engine_adapter
+
         if model_or_snapshot:
             model = self.get_model(model_or_snapshot, raise_if_missing=True)
             adapter = self._get_engine_adapter(model.gateway)
@@ -1639,6 +1640,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             test_adapter = self._test_connection_config.create_engine_adapter(
                 register_comments_override=False
             )
+
             generate_test(
                 model=model_to_test,
                 input_queries=input_queries,
@@ -2032,6 +2034,7 @@ class GenericContext(BaseContext, t.Generic[C]):
 
     def _get_engine_adapter(self, gateway: t.Optional[str] = None) -> EngineAdapter:
         if gateway:
+            self._create_engine_adapters()
             if adapter := self._engine_adapters.get(gateway):
                 return adapter
             raise SQLMeshError(f"Gateway '{gateway}' not found in the available engine adapters.")
