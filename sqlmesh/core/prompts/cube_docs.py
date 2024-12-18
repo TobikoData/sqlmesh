@@ -127,8 +127,8 @@ Types of measures:
 - sum: Adds up values
 - avg: Calculates average
 - min/max: Find minimum/maximum values
-- countDistinct: Counts unique values
-- countDistinctApprox: Approximate count of unique values
+- count_distinct: Counts unique values
+- count_distinct_approx: Approximate count of unique values
 
 Example:
 ```yaml
@@ -141,7 +141,7 @@ cubes:
         format: currency
       
       uniqueUsers:
-        type: countDistinct
+        type: count_distinct
         sql: user_id
 ```
 """
@@ -186,9 +186,9 @@ Key concepts in Cube data modeling:
 CUBE_REFERENCE = """
 Cube properties:
 - sql: The base SQL table or subquery
-- sqlAlias: Optional alias for the SQL table
-- refreshKey: Defines the refresh strategy
-- dataSource: Specifies the data source
+- sql_alias: Optional alias for the SQL table
+- refresh_key: Defines the refresh strategy
+- data_source: Specifies the data source
 - description: Documentation for the cube
 - shown: Controls cube visibility
 
@@ -198,9 +198,9 @@ Measure types:
 - avg
 - min
 - max
-- countDistinct
-- countDistinctApprox
-- runningTotal
+- count_distinct
+- count_distinct_approx
+- running_total
 - number
 
 Dimension types:
@@ -222,25 +222,80 @@ Don't use old join types:
 """
 
 CUBE_TYPES = """
-Type modifiers and formats:
-1. Time dimensions:
-   - sql: Timestamp column
-   - type: 'time'
-   - format: 'YYYY-MM-DD'
+Common measure types:
+- count: Counts all records in the dataset
+- sum: Adds up the values in a specific column
+- avg: Calculates the average (mean) of values
+- min: Finds the minimum value
+- max: Finds the maximum value
+- number: Returns a single numeric value
+- count_distinct: Counts unique values
+- count_distinct_approx: Approximate count of unique values (more efficient for large datasets)
+- running_total: Calculates cumulative sum
 
-2. Number formats:
-   - percent
-   - currency
-   - decimal places
+Common dimension types:
+- string: Text values
+- number: Numeric values
+- time: Timestamps and dates
+- boolean: True/False values
 
-3. String operations:
-   - substring
-   - uppercase/lowercase
-   - trim
+Special properties:
+- primary_key: Marks a dimension as the unique identifier for the cube
+  Example:
+  ```yaml
+  dimensions:
+    id:
+      sql: id
+      type: number
+      primary_key: true
+  ```
 
-4. Boolean expressions:
-   - case statements
-   - boolean operations
+Format options for dimensions:
+- image: URL to an image
+- link: Clickable URL
+- currency: Monetary values with currency symbol
+- percent: Percentage values
+- id: Unique identifiers
+- datetime: {
+    - year
+    - quarter
+    - month
+    - week
+    - date (YYYY-MM-DD)
+    - hour
+    - minute
+    - second
+  }
+
+Examples:
+```yaml
+measures:
+  revenue:
+    sql: amount
+    type: sum
+  unique_users:
+    sql: user_id
+    type: count_distinct
+  average_order_value:
+    sql: amount
+    type: avg
+
+dimensions:
+  id:
+    sql: id
+    type: number
+    primary_key: true
+  created_at:
+    sql: created_at
+    type: time
+  status:
+    sql: status
+    type: string
+  amount:
+    sql: amount
+    type: number
+    format: currency
+```
 """
 
 CUBE_BEST_PRACTICES = """
