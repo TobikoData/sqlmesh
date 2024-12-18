@@ -6404,3 +6404,35 @@ def test_model_optimize(tmp_path: Path, assert_exp_eq):
         context = Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb")))
         context.upsert_model(model)
         context.plan(auto_apply=True, no_prompts=True)
+
+
+def test_column_description_metadata_change():
+    context = Context(config=Config())
+
+    model = load_sql_based_model(
+        d.parse(
+            """
+        MODEL (
+          name db.test_model,
+          kind full
+        );
+
+        SELECT
+          1 AS id /* description */
+        """
+        ),
+        default_catalog=context.default_catalog,
+    )
+
+    context.upsert_model(model)
+    context.plan(no_prompts=True, auto_apply=True)
+
+    context.upsert_model("db.test_model", query=parse_one("SELECT 1 AS id /* description 2 */"))
+    plan = context.plan(no_prompts=True, auto_apply=True)
+
+    snapshots = list(plan.snapshots.values())
+    assert len(snapshots) == 1
+
+    snapshot = snapshots[0]
+    assert len(snapshot.previous_versions) == 1
+    assert snapshot.change_category == SnapshotChangeCategory.METADATA
