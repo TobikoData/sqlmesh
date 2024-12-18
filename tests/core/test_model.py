@@ -4072,7 +4072,7 @@ def test_default_catalog_sql(assert_exp_eq):
     The system is not designed to actually support having an engine that doesn't support default catalog
     to start supporting it or the reverse of that. If that did happen then bugs would occur.
     """
-    HASH_WITH_CATALOG = "368216481"
+    HASH_WITH_CATALOG = "516937963"
 
     # Test setting default catalog doesn't change hash if it matches existing logic
     expressions = d.parse(
@@ -4238,7 +4238,7 @@ def test_default_catalog_sql(assert_exp_eq):
 
 
 def test_default_catalog_python():
-    HASH_WITH_CATALOG = "663490914"
+    HASH_WITH_CATALOG = "770057346"
 
     @model(name="db.table", kind="full", columns={'"COL"': "int"})
     def my_model(context, **kwargs):
@@ -4330,7 +4330,7 @@ def test_default_catalog_external_model():
     Since external models fqns are the only thing affected by default catalog, and when they change new snapshots
     are made, the hash will be the same across different names.
     """
-    EXPECTED_HASH = "627688262"
+    EXPECTED_HASH = "3614876346"
 
     model = create_external_model("db.table", columns={"a": "int", "limit": "int"})
     assert model.default_catalog is None
@@ -6319,3 +6319,88 @@ def test_fingerprint_signals():
     model = load_sql_based_model(expressions, signal_definitions=signal.get_registry())
     model.signals.clear()
     assert_metadata_only()
+
+
+def test_model_optimize(tmp_path: Path, assert_exp_eq):
+    defaults = [
+        ModelDefaultsConfig(optimize_query=True).dict(),
+        ModelDefaultsConfig(optimize_query=False).dict(),
+    ]
+    non_optimized_sql = 'SELECT 1 + 2 AS "new_col"'
+    optimized_sql = 'SELECT 3 AS "new_col"'
+
+    # Model flag is False, overriding defaults
+    disabled_opt = d.parse(
+        """
+        MODEL (
+            name test,
+            optimize_query False,
+        );
+
+        SELECT 1 + 2 AS new_col
+        """
+    )
+
+    for default in defaults:
+        model = load_sql_based_model(disabled_opt, defaults=default)
+        assert_exp_eq(model.render_query(), non_optimized_sql)
+
+    # Model flag is True, overriding defaults
+    enabled_opt = d.parse(
+        """
+        MODEL (
+            name test,
+            optimize_query True,
+        );
+
+        SELECT 1 + 2 AS new_col
+        """
+    )
+
+    for default in defaults:
+        model = load_sql_based_model(enabled_opt, defaults=default)
+        assert_exp_eq(model.render_query(), optimized_sql)
+
+    # Model flag is not defined, behavior is set according to the defaults
+    none_opt = d.parse(
+        """
+        MODEL (
+            name test,
+        );
+
+        SELECT 1 + 2 AS new_col
+        """
+    )
+
+    assert_exp_eq(load_sql_based_model(none_opt).render_query(), optimized_sql)
+    assert_exp_eq(
+        load_sql_based_model(none_opt, defaults=defaults[0]).render_query(), optimized_sql
+    )
+    assert_exp_eq(
+        load_sql_based_model(none_opt, defaults=defaults[1]).render_query(), non_optimized_sql
+    )
+
+    # Ensure that plan works as expected (optimize_query flag affects the model's data hash)
+    for parsed_model in [enabled_opt, disabled_opt, none_opt]:
+        context = Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb")))
+        context.upsert_model(load_sql_based_model(parsed_model))
+        context.plan(auto_apply=True, no_prompts=True)
+
+    # Ensure non-SQLModels raise if optimize_query is not None
+    with pytest.raises(
+        ConfigError,
+        match=r"SQLMesh query optimizer can only be enabled/disabled for SQL models",
+    ):
+        seed_path = tmp_path / "seed.csv"
+        model_kind = SeedKind(path=str(seed_path.absolute()))
+        with open(seed_path, "w", encoding="utf-8") as fd:
+            fd.write(
+                """
+    col_a,col_b,col_c
+    1,text_a,1.0
+    2,text_b,2.0"""
+            )
+        model = create_seed_model("test_db.test_seed_model", model_kind, optimize_query=True)
+        context = Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb")))
+        context.upsert_model(model)
+        context.plan(auto_apply=True, no_prompts=True)
