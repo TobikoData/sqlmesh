@@ -328,10 +328,14 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             if promoted_snapshots := [
                 s for s in added_snapshots if s.is_model and not s.is_symbolic
             ]:
-                self._virtual_statements(
-                    plan,
+                self.snapshot_evaluator._execute_virtual_statements(
                     promoted_snapshots,
                     snapshots,
+                    plan.start,
+                    plan.end,
+                    plan.execution_time or now(),
+                    plan.environment.naming_info,
+                    self.default_catalog,
                     deployability_index,
                 )
 
@@ -364,24 +368,6 @@ class BuiltInPlanEvaluator(PlanEvaluator):
     ) -> None:
         self.snapshot_evaluator.demote(
             target_snapshots, environment_naming_info, on_complete=on_complete
-        )
-
-    def _virtual_statements(
-        self,
-        plan: EvaluatablePlan,
-        target_snapshots: t.Iterable[Snapshot],
-        snapshots: t.Dict[SnapshotId, Snapshot],
-        deployability_index: t.Optional[DeployabilityIndex] = None,
-    ) -> None:
-        self.snapshot_evaluator._execute_virtual_statements(
-            target_snapshots,
-            snapshots,
-            plan.start,
-            plan.end,
-            plan.execution_time or now(),
-            plan.environment.naming_info,
-            self.default_catalog,
-            deployability_index,
         )
 
     def _restate(self, plan: EvaluatablePlan, snapshots_by_name: t.Dict[str, Snapshot]) -> None:

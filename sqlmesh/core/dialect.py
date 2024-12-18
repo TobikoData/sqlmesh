@@ -61,7 +61,7 @@ class JinjaStatement(Jinja):
     pass
 
 
-class VirtualStatement(exp.Expression):
+class VirtualUpdateStatement(exp.Expression):
     pass
 
 
@@ -808,8 +808,8 @@ def _is_virtual_statement_end(tokens: t.List[Token], pos: int) -> bool:
     return _is_command_statement(ON_VIRTUAL_UPDATE_END, tokens, pos)
 
 
-def virtual_statement(statement: exp.Expression) -> VirtualStatement:
-    return VirtualStatement(this=statement)
+def virtual_statement(statement: exp.Expression) -> VirtualUpdateStatement:
+    return VirtualUpdateStatement(this=statement)
 
 
 class ChunkType(Enum):

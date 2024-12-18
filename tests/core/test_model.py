@@ -6695,8 +6695,19 @@ def test_model_on_virtual_update(make_snapshot: t.Callable):
     def resolve_parent_name(evaluator, name):
         return evaluator.resolve_table(name.name)
 
+    virtual_update_statements = """ 
+        CREATE OR REPLACE VIEW test_view FROM demo_db.table;
+        GRANT SELECT ON VIEW @this_model TO ROLE owner_name;
+        JINJA_STATEMENT_BEGIN;
+        GRANT SELECT ON VIEW {{this_model}} TO ROLE admin;
+        JINJA_END;
+        GRANT REFERENCES, SELECT ON FUTURE VIEWS IN DATABASE demo_db TO ROLE owner_name;
+        @resolve_parent_name('parent');
+        GRANT SELECT ON VIEW demo_db.table /* sqlglot.meta replace=false */ TO ROLE admin; 
+    """
+
     expressions = d.parse(
-        """
+        f"""
         MODEL (
             name demo_db.table,
             owner owner_name,
@@ -6706,14 +6717,7 @@ def test_model_on_virtual_update(make_snapshot: t.Callable):
 
         ON_VIRTUAL_UPDATE_BEGIN;
 
-        CREATE OR REPLACE VIEW test_view FROM demo_db.table;
-        GRANT SELECT ON VIEW @this_model TO ROLE owner_name;
-        JINJA_STATEMENT_BEGIN;
-        GRANT SELECT ON VIEW {{this_model}} TO ROLE admin;
-        JINJA_END;
-        GRANT REFERENCES, SELECT ON FUTURE VIEWS IN DATABASE demo_db TO ROLE owner_name;
-        @resolve_parent_name('parent');
-        GRANT SELECT ON VIEW demo_db.table /* sqlglot.meta replace=false */ TO ROLE admin; 
+        {virtual_update_statements} 
 
         ON_VIRTUAL_UPDATE_END;
 
@@ -6744,28 +6748,11 @@ def test_model_on_virtual_update(make_snapshot: t.Callable):
     parent_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
     version = parent_snapshot.version
 
-    expected_virtual_statements = [
-        *d.parse("CREATE OR REPLACE VIEW test_view FROM demo_db.table;"),
-        *d.parse("GRANT SELECT ON VIEW @this_model TO ROLE owner_name;"),
-        *d.parse(
-            "JINJA_STATEMENT_BEGIN; GRANT SELECT ON VIEW {{this_model}} TO ROLE admin; JINJA_END;"
-        ),
-        *d.parse(
-            "GRANT REFERENCES, SELECT ON FUTURE VIEWS IN DATABASE demo_db TO ROLE owner_name;"
-        ),
-        *d.parse("@resolve_parent_name('parent')"),
-        *d.parse(
-            "GRANT SELECT ON VIEW demo_db.table /* sqlglot.meta replace=false */ TO ROLE admin;"
-        ),
-    ]
+    assert model.on_virtual_update == d.parse(virtual_update_statements)
 
-    assert model.on_virtual_update == expected_virtual_statements
-
-    assert parent.on_virtual_update == [
-        *d.parse(
-            "JINJA_STATEMENT_BEGIN; GRANT SELECT ON VIEW {{this_model}} TO ROLE admin; JINJA_END;"
-        )
-    ]
+    assert parent.on_virtual_update == d.parse(
+        "JINJA_STATEMENT_BEGIN; GRANT SELECT ON VIEW {{this_model}} TO ROLE admin; JINJA_END;"
+    )
 
     table_mapping = {'"demo_db"."table"': "demo_db__dev.table"}
     snapshots = {'"parent"': parent_snapshot}
