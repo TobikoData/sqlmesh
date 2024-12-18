@@ -371,7 +371,7 @@ class PlanBuilder:
             # we need to ensure the whole affected day in Model B is restated
             floored_snapshot_start = snapshot.node.interval_unit.cron_floor(snapshot_start)
             floored_snapshot_end = snapshot.node.interval_unit.cron_floor(snapshot_end)
-            if floored_snapshot_end <= floored_snapshot_start:
+            if to_timestamp(floored_snapshot_end) < snapshot_end:
                 snapshot_start = to_timestamp(floored_snapshot_start)
                 snapshot_end = to_timestamp(
                     snapshot.node.interval_unit.cron_next(floored_snapshot_end)

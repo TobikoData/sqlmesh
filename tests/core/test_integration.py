@@ -1746,6 +1746,39 @@ def test_restatement_plan_hourly_with_downstream_daily_restates_correct_interval
             "2024-01-02 00:30:00",
         ], f"Table {tbl} wasnt cleared"
 
+    # Put some data
+    df = pd.DataFrame(
+        {
+            "account_id": [1001, 1002, 1003, 1004],
+            "ts": [
+                "2024-01-01 01:30:00",
+                "2024-01-01 23:30:00",
+                "2024-01-02 03:30:00",
+                "2024-01-03 12:30:00",
+            ],
+        }
+    )
+    engine_adapter.replace_query(
+        table_name=external_table, query_or_df=df, columns_to_types=columns_to_types
+    )
+
+    # Restate A across a day boundary with the expectation that two day intervals in B are affected
+    ctx.plan(
+        restate_models=["test.a"],
+        start="2024-01-01 02:00:00",
+        end="2024-01-02 04:00:00",
+        auto_apply=True,
+        no_prompts=True,
+    )
+
+    for tbl in ["test.a", "test.b"]:
+        assert _dates_in_table(tbl) == [
+            "2024-01-01 00:30:00",  # present already
+            # "2024-01-01 02:30:00", #removed in last restatement
+            "2024-01-01 23:30:00",  # added in last restatement
+            "2024-01-02 03:30:00",  # added in last restatement
+        ], f"Table {tbl} wasnt cleared"
+
 
 def test_restatement_plan_clears_correct_intervals_across_environments(tmp_path: Path):
     model1 = """
