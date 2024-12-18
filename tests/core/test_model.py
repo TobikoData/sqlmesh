@@ -25,6 +25,7 @@ from sqlmesh.core.config import (
 )
 from sqlmesh.core.context import Context, ExecutionContext
 from sqlmesh.core.dialect import parse
+from sqlmesh.core.engine_adapter.duckdb import DuckDBEngineAdapter
 from sqlmesh.core.macros import MacroEvaluator, macro
 from sqlmesh.core.model import (
     CustomKind,
@@ -6319,3 +6320,49 @@ def test_fingerprint_signals():
     model = load_sql_based_model(expressions, signal_definitions=signal.get_registry())
     model.signals.clear()
     assert_metadata_only()
+
+
+def test_gateway_specific_render(assert_exp_eq) -> None:
+    gateways = {
+        "main": GatewayConfig(connection=DuckDBConnectionConfig()),
+        "duckdb": GatewayConfig(connection=DuckDBConnectionConfig()),
+    }
+    config = Config(
+        gateways=gateways,
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        default_gateway="main",
+    )
+    context = Context(config=config)
+    assert context.engine_adapter == context._engine_adapters["main"]
+    with pytest.raises(
+        SQLMeshError, match=r"Gateway 'duckdb' not found in the available engine adapters."
+    ):
+        context._get_engine_adapter("duckdb")
+
+    @model(
+        name="dummy_model",
+        is_sql=True,
+        kind="full",
+        gateway="duckdb",
+        grain='"x"',
+    )
+    def dummy_model_entry(evaluator: MacroEvaluator) -> exp.Select:
+        return exp.select("x").from_(exp.values([("1", 2)], "_v", ["x"]))
+
+    dummy_model = model.get_registry()["dummy_model"].model(module_path=Path("."), path=Path("."))
+    context.upsert_model(dummy_model)
+    assert isinstance(dummy_model, SqlModel)
+    assert dummy_model.gateway == "duckdb"
+
+    # Calling render with a model with a non-default gateway should create
+    # the engine adapters and render with the model specified gateway
+    assert_exp_eq(
+        context.render("dummy_model"),
+        """
+        SELECT
+          "_v"."x" AS "x",
+        FROM (VALUES ('1', 2)) AS "_v"("x")
+        """,
+    )
+    assert isinstance(context._get_engine_adapter("duckdb"), DuckDBEngineAdapter)
+    assert len(context._engine_adapters) == 2
