@@ -6620,6 +6620,8 @@ def test_auto_restatement():
     )
     with pytest.raises(ValueError, match="Invalid cron expression '@invalid'.*"):
         load_sql_based_model(parsed_definition)
+
+
 def test_model_on_virtual_update(make_snapshot: t.Callable):
     # Macro to test resolution within virtual statement
     @macro()
