@@ -12,8 +12,11 @@ from sqlmesh.cli import error_handler
 from sqlmesh.cli import options as opt
 from sqlmesh.cli.example_project import ProjectTemplate, init_example_project
 from sqlmesh.core.analytics import cli_analytics
-from sqlmesh.core.config import load_configs
+from sqlmesh.core.config import Config
+from sqlmesh.core.config.loader import load_configs
 from sqlmesh.core.context import Context
+from sqlmesh.core.cube import generate_cube_data, write_cube_data
+from pathlib import Path
 from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.errors import MissingDependencyError
 
@@ -89,11 +92,14 @@ def cli(
         elif ctx.invoked_subcommand in SKIP_LOAD_COMMANDS:
             load = False
 
-    configs = load_configs(config, Context.CONFIG_TYPE, paths)
-    log_limit = list(configs.values())[0].log_limit
-    configure_logging(
-        debug, ignore_warnings, log_to_stdout, log_limit=log_limit, log_file_dir=log_file_dir
-    )
+    if not load:
+        ctx.obj = Context(Config())
+    else:
+        configs = load_configs(config, Context.CONFIG_TYPE, paths)
+        log_limit = list(configs.values())[0].log_limit
+        configure_logging(
+            debug, ignore_warnings, log_to_stdout, log_limit=log_limit, log_file_dir=log_file_dir
+        )
 
     try:
         context = Context(
@@ -965,22 +971,46 @@ def dlt_refresh(
 
 @cli.command("cube_generate")
 @click.option(
-    "--output", "-o",
-    type=click.Path(dir_okay=False),
+    "--output",
+    type=str,
     help="Output file path. If not provided, prints to stdout.",
 )
 @click.option(
     "--select-models",
     multiple=True,
-    help="Filter models by selection pattern (e.g., 'silver.*' or '@tag'). Can be specified multiple times.",
+    help="Selection patterns to filter models.",
+)
+@click.option(
+    "--openai-key",
+    type=str,
+    help="OpenAI API key. If not provided, will look for OPENAI_API_KEY env var.",
+)
+@click.option(
+    "--openai-org",
+    type=str,
+    help="OpenAI organization ID. If not provided, will look for OPENAI_ORG_ID env var.",
+)
+@click.option(
+    "--openai-model",
+    type=str,
+    help="OpenAI model to use. Defaults to most capable model.",
+)
+@click.option(
+    "--generate-yaml",
+    is_flag=True,
+    help="Generate YAML output using OpenAI instead of JSON.",
 )
 @click.pass_obj
 @error_handler
 @cli_analytics
 def cube_generate(
-    obj: Context, 
+    obj: Context,
     output: t.Optional[str] = None,
     select_models: t.Optional[t.Tuple[str, ...]] = None,
+    openai_key: t.Optional[str] = None,
+    openai_org: t.Optional[str] = None,
+    openai_model: t.Optional[str] = None,
+    generate_yaml: bool = False,
 ) -> None:
     """Generate cube data for SQL models in the current project.
     
@@ -991,5 +1021,36 @@ def cube_generate(
     - Wildcards: 'silver.*' matches all models in silver folder
     - Tags: '@daily' matches models with the 'daily' tag
     - Full names: 'my_project.silver.my_model'
+    
+    The output can be either JSON or YAML format. YAML generation requires OpenAI
+    credentials and uses AI to create a more semantic representation. When generating
+    YAML, both the JSON metadata and SQL definitions of the models are used to create
+    a comprehensive Cube configuration.
     """
-    obj.cube_generate(output, select_models=select_models)
+    from sqlmesh.core.model import SqlModel
+
+    # Get selected models
+    selector = obj._new_selector()
+    if select_models:
+        selected_model_names = selector.expand_model_selections(select_models)
+        models = [m for m in [obj._models[name] for name in selected_model_names] if isinstance(m, SqlModel)]
+    else:
+        models = [m for m in obj._models.values() if isinstance(m, SqlModel)]
+
+    if not models:
+        obj.console.print("[yellow]Warning: No SQL models found to analyze[/yellow]")
+        return
+
+    # Generate cube data
+    cube_data = generate_cube_data(models)
+    
+    # Write output
+    write_cube_data(
+        cube_data,
+        models,
+        Path(output) if output else None,
+        openai_key=openai_key,
+        openai_org=openai_org,
+        openai_model=openai_model,
+        generate_yaml=generate_yaml,
+    )

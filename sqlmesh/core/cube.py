@@ -7,6 +7,7 @@ from sqlmesh.core.model import SqlModel
 from sqlmesh.core.loader import SqlMeshLoader
 from sqlmesh.core.config import Config, ModelDefaultsConfig
 from sqlmesh.core.config.loader import load_config_from_yaml
+from sqlmesh.core.openai_client import OpenAIClient
 import sqlglot
 
 
@@ -370,13 +371,71 @@ def generate_cube_data(models: t.List[SqlModel]) -> t.List[dict]:
     return [generate_model_lineage(model) for model in models]
 
 
-def write_cube_data(cube_data: t.List[dict], output_file: t.Optional[Path] = None) -> None:
-    """Write cube data to a file or stdout."""
-    if output_file:
-        with open(output_file, "w") as f:
-            json.dump(cube_data, f, indent=2)
+def generate_model_sql(model: SqlModel) -> str:
+    """Generate SQL definition for a model.
+    
+    Args:
+        model: SqlModel to generate SQL for
+        
+    Returns:
+        SQL definition string
+    """
+    rendered_query = model.render_query()
+    return f"-- Model: {model.name}\n{rendered_query.sql(pretty=True) if rendered_query else ''}\n\n"
+
+
+def write_cube_data(
+    cube_data: t.List[dict],
+    models: t.List[SqlModel],
+    output_file: t.Optional[Path] = None,
+    openai_key: t.Optional[str] = None,
+    openai_org: t.Optional[str] = None,
+    openai_model: t.Optional[str] = None,
+    generate_yaml: bool = False,
+) -> None:
+    """Write cube data to a file or stdout.
+    
+    Args:
+        cube_data: List of cube data dictionaries
+        models: List of SqlModels to include SQL definitions from
+        output_file: Optional output file path. If not provided, prints to stdout.
+        openai_key: Optional OpenAI API key for YAML generation
+        openai_org: Optional OpenAI organization ID
+        openai_model: Optional OpenAI model to use
+        generate_yaml: If True, converts JSON to YAML using OpenAI
+    """
+    output_data = cube_data
+    
+    if generate_yaml:
+        # Initialize OpenAI client
+        client = OpenAIClient(
+            api_key=openai_key,
+            organization=openai_org,
+            model=openai_model,
+        )
+        
+        # Load prompt template
+        prompt_path = Path(__file__).parent / "prompts" / "cube_generate.txt"
+        with open(prompt_path) as f:
+            prompt_template = f.read()
+            
+        # Generate SQL definitions
+        sql_definitions = "\n".join(generate_model_sql(model) for model in models)
+            
+        # Generate YAML using OpenAI
+        output_data = client.generate_yaml(cube_data, sql_definitions, prompt_template)
     else:
-        print(json.dumps(cube_data, indent=2))
+        # Convert to JSON if not generating YAML
+        output_data = json.dumps(cube_data, indent=2)
+
+    if output_file:
+        # Write to file with appropriate extension
+        ext = ".yaml" if generate_yaml else ".json"
+        output_path = Path(output_file).with_suffix(ext)
+        with open(output_path, "w") as f:
+            f.write(output_data)
+    else:
+        print(output_data)
 
 
 def load_models_from_directory(directory_path: Path, tag: t.Optional[str] = None) -> t.List[SqlModel]:
@@ -419,7 +478,7 @@ def main(model_dir: Path, output_file: t.Optional[Path] = None, models: t.Option
     if not models:
         return
     cube_data = generate_cube_data(models)
-    write_cube_data(cube_data, output_file)
+    write_cube_data(cube_data, models, output_file)
 
 
 if __name__ == "__main__":
