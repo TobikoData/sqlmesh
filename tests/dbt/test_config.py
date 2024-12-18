@@ -1,5 +1,4 @@
 import base64
-import sys
 import typing as t
 from pathlib import Path
 from shutil import copytree
@@ -473,7 +472,7 @@ def test_duckdb_threads(tmp_path):
 
 
 def test_snowflake_config():
-    _test_warehouse_config(
+    config = _test_warehouse_config(
         """
         sushi:
           target: dev
@@ -495,6 +494,8 @@ def test_snowflake_config():
         "outputs",
         "dev",
     )
+    sqlmesh_config = config.to_sqlmesh()
+    assert sqlmesh_config.application == "Tobiko_SQLMesh"
 
 
 def test_snowflake_config_private_key_path():
@@ -872,15 +873,13 @@ def test_db_type_to_relation_class():
     assert (TARGET_TYPE_TO_CONFIG_CLASS["redshift"].relation_class) == RedshiftRelation
     assert (TARGET_TYPE_TO_CONFIG_CLASS["snowflake"].relation_class) == SnowflakeRelation
 
-    # typing chokes on dbt-clickhouse if python < 3.9
-    if sys.version_info >= (3, 9):
-        from dbt.adapters.clickhouse.relation import ClickHouseRelation
-        from dbt.adapters.trino.relation import TrinoRelation
-        from dbt.adapters.athena.relation import AthenaRelation
+    from dbt.adapters.clickhouse.relation import ClickHouseRelation
+    from dbt.adapters.trino.relation import TrinoRelation
+    from dbt.adapters.athena.relation import AthenaRelation
 
-        assert (TARGET_TYPE_TO_CONFIG_CLASS["clickhouse"].relation_class) == ClickHouseRelation
-        assert (TARGET_TYPE_TO_CONFIG_CLASS["trino"].relation_class) == TrinoRelation
-        assert (TARGET_TYPE_TO_CONFIG_CLASS["athena"].relation_class) == AthenaRelation
+    assert (TARGET_TYPE_TO_CONFIG_CLASS["clickhouse"].relation_class) == ClickHouseRelation
+    assert (TARGET_TYPE_TO_CONFIG_CLASS["trino"].relation_class) == TrinoRelation
+    assert (TARGET_TYPE_TO_CONFIG_CLASS["athena"].relation_class) == AthenaRelation
 
 
 @pytest.mark.cicdonly
@@ -896,15 +895,13 @@ def test_db_type_to_column_class():
     assert (TARGET_TYPE_TO_CONFIG_CLASS["snowflake"].column_class) == SnowflakeColumn
     assert (TARGET_TYPE_TO_CONFIG_CLASS["sqlserver"].column_class) == SQLServerColumn
 
-    # typing chokes on dbt-clickhouse if python < 3.9
-    if sys.version_info >= (3, 9):
-        from dbt.adapters.clickhouse.column import ClickHouseColumn
-        from dbt.adapters.trino.column import TrinoColumn
-        from dbt.adapters.athena.column import AthenaColumn
+    from dbt.adapters.clickhouse.column import ClickHouseColumn
+    from dbt.adapters.trino.column import TrinoColumn
+    from dbt.adapters.athena.column import AthenaColumn
 
-        assert (TARGET_TYPE_TO_CONFIG_CLASS["clickhouse"].column_class) == ClickHouseColumn
-        assert (TARGET_TYPE_TO_CONFIG_CLASS["trino"].column_class) == TrinoColumn
-        assert (TARGET_TYPE_TO_CONFIG_CLASS["athena"].column_class) == AthenaColumn
+    assert (TARGET_TYPE_TO_CONFIG_CLASS["clickhouse"].column_class) == ClickHouseColumn
+    assert (TARGET_TYPE_TO_CONFIG_CLASS["trino"].column_class) == TrinoColumn
+    assert (TARGET_TYPE_TO_CONFIG_CLASS["athena"].column_class) == AthenaColumn
 
 
 def test_db_type_to_quote_policy():

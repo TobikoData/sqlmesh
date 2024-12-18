@@ -30,7 +30,12 @@ from sqlmesh.utils.date import now, to_date, to_time_column
 from sqlmesh.core.table_diff import TableDiff
 from sqlmesh.utils.pydantic import PydanticModel
 from tests.conftest import SushiDataValidator
-from tests.core.engine_adapter.integration import TestContext, MetadataResults, TEST_SCHEMA
+from tests.core.engine_adapter.integration import (
+    TestContext,
+    MetadataResults,
+    TEST_SCHEMA,
+    wait_until,
+)
 
 DATA_TYPE = exp.DataType.Type
 VARCHAR_100 = exp.DataType.build("varchar(100)")
@@ -87,7 +92,9 @@ def test_type(request):
                 pytest.mark.duckdb,
                 pytest.mark.engine,
                 pytest.mark.slow,
-                # duckdb does not support concurrency so we run the tests sequentially
+                # the duckdb tests cannot run concurrently because many of them point at the same files
+                # and duckdb does not support multi process read/write on the same files
+                # ref: https://duckdb.org/docs/connect/concurrency.html#writing-to-duckdb-from-multiple-processes
                 pytest.mark.xdist_group("engine_integration_duckdb"),
             ],
         ),
@@ -250,8 +257,8 @@ def test_connection(ctx: TestContext):
 
 def test_catalog_operations(ctx: TestContext):
     if (
-        ctx.engine_adapter.CATALOG_SUPPORT.is_unsupported
-        or ctx.engine_adapter.CATALOG_SUPPORT.is_single_catalog_only
+        ctx.engine_adapter.catalog_support.is_unsupported
+        or ctx.engine_adapter.catalog_support.is_single_catalog_only
     ):
         pytest.skip(
             f"Engine adapter {ctx.engine_adapter.dialect} doesn't support catalog operations"
@@ -307,7 +314,7 @@ def test_drop_schema_catalog(ctx: TestContext, caplog):
         assert len(results.materialized_views) == 0
         assert len(results.non_temp_tables) == 2
 
-    if ctx.engine_adapter.CATALOG_SUPPORT.is_unsupported:
+    if ctx.engine_adapter.catalog_support.is_unsupported:
         pytest.skip(
             f"Engine adapter {ctx.engine_adapter.dialect} doesn't support catalog operations"
         )
@@ -327,7 +334,7 @@ def test_drop_schema_catalog(ctx: TestContext, caplog):
     ctx.create_catalog(catalog_name)
 
     schema = ctx.schema("drop_schema_catalog_test", catalog_name)
-    if ctx.engine_adapter.CATALOG_SUPPORT.is_single_catalog_only:
+    if ctx.engine_adapter.catalog_support.is_single_catalog_only:
         drop_schema_and_validate(schema)
         assert "requires that all catalog operations be against a single catalog" in caplog.text
         return
@@ -747,6 +754,11 @@ def test_insert_overwrite_by_time_partition(ctx: TestContext):
     assert len(results.materialized_views) == 0
     assert len(results.tables) == len(results.non_temp_tables) == 1
     assert results.non_temp_tables[0] == table.name
+
+    if ctx.dialect == "trino":
+        # trino has some lag between partitions being registered and data showing up
+        wait_until(lambda: len(ctx.get_current_data(table)) > 0)
+
     ctx.compare_with_current(table, input_data.iloc[1:])
 
     if ctx.test_type == "df":
@@ -771,6 +783,10 @@ def test_insert_overwrite_by_time_partition(ctx: TestContext):
         assert len(results.materialized_views) == 0
         assert len(results.tables) == len(results.non_temp_tables) == 1
         assert results.non_temp_tables[0] == table.name
+
+        if ctx.dialect == "trino":
+            wait_until(lambda: len(ctx.get_current_data(table)) > 2)
+
         ctx.compare_with_current(
             table,
             pd.DataFrame(
@@ -1324,8 +1340,6 @@ def test_sushi(ctx: TestContext, tmp_path_factory: pytest.TempPathFactory):
 
     current_gateway_config = config.gateways[ctx.gateway]
     current_gateway_config.state_schema = sushi_state_schema
-    if (sc := current_gateway_config.state_connection) and sc.type_ == "duckdb":
-        current_gateway_config.connection.concurrent_tasks = 1  # duckdb cant handle parallelism
 
     if ctx.dialect == "athena":
         # Ensure that this test is using the same s3_warehouse_location as TestContext (which includes the testrun_id)
@@ -1683,9 +1697,11 @@ def test_sushi(ctx: TestContext, tmp_path_factory: pytest.TempPathFactory):
         ctx._schemas.append(schema)
 
 
-def test_init_project(ctx: TestContext, tmp_path: pathlib.Path):
+def test_init_project(ctx: TestContext, tmp_path_factory: pytest.TempPathFactory):
     if ctx.test_type != "query":
         pytest.skip("Init example project end-to-end tests only need to run for query")
+
+    tmp_path = tmp_path_factory.mktemp(f"init_project_{ctx.test_id}")
 
     schema_name = ctx.add_test_suffix(TEST_SCHEMA)
     state_schema = ctx.add_test_suffix("sqlmesh_state")
@@ -1726,8 +1742,6 @@ def test_init_project(ctx: TestContext, tmp_path: pathlib.Path):
         config.model_defaults = config.model_defaults.copy(update={"dialect": ctx.dialect})
 
     current_gateway_config = config.gateways[ctx.gateway]
-    if (sc := current_gateway_config.state_connection) and sc.type_ == "duckdb":
-        current_gateway_config.connection.concurrent_tasks = 1  # duckdb cant handle parallelism
 
     if ctx.dialect == "athena":
         # Ensure that this test is using the same s3_warehouse_location as TestContext (which includes the testrun_id)
@@ -2330,6 +2344,8 @@ def test_value_normalization(
                     )
                 ],
             )
+    if ctx.dialect == "tsql" and column_type == exp.DataType.Type.DATETIME:
+        full_column_type = exp.DataType.build("DATETIME2", dialect="tsql")
 
     columns_to_types = {
         "_idx": exp.DataType.build(DATA_TYPE.INT),

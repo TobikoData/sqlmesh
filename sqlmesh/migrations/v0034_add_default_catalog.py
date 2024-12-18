@@ -12,6 +12,7 @@ from sqlglot.helper import dict_depth, seq_get
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
 from sqlmesh.utils.migration import index_text_type
+from sqlmesh.utils.migration import blob_text_type
 
 
 def set_default_catalog(
@@ -80,6 +81,7 @@ def migrate(state_sync, default_catalog: t.Optional[str], **kwargs):  # type: ig
     new_snapshots = []
     snapshot_to_dialect = {}
     index_type = index_text_type(engine_adapter.dialect)
+    blob_type = blob_text_type(engine_adapter.dialect)
 
     for name, identifier, version, snapshot, kind_name in engine_adapter.fetchall(
         exp.select("name", "identifier", "version", "snapshot", "kind_name").from_(snapshots_table),
@@ -162,7 +164,7 @@ def migrate(state_sync, default_catalog: t.Optional[str], **kwargs):  # type: ig
                 "name": exp.DataType.build(index_type),
                 "identifier": exp.DataType.build(index_type),
                 "version": exp.DataType.build(index_type),
-                "snapshot": exp.DataType.build("text"),
+                "snapshot": exp.DataType.build(blob_type),
                 "kind_name": exp.DataType.build(index_type),
             },
         )
@@ -240,14 +242,14 @@ def migrate(state_sync, default_catalog: t.Optional[str], **kwargs):  # type: ig
             pd.DataFrame(new_environments),
             columns_to_types={
                 "name": exp.DataType.build(index_type),
-                "snapshots": exp.DataType.build("text"),
+                "snapshots": exp.DataType.build(blob_type),
                 "start_at": exp.DataType.build("text"),
                 "end_at": exp.DataType.build("text"),
                 "plan_id": exp.DataType.build("text"),
                 "previous_plan_id": exp.DataType.build("text"),
                 "expiration_ts": exp.DataType.build("bigint"),
                 "finalized_ts": exp.DataType.build("bigint"),
-                "promoted_snapshot_ids": exp.DataType.build("text"),
+                "promoted_snapshot_ids": exp.DataType.build(blob_type),
                 "suffix_target": exp.DataType.build("text"),
             },
         )

@@ -2,7 +2,7 @@ import typing as t
 from datetime import date, datetime
 
 import pytest
-from freezegun import freeze_time
+import time_machine
 from sqlglot import exp
 
 from sqlmesh.utils.date import (
@@ -57,7 +57,7 @@ def test_to_datetime() -> None:
     ],
 )
 def test_to_datetime_with_expressions(expression, result) -> None:
-    with freeze_time("2023-01-20 12:30:30"):
+    with time_machine.travel("2023-01-20 12:30:30 UTC", tick=False):
         assert to_datetime(expression) == result
 
 

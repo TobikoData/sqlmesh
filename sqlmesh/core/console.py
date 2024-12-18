@@ -613,22 +613,37 @@ class TerminalConsole(Console):
             no_diff: Hide the actual SQL differences.
         """
         if context_diff.is_new_environment:
-            self._print(
-                Tree(
-                    f"[bold]New environment `{context_diff.environment}` will be created from `{context_diff.create_from}`"
-                )
+            msg = (
+                f"`{context_diff.environment}` environment will be initialized"
+                if not context_diff.create_from_env_exists
+                else f"New environment `{context_diff.environment}` will be created from `{context_diff.create_from}`"
             )
+            self._print(Tree(f"[bold]{msg}\n"))
             if not context_diff.has_snapshot_changes:
                 return
 
         if not context_diff.has_changes:
-            self._print(Tree(f"[bold]No differences when compared to `{context_diff.environment}`"))
+            # This is only reached when the plan is against an existing environment, so we use the environment
+            #   name instead of the create_from name. The equivalent message for new environments happens in
+            #   the PlanBuilder.
+            self._print(
+                Tree(
+                    f"[bold]No changes to plan: project files match the `{context_diff.environment}` environment\n"
+                )
+            )
             return
 
-        self._print(Tree(f"[bold]Summary of differences against `{context_diff.environment}`:"))
+        if not context_diff.is_new_environment or (
+            context_diff.is_new_environment and context_diff.create_from_env_exists
+        ):
+            self._print(
+                Tree(
+                    f"[bold]Differences from the `{context_diff.create_from if context_diff.is_new_environment else context_diff.environment}` environment:\n"
+                )
+            )
 
         if context_diff.has_requirement_changes:
-            self._print(f"Requirements:\n{context_diff.requirements_diff()}")
+            self._print(f"[bold]Requirements:\n{context_diff.requirements_diff()}")
 
         self._show_summary_tree_for(
             context_diff,

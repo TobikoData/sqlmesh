@@ -76,7 +76,12 @@ def test_format_model_expressions():
     sum(n + 1)::int as n, -- n
     o,
     p + 1,
-    CAST(x as int)::int,
+    CAST(x as int)::int,;
+
+@IF(
+    @runtime_stage = 'creating',
+    GRANT SELECT ON foo.bar TO "bla"
+)
     """
         )
     )
@@ -151,7 +156,9 @@ SELECT
   SUM(n + 1)::INT AS n, /* n */
   o,
   p + 1,
-  x::INT::INT"""
+  x::INT::INT;
+
+@IF(@runtime_stage = 'creating', GRANT SELECT ON foo.bar TO "bla")"""
     )
 
     x = format_model_expressions(

@@ -95,7 +95,9 @@ $ sqlmesh plan
 ======================================================================
 Successfully Ran 1 tests against duckdb
 ----------------------------------------------------------------------
-Summary of differences against `prod`:
+Differences from the `prod` environment:
+
+Models
 └── Added Models:
     ├── sqlmesh_example.example_incremental_model
     └── sqlmesh_example.example_full_model

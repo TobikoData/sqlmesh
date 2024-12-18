@@ -94,13 +94,15 @@ Christmas,2023-12-25
 ```
 
 When we run the `sqlmesh plan` command, the new seed model is automatically detected:
-```bash hl_lines="6-7"
+```bash hl_lines="8-9"
 $ sqlmesh plan
 ======================================================================
 Successfully Ran 0 tests against duckdb
 ----------------------------------------------------------------------
-Summary of differences against `prod`:
-└── Added Models:
+`prod` environment will be initialized
+
+Models
+└── Added:
     └── test_db.national_holidays
 Models needing backfill (missing dates):
 └── test_db.national_holidays: (2023-02-16, 2023-02-16)
@@ -129,7 +131,9 @@ $ sqlmesh plan
 ======================================================================
 Successfully Ran 0 tests against duckdb
 ----------------------------------------------------------------------
-Summary of differences against `prod`:
+Differences from the `prod` environment:
+
+Models:
 └── Directly Modified:
     └── test_db.national_holidays
 ---

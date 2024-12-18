@@ -20,6 +20,7 @@ from sqlmesh.utils.errors import MissingDependencyError
 logger = logging.getLogger(__name__)
 
 SKIP_LOAD_COMMANDS = ("create_external_models", "migrate", "rollback", "run")
+SKIP_CONTEXT_COMMANDS = ("init", "ui")
 
 
 def _sqlmesh_version() -> str:
@@ -39,11 +40,13 @@ def _sqlmesh_version() -> str:
     "--gateway",
     type=str,
     help="The name of the gateway.",
+    envvar="SQLMESH_GATEWAY",
 )
 @click.option(
     "--ignore-warnings",
     is_flag=True,
     help="Ignore warnings.",
+    envvar="SQLMESH_IGNORE_WARNINGS",
 )
 @click.option(
     "--debug",
@@ -80,7 +83,7 @@ def cli(
 
     if len(paths) == 1:
         path = os.path.abspath(paths[0])
-        if ctx.invoked_subcommand in ("init", "ui"):
+        if ctx.invoked_subcommand in SKIP_CONTEXT_COMMANDS:
             ctx.obj = path
             return
         elif ctx.invoked_subcommand in SKIP_LOAD_COMMANDS:

@@ -72,6 +72,7 @@ from sqlmesh.utils import major_minor, random_id, unique
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import TimeLike, now, now_timestamp, time_like_to_str, to_timestamp
 from sqlmesh.utils.errors import ConflictingPlanError, SQLMeshError
+from sqlmesh.utils.migration import blob_text_type, index_text_type
 
 logger = logging.getLogger(__name__)
 
@@ -125,10 +126,12 @@ class EngineAdapterStateSync(StateSync):
         self.plan_dags_table = exp.table_("_plan_dags", db=self.schema)
         self.versions_table = exp.table_("_versions", db=self.schema)
 
+        index_type = index_text_type(engine_adapter.dialect)
+        blob_type = blob_text_type(engine_adapter.dialect)
         self._snapshot_columns_to_types = {
-            "name": exp.DataType.build("text"),
-            "identifier": exp.DataType.build("text"),
-            "version": exp.DataType.build("text"),
+            "name": exp.DataType.build(index_type),
+            "identifier": exp.DataType.build(index_type),
+            "version": exp.DataType.build(index_type),
             "snapshot": exp.DataType.build("text"),
             "kind_name": exp.DataType.build("text"),
             "updated_ts": exp.DataType.build("bigint"),
@@ -138,26 +141,26 @@ class EngineAdapterStateSync(StateSync):
         }
 
         self._environment_columns_to_types = {
-            "name": exp.DataType.build("text"),
-            "snapshots": exp.DataType.build("text"),
+            "name": exp.DataType.build(index_type),
+            "snapshots": exp.DataType.build(blob_type),
             "start_at": exp.DataType.build("text"),
             "end_at": exp.DataType.build("text"),
             "plan_id": exp.DataType.build("text"),
             "previous_plan_id": exp.DataType.build("text"),
             "expiration_ts": exp.DataType.build("bigint"),
             "finalized_ts": exp.DataType.build("bigint"),
-            "promoted_snapshot_ids": exp.DataType.build("text"),
+            "promoted_snapshot_ids": exp.DataType.build(blob_type),
             "suffix_target": exp.DataType.build("text"),
             "catalog_name_override": exp.DataType.build("text"),
-            "previous_finalized_snapshots": exp.DataType.build("text"),
+            "previous_finalized_snapshots": exp.DataType.build(blob_type),
             "normalize_name": exp.DataType.build("boolean"),
-            "requirements": exp.DataType.build("text"),
+            "requirements": exp.DataType.build(blob_type),
         }
 
         self._interval_columns_to_types = {
-            "id": exp.DataType.build("text"),
+            "id": exp.DataType.build(index_type),
             "created_ts": exp.DataType.build("bigint"),
-            "name": exp.DataType.build("text"),
+            "name": exp.DataType.build(index_type),
             "identifier": exp.DataType.build("text"),
             "version": exp.DataType.build("text"),
             "start_ts": exp.DataType.build("bigint"),
@@ -169,8 +172,8 @@ class EngineAdapterStateSync(StateSync):
 
         self._version_columns_to_types = {
             "schema_version": exp.DataType.build("int"),
-            "sqlglot_version": exp.DataType.build("text"),
-            "sqlmesh_version": exp.DataType.build("text"),
+            "sqlglot_version": exp.DataType.build(index_type),
+            "sqlmesh_version": exp.DataType.build(index_type),
         }
 
         self._snapshot_cache = SnapshotCache(context_path / c.CACHE)
@@ -1304,16 +1307,24 @@ class EngineAdapterStateSync(StateSync):
     ) -> bool:
         versions = self.get_versions(validate=False)
         migrations = MIGRATIONS[versions.schema_version :]
-
-        migrate_rows = migrations or major_minor(SQLGLOT_VERSION) != versions.minor_sqlglot_version
-        if not skip_backup and migrate_rows:
+        should_backup = any(
+            [
+                migrations,
+                major_minor(SQLGLOT_VERSION) != versions.minor_sqlglot_version,
+                major_minor(SQLMESH_VERSION) != versions.minor_sqlmesh_version,
+            ]
+        )
+        if not skip_backup and should_backup:
             self._backup_state()
 
         for migration in migrations:
             logger.info(f"Applying migration {migration}")
             migration.migrate(self, default_catalog=default_catalog)
 
-        return bool(migrate_rows)
+        migrate_snapshots_and_environments = (
+            bool(migrations) or major_minor(SQLGLOT_VERSION) != versions.minor_sqlglot_version
+        )
+        return migrate_snapshots_and_environments
 
     def _migrate_rows(self, promoted_snapshots_only: bool) -> None:
         logger.info("Fetching environments")

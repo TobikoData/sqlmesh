@@ -148,9 +148,10 @@ $ sqlmesh plan
 ======================================================================
 Successfully Ran 1 tests against duckdb
 ----------------------------------------------------------------------
-New environment `prod` will be created from `prod`
-Summary of differences against `prod`:
-└── Added Models:
+`prod` environment will be initialized
+
+Models:
+└── Added:
     ├── sqlmesh_example.seed_model
     ├── sqlmesh_example.incremental_model
     └── sqlmesh_example.full_model
@@ -324,7 +325,9 @@ $ sqlmesh plan dev
 Successfully Ran 1 tests against duckdb
 ----------------------------------------------------------------------
 New environment `dev` will be created from `prod`
-Summary of differences against `dev`:
+
+Differences from the `prod` environment:
+
 Models:
 ├── Directly Modified:
 │   └── sqlmesh_example__dev.incremental_model
@@ -353,9 +356,9 @@ Enter the backfill start date (eg. '1 year', '2020-01-01') or blank to backfill 
 
 Line 5 of the output states that a new environment `dev` will be created from the existing `prod` environment.
 
-Lines 6-11 summarize the differences between the modified model and the `prod` environment, detecting that we directly modified `incremental_model` and that `full_model` was indirectly modified because it selects from the incremental model. Note that the model schemas are `sqlmesh_example__dev`, indicating that they are being created in the `dev` environment.
+Lines 7-13 summarize the differences between the modified model and the `prod` environment, detecting that we directly modified `incremental_model` and that `full_model` was indirectly modified because it selects from the incremental model. Note that the model schemas are `sqlmesh_example__dev`, indicating that they are being created in the `dev` environment.
 
-On line 25, we see that SQLMesh automatically classified the change as `Non-breaking` because it understood that the change was additive (added a column not used by `full_model`) and did not invalidate any data already in `prod`.
+On line 27, we see that SQLMesh automatically classified the change as `Non-breaking` because it understood that the change was additive (added a column not used by `full_model`) and did not invalidate any data already in `prod`.
 
 Hit `Enter` at the prompt to backfill data from our start date `2020-01-01`. Another prompt will appear asking for a backfill end date; hit `Enter` to backfill until now. Finally, enter `y` and press `Enter` to apply the plan and execute the backfill:
 
@@ -431,7 +434,8 @@ $ sqlmesh plan
 ======================================================================
 Successfully Ran 1 tests against duckdb
 ----------------------------------------------------------------------
-Summary of differences against `prod`:
+Differences from the `prod` environment:
+
 Models:
 ├── Directly Modified:
 │   └── sqlmesh_example.incremental_model

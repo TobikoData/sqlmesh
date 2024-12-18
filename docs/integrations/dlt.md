@@ -8,7 +8,7 @@ SQLMesh enables efforless project generation using data ingested through [dlt](h
 To load data from a dlt pipeline into SQLMesh, ensure the dlt pipeline has been run or restored locally. Then simply execute the sqlmesh `init` command *within the dlt project root directory* using the `dlt` template option and specifying the pipeline's name with the `dlt-pipeline` option:
 
 ```bash
-$ sqlmesh init -t dlt --dlt-pipeline <pipeline-name> dialect 
+$ sqlmesh init -t dlt --dlt-pipeline <pipeline-name> dialect
 ```
 
 This will create the configuration file and directories, which are found in all SQLMesh projects:
@@ -33,13 +33,13 @@ SQLMesh will also automatically generate models to ingest data from the pipeline
 To update the models in your SQLMesh project on demand, use the `dlt_refresh` command. This allows you to either specify individual tables to generate incremental models from or update all models at once.
 
 - **Generate all missing tables**:
-  
+
 ```bash
 $ sqlmesh dlt_refresh <pipeline-name>
 ```
 
 - **Generate all missing tables and overwrite existing ones** (use with `--force` or `-f`):
-  
+
 ```bash
 $ sqlmesh dlt_refresh <pipeline-name> --force
 ```
@@ -69,15 +69,15 @@ Load package 1728074157.660565 is LOADED and contains no failed jobs
 After the pipeline has run, generate a SQLMesh project by executing:
 
 ```bash
-$ sqlmesh init -t dlt --dlt-pipeline sushi duckdb 
+$ sqlmesh init -t dlt --dlt-pipeline sushi duckdb
 ```
 
 Then the SQLMesh project is all set up. You can then proceed to run the SQLMesh `plan` command to ingest the dlt pipeline data and populate the SQLMesh tables:
 
 ```bash
 $ sqlmesh plan
-New environment `prod` will be created from `prod`
-Summary of differences against `prod`:
+`prod` environment will be initialized
+
 Models:
 └── Added:
     ├── sushi_dataset_sqlmesh.incremental__dlt_loads
@@ -95,8 +95,8 @@ All model versions have been created successfully
 [1/1] sushi_dataset_sqlmesh.incremental__dlt_loads evaluated in 0.01s
 [1/1] sushi_dataset_sqlmesh.incremental_sushi_types evaluated in 0.00s
 [1/1] sushi_dataset_sqlmesh.incremental_waiters evaluated in 0.01s
-Evaluating models ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 3/3 • 0:00:00                                                                              
-                                                                                                                                                               
+Evaluating models ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 3/3 • 0:00:00
+
 
 All model batches have been executed successfully
 
@@ -106,4 +106,3 @@ The target environment has been updated successfully
 ```
 
 Once the models are planned and applied, you can continue as with any SQLMesh project, generating and applying [plans](../concepts/overview.md#make-a-plan), running [tests](../concepts/overview.md#tests) or [audits](../concepts/overview.md#audits), and executing models with a [scheduler](../guides/scheduling.md) if desired.
-

@@ -13,6 +13,7 @@ from sqlmesh.core.config import (
 from sqlmesh.core.loader import LoadedProject, Loader
 from sqlmesh.core.macros import MacroRegistry, macro
 from sqlmesh.core.model import Model, ModelCache
+from sqlmesh.core.signal import signal
 from sqlmesh.dbt.basemodel import BMC, BaseModelConfig
 from sqlmesh.dbt.context import DbtContext
 from sqlmesh.dbt.model import ModelConfig
@@ -94,6 +95,7 @@ class DbtLoader(Loader):
         jinja_macros: JinjaMacroRegistry,
         gateway: t.Optional[str],
         audits: UniqueKeyDict[str, ModelAudit],
+        signals: UniqueKeyDict[str, signal],
     ) -> UniqueKeyDict[str, Model]:
         models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
 
@@ -155,7 +157,7 @@ class DbtLoader(Loader):
 
     def _load_projects(self) -> t.List[Project]:
         if not self._projects:
-            target_name = self._context.gateway or self._context.config.default_gateway
+            target_name = self._context.selected_gateway
 
             self._projects = []
 

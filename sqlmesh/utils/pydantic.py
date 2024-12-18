@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import sys
 import typing as t
 from functools import cached_property, wraps
 
@@ -14,11 +13,6 @@ from sqlglot.optimizer.qualify_columns import quote_identifiers
 
 from sqlmesh.core import dialect as d
 from sqlmesh.utils import str_to_bool
-
-if sys.version_info >= (3, 9):
-    from typing import Annotated
-else:
-    from typing_extensions import Annotated
 
 if t.TYPE_CHECKING:
     Model = t.TypeVar("Model", bound="PydanticModel")
@@ -391,15 +385,15 @@ if t.TYPE_CHECKING:
 elif PYDANTIC_MAJOR_VERSION >= 2:
     from pydantic.functional_validators import BeforeValidator  # type: ignore
 
-    SQLGlotListOfStrings = Annotated[t.List[str], BeforeValidator(validate_list_of_strings)]
-    SQLGlotString = Annotated[str, BeforeValidator(validate_string)]
-    SQLGlotBool = Annotated[bool, BeforeValidator(bool_validator)]
-    SQLGlotPositiveInt = Annotated[int, BeforeValidator(positive_int_validator)]
-    SQLGlotColumn = Annotated[exp.Expression, BeforeValidator(column_validator)]
-    SQLGlotListOfFields = Annotated[
+    SQLGlotListOfStrings = t.Annotated[t.List[str], BeforeValidator(validate_list_of_strings)]
+    SQLGlotString = t.Annotated[str, BeforeValidator(validate_string)]
+    SQLGlotBool = t.Annotated[bool, BeforeValidator(bool_validator)]
+    SQLGlotPositiveInt = t.Annotated[int, BeforeValidator(positive_int_validator)]
+    SQLGlotColumn = t.Annotated[exp.Expression, BeforeValidator(column_validator)]
+    SQLGlotListOfFields = t.Annotated[
         t.List[exp.Expression], BeforeValidator(list_of_fields_validator)
     ]
-    SQLGlotListOfColumnsOrStar = Annotated[
+    SQLGlotListOfColumnsOrStar = t.Annotated[
         t.Union[t.List[exp.Column], exp.Star], BeforeValidator(list_of_columns_or_star_validator)
     ]
 else:

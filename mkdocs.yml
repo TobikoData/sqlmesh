@@ -15,6 +15,7 @@ nav:
       - guides/projects.md
       - guides/multi_repo.md
       - guides/isolated_systems.md
+      - guides/multi_engine.md
     - Project setup:
       - guides/configuration.md
       - guides/connections.md
@@ -72,6 +73,7 @@ nav:
       - integrations/github.md
     - Execution engines:
       - integrations/engines/athena.md
+      - integrations/engines/azuresql.md
       - integrations/engines/bigquery.md
       - integrations/engines/clickhouse.md
       - integrations/engines/databricks.md
@@ -98,6 +100,18 @@ nav:
     - Configuration:
       - reference/configuration.md
       - reference/model_configuration.md
+  - Tobiko Cloud:
+    - "Overview": cloud/cloud_index.md
+    - "Getting Started": cloud/tcloud_getting_started.md
+    - Cloud Features:
+  #     - "Alerts & Notifications": cloud/features/alerts_notifications.md
+      - cloud/features/debugger_view.md
+  #     - cloud/features/data_catalog.md
+  #     - cloud/features/model_freshness.md
+  #     - cloud/features/scheduler.md
+  #     - Observability:
+  #       - cloud/observability/monitoring.md
+  #       - "Measures & Dashboards": cloud/observability/measures_dashboards.md
 theme:
   name: material
   logo: _readthedocs/html/sqlmesh.png
@@ -121,6 +135,7 @@ theme:
   features:
     - content.tabs.link
     - content.code.copy
+    - navigation.expand ## expands navigation bar by default
     - navigation.tracking
     - navigation.tabs
     - navigation.sections

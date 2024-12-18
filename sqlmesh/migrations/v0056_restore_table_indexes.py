@@ -3,6 +3,7 @@
 from sqlglot import exp
 from sqlmesh.utils import random_id
 from sqlmesh.utils.migration import index_text_type
+from sqlmesh.utils.migration import blob_text_type
 
 
 def migrate(state_sync, **kwargs):  # type: ignore
@@ -22,13 +23,14 @@ def migrate(state_sync, **kwargs):  # type: ignore
     table_suffix = random_id(short=True)
 
     index_type = index_text_type(engine_adapter.dialect)
+    blob_type = blob_text_type(engine_adapter.dialect)
 
     new_snapshots_table = f"{snapshots_table}__{table_suffix}"
     snapshots_columns_to_types = {
         "name": exp.DataType.build(index_type),
         "identifier": exp.DataType.build(index_type),
         "version": exp.DataType.build(index_type),
-        "snapshot": exp.DataType.build("text"),
+        "snapshot": exp.DataType.build(blob_type),
         "kind_name": exp.DataType.build(index_type),
         "updated_ts": exp.DataType.build("bigint"),
         "unpaused_ts": exp.DataType.build("bigint"),
@@ -39,17 +41,17 @@ def migrate(state_sync, **kwargs):  # type: ignore
     new_environments_table = f"{environments_table}__{table_suffix}"
     environments_columns_to_types = {
         "name": exp.DataType.build(index_type),
-        "snapshots": exp.DataType.build("text"),
+        "snapshots": exp.DataType.build(blob_type),
         "start_at": exp.DataType.build("text"),
         "end_at": exp.DataType.build("text"),
         "plan_id": exp.DataType.build("text"),
         "previous_plan_id": exp.DataType.build("text"),
         "expiration_ts": exp.DataType.build("bigint"),
         "finalized_ts": exp.DataType.build("bigint"),
-        "promoted_snapshot_ids": exp.DataType.build("text"),
+        "promoted_snapshot_ids": exp.DataType.build(blob_type),
         "suffix_target": exp.DataType.build("text"),
         "catalog_name_override": exp.DataType.build("text"),
-        "previous_finalized_snapshots": exp.DataType.build("text"),
+        "previous_finalized_snapshots": exp.DataType.build(blob_type),
         "normalize_name": exp.DataType.build("boolean"),
     }
 

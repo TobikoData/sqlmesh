@@ -9,6 +9,7 @@ from sqlglot.helper import seq_get
 from sqlmesh.core.engine_adapter.base import EngineAdapter
 from sqlmesh.core.engine_adapter.shared import InsertOverwriteStrategy, SourceQuery
 from sqlmesh.core.node import IntervalUnit
+from sqlmesh.core.dialect import schema_
 from sqlmesh.utils.errors import SQLMeshError
 
 if t.TYPE_CHECKING:
@@ -29,7 +30,7 @@ class LogicalMergeMixin(EngineAdapter):
         source_table: QueryOrDF,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
         unique_key: t.Sequence[exp.Expression],
-        when_matched: t.Optional[t.Union[exp.When, t.List[exp.When]]] = None,
+        when_matched: t.Optional[exp.Whens] = None,
     ) -> None:
         logical_merge(
             self,
@@ -104,7 +105,9 @@ class InsertOverwriteWithMergeMixin(EngineAdapter):
                     target_table=table_name,
                     query=query,
                     on=exp.false(),
-                    match_expressions=[when_not_matched_by_source, when_not_matched_by_target],
+                    whens=exp.Whens(
+                        expressions=[when_not_matched_by_source, when_not_matched_by_target]
+                    ),
                 )
 
 
@@ -299,6 +302,7 @@ class VarcharSizeWorkaroundMixin(EngineAdapter):
                 select_or_union.set("where", None)
 
             temp_view_name = self._get_temp_table("ctas")
+
             self.create_view(
                 temp_view_name, select_statement, replace=False, no_schema_binding=False
             )
@@ -355,10 +359,15 @@ class ClusteredByMixin(EngineAdapter):
         current_table = exp.to_table(current_table_name)
         target_table = exp.to_table(target_table_name)
 
+        current_table_schema = schema_(current_table.db, catalog=current_table.catalog)
+        target_table_schema = schema_(target_table.db, catalog=target_table.catalog)
+
         current_table_info = seq_get(
-            self.get_data_objects(current_table.db, {current_table.name}), 0
+            self.get_data_objects(current_table_schema, {current_table.name}), 0
         )
-        target_table_info = seq_get(self.get_data_objects(target_table.db, {target_table.name}), 0)
+        target_table_info = seq_get(
+            self.get_data_objects(target_table_schema, {target_table.name}), 0
+        )
 
         if current_table_info and target_table_info:
             if target_table_info.is_clustered:
@@ -399,7 +408,7 @@ def logical_merge(
     source_table: QueryOrDF,
     columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
     unique_key: t.Sequence[exp.Expression],
-    when_matched: t.Optional[t.Union[exp.When, t.List[exp.When]]] = None,
+    when_matched: t.Optional[exp.Whens] = None,
 ) -> None:
     """
     Merge implementation for engine adapters that do not support merge natively.

@@ -320,7 +320,9 @@ MODEL (
   name db.employees,
   kind INCREMENTAL_BY_UNIQUE_KEY (
     unique_key name,
-    when_matched WHEN MATCHED THEN UPDATE SET target.salary = COALESCE(source.salary, target.salary)
+    when_matched (
+      WHEN MATCHED THEN UPDATE SET target.salary = COALESCE(source.salary, target.salary)
+    )
   )
 );
 ```
@@ -334,8 +336,10 @@ MODEL (
   name db.employees,
   kind INCREMENTAL_BY_UNIQUE_KEY (
     unique_key name,
-    when_matched WHEN MATCHED AND source.value IS NULL THEN UPDATE SET target.salary = COALESCE(source.salary, target.salary),
-    WHEN MATCHED THEN UPDATE SET target.title = COALESCE(source.title, target.title)
+    when_matched (
+      WHEN MATCHED AND source.value IS NULL THEN UPDATE SET target.salary = COALESCE(source.salary, target.salary)
+      WHEN MATCHED THEN UPDATE SET target.title = COALESCE(source.title, target.title)
+    )
   )
 );
 ```
@@ -438,7 +442,7 @@ During the evaluation of a model of this kind, the view will be replaced or recr
 ## EMBEDDED
 Embedded models are a way to share common logic between different models of other kinds.
 
-There are no data assets (tables or views) associated with `EMBEDDED` models in the data warehouse. Instead, an `EMBEDDED` model's query is injected directly into the query of each downstream model that references it.
+There are no data assets (tables or views) associated with `EMBEDDED` models in the data warehouse. Instead, an `EMBEDDED` model's query is injected directly into the query of each downstream model that references it, as a subquery.
 
 This example specifies a `EMBEDDED` model kind:
 ```sql linenums="1" hl_lines="3"
@@ -469,7 +473,7 @@ There are two ways to tracking changes: By Time (Recommended) or By Column.
 
 ### SCD Type 2 By Time (Recommended)
 
-SCD Type 2 By Time supports sourcing from tables that have an "Updated At" timestamp defined in the table that tells you when a given was last updated.
+SCD Type 2 By Time supports sourcing from tables that have an "Updated At" timestamp defined in the table that tells you when a given record was last updated.
 This is the recommended way since this "Updated At" gives you a precise time when the record was last updated and therefore improves the accuracy of the SCD Type 2 table that is produced.
 
 This example specifies a `SCD_TYPE_2_BY_TIME` model kind:
@@ -903,6 +907,46 @@ FROM
 GROUP BY
   id
 ```
+
+### Reset SCD Type 2 Model (clearing history)
+
+SCD Type 2 models are designed by default to protect the data that has been captured because it is not possible to recreate the history once it has been lost. 
+However, there are cases where you may want to clear the history and start fresh.
+For this use use case you will want to start by setting `disable_restatement` to `false` in the model definition.
+
+```sql linenums="1" hl_lines="5"
+MODEL (
+  name db.menu_items,
+  kind SCD_TYPE_2_BY_TIME (
+    unique_key id,
+    disable_restatement false
+  )
+);
+```
+
+Plan/apply this change to production. 
+Then you will want to [restate the model](../plans.md#restatement-plans).
+    
+```bash
+sqlmesh plan --restate-model db.menu_items
+```
+
+!!! warning
+
+    This will remove the historical data on the model which in most situations cannot be recovered.
+
+Once complete you will want to remove `disable_restatement` on the model definition which will set it back to `true` and prevent accidental data loss.
+
+```sql linenums="1"
+MODEL (
+  name db.menu_items,
+  kind SCD_TYPE_2_BY_TIME (
+    unique_key id,
+  )
+);
+```
+
+Plan/apply this change to production.
 
 ## EXTERNAL
 

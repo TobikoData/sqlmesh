@@ -6,7 +6,7 @@ from datetime import date, timedelta
 from tempfile import TemporaryDirectory
 from unittest.mock import PropertyMock, call, patch
 
-import freezegun
+import time_machine
 import pytest
 import pandas as pd
 from pathlib import Path
@@ -14,6 +14,7 @@ from pytest_mock.plugin import MockerFixture
 from sqlglot import exp, parse_one
 from sqlglot.errors import SchemaError
 
+from sqlmesh.core.config.gateway import GatewayConfig
 import sqlmesh.core.constants
 import sqlmesh.core.dialect as d
 from sqlmesh.core.config import (
@@ -26,10 +27,14 @@ from sqlmesh.core.config import (
 )
 from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import parse, schema_
+from sqlmesh.core.engine_adapter.duckdb import DuckDBEngineAdapter
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import load_sql_based_model, model
 from sqlmesh.core.model.kind import ModelKindName
 from sqlmesh.core.plan import BuiltInPlanEvaluator, PlanBuilder
+from sqlmesh.core.state_sync.cache import CachingStateSync
+from sqlmesh.core.state_sync.engine_adapter import EngineAdapterStateSync
+from sqlmesh.utils.connection_pool import SingletonConnectionPool, ThreadLocalConnectionPool
 from sqlmesh.utils.date import (
     make_inclusive_end,
     now,
@@ -312,6 +317,94 @@ def test_evaluate_limit():
     assert context.evaluate("without_limit", "2020-01-01", "2020-01-02", "2020-01-02", 2).size == 2
 
 
+def test_gateway_specific_adapters(copy_to_temp_path, mocker):
+    path = copy_to_temp_path("examples/sushi")
+    ctx = Context(paths=path, config="isolated_systems_config", gateway="prod")
+    assert len(ctx._engine_adapters) == 1
+    assert ctx.engine_adapter == ctx._engine_adapters["prod"]
+    with pytest.raises(SQLMeshError):
+        assert ctx._get_engine_adapter("dev")
+
+    ctx = Context(paths=path, config="isolated_systems_config")
+    assert len(ctx._engine_adapters) == 1
+    assert ctx.engine_adapter == ctx._engine_adapters["dev"]
+
+    mocker.patch.object(
+        Context,
+        "_snapshot_gateways",
+        new_callable=mocker.PropertyMock(return_value={"test_snapshot": "test"}),
+    )
+
+    ctx = Context(paths=path, config="isolated_systems_config")
+
+    ctx._create_engine_adapters({"test"})
+    assert len(ctx._engine_adapters) == 2
+    assert ctx.engine_adapter == ctx._get_engine_adapter()
+    assert ctx._get_engine_adapter("test") == ctx._engine_adapters["test"]
+
+
+def test_multiple_gateways(tmp_path: Path):
+    db_path = str(tmp_path / "db.db")
+    gateways = {
+        "staging": GatewayConfig(connection=DuckDBConnectionConfig(database=db_path)),
+        "final": GatewayConfig(connection=DuckDBConnectionConfig(database=db_path)),
+    }
+
+    config = Config(gateways=gateways, default_gateway="final")
+    context = Context(config=config)
+
+    gateway_model = load_sql_based_model(
+        parse(
+            """
+    MODEL(name staging.stg_model, start '2024-01-01',kind FULL, gateway staging);
+    SELECT t.v as v FROM (VALUES (1), (2), (3), (4), (5)) AS t(v)"""
+        ),
+        default_catalog="db",
+    )
+
+    assert gateway_model.gateway == "staging"
+    context.upsert_model(gateway_model)
+    assert context.evaluate("staging.stg_model", "2020-01-01", "2020-01-02", "2020-01-02").size == 5
+
+    default_model = load_sql_based_model(
+        parse(
+            """
+    MODEL(name main.final_model, start '2024-01-01',kind FULL);
+    SELECT v FROM staging.stg_model"""
+        ),
+        default_catalog="db",
+    )
+
+    assert not default_model.gateway
+    context.upsert_model(default_model)
+
+    context.plan(
+        execution_time="2024-01-02",
+        auto_apply=True,
+        no_prompts=True,
+    )
+
+    sorted_snapshots = sorted(context.snapshots.values())
+
+    physical_schemas = [snapshot.physical_schema for snapshot in sorted_snapshots]
+    assert physical_schemas == ["sqlmesh__main", "sqlmesh__staging"]
+
+    view_schemas = [snapshot.qualified_view_name.schema_name for snapshot in sorted_snapshots]
+    assert view_schemas == ["main", "staging"]
+
+    assert (
+        str(context.fetchdf("select * from staging.stg_model"))
+        == "   v\n0  1\n1  2\n2  3\n3  4\n4  5"
+    )
+    assert str(context.fetchdf("select * from final_model")) == "   v\n0  1\n1  2\n2  3\n3  4\n4  5"
+
+    assert (
+        context.snapshots['"db"."main"."final_model"'].parents[0].name
+        == '"db"."staging"."stg_model"'
+    )
+    assert context.dag._sorted == ['"db"."staging"."stg_model"', '"db"."main"."final_model"']
+
+
 def test_plan_execution_time():
     context = Context(config=Config())
     context.upsert_model(
@@ -363,17 +456,18 @@ def test_override_builtin_audit_blocking_mode():
         )
     )
 
-    logger = logging.getLogger("sqlmesh.core.snapshot.evaluator")
+    logger = logging.getLogger("sqlmesh.core.scheduler")
     with patch.object(logger, "warning") as mock_logger:
         plan = context.plan(auto_apply=True, no_prompts=True)
         new_snapshot = next(iter(plan.context_diff.new_snapshots.values()))
 
+        version = new_snapshot.fingerprint.to_version()
         assert mock_logger.mock_calls == [
             call(
                 "Audit 'not_null' for model 'db.x' failed.\n"
                 "Got 1 results, expected 0.\n"
-                'SELECT * FROM (SELECT * FROM "sqlmesh__db"."db__x__2457047842" AS "db__x__2457047842") AS "_q_0" WHERE "c" IS NULL AND TRUE\n'
-                "Audit is warn only so proceeding with execution."
+                f'SELECT * FROM (SELECT * FROM "sqlmesh__db"."db__x__{version}" AS "db__x__{version}") AS "_q_0" WHERE "c" IS NULL AND TRUE\n'
+                "Audit is non-blocking so proceeding with execution."
             )
         ]
 
@@ -591,6 +685,7 @@ model_defaults:
         assert snowflake_connection.account == "abc123"
         assert snowflake_connection.user == "ABC"
         assert snowflake_connection.password == "XYZ"
+        assert snowflake_connection.application == "Tobiko_SQLMesh"
 
 
 @pytest.mark.slow
@@ -703,7 +798,7 @@ def test_janitor(sushi_context, mocker: MockerFixture) -> None:
             previous_plan_id="test_plan_id",
         ),
     ]
-    sushi_context._engine_adapter = adapter_mock
+    sushi_context._engine_adapters = {sushi_context.config.default_gateway: adapter_mock}
     sushi_context._state_sync = state_sync_mock
     sushi_context._run_janitor()
     # Assert that the schemas are dropped just twice for the schema based environment
@@ -755,7 +850,7 @@ def test_plan_default_end(sushi_context_pre_scheduling: Context):
 @pytest.mark.slow
 def test_plan_start_ahead_of_end(copy_to_temp_path):
     path = copy_to_temp_path("examples/sushi")
-    with freezegun.freeze_time("2024-01-02 00:00:00"):
+    with time_machine.travel("2024-01-02 00:00:00 UTC"):
         context = Context(paths=path, gateway="duckdb_persistent")
         context.plan("prod", no_prompts=True, auto_apply=True)
         assert all(
@@ -763,7 +858,7 @@ def test_plan_start_ahead_of_end(copy_to_temp_path):
             for i in context.state_sync.max_interval_end_per_model("prod").values()
         )
         context.close()
-    with freezegun.freeze_time("2024-01-03 00:00:00"):
+    with time_machine.travel("2024-01-03 00:00:00 UTC"):
         context = Context(paths=path, gateway="duckdb_persistent")
         expression = d.parse(
             """
@@ -1019,3 +1114,43 @@ def test_wildcard(copy_to_temp_path: t.Callable):
 
     context = Context(paths=f"{parent_path}/*")
     assert len(context.models) == 4
+
+
+def test_duckdb_state_connection_automatic_multithreaded_mode(tmp_path):
+    single_threaded_config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        default_gateway="duckdb",
+        gateways={
+            "duckdb": GatewayConfig(
+                connection=DuckDBConnectionConfig(concurrent_tasks=1),
+                state_connection=DuckDBConnectionConfig(concurrent_tasks=1),
+            )
+        },
+    )
+
+    # main connection 4 concurrent tasks, state connection 1 concurrent task,
+    # context should adjust concurrent tasks on state connection to match main connection
+    multi_threaded_config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        default_gateway="duckdb",
+        gateways={
+            "duckdb": GatewayConfig(
+                connection=DuckDBConnectionConfig(concurrent_tasks=4),
+                state_connection=DuckDBConnectionConfig(concurrent_tasks=1),
+            )
+        },
+    )
+
+    context = Context(paths=[tmp_path], config=single_threaded_config)
+    assert isinstance(context.state_sync, CachingStateSync)
+    state_sync = context.state_sync.state_sync
+    assert isinstance(state_sync, EngineAdapterStateSync)
+    assert isinstance(state_sync.engine_adapter, DuckDBEngineAdapter)
+    assert isinstance(state_sync.engine_adapter._connection_pool, SingletonConnectionPool)
+
+    context = Context(paths=[tmp_path], config=multi_threaded_config)
+    assert isinstance(context.state_sync, CachingStateSync)
+    state_sync = context.state_sync.state_sync
+    assert isinstance(state_sync, EngineAdapterStateSync)
+    assert isinstance(state_sync.engine_adapter, DuckDBEngineAdapter)
+    assert isinstance(state_sync.engine_adapter._connection_pool, ThreadLocalConnectionPool)

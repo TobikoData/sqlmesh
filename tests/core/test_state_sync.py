@@ -7,7 +7,7 @@ from unittest.mock import call, patch
 import duckdb
 import pandas as pd
 import pytest
-from freezegun import freeze_time
+import time_machine
 from pytest_mock.plugin import MockerFixture
 from sqlglot import exp
 
@@ -939,7 +939,7 @@ def test_promote_snapshots_no_gaps(state_sync: EngineAdapterStateSync, make_snap
     )
 
 
-@freeze_time("2023-01-08 16:00:00")
+@time_machine.travel("2023-01-08 16:00:00 UTC", tick=False)
 def test_promote_snapshots_no_gaps_lookback(
     state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
 ):
@@ -2225,12 +2225,12 @@ def test_snapshot_batching(state_sync, mocker, make_snapshot):
         call(
             exp.to_table("sqlmesh._snapshots"),
             where=parse_one(
-                f"(name, identifier) in (('\"a\"', '{snapshot_b.identifier}'), ('\"a\"', '{snapshot_c.identifier}'))"
+                f"(name, identifier) in (('\"a\"', '{snapshot_b.identifier}'), ('\"a\"', '{snapshot_a.identifier}'))"
             ),
         ),
         call(
             exp.to_table("sqlmesh._snapshots"),
-            where=parse_one(f"(name, identifier) in (('\"a\"', '{snapshot_a.identifier}'))"),
+            where=parse_one(f"(name, identifier) in (('\"a\"', '{snapshot_c.identifier}'))"),
         ),
     ]
 

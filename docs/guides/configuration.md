@@ -518,13 +518,13 @@ Recommended state engines for production deployments:
 Other state engines with fast and reliable database transactions (less tested than the recommended engines):
 
 * [DuckDB](../integrations/engines/duckdb.md)
-    * Does not support concurrency and may error if the primary connection executes with concurrent tasks (its [connection configuration's `concurrent_tasks`](#connections) is greater than 1)
+    * With the caveat that it's a [single user](https://duckdb.org/docs/connect/concurrency.html#writing-to-duckdb-from-multiple-processes) database so will not scale to production usage
 * [MySQL](../integrations/engines/mysql.md)
 * [MSSQL](../integrations/engines/mssql.md)
 
 Unsupported state engines, even for development:
 
-* [Clickhouse](../integrations/engines/clickhouse.md)
+* [ClickHouse](../integrations/engines/clickhouse.md)
 * [Spark](../integrations/engines/spark.md)
 * [Trino](../integrations/engines/trino.md)
 

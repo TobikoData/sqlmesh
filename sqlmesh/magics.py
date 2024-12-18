@@ -3,8 +3,9 @@ from __future__ import annotations
 import functools
 import logging
 import typing as t
-from argparse import Namespace
+from argparse import Namespace, SUPPRESS
 from collections import defaultdict
+from copy import deepcopy
 
 from hyperscript import h
 from IPython.core.display import display
@@ -60,8 +61,19 @@ def pass_sqlmesh_context(func: t.Callable) -> t.Callable:
         if bound_method:
             args_split = arg_split(args[0])
             parser = bound_method.parser
-            # Calling the private method to bypass setting of defaults.
-            parsed_args, _ = parser._parse_known_args(args_split, Namespace())
+
+            original_parser_actions = deepcopy(parser._actions)
+            original_parser_defaults = parser._defaults
+
+            # Temporarily supress default values, otherwise any missing arg would be set and affect analytics
+            parser._defaults = {}
+            for action in parser._actions:
+                action.default = SUPPRESS
+
+            parsed_args, _ = parser.parse_known_args(args_split, Namespace())
+
+            parser._actions = original_parser_actions
+            parser._defaults = original_parser_defaults
 
             command_args = {k for k, v in parsed_args.__dict__.items() if v is not None}
             analytics.collector.on_magic_command(command_name=magic_name, command_args=command_args)

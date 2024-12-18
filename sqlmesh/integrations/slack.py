@@ -1,15 +1,9 @@
 """Helpers for building robust Slack messages"""
 
 import json
-import sys
 import typing as t
 from enum import Enum
 from textwrap import dedent
-
-if sys.version_info >= (3, 8):
-    from typing import TypedDict
-else:
-    from typing_extensions import TypedDict
 
 
 SLACK_MAX_TEXT_LENGTH = 3000
@@ -21,7 +15,7 @@ CONTINUATION_SYMBOL = "..."
 TSlackBlock = t.Dict[str, t.Any]
 
 
-class TSlackBlocks(TypedDict):
+class TSlackBlocks(t.TypedDict):
     blocks: t.List[TSlackBlock]
 
 

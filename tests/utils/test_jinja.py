@@ -49,6 +49,10 @@ macro_b_b
         "macro_a_a",
     ]
 
+    assert (
+        extractor.extract("""{% set foo = bar | replace("'", "\\"") %}""", dialect="bigquery") == {}
+    )
+
 
 def test_macro_registry_render_nested_self_package_references():
     package_a = """

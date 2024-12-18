@@ -5,6 +5,7 @@ import datetime
 from sqlmesh.core.engine_adapter import AthenaEngineAdapter
 from sqlmesh.utils.aws import parse_s3_uri
 from sqlmesh.utils.pandas import columns_to_types_from_df
+from sqlmesh.utils.date import to_ds, to_ts, TimeLike
 from tests.core.engine_adapter.integration import TestContext
 from sqlglot import exp
 
@@ -342,3 +343,126 @@ def test_hive_replace_query_new_schema(ctx: TestContext, engine_adapter: AthenaE
         "one",
         datetime.datetime(2023, 1, 1),
     )
+
+
+def test_insert_overwrite_by_time_partition_date_type(
+    ctx: TestContext, engine_adapter: AthenaEngineAdapter
+):
+    table = ctx.table("test_table")
+
+    data = pd.DataFrame(
+        [
+            {"id": 1, "date": datetime.date(2023, 1, 1)},
+            {"id": 2, "date": datetime.date(2023, 1, 2)},
+            {"id": 3, "date": datetime.date(2023, 1, 3)},
+        ]
+    )
+
+    columns_to_types = {
+        "id": exp.DataType.build("int"),
+        "date": exp.DataType.build(
+            "date"
+        ),  # note: columns_to_types_from_df() would infer this as TEXT but we need a DATE type
+    }
+
+    def time_formatter(time: TimeLike, _: t.Optional[t.Dict[str, exp.DataType]]) -> exp.Expression:
+        return exp.cast(exp.Literal.string(to_ds(time)), "date")
+
+    engine_adapter.create_table(
+        table_name=table, columns_to_types=columns_to_types, partitioned_by=[exp.to_column("date")]
+    )
+    engine_adapter.insert_overwrite_by_time_partition(
+        table_name=table,
+        query_or_df=data,
+        columns_to_types=columns_to_types,
+        time_column=exp.to_identifier("date"),
+        start="2023-01-01",
+        end="2023-01-03",
+        time_formatter=time_formatter,
+    )
+
+    assert len(engine_adapter.fetchdf(exp.select("*").from_(table))) == 3
+
+    new_data = pd.DataFrame(
+        [
+            {"id": 4, "date": datetime.date(2023, 1, 3)},  # replaces the old entry for 2023-01-03
+            {"id": 5, "date": datetime.date(2023, 1, 4)},
+        ]
+    )
+
+    engine_adapter.insert_overwrite_by_time_partition(
+        table_name=table,
+        query_or_df=new_data,
+        columns_to_types=columns_to_types,
+        time_column=exp.to_identifier("date"),
+        start="2023-01-03",
+        end="2023-01-04",
+        time_formatter=time_formatter,
+    )
+
+    result = engine_adapter.fetchdf(exp.select("*").from_(table))
+    assert len(result) == 4
+    assert sorted(result["id"].tolist()) == [1, 2, 4, 5]
+
+
+def test_insert_overwrite_by_time_partition_datetime_type(
+    ctx: TestContext, engine_adapter: AthenaEngineAdapter
+):
+    table = ctx.table("test_table")
+
+    data = pd.DataFrame(
+        [
+            {"id": 1, "ts": datetime.datetime(2023, 1, 1, 1, 0, 0)},
+            {"id": 2, "ts": datetime.datetime(2023, 1, 1, 2, 0, 0)},
+            {"id": 3, "ts": datetime.datetime(2023, 1, 1, 3, 0, 0)},
+        ]
+    )
+
+    columns_to_types = {
+        "id": exp.DataType.build("int"),
+        "ts": exp.DataType.build(
+            "datetime"
+        ),  # note: columns_to_types_from_df() would infer this as TEXT but we need a DATETIME type
+    }
+
+    def time_formatter(time: TimeLike, _: t.Optional[t.Dict[str, exp.DataType]]) -> exp.Expression:
+        return exp.cast(exp.Literal.string(to_ts(time)), "datetime")
+
+    engine_adapter.create_table(
+        table_name=table, columns_to_types=columns_to_types, partitioned_by=[exp.to_column("ts")]
+    )
+    engine_adapter.insert_overwrite_by_time_partition(
+        table_name=table,
+        query_or_df=data,
+        columns_to_types=columns_to_types,
+        time_column=exp.to_identifier("ts"),
+        start="2023-01-01 00:00:00",
+        end="2023-01-01 04:00:00",
+        time_formatter=time_formatter,
+    )
+
+    assert len(engine_adapter.fetchdf(exp.select("*").from_(table))) == 3
+
+    new_data = pd.DataFrame(
+        [
+            {
+                "id": 4,
+                "ts": datetime.datetime(2023, 1, 1, 3, 0, 0),
+            },  # replaces the old entry for 2023-01-01 03:00:00
+            {"id": 5, "ts": datetime.datetime(2023, 1, 1, 4, 0, 0)},
+        ]
+    )
+
+    engine_adapter.insert_overwrite_by_time_partition(
+        table_name=table,
+        query_or_df=new_data,
+        columns_to_types=columns_to_types,
+        time_column=exp.to_identifier("ts"),
+        start="2023-01-01 03:00:00",
+        end="2023-01-01 05:00:00",
+        time_formatter=time_formatter,
+    )
+
+    result = engine_adapter.fetchdf(exp.select("*").from_(table))
+    assert len(result) == 4
+    assert sorted(result["id"].tolist()) == [1, 2, 4, 5]

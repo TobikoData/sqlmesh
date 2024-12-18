@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import sys
 import typing as t
 from collections import defaultdict
 from datetime import datetime, timedelta
 from enum import IntEnum
 from functools import cached_property, lru_cache
+from pathlib import Path
 
 from pydantic import Field
 from sqlglot import exp
@@ -13,6 +13,7 @@ from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.audit import StandaloneAudit
+from sqlmesh.core.macros import call_macro
 from sqlmesh.core.model import Model, ModelKindMixin, ModelKindName, ViewKind, CustomKind
 from sqlmesh.core.model.definition import _Model
 from sqlmesh.core.node import IntervalUnit, NodeType
@@ -35,13 +36,9 @@ from sqlmesh.utils.date import (
     yesterday,
 )
 from sqlmesh.utils.errors import SQLMeshError
+from sqlmesh.utils.metaprogramming import prepare_env, print_exception
 from sqlmesh.utils.hashing import hash_data
 from sqlmesh.utils.pydantic import PydanticModel, field_validator
-
-if sys.version_info >= (3, 9):
-    from typing import Annotated
-else:
-    from typing_extensions import Annotated
 
 if t.TYPE_CHECKING:
     from sqlglot.dialects.dialect import DialectType
@@ -51,7 +48,7 @@ if t.TYPE_CHECKING:
 Interval = t.Tuple[int, int]
 Intervals = t.List[Interval]
 
-Node = Annotated[t.Union[Model, StandaloneAudit], Field(descriminator="source_type")]
+Node = t.Annotated[t.Union[Model, StandaloneAudit], Field(discriminator="source_type")]
 
 
 class SnapshotChangeCategory(IntEnum):
@@ -891,6 +888,37 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             model_end_ts,
         )
 
+    def check_ready_intervals(self, intervals: Intervals) -> Intervals:
+        """Returns a list of intervals that are considered ready by the provided signal.
+
+        Note that this will handle gaps in the provided intervals. The returned intervals
+        may introduce new gaps.
+        """
+        signals = self.is_model and self.model.signals
+
+        if not signals:
+            return intervals
+
+        python_env = self.model.python_env
+        env = prepare_env(python_env)
+
+        for signal_name, kwargs in signals:
+            try:
+                intervals = _check_ready_intervals(
+                    env[signal_name],
+                    intervals,
+                    dialect=self.model.dialect,
+                    path=self.model._path,
+                    kwargs=kwargs,
+                )
+            except SQLMeshError as e:
+                print_exception(e, python_env)
+                raise SQLMeshError(
+                    f"{e} '{signal_name}' for '{self.model.name}' at {self.model._path}"
+                )
+
+        return intervals
+
     def categorize_as(self, category: SnapshotChangeCategory) -> None:
         """Assigns the given category to this snapshot.
 
@@ -1113,6 +1141,10 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         return None
 
     @property
+    def model_gateway(self) -> t.Optional[str]:
+        return self.model.gateway if self.is_model else None
+
+    @property
     def audit(self) -> StandaloneAudit:
         if self.is_audit:
             return t.cast(StandaloneAudit, self.node)
@@ -1308,13 +1340,7 @@ class DeployabilityIndex(PydanticModel, frozen=True):
 
             if deployable and node in snapshots:
                 snapshot = snapshots[node]
-                # Capture uncategorized snapshot which represents a forward-only model.
-                is_uncategorized_forward_only_model = (
-                    snapshot.change_category is None
-                    and snapshot.previous_versions
-                    and snapshot.is_model
-                    and snapshot.model.forward_only
-                )
+                is_forward_only_model = snapshot.is_model and snapshot.model.forward_only
 
                 is_valid_start = (
                     snapshot.is_valid_start(
@@ -1327,7 +1353,7 @@ class DeployabilityIndex(PydanticModel, frozen=True):
                 if (
                     snapshot.is_forward_only
                     or snapshot.is_indirect_non_breaking
-                    or is_uncategorized_forward_only_model
+                    or is_forward_only_model
                     or not is_valid_start
                 ):
                     # FORWARD_ONLY and INDIRECT_NON_BREAKING snapshots are not deployable by nature.
@@ -1340,8 +1366,7 @@ class DeployabilityIndex(PydanticModel, frozen=True):
                 else:
                     this_deployable = True
                 children_deployable = is_valid_start and not (
-                    snapshot.is_paused
-                    and (snapshot.is_forward_only or is_uncategorized_forward_only_model)
+                    snapshot.is_paused and (snapshot.is_forward_only or is_forward_only_model)
                 )
             else:
                 this_deployable, children_deployable = False, False
@@ -1838,3 +1863,53 @@ def snapshots_to_dag(snapshots: t.Collection[Snapshot]) -> DAG[SnapshotId]:
     for snapshot in snapshots:
         dag.add(snapshot.snapshot_id, snapshot.parents)
     return dag
+
+
+def _contiguous_intervals(intervals: Intervals) -> t.List[Intervals]:
+    """Given a list of intervals with gaps, returns a list of sequences of contiguous intervals."""
+    contiguous_intervals = []
+    current_batch: t.List[Interval] = []
+    for interval in intervals:
+        if len(current_batch) == 0 or interval[0] == current_batch[-1][-1]:
+            current_batch.append(interval)
+        else:
+            contiguous_intervals.append(current_batch)
+            current_batch = [interval]
+
+    if len(current_batch) > 0:
+        contiguous_intervals.append(current_batch)
+
+    return contiguous_intervals
+
+
+def _check_ready_intervals(
+    check: t.Callable,
+    intervals: Intervals,
+    dialect: DialectType = None,
+    path: Path = Path(),
+    kwargs: t.Optional[t.Dict] = None,
+) -> Intervals:
+    checked_intervals: Intervals = []
+
+    for interval_batch in _contiguous_intervals(intervals):
+        batch = [(to_datetime(start), to_datetime(end)) for start, end in interval_batch]
+
+        try:
+            ready_intervals = call_macro(check, dialect, path, batch, **(kwargs or {}))
+        except Exception:
+            raise SQLMeshError("Error evaluating signal")
+
+        if isinstance(ready_intervals, bool):
+            if not ready_intervals:
+                batch = []
+        elif isinstance(ready_intervals, list):
+            for i in ready_intervals:
+                if i not in batch:
+                    raise SQLMeshError(f"Unknown interval {i} for signal")
+                batch = ready_intervals
+        else:
+            raise SQLMeshError(f"Expected bool | list, got {type(ready_intervals)} for signal")
+
+        checked_intervals.extend((to_timestamp(start), to_timestamp(end)) for start, end in batch)
+
+    return checked_intervals

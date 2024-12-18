@@ -395,7 +395,7 @@ def test_duckdb(make_config):
         connector_config={"foo": "bar"},
     )
     assert isinstance(config, DuckDBConnectionConfig)
-    assert config.is_recommended_for_state_sync is True
+    assert not config.is_recommended_for_state_sync
 
 
 @pytest.mark.parametrize(
@@ -556,7 +556,7 @@ def test_duckdb_attach_catalog(make_config):
 
     assert config.catalogs.get("test2").read_only is False
     assert config.catalogs.get("test2").path == "test2.duckdb"
-    assert config.is_recommended_for_state_sync is True
+    assert not config.is_recommended_for_state_sync
 
 
 def test_duckdb_attach_options():
@@ -572,6 +572,47 @@ def test_duckdb_attach_options():
     options = DuckDBAttachOptions(type="duckdb", path="test.db", read_only=False)
 
     assert options.to_sql(alias="db") == "ATTACH 'test.db' AS db"
+
+
+def test_duckdb_multithreaded_connection_factory(make_config):
+    from sqlmesh.core.engine_adapter import DuckDBEngineAdapter
+    from sqlmesh.utils.connection_pool import ThreadLocalConnectionPool
+    from threading import Thread
+
+    config = make_config(type="duckdb")
+
+    # defaults to 1, no issue
+    assert config.concurrent_tasks == 1
+
+    # check that the connection factory always returns the same connection in multithreaded mode
+    # this sounds counter-intuitive but that's what DuckDB recommends here: https://duckdb.org/docs/guides/python/multiple_threads.html
+    config = make_config(type="duckdb", concurrent_tasks=8)
+    adapter = config.create_engine_adapter()
+    assert isinstance(adapter, DuckDBEngineAdapter)
+    assert isinstance(adapter._connection_pool, ThreadLocalConnectionPool)
+
+    threads = []
+    connection_objects = []
+
+    def _thread_connection():
+        connection_objects.append(adapter.connection)
+
+    for _ in range(8):
+        threads.append(Thread(target=_thread_connection))
+
+    for thread in threads:
+        thread.start()
+
+    for thread in threads:
+        thread.join()
+
+    assert len(connection_objects) == 8
+    assert len(set(connection_objects)) == 1  # they should all be the same object
+
+    # test that recycling the pool means we dont end up with unusable connections (eg check we havent cached a closed connection)
+    assert adapter.fetchone("select 1") == (1,)
+    adapter.recycle()
+    assert adapter.fetchone("select 1") == (1,)
 
 
 def test_bigquery(make_config):

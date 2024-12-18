@@ -106,7 +106,7 @@ class PostgresEngineAdapter(
         source_table: QueryOrDF,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
         unique_key: t.Sequence[exp.Expression],
-        when_matched: t.Optional[t.Union[exp.When, t.List[exp.When]]] = None,
+        when_matched: t.Optional[exp.Whens] = None,
     ) -> None:
         # Merge isn't supported until Postgres 15
         merge_impl = (
