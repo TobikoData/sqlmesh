@@ -1015,10 +1015,10 @@ class SnapshotEvaluator:
             adapter = self._get_adapter(snapshot.model_gateway)
             snapshot_deps = {snapshots[p_sid].name: snapshots[p_sid] for p_sid in snapshot.parents}
             snapshot_deps[snapshot.name] = snapshot
-            if virtual_statements := snapshot.model.on_virtual_update:
+            if on_virtual_update := snapshot.model.on_virtual_update:
                 adapter.execute(
                     snapshot.model._render_statements(
-                        virtual_statements,
+                        on_virtual_update,
                         start=start,
                         end=end,
                         execution_time=execution_time,
