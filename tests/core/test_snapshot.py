@@ -707,12 +707,11 @@ def test_fingerprint(model: Model, parent_model: Model):
     fingerprint = fingerprint_from_node(model, nodes={})
 
     original_fingerprint = SnapshotFingerprint(
-        data_hash="2098818222",
+        data_hash="1312415267",
         metadata_hash="2793463216",
     )
 
     assert fingerprint == original_fingerprint
-
     with_parent_fingerprint = fingerprint_from_node(model, nodes={'"parent"."tbl"': parent_model})
     assert with_parent_fingerprint != fingerprint
     assert int(with_parent_fingerprint.parent_data_hash) > 0
@@ -767,7 +766,7 @@ def test_fingerprint_seed_model():
     )
 
     expected_fingerprint = SnapshotFingerprint(
-        data_hash="295987232",
+        data_hash="1909791099",
         metadata_hash="3403817841",
     )
 
@@ -806,7 +805,7 @@ def test_fingerprint_jinja_macros(model: Model):
         }
     )
     original_fingerprint = SnapshotFingerprint(
-        data_hash="979797026",
+        data_hash="923305614",
         metadata_hash="2793463216",
     )
 

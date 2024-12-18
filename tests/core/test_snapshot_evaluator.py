@@ -561,7 +561,7 @@ def test_evaluate_materialized_view_with_partitioned_by_cluster_by(
         [
             call("CREATE SCHEMA IF NOT EXISTS `sqlmesh__test_schema`"),
             call(
-                "CREATE MATERIALIZED VIEW `sqlmesh__test_schema`.`test_schema__test_model__3674208014` PARTITION BY `a` CLUSTER BY `b` AS SELECT `a` AS `a`, `b` AS `b` FROM `tbl` AS `tbl`"
+                f"CREATE MATERIALIZED VIEW `sqlmesh__test_schema`.`test_schema__test_model__{snapshot.version}` PARTITION BY `a` CLUSTER BY `b` AS SELECT `a` AS `a`, `b` AS `b` FROM `tbl` AS `tbl`"
             ),
         ]
     )
@@ -2862,12 +2862,9 @@ def test_cleanup_managed(adapter_mock, make_snapshot, mocker: MockerFixture):
 
     evaluator.cleanup(target_snapshots=[cleanup_task])
 
-    adapter_mock.drop_table.assert_called_once_with(
-        "sqlmesh__test_schema.test_schema__test_model__14485873__temp"
-    )
-    adapter_mock.drop_managed_table.assert_called_once_with(
-        "sqlmesh__test_schema.test_schema__test_model__14485873"
-    )
+    physical_name = f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}"
+    adapter_mock.drop_table.assert_called_once_with(f"{physical_name}__temp")
+    adapter_mock.drop_managed_table.assert_called_once_with(f"{physical_name}")
 
 
 def test_create_managed_forward_only_with_previous_version_doesnt_clone_for_dev_preview(

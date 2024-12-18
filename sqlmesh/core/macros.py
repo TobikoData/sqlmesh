@@ -448,6 +448,14 @@ class MacroEvaluator:
         return self.locals["runtime_stage"]
 
     @property
+    def this_model(self) -> str:
+        """Returns the resolved name of the surrounding model."""
+        this_model = self.locals.get("this_model")
+        if not this_model:
+            raise SQLMeshError("Model name is not available in the macro evaluator.")
+        return this_model.sql(dialect=self.dialect, identify=True, comments=False)
+
+    @property
     def engine_adapter(self) -> EngineAdapter:
         engine_adapter = self.locals.get("engine_adapter")
         if not engine_adapter:
