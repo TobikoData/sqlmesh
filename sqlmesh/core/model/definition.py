@@ -843,7 +843,7 @@ class _Model(ModelMeta, frozen=True):
 
         if not self.is_sql and self.optimize_query is not None:
             raise_config_error(
-                "SQLMesh query optimizer can only be enabled/disabled for SQLModels",
+                "SQLMesh query optimizer can only be enabled/disabled for SQL models",
                 self._path,
             )
 
