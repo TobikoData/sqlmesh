@@ -2,7 +2,7 @@ from __future__ import annotations
 from enum import Enum
 import logging
 import typing as t
-from datetime import datetime, timedelta
+from datetime import datetime
 from sqlglot import exp
 
 from sqlmesh.core import constants as c
@@ -25,6 +25,11 @@ from sqlmesh.core.snapshot import (
     Intervals,
 )
 from sqlmesh.core.snapshot.definition import Interval, expand_range
+from sqlmesh.core.snapshot.definition import (
+    SnapshotId,
+    merge_intervals,
+    get_next_model_interval_start,
+)
 from sqlmesh.core.state_sync import StateSync
 from sqlmesh.utils import format_exception
 from sqlmesh.utils.concurrency import concurrent_apply_to_dag, NodeExecutionFailedError
@@ -33,7 +38,6 @@ from sqlmesh.utils.date import (
     TimeLike,
     now,
     now_timestamp,
-    to_datetime,
     to_timestamp,
     validate_date_range,
 )
@@ -310,33 +314,7 @@ class Scheduler:
         )
 
         if not merged_intervals:
-            processed_interval_ends = []
-            interval_unit_seconds = []
-            for snapshot in self.snapshots.values():
-                if snapshot.is_model and not snapshot.is_symbolic and not snapshot.is_seed:
-                    if snapshot.intervals:
-                        processed_interval_ends.append(to_timestamp(snapshot.intervals[-1][1]))
-                        interval_unit_seconds.append(snapshot.node.interval_unit.seconds)
-
-            window_start = max(processed_interval_ends)
-            window_end = now() + timedelta(seconds=max(interval_unit_seconds))
-
-            next_ready_intervals = missing_intervals(
-                self.snapshots.values(),
-                start=window_start,
-                end=window_end,
-                execution_time=window_end,
-            )
-
-            next_ready_interval_start = to_datetime(
-                min(
-                    [
-                        # earliest next interval end for each snapshot
-                        min([interval[1] for interval in intervals])
-                        for intervals in next_ready_intervals.values()
-                    ]
-                )
-            )
+            next_ready_interval_start = get_next_model_interval_start(self.snapshots.values())
 
             time_format_str = "%Y-%m-%d %-I:%M%p %Z"  # Example: 2024-01-01 6:00AM UTC
             utc_time = next_ready_interval_start.strftime(time_format_str)
