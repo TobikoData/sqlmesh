@@ -1741,7 +1741,7 @@ class RisingwaveConnectionConfig(ConnectionConfig):
     register_comments: bool = True
     pre_ping: bool = True
 
-    type_: Literal["risingwave"] = Field(alias="type", default="risingwave")
+    type_: t.Literal["risingwave"] = Field(alias="type", default="risingwave")
 
     @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
