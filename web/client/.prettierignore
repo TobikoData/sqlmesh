@@ -7,4 +7,6 @@ node_modules/
 /playwright/.cache/
 dist
 /public/favicons/
+/src/styles/fonts/
+/src/assets/fonts/
 tsconfig.tsbuildinfo
