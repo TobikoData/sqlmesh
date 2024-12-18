@@ -1,0 +1,330 @@
+```yaml
+cubes:
+  - name: silver_customers
+    sql: SELECT * FROM db.silver.customers
+    dimensions:
+      - name: customer_id
+        sql: customer_id
+        type: number
+        primary_key: true
+      - name: full_name
+        sql: full_name
+        type: string
+      - name: email
+        sql: email
+        type: string
+    joins:
+      - name: bronze_raw_customer_addresses
+        relationship: one_to_many
+        sql: "{CUBE.customer_id} = {bronze_raw_customer_addresses.customer_id}"
+      - name: silver_orders
+        relationship: one_to_many
+        sql: "{CUBE.customer_id} = {silver_orders.user_id}"
+
+  - name: bronze_raw_customer_addresses
+    sql: SELECT * FROM db.bronze.raw_customer_addresses
+    dimensions:
+      - name: customer_id
+        sql: customer_id
+        type: number
+      - name: city
+        sql: city
+        type: string
+      - name: state
+        sql: state
+        type: string
+      - name: country
+        sql: country
+        type: string
+
+  - name: silver_orders
+    sql: SELECT * FROM db.silver.orders
+    dimensions:
+      - name: order_id
+        sql: order_id
+        type: number
+        primary_key: true
+      - name: user_id
+        sql: user_id
+        type: number
+      - name: order_timestamp
+        sql: order_timestamp
+        type: time
+      - name: date
+        sql: CAST({order_timestamp} AS DATE)
+        type: time
+      - name: is_completed
+        sql: is_completed
+        type: boolean
+      - name: total_amount
+        sql: total_amount
+        type: number
+    measures:
+      - name: total_orders
+        sql: order_id
+        type: count_distinct
+      - name: unique_customers
+        sql: user_id
+        type: count_distinct
+      - name: total_revenue
+        sql: total_amount
+        type: sum
+      - name: total_spend
+        sql: total_amount
+        type: sum
+      - name: average_order_value
+        sql: total_amount
+        type: avg
+      - name: first_order_date
+        sql: order_timestamp
+        type: min
+      - name: last_order_date
+        sql: order_timestamp
+        type: max
+      - name: customer_lifetime_days
+        sql: "DATEDIFF('day', {first_order_date}, {last_order_date})"
+        type: number
+      - name: completed_orders
+        sql: "CASE WHEN {is_completed} THEN 1 ELSE 0 END"
+        type: sum
+      - name: avg_order_value
+        sql: "{total_revenue} / NULLIF({total_orders}, 0)"
+        type: number
+      - name: order_completion_rate
+        sql: "CAST({completed_orders} AS FLOAT) / NULLIF({total_orders}, 0)"
+        type: number
+    joins:
+      - name: silver_customers
+        relationship: many_to_one
+        sql: "{CUBE.user_id} = {silver_customers.customer_id}"
+      - name: silver_order_items
+        relationship: one_to_many
+        sql: "{CUBE.order_id} = {silver_order_items.order_id}"
+
+  - name: silver_order_items
+    sql: SELECT * FROM db.silver.order_items
+    dimensions:
+      - name: order_item_id
+        sql: order_item_id
+        type: number
+        primary_key: true
+      - name: order_id
+        sql: order_id
+        type: number
+      - name: product_id
+        sql: product_id
+        type: number
+      - name: order_timestamp
+        sql: order_timestamp
+        type: time
+      - name: date
+        sql: CAST({order_timestamp} AS DATE)
+        type: time
+      - name: quantity
+        sql: quantity
+        type: number
+      - name: unit_price
+        sql: unit_price
+        type: number
+      - name: total_item_amount
+        sql: total_item_amount
+        type: number
+    measures:
+      - name: unique_products_sold
+        sql: product_id
+        type: count_distinct
+      - name: total_items_sold
+        sql: quantity
+        type: sum
+      - name: avg_unit_price
+        sql: unit_price
+        type: avg
+      - name: number_of_orders
+        sql: order_id
+        type: count_distinct
+      - name: units_sold
+        sql: quantity
+        type: sum
+      - name: total_revenue
+        sql: total_item_amount
+        type: sum
+      - name: average_selling_price
+        sql: unit_price
+        type: avg
+    joins:
+      - name: silver_orders
+        relationship: many_to_one
+        sql: "{CUBE.order_id} = {silver_orders.order_id}"
+      - name: silver_products
+        relationship: many_to_one
+        sql: "{CUBE.product_id} = {silver_products.product_id}"
+
+  - name: silver_suppliers
+    sql: SELECT * FROM db.silver.suppliers
+    dimensions:
+      - name: supplier_id
+        sql: supplier_id
+        type: number
+        primary_key: true
+      - name: company_name
+        sql: company_name
+        type: string
+      - name: supplier_country
+        sql: country
+        type: string
+    joins:
+      - name: silver_products
+        relationship: one_to_many
+        sql: "{CUBE.supplier_id} = {silver_products.supplier_id}"
+
+  - name: silver_products
+    sql: SELECT * FROM db.silver.products
+    dimensions:
+      - name: product_id
+        sql: product_id
+        type: number
+        primary_key: true
+      - name: supplier_id
+        sql: supplier_id
+        type: number
+      - name: category_id
+        sql: category_id
+        type: number
+      - name: product_name
+        sql: product_name
+        type: string
+      - name: stock_quantity
+        sql: stock_quantity
+        type: number
+      - name: current_stock_level
+        sql: stock_quantity
+        type: number
+      - name: inventory_status
+        sql: "CASE WHEN {stock_quantity} = 0 THEN 'Out of Stock' 
+              WHEN {stock_quantity} < 10 THEN 'Low Stock' ELSE 'In Stock' END"
+        type: string
+    measures:
+      - name: total_stock_quantity
+        sql: stock_quantity
+        type: sum
+      - name: out_of_stock_products
+        sql: product_id
+        type: count_distinct
+        filters:
+          - sql: "{stock_quantity} = 0"
+      - name: number_of_products
+        sql: product_id
+        type: count_distinct
+      - name: number_of_categories_supplied
+        sql: category_id
+        type: count_distinct
+      - name: units_sold
+        sql: "{silver_order_items.quantity}"
+        type: sum
+      - name: total_revenue
+        sql: "{silver_order_items.total_item_amount}"
+        type: sum
+      - name: average_selling_price
+        sql: "{silver_order_items.unit_price}"
+        type: avg
+      - name: number_of_orders
+        sql: "{silver_order_items.order_id}"
+        type: count_distinct
+    joins:
+      - name: silver_suppliers
+        relationship: many_to_one
+        sql: "{CUBE.supplier_id} = {silver_suppliers.supplier_id}"
+      - name: silver_order_items
+        relationship: one_to_many
+        sql: "{CUBE.product_id} = {silver_order_items.product_id}"
+      - name: silver_product_categories
+        relationship: many_to_one
+        sql: "{CUBE.category_id} = {silver_product_categories.category_id}"
+
+  - name: silver_product_categories
+    sql: SELECT * FROM db.silver.product_categories
+    dimensions:
+      - name: category_id
+        sql: category_id
+        type: number
+        primary_key: true
+      - name: category_name
+        sql: category_name
+        type: string
+
+views:
+  - name: customer_metrics
+    cubes:
+      - join_path: silver_customers
+        includes:
+          - customer_id
+          - full_name
+          - email
+      - join_path: silver_customers.bronze_raw_customer_addresses
+        includes:
+          - city
+          - state
+          - country
+      - join_path: silver_customers.silver_orders
+        includes:
+          - total_orders
+          - total_spend
+          - average_order_value
+          - first_order_date
+          - last_order_date
+          - customer_lifetime_days
+
+  - name: daily_sales_metrics
+    cubes:
+      - join_path: silver_orders
+        includes:
+          - date
+          - total_orders
+          - unique_customers
+          - total_revenue
+          - completed_orders
+          - avg_order_value
+          - order_completion_rate
+      - join_path: silver_orders.silver_order_items
+        includes:
+          - unique_products_sold
+          - total_items_sold
+          - avg_unit_price
+
+  - name: supplier_performance_metrics
+    cubes:
+      - join_path: silver_suppliers
+        includes:
+          - supplier_id
+          - company_name
+          - supplier_country
+      - join_path: silver_suppliers.silver_products
+        includes:
+          - number_of_products
+          - total_stock_quantity
+          - out_of_stock_products
+          - number_of_categories_supplied
+      - join_path: silver_suppliers.silver_products.silver_order_items
+        includes:
+          - number_of_orders
+          - units_sold
+          - total_revenue
+
+  - name: product_performance_metrics
+    cubes:
+      - join_path: silver_products
+        includes:
+          - product_id
+          - product_name
+          - current_stock_level
+          - inventory_status
+      - join_path: silver_products.silver_product_categories
+        includes:
+          - category_name
+      - join_path: silver_products.silver_order_items
+        includes:
+          - number_of_orders
+          - units_sold
+          - total_revenue
+          - average_selling_price
+```

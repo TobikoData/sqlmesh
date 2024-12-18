@@ -311,6 +311,9 @@ Best practices for Cube modeling:
 9. Use security contexts where needed
 10. Implement proper refresh strategies
 11. It is normal for sections of a Cube definition to be joins then dimensions then measures
+12. Don't output types in camelCase use snake_case instead
+13. View fields selected in includes statement don't need types or sql as these are inherited from Cubes
+14. Measures and dimensions cannot be defined in a View, only in a Cube
 """
 
 def get_all_docs() -> str:

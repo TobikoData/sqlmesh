@@ -1,0 +1,258 @@
+[
+  {
+    "model": "gold.customer_metrics",
+    "joins": [
+      {
+        "type": "left",
+        "left": "silver.customers",
+        "right": "bronze.raw_customer_addresses",
+        "condition": "c.customer_id = ca.customer_id"
+      },
+      {
+        "type": "LEFT",
+        "left": "bronze.raw_customer_addresses",
+        "right": "silver.orders",
+        "condition": "c.customer_id = o.user_id"
+      }
+    ],
+    "fields": [
+      {
+        "name": "total_orders",
+        "type": "DECIMAL",
+        "sql": "COUNT(DISTINCT o.order_id)",
+        "is_agg": true
+      },
+      {
+        "name": "total_spend",
+        "type": "DECIMAL",
+        "sql": "SUM(o.total_amount)",
+        "is_agg": true
+      },
+      {
+        "name": "average_order_value",
+        "type": "DECIMAL",
+        "sql": "AVG(o.total_amount)",
+        "is_agg": true
+      },
+      {
+        "name": "first_order_date",
+        "type": "DECIMAL",
+        "sql": "MIN(o.order_timestamp)",
+        "is_agg": false
+      },
+      {
+        "name": "last_order_date",
+        "type": "DECIMAL",
+        "sql": "MAX(o.order_timestamp)",
+        "is_agg": false
+      },
+      {
+        "name": "customer_lifetime_days",
+        "type": "DECIMAL",
+        "sql": "DATEDIFF(MAX(o.order_timestamp), MIN(o.order_timestamp), DAY)",
+        "is_agg": false
+      }
+    ]
+  },
+  {
+    "model": "gold.product_performance_metrics",
+    "joins": [
+      {
+        "type": "LEFT",
+        "left": "silver.products",
+        "right": "silver.order_items",
+        "condition": "p.product_id = oi.product_id"
+      },
+      {
+        "type": "LEFT",
+        "left": "silver.order_items",
+        "right": "silver.product_categories",
+        "condition": "p.category_id = c.category_id"
+      }
+    ],
+    "fields": [
+      {
+        "name": "number_of_orders",
+        "type": "DECIMAL",
+        "sql": "COUNT(DISTINCT oi.order_id)",
+        "is_agg": true
+      },
+      {
+        "name": "units_sold",
+        "type": "DECIMAL",
+        "sql": "SUM(oi.quantity)",
+        "is_agg": true
+      },
+      {
+        "name": "total_revenue",
+        "type": "DECIMAL",
+        "sql": "SUM(oi.total_item_amount)",
+        "is_agg": true
+      },
+      {
+        "name": "average_selling_price",
+        "type": "DECIMAL",
+        "sql": "AVG(oi.unit_price)",
+        "is_agg": true
+      },
+      {
+        "name": "current_stock_level",
+        "type": "DECIMAL",
+        "sql": "p.stock_quantity",
+        "is_agg": false
+      },
+      {
+        "name": "inventory_status",
+        "type": "DECIMAL",
+        "sql": "CASE\n  WHEN p.stock_quantity = 0\n  THEN 'Out of Stock'\n  WHEN p.stock_quantity < 10\n  THEN 'Low Stock'\n  ELSE 'In Stock'\nEND",
+        "is_agg": false
+      }
+    ]
+  },
+  {
+    "model": "gold.supplier_performance_metrics",
+    "joins": [
+      {
+        "type": "LEFT",
+        "left": "silver.suppliers",
+        "right": "silver.products",
+        "condition": "s.supplier_id = p.supplier_id"
+      },
+      {
+        "type": "LEFT",
+        "left": "silver.products",
+        "right": "silver.order_items",
+        "condition": "p.product_id = oi.product_id"
+      }
+    ],
+    "fields": [
+      {
+        "name": "number_of_products",
+        "type": "DECIMAL",
+        "sql": "COUNT(DISTINCT p.product_id)",
+        "is_agg": true
+      },
+      {
+        "name": "total_stock_quantity",
+        "type": "DECIMAL",
+        "sql": "SUM(p.stock_quantity)",
+        "is_agg": true
+      },
+      {
+        "name": "out_of_stock_products",
+        "type": "DECIMAL",
+        "sql": "COUNT(DISTINCT CASE WHEN p.stock_quantity = 0 THEN p.product_id END)",
+        "is_agg": true
+      },
+      {
+        "name": "number_of_orders",
+        "type": "DECIMAL",
+        "sql": "COUNT(DISTINCT oi.order_id)",
+        "is_agg": true
+      },
+      {
+        "name": "total_units_sold",
+        "type": "DECIMAL",
+        "sql": "SUM(oi.quantity)",
+        "is_agg": true
+      },
+      {
+        "name": "total_revenue",
+        "type": "DECIMAL",
+        "sql": "SUM(oi.total_item_amount)",
+        "is_agg": true
+      },
+      {
+        "name": "supplier_country",
+        "type": "DECIMAL",
+        "sql": "s.country",
+        "is_agg": false
+      },
+      {
+        "name": "number_of_categories_supplied",
+        "type": "DECIMAL",
+        "sql": "COUNT(DISTINCT p.category_id)",
+        "is_agg": true
+      }
+    ]
+  },
+  {
+    "model": "gold.daily_sales_metrics",
+    "joins": [
+      {
+        "type": "INNER",
+        "left": "silver.orders",
+        "right": "silver.order_items",
+        "condition": "o.date = i.date"
+      }
+    ],
+    "fields": [
+      {
+        "name": "silver.orders.date",
+        "type": "DATE",
+        "sql": "CAST(order_timestamp AS DATE)",
+        "is_agg": false
+      },
+      {
+        "name": "silver.orders.total_orders",
+        "type": "BIGINT",
+        "sql": "COUNT(DISTINCT order_id)",
+        "is_agg": true
+      },
+      {
+        "name": "silver.orders.unique_customers",
+        "type": "BIGINT",
+        "sql": "COUNT(DISTINCT user_id)",
+        "is_agg": true
+      },
+      {
+        "name": "silver.orders.total_revenue",
+        "type": "DECIMAL",
+        "sql": "SUM(total_amount)",
+        "is_agg": true
+      },
+      {
+        "name": "silver.orders.completed_orders",
+        "type": "DECIMAL",
+        "sql": "SUM(CASE WHEN is_completed THEN 1 ELSE 0 END)",
+        "is_agg": true
+      },
+      {
+        "name": "silver.order_items.date",
+        "type": "DATE",
+        "sql": "CAST(order_timestamp AS DATE)",
+        "is_agg": false
+      },
+      {
+        "name": "silver.order_items.unique_products_sold",
+        "type": "BIGINT",
+        "sql": "COUNT(DISTINCT product_id)",
+        "is_agg": true
+      },
+      {
+        "name": "silver.order_items.total_items_sold",
+        "type": "DECIMAL",
+        "sql": "SUM(quantity)",
+        "is_agg": true
+      },
+      {
+        "name": "silver.order_items.avg_unit_price",
+        "type": "DOUBLE",
+        "sql": "AVG(unit_price)",
+        "is_agg": true
+      },
+      {
+        "name": "avg_order_value",
+        "type": "DOUBLE",
+        "sql": "o.total_revenue / NULLIF(NULLIF(o.total_orders, 0), 0)",
+        "is_agg": false
+      },
+      {
+        "name": "order_completion_rate",
+        "type": "DOUBLE",
+        "sql": "CAST(o.completed_orders AS FLOAT) / NULLIF(NULLIF(o.total_orders, 0), 0)",
+        "is_agg": false
+      }
+    ]
+  }
+]
