@@ -1020,7 +1020,7 @@ class SnapshotEvaluator:
                         start=start,
                         end=end,
                         execution_time=execution_time,
-                        snapshots=snapshots,
+                        snapshots=snapshot_deps,
                         deployability_index=deployability_index,
                         engine_adapter=adapter,
                         table_mapping=table_mapping,
