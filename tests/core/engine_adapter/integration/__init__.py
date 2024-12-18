@@ -158,7 +158,7 @@ class TestContext:
 
         if self.dialect == "athena":
             return "hive" not in self.mark
-        
+
         if self.dialect == "risingwave":
             return False
 
@@ -564,7 +564,7 @@ class TestContext:
 
         if self.engine_adapter.DIALECT == "risingwave":
             return
-        
+
         for schema_name in set(self._schemas):
             self.engine_adapter.drop_schema(
                 schema_name=schema_name, ignore_if_not_exists=True, cascade=True

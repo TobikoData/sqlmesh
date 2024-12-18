@@ -1262,11 +1262,9 @@ def test_get_data_objects(ctx: TestContext):
 def test_truncate_table(ctx: TestContext):
     if ctx.test_type != "query":
         pytest.skip("Truncate table test does not change based on input data type")
-        
+
     if ctx.dialect == "risingwave":
-        pytest.skip(
-            "Risingwave doesn't support truncate table so we skip this test for now"
-        )
+        pytest.skip("Risingwave doesn't support truncate table so we skip this test for now")
 
     table = ctx.table("test_table")
 
