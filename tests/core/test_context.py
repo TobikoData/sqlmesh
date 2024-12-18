@@ -322,8 +322,12 @@ def test_gateway_specific_adapters(copy_to_temp_path, mocker):
     ctx = Context(paths=path, config="isolated_systems_config", gateway="prod")
     assert len(ctx._engine_adapters) == 1
     assert ctx.engine_adapter == ctx._engine_adapters["prod"]
+
     with pytest.raises(SQLMeshError):
-        assert ctx._get_engine_adapter("dev")
+        assert ctx._get_engine_adapter("non_existing")
+
+    # This will create the requested engine adapter
+    assert ctx._get_engine_adapter("dev") == ctx._engine_adapters["dev"]
 
     ctx = Context(paths=path, config="isolated_systems_config")
     assert len(ctx._engine_adapters) == 1
