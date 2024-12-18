@@ -571,7 +571,7 @@ def test_model_normalization_multiple_serde(
     expressions = parse(
         f"""
         MODEL (
-            name {table},
+            name {exp.maybe_parse(table, into=exp.Table).sql(dialect=normalization_dialect)},
             kind INCREMENTAL_BY_TIME_RANGE(
                 time_column ds
             ),
@@ -639,3 +639,20 @@ def test_conditional_statement():
 
     q = parse_one("@IF(cond, VACUUM ANALYZE);", read="postgres")
     assert q.sql(dialect="postgres") == "@IF(cond, VACUUM ANALYZE)"
+
+
+def test_model_name_cannot_be_string():
+    with pytest.raises(ParseError) as parse_error:
+        parse(
+            """
+            MODEL(
+              name 'schema.table',
+              kind FULL
+            );
+
+            SELECT
+              1 AS c
+            """
+        )
+
+    assert "\\'name\\' property cannot be a string value" in str(parse_error)
