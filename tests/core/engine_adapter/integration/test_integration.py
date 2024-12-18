@@ -315,10 +315,6 @@ def test_drop_schema_catalog(ctx: TestContext, caplog):
         pytest.skip(
             "Currently local spark is configured to have iceberg be the testing catalog and drop cascade doesn't work on iceberg. Skipping until we have time to fix."
         )
-    if ctx.dialect == "risingwave":
-        pytest.skip(
-            "Risingwave doesn't support dropping schemas cascade so we skip this test for now"
-        )
     if ctx.test_type != "query":
         pytest.skip("Drop Schema Catalog tests only need to run once so we skip anything not query")
 
@@ -510,10 +506,6 @@ def test_materialized_view(ctx: TestContext):
 def test_drop_schema(ctx: TestContext):
     if ctx.test_type != "query":
         pytest.skip("Drop Schema tests only need to run once so we skip anything not query")
-    if ctx.dialect == "risingwave":
-        pytest.skip(
-            "Risingwave doesn't support dropping schemas cascade so we skip this test for now"
-        )
     ctx.columns_to_types = {"one": "int"}
     schema = ctx.schema(TEST_SCHEMA)
     ctx.engine_adapter.drop_schema(schema, cascade=True)
@@ -1262,9 +1254,6 @@ def test_get_data_objects(ctx: TestContext):
 def test_truncate_table(ctx: TestContext):
     if ctx.test_type != "query":
         pytest.skip("Truncate table test does not change based on input data type")
-
-    if ctx.dialect == "risingwave":
-        pytest.skip("Risingwave doesn't support truncate table so we skip this test for now")
 
     table = ctx.table("test_table")
 

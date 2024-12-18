@@ -4,19 +4,21 @@ import logging
 import typing as t
 
 
-from sqlglot import Dialect
+from sqlglot import Dialect, exp
 
 from sqlmesh.core.engine_adapter.postgres import PostgresEngineAdapter
 from sqlmesh.core.engine_adapter.shared import (
     set_catalog,
     CatalogSupport,
     CommentCreationView,
+    DataObjectType,
     CommentCreationTable,
 )
 
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import SessionProperties
+    from sqlmesh.core._typing import SchemaName
 
 logger = logging.getLogger(__name__)
 
@@ -70,3 +72,29 @@ class RisingwaveEngineAdapter(PostgresEngineAdapter):
     def _begin_session(self, properties: SessionProperties) -> t.Any:
         """Begin a new session."""
         self._set_flush()
+
+    def drop_schema(
+        self,
+        schema_name: SchemaName,
+        ignore_if_not_exists: bool = True,
+        cascade: bool = False,
+        **drop_args: t.Dict[str, exp.Expression],
+    ) -> None:
+        """
+        Risingwave doesn't support CASCADE clause and drops schemas unconditionally so far.
+        If cascade is supported later, this logic could be discarded.
+        """
+        if cascade:
+            objects = self._get_data_objects(schema_name)
+            for obj in objects:
+                if obj.type == DataObjectType.VIEW:
+                    self.drop_view(
+                        ".".join([obj.schema_name, obj.name]),
+                        ignore_if_not_exists=ignore_if_not_exists,
+                    )
+                else:
+                    self.drop_table(
+                        ".".join([obj.schema_name, obj.name]),
+                        exists=ignore_if_not_exists,
+                    )
+        super().drop_schema(schema_name, ignore_if_not_exists=ignore_if_not_exists, cascade=False)

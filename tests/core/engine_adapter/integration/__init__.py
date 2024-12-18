@@ -562,9 +562,6 @@ class TestContext:
                 self._schemas.append(model.schema_name)
                 self._schemas.append(model.physical_schema)
 
-        if self.engine_adapter.DIALECT == "risingwave":
-            return
-
         for schema_name in set(self._schemas):
             self.engine_adapter.drop_schema(
                 schema_name=schema_name, ignore_if_not_exists=True, cascade=True
