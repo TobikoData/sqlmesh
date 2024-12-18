@@ -6336,7 +6336,7 @@ def test_model_optimize(tmp_path: Path, assert_exp_eq):
     # Ensure non-SQLModels raise if optimize_query is not None
     with pytest.raises(
         ConfigError,
-        match=r"SQLMesh query optimizer can only be enabled/disabled for SQLModels",
+        match=r"SQLMesh query optimizer can only be enabled/disabled for SQL models",
     ):
         seed_path = tmp_path / "seed.csv"
         model_kind = SeedKind(path=str(seed_path.absolute()))
