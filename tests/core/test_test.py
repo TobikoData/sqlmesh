@@ -1236,12 +1236,12 @@ test_foo:
 
     @model("py_model", columns={"ts1": "timestamptz", "ts2": "timestamptz"})
     def execute(context, start, end, execution_time, **kwargs):
-        datetime_now = datetime.datetime.now()
+        datetime_now_utc = datetime.datetime.now(tz=datetime.timezone.utc)
 
         context.engine_adapter.execute(exp.select("CURRENT_TIMESTAMP"))
         current_timestamp = context.engine_adapter.cursor.fetchone()[0]
 
-        return pd.DataFrame([{"ts1": datetime_now, "ts2": current_timestamp}])
+        return pd.DataFrame([{"ts1": datetime_now_utc, "ts2": current_timestamp}])
 
     _check_successful_or_raise(
         _create_test(
