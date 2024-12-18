@@ -1932,6 +1932,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             ignore_cron=ignore_cron,
             circuit_breaker=circuit_breaker,
             selected_snapshots=select_models,
+            auto_restatement_enabled=environment.lower() == c.PROD,
         )
 
     def _apply(self, plan: Plan, circuit_breaker: t.Optional[t.Callable[[], bool]]) -> None:

@@ -6436,3 +6436,73 @@ def test_column_description_metadata_change():
     snapshot = snapshots[0]
     assert len(snapshot.previous_versions) == 1
     assert snapshot.change_category == SnapshotChangeCategory.METADATA
+
+
+def test_auto_restatement():
+    parsed_definition = d.parse(
+        """
+        MODEL (
+          name test_schema.test_model,
+          kind INCREMENTAL_BY_TIME_RANGE(
+            time_column a,
+            auto_restatement_cron '@daily',
+          )
+        );
+        SELECT 1 AS c
+        """
+    )
+    model = load_sql_based_model(parsed_definition)
+    assert model.auto_restatement_cron == "@daily"
+    assert (
+        model.kind.to_expression().sql(pretty=True)
+        == """INCREMENTAL_BY_TIME_RANGE (
+  time_column ("a", '%Y-%m-%d'),
+  forward_only FALSE,
+  disable_restatement FALSE,
+  on_destructive_change 'ERROR',
+  auto_restatement_cron '@daily'
+)"""
+    )
+
+    parsed_definition = d.parse(
+        """
+        MODEL (
+          name test_schema.test_model,
+          kind INCREMENTAL_BY_TIME_RANGE(
+            time_column a,
+            auto_restatement_cron '@daily',
+            auto_restatement_intervals 1,
+          )
+        );
+        SELECT 1 AS c
+        """
+    )
+    model = load_sql_based_model(parsed_definition)
+    assert model.auto_restatement_cron == "@daily"
+    assert model.auto_restatement_intervals == 1
+    assert (
+        model.kind.to_expression().sql(pretty=True)
+        == """INCREMENTAL_BY_TIME_RANGE (
+  time_column ("a", '%Y-%m-%d'),
+  auto_restatement_intervals 1,
+  forward_only FALSE,
+  disable_restatement FALSE,
+  on_destructive_change 'ERROR',
+  auto_restatement_cron '@daily'
+)"""
+    )
+
+    parsed_definition = d.parse(
+        """
+        MODEL (
+          name test_schema.test_model,
+          kind INCREMENTAL_BY_TIME_RANGE(
+            time_column a,
+            auto_restatement_cron '@invalid'
+          )
+        );
+        SELECT 1 AS c
+        """
+    )
+    with pytest.raises(ValueError, match="Invalid cron expression '@invalid'.*"):
+        load_sql_based_model(parsed_definition)

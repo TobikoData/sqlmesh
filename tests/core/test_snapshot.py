@@ -39,6 +39,7 @@ from sqlmesh.core.snapshot import (
     SnapshotId,
     SnapshotChangeCategory,
     SnapshotFingerprint,
+    SnapshotIntervals,
     SnapshotTableInfo,
     earliest_start_date,
     fingerprint_from_node,
@@ -48,6 +49,7 @@ from sqlmesh.core.snapshot import (
 from sqlmesh.core.snapshot.cache import SnapshotCache
 from sqlmesh.core.snapshot.categorizer import categorize_change
 from sqlmesh.core.snapshot.definition import (
+    apply_auto_restatements,
     display_name,
     _check_ready_intervals,
     _contiguous_intervals,
@@ -107,6 +109,7 @@ def test_json(snapshot: Snapshot):
         "fingerprint": snapshot.fingerprint.dict(),
         "intervals": [],
         "dev_intervals": [],
+        "pending_restatement_intervals": [],
         "node": {
             "audits": [],
             "audit_definitions": {},
@@ -708,7 +711,7 @@ def test_fingerprint(model: Model, parent_model: Model):
 
     original_fingerprint = SnapshotFingerprint(
         data_hash="1312415267",
-        metadata_hash="2793463216",
+        metadata_hash="2573378960",
     )
 
     assert fingerprint == original_fingerprint
@@ -806,7 +809,7 @@ def test_fingerprint_jinja_macros(model: Model):
     )
     original_fingerprint = SnapshotFingerprint(
         data_hash="923305614",
-        metadata_hash="2793463216",
+        metadata_hash="2573378960",
     )
 
     fingerprint = fingerprint_from_node(model, nodes={})
@@ -1715,6 +1718,35 @@ def test_deployability_index_uncategorized_forward_only_model(make_snapshot):
     assert not deployability_index.is_representative(snapshot_b)
 
 
+def test_deployability_index_auto_restatement_model(make_snapshot):
+    model_a = SqlModel(
+        name="a",
+        query=parse_one("SELECT 1, ds"),
+        kind=IncrementalByTimeRangeKind(
+            time_column="ds", forward_only=False, auto_restatement_cron="@weekly"
+        ),
+    )
+
+    snapshot_a_old = make_snapshot(model_a)
+    snapshot_a_old.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    snapshot_a = make_snapshot(model_a)
+    snapshot_a.previous_versions = snapshot_a_old.all_versions
+
+    snapshot_b = make_snapshot(SqlModel(name="b", query=parse_one("SELECT 1")))
+    snapshot_b.parents = (snapshot_a.snapshot_id,)
+
+    deployability_index = DeployabilityIndex.create(
+        {s.snapshot_id: s for s in [snapshot_a, snapshot_b]}
+    )
+
+    assert not deployability_index.is_deployable(snapshot_a)
+    assert not deployability_index.is_deployable(snapshot_b)
+
+    assert not deployability_index.is_representative(snapshot_a)
+    assert not deployability_index.is_representative(snapshot_b)
+
+
 def test_deployability_index_categorized_forward_only_model(make_snapshot):
     model_a = SqlModel(
         name="a",
@@ -2235,3 +2267,248 @@ def test_check_ready_intervals(mocker: MockerFixture):
         [[(0, 1)], [(3, 4)]],
         [(0, 1), (3, 4)],
     )
+
+
+@pytest.mark.parametrize(
+    "auto_restatement_intervals,expected_auto_restatement_start",
+    [
+        (None, "2020-01-01"),
+        (2, "2020-01-04"),
+    ],
+)
+def test_get_next_auto_restatement_interval(
+    make_snapshot,
+    auto_restatement_intervals: t.Optional[int],
+    expected_auto_restatement_start: str,
+):
+    snapshot = make_snapshot(
+        SqlModel(
+            name="test_model",
+            kind=IncrementalByTimeRangeKind(
+                time_column=TimeColumn(column="ds"),
+                auto_restatement_cron="0 10 * * *",
+                auto_restatement_intervals=auto_restatement_intervals,
+            ),
+            cron="@daily",
+            query=parse_one("SELECT 1, ds FROM name"),
+        )
+    )
+    snapshot.add_interval("2020-01-01", "2020-01-05")
+    snapshot.next_auto_restatement_ts = to_timestamp("2020-01-06 10:00:00")
+
+    assert snapshot.get_next_auto_restatement_interval(to_timestamp("2020-01-06 09:59:00")) is None
+
+    assert snapshot.get_next_auto_restatement_interval(to_timestamp("2020-01-06 10:01:00")) == (
+        to_timestamp(expected_auto_restatement_start),
+        to_timestamp("2020-01-06"),
+    )
+
+
+def test_apply_auto_restatements(make_snapshot):
+    # Hourly upstream model with auto restatement intervals set to 24
+    model_a = SqlModel(
+        name="test_model_a",
+        kind=IncrementalByTimeRangeKind(
+            time_column=TimeColumn(column="ds"),
+            auto_restatement_cron="0 10 * * *",
+            auto_restatement_intervals=24,
+        ),
+        cron="@hourly",
+        query=parse_one("SELECT 1, ds FROM name"),
+    )
+    snapshot_a = make_snapshot(model_a, version="1")
+    snapshot_a.add_interval("2020-01-01", "2020-01-06 09:00:00")
+    snapshot_a.next_auto_restatement_ts = to_timestamp("2020-01-06 10:00:00")
+
+    # Daily downstream model with no auto restatement
+    model_b = SqlModel(
+        name="test_model_b",
+        kind=IncrementalByTimeRangeKind(
+            time_column=TimeColumn(column="ds"),
+        ),
+        cron="@daily",
+        query=parse_one("SELECT ds FROM test_model_a"),
+    )
+    snapshot_b = make_snapshot(model_b, nodes={model_a.fqn: model_a}, version="2")
+    snapshot_b.add_interval("2020-01-01", "2020-01-05")
+    assert snapshot_a.snapshot_id in snapshot_b.parents
+
+    # Daily downstream model with auto restatement intervals of 2
+    model_c = SqlModel(
+        name="test_model_c",
+        kind=IncrementalByTimeRangeKind(
+            time_column=TimeColumn(column="ds"),
+            auto_restatement_cron="0 10 * * *",
+            auto_restatement_intervals=2,
+        ),
+        cron="@daily",
+        query=parse_one("SELECT ds FROM test_model_a"),
+    )
+    snapshot_c = make_snapshot(model_c, nodes={model_a.fqn: model_a}, version="3")
+    snapshot_c.add_interval("2020-01-01", "2020-01-05")
+    snapshot_c.next_auto_restatement_ts = to_timestamp("2020-01-06 10:00:00")
+    assert snapshot_a.snapshot_id in snapshot_c.parents
+
+    # Hourly downstream model with auto restatement intervals of 5
+    model_d = SqlModel(
+        name="test_model_d",
+        kind=IncrementalByTimeRangeKind(
+            time_column=TimeColumn(column="ds"),
+            auto_restatement_cron="0 10 * * *",
+            auto_restatement_intervals=5,
+        ),
+        cron="@hourly",
+        query=parse_one("SELECT ds FROM test_model_a"),
+    )
+    snapshot_d = make_snapshot(model_d, nodes={model_a.fqn: model_a}, version="4")
+    snapshot_d.add_interval("2020-01-01", "2020-01-06 09:00:00")
+    snapshot_d.next_auto_restatement_ts = to_timestamp("2020-01-06 10:00:00")
+    assert snapshot_a.snapshot_id in snapshot_d.parents
+
+    # Hourly upstream model with auto restatement intervals set to 5
+    model_e = SqlModel(
+        name="test_model_e",
+        kind=IncrementalByTimeRangeKind(
+            time_column=TimeColumn(column="ds"),
+            auto_restatement_cron="0 10 * * *",
+            auto_restatement_intervals=5,
+        ),
+        cron="@hourly",
+        query=parse_one("SELECT 1, ds FROM name"),
+    )
+    snapshot_e = make_snapshot(model_e, version="5")
+    snapshot_e.add_interval("2020-01-01", "2020-01-06 09:00:00")
+    snapshot_e.next_auto_restatement_ts = to_timestamp("2020-01-06 10:00:00")
+
+    # Daily model downstream from model_e without auto restatement that should not be impacted by auto restatement
+    # upstream.
+    model_f = SqlModel(
+        name="test_model_f",
+        kind=IncrementalByTimeRangeKind(
+            time_column=TimeColumn(column="ds"),
+        ),
+        cron="@daily",
+        query=parse_one("SELECT ds FROM test_model_e"),
+    )
+    snapshot_f = make_snapshot(model_f, nodes={model_e.fqn: model_e}, version="6")
+    snapshot_f.add_interval("2020-01-01", "2020-01-05")
+    assert snapshot_e.snapshot_id in snapshot_f.parents
+
+    assert snapshot_a.intervals == [
+        (to_timestamp("2020-01-01"), to_timestamp("2020-01-06 09:00:00")),
+    ]
+    assert snapshot_b.intervals == [
+        (to_timestamp("2020-01-01"), to_timestamp("2020-01-06")),
+    ]
+    assert snapshot_c.intervals == [
+        (to_timestamp("2020-01-01"), to_timestamp("2020-01-06")),
+    ]
+    assert snapshot_d.intervals == [
+        (to_timestamp("2020-01-01"), to_timestamp("2020-01-06 09:00:00")),
+    ]
+    assert snapshot_e.intervals == [
+        (to_timestamp("2020-01-01"), to_timestamp("2020-01-06 09:00:00")),
+    ]
+    assert snapshot_f.intervals == [
+        (to_timestamp("2020-01-01"), to_timestamp("2020-01-06")),
+    ]
+
+    restated_intervals = apply_auto_restatements(
+        {
+            snapshot_a.snapshot_id: snapshot_a,
+            snapshot_b.snapshot_id: snapshot_b,
+            snapshot_c.snapshot_id: snapshot_c,
+            snapshot_d.snapshot_id: snapshot_d,
+            snapshot_e.snapshot_id: snapshot_e,
+            snapshot_f.snapshot_id: snapshot_f,
+        },
+        "2020-01-06 10:01:00",
+    )
+    assert sorted(restated_intervals, key=lambda x: x.name) == [
+        SnapshotIntervals(
+            name=snapshot_a.name,
+            identifier=snapshot_a.identifier,
+            version=snapshot_a.version,
+            intervals=[],
+            dev_intervals=[],
+            pending_restatement_intervals=[
+                (to_timestamp("2020-01-05 10:00:00"), to_timestamp("2020-01-06 10:00:00"))
+            ],
+        ),
+        SnapshotIntervals(
+            name=snapshot_b.name,
+            identifier=snapshot_b.identifier,
+            version=snapshot_b.version,
+            intervals=[],
+            dev_intervals=[],
+            pending_restatement_intervals=[
+                (to_timestamp("2020-01-05"), to_timestamp("2020-01-07"))
+            ],
+        ),
+        SnapshotIntervals(
+            name=snapshot_c.name,
+            identifier=snapshot_c.identifier,
+            version=snapshot_c.version,
+            intervals=[],
+            dev_intervals=[],
+            pending_restatement_intervals=[
+                (to_timestamp("2020-01-04"), to_timestamp("2020-01-07"))
+            ],
+        ),
+        SnapshotIntervals(
+            name=snapshot_d.name,
+            identifier=snapshot_d.identifier,
+            version=snapshot_d.version,
+            intervals=[],
+            dev_intervals=[],
+            pending_restatement_intervals=[
+                (to_timestamp("2020-01-05 10:00:00"), to_timestamp("2020-01-06 10:00:00"))
+            ],
+        ),
+        SnapshotIntervals(
+            name=snapshot_e.name,
+            identifier=snapshot_e.identifier,
+            version=snapshot_e.version,
+            intervals=[],
+            dev_intervals=[],
+            pending_restatement_intervals=[
+                (to_timestamp("2020-01-06 05:00:00"), to_timestamp("2020-01-06 10:00:00"))
+            ],
+        ),
+        SnapshotIntervals(
+            name=snapshot_f.name,
+            identifier=snapshot_f.identifier,
+            version=snapshot_f.version,
+            intervals=[],
+            dev_intervals=[],
+            pending_restatement_intervals=[
+                (to_timestamp("2020-01-06"), to_timestamp("2020-01-07"))
+            ],
+        ),
+    ]
+
+    assert snapshot_a.next_auto_restatement_ts == to_timestamp("2020-01-07 10:00:00")
+    assert snapshot_b.next_auto_restatement_ts is None
+    assert snapshot_c.next_auto_restatement_ts == to_timestamp("2020-01-07 10:00:00")
+    assert snapshot_d.next_auto_restatement_ts == to_timestamp("2020-01-07 10:00:00")
+    assert snapshot_e.next_auto_restatement_ts == to_timestamp("2020-01-07 10:00:00")
+    assert snapshot_f.next_auto_restatement_ts is None
+
+    assert snapshot_a.intervals == [
+        (to_timestamp("2020-01-01"), to_timestamp("2020-01-05 10:00:00")),
+    ]
+    assert snapshot_b.intervals == [
+        (to_timestamp("2020-01-01"), to_timestamp("2020-01-05")),
+    ]
+    assert snapshot_c.intervals == [
+        (to_timestamp("2020-01-01"), to_timestamp("2020-01-04")),
+    ]
+    assert snapshot_d.intervals == [
+        (to_timestamp("2020-01-01"), to_timestamp("2020-01-05 10:00:00")),
+    ]
+    assert snapshot_e.intervals == [
+        (to_timestamp("2020-01-01"), to_timestamp("2020-01-06 05:00:00")),
+    ]
+    assert snapshot_f.intervals == [
+        (to_timestamp("2020-01-01"), to_timestamp("2020-01-06")),
+    ]

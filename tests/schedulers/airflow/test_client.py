@@ -98,6 +98,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
                     "fingerprint": snapshot.fingerprint.dict(),
                     "intervals": [],
                     "dev_intervals": [],
+                    "pending_restatement_intervals": [],
                     "node": {
                         "audits": [],
                         "audit_definitions": {},

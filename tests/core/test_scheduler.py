@@ -164,7 +164,6 @@ def test_incremental_by_unique_key_kind_dag(
             ((to_timestamp("2023-01-01"), to_timestamp("2023-01-07")), 0),
         ): set(),
     }
-    mock_state_sync.refresh_snapshot_intervals.assert_called_once()
 
 
 def test_incremental_time_self_reference_dag(

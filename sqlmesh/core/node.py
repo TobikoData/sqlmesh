@@ -14,6 +14,7 @@ from sqlmesh.utils.date import TimeLike, to_datetime, validate_date_range
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import (
     PydanticModel,
+    SQLGlotCron,
     field_validator,
     model_validator,
     model_validator_v1_args,
@@ -194,7 +195,7 @@ class _Node(PydanticModel):
     owner: t.Optional[str] = None
     start: t.Optional[TimeLike] = None
     end: t.Optional[TimeLike] = None
-    cron: str = "@daily"
+    cron: SQLGlotCron = "@daily"
     interval_unit_: t.Optional[IntervalUnit] = Field(alias="interval_unit", default=None)
     tags: t.List[str] = []
     stamp: t.Optional[str] = None
@@ -239,19 +240,6 @@ class _Node(PydanticModel):
         if v and not to_datetime(v):
             raise ConfigError(f"'{v}' needs to be time-like: https://pypi.org/project/dateparser")
         return v
-
-    @field_validator("cron", mode="before")
-    @classmethod
-    def _cron_validator(cls, v: t.Any) -> t.Optional[str]:
-        cron = str_or_exp_to_str(v)
-        if cron:
-            from croniter import CroniterBadCronError, croniter
-
-            try:
-                croniter(cron)
-            except CroniterBadCronError:
-                raise ConfigError(f"Invalid cron expression '{cron}'")
-        return cron
 
     @field_validator("owner", "description", "stamp", mode="before")
     @classmethod

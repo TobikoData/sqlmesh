@@ -208,8 +208,13 @@ def test_model_kind():
         unique_key=["bar"],
         disable_restatement=True,
         full_refresh=False,
+        auto_restatement_cron="0 0 * * *",
     ).model_kind(context) == IncrementalByUniqueKeyKind(
-        unique_key=["bar"], dialect="duckdb", forward_only=True, disable_restatement=True
+        unique_key=["bar"],
+        dialect="duckdb",
+        forward_only=True,
+        disable_restatement=True,
+        auto_restatement_cron="0 0 * * *",
     )
 
     assert ModelConfig(
@@ -234,6 +239,22 @@ def test_model_kind():
         partition_by={"field": "bar"},
         forward_only=False,
     ).model_kind(context) == IncrementalByTimeRangeKind(time_column="foo", dialect="duckdb")
+
+    assert ModelConfig(
+        materialized=Materialization.INCREMENTAL,
+        time_column="foo",
+        incremental_strategy="insert_overwrite",
+        partition_by={"field": "bar"},
+        forward_only=False,
+        auto_restatement_cron="0 0 * * *",
+        auto_restatement_intervals=3,
+    ).model_kind(context) == IncrementalByTimeRangeKind(
+        time_column="foo",
+        dialect="duckdb",
+        forward_only=False,
+        auto_restatement_cron="0 0 * * *",
+        auto_restatement_intervals=3,
+    )
 
     assert ModelConfig(
         materialized=Materialization.INCREMENTAL,
@@ -289,6 +310,14 @@ def test_model_kind():
         disable_restatement=True,
     ).model_kind(context) == IncrementalUnmanagedKind(
         insert_overwrite=True, disable_restatement=True
+    )
+
+    assert ModelConfig(
+        materialized=Materialization.INCREMENTAL,
+        incremental_strategy="insert_overwrite",
+        auto_restatement_cron="0 0 * * *",
+    ).model_kind(context) == IncrementalUnmanagedKind(
+        insert_overwrite=True, auto_restatement_cron="0 0 * * *", disable_restatement=False
     )
 
     assert (
