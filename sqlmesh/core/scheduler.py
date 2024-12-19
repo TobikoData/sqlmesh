@@ -2,7 +2,6 @@ from __future__ import annotations
 from enum import Enum
 import logging
 import typing as t
-from datetime import datetime
 from sqlglot import exp
 
 from sqlmesh.core import constants as c
@@ -24,10 +23,9 @@ from sqlmesh.core.snapshot import (
     merge_intervals,
     Intervals,
 )
-from sqlmesh.core.snapshot.definition import Interval, expand_range
 from sqlmesh.core.snapshot.definition import (
-    SnapshotId,
-    merge_intervals,
+    Interval,
+    expand_range,
     get_next_model_interval_start,
 )
 from sqlmesh.core.state_sync import StateSync
@@ -36,6 +34,7 @@ from sqlmesh.utils.concurrency import concurrent_apply_to_dag, NodeExecutionFail
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import (
     TimeLike,
+    format_tz_datetime,
     now,
     now_timestamp,
     to_timestamp,
@@ -316,12 +315,8 @@ class Scheduler:
         if not merged_intervals:
             next_ready_interval_start = get_next_model_interval_start(self.snapshots.values())
 
-            time_format_str = "%Y-%m-%d %-I:%M%p %Z"  # Example: 2024-01-01 6:00AM UTC
-            utc_time = next_ready_interval_start.strftime(time_format_str)
-            local_timezone = datetime.now().astimezone().tzinfo
-            local_time = next_ready_interval_start.astimezone(local_timezone).strftime(
-                time_format_str
-            )
+            utc_time = format_tz_datetime(next_ready_interval_start)
+            local_time = format_tz_datetime(next_ready_interval_start, use_local_timezone=True)
 
             self.console.log_status_update(
                 f"No models are ready to run. Please wait until a model `cron` interval has elapsed.\n\nNext run will be ready at {local_time} ({utc_time})."
