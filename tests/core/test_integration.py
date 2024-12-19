@@ -1991,7 +1991,7 @@ def test_prod_restatement_plan_clears_correct_intervals_in_derived_dev_tables(tm
             cron '@daily'
         );
 
-        select account_id, ts from test.{upstream} where ts between @start_dt and @end_dt;
+        select account_id, ts from test.{upstream} where ts between @start_ts and @end_ts;
         """
 
     model_b = _derived_incremental_model_def("b", upstream="a")
@@ -2145,7 +2145,7 @@ def test_prod_restatement_plan_clears_unaligned_intervals_in_derived_dev_tables(
             cron '@daily'
         );
 
-        select account_id, ts from test.a where ts between @start_dt and @end_dt;
+        select account_id, ts from test.a where ts between @start_ts and @end_ts;
         """
 
     models_dir = tmp_path / "models"
@@ -2287,7 +2287,7 @@ def test_prod_restatement_plan_causes_dev_intervals_to_be_processed_in_next_dev_
             cron '@daily'
         );
 
-        select account_id, ts from test.a where ts between @start_dt and @end_dt;
+        select account_id, ts from test.a where ts between @start_ts and @end_ts;
         """
 
     models_dir = tmp_path / "models"
