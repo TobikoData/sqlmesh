@@ -2562,35 +2562,33 @@ def test_compact_intervals_pending_restatement_shared_version(
         ]
 
         state_sync.compact_intervals()
-        assert (
-            sorted(
-                state_sync._get_snapshot_intervals([snapshot_a, snapshot_b])[1],
-                key=lambda x: (x.name, x.identifier),
-            )
-            == expected_intervals
-        )
         snapshots = state_sync.get_snapshots([snapshot_a, snapshot_b])
+        assert snapshots[snapshot_a.snapshot_id].intervals == [
+            (to_timestamp("2020-01-01"), to_timestamp("2020-01-06")),
+        ]
         assert snapshots[snapshot_a.snapshot_id].pending_restatement_intervals == [
             (to_timestamp("2020-01-04"), to_timestamp("2020-01-06")),
         ]
         assert snapshots[snapshot_b.snapshot_id].pending_restatement_intervals == [
             (to_timestamp("2020-01-04"), to_timestamp("2020-01-06")),
+        ]
+        assert snapshots[snapshot_b.snapshot_id].intervals == [
+            (to_timestamp("2020-01-01"), to_timestamp("2020-01-06")),
         ]
 
         state_sync.compact_intervals()
-        assert (
-            sorted(
-                state_sync._get_snapshot_intervals([snapshot_a, snapshot_b])[1],
-                key=lambda x: (x.name, x.identifier),
-            )
-            == expected_intervals
-        )
         snapshots = state_sync.get_snapshots([snapshot_a, snapshot_b])
+        assert snapshots[snapshot_a.snapshot_id].intervals == [
+            (to_timestamp("2020-01-01"), to_timestamp("2020-01-06")),
+        ]
         assert snapshots[snapshot_a.snapshot_id].pending_restatement_intervals == [
             (to_timestamp("2020-01-04"), to_timestamp("2020-01-06")),
         ]
         assert snapshots[snapshot_b.snapshot_id].pending_restatement_intervals == [
             (to_timestamp("2020-01-04"), to_timestamp("2020-01-06")),
+        ]
+        assert snapshots[snapshot_b.snapshot_id].intervals == [
+            (to_timestamp("2020-01-01"), to_timestamp("2020-01-06")),
         ]
 
     expected_intervals = [
@@ -2638,19 +2636,18 @@ def test_compact_intervals_pending_restatement_shared_version(
         ]
 
         state_sync.compact_intervals()
-        assert (
-            sorted(
-                state_sync._get_snapshot_intervals([snapshot_a, snapshot_b])[1],
-                key=lambda x: (x.name, x.identifier),
-            )
-            == expected_intervals
-        )
         snapshots = state_sync.get_snapshots([snapshot_a, snapshot_b])
+        assert snapshots[snapshot_a.snapshot_id].intervals == [
+            (to_timestamp("2020-01-01"), to_timestamp("2020-01-06")),
+        ]
         assert snapshots[snapshot_a.snapshot_id].pending_restatement_intervals == [
             (to_timestamp("2020-01-05"), to_timestamp("2020-01-06")),
         ]
         assert snapshots[snapshot_b.snapshot_id].pending_restatement_intervals == [
             (to_timestamp("2020-01-05"), to_timestamp("2020-01-06")),
+        ]
+        assert snapshots[snapshot_b.snapshot_id].intervals == [
+            (to_timestamp("2020-01-01"), to_timestamp("2020-01-06")),
         ]
 
     expected_intervals = [
@@ -2692,14 +2689,12 @@ def test_compact_intervals_pending_restatement_shared_version(
         assert snapshots[snapshot_b.snapshot_id].pending_restatement_intervals == []
 
         state_sync.compact_intervals()
-        assert (
-            sorted(
-                state_sync._get_snapshot_intervals([snapshot_a, snapshot_b])[1],
-                key=lambda x: (x.name, x.identifier),
-            )
-            == expected_intervals
-        )
-
         snapshots = state_sync.get_snapshots([snapshot_a, snapshot_b])
         assert snapshots[snapshot_a.snapshot_id].pending_restatement_intervals == []
+        assert snapshots[snapshot_a.snapshot_id].intervals == [
+            (to_timestamp("2020-01-01"), to_timestamp("2020-01-06")),
+        ]
         assert snapshots[snapshot_b.snapshot_id].pending_restatement_intervals == []
+        assert snapshots[snapshot_b.snapshot_id].intervals == [
+            (to_timestamp("2020-01-01"), to_timestamp("2020-01-06")),
+        ]
