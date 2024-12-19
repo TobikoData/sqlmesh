@@ -1,6 +1,9 @@
 # Plan
 
 From the Recent Activity section within your environment overview (which could be either production or development environments), you can easily access detailed status information and comprehensive metadata for any individual plan. To do this, simply locate the specific plan you're interested in and click on its distinctive blue ID hash that appears within the table. 
+![tcloud paln information](plan_info.png)
+
+This opens the detailed plan overview page: 
 
 ![tcloud plan](tcloud_plan.png)
 
