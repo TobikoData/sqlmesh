@@ -588,6 +588,11 @@ def test_ignore_files(mocker: MockerFixture, tmp_path: pathlib.Path):
     )
     create_temp_file(
         tmp_path,
+        pathlib.Path(models_dir, "ignore", "inner_ignore", "inner_ignore_model.sql"),
+        "MODEL(name ignore.inner_ignore_model); SELECT 1 AS cola",
+    )
+    create_temp_file(
+        tmp_path,
         pathlib.Path(macros_dir, "macro_ignore.py"),
         """
 from sqlmesh.core.macros import macro
@@ -619,7 +624,7 @@ def test():
 """,
     )
     config = Config(
-        ignore_patterns=["models/ignore/*.sql", "macro_ignore.py", ".ipynb_checkpoints/*"]
+        ignore_patterns=["models/ignore/**/*.sql", "macro_ignore.py", ".ipynb_checkpoints/*"]
     )
     context = Context(paths=tmp_path, config=config)
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import abc
+import glob
 import linecache
 import logging
 import os
@@ -262,12 +263,18 @@ class Loader(abc.ABC):
         ignore_patterns = ignore_patterns or []
         extension = extension or ""
 
+        # We try to match both ignore_pattern itself and every file returned by glob,
+        # so that we will always ignore file names that do not appear in the latter.
+        ignored_filepaths = set(ignore_patterns) | {
+            ignored_path
+            for ignore_pattern in ignore_patterns
+            for ignored_path in glob.glob(str(self._context.path / ignore_pattern), recursive=True)
+        }
         for filepath in path.glob(f"**/*{extension}"):
-            for ignore_pattern in ignore_patterns:
-                if filepath.match(ignore_pattern):
-                    break
-            else:
-                yield filepath
+            if any(filepath.match(ignored_filepath) for ignored_filepath in ignored_filepaths):
+                continue
+
+            yield filepath
 
     def _add_model_to_dag(self, model: Model) -> None:
         self._dag.add(model.fqn, model.depends_on)
