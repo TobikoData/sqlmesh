@@ -25,6 +25,7 @@ from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.notification_target import (
     NotificationTarget,
 )
+from sqlmesh.core.snapshot.definition import Interval
 from sqlmesh.core.plan.definition import EvaluatablePlan
 from sqlmesh.core.scheduler import Scheduler
 from sqlmesh.core.snapshot import (
@@ -43,6 +44,7 @@ from sqlmesh.schedulers.airflow import common as airflow_common
 from sqlmesh.schedulers.airflow.client import AirflowClient, BaseAirflowClient
 from sqlmesh.schedulers.airflow.mwaa_client import MWAAClient
 from sqlmesh.utils.errors import PlanError, SQLMeshError
+from sqlmesh.utils.dag import DAG
 
 logger = logging.getLogger(__name__)
 
@@ -358,10 +360,58 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         if not plan.restatements:
             return
 
+        snapshot_intervals_to_restate = {
+            (snapshots_by_name[name].table_info, intervals)
+            for name, intervals in plan.restatements.items()
+        }
+
+        if plan.is_prod:
+            # Restating intervals on prod plans should mean that the intervals are cleared across
+            # all environments, not just the version currently in prod
+            # This ensures that work done in dev environments can still be promoted to prod
+            # by forcing dev environments to re-run intervals that changed in prod
+            #
+            # Without this rule, its possible that promoting a dev table to prod will introduce old data to prod
+            snapshot_intervals_to_restate.update(
+                self._restatement_intervals_across_all_environments(plan.restatements)
+            )
+
         self.state_sync.remove_intervals(
-            [(snapshots_by_name[name], interval) for name, interval in plan.restatements.items()],
-            remove_shared_versions=not plan.is_dev,
+            snapshot_intervals=list(snapshot_intervals_to_restate),
+            remove_shared_versions=plan.is_prod,
         )
+
+    def _restatement_intervals_across_all_environments(
+        self, prod_restatements: t.Dict[str, Interval]
+    ) -> t.Set[t.Tuple[SnapshotTableInfo, Interval]]:
+        """
+        Given a map of snapshot names + intervals to restate in prod:
+         - Look up matching snapshots across all environments (match based on name - regardless of version)
+         - For each match, also match downstream snapshots
+         - Return all matches mapped to the intervals of the prod snapshot being restated
+
+        The goal here is to produce a list of intervals to invalidate across all environments so that a cadence
+        run in those environments causes the intervals to be repopulated
+        """
+        if not prod_restatements:
+            return set()
+
+        snapshots_to_restate: t.Set[t.Tuple[SnapshotTableInfo, Interval]] = set()
+
+        for env in self.state_sync.get_environments():
+            keyed_snapshots = {s.name: s.table_info for s in env.snapshots}
+
+            # We dont just restate matching snapshots, we also have to restate anything downstream of them
+            # so that if A gets restated in prod and dev has A <- B <- C, B and C get restated in dev
+            env_dag = DAG({s.name: {p.name for p in s.parents} for s in env.snapshots})
+
+            for restatement, intervals in prod_restatements.items():
+                affected_snapshot_names = [restatement] + env_dag.downstream(restatement)
+                snapshots_to_restate.update(
+                    {(keyed_snapshots[a], intervals) for a in affected_snapshot_names}
+                )
+
+        return snapshots_to_restate
 
 
 class BaseAirflowPlanEvaluator(PlanEvaluator):

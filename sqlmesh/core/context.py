@@ -1278,7 +1278,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             backfill_models = {
                 *context_diff.modified_snapshots,
                 *[s.name for s in context_diff.added],
-            }
+            } or None
 
         # If no end date is specified, use the max interval end from prod
         # to prevent unintended evaluation of the entire DAG.
