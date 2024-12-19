@@ -1126,6 +1126,79 @@ MERGE INTO "target" AS "__MERGE_TARGET__" USING (
     )
 
 
+def test_merge_incremental_predicates(make_mocked_engine_adapter: t.Callable, assert_exp_eq):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
+
+    adapter.merge(
+        target_table="target",
+        source_table=t.cast(exp.Select, parse_one('SELECT "ID", ts, val FROM source')),
+        columns_to_types={
+            "ID": exp.DataType.build("int"),
+            "ts": exp.DataType.build("timestamp"),
+            "val": exp.DataType.build("int"),
+        },
+        unique_key=[exp.to_identifier("ID", quoted=True)],
+        when_matched=exp.Whens(
+            expressions=[
+                exp.When(
+                    matched=True,
+                    source=False,
+                    then=exp.Update(
+                        expressions=[
+                            exp.column("val", "__MERGE_TARGET__").eq(
+                                exp.column("val", "__MERGE_SOURCE__")
+                            ),
+                            exp.column("ts", "__MERGE_TARGET__").eq(
+                                exp.Coalesce(
+                                    this=exp.column("ts", "__MERGE_SOURCE__"),
+                                    expressions=[exp.column("ts", "__MERGE_TARGET__")],
+                                )
+                            ),
+                        ],
+                    ),
+                )
+            ]
+        ),
+        incremental_predicates=exp.And(
+            this=exp.GT(
+                this=exp.column("ID", "__MERGE_SOURCE__"),
+                expression=exp.Literal(this="0", is_string=False),
+            ),
+            expression=exp.LT(
+                this=exp.column("ts", "__MERGE_TARGET__"),
+                expression=exp.Timestamp(this=exp.column("2020-02-05", quoted=True)),
+            ),
+        ),
+    )
+
+    assert_exp_eq(
+        adapter.cursor.execute.call_args[0][0],
+        """
+MERGE INTO "target" AS "__MERGE_TARGET__"
+USING (
+    SELECT "ID", "ts", "val" 
+    FROM "source"
+) AS "__MERGE_SOURCE__"
+ON (
+    "__MERGE_SOURCE__"."ID" > 0 
+    AND "__MERGE_TARGET__"."ts" < TIMESTAMP("2020-02-05")
+)
+AND "__MERGE_TARGET__"."ID" = "__MERGE_SOURCE__"."ID"
+WHEN MATCHED THEN 
+    UPDATE SET 
+        "__MERGE_TARGET__"."val" = "__MERGE_SOURCE__"."val",
+        "__MERGE_TARGET__"."ts" = COALESCE("__MERGE_SOURCE__"."ts", "__MERGE_TARGET__"."ts")
+WHEN NOT MATCHED THEN 
+    INSERT ("ID", "ts", "val") 
+    VALUES (
+        "__MERGE_SOURCE__"."ID", 
+        "__MERGE_SOURCE__"."ts", 
+        "__MERGE_SOURCE__"."val"
+    );
+""",
+    )
+
+
 def test_scd_type_2_by_time(make_mocked_engine_adapter: t.Callable):
     adapter = make_mocked_engine_adapter(EngineAdapter)
 
