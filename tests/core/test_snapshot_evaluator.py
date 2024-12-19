@@ -2018,6 +2018,7 @@ def test_create_incremental_by_unique_key_updated_at_exp(adapter_mock, make_snap
             "updated_at": exp.DataType.build("TIMESTAMP"),
         },
         unique_key=[exp.to_column("id", quoted=True)],
+        incremental_predicates=None,
         when_matched=exp.Whens(
             expressions=[
                 exp.When(
@@ -2082,6 +2083,7 @@ def test_create_incremental_by_unique_key_multiple_updated_at_exp(adapter_mock, 
             "updated_at": exp.DataType.build("TIMESTAMP"),
         },
         unique_key=[exp.to_column("id", quoted=True)],
+        incremental_predicates=None,
         when_matched=exp.Whens(
             expressions=[
                 exp.When(
@@ -2172,6 +2174,75 @@ def test_create_incremental_by_unique_no_intervals(adapter_mock, make_snapshot):
         table_properties={},
     )
     adapter_mock.columns.assert_called_once_with(snapshot.table_name())
+
+
+def test_create_incremental_by_unique_key_incremental_predicates(adapter_mock, make_snapshot):
+    evaluator = SnapshotEvaluator(adapter_mock)
+    model = load_sql_based_model(
+        d.parse(
+            """
+            MODEL (
+                name test_schema.test_model,
+                kind INCREMENTAL_BY_UNIQUE_KEY (
+                    unique_key [id],
+                    incremental_predicates source.id > 0 and target.updated_at < TIMESTAMP("2020-02-05"),
+                    when_matched WHEN MATCHED THEN UPDATE SET target.updated_at = COALESCE(source.updated_at, target.updated_at),
+                )
+            );
+
+            SELECT id::int, updated_at::timestamp FROM tbl;
+            """
+        )
+    )
+
+    snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    snapshot.intervals = [(to_timestamp("2020-01-01"), to_timestamp("2020-01-02"))]
+
+    evaluator.evaluate(
+        snapshot,
+        start="2020-01-01",
+        end="2020-01-02",
+        execution_time="2020-01-02",
+        snapshots={},
+    )
+
+    adapter_mock.merge.assert_called_once_with(
+        snapshot.table_name(),
+        model.render_query(),
+        columns_to_types={
+            "id": exp.DataType.build("INT"),
+            "updated_at": exp.DataType.build("TIMESTAMP"),
+        },
+        unique_key=[exp.to_column("id", quoted=True)],
+        when_matched=exp.Whens(
+            expressions=[
+                exp.When(
+                    matched=True,
+                    then=exp.Update(
+                        expressions=[
+                            exp.column("updated_at", MERGE_TARGET_ALIAS).eq(
+                                exp.Coalesce(
+                                    this=exp.column("updated_at", MERGE_SOURCE_ALIAS),
+                                    expressions=[exp.column("updated_at", MERGE_TARGET_ALIAS)],
+                                )
+                            ),
+                        ],
+                    ),
+                )
+            ]
+        ),
+        incremental_predicates=exp.And(
+            this=exp.GT(
+                this=exp.column("id", MERGE_SOURCE_ALIAS),
+                expression=exp.Literal(this="0", is_string=False),
+            ),
+            expression=exp.LT(
+                this=exp.column("updated_at", MERGE_TARGET_ALIAS),
+                expression=exp.Timestamp(this=exp.column("2020-02-05", quoted=True)),
+            ),
+        ),
+    )
 
 
 def test_create_seed(mocker: MockerFixture, adapter_mock, make_snapshot):

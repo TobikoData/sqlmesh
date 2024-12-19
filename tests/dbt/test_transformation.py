@@ -11,7 +11,7 @@ from dbt.adapters.base import BaseRelation
 from dbt.exceptions import CompilationError
 import time_machine
 from pytest_mock.plugin import MockerFixture
-from sqlglot import exp
+from sqlglot import exp, parse_one
 from sqlmesh.core import dialect as d
 from sqlmesh.core.audit import StandaloneAudit
 from sqlmesh.core.context import Context
@@ -168,6 +168,24 @@ def test_model_kind():
         materialized=Materialization.INCREMENTAL, unique_key=["bar"], incremental_strategy="merge"
     ).model_kind(context) == IncrementalByUniqueKeyKind(
         unique_key=["bar"], dialect="duckdb", forward_only=True, disable_restatement=False
+    )
+
+    dbt_incremental_predicate = "DBT_INTERNAL_DEST.session_start > dateadd(day, -7, current_date)"
+    expected_sqlmesh_predicate = parse_one(
+        "__MERGE_TARGET__.session_start > DATEADD(day, -7, CURRENT_DATE)"
+    )
+    ModelConfig(
+        materialized=Materialization.INCREMENTAL,
+        unique_key=["bar"],
+        incremental_strategy="merge",
+        dialect="postgres",
+        incremental_predicates=[dbt_incremental_predicate],
+    ).model_kind(context) == IncrementalByUniqueKeyKind(
+        unique_key=["bar"],
+        dialect="postgres",
+        forward_only=True,
+        disable_restatement=False,
+        incremental_predicates=expected_sqlmesh_predicate,
     )
 
     assert ModelConfig(materialized=Materialization.INCREMENTAL, unique_key=["bar"]).model_kind(

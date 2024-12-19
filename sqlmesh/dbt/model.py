@@ -294,6 +294,17 @@ class ModelConfig(BaseModelConfig):
                         f"{self.canonical_name(context)}: SQLMesh incremental by unique key strategy is not compatible with '{strategy}'"
                         f" incremental strategy. Supported strategies include {collection_to_str(INCREMENTAL_BY_UNIQUE_KEY_STRATEGIES)}."
                     )
+
+                if self.incremental_predicates:
+                    dialect = self.dialect(context)
+                    incremental_kind_kwargs["incremental_predicates"] = exp.and_(
+                        *[
+                            d.parse_one(predicate, dialect=dialect)
+                            for predicate in self.incremental_predicates
+                        ],
+                        dialect=dialect,
+                    ).transform(d.replace_table_references)
+
                 return IncrementalByUniqueKeyKind(
                     unique_key=self.unique_key,
                     disable_restatement=disable_restatement,

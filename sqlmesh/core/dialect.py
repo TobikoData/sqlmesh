@@ -429,6 +429,10 @@ def _parse_props(self: Parser) -> t.Optional[exp.Expression]:
             lambda: _parse_macro_or_clause(self, self._parse_when_matched),
             optional=True,
         )
+    elif name == "incremental_predicates":
+        value = self._parse_wrapped(
+            lambda: _parse_macro_or_clause(self, self._parse_conjunction), optional=True
+        )
     elif self._match(TokenType.L_PAREN):
         value = self.expression(exp.Tuple, expressions=self._parse_csv(self._parse_equality))
         self._match_r_paren()
@@ -1260,3 +1264,19 @@ def extract_func_call(
 
 def is_meta_expression(v: t.Any) -> bool:
     return isinstance(v, (Audit, Metric, Model))
+
+
+def replace_table_references(expression: exp.Expression) -> exp.Expression:
+    """
+    Resolves references from the "source" and "target" tables (or their DBT equivalents)
+    with the corresponding SQLMesh merge aliases (MERGE_SOURCE_ALIAS and MERGE_TARGET_ALIAS)
+    """
+    from sqlmesh.core.engine_adapter.base import MERGE_SOURCE_ALIAS, MERGE_TARGET_ALIAS
+
+    if isinstance(expression, exp.Column):
+        if expression.table.lower() in ("target", "dbt_internal_dest"):
+            expression.set("table", exp.to_identifier(MERGE_TARGET_ALIAS))
+        elif expression.table.lower() in ("source", "dbt_internal_source"):
+            expression.set("table", exp.to_identifier(MERGE_SOURCE_ALIAS))
+
+    return expression

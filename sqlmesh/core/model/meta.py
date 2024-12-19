@@ -437,6 +437,12 @@ class ModelMeta(_Node):
         return None
 
     @property
+    def incremental_predicates(self) -> t.Optional[exp.Expression]:
+        if isinstance(self.kind, IncrementalByUniqueKeyKind):
+            return self.kind.incremental_predicates
+        return None
+
+    @property
     def catalog(self) -> t.Optional[str]:
         """Returns the catalog of a model."""
         return self.fully_qualified_table.catalog

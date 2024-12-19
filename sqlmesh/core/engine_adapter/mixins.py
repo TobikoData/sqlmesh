@@ -31,6 +31,7 @@ class LogicalMergeMixin(EngineAdapter):
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
         unique_key: t.Sequence[exp.Expression],
         when_matched: t.Optional[exp.Whens] = None,
+        incremental_predicates: t.Optional[exp.Expression] = None,
     ) -> None:
         logical_merge(
             self,
@@ -39,6 +40,7 @@ class LogicalMergeMixin(EngineAdapter):
             columns_to_types,
             unique_key,
             when_matched=when_matched,
+            incremental_predicates=incremental_predicates,
         )
 
 
@@ -409,6 +411,7 @@ def logical_merge(
     columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
     unique_key: t.Sequence[exp.Expression],
     when_matched: t.Optional[exp.Whens] = None,
+    incremental_predicates: t.Optional[exp.Expression] = None,
 ) -> None:
     """
     Merge implementation for engine adapters that do not support merge natively.
@@ -420,10 +423,12 @@ def logical_merge(
        within the temporary table are ommitted.
     4. Drop the temporary table.
     """
-    if when_matched:
+    if when_matched or incremental_predicates:
+        prop = "when_matched" if when_matched else "incremental_predicates"
         raise SQLMeshError(
-            "This engine does not support MERGE expressions and therefore `when_matched` is not supported."
+            f"This engine does not support MERGE expressions and therefore `{prop}` is not supported."
         )
+
     engine_adapter._replace_by_key(
         target_table, source_table, columns_to_types, unique_key, is_unique_key=True
     )
