@@ -92,14 +92,11 @@ def cli(
         elif ctx.invoked_subcommand in SKIP_LOAD_COMMANDS:
             load = False
 
-    if not load:
-        ctx.obj = Context(Config())
-    else:
-        configs = load_configs(config, Context.CONFIG_TYPE, paths)
-        log_limit = list(configs.values())[0].log_limit
-        configure_logging(
-            debug, ignore_warnings, log_to_stdout, log_limit=log_limit, log_file_dir=log_file_dir
-        )
+    configs = load_configs(config, Context.CONFIG_TYPE, paths)
+    log_limit = list(configs.values())[0].log_limit
+    configure_logging(
+        debug, ignore_warnings, log_to_stdout, log_limit=log_limit, log_file_dir=log_file_dir
+    )
 
     try:
         context = Context(
