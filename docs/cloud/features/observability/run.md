@@ -14,5 +14,10 @@ This opens the detailed run overview page:
 The lower portion of the page contains the powerful Execution Explorer/Debugger interface, which organizes detailed information into three distinct and purposeful tabs:
 
 - Model Executions: Provides a detailed overview of all executed models, complete with current status indicators, comprehensive error messages when applicable, and convenient access to detailed execution logs for troubleshooting
+![tcloud run model executions](run_model_executions.png)
+
 - Audits: Offers a complete view of all audit execution statuses, clearly indicates whether specific audits are configured as blocking operations, and provides straightforward access to detailed audit logs for verification
+![tcloud run model executions](run_audits.png)
+
 - Explore Executions: Delivers an extensive and interactive view of all included models, featuring an intuitive lineage graph for understanding dependencies, alongside detailed sections covering overview information, impact analysis, model definitions, comprehensive schema intervals, and easily accessible associated logs. 
+![tcloud run model executions](run_explore_executions.png)
