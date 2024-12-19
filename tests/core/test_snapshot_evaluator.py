@@ -3375,7 +3375,7 @@ def test_multi_engine_python_model_with_macros(adapters, make_snapshot):
             return None
 
     @model(
-        "db.test_model",
+        "db.multi_engine_test_model",
         kind="full",
         gateway="secondary",
         columns={"id": "string", "name": "string"},
@@ -3392,7 +3392,7 @@ def test_multi_engine_python_model_with_macros(adapters, make_snapshot):
             ]
         )
 
-    python_model = model.get_registry()["db.test_model"].model(
+    python_model = model.get_registry()["db.multi_engine_test_model"].model(
         module_path=Path("."),
         path=Path("."),
         macros=macro.get_registry(),
@@ -3412,7 +3412,7 @@ def test_multi_engine_python_model_with_macros(adapters, make_snapshot):
     # Validate model-specific gateway usage during table creation
     create_args = engine_adapters["secondary"].create_table.call_args_list
     assert len(create_args) == 1
-    assert create_args[0][0] == (f"sqlmesh__db.db__test_model__{snapshot.version}",)
+    assert create_args[0][0] == (f"sqlmesh__db.db__multi_engine_test_model__{snapshot.version}",)
 
     evaluator.promote([snapshot], EnvironmentNamingInfo(name="test_env"))
 
@@ -3420,7 +3420,7 @@ def test_multi_engine_python_model_with_macros(adapters, make_snapshot):
     engine_adapters["secondary"].create_view.assert_not_called()
     view_args = engine_adapters["default"].create_view.call_args_list
     assert len(view_args) == 1
-    assert view_args[0][0][0] == "db__test_env.test_model"
+    assert view_args[0][0][0] == "db__test_env.multi_engine_test_model"
 
     # For the pre/post statements verify the model-specific gateway was used
     engine_adapters["default"].execute.assert_not_called()
