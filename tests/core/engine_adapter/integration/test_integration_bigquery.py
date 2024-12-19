@@ -110,7 +110,7 @@ def test_mutating_clustered_by_forward_only(
                 d.parse(
                     f"""
                 MODEL (
-                    name {model_name},
+                    name {model_name.sql(dialect="bigquery")},
                     kind INCREMENTAL_BY_TIME_RANGE (
                         time_column partitiondate
                     ),
