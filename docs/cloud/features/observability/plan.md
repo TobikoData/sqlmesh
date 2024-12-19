@@ -11,7 +11,10 @@ The top section provides an intuitive, comprehensive at-a-glance overview of the
 
 - current plan status, with clear indicators showing whether the plan is complete, currently in progress, or has encountered any failures
 - detailed timing information, including both the precise start time when the plan was initiated and the total duration it ran before either completing successfully or encountering a failure
-- specific plan type classification; in this particular example, it's identified as an environment update operation
+- specific plan type classification; in this particular example, it's identified as an environment update operation. Other options and their explanation are below:
+    - Environment Update: models themselves have changed
+    - Restatement: updating a model that you already have to get the newest, freshest data
+    - System: the Tobiko Data Cloud team has made a upgrade to your system. None of your models or data is affected (general housekeeping)
 - comprehensive model backfill dates showing the temporal scope of the operation
 - visual graph representation of all model changes, using our standard intuitive colour-coding system: directly modified models are highlighted in blue, newly added models appear in green, and removed models are marked in red for easy identification
 
