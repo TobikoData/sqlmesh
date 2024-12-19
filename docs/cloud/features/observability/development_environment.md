@@ -20,4 +20,6 @@ Detailed comparative list view showing model differences between development and
 
 ## Plan history information
 
-WIP
+The plan applications table delivers a comprehensive calendar visualization of all plans that have been executed within this specific environment. Each executed plan is represented visually as a distinctive green bar positioned along the timeline of the chart, making it easy to track execution history at a glance. 
+
+When users hover their cursor over any of these green bars, a detailed information panel appears, presenting crucial metrics and specifics about that particular plan execution. This hover functionality not only provides immediate insights but also serves as an interactive gateway - users can click through from this preview to access the complete, detailed plan view for more in-depth analysis and review.
