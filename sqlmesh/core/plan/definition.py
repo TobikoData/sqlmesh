@@ -284,6 +284,10 @@ class EvaluatablePlan(PydanticModel):
     def plan_id(self) -> str:
         return self.environment.plan_id
 
+    @property
+    def is_prod(self) -> bool:
+        return not self.is_dev
+
 
 class PlanStatus(str, Enum):
     STARTED = "started"
