@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
+import time_machine
 from _pytest.monkeypatch import MonkeyPatch
 from pytest_mock.plugin import MockerFixture
 from sqlglot import exp, to_column
@@ -32,6 +33,7 @@ from sqlmesh.core.model import (
     load_sql_based_model,
 )
 from sqlmesh.core.model.kind import TimeColumn, ModelKindName
+from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.snapshot import (
     DeployabilityIndex,
     QualifiedViewName,
@@ -51,6 +53,7 @@ from sqlmesh.core.snapshot.categorizer import categorize_change
 from sqlmesh.core.snapshot.definition import (
     apply_auto_restatements,
     display_name,
+    get_next_model_interval_start,
     _check_ready_intervals,
     _contiguous_intervals,
 )
@@ -262,6 +265,44 @@ def test_add_interval_partial(snapshot: Snapshot, make_snapshot):
     assert monthly_snapshot.intervals == [
         (to_timestamp("2023-02-01"), to_timestamp("2023-03-01")),
     ]
+
+
+@time_machine.travel("2023-01-01 01:00:00 UTC")
+def test_get_next_model_interval_start(make_snapshot):
+    hourly_snapshot = make_snapshot(
+        SqlModel(
+            name="late", kind=FullKind(), query=parse_one("SELECT 1, ds FROM name"), cron="@hourly"
+        )
+    )
+
+    daily_snapshot = make_snapshot(
+        SqlModel(
+            name="early", kind=FullKind(), query=parse_one("SELECT 1, ds FROM name"), cron="@daily"
+        )
+    )
+
+    seed_snapshot = make_snapshot(
+        SeedModel(
+            name="seed",
+            kind=SeedKind(path="./path/to/seed"),
+            seed=Seed(content="content"),
+            column_hashes={"col": "hash"},
+            depends_on=set(),
+            interval_unit=IntervalUnit.FIVE_MINUTE,
+        )
+    )
+
+    audit_snapshot = make_snapshot(
+        StandaloneAudit(
+            name="test_standalone_audit",
+            query=parse_one("SELECT 1"),
+            interval_unit=IntervalUnit.FIVE_MINUTE,
+        )
+    )
+
+    assert get_next_model_interval_start(
+        [daily_snapshot, hourly_snapshot, seed_snapshot, audit_snapshot]
+    ) == to_datetime("2023-01-01 02:00:00 UTC")
 
 
 def test_missing_intervals(snapshot: Snapshot):

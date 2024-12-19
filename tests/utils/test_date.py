@@ -235,5 +235,3 @@ def test_format_tz_datetime():
     test_datetime = to_datetime("2020-01-01 00:00:00")
     assert format_tz_datetime(test_datetime) == "2020-01-01 12:00AM UTC"
     assert format_tz_datetime(test_datetime, format_string=None) == "2020-01-01 00:00:00+00:00"
-
-    # assert format_tz_datetime(test_datetime, use_local_timezone=True) == "2020-01-01 07:00PM EST"

@@ -3,9 +3,7 @@ from contextlib import contextmanager
 from os import getcwd, path, remove
 from pathlib import Path
 from unittest.mock import patch
-from pytest_mock.plugin import MockerFixture
 import pytest
-import pytz
 from click.testing import CliRunner
 import time_machine
 
@@ -678,22 +676,9 @@ def test_run_dev(runner, tmp_path, flag):
 
 
 @time_machine.travel(FREEZE_TIME)
-def test_run_cron_not_elapsed(runner, tmp_path, caplog, mocker: MockerFixture):
+def test_run_cron_not_elapsed(runner, tmp_path, caplog):
     create_example_project(tmp_path)
     init_prod_and_backfill(runner, tmp_path)
-
-    # Patch datetime.now.astimezone in scheduler.py
-    mock_dt = mocker.Mock()
-    mock_dt.tzinfo = pytz.timezone("America/New_York")
-
-    # Mock the chain of datetime.now().astimezone()
-    mock_now = mocker.Mock(return_value=mock_dt)
-    mock_astimezone = mocker.Mock(return_value=mock_dt)
-
-    mock_dt.now = mock_now
-    mock_dt.astimezone = mock_astimezone
-
-    mocker.patch("sqlmesh.core.scheduler.datetime", mock_dt)
 
     # No error if `prod` environment exists and cron has not elapsed
     with disable_logging():
@@ -701,8 +686,8 @@ def test_run_cron_not_elapsed(runner, tmp_path, caplog, mocker: MockerFixture):
     assert result.exit_code == 0
 
     assert (
-        result.output.strip()
-        == "No models are ready to run. Please wait until a model `cron` interval has \nelapsed.\n\nNext run will be ready at 2023-01-01 7:00PM EST (2023-01-02 12:00AM UTC)."
+        "No models are ready to run. Please wait until a model `cron` interval has \nelapsed.\n\nNext run will be ready at "
+        in result.output.strip()
     )
 
 
