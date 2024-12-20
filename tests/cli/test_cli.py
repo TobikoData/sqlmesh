@@ -827,6 +827,9 @@ WHERE
     dlt_loads_model_path = tmp_path / "models/incremental__dlt_loads.sql"
     dlt_waiters_model_path = tmp_path / "models/incremental_waiters.sql"
     dlt_sushi_fillings_model_path = tmp_path / "models/incremental_sushi_menu__fillings.sql"
+    dlt_sushi_twice_nested_model_path = (
+        tmp_path / "models/incremental_sushi_menu__details__ingredients.sql"
+    )
 
     with open(dlt_sushi_types_model_path) as file:
         incremental_model = file.read()
@@ -886,6 +889,8 @@ WHERE
     assert dlt_loads_model_path.exists()
     assert dlt_sushi_types_model_path.exists()
     assert dlt_waiters_model_path.exists()
+    assert dlt_sushi_fillings_model_path.exists()
+    assert dlt_sushi_twice_nested_model_path.exists()
     assert dlt_loads_model == expected_dlt_loads_model
     assert incremental_model == expected_incremental_model
     assert nested_model == expected_nested_fillings_model
@@ -914,6 +919,7 @@ WHERE
     remove(dlt_loads_model_path)
     remove(dlt_sushi_types_model_path)
     remove(dlt_sushi_fillings_model_path)
+    remove(dlt_sushi_twice_nested_model_path)
 
     # Update to generate a specific model: sushi_types
     assert generate_dlt_models(context, "sushi", ["sushi_types"], False) == [
@@ -924,6 +930,7 @@ WHERE
     assert not dlt_waiters_model_path.exists()
     assert not dlt_loads_model_path.exists()
     assert not dlt_sushi_fillings_model_path.exists()
+    assert not dlt_sushi_twice_nested_model_path.exists()
     assert dlt_sushi_types_model_path.exists()
 
     # Update with force = True will generate all models and overwrite existing ones
@@ -932,5 +939,6 @@ WHERE
     assert dlt_sushi_types_model_path.exists()
     assert dlt_waiters_model_path.exists()
     assert dlt_sushi_fillings_model_path.exists()
+    assert dlt_sushi_twice_nested_model_path.exists()
 
     remove(dataset_path)
