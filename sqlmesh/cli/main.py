@@ -958,6 +958,6 @@ def dlt_refresh(
     sqlmesh_models = generate_dlt_models(ctx.obj, pipeline, list(table or []), force)
     if sqlmesh_models:
         model_names = "\n".join([f"- {model_name}" for model_name in sqlmesh_models])
-        ctx.obj.console.log_success(f"Updatde SQLMesh project with models:\n{model_names}")
+        ctx.obj.console.log_success(f"Updated SQLMesh project with models:\n{model_names}")
     else:
         ctx.obj.console.log_success("All SQLMesh models are up to date.")

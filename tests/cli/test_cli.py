@@ -812,20 +812,24 @@ model_defaults:
 );
 
 SELECT
-  CAST(id AS BIGINT) AS id,
-  CAST(name AS TEXT) AS name,
-  CAST(_dlt_load_id AS TEXT) AS _dlt_load_id,
-  CAST(_dlt_id AS TEXT) AS _dlt_id,
-  TO_TIMESTAMP(CAST(_dlt_load_id AS DOUBLE)) as _dlt_load_time
+  CAST(c.id AS BIGINT) AS id,
+  CAST(c.name AS TEXT) AS name,
+  CAST(c._dlt_load_id AS TEXT) AS _dlt_load_id,
+  CAST(c._dlt_id AS TEXT) AS _dlt_id,
+  TO_TIMESTAMP(CAST(c._dlt_load_id AS DOUBLE)) as _dlt_load_time
 FROM
-  sushi_dataset.sushi_types
+  sushi_dataset.sushi_types as c
 WHERE
-  TO_TIMESTAMP(CAST(_dlt_load_id AS DOUBLE)) BETWEEN @start_ds AND @end_ds
+  TO_TIMESTAMP(CAST(c._dlt_load_id AS DOUBLE)) BETWEEN @start_ds AND @end_ds
 """
 
     dlt_sushi_types_model_path = tmp_path / "models/incremental_sushi_types.sql"
     dlt_loads_model_path = tmp_path / "models/incremental__dlt_loads.sql"
     dlt_waiters_model_path = tmp_path / "models/incremental_waiters.sql"
+    dlt_sushi_fillings_model_path = tmp_path / "models/incremental_sushi_menu__fillings.sql"
+    dlt_sushi_twice_nested_model_path = (
+        tmp_path / "models/incremental_sushi_menu__details__ingredients.sql"
+    )
 
     with open(dlt_sushi_types_model_path) as file:
         incremental_model = file.read()
@@ -838,28 +842,58 @@ WHERE
 );
 
 SELECT
-  CAST(load_id AS TEXT) AS load_id,
-  CAST(schema_name AS TEXT) AS schema_name,
-  CAST(status AS BIGINT) AS status,
-  CAST(inserted_at AS TIMESTAMP) AS inserted_at,
-  CAST(schema_version_hash AS TEXT) AS schema_version_hash,
-  TO_TIMESTAMP(CAST(load_id AS DOUBLE)) as _dlt_load_time
+  CAST(c.load_id AS TEXT) AS load_id,
+  CAST(c.schema_name AS TEXT) AS schema_name,
+  CAST(c.status AS BIGINT) AS status,
+  CAST(c.inserted_at AS TIMESTAMP) AS inserted_at,
+  CAST(c.schema_version_hash AS TEXT) AS schema_version_hash,
+  TO_TIMESTAMP(CAST(c.load_id AS DOUBLE)) as _dlt_load_time
 FROM
-  sushi_dataset._dlt_loads
+  sushi_dataset._dlt_loads as c
 WHERE
-  TO_TIMESTAMP(CAST(load_id AS DOUBLE)) BETWEEN @start_ds AND @end_ds
+  TO_TIMESTAMP(CAST(c.load_id AS DOUBLE)) BETWEEN @start_ds AND @end_ds
 """
 
     with open(dlt_loads_model_path) as file:
         dlt_loads_model = file.read()
+
+    expected_nested_fillings_model = """MODEL (
+  name sushi_dataset_sqlmesh.incremental_sushi_menu__fillings,
+  kind INCREMENTAL_BY_TIME_RANGE (
+    time_column _dlt_load_time,
+  ),
+);
+
+SELECT
+  CAST(c.value AS TEXT) AS value,
+  CAST(c._dlt_root_id AS TEXT) AS _dlt_root_id,
+  CAST(c._dlt_parent_id AS TEXT) AS _dlt_parent_id,
+  CAST(c._dlt_list_idx AS BIGINT) AS _dlt_list_idx,
+  CAST(c._dlt_id AS TEXT) AS _dlt_id,
+  TO_TIMESTAMP(CAST(p._dlt_load_id AS DOUBLE)) as _dlt_load_time
+FROM
+  sushi_dataset.sushi_menu__fillings as c
+JOIN
+  sushi_dataset.sushi_menu as p
+ON
+  c._dlt_parent_id = p._dlt_id
+WHERE
+  TO_TIMESTAMP(CAST(p._dlt_load_id AS DOUBLE)) BETWEEN @start_ds AND @end_ds
+"""
+
+    with open(dlt_sushi_fillings_model_path) as file:
+        nested_model = file.read()
 
     # Validate generated config and models
     assert config == expected_config
     assert dlt_loads_model_path.exists()
     assert dlt_sushi_types_model_path.exists()
     assert dlt_waiters_model_path.exists()
+    assert dlt_sushi_fillings_model_path.exists()
+    assert dlt_sushi_twice_nested_model_path.exists()
     assert dlt_loads_model == expected_dlt_loads_model
     assert incremental_model == expected_incremental_model
+    assert nested_model == expected_nested_fillings_model
 
     # Plan prod and backfill
     result = runner.invoke(
@@ -884,6 +918,8 @@ WHERE
     remove(dlt_waiters_model_path)
     remove(dlt_loads_model_path)
     remove(dlt_sushi_types_model_path)
+    remove(dlt_sushi_fillings_model_path)
+    remove(dlt_sushi_twice_nested_model_path)
 
     # Update to generate a specific model: sushi_types
     assert generate_dlt_models(context, "sushi", ["sushi_types"], False) == [
@@ -893,6 +929,8 @@ WHERE
     # Only the sushi_types should be generated now
     assert not dlt_waiters_model_path.exists()
     assert not dlt_loads_model_path.exists()
+    assert not dlt_sushi_fillings_model_path.exists()
+    assert not dlt_sushi_twice_nested_model_path.exists()
     assert dlt_sushi_types_model_path.exists()
 
     # Update with force = True will generate all models and overwrite existing ones
@@ -900,5 +938,7 @@ WHERE
     assert dlt_loads_model_path.exists()
     assert dlt_sushi_types_model_path.exists()
     assert dlt_waiters_model_path.exists()
+    assert dlt_sushi_fillings_model_path.exists()
+    assert dlt_sushi_twice_nested_model_path.exists()
 
     remove(dataset_path)
