@@ -9,6 +9,7 @@ from sqlmesh.utils.date import (
     UTC,
     TimeLike,
     date_dict,
+    format_tz_datetime,
     is_categorical_relative_expression,
     make_inclusive,
     to_datetime,
@@ -228,3 +229,9 @@ def test_date_dict():
         "start_hour": 0,
         "end_hour": 0,
     }
+
+
+def test_format_tz_datetime():
+    test_datetime = to_datetime("2020-01-01 00:00:00")
+    assert format_tz_datetime(test_datetime) == "2020-01-01 12:00AM UTC"
+    assert format_tz_datetime(test_datetime, format_string=None) == "2020-01-01 00:00:00+00:00"

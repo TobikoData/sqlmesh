@@ -186,7 +186,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             return
 
         scheduler = self.create_scheduler(snapshots_by_name.values())
-        is_run_successful = scheduler.run(
+        completion_status = scheduler.run(
             plan.environment,
             plan.start,
             plan.end,
@@ -201,7 +201,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             end_bounded=plan.end_bounded,
             interval_end_per_model=plan.interval_end_per_model,
         )
-        if not is_run_successful:
+        if completion_status.is_failure:
             raise PlanError("Plan application failed.")
 
     def _push(

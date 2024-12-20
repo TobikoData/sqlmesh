@@ -2764,7 +2764,8 @@ def test_run_auto_restatement_failure(init_and_plan_context: t.Callable):
     context.apply(plan)
 
     with time_machine.travel("2023-01-08 06:01:00 UTC"):
-        assert not context.run()
+        run_status = context.run()
+        assert run_status.is_failure
 
         snapshot = context.get_snapshot(new_model.name)
         snapshot = context.state_sync.state_sync.get_snapshots([snapshot.snapshot_id])[
