@@ -16,7 +16,7 @@ from sqlglot.errors import SchemaError
 
 from sqlmesh.core.config.gateway import GatewayConfig
 import sqlmesh.core.constants
-import sqlmesh.core.dialect as d
+from sqlmesh.core import dialect as d, constants as c
 from sqlmesh.core.config import (
     Config,
     DuckDBConnectionConfig,
@@ -1159,3 +1159,34 @@ def test_duckdb_state_connection_automatic_multithreaded_mode(tmp_path):
     assert isinstance(state_sync, EngineAdapterStateSync)
     assert isinstance(state_sync.engine_adapter, DuckDBEngineAdapter)
     assert isinstance(state_sync.engine_adapter._connection_pool, ThreadLocalConnectionPool)
+
+
+def test_requirements(copy_to_temp_path: t.Callable):
+    from sqlmesh.utils.metaprogramming import Executable
+
+    context_path = copy_to_temp_path("examples/sushi")[0]
+
+    with open(context_path / c.REQUIREMENTS, "w") as f:
+        # Add pandas and test_package and exclude ruamel.yaml
+        f.write("pandas==2.2.2\ntest_package==1.0.0\n^ruamel.yaml\n^ruamel.yaml.clib")
+
+    context = Context(paths=context_path)
+
+    model = context.get_model("sushi.items")
+    model.python_env["ruamel"] = Executable(payload="import ruamel", kind="import")
+    model.python_env["Image"] = Executable(
+        payload="from ipywidgets.widgets.widget_media import Image", kind="import"
+    )
+
+    environment = context.plan(
+        "dev", no_prompts=True, skip_tests=True, skip_backfill=True, auto_apply=True
+    ).environment
+    requirements = {"ipywidgets", "numpy", "pandas", "test_package"}
+    assert environment.requirements["pandas"] == "2.2.2"
+    assert set(environment.requirements) == requirements
+
+    context._requirements = {"numpy": "2.1.2", "pandas": "2.2.1"}
+    context._excluded_requirements = {"ipywidgets", "ruamel.yaml", "ruamel.yaml.clib"}
+    diff = context.plan("dev", no_prompts=True, skip_tests=True, skip_backfill=True).context_diff
+    assert set(diff.previous_requirements) == requirements
+    assert set(diff.requirements) == {"numpy", "pandas"}

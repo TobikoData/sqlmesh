@@ -55,6 +55,8 @@ class LoadedProject:
     audits: UniqueKeyDict[str, ModelAudit]
     metrics: UniqueKeyDict[str, Metric]
     dag: DAG[str]
+    requirements: t.Dict[str, str]
+    excluded_requirements: t.Set[str]
 
 
 class Loader(abc.ABC):
@@ -128,6 +130,8 @@ class Loader(abc.ABC):
 
         metrics = self._load_metrics()
 
+        requirements, excluded_requirements = self._load_requirements()
+
         project = LoadedProject(
             macros=macros,
             jinja_macros=jinja_macros,
@@ -136,6 +140,8 @@ class Loader(abc.ABC):
             standalone_audits=standalone_audits,
             metrics=expand_metrics(metrics),
             dag=self._dag,
+            requirements=requirements,
+            excluded_requirements=excluded_requirements,
         )
         return project
 
@@ -241,6 +247,41 @@ class Loader(abc.ABC):
                             models.update({model.fqn: model})
 
         return models
+
+    def _load_requirements(self) -> t.Tuple[t.Dict[str, str], t.Set[str]]:
+        """Loads Python dependencies from the lock file.
+
+        Returns:
+            A tuple of requirements and excluded requirements.
+        """
+        requirements: t.Dict[str, str] = {}
+        excluded_requirements: t.Set[str] = set()
+
+        for context_path in self._context.configs:
+            requirements_path = context_path / c.REQUIREMENTS
+            if not requirements_path.is_file():
+                continue
+            with open(requirements_path, "r", encoding="utf-8") as file:
+                for line in file:
+                    line = line.strip()
+                    if line.startswith("^"):
+                        excluded_requirements.add(line[1:])
+                        continue
+
+                    args = [k.strip() for k in line.split("==")]
+                    if len(args) != 2:
+                        raise ConfigError(
+                            f"Invalid lock file entry '{line.strip()}'. Only 'dep==ver' is supported"
+                        )
+                    dep, ver = args
+                    other_ver = requirements.get(dep, ver)
+                    if ver != other_ver:
+                        raise ConfigError(
+                            f"Conflicting requirement {dep}: {ver} != {other_ver}. Fix your {c.REQUIREMENTS} file."
+                        )
+                    requirements[dep] = ver
+
+        return requirements, excluded_requirements
 
     def _glob_paths(
         self,

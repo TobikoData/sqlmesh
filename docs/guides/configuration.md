@@ -1070,3 +1070,12 @@ pandas==2.2.3
 ```
 
 This feature is only available in [Tobiko Cloud](https://tobikodata.com/product.html).
+
+#### Excluding dependencies
+
+You can exclude dependencies by prefixing the dependency with a `^`. For example:
+
+```
+^numpy
+pandas==2.2.3
+```
