@@ -179,13 +179,13 @@ def test_model_kind():
         unique_key=["bar"],
         incremental_strategy="merge",
         dialect="postgres",
-        incremental_predicates=[dbt_incremental_predicate],
+        merge_filters=[dbt_incremental_predicate],
     ).model_kind(context) == IncrementalByUniqueKeyKind(
         unique_key=["bar"],
         dialect="postgres",
         forward_only=True,
         disable_restatement=False,
-        incremental_predicates=expected_sqlmesh_predicate,
+        merge_filters=expected_sqlmesh_predicate,
     )
 
     assert ModelConfig(materialized=Materialization.INCREMENTAL, unique_key=["bar"]).model_kind(

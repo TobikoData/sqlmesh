@@ -1804,7 +1804,7 @@ class EngineAdapter:
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
         unique_key: t.Sequence[exp.Expression],
         when_matched: t.Optional[exp.Whens] = None,
-        incremental_predicates: t.Optional[exp.Expression] = None,
+        merge_filters: t.Optional[exp.Expression] = None,
     ) -> None:
         source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
             source_table, columns_to_types, target_table=target_table
@@ -1816,8 +1816,8 @@ class EngineAdapter:
                 for part in unique_key
             )
         )
-        if incremental_predicates:
-            on = exp.and_(incremental_predicates, on)
+        if merge_filters:
+            on = exp.and_(merge_filters, on)
 
         if not when_matched:
             when_matched = exp.Whens()

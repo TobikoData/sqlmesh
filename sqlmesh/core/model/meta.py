@@ -437,9 +437,9 @@ class ModelMeta(_Node):
         return None
 
     @property
-    def incremental_predicates(self) -> t.Optional[exp.Expression]:
+    def merge_filters(self) -> t.Optional[exp.Expression]:
         if isinstance(self.kind, IncrementalByUniqueKeyKind):
-            return self.kind.incremental_predicates
+            return self.kind.merge_filters
         return None
 
     @property

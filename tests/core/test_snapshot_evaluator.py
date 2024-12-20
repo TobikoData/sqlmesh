@@ -2018,7 +2018,7 @@ def test_create_incremental_by_unique_key_updated_at_exp(adapter_mock, make_snap
             "updated_at": exp.DataType.build("TIMESTAMP"),
         },
         unique_key=[exp.to_column("id", quoted=True)],
-        incremental_predicates=None,
+        merge_filters=None,
         when_matched=exp.Whens(
             expressions=[
                 exp.When(
@@ -2083,7 +2083,7 @@ def test_create_incremental_by_unique_key_multiple_updated_at_exp(adapter_mock, 
             "updated_at": exp.DataType.build("TIMESTAMP"),
         },
         unique_key=[exp.to_column("id", quoted=True)],
-        incremental_predicates=None,
+        merge_filters=None,
         when_matched=exp.Whens(
             expressions=[
                 exp.When(
@@ -2176,7 +2176,7 @@ def test_create_incremental_by_unique_no_intervals(adapter_mock, make_snapshot):
     adapter_mock.columns.assert_called_once_with(snapshot.table_name())
 
 
-def test_create_incremental_by_unique_key_incremental_predicates(adapter_mock, make_snapshot):
+def test_create_incremental_by_unique_key_merge_filters(adapter_mock, make_snapshot):
     evaluator = SnapshotEvaluator(adapter_mock)
     model = load_sql_based_model(
         d.parse(
@@ -2185,7 +2185,7 @@ def test_create_incremental_by_unique_key_incremental_predicates(adapter_mock, m
                 name test_schema.test_model,
                 kind INCREMENTAL_BY_UNIQUE_KEY (
                     unique_key [id],
-                    incremental_predicates source.id > 0 and target.updated_at < TIMESTAMP("2020-02-05"),
+                    merge_filters source.id > 0 and target.updated_at < TIMESTAMP("2020-02-05"),
                     when_matched WHEN MATCHED THEN UPDATE SET target.updated_at = COALESCE(source.updated_at, target.updated_at),
                 )
             );
@@ -2232,7 +2232,7 @@ def test_create_incremental_by_unique_key_incremental_predicates(adapter_mock, m
                 )
             ]
         ),
-        incremental_predicates=exp.And(
+        merge_filters=exp.And(
             this=exp.GT(
                 this=exp.column("id", MERGE_SOURCE_ALIAS),
                 expression=exp.Literal(this="0", is_string=False),

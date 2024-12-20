@@ -1126,7 +1126,7 @@ MERGE INTO "target" AS "__MERGE_TARGET__" USING (
     )
 
 
-def test_merge_incremental_predicates(make_mocked_engine_adapter: t.Callable, assert_exp_eq):
+def test_merge_filters(make_mocked_engine_adapter: t.Callable, assert_exp_eq):
     adapter = make_mocked_engine_adapter(EngineAdapter)
 
     adapter.merge(
@@ -1159,7 +1159,7 @@ def test_merge_incremental_predicates(make_mocked_engine_adapter: t.Callable, as
                 )
             ]
         ),
-        incremental_predicates=exp.And(
+        merge_filters=exp.And(
             this=exp.GT(
                 this=exp.column("ID", "__MERGE_SOURCE__"),
                 expression=exp.Literal(this="0", is_string=False),

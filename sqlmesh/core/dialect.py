@@ -429,7 +429,7 @@ def _parse_props(self: Parser) -> t.Optional[exp.Expression]:
             lambda: _parse_macro_or_clause(self, self._parse_when_matched),
             optional=True,
         )
-    elif name == "incremental_predicates":
+    elif name == "merge_filters":
         value = self._parse_wrapped(
             lambda: _parse_macro_or_clause(self, self._parse_conjunction), optional=True
         )

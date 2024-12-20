@@ -107,7 +107,7 @@ class PostgresEngineAdapter(
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
         unique_key: t.Sequence[exp.Expression],
         when_matched: t.Optional[exp.Whens] = None,
-        incremental_predicates: t.Optional[exp.Expression] = None,
+        merge_filters: t.Optional[exp.Expression] = None,
     ) -> None:
         # Merge isn't supported until Postgres 15
         merge_impl = (
@@ -121,5 +121,5 @@ class PostgresEngineAdapter(
             columns_to_types,
             unique_key,
             when_matched=when_matched,
-            incremental_predicates=incremental_predicates,
+            merge_filters=merge_filters,
         )

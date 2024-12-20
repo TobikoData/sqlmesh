@@ -297,7 +297,7 @@ class ModelConfig(BaseModelConfig):
 
                 if self.incremental_predicates:
                     dialect = self.dialect(context)
-                    incremental_kind_kwargs["incremental_predicates"] = exp.and_(
+                    incremental_kind_kwargs["merge_filters"] = exp.and_(
                         *[
                             d.parse_one(predicate, dialect=dialect)
                             for predicate in self.incremental_predicates

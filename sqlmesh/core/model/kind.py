@@ -444,7 +444,7 @@ class IncrementalByUniqueKeyKind(_IncrementalBy):
     )
     unique_key: SQLGlotListOfFields
     when_matched: t.Optional[exp.Whens] = None
-    incremental_predicates: t.Optional[exp.Expression] = None
+    merge_filters: t.Optional[exp.Expression] = None
     batch_concurrency: t.Literal[1] = 1
 
     @field_validator("when_matched", mode="before")
@@ -466,9 +466,9 @@ class IncrementalByUniqueKeyKind(_IncrementalBy):
 
         return t.cast(exp.Whens, v.transform(d.replace_table_references))
 
-    @field_validator("incremental_predicates", mode="before")
+    @field_validator("merge_filters", mode="before")
     @field_validator_v1_args
-    def _incremental_predicates_validator(
+    def _merge_filters_validator(
         cls,
         v: t.Optional[exp.Expression],
         values: t.Dict[str, t.Any],
@@ -489,7 +489,7 @@ class IncrementalByUniqueKeyKind(_IncrementalBy):
             *super().data_hash_values,
             *(gen(k) for k in self.unique_key),
             gen(self.when_matched) if self.when_matched is not None else None,
-            gen(self.incremental_predicates) if self.incremental_predicates is not None else None,
+            gen(self.merge_filters) if self.merge_filters is not None else None,
         ]
 
     def to_expression(
@@ -502,7 +502,7 @@ class IncrementalByUniqueKeyKind(_IncrementalBy):
                     {
                         "unique_key": exp.Tuple(expressions=self.unique_key),
                         "when_matched": self.when_matched,
-                        "incremental_predicates": self.incremental_predicates,
+                        "merge_filters": self.merge_filters,
                     }
                 ),
             ],

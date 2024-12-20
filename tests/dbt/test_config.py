@@ -134,7 +134,7 @@ def test_model_to_sqlmesh_fields():
     assert kind.lookback == 3
     assert kind.on_destructive_change == OnDestructiveChange.ALLOW
     assert (
-        kind.incremental_predicates.sql()
+        kind.merge_filters.sql()
         == "55 > __MERGE_SOURCE__.b AND __MERGE_TARGET__.session_start > DATEADD(day, -7, CURRENT_DATE)"
     )
 
