@@ -464,7 +464,7 @@ class IncrementalByUniqueKeyKind(_IncrementalBy):
 
             return t.cast(exp.Whens, d.parse_one(v, into=exp.Whens, dialect=get_dialect(values)))
 
-        return t.cast(exp.Whens, v.transform(d.replace_table_references))
+        return t.cast(exp.Whens, v.transform(d.replace_merge_table_aliases))
 
     @field_validator("merge_filter", mode="before")
     @field_validator_v1_args
@@ -479,7 +479,7 @@ class IncrementalByUniqueKeyKind(_IncrementalBy):
             v = v.strip()
             return d.parse_one(v, dialect=get_dialect(values))
 
-        return v.transform(d.replace_table_references)
+        return v.transform(d.replace_merge_table_aliases)
 
     @property
     def data_hash_values(self) -> t.List[t.Optional[str]]:

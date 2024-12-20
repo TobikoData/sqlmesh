@@ -1264,7 +1264,7 @@ def is_meta_expression(v: t.Any) -> bool:
     return isinstance(v, (Audit, Metric, Model))
 
 
-def replace_table_references(expression: exp.Expression) -> exp.Expression:
+def replace_merge_table_aliases(expression: exp.Expression) -> exp.Expression:
     """
     Resolves references from the "source" and "target" tables (or their DBT equivalents)
     with the corresponding SQLMesh merge aliases (MERGE_SOURCE_ALIAS and MERGE_TARGET_ALIAS)

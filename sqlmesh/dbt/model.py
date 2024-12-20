@@ -303,7 +303,7 @@ class ModelConfig(BaseModelConfig):
                             for predicate in self.incremental_predicates
                         ],
                         dialect=dialect,
-                    ).transform(d.replace_table_references)
+                    ).transform(d.replace_merge_table_aliases)
 
                 return IncrementalByUniqueKeyKind(
                     unique_key=self.unique_key,
