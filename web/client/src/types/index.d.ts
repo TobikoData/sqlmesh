@@ -21,6 +21,11 @@ declare module '~/utils/tbk-components' {
   export const Tab: any
   export const TabPanel: any
   export const Datetime: any
+  export const TextBlock: any
+  export const Information: any
+  export const Icon: any
+  export const Button: any
+  export const Tooltip: any
 }
 declare module '~/utils/additional-components' {
   export const TBKBadge: any
@@ -39,6 +44,11 @@ declare module '~/utils/additional-components' {
   export const TBKTab: any
   export const TBKTabPanel: any
   export const TBKDatetime: any
+  export const TBKTextBlock: any
+  export const TBKInformation: any
+  export const TBKIcon: any
+  export const TBKButton: any
+  export const TBKTooltip: any
 }
 
 type Subset<T, S extends T> = S
