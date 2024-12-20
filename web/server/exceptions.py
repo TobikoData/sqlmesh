@@ -43,4 +43,4 @@ class ApiException(HTTPException):
             description=self.description,
             traceback=self.traceback,
             stack=self.stack,
-        ).dict(exclude_none=True)
+        ).dict()

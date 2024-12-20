@@ -81,37 +81,6 @@ jobs:
       - store_test_results:
           path: test-results
 
-  style_and_slow_tests_pydantic_v1:
-    docker:
-      - image: cimg/python:3.10
-    resource_class: large
-    environment:
-      PYTEST_XDIST_AUTO_NUM_WORKERS: 8
-    steps:
-      - halt_unless_core
-      - checkout
-      - run:
-          name: Install OpenJDK
-          command: sudo apt-get update && sudo apt-get install default-jdk
-      - run:
-          name: Install ODBC
-          command: sudo apt-get install unixodbc-dev
-      - run:
-          name: Install SQLMesh and dbt adapter dependencies
-          command: make install-cicd-test
-      - run:
-          name: Install Pydantic v1
-          command: pip install --upgrade "pydantic<2.0.0" && pip uninstall pydantic_core -y
-      - run:
-          name: Fix Git URL override
-          command: git config --global --unset url."ssh://git@github.com".insteadOf
-      - run:
-          name: Run linters and code style checks
-          command: make py-style
-      - run:
-          name: Run slow tests
-          command: make cicd-test
-
   migration_test:
     docker:
       - image: cimg/python:3.10
@@ -309,7 +278,6 @@ workflows:
                 - "3.10"
                 - "3.11"
                 - "3.12"
-      - style_and_slow_tests_pydantic_v1
       - airflow_docker_tests:
           requires:
             - style_and_slow_tests

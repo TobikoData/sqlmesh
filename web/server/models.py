@@ -20,7 +20,6 @@ from sqlmesh.core.snapshot.definition import (
 )
 from sqlmesh.utils.date import TimeLike, now_timestamp
 from sqlmesh.utils.pydantic import (
-    PYDANTIC_MAJOR_VERSION,
     PydanticModel,
     field_validator,
     field_validator_v1_args,
@@ -118,9 +117,7 @@ class File(PydanticModel):
     path: str
     extension: str = ""
     content: t.Optional[str] = None
-
-    if PYDANTIC_MAJOR_VERSION >= 2:
-        model_config = pydantic.ConfigDict(validate_default=True)  # type: ignore
+    model_config = pydantic.ConfigDict(validate_default=True)  # type: ignore
 
     @field_validator("extension", always=True, mode="before")
     @field_validator_v1_args
