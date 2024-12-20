@@ -35,7 +35,7 @@ const Documentation = function Documentation({
   )
 
   return (
-    <TBKScroll className="w-full py-3 bg-neutral-5">
+    <TBKScroll className="w-full py-3">
       <div className="px-3 flex flex-col gap-2 ">
         <TBKDetails
           summary="Model Details"
