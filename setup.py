@@ -42,7 +42,7 @@ setup(
         "ipywidgets",
         "jinja2",
         "pandas",
-        "pydantic",
+        "pydantic>=2.0.0",
         "requests",
         "rich[jupyter]",
         "ruamel.yaml",
