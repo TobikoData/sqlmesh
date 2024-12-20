@@ -61,8 +61,13 @@ def generate_dlt_models_and_settings(
             if col.get("primary_key"):
                 primary_key.append(str(col["name"]))
 
+        load_id = next(
+            (col for col in ["_dlt_load_id", "load_id", "_dlt_parent_id"] if col in dlt_columns),
+            None,
+        )
+
         column_types = [
-            exp.cast(column, data_type, dialect=dialect).as_(column).sql(dialect=dialect)
+            exp.cast("c." + column, data_type, dialect=dialect).as_(column).sql(dialect=dialect)
             for column, data_type in dlt_columns.items()
             if isinstance(column, str)
         ]
@@ -73,15 +78,32 @@ def generate_dlt_models_and_settings(
         grain = f"\n  grain ({', '.join(primary_key)})," if primary_key else ""
         incremental_model_name = f"{dataset}_sqlmesh.incremental_{table_name}"
 
-        incremental_model_sql = generate_incremental_model(
-            incremental_model_name,
-            select_columns,
-            grain,
-            dataset + "." + table_name,
-            dialect,
-        )
+        if load_id:
+            load_key = "c." + load_id
+            parent_table = None
 
-        sqlmesh_models.add((incremental_model_name, incremental_model_sql))
+            # Handling for nested tables: https://dlthub.com/docs/general-usage/destination-tables#nested-tables
+            if load_id == "_dlt_parent_id" and "_dlt_parent_id" in dlt_columns:
+                if parent_table := table["parent"]:
+                    if (
+                        parent_table in dlt_tables
+                        and "_dlt_id" in dlt_tables[parent_table]["columns"]
+                    ):
+                        load_key = "p._dlt_load_id"
+                        parent_table = dataset + "." + parent_table
+                    else:
+                        break
+
+            incremental_model_sql = generate_incremental_model(
+                incremental_model_name,
+                select_columns,
+                grain,
+                dataset + "." + table_name,
+                dialect,
+                load_key,
+                parent_table,
+            )
+            sqlmesh_models.add((incremental_model_name, incremental_model_sql))
 
     return sqlmesh_models, format_config(configs, db_type), get_start_date(storage_ids)
 
@@ -113,11 +135,21 @@ def generate_incremental_model(
     grain: str,
     from_table: str,
     dialect: str,
+    load_id: str,
+    parent_table: t.Optional[str] = None,
 ) -> str:
     """Generate the SQL definition for an incremental model."""
 
-    load_id = "load_id" if from_table.endswith("_dlt_loads") else "_dlt_load_id"
     time_column = parse_one(f"to_timestamp(CAST({load_id} AS DOUBLE))").sql(dialect=dialect)
+
+    join = (
+        f"""\nJOIN
+  {parent_table} as p
+ON
+  c._dlt_parent_id = p._dlt_id"""
+        if parent_table
+        else ""
+    )
 
     return f"""MODEL (
   name {model_name},
@@ -130,7 +162,7 @@ SELECT
 {select_columns},
   {time_column} as _dlt_load_time
 FROM
-  {from_table}
+  {from_table} as c{join}
 WHERE
   {time_column} BETWEEN @start_ds AND @end_ds
 """

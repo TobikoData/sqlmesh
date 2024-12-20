@@ -30,6 +30,39 @@ def waiters() -> t.Iterator[t.Dict[str, t.Any]]:
     ]
 
 
+# Example menu table with nested fillings table
+@dlt.resource(name="sushi_menu", primary_key="id", write_disposition="merge")
+def sushi_menu() -> t.Iterator[t.Dict[str, t.Any]]:
+    yield from [
+        {
+            "id": 0,
+            "name": "Tobiko",
+            "fillings": ["Red Tobiko", "Black Tobiko", "Wasabi Tobiko", "Green Tobiko"],
+        },
+        {
+            "id": 1,
+            "name": "Sashimi",
+            "fillings": [
+                "Tuna Sashimi",
+                "Salmon Sashimi",
+                "Yellowtail Sashimi",
+                "Octopus Sashimi",
+                "Scallop Sashimi",
+            ],
+        },
+        {
+            "id": 2,
+            "name": "Maki",
+            "fillings": ["Cucumber", "Tuna", "Salmon", "Avocado", "Tempura Shrimp"],
+        },
+        {
+            "id": 3,
+            "name": "Temaki",
+            "fillings": ["Tuna Temaki", "Salmon Temaki", "Vegetable Temaki", "Ebi Temaki"],
+        },
+    ]
+
+
 # Run the pipeline
 p = dlt.pipeline(pipeline_name="sushi", destination="duckdb")
-info = p.run([sushi_types(), waiters()])
+info = p.run([sushi_types(), waiters(), sushi_menu()])
