@@ -1,11 +1,11 @@
 # Plan
 
-From the Recent Activity section within your environment overview (which could be either production or development environments), you can easily access detailed status information and comprehensive metadata for any individual plan. To do this, simply locate the specific plan you're interested in and click on its distinctive blue ID hash that appears within the table. 
-![tcloud paln information](plan_info.png)
+From the Recent Activity section within your environment overview (which could be either production or development environments), you can easily access detailed status information and comprehensive metadata for any individual plan. To do this, simply locate the specific plan you're interested in and click on its distinctive blue ID hash that appears within the table.
+![tcloud paln information](./plan/plan_info.png)
 
-This opens the detailed plan overview page: 
+This opens the detailed plan overview page:
 
-![tcloud plan](tcloud_plan.png)
+![tcloud plan](./plan/tcloud_plan.png)
 
 The top section provides an intuitive, comprehensive at-a-glance overview of the plan, displaying all essential information in a clear, organized format.
 
@@ -22,10 +22,10 @@ The top section provides an intuitive, comprehensive at-a-glance overview of the
 
 The middle section presents a detailed summary of all plan changes, featuring an interactive interface that allows users to filter and view specific types of changes. Users can toggle between various categories including added models, directly modified models, metadata-only modified models, and deleted models. For reference, below you'll find a screenshot that illustrates a plan containing multiple types of changes: models with direct modifications, models with metadata-only changes, and newly added models.
 
-![plan example](plan_example.png)
+![plan example](./plan/plan_example.png)
 
 ## Execution and Audits section
 
 The final section provides a comprehensive overview of all execution statuses and audit results. This includes in-depth information about individual model executions (with convenient, direct access to associated logs), virtual updates, and a complete chronological listing of all audits that have been performed.
 
-![tcloud plan audits section](tcloud_plan_zoom.png)
+![tcloud plan audits section](./plan/tcloud_plan_zoom.png)
