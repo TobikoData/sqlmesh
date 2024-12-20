@@ -331,7 +331,6 @@ class Scheduler:
             circuit_breaker=circuit_breaker,
             start=start,
             end=end,
-            auto_restatement_enabled=auto_restatement_enabled,
         )
 
         self.console.stop_evaluation_progress(success=not errors)
@@ -421,7 +420,6 @@ class Scheduler:
         circuit_breaker: t.Optional[t.Callable[[], bool]] = None,
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
-        auto_restatement_enabled: bool = False,
     ) -> t.Tuple[t.List[NodeExecutionFailedError[SchedulingUnit]], t.List[SchedulingUnit]]:
         """Runs precomputed batches of missing intervals.
 
@@ -433,7 +431,6 @@ class Scheduler:
             circuit_breaker: An optional handler which checks if the run should be aborted.
             start: The start of the run.
             end: The end of the run.
-            auto_restatement_enabled: Whether to enable auto restatements.
 
         Returns:
             A tuple of errors and skipped intervals.
