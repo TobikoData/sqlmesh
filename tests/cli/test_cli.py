@@ -3,7 +3,6 @@ from contextlib import contextmanager
 from os import getcwd, path, remove
 from pathlib import Path
 from unittest.mock import patch
-
 import pytest
 from click.testing import CliRunner
 import time_machine
@@ -681,11 +680,15 @@ def test_run_cron_not_elapsed(runner, tmp_path, caplog):
     create_example_project(tmp_path)
     init_prod_and_backfill(runner, tmp_path)
 
-    # No error and no output if `prod` environment exists and cron has not elapsed
+    # No error if `prod` environment exists and cron has not elapsed
     with disable_logging():
         result = runner.invoke(cli, ["--log-file-dir", tmp_path, "--paths", tmp_path, "run"])
     assert result.exit_code == 0
-    assert result.output.strip() == "Run finished for environment 'prod'"
+
+    assert (
+        "No models are ready to run. Please wait until a model `cron` interval has \nelapsed.\n\nNext run will be ready at "
+        in result.output.strip()
+    )
 
 
 def test_run_cron_elapsed(runner, tmp_path):

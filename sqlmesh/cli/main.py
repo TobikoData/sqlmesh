@@ -472,8 +472,8 @@ def run(ctx: click.Context, environment: t.Optional[str] = None, **kwargs: t.Any
     """Evaluate missing intervals for the target environment."""
     context = ctx.obj
     select_models = kwargs.pop("select_model") or None
-    success = context.run(environment, select_models=select_models, **kwargs)
-    if not success:
+    completion_status = context.run(environment, select_models=select_models, **kwargs)
+    if completion_status.is_failure:
         raise click.ClickException("Run DAG Failed. See output for details.")
 
 
