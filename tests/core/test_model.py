@@ -25,6 +25,7 @@ from sqlmesh.core.config import (
 )
 from sqlmesh.core.context import Context, ExecutionContext
 from sqlmesh.core.dialect import parse
+from sqlmesh.core.engine_adapter.base import MERGE_SOURCE_ALIAS, MERGE_TARGET_ALIAS
 from sqlmesh.core.macros import MacroEvaluator, macro
 from sqlmesh.core.model import (
     CustomKind,
@@ -5906,6 +5907,119 @@ materialized FALSE
 materialized TRUE
 )"""
     )
+
+
+def test_merge_filter():
+    expressions = d.parse(
+        """
+        MODEL (
+          name db.employees,
+          kind INCREMENTAL_BY_UNIQUE_KEY (
+            unique_key name,
+            merge_filter source.salary > 0
+          )
+        );
+        SELECT 'name' AS name, 1 AS salary;
+    """
+    )
+
+    expected_incremental_predicate = f"{MERGE_SOURCE_ALIAS}.salary > 0"
+
+    model = load_sql_based_model(expressions, dialect="hive")
+    assert model.kind.merge_filter.sql() == expected_incremental_predicate
+
+    model = SqlModel.parse_raw(model.json())
+    assert model.kind.merge_filter.sql() == expected_incremental_predicate
+
+    expressions = d.parse(
+        """
+        MODEL (
+          name db.test,
+          kind INCREMENTAL_BY_UNIQUE_KEY (
+            unique_key purchase_order_id,
+            when_matched (
+              WHEN MATCHED AND source._operation = 1 THEN DELETE
+              WHEN MATCHED AND source._operation <> 1 THEN UPDATE SET target.purchase_order_id = 1
+            ),
+            merge_filter (
+                source.ds > (SELECT MAX(ds) FROM db.test) AND
+                source.ds > @start_ds AND
+                source._operation <> 1 AND 
+                target.start_date > dateadd(day, -7, current_date)
+            )
+          )
+        );
+
+        SELECT
+          purchase_order_id,
+          start_date
+        FROM db.upstream
+        """
+    )
+
+    model = SqlModel.parse_raw(load_sql_based_model(expressions).json())
+    assert d.format_model_expressions(model.render_definition()) == (
+        f"""MODEL (
+  name db.test,
+  kind INCREMENTAL_BY_UNIQUE_KEY (
+    unique_key ("purchase_order_id"),
+    when_matched (
+      WHEN MATCHED AND {MERGE_SOURCE_ALIAS}._operation = 1 THEN DELETE
+      WHEN MATCHED AND {MERGE_SOURCE_ALIAS}._operation <> 1 THEN UPDATE SET {MERGE_TARGET_ALIAS}.purchase_order_id = 1
+    ),
+    merge_filter (
+      {MERGE_SOURCE_ALIAS}.ds > (
+        SELECT
+          MAX(ds)
+        FROM db.test
+      )
+      AND {MERGE_SOURCE_ALIAS}.ds > '1970-01-01'
+      AND {MERGE_SOURCE_ALIAS}._operation <> 1
+      AND {MERGE_TARGET_ALIAS}.start_date > DATEADD(day, -7, CURRENT_DATE)
+    ),
+    batch_concurrency 1,
+    forward_only FALSE,
+    disable_restatement FALSE,
+    on_destructive_change 'ERROR'
+  )
+);
+
+SELECT
+  purchase_order_id,
+  start_date
+FROM db.upstream"""
+    )
+
+
+def test_merge_filter_macro():
+    @macro()
+    def predicate(
+        evaluator: MacroEvaluator,
+        cluster_column: exp.Column,
+    ) -> exp.Expression:
+        return parse_one(f"source.{cluster_column} > dateadd(day, -7, target.{cluster_column})")
+
+    expressions = d.parse(
+        """
+        MODEL (
+          name db.incremental_model,
+          kind INCREMENTAL_BY_UNIQUE_KEY (
+            unique_key id,
+            merge_filter @predicate(update_datetime)
+          ),
+          clustered_by update_datetime
+        );
+        SELECT id, update_datetime FROM db.test_model;
+    """
+    )
+
+    expected_incremental_predicate = f"{MERGE_SOURCE_ALIAS}.update_datetime > DATE_ADD({MERGE_TARGET_ALIAS}.update_datetime, -7, 'DAY')"
+
+    model = load_sql_based_model(expressions, dialect="snowflake")
+    assert model.kind.merge_filter.sql() == expected_incremental_predicate
+
+    model = SqlModel.parse_raw(model.json())
+    assert model.kind.merge_filter.sql() == expected_incremental_predicate
 
 
 @pytest.mark.parametrize(

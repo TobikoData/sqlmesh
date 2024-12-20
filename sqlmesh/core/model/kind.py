@@ -444,6 +444,7 @@ class IncrementalByUniqueKeyKind(_IncrementalBy):
     )
     unique_key: SQLGlotListOfFields
     when_matched: t.Optional[exp.Whens] = None
+    merge_filter: t.Optional[exp.Expression] = None
     batch_concurrency: t.Literal[1] = 1
 
     @field_validator("when_matched", mode="before")
@@ -453,17 +454,6 @@ class IncrementalByUniqueKeyKind(_IncrementalBy):
         v: t.Optional[t.Union[str, exp.Whens]],
         values: t.Dict[str, t.Any],
     ) -> t.Optional[exp.Whens]:
-        def replace_table_references(expression: exp.Expression) -> exp.Expression:
-            from sqlmesh.core.engine_adapter.base import MERGE_SOURCE_ALIAS, MERGE_TARGET_ALIAS
-
-            if isinstance(expression, exp.Column):
-                if expression.table.lower() == "target":
-                    expression.set("table", exp.to_identifier(MERGE_TARGET_ALIAS))
-                elif expression.table.lower() == "source":
-                    expression.set("table", exp.to_identifier(MERGE_SOURCE_ALIAS))
-
-            return expression
-
         if v is None:
             return v
         if isinstance(v, str):
@@ -474,7 +464,22 @@ class IncrementalByUniqueKeyKind(_IncrementalBy):
 
             return t.cast(exp.Whens, d.parse_one(v, into=exp.Whens, dialect=get_dialect(values)))
 
-        return t.cast(exp.Whens, v.transform(replace_table_references))
+        return t.cast(exp.Whens, v.transform(d.replace_merge_table_aliases))
+
+    @field_validator("merge_filter", mode="before")
+    @field_validator_v1_args
+    def _merge_filter_validator(
+        cls,
+        v: t.Optional[exp.Expression],
+        values: t.Dict[str, t.Any],
+    ) -> t.Optional[exp.Expression]:
+        if v is None:
+            return v
+        if isinstance(v, str):
+            v = v.strip()
+            return d.parse_one(v, dialect=get_dialect(values))
+
+        return v.transform(d.replace_merge_table_aliases)
 
     @property
     def data_hash_values(self) -> t.List[t.Optional[str]]:
@@ -482,6 +487,7 @@ class IncrementalByUniqueKeyKind(_IncrementalBy):
             *super().data_hash_values,
             *(gen(k) for k in self.unique_key),
             gen(self.when_matched) if self.when_matched is not None else None,
+            gen(self.merge_filter) if self.merge_filter is not None else None,
         ]
 
     def to_expression(
@@ -494,6 +500,7 @@ class IncrementalByUniqueKeyKind(_IncrementalBy):
                     {
                         "unique_key": exp.Tuple(expressions=self.unique_key),
                         "when_matched": self.when_matched,
+                        "merge_filter": self.merge_filter,
                     }
                 ),
             ],

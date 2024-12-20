@@ -94,6 +94,10 @@ def test_model_to_sqlmesh_fields():
         start="Jan 1 2023",
         partition_by=["a"],
         cluster_by=["a", '"b"'],
+        incremental_predicates=[
+            "55 > DBT_INTERNAL_SOURCE.b",
+            "DBT_INTERNAL_DEST.session_start > dateadd(day, -7, current_date)",
+        ],
         cron="@hourly",
         interval_unit="FIVE_MINUTE",
         batch_size=5,
@@ -129,6 +133,10 @@ def test_model_to_sqlmesh_fields():
     assert kind.batch_size == 5
     assert kind.lookback == 3
     assert kind.on_destructive_change == OnDestructiveChange.ALLOW
+    assert (
+        kind.merge_filter.sql()
+        == "55 > __MERGE_SOURCE__.b AND __MERGE_TARGET__.session_start > DATEADD(day, -7, CURRENT_DATE)"
+    )
 
     model = model_config.update_with({"dialect": "snowflake"}).to_sqlmesh(context)
     assert model.dialect == "snowflake"
