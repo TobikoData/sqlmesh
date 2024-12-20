@@ -52,6 +52,7 @@ class BaseExpressionRenderer:
         model_fqn: t.Optional[str] = None,
         normalize_identifiers: bool = True,
         optimize_query: t.Optional[bool] = True,
+        validate_query: t.Optional[bool] = False,
     ):
         self._expression = expression
         self._dialect = dialect
@@ -67,6 +68,7 @@ class BaseExpressionRenderer:
         self._cache: t.List[t.Optional[exp.Expression]] = []
         self._model_fqn = model_fqn
         self._optimize_query_flag = optimize_query is not False
+        self.validate_query = validate_query
 
     def update_schema(self, schema: t.Dict[str, t.Any]) -> None:
         self.schema = d.normalize_mapping_schema(schema, dialect=self._dialect)
@@ -482,7 +484,7 @@ class QueryRenderer(BaseExpressionRenderer):
                     query, default_catalog=self._default_catalog, dialect=self._dialect
                 )
 
-                query = self._optimize_query(query, deps)
+                query = self._optimize_query(query, deps, self.validate_query)
 
                 if should_cache:
                     self._optimized_cache = query
@@ -511,7 +513,9 @@ class QueryRenderer(BaseExpressionRenderer):
         else:
             super().update_cache(expression)
 
-    def _optimize_query(self, query: exp.Query, all_deps: t.Set[str]) -> exp.Query:
+    def _optimize_query(
+        self, query: exp.Query, all_deps: t.Set[str], strict: t.Optional[bool] = None
+    ) -> exp.Query:
         # We don't want to normalize names in the schema because that's handled by the optimizer
         original = query
         missing_deps = set()
@@ -526,11 +530,16 @@ class QueryRenderer(BaseExpressionRenderer):
         if self._model_fqn and not should_optimize and any(s.is_star for s in query.selects):
             deps = ", ".join(f"'{dep}'" for dep in sorted(missing_deps))
 
-            logger.warning(
+            warning = (
                 f"SELECT * cannot be expanded due to missing schema(s) for model(s): {deps}. "
                 "Run `sqlmesh create_external_models` and / or make sure that the model "
-                f"'{self._model_fqn}' can be rendered at parse time.",
+                f"'{self._model_fqn}' can be rendered at parse time."
             )
+
+            if strict:
+                raise_config_error(warning, self._path)
+
+            logger.warning(warning)
 
         try:
             if should_optimize:
@@ -549,11 +558,16 @@ class QueryRenderer(BaseExpressionRenderer):
                     )
                 )
         except SqlglotError as ex:
+            warning = (
+                f"{ex} for model '{self._model_fqn}', the column may not exist or is ambiguous"
+            )
+
+            if strict:
+                raise_config_error(warning, self._path)
+
             query = original
 
-            logger.warning(
-                "%s for model '%s', the column may not exist or is ambiguous", ex, self._model_fqn
-            )
+            logger.warning(warning)
         except Exception as ex:
             raise_config_error(
                 f"Failed to optimize query, please file an issue at https://github.com/TobikoData/sqlmesh/issues/new. {ex}",

@@ -221,6 +221,7 @@ class _Model(ModelMeta, frozen=True):
                     "enabled",
                     "inline_audits",
                     "optimize_query",
+                    "validate_query",
                 ):
                     expressions.append(
                         exp.Property(
@@ -912,11 +913,19 @@ class _Model(ModelMeta, frozen=True):
                 self._path,
             )
 
-        if not self.is_sql and self.optimize_query is not None:
-            raise_config_error(
-                "SQLMesh query optimizer can only be enabled/disabled for SQL models",
-                self._path,
-            )
+        # The following attributes should be defined only for SQL models
+        if not self.is_sql:
+            if self.optimize_query is not None:
+                raise_config_error(
+                    "SQLMesh query optimizer can only be enabled/disabled for SQL models",
+                    self._path,
+                )
+
+            if self.validate_query is not None:
+                raise_config_error(
+                    "Query validation can only be enabled/disabled for SQL models",
+                    self._path,
+                )
 
     def is_breaking_change(self, previous: Model) -> t.Optional[bool]:
         """Determines whether this model is a breaking change in relation to the `previous` model.
@@ -1013,6 +1022,7 @@ class _Model(ModelMeta, frozen=True):
                 self.project,
                 str(self.allow_partials),
                 gen(self.session_properties_) if self.session_properties_ else None,
+                str(self.validate_query) if self.validate_query is not None else None,
             ]
 
             for audit_name, audit_args in sorted(self.audits, key=lambda a: a[0]):
@@ -1354,6 +1364,7 @@ class SqlModel(_Model):
             default_catalog=self.default_catalog,
             quote_identifiers=not no_quote_identifiers,
             optimize_query=self.optimize_query,
+            validate_query=self.validate_query,
         )
 
     @property

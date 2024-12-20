@@ -47,6 +47,7 @@ class ModelDefaultsConfig(BaseConfig):
     session_properties: t.Optional[t.Dict[str, t.Any]] = None
     audits: t.Optional[t.List[FunctionCall]] = None
     optimize_query: t.Optional[bool] = None
+    validate_query: t.Optional[bool] = None
 
     _model_kind_validator = model_kind_validator
     _on_destructive_change_validator = on_destructive_change_validator

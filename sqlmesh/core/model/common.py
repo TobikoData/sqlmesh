@@ -303,6 +303,7 @@ bool_validator = field_validator(
     "allow_partials",
     "enabled",
     "optimize_query",
+    "validate_query",
     mode="before",
     check_fields=False,
 )(parse_bool)
