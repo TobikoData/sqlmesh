@@ -1079,6 +1079,17 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             )
         return self.next_auto_restatement_ts
 
+    def apply_pending_restatement_intervals(self) -> None:
+        """Applies the pending restatement intervals to the snapshot's intervals."""
+        for pending_restatement_interval in self.pending_restatement_intervals:
+            logger.info(
+                "Applying the auto restated interval (%s, %s) to snapshot %s",
+                time_like_to_str(pending_restatement_interval[0]),
+                time_like_to_str(pending_restatement_interval[1]),
+                self.snapshot_id,
+            )
+            self.intervals = remove_interval(self.intervals, *pending_restatement_interval)
+
     @property
     def physical_schema(self) -> str:
         if self.physical_schema_ is not None:
@@ -1985,15 +1996,7 @@ def apply_auto_restatements(
                 [*snapshot.pending_restatement_intervals, removal_interval]
             )
 
-        for pending_restatement_interval in snapshot.pending_restatement_intervals:
-            logger.info(
-                "Applying the auto restated interval (%s, %s) to snapshot %s",
-                time_like_to_str(pending_restatement_interval[0]),
-                time_like_to_str(pending_restatement_interval[1]),
-                snapshot.snapshot_id,
-            )
-            snapshot.intervals = remove_interval(snapshot.intervals, *pending_restatement_interval)
-
+        snapshot.apply_pending_restatement_intervals()
         snapshot.update_next_auto_restatement_ts(execution_time)
 
     return [
