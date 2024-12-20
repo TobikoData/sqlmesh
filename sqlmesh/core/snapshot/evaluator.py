@@ -1392,7 +1392,7 @@ class IncrementalByUniqueKeyStrategy(MaterializableStrategy):
                 columns_to_types=model.columns_to_types,
                 unique_key=model.unique_key,
                 when_matched=model.when_matched,
-                merge_filters=model.merge_filters,
+                merge_filter=model.merge_filter,
             )
 
     def append(
@@ -1408,7 +1408,7 @@ class IncrementalByUniqueKeyStrategy(MaterializableStrategy):
             columns_to_types=model.columns_to_types,
             unique_key=model.unique_key,
             when_matched=model.when_matched,
-            merge_filters=model.merge_filters,
+            merge_filter=model.merge_filter,
         )
 
 

@@ -5909,14 +5909,14 @@ materialized TRUE
     )
 
 
-def test_merge_filters():
+def test_merge_filter():
     expressions = d.parse(
         """
         MODEL (
           name db.employees,
           kind INCREMENTAL_BY_UNIQUE_KEY (
             unique_key name,
-            merge_filters source.salary > 0
+            merge_filter source.salary > 0
           )
         );
         SELECT 'name' AS name, 1 AS salary;
@@ -5926,10 +5926,10 @@ def test_merge_filters():
     expected_incremental_predicate = f"{MERGE_SOURCE_ALIAS}.salary > 0"
 
     model = load_sql_based_model(expressions, dialect="hive")
-    assert model.kind.merge_filters.sql() == expected_incremental_predicate
+    assert model.kind.merge_filter.sql() == expected_incremental_predicate
 
     model = SqlModel.parse_raw(model.json())
-    assert model.kind.merge_filters.sql() == expected_incremental_predicate
+    assert model.kind.merge_filter.sql() == expected_incremental_predicate
 
     expressions = d.parse(
         """
@@ -5941,8 +5941,9 @@ def test_merge_filters():
               WHEN MATCHED AND source._operation = 1 THEN DELETE
               WHEN MATCHED AND source._operation <> 1 THEN UPDATE SET target.purchase_order_id = 1
             ),
-            merge_filters (
+            merge_filter (
                 source.ds > (SELECT MAX(ds) FROM db.test) AND
+                source.ds > @start_ds AND
                 source._operation <> 1 AND 
                 target.start_date > dateadd(day, -7, current_date)
             )
@@ -5957,7 +5958,6 @@ def test_merge_filters():
     )
 
     model = SqlModel.parse_raw(load_sql_based_model(expressions).json())
-
     assert d.format_model_expressions(model.render_definition()) == (
         f"""MODEL (
   name db.test,
@@ -5967,13 +5967,16 @@ def test_merge_filters():
       WHEN MATCHED AND {MERGE_SOURCE_ALIAS}._operation = 1 THEN DELETE
       WHEN MATCHED AND {MERGE_SOURCE_ALIAS}._operation <> 1 THEN UPDATE SET {MERGE_TARGET_ALIAS}.purchase_order_id = 1
     ),
-    merge_filters {MERGE_SOURCE_ALIAS}.ds > (
-      SELECT
-        MAX(ds)
-      FROM db.test
-    )
-    AND {MERGE_SOURCE_ALIAS}._operation <> 1
-    AND {MERGE_TARGET_ALIAS}.start_date > DATEADD(day, -7, CURRENT_DATE),
+    merge_filter (
+      {MERGE_SOURCE_ALIAS}.ds > (
+        SELECT
+          MAX(ds)
+        FROM db.test
+      )
+      AND {MERGE_SOURCE_ALIAS}.ds > '1970-01-01'
+      AND {MERGE_SOURCE_ALIAS}._operation <> 1
+      AND {MERGE_TARGET_ALIAS}.start_date > DATEADD(day, -7, CURRENT_DATE)
+    ),
     batch_concurrency 1,
     forward_only FALSE,
     disable_restatement FALSE,
@@ -5988,7 +5991,7 @@ FROM db.upstream"""
     )
 
 
-def test_merge_filters_macro():
+def test_merge_filter_macro():
     @macro()
     def predicate(
         evaluator: MacroEvaluator,
@@ -6002,7 +6005,7 @@ def test_merge_filters_macro():
           name db.incremental_model,
           kind INCREMENTAL_BY_UNIQUE_KEY (
             unique_key id,
-            merge_filters @predicate(update_datetime)
+            merge_filter @predicate(update_datetime)
           ),
           clustered_by update_datetime
         );
@@ -6013,10 +6016,10 @@ def test_merge_filters_macro():
     expected_incremental_predicate = f"{MERGE_SOURCE_ALIAS}.update_datetime > DATE_ADD({MERGE_TARGET_ALIAS}.update_datetime, -7, 'DAY')"
 
     model = load_sql_based_model(expressions, dialect="snowflake")
-    assert model.kind.merge_filters.sql() == expected_incremental_predicate
+    assert model.kind.merge_filter.sql() == expected_incremental_predicate
 
     model = SqlModel.parse_raw(model.json())
-    assert model.kind.merge_filters.sql() == expected_incremental_predicate
+    assert model.kind.merge_filter.sql() == expected_incremental_predicate
 
 
 @pytest.mark.parametrize(

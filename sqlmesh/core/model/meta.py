@@ -437,9 +437,9 @@ class ModelMeta(_Node):
         return None
 
     @property
-    def merge_filters(self) -> t.Optional[exp.Expression]:
+    def merge_filter(self) -> t.Optional[exp.Expression]:
         if isinstance(self.kind, IncrementalByUniqueKeyKind):
-            return self.kind.merge_filters
+            return self.kind.merge_filter
         return None
 
     @property
