@@ -94,31 +94,33 @@ export default function PageModels({
                   headline={namespace}
                   open
                 >
-                  {models.map((model: ModelSQLMeshModel) => (
-                    <TBKSourceListItem
-                      key={model.name}
-                      size="xs"
-                      hide-icon
-                      active={pathname === `${to}/${model.name}`}
-                      value={`${to}/${model.name}`}
-                      search-value={model.name}
-                      compact
-                    >
-                      <TBKModelName
-                        hide-schema
-                        hide-catalog
-                        hide-tooltip
-                        text={model.name}
+                  {models.map((model: ModelSQLMeshModel) => {
+                    return (
+                      <TBKSourceListItem
+                        key={model.name}
+                        size="xs"
+                        hide-icon
+                        active={pathname === `${to}/${model.name}`}
+                        value={`${to}/${model.name}`}
+                        search-value={model.name}
+                        compact
                       >
-                        <TBKBadge
-                          size="2xs"
-                          slot="after"
+                        <TBKModelName
+                          hide-schema
+                          hide-catalog
+                          hide-tooltip
+                          text={model.name}
                         >
-                          {getModelNodeTypeTitle(model.type)}
-                        </TBKBadge>
-                      </TBKModelName>
-                    </TBKSourceListItem>
-                  ))}
+                          <TBKBadge
+                            size="2xs"
+                            slot="after"
+                          >
+                            {getModelNodeTypeTitle(model.type)}
+                          </TBKBadge>
+                        </TBKModelName>
+                      </TBKSourceListItem>
+                    )
+                  })}
                 </TBKSourceListSection>
               ))}
             </TBKSourceList>

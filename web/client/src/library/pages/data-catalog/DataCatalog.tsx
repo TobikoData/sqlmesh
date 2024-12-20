@@ -118,7 +118,6 @@ export default function PageDataCatalog(): JSX.Element {
                   <TBKTabs
                     size="2xs"
                     variant="primary"
-                    disabled={isFetchingModel}
                   >
                     <TBKTab
                       slot="nav"
