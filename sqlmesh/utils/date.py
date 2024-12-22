@@ -420,7 +420,7 @@ def pandas_timestamp_to_pydatetime(
 
 def format_tz_datetime(
     time: TimeLike,
-    format_string: t.Optional[str] = "%Y-%m-%d %-I:%M%p %Z",
+    format_string: t.Optional[str] = "%Y-%m-%d %I:%M%p %Z",
     use_local_timezone: bool = False,
 ) -> str:
     output_datetime = to_datetime(time)
