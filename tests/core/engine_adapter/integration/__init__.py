@@ -470,6 +470,7 @@ class TestContext:
             ],
         )
         if config_mutator:
+            config.gateways = {self.gateway: config.gateways[self.gateway]}
             config_mutator(self.gateway, config)
 
         gateway_config = config.gateways[self.gateway]

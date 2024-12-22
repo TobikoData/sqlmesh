@@ -418,12 +418,10 @@ class GenericContext(BaseContext, t.Generic[C]):
     @property
     def snapshot_evaluator(self) -> SnapshotEvaluator:
         if not self._snapshot_evaluator:
-            if snapshot_gateways := self._snapshot_gateways:
-                self._create_engine_adapters(set(snapshot_gateways.values()))
             self._snapshot_evaluator = SnapshotEvaluator(
                 {
                     gateway: adapter.with_log_level(logging.INFO)
-                    for gateway, adapter in self._engine_adapters.items()
+                    for gateway, adapter in self.engine_adapters.items()
                 },
                 ddl_concurrent_tasks=self.concurrent_tasks,
                 selected_gateway=self.selected_gateway,
@@ -2025,21 +2023,13 @@ class GenericContext(BaseContext, t.Generic[C]):
 
     @cached_property
     def engine_adapters(self) -> t.Dict[str, EngineAdapter]:
-        """Returns all engine adapters for the gateways defined in the configs."""
-        self._create_engine_adapters()
-        return self._engine_adapters
-
-    def _create_engine_adapters(self, gateways: t.Optional[t.Set] = None) -> None:
-        """Create engine adapters for the gateways, when none provided include all defined in the configs."""
-
+        """Returns all the engine adapters for the gateways defined in the configuration."""
         for gateway_name in self.config.gateways:
-            if gateway_name != self.selected_gateway and (
-                gateways is None or gateway_name in gateways
-            ):
+            if gateway_name != self.selected_gateway:
                 connection = self.config.get_connection(gateway_name)
                 adapter = connection.create_engine_adapter()
-                self.concurrent_tasks = min(self.concurrent_tasks, connection.concurrent_tasks)
                 self._engine_adapters[gateway_name] = adapter
+        return self._engine_adapters
 
     def _get_engine_adapter(self, gateway: t.Optional[str] = None) -> EngineAdapter:
         if gateway:

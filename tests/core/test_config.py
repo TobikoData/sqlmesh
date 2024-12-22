@@ -757,10 +757,8 @@ model_defaults:
         new_callable=mocker.PropertyMock(return_value={"snapshot": "athena"}),
     )
 
-    ctx._create_engine_adapters()
-
     assert isinstance(ctx._connection_config, RedshiftConnectionConfig)
-    assert len(ctx._engine_adapters) == 2
-    assert isinstance(ctx._engine_adapters["athena"], AthenaEngineAdapter)
-    assert isinstance(ctx._engine_adapters["redshift"], RedshiftEngineAdapter)
+    assert len(ctx.engine_adapters) == 2
+    assert isinstance(ctx.engine_adapters["athena"], AthenaEngineAdapter)
+    assert isinstance(ctx.engine_adapters["redshift"], RedshiftEngineAdapter)
     assert ctx.engine_adapter == ctx._get_engine_adapter("redshift")

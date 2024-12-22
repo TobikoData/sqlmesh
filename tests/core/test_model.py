@@ -6635,7 +6635,6 @@ def test_gateway_specific_render(assert_exp_eq) -> None:
     )
     context = Context(config=config)
     assert context.engine_adapter == context._engine_adapters["main"]
-    assert len(context._engine_adapters) == 1
 
     @model(
         name="dummy_model",
@@ -6652,8 +6651,6 @@ def test_gateway_specific_render(assert_exp_eq) -> None:
     assert isinstance(dummy_model, SqlModel)
     assert dummy_model.gateway == "duckdb"
 
-    # Calling render with a model with a non-default gateway should create
-    # the engine adapters and render with the model specified gateway
     assert_exp_eq(
         context.render("dummy_model"),
         """
