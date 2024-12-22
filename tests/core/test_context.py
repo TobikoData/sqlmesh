@@ -341,8 +341,7 @@ def test_gateway_specific_adapters(copy_to_temp_path, mocker):
 
     ctx = Context(paths=path, config="isolated_systems_config")
 
-    ctx._create_engine_adapters({"test"})
-    assert len(ctx._engine_adapters) == 2
+    assert len(ctx.engine_adapters) == 3
     assert ctx.engine_adapter == ctx._get_engine_adapter()
     assert ctx._get_engine_adapter("test") == ctx._engine_adapters["test"]
 

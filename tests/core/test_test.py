@@ -2021,7 +2021,6 @@ def test_test_with_gateway_specific_model(tmp_path: Path, mocker: MockerFixture)
     )
 
     assert context.engine_adapter == context._engine_adapters["main"]
-    assert len(context._engine_adapters) == 1
     with pytest.raises(
         SQLMeshError, match=r"Gateway 'wrong' not found in the available engine adapters."
     ):

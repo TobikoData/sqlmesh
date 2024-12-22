@@ -1328,6 +1328,8 @@ def test_sushi(ctx: TestContext, tmp_path_factory: pytest.TempPathFactory):
         personal_paths=[pathlib.Path("~/.sqlmesh/config.yaml").expanduser()],
     )
 
+    # To enable parallelism in integration tests
+    config.gateways = {ctx.gateway: config.gateways[ctx.gateway]}
     current_gateway_config = config.gateways[ctx.gateway]
     current_gateway_config.state_schema = sushi_state_schema
 
@@ -1730,6 +1732,8 @@ def test_init_project(ctx: TestContext, tmp_path_factory: pytest.TempPathFactory
     if config.model_defaults.dialect != ctx.dialect:
         config.model_defaults = config.model_defaults.copy(update={"dialect": ctx.dialect})
 
+    # To enable parallelism in integration tests
+    config.gateways = {ctx.gateway: config.gateways[ctx.gateway]}
     current_gateway_config = config.gateways[ctx.gateway]
 
     if ctx.dialect == "athena":
