@@ -217,7 +217,8 @@ def test_plan_restate_model(runner, tmp_path):
     assert_duckdb_test(result)
     assert "No changes to plan: project files match the `prod` environment" in result.output
     assert "sqlmesh_example.full_model evaluated in" in result.output
-    assert_backfill_success(result)
+    assert_model_batches_executed(result)
+    assert_target_env_updated(result)
 
 
 @pytest.mark.parametrize("flag", ["--skip-backfill", "--dry-run"])
@@ -345,7 +346,6 @@ def test_plan_dev_create_from_virtual(runner, tmp_path):
     )
     assert result.exit_code == 0
     assert_new_env(result, "dev2", "dev", initialize=False)
-    assert_model_versions_created(result)
     assert_target_env_updated(result)
     assert_virtual_update(result)
 

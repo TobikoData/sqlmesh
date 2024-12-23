@@ -218,30 +218,36 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             plan: The plan to source snapshots from.
             deployability_index: Indicates which snapshots are deployable in the context of this creation.
         """
-        snapshots_to_create = [
+        snapshots_to_maybe_create = [
             s
             for s in snapshots.values()
             if s.is_model and not s.is_symbolic and plan.is_selected_for_backfill(s.name)
         ]
-        snapshots_to_create_count = len(snapshots_to_create)
 
-        if snapshots_to_create_count > 0:
+        snapshots_to_create = self.snapshot_evaluator.get_snapshots_to_create(
+            snapshots_to_maybe_create,
+            deployability_index=deployability_index,
+        )
+
+        if snapshots_to_create["snapshots_to_create"]:
             self.console.start_creation_progress(
-                snapshots_to_create_count, plan.environment, self.default_catalog
+                len(snapshots_to_create["snapshots_to_create"]),
+                plan.environment,
+                self.default_catalog,
             )
 
-        completed = False
-        try:
-            self.snapshot_evaluator.create(
-                snapshots_to_create,
-                snapshots,
-                allow_destructive_snapshots=plan.allow_destructive_models,
-                deployability_index=deployability_index,
-                on_complete=self.console.update_creation_progress,
-            )
-            completed = True
-        finally:
-            self.console.stop_creation_progress(success=completed)
+            completed = False
+            try:
+                self.snapshot_evaluator.create(
+                    **snapshots_to_create,
+                    snapshots=snapshots,
+                    allow_destructive_snapshots=plan.allow_destructive_models,
+                    deployability_index=deployability_index,
+                    on_complete=self.console.update_creation_progress,
+                )
+                completed = True
+            finally:
+                self.console.stop_creation_progress(success=completed)
 
         self.state_sync.push_snapshots(plan.new_snapshots)
 

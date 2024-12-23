@@ -80,6 +80,13 @@ if t.TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+class SnapshotsToCreate(t.TypedDict):
+    snapshots_to_create: t.List[Snapshot]
+    tables_by_schema: t.DefaultDict[exp.Table, t.Set[str]]
+    gateway_by_schema: t.Dict[exp.Table, str]
+    target_deployability_flags: t.Dict[str, t.List[bool]]
+
+
 class SnapshotEvaluator:
     """Evaluates a snapshot given runtime arguments through an arbitrary EngineAdapter.
 
@@ -256,23 +263,12 @@ class SnapshotEvaluator:
                 self.ddl_concurrent_tasks,
             )
 
-    def create(
+    def get_snapshots_to_create(
         self,
         target_snapshots: t.Iterable[Snapshot],
-        snapshots: t.Dict[SnapshotId, Snapshot],
         deployability_index: t.Optional[DeployabilityIndex] = None,
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]] = None,
-        allow_destructive_snapshots: t.Set[str] = set(),
-    ) -> None:
-        """Creates a physical snapshot schema and table for the given collection of snapshots.
-
-        Args:
-            target_snapshots: Target snapshots.
-            snapshots: Mapping of snapshot ID to snapshot.
-            deployability_index: Determines snapshots that are deployable in the context of this creation.
-            on_complete: A callback to call on each successfully created snapshot.
-            allow_destructive_snapshots: Set of snapshots that are allowed to have destructive schema changes.
-        """
+    ) -> SnapshotsToCreate:
         snapshots_with_table_names = defaultdict(set)
         tables_by_schema = defaultdict(set)
         gateway_by_schema: t.Dict[exp.Table, str] = {}
@@ -326,9 +322,34 @@ class SnapshotEvaluator:
                         table_deployability[table_name]
                     )
                 target_deployability_flags[snapshot.name].sort()
-            elif on_complete:
-                on_complete(snapshot)
 
+        return {
+            "snapshots_to_create": snapshots_to_create,
+            "tables_by_schema": tables_by_schema,
+            "gateway_by_schema": gateway_by_schema,
+            "target_deployability_flags": target_deployability_flags,
+        }
+
+    def create(
+        self,
+        snapshots_to_create: t.Iterable[Snapshot],
+        tables_by_schema: t.DefaultDict[exp.Table, t.Set[str]],
+        gateway_by_schema: t.Dict[exp.Table, str],
+        target_deployability_flags: t.Dict[str, t.List[bool]],
+        snapshots: t.Dict[SnapshotId, Snapshot],
+        deployability_index: t.Optional[DeployabilityIndex] = None,
+        on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]] = None,
+        allow_destructive_snapshots: t.Set[str] = set(),
+    ) -> None:
+        """Creates a physical snapshot schema and table for the given collection of snapshots.
+
+        Args:
+            snapshots_to_create: Snapshots to create.
+            snapshots: Mapping of snapshot ID to snapshot.
+            deployability_index: Determines snapshots that are deployable in the context of this creation.
+            on_complete: A callback to call on each successfully created snapshot.
+            allow_destructive_snapshots: Set of snapshots that are allowed to have destructive schema changes.
+        """
         if not snapshots_to_create:
             return
         self._create_schemas(tables_by_schema, gateway_by_schema)
@@ -350,7 +371,7 @@ class SnapshotEvaluator:
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]],
         allow_destructive_snapshots: t.Set[str],
     ) -> None:
-        """Internal method to create tables in parrallel."""
+        """Internal method to create tables in parallel."""
         with self.concurrent_context():
             concurrent_apply_to_snapshots(
                 snapshots_to_create,
