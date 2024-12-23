@@ -303,7 +303,7 @@ def test_plan(
     )
     # TODO: Is this what we expect?
     assert text_output[2] == ""
-    assert text_output[3] == "The target environment has been updated successfully"
+    assert text_output[3] == "Target environment updated successfully"
     assert convert_all_html_output_to_tags(output) == [
         ["pre", "span"],
         ["pre"] + ["span"] * 4,
@@ -326,7 +326,7 @@ def test_run_dag(
     assert not output.stderr
     assert len(output.outputs) == 2
     assert convert_all_html_output_to_text(output) == [
-        "All model batches have been executed successfully",
+        "Model batches executed successfully",
         "Run finished for environment 'prod'",
     ]
     assert get_all_html_output(output) == [
@@ -337,7 +337,7 @@ def test_run_dag(
                 h(
                     "span",
                     {"style": SUCCESS_STYLE},
-                    "All model batches have been executed successfully",
+                    "Model batches executed successfully",
                     autoescape=False,
                 ),
                 autoescape=False,
@@ -381,7 +381,7 @@ def test_invalidate(
     assert not output.stderr
     assert len(output.outputs) == 1
     assert convert_all_html_output_to_text(output) == [
-        "Environment 'dev' has been invalidated.",
+        "Environment 'dev' invalidated.",
     ]
     assert get_all_html_output(output) == [
         str(
@@ -408,7 +408,7 @@ def test_invalidate(
                     h(
                         "span",
                         {"style": SUCCESS_STYLE},
-                        " has been invalidated.",
+                        " invalidated.",
                         autoescape=False,
                     )
                 ),
