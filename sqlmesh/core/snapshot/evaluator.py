@@ -67,6 +67,7 @@ from sqlmesh.utils.concurrency import (
 )
 from sqlmesh.utils.date import TimeLike, now, time_like_to_str
 from sqlmesh.utils.errors import ConfigError, SQLMeshError
+from sqlmesh.utils.pydantic import PydanticModel
 
 if sys.version_info >= (3, 12):
     from importlib import metadata
@@ -80,7 +81,7 @@ if t.TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class SnapshotsToCreate(t.TypedDict):
+class SnapshotsToCreate(PydanticModel):
     snapshots_to_create: t.List[Snapshot]
     tables_by_schema: t.DefaultDict[exp.Table, t.Set[str]]
     gateway_by_schema: t.Dict[exp.Table, str]
@@ -323,19 +324,16 @@ class SnapshotEvaluator:
                     )
                 target_deployability_flags[snapshot.name].sort()
 
-        return {
-            "snapshots_to_create": snapshots_to_create,
-            "tables_by_schema": tables_by_schema,
-            "gateway_by_schema": gateway_by_schema,
-            "target_deployability_flags": target_deployability_flags,
-        }
+        return SnapshotsToCreate(
+            snapshots_to_create=snapshots_to_create,
+            tables_by_schema=tables_by_schema,
+            gateway_by_schema=gateway_by_schema,
+            target_deployability_flags=target_deployability_flags,
+        )
 
     def create(
         self,
-        snapshots_to_create: t.Iterable[Snapshot],
-        tables_by_schema: t.DefaultDict[exp.Table, t.Set[str]],
-        gateway_by_schema: t.Dict[exp.Table, str],
-        target_deployability_flags: t.Dict[str, t.List[bool]],
+        snapshots_to_create: SnapshotsToCreate,
         snapshots: t.Dict[SnapshotId, Snapshot],
         deployability_index: t.Optional[DeployabilityIndex] = None,
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]] = None,
@@ -344,19 +342,21 @@ class SnapshotEvaluator:
         """Creates a physical snapshot schema and table for the given collection of snapshots.
 
         Args:
-            snapshots_to_create: Snapshots to create.
+            snapshots_to_create: Snapshots to create and associated information.
             snapshots: Mapping of snapshot ID to snapshot.
             deployability_index: Determines snapshots that are deployable in the context of this creation.
             on_complete: A callback to call on each successfully created snapshot.
             allow_destructive_snapshots: Set of snapshots that are allowed to have destructive schema changes.
         """
-        if not snapshots_to_create:
+        if not snapshots_to_create.snapshots_to_create:
             return
-        self._create_schemas(tables_by_schema, gateway_by_schema)
+        self._create_schemas(
+            snapshots_to_create.tables_by_schema, snapshots_to_create.gateway_by_schema
+        )
         self._create_snapshots(
-            snapshots_to_create,
+            snapshots_to_create.snapshots_to_create,
             snapshots,
-            target_deployability_flags,
+            snapshots_to_create.target_deployability_flags,
             deployability_index,
             on_complete,
             allow_destructive_snapshots,

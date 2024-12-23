@@ -229,9 +229,9 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             deployability_index=deployability_index,
         )
 
-        if snapshots_to_create["snapshots_to_create"]:
+        if snapshots_to_create.snapshots_to_create:
             self.console.start_creation_progress(
-                len(snapshots_to_create["snapshots_to_create"]),
+                len(snapshots_to_create.snapshots_to_create),
                 plan.environment,
                 self.default_catalog,
             )
@@ -239,8 +239,8 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             completed = False
             try:
                 self.snapshot_evaluator.create(
-                    **snapshots_to_create,
-                    snapshots=snapshots,
+                    snapshots_to_create,
+                    snapshots,
                     allow_destructive_snapshots=plan.allow_destructive_models,
                     deployability_index=deployability_index,
                     on_complete=self.console.update_creation_progress,

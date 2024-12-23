@@ -156,8 +156,8 @@ def create_tables(
         target_snapshots, deployability_index=command_payload.deployability_index
     )
     evaluator.create(
-        **snapshots_to_create,
-        snapshots=snapshots_by_id,
+        snapshots_to_create,
+        snapshots_by_id,
         deployability_index=command_payload.deployability_index,
         allow_destructive_snapshots=command_payload.allow_destructive_snapshots,
     )
