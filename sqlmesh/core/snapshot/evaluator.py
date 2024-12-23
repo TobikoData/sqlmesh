@@ -1010,7 +1010,7 @@ class SnapshotEvaluator:
                         start=start,
                         end=end,
                         execution_time=execution_time,
-                        snapshots=parent_snapshots_by_name(snapshot, snapshots),
+                        snapshots=snapshots,
                         deployability_index=deployability_index,
                         engine_adapter=adapter,
                         table_mapping=table_mapping,

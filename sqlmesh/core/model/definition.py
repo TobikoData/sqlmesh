@@ -2165,7 +2165,7 @@ def _split_sql_model_statements(
             inline_audits[loaded_audit.name] = loaded_audit
             idx += 2
         elif isinstance(expr, d.VirtualUpdateStatement):
-            for statement in expr.this:
+            for statement in expr.expressions:
                 on_virtual_update.append(statement)
             idx += 1
         else:

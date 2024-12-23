@@ -986,6 +986,40 @@ def test_seed_pre_statements_only():
     assert not model.post_statements
 
 
+def test_seed_on_virtual_update_statements():
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.seed,
+            kind SEED (
+              path '../seeds/waiter_names.csv',
+              batch_size 100,
+            )
+        );
+
+        JINJA_STATEMENT_BEGIN;
+        CREATE TABLE x{{ 1 + 1 }};
+        JINJA_END;
+
+        ON_VIRTUAL_UPDATE_BEGIN; 
+        JINJA_STATEMENT_BEGIN;     
+        GRANT SELECT ON VIEW {{ this_model }} TO ROLE dev_role;
+        JINJA_END;  
+        DROP TABLE x2;
+        ON_VIRTUAL_UPDATE_END;
+
+    """
+    )
+
+    model = load_sql_based_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
+
+    assert model.pre_statements == [d.jinja_statement("CREATE TABLE x{{ 1 + 1 }};")]
+    assert model.on_virtual_update == [
+        d.jinja_statement("GRANT SELECT ON VIEW {{ this_model }} TO ROLE dev_role;"),
+        *d.parse("DROP TABLE x2;"),
+    ]
+
+
 def test_seed_model_custom_types(tmp_path):
     model_csv_path = (tmp_path / "model.csv").absolute()
 
