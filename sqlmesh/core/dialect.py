@@ -888,12 +888,7 @@ def parse(
             chunks.append(([token], ChunkType.JINJA_QUERY))
             pos += 2
         elif _is_jinja_statement_begin(tokens, pos):
-            chunks.append(
-                (
-                    [token],
-                    ChunkType.JINJA_STATEMENT,
-                )
-            )
+            chunks.append(([token], ChunkType.JINJA_STATEMENT))
             pos += 2
         elif _is_virtual_statement_begin(tokens, pos):
             chunks.append(([token], ChunkType.VIRTUAL_STATEMENT))
@@ -933,9 +928,7 @@ def parse(
         virtual_update_statements = []
         start = chunks[pos][0][0].start
 
-        while chunks[pos - 1][0] == [] or (
-            chunks[pos - 1][0] and chunks[pos - 1][0][-1].text != ON_VIRTUAL_UPDATE_END
-        ):
+        while chunks[pos - 1][0] == [] or chunks[pos - 1][0][-1].text != ON_VIRTUAL_UPDATE_END:
             chunk, chunk_type = chunks[pos]
             if chunk_type == ChunkType.JINJA_STATEMENT:
                 virtual_update_statements.append(parse_jinja_chunk(chunk))

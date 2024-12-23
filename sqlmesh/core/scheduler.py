@@ -27,6 +27,9 @@ from sqlmesh.core.snapshot.definition import (
     Interval,
     expand_range,
     get_next_model_interval_start,
+    SnapshotId,
+    merge_intervals,
+    parent_snapshots_by_name
 )
 from sqlmesh.core.state_sync import StateSync
 from sqlmesh.utils import format_exception
@@ -182,10 +185,7 @@ class Scheduler:
         """
         validate_date_range(start, end)
 
-        snapshots = {
-            self.snapshots[p_sid].name: self.snapshots[p_sid] for p_sid in snapshot.parents
-        }
-        snapshots[snapshot.name] = snapshot
+        snapshots = parent_snapshots_by_name(snapshot, self.snapshots)
 
         is_deployable = deployability_index.is_deployable(snapshot)
 

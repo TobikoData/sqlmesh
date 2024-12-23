@@ -60,7 +60,7 @@ from sqlmesh.core.snapshot import (
     SnapshotInfoLike,
     SnapshotTableCleanupTask,
 )
-from sqlmesh.core.snapshot.definition import to_view_mapping
+from sqlmesh.core.snapshot.definition import parent_snapshots_by_name, to_view_mapping
 from sqlmesh.utils import random_id
 from sqlmesh.utils.concurrency import (
     concurrent_apply_to_snapshots,
@@ -722,17 +722,12 @@ class SnapshotEvaluator:
         if not snapshot.is_model:
             return
 
-        parent_snapshots_by_name = {
-            snapshots[p_sid].name: snapshots[p_sid] for p_sid in snapshot.parents
-        }
-        parent_snapshots_by_name[snapshot.name] = snapshot
-
         deployability_index = deployability_index or DeployabilityIndex.all_deployable()
 
         adapter = self._get_adapter(snapshot.model.gateway)
         common_render_kwargs: t.Dict[str, t.Any] = dict(
             engine_adapter=adapter,
-            snapshots=parent_snapshots_by_name,
+            snapshots=parent_snapshots_by_name(snapshot, snapshots),
             runtime_stage=RuntimeStage.CREATING,
         )
         pre_post_render_kwargs = dict(
@@ -821,18 +816,13 @@ class SnapshotEvaluator:
         if not needs_migration:
             return
 
-        parent_snapshots_by_name = {
-            snapshots[p_sid].name: snapshots[p_sid] for p_sid in snapshot.parents
-        }
-        parent_snapshots_by_name[snapshot.name] = snapshot
-
         tmp_table_name = snapshot.table_name(is_deployable=False)
         target_table_name = snapshot.table_name()
         _evaluation_strategy(snapshot, adapter).migrate(
             target_table_name=target_table_name,
             source_table_name=tmp_table_name,
             snapshot=snapshot,
-            snapshots=parent_snapshots_by_name,
+            snapshots=parent_snapshots_by_name(snapshot, snapshots),
             allow_destructive_snapshots=allow_destructive_snapshots,
         )
 
@@ -1013,8 +1003,6 @@ class SnapshotEvaluator:
 
         for snapshot in target_snapshots:
             adapter = self._get_adapter(snapshot.model_gateway)
-            snapshot_deps = {snapshots[p_sid].name: snapshots[p_sid] for p_sid in snapshot.parents}
-            snapshot_deps[snapshot.name] = snapshot
             if on_virtual_update := snapshot.model.on_virtual_update:
                 adapter.execute(
                     snapshot.model._render_statements(
@@ -1022,7 +1010,7 @@ class SnapshotEvaluator:
                         start=start,
                         end=end,
                         execution_time=execution_time,
-                        snapshots=snapshot_deps,
+                        snapshots=parent_snapshots_by_name(snapshot, snapshots),
                         deployability_index=deployability_index,
                         engine_adapter=adapter,
                         table_mapping=table_mapping,

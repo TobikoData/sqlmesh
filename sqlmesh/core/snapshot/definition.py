@@ -2035,6 +2035,16 @@ def apply_auto_restatements(
     ]
 
 
+def parent_snapshots_by_name(
+    snapshot: Snapshot, snapshots: t.Dict[SnapshotId, Snapshot]
+) -> t.Dict[str, Snapshot]:
+    parent_snapshots_by_name = {
+        snapshots[p_sid].name: snapshots[p_sid] for p_sid in snapshot.parents
+    }
+    parent_snapshots_by_name[snapshot.name] = snapshot
+    return parent_snapshots_by_name
+
+
 def _contiguous_intervals(intervals: Intervals) -> t.List[Intervals]:
     """Given a list of intervals with gaps, returns a list of sequences of contiguous intervals."""
     contiguous_intervals = []

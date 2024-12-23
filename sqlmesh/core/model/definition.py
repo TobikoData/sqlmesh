@@ -1109,7 +1109,7 @@ class SqlModel(_Model):
         query: The main query representing the model.
         pre_statements: The list of SQL statements that precede the model's query.
         post_statements: The list of SQL statements that follow after the model's query.
-        on_virtual_update: The list of SQL statements to be executed after virtual update.
+        on_virtual_update: The list of SQL statements to be executed after the virtual update.
     """
 
     query: t.Union[exp.Query, d.JinjaQuery, d.MacroFunc]
