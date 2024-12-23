@@ -164,6 +164,41 @@ def execute(
     context.fetchdf("CREATE INDEX idx ON example.pre_post_statements (id);")
 ```
 
+## Optional on-virtual-update statements
+
+The optional on-virtual-update statements allow you to execute SQL commands after the completion of the [Virtual Update](#virtual-update).
+
+These can be used, for example, to grant privileges on views of the virtual layer. 
+
+Similar to pre/post-statements you can set the `on_virtual_update` argument in the `@model` decorator to a list of SQL strings, SQLGlot expressions, or macro calls.
+
+``` python linenums="1" hl_lines="8"
+@model(
+    "db.test_model",
+    kind="full",
+    columns={
+        "id": "int",
+        "name": "text",
+    },
+    on_virtual_update=["GRANT SELECT ON VIEW @this_model TO ROLE dev_role"],
+)
+def execute(
+    context: ExecutionContext,
+    start: datetime,
+    end: datetime,
+    execution_time: datetime,
+    **kwargs: t.Any,
+) -> pd.DataFrame:
+
+    return pd.DataFrame([
+        {"id": 1, "name": "name"}
+    ])
+```
+
+!!! note
+
+    Table resolution for these statements occurs at the virtual layer. This means that table names, including `@this_model` macro, are resolved to their qualified view names. For instance, when running the plan in an environment named `dev`, `db.test_model` and `@this_model` would resolve to `db__dev.test_model` and not to the physical table name.
+
 ## Dependencies
 In order to fetch data from an upstream model, you first get the table name using `context`'s `resolve_table` method. This returns the appropriate table name for the current runtime [environment](../environments.md):
 
