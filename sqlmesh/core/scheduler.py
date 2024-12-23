@@ -27,9 +27,7 @@ from sqlmesh.core.snapshot.definition import (
     Interval,
     expand_range,
     get_next_model_interval_start,
-    SnapshotId,
-    merge_intervals,
-    parent_snapshots_by_name
+    parent_snapshots_by_name,
 )
 from sqlmesh.core.state_sync import StateSync
 from sqlmesh.utils import format_exception
