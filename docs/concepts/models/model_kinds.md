@@ -354,7 +354,9 @@ MODEL (
 
 ### Merge Filter Expression
 
-When working with a large volume of data, the `merge_filter` can help limit scans in engines that support the `MERGE` statement.
+The `MERGE` statement typically induces a full table scan of the existing table, which can be problematic with large data volumes. 
+
+Prevent a full table scan by passing filtering conditions to the `merge_filter` parameter.
 
 The `merge_filter` accepts a single or a conjunction of predicates to be used in the `ON` clause of the `MERGE` operation: 
 
@@ -368,9 +370,9 @@ MODEL (
 );
 ```
 
-Similar to `when_matched`, the `source` and `target` aliases are used to distinguish between the source and target columns.
+Similar to `when_matched`, the `source` and `target` aliases are used to distinguish between the source and target tables.
 
-Additionally, the use of [incremental_predicates](https://docs.getdbt.com/docs/build/incremental-strategy#about-incremental_predicates) in an existing dbt project is supported by resolving them to the equivalent SQLMesh `merge_filter`.
+If an existing dbt project uses the [incremental_predicates](https://docs.getdbt.com/docs/build/incremental-strategy#about-incremental_predicates) functionality, SQLMesh will automatically convert them into the equivalent `merge_filter` specification.
 
 ### Materialization strategy
 Depending on the target engine, models of the `INCREMENTAL_BY_UNIQUE_KEY` kind are materialized using the following strategies:
