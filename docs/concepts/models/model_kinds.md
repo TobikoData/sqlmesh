@@ -352,6 +352,26 @@ MODEL (
 * Snowflake
 * Spark
 
+### Merge Filter Expression
+
+When working with a large volume of data, the `merge_filter` can help limit scans in engines that support the `MERGE` statement.
+
+The `merge_filter` accepts a single or a conjunction of predicates to be used in the `ON` clause of the `MERGE` operation: 
+
+```sql linenums="1" hl_lines="5"
+MODEL (
+  name db.employee_contracts,
+  kind INCREMENTAL_BY_UNIQUE_KEY (
+    unique_key id,
+    merge_filter source._operation IS NULL AND target.contract_date > dateadd(day, -7, current_date) 
+  )
+);
+```
+
+Similar to `when_matched`, the `source` and `target` aliases are used to distinguish between the source and target columns.
+
+Additionally, the use of [incremental_predicates](https://docs.getdbt.com/docs/build/incremental-strategy#about-incremental_predicates) in an existing dbt project is supported by resolving them to the equivalent SQLMesh `merge_filter`.
+
 ### Materialization strategy
 Depending on the target engine, models of the `INCREMENTAL_BY_UNIQUE_KEY` kind are materialized using the following strategies:
 
