@@ -27,6 +27,7 @@ export default defineConfig({
       { find: '@tests', replacement: path.resolve(__dirname, './src/tests') },
     ],
   },
+  assetsInclude: ['**/*.woff', '**/*.woff2', '**/*.ttf', '**/*.otf'],
   build: {
     outDir: 'dist',
     modulePreload: false,
