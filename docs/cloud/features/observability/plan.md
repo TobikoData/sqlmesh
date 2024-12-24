@@ -2,11 +2,11 @@
 
 Every SQLMesh `plan` is applied to a specific environment. To locate a `plan`, first navigate to its [Environment page](./development_environment.md).
 
-The environment page's Recent Activity table includes a list of every recent `plan` and `run`. To learn more about a `plan`, locate the `plan` by application date and click on its blue ID in the table's final column.
+The environment page's Recent Activity table includes a list of every recent `plan` and `run`. To learn more about a `plan`, locate the `plan` by application date and click on its blue ID link in the table's final column.
 
 ![tcloud plan information](./plan/plan_info.png)
 
-This opens the detailed plan overview page:
+Clicking the link opens the detailed plan overview page:
 
 ![tcloud plan](./plan/tcloud_plan.png)
 

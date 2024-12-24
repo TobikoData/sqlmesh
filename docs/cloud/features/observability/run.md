@@ -1,23 +1,37 @@
 # Run
 
-From the Recent Activity section of an environment overview (such as [production](prod_environment.md) or [development](development_environment.md) environments), you can access comprehensive status information and detailed metadata about individual runs. This is done by locating a run and clicking the distinctive blue ID hash within the table, which serves as a direct link to the Run Observability Overview page.
+Every SQLMesh `plan` is applied to a specific environment. To locate a `plan`, first navigate to its [Environment page](./development_environment.md).
+
+The environment page's Recent Activity table includes a list of every recent `plan` and `run`. To learn more about a `run`, locate the `run` by application date and click on its blue ID link in the table's final column.
+
 ![tcloud run information](./run/run_info.png)
 
-This opens the detailed run overview page:
+Clicking the link opens the detailed run overview page:
 
 ![tcloud run](./run/tcloud_run.png)
 
-- At the top of the overview page, you'll find convenient at-a-glance summaries that provide immediate visibility into critical information, including the run's current status (whether it has completed successfully, is currently in progress, or has encountered failures) and a timestamp indicating when the information was last refreshed or updated.
-- The run's detailed temporal information is clearly displayed, encompassing the precise start time of execution, the completion time, and a calculated total duration that helps you understand the run's performance characteristics
-- A comprehensive comparison showing all relevant modifications and updates that have occurred since the previous run execution
+## Summary
 
-The lower portion of the page contains the powerful Execution Explorer/Debugger interface, which organizes detailed information into three distinct and purposeful tabs:
+The top of the overview page summarizes the `run`, including:
 
-- Model Executions: Provides a detailed overview of all executed models, complete with current status indicators, comprehensive error messages when applicable, and convenient access to detailed execution logs for troubleshooting
+  - `Status`: completion status (completed, in progress, or failed)
+  - `When`: start and end times
+  - `Changes since previous run`: list of project changes that occurred since the previous `run`
+
+![tcloud run](./run/tcloud_run_summary.png)
+
+## Details
+
+The lower portion of the page contains a table with three tabs.
+
+`Model Executions`: list of executed models, including completion status, run times, error messages (when applicable), and links to detailed execution logs for troubleshooting
+
 ![tcloud run model executions](./run/run_model_executions.png)
 
-- Audits: Offers a complete view of all audit execution statuses, clearly indicates whether specific audits are configured as blocking operations, and provides straightforward access to detailed audit logs for verification
+`Audits`: list of audit executions statuses, including completion status, whether the audit is blocking, and links to detailed audit logs for verification
+
 ![tcloud run model executions](./run/run_audits.png)
 
-- Explore Executions: Delivers an extensive and interactive view of all included models, featuring an intuitive lineage graph for understanding dependencies, alongside detailed sections covering overview information, impact analysis, model definitions, comprehensive schema intervals, and easily accessible associated logs.
+`Explore Executions`: interactive view of executed models, including a lineage graph of model dependencies, and detailed information about impact analysis, model definitions, time intervals processed, and links to associated logs
+
 ![tcloud run model executions](./run/run_explore_executions.png)
