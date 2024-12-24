@@ -701,7 +701,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                 done = True
             except CircuitBreakerError:
                 logger.warning(
-                    "Environment '%s' has been modified while running. Restarting the run...",
+                    "Environment '%s' modified while running. Restarting the run...",
                     environment,
                 )
                 if exit_on_env_update:
@@ -1406,9 +1406,9 @@ class GenericContext(BaseContext, t.Generic[C]):
         self.state_sync.invalidate_environment(name)
         if sync:
             self._cleanup_environments()
-            self.console.log_success(f"Environment '{name}' has been deleted.")
+            self.console.log_success(f"Environment '{name}' deleted.")
         else:
-            self.console.log_success(f"Environment '{name}' has been invalidated.")
+            self.console.log_success(f"Environment '{name}' invalidated.")
 
     @python_api_analytics
     def diff(self, environment: t.Optional[str] = None, detailed: bool = False) -> bool:
