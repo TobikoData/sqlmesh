@@ -69,7 +69,7 @@ Configuration for the `sqlmesh plan` command.
 | `forward_only`            | Indicates whether the plan should be [forward-only](../concepts/plans.md#forward-only-plans) (Default: False)                                                                                                                                           |       boolean        |    N     |
 | `enable_preview`          | Indicates whether to enable [data preview](../concepts/plans.md#data-preview) for forward-only models when targeting a development environment (Default: False)                                                                                         |       boolean        |    N     |
 | `no_diff`                 | Don't show diffs for changed models (Default: False)                                                                                                                                                                                                    |       boolean        |    N     |
-| `no_prompts`              | Disables interactive prompts in CLI (Default: False)                                                                                                                                                                                                    |       boolean        |    N     |
+| `no_prompts`              | Disables interactive prompts in CLI (Default: True)                                                                                                                                                                                                    |       boolean        |    N     |
 
 ## Run
 

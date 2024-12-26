@@ -844,9 +844,9 @@ def test_plan_default_end(sushi_context_pre_scheduling: Context):
     assert dev_plan.end is not None
     assert to_date(make_inclusive_end(dev_plan.end)) == plan_end
 
-    forward_only_dev_plan = sushi_context_pre_scheduling.plan(
-        "test_env_forward_only", no_prompts=True, include_unmodified=True, forward_only=True
-    )
+    forward_only_dev_plan = sushi_context_pre_scheduling.plan_builder(
+        "test_env_forward_only", include_unmodified=True, forward_only=True
+    ).build()
     assert forward_only_dev_plan.end is not None
     assert to_date(make_inclusive_end(forward_only_dev_plan.end)) == plan_end
     assert forward_only_dev_plan.start == plan_end
@@ -1187,6 +1187,6 @@ def test_requirements(copy_to_temp_path: t.Callable):
 
     context._requirements = {"numpy": "2.1.2", "pandas": "2.2.1"}
     context._excluded_requirements = {"ipywidgets", "ruamel.yaml", "ruamel.yaml.clib"}
-    diff = context.plan("dev", no_prompts=True, skip_tests=True, skip_backfill=True).context_diff
+    diff = context.plan_builder("dev", skip_tests=True, skip_backfill=True).build().context_diff
     assert set(diff.previous_requirements) == requirements
     assert set(diff.requirements) == {"numpy", "pandas"}

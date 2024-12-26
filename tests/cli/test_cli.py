@@ -51,6 +51,9 @@ default_gateway: local
 
 model_defaults:
   dialect: duckdb
+
+plan:
+  no_prompts: false
 """
         )
 
@@ -442,13 +445,11 @@ def test_plan_dev_bad_create_from(runner, tmp_path):
 def test_plan_dev_no_prompts(runner, tmp_path):
     create_example_project(tmp_path)
 
-    # plan for non-prod environment doesn't prompt to apply and doesn't
-    # backfill if only `--no-prompts` is passed
+    # plan for non-prod environment doesn't prompt for dates but prompts to apply
     result = runner.invoke(
         cli, ["--log-file-dir", tmp_path, "--paths", tmp_path, "plan", "dev", "--no-prompts"]
     )
-    assert result.exit_code == 0
-    assert "Apply - Backfill Tables [y/n]: " not in result.output
+    assert "Apply - Backfill Tables [y/n]: " in result.output
     assert "All model versions have been created successfully" not in result.output
     assert "All model batches have been executed successfully" not in result.output
     assert "The target environment has been updated successfully" not in result.output
