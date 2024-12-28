@@ -56,9 +56,6 @@ class Project:
 
         variable_overrides = variables
         variables = {**project_yaml.get("vars", {}), **(variables or {})}
-        global_variables = {
-            name: var for name, var in variables.items() if not isinstance(var, dict)
-        }
 
         project_name = context.render(project_yaml.get("name", ""))
         context.project_name = project_name
@@ -107,7 +104,7 @@ class Project:
             if isinstance(package_vars, dict):
                 package.variables.update(package_vars)
 
-            package.variables.update(global_variables)
+            package.variables.update(variables)
 
         return Project(context, profile, packages)
 
