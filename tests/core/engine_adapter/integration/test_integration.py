@@ -1647,14 +1647,13 @@ def test_sushi(ctx: TestContext, tmp_path_factory: pytest.TempPathFactory):
         )
 
     # Ensure that the plan has been applied successfully.
-    no_change_plan: Plan = context.plan(
+    no_change_plan: Plan = context.plan_builder(
         environment="test_dev",
         start=start,
         end=end,
         skip_tests=True,
-        no_prompts=True,
         include_unmodified=True,
-    )
+    ).build()
     assert not no_change_plan.requires_backfill
     assert no_change_plan.context_diff.is_new_environment
 
@@ -1769,12 +1768,11 @@ def test_init_project(ctx: TestContext, tmp_path_factory: pytest.TempPathFactory
     assert len(physical_layer_results.tables) == len(physical_layer_results.non_temp_tables) == 3
 
     # make and validate unmodified dev environment
-    no_change_plan: Plan = context.plan(
+    no_change_plan: Plan = context.plan_builder(
         environment="test_dev",
         skip_tests=True,
-        no_prompts=True,
         include_unmodified=True,
-    )
+    ).build()
     assert not no_change_plan.requires_backfill
     assert no_change_plan.context_diff.is_new_environment
 
