@@ -24,9 +24,9 @@ import sqlmesh
 %context path_to_sqlmesh_project
 ```
 
-### Quick start project
+### Quickstart project
 
-If desired, you can create the [quick start example project](../quick_start.md) with the Python `init_example_project` function. The function requires a default SQL dialect for the project's models; this example uses `snowflake`:
+If desired, you can create the [quickstart example project](../quick_start.md) with the Python `init_example_project` function. The function requires a default SQL dialect for the project's models; this example uses `snowflake`:
 
 ```python
 from sqlmesh.cli.example_project import init_example_project
