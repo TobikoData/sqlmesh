@@ -50,11 +50,10 @@ def test_sushi(mocker: MockerFixture, is_docker: bool):
     )
 
     # Ensure that the plan has been applied successfully.
-    no_change_plan = context.plan(
+    no_change_plan = context.plan_builder(
         environment="test_dev_two",
         start=start,
         end=end,
         skip_tests=True,
-        no_prompts=True,
-    )
+    ).build()
     assert not no_change_plan.requires_backfill
