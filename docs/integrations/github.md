@@ -294,7 +294,7 @@ Below is an example of how to define the default config for the bot in either YA
 | `default_pr_start`                    | Default start when creating PR environment plans. If running in a mode where the bot automatically backfills models (based on `auto_categorize_changes` behavior) then this can be used to limit the amount of data backfilled. Defaults to `None` meaning the start date is set to the earliest model's start or to 1 day ago if [data previews](../concepts/plans.md#data-preview) need to be computed. |  str   |    N     |
 | `skip_pr_backfill`                    | Indicates if the bot should skip backfilling models in the PR environment. Default: `True`                                                                                                                                                                                                                                                                                                                |  bool  |    N     |
 | `pr_include_unmodified`               | Indicates whether to include unmodified models in the PR environment. Default to the project's config value (which defaults to `False`)                                                                                                                                                                                                                                                                   |  bool  |    N     |
-| `run_on_deploy_to_prod`               | Indicates whether to run latest intervals when deploying to prod. If set to false, the deployment will backfill only the changed models up to the existing latest interval in production, ignoring any missing intervals beyond this point. Default: `True`                                                                                                                                               |  bool  |    N     |
+| `run_on_deploy_to_prod`               | Indicates whether to run latest intervals when deploying to prod. If set to false, the deployment will backfill only the changed models up to the existing latest interval in production, ignoring any missing intervals beyond this point. Default: `False`                                                                                                                                               |  bool  |    N     |
 | `pr_environment_name`                 | The name of the PR environment to create for which a PR number will be appended to. Defaults to the repo name if not provided. Note: The name will be normalized to alphanumeric + underscore and lowercase.                                                                                                                                                                                              |  str   |    N     |	
 
 Example with all properties defined:
@@ -315,7 +315,7 @@ Example with all properties defined:
         seed: full
       default_pr_start: "1 week ago"
       skip_pr_backfill: false
-      run_on_deploy_to_prod: true
+      run_on_deploy_to_prod: false
     ```
 
 === "Python"
@@ -338,7 +338,7 @@ Example with all properties defined:
             ),
             default_pr_start="1 week ago",
             skip_pr_backfill=False,
-            run_on_deploy_to_prod=True,
+            run_on_deploy_to_prod=False,
         )
     )
     ```
