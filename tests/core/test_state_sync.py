@@ -870,6 +870,7 @@ def test_promote_environment_expired(state_sync: EngineAdapterStateSync, make_sn
 
     state_sync.push_snapshots([snapshot])
     promote_snapshots(state_sync, [snapshot], "dev")
+    state_sync.finalize(state_sync.get_environment("dev"))
     state_sync.invalidate_environment("dev")
 
     new_environment = Environment(
@@ -882,7 +883,10 @@ def test_promote_environment_expired(state_sync: EngineAdapterStateSync, make_sn
     )
 
     # This call shouldn't fail.
-    state_sync.promote(new_environment)
+    promotion_result = state_sync.promote(new_environment)
+    assert promotion_result.added == [snapshot.table_info]
+    assert promotion_result.removed == []
+    assert promotion_result.removed_environment_naming_info is None
 
 
 def test_promote_snapshots_no_gaps(state_sync: EngineAdapterStateSync, make_snapshot: t.Callable):

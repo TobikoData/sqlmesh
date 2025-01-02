@@ -325,7 +325,11 @@ class EngineAdapterStateSync(StateSync):
         }
 
         added_table_infos = set(table_infos.values())
-        if existing_environment and existing_environment.finalized_ts:
+        if (
+            existing_environment
+            and existing_environment.finalized_ts
+            and not existing_environment.expiration_ts
+        ):
             # Only promote new snapshots.
             added_table_infos -= set(existing_environment.promoted_snapshots)
 
