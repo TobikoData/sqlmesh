@@ -350,7 +350,11 @@ def test_missing_intervals_partial(make_snapshot):
     assert snapshot.missing_intervals(start, end_ts) == [
         (to_timestamp(start), end_ts),
     ]
-    assert snapshot.missing_intervals(start, end_ts, execution_time=end_ts) == [
+    assert snapshot.missing_intervals(start, end_ts, execution_time=end_ts) == []
+    assert snapshot.missing_intervals(start, end_ts, execution_time=end_ts, ignore_cron=True) == [
+        (to_timestamp(start), end_ts)
+    ]
+    assert snapshot.missing_intervals(start, end_ts, execution_time="2023-01-02") == [
         (to_timestamp(start), end_ts)
     ]
     assert snapshot.missing_intervals(start, start) == [
@@ -524,7 +528,7 @@ def test_incremental_time_self_reference(make_snapshot):
     ]
 
 
-def test_lookback(snapshot: Snapshot, make_snapshot):
+def test_lookback(make_snapshot):
     snapshot = make_snapshot(
         SqlModel(
             name="name",

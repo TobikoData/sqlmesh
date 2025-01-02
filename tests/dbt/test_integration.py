@@ -399,7 +399,8 @@ test_config = config"""
         time_start_end_mapping = {}
         for time, (starting_source_data, expected_table_data) in time_expected_mapping.items():
             self._replace_source_table(adapter, starting_source_data)
-            with time_machine.travel(time):
+            # Tick when running dbt runtime because it hangs during execution for unknown reasons.
+            with time_machine.travel(time, tick=test_type.is_dbt_runtime):
                 start_time = self._get_duckdb_now(adapter)
                 run()
                 end_time = self._get_duckdb_now(adapter)
