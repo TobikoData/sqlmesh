@@ -768,7 +768,7 @@ class TerminalConsole(Console):
                     metadata.add(
                         f"[metadata]{display_name}"
                         if no_diff
-                        else Syntax(f"{display_name}", "sql", word_wrap=True)
+                        else Syntax(f"{display_name}\n{context_diff.text_diff(name)}", "sql")
                     )
             if direct.children:
                 tree.add(direct)
@@ -855,25 +855,31 @@ class TerminalConsole(Console):
         context_diff = plan.context_diff
 
         for snapshot in plan.categorized:
-            if not context_diff.directly_modified(snapshot.name):
-                continue
-
-            category_str = SNAPSHOT_CHANGE_CATEGORY_STR[snapshot.change_category]
-            tree = Tree(
-                f"[bold][direct]Directly Modified: {snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)} ({category_str})"
-            )
-            indirect_tree = None
-            for child_sid in sorted(plan.indirectly_modified.get(snapshot.snapshot_id, set())):
-                child_snapshot = context_diff.snapshots[child_sid]
-                if not indirect_tree:
-                    indirect_tree = Tree("[indirect]Indirectly Modified Children:")
-                    tree.add(indirect_tree)
-                child_category_str = SNAPSHOT_CHANGE_CATEGORY_STR[child_snapshot.change_category]
-                indirect_tree.add(
-                    f"[indirect]{child_snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)} ({child_category_str})"
+            if context_diff.directly_modified(snapshot.name):
+                category_str = SNAPSHOT_CHANGE_CATEGORY_STR[snapshot.change_category]
+                tree = Tree(
+                    f"[bold][direct]Directly Modified: {snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)} ({category_str})"
                 )
-            if indirect_tree:
-                indirect_tree = self._limit_model_names(indirect_tree, self.verbose)
+                indirect_tree = None
+                for child_sid in sorted(plan.indirectly_modified.get(snapshot.snapshot_id, set())):
+                    child_snapshot = context_diff.snapshots[child_sid]
+                    if not indirect_tree:
+                        indirect_tree = Tree("[indirect]Indirectly Modified Children:")
+                        tree.add(indirect_tree)
+                    child_category_str = SNAPSHOT_CHANGE_CATEGORY_STR[
+                        child_snapshot.change_category
+                    ]
+                    indirect_tree.add(
+                        f"[indirect]{child_snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)} ({child_category_str})"
+                    )
+                if indirect_tree:
+                    indirect_tree = self._limit_model_names(indirect_tree, self.verbose)
+            elif context_diff.metadata_updated(snapshot.name):
+                tree = Tree(
+                    f"[bold][metadata]Metadata Updated: {snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)}"
+                )
+            else:
+                continue
 
             self._print(Syntax(context_diff.text_diff(snapshot.name), "sql", word_wrap=True))
             self._print(tree)
@@ -1740,25 +1746,32 @@ class MarkdownConsole(CaptureTerminalConsole):
     def _show_categorized_snapshots(self, plan: Plan, default_catalog: t.Optional[str]) -> None:
         context_diff = plan.context_diff
         for snapshot in plan.categorized:
-            if not context_diff.directly_modified(snapshot.name):
+            if context_diff.directly_modified(snapshot.name):
+                category_str = SNAPSHOT_CHANGE_CATEGORY_STR[snapshot.change_category]
+                tree = Tree(
+                    f"[bold][direct]Directly Modified: {snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)} ({category_str})"
+                )
+                indirect_tree = None
+                for child_sid in sorted(plan.indirectly_modified.get(snapshot.snapshot_id, set())):
+                    child_snapshot = context_diff.snapshots[child_sid]
+                    if not indirect_tree:
+                        indirect_tree = Tree("[indirect]Indirectly Modified Children:")
+                        tree.add(indirect_tree)
+                    child_category_str = SNAPSHOT_CHANGE_CATEGORY_STR[
+                        child_snapshot.change_category
+                    ]
+                    indirect_tree.add(
+                        f"[indirect]{child_snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)} ({child_category_str})"
+                    )
+                if indirect_tree:
+                    indirect_tree = self._limit_model_names(indirect_tree, self.verbose)
+            elif context_diff.metadata_updated(snapshot.name):
+                tree = Tree(
+                    f"[bold][metadata]Metadata Updated: {snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)}"
+                )
+            else:
                 continue
 
-            category_str = SNAPSHOT_CHANGE_CATEGORY_STR[snapshot.change_category]
-            tree = Tree(
-                f"[bold][direct]Directly Modified: {snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)} ({category_str})"
-            )
-            indirect_tree = None
-            for child_sid in sorted(plan.indirectly_modified.get(snapshot.snapshot_id, set())):
-                child_snapshot = context_diff.snapshots[child_sid]
-                if not indirect_tree:
-                    indirect_tree = Tree("[indirect]Indirectly Modified Children:")
-                    tree.add(indirect_tree)
-                child_category_str = SNAPSHOT_CHANGE_CATEGORY_STR[child_snapshot.change_category]
-                indirect_tree.add(
-                    f"[indirect]{child_snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)} ({child_category_str})"
-                )
-            if indirect_tree:
-                indirect_tree = self._limit_model_names(indirect_tree, self.verbose)
             self._print(f"```diff\n{context_diff.text_diff(snapshot.name)}\n```\n")
             self._print("```\n")
             self._print(tree)
