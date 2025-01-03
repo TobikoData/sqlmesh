@@ -360,6 +360,77 @@ def test_forward_only_model_regular_plan_preview_enabled(init_and_plan_context: 
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_forward_only_model_restate_full_history_in_dev(init_and_plan_context: t.Callable):
+    context, _ = init_and_plan_context("examples/sushi")
+
+    model_name = "memory.sushi.customer_max_revenue"
+    expressions = d.parse(
+        f"""
+        MODEL (
+            name {model_name},
+            kind INCREMENTAL_BY_UNIQUE_KEY (
+                unique_key customer_id,
+                forward_only true,
+            ),
+        );
+
+        SELECT
+          customer_id, MAX(revenue) AS max_revenue
+        FROM memory.sushi.customer_revenue_lifetime
+        GROUP BY 1;
+        """
+    )
+
+    model = load_sql_based_model(expressions)
+    assert model.forward_only
+    assert model.kind.full_history_restatement_only
+    context.upsert_model(model)
+
+    context.plan("prod", skip_tests=True, auto_apply=True)
+
+    model_kwargs = {
+        **model.dict(),
+        # Make a breaking change.
+        "query": model.query.order_by("customer_id"),  # type: ignore
+    }
+    context.upsert_model(SqlModel.parse_obj(model_kwargs))
+
+    # Apply the model change in dev
+    plan = context.plan_builder("dev", skip_tests=True).build()
+    assert not plan.missing_intervals
+    context.apply(plan)
+
+    snapshot = context.get_snapshot(model, raise_if_missing=True)
+    snapshot_table_name = snapshot.table_name(False)
+
+    # Manually insert a dummy value to check that the table is recreated during the restatement
+    context.engine_adapter.insert_append(
+        snapshot_table_name,
+        pd.DataFrame({"customer_id": [-1], "max_revenue": [100]}),
+    )
+    df = context.engine_adapter.fetchdf(
+        "SELECT COUNT(*) AS cnt FROM sushi__dev.customer_max_revenue WHERE customer_id = -1"
+    )
+    assert df["cnt"][0] == 1
+
+    # Apply a restatement plan in dev
+    plan = context.plan("dev", restate_models=[model.name], auto_apply=True)
+    assert len(plan.missing_intervals) == 1
+
+    # Check that the dummy value is not present
+    df = context.engine_adapter.fetchdf(
+        "SELECT COUNT(*) AS cnt FROM sushi__dev.customer_max_revenue WHERE customer_id = -1"
+    )
+    assert df["cnt"][0] == 0
+
+    # Check that the table is not empty
+    df = context.engine_adapter.fetchdf(
+        "SELECT COUNT(*) AS cnt FROM sushi__dev.customer_max_revenue"
+    )
+    assert df["cnt"][0] > 0
+
+
+@time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_full_history_restatement_model_regular_plan_preview_enabled(
     init_and_plan_context: t.Callable,
 ):
