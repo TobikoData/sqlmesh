@@ -1392,7 +1392,11 @@ class IncrementalByUniqueKeyStrategy(MaterializableStrategy):
                 columns_to_types=model.columns_to_types,
                 unique_key=model.unique_key,
                 when_matched=model.when_matched,
-                merge_filter=model.merge_filter,
+                merge_filter=model.render_merge_filter(
+                    start=kwargs.get("start"),
+                    end=kwargs.get("end"),
+                    execution_time=kwargs.get("execution_time"),
+                ),
             )
 
     def append(
@@ -1408,7 +1412,11 @@ class IncrementalByUniqueKeyStrategy(MaterializableStrategy):
             columns_to_types=model.columns_to_types,
             unique_key=model.unique_key,
             when_matched=model.when_matched,
-            merge_filter=model.merge_filter,
+            merge_filter=model.render_merge_filter(
+                start=kwargs.get("start"),
+                end=kwargs.get("end"),
+                execution_time=kwargs.get("execution_time"),
+            ),
         )
 
 
