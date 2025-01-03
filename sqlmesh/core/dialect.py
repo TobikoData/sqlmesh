@@ -577,7 +577,12 @@ def _create_parser(parser_type: t.Type[exp.Expression], table_keys: t.List[str])
                 if not field or isinstance(field, (MacroVar, MacroFunc)):
                     value = field
                 else:
-                    kind = ModelKindName[field.name.upper()]
+                    try:
+                        kind = ModelKindName[field.name.upper()]
+                    except KeyError:
+                        raise SQLMeshError(
+                            f"Model kind specified as '{field.name}', but that is not a valid model kind.\n\nPlease specify one of {', '.join(ModelKindName)}."
+                        )
 
                     if kind in (
                         ModelKindName.INCREMENTAL_BY_TIME_RANGE,

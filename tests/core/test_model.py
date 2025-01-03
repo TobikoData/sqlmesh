@@ -5910,6 +5910,22 @@ materialized TRUE
     )
 
 
+def test_bad_model_kind():
+    with pytest.raises(
+        SQLMeshError,
+        match=f"Model kind specified as 'BAD_KIND', but that is not a valid model kind.\n\nPlease specify one of {', '.join(ModelKindName)}.",
+    ):
+        d.parse(
+            """
+        MODEL (
+            name db.table,
+            kind BAD_KIND
+        );
+        SELECT a, b
+        """
+        )
+
+
 def test_merge_filter():
     expressions = d.parse(
         """
@@ -5945,7 +5961,7 @@ def test_merge_filter():
             merge_filter (
                 source.ds > (SELECT MAX(ds) FROM db.test) AND
                 source.ds > @start_ds AND
-                source._operation <> 1 AND 
+                source._operation <> 1 AND
                 target.start_date > dateadd(day, -7, current_date)
             )
           )
