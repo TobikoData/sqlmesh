@@ -1,8 +1,8 @@
 # Multi-Repo guide
 
-Although mono repos are convenient and easy to use, sometimes your organization may choose to use multiple repos. 
+Although mono repos are convenient and easy to use, sometimes your organization may choose to use multiple repos.
 SQLMesh provides native support for multiple repos and makes it easy to maintain data consistency and correctness even with multiple repos.
-If you are wanting to separate your systems/data and provide isolation, checkout the [isolated systems guide](https://sqlmesh.readthedocs.io/en/stable/guides/isolated_systems/?h=isolated). 
+If you are wanting to separate your systems/data and provide isolation, checkout the [isolated systems guide](https://sqlmesh.readthedocs.io/en/stable/guides/isolated_systems/?h=isolated).
 
 ## Bootstrapping multiple projects
 Setting up SQLMesh with multiple repos is quite simple. Copy the contents of this example [multi-repo project](https://github.com/TobikoData/sqlmesh/tree/main/examples/multi).
@@ -14,9 +14,10 @@ $ sqlmesh -p examples/multi/repo_1 -p examples/multi/repo_2/ plan
 ======================================================================
 Successfully Ran 0 tests against duckdb
 ----------------------------------------------------------------------
-New environment `prod` will be created from `prod`
-Summary of differences against `prod`:
-└── Added Models:
+`prod` environment will be initialized
+
+Models
+└── Added:
     ├── silver.d
     ├── bronze.a
     ├── bronze.b
@@ -64,7 +65,9 @@ $ sqlmesh -p examples/multi/repo_1 plan
 ======================================================================
 Successfully Ran 0 tests against duckdb
 ----------------------------------------------------------------------
-Summary of differences against `prod`:
+Differences from the `prod` environment:
+
+Models
 ├── Directly Modified:
 │   └── bronze.a
 └── Indirectly Modified:
@@ -123,7 +126,9 @@ $ sqlmesh -p examples/multi/repo_1 plan
 ======================================================================
 Successfully Ran 0 tests against duckdb
 ----------------------------------------------------------------------
-Summary of differences against `prod`:
+Differences from the `prod` environment:
+
+Models
 ├── Directly Modified:
 │   └── bronze.a
 └── Indirectly Modified:
@@ -168,7 +173,7 @@ SQLMesh correctly detects a breaking change and allows you to perform a multi-re
 
 ## Configuring projects with multiple repositories
 
-To add support for multiple repositories, add a `project` key to the config file in each of the respective repos. 
+To add support for multiple repositories, add a `project` key to the config file in each of the respective repos.
 
 ```yaml
 project: repo_1
@@ -181,13 +186,13 @@ Even if you do not have a need for multiple repos now, consider adding a `projec
 
 ## Multi-Repo dbt projects
 
-SQLMesh also supports multiple repos for dbt projects, allowing it to correctly detect changes and orchestrate backfills even when changes span multiple dbt projects. 
+SQLMesh also supports multiple repos for dbt projects, allowing it to correctly detect changes and orchestrate backfills even when changes span multiple dbt projects.
 
 You can watch a [quick demo](https://www.loom.com/share/69c083428bb348da8911beb2cd4d30b2) of this setup or experiment with the [multi-repo dbt example](https://github.com/TobikoData/sqlmesh/tree/main/examples/multi_dbt) yourself.
 
 ## Multi-repo mixed projects
 
-Native SQLMesh projects can be used alongside dbt projects in a multi-repo setup. 
+Native SQLMesh projects can be used alongside dbt projects in a multi-repo setup.
 
 This allows managing and sourcing tables from either project type within the same multi-repo project and facilitates a gradual migration from dbt to SQLMesh.
 
@@ -197,6 +202,6 @@ Use the same syntax as SQLMesh-only multi-repo projects to execute a multi-repo 
 $ sqlmesh -p examples/multi_hybrid/dbt_repo -p examples/multi_hybrid/sqlmesh_repo plan
 ```
 
-SQLMesh will automatically detect dependencies and lineage across both SQLMesh and dbt projects, even when models are sourcing from different project types. 
+SQLMesh will automatically detect dependencies and lineage across both SQLMesh and dbt projects, even when models are sourcing from different project types.
 
 Additionally, macros can be reused across both project types. For an example of this setup, refer to the [mixed SQLMesh and dbt example](https://github.com/TobikoData/sqlmesh/tree/main/examples/multi_hybrid).

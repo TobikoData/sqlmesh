@@ -58,6 +58,7 @@ class RedshiftEngineAdapter(
             exp.DataType.build("CHAR", dialect=DIALECT).this: 4096,
             exp.DataType.build("VARCHAR", dialect=DIALECT).this: 65535,
         },
+        drop_cascade=True,
     )
     VARIABLE_LENGTH_DATA_TYPES = {
         "char",
@@ -208,6 +209,12 @@ class RedshiftEngineAdapter(
         underlying table without dropping the view first. This is a problem for us since we want to be able to
         swap tables out from under views. Therefore, we create the view as non-binding.
         """
+
+        if create_kwargs.pop("no_schema_binding", None) is False:
+            logger.warning(
+                "The 'no_schema_binding' attribute is deprecated. Views in Redshift are created as non-binding."
+            )
+
         return super().create_view(
             view_name,
             query_or_df,
@@ -217,7 +224,7 @@ class RedshiftEngineAdapter(
             materialized_properties,
             table_description=table_description,
             column_descriptions=column_descriptions,
-            no_schema_binding=create_kwargs.pop("no_schema_binding", True),
+            no_schema_binding=True,
             view_properties=view_properties,
             **create_kwargs,
         )

@@ -74,7 +74,7 @@ def test_varchar_size_workaround(make_mocked_engine_adapter: t.Callable, mocker:
     )
 
     assert to_sql_calls(adapter) == [
-        'CREATE VIEW "__temp_ctas_test_random_id" AS SELECT "char", "char1" + 1 AS "char1", "char2" AS "char2", "varchar", "varchar256", "varchar2" FROM (SELECT * FROM "table")',
+        'CREATE VIEW "__temp_ctas_test_random_id" AS SELECT "char", "char1" + 1 AS "char1", "char2" AS "char2", "varchar", "varchar256", "varchar2" FROM (SELECT * FROM "table") WITH NO SCHEMA BINDING',
         'DROP VIEW IF EXISTS "__temp_ctas_test_random_id" CASCADE',
         'CREATE TABLE "test_schema"."test_table" ("char" CHAR, "char1" CHAR(max), "char2" CHAR(2), "varchar" VARCHAR, "varchar256" VARCHAR(max), "varchar2" VARCHAR(2))',
     ]
@@ -113,7 +113,7 @@ def test_create_table_from_query_exists_no_if_not_exists(
     )
 
     assert to_sql_calls(adapter) == [
-        'CREATE VIEW "__temp_ctas_test_random_id" AS SELECT "a", "b", "x" + 1 AS "c", "d" AS "d", "e" FROM (SELECT * FROM "table")',
+        'CREATE VIEW "__temp_ctas_test_random_id" AS SELECT "a", "b", "x" + 1 AS "c", "d" AS "d", "e" FROM (SELECT * FROM "table") WITH NO SCHEMA BINDING',
         'DROP VIEW IF EXISTS "__temp_ctas_test_random_id" CASCADE',
         'CREATE TABLE "test_schema"."test_table" ("a" VARCHAR(MAX), "b" VARCHAR(60), "c" VARCHAR(MAX), "d" VARCHAR(MAX), "e" TIMESTAMP)',
     ]
@@ -303,4 +303,22 @@ def test_create_view(adapter: t.Callable):
     assert to_sql_calls(adapter) == [
         'DROP VIEW IF EXISTS "test_view" CASCADE',
         'CREATE VIEW "test_view" ("a", "b") AS SELECT "cola" FROM "table" WITH NO SCHEMA BINDING',
+    ]
+
+
+def test_alter_table_drop_column_cascade(adapter: t.Callable):
+    current_table_name = "test_table"
+    target_table_name = "target_table"
+
+    def table_columns(table_name: str) -> t.Dict[str, exp.DataType]:
+        if table_name == current_table_name:
+            return {"id": exp.DataType.build("int"), "test_column": exp.DataType.build("int")}
+        else:
+            return {"id": exp.DataType.build("int")}
+
+    adapter.columns = table_columns
+
+    adapter.alter_table(adapter.get_alter_expressions(current_table_name, target_table_name))
+    assert to_sql_calls(adapter) == [
+        'ALTER TABLE "test_table" DROP COLUMN "test_column" CASCADE',
     ]

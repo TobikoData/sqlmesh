@@ -518,13 +518,13 @@ Recommended state engines for production deployments:
 Other state engines with fast and reliable database transactions (less tested than the recommended engines):
 
 * [DuckDB](../integrations/engines/duckdb.md)
-    * Does not support concurrency and may error if the primary connection executes with concurrent tasks (its [connection configuration's `concurrent_tasks`](#connections) is greater than 1)
+    * With the caveat that it's a [single user](https://duckdb.org/docs/connect/concurrency.html#writing-to-duckdb-from-multiple-processes) database so will not scale to production usage
 * [MySQL](../integrations/engines/mysql.md)
 * [MSSQL](../integrations/engines/mssql.md)
 
 Unsupported state engines, even for development:
 
-* [Clickhouse](../integrations/engines/clickhouse.md)
+* [ClickHouse](../integrations/engines/clickhouse.md)
 * [Spark](../integrations/engines/spark.md)
 * [Trino](../integrations/engines/trino.md)
 
@@ -1058,7 +1058,7 @@ Example enabling debug mode for the CLI command `sqlmesh plan`:
 
 
 ### Python library dependencies
-SQLMesh enables you to write Python models and macros which depend on third-party libraries. To ensure each run / evaluation uses the same version, you can specify versions in a sqlmesh.lock file in the root of your project.
+SQLMesh enables you to write Python models and macros which depend on third-party libraries. To ensure each run / evaluation uses the same version, you can specify versions in a `sqlmesh-requirements.lock` file in the root of your project.
 
 The sqlmesh.lock must be of the format `dep==version`. Only `==` is supported.
 
@@ -1070,3 +1070,12 @@ pandas==2.2.3
 ```
 
 This feature is only available in [Tobiko Cloud](https://tobikodata.com/product.html).
+
+#### Excluding dependencies
+
+You can exclude dependencies by prefixing the dependency with a `^`. For example:
+
+```
+^numpy
+pandas==2.2.3
+```

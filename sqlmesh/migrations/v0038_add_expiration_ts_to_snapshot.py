@@ -7,6 +7,7 @@ from sqlglot import exp
 
 from sqlmesh.utils.date import to_datetime, to_timestamp
 from sqlmesh.utils.migration import index_text_type
+from sqlmesh.utils.migration import blob_text_type
 
 
 def migrate(state_sync, **kwargs):  # type: ignore
@@ -17,6 +18,7 @@ def migrate(state_sync, **kwargs):  # type: ignore
         snapshots_table = f"{schema}.{snapshots_table}"
 
     index_type = index_text_type(engine_adapter.dialect)
+    blob_type = blob_text_type(engine_adapter.dialect)
 
     alter_table_exp = exp.Alter(
         this=exp.to_table(snapshots_table),
@@ -63,7 +65,7 @@ def migrate(state_sync, **kwargs):  # type: ignore
                 "name": exp.DataType.build(index_type),
                 "identifier": exp.DataType.build(index_type),
                 "version": exp.DataType.build(index_type),
-                "snapshot": exp.DataType.build("text"),
+                "snapshot": exp.DataType.build(blob_type),
                 "kind_name": exp.DataType.build(index_type),
                 "expiration_ts": exp.DataType.build("bigint"),
             },

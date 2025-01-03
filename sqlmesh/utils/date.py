@@ -416,3 +416,19 @@ def pandas_timestamp_to_pydatetime(
                 )
 
     return df
+
+
+def format_tz_datetime(
+    time: TimeLike,
+    format_string: t.Optional[str] = "%Y-%m-%d %I:%M%p %Z",
+    use_local_timezone: bool = False,
+) -> str:
+    output_datetime = to_datetime(time)
+    if use_local_timezone:
+        local_timezone = datetime.now().astimezone().tzinfo
+        output_datetime = output_datetime.astimezone(local_timezone)
+    return (
+        output_datetime.strftime(format_string)
+        if format_string
+        else output_datetime.isoformat(sep=" ")
+    )

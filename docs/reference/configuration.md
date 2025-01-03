@@ -69,7 +69,7 @@ Configuration for the `sqlmesh plan` command.
 | `forward_only`            | Indicates whether the plan should be [forward-only](../concepts/plans.md#forward-only-plans) (Default: False)                                                                                                                                           |       boolean        |    N     |
 | `enable_preview`          | Indicates whether to enable [data preview](../concepts/plans.md#data-preview) for forward-only models when targeting a development environment (Default: False)                                                                                         |       boolean        |    N     |
 | `no_diff`                 | Don't show diffs for changed models (Default: False)                                                                                                                                                                                                    |       boolean        |    N     |
-| `no_prompts`              | Disables interactive prompts in CLI (Default: False)                                                                                                                                                                                                    |       boolean        |    N     |
+| `no_prompts`              | Disables interactive prompts in CLI (Default: True)                                                                                                                                                                                                    |       boolean        |    N     |
 
 ## Run
 
@@ -164,16 +164,19 @@ Most parameters are specific to the connection engine `type` - see [below](#engi
 
 | Option              | Description                                                                                                                                                             | Type | Required |
 |---------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------|:----:|:--------:|
-| `type`              | The engine type name, listed in engine-specific configuration pages below.                                                                                              | str  | Y        |
-| `concurrent_tasks`  | The maximum number of concurrent tasks that will be run by SQLMesh. (Default: 4 for engines that support concurrent tasks.)                                             | int  | N        |
-| `register_comments` | Whether SQLMesh should register model comments with the SQL engine (if the engine supports it). (Default: `true`.)                                                      | bool | N        |
-| `pre_ping`          | Whether or not to pre-ping the connection before starting a new transaction to ensure it is still alive. This can only be enabled for engines with transaction support. | bool | N        |
+| `type`              | The engine type name, listed in engine-specific configuration pages below.                                                                                              | str  |    Y     |
+| `concurrent_tasks`  | The maximum number of concurrent tasks that will be run by SQLMesh. (Default: 4 for engines that support concurrent tasks.)                                             | int  |    N     |
+| `register_comments` | Whether SQLMesh should register model comments with the SQL engine (if the engine supports it). (Default: `true`.)                                                      | bool |    N     |
+| `pre_ping`          | Whether or not to pre-ping the connection before starting a new transaction to ensure it is still alive. This can only be enabled for engines with transaction support. | bool |    N     |
+| `pretty_sql`        | If SQL should be formatted before being executed, not recommended in a production setting. (Default: `false`.)                                                          | bool |    N     |
 
 #### Engine-specific
 
 These pages describe the connection configuration options for each execution engine.
 
+* [Athena](../integrations/engines/athena.md)
 * [BigQuery](../integrations/engines/bigquery.md)
+* [ClickHouse](../integrations/engines/clickhouse.md)
 * [Databricks](../integrations/engines/databricks.md)
 * [DuckDB](../integrations/engines/duckdb.md)
 * [MotherDuck](../integrations/engines/motherduck.md)

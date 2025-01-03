@@ -48,3 +48,12 @@ vars:
     some_var: ["foo", "bar"]
     'customers:bla': false
     'customers:customer_id': "customer_id"
+
+  nested_vars:
+    some_nested_var: 2
+
+  list_var:
+    - name: 'item1'
+      value: 1
+    - name: 'item2'
+      value: 2

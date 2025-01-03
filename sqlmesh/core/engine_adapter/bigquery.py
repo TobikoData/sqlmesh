@@ -59,7 +59,6 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
     SUPPORTS_TRANSACTIONS = False
     SUPPORTS_MATERIALIZED_VIEWS = True
     SUPPORTS_CLONING = True
-    CATALOG_SUPPORT = CatalogSupport.FULL_SUPPORT
     MAX_TABLE_COMMENT_LENGTH = 1024
     MAX_COLUMN_COMMENT_LENGTH = 1024
 
@@ -119,6 +118,10 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
         if self._extra_config.get("maximum_bytes_billed"):
             params["maximum_bytes_billed"] = self._extra_config.get("maximum_bytes_billed")
         return params
+
+    @property
+    def catalog_support(self) -> CatalogSupport:
+        return CatalogSupport.FULL_SUPPORT
 
     def _df_to_source_queries(
         self,
@@ -995,6 +998,9 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
 
     def _normalize_decimal_value(self, col: exp.Expression, precision: int) -> exp.Expression:
         return exp.func("FORMAT", exp.Literal.string(f"%.{precision}f"), col)
+
+    def _normalize_nested_value(self, col: exp.Expression) -> exp.Expression:
+        return exp.func("TO_JSON_STRING", col, dialect=self.dialect)
 
     @property
     def _query_data(self) -> t.Any:

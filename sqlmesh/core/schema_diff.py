@@ -169,6 +169,7 @@ class TableAlterOperation(PydanticModel):
     expected_table_struct: exp.DataType
     add_position: t.Optional[TableAlterColumnPosition] = None
     current_type: t.Optional[exp.DataType] = None
+    cascade: bool = False
 
     @classmethod
     def add(
@@ -192,6 +193,7 @@ class TableAlterOperation(PydanticModel):
         columns: t.Union[TableAlterColumn, t.List[TableAlterColumn]],
         expected_table_struct: t.Union[str, exp.DataType],
         column_type: t.Optional[t.Union[str, exp.DataType]] = None,
+        cascade: bool = False,
     ) -> TableAlterOperation:
         column_type = exp.DataType.build(column_type) if column_type else exp.DataType.build("INT")
         return cls(
@@ -199,6 +201,7 @@ class TableAlterOperation(PydanticModel):
             columns=ensure_list(columns),
             column_type=column_type,
             expected_table_struct=exp.DataType.build(expected_table_struct),
+            cascade=cascade,
         )
 
     @classmethod
@@ -274,7 +277,9 @@ class TableAlterOperation(PydanticModel):
             return alter_table
         elif self.is_drop:
             alter_table = exp.Alter(this=exp.to_table(table_name), kind="TABLE")
-            drop_column = exp.Drop(this=self.column(array_element_selector), kind="COLUMN")
+            drop_column = exp.Drop(
+                this=self.column(array_element_selector), kind="COLUMN", cascade=self.cascade
+            )
             alter_table.set("actions", [drop_column])
             return alter_table
         else:
@@ -313,6 +318,7 @@ class SchemaDiffer(PydanticModel):
             into a FLOAT64 column just fine.
         support_coercing_compatible_types: Whether or not the engine for which the diff is being computed supports direct
             coercion of compatible types.
+        drop_cascade: Whether to add CASCADE modifier when dropping a column.
         parameterized_type_defaults: Default values for parameterized data types. Dict key is a sqlglot exp.DataType.Type,
             but in the engine adapter specification we build it from the dialect string instead of specifying it directly.
             Example: `exp.DataType.build("STRING", dialect=DIALECT).this` instead of the underlying `exp.DataType.Type.TEXT`
@@ -336,6 +342,7 @@ class SchemaDiffer(PydanticModel):
         default_factory=dict, alias="coerceable_types"
     )
     support_coercing_compatible_types: bool = False
+    drop_cascade: bool = False
     parameterized_type_defaults: t.Dict[
         exp.DataType.Type, t.List[t.Tuple[t.Union[int, float], ...]]
     ] = {}
@@ -458,7 +465,9 @@ class SchemaDiffer(PydanticModel):
         assert column_kwarg
         struct.expressions.pop(column_pos)
         operations.append(
-            TableAlterOperation.drop(columns, root_struct.copy(), column_kwarg.args["kind"])
+            TableAlterOperation.drop(
+                columns, root_struct.copy(), column_kwarg.args["kind"], cascade=self.drop_cascade
+            )
         )
         return operations
 

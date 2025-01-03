@@ -613,22 +613,37 @@ class TerminalConsole(Console):
             no_diff: Hide the actual SQL differences.
         """
         if context_diff.is_new_environment:
-            self._print(
-                Tree(
-                    f"[bold]New environment `{context_diff.environment}` will be created from `{context_diff.create_from}`"
-                )
+            msg = (
+                f"`{context_diff.environment}` environment will be initialized"
+                if not context_diff.create_from_env_exists
+                else f"New environment `{context_diff.environment}` will be created from `{context_diff.create_from}`"
             )
+            self._print(Tree(f"[bold]{msg}\n"))
             if not context_diff.has_snapshot_changes:
                 return
 
         if not context_diff.has_changes:
-            self._print(Tree(f"[bold]No differences when compared to `{context_diff.environment}`"))
+            # This is only reached when the plan is against an existing environment, so we use the environment
+            #   name instead of the create_from name. The equivalent message for new environments happens in
+            #   the PlanBuilder.
+            self._print(
+                Tree(
+                    f"[bold]No changes to plan: project files match the `{context_diff.environment}` environment\n"
+                )
+            )
             return
 
-        self._print(Tree(f"[bold]Summary of differences against `{context_diff.environment}`:"))
+        if not context_diff.is_new_environment or (
+            context_diff.is_new_environment and context_diff.create_from_env_exists
+        ):
+            self._print(
+                Tree(
+                    f"[bold]Differences from the `{context_diff.create_from if context_diff.is_new_environment else context_diff.environment}` environment:\n"
+                )
+            )
 
         if context_diff.has_requirement_changes:
-            self._print(f"Requirements:\n{context_diff.requirements_diff()}")
+            self._print(f"[bold]Requirements:\n{context_diff.requirements_diff()}")
 
         self._show_summary_tree_for(
             context_diff,
@@ -677,10 +692,9 @@ class TerminalConsole(Console):
             default_catalog=default_catalog,
         )
 
-        if not no_prompts:
-            self._show_options_after_categorization(
-                plan_builder, auto_apply, default_catalog=default_catalog
-            )
+        self._show_options_after_categorization(
+            plan_builder, auto_apply, default_catalog=default_catalog, no_prompts=no_prompts
+        )
 
         if auto_apply:
             plan_builder.apply()
@@ -754,7 +768,7 @@ class TerminalConsole(Console):
                     metadata.add(
                         f"[metadata]{display_name}"
                         if no_diff
-                        else Syntax(f"{display_name}", "sql", word_wrap=True)
+                        else Syntax(f"{display_name}\n{context_diff.text_diff(name)}", "sql")
                     )
             if direct.children:
                 tree.add(direct)
@@ -765,15 +779,27 @@ class TerminalConsole(Console):
         self._print(tree)
 
     def _show_options_after_categorization(
-        self, plan_builder: PlanBuilder, auto_apply: bool, default_catalog: t.Optional[str]
+        self,
+        plan_builder: PlanBuilder,
+        auto_apply: bool,
+        default_catalog: t.Optional[str],
+        no_prompts: bool,
     ) -> None:
         plan = plan_builder.build()
-        if plan.forward_only and plan.new_snapshots:
+        if not no_prompts and plan.forward_only and plan.new_snapshots:
             self._prompt_effective_from(plan_builder, auto_apply, default_catalog)
 
         if plan.requires_backfill:
             self._show_missing_dates(plan_builder.build(), default_catalog)
-            self._prompt_backfill(plan_builder, auto_apply, default_catalog)
+
+            if not no_prompts:
+                self._prompt_backfill(plan_builder, auto_apply, default_catalog)
+
+            backfill_or_preview = "preview" if plan.is_dev and plan.forward_only else "backfill"
+            if not auto_apply and self._confirm(
+                f"Apply - {backfill_or_preview.capitalize()} Tables"
+            ):
+                plan_builder.apply()
         elif plan.has_changes and not auto_apply:
             self._prompt_promote(plan_builder)
         elif plan.has_unmodified_unpromoted and not auto_apply:
@@ -829,25 +855,31 @@ class TerminalConsole(Console):
         context_diff = plan.context_diff
 
         for snapshot in plan.categorized:
-            if not context_diff.directly_modified(snapshot.name):
-                continue
-
-            category_str = SNAPSHOT_CHANGE_CATEGORY_STR[snapshot.change_category]
-            tree = Tree(
-                f"[bold][direct]Directly Modified: {snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)} ({category_str})"
-            )
-            indirect_tree = None
-            for child_sid in sorted(plan.indirectly_modified.get(snapshot.snapshot_id, set())):
-                child_snapshot = context_diff.snapshots[child_sid]
-                if not indirect_tree:
-                    indirect_tree = Tree("[indirect]Indirectly Modified Children:")
-                    tree.add(indirect_tree)
-                child_category_str = SNAPSHOT_CHANGE_CATEGORY_STR[child_snapshot.change_category]
-                indirect_tree.add(
-                    f"[indirect]{child_snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)} ({child_category_str})"
+            if context_diff.directly_modified(snapshot.name):
+                category_str = SNAPSHOT_CHANGE_CATEGORY_STR[snapshot.change_category]
+                tree = Tree(
+                    f"[bold][direct]Directly Modified: {snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)} ({category_str})"
                 )
-            if indirect_tree:
-                indirect_tree = self._limit_model_names(indirect_tree, self.verbose)
+                indirect_tree = None
+                for child_sid in sorted(plan.indirectly_modified.get(snapshot.snapshot_id, set())):
+                    child_snapshot = context_diff.snapshots[child_sid]
+                    if not indirect_tree:
+                        indirect_tree = Tree("[indirect]Indirectly Modified Children:")
+                        tree.add(indirect_tree)
+                    child_category_str = SNAPSHOT_CHANGE_CATEGORY_STR[
+                        child_snapshot.change_category
+                    ]
+                    indirect_tree.add(
+                        f"[indirect]{child_snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)} ({child_category_str})"
+                    )
+                if indirect_tree:
+                    indirect_tree = self._limit_model_names(indirect_tree, self.verbose)
+            elif context_diff.metadata_updated(snapshot.name):
+                tree = Tree(
+                    f"[bold][metadata]Metadata Updated: {snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)}"
+                )
+            else:
+                continue
 
             self._print(Syntax(context_diff.text_diff(snapshot.name), "sql", word_wrap=True))
             self._print(tree)
@@ -918,6 +950,9 @@ class TerminalConsole(Console):
             if not plan_builder.override_end:
                 if plan.provided_end:
                     blank_meaning = f"'{time_like_to_str(plan.provided_end)}'"
+                elif plan.interval_end_per_model:
+                    max_end = max(plan.interval_end_per_model.values())
+                    blank_meaning = f"'{time_like_to_str(max_end)}'"
                 else:
                     blank_meaning = "now"
                 end = self._prompt(
@@ -927,9 +962,6 @@ class TerminalConsole(Console):
                     plan_builder.set_end(end)
 
             plan = plan_builder.build()
-
-        if not auto_apply and self._confirm(f"Apply - {backfill_or_preview.capitalize()} Tables"):
-            plan_builder.apply()
 
     def _prompt_promote(self, plan_builder: PlanBuilder) -> None:
         if self._confirm(
@@ -1271,13 +1303,18 @@ class NotebookMagicConsole(TerminalConsole):
 
         def effective_from_change_callback(change: t.Dict[str, datetime.datetime]) -> None:
             plan_builder.set_effective_from(change["new"])
-            self._show_options_after_categorization(plan_builder, auto_apply, default_catalog)
+            self._show_options_after_categorization(
+                plan_builder, auto_apply, default_catalog, no_prompts=False
+            )
 
         def going_forward_change_callback(change: t.Dict[str, bool]) -> None:
             checked = change["new"]
             plan_builder.set_effective_from(None if checked else yesterday_ds())
             self._show_options_after_categorization(
-                plan_builder, auto_apply=auto_apply, default_catalog=default_catalog
+                plan_builder,
+                auto_apply=auto_apply,
+                default_catalog=default_catalog,
+                no_prompts=False,
             )
 
         date_picker = widgets.DatePicker(
@@ -1335,11 +1372,15 @@ class NotebookMagicConsole(TerminalConsole):
 
         def start_change_callback(change: t.Dict[str, datetime.datetime]) -> None:
             plan_builder.set_start(change["new"])
-            self._show_options_after_categorization(plan_builder, auto_apply, default_catalog)
+            self._show_options_after_categorization(
+                plan_builder, auto_apply, default_catalog, no_prompts=False
+            )
 
         def end_change_callback(change: t.Dict[str, datetime.datetime]) -> None:
             plan_builder.set_end(change["new"])
-            self._show_options_after_categorization(plan_builder, auto_apply, default_catalog)
+            self._show_options_after_categorization(
+                plan_builder, auto_apply, default_catalog, no_prompts=False
+            )
 
         if plan_builder.is_start_and_end_allowed:
             add_to_layout_widget(
@@ -1387,11 +1428,17 @@ class NotebookMagicConsole(TerminalConsole):
             button.output = output
 
     def _show_options_after_categorization(
-        self, plan_builder: PlanBuilder, auto_apply: bool, default_catalog: t.Optional[str]
+        self,
+        plan_builder: PlanBuilder,
+        auto_apply: bool,
+        default_catalog: t.Optional[str],
+        no_prompts: bool,
     ) -> None:
         self.dynamic_options_after_categorization_output.children = ()
         self.display(self.dynamic_options_after_categorization_output)
-        super()._show_options_after_categorization(plan_builder, auto_apply, default_catalog)
+        super()._show_options_after_categorization(
+            plan_builder, auto_apply, default_catalog, no_prompts
+        )
 
     def _add_to_dynamic_options(self, *widgets: widgets.Widget) -> None:
         add_to_layout_widget(self.dynamic_options_after_categorization_output, *widgets)
@@ -1416,7 +1463,9 @@ class NotebookMagicConsole(TerminalConsole):
 
         def radio_button_selected(change: t.Dict[str, t.Any]) -> None:
             plan_builder.set_choice(snapshot, choices[change["owner"].index])
-            self._show_options_after_categorization(plan_builder, auto_apply, default_catalog)
+            self._show_options_after_categorization(
+                plan_builder, auto_apply, default_catalog, no_prompts=False
+            )
 
         radio = widgets.RadioButtons(
             options=choice_mapping.values(),
@@ -1697,25 +1746,32 @@ class MarkdownConsole(CaptureTerminalConsole):
     def _show_categorized_snapshots(self, plan: Plan, default_catalog: t.Optional[str]) -> None:
         context_diff = plan.context_diff
         for snapshot in plan.categorized:
-            if not context_diff.directly_modified(snapshot.name):
+            if context_diff.directly_modified(snapshot.name):
+                category_str = SNAPSHOT_CHANGE_CATEGORY_STR[snapshot.change_category]
+                tree = Tree(
+                    f"[bold][direct]Directly Modified: {snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)} ({category_str})"
+                )
+                indirect_tree = None
+                for child_sid in sorted(plan.indirectly_modified.get(snapshot.snapshot_id, set())):
+                    child_snapshot = context_diff.snapshots[child_sid]
+                    if not indirect_tree:
+                        indirect_tree = Tree("[indirect]Indirectly Modified Children:")
+                        tree.add(indirect_tree)
+                    child_category_str = SNAPSHOT_CHANGE_CATEGORY_STR[
+                        child_snapshot.change_category
+                    ]
+                    indirect_tree.add(
+                        f"[indirect]{child_snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)} ({child_category_str})"
+                    )
+                if indirect_tree:
+                    indirect_tree = self._limit_model_names(indirect_tree, self.verbose)
+            elif context_diff.metadata_updated(snapshot.name):
+                tree = Tree(
+                    f"[bold][metadata]Metadata Updated: {snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)}"
+                )
+            else:
                 continue
 
-            category_str = SNAPSHOT_CHANGE_CATEGORY_STR[snapshot.change_category]
-            tree = Tree(
-                f"[bold][direct]Directly Modified: {snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)} ({category_str})"
-            )
-            indirect_tree = None
-            for child_sid in sorted(plan.indirectly_modified.get(snapshot.snapshot_id, set())):
-                child_snapshot = context_diff.snapshots[child_sid]
-                if not indirect_tree:
-                    indirect_tree = Tree("[indirect]Indirectly Modified Children:")
-                    tree.add(indirect_tree)
-                child_category_str = SNAPSHOT_CHANGE_CATEGORY_STR[child_snapshot.change_category]
-                indirect_tree.add(
-                    f"[indirect]{child_snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)} ({child_category_str})"
-                )
-            if indirect_tree:
-                indirect_tree = self._limit_model_names(indirect_tree, self.verbose)
             self._print(f"```diff\n{context_diff.text_diff(snapshot.name)}\n```\n")
             self._print("```\n")
             self._print(tree)

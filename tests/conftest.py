@@ -19,9 +19,9 @@ from sqlglot.dialects.dialect import DialectType
 from sqlglot.helper import ensure_list
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
-from sqlmesh.core.config import DuckDBConnectionConfig
+from sqlmesh.core.config import BaseDuckDBConnectionConfig
 from sqlmesh.core.context import Context
-from sqlmesh.core.engine_adapter import SparkEngineAdapter
+from sqlmesh.core.engine_adapter import MSSQLEngineAdapter, SparkEngineAdapter
 from sqlmesh.core.engine_adapter.base import EngineAdapter
 from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core import lineage
@@ -38,6 +38,7 @@ from sqlmesh.core.snapshot import (
 )
 from sqlmesh.utils import random_id
 from sqlmesh.utils.date import TimeLike, to_date
+from sqlmesh.core.engine_adapter.shared import CatalogSupport
 
 pytest_plugins = ["tests.common_fixtures"]
 
@@ -217,7 +218,7 @@ def rescope_global_models(request):
 
 @pytest.fixture(scope="function", autouse=True)
 def rescope_duckdb_classvar(request):
-    DuckDBConnectionConfig._data_file_to_adapter = {}
+    BaseDuckDBConnectionConfig._data_file_to_adapter = {}
     yield
 
 
@@ -440,6 +441,11 @@ def make_mocked_engine_adapter(mocker: MockerFixture) -> t.Callable:
             mocker.patch(
                 "sqlmesh.engines.spark.db_api.spark_session.SparkSessionConnection._spark_major_minor",
                 new_callable=PropertyMock(return_value=(3, 5)),
+            )
+        if isinstance(adapter, MSSQLEngineAdapter):
+            mocker.patch(
+                "sqlmesh.core.engine_adapter.mssql.MSSQLEngineAdapter.catalog_support",
+                new_callable=PropertyMock(return_value=CatalogSupport.REQUIRES_SET_CATALOG),
             )
         return adapter
 

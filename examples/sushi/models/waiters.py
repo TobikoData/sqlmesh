@@ -12,6 +12,7 @@ from sqlmesh.core.model.kind import ModelKindName
     kind=dict(name=ModelKindName.EMBEDDED),
     owner="jen",
     cron="@daily",
+    pre_statements=["@noop()"],
 )
 def entrypoint(evaluator: MacroEvaluator) -> exp.Select:
     """

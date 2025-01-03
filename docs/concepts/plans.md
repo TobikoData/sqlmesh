@@ -158,8 +158,8 @@ When we run the project's first plan, we see that SQLMesh correctly detected a d
 ======================================================================
 Successfully Ran 1 tests against duckdb
 ----------------------------------------------------------------------
-New environment `prod` will be created from `prod`
-Summary of differences against `prod`:
+`prod` environment will be initialized
+
 Models:
 └── Added:
     ├── sqlmesh_example.full_model
@@ -185,7 +185,9 @@ We then execute `sqlmesh plan dev` to create the new `dev` environment:
 Successfully Ran 1 tests against duckdb
 ----------------------------------------------------------------------
 New environment `dev` will be created from `prod`
-Summary of differences against `dev`:
+
+Differences from the `prod` environment:
+
 Models:
 ├── Directly Modified:
 │   ├── sqlmesh_example__dev.start_end_model
@@ -225,7 +227,9 @@ Because the command's `--start` of 2024-09-24 is after `start_end_model`'s start
 Successfully Ran 1 tests against duckdb
 ----------------------------------------------------------------------
 New environment `dev` will be created from `prod`
-Summary of differences against `dev`:
+
+Differences from the `prod` environment:
+
 Models:
 ├── Directly Modified:
 │   ├── sqlmesh_example__dev.start_end_model
@@ -346,3 +350,50 @@ See examples below for how to restate both based on model names and model tags.
     ```bash
     sqlmesh plan --restate-model "+db*" --restate-model "tag:+exp*"
     ```
+
+=== "Specific Date Range"
+
+    ```bash
+    sqlmesh plan --restate-model "db.model_a" --start "2024-01-01" --end "2024-01-10"
+    ```
+
+### Restating production vs development
+
+Restatement plans behave differently depending on if you're targeting the `prod` environment or a [development environment](./environments.md#how-to-use-environments).
+
+If you target a development environment like so:
+
+```bash
+sqlmesh plan dev --restate-model "db.model_a" --start "2024-01-01" --end "2024-01-10"
+```
+
+the restatement plan will restate the requested intervals for the specified model in the `dev` environment. Versions of the model in other environments will be unaffected.
+
+However, if you target the `prod` environment:
+
+```bash
+sqlmesh plan --restate-model "db.model_a" --start "2024-01-01" --end "2024-01-10"
+```
+
+the restatement plan will restate the intervals in the `prod` table *and clear the intervals from state for every other version of that model*.
+
+This means that next time you do a run in `dev`, those intervals will be restated in the development environment as well.
+
+The reason for this is to prevent old data from getting promoted to `prod`. One of the benefits of SQLMesh is being able to [reuse tables](#virtual-update) from development environments to ensure that production deployments consist of quick, painless pointer swaps.
+
+!!! info
+    If restating data in `prod` did not also trigger a restatement in `dev`, when `sqlmesh plan` is run against `prod` to deploy changes, a table containing old data may be promoted.
+
+That this behaviour also triggers downstream tables that only exist in development environments to have the affected intervals cleared as well. Consider the following example:
+
+ - Table `A` exists in `prod`
+ - A virtual environment `dev` is created with new tables `B` and `C` downstream of `A`
+    - the DAG in `prod` looks like `A`
+    - the DAG in `dev` looks like `A <- B <- C`
+ - A restatement plan is created against table `A` in `prod`
+ - SQLMesh will ensure that the affected intervals are also cleared for `B` and `C` in `dev` even though those tables do not exist in `prod`
+
+!!! info
+    If a restatement plan against `prod` cleared intervals from state for tables in development environments, you need to `sqlmesh run <env>` to trigger the reprocessing of that data.
+
+    This is because SQLMesh limits the work done in the `prod` restatement plan to just the `prod` environment to ensure the restatement can be applied as quickly as possible and to prevent potentially unnecessary work being done. We do not assume that all snapshots in a development environment will be eventually deployed to `prod`.

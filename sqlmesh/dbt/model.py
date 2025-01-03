@@ -81,6 +81,8 @@ class ModelConfig(BaseModelConfig):
     disable_restatement: t.Optional[bool] = None
     allow_partials: t.Optional[bool] = None
     physical_version: t.Optional[str] = None
+    auto_restatement_cron: t.Optional[str] = None
+    auto_restatement_intervals: t.Optional[int] = None
 
     # DBT configuration fields
     cluster_by: t.Optional[t.List[str]] = None
@@ -235,18 +237,21 @@ class ModelConfig(BaseModelConfig):
 
             incremental_kind_kwargs["on_destructive_change"] = on_destructive_change
 
+        for field in ("forward_only", "auto_restatement_cron"):
+            field_val = getattr(self, field, None) or self.meta.get(field, None)
+            if field_val:
+                incremental_kind_kwargs[field] = field_val
+
         if materialization == Materialization.TABLE:
             return FullKind()
         if materialization == Materialization.VIEW:
             return ViewKind()
         if materialization == Materialization.INCREMENTAL:
-            incremental_materialization_kwargs: t.Dict[str, t.Any] = {
-                "dialect": self.dialect(context)
-            }
-            for field in ("batch_size", "batch_concurrency", "lookback", "forward_only"):
+            incremental_by_kind_kwargs: t.Dict[str, t.Any] = {"dialect": self.dialect(context)}
+            for field in ("batch_size", "batch_concurrency", "lookback"):
                 field_val = getattr(self, field, None) or self.meta.get(field, None)
                 if field_val:
-                    incremental_materialization_kwargs[field] = field_val
+                    incremental_by_kind_kwargs[field] = field_val
 
             if self.time_column:
                 strategy = self.incremental_strategy or target.default_incremental_strategy(
@@ -266,8 +271,9 @@ class ModelConfig(BaseModelConfig):
                     disable_restatement=(
                         self.disable_restatement if self.disable_restatement is not None else False
                     ),
+                    auto_restatement_intervals=self.auto_restatement_intervals,
                     **incremental_kind_kwargs,
-                    **incremental_materialization_kwargs,
+                    **incremental_by_kind_kwargs,
                 )
 
             disable_restatement = self.disable_restatement
@@ -288,11 +294,22 @@ class ModelConfig(BaseModelConfig):
                         f"{self.canonical_name(context)}: SQLMesh incremental by unique key strategy is not compatible with '{strategy}'"
                         f" incremental strategy. Supported strategies include {collection_to_str(INCREMENTAL_BY_UNIQUE_KEY_STRATEGIES)}."
                     )
+
+                if self.incremental_predicates:
+                    dialect = self.dialect(context)
+                    incremental_kind_kwargs["merge_filter"] = exp.and_(
+                        *[
+                            d.parse_one(predicate, dialect=dialect)
+                            for predicate in self.incremental_predicates
+                        ],
+                        dialect=dialect,
+                    ).transform(d.replace_merge_table_aliases)
+
                 return IncrementalByUniqueKeyKind(
                     unique_key=self.unique_key,
                     disable_restatement=disable_restatement,
                     **incremental_kind_kwargs,
-                    **incremental_materialization_kwargs,
+                    **incremental_by_kind_kwargs,
                 )
 
             logger.warning(
@@ -306,7 +323,6 @@ class ModelConfig(BaseModelConfig):
             )
             return IncrementalUnmanagedKind(
                 insert_overwrite=strategy in INCREMENTAL_BY_TIME_STRATEGIES,
-                forward_only=incremental_materialization_kwargs.get("forward_only", True),
                 disable_restatement=disable_restatement,
                 **incremental_kind_kwargs,
             )

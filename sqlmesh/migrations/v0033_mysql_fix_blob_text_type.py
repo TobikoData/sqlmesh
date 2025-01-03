@@ -2,6 +2,8 @@
 
 from sqlglot import exp
 
+from sqlmesh.utils.migration import blob_text_type
+
 
 def migrate(state_sync, **kwargs):  # type: ignore
     engine_adapter = state_sync.engine_adapter
@@ -28,13 +30,14 @@ def migrate(state_sync, **kwargs):  # type: ignore
     ]
 
     for table_name, column_name in targets:
+        blob_type = blob_text_type(engine_adapter.dialect)
         alter_table_exp = exp.Alter(
             this=exp.to_table(table_name),
             kind="TABLE",
             actions=[
                 exp.AlterColumn(
                     this=exp.to_column(column_name),
-                    dtype=exp.DataType.build("longtext"),
+                    dtype=exp.DataType.build(blob_type),
                 )
             ],
         )

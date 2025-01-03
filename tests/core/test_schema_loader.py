@@ -16,13 +16,13 @@ from sqlmesh.core.model import SqlModel, create_external_model, load_sql_based_m
 from sqlmesh.core.model.definition import ExternalModel
 from sqlmesh.core.schema_loader import create_external_models_file
 from sqlmesh.core.snapshot import SnapshotChangeCategory
-from sqlmesh.utils.yaml import YAML
+from sqlmesh.utils import yaml
 from sqlmesh.utils.errors import SQLMeshError
 
 
-def test_create_external_models(tmpdir, assert_exp_eq):
+def test_create_external_models(tmp_path, assert_exp_eq):
     config = Config(gateways=GatewayConfig(connection=DuckDBConnectionConfig()))
-    context = Context(paths=[tmpdir], config=config)
+    context = Context(paths=[tmp_path], config=config)
 
     # `fruits` is used by DuckDB in the upcoming select query
     fruits = pd.DataFrame(
@@ -107,7 +107,7 @@ def test_create_external_models(tmpdir, assert_exp_eq):
     assert context.models['"memory"."sushi"."raw_fruits"'].gateway is None
 
 
-def test_gateway_specific_external_models(tmpdir: Path):
+def test_gateway_specific_external_models(tmp_path: Path):
     gateways = {
         "dev": GatewayConfig(connection=DuckDBConnectionConfig()),
         "prod": GatewayConfig(connection=DuckDBConnectionConfig()),
@@ -115,12 +115,12 @@ def test_gateway_specific_external_models(tmpdir: Path):
 
     config = Config(gateways=gateways, default_gateway="dev")
 
-    dev_context = Context(paths=[tmpdir], config=config, gateway="dev")
+    dev_context = Context(paths=[tmp_path], config=config, gateway="dev")
     dev_context.engine_adapter.execute("create schema landing")
     dev_context.engine_adapter.execute("create table landing.dev_source as select 1")
     dev_context.engine_adapter.execute("create schema lake")
 
-    prod_context = Context(paths=[tmpdir], config=config, gateway="prod")
+    prod_context = Context(paths=[tmp_path], config=config, gateway="prod")
     prod_context.engine_adapter.execute("create schema landing")
     prod_context.engine_adapter.execute("create table landing.prod_source as select 1")
     prod_context.engine_adapter.execute("create schema lake")
@@ -160,23 +160,28 @@ def test_gateway_specific_external_models(tmpdir: Path):
 
     # each context can only see models for its own gateway
     # check that models from both gateways present in the file, to show that prod_context.create_external_models() didnt clobber the dev ones
-    external_models_filename = tmpdir / c.EXTERNAL_MODELS_YAML
-    with open(external_models_filename, "r", encoding="utf8") as fd:
-        contents = YAML().load(fd)
+    contents = yaml.load(tmp_path / c.EXTERNAL_MODELS_YAML)
 
-        assert len(contents) == 2
-        assert len([c for c in contents if c["name"] == '"memory"."landing"."dev_source"']) == 1
-        assert len([c for c in contents if c["name"] == '"memory"."landing"."prod_source"']) == 1
+    assert len(contents) == 2
+    assert len([c for c in contents if c["name"] == '"memory"."landing"."dev_source"']) == 1
+    assert len([c for c in contents if c["name"] == '"memory"."landing"."prod_source"']) == 1
 
 
-def test_gateway_specific_external_models_mixed_with_others(tmpdir):
+def test_gateway_specific_external_models_mixed_with_others(tmp_path: Path):
+    def _init_db(ctx: Context):
+        ctx.engine_adapter.execute("create schema landing")
+        ctx.engine_adapter.execute("create table landing.source_table as select 1")
+        ctx.engine_adapter.execute("create schema lake")
+
     gateways = {
         "dev": GatewayConfig(connection=DuckDBConnectionConfig()),
+        "prod": GatewayConfig(connection=DuckDBConnectionConfig()),
     }
 
     config = Config(gateways=gateways, default_gateway="dev")
 
-    model_dir = (tmpdir / c.MODELS).mkdir()
+    model_dir = tmp_path / c.MODELS
+    model_dir.mkdir()
 
     with open(model_dir / "table.sql", "w", encoding="utf8") as fd:
         fd.write(
@@ -190,12 +195,11 @@ def test_gateway_specific_external_models_mixed_with_others(tmpdir):
         """,
         )
 
-    ctx = Context(paths=[tmpdir], config=config)  # note: No explicitly defined gateway
+    ctx = Context(paths=[tmp_path], config=config)  # note: No explicitly defined gateway
     assert ctx.gateway is None
+    assert ctx.selected_gateway == "dev"
 
-    ctx.engine_adapter.execute("create schema landing")
-    ctx.engine_adapter.execute("create table landing.source_table as select 1")
-    ctx.engine_adapter.execute("create schema lake")
+    _init_db(ctx)
 
     ctx.load()
     assert len(ctx.models) == 1
@@ -203,46 +207,50 @@ def test_gateway_specific_external_models_mixed_with_others(tmpdir):
 
     ctx.create_external_models()
 
-    # no gateway was specifically chosen; external models should be created without a gateway
-    external_models_filename = tmpdir / c.EXTERNAL_MODELS_YAML
-    with open(external_models_filename, "r", encoding="utf8") as fd:
-        contents = YAML().load(fd)
-        assert len(contents) == 1
-        assert "gateway" not in contents[0]
+    # no gateway was specifically chosen; external models should be created against the default gateway
+    external_models_filename = tmp_path / c.EXTERNAL_MODELS_YAML
+    contents = yaml.load(external_models_filename)
+    assert len(contents) == 1
+    assert contents[0]["gateway"] == "dev"
 
     ctx.load()
     assert len(ctx.models) == 2
     assert '"memory"."landing"."source_table"' in ctx.models
     assert '"memory"."lake"."table"' in ctx.models
 
-    ctx.gateway = "dev"  # explicitly set gateway=dev
-    ctx.create_external_models()
+    # explicitly set --gateway prod
+    prod_ctx = Context(paths=[tmp_path], config=config, gateway="prod")
+    assert prod_ctx.gateway == "prod"
+    assert prod_ctx.selected_gateway == "prod"
 
-    # there should now be 2 external models with the same name - one with a gateway and one without
-    with open(external_models_filename, "r", encoding="utf8") as fd:
-        contents = YAML().load(fd)
-        assert len(contents) == 2
-        assert "gateway" not in contents[0]
-        assert "gateway" in contents[1]
-        assert contents[0]["name"] == contents[1]["name"]
+    _init_db(prod_ctx)
+
+    prod_ctx.create_external_models()
+
+    # there should now be 2 external models with the same name - one with a gateway=dev and one with gateway=prod
+    contents = yaml.load(external_models_filename)
+    assert len(contents) == 2
+    assert sorted([contents[0]["gateway"], contents[1]["gateway"]]) == ["dev", "prod"]
+    assert contents[0]["name"] == contents[1]["name"]
 
     # check that this doesnt present a problem on load
-    ctx.load()
+    prod_ctx.load()
 
-    external_models = [m for _, m in ctx.models.items() if type(m) == ExternalModel]
+    external_models = [m for _, m in prod_ctx.models.items() if type(m) == ExternalModel]
     assert len(external_models) == 1
     assert external_models[0].name == '"memory"."landing"."source_table"'
+    assert external_models[0].gateway == "prod"
 
 
-def test_gateway_specific_external_models_default_gateway(tmpdir: Path):
+def test_gateway_specific_external_models_default_gateway(tmp_path: Path):
     model_0 = {"name": "db.model0", "columns": {"a": "int"}}
 
     model_1 = {"name": "db.model1", "gateway": "dev", "columns": {"a": "int"}}
 
     model_2 = {"name": "db.model2", "gateway": "prod", "columns": {"a": "int"}}
 
-    with open(tmpdir / c.EXTERNAL_MODELS_YAML, "w", encoding="utf8") as fd:
-        YAML().dump([model_0, model_1, model_2], fd)
+    with open(tmp_path / c.EXTERNAL_MODELS_YAML, "w", encoding="utf8") as fd:
+        yaml.dump([model_0, model_1, model_2], fd)
 
     gateways = {
         "dev": GatewayConfig(connection=DuckDBConnectionConfig()),
@@ -250,7 +258,7 @@ def test_gateway_specific_external_models_default_gateway(tmpdir: Path):
     }
 
     config = Config(gateways=gateways, default_gateway="prod")
-    ctx = Context(paths=[tmpdir], config=config)
+    ctx = Context(paths=[tmp_path], config=config)
 
     ctx.load()
 
@@ -260,10 +268,11 @@ def test_gateway_specific_external_models_default_gateway(tmpdir: Path):
     assert '"memory"."db"."model2"' in model_names
 
 
-def test_create_external_models_no_duplicates(tmpdir):
+def test_create_external_models_no_duplicates(tmp_path: Path):
     config = Config(gateways={"": GatewayConfig(connection=DuckDBConnectionConfig())})
 
-    model_dir = (tmpdir / c.MODELS).mkdir()
+    model_dir = tmp_path / c.MODELS
+    model_dir.mkdir()
 
     with open(model_dir / "table.sql", "w", encoding="utf8") as fd:
         fd.write(
@@ -277,15 +286,14 @@ def test_create_external_models_no_duplicates(tmpdir):
         """,
         )
 
-    ctx = Context(paths=[tmpdir], config=config)
+    ctx = Context(paths=[tmp_path], config=config)
     assert ctx.gateway is None
     ctx.engine_adapter.execute("create schema landing")
     ctx.engine_adapter.execute("create table landing.source_table as select 1")
     ctx.engine_adapter.execute("create schema lake")
 
     def _load_external_models():
-        with open(tmpdir / c.EXTERNAL_MODELS_YAML, "r", encoding="utf8") as fd:
-            return YAML().load(fd)
+        return yaml.load(tmp_path / c.EXTERNAL_MODELS_YAML)
 
     ctx.create_external_models()
 
@@ -298,7 +306,7 @@ def test_create_external_models_no_duplicates(tmpdir):
     assert len(_load_external_models()) == 1
 
 
-def test_no_internal_model_conversion(tmp_path: Path, make_snapshot, mocker: MockerFixture):
+def test_no_internal_model_conversion(tmp_path: Path, mocker: MockerFixture):
     engine_adapter_mock = mocker.Mock()
     engine_adapter_mock.columns.return_value = {
         "b": exp.DataType.build("text"),
@@ -323,8 +331,7 @@ def test_no_internal_model_conversion(tmp_path: Path, make_snapshot, mocker: Moc
         "bigquery",
     )
 
-    with open(filename, "r", encoding="utf8") as fd:
-        schema = YAML().load(fd)
+    schema = yaml.load(filename)
 
     assert len(schema) == 2
     assert schema[0]["name"] == "`tbl-d`"
@@ -353,8 +360,7 @@ def test_missing_table(tmp_path: Path):
         )
     assert """Unable to get schema for '"tbl_source"'""" in mock_logger.call_args[0][0]
 
-    with open(filename, "r", encoding="utf8") as fd:
-        schema = YAML().load(fd)
+    schema = yaml.load(filename)
     assert len(schema) == 0
 
     with pytest.raises(SQLMeshError, match=r"""Unable to get schema for '"tbl_source"'.*"""):

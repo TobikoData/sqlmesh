@@ -13,12 +13,14 @@ SQLMesh supports integrations with the following tools:
 SQLMesh supports the following execution engines for running SQLMesh projects:
 
 * [Athena](./engines/athena.md)
+* [Azure SQL](./engines/azuresql.md)
 * [BigQuery](./engines/bigquery.md)
+* [ClickHouse](./engines/clickhouse.md)
 * [Databricks](./engines/databricks.md)
 * [DuckDB](./engines/duckdb.md)
 * [MotherDuck](./engines/motherduck.md)
-* [MySQL](./engines/mysql.md)
 * [MSSQL](./engines/mssql.md)
+* [MySQL](./engines/mysql.md)
 * [Postgres](./engines/postgres.md)
 * [GCP Postgres](./engines/gcp-postgres.md)
 * [Redshift](./engines/redshift.md)

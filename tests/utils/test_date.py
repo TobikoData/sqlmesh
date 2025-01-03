@@ -2,13 +2,14 @@ import typing as t
 from datetime import date, datetime
 
 import pytest
-from freezegun import freeze_time
+import time_machine
 from sqlglot import exp
 
 from sqlmesh.utils.date import (
     UTC,
     TimeLike,
     date_dict,
+    format_tz_datetime,
     is_categorical_relative_expression,
     make_inclusive,
     to_datetime,
@@ -57,7 +58,7 @@ def test_to_datetime() -> None:
     ],
 )
 def test_to_datetime_with_expressions(expression, result) -> None:
-    with freeze_time("2023-01-20 12:30:30"):
+    with time_machine.travel("2023-01-20 12:30:30 UTC", tick=False):
         assert to_datetime(expression) == result
 
 
@@ -228,3 +229,9 @@ def test_date_dict():
         "start_hour": 0,
         "end_hour": 0,
     }
+
+
+def test_format_tz_datetime():
+    test_datetime = to_datetime("2020-01-01 00:00:00")
+    assert format_tz_datetime(test_datetime) == "2020-01-01 12:00AM UTC"
+    assert format_tz_datetime(test_datetime, format_string=None) == "2020-01-01 00:00:00+00:00"

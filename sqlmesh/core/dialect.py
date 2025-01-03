@@ -116,6 +116,7 @@ def _parse_statement(self: Parser) -> t.Optional[exp.Expression]:
         return None
 
     parser = PARSERS.get(self._curr.text.upper())
+    error_msg = None
 
     if parser:
         # Capture any available description in the form of a comment
@@ -125,7 +126,8 @@ def _parse_statement(self: Parser) -> t.Optional[exp.Expression]:
         try:
             self._advance()
             meta = self._parse_wrapped(lambda: t.cast(t.Callable, parser)(self))
-        except ParseError:
+        except ParseError as parse_error:
+            error_msg = parse_error.args[0]
             self._retreat(index)
 
         # Only return the DDL expression if we actually managed to parse one. This is
@@ -135,7 +137,12 @@ def _parse_statement(self: Parser) -> t.Optional[exp.Expression]:
             meta.comments = comments
             return meta
 
-    return self.__parse_statement()  # type: ignore
+    try:
+        return self.__parse_statement()  # type: ignore
+    except ParseError:
+        if error_msg:
+            raise ParseError(error_msg)
+        raise
 
 
 def _parse_lambda(self: Parser, alias: bool = False) -> t.Optional[exp.Expression]:
@@ -403,19 +410,27 @@ def _parse_limit(
     return macro
 
 
+def _parse_macro_or_clause(self: Parser, parser: t.Callable) -> t.Optional[exp.Expression]:
+    return _parse_macro(self) if self._match(TokenType.PARAMETER) else parser()
+
+
 def _parse_props(self: Parser) -> t.Optional[exp.Expression]:
     key = self._parse_id_var(any_token=True)
     if not key:
         return None
 
     name = key.name.lower()
-    if name == "when_matched":
-        value: t.Optional[t.Union[exp.Expression, t.List[exp.Expression]]] = (
-            self._parse_when_matched()  # type: ignore
-        )
-    elif name == "time_data_type":
+    if name == "time_data_type":
         # TODO: if we make *_data_type a convention to parse things into exp.DataType, we could make this more generic
         value = self._parse_types(schema=True)
+    elif name == "when_matched":
+        # Parentheses around the WHEN clauses can be used to disambiguate them from other properties
+        value = self._parse_wrapped(
+            lambda: _parse_macro_or_clause(self, self._parse_when_matched),
+            optional=True,
+        )
+    elif name == "merge_filter":
+        value = self._parse_conjunction()
     elif self._match(TokenType.L_PAREN):
         value = self.expression(exp.Tuple, expressions=self._parse_csv(self._parse_equality))
         self._match_r_paren()
@@ -549,13 +564,15 @@ def _create_parser(parser_type: t.Type[exp.Expression], table_keys: t.List[str])
 
             if key in table_keys:
                 value = self._parse_table_parts()
+                if value and self._prev.token_type == TokenType.STRING:
+                    self.raise_error(
+                        f"'{key}' property cannot be a string value: {value}. "
+                        "Please use the identifier syntax instead, e.g. foo.bar instead of 'foo.bar'"
+                    )
             elif key == "columns":
                 value = self._parse_schema()
             elif key == "kind":
-                if self._match(TokenType.PARAMETER):
-                    field = _parse_macro(self)
-                else:
-                    field = self._parse_id_var(any_token=True)
+                field = _parse_macro_or_clause(self, lambda: self._parse_id_var(any_token=True))
 
                 if not field or isinstance(field, (MacroVar, MacroFunc)):
                     value = field
@@ -605,15 +622,11 @@ def _props_sql(self: Generator, expressions: t.List[exp.Expression]) -> str:
     size = len(expressions)
 
     for i, prop in enumerate(expressions):
-        value = prop.args.get("value")
-        if prop.name == "when_matched" and isinstance(value, list):
-            output_value = ", ".join(self.sql(v) for v in value)
-        else:
-            output_value = self.sql(prop, "value")
-        sql = self.indent(f"{prop.name} {output_value}")
+        sql = self.indent(f"{prop.name} {self.sql(prop, 'value')}")
 
         if i < size - 1:
             sql += ","
+
         props.append(self.maybe_comment(sql, expression=prop))
 
     return "\n".join(props)
@@ -648,6 +661,15 @@ def _macro_func_sql(self: Generator, expression: MacroFunc) -> str:
     return self.maybe_comment(sql, expression)
 
 
+def _whens_sql(self: Generator, expression: exp.Whens) -> str:
+    if isinstance(expression.parent, exp.Merge):
+        return self.whens_sql(expression)
+
+    # If the `WHEN` clauses aren't part of a MERGE statement (e.g. they
+    # appear in the `MODEL` DDL), then we will wrap them with parentheses.
+    return self.wrap(self.expressions(expression, sep=" ", indent=False))
+
+
 def _override(klass: t.Type[Tokenizer | Parser], func: t.Callable) -> None:
     name = func.__name__
     setattr(klass, f"_{name}", getattr(klass, name))
@@ -674,8 +696,6 @@ def format_model_expressions(
     if len(expressions) == 1 and is_meta_expression(expressions[0]):
         return expressions[0].sql(pretty=True, dialect=dialect)
 
-    *statements, query = expressions
-
     if rewrite_casts:
 
         def cast_to_colon(node: exp.Expression) -> exp.Expression:
@@ -696,14 +716,16 @@ def format_model_expressions(
             exp.replace_children(node, cast_to_colon)
             return node
 
-        query = query.copy()
-        exp.replace_children(query, cast_to_colon)
+        new_expressions = []
+        for expression in expressions:
+            expression = expression.copy()
+            exp.replace_children(expression, cast_to_colon)
+            new_expressions.append(expression)
+
+        expressions = new_expressions
 
     return ";\n\n".join(
-        [
-            *(statement.sql(pretty=True, dialect=dialect, **kwargs) for statement in statements),
-            query.sql(pretty=True, dialect=dialect, **kwargs),
-        ]
+        expression.sql(pretty=True, dialect=dialect, **kwargs) for expression in expressions
     ).strip()
 
 
@@ -901,6 +923,7 @@ def extend_sqlglot() -> None:
                     ModelKind: _model_kind_sql,
                     PythonCode: lambda self, e: self.expressions(e, sep="\n", indent=False),
                     StagedFilePath: lambda self, e: self.table_sql(e),
+                    exp.Whens: _whens_sql,
                 }
             )
 
@@ -1205,7 +1228,9 @@ def interpret_key_value_pairs(
     return {i.this.name: interpret_expression(i.expression) for i in e.expressions}
 
 
-def extract_audit(v: exp.Expression) -> t.Tuple[str, t.Dict[str, exp.Expression]]:
+def extract_func_call(
+    v: exp.Expression, allow_tuples: bool = False
+) -> t.Tuple[str, t.Dict[str, exp.Expression]]:
     kwargs = {}
 
     if isinstance(v, exp.Anonymous):
@@ -1214,6 +1239,15 @@ def extract_audit(v: exp.Expression) -> t.Tuple[str, t.Dict[str, exp.Expression]
     elif isinstance(v, exp.Func):
         func = v.sql_name()
         args = list(v.args.values())
+    elif isinstance(v, exp.Paren):
+        func = ""
+        args = [v.this]
+    elif isinstance(v, exp.Tuple):  # airflow only
+        if not allow_tuples:
+            raise ConfigError("Audit name is missing (eg. MY_AUDIT())")
+
+        func = ""
+        args = v.expressions
     else:
         return v.name.lower(), {}
 
@@ -1228,3 +1262,19 @@ def extract_audit(v: exp.Expression) -> t.Tuple[str, t.Dict[str, exp.Expression]
 
 def is_meta_expression(v: t.Any) -> bool:
     return isinstance(v, (Audit, Metric, Model))
+
+
+def replace_merge_table_aliases(expression: exp.Expression) -> exp.Expression:
+    """
+    Resolves references from the "source" and "target" tables (or their DBT equivalents)
+    with the corresponding SQLMesh merge aliases (MERGE_SOURCE_ALIAS and MERGE_TARGET_ALIAS)
+    """
+    from sqlmesh.core.engine_adapter.base import MERGE_SOURCE_ALIAS, MERGE_TARGET_ALIAS
+
+    if isinstance(expression, exp.Column):
+        if expression.table.lower() in ("target", "dbt_internal_dest"):
+            expression.set("table", exp.to_identifier(MERGE_TARGET_ALIAS))
+        elif expression.table.lower() in ("source", "dbt_internal_source"):
+            expression.set("table", exp.to_identifier(MERGE_SOURCE_ALIAS))
+
+    return expression

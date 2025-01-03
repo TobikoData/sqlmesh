@@ -30,11 +30,13 @@ from sqlmesh.core.model.common import (
     parse_dependencies,
     single_value_or_tuple,
 )
+from sqlmesh.core.model.meta import ModelMeta, FunctionCall
 from sqlmesh.core.model.kind import ModelKindName, SeedKind, ModelKind, FullKind, create_model_kind
-from sqlmesh.core.model.meta import ModelMeta, AuditReference
 from sqlmesh.core.model.seed import CsvSeedReader, Seed, create_seed
 from sqlmesh.core.renderer import ExpressionRenderer, QueryRenderer
+from sqlmesh.core.signal import SignalRegistry
 from sqlmesh.utils import columns_to_types_all_known, str_to_bool, UniqueKeyDict
+from sqlmesh.utils.cron import CroniterCache
 from sqlmesh.utils.date import TimeLike, make_inclusive, to_datetime, to_time_column
 from sqlmesh.utils.errors import ConfigError, SQLMeshError, raise_config_error
 from sqlmesh.utils.hashing import hash_data
@@ -42,8 +44,10 @@ from sqlmesh.utils.jinja import JinjaMacroRegistry, extract_macro_references_and
 from sqlmesh.utils.pydantic import PydanticModel, PRIVATE_FIELDS
 from sqlmesh.utils.metaprogramming import (
     Executable,
+    build_env,
     prepare_env,
     print_exception,
+    serialize_env,
 )
 
 if t.TYPE_CHECKING:
@@ -59,11 +63,6 @@ if t.TYPE_CHECKING:
         from typing import Self
     else:
         from typing_extensions import Self
-
-if sys.version_info >= (3, 9):
-    from typing import Literal
-else:
-    from typing_extensions import Literal
 
 logger = logging.getLogger(__name__)
 
@@ -218,6 +217,7 @@ class _Model(ModelMeta, frozen=True):
                     "default_catalog",
                     "enabled",
                     "inline_audits",
+                    "optimize_query",
                 ):
                     expressions.append(
                         exp.Property(
@@ -464,7 +464,7 @@ class _Model(ModelMeta, frozen=True):
 
         query_renderer = QueryRenderer(
             audit.query,
-            audit.dialect,
+            audit.dialect or self.dialect,
             audit.macro_definitions,
             path=audit._path or Path(),
             jinja_macro_registry=audit.jinja_macros,
@@ -561,6 +561,7 @@ class _Model(ModelMeta, frozen=True):
                 jinja_macro_registry=self.jinja_macros,
                 python_env=self.python_env,
                 only_execution_time=False,
+                quote_identifiers=False,
             )
 
         def _render(e: exp.Expression) -> str | int | float | bool:
@@ -580,7 +581,10 @@ class _Model(ModelMeta, frozen=True):
                 return rendered.this
             return rendered.sql(dialect=self.dialect)
 
-        return [{t.this.name: _render(t.expression) for t in signal} for signal in self.signals]
+        # airflow only
+        return [
+            {k: _render(v) for k, v in signal.items()} for name, signal in self.signals if not name
+        ]
 
     def ctas_query(self, **render_kwarg: t.Any) -> exp.Query:
         """Return a dummy query to do a CTAS.
@@ -768,6 +772,20 @@ class _Model(ModelMeta, frozen=True):
         return getattr(self.kind, "disable_restatement", False)
 
     @property
+    def auto_restatement_intervals(self) -> t.Optional[int]:
+        return getattr(self.kind, "auto_restatement_intervals", None)
+
+    @property
+    def auto_restatement_cron(self) -> t.Optional[str]:
+        return getattr(self.kind, "auto_restatement_cron", None)
+
+    def auto_restatement_croniter(self, value: TimeLike) -> CroniterCache:
+        cron = self.auto_restatement_cron
+        if cron is None:
+            raise SQLMeshError("Auto restatement cron is not set.")
+        return CroniterCache(cron, value)
+
+    @property
     def wap_supported(self) -> bool:
         return self.kind.is_materialized and (self.storage_format or "").lower() == "iceberg"
 
@@ -838,6 +856,12 @@ class _Model(ModelMeta, frozen=True):
                 self._path,
             )
 
+        if not self.is_sql and self.optimize_query is not None:
+            raise_config_error(
+                "SQLMesh query optimizer can only be enabled/disabled for SQL models",
+                self._path,
+            )
+
     def is_breaking_change(self, previous: Model) -> t.Optional[bool]:
         """Determines whether this model is a breaking change in relation to the `previous` model.
 
@@ -877,7 +901,9 @@ class _Model(ModelMeta, frozen=True):
             self.stamp,
             self.physical_schema,
             self.physical_version,
+            self.gateway,
             self.interval_unit.value if self.interval_unit is not None else None,
+            str(self.optimize_query) if self.optimize_query is not None else None,
         ]
 
         for column_name, column_type in (self.columns_to_types_ or {}).items():
@@ -958,7 +984,11 @@ class _Model(ModelMeta, frozen=True):
                 metadata.append(key)
                 metadata.append(gen(value))
 
-            metadata.extend(gen(s) for s in self.signals)
+            for signal_name, args in sorted(self.signals, key=lambda x: x[0]):
+                metadata.append(signal_name)
+                for k, v in sorted(args.items()):
+                    metadata.append(f"{k}:{gen(v)}")
+
             metadata.extend(self._additional_metadata)
 
             self._metadata_hash = hash_data(metadata)
@@ -1052,7 +1082,7 @@ class SqlModel(_Model):
     """
 
     query: t.Union[exp.Query, d.JinjaQuery, d.MacroFunc]
-    source_type: Literal["sql"] = "sql"
+    source_type: t.Literal["sql"] = "sql"
 
     _columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
 
@@ -1262,6 +1292,7 @@ class SqlModel(_Model):
             only_execution_time=self.kind.only_execution_time,
             default_catalog=self.default_catalog,
             quote_identifiers=not no_quote_identifiers,
+            optimize_query=self.optimize_query,
         )
 
     @property
@@ -1286,7 +1317,7 @@ class SeedModel(_Model):
     column_hashes_: t.Optional[t.Dict[str, str]] = Field(default=None, alias="column_hashes")
     derived_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
     is_hydrated: bool = True
-    source_type: Literal["seed"] = "seed"
+    source_type: t.Literal["seed"] = "seed"
 
     def __getstate__(self) -> t.Dict[t.Any, t.Any]:
         state = super().__getstate__()
@@ -1484,7 +1515,7 @@ class PythonModel(_Model):
 
     kind: ModelKind = FullKind()
     entrypoint: str
-    source_type: Literal["python"] = "python"
+    source_type: t.Literal["python"] = "python"
 
     def validate_definition(self) -> None:
         super().validate_definition()
@@ -1557,8 +1588,7 @@ class PythonModel(_Model):
 class ExternalModel(_Model):
     """The model definition which represents an external source/table."""
 
-    source_type: Literal["external"] = "external"
-    gateway: t.Optional[str] = None
+    source_type: t.Literal["external"] = "external"
 
     def is_breaking_change(self, previous: Model) -> t.Optional[bool]:
         if not isinstance(previous, ExternalModel):
@@ -1603,7 +1633,7 @@ def load_sql_based_model(
     macros: t.Optional[MacroRegistry] = None,
     jinja_macros: t.Optional[JinjaMacroRegistry] = None,
     audits: t.Optional[t.Dict[str, ModelAudit]] = None,
-    default_audits: t.Optional[t.List[AuditReference]] = None,
+    default_audits: t.Optional[t.List[FunctionCall]] = None,
     python_env: t.Optional[t.Dict[str, Executable]] = None,
     dialect: t.Optional[str] = None,
     physical_schema_mapping: t.Optional[t.Dict[re.Pattern, str]] = None,
@@ -1871,6 +1901,7 @@ def create_python_model(
         depends_on=depends_on,
         entrypoint=entrypoint,
         python_env=python_env,
+        macros=macros,
         jinja_macros=jinja_macros,
         module_path=module_path,
         variables=variables,
@@ -1922,10 +1953,11 @@ def _create_model(
     physical_schema_mapping: t.Optional[t.Dict[re.Pattern, str]] = None,
     python_env: t.Optional[t.Dict[str, Executable]] = None,
     audit_definitions: t.Optional[t.Dict[str, ModelAudit]] = None,
-    default_audits: t.Optional[t.List[AuditReference]] = None,
+    default_audits: t.Optional[t.List[FunctionCall]] = None,
     inline_audits: t.Optional[t.Dict[str, ModelAudit]] = None,
     module_path: Path = Path(),
     macros: t.Optional[MacroRegistry] = None,
+    signal_definitions: t.Optional[SignalRegistry] = None,
     variables: t.Optional[t.Dict[str, t.Any]] = None,
     **kwargs: t.Any,
 ) -> Model:
@@ -2022,7 +2054,16 @@ def _create_model(
         python_env=python_env,
     )
 
+    env: t.Dict[str, t.Any] = {}
+
+    for signal_name, _ in model.signals:
+        if signal_definitions and signal_name in signal_definitions:
+            func = signal_definitions[signal_name].func
+            setattr(func, c.SQLMESH_METADATA, True)
+            build_env(func, env=env, name=signal_name, path=module_path)
+
     model.python_env.update(python_env)
+    model.python_env.update(serialize_env(env, path=module_path))
     model._path = path
     model.set_time_format(time_column_format)
 
@@ -2207,7 +2248,16 @@ META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
     "virtual_properties_": lambda value: value,
     "session_properties_": lambda value: value,
     "allow_partials": exp.convert,
-    "signals": lambda values: exp.Tuple(expressions=values),
+    "signals": lambda values: exp.tuple_(
+        *(
+            exp.func(
+                name, *(exp.PropertyEQ(this=exp.var(k), expression=v) for k, v in args.items())
+            )
+            if name
+            else exp.Tuple(expressions=[exp.var(k).eq(v) for k, v in args.items()])
+            for name, args in values
+        )
+    ),
 }
 
 

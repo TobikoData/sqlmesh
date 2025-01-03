@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import abc
+import glob
 import linecache
 import logging
 import os
@@ -29,6 +30,7 @@ from sqlmesh.core.model import (
 )
 from sqlmesh.core.model.cache import load_optimized_query_and_mapping, optimized_query_cache_pool
 from sqlmesh.core.model import model as model_registry
+from sqlmesh.core.signal import signal
 from sqlmesh.utils import UniqueKeyDict
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.errors import ConfigError
@@ -53,6 +55,8 @@ class LoadedProject:
     audits: UniqueKeyDict[str, ModelAudit]
     metrics: UniqueKeyDict[str, Metric]
     dag: DAG[str]
+    requirements: t.Dict[str, str]
+    excluded_requirements: t.Set[str]
 
 
 class Loader(abc.ABC):
@@ -79,7 +83,7 @@ class Loader(abc.ABC):
         self._dag = DAG()
 
         self._load_materializations()
-        self._load_signals()
+        signals = self._load_signals()
 
         config_mtimes: t.Dict[Path, t.List[float]] = defaultdict(list)
         for context_path, config in self._context.configs.items():
@@ -104,7 +108,11 @@ class Loader(abc.ABC):
                 standalone_audits[name] = audit
 
         models = self._load_models(
-            macros, jinja_macros, context.gateway or context.config.default_gateway, audits
+            macros,
+            jinja_macros,
+            context.selected_gateway,
+            audits,
+            signals,
         )
 
         for model in models.values():
@@ -122,6 +130,8 @@ class Loader(abc.ABC):
 
         metrics = self._load_metrics()
 
+        requirements, excluded_requirements = self._load_requirements()
+
         project = LoadedProject(
             macros=macros,
             jinja_macros=jinja_macros,
@@ -130,13 +140,15 @@ class Loader(abc.ABC):
             standalone_audits=standalone_audits,
             metrics=expand_metrics(metrics),
             dag=self._dag,
+            requirements=requirements,
+            excluded_requirements=excluded_requirements,
         )
         return project
 
-    def load_signals(self, context: GenericContext) -> None:
+    def load_signals(self, context: GenericContext) -> UniqueKeyDict[str, signal]:
         """Loads signals for the built-in scheduler."""
         self._context = context
-        self._load_signals()
+        return self._load_signals()
 
     def load_materializations(self, context: GenericContext) -> None:
         """Loads materializations for the built-in scheduler."""
@@ -167,6 +179,7 @@ class Loader(abc.ABC):
         jinja_macros: JinjaMacroRegistry,
         gateway: t.Optional[str],
         audits: UniqueKeyDict[str, ModelAudit],
+        signals: UniqueKeyDict[str, signal],
     ) -> UniqueKeyDict[str, Model]:
         """Loads all models."""
 
@@ -179,8 +192,8 @@ class Loader(abc.ABC):
     def _load_materializations(self) -> None:
         """Loads custom materializations."""
 
-    def _load_signals(self) -> None:
-        """Loads signals for the built-in scheduler."""
+    def _load_signals(self) -> UniqueKeyDict[str, signal]:
+        return UniqueKeyDict("signals")
 
     def _load_metrics(self) -> UniqueKeyDict[str, MetricMeta]:
         return UniqueKeyDict("metrics")
@@ -235,6 +248,41 @@ class Loader(abc.ABC):
 
         return models
 
+    def _load_requirements(self) -> t.Tuple[t.Dict[str, str], t.Set[str]]:
+        """Loads Python dependencies from the lock file.
+
+        Returns:
+            A tuple of requirements and excluded requirements.
+        """
+        requirements: t.Dict[str, str] = {}
+        excluded_requirements: t.Set[str] = set()
+
+        for context_path in self._context.configs:
+            requirements_path = context_path / c.REQUIREMENTS
+            if not requirements_path.is_file():
+                continue
+            with open(requirements_path, "r", encoding="utf-8") as file:
+                for line in file:
+                    line = line.strip()
+                    if line.startswith("^"):
+                        excluded_requirements.add(line[1:])
+                        continue
+
+                    args = [k.strip() for k in line.split("==")]
+                    if len(args) != 2:
+                        raise ConfigError(
+                            f"Invalid lock file entry '{line.strip()}'. Only 'dep==ver' is supported"
+                        )
+                    dep, ver = args
+                    other_ver = requirements.get(dep, ver)
+                    if ver != other_ver:
+                        raise ConfigError(
+                            f"Conflicting requirement {dep}: {ver} != {other_ver}. Fix your {c.REQUIREMENTS} file."
+                        )
+                    requirements[dep] = ver
+
+        return requirements, excluded_requirements
+
     def _glob_paths(
         self,
         path: Path,
@@ -256,12 +304,18 @@ class Loader(abc.ABC):
         ignore_patterns = ignore_patterns or []
         extension = extension or ""
 
+        # We try to match both ignore_pattern itself and every file returned by glob,
+        # so that we will always ignore file names that do not appear in the latter.
+        ignored_filepaths = set(ignore_patterns) | {
+            ignored_path
+            for ignore_pattern in ignore_patterns
+            for ignored_path in glob.glob(str(self._context.path / ignore_pattern), recursive=True)
+        }
         for filepath in path.glob(f"**/*{extension}"):
-            for ignore_pattern in ignore_patterns:
-                if filepath.match(ignore_pattern):
-                    break
-            else:
-                yield filepath
+            if any(filepath.match(ignored_filepath) for ignored_filepath in ignored_filepaths):
+                continue
+
+            yield filepath
 
     def _add_model_to_dag(self, model: Model) -> None:
         self._dag.add(model.fqn, model.depends_on)
@@ -307,7 +361,9 @@ class SqlMeshLoader(Loader):
                     else macro_file_mtime
                 )
                 with open(path, "r", encoding="utf-8") as file:
-                    jinja_macros.add_macros(extractor.extract(file.read()))
+                    jinja_macros.add_macros(
+                        extractor.extract(file.read(), dialect=config.model_defaults.dialect)
+                    )
 
         self._macros_max_mtime = macros_max_mtime
 
@@ -322,14 +378,15 @@ class SqlMeshLoader(Loader):
         jinja_macros: JinjaMacroRegistry,
         gateway: t.Optional[str],
         audits: UniqueKeyDict[str, ModelAudit],
+        signals: UniqueKeyDict[str, signal],
     ) -> UniqueKeyDict[str, Model]:
         """
         Loads all of the models within the model directory with their associated
         audits into a Dict and creates the dag
         """
-        models = self._load_sql_models(macros, jinja_macros, audits)
+        models = self._load_sql_models(macros, jinja_macros, audits, signals)
         models.update(self._load_external_models(audits, gateway))
-        models.update(self._load_python_models(macros, jinja_macros, audits))
+        models.update(self._load_python_models(macros, jinja_macros, audits, signals))
 
         return models
 
@@ -338,6 +395,7 @@ class SqlMeshLoader(Loader):
         macros: MacroRegistry,
         jinja_macros: JinjaMacroRegistry,
         audits: UniqueKeyDict[str, ModelAudit],
+        signals: UniqueKeyDict[str, signal],
     ) -> UniqueKeyDict[str, Model]:
         """Loads the sql models into a Dict"""
         models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
@@ -382,6 +440,7 @@ class SqlMeshLoader(Loader):
                         default_catalog=self._context.default_catalog,
                         variables=variables,
                         infer_names=config.model_naming.infer_names,
+                        signal_definitions=signals,
                     )
 
                 model = cache.get_or_load_model(path, _load)
@@ -399,6 +458,7 @@ class SqlMeshLoader(Loader):
         macros: MacroRegistry,
         jinja_macros: JinjaMacroRegistry,
         audits: UniqueKeyDict[str, ModelAudit],
+        signals: UniqueKeyDict[str, signal],
     ) -> UniqueKeyDict[str, Model]:
         """Loads the python models into a Dict"""
         models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
@@ -454,8 +514,11 @@ class SqlMeshLoader(Loader):
                 if os.path.getsize(path):
                     import_python_file(path, context_path)
 
-    def _load_signals(self) -> None:
+    def _load_signals(self) -> UniqueKeyDict[str, signal]:
         """Loads signals for the built-in scheduler."""
+
+        signals_max_mtime: t.Optional[float] = None
+
         for context_path, config in self._context.configs.items():
             for path in self._glob_paths(
                 context_path / c.SIGNALS,
@@ -463,13 +526,26 @@ class SqlMeshLoader(Loader):
                 extension=".py",
             ):
                 if os.path.getsize(path):
+                    self._track_file(path)
+                    signal_file_mtime = self._path_mtimes[path]
+                    signals_max_mtime = (
+                        max(signals_max_mtime, signal_file_mtime)
+                        if signals_max_mtime
+                        else signal_file_mtime
+                    )
                     import_python_file(path, context_path)
+
+        self._signals_max_mtime = signals_max_mtime
+
+        return signal.get_registry()
 
     def _load_audits(
         self, macros: MacroRegistry, jinja_macros: JinjaMacroRegistry
     ) -> UniqueKeyDict[str, Audit]:
         """Loads all the model audits."""
         audits_by_name: UniqueKeyDict[str, Audit] = UniqueKeyDict("audits")
+        audits_max_mtime: t.Optional[float] = None
+
         for context_path, config in self._context.configs.items():
             variables = self._variables(config)
             for path in self._glob_paths(
@@ -477,6 +553,12 @@ class SqlMeshLoader(Loader):
             ):
                 self._track_file(path)
                 with open(path, "r", encoding="utf-8") as file:
+                    audits_file_mtime = self._path_mtimes[path]
+                    audits_max_mtime = (
+                        max(audits_max_mtime, audits_file_mtime)
+                        if audits_max_mtime
+                        else audits_file_mtime
+                    )
                     expressions = parse(file.read(), default_dialect=config.model_defaults.dialect)
                     audits = load_multiple_audits(
                         expressions=expressions,
@@ -490,6 +572,9 @@ class SqlMeshLoader(Loader):
                     )
                     for audit in audits:
                         audits_by_name[audit.name] = audit
+
+        self._audits_max_mtime = audits_max_mtime
+
         return audits_by_name
 
     def _load_metrics(self) -> UniqueKeyDict[str, MetricMeta]:
@@ -516,7 +601,7 @@ class SqlMeshLoader(Loader):
         return metrics
 
     def _variables(self, config: Config) -> t.Dict[str, t.Any]:
-        gateway_name = self._context.gateway or self._context.config.default_gateway_name
+        gateway_name = self._context.selected_gateway
         try:
             gateway = config.get_gateway(gateway_name)
         except ConfigError:
@@ -552,6 +637,8 @@ class SqlMeshLoader(Loader):
             mtimes = [
                 self._loader._path_mtimes[model_path],
                 self._loader._macros_max_mtime,
+                self._loader._signals_max_mtime,
+                self._loader._audits_max_mtime,
                 self._loader._config_mtimes.get(self._context_path),
                 self._loader._config_mtimes.get(c.SQLMESH_PATH),
             ]

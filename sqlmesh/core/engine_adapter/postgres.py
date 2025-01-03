@@ -61,6 +61,7 @@ class PostgresEngineAdapter(
                 exp.DataType.build("BPCHAR", dialect=DIALECT).this
             },
         },
+        drop_cascade=True,
     )
 
     def _fetch_native_df(
@@ -105,7 +106,8 @@ class PostgresEngineAdapter(
         source_table: QueryOrDF,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
         unique_key: t.Sequence[exp.Expression],
-        when_matched: t.Optional[t.Union[exp.When, t.List[exp.When]]] = None,
+        when_matched: t.Optional[exp.Whens] = None,
+        merge_filter: t.Optional[exp.Expression] = None,
     ) -> None:
         # Merge isn't supported until Postgres 15
         merge_impl = (
@@ -119,4 +121,5 @@ class PostgresEngineAdapter(
             columns_to_types,
             unique_key,
             when_matched=when_matched,
+            merge_filter=merge_filter,
         )

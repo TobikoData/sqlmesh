@@ -30,7 +30,6 @@ if t.TYPE_CHECKING:
 class DuckDBEngineAdapter(LogicalMergeMixin, GetCurrentCatalogFromFunctionMixin, RowDiffMixin):
     DIALECT = "duckdb"
     SUPPORTS_TRANSACTIONS = False
-    CATALOG_SUPPORT = CatalogSupport.FULL_SUPPORT
     SCHEMA_DIFFER = SchemaDiffer(
         parameterized_type_defaults={
             exp.DataType.build("DECIMAL", dialect=DIALECT).this: [(18, 3), (0,)],
@@ -43,6 +42,10 @@ class DuckDBEngineAdapter(LogicalMergeMixin, GetCurrentCatalogFromFunctionMixin,
         if major_minor(duckdb_version) < (0, 10)
         else (CommentCreationTable.COMMENT_COMMAND_ONLY, CommentCreationView.COMMENT_COMMAND_ONLY)
     )
+
+    @property
+    def catalog_support(self) -> CatalogSupport:
+        return CatalogSupport.FULL_SUPPORT
 
     def set_current_catalog(self, catalog: str) -> None:
         """Sets the catalog name of the current connection."""

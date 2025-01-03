@@ -20,6 +20,7 @@ from sqlmesh.utils.errors import MissingDependencyError
 logger = logging.getLogger(__name__)
 
 SKIP_LOAD_COMMANDS = ("create_external_models", "migrate", "rollback", "run")
+SKIP_CONTEXT_COMMANDS = ("init", "ui")
 
 
 def _sqlmesh_version() -> str:
@@ -39,11 +40,13 @@ def _sqlmesh_version() -> str:
     "--gateway",
     type=str,
     help="The name of the gateway.",
+    envvar="SQLMESH_GATEWAY",
 )
 @click.option(
     "--ignore-warnings",
     is_flag=True,
     help="Ignore warnings.",
+    envvar="SQLMESH_IGNORE_WARNINGS",
 )
 @click.option(
     "--debug",
@@ -80,7 +83,7 @@ def cli(
 
     if len(paths) == 1:
         path = os.path.abspath(paths[0])
-        if ctx.invoked_subcommand in ("init", "ui"):
+        if ctx.invoked_subcommand in SKIP_CONTEXT_COMMANDS:
             ctx.obj = path
             return
         elif ctx.invoked_subcommand in SKIP_LOAD_COMMANDS:
@@ -469,8 +472,8 @@ def run(ctx: click.Context, environment: t.Optional[str] = None, **kwargs: t.Any
     """Evaluate missing intervals for the target environment."""
     context = ctx.obj
     select_models = kwargs.pop("select_model") or None
-    success = context.run(environment, select_models=select_models, **kwargs)
-    if not success:
+    completion_status = context.run(environment, select_models=select_models, **kwargs)
+    if completion_status.is_failure:
         raise click.ClickException("Run DAG Failed. See output for details.")
 
 
@@ -955,6 +958,6 @@ def dlt_refresh(
     sqlmesh_models = generate_dlt_models(ctx.obj, pipeline, list(table or []), force)
     if sqlmesh_models:
         model_names = "\n".join([f"- {model_name}" for model_name in sqlmesh_models])
-        ctx.obj.console.log_success(f"Updatde SQLMesh project with models:\n{model_names}")
+        ctx.obj.console.log_success(f"Updated SQLMesh project with models:\n{model_names}")
     else:
         ctx.obj.console.log_success("All SQLMesh models are up to date.")

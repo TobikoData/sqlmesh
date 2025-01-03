@@ -7,6 +7,7 @@ import pandas as pd
 from sqlglot import exp
 
 from sqlmesh.utils.migration import index_text_type
+from sqlmesh.utils.migration import blob_text_type
 
 
 def migrate(state_sync, **kwargs):  # type: ignore
@@ -52,6 +53,7 @@ def migrate(state_sync, **kwargs):  # type: ignore
         engine_adapter.delete_from(snapshots_table, "TRUE")
 
         index_type = index_text_type(engine_adapter.dialect)
+        blob_type = blob_text_type(engine_adapter.dialect)
 
         engine_adapter.insert_append(
             snapshots_table,
@@ -60,7 +62,7 @@ def migrate(state_sync, **kwargs):  # type: ignore
                 "name": exp.DataType.build(index_type),
                 "identifier": exp.DataType.build(index_type),
                 "version": exp.DataType.build(index_type),
-                "snapshot": exp.DataType.build("text"),
+                "snapshot": exp.DataType.build(blob_type),
                 "kind_name": exp.DataType.build(index_type),
                 "expiration_ts": exp.DataType.build("bigint"),
             },

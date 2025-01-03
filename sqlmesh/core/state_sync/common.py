@@ -44,7 +44,7 @@ def cleanup_expired_views(
             if console:
                 console.update_cleanup_progress(schema.sql(dialect=adapter.dialect))
         except Exception as e:
-            logger.warning("Falied to drop the expired environment schema '%s': %s", schema, e)
+            logger.warning("Failed to drop the expired environment schema '%s': %s", schema, e)
     for expired_view in {
         snapshot.qualified_view_name.for_environment(
             environment.naming_info, dialect=adapter.dialect
@@ -58,7 +58,7 @@ def cleanup_expired_views(
             if console:
                 console.update_cleanup_progress(expired_view)
         except Exception as e:
-            logger.warning("Falied to drop the expired environment view '%s': %s", expired_view, e)
+            logger.warning("Failed to drop the expired environment view '%s': %s", expired_view, e)
 
 
 def transactional() -> t.Callable[[t.Callable], t.Callable]:

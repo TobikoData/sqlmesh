@@ -12,6 +12,7 @@ from sqlmesh.core.audit import (
 )
 from sqlmesh.core.dialect import parse
 from sqlmesh.core.model import (
+    FullKind,
     IncrementalByTimeRangeKind,
     Model,
     SeedModel,
@@ -880,3 +881,20 @@ def test_model_inline_audits(sushi_context: Context):
     assert len(model.audit_definitions) == 3
     assert isinstance(model.audit_definitions["assert_valid_name"], ModelAudit)
     model.render_audit_query(model.audit_definitions["assert_positive_id"]).sql() == expected_query
+
+
+def test_audit_query_normalization():
+    model = create_sql_model(
+        "db.test_model",
+        parse_one("SELECT a, b, ds"),
+        kind=FullKind(),
+        dialect="snowflake",
+    )
+    rendered_audit_query = model.render_audit_query(
+        builtin.not_null_audit,
+        columns=[exp.to_column("a")],
+    )
+    assert (
+        rendered_audit_query.sql("snowflake")
+        == """SELECT * FROM (SELECT * FROM "DB"."TEST_MODEL" AS "TEST_MODEL") AS "_Q_0" WHERE "A" IS NULL AND TRUE"""
+    )

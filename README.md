@@ -2,9 +2,7 @@
   <img src="https://github.com/TobikoData/sqlmesh/blob/main/docs/readme/sqlmesh.png?raw=true" alt="SQLMesh logo" width="50%" height="50%">
 </p>
 
-SQLMesh is a next-generation data transformation and modeling framework that is backwards compatible with dbt. It aims to be easy to use, correct, and efficient.
-
-SQLMesh enables data teams to efficiently run and deploy data transformations written in SQL or Python.
+SQLMesh is a next-generation data transformation framework designed to ship data quickly, efficiently, and without error. Data teams can efficiently run and deploy data transformations written in SQL or Python with visibility and control at any size.
 
 It is more than just a [dbt alternative](https://tobikodata.com/reduce_costs_with_cron_and_partitions.html).
 
@@ -25,9 +23,9 @@ It is more than just a [dbt alternative](https://tobikodata.com/reduce_costs_wit
 
   </details>
 
+  * Create isolated development environments without data warehouse costs
   * Plan / Apply workflow like [Terraform](https://www.terraform.io/) to understand potential impact of changes
-  * Automatic [column level lineage](https://sqlmesh.readthedocs.io/en/stable/guides/ui/?h=column+lineage#lineage-module) and data contracts
-  * Easy to use [CI/CD bot](https://sqlmesh.readthedocs.io/en/stable/integrations/github/)
+  * Easy to use [CI/CD bot](https://sqlmesh.readthedocs.io/en/stable/integrations/github/) for true blue-green deployments
 
 <details>
 <summary><b>Efficiency and Testing</b></summary>
@@ -69,69 +67,69 @@ test_stg_payments:
 model: tcloud_demo.stg_payments
 inputs:
     tcloud_demo.seed_raw_payments:
-    - id: 66
-    order_id: 58
-    payment_method: coupon
-    amount: 1800
-    - id: 27
-    order_id: 24
-    payment_method: coupon
-    amount: 2600
-    - id: 30
-    order_id: 25
-    payment_method: coupon
-    amount: 1600
-    - id: 109
-    order_id: 95
-    payment_method: coupon
-    amount: 2400
-    - id: 3
-    order_id: 3
-    payment_method: coupon
-    amount: 100
+      - id: 66
+        order_id: 58
+        payment_method: coupon
+        amount: 1800
+      - id: 27
+        order_id: 24
+        payment_method: coupon
+        amount: 2600
+      - id: 30
+        order_id: 25
+        payment_method: coupon
+        amount: 1600
+      - id: 109
+        order_id: 95
+        payment_method: coupon
+        amount: 2400
+      - id: 3
+        order_id: 3
+        payment_method: coupon
+        amount: 100
 outputs:
     query:
-    - payment_id: 66
-    order_id: 58
-    payment_method: coupon
-    amount: 18.0
-    new_column: new_column
-    - payment_id: 27
-    order_id: 24
-    payment_method: coupon
-    amount: 26.0
-    new_column: new_column
-    - payment_id: 30
-    order_id: 25
-    payment_method: coupon
-    amount: 16.0
-    new_column: new_column
-    - payment_id: 109
-    order_id: 95
-    payment_method: coupon
-    amount: 24.0
-    new_column: new_column
-    - payment_id: 3
-    order_id: 3
-    payment_method: coupon
-    amount: 1.0
-    new_column: new_column
+      - payment_id: 66
+        order_id: 58
+        payment_method: coupon
+        amount: 18.0
+        new_column: new_column
+      - payment_id: 27
+        order_id: 24
+        payment_method: coupon
+        amount: 26.0
+        new_column: new_column
+      - payment_id: 30
+        order_id: 25
+        payment_method: coupon
+        amount: 16.0
+        new_column: new_column
+      - payment_id: 109
+        order_id: 95
+        payment_method: coupon
+        amount: 24.0
+        new_column: new_column
+      - payment_id: 3
+        order_id: 3
+        payment_method: coupon
+        amount: 1.0
+        new_column: new_column
 ```
 </details>
 
-* Never builds a table [more than once](https://tobikodata.com/simplicity-or-efficiency-how-dbt-makes-you-choose.html)
-* Partition-based [incremental models](https://tobikodata.com/correctly-loading-incremental-data-at-scale.html)
-* [Unit tests](https://tobikodata.com/we-need-even-greater-expectations.html) and audits
+* Never build a table [more than once](https://tobikodata.com/simplicity-or-efficiency-how-dbt-makes-you-choose.html)
+* Track what data’s been modified and run only the necessary transformations for [incremental models](https://tobikodata.com/correctly-loading-incremental-data-at-scale.html)
+* Run [unit tests](https://tobikodata.com/we-need-even-greater-expectations.html) for free and configure automated audits
 
 <details>
-<summary><b>Take SQL Anywhere</b></summary>
+<summary><b>Level Up Your SQL</b></summary>
 Write SQL in any dialect and SQLMesh will transpile it to your target SQL dialect on the fly before sending it to the warehouse.
 <img src="https://github.com/TobikoData/sqlmesh/blob/main/docs/readme/transpile_example.png?raw=true" alt="Transpile Example">
 </details>
 
-* Compile time error checking and can transpile [10+ different SQL dialects](https://sqlmesh.readthedocs.io/en/stable/integrations/overview/#execution-engines)
-* Definitions using [simply SQL](https://sqlmesh.readthedocs.io/en/stable/concepts/models/sql_models/#sql-based-definition) (no need for redundant and confusing Jinja + YAML)
-* [Self documenting queries](https://tobikodata.com/metadata-everywhere.html) using native SQL Comments
+* Debug transformation errors *before* you run them in your warehouse in [10+ different SQL dialects](https://sqlmesh.readthedocs.io/en/stable/integrations/overview/#execution-engines)
+* Definitions using [simply SQL](https://sqlmesh.readthedocs.io/en/stable/concepts/models/sql_models/#sql-based-definition) (no need for redundant and confusing `Jinja` + `YAML`)
+* See impact of changes before you run them in your warehouse with column-level lineage
 
 For more information, check out the [website](https://sqlmesh.com) and [documentation](https://sqlmesh.readthedocs.io/en/stable/).
 
@@ -149,8 +147,10 @@ sqlmesh init duckdb # get started right away with a local duckdb instance
 
 Follow the [quickstart guide](https://sqlmesh.readthedocs.io/en/stable/quickstart/cli/#1-create-the-sqlmesh-project) to learn how to use SQLMesh. You already have a head start!
 
+Follow this [example](https://sqlmesh.readthedocs.io/en/stable/examples/incremental_time_full_walkthrough/) to learn how to use SQLMesh in a full walkthrough.
+
 ## Join Our Community
-We want to ship better data with you. Connect with us in the following ways:
+Together, we want to build data transformation without the waste. Connect with us in the following ways:
 
 * Join the [Tobiko Slack Community](https://tobikodata.com/slack) to ask questions, or just to say hi!
 * File an issue on our [GitHub](https://github.com/TobikoData/sqlmesh/issues/new)
@@ -158,4 +158,8 @@ We want to ship better data with you. Connect with us in the following ways:
 * Read our [blog](https://tobikodata.com/blog)
 
 ## Contribution
-Contributions in the form of issues or pull requests are greatly appreciated. [Read more](https://sqlmesh.readthedocs.io/en/stable/development/) on how to contribute to SQLMesh open source.
+Contributions in the form of issues or pull requests (from fork) are greatly appreciated. 
+
+[Read more](https://sqlmesh.readthedocs.io/en/stable/development/) on how to contribute to SQLMesh open source.
+
+[Watch this video walkthrough](https://www.loom.com/share/2abd0d661c12459693fa155490633126?sid=b65c1c0f-8ef7-4036-ad19-3f85a3b87ff2) to see how our team contributes a feature to SQLMesh.

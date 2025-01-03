@@ -97,7 +97,6 @@ class EngineAdapter:
     SUPPORTS_MANAGED_MODELS = False
     SCHEMA_DIFFER = SchemaDiffer()
     SUPPORTS_TUPLE_IN = True
-    CATALOG_SUPPORT = CatalogSupport.UNSUPPORTED
     HAS_VIEW_BINDING = False
     SUPPORTS_REPLACE_TABLE = True
     DEFAULT_CATALOG_TYPE = DIALECT
@@ -115,6 +114,7 @@ class EngineAdapter:
         execute_log_level: int = logging.DEBUG,
         register_comments: bool = True,
         pre_ping: bool = False,
+        pretty_sql: bool = False,
         **kwargs: t.Any,
     ):
         self.dialect = dialect.lower() or self.DIALECT
@@ -127,6 +127,7 @@ class EngineAdapter:
         self._extra_config = kwargs
         self._register_comments = register_comments
         self._pre_ping = pre_ping
+        self._pretty_sql = pretty_sql
 
     def with_log_level(self, level: int) -> EngineAdapter:
         adapter = self.__class__(
@@ -163,6 +164,10 @@ class EngineAdapter:
     def comments_enabled(self) -> bool:
         return self._register_comments and self.COMMENT_CREATION_TABLE.is_supported
 
+    @property
+    def catalog_support(self) -> CatalogSupport:
+        return CatalogSupport.UNSUPPORTED
+
     @classmethod
     def _casted_columns(cls, columns_to_types: t.Dict[str, exp.DataType]) -> t.List[exp.Alias]:
         return [
@@ -172,7 +177,7 @@ class EngineAdapter:
 
     @property
     def default_catalog(self) -> t.Optional[str]:
-        if self.CATALOG_SUPPORT.is_unsupported:
+        if self.catalog_support.is_unsupported:
             return None
         default_catalog = self._default_catalog or self.get_current_catalog()
         if not default_catalog:
@@ -291,7 +296,7 @@ class EngineAdapter:
         """Intended to be overridden for data virtualization systems like Trino that,
         depending on the target catalog, require slightly different properties to be set when creating / updating tables
         """
-        if self.CATALOG_SUPPORT.is_unsupported:
+        if self.catalog_support.is_unsupported:
             raise UnsupportedCatalogOperationError(
                 f"{self.dialect} does not support catalogs and a catalog was provided: {catalog}"
             )
@@ -1335,20 +1340,13 @@ class EngineAdapter:
         target_table: TableName,
         query: Query,
         on: exp.Expression,
-        match_expressions: t.List[exp.When],
+        whens: exp.Whens,
     ) -> None:
         this = exp.alias_(exp.to_table(target_table), alias=MERGE_TARGET_ALIAS, table=True)
         using = exp.alias_(
             exp.Subquery(this=query), alias=MERGE_SOURCE_ALIAS, copy=False, table=True
         )
-        self.execute(
-            exp.Merge(
-                this=this,
-                using=using,
-                on=on,
-                expressions=match_expressions,
-            )
-        )
+        self.execute(exp.Merge(this=this, using=using, on=on, whens=whens))
 
     def scd_type_2_by_time(
         self,
@@ -1805,7 +1803,8 @@ class EngineAdapter:
         source_table: QueryOrDF,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
         unique_key: t.Sequence[exp.Expression],
-        when_matched: t.Optional[t.Union[exp.When, t.List[exp.When]]] = None,
+        when_matched: t.Optional[exp.Whens] = None,
+        merge_filter: t.Optional[exp.Expression] = None,
     ) -> None:
         source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
             source_table, columns_to_types, target_table=target_table
@@ -1817,18 +1816,27 @@ class EngineAdapter:
                 for part in unique_key
             )
         )
+        if merge_filter:
+            on = exp.and_(merge_filter, on)
+
         if not when_matched:
-            when_matched = exp.When(
-                matched=True,
-                source=False,
-                then=exp.Update(
-                    expressions=[
-                        exp.column(col, MERGE_TARGET_ALIAS).eq(exp.column(col, MERGE_SOURCE_ALIAS))
-                        for col in columns_to_types
-                    ],
+            when_matched = exp.Whens()
+            when_matched.append(
+                "expressions",
+                exp.When(
+                    matched=True,
+                    source=False,
+                    then=exp.Update(
+                        expressions=[
+                            exp.column(col, MERGE_TARGET_ALIAS).eq(
+                                exp.column(col, MERGE_SOURCE_ALIAS)
+                            )
+                            for col in columns_to_types
+                        ],
+                    ),
                 ),
             )
-        when_matched = ensure_list(when_matched)
+
         when_not_matched = exp.When(
             matched=False,
             source=False,
@@ -1839,14 +1847,15 @@ class EngineAdapter:
                 ),
             ),
         )
-        match_expressions = when_matched + [when_not_matched]
+        when_matched.append("expressions", when_not_matched)
+
         for source_query in source_queries:
             with source_query as query:
                 self._merge(
                     target_table=target_table,
                     query=query,
                     on=on,
-                    match_expressions=match_expressions,
+                    whens=when_matched,
                 )
 
     def rename_table(
@@ -2044,7 +2053,6 @@ class EngineAdapter:
         to_sql_kwargs = (
             {"unsupported_level": ErrorLevel.IGNORE} if ignore_unsupported_errors else {}
         )
-
         with self.transaction():
             for e in ensure_list(expressions):
                 sql = t.cast(
@@ -2209,7 +2217,7 @@ class EngineAdapter:
         """
         sql_gen_kwargs = {
             "dialect": self.dialect,
-            "pretty": False,
+            "pretty": self._pretty_sql,
             "comments": False,
             **self._sql_gen_kwargs,
             **kwargs,

@@ -1,6 +1,7 @@
 """Include a set of snapshot IDs filtered for promotion."""
 
 from sqlglot import exp
+from sqlmesh.utils.migration import blob_text_type
 
 
 def migrate(state_sync, **kwargs):  # type: ignore
@@ -9,13 +10,15 @@ def migrate(state_sync, **kwargs):  # type: ignore
     if state_sync.schema:
         environments_table = f"{state_sync.schema}.{environments_table}"
 
+    blob_type = blob_text_type(engine_adapter.dialect)
+
     alter_table_exp = exp.Alter(
         this=exp.to_table(environments_table),
         kind="TABLE",
         actions=[
             exp.ColumnDef(
                 this=exp.to_column("promoted_snapshot_ids"),
-                kind=exp.DataType.build("text"),
+                kind=exp.DataType.build(blob_type),
             )
         ],
     )

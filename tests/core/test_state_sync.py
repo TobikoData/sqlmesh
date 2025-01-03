@@ -7,7 +7,7 @@ from unittest.mock import call, patch
 import duckdb
 import pandas as pd
 import pytest
-from freezegun import freeze_time
+import time_machine
 from pytest_mock.plugin import MockerFixture
 from sqlglot import exp
 
@@ -31,6 +31,7 @@ from sqlmesh.core.snapshot import (
     SnapshotChangeCategory,
     SnapshotId,
     SnapshotIntervals,
+    SnapshotNameVersion,
     SnapshotTableCleanupTask,
     missing_intervals,
 )
@@ -869,6 +870,7 @@ def test_promote_environment_expired(state_sync: EngineAdapterStateSync, make_sn
 
     state_sync.push_snapshots([snapshot])
     promote_snapshots(state_sync, [snapshot], "dev")
+    state_sync.finalize(state_sync.get_environment("dev"))
     state_sync.invalidate_environment("dev")
 
     new_environment = Environment(
@@ -881,7 +883,10 @@ def test_promote_environment_expired(state_sync: EngineAdapterStateSync, make_sn
     )
 
     # This call shouldn't fail.
-    state_sync.promote(new_environment)
+    promotion_result = state_sync.promote(new_environment)
+    assert promotion_result.added == [snapshot.table_info]
+    assert promotion_result.removed == []
+    assert promotion_result.removed_environment_naming_info is None
 
 
 def test_promote_snapshots_no_gaps(state_sync: EngineAdapterStateSync, make_snapshot: t.Callable):
@@ -939,7 +944,7 @@ def test_promote_snapshots_no_gaps(state_sync: EngineAdapterStateSync, make_snap
     )
 
 
-@freeze_time("2023-01-08 16:00:00")
+@time_machine.travel("2023-01-08 16:00:00 UTC", tick=False)
 def test_promote_snapshots_no_gaps_lookback(
     state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
 ):
@@ -1747,6 +1752,7 @@ def test_migrate_rows(state_sync: EngineAdapterStateSync, mocker: MockerFixture)
     )
 
     state_sync.engine_adapter.drop_table("sqlmesh._seeds")
+    state_sync.engine_adapter.drop_table("sqlmesh._intervals")
 
     old_snapshots = state_sync.engine_adapter.fetchdf("select * from sqlmesh._snapshots")
     old_environments = state_sync.engine_adapter.fetchdf("select * from sqlmesh._environments")
@@ -2221,16 +2227,17 @@ def test_snapshot_batching(state_sync, mocker, make_snapshot):
         )
     )
     calls = mock.delete_from.call_args_list
+    identifiers = sorted([snapshot_a.identifier, snapshot_b.identifier, snapshot_c.identifier])
     assert mock.delete_from.call_args_list == [
         call(
             exp.to_table("sqlmesh._snapshots"),
             where=parse_one(
-                f"(name, identifier) in (('\"a\"', '{snapshot_b.identifier}'), ('\"a\"', '{snapshot_c.identifier}'))"
+                f"(name, identifier) in (('\"a\"', '{identifiers[0]}'), ('\"a\"', '{identifiers[1]}'))"
             ),
         ),
         call(
             exp.to_table("sqlmesh._snapshots"),
-            where=parse_one(f"(name, identifier) in (('\"a\"', '{snapshot_a.identifier}'))"),
+            where=parse_one(f"(name, identifier) in (('\"a\"', '{identifiers[2]}'))"),
         ),
     ]
 
@@ -2246,6 +2253,7 @@ def test_snapshot_batching(state_sync, mocker, make_snapshot):
                 1,
                 1,
                 False,
+                None,
             ],
             [
                 make_snapshot(
@@ -2257,6 +2265,7 @@ def test_snapshot_batching(state_sync, mocker, make_snapshot):
                 1,
                 1,
                 False,
+                None,
             ],
         ],
         [
@@ -2270,6 +2279,7 @@ def test_snapshot_batching(state_sync, mocker, make_snapshot):
                 1,
                 1,
                 False,
+                None,
             ],
         ],
     ]
@@ -2341,3 +2351,354 @@ def test_snapshot_cache(
     # If the record was deleted from the state, the cached version should not be returned.
     state_sync.delete_snapshots([snapshot.snapshot_id])
     assert state_sync.get_snapshots([snapshot.snapshot_id]) == {}
+
+
+def test_update_auto_restatements(state_sync: EngineAdapterStateSync, make_snapshot: t.Callable):
+    snapshot_a = make_snapshot(SqlModel(name="a", query=parse_one("select 1")), version="1")
+    snapshot_b = make_snapshot(SqlModel(name="b", query=parse_one("select 2")), version="2")
+    snapshot_c = make_snapshot(SqlModel(name="c", query=parse_one("select 3")), version="3")
+
+    state_sync._push_snapshots([snapshot_a, snapshot_b, snapshot_c])
+
+    next_auto_restatement_ts: t.Dict[SnapshotNameVersion, t.Optional[int]] = {
+        snapshot_a.name_version: 1,
+        snapshot_b.name_version: 2,
+        snapshot_c.name_version: 3,
+    }
+    state_sync.update_auto_restatements(next_auto_restatement_ts)
+
+    snapshots = state_sync.get_snapshots(
+        [snapshot_a.snapshot_id, snapshot_b.snapshot_id, snapshot_c.snapshot_id]
+    )
+    assert snapshots[snapshot_a.snapshot_id].next_auto_restatement_ts == 1
+    assert snapshots[snapshot_b.snapshot_id].next_auto_restatement_ts == 2
+    assert snapshots[snapshot_c.snapshot_id].next_auto_restatement_ts == 3
+
+    next_auto_restatement_ts = {
+        snapshot_a.name_version: 4,
+        snapshot_b.name_version: 5,
+        snapshot_c.name_version: None,
+    }
+    state_sync.update_auto_restatements(next_auto_restatement_ts)
+
+    snapshots = state_sync.get_snapshots(
+        [snapshot_a.snapshot_id, snapshot_b.snapshot_id, snapshot_c.snapshot_id]
+    )
+    assert snapshots[snapshot_a.snapshot_id].next_auto_restatement_ts == 4
+    assert snapshots[snapshot_b.snapshot_id].next_auto_restatement_ts == 5
+    assert snapshots[snapshot_c.snapshot_id].next_auto_restatement_ts is None
+
+
+@time_machine.travel("2020-01-05 00:00:00 UTC")
+def test_compact_intervals_pending_restatement(
+    state_sync: EngineAdapterStateSync,
+    make_snapshot: t.Callable,
+    get_snapshot_intervals: t.Callable,
+) -> None:
+    snapshot = make_snapshot(
+        SqlModel(
+            name="a",
+            cron="@daily",
+            query=parse_one("select 1, ds"),
+        ),
+        version="a",
+    )
+
+    state_sync.push_snapshots([snapshot])
+
+    state_sync.add_interval(snapshot, "2020-01-01", "2020-01-01")
+    state_sync.add_interval(snapshot, "2020-01-02", "2020-01-02")
+    state_sync.add_interval(snapshot, "2020-01-03", "2020-01-03")
+    state_sync.add_interval(snapshot, "2020-01-04", "2020-01-04")
+
+    pending_restatement_intervals = [
+        (to_timestamp("2020-01-03"), to_timestamp("2020-01-05")),
+    ]
+    state_sync.add_snapshots_intervals(
+        [
+            SnapshotIntervals(
+                name=snapshot.name,
+                identifier=snapshot.identifier,
+                version=snapshot.version,
+                intervals=[],
+                dev_intervals=[],
+                pending_restatement_intervals=pending_restatement_intervals,
+            )
+        ]
+    )
+
+    with time_machine.travel("2020-01-05 01:00:00 UTC"):
+        # Backfill one of the pending restatement intervals.
+        state_sync.add_interval(snapshot, "2020-01-03", "2020-01-03")
+        assert get_snapshot_intervals(snapshot).intervals == [
+            (to_timestamp("2020-01-01"), to_timestamp("2020-01-05")),
+        ]
+        assert get_snapshot_intervals(snapshot).pending_restatement_intervals == [
+            (to_timestamp("2020-01-04"), to_timestamp("2020-01-05")),
+        ]
+
+        state_sync.compact_intervals()
+        assert get_snapshot_intervals(snapshot).intervals == [
+            (to_timestamp("2020-01-01"), to_timestamp("2020-01-05")),
+        ]
+        assert get_snapshot_intervals(snapshot).pending_restatement_intervals == [
+            (to_timestamp("2020-01-04"), to_timestamp("2020-01-05")),
+        ]
+
+        # Make sure compaction is idempotent.
+        state_sync.compact_intervals()
+        assert get_snapshot_intervals(snapshot).intervals == [
+            (to_timestamp("2020-01-01"), to_timestamp("2020-01-05")),
+        ]
+        assert get_snapshot_intervals(snapshot).pending_restatement_intervals == [
+            (to_timestamp("2020-01-04"), to_timestamp("2020-01-05")),
+        ]
+
+    with time_machine.travel("2020-01-05 02:00:00 UTC"):
+        # Backfill the remaining pending restatement interval.
+        state_sync.add_interval(snapshot, "2020-01-04", "2020-01-04")
+        assert get_snapshot_intervals(snapshot).intervals == [
+            (to_timestamp("2020-01-01"), to_timestamp("2020-01-05")),
+        ]
+        assert get_snapshot_intervals(snapshot).pending_restatement_intervals == []
+
+        state_sync.compact_intervals()
+        assert get_snapshot_intervals(snapshot).intervals == [
+            (to_timestamp("2020-01-01"), to_timestamp("2020-01-05")),
+        ]
+        assert get_snapshot_intervals(snapshot).pending_restatement_intervals == []
+
+        # Make sure compaction is idempotent.
+        state_sync.compact_intervals()
+        assert get_snapshot_intervals(snapshot).intervals == [
+            (to_timestamp("2020-01-01"), to_timestamp("2020-01-05")),
+        ]
+        assert get_snapshot_intervals(snapshot).pending_restatement_intervals == []
+
+
+@time_machine.travel("2020-01-05 00:00:00 UTC")
+def test_compact_intervals_pending_restatement_shared_version(
+    state_sync: EngineAdapterStateSync,
+    make_snapshot: t.Callable,
+    get_snapshot_intervals: t.Callable,
+) -> None:
+    snapshot_a = make_snapshot(
+        SqlModel(
+            name="a",
+            cron="@daily",
+            query=parse_one("select 1, ds"),
+        ),
+        version="a",
+    )
+    snapshot_b = make_snapshot(
+        SqlModel(
+            name="a",
+            cron="@daily",
+            query=parse_one("select 2, ds"),
+        ),
+        version="a",
+    )
+
+    state_sync.push_snapshots([snapshot_a, snapshot_b])
+
+    state_sync.add_interval(snapshot_a, "2020-01-01", "2020-01-01")
+    state_sync.add_interval(snapshot_a, "2020-01-02", "2020-01-02")
+    state_sync.add_interval(snapshot_a, "2020-01-03", "2020-01-03")
+    state_sync.add_interval(snapshot_a, "2020-01-04", "2020-01-04")
+    state_sync.add_interval(snapshot_a, "2020-01-05", "2020-01-05")
+    state_sync.add_snapshots_intervals(
+        [
+            SnapshotIntervals(
+                name=snapshot_a.name,
+                identifier=snapshot_a.identifier,
+                version=snapshot_a.version,
+                intervals=[],
+                dev_intervals=[],
+                pending_restatement_intervals=[
+                    (to_timestamp("2020-01-03"), to_timestamp("2020-01-06")),
+                ],
+            )
+        ]
+    )
+
+    expected_intervals = [
+        SnapshotIntervals(
+            name=snapshot_a.name,
+            identifier=snapshot_a.identifier,
+            version=snapshot_a.version,
+            intervals=[
+                (to_timestamp("2020-01-01"), to_timestamp("2020-01-06")),
+            ],
+            dev_intervals=[],
+            pending_restatement_intervals=[],
+        ),
+        SnapshotIntervals(
+            name=snapshot_b.name,
+            identifier=snapshot_b.identifier,
+            version=snapshot_b.version,
+            intervals=[
+                (to_timestamp("2020-01-03"), to_timestamp("2020-01-04")),
+            ],
+            dev_intervals=[],
+            pending_restatement_intervals=[
+                (to_timestamp("2020-01-04"), to_timestamp("2020-01-06")),
+            ],
+        ),
+    ]
+    expected_intervals = sorted(expected_intervals, key=lambda x: (x.name, x.identifier))
+
+    with time_machine.travel("2020-01-05 01:00:00 UTC"):
+        # Add a new interval for the new snapshot
+        state_sync.add_interval(snapshot_b, "2020-01-03", "2020-01-03")
+        assert (
+            sorted(
+                state_sync._get_snapshot_intervals([snapshot_a, snapshot_b])[1],
+                key=lambda x: (x.name, x.identifier),
+            )
+            == expected_intervals
+        )
+        snapshots = state_sync.get_snapshots([snapshot_a, snapshot_b])
+        assert snapshots[snapshot_a.snapshot_id].pending_restatement_intervals == [
+            (to_timestamp("2020-01-04"), to_timestamp("2020-01-06")),
+        ]
+        assert snapshots[snapshot_b.snapshot_id].pending_restatement_intervals == [
+            (to_timestamp("2020-01-04"), to_timestamp("2020-01-06")),
+        ]
+
+        state_sync.compact_intervals()
+        snapshots = state_sync.get_snapshots([snapshot_a, snapshot_b])
+        assert snapshots[snapshot_a.snapshot_id].intervals == [
+            (to_timestamp("2020-01-01"), to_timestamp("2020-01-06")),
+        ]
+        assert snapshots[snapshot_a.snapshot_id].pending_restatement_intervals == [
+            (to_timestamp("2020-01-04"), to_timestamp("2020-01-06")),
+        ]
+        assert snapshots[snapshot_b.snapshot_id].pending_restatement_intervals == [
+            (to_timestamp("2020-01-04"), to_timestamp("2020-01-06")),
+        ]
+        assert snapshots[snapshot_b.snapshot_id].intervals == [
+            (to_timestamp("2020-01-01"), to_timestamp("2020-01-06")),
+        ]
+
+        state_sync.compact_intervals()
+        snapshots = state_sync.get_snapshots([snapshot_a, snapshot_b])
+        assert snapshots[snapshot_a.snapshot_id].intervals == [
+            (to_timestamp("2020-01-01"), to_timestamp("2020-01-06")),
+        ]
+        assert snapshots[snapshot_a.snapshot_id].pending_restatement_intervals == [
+            (to_timestamp("2020-01-04"), to_timestamp("2020-01-06")),
+        ]
+        assert snapshots[snapshot_b.snapshot_id].pending_restatement_intervals == [
+            (to_timestamp("2020-01-04"), to_timestamp("2020-01-06")),
+        ]
+        assert snapshots[snapshot_b.snapshot_id].intervals == [
+            (to_timestamp("2020-01-01"), to_timestamp("2020-01-06")),
+        ]
+
+    expected_intervals = [
+        SnapshotIntervals(
+            name=snapshot_a.name,
+            identifier=snapshot_a.identifier,
+            version=snapshot_a.version,
+            intervals=[
+                (to_timestamp("2020-01-01"), to_timestamp("2020-01-06")),
+            ],
+            dev_intervals=[],
+            pending_restatement_intervals=[
+                (to_timestamp("2020-01-05"), to_timestamp("2020-01-06")),
+            ],
+        ),
+        SnapshotIntervals(
+            name=snapshot_b.name,
+            identifier=snapshot_b.identifier,
+            version=snapshot_b.version,
+            intervals=[
+                (to_timestamp("2020-01-03"), to_timestamp("2020-01-04")),
+            ],
+            dev_intervals=[],
+            pending_restatement_intervals=[],
+        ),
+    ]
+    expected_intervals = sorted(expected_intervals, key=lambda x: (x.name, x.identifier))
+
+    with time_machine.travel("2020-01-05 02:00:00 UTC"):
+        # Add a new interval for the previous snapshot
+        state_sync.add_interval(snapshot_a, "2020-01-04", "2020-01-04")
+        assert (
+            sorted(
+                state_sync._get_snapshot_intervals([snapshot_a, snapshot_b])[1],
+                key=lambda x: (x.name, x.identifier),
+            )
+            == expected_intervals
+        )
+        snapshots = state_sync.get_snapshots([snapshot_a, snapshot_b])
+        assert snapshots[snapshot_a.snapshot_id].pending_restatement_intervals == [
+            (to_timestamp("2020-01-05"), to_timestamp("2020-01-06")),
+        ]
+        assert snapshots[snapshot_b.snapshot_id].pending_restatement_intervals == [
+            (to_timestamp("2020-01-05"), to_timestamp("2020-01-06")),
+        ]
+
+        state_sync.compact_intervals()
+        snapshots = state_sync.get_snapshots([snapshot_a, snapshot_b])
+        assert snapshots[snapshot_a.snapshot_id].intervals == [
+            (to_timestamp("2020-01-01"), to_timestamp("2020-01-06")),
+        ]
+        assert snapshots[snapshot_a.snapshot_id].pending_restatement_intervals == [
+            (to_timestamp("2020-01-05"), to_timestamp("2020-01-06")),
+        ]
+        assert snapshots[snapshot_b.snapshot_id].pending_restatement_intervals == [
+            (to_timestamp("2020-01-05"), to_timestamp("2020-01-06")),
+        ]
+        assert snapshots[snapshot_b.snapshot_id].intervals == [
+            (to_timestamp("2020-01-01"), to_timestamp("2020-01-06")),
+        ]
+
+    expected_intervals = [
+        SnapshotIntervals(
+            name=snapshot_a.name,
+            identifier=snapshot_a.identifier,
+            version=snapshot_a.version,
+            intervals=[
+                (to_timestamp("2020-01-01"), to_timestamp("2020-01-06")),
+            ],
+            dev_intervals=[],
+            pending_restatement_intervals=[],
+        ),
+        SnapshotIntervals(
+            name=snapshot_b.name,
+            identifier=snapshot_b.identifier,
+            version=snapshot_b.version,
+            intervals=[
+                (to_timestamp("2020-01-03"), to_timestamp("2020-01-04")),
+                (to_timestamp("2020-01-05"), to_timestamp("2020-01-06")),
+            ],
+            dev_intervals=[],
+            pending_restatement_intervals=[],
+        ),
+    ]
+    expected_intervals = sorted(expected_intervals, key=lambda x: (x.name, x.identifier))
+
+    with time_machine.travel("2020-01-05 03:00:00 UTC"):
+        state_sync.add_interval(snapshot_b, "2020-01-05", "2020-01-05")
+        assert (
+            sorted(
+                state_sync._get_snapshot_intervals([snapshot_a, snapshot_b])[1],
+                key=lambda x: (x.name, x.identifier),
+            )
+            == expected_intervals
+        )
+        snapshots = state_sync.get_snapshots([snapshot_a, snapshot_b])
+        assert snapshots[snapshot_a.snapshot_id].pending_restatement_intervals == []
+        assert snapshots[snapshot_b.snapshot_id].pending_restatement_intervals == []
+
+        state_sync.compact_intervals()
+        snapshots = state_sync.get_snapshots([snapshot_a, snapshot_b])
+        assert snapshots[snapshot_a.snapshot_id].pending_restatement_intervals == []
+        assert snapshots[snapshot_a.snapshot_id].intervals == [
+            (to_timestamp("2020-01-01"), to_timestamp("2020-01-06")),
+        ]
+        assert snapshots[snapshot_b.snapshot_id].pending_restatement_intervals == []
+        assert snapshots[snapshot_b.snapshot_id].intervals == [
+            (to_timestamp("2020-01-01"), to_timestamp("2020-01-06")),
+        ]

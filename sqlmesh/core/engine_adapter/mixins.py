@@ -9,6 +9,7 @@ from sqlglot.helper import seq_get
 from sqlmesh.core.engine_adapter.base import EngineAdapter
 from sqlmesh.core.engine_adapter.shared import InsertOverwriteStrategy, SourceQuery
 from sqlmesh.core.node import IntervalUnit
+from sqlmesh.core.dialect import schema_
 from sqlmesh.utils.errors import SQLMeshError
 
 if t.TYPE_CHECKING:
@@ -29,7 +30,8 @@ class LogicalMergeMixin(EngineAdapter):
         source_table: QueryOrDF,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
         unique_key: t.Sequence[exp.Expression],
-        when_matched: t.Optional[t.Union[exp.When, t.List[exp.When]]] = None,
+        when_matched: t.Optional[exp.Whens] = None,
+        merge_filter: t.Optional[exp.Expression] = None,
     ) -> None:
         logical_merge(
             self,
@@ -38,6 +40,7 @@ class LogicalMergeMixin(EngineAdapter):
             columns_to_types,
             unique_key,
             when_matched=when_matched,
+            merge_filter=merge_filter,
         )
 
 
@@ -104,7 +107,9 @@ class InsertOverwriteWithMergeMixin(EngineAdapter):
                     target_table=table_name,
                     query=query,
                     on=exp.false(),
-                    match_expressions=[when_not_matched_by_source, when_not_matched_by_target],
+                    whens=exp.Whens(
+                        expressions=[when_not_matched_by_source, when_not_matched_by_target]
+                    ),
                 )
 
 
@@ -299,6 +304,7 @@ class VarcharSizeWorkaroundMixin(EngineAdapter):
                 select_or_union.set("where", None)
 
             temp_view_name = self._get_temp_table("ctas")
+
             self.create_view(
                 temp_view_name, select_statement, replace=False, no_schema_binding=False
             )
@@ -355,10 +361,15 @@ class ClusteredByMixin(EngineAdapter):
         current_table = exp.to_table(current_table_name)
         target_table = exp.to_table(target_table_name)
 
+        current_table_schema = schema_(current_table.db, catalog=current_table.catalog)
+        target_table_schema = schema_(target_table.db, catalog=target_table.catalog)
+
         current_table_info = seq_get(
-            self.get_data_objects(current_table.db, {current_table.name}), 0
+            self.get_data_objects(current_table_schema, {current_table.name}), 0
         )
-        target_table_info = seq_get(self.get_data_objects(target_table.db, {target_table.name}), 0)
+        target_table_info = seq_get(
+            self.get_data_objects(target_table_schema, {target_table.name}), 0
+        )
 
         if current_table_info and target_table_info:
             if target_table_info.is_clustered:
@@ -399,7 +410,8 @@ def logical_merge(
     source_table: QueryOrDF,
     columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
     unique_key: t.Sequence[exp.Expression],
-    when_matched: t.Optional[t.Union[exp.When, t.List[exp.When]]] = None,
+    when_matched: t.Optional[exp.Whens] = None,
+    merge_filter: t.Optional[exp.Expression] = None,
 ) -> None:
     """
     Merge implementation for engine adapters that do not support merge natively.
@@ -411,10 +423,12 @@ def logical_merge(
        within the temporary table are ommitted.
     4. Drop the temporary table.
     """
-    if when_matched:
+    if when_matched or merge_filter:
+        prop = "when_matched" if when_matched else "merge_filter"
         raise SQLMeshError(
-            "This engine does not support MERGE expressions and therefore `when_matched` is not supported."
+            f"This engine does not support MERGE expressions and therefore `{prop}` is not supported."
         )
+
     engine_adapter._replace_by_key(
         target_table, source_table, columns_to_types, unique_key, is_unique_key=True
     )
@@ -484,10 +498,15 @@ class RowDiffMixin(EngineAdapter):
                 value = self._normalize_decimal_value(expr, decimal_precision)
         elif type.is_type(*exp.DataType.TEMPORAL_TYPES):
             value = self._normalize_timestamp_value(expr, type, timestamp_precision)
+        elif type.is_type(*exp.DataType.NESTED_TYPES):
+            value = self._normalize_nested_value(expr)
         else:
             value = expr
 
         return exp.cast(value, to=exp.DataType.build("VARCHAR"))
+
+    def _normalize_nested_value(self, expr: exp.Expression) -> exp.Expression:
+        return expr
 
     def _normalize_timestamp_value(
         self, expr: exp.Expression, type: exp.DataType, precision: int

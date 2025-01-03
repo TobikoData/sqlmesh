@@ -1,6 +1,7 @@
 import typing as t
 from enum import Enum
 
+from sqlglot import exp
 from sqlmesh.core.environment import Environment, EnvironmentNamingInfo
 from sqlmesh.core.snapshot import (
     DeployabilityIndex,
@@ -12,6 +13,7 @@ from sqlmesh.core.snapshot import (
 )
 from sqlmesh.core.state_sync import cleanup_expired_views
 from sqlmesh.utils.date import TimeLike
+from sqlmesh.utils.errors import AuditError
 from sqlmesh.utils.pydantic import PydanticModel
 
 COMMAND_PAYLOAD_FILE_NAME = "payload.json"
@@ -87,7 +89,7 @@ def evaluate(
         deployability_index=command_payload.deployability_index,
         batch_index=command_payload.batch_index,
     )
-    evaluator.audit(
+    audit_results = evaluator.audit(
         snapshot=command_payload.snapshot,
         start=command_payload.start,
         end=command_payload.end,
@@ -96,6 +98,16 @@ def evaluate(
         deployability_index=command_payload.deployability_index,
         wap_id=wap_id,
     )
+
+    failed_audit_result = next((r for r in audit_results if r.count and r.blocking), None)
+    if failed_audit_result:
+        raise AuditError(
+            audit_name=failed_audit_result.audit.name,
+            model=command_payload.snapshot.model_or_none,
+            count=t.cast(int, failed_audit_result.count),
+            query=t.cast(exp.Query, failed_audit_result.query),
+            adapter_dialect=evaluator.adapter.dialect,
+        )
 
 
 def promote(

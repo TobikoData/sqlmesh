@@ -13,16 +13,6 @@ from sqlmesh.integrations import slack
 from sqlmesh.utils.errors import AuditError, ConfigError, MissingDependencyError
 from sqlmesh.utils.pydantic import PydanticModel
 
-if sys.version_info >= (3, 8):
-    from typing import Literal
-else:
-    from typing_extensions import Literal
-
-if sys.version_info >= (3, 9):
-    from typing import Annotated
-else:
-    from typing_extensions import Annotated
-
 if t.TYPE_CHECKING:
     from slack_sdk import WebClient, WebhookClient
 
@@ -220,7 +210,7 @@ class ConsoleNotificationTarget(BaseTextBasedNotificationTarget):
     Example console notification target. Keeping this around for testing purposes.
     """
 
-    type_: Literal["console"] = Field(alias="type", default="console")
+    type_: t.Literal["console"] = Field(alias="type", default="console")
     _console: t.Optional[Console] = None
 
     @property
@@ -299,7 +289,7 @@ class BaseSlackNotificationTarget(BaseNotificationTarget):
 
 class SlackWebhookNotificationTarget(BaseSlackNotificationTarget):
     url: t.Optional[str] = None
-    type_: Literal["slack_webhook"] = Field(alias="type", default="slack_webhook")
+    type_: t.Literal["slack_webhook"] = Field(alias="type", default="slack_webhook")
     _client: t.Optional[WebhookClient] = None
 
     @property
@@ -333,7 +323,7 @@ class SlackWebhookNotificationTarget(BaseSlackNotificationTarget):
 class SlackApiNotificationTarget(BaseSlackNotificationTarget):
     token: t.Optional[str] = None
     channel: t.Optional[str] = None
-    type_: Literal["slack_api"] = Field(alias="type", default="slack_api")
+    type_: t.Literal["slack_api"] = Field(alias="type", default="slack_api")
     _client: t.Optional[WebClient] = None
 
     @property
@@ -373,7 +363,7 @@ class BasicSMTPNotificationTarget(BaseTextBasedNotificationTarget):
     sender: t.Optional[str] = None
     recipients: t.Optional[t.FrozenSet[str]] = None
     subject: t.Optional[str] = "SQLMesh Notification"
-    type_: Literal["smtp"] = Field(alias="type", default="smtp")
+    type_: t.Literal["smtp"] = Field(alias="type", default="smtp")
 
     def send_text_message(
         self,
@@ -421,10 +411,10 @@ class GenericNotificationTarget(BaseNotificationTarget):
     ```
     """
 
-    type_: Literal["generic"] = Field(alias="type", default="generic")
+    type_: t.Literal["generic"] = Field(alias="type", default="generic")
 
 
-NotificationTarget = Annotated[
+NotificationTarget = t.Annotated[
     t.Union[
         BasicSMTPNotificationTarget,
         GenericNotificationTarget,

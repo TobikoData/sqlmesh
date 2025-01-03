@@ -10,12 +10,11 @@ from sqlglot.helper import ensure_collection, ensure_list
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
 from sqlmesh.core import dialect as d
-from sqlmesh.core.dialect import normalize_model_name, extract_audit
+from sqlmesh.core.dialect import normalize_model_name, extract_func_call
 from sqlmesh.core.model.common import (
     bool_validator,
     default_catalog_validator,
     depends_on_validator,
-    parse_properties,
     properties_validator,
 )
 from sqlmesh.core.model.kind import (
@@ -45,7 +44,7 @@ from sqlmesh.utils.pydantic import (
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import CustomMaterializationProperties, SessionProperties
 
-AuditReference = t.Tuple[str, t.Dict[str, exp.Expression]]
+FunctionCall = t.Tuple[str, t.Dict[str, exp.Expression]]
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +66,7 @@ class ModelMeta(_Node):
     column_descriptions_: t.Optional[t.Dict[str, str]] = Field(
         default=None, alias="column_descriptions"
     )
-    audits: t.List[AuditReference] = []
+    audits: t.List[FunctionCall] = []
     grains: t.List[exp.Expression] = []
     references: t.List[exp.Expression] = []
     physical_schema_override: t.Optional[str] = None
@@ -75,9 +74,11 @@ class ModelMeta(_Node):
     virtual_properties_: t.Optional[exp.Tuple] = Field(default=None, alias="virtual_properties")
     session_properties_: t.Optional[exp.Tuple] = Field(default=None, alias="session_properties")
     allow_partials: bool = False
-    signals: t.List[exp.Tuple] = []
+    signals: t.List[FunctionCall] = []
     enabled: bool = True
     physical_version: t.Optional[str] = None
+    gateway: t.Optional[str] = None
+    optimize_query: t.Optional[bool] = None
 
     _bool_validator = bool_validator
     _model_kind_validator = model_kind_validator
@@ -85,21 +86,23 @@ class ModelMeta(_Node):
     _default_catalog_validator = default_catalog_validator
     _depends_on_validator = depends_on_validator
 
-    @field_validator("audits", mode="before")
-    def _audits_validator(cls, v: t.Any) -> t.Any:
+    @field_validator("audits", "signals", mode="before")
+    def _func_call_validator(cls, v: t.Any, field: t.Any) -> t.Any:
+        is_signal = getattr(field, "name" if hasattr(field, "name") else "field_name") == "signals"
+
         if isinstance(v, (exp.Tuple, exp.Array)):
-            return [extract_audit(i) for i in v.expressions]
+            return [extract_func_call(i, allow_tuples=is_signal) for i in v.expressions]
         if isinstance(v, exp.Paren):
-            return [extract_audit(v.this)]
+            return [extract_func_call(v.this, allow_tuples=is_signal)]
         if isinstance(v, exp.Expression):
-            return [extract_audit(v)]
+            return [extract_func_call(v, allow_tuples=is_signal)]
         if isinstance(v, list):
             audits = []
 
             for entry in v:
                 if isinstance(entry, dict):
                     args = entry
-                    name = entry.pop("name")
+                    name = "" if is_signal else entry.pop("name")
                 elif isinstance(entry, (tuple, list)):
                     name, args = entry
                 else:
@@ -167,6 +170,13 @@ class ModelMeta(_Node):
         if v is None:
             return v
         return str_or_exp_to_str(v)
+
+    @field_validator("gateway", mode="before")
+    def _gateway_validator(cls, v: t.Any) -> t.Optional[str]:
+        if v is None:
+            return None
+        gateway = str_or_exp_to_str(v)
+        return gateway and gateway.lower()
 
     @field_validator("partitioned_by_", "clustered_by", mode="before")
     @field_validator_v1_args
@@ -277,28 +287,6 @@ class ModelMeta(_Node):
             refs.append(v)
 
         return refs
-
-    @field_validator("signals", mode="before")
-    @field_validator_v1_args
-    def _signals_validator(cls, v: t.Any, values: t.Dict[str, t.Any]) -> t.Any:
-        if v is None:
-            return []
-
-        if isinstance(v, str):
-            dialect = values.get("dialect")
-            v = d.parse_one(v, dialect=dialect)
-
-        if isinstance(v, (exp.Array, exp.Paren, exp.Tuple)):
-            tuples: t.List[exp.Expression] = (
-                [v.unnest()] if isinstance(v, exp.Paren) else v.expressions
-            )
-            signals = [parse_properties(cls, t, values) for t in tuples]
-        elif isinstance(v, list):
-            signals = [parse_properties(cls, t, values) for t in v]
-        else:
-            raise ConfigError(f"Unexpected signals '{v}'")
-
-        return signals
 
     @model_validator(mode="before")
     @model_validator_v1_args
@@ -443,9 +431,15 @@ class ModelMeta(_Node):
         return getattr(self.kind, "managed_columns", {})
 
     @property
-    def when_matched(self) -> t.Optional[t.List[exp.When]]:
+    def when_matched(self) -> t.Optional[exp.Whens]:
         if isinstance(self.kind, IncrementalByUniqueKeyKind):
             return self.kind.when_matched
+        return None
+
+    @property
+    def merge_filter(self) -> t.Optional[exp.Expression]:
+        if isinstance(self.kind, IncrementalByUniqueKeyKind):
+            return self.kind.merge_filter
         return None
 
     @property

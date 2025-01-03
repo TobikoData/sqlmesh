@@ -35,6 +35,7 @@ Some extras add features, like the SQLMesh browser UI or Github CI/CD bot:
     | ------------------- | ------------------------------- |
     | Browser UI          | `pip install "sqlmesh[web]"`    |
     | dbt projects        | `pip install "sqlmesh[dbt]"`    |
+    | dlt projects        | `pip install "sqlmesh[dlt]"`    |
     | Github CI/CD bot    | `pip install "sqlmesh[github]"` |
     | Slack notifications | `pip install "sqlmesh[slack]"`  |
     | Development setup   | `pip install "sqlmesh[dev]"`    |
@@ -44,8 +45,10 @@ Other extras are required to use specific SQL engines, like Bigquery or Postgres
 
 ??? info "SQL engine extras commands"
     | SQL engine    | `pip` command                        |
-    |---------------|--------------------------------------|
+    | ------------- | ------------------------------------ |
+    | Athena        | `pip install "sqlmesh[athena]"`      |
     | Bigquery      | `pip install "sqlmesh[bigquery]"`    |
+    | ClickHouse    | `pip install "sqlmesh[clickhouse]"`  |
     | Databricks    | `pip install "sqlmesh[databricks]"`  |
     | GCP Postgres  | `pip install "sqlmesh[gcppostgres]"` |
     | MS SQL Server | `pip install "sqlmesh[mssql]"`       |
@@ -53,21 +56,9 @@ Other extras are required to use specific SQL engines, like Bigquery or Postgres
     | Postgres      | `pip install "sqlmesh[postgres]"`    |
     | Redshift      | `pip install "sqlmesh[redshift]"`    |
     | Snowflake     | `pip install "sqlmesh[snowflake]"`   |
+    | Trino         | `pip install "sqlmesh[trino]"`       |
 
 Multiple extras can be installed at once, as in `pip install "sqlmesh[web,slack]"`.
-
-## Pydantic v2
-SQLMesh supports Pydantic v2, but since v2 is relatively new, v1 is the version installed by default. If you would like to use Pydantic v2, you can by installing it after installing SQLMesh.
-
-```bash
-pip install --upgrade pydantic
-```
-
-Pip may issue a warning about dependency conflicts, but SQLMesh should still function fine. Furthermore, if you are using the SQLMesh UI, you will also need to install pydantic-settings.
-
-```bash
-pip install --upgrade pydantic-settings
-```
 
 ## Next steps
 

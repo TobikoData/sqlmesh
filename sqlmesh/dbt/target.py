@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import abc
 import logging
-import sys
 import typing as t
 from pathlib import Path
 
@@ -40,11 +39,6 @@ from sqlmesh.utils.pydantic import (
     model_validator,
     model_validator_v1_args,
 )
-
-if sys.version_info >= (3, 9):
-    from typing import Literal
-else:
-    from typing_extensions import Literal
 
 logger = logging.getLogger(__name__)
 
@@ -165,7 +159,7 @@ class DuckDbConfig(TargetConfig):
         settings: A dictionary of settings to pass into the duckdb connector.
     """
 
-    type: Literal["duckdb"] = "duckdb"
+    type: t.Literal["duckdb"] = "duckdb"
     database: str = "main"
     schema_: str = Field(default="main", alias="schema")
     path: str = DUCKDB_IN_MEMORY
@@ -232,7 +226,7 @@ class SnowflakeConfig(TargetConfig):
         token: OAuth authentication: The Snowflake OAuth 2.0 access token
     """
 
-    type: Literal["snowflake"] = "snowflake"
+    type: t.Literal["snowflake"] = "snowflake"
     account: str
     user: str
 
@@ -331,7 +325,7 @@ class PostgresConfig(TargetConfig):
         sslmode: SSL Mode used to connect to the database
     """
 
-    type: Literal["postgres"] = "postgres"
+    type: t.Literal["postgres"] = "postgres"
     host: str
     user: str
     password: str
@@ -395,7 +389,7 @@ class RedshiftConfig(TargetConfig):
     """
 
     # TODO add other forms of authentication
-    type: Literal["redshift"] = "redshift"
+    type: t.Literal["redshift"] = "redshift"
     host: str
     user: str
     password: str
@@ -460,7 +454,7 @@ class DatabricksConfig(TargetConfig):
         database: Name of the database. Not applicable for Databricks and ignored
     """
 
-    type: Literal["databricks"] = "databricks"
+    type: t.Literal["databricks"] = "databricks"
     host: str
     http_path: str
     token: t.Optional[str] = None  # only required if auth_type is not set to 'oauth'
@@ -524,7 +518,7 @@ class BigQueryConfig(TargetConfig):
         maximum_bytes_billed: The maximum number of bytes to be billed for the underlying job
     """
 
-    type: Literal["bigquery"] = "bigquery"
+    type: t.Literal["bigquery"] = "bigquery"
     method: t.Optional[str] = BigQueryConnectionMethod.OAUTH
     dataset: t.Optional[str] = None
     project: t.Optional[str] = None
@@ -637,7 +631,7 @@ class MSSQLConfig(TargetConfig):
         client_secret: The client secret of the Azure Active Directory service principal, not used by SQLMesh
     """
 
-    type: Literal["sqlserver"] = "sqlserver"
+    type: t.Literal["sqlserver"] = "sqlserver"
     host: t.Optional[str] = None
     server: t.Optional[str] = None
     port: int = 1433
@@ -775,7 +769,7 @@ class TrinoConfig(TargetConfig):
         "oauth_console": TrinoAuthenticationMethod.OAUTH,
     }
 
-    type: Literal["trino"] = "trino"
+    type: t.Literal["trino"] = "trino"
     host: str
     database: str
     schema_: str = Field(alias="schema")
@@ -921,7 +915,7 @@ class ClickhouseConfig(TargetConfig):
     local_suffix: str = "local"
     local_db_prefix: str = ""
 
-    type: Literal["clickhouse"] = "clickhouse"
+    type: t.Literal["clickhouse"] = "clickhouse"
 
     def default_incremental_strategy(self, kind: IncrementalKind) -> str:
         # dbt-clickhouse name for temp table swap. That is sqlmesh's default
@@ -983,7 +977,7 @@ class AthenaConfig(TargetConfig):
         lf_tags_database: Default LF tags for new database if it's created by dbt
     """
 
-    type: Literal["athena"] = "athena"
+    type: t.Literal["athena"] = "athena"
     threads: int = 4
 
     s3_staging_dir: t.Optional[str] = None
