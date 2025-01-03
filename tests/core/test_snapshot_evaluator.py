@@ -2185,7 +2185,7 @@ def test_create_incremental_by_unique_key_merge_filter(adapter_mock, make_snapsh
                 name test_schema.test_model,
                 kind INCREMENTAL_BY_UNIQUE_KEY (
                     unique_key [id],
-                    merge_filter source.id > 0 and target.updated_at < TIMESTAMP("2020-02-05"),
+                    merge_filter source.id > 0 and target.updated_at < @end_ds and source.updated_at > @start_ds,
                     when_matched WHEN MATCHED THEN UPDATE SET target.updated_at = COALESCE(source.updated_at, target.updated_at),
                 )
             );
@@ -2193,6 +2193,24 @@ def test_create_incremental_by_unique_key_merge_filter(adapter_mock, make_snapsh
             SELECT id::int, updated_at::timestamp FROM tbl;
             """
         )
+    )
+
+    # At load time macros should remain unresolved
+    assert model.merge_filter == exp.And(
+        this=exp.And(
+            this=exp.GT(
+                this=exp.column("id", MERGE_SOURCE_ALIAS),
+                expression=exp.Literal(this="0", is_string=False),
+            ),
+            expression=exp.LT(
+                this=exp.column("updated_at", MERGE_TARGET_ALIAS),
+                expression=d.MacroVar(this="end_ds"),
+            ),
+        ),
+        expression=exp.GT(
+            this=exp.column("updated_at", MERGE_SOURCE_ALIAS),
+            expression=d.MacroVar(this="start_ds"),
+        ),
     )
 
     snapshot = make_snapshot(model)
@@ -2207,6 +2225,7 @@ def test_create_incremental_by_unique_key_merge_filter(adapter_mock, make_snapsh
         snapshots={},
     )
 
+    # The macros for merge_filter must now be rendered at evaluation time.
     adapter_mock.merge.assert_called_once_with(
         snapshot.table_name(),
         model.render_query(),
@@ -2233,13 +2252,19 @@ def test_create_incremental_by_unique_key_merge_filter(adapter_mock, make_snapsh
             ]
         ),
         merge_filter=exp.And(
-            this=exp.GT(
-                this=exp.column("id", MERGE_SOURCE_ALIAS),
-                expression=exp.Literal(this="0", is_string=False),
+            this=exp.And(
+                this=exp.GT(
+                    this=exp.column("id", MERGE_SOURCE_ALIAS),
+                    expression=exp.Literal(this="0", is_string=False),
+                ),
+                expression=exp.LT(
+                    this=exp.column("updated_at", MERGE_TARGET_ALIAS),
+                    expression=exp.Literal(this="2020-01-02", is_string=True),
+                ),
             ),
-            expression=exp.LT(
-                this=exp.column("updated_at", MERGE_TARGET_ALIAS),
-                expression=exp.Timestamp(this=exp.column("2020-02-05", quoted=True)),
+            expression=exp.GT(
+                this=exp.column("updated_at", MERGE_SOURCE_ALIAS),
+                expression=exp.Literal(this="2020-01-01", is_string=True),
             ),
         ),
     )
