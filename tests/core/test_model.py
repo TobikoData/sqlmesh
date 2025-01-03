@@ -5990,7 +5990,7 @@ def test_merge_filter():
           MAX(ds)
         FROM db.test
       )
-      AND {MERGE_SOURCE_ALIAS}.ds > '1970-01-01'
+      AND {MERGE_SOURCE_ALIAS}.ds > @start_ds
       AND {MERGE_SOURCE_ALIAS}._operation <> 1
       AND {MERGE_TARGET_ALIAS}.start_date > DATEADD(day, -7, CURRENT_DATE)
     ),
@@ -6005,6 +6005,12 @@ SELECT
   purchase_order_id,
   start_date
 FROM db.upstream"""
+    )
+
+    rendered_merge_filters = model.render_merge_filter(start="2023-01-01", end="2023-01-02")
+    assert (
+        rendered_merge_filters.sql()
+        == "(__MERGE_SOURCE__.ds > (SELECT MAX(ds) FROM db.test) AND __MERGE_SOURCE__.ds > '2023-01-01' AND __MERGE_SOURCE__._operation <> 1 AND __MERGE_TARGET__.start_date > DATEADD(day, -7, CURRENT_DATE))"
     )
 
 
@@ -6022,7 +6028,7 @@ def test_merge_filter_macro():
           name db.incremental_model,
           kind INCREMENTAL_BY_UNIQUE_KEY (
             unique_key id,
-            merge_filter @predicate(update_datetime)
+            merge_filter @predicate(update_datetime) and target.update_datetime > @start_dt
           ),
           clustered_by update_datetime
         );
@@ -6030,13 +6036,19 @@ def test_merge_filter_macro():
     """
     )
 
-    expected_incremental_predicate = f"{MERGE_SOURCE_ALIAS}.update_datetime > DATE_ADD({MERGE_TARGET_ALIAS}.update_datetime, -7, 'DAY')"
+    unrendered_merge_filter = (
+        f"@predicate(update_datetime) AND {MERGE_TARGET_ALIAS}.update_datetime > @start_dt"
+    )
+    expected_merge_filter = f"{MERGE_SOURCE_ALIAS}.UPDATE_DATETIME > DATE_ADD({MERGE_TARGET_ALIAS}.UPDATE_DATETIME, -7, 'DAY') AND {MERGE_TARGET_ALIAS}.UPDATE_DATETIME > CAST('2023-01-01 15:00:00+00:00' AS TIMESTAMPTZ)"
 
     model = load_sql_based_model(expressions, dialect="snowflake")
-    assert model.kind.merge_filter.sql() == expected_incremental_predicate
+    assert model.kind.merge_filter.sql() == unrendered_merge_filter
 
     model = SqlModel.parse_raw(model.json())
-    assert model.kind.merge_filter.sql() == expected_incremental_predicate
+    assert model.kind.merge_filter.sql() == unrendered_merge_filter
+
+    rendered_merge_filters = model.render_merge_filter(start="2023-01-01 15:00:00")
+    assert rendered_merge_filters.sql() == expected_merge_filter
 
 
 @pytest.mark.parametrize(

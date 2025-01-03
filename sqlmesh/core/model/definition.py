@@ -552,21 +552,9 @@ class _Model(ModelMeta, frozen=True):
             The list of rendered expressions.
         """
 
-        def _create_renderer(expression: exp.Expression) -> ExpressionRenderer:
-            return ExpressionRenderer(
-                expression,
-                self.dialect,
-                [],
-                path=self._path,
-                jinja_macro_registry=self.jinja_macros,
-                python_env=self.python_env,
-                only_execution_time=False,
-                quote_identifiers=False,
-            )
-
         def _render(e: exp.Expression) -> str | int | float | bool:
             rendered_exprs = (
-                _create_renderer(e).render(start=start, end=end, execution_time=execution_time)
+                self._create_renderer(e).render(start=start, end=end, execution_time=execution_time)
                 or []
             )
             if len(rendered_exprs) != 1:
@@ -585,6 +573,37 @@ class _Model(ModelMeta, frozen=True):
         return [
             {k: _render(v) for k, v in signal.items()} for name, signal in self.signals if not name
         ]
+
+    def render_merge_filter(
+        self,
+        *,
+        start: t.Optional[TimeLike] = None,
+        end: t.Optional[TimeLike] = None,
+        execution_time: t.Optional[TimeLike] = None,
+    ) -> t.Optional[exp.Expression]:
+        if self.merge_filter is None:
+            return None
+        rendered_exprs = (
+            self._create_renderer(self.merge_filter).render(
+                start=start, end=end, execution_time=execution_time
+            )
+            or []
+        )
+        if len(rendered_exprs) != 1:
+            raise SQLMeshError(f"Expected one expression but got {len(rendered_exprs)}")
+        return rendered_exprs[0].transform(d.replace_merge_table_aliases)
+
+    def _create_renderer(self, expression: exp.Expression) -> ExpressionRenderer:
+        return ExpressionRenderer(
+            expression,
+            self.dialect,
+            [],
+            path=self._path,
+            jinja_macro_registry=self.jinja_macros,
+            python_env=self.python_env,
+            only_execution_time=False,
+            quote_identifiers=False,
+        )
 
     def ctas_query(self, **render_kwarg: t.Any) -> exp.Query:
         """Return a dummy query to do a CTAS.
@@ -1676,11 +1695,21 @@ def load_sql_based_model(
         meta = d.Model(expressions=[])  # Dummy meta node
         expressions.insert(0, meta)
 
+    unrendered_merge_filter = None
     unrendered_signals = None
 
     for prop in meta.expressions:
         if prop.name.lower() == "signals":
             unrendered_signals = prop.args.get("value")
+
+        if (
+            prop.name.lower() == "kind"
+            and (value := prop.args.get("value"))
+            and value.name.lower() == "incremental_by_unique_key"
+        ):
+            for kind_prop in value.expressions:
+                if kind_prop.name.lower() == "merge_filter":
+                    unrendered_merge_filter = kind_prop
 
     meta_renderer = _meta_renderer(
         expression=meta,
@@ -1718,9 +1747,15 @@ def load_sql_based_model(
         **{prop.name.lower(): prop.args.get("value") for prop in rendered_meta.expressions},
         **kwargs,
     }
+
+    # Signals and merge_filter must remain unrendered, so that they can be rendered later at evaluation runtime.
     if unrendered_signals:
-        # Signals must remain unrendered, so that they can be rendered later at evaluation runtime.
         meta_fields["signals"] = unrendered_signals
+
+    if unrendered_merge_filter:
+        for idx, kind_prop in enumerate(meta_fields["kind"].expressions):
+            if kind_prop.name.lower() == "merge_filter":
+                meta_fields["kind"].expressions[idx] = unrendered_merge_filter
 
     if isinstance(meta_fields.get("dialect"), exp.Expression):
         meta_fields["dialect"] = meta_fields["dialect"].name
