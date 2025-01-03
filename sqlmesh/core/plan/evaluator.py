@@ -223,12 +223,6 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             for s in snapshots.values()
             if s.is_model and not s.is_symbolic and plan.is_selected_for_backfill(s.name)
         ]
-        snapshots_to_create_count = len(snapshots_to_create)
-
-        if snapshots_to_create_count > 0:
-            self.console.start_creation_progress(
-                snapshots_to_create_count, plan.environment, self.default_catalog
-            )
 
         completed = False
         try:
@@ -237,6 +231,9 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                 snapshots,
                 allow_destructive_snapshots=plan.allow_destructive_models,
                 deployability_index=deployability_index,
+                on_start=lambda x: self.console.start_creation_progress(
+                    x, plan.environment, self.default_catalog
+                ),
                 on_complete=self.console.update_creation_progress,
             )
             completed = True
