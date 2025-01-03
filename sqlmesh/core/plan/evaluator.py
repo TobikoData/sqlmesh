@@ -45,6 +45,7 @@ from sqlmesh.schedulers.airflow.client import AirflowClient, BaseAirflowClient
 from sqlmesh.schedulers.airflow.mwaa_client import MWAAClient
 from sqlmesh.utils.errors import PlanError, SQLMeshError
 from sqlmesh.utils.dag import DAG
+from sqlmesh.utils.date import now
 
 logger = logging.getLogger(__name__)
 
@@ -311,9 +312,10 @@ class BuiltInPlanEvaluator(PlanEvaluator):
 
         completed = False
         try:
+            added_snapshots = [snapshots[s.snapshot_id] for s in promotion_result.added]
             self._promote_snapshots(
                 plan,
-                [snapshots[s.snapshot_id] for s in promotion_result.added],
+                added_snapshots,
                 environment.naming_info,
                 deployability_index=deployability_index,
                 on_complete=lambda s: self.console.update_promotion_progress(s, True),
@@ -325,6 +327,21 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                     promotion_result.removed_environment_naming_info,
                     on_complete=lambda s: self.console.update_promotion_progress(s, False),
                 )
+
+            if promoted_snapshots := [
+                s for s in added_snapshots if s.is_model and not s.is_symbolic
+            ]:
+                self.snapshot_evaluator._execute_virtual_statements(
+                    promoted_snapshots,
+                    snapshots,
+                    plan.start,
+                    plan.end,
+                    plan.execution_time or now(),
+                    plan.environment.naming_info,
+                    self.default_catalog,
+                    deployability_index,
+                )
+
             self.state_sync.finalize(environment)
             completed = True
         finally:
