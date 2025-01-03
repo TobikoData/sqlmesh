@@ -2290,7 +2290,7 @@ def clickhouse_partition_func(
     if col_type.is_type(exp.DataType.Type.UNKNOWN):
         return exp.func(
             "toMonday",
-            exp.cast(column, exp.DataType.build("DateTime64('UTC')", dialect="clickhouse")),
+            exp.cast(column, exp.DataType.build("DateTime64(9, 'UTC')", dialect="clickhouse")),
             dialect="clickhouse",
         )
 
@@ -2298,7 +2298,7 @@ def clickhouse_partition_func(
     return exp.cast(
         exp.func(
             "toMonday",
-            exp.cast(column, exp.DataType.build("DateTime64('UTC')", dialect="clickhouse")),
+            exp.cast(column, exp.DataType.build("DateTime64(9, 'UTC')", dialect="clickhouse")),
             dialect="clickhouse",
         ),
         col_type,
