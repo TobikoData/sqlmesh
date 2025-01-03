@@ -108,7 +108,7 @@ class Plan(PydanticModel, frozen=True):
         """Returns the already categorized snapshots."""
         return [
             self.context_diff.snapshots[s_id]
-            for s_id in sorted(self.directly_modified)
+            for s_id in sorted({*self.directly_modified, *self.metadata_updated})
             if self.context_diff.snapshots[s_id].version
         ]
 
@@ -136,6 +136,15 @@ class Plan(PydanticModel, frozen=True):
                 for s_id in sorted(downstream_s_ids)
             },
             **self.context_diff.removed_snapshots,
+            **{s_id: self.context_diff.snapshots[s_id] for s_id in sorted(self.metadata_updated)},
+        }
+
+    @cached_property
+    def metadata_updated(self) -> t.Set[SnapshotId]:
+        return {
+            snapshot.snapshot_id
+            for snapshot, _ in self.context_diff.modified_snapshots.values()
+            if self.context_diff.metadata_updated(snapshot.name)
         }
 
     @property
@@ -283,6 +292,10 @@ class EvaluatablePlan(PydanticModel):
     @property
     def plan_id(self) -> str:
         return self.environment.plan_id
+
+    @property
+    def is_prod(self) -> bool:
+        return not self.is_dev
 
 
 class PlanStatus(str, Enum):

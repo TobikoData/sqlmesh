@@ -22,6 +22,7 @@ from sqlmesh.utils.pydantic import (
     SQLGlotListOfFields,
     SQLGlotPositiveInt,
     SQLGlotString,
+    SQLGlotCron,
     column_validator,
     field_validator,
     field_validator_v1_args,
@@ -325,6 +326,7 @@ kind_dialect_validator = field_validator("dialect", mode="before", always=True)(
 
 class _Incremental(_ModelKind):
     on_destructive_change: OnDestructiveChange = OnDestructiveChange.ERROR
+    auto_restatement_cron: t.Optional[SQLGlotCron] = None
 
     _on_destructive_change_validator = on_destructive_change_validator
 
@@ -333,6 +335,7 @@ class _Incremental(_ModelKind):
         return [
             *super().metadata_hash_values,
             str(self.on_destructive_change),
+            self.auto_restatement_cron,
         ]
 
     def to_expression(
@@ -341,8 +344,11 @@ class _Incremental(_ModelKind):
         return super().to_expression(
             expressions=[
                 *(expressions or []),
-                _property(
-                    "on_destructive_change", exp.Literal.string(self.on_destructive_change.value)
+                *_properties(
+                    {
+                        "on_destructive_change": self.on_destructive_change.value,
+                        "auto_restatement_cron": self.auto_restatement_cron,
+                    }
                 ),
             ],
         )
@@ -399,6 +405,7 @@ class IncrementalByTimeRangeKind(_IncrementalBy):
         ModelKindName.INCREMENTAL_BY_TIME_RANGE
     )
     time_column: TimeColumn
+    auto_restatement_intervals: t.Optional[SQLGlotPositiveInt] = None
 
     _time_column_validator = TimeColumn.validator()
 
@@ -409,12 +416,26 @@ class IncrementalByTimeRangeKind(_IncrementalBy):
             expressions=[
                 *(expressions or []),
                 self.time_column.to_property(kwargs.get("dialect") or ""),
+                *(
+                    [_property("auto_restatement_intervals", self.auto_restatement_intervals)]
+                    if self.auto_restatement_intervals is not None
+                    else []
+                ),
             ]
         )
 
     @property
     def data_hash_values(self) -> t.List[t.Optional[str]]:
         return [*super().data_hash_values, gen(self.time_column.column), self.time_column.format]
+
+    @property
+    def metadata_hash_values(self) -> t.List[t.Optional[str]]:
+        return [
+            *super().metadata_hash_values,
+            str(self.auto_restatement_intervals)
+            if self.auto_restatement_intervals is not None
+            else None,
+        ]
 
 
 class IncrementalByUniqueKeyKind(_IncrementalBy):
@@ -423,6 +444,7 @@ class IncrementalByUniqueKeyKind(_IncrementalBy):
     )
     unique_key: SQLGlotListOfFields
     when_matched: t.Optional[exp.Whens] = None
+    merge_filter: t.Optional[exp.Expression] = None
     batch_concurrency: t.Literal[1] = 1
 
     @field_validator("when_matched", mode="before")
@@ -432,17 +454,6 @@ class IncrementalByUniqueKeyKind(_IncrementalBy):
         v: t.Optional[t.Union[str, exp.Whens]],
         values: t.Dict[str, t.Any],
     ) -> t.Optional[exp.Whens]:
-        def replace_table_references(expression: exp.Expression) -> exp.Expression:
-            from sqlmesh.core.engine_adapter.base import MERGE_SOURCE_ALIAS, MERGE_TARGET_ALIAS
-
-            if isinstance(expression, exp.Column):
-                if expression.table.lower() == "target":
-                    expression.set("table", exp.to_identifier(MERGE_TARGET_ALIAS))
-                elif expression.table.lower() == "source":
-                    expression.set("table", exp.to_identifier(MERGE_SOURCE_ALIAS))
-
-            return expression
-
         if v is None:
             return v
         if isinstance(v, str):
@@ -453,7 +464,22 @@ class IncrementalByUniqueKeyKind(_IncrementalBy):
 
             return t.cast(exp.Whens, d.parse_one(v, into=exp.Whens, dialect=get_dialect(values)))
 
-        return t.cast(exp.Whens, v.transform(replace_table_references))
+        return t.cast(exp.Whens, v.transform(d.replace_merge_table_aliases))
+
+    @field_validator("merge_filter", mode="before")
+    @field_validator_v1_args
+    def _merge_filter_validator(
+        cls,
+        v: t.Optional[exp.Expression],
+        values: t.Dict[str, t.Any],
+    ) -> t.Optional[exp.Expression]:
+        if v is None:
+            return v
+        if isinstance(v, str):
+            v = v.strip()
+            return d.parse_one(v, dialect=get_dialect(values))
+
+        return v.transform(d.replace_merge_table_aliases)
 
     @property
     def data_hash_values(self) -> t.List[t.Optional[str]]:
@@ -461,6 +487,7 @@ class IncrementalByUniqueKeyKind(_IncrementalBy):
             *super().data_hash_values,
             *(gen(k) for k in self.unique_key),
             gen(self.when_matched) if self.when_matched is not None else None,
+            gen(self.merge_filter) if self.merge_filter is not None else None,
         ]
 
     def to_expression(
@@ -473,6 +500,7 @@ class IncrementalByUniqueKeyKind(_IncrementalBy):
                     {
                         "unique_key": exp.Tuple(expressions=self.unique_key),
                         "when_matched": self.when_matched,
+                        "merge_filter": self.merge_filter,
                     }
                 ),
             ],
@@ -807,6 +835,8 @@ class CustomKind(_ModelKind):
     batch_size: t.Optional[SQLGlotPositiveInt] = None
     batch_concurrency: t.Optional[SQLGlotPositiveInt] = None
     lookback: t.Optional[SQLGlotPositiveInt] = None
+    auto_restatement_cron: t.Optional[SQLGlotCron] = None
+    auto_restatement_intervals: t.Optional[SQLGlotPositiveInt] = None
 
     _properties_validator = properties_validator
 
@@ -844,6 +874,10 @@ class CustomKind(_ModelKind):
             str(self.batch_concurrency) if self.batch_concurrency is not None else None,
             str(self.forward_only),
             str(self.disable_restatement),
+            self.auto_restatement_cron,
+            str(self.auto_restatement_intervals)
+            if self.auto_restatement_intervals is not None
+            else None,
         ]
 
     def to_expression(
@@ -861,6 +895,8 @@ class CustomKind(_ModelKind):
                         "batch_size": self.batch_size,
                         "batch_concurrency": self.batch_concurrency,
                         "lookback": self.lookback,
+                        "auto_restatement_cron": self.auto_restatement_cron,
+                        "auto_restatement_intervals": self.auto_restatement_intervals,
                     }
                 ),
             ],

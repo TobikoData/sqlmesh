@@ -85,7 +85,7 @@ from sqlmesh.core.notification_target import (
 )
 from sqlmesh.core.plan import Plan, PlanBuilder
 from sqlmesh.core.reference import ReferenceGraph
-from sqlmesh.core.scheduler import Scheduler
+from sqlmesh.core.scheduler import Scheduler, CompletionStatus
 from sqlmesh.core.schema_loader import create_external_models_file
 from sqlmesh.core.selector import Selector
 from sqlmesh.core.snapshot import (
@@ -339,6 +339,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         self._metrics: UniqueKeyDict[str, Metric] = UniqueKeyDict("metrics")
         self._jinja_macros = JinjaMacroRegistry()
         self._requirements: t.Dict[str, str] = {}
+        self._excluded_requirements: t.Set[str] = set()
         self._default_catalog: t.Optional[str] = None
         self._loaded: bool = False
 
@@ -551,10 +552,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         load_start_ts = time.perf_counter()
 
         projects = []
-        self._requirements.clear()
         for context_loader in self._loaders.values():
-            for path in context_loader.configs:
-                self._load_requirements(path)
             with sys_path(*context_loader.configs):
                 projects.append(context_loader.loader.load(self, update_schemas))
 
@@ -563,6 +561,8 @@ class GenericContext(BaseContext, t.Generic[C]):
         self._macros.clear()
         self._models.clear()
         self._metrics.clear()
+        self._requirements.clear()
+        self._excluded_requirements.clear()
         for project in projects:
             self._jinja_macros = self._jinja_macros.merge(project.jinja_macros)
             self._macros.update(project.macros)
@@ -570,6 +570,8 @@ class GenericContext(BaseContext, t.Generic[C]):
             self._metrics.update(project.metrics)
             self._audits.update(project.audits)
             self._standalone_audits.update(project.standalone_audits)
+            self._requirements.update(project.requirements)
+            self._excluded_requirements.update(project.excluded_requirements)
 
         self.dag = DAG({k: v for project in projects for k, v in project.dag.graph.items()})
 
@@ -611,7 +613,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         select_models: t.Optional[t.Collection[str]] = None,
         exit_on_env_update: t.Optional[int] = None,
         no_auto_upstream: bool = False,
-    ) -> bool:
+    ) -> CompletionStatus:
         """Run the entire dag through the scheduler.
 
         Args:
@@ -686,7 +688,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                 )
 
             try:
-                success = self._run(
+                completion_status = self._run(
                     environment,
                     start=start,
                     end=end,
@@ -715,12 +717,12 @@ class GenericContext(BaseContext, t.Generic[C]):
                 )
                 raise e
 
-        if success or interrupted:
+        if completion_status.is_success or interrupted:
             self.notification_target_manager.notify(
                 NotificationEvent.RUN_END, environment=environment
             )
             self.console.log_success(f"Run finished for environment '{environment}'")
-        else:
+        elif completion_status.is_failure:
             self.notification_target_manager.notify(
                 NotificationEvent.RUN_FAILURE, "See console logs for details."
             )
@@ -732,7 +734,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         if interrupted and exit_on_env_update is not None:
             sys.exit(exit_on_env_update)
 
-        return success
+        return completion_status
 
     @python_api_analytics
     def run_janitor(self, ignore_ttl: bool) -> bool:
@@ -1278,7 +1280,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             backfill_models = {
                 *context_diff.modified_snapshots,
                 *[s.name for s in context_diff.added],
-            }
+            } or None
 
         # If no end date is specified, use the max interval end from prod
         # to prevent unintended evaluation of the entire DAG.
@@ -1915,7 +1917,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         select_models: t.Optional[t.Collection[str]],
         circuit_breaker: t.Optional[t.Callable[[], bool]],
         no_auto_upstream: bool,
-    ) -> bool:
+    ) -> CompletionStatus:
         scheduler = self.scheduler(environment=environment)
         snapshots = scheduler.snapshots
 
@@ -1932,6 +1934,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             ignore_cron=ignore_cron,
             circuit_breaker=circuit_breaker,
             selected_snapshots=select_models,
+            auto_restatement_enabled=environment.lower() == c.PROD,
         )
 
     def _apply(self, plan: Plan, circuit_breaker: t.Optional[t.Callable[[], bool]]) -> None:
@@ -2126,7 +2129,8 @@ class GenericContext(BaseContext, t.Generic[C]):
             snapshots=snapshots or self.snapshots,
             create_from=create_from or c.PROD,
             state_reader=self.state_reader,
-            requirements=self._requirements,
+            provided_requirements=self._requirements,
+            excluded_requirements=self._excluded_requirements,
             ensure_finalized_snapshots=ensure_finalized_snapshots,
         )
 
@@ -2207,24 +2211,6 @@ class GenericContext(BaseContext, t.Generic[C]):
         if not no_auto_upstream:
             result = set(dag.subdag(*result))
         return result
-
-    def _load_requirements(self, path: Path) -> None:
-        path = path / c.REQUIREMENTS
-        if path.is_file():
-            with open(path, "r", encoding="utf-8") as file:
-                for line in file:
-                    args = [k.strip() for k in line.split("==")]
-                    if len(args) != 2:
-                        raise SQLMeshError(
-                            f"Invalid lock file entry '{line.strip()}'. Only 'dep==ver' is supported"
-                        )
-                    dep, ver = args
-                    other_ver = self._requirements.get(dep, ver)
-                    if ver != other_ver:
-                        raise SQLMeshError(
-                            f"Conflicting requirement {dep}: {ver} != {other_ver}. Fix your {c.REQUIREMENTS} file."
-                        )
-                    self._requirements[dep] = ver
 
 
 class Context(GenericContext[Config]):

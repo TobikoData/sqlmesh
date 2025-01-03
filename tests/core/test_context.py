@@ -16,7 +16,7 @@ from sqlglot.errors import SchemaError
 
 from sqlmesh.core.config.gateway import GatewayConfig
 import sqlmesh.core.constants
-import sqlmesh.core.dialect as d
+from sqlmesh.core import dialect as d, constants as c
 from sqlmesh.core.config import (
     Config,
     DuckDBConnectionConfig,
@@ -588,6 +588,11 @@ def test_ignore_files(mocker: MockerFixture, tmp_path: pathlib.Path):
     )
     create_temp_file(
         tmp_path,
+        pathlib.Path(models_dir, "ignore", "inner_ignore", "inner_ignore_model.sql"),
+        "MODEL(name ignore.inner_ignore_model); SELECT 1 AS cola",
+    )
+    create_temp_file(
+        tmp_path,
         pathlib.Path(macros_dir, "macro_ignore.py"),
         """
 from sqlmesh.core.macros import macro
@@ -619,7 +624,7 @@ def test():
 """,
     )
     config = Config(
-        ignore_patterns=["models/ignore/*.sql", "macro_ignore.py", ".ipynb_checkpoints/*"]
+        ignore_patterns=["models/ignore/**/*.sql", "macro_ignore.py", ".ipynb_checkpoints/*"]
     )
     context = Context(paths=tmp_path, config=config)
 
@@ -839,9 +844,9 @@ def test_plan_default_end(sushi_context_pre_scheduling: Context):
     assert dev_plan.end is not None
     assert to_date(make_inclusive_end(dev_plan.end)) == plan_end
 
-    forward_only_dev_plan = sushi_context_pre_scheduling.plan(
-        "test_env_forward_only", no_prompts=True, include_unmodified=True, forward_only=True
-    )
+    forward_only_dev_plan = sushi_context_pre_scheduling.plan_builder(
+        "test_env_forward_only", include_unmodified=True, forward_only=True
+    ).build()
     assert forward_only_dev_plan.end is not None
     assert to_date(make_inclusive_end(forward_only_dev_plan.end)) == plan_end
     assert forward_only_dev_plan.start == plan_end
@@ -1154,3 +1159,34 @@ def test_duckdb_state_connection_automatic_multithreaded_mode(tmp_path):
     assert isinstance(state_sync, EngineAdapterStateSync)
     assert isinstance(state_sync.engine_adapter, DuckDBEngineAdapter)
     assert isinstance(state_sync.engine_adapter._connection_pool, ThreadLocalConnectionPool)
+
+
+def test_requirements(copy_to_temp_path: t.Callable):
+    from sqlmesh.utils.metaprogramming import Executable
+
+    context_path = copy_to_temp_path("examples/sushi")[0]
+
+    with open(context_path / c.REQUIREMENTS, "w") as f:
+        # Add pandas and test_package and exclude ruamel.yaml
+        f.write("pandas==2.2.2\ntest_package==1.0.0\n^ruamel.yaml\n^ruamel.yaml.clib")
+
+    context = Context(paths=context_path)
+
+    model = context.get_model("sushi.items")
+    model.python_env["ruamel"] = Executable(payload="import ruamel", kind="import")
+    model.python_env["Image"] = Executable(
+        payload="from ipywidgets.widgets.widget_media import Image", kind="import"
+    )
+
+    environment = context.plan(
+        "dev", no_prompts=True, skip_tests=True, skip_backfill=True, auto_apply=True
+    ).environment
+    requirements = {"ipywidgets", "numpy", "pandas", "test_package"}
+    assert environment.requirements["pandas"] == "2.2.2"
+    assert set(environment.requirements) == requirements
+
+    context._requirements = {"numpy": "2.1.2", "pandas": "2.2.1"}
+    context._excluded_requirements = {"ipywidgets", "ruamel.yaml", "ruamel.yaml.clib"}
+    diff = context.plan_builder("dev", skip_tests=True, skip_backfill=True).build().context_diff
+    assert set(diff.previous_requirements) == requirements
+    assert set(diff.requirements) == {"numpy", "pandas"}

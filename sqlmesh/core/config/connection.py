@@ -24,7 +24,6 @@ from sqlmesh.core.engine_adapter.shared import CatalogSupport
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import (
-    PYDANTIC_MAJOR_VERSION,
     field_validator,
     model_validator,
     model_validator_v1_args,
@@ -140,13 +139,18 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
     """Common configuration for the DuckDB-based connections.
 
     Args:
+        database: The optional database name. If not specified, the in-memory database will be used.
+        catalogs: Key is the name of the catalog and value is the path.
         extensions: A list of autoloadable extensions to load.
         connector_config: A dictionary of configuration to pass into the duckdb connector.
         concurrent_tasks: The maximum number of tasks that can use this connection concurrently.
         register_comments: Whether or not to register model comments with the SQL engine.
         pre_ping: Whether or not to pre-ping the connection before starting a new transaction to ensure it is still alive.
+        token: The optional MotherDuck token. If not specified and a MotherDuck path is in the catalog, the user will be prompted to login with their web browser.
     """
 
+    database: t.Optional[str] = None
+    catalogs: t.Optional[t.Dict[str, t.Union[str, DuckDBAttachOptions]]] = None
     extensions: t.List[t.Union[str, t.Dict[str, t.Any]]] = []
     connector_config: t.Dict[str, t.Any] = {}
 
@@ -154,136 +158,7 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
     register_comments: bool = True
     pre_ping: t.Literal[False] = False
 
-    @property
-    def _engine_adapter(self) -> t.Type[EngineAdapter]:
-        return engine_adapter.DuckDBEngineAdapter
-
-    @property
-    def _connection_factory(self) -> t.Callable:
-        import duckdb
-
-        return duckdb.connect
-
-    @property
-    def _cursor_init(self) -> t.Optional[t.Callable[[t.Any], None]]:
-        """A function that is called to initialize the cursor"""
-        import duckdb
-        from duckdb import BinderException
-
-        def init(cursor: duckdb.DuckDBPyConnection) -> None:
-            for extension in self.extensions:
-                extension = extension if isinstance(extension, dict) else {"name": extension}
-
-                install_command = f"INSTALL {extension['name']}"
-
-                if extension.get("repository"):
-                    install_command = f"{install_command} FROM {extension['repository']}"
-
-                if extension.get("force_install"):
-                    install_command = f"FORCE {install_command}"
-
-                try:
-                    cursor.execute(install_command)
-                    cursor.execute(f"LOAD {extension['name']}")
-                except Exception as e:
-                    raise ConfigError(f"Failed to load extension {extension['name']}: {e}")
-
-            for field, setting in self.connector_config.items():
-                try:
-                    cursor.execute(f"SET {field} = '{setting}'")
-                except Exception as e:
-                    raise ConfigError(f"Failed to set connector config {field} to {setting}: {e}")
-
-            for i, (alias, path_options) in enumerate(
-                (getattr(self, "catalogs", None) or {}).items()
-            ):
-                # we parse_identifier and generate to ensure that `alias` has exactly one set of quotes
-                # regardless of whether it comes in quoted or not
-                alias = exp.parse_identifier(alias, dialect="duckdb").sql(
-                    identify=True, dialect="duckdb"
-                )
-                try:
-                    query = (
-                        path_options.to_sql(alias)
-                        if isinstance(path_options, DuckDBAttachOptions)
-                        else f"ATTACH '{path_options}' AS {alias}"
-                    )
-                    cursor.execute(query)
-                except BinderException as e:
-                    # If a user tries to create a catalog pointing at `:memory:` and with the name `memory`
-                    # then we don't want to raise since this happens by default. They are just doing this to
-                    # set it as the default catalog.
-                    if not (
-                        'database with name "memory" already exists' in str(e)
-                        and path_options == ":memory:"
-                    ):
-                        raise e
-                if i == 0 and not getattr(self, "database", None):
-                    cursor.execute(f"USE {alias}")
-
-        return init
-
-
-class MotherDuckConnectionConfig(BaseDuckDBConnectionConfig):
-    """Configuration for the MotherDuck connection.
-
-    Args:
-        database: The database name.
-        token: The optional MotherDuck token. If not specified, the user will be prompted to login with their web browser.
-    """
-
-    database: str
     token: t.Optional[str] = None
-
-    type_: t.Literal["motherduck"] = Field(alias="type", default="motherduck")
-
-    @property
-    def _connection_kwargs_keys(self) -> t.Set[str]:
-        return set()
-
-    @property
-    def _static_connection_kwargs(self) -> t.Dict[str, t.Any]:
-        """kwargs that are for execution config only"""
-        from sqlmesh import __version__
-
-        connection_str = f"md:{self.database}"
-        if self.token:
-            connection_str += f"?motherduck_token={self.token}"
-        return {
-            "database": connection_str,
-            "config": {"custom_user_agent": f"SQLMesh/{__version__}"},
-        }
-
-
-class DuckDBAttachOptions(BaseConfig):
-    type: str
-    path: str
-    read_only: bool = False
-
-    def to_sql(self, alias: str) -> str:
-        options = []
-        # 'duckdb' is actually not a supported type, but we'd like to allow it for
-        # fully qualified attach options or integration testing, similar to duckdb-dbt
-        if self.type != "duckdb":
-            options.append(f"TYPE {self.type.upper()}")
-        if self.read_only:
-            options.append("READ_ONLY")
-        options_sql = f" ({', '.join(options)})" if options else ""
-        return f"ATTACH '{self.path}' AS {alias}{options_sql}"
-
-
-class DuckDBConnectionConfig(BaseDuckDBConnectionConfig):
-    """Configuration for the DuckDB connection.
-
-    Args:
-        database: The optional database name. If not specified, the in-memory database will be used.
-        catalogs: Key is the name of the catalog and value is the path.
-    """
-
-    database: t.Optional[str] = None
-    catalogs: t.Optional[t.Dict[str, t.Union[str, DuckDBAttachOptions]]] = None
-
-    type_: t.Literal["duckdb"] = Field(alias="type", default="duckdb")
 
     _data_file_to_adapter: t.ClassVar[t.Dict[str, EngineAdapter]] = {}
 
@@ -292,11 +167,19 @@ class DuckDBConnectionConfig(BaseDuckDBConnectionConfig):
     def _validate_database_catalogs(
         cls, values: t.Dict[str, t.Optional[str]]
     ) -> t.Dict[str, t.Optional[str]]:
-        if values.get("database") and values.get("catalogs"):
+        if db_path := values.get("database") and values.get("catalogs"):
             raise ConfigError(
                 "Cannot specify both `database` and `catalogs`. Define all your catalogs in `catalogs` and have the first entry be the default catalog"
             )
+        if isinstance(db_path, str) and db_path.startswith("md:"):
+            raise ConfigError(
+                "Please use connection type 'motherduck' without the `md:` prefix if you want to use a MotherDuck database as the single `database`."
+            )
         return values
+
+    @property
+    def _engine_adapter(self) -> t.Type[EngineAdapter]:
+        return engine_adapter.DuckDBEngineAdapter
 
     @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
@@ -343,7 +226,69 @@ class DuckDBConnectionConfig(BaseDuckDBConnectionConfig):
 
             return _factory
 
-        return super()._connection_factory
+        return duckdb.connect
+
+    @property
+    def _cursor_init(self) -> t.Optional[t.Callable[[t.Any], None]]:
+        """A function that is called to initialize the cursor"""
+        import duckdb
+        from duckdb import BinderException
+
+        def init(cursor: duckdb.DuckDBPyConnection) -> None:
+            for extension in self.extensions:
+                extension = extension if isinstance(extension, dict) else {"name": extension}
+
+                install_command = f"INSTALL {extension['name']}"
+
+                if extension.get("repository"):
+                    install_command = f"{install_command} FROM {extension['repository']}"
+
+                if extension.get("force_install"):
+                    install_command = f"FORCE {install_command}"
+
+                try:
+                    cursor.execute(install_command)
+                    cursor.execute(f"LOAD {extension['name']}")
+                except Exception as e:
+                    raise ConfigError(f"Failed to load extension {extension['name']}: {e}")
+
+            for field, setting in self.connector_config.items():
+                try:
+                    cursor.execute(f"SET {field} = '{setting}'")
+                except Exception as e:
+                    raise ConfigError(f"Failed to set connector config {field} to {setting}: {e}")
+
+            for i, (alias, path_options) in enumerate(
+                (getattr(self, "catalogs", None) or {}).items()
+            ):
+                # we parse_identifier and generate to ensure that `alias` has exactly one set of quotes
+                # regardless of whether it comes in quoted or not
+                alias = exp.parse_identifier(alias, dialect="duckdb").sql(
+                    identify=True, dialect="duckdb"
+                )
+                try:
+                    if isinstance(path_options, DuckDBAttachOptions):
+                        query = path_options.to_sql(alias)
+                    else:
+                        query = f"ATTACH '{path_options}'"
+                        if not path_options.startswith("md:"):
+                            query += f" AS {alias}"
+                        elif self.token:
+                            query += f"?motherduck_token={self.token}"
+                    cursor.execute(query)
+                except BinderException as e:
+                    # If a user tries to create a catalog pointing at `:memory:` and with the name `memory`
+                    # then we don't want to raise since this happens by default. They are just doing this to
+                    # set it as the default catalog.
+                    if not (
+                        'database with name "memory" already exists' in str(e)
+                        and path_options == ":memory:"
+                    ):
+                        raise e
+                if i == 0 and not getattr(self, "database", None):
+                    cursor.execute(f"USE {alias}")
+
+        return init
 
     def create_engine_adapter(self, register_comments_override: bool = False) -> EngineAdapter:
         """Checks if another engine adapter has already been created that shares a catalog that points to the same data
@@ -351,11 +296,17 @@ class DuckDBConnectionConfig(BaseDuckDBConnectionConfig):
         associated with the new adapter will be ignored."""
         data_files = set((self.catalogs or {}).values())
         if self.database:
-            data_files.add(self.database)
+            if isinstance(self, MotherDuckConnectionConfig):
+                data_files.add(
+                    f"md:{self.database}"
+                    + (f"?motherduck_token={self.token}" if self.token else "")
+                )
+            else:
+                data_files.add(self.database)
         data_files.discard(":memory:")
         for data_file in data_files:
             key = data_file if isinstance(data_file, str) else data_file.path
-            if adapter := DuckDBConnectionConfig._data_file_to_adapter.get(key):
+            if adapter := BaseDuckDBConnectionConfig._data_file_to_adapter.get(key):
                 logger.info(f"Using existing DuckDB adapter due to overlapping data file: {key}")
                 return adapter
 
@@ -366,16 +317,69 @@ class DuckDBConnectionConfig(BaseDuckDBConnectionConfig):
         adapter = super().create_engine_adapter(register_comments_override)
         for data_file in data_files:
             key = data_file if isinstance(data_file, str) else data_file.path
-            DuckDBConnectionConfig._data_file_to_adapter[key] = adapter
+            BaseDuckDBConnectionConfig._data_file_to_adapter[key] = adapter
         return adapter
 
     def get_catalog(self) -> t.Optional[str]:
         if self.database:
             # Remove `:` from the database name in order to handle if `:memory:` is passed in
-            return pathlib.Path(self.database.replace(":", "")).stem
+            return pathlib.Path(self.database.replace(":memory:", "memory")).stem
         if self.catalogs:
             return list(self.catalogs)[0]
         return None
+
+
+class MotherDuckConnectionConfig(BaseDuckDBConnectionConfig):
+    """Configuration for the MotherDuck connection."""
+
+    type_: t.Literal["motherduck"] = Field(alias="type", default="motherduck")
+
+    @property
+    def _connection_kwargs_keys(self) -> t.Set[str]:
+        return set()
+
+    @property
+    def _static_connection_kwargs(self) -> t.Dict[str, t.Any]:
+        """kwargs that are for execution config only"""
+        from sqlmesh import __version__
+
+        custom_user_agent_config = {"custom_user_agent": f"SQLMesh/{__version__}"}
+        if not self.database:
+            return {"config": custom_user_agent_config}
+        connection_str = f"md:{self.database or ''}"
+        if self.token:
+            connection_str += f"?motherduck_token={self.token}"
+        return {"database": connection_str, "config": custom_user_agent_config}
+
+
+class DuckDBAttachOptions(BaseConfig):
+    type: str
+    path: str
+    read_only: bool = False
+    token: t.Optional[str] = None
+
+    def to_sql(self, alias: str) -> str:
+        options = []
+        # 'duckdb' is actually not a supported type, but we'd like to allow it for
+        # fully qualified attach options or integration testing, similar to duckdb-dbt
+        if self.type not in ("duckdb", "motherduck"):
+            options.append(f"TYPE {self.type.upper()}")
+        if self.read_only:
+            options.append("READ_ONLY")
+        # TODO: Add support for Postgres schema. Currently adding it blocks access to the information_schema
+        alias_sql = (
+            # MotherDuck does not support aliasing
+            f" AS {alias}" if not (self.type == "motherduck" or self.path.startswith("md:")) else ""
+        )
+        options_sql = f" ({', '.join(options)})" if options else ""
+        token_sql = "?" + self.token if self.token else ""
+        return f"ATTACH '{self.path}{token_sql}'{alias_sql}{options_sql}"
+
+
+class DuckDBConnectionConfig(BaseDuckDBConnectionConfig):
+    """Configuration for the DuckDB connection."""
+
+    type_: t.Literal["duckdb"] = Field(alias="type", default="duckdb")
 
 
 class SnowflakeConnectionConfig(ConnectionConfig):
@@ -1813,10 +1817,8 @@ if t.TYPE_CHECKING:
     # TypeAlias hasn't been introduced until Python 3.10 which means that we can't use it
     # outside the TYPE_CHECKING guard.
     SerializableConnectionConfig: t.TypeAlias = ConnectionConfig  # type: ignore
-elif PYDANTIC_MAJOR_VERSION >= 2:
+else:
     import pydantic
 
     # Workaround for https://docs.pydantic.dev/latest/concepts/serialization/#serializing-with-duck-typing
     SerializableConnectionConfig = pydantic.SerializeAsAny[ConnectionConfig]  # type: ignore
-else:
-    SerializableConnectionConfig = ConnectionConfig  # type: ignore

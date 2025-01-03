@@ -1,8 +1,7 @@
 from __future__ import annotations
-
+from enum import Enum
 import logging
 import typing as t
-
 from sqlglot import exp
 
 from sqlmesh.core import constants as c
@@ -16,19 +15,26 @@ from sqlmesh.core.notification_target import (
 from sqlmesh.core.snapshot import (
     DeployabilityIndex,
     Snapshot,
+    SnapshotId,
     SnapshotEvaluator,
+    apply_auto_restatements,
     earliest_start_date,
     missing_intervals,
+    merge_intervals,
     Intervals,
 )
-from sqlmesh.core.snapshot.definition import Interval, expand_range
-from sqlmesh.core.snapshot.definition import SnapshotId, merge_intervals
+from sqlmesh.core.snapshot.definition import (
+    Interval,
+    expand_range,
+    get_next_model_interval_start,
+)
 from sqlmesh.core.state_sync import StateSync
 from sqlmesh.utils import format_exception
 from sqlmesh.utils.concurrency import concurrent_apply_to_dag, NodeExecutionFailedError
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import (
     TimeLike,
+    format_tz_datetime,
     now,
     now_timestamp,
     to_timestamp,
@@ -41,6 +47,24 @@ SnapshotToIntervals = t.Dict[Snapshot, Intervals]
 # we store snapshot name instead of snapshots/snapshotids because pydantic
 # is extremely slow to hash. snapshot names should be unique within a dag run
 SchedulingUnit = t.Tuple[str, t.Tuple[Interval, int]]
+
+
+class CompletionStatus(Enum):
+    SUCCESS = "success"
+    FAILURE = "failure"
+    NOTHING_TO_DO = "nothing_to_do"
+
+    @property
+    def is_success(self) -> bool:
+        return self == CompletionStatus.SUCCESS
+
+    @property
+    def is_failure(self) -> bool:
+        return self == CompletionStatus.FAILURE
+
+    @property
+    def is_nothing_to_do(self) -> bool:
+        return self == CompletionStatus.NOTHING_TO_DO
 
 
 class Scheduler:
@@ -116,8 +140,6 @@ class Scheduler:
         validate_date_range(start, end)
 
         snapshots: t.Collection[Snapshot] = self.snapshot_per_version.values()
-        self.state_sync.refresh_snapshot_intervals(snapshots)
-
         snapshots_to_intervals = compute_interval_params(
             snapshots,
             start=start or earliest_start_date(snapshots),
@@ -156,6 +178,7 @@ class Scheduler:
             execution_time: The date/time time reference to use for execution time. Defaults to now.
             deployability_index: Determines snapshots that are deployable in the context of this evaluation.
             batch_index: If the snapshot is part of a batch of related snapshots; which index in the batch is it
+            auto_restatement_enabled: Whether to enable auto restatements.
             kwargs: Additional kwargs to pass to the renderer.
         """
         validate_date_range(start, end)
@@ -225,7 +248,8 @@ class Scheduler:
         selected_snapshots: t.Optional[t.Set[str]] = None,
         circuit_breaker: t.Optional[t.Callable[[], bool]] = None,
         deployability_index: t.Optional[DeployabilityIndex] = None,
-    ) -> bool:
+        auto_restatement_enabled: bool = False,
+    ) -> CompletionStatus:
         """Concurrently runs all snapshots in topological order.
 
         Args:
@@ -243,6 +267,7 @@ class Scheduler:
             selected_snapshots: A set of snapshot names to run. If not provided, all snapshots will be run.
             circuit_breaker: An optional handler which checks if the run should be aborted.
             deployability_index: Determines snapshots that are deployable in the context of this render.
+            auto_restatement_enabled: Whether to enable auto restatements.
 
         Returns:
             True if the execution was successful and False otherwise.
@@ -266,6 +291,15 @@ class Scheduler:
             else DeployabilityIndex.all_deployable()
         )
         execution_time = execution_time or now()
+
+        self.state_sync.refresh_snapshot_intervals(self.snapshots.values())
+        if auto_restatement_enabled:
+            auto_restated_intervals = apply_auto_restatements(self.snapshots, execution_time)
+            self.state_sync.add_snapshots_intervals(auto_restated_intervals)
+            self.state_sync.update_auto_restatements(
+                {s.name_version: s.next_auto_restatement_ts for s in self.snapshots.values()}
+            )
+
         merged_intervals = self.merged_missing_intervals(
             start,
             end,
@@ -277,8 +311,17 @@ class Scheduler:
             end_bounded=end_bounded,
             selected_snapshots=selected_snapshots,
         )
+
         if not merged_intervals:
-            return True
+            next_ready_interval_start = get_next_model_interval_start(self.snapshots.values())
+
+            utc_time = format_tz_datetime(next_ready_interval_start)
+            local_time = format_tz_datetime(next_ready_interval_start, use_local_timezone=True)
+
+            self.console.log_status_update(
+                f"No models are ready to run. Please wait until a model `cron` interval has elapsed.\n\nNext run will be ready at {local_time} ({utc_time})."
+            )
+            return CompletionStatus.NOTHING_TO_DO
 
         errors, skipped_intervals = self.run_merged_intervals(
             merged_intervals=merged_intervals,
@@ -308,7 +351,7 @@ class Scheduler:
             # Log with INFO level to prevent duplicate messages in the console.
             logger.info(log_message)
 
-        return not errors
+        return CompletionStatus.FAILURE if errors else CompletionStatus.SUCCESS
 
     def batch_intervals(
         self,

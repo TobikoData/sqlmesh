@@ -78,6 +78,7 @@ class ModelMeta(_Node):
     enabled: bool = True
     physical_version: t.Optional[str] = None
     gateway: t.Optional[str] = None
+    optimize_query: t.Optional[bool] = None
 
     _bool_validator = bool_validator
     _model_kind_validator = model_kind_validator
@@ -433,6 +434,12 @@ class ModelMeta(_Node):
     def when_matched(self) -> t.Optional[exp.Whens]:
         if isinstance(self.kind, IncrementalByUniqueKeyKind):
             return self.kind.when_matched
+        return None
+
+    @property
+    def merge_filter(self) -> t.Optional[exp.Expression]:
+        if isinstance(self.kind, IncrementalByUniqueKeyKind):
+            return self.kind.merge_filter
         return None
 
     @property

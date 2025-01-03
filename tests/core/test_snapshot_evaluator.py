@@ -561,7 +561,7 @@ def test_evaluate_materialized_view_with_partitioned_by_cluster_by(
         [
             call("CREATE SCHEMA IF NOT EXISTS `sqlmesh__test_schema`"),
             call(
-                "CREATE MATERIALIZED VIEW `sqlmesh__test_schema`.`test_schema__test_model__3674208014` PARTITION BY `a` CLUSTER BY `b` AS SELECT `a` AS `a`, `b` AS `b` FROM `tbl` AS `tbl`"
+                f"CREATE MATERIALIZED VIEW `sqlmesh__test_schema`.`test_schema__test_model__{snapshot.version}` PARTITION BY `a` CLUSTER BY `b` AS SELECT `a` AS `a`, `b` AS `b` FROM `tbl` AS `tbl`"
             ),
         ]
     )
@@ -2018,6 +2018,7 @@ def test_create_incremental_by_unique_key_updated_at_exp(adapter_mock, make_snap
             "updated_at": exp.DataType.build("TIMESTAMP"),
         },
         unique_key=[exp.to_column("id", quoted=True)],
+        merge_filter=None,
         when_matched=exp.Whens(
             expressions=[
                 exp.When(
@@ -2082,6 +2083,7 @@ def test_create_incremental_by_unique_key_multiple_updated_at_exp(adapter_mock, 
             "updated_at": exp.DataType.build("TIMESTAMP"),
         },
         unique_key=[exp.to_column("id", quoted=True)],
+        merge_filter=None,
         when_matched=exp.Whens(
             expressions=[
                 exp.When(
@@ -2172,6 +2174,75 @@ def test_create_incremental_by_unique_no_intervals(adapter_mock, make_snapshot):
         table_properties={},
     )
     adapter_mock.columns.assert_called_once_with(snapshot.table_name())
+
+
+def test_create_incremental_by_unique_key_merge_filter(adapter_mock, make_snapshot):
+    evaluator = SnapshotEvaluator(adapter_mock)
+    model = load_sql_based_model(
+        d.parse(
+            """
+            MODEL (
+                name test_schema.test_model,
+                kind INCREMENTAL_BY_UNIQUE_KEY (
+                    unique_key [id],
+                    merge_filter source.id > 0 and target.updated_at < TIMESTAMP("2020-02-05"),
+                    when_matched WHEN MATCHED THEN UPDATE SET target.updated_at = COALESCE(source.updated_at, target.updated_at),
+                )
+            );
+
+            SELECT id::int, updated_at::timestamp FROM tbl;
+            """
+        )
+    )
+
+    snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    snapshot.intervals = [(to_timestamp("2020-01-01"), to_timestamp("2020-01-02"))]
+
+    evaluator.evaluate(
+        snapshot,
+        start="2020-01-01",
+        end="2020-01-02",
+        execution_time="2020-01-02",
+        snapshots={},
+    )
+
+    adapter_mock.merge.assert_called_once_with(
+        snapshot.table_name(),
+        model.render_query(),
+        columns_to_types={
+            "id": exp.DataType.build("INT"),
+            "updated_at": exp.DataType.build("TIMESTAMP"),
+        },
+        unique_key=[exp.to_column("id", quoted=True)],
+        when_matched=exp.Whens(
+            expressions=[
+                exp.When(
+                    matched=True,
+                    then=exp.Update(
+                        expressions=[
+                            exp.column("updated_at", MERGE_TARGET_ALIAS).eq(
+                                exp.Coalesce(
+                                    this=exp.column("updated_at", MERGE_SOURCE_ALIAS),
+                                    expressions=[exp.column("updated_at", MERGE_TARGET_ALIAS)],
+                                )
+                            ),
+                        ],
+                    ),
+                )
+            ]
+        ),
+        merge_filter=exp.And(
+            this=exp.GT(
+                this=exp.column("id", MERGE_SOURCE_ALIAS),
+                expression=exp.Literal(this="0", is_string=False),
+            ),
+            expression=exp.LT(
+                this=exp.column("updated_at", MERGE_TARGET_ALIAS),
+                expression=exp.Timestamp(this=exp.column("2020-02-05", quoted=True)),
+            ),
+        ),
+    )
 
 
 def test_create_seed(mocker: MockerFixture, adapter_mock, make_snapshot):
@@ -2862,12 +2933,9 @@ def test_cleanup_managed(adapter_mock, make_snapshot, mocker: MockerFixture):
 
     evaluator.cleanup(target_snapshots=[cleanup_task])
 
-    adapter_mock.drop_table.assert_called_once_with(
-        "sqlmesh__test_schema.test_schema__test_model__14485873__temp"
-    )
-    adapter_mock.drop_managed_table.assert_called_once_with(
-        "sqlmesh__test_schema.test_schema__test_model__14485873"
-    )
+    physical_name = f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}"
+    adapter_mock.drop_table.assert_called_once_with(f"{physical_name}__temp")
+    adapter_mock.drop_managed_table.assert_called_once_with(f"{physical_name}")
 
 
 def test_create_managed_forward_only_with_previous_version_doesnt_clone_for_dev_preview(
@@ -3378,7 +3446,7 @@ def test_multi_engine_python_model_with_macros(adapters, make_snapshot):
             return None
 
     @model(
-        "db.test_model",
+        "db.multi_engine_test_model",
         kind="full",
         gateway="secondary",
         columns={"id": "string", "name": "string"},
@@ -3395,7 +3463,7 @@ def test_multi_engine_python_model_with_macros(adapters, make_snapshot):
             ]
         )
 
-    python_model = model.get_registry()["db.test_model"].model(
+    python_model = model.get_registry()["db.multi_engine_test_model"].model(
         module_path=Path("."),
         path=Path("."),
         macros=macro.get_registry(),
@@ -3415,7 +3483,7 @@ def test_multi_engine_python_model_with_macros(adapters, make_snapshot):
     # Validate model-specific gateway usage during table creation
     create_args = engine_adapters["secondary"].create_table.call_args_list
     assert len(create_args) == 1
-    assert create_args[0][0] == (f"sqlmesh__db.db__test_model__{snapshot.version}",)
+    assert create_args[0][0] == (f"sqlmesh__db.db__multi_engine_test_model__{snapshot.version}",)
 
     evaluator.promote([snapshot], EnvironmentNamingInfo(name="test_env"))
 
@@ -3423,7 +3491,7 @@ def test_multi_engine_python_model_with_macros(adapters, make_snapshot):
     engine_adapters["secondary"].create_view.assert_not_called()
     view_args = engine_adapters["default"].create_view.call_args_list
     assert len(view_args) == 1
-    assert view_args[0][0][0] == "db__test_env.test_model"
+    assert view_args[0][0][0] == "db__test_env.multi_engine_test_model"
 
     # For the pre/post statements verify the model-specific gateway was used
     engine_adapters["default"].execute.assert_not_called()

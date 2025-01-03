@@ -11,8 +11,8 @@ from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
+import time_machine
 from io import StringIO
-from freezegun import freeze_time
 from pandas.api.types import is_object_dtype
 from sqlglot import Dialect, exp
 from sqlglot.optimizer.annotate_types import annotate_types
@@ -24,7 +24,7 @@ from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.macros import RuntimeStage
 from sqlmesh.core.model import Model, PythonModel, SqlModel
 from sqlmesh.utils import UniqueKeyDict, random_id, type_is_known, yaml
-from sqlmesh.utils.date import date_dict, pandas_timestamp_to_pydatetime
+from sqlmesh.utils.date import date_dict, pandas_timestamp_to_pydatetime, to_datetime
 from sqlmesh.utils.errors import ConfigError, TestError
 from sqlmesh.utils.yaml import load as yaml_load
 
@@ -104,6 +104,10 @@ class ModelTest(unittest.TestCase):
 
         self._transforms = self._test_adapter_dialect.generator_class.TRANSFORMS
         self._execution_time = str(self.body.get("vars", {}).get("execution_time") or "")
+
+        if self._execution_time:
+            # Normalizes the execution time by converting it into UTC timezone
+            self._execution_time = str(to_datetime(self._execution_time))
 
         # When execution_time is set, we mock the CURRENT_* SQL expressions so they always return it
         if self._execution_time:
@@ -649,7 +653,11 @@ class PythonModelTest(ModelTest):
 
     def _execute_model(self) -> pd.DataFrame:
         """Executes the python model and returns a DataFrame."""
-        time_ctx = freeze_time(self._execution_time) if self._execution_time else nullcontext()
+        time_ctx = (
+            time_machine.travel(self._execution_time, tick=False)
+            if self._execution_time
+            else nullcontext()
+        )
         with patch.dict(self._test_adapter_dialect.generator_class.TRANSFORMS, self._transforms):
             with t.cast(AbstractContextManager, time_ctx):
                 variables = self.body.get("vars", {}).copy()

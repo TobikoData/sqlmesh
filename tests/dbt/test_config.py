@@ -94,6 +94,10 @@ def test_model_to_sqlmesh_fields():
         start="Jan 1 2023",
         partition_by=["a"],
         cluster_by=["a", '"b"'],
+        incremental_predicates=[
+            "55 > DBT_INTERNAL_SOURCE.b",
+            "DBT_INTERNAL_DEST.session_start > dateadd(day, -7, current_date)",
+        ],
         cron="@hourly",
         interval_unit="FIVE_MINUTE",
         batch_size=5,
@@ -129,6 +133,10 @@ def test_model_to_sqlmesh_fields():
     assert kind.batch_size == 5
     assert kind.lookback == 3
     assert kind.on_destructive_change == OnDestructiveChange.ALLOW
+    assert (
+        kind.merge_filter.sql()
+        == "55 > __MERGE_SOURCE__.b AND __MERGE_TARGET__.session_start > DATEADD(day, -7, CURRENT_DATE)"
+    )
 
     model = model_config.update_with({"dialect": "snowflake"}).to_sqlmesh(context)
     assert model.dialect == "snowflake"
@@ -346,6 +354,18 @@ def test_variables(assert_exp_eq, sushi_test_project):
         "top_waiters:limit": 10,
         "top_waiters:revenue": "revenue",
         "customers:boo": ["a", "b"],
+        "nested_vars": {
+            "some_nested_var": 2,
+        },
+        "list_var": [
+            {"name": "item1", "value": 1},
+            {"name": "item2", "value": 2},
+        ],
+        "customers": {
+            "customers:bla": False,
+            "customers:customer_id": "customer_id",
+            "some_var": ["foo", "bar"],
+        },
     }
     expected_customer_variables = {
         "some_var": ["foo", "bar"],
@@ -357,10 +377,32 @@ def test_variables(assert_exp_eq, sushi_test_project):
         "top_waiters:limit": 10,
         "top_waiters:revenue": "revenue",
         "customers:boo": ["a", "b"],
+        "nested_vars": {
+            "some_nested_var": 2,
+        },
+        "list_var": [
+            {"name": "item1", "value": 1},
+            {"name": "item2", "value": 2},
+        ],
+        "customers": {
+            "customers:bla": False,
+            "customers:customer_id": "customer_id",
+            "some_var": ["foo", "bar"],
+        },
     }
 
     assert sushi_test_project.packages["sushi"].variables == expected_sushi_variables
     assert sushi_test_project.packages["customers"].variables == expected_customer_variables
+
+
+def test_nested_variables(sushi_test_project):
+    model_config = ModelConfig(
+        alias="sushi.test_nested",
+        sql="SELECT {{ var('nested_vars')['some_nested_var'] }}",
+        dependencies=Dependencies(variables=["nested_vars"]),
+    )
+    sqlmesh_model = model_config.to_sqlmesh(sushi_test_project.context)
+    assert sqlmesh_model.jinja_macros.global_objs["vars"]["nested_vars"] == {"some_nested_var": 2}
 
 
 def test_source_config(sushi_test_project: Project):

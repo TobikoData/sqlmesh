@@ -26,7 +26,7 @@ class GithubCICDBotConfig(BaseConfig):
     default_pr_start: t.Optional[TimeLike] = None
     skip_pr_backfill: bool = True
     pr_include_unmodified: t.Optional[bool] = None
-    run_on_deploy_to_prod: bool = True
+    run_on_deploy_to_prod: bool = False
     pr_environment_name: t.Optional[str] = None
 
     @model_validator(mode="before")

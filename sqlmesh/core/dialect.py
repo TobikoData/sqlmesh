@@ -116,6 +116,7 @@ def _parse_statement(self: Parser) -> t.Optional[exp.Expression]:
         return None
 
     parser = PARSERS.get(self._curr.text.upper())
+    error_msg = None
 
     if parser:
         # Capture any available description in the form of a comment
@@ -125,7 +126,8 @@ def _parse_statement(self: Parser) -> t.Optional[exp.Expression]:
         try:
             self._advance()
             meta = self._parse_wrapped(lambda: t.cast(t.Callable, parser)(self))
-        except ParseError:
+        except ParseError as parse_error:
+            error_msg = parse_error.args[0]
             self._retreat(index)
 
         # Only return the DDL expression if we actually managed to parse one. This is
@@ -135,7 +137,12 @@ def _parse_statement(self: Parser) -> t.Optional[exp.Expression]:
             meta.comments = comments
             return meta
 
-    return self.__parse_statement()  # type: ignore
+    try:
+        return self.__parse_statement()  # type: ignore
+    except ParseError:
+        if error_msg:
+            raise ParseError(error_msg)
+        raise
 
 
 def _parse_lambda(self: Parser, alias: bool = False) -> t.Optional[exp.Expression]:
@@ -422,6 +429,8 @@ def _parse_props(self: Parser) -> t.Optional[exp.Expression]:
             lambda: _parse_macro_or_clause(self, self._parse_when_matched),
             optional=True,
         )
+    elif name == "merge_filter":
+        value = self._parse_conjunction()
     elif self._match(TokenType.L_PAREN):
         value = self.expression(exp.Tuple, expressions=self._parse_csv(self._parse_equality))
         self._match_r_paren()
@@ -555,6 +564,11 @@ def _create_parser(parser_type: t.Type[exp.Expression], table_keys: t.List[str])
 
             if key in table_keys:
                 value = self._parse_table_parts()
+                if value and self._prev.token_type == TokenType.STRING:
+                    self.raise_error(
+                        f"'{key}' property cannot be a string value: {value}. "
+                        "Please use the identifier syntax instead, e.g. foo.bar instead of 'foo.bar'"
+                    )
             elif key == "columns":
                 value = self._parse_schema()
             elif key == "kind":
@@ -1248,3 +1262,19 @@ def extract_func_call(
 
 def is_meta_expression(v: t.Any) -> bool:
     return isinstance(v, (Audit, Metric, Model))
+
+
+def replace_merge_table_aliases(expression: exp.Expression) -> exp.Expression:
+    """
+    Resolves references from the "source" and "target" tables (or their DBT equivalents)
+    with the corresponding SQLMesh merge aliases (MERGE_SOURCE_ALIAS and MERGE_TARGET_ALIAS)
+    """
+    from sqlmesh.core.engine_adapter.base import MERGE_SOURCE_ALIAS, MERGE_TARGET_ALIAS
+
+    if isinstance(expression, exp.Column):
+        if expression.table.lower() in ("target", "dbt_internal_dest"):
+            expression.set("table", exp.to_identifier(MERGE_TARGET_ALIAS))
+        elif expression.table.lower() in ("source", "dbt_internal_source"):
+            expression.set("table", exp.to_identifier(MERGE_SOURCE_ALIAS))
+
+    return expression

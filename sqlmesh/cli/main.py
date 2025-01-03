@@ -472,8 +472,8 @@ def run(ctx: click.Context, environment: t.Optional[str] = None, **kwargs: t.Any
     """Evaluate missing intervals for the target environment."""
     context = ctx.obj
     select_models = kwargs.pop("select_model") or None
-    success = context.run(environment, select_models=select_models, **kwargs)
-    if not success:
+    completion_status = context.run(environment, select_models=select_models, **kwargs)
+    if completion_status.is_failure:
         raise click.ClickException("Run DAG Failed. See output for details.")
 
 
@@ -958,6 +958,6 @@ def dlt_refresh(
     sqlmesh_models = generate_dlt_models(ctx.obj, pipeline, list(table or []), force)
     if sqlmesh_models:
         model_names = "\n".join([f"- {model_name}" for model_name in sqlmesh_models])
-        ctx.obj.console.log_success(f"Updatde SQLMesh project with models:\n{model_names}")
+        ctx.obj.console.log_success(f"Updated SQLMesh project with models:\n{model_names}")
     else:
         ctx.obj.console.log_success("All SQLMesh models are up to date.")

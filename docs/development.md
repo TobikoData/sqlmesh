@@ -28,9 +28,17 @@ Run Airflow tests that will run when PR is merged to main:
 ```bash
 make airflow-docker-test-with-env
 ```
+Install docs dependencies:
+```bash
+make install-doc
+```
 Run docs server:
 ```bash
 make docs-serve
+```
+Run docs tests:
+```bash
+make doc-test
 ```
 Run ide:
 ```bash

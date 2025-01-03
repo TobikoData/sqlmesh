@@ -30,6 +30,7 @@ from sqlmesh.core.context import Context
 from sqlmesh.core.config.categorizer import CategorizerConfig
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.environment import EnvironmentNamingInfo
+from sqlmesh.core.macros import macro
 from sqlmesh.core.model import (
     IncrementalByTimeRangeKind,
     IncrementalByUniqueKeyKind,
@@ -181,7 +182,7 @@ def test_forward_only_plan_with_effective_date(context_fixture: Context, request
         pd.to_datetime("2023-01-07"),
     ]
 
-    prod_plan = context.plan(no_prompts=True, skip_tests=True)
+    prod_plan = context.plan_builder(skip_tests=True).build()
     # Make sure that the previously set effective_from is respected
     assert prod_plan.start == to_timestamp("2023-01-04")
     assert prod_plan.missing_intervals == [
@@ -231,7 +232,7 @@ def test_forward_only_model_regular_plan(init_and_plan_context: t.Callable):
     snapshot = context.get_snapshot(model, raise_if_missing=True)
     top_waiters_snapshot = context.get_snapshot("sushi.top_waiters", raise_if_missing=True)
 
-    plan = context.plan("dev", no_prompts=True, skip_tests=True)
+    plan = context.plan_builder("dev", skip_tests=True).build()
     assert len(plan.new_snapshots) == 2
     assert (
         plan.context_diff.snapshots[snapshot.snapshot_id].change_category
@@ -296,7 +297,7 @@ def test_forward_only_model_regular_plan(init_and_plan_context: t.Callable):
     assert dev_df["event_date"].tolist() == [pd.to_datetime("2023-01-07")]
 
     # Promote changes to prod
-    prod_plan = context.plan(no_prompts=True, skip_tests=True)
+    prod_plan = context.plan_builder(skip_tests=True).build()
     assert not prod_plan.missing_intervals
 
     context.apply(prod_plan)
@@ -324,7 +325,7 @@ def test_forward_only_model_regular_plan_preview_enabled(init_and_plan_context: 
     snapshot = context.get_snapshot(model, raise_if_missing=True)
     top_waiters_snapshot = context.get_snapshot("sushi.top_waiters", raise_if_missing=True)
 
-    plan = context.plan("dev", no_prompts=True, skip_tests=True, enable_preview=True)
+    plan = context.plan_builder("dev", skip_tests=True, enable_preview=True).build()
     assert len(plan.new_snapshots) == 2
     assert (
         plan.context_diff.snapshots[snapshot.snapshot_id].change_category
@@ -380,7 +381,7 @@ def test_full_history_restatement_model_regular_plan_preview_enabled(
         "sushi.waiter_as_customer_by_day", raise_if_missing=True
     )
 
-    plan = context.plan("dev", no_prompts=True, skip_tests=True, enable_preview=True)
+    plan = context.plan_builder("dev", skip_tests=True, enable_preview=True).build()
 
     assert len(plan.new_snapshots) == 4
     assert (
@@ -445,7 +446,7 @@ def test_metadata_changed_regular_plan_preview_enabled(init_and_plan_context: t.
     snapshot = context.get_snapshot(model, raise_if_missing=True)
     top_waiters_snapshot = context.get_snapshot("sushi.top_waiters", raise_if_missing=True)
 
-    plan = context.plan("dev", no_prompts=True, skip_tests=True, enable_preview=True)
+    plan = context.plan_builder("dev", skip_tests=True, enable_preview=True).build()
     assert len(plan.new_snapshots) == 2
     assert (
         plan.context_diff.snapshots[snapshot.snapshot_id].change_category
@@ -476,7 +477,7 @@ def test_hourly_model_with_lookback_no_backfill_in_dev(init_and_plan_context: t.
     )
     context.upsert_model(model)
 
-    plan = context.plan("prod", no_prompts=True, skip_tests=True)
+    plan = context.plan_builder("prod", skip_tests=True).build()
     context.apply(plan)
 
     top_waiters_model = context.get_model("sushi.top_waiters")
@@ -487,7 +488,7 @@ def test_hourly_model_with_lookback_no_backfill_in_dev(init_and_plan_context: t.
     top_waiters_snapshot = context.get_snapshot("sushi.top_waiters", raise_if_missing=True)
 
     with time_machine.travel(now() + timedelta(hours=2)):
-        plan = context.plan("dev", no_prompts=True, skip_tests=True)
+        plan = context.plan_builder("dev", skip_tests=True).build()
         # Make sure the waiter_revenue_by_day model is not backfilled.
         assert plan.missing_intervals == [
             SnapshotIntervals(
@@ -518,7 +519,7 @@ def test_parent_cron_after_child(init_and_plan_context: t.Callable):
     )
     context.upsert_model(model)
 
-    plan = context.plan("prod", no_prompts=True, skip_tests=True)
+    plan = context.plan_builder("prod", skip_tests=True).build()
     context.apply(plan)
 
     waiter_revenue_by_day_snapshot = context.get_snapshot(model.name, raise_if_missing=True)
@@ -533,7 +534,7 @@ def test_parent_cron_after_child(init_and_plan_context: t.Callable):
     top_waiters_snapshot = context.get_snapshot("sushi.top_waiters", raise_if_missing=True)
 
     with time_machine.travel("2023-01-08 23:55:00 UTC"):  # Past parent's cron, but before child's
-        plan = context.plan("dev", no_prompts=True, skip_tests=True)
+        plan = context.plan_builder("dev", skip_tests=True).build()
         # Make sure the waiter_revenue_by_day model is not backfilled.
         assert plan.missing_intervals == [
             SnapshotIntervals(
@@ -591,7 +592,7 @@ def test_cron_not_aligned_with_day_boundary(
     )
     context.upsert_model(model)
 
-    plan = context.plan("prod", no_prompts=True, skip_tests=True)
+    plan = context.plan_builder("prod", skip_tests=True).build()
     context.apply(plan)
 
     waiter_revenue_by_day_snapshot = context.get_snapshot(model.name, raise_if_missing=True)
@@ -607,9 +608,9 @@ def test_cron_not_aligned_with_day_boundary(
     )
 
     with time_machine.travel("2023-01-08 00:10:00 UTC"):  # Past model's cron.
-        plan = context.plan(
-            "dev", select_models=[model.name], no_prompts=True, skip_tests=True, enable_preview=True
-        )
+        plan = context.plan_builder(
+            "dev", select_models=[model.name], skip_tests=True, enable_preview=True
+        ).build()
         assert plan.missing_intervals == [
             SnapshotIntervals(
                 snapshot_id=waiter_revenue_by_day_snapshot.snapshot_id,
@@ -640,7 +641,7 @@ def test_forward_only_parent_created_in_dev_child_created_in_prod(
     )
     top_waiters_snapshot = context.get_snapshot("sushi.top_waiters", raise_if_missing=True)
 
-    plan = context.plan("dev", no_prompts=True, skip_tests=True)
+    plan = context.plan_builder("dev", skip_tests=True).build()
     assert len(plan.new_snapshots) == 2
     assert (
         plan.context_diff.snapshots[waiter_revenue_by_day_snapshot.snapshot_id].change_category
@@ -662,7 +663,7 @@ def test_forward_only_parent_created_in_dev_child_created_in_prod(
 
     top_waiters_snapshot = context.get_snapshot("sushi.top_waiters", raise_if_missing=True)
 
-    plan = context.plan("prod", no_prompts=True, skip_tests=True)
+    plan = context.plan_builder("prod", skip_tests=True).build()
     assert len(plan.new_snapshots) == 1
     assert (
         plan.context_diff.snapshots[top_waiters_snapshot.snapshot_id].change_category
@@ -796,7 +797,7 @@ def test_plan_set_choice_is_reflected_in_missing_intervals(init_and_plan_context
     ]
 
     # Promote changes to prod
-    prod_plan = context.plan(no_prompts=True, skip_tests=True)
+    prod_plan = context.plan_builder(skip_tests=True).build()
     assert not prod_plan.missing_intervals
 
     context.apply(prod_plan)
@@ -833,7 +834,7 @@ def test_non_breaking_change_after_forward_only_in_dev(
     )
     top_waiters_snapshot = context.get_snapshot("sushi.top_waiters", raise_if_missing=True)
 
-    plan = context.plan("dev", no_prompts=True, skip_tests=True, forward_only=True)
+    plan = context.plan_builder("dev", skip_tests=True, forward_only=True).build()
     assert len(plan.new_snapshots) == 2
     assert (
         plan.context_diff.snapshots[waiter_revenue_by_day_snapshot.snapshot_id].change_category
@@ -869,7 +870,7 @@ def test_non_breaking_change_after_forward_only_in_dev(
     context.upsert_model(add_projection_to_model(t.cast(SqlModel, model), literal=False))
     top_waiters_snapshot = context.get_snapshot("sushi.top_waiters", raise_if_missing=True)
 
-    plan = context.plan("dev", no_prompts=True, skip_tests=True)
+    plan = context.plan_builder("dev", skip_tests=True).build()
     assert len(plan.new_snapshots) == 1
     assert (
         plan.context_diff.snapshots[top_waiters_snapshot.snapshot_id].change_category
@@ -903,7 +904,7 @@ def test_non_breaking_change_after_forward_only_in_dev(
     assert "one" not in prod_df["column_name"].tolist()
 
     # Deploy both changes to prod.
-    plan = context.plan("prod", no_prompts=True, skip_tests=True)
+    plan = context.plan_builder("prod", skip_tests=True).build()
     assert plan.start == to_timestamp("2023-01-01")
     assert plan.missing_intervals == [
         SnapshotIntervals(
@@ -945,7 +946,7 @@ def test_indirect_non_breaking_change_after_forward_only_in_dev(init_and_plan_co
     context.upsert_model(model)
     snapshot = context.get_snapshot(model, raise_if_missing=True)
 
-    plan = context.plan("dev", no_prompts=True, skip_tests=True)
+    plan = context.plan_builder("dev", skip_tests=True).build()
     assert (
         plan.context_diff.snapshots[snapshot.snapshot_id].change_category
         == SnapshotChangeCategory.FORWARD_ONLY
@@ -958,7 +959,7 @@ def test_indirect_non_breaking_change_after_forward_only_in_dev(init_and_plan_co
     context.upsert_model(add_projection_to_model(t.cast(SqlModel, model)))
     top_waiters_snapshot = context.get_snapshot("sushi.top_waiters", raise_if_missing=True)
 
-    plan = context.plan("dev", no_prompts=True, skip_tests=True)
+    plan = context.plan_builder("dev", skip_tests=True).build()
     assert len(plan.new_snapshots) == 1
     assert (
         plan.context_diff.snapshots[top_waiters_snapshot.snapshot_id].change_category
@@ -991,7 +992,7 @@ def test_indirect_non_breaking_change_after_forward_only_in_dev(init_and_plan_co
     )
     top_waiters_snapshot = context.get_snapshot("sushi.top_waiters", raise_if_missing=True)
 
-    plan = context.plan("dev", no_prompts=True, skip_tests=True)
+    plan = context.plan_builder("dev", skip_tests=True).build()
     assert len(plan.new_snapshots) == 2
     assert (
         plan.context_diff.snapshots[waiter_revenue_by_day_snapshot.snapshot_id].change_category
@@ -1019,10 +1020,10 @@ def test_indirect_non_breaking_change_after_forward_only_in_dev(init_and_plan_co
 
     # Apply the upstream non-breaking changes.
     context.apply(plan)
-    assert not context.plan("dev", no_prompts=True, skip_tests=True).requires_backfill
+    assert not context.plan_builder("dev", skip_tests=True).build().requires_backfill
 
     # Deploy everything to prod.
-    plan = context.plan("prod", no_prompts=True, skip_tests=True)
+    plan = context.plan_builder("prod", skip_tests=True).build()
     assert plan.start == to_timestamp("2023-01-01")
     assert plan.missing_intervals == [
         SnapshotIntervals(
@@ -1052,7 +1053,7 @@ def test_indirect_non_breaking_change_after_forward_only_in_dev(init_and_plan_co
     ]
 
     context.apply(plan)
-    assert not context.plan("prod", no_prompts=True, skip_tests=True).requires_backfill
+    assert not context.plan_builder("prod", skip_tests=True).build().requires_backfill
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
@@ -1074,7 +1075,7 @@ def test_forward_only_precedence_over_indirect_non_breaking(init_and_plan_contex
     non_breaking_snapshot = context.get_snapshot(non_breaking_model, raise_if_missing=True)
     top_waiter_snapshot = context.get_snapshot("sushi.top_waiters", raise_if_missing=True)
 
-    plan = context.plan("dev", no_prompts=True, skip_tests=True)
+    plan = context.plan_builder("dev", skip_tests=True).build()
     assert (
         plan.context_diff.snapshots[forward_only_snapshot.snapshot_id].change_category
         == SnapshotChangeCategory.FORWARD_ONLY
@@ -1104,10 +1105,10 @@ def test_forward_only_precedence_over_indirect_non_breaking(init_and_plan_contex
     ]
 
     context.apply(plan)
-    assert not context.plan("dev", no_prompts=True, skip_tests=True).requires_backfill
+    assert not context.plan_builder("dev", skip_tests=True).build().requires_backfill
 
     # Deploy everything to prod.
-    plan = context.plan("prod", no_prompts=True, skip_tests=True)
+    plan = context.plan_builder("prod", skip_tests=True).build()
     assert plan.start == to_timestamp("2023-01-01")
     assert plan.missing_intervals == [
         SnapshotIntervals(
@@ -1125,7 +1126,7 @@ def test_forward_only_precedence_over_indirect_non_breaking(init_and_plan_contex
     ]
 
     context.apply(plan)
-    assert not context.plan("prod", no_prompts=True, skip_tests=True).requires_backfill
+    assert not context.plan_builder("prod", skip_tests=True).build().requires_backfill
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
@@ -1328,7 +1329,7 @@ def test_select_unchanged_model_for_backfill(init_and_plan_context: t.Callable):
     assert {o.name for o in schema_objects} == {"waiter_revenue_by_day"}
 
     # Now select a model downstream from the previously modified one in order to backfill it.
-    plan = context.plan("dev", select_models=["*top_waiters"], skip_tests=True, no_prompts=True)
+    plan = context.plan_builder("dev", select_models=["*top_waiters"], skip_tests=True).build()
 
     assert not plan.has_changes
     assert plan.missing_intervals == [
@@ -1357,9 +1358,9 @@ def test_max_interval_end_per_model_not_applied_when_end_is_provided(
     with time_machine.travel("2023-01-09 00:00:00 UTC"):
         context.run()
 
-        plan = context.plan(
-            no_prompts=True, restate_models=["*"], start="2023-01-09", end="2023-01-09"
-        )
+        plan = context.plan_builder(
+            restate_models=["*"], start="2023-01-09", end="2023-01-09"
+        ).build()
         context.apply(plan)
 
 
@@ -1377,9 +1378,9 @@ def test_select_models_for_backfill(init_and_plan_context: t.Callable):
         (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
     ]
 
-    plan = context.plan(
-        "dev", backfill_models=["+*waiter_revenue_by_day"], no_prompts=True, skip_tests=True
-    )
+    plan = context.plan_builder(
+        "dev", backfill_models=["+*waiter_revenue_by_day"], skip_tests=True
+    ).build()
 
     assert plan.missing_intervals == [
         SnapshotIntervals(
@@ -1610,7 +1611,7 @@ def test_unaligned_start_snapshot_with_non_deployable_downstream(init_and_plan_c
         ),
     )
 
-    plan = context.plan("dev", no_prompts=True, enable_preview=True)
+    plan = context.plan_builder("dev", enable_preview=True).build()
     assert {s.name for s in plan.new_snapshots} == {
         '"memory"."sushi"."customer_revenue_lifetime_new"',
         '"memory"."sushi"."customer_max_revenue"',
@@ -1631,7 +1632,7 @@ def test_restatement_plan_ignores_changes(init_and_plan_context: t.Callable):
     model = context.get_model("sushi.waiter_revenue_by_day")
     context.upsert_model(add_projection_to_model(t.cast(SqlModel, model)))
 
-    plan = context.plan(no_prompts=True, restate_models=["sushi.top_waiters"], start="2023-01-07")
+    plan = context.plan_builder(restate_models=["sushi.top_waiters"], start="2023-01-07").build()
     assert plan.snapshots != context.snapshots
 
     assert not plan.directly_modified
@@ -1651,6 +1652,740 @@ def test_restatement_plan_ignores_changes(init_and_plan_context: t.Callable):
     context.apply(plan)
 
 
+def test_restatement_plan_hourly_with_downstream_daily_restates_correct_intervals(tmp_path: Path):
+    model_a = """
+    MODEL (
+        name test.a,
+        kind INCREMENTAL_BY_TIME_RANGE (
+            time_column "ts"
+        ),
+        start '2024-01-01 00:00:00',
+        cron '@hourly'
+    );
+
+    select account_id, ts from test.external_table;
+    """
+
+    model_b = """
+    MODEL (
+        name test.b,
+        kind FULL,
+        cron '@daily'
+    );
+
+    select account_id, ts from test.a;
+    """
+
+    models_dir = tmp_path / "models"
+    models_dir.mkdir()
+
+    for path, defn in {"a.sql": model_a, "b.sql": model_b}.items():
+        with open(models_dir / path, "w") as f:
+            f.write(defn)
+
+    config = Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))
+    ctx = Context(paths=[tmp_path], config=config)
+
+    engine_adapter = ctx.engine_adapter
+    engine_adapter.create_schema("test")
+
+    # source data
+    df = pd.DataFrame(
+        {
+            "account_id": [1001, 1002, 1003, 1004],
+            "ts": [
+                "2024-01-01 00:30:00",
+                "2024-01-01 01:30:00",
+                "2024-01-01 02:30:00",
+                "2024-01-02 00:30:00",
+            ],
+        }
+    )
+    columns_to_types = {
+        "account_id": exp.DataType.build("int"),
+        "ts": exp.DataType.build("timestamp"),
+    }
+    external_table = exp.table_(table="external_table", db="test", quoted=True)
+    engine_adapter.create_table(table_name=external_table, columns_to_types=columns_to_types)
+    engine_adapter.insert_append(
+        table_name=external_table, query_or_df=df, columns_to_types=columns_to_types
+    )
+
+    # plan + apply
+    ctx.plan(auto_apply=True, no_prompts=True)
+
+    def _dates_in_table(table_name: str) -> t.List[str]:
+        return [
+            str(r[0]) for r in engine_adapter.fetchall(f"select ts from {table_name} order by ts")
+        ]
+
+    # verify initial state
+    for tbl in ["test.a", "test.b"]:
+        assert _dates_in_table(tbl) == [
+            "2024-01-01 00:30:00",
+            "2024-01-01 01:30:00",
+            "2024-01-01 02:30:00",
+            "2024-01-02 00:30:00",
+        ]
+
+    # restate A
+    engine_adapter.execute("delete from test.external_table where ts = '2024-01-01 01:30:00'")
+    ctx.plan(
+        restate_models=["test.a"],
+        start="2024-01-01 01:00:00",
+        end="2024-01-01 02:00:00",
+        auto_apply=True,
+        no_prompts=True,
+    )
+
+    # verify result
+    for tbl in ["test.a", "test.b"]:
+        assert _dates_in_table(tbl) == [
+            "2024-01-01 00:30:00",
+            "2024-01-01 02:30:00",
+            "2024-01-02 00:30:00",
+        ], f"Table {tbl} wasnt cleared"
+
+    # Put some data
+    df = pd.DataFrame(
+        {
+            "account_id": [1001, 1002, 1003, 1004],
+            "ts": [
+                "2024-01-01 01:30:00",
+                "2024-01-01 23:30:00",
+                "2024-01-02 03:30:00",
+                "2024-01-03 12:30:00",
+            ],
+        }
+    )
+    engine_adapter.replace_query(
+        table_name=external_table, query_or_df=df, columns_to_types=columns_to_types
+    )
+
+    # Restate A across a day boundary with the expectation that two day intervals in B are affected
+    ctx.plan(
+        restate_models=["test.a"],
+        start="2024-01-01 02:00:00",
+        end="2024-01-02 04:00:00",
+        auto_apply=True,
+        no_prompts=True,
+    )
+
+    for tbl in ["test.a", "test.b"]:
+        assert _dates_in_table(tbl) == [
+            "2024-01-01 00:30:00",  # present already
+            # "2024-01-01 02:30:00", #removed in last restatement
+            "2024-01-01 23:30:00",  # added in last restatement
+            "2024-01-02 03:30:00",  # added in last restatement
+        ], f"Table {tbl} wasnt cleared"
+
+
+def test_restatement_plan_clears_correct_intervals_across_environments(tmp_path: Path):
+    model1 = """
+    MODEL (
+        name test.incremental_model,
+        kind INCREMENTAL_BY_TIME_RANGE (
+            time_column "date"
+        ),
+        start '2024-01-01',
+        cron '@daily'
+    );
+
+    select account_id, date from test.external_table;
+    """
+
+    model2 = """
+    MODEL (
+        name test.downstream_of_incremental,
+        kind FULL
+    );
+
+    select account_id, date from test.incremental_model;
+    """
+
+    models_dir = tmp_path / "models"
+    models_dir.mkdir()
+
+    with open(models_dir / "model1.sql", "w") as f:
+        f.write(model1)
+
+    with open(models_dir / "model2.sql", "w") as f:
+        f.write(model2)
+
+    config = Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))
+    ctx = Context(paths=[tmp_path], config=config)
+
+    engine_adapter = ctx.engine_adapter
+    engine_adapter.create_schema("test")
+
+    # source data
+    df = pd.DataFrame(
+        {
+            "account_id": [1001, 1002, 1003, 1004, 1005],
+            "name": ["foo", "bar", "baz", "bing", "bong"],
+            "date": ["2024-01-01", "2024-01-02", "2024-01-03", "2024-01-04", "2024-01-05"],
+        }
+    )
+    columns_to_types = {
+        "account_id": exp.DataType.build("int"),
+        "name": exp.DataType.build("varchar"),
+        "date": exp.DataType.build("date"),
+    }
+    external_table = exp.table_(table="external_table", db="test", quoted=True)
+    engine_adapter.create_table(table_name=external_table, columns_to_types=columns_to_types)
+    engine_adapter.insert_append(
+        table_name=external_table, query_or_df=df, columns_to_types=columns_to_types
+    )
+
+    # first, create the prod models
+    ctx.plan(auto_apply=True, no_prompts=True)
+    assert engine_adapter.fetchone("select count(*) from test.incremental_model") == (5,)
+    assert engine_adapter.fetchone("select count(*) from test.downstream_of_incremental") == (5,)
+    assert not engine_adapter.table_exists("test__dev.incremental_model")
+
+    # then, make a dev version
+    model1 = """
+    MODEL (
+        name test.incremental_model,
+        kind INCREMENTAL_BY_TIME_RANGE (
+            time_column "date"
+        ),
+        start '2024-01-01',
+        cron '@daily'
+    );
+
+    select account_id, name, date from test.external_table;
+    """
+    with open(models_dir / "model1.sql", "w") as f:
+        f.write(model1)
+    ctx.load()
+
+    ctx.plan(environment="dev", auto_apply=True, no_prompts=True)
+    assert engine_adapter.table_exists("test__dev.incremental_model")
+    assert engine_adapter.fetchone("select count(*) from test__dev.incremental_model") == (5,)
+
+    # drop some source data so when we restate the interval it essentially clears it which is easy to verify
+    engine_adapter.execute("delete from test.external_table where date = '2024-01-01'")
+    assert engine_adapter.fetchone("select count(*) from test.external_table") == (4,)
+
+    # now, restate intervals in dev and verify prod is NOT affected
+    ctx.plan(
+        environment="dev",
+        start="2024-01-01",
+        end="2024-01-02",
+        restate_models=["test.incremental_model"],
+        auto_apply=True,
+        no_prompts=True,
+    )
+    assert engine_adapter.fetchone("select count(*) from test.incremental_model") == (5,)
+    assert engine_adapter.fetchone(
+        "select count(*) from test.incremental_model where date = '2024-01-01'"
+    ) == (1,)
+    assert engine_adapter.fetchone("select count(*) from test__dev.incremental_model") == (4,)
+    assert engine_adapter.fetchone(
+        "select count(*) from test__dev.incremental_model where date = '2024-01-01'"
+    ) == (0,)
+
+    # prod still should not be affected by a run because the restatement only happened in dev
+    ctx.run()
+    assert engine_adapter.fetchone("select count(*) from test.incremental_model") == (5,)
+    assert engine_adapter.fetchone(
+        "select count(*) from test.incremental_model where date = '2024-01-01'"
+    ) == (1,)
+
+    # drop another interval from the source data
+    engine_adapter.execute("delete from test.external_table where date = '2024-01-02'")
+
+    # now, restate intervals in prod and verify that dev IS affected
+    ctx.plan(
+        start="2024-01-01",
+        end="2024-01-03",
+        restate_models=["test.incremental_model"],
+        auto_apply=True,
+        no_prompts=True,
+    )
+    assert engine_adapter.fetchone("select count(*) from test.incremental_model") == (3,)
+    assert engine_adapter.fetchone(
+        "select count(*) from test.incremental_model where date = '2024-01-01'"
+    ) == (0,)
+    assert engine_adapter.fetchone(
+        "select count(*) from test.incremental_model where date = '2024-01-02'"
+    ) == (0,)
+    assert engine_adapter.fetchone(
+        "select count(*) from test.incremental_model where date = '2024-01-03'"
+    ) == (1,)
+
+    # dev not affected yet until `sqlmesh run` is run
+    assert engine_adapter.fetchone("select count(*) from test__dev.incremental_model") == (4,)
+    assert engine_adapter.fetchone(
+        "select count(*) from test__dev.incremental_model where date = '2024-01-01'"
+    ) == (0,)
+    assert engine_adapter.fetchone(
+        "select count(*) from test__dev.incremental_model where date = '2024-01-02'"
+    ) == (1,)
+    assert engine_adapter.fetchone(
+        "select count(*) from test__dev.incremental_model where date = '2024-01-03'"
+    ) == (1,)
+
+    # the restatement plan for prod should have cleared dev intervals too, which means this `sqlmesh run` re-runs 2024-01-01 and 2024-01-02
+    ctx.run(environment="dev")
+    assert engine_adapter.fetchone("select count(*) from test__dev.incremental_model") == (3,)
+    assert engine_adapter.fetchone(
+        "select count(*) from test__dev.incremental_model where date = '2024-01-01'"
+    ) == (0,)
+    assert engine_adapter.fetchone(
+        "select count(*) from test__dev.incremental_model where date = '2024-01-02'"
+    ) == (0,)
+    assert engine_adapter.fetchone(
+        "select count(*) from test__dev.incremental_model where date = '2024-01-03'"
+    ) == (1,)
+
+    # the downstream full model should always reflect whatever the incremental model is showing
+    assert engine_adapter.fetchone("select count(*) from test.downstream_of_incremental") == (3,)
+    assert engine_adapter.fetchone("select count(*) from test__dev.downstream_of_incremental") == (
+        3,
+    )
+
+
+def test_prod_restatement_plan_clears_correct_intervals_in_derived_dev_tables(tmp_path: Path):
+    """
+    Scenario:
+        I have models A[hourly] <- B[daily] <- C in prod
+        I create dev and add 2 new models D and E so that my dev DAG looks like A <- B <- C <- D[daily] <- E
+        I prod, I restate *one hour* of A
+    Outcome:
+        D and E should be restated in dev despite not being a part of prod
+        since B and D are daily, the whole day should be restated even though only 1hr of the upstream model was restated
+    """
+
+    model_a = """
+    MODEL (
+        name test.a,
+        kind INCREMENTAL_BY_TIME_RANGE (
+            time_column "ts"
+        ),
+        start '2024-01-01 00:00:00',
+        cron '@hourly'
+    );
+
+    select account_id, ts from test.external_table;
+    """
+
+    def _derived_full_model_def(name: str, upstream: str) -> str:
+        return f"""
+        MODEL (
+            name test.{name},
+            kind FULL
+        );
+
+        select account_id, ts from test.{upstream};
+        """
+
+    def _derived_incremental_model_def(name: str, upstream: str) -> str:
+        return f"""
+        MODEL (
+            name test.{name},
+            kind INCREMENTAL_BY_TIME_RANGE (
+                time_column ts
+            ),
+            cron '@daily'
+        );
+
+        select account_id, ts from test.{upstream} where ts between @start_ts and @end_ts;
+        """
+
+    model_b = _derived_incremental_model_def("b", upstream="a")
+    model_c = _derived_full_model_def("c", upstream="b")
+
+    models_dir = tmp_path / "models"
+    models_dir.mkdir()
+
+    for path, defn in {"a.sql": model_a, "b.sql": model_b, "c.sql": model_c}.items():
+        with open(models_dir / path, "w") as f:
+            f.write(defn)
+
+    config = Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))
+    ctx = Context(paths=[tmp_path], config=config)
+
+    engine_adapter = ctx.engine_adapter
+    engine_adapter.create_schema("test")
+
+    # source data
+    df = pd.DataFrame(
+        {
+            "account_id": [1001, 1002, 1003, 1004],
+            "ts": [
+                "2024-01-01 00:30:00",
+                "2024-01-01 01:30:00",
+                "2024-01-01 02:30:00",
+                "2024-01-02 00:30:00",
+            ],
+        }
+    )
+    columns_to_types = {
+        "account_id": exp.DataType.build("int"),
+        "ts": exp.DataType.build("timestamp"),
+    }
+    external_table = exp.table_(table="external_table", db="test", quoted=True)
+    engine_adapter.create_table(table_name=external_table, columns_to_types=columns_to_types)
+    engine_adapter.insert_append(
+        table_name=external_table, query_or_df=df, columns_to_types=columns_to_types
+    )
+
+    # plan + apply A, B, C in prod
+    ctx.plan(auto_apply=True, no_prompts=True)
+
+    # add D[daily], E in dev
+    model_d = _derived_incremental_model_def("d", upstream="c")
+    model_e = _derived_full_model_def("e", upstream="d")
+
+    for path, defn in {
+        "d.sql": model_d,
+        "e.sql": model_e,
+    }.items():
+        with open(models_dir / path, "w") as f:
+            f.write(defn)
+
+    # plan + apply dev
+    ctx.load()
+    ctx.plan(environment="dev", auto_apply=True, no_prompts=True)
+
+    def _dates_in_table(table_name: str) -> t.List[str]:
+        return [
+            str(r[0]) for r in engine_adapter.fetchall(f"select ts from {table_name} order by ts")
+        ]
+
+    # verify initial state
+    for tbl in ["test.a", "test.b", "test.c", "test__dev.d", "test__dev.e"]:
+        assert engine_adapter.table_exists(tbl)
+        assert _dates_in_table(tbl) == [
+            "2024-01-01 00:30:00",
+            "2024-01-01 01:30:00",
+            "2024-01-01 02:30:00",
+            "2024-01-02 00:30:00",
+        ]
+
+    for tbl in ["test.d", "test.e"]:
+        assert not engine_adapter.table_exists(tbl)
+
+    # restate A in prod
+    engine_adapter.execute("delete from test.external_table where ts = '2024-01-01 01:30:00'")
+    ctx.plan(
+        restate_models=["test.a"],
+        start="2024-01-01 01:00:00",
+        end="2024-01-01 02:00:00",
+        auto_apply=True,
+        no_prompts=True,
+    )
+
+    # verify result
+    for tbl in ["test.a", "test.b", "test.c"]:
+        assert _dates_in_table(tbl) == [
+            "2024-01-01 00:30:00",
+            "2024-01-01 02:30:00",
+            "2024-01-02 00:30:00",
+        ], f"Table {tbl} wasnt cleared"
+
+    # dev shouldnt have been affected yet
+    for tbl in ["test__dev.d", "test__dev.e"]:
+        assert _dates_in_table(tbl) == [
+            "2024-01-01 00:30:00",
+            "2024-01-01 01:30:00",
+            "2024-01-01 02:30:00",
+            "2024-01-02 00:30:00",
+        ], f"Table {tbl} was prematurely cleared"
+
+    # run dev to trigger the processing of the prod restatement
+    ctx.run(environment="dev")
+
+    # data should now be cleared from dev
+    # note that D is a daily model, so clearing an hour interval from A should have triggered the full day in D
+    for tbl in ["test__dev.d", "test__dev.e"]:
+        assert _dates_in_table(tbl) == [
+            "2024-01-01 00:30:00",
+            "2024-01-01 02:30:00",
+            "2024-01-02 00:30:00",
+        ], f"Table {tbl} wasnt cleared"
+
+
+def test_prod_restatement_plan_clears_unaligned_intervals_in_derived_dev_tables(tmp_path: Path):
+    """
+    Scenario:
+        I have a model A[hourly] in prod
+        I create dev and add a model B[daily]
+        I prod, I restate *one hour* of A
+
+    Outcome:
+        The whole day for B should be restated. The restatement plan for prod has no hints about B's cadence because
+        B only exists in dev and there are no other downstream models in prod that would cause the restatement intervals
+        to be widened.
+
+        Therefore, this test checks that SQLMesh does the right thing when an interval is partially cleared
+    """
+
+    model_a = """
+    MODEL (
+        name test.a,
+        kind INCREMENTAL_BY_TIME_RANGE (
+            time_column "ts"
+        ),
+        start '2024-01-01 00:00:00',
+        cron '@hourly'
+    );
+
+    select account_id, ts from test.external_table;
+    """
+
+    model_b = """
+        MODEL (
+            name test.b,
+            kind INCREMENTAL_BY_TIME_RANGE (
+                time_column ts
+            ),
+            cron '@daily'
+        );
+
+        select account_id, ts from test.a where ts between @start_ts and @end_ts;
+        """
+
+    models_dir = tmp_path / "models"
+    models_dir.mkdir()
+
+    with open(models_dir / "a.sql", "w") as f:
+        f.write(model_a)
+
+    config = Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))
+    ctx = Context(paths=[tmp_path], config=config)
+
+    engine_adapter = ctx.engine_adapter
+    engine_adapter.create_schema("test")
+
+    # source data
+    df = pd.DataFrame(
+        {
+            "account_id": [1001, 1002, 1003, 1004],
+            "ts": [
+                "2024-01-01 00:30:00",
+                "2024-01-01 01:30:00",
+                "2024-01-01 02:30:00",
+                "2024-01-02 00:30:00",
+            ],
+        }
+    )
+    columns_to_types = {
+        "account_id": exp.DataType.build("int"),
+        "ts": exp.DataType.build("timestamp"),
+    }
+    external_table = exp.table_(table="external_table", db="test", quoted=True)
+    engine_adapter.create_table(table_name=external_table, columns_to_types=columns_to_types)
+    engine_adapter.insert_append(
+        table_name=external_table, query_or_df=df, columns_to_types=columns_to_types
+    )
+
+    # plan + apply A[hourly] in prod
+    ctx.plan(auto_apply=True, no_prompts=True)
+
+    # add B[daily] in dev
+    with open(models_dir / "b.sql", "w") as f:
+        f.write(model_b)
+
+    # plan + apply dev
+    ctx.load()
+    ctx.plan(environment="dev", auto_apply=True, no_prompts=True)
+
+    def _dates_in_table(table_name: str) -> t.List[str]:
+        return [
+            str(r[0]) for r in engine_adapter.fetchall(f"select ts from {table_name} order by ts")
+        ]
+
+    # verify initial state
+    for tbl in ["test.a", "test__dev.b"]:
+        assert _dates_in_table(tbl) == [
+            "2024-01-01 00:30:00",
+            "2024-01-01 01:30:00",
+            "2024-01-01 02:30:00",
+            "2024-01-02 00:30:00",
+        ]
+
+    # restate A in prod
+    engine_adapter.execute("delete from test.external_table where ts = '2024-01-01 01:30:00'")
+    ctx.plan(
+        restate_models=["test.a"],
+        start="2024-01-01 01:00:00",
+        end="2024-01-01 02:00:00",
+        auto_apply=True,
+        no_prompts=True,
+    )
+
+    # verify result
+    assert _dates_in_table("test.a") == [
+        "2024-01-01 00:30:00",
+        "2024-01-01 02:30:00",
+        "2024-01-02 00:30:00",
+    ]
+
+    # dev shouldnt have been affected yet
+    assert _dates_in_table("test__dev.b") == [
+        "2024-01-01 00:30:00",
+        "2024-01-01 01:30:00",
+        "2024-01-01 02:30:00",
+        "2024-01-02 00:30:00",
+    ]
+
+    # mess with A independently of SQLMesh to prove a whole day gets restated for B instead of just 1hr
+    snapshot_table_name = ctx.table_name("test.a", False)
+    engine_adapter.execute(
+        f"delete from {snapshot_table_name} where cast(ts as date) == '2024-01-01'"
+    )
+    engine_adapter.execute(
+        f"insert into {snapshot_table_name} (account_id, ts) values (1007, '2024-01-02 01:30:00')"
+    )
+
+    assert _dates_in_table("test.a") == ["2024-01-02 00:30:00", "2024-01-02 01:30:00"]
+
+    # run dev to trigger the processing of the prod restatement
+    ctx.run(environment="dev")
+
+    # B should now have no data for 2024-01-01
+    # To prove a single day was restated vs the whole model, it also shouldnt have the '2024-01-02 01:30:00' record
+    assert _dates_in_table("test__dev.b") == ["2024-01-02 00:30:00"]
+
+
+def test_prod_restatement_plan_causes_dev_intervals_to_be_processed_in_next_dev_plan(
+    tmp_path: Path,
+):
+    """
+    Scenario:
+        I have a model A[hourly] in prod
+        I create dev and add a model B[daily]
+        I prod, I restate *one hour* of A
+        In dev, I run a normal plan instead of a cadence run
+
+    Outcome:
+        The whole day for B should be restated as part of a normal plan
+    """
+
+    model_a = """
+    MODEL (
+        name test.a,
+        kind INCREMENTAL_BY_TIME_RANGE (
+            time_column "ts"
+        ),
+        start '2024-01-01 00:00:00',
+        cron '@hourly'
+    );
+
+    select account_id, ts from test.external_table;
+    """
+
+    model_b = """
+        MODEL (
+            name test.b,
+            kind INCREMENTAL_BY_TIME_RANGE (
+                time_column ts
+            ),
+            cron '@daily'
+        );
+
+        select account_id, ts from test.a where ts between @start_ts and @end_ts;
+        """
+
+    models_dir = tmp_path / "models"
+    models_dir.mkdir()
+
+    with open(models_dir / "a.sql", "w") as f:
+        f.write(model_a)
+
+    config = Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))
+    ctx = Context(paths=[tmp_path], config=config)
+
+    engine_adapter = ctx.engine_adapter
+    engine_adapter.create_schema("test")
+
+    # source data
+    df = pd.DataFrame(
+        {
+            "account_id": [1001, 1002, 1003, 1004],
+            "ts": [
+                "2024-01-01 00:30:00",
+                "2024-01-01 01:30:00",
+                "2024-01-01 02:30:00",
+                "2024-01-02 00:30:00",
+            ],
+        }
+    )
+    columns_to_types = {
+        "account_id": exp.DataType.build("int"),
+        "ts": exp.DataType.build("timestamp"),
+    }
+    external_table = exp.table_(table="external_table", db="test", quoted=True)
+    engine_adapter.create_table(table_name=external_table, columns_to_types=columns_to_types)
+    engine_adapter.insert_append(
+        table_name=external_table, query_or_df=df, columns_to_types=columns_to_types
+    )
+
+    # plan + apply A[hourly] in prod
+    ctx.plan(auto_apply=True, no_prompts=True)
+
+    # add B[daily] in dev
+    with open(models_dir / "b.sql", "w") as f:
+        f.write(model_b)
+
+    # plan + apply dev
+    ctx.load()
+    ctx.plan(environment="dev", auto_apply=True, no_prompts=True)
+
+    def _dates_in_table(table_name: str) -> t.List[str]:
+        return [
+            str(r[0]) for r in engine_adapter.fetchall(f"select ts from {table_name} order by ts")
+        ]
+
+    # verify initial state
+    for tbl in ["test.a", "test__dev.b"]:
+        assert _dates_in_table(tbl) == [
+            "2024-01-01 00:30:00",
+            "2024-01-01 01:30:00",
+            "2024-01-01 02:30:00",
+            "2024-01-02 00:30:00",
+        ]
+
+    # restate A in prod
+    engine_adapter.execute("delete from test.external_table where ts = '2024-01-01 01:30:00'")
+    ctx.plan(
+        restate_models=["test.a"],
+        start="2024-01-01 01:00:00",
+        end="2024-01-01 02:00:00",
+        auto_apply=True,
+        no_prompts=True,
+    )
+
+    # verify result
+    assert _dates_in_table("test.a") == [
+        "2024-01-01 00:30:00",
+        "2024-01-01 02:30:00",
+        "2024-01-02 00:30:00",
+    ]
+
+    # dev shouldnt have been affected yet
+    assert _dates_in_table("test__dev.b") == [
+        "2024-01-01 00:30:00",
+        "2024-01-01 01:30:00",
+        "2024-01-01 02:30:00",
+        "2024-01-02 00:30:00",
+    ]
+
+    # plan dev which should trigger the missing intervals to get repopulated
+    ctx.plan(environment="dev", auto_apply=True, no_prompts=True)
+
+    # dev should have the restated data
+    for tbl in ["test.a", "test__dev.b"]:
+        assert _dates_in_table(tbl) == [
+            "2024-01-01 00:30:00",
+            "2024-01-01 02:30:00",
+            "2024-01-02 00:30:00",
+        ]
+
+
 @time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_plan_against_expired_environment(init_and_plan_context: t.Callable):
     context, plan = init_and_plan_context("examples/sushi")
@@ -1661,21 +2396,21 @@ def test_plan_against_expired_environment(init_and_plan_context: t.Callable):
 
     modified_models = {model.fqn, context.get_model("sushi.top_waiters").fqn}
 
-    plan = context.plan("dev", no_prompts=True)
+    plan = context.plan_builder("dev").build()
     assert plan.has_changes
     assert set(plan.context_diff.modified_snapshots) == modified_models
     assert plan.missing_intervals
     context.apply(plan)
 
     # Make sure there are no changes when comparing against the existing environment.
-    plan = context.plan("dev", no_prompts=True)
+    plan = context.plan_builder("dev").build()
     assert not plan.has_changes
     assert not plan.context_diff.modified_snapshots
     assert not plan.missing_intervals
 
     # Invalidate the environment and make sure that the plan detects the changes.
     context.invalidate_environment("dev")
-    plan = context.plan("dev", no_prompts=True)
+    plan = context.plan_builder("dev").build()
     assert plan.has_changes
     assert set(plan.context_diff.modified_snapshots) == modified_models
     assert not plan.missing_intervals
@@ -1706,7 +2441,7 @@ def test_new_forward_only_model_concurrent_versions(init_and_plan_context: t.Cal
     # Add the first version of the model and apply it to dev_a.
     context.upsert_model(new_model)
     snapshot_a = context.get_snapshot(new_model.name)
-    plan_a = context.plan("dev_a", no_prompts=True)
+    plan_a = context.plan_builder("dev_a").build()
     snapshot_a = plan_a.snapshots[snapshot_a.snapshot_id]
 
     assert snapshot_a.snapshot_id in plan_a.context_diff.new_snapshots
@@ -1734,7 +2469,7 @@ def test_new_forward_only_model_concurrent_versions(init_and_plan_context: t.Cal
     # Add the second version of the model and apply it to dev_b.
     context.upsert_model(new_model_alt)
     snapshot_b = context.get_snapshot(new_model_alt.name)
-    plan_b = context.plan("dev_b", no_prompts=True)
+    plan_b = context.plan_builder("dev_b").build()
     snapshot_b = plan_b.snapshots[snapshot_b.snapshot_id]
 
     assert snapshot_b.snapshot_id in plan_b.context_diff.new_snapshots
@@ -1748,7 +2483,7 @@ def test_new_forward_only_model_concurrent_versions(init_and_plan_context: t.Cal
 
     # Apply the 1st version to prod
     context.upsert_model(new_model)
-    plan_prod_a = context.plan("prod", no_prompts=True)
+    plan_prod_a = context.plan_builder("prod").build()
     assert snapshot_a.snapshot_id in plan_prod_a.snapshots
     assert (
         plan_prod_a.snapshots[snapshot_a.snapshot_id].change_category
@@ -1761,7 +2496,7 @@ def test_new_forward_only_model_concurrent_versions(init_and_plan_context: t.Cal
 
     # Apply the 2nd version to prod
     context.upsert_model(new_model_alt)
-    plan_prod_b = context.plan("prod", no_prompts=True)
+    plan_prod_b = context.plan_builder("prod").build()
     assert snapshot_b.snapshot_id in plan_prod_b.snapshots
     assert (
         plan_prod_b.snapshots[snapshot_b.snapshot_id].change_category
@@ -1798,7 +2533,7 @@ def test_new_forward_only_model_same_dev_environment(init_and_plan_context: t.Ca
     # Add the first version of the model and apply it to dev.
     context.upsert_model(new_model)
     snapshot_a = context.get_snapshot(new_model.name)
-    plan_a = context.plan("dev", no_prompts=True)
+    plan_a = context.plan_builder("dev").build()
     snapshot_a = plan_a.snapshots[snapshot_a.snapshot_id]
 
     assert snapshot_a.snapshot_id in plan_a.context_diff.new_snapshots
@@ -1831,13 +2566,215 @@ def test_new_forward_only_model_same_dev_environment(init_and_plan_context: t.Ca
     snapshot_b = context.get_snapshot(new_model_alt.name)
 
     context.invalidate_environment("dev", sync=True)
-    plan_b = context.plan("dev", no_prompts=True)
+    plan_b = context.plan_builder("dev").build()
     snapshot_b = plan_b.snapshots[snapshot_b.snapshot_id]
 
     context.apply(plan_b)
 
     df = context.fetchdf("SELECT * FROM memory.sushi__dev.new_model").replace({np.nan: None})
     assert df.to_dict() == {"ds": {0: "2023-01-07"}, "b": {0: 1}}
+
+
+@time_machine.travel("2023-01-08 01:00:00 UTC")
+def test_run_auto_restatement(init_and_plan_context: t.Callable):
+    context, _ = init_and_plan_context("examples/sushi")
+
+    context.engine_adapter.execute(
+        "CREATE TABLE _test_auto_restatement_intervals (name STRING, start_ds STRING, end_ds STRING)"
+    )
+
+    @macro()
+    def record_intervals(
+        evaluator, name: exp.Expression, start: exp.Expression, end: exp.Expression, **kwargs: t.Any
+    ) -> None:
+        if evaluator.runtime_stage == "evaluating":
+            evaluator.engine_adapter.insert_append(
+                "_test_auto_restatement_intervals",
+                pd.DataFrame({"name": [name.name], "start_ds": [start.name], "end_ds": [end.name]}),
+            )
+
+    new_model_expr = d.parse(
+        """
+        MODEL (
+            name memory.sushi.new_model,
+            kind INCREMENTAL_BY_TIME_RANGE (
+                time_column ds,
+                auto_restatement_cron '0 6 * * 7',  -- At 6am every Sunday
+                auto_restatement_intervals 3,
+            ),
+            start '2023-01-01',
+        );
+
+        @record_intervals('new_model', @start_ds, @end_ds);
+
+        SELECT '2023-01-07' AS ds, 1 AS a;
+        """
+    )
+    new_model = load_sql_based_model(new_model_expr)
+    context.upsert_model(new_model)
+
+    new_model_downstream_expr = d.parse(
+        """
+        MODEL (
+            name memory.sushi.new_model_downstream,
+            kind INCREMENTAL_BY_TIME_RANGE (
+                time_column ds,
+            ),
+            cron '@hourly',
+        );
+
+        @record_intervals('new_model_downstream', @start_ts, @end_ts);
+
+        SELECT * FROM memory.sushi.new_model;
+        """
+    )
+    new_model_downstream = load_sql_based_model(new_model_downstream_expr)
+    context.upsert_model(new_model_downstream)
+
+    plan = context.plan_builder("prod").build()
+    context.apply(plan)
+
+    with time_machine.travel("2023-01-08 06:01:00 UTC"):
+        assert context.run()
+
+        recorded_intervals_df = context.engine_adapter.fetchdf(
+            "SELECT start_ds, end_ds FROM _test_auto_restatement_intervals WHERE name = 'new_model'"
+        )
+        # The first interval is the first backfill and the second interval should be the 3 auto restated intervals
+        assert recorded_intervals_df.to_dict() == {
+            "start_ds": {0: "2023-01-01", 1: "2023-01-05"},
+            "end_ds": {0: "2023-01-07", 1: "2023-01-07"},
+        }
+        recorded_intervals_downstream_df = context.engine_adapter.fetchdf(
+            "SELECT start_ds, end_ds FROM _test_auto_restatement_intervals WHERE name = 'new_model_downstream'"
+        )
+        # The first interval is the first backfill, the second interval should be the 3 days of restated intervals, and
+        # the third interval should catch up to the current hour
+        assert recorded_intervals_downstream_df.to_dict() == {
+            "start_ds": {
+                0: "2023-01-01 00:00:00",
+                1: "2023-01-05 00:00:00",
+                2: "2023-01-08 01:00:00",
+            },
+            "end_ds": {
+                0: "2023-01-08 00:59:59.999999",
+                1: "2023-01-07 23:59:59.999999",
+                2: "2023-01-08 05:59:59.999999",
+            },
+        }
+
+        snapshot = context.get_snapshot(new_model.name)
+        snapshot = context.state_sync.state_sync.get_snapshots([snapshot.snapshot_id])[
+            snapshot.snapshot_id
+        ]
+        assert snapshot.next_auto_restatement_ts == to_timestamp("2023-01-15 06:00:00")
+        assert not snapshot.pending_restatement_intervals
+
+        snapshot_downstream = context.get_snapshot(new_model_downstream.name)
+        snapshot_downstream = context.state_sync.state_sync.get_snapshots(
+            [snapshot_downstream.snapshot_id]
+        )[snapshot_downstream.snapshot_id]
+        assert not snapshot_downstream.next_auto_restatement_ts
+        assert not snapshot_downstream.pending_restatement_intervals
+
+
+@time_machine.travel("2023-01-08 01:00:00 UTC")
+def test_run_auto_restatement_plan_preview(init_and_plan_context: t.Callable):
+    context, init_plan = init_and_plan_context("examples/sushi")
+    context.apply(init_plan)
+
+    new_model_expr = d.parse(
+        """
+        MODEL (
+            name memory.sushi.new_model,
+            kind INCREMENTAL_BY_TIME_RANGE (
+                time_column ds,
+                auto_restatement_cron '0 6 * * 7',
+            ),
+            start '2023-01-01',
+        );
+
+        SELECT '2023-01-07' AS ds, 1 AS a;
+        """
+    )
+    new_model = load_sql_based_model(new_model_expr)
+    context.upsert_model(new_model)
+    snapshot = context.get_snapshot(new_model.name)
+
+    plan_dev = context.plan_builder("dev").build()
+    # Make sure that a limited preview is computed by default
+    assert to_timestamp(plan_dev.start) == to_timestamp("2023-01-07")
+    assert plan_dev.missing_intervals == [
+        SnapshotIntervals(
+            snapshot.snapshot_id,
+            [(to_timestamp("2023-01-07"), to_timestamp("2023-01-08"))],
+        )
+    ]
+    assert not plan_dev.deployability_index.is_deployable(snapshot.snapshot_id)
+    context.apply(plan_dev)
+
+    plan_prod = context.plan_builder("prod").build()
+    assert plan_prod.missing_intervals == [
+        SnapshotIntervals(
+            context.get_snapshot(new_model.name).snapshot_id,
+            [
+                (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+                (to_timestamp("2023-01-02"), to_timestamp("2023-01-03")),
+                (to_timestamp("2023-01-03"), to_timestamp("2023-01-04")),
+                (to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
+                (to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
+                (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
+                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
+            ],
+        )
+    ]
+    context.apply(plan_prod)
+
+
+@time_machine.travel("2023-01-08 01:00:00 UTC")
+def test_run_auto_restatement_failure(init_and_plan_context: t.Callable):
+    context, _ = init_and_plan_context("examples/sushi")
+
+    @macro()
+    def fail_auto_restatement(evaluator, start: exp.Expression, **kwargs: t.Any) -> None:
+        if evaluator.runtime_stage == "evaluating" and start.name != "2023-01-01":
+            raise Exception("Failed")
+
+    new_model_expr = d.parse(
+        """
+        MODEL (
+            name memory.sushi.new_model,
+            kind INCREMENTAL_BY_TIME_RANGE (
+                time_column ds,
+                auto_restatement_cron '0 6 * * 7',  -- At 6am every Sunday
+                auto_restatement_intervals 3,
+            ),
+            start '2023-01-01',
+        );
+
+        @fail_auto_restatement(@start_ds);
+
+        SELECT '2023-01-07' AS ds, 1 AS a;
+        """
+    )
+    new_model = load_sql_based_model(new_model_expr)
+    context.upsert_model(new_model)
+
+    plan = context.plan_builder("prod").build()
+    context.apply(plan)
+
+    with time_machine.travel("2023-01-08 06:01:00 UTC"):
+        run_status = context.run()
+        assert run_status.is_failure
+
+        snapshot = context.get_snapshot(new_model.name)
+        snapshot = context.state_sync.state_sync.get_snapshots([snapshot.snapshot_id])[
+            snapshot.snapshot_id
+        ]
+        assert snapshot.next_auto_restatement_ts == to_timestamp("2023-01-15 06:00:00")
+        assert snapshot.pending_restatement_intervals == [
+            (to_timestamp("2023-01-05"), to_timestamp("2023-01-08"))
+        ]
 
 
 def test_plan_twice_with_star_macro_yields_no_diff(tmp_path: Path):
@@ -1872,7 +2809,7 @@ def test_plan_twice_with_star_macro_yields_no_diff(tmp_path: Path):
         == 'SELECT CAST("full_model"."item_id" AS INT) AS "item_id", CAST("full_model"."num_orders" AS BIGINT) AS "num_orders" FROM "db"."sqlmesh_example"."full_model" AS "full_model"'
     )
 
-    new_plan = new_context.plan(no_prompts=True)
+    new_plan = new_context.plan_builder().build()
     assert not new_plan.has_changes
     assert not new_plan.new_snapshots
 
@@ -1883,9 +2820,9 @@ def test_create_environment_no_changes_with_selector(init_and_plan_context: t.Ca
     context.apply(plan)
 
     with pytest.raises(NoChangesPlanError):
-        context.plan("dev", no_prompts=True)
+        context.plan_builder("dev").build()
 
-    plan = context.plan("dev", no_prompts=True, select_models=["*top_waiters"])
+    plan = context.plan_builder("dev", select_models=["*top_waiters"]).build()
     assert not plan.missing_intervals
     context.apply(plan)
 
@@ -1897,7 +2834,7 @@ def test_create_environment_no_changes_with_selector(init_and_plan_context: t.Ca
 def test_empty_bacfkill(init_and_plan_context: t.Callable):
     context, _ = init_and_plan_context("examples/sushi")
 
-    plan = context.plan("prod", no_prompts=True, skip_tests=True, empty_backfill=True)
+    plan = context.plan_builder("prod", skip_tests=True, empty_backfill=True).build()
     assert plan.missing_intervals
     assert plan.empty_backfill
     assert not plan.requires_backfill
@@ -1910,7 +2847,7 @@ def test_empty_bacfkill(init_and_plan_context: t.Callable):
         row_num = context.engine_adapter.fetchone(f"SELECT COUNT(*) FROM {model.name}")[0]
         assert row_num == 0
 
-    plan = context.plan("prod", no_prompts=True, skip_tests=True)
+    plan = context.plan_builder("prod", skip_tests=True).build()
     assert not plan.requires_backfill
     assert not plan.has_changes
     assert not plan.missing_intervals
@@ -2399,7 +3336,7 @@ def test_auto_categorization(sushi_context: Context):
 def test_multi(mocker):
     context = Context(paths=["examples/multi/repo_1", "examples/multi/repo_2"], gateway="memory")
     context._new_state_sync().reset(default_catalog=context.default_catalog)
-    plan = context.plan()
+    plan = context.plan_builder().build()
     assert len(plan.new_snapshots) == 4
     context.apply(plan)
 
@@ -2414,7 +3351,7 @@ def test_multi(mocker):
     model = context.get_model("bronze.a")
     assert model.project == "repo_1"
     context.upsert_model(model.copy(update={"query": model.query.select("'c' AS c")}))
-    plan = context.plan()
+    plan = context.plan_builder().build()
 
     assert set(snapshot.name for snapshot in plan.directly_modified) == {
         '"memory"."bronze"."a"',
@@ -2432,7 +3369,7 @@ def test_multi(mocker):
 def test_multi_dbt(mocker):
     context = Context(paths=["examples/multi_dbt/bronze", "examples/multi_dbt/silver"])
     context._new_state_sync().reset(default_catalog=context.default_catalog)
-    plan = context.plan()
+    plan = context.plan_builder().build()
     assert len(plan.new_snapshots) == 4
     context.apply(plan)
     validate_apply_basics(context, c.PROD, plan.snapshots.values())
@@ -2443,7 +3380,7 @@ def test_multi_hybrid(mocker):
         paths=["examples/multi_hybrid/dbt_repo", "examples/multi_hybrid/sqlmesh_repo"]
     )
     context._new_state_sync().reset(default_catalog=context.default_catalog)
-    plan = context.plan()
+    plan = context.plan_builder().build()
 
     assert len(plan.new_snapshots) == 5
     assert context.dag.roots == {'"memory"."dbt_repo"."e"'}
@@ -2488,12 +3425,11 @@ def test_incremental_time_self_reference(
     )
     assert df.iloc[0, 0] == pd.to_datetime(end_date)
     results = sushi_data_validator.validate("sushi.customer_revenue_lifetime", start_date, end_date)
-    plan = sushi_context.plan(
+    plan = sushi_context.plan_builder(
         restate_models=["sushi.customer_revenue_lifetime", "sushi.customer_revenue_by_day"],
-        no_prompts=True,
         start=start_date,
         end="5 days ago",
-    )
+    ).build()
     revenue_lifeteime_snapshot = sushi_context.get_snapshot(
         "sushi.customer_revenue_lifetime", raise_if_missing=True
     )

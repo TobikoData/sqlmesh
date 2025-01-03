@@ -85,7 +85,7 @@ def test_manifest_helper(caplog):
             MacroReference(name="source"),
         },
         sources={"streaming.items", "streaming.orders", "streaming.order_items"},
-        variables={"yet_another_var"},
+        variables={"yet_another_var", "nested_vars"},
     )
     assert waiter_revenue_by_day_config.materialized == "incremental"
     assert waiter_revenue_by_day_config.incremental_strategy == "delete+insert"

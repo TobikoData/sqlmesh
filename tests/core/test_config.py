@@ -494,13 +494,13 @@ environment_catalog_mapping:
 
 
 def test_physical_schema_mapping_mutually_exclusive_with_physical_schema_override() -> None:
-    Config(physical_schema_override={"foo": "bar"})
+    Config(physical_schema_override={"foo": "bar"})  # type: ignore
     Config(physical_schema_mapping={"^foo$": "bar"})
 
     with pytest.raises(
         ConfigError, match=r"Only one.*physical_schema_override.*physical_schema_mapping"
     ):
-        Config(physical_schema_override={"foo": "bar"}, physical_schema_mapping={"^foo$": "bar"})
+        Config(physical_schema_override={"foo": "bar"}, physical_schema_mapping={"^foo$": "bar"})  # type: ignore
 
 
 def test_load_feature_flag(tmp_path_factory):

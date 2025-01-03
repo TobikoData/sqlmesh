@@ -25,6 +25,7 @@ from sqlmesh.core.config import (
 )
 from sqlmesh.core.context import Context, ExecutionContext
 from sqlmesh.core.dialect import parse
+from sqlmesh.core.engine_adapter.base import MERGE_SOURCE_ALIAS, MERGE_TARGET_ALIAS
 from sqlmesh.core.macros import MacroEvaluator, macro
 from sqlmesh.core.model import (
     CustomKind,
@@ -4072,7 +4073,7 @@ def test_default_catalog_sql(assert_exp_eq):
     The system is not designed to actually support having an engine that doesn't support default catalog
     to start supporting it or the reverse of that. If that did happen then bugs would occur.
     """
-    HASH_WITH_CATALOG = "368216481"
+    HASH_WITH_CATALOG = "516937963"
 
     # Test setting default catalog doesn't change hash if it matches existing logic
     expressions = d.parse(
@@ -4238,7 +4239,7 @@ def test_default_catalog_sql(assert_exp_eq):
 
 
 def test_default_catalog_python():
-    HASH_WITH_CATALOG = "663490914"
+    HASH_WITH_CATALOG = "770057346"
 
     @model(name="db.table", kind="full", columns={'"COL"': "int"})
     def my_model(context, **kwargs):
@@ -4330,7 +4331,7 @@ def test_default_catalog_external_model():
     Since external models fqns are the only thing affected by default catalog, and when they change new snapshots
     are made, the hash will be the same across different names.
     """
-    EXPECTED_HASH = "627688262"
+    EXPECTED_HASH = "3614876346"
 
     model = create_external_model("db.table", columns={"a": "int", "limit": "int"})
     assert model.default_catalog is None
@@ -5050,6 +5051,7 @@ def test_this_model() -> None:
         return not this_model or (
             isinstance(this_model, exp.Table)
             and this_model.sql(dialect=evaluator.dialect, comments=False) == expected_name
+            and evaluator.this_model == expected_name
         )
 
     expressions = d.parse(
@@ -5907,6 +5909,119 @@ materialized TRUE
     )
 
 
+def test_merge_filter():
+    expressions = d.parse(
+        """
+        MODEL (
+          name db.employees,
+          kind INCREMENTAL_BY_UNIQUE_KEY (
+            unique_key name,
+            merge_filter source.salary > 0
+          )
+        );
+        SELECT 'name' AS name, 1 AS salary;
+    """
+    )
+
+    expected_incremental_predicate = f"{MERGE_SOURCE_ALIAS}.salary > 0"
+
+    model = load_sql_based_model(expressions, dialect="hive")
+    assert model.kind.merge_filter.sql() == expected_incremental_predicate
+
+    model = SqlModel.parse_raw(model.json())
+    assert model.kind.merge_filter.sql() == expected_incremental_predicate
+
+    expressions = d.parse(
+        """
+        MODEL (
+          name db.test,
+          kind INCREMENTAL_BY_UNIQUE_KEY (
+            unique_key purchase_order_id,
+            when_matched (
+              WHEN MATCHED AND source._operation = 1 THEN DELETE
+              WHEN MATCHED AND source._operation <> 1 THEN UPDATE SET target.purchase_order_id = 1
+            ),
+            merge_filter (
+                source.ds > (SELECT MAX(ds) FROM db.test) AND
+                source.ds > @start_ds AND
+                source._operation <> 1 AND 
+                target.start_date > dateadd(day, -7, current_date)
+            )
+          )
+        );
+
+        SELECT
+          purchase_order_id,
+          start_date
+        FROM db.upstream
+        """
+    )
+
+    model = SqlModel.parse_raw(load_sql_based_model(expressions).json())
+    assert d.format_model_expressions(model.render_definition()) == (
+        f"""MODEL (
+  name db.test,
+  kind INCREMENTAL_BY_UNIQUE_KEY (
+    unique_key ("purchase_order_id"),
+    when_matched (
+      WHEN MATCHED AND {MERGE_SOURCE_ALIAS}._operation = 1 THEN DELETE
+      WHEN MATCHED AND {MERGE_SOURCE_ALIAS}._operation <> 1 THEN UPDATE SET {MERGE_TARGET_ALIAS}.purchase_order_id = 1
+    ),
+    merge_filter (
+      {MERGE_SOURCE_ALIAS}.ds > (
+        SELECT
+          MAX(ds)
+        FROM db.test
+      )
+      AND {MERGE_SOURCE_ALIAS}.ds > '1970-01-01'
+      AND {MERGE_SOURCE_ALIAS}._operation <> 1
+      AND {MERGE_TARGET_ALIAS}.start_date > DATEADD(day, -7, CURRENT_DATE)
+    ),
+    batch_concurrency 1,
+    forward_only FALSE,
+    disable_restatement FALSE,
+    on_destructive_change 'ERROR'
+  )
+);
+
+SELECT
+  purchase_order_id,
+  start_date
+FROM db.upstream"""
+    )
+
+
+def test_merge_filter_macro():
+    @macro()
+    def predicate(
+        evaluator: MacroEvaluator,
+        cluster_column: exp.Column,
+    ) -> exp.Expression:
+        return parse_one(f"source.{cluster_column} > dateadd(day, -7, target.{cluster_column})")
+
+    expressions = d.parse(
+        """
+        MODEL (
+          name db.incremental_model,
+          kind INCREMENTAL_BY_UNIQUE_KEY (
+            unique_key id,
+            merge_filter @predicate(update_datetime)
+          ),
+          clustered_by update_datetime
+        );
+        SELECT id, update_datetime FROM db.test_model;
+    """
+    )
+
+    expected_incremental_predicate = f"{MERGE_SOURCE_ALIAS}.update_datetime > DATE_ADD({MERGE_TARGET_ALIAS}.update_datetime, -7, 'DAY')"
+
+    model = load_sql_based_model(expressions, dialect="snowflake")
+    assert model.kind.merge_filter.sql() == expected_incremental_predicate
+
+    model = SqlModel.parse_raw(model.json())
+    assert model.kind.merge_filter.sql() == expected_incremental_predicate
+
+
 @pytest.mark.parametrize(
     "metadata_only",
     [True, False],
@@ -6318,3 +6433,190 @@ def test_fingerprint_signals():
     model = load_sql_based_model(expressions, signal_definitions=signal.get_registry())
     model.signals.clear()
     assert_metadata_only()
+
+
+def test_model_optimize(tmp_path: Path, assert_exp_eq):
+    defaults = [
+        ModelDefaultsConfig(optimize_query=True).dict(),
+        ModelDefaultsConfig(optimize_query=False).dict(),
+    ]
+    non_optimized_sql = 'SELECT 1 + 2 AS "new_col"'
+    optimized_sql = 'SELECT 3 AS "new_col"'
+
+    # Model flag is False, overriding defaults
+    disabled_opt = d.parse(
+        """
+        MODEL (
+            name test,
+            optimize_query False,
+        );
+
+        SELECT 1 + 2 AS new_col
+        """
+    )
+
+    for default in defaults:
+        model = load_sql_based_model(disabled_opt, defaults=default)
+        assert_exp_eq(model.render_query(), non_optimized_sql)
+
+    # Model flag is True, overriding defaults
+    enabled_opt = d.parse(
+        """
+        MODEL (
+            name test,
+            optimize_query True,
+        );
+
+        SELECT 1 + 2 AS new_col
+        """
+    )
+
+    for default in defaults:
+        model = load_sql_based_model(enabled_opt, defaults=default)
+        assert_exp_eq(model.render_query(), optimized_sql)
+
+    # Model flag is not defined, behavior is set according to the defaults
+    none_opt = d.parse(
+        """
+        MODEL (
+            name test,
+        );
+
+        SELECT 1 + 2 AS new_col
+        """
+    )
+
+    assert_exp_eq(load_sql_based_model(none_opt).render_query(), optimized_sql)
+    assert_exp_eq(
+        load_sql_based_model(none_opt, defaults=defaults[0]).render_query(), optimized_sql
+    )
+    assert_exp_eq(
+        load_sql_based_model(none_opt, defaults=defaults[1]).render_query(), non_optimized_sql
+    )
+
+    # Ensure that plan works as expected (optimize_query flag affects the model's data hash)
+    for parsed_model in [enabled_opt, disabled_opt, none_opt]:
+        context = Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb")))
+        context.upsert_model(load_sql_based_model(parsed_model))
+        context.plan(auto_apply=True, no_prompts=True)
+
+    # Ensure non-SQLModels raise if optimize_query is not None
+    with pytest.raises(
+        ConfigError,
+        match=r"SQLMesh query optimizer can only be enabled/disabled for SQL models",
+    ):
+        seed_path = tmp_path / "seed.csv"
+        model_kind = SeedKind(path=str(seed_path.absolute()))
+        with open(seed_path, "w", encoding="utf-8") as fd:
+            fd.write(
+                """
+    col_a,col_b,col_c
+    1,text_a,1.0
+    2,text_b,2.0"""
+            )
+        model = create_seed_model("test_db.test_seed_model", model_kind, optimize_query=True)
+        context = Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb")))
+        context.upsert_model(model)
+        context.plan(auto_apply=True, no_prompts=True)
+
+
+def test_column_description_metadata_change():
+    context = Context(config=Config())
+
+    model = load_sql_based_model(
+        d.parse(
+            """
+        MODEL (
+          name db.test_model,
+          kind full
+        );
+
+        SELECT
+          1 AS id /* description */
+        """
+        ),
+        default_catalog=context.default_catalog,
+    )
+
+    context.upsert_model(model)
+    context.plan(no_prompts=True, auto_apply=True)
+
+    context.upsert_model("db.test_model", query=parse_one("SELECT 1 AS id /* description 2 */"))
+    plan = context.plan(no_prompts=True, auto_apply=True)
+
+    snapshots = list(plan.snapshots.values())
+    assert len(snapshots) == 1
+
+    snapshot = snapshots[0]
+    assert len(snapshot.previous_versions) == 1
+    assert snapshot.change_category == SnapshotChangeCategory.METADATA
+
+
+def test_auto_restatement():
+    parsed_definition = d.parse(
+        """
+        MODEL (
+          name test_schema.test_model,
+          kind INCREMENTAL_BY_TIME_RANGE(
+            time_column a,
+            auto_restatement_cron '@daily',
+          )
+        );
+        SELECT 1 AS c
+        """
+    )
+    model = load_sql_based_model(parsed_definition)
+    assert model.auto_restatement_cron == "@daily"
+    assert (
+        model.kind.to_expression().sql(pretty=True)
+        == """INCREMENTAL_BY_TIME_RANGE (
+  time_column ("a", '%Y-%m-%d'),
+  forward_only FALSE,
+  disable_restatement FALSE,
+  on_destructive_change 'ERROR',
+  auto_restatement_cron '@daily'
+)"""
+    )
+
+    parsed_definition = d.parse(
+        """
+        MODEL (
+          name test_schema.test_model,
+          kind INCREMENTAL_BY_TIME_RANGE(
+            time_column a,
+            auto_restatement_cron '@daily',
+            auto_restatement_intervals 1,
+          )
+        );
+        SELECT 1 AS c
+        """
+    )
+    model = load_sql_based_model(parsed_definition)
+    assert model.auto_restatement_cron == "@daily"
+    assert model.auto_restatement_intervals == 1
+    assert (
+        model.kind.to_expression().sql(pretty=True)
+        == """INCREMENTAL_BY_TIME_RANGE (
+  time_column ("a", '%Y-%m-%d'),
+  auto_restatement_intervals 1,
+  forward_only FALSE,
+  disable_restatement FALSE,
+  on_destructive_change 'ERROR',
+  auto_restatement_cron '@daily'
+)"""
+    )
+
+    parsed_definition = d.parse(
+        """
+        MODEL (
+          name test_schema.test_model,
+          kind INCREMENTAL_BY_TIME_RANGE(
+            time_column a,
+            auto_restatement_cron '@invalid'
+          )
+        );
+        SELECT 1 AS c
+        """
+    )
+    with pytest.raises(ValueError, match="Invalid cron expression '@invalid'.*"):
+        load_sql_based_model(parsed_definition)
