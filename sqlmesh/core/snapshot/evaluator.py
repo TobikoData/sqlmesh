@@ -261,6 +261,7 @@ class SnapshotEvaluator:
         target_snapshots: t.Iterable[Snapshot],
         snapshots: t.Dict[SnapshotId, Snapshot],
         deployability_index: t.Optional[DeployabilityIndex] = None,
+        on_start: t.Optional[t.Callable] = None,
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]] = None,
         allow_destructive_snapshots: t.Set[str] = set(),
     ) -> None:
@@ -270,6 +271,7 @@ class SnapshotEvaluator:
             target_snapshots: Target snapshots.
             snapshots: Mapping of snapshot ID to snapshot.
             deployability_index: Determines snapshots that are deployable in the context of this creation.
+            on_start: A callback to initialize the snapshot creation progress bar.
             on_complete: A callback to call on each successfully created snapshot.
             allow_destructive_snapshots: Set of snapshots that are allowed to have destructive schema changes.
         """
@@ -326,11 +328,11 @@ class SnapshotEvaluator:
                         table_deployability[table_name]
                     )
                 target_deployability_flags[snapshot.name].sort()
-            elif on_complete:
-                on_complete(snapshot)
 
         if not snapshots_to_create:
             return
+        if on_start:
+            on_start(len(snapshots_to_create))
         self._create_schemas(tables_by_schema, gateway_by_schema)
         self._create_snapshots(
             snapshots_to_create,
@@ -350,7 +352,7 @@ class SnapshotEvaluator:
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]],
         allow_destructive_snapshots: t.Set[str],
     ) -> None:
-        """Internal method to create tables in parrallel."""
+        """Internal method to create tables in parallel."""
         with self.concurrent_context():
             concurrent_apply_to_snapshots(
                 snapshots_to_create,
