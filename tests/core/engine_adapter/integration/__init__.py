@@ -471,6 +471,7 @@ class TestContext:
         )
         if config_mutator:
             config_mutator(self.gateway, config)
+        config.gateways = {self.gateway: config.gateways[self.gateway]}
 
         gateway_config = config.gateways[self.gateway]
         if (
