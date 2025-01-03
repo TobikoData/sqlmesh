@@ -1,8 +1,5 @@
 services:
   risingwave:
-    image: risingwavelabs/risingwave:nightly-20241216
+    image: risingwavelabs/risingwave:nightly-20250101
     ports:
       - "4566:4566"
-    # environment:
-    #   - RUST_BACKTRACE=1
-    #   - RW_LOG_LEVEL=debug
