@@ -387,8 +387,6 @@ def test_create_table(ctx: TestContext):
     if ctx.engine_adapter.COMMENT_CREATION_TABLE.is_supported:
         table_description = ctx.get_table_comment(table.db, "test_table")
         column_comments = ctx.get_column_comments(table.db, "test_table")
-        print("table description should be:", table_description)
-        print("column description should be:", column_comments)
         assert table_description == "test table description"
         assert column_comments == {"id": "test id column description"}
 
