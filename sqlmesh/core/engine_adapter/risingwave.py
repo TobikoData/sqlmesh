@@ -30,7 +30,6 @@ class RisingwaveEngineAdapter(PostgresEngineAdapter):
     CATALOG_SUPPORT = CatalogSupport.SINGLE_CATALOG_ONLY
     COMMENT_CREATION_TABLE = CommentCreationTable.COMMENT_COMMAND_ONLY
     COMMENT_CREATION_VIEW = CommentCreationView.UNSUPPORTED
-    # COMMENT_CREATION_VIEW = CommentCreationView.COMMENT_COMMAND_ONLY
     SUPPORTS_MATERIALIZED_VIEWS = True
     # Temporarily set this because integration test: test_transaction uses truncate table operation, which is not supported in risingwave.
     SUPPORTS_TRANSACTIONS = False
