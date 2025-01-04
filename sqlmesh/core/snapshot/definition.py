@@ -1436,7 +1436,10 @@ class DeployabilityIndex(PydanticModel, frozen=True):
                 )
             else:
                 this_deployable, children_deployable = False, False
-                representative_shared_version_ids.discard(node)
+                if node in snapshots and not snapshots[node].is_paused:
+                    representative_shared_version_ids.add(node)
+                else:
+                    representative_shared_version_ids.discard(node)
 
             deployability_mapping[node] = deployability_mapping.get(node, True) and this_deployable
             for child in reversed_dag[node]:
