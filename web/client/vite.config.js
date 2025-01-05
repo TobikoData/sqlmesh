@@ -35,6 +35,7 @@ export default defineConfig({
     __BASE_URL__: JSON.stringify(BASE_URL),
     __IS_HEADLESS__: JSON.stringify(Boolean(process.env.IS_HEADLESS ?? false)),
   },
+  // @ts-expect-error: cssInjectedByJsPlugin has old type
   plugins: [react(), cssInjectedByJsPlugin()],
   test: {
     globals: true,
@@ -53,15 +54,15 @@ export default defineConfig({
             },
             [`${BASE_URL}/data-catalog`]: {
               target: 'http://app:8001',
-              rewrite: path => BASE,
+              rewrite: () => BASE,
             },
             [`${BASE_URL}/data`]: {
               target: 'http://app:8001',
-              rewrite: path => BASE,
+              rewrite: () => BASE,
             },
             [`${BASE_URL}/lineage`]: {
               target: 'http://app:8001',
-              rewrite: path => BASE,
+              rewrite: () => BASE,
             },
           },
         },

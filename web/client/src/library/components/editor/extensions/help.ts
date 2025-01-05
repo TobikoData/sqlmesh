@@ -145,7 +145,9 @@ function getMarkDecorations(
         key,
       }
 
-      isNotNil(callback) && callback(options)
+      if (isNotNil(callback)) {
+        callback(options)
+      }
     }
   }
 }

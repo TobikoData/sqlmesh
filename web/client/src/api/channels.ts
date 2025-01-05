@@ -29,13 +29,8 @@ class EventSourceConnection {
   }
 
   listen(eventSource: EventSource): void {
-    eventSource.addEventListener('error', (e: MessageEvent) => {
-      this.reconnect(DELAY_AND_RETRY)
-    })
-
-    eventSource.addEventListener('ping', (e: MessageEvent) => {
-      this.reconnect(this.delay)
-    })
+    eventSource.addEventListener('error', () => this.reconnect(DELAY_AND_RETRY))
+    eventSource.addEventListener('ping', () => this.reconnect(this.delay))
   }
 
   cleanup(): void {

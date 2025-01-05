@@ -1,5 +1,7 @@
+import cq from '@tailwindcss/container-queries'
+
 /** @type {import('tailwindcss').Config} */
-module.exports = {
+export default {
   content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
   darkMode: ['class', '[mode="dark"]'],
   theme: {
@@ -184,5 +186,5 @@ module.exports = {
       serif: ['Publico', 'serif'],
     },
   },
-  plugins: [require('@tailwindcss/container-queries')],
+  plugins: [cq],
 }

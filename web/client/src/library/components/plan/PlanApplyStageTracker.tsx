@@ -72,7 +72,6 @@ export default function PlanApplyStageTracker(): JSX.Element {
       leave="transition ease duration-300 transform"
       leaveFrom="opacity-100 scale-100"
       leaveTo="opacity-0 scale-95"
-      className={clsx('my-2 rounded-xl', isFailed && 'bg-danger-5')}
     >
       {showFailedMessage ? (
         <Banner
@@ -727,7 +726,6 @@ function Stage({
       leave="transition ease duration-300 transform"
       leaveFrom="opacity-100 scale-100"
       leaveTo="opacity-0 scale-95"
-      className="my-2"
     >
       <Disclosure>
         <Banner
@@ -801,7 +799,6 @@ function Stage({
           leave="transition ease duration-300 transform"
           leaveFrom="opacity-100 scale-100"
           leaveTo="opacity-0 scale-95"
-          className="trasition-all duration-300 ease-in-out"
         >
           <Disclosure.Panel
             static

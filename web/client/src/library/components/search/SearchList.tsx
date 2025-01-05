@@ -196,13 +196,12 @@ export default function SearchList<
             )}
             ref={elList}
             onKeyDown={(e: React.KeyboardEvent) => {
-              if (e.key === 'ArrowUp') {
-                activeIndex > 0 && setActiveIndex(activeIndex - 1)
+              if (e.key === 'ArrowUp' && activeIndex > 0) {
+                setActiveIndex(activeIndex - 1)
               }
 
-              if (e.key === 'ArrowDown') {
-                activeIndex < found.length - 1 &&
-                  setActiveIndex(activeIndex + 1)
+              if (e.key === 'ArrowDown' && activeIndex < found.length - 1) {
+                setActiveIndex(activeIndex + 1)
               }
 
               if (e.key === 'Enter') {

@@ -12,7 +12,7 @@ import('https://cdn.jsdelivr.net/pyodide/v0.23.2/full/pyodide.js')
 
         try {
           payload = JSON.parse(sqlglot.get('validate')?.(e.data.payload))
-        } catch (error) {
+        } catch {
           payload = false
         }
 
@@ -27,7 +27,7 @@ import('https://cdn.jsdelivr.net/pyodide/v0.23.2/full/pyodide.js')
 
         try {
           payload = JSON.parse(sqlglot.get('get_dialect')?.(e.data.payload))
-        } catch (error) {
+        } catch {
           payload = {
             keywords: '',
             types: '',
@@ -45,7 +45,7 @@ import('https://cdn.jsdelivr.net/pyodide/v0.23.2/full/pyodide.js')
 
         try {
           payload = JSON.parse(sqlglot.get('dialects'))
-        } catch (error) {
+        } catch {
           payload = []
         }
 

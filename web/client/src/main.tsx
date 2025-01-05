@@ -1,4 +1,4 @@
-import React, { type HTMLAttributes } from 'react'
+import React from 'react'
 import ThemeProvider from '@context/theme'
 import ReactDOM from 'react-dom/client'
 import { type ApiQueryMeta } from './api'
@@ -15,12 +15,10 @@ import { isNotNil } from './utils'
 
 import './index.css'
 
-export interface PropsComponent extends HTMLAttributes<HTMLElement> {}
-
 const client = new QueryClient({
   queryCache: new QueryCache({
     onError(error, query) {
-      ;(query.meta as ApiQueryMeta).onError(error as ErrorIDE)
+      ;(query.meta as ApiQueryMeta).onError(error as unknown as ErrorIDE)
     },
     onSuccess(_, query) {
       ;(query.meta as ApiQueryMeta).onSuccess()

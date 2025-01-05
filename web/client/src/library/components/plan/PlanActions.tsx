@@ -162,7 +162,6 @@ export default function PlanActions({
             leave="transition ease duration-300 transform"
             leaveFrom="opacity-100 scale-100"
             leaveTo="opacity-0 scale-95"
-            className="trasition-all duration-300 ease-in-out"
           >
             {showPlanActionButton && (
               <Button

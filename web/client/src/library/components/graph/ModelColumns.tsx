@@ -584,7 +584,9 @@ function ColumnDisplay({
 
   try {
     decodedColumnName = decodeURI(columnName)
-  } catch {}
+  } catch (err) {
+    console.warn(err)
+  }
 
   return (
     <div

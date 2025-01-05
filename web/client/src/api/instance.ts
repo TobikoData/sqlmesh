@@ -118,7 +118,7 @@ function toRequestHeaders(headers?: Record<string, string>): HeadersInit {
 function toRequestBody(obj: unknown): BodyInit {
   try {
     return JSON.stringify(obj)
-  } catch (error) {
+  } catch {
     return ''
   }
 }
