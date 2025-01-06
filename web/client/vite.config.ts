@@ -11,10 +11,10 @@ export default defineConfig({
   base: BASE,
   resolve: {
     alias: [
-      { find: '~', replacement: path.resolve(__dirname, './src') },
+      { find: '~', replacement: path.resolve('./src') },
       {
         find: '@components',
-        replacement: path.resolve(__dirname, './src/library/components'),
+        replacement: path.resolve('./src/library/components'),
       },
       { find: '@hooks', replacement: path.resolve(__dirname, './src/hooks') },
       { find: '@utils', replacement: path.resolve(__dirname, './src/utils') },

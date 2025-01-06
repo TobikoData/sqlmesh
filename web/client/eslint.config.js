@@ -1,4 +1,3 @@
-import globals from 'globals'
 import eslint from '@eslint/js'
 import prettier from 'eslint-config-prettier'
 import tsParser from '@typescript-eslint/parser'
@@ -14,11 +13,6 @@ export default tseslint.config(
     files: ['**/*.{js,jsx,ts,tsx}'],
     languageOptions: {
       parser: tsParser,
-      globals: {
-        ...globals.serviceworker,
-        ...globals.browser,
-        ...globals.node,
-      },
     },
   },
   {

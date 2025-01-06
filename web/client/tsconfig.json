@@ -36,8 +36,7 @@
     ".prettierrc.js",
     "eslint.config.js",
     "postcss.config.js",
-    "tailwind.config.js",
-    "vite.config.js"
+    "tailwind.config.js"
   ],
   "exclude": ["node_modules"]
 }
