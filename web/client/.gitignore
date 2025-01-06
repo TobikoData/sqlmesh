@@ -4,3 +4,4 @@ node_modules/
 /playwright/.cache/
 dist
 tsconfig.tsbuildinfo
+/blob-report/

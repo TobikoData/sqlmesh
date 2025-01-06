@@ -35,7 +35,6 @@
     "**/*.tsx",
     ".prettierrc.js",
     "eslint.config.js",
-    "playwright.config.js",
     "postcss.config.js",
     "tailwind.config.js",
     "vite.config.js"
