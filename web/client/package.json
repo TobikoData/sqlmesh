@@ -1,7 +1,6 @@
 {
   "name": "tobiko",
   "version": "0.0.0",
-  "type": "module",
   "scripts": {
     "dev": "npm run generate:api && vite",
     "build": "npm run generate:api && tsc && vite build",

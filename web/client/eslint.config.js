@@ -7,7 +7,6 @@ const reactPlugin = require('eslint-plugin-react')
 
 const OFF = 0
 const ERROR = 2
-const WARN = 1
 
 module.exports = tseslint.config(
   {
@@ -24,7 +23,6 @@ module.exports = tseslint.config(
   {
     ignores: [
       'src/api/client.ts',
-      'eslint.config.cjs',
       'test-results',
       'playwright',
       'playwright-report',
@@ -42,12 +40,6 @@ module.exports = tseslint.config(
   eslint.configs.recommended,
   tseslint.configs.recommended,
   prettier,
-  {
-    files: ['*.js'],
-    languageOptions: {
-      parser: undefined, // Use default JS parser for JS files
-    },
-  },
   {
     rules: {
       'no-unused-expressions': OFF,
@@ -78,7 +70,8 @@ module.exports = tseslint.config(
       '@typescript-eslint/no-confusing-void-expression': OFF,
       '@typescript-eslint/no-empty-object-type': OFF,
       '@typescript-eslint/no-unused-expressions': OFF,
-      '@typescript-eslint/no-explicit-any': WARN,
+      '@typescript-eslint/no-explicit-any': OFF,
+      '@typescript-eslint/no-require-imports': OFF,
     },
   },
 )

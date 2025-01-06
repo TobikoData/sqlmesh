@@ -30,13 +30,6 @@
     },
     "typeRoots": ["./src/types", "./node_modules/@types"]
   },
-  "include": [
-    "**/*.ts",
-    "**/*.tsx",
-    ".prettierrc.js",
-    "eslint.config.cjs",
-    "postcss.config.js",
-    "tailwind.config.js"
-  ],
+  "include": ["**/*.ts", "**/*.tsx"],
   "exclude": ["node_modules"]
 }

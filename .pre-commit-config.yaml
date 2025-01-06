@@ -41,7 +41,7 @@ repos:
         files: \.[jt]sx?$
         exclude: ^(web/client/node_modules)
         types: [file]
-        entry: eslint --fix --config web/client/eslint.config.cjs
+        entry: eslint --fix --config web/client/eslint.config.js
         additional_dependencies:
           [
             "@typescript-eslint/eslint-plugin@8.19.0",
