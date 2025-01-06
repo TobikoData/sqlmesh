@@ -107,7 +107,7 @@ SQLMesh automatically infers used Python libraries by statically analyzing the c
 
 Additionally, dependencies can be specified, pinned, or excluded using the `sqlmesh-requirements.lock` file. See the [Python library dependencies](../guides/configuration.md#python-library-dependencies) section in the SQLMesh configuration guide for more information.
 
-## Self-hosted Executors
+## Hybrid Deployment (Self-hosted Executors)
 
 Letting Tobiko Cloud manage your data warehouse connections is a secure and convenient way to run your project. However, some organizations may prefer to not share their data warehouse credentials with a third party or bring the execution closer to their data.
 
@@ -115,8 +115,8 @@ To support this, Tobiko Cloud offers a self-hosted executor option. With this ap
 
 ### How it works
 
-TBD
+Coming soon!
 
 ### Configuration
 
-TBD
+Coming soon!
