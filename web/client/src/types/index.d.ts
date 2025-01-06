@@ -1,5 +1,5 @@
 declare module '@uidotdev/usehooks'
-declare module 'https://cdn.jsdelivr.net/pyodide/v0.23.2/full/pyodide.js'
+declare module 'https://cdn.jsdelivr.net/pyodide/v0.27.0/full/pyodide.js'
 declare module '*?worker&inline' {
   const InlineWorkerFactory: () => Worker
   export default InlineWorkerFactory
