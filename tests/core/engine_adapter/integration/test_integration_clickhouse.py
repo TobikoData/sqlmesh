@@ -497,3 +497,51 @@ def test_insert_overwrite_by_condition_inc_by_partition(ctx: TestContext):
             ]
         ),
     )
+
+
+def test_inc_by_time_auto_partition_string(ctx: TestContext):
+    # ensure automatic time partitioning works when the time column is not a Date/DateTime type
+    existing_table_name = _create_table_and_insert_existing_data(
+        ctx,
+        columns_to_types={
+            "id": exp.DataType.build("Int8", "clickhouse"),
+            "ds": exp.DataType.build("String", "clickhouse"),  # String time column
+        },
+        table_name="data_existing",
+        partitioned_by=None,
+    )
+
+    sqlmesh_context, model = ctx.upsert_sql_model(
+        f"""
+        MODEL (
+            name test.inc_by_time_no_partition,
+            kind INCREMENTAL_BY_TIME_RANGE (
+                time_column ds
+            ),
+            dialect clickhouse,
+            start '2023-01-01'
+        );
+
+        SELECT
+            id::Int8,
+            ds::String
+        FROM {existing_table_name.sql()}
+        WHERE ds BETWEEN @start_ds AND @end_ds
+        """
+    )
+
+    plan = sqlmesh_context.plan(no_prompts=True, auto_apply=True)
+
+    physical_location = ctx.engine_adapter.get_data_objects(
+        plan.environment.snapshots[0].physical_schema
+    )[0]
+
+    partitions = ctx.engine_adapter.fetchall(
+        exp.select("_partition_id")
+        .distinct()
+        .from_(f"{physical_location.schema_name}.{physical_location.name}")
+    )
+
+    # The automatic time partitioning creates one partition per week. The 4 input data points
+    # are located in three distinct weeks, which should have one partition each.
+    assert len(partitions) == 3
