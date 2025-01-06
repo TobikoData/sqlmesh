@@ -2457,6 +2457,99 @@ def test_prod_restatement_plan_causes_dev_intervals_to_be_processed_in_next_dev_
         ]
 
 
+def test_prod_restatement_plan_missing_model_in_dev(
+    tmp_path: Path,
+):
+    """
+    Scenario:
+        I have a model B in prod but only model A in dev
+        I restate B in prod
+
+    Outcome:
+        The A model should be ignore and the plan shouldn't fail
+    """
+
+    model_a = """
+    MODEL (
+        name test.a,
+        kind INCREMENTAL_BY_TIME_RANGE (
+            time_column "ts"
+        ),
+        start '2024-01-01 00:00:00',
+        cron '@hourly'
+    );
+
+    select account_id, ts from test.external_table;
+    """
+
+    model_b = """
+        MODEL (
+            name test.b,
+            kind INCREMENTAL_BY_TIME_RANGE (
+                time_column ts
+            ),
+            cron '@daily'
+        );
+
+        select account_id, ts from test.external_table where ts between @start_ts and @end_ts;
+        """
+
+    models_dir = tmp_path / "models"
+    models_dir.mkdir()
+
+    with open(models_dir / "a.sql", "w") as f:
+        f.write(model_a)
+
+    config = Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))
+    ctx = Context(paths=[tmp_path], config=config)
+
+    engine_adapter = ctx.engine_adapter
+    engine_adapter.create_schema("test")
+
+    # source data
+    df = pd.DataFrame(
+        {
+            "account_id": [1001, 1002, 1003, 1004],
+            "ts": [
+                "2024-01-01 00:30:00",
+                "2024-01-01 01:30:00",
+                "2024-01-01 02:30:00",
+                "2024-01-02 00:30:00",
+            ],
+        }
+    )
+    columns_to_types = {
+        "account_id": exp.DataType.build("int"),
+        "ts": exp.DataType.build("timestamp"),
+    }
+    external_table = exp.table_(table="external_table", db="test", quoted=True)
+    engine_adapter.create_table(table_name=external_table, columns_to_types=columns_to_types)
+    engine_adapter.insert_append(
+        table_name=external_table, query_or_df=df, columns_to_types=columns_to_types
+    )
+
+    # plan + apply A[hourly] in dev
+    ctx.plan("dev", auto_apply=True, no_prompts=True)
+
+    # add B[daily] in prod and remove A
+    with open(models_dir / "b.sql", "w") as f:
+        f.write(model_b)
+    Path(models_dir / "a.sql").unlink()
+
+    # plan + apply dev
+    ctx.load()
+    ctx.plan(auto_apply=True, no_prompts=True)
+
+    # restate B in prod
+    ctx.plan(
+        restate_models=["test.b"],
+        start="2024-01-01",
+        end="2024-01-02",
+        auto_apply=True,
+        no_prompts=True,
+    )
+
+
 @time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_plan_against_expired_environment(init_and_plan_context: t.Callable):
     context, plan = init_and_plan_context("examples/sushi")
