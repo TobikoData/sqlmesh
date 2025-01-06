@@ -165,6 +165,6 @@ This gives you complete control over data security and network access while stil
 
 Coming soon!
 
-#### Configuration
+### Configuration
 
 Coming soon!
