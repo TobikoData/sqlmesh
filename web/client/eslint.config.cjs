@@ -1,23 +1,30 @@
-import eslint from '@eslint/js'
-import prettier from 'eslint-config-prettier'
-import tsParser from '@typescript-eslint/parser'
-import tseslint from 'typescript-eslint'
-import reactPlugin from 'eslint-plugin-react'
+const globals = require('globals')
+const eslint = require('@eslint/js')
+const prettier = require('eslint-config-prettier')
+const tsParser = require('@typescript-eslint/parser')
+const tseslint = require('typescript-eslint')
+const reactPlugin = require('eslint-plugin-react')
 
 const OFF = 0
 const ERROR = 2
 const WARN = 1
 
-export default tseslint.config(
+module.exports = tseslint.config(
   {
     files: ['**/*.{js,jsx,ts,tsx}'],
     languageOptions: {
       parser: tsParser,
+      globals: {
+        ...globals.serviceworker,
+        ...globals.browser,
+        ...globals.node,
+      },
     },
   },
   {
     ignores: [
       'src/api/client.ts',
+      'eslint.config.cjs',
       'test-results',
       'playwright',
       'playwright-report',

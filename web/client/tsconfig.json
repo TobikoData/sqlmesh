@@ -34,7 +34,7 @@
     "**/*.ts",
     "**/*.tsx",
     ".prettierrc.js",
-    "eslint.config.mjs",
+    "eslint.config.cjs",
     "postcss.config.js",
     "tailwind.config.js"
   ],
