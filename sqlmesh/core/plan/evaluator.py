@@ -357,7 +357,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         )
 
     def _restate(self, plan: EvaluatablePlan, snapshots_by_name: t.Dict[str, Snapshot]) -> None:
-        if not plan.restatements:
+        if not plan.restatements or plan.is_dev:
             return
 
         snapshot_intervals_to_restate = {
@@ -365,16 +365,15 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             for name, intervals in plan.restatements.items()
         }
 
-        if plan.is_prod:
-            # Restating intervals on prod plans should mean that the intervals are cleared across
-            # all environments, not just the version currently in prod
-            # This ensures that work done in dev environments can still be promoted to prod
-            # by forcing dev environments to re-run intervals that changed in prod
-            #
-            # Without this rule, its possible that promoting a dev table to prod will introduce old data to prod
-            snapshot_intervals_to_restate.update(
-                self._restatement_intervals_across_all_environments(plan.restatements)
-            )
+        # Restating intervals on prod plans should mean that the intervals are cleared across
+        # all environments, not just the version currently in prod
+        # This ensures that work done in dev environments can still be promoted to prod
+        # by forcing dev environments to re-run intervals that changed in prod
+        #
+        # Without this rule, its possible that promoting a dev table to prod will introduce old data to prod
+        snapshot_intervals_to_restate.update(
+            self._restatement_intervals_across_all_environments(plan.restatements)
+        )
 
         self.state_sync.remove_intervals(
             snapshot_intervals=list(snapshot_intervals_to_restate),
@@ -406,6 +405,8 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             env_dag = DAG({s.name: {p.name for p in s.parents} for s in env.snapshots})
 
             for restatement, intervals in prod_restatements.items():
+                if restatement not in keyed_snapshots:
+                    continue
                 affected_snapshot_names = [restatement] + env_dag.downstream(restatement)
                 snapshots_to_restate.update(
                     {(keyed_snapshots[a], intervals) for a in affected_snapshot_names}
@@ -470,7 +471,7 @@ class BaseAirflowPlanEvaluator(PlanEvaluator):
             if not plan_application_succeeded:
                 raise PlanError("Plan application failed.")
 
-            self.console.log_success("The plan has been applied successfully")
+            self.console.log_success("Plan applied successfully")
 
     @property
     def client(self) -> BaseAirflowClient:

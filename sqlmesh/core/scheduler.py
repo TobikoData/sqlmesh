@@ -293,6 +293,9 @@ class Scheduler:
         execution_time = execution_time or now()
 
         self.state_sync.refresh_snapshot_intervals(self.snapshots.values())
+        for s_id, interval in (restatements or {}).items():
+            self.snapshots[s_id].remove_interval(interval)
+
         if auto_restatement_enabled:
             auto_restated_intervals = apply_auto_restatements(self.snapshots, execution_time)
             self.state_sync.add_snapshots_intervals(auto_restated_intervals)

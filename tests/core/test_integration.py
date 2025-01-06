@@ -360,6 +360,77 @@ def test_forward_only_model_regular_plan_preview_enabled(init_and_plan_context: 
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_forward_only_model_restate_full_history_in_dev(init_and_plan_context: t.Callable):
+    context, _ = init_and_plan_context("examples/sushi")
+
+    model_name = "memory.sushi.customer_max_revenue"
+    expressions = d.parse(
+        f"""
+        MODEL (
+            name {model_name},
+            kind INCREMENTAL_BY_UNIQUE_KEY (
+                unique_key customer_id,
+                forward_only true,
+            ),
+        );
+
+        SELECT
+          customer_id, MAX(revenue) AS max_revenue
+        FROM memory.sushi.customer_revenue_lifetime
+        GROUP BY 1;
+        """
+    )
+
+    model = load_sql_based_model(expressions)
+    assert model.forward_only
+    assert model.kind.full_history_restatement_only
+    context.upsert_model(model)
+
+    context.plan("prod", skip_tests=True, auto_apply=True)
+
+    model_kwargs = {
+        **model.dict(),
+        # Make a breaking change.
+        "query": model.query.order_by("customer_id"),  # type: ignore
+    }
+    context.upsert_model(SqlModel.parse_obj(model_kwargs))
+
+    # Apply the model change in dev
+    plan = context.plan_builder("dev", skip_tests=True).build()
+    assert not plan.missing_intervals
+    context.apply(plan)
+
+    snapshot = context.get_snapshot(model, raise_if_missing=True)
+    snapshot_table_name = snapshot.table_name(False)
+
+    # Manually insert a dummy value to check that the table is recreated during the restatement
+    context.engine_adapter.insert_append(
+        snapshot_table_name,
+        pd.DataFrame({"customer_id": [-1], "max_revenue": [100]}),
+    )
+    df = context.engine_adapter.fetchdf(
+        "SELECT COUNT(*) AS cnt FROM sushi__dev.customer_max_revenue WHERE customer_id = -1"
+    )
+    assert df["cnt"][0] == 1
+
+    # Apply a restatement plan in dev
+    plan = context.plan("dev", restate_models=[model.name], auto_apply=True)
+    assert len(plan.missing_intervals) == 1
+
+    # Check that the dummy value is not present
+    df = context.engine_adapter.fetchdf(
+        "SELECT COUNT(*) AS cnt FROM sushi__dev.customer_max_revenue WHERE customer_id = -1"
+    )
+    assert df["cnt"][0] == 0
+
+    # Check that the table is not empty
+    df = context.engine_adapter.fetchdf(
+        "SELECT COUNT(*) AS cnt FROM sushi__dev.customer_max_revenue"
+    )
+    assert df["cnt"][0] > 0
+
+
+@time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_full_history_restatement_model_regular_plan_preview_enabled(
     init_and_plan_context: t.Callable,
 ):
@@ -2384,6 +2455,99 @@ def test_prod_restatement_plan_causes_dev_intervals_to_be_processed_in_next_dev_
             "2024-01-01 02:30:00",
             "2024-01-02 00:30:00",
         ]
+
+
+def test_prod_restatement_plan_missing_model_in_dev(
+    tmp_path: Path,
+):
+    """
+    Scenario:
+        I have a model B in prod but only model A in dev
+        I restate B in prod
+
+    Outcome:
+        The A model should be ignore and the plan shouldn't fail
+    """
+
+    model_a = """
+    MODEL (
+        name test.a,
+        kind INCREMENTAL_BY_TIME_RANGE (
+            time_column "ts"
+        ),
+        start '2024-01-01 00:00:00',
+        cron '@hourly'
+    );
+
+    select account_id, ts from test.external_table;
+    """
+
+    model_b = """
+        MODEL (
+            name test.b,
+            kind INCREMENTAL_BY_TIME_RANGE (
+                time_column ts
+            ),
+            cron '@daily'
+        );
+
+        select account_id, ts from test.external_table where ts between @start_ts and @end_ts;
+        """
+
+    models_dir = tmp_path / "models"
+    models_dir.mkdir()
+
+    with open(models_dir / "a.sql", "w") as f:
+        f.write(model_a)
+
+    config = Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))
+    ctx = Context(paths=[tmp_path], config=config)
+
+    engine_adapter = ctx.engine_adapter
+    engine_adapter.create_schema("test")
+
+    # source data
+    df = pd.DataFrame(
+        {
+            "account_id": [1001, 1002, 1003, 1004],
+            "ts": [
+                "2024-01-01 00:30:00",
+                "2024-01-01 01:30:00",
+                "2024-01-01 02:30:00",
+                "2024-01-02 00:30:00",
+            ],
+        }
+    )
+    columns_to_types = {
+        "account_id": exp.DataType.build("int"),
+        "ts": exp.DataType.build("timestamp"),
+    }
+    external_table = exp.table_(table="external_table", db="test", quoted=True)
+    engine_adapter.create_table(table_name=external_table, columns_to_types=columns_to_types)
+    engine_adapter.insert_append(
+        table_name=external_table, query_or_df=df, columns_to_types=columns_to_types
+    )
+
+    # plan + apply A[hourly] in dev
+    ctx.plan("dev", auto_apply=True, no_prompts=True)
+
+    # add B[daily] in prod and remove A
+    with open(models_dir / "b.sql", "w") as f:
+        f.write(model_b)
+    Path(models_dir / "a.sql").unlink()
+
+    # plan + apply dev
+    ctx.load()
+    ctx.plan(auto_apply=True, no_prompts=True)
+
+    # restate B in prod
+    ctx.plan(
+        restate_models=["test.b"],
+        start="2024-01-01",
+        end="2024-01-02",
+        auto_apply=True,
+        no_prompts=True,
+    )
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")

@@ -1732,6 +1732,43 @@ def test_deployability_index_unpaused_forward_only(make_snapshot):
     assert deplyability_index.is_representative(snapshot_b)
 
 
+def test_deployability_index_unpaused_auto_restatement(make_snapshot):
+    model_a = SqlModel(
+        name="a",
+        query=parse_one("SELECT 1, ds"),
+        kind=IncrementalByTimeRangeKind(
+            time_column="ds", forward_only=True, auto_restatement_cron="@weekly"
+        ),
+    )
+    snapshot_a = make_snapshot(model_a)
+    snapshot_a.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    snapshot_a.unpaused_ts = 1
+
+    # Snapshot B is a child of a model with auto restatement and is not paused,
+    # so it is not deployable but is representative
+    snapshot_b = make_snapshot(SqlModel(name="b", query=parse_one("SELECT 1")))
+    snapshot_b.categorize_as(SnapshotChangeCategory.BREAKING)
+    snapshot_b.parents = (snapshot_a.snapshot_id,)
+    snapshot_b.unpaused_ts = 1
+
+    # Snapshot C is paused and hence is neither deployable nor representative
+    snapshot_c = make_snapshot(SqlModel(name="c", query=parse_one("SELECT 1")))
+    snapshot_c.categorize_as(SnapshotChangeCategory.BREAKING)
+    snapshot_c.parents = (snapshot_b.snapshot_id,)
+
+    deplyability_index = DeployabilityIndex.create(
+        {s.snapshot_id: s for s in [snapshot_a, snapshot_b, snapshot_c]}
+    )
+
+    assert not deplyability_index.is_deployable(snapshot_a)
+    assert not deplyability_index.is_deployable(snapshot_b)
+    assert not deplyability_index.is_deployable(snapshot_c)
+
+    assert deplyability_index.is_representative(snapshot_a)
+    assert deplyability_index.is_representative(snapshot_b)
+    assert not deplyability_index.is_representative(snapshot_c)
+
+
 def test_deployability_index_uncategorized_forward_only_model(make_snapshot):
     model_a = SqlModel(
         name="a",
