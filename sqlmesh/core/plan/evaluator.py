@@ -405,6 +405,8 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             env_dag = DAG({s.name: {p.name for p in s.parents} for s in env.snapshots})
 
             for restatement, intervals in prod_restatements.items():
+                if restatement not in keyed_snapshots:
+                    continue
                 affected_snapshot_names = [restatement] + env_dag.downstream(restatement)
                 snapshots_to_restate.update(
                     {(keyed_snapshots[a], intervals) for a in affected_snapshot_names}
