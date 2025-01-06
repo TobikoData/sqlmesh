@@ -25,7 +25,7 @@
     "@codemirror/legacy-modes": "^6.4.2",
     "@codemirror/state": "^6.5.0",
     "@codemirror/view": "^6.36.1",
-    "@headlessui/react": "^2.2.0",
+    "@headlessui/react": "^1.7.17",
     "@heroicons/react": "^2.0.18",
     "@radix-ui/react-context-menu": "^2.1.4",
     "@radix-ui/react-select": "^2.1.4",

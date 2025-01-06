@@ -58,7 +58,7 @@ function createGraphLayout({
   const elk: any = new ELK()
 
   return {
-    terminate: () => elk.worker.terminate(),
+    terminate: elk.terminateWorker,
     create: async () =>
       new Promise((resolve, reject) => {
         elk
