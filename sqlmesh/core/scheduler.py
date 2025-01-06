@@ -35,7 +35,6 @@ from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import (
     TimeLike,
     format_tz_datetime,
-    now,
     now_timestamp,
     to_timestamp,
     validate_date_range,
@@ -143,9 +142,9 @@ class Scheduler:
         snapshots_to_intervals = compute_interval_params(
             snapshots,
             start=start or earliest_start_date(snapshots),
-            end=end or now(),
+            end=end or now_timestamp(),
             deployability_index=deployability_index,
-            execution_time=execution_time or now(),
+            execution_time=execution_time or now_timestamp(),
             restatements=restatements,
             interval_end_per_model=interval_end_per_model,
             ignore_cron=ignore_cron,
@@ -290,7 +289,7 @@ class Scheduler:
             if environment_naming_info.name != c.PROD
             else DeployabilityIndex.all_deployable()
         )
-        execution_time = execution_time or now()
+        execution_time = execution_time or now_timestamp()
 
         self.state_sync.refresh_snapshot_intervals(self.snapshots.values())
         for s_id, interval in (restatements or {}).items():
@@ -438,7 +437,7 @@ class Scheduler:
         Returns:
             A tuple of errors and skipped intervals.
         """
-        execution_time = execution_time or now()
+        execution_time = execution_time or now_timestamp()
 
         batched_intervals = self.batch_intervals(merged_intervals, start, end, execution_time)
 

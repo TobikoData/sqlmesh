@@ -712,7 +712,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
                 When previewing, we are not actually restating a model, but removing an interval to trigger
                 a run.
         """
-        end = execution_time or now() if self.depends_on_past else end
+        end = execution_time or now_timestamp() if self.depends_on_past else end
         if not is_preview and self.full_history_restatement_only and self.intervals:
             start = self.intervals[0][0]
         return self.inclusive_exclusive(start, end, strict)
@@ -722,7 +722,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         start: TimeLike,
         end: TimeLike,
         strict: bool = True,
-        allow_partial: bool = False,
+        allow_partial: t.Optional[bool] = None,
     ) -> Interval:
         """Transform the inclusive start and end into a [start, end) pair.
 
@@ -735,6 +735,8 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         Returns:
             A [start, end) pair.
         """
+        if allow_partial is None:
+            allow_partial = self.is_model and self.model.allow_partials
         return inclusive_exclusive(
             start,
             end,
@@ -833,7 +835,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         if not self.evaluatable or (self.is_seed and intervals):
             return []
 
-        allow_partials = not end_bounded and self.is_model and self.model.allow_partials
+        allow_partials = self.is_model and self.model.allow_partials
         start_ts, end_ts = (
             to_timestamp(ts)
             for ts in self.inclusive_exclusive(
@@ -845,20 +847,18 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         )
 
         interval_unit = self.node.interval_unit
-        upper_bound_ts = to_timestamp(execution_time or now())
+        execution_time_ts = to_timestamp(execution_time) if execution_time else now_timestamp()
+        upper_bound_ts = (
+            execution_time_ts
+            if ignore_cron
+            else to_timestamp(self.node.cron_floor(execution_time_ts))
+        )
+        if end_bounded:
+            upper_bound_ts = min(upper_bound_ts, end_ts)
+        if not allow_partials:
+            upper_bound_ts = to_timestamp(interval_unit.cron_floor(upper_bound_ts))
 
-        if allow_partials:
-            end_ts = min(end_ts, upper_bound_ts)
-        else:
-            if not ignore_cron:
-                upper_bound_ts = to_timestamp(self.node.cron_floor(upper_bound_ts))
-            if end_bounded:
-                upper_bound_ts = min(upper_bound_ts, end_ts)
-
-            end_ts = min(
-                end_ts,
-                to_timestamp(interval_unit.cron_floor(upper_bound_ts)),
-            )
+        end_ts = min(end_ts, upper_bound_ts)
 
         lookback = 0
         model_end_ts: t.Optional[int] = None
@@ -1687,7 +1687,7 @@ def missing_intervals(
     """Returns all missing intervals given a collection of snapshots."""
     missing = {}
     cache: t.Dict[str, datetime] = {}
-    end_date = end or now()
+    end_date = end or now_timestamp()
     start_dt = (
         to_datetime(start)
         if start

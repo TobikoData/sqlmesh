@@ -1595,7 +1595,9 @@ def test_incremental_by_partition(init_and_plan_context: t.Callable):
         source_name,
         d.parse_one("SELECT 'key_a' AS key, 2 AS value"),
     )
-    context.run(ignore_cron=True)
+    # Run 1 minute later.
+    with time_machine.travel("2023-01-08 15:01:00 UTC"):
+        context.run(ignore_cron=True)
     assert context.engine_adapter.fetchall(f"SELECT * FROM {model_name}") == [
         ("key_b", 1),
         ("key_a", 2),
