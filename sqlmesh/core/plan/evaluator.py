@@ -469,7 +469,7 @@ class BaseAirflowPlanEvaluator(PlanEvaluator):
             if not plan_application_succeeded:
                 raise PlanError("Plan application failed.")
 
-            self.console.log_success("The plan has been applied successfully")
+            self.console.log_success("Plan applied successfully")
 
     @property
     def client(self) -> BaseAirflowClient:
