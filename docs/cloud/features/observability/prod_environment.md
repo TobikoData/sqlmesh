@@ -4,7 +4,7 @@ A data transformation system's most important component is the production enviro
 
 Tobiko Cloud makes it easy to understand your production environment, embedding three observability features directly on your project's homepage:
 
-1. [Model Freshness chart](../model_freshness.md)
+1. [Model Freshness chart](./model_freshness.md)
 2. Runs and plans chart
 3. Recent activity table
 
@@ -12,7 +12,7 @@ Tobiko Cloud makes it easy to understand your production environment, embedding 
 
 !!! Note
 
-    Model freshness has its own feature page - learn more [here](../model_freshness.md)!
+    Model freshness has its own feature page - learn more [here](./model_freshness.md)!
 
 ## Runs and Plans Chart
 

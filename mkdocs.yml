@@ -112,14 +112,14 @@ nav:
         - "Cloud": cloud/features/scheduler.md
         - cloud/features/scheduler/airflow.md
         - cloud/features/scheduler/dagster.md
-      - "Cost & Savings Estimates": cloud/features/costs_savings.md
-  #     - Observability:
-  #       - cloud/features/observability/overview.md
-  #       - cloud/features/observability/prod_environment.md
-  #       - cloud/features/observability/development_environment.md
-  #       - cloud/features/observability/plan.md
-  #       - cloud/features/observability/run.md
-  #       - cloud/features/observability/model.md
+      - Observability:
+        - cloud/features/observability/overview.md
+        - cloud/features/observability/model_freshness.md
+        - cloud/features/observability/prod_environment.md
+        - cloud/features/observability/development_environment.md
+        - cloud/features/observability/plan.md
+        - cloud/features/observability/run.md
+        - cloud/features/observability/model.md
   #       - "Measures & Dashboards": cloud/features/observability/measures_dashboards.md
 theme:
   name: material
