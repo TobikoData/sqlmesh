@@ -139,7 +139,7 @@ The target model and its downstream dependencies will not be run in this environ
 
 #### Resuming a model
 
-To resume a model, navigate to an environment's pauses page andclick the "Delete" button for that model's pause.
+To resume a model, navigate to an environment's pauses page and click the "Delete" button for that model's pause.
 
 ![delete_pause](./scheduler/delete_pause.png)
 
@@ -151,7 +151,7 @@ SQLMesh automatically infers which Python libraries are used by statically analy
 
 For fine-grained control, dependencies can be specified, pinned, or excluded using the `sqlmesh-requirements.lock` file. See the [Python library dependencies](../../guides/configuration.md#python-library-dependencies) section in the SQLMesh configuration guide for more information.
 
-### Hybrid Deployment (Self-hosted executors)
+## Hybrid Deployment (Self-hosted executors)
 
 Letting Tobiko Cloud manage your data warehouse connections is a secure and convenient way to run your project.
 
@@ -161,10 +161,10 @@ With this approach, Tobiko Cloud uses project metadata to manage user access con
 
 This gives you complete control over data security and network access while still benefiting from Tobiko Cloud's scheduling capabilities.
 
-#### How it works
+### How it works
 
 Coming soon!
 
-#### Configuration
+### Configuration
 
 Coming soon!
