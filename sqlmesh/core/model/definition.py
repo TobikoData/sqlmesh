@@ -944,7 +944,7 @@ class _Model(ModelMeta, frozen=True):
             data.append(key)
             data.append(gen(value))
 
-        for statement in (*self.pre_statements, *self.post_statements, *self.on_virtual_update):
+        for statement in (*self.pre_statements, *self.post_statements):
             statement_exprs: t.List[exp.Expression] = []
             if not isinstance(statement, d.MacroDef):
                 rendered = self._statement_renderer(statement).render()
@@ -1037,9 +1037,12 @@ class _Model(ModelMeta, frozen=True):
         if metadata_only_macros:
             additional_metadata.append(str(metadata_only_macros))
 
-        for statement in (*self.pre_statements, *self.post_statements, *self.on_virtual_update):
+        for statement in (*self.pre_statements, *self.post_statements):
             if self._is_metadata_statement(statement):
                 additional_metadata.append(gen(statement))
+
+        for statement in self.on_virtual_update:
+            additional_metadata.append(gen(statement))
 
         return additional_metadata
 
