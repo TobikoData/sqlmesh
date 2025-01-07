@@ -1,4 +1,4 @@
-# Run
+# Runs
 
 Every SQLMesh `plan` is applied to a specific environment. To locate a `plan`, first navigate to its [Environment page](./development_environment.md).
 
