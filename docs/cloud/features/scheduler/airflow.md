@@ -1,82 +1,222 @@
 # Airflow
 
-This integration with Tobiko Cloud enables you to synchronize your Airflow monitoring and debugging experience with Tobiko Cloud.
+Tobiko Cloud's Airflow integration allows you to combine Airflow system monitoring with the powerful debugging tools in Tobiko Cloud.
 
-To set up the integration, add the following library to your Airflow runtime environment:
+## Setup
 
-```
+Your SQLMesh project must be configured and connected to Tobiko Cloud before using the Airflow integration.
+
+Learn more about connecting to Tobiko Cloud in the [Getting Started page](../../tcloud_getting_started.md).
+
+### Install libraries
+
+After connecting your project to Tobiko Cloud, you're ready to set up the Airflow integration.
+
+Start by installing the `tobiko-cloud-scheduler-facade` library in your Airflow runtime environment.
+
+Make sure to include the `[airflow]` extra in the installation command:
+
+``` bash
 $ pip install tobiko-cloud-scheduler-facade[airflow]
 ```
 
-You also need to add an Airflow [connection](https://airflow.apache.org/docs/apache-airflow/stable/howto/connection.html#creating-a-connection-with-the-ui) containing your Tobiko Cloud credentials:
+### Connect Airflow to Tobiko Cloud
 
-```yaml
-id: tobiko_cloud
-type: HTTP
-host: https://tobiko/cloud/base/url
-password: <tobiko cloud API token>
-```
+Next, add an Airflow [connection](https://airflow.apache.org/docs/apache-airflow/stable/howto/connection.html#creating-a-connection-with-the-ui) containing your Tobiko Cloud credentials. The connection can be specified in YAML or in the Airflow UI:
 
-![add_connection](./airflow/add_connection.png)
+=== "YAML"
 
-!!! info
+    ```yaml
+    id: tobiko_cloud
+    type: HTTP
+    host: https://tobiko/cloud/base/url
+    password: <tobiko cloud API token>
+    ```
 
-    You can name the connection whatever you like, you just need to remember the name because it's used for the `conn_id` parameter below.
+=== "UI"
 
-![connection_list](./airflow/connection_list.png)
+    Adding the connection:
 
-After setting up the connection, you can then create a DAG with the following content:
+    ![Add a connection in the Airflow UI](./airflow/add_connection.png)
 
-```python
+    Successful connection:
+
+    ![List of connections in the Airflow UI](./airflow/connection_list.png)
+
+!!! info "Remember the connection name!"
+
+    Name the connection whatever you like, but remember that name because it's used for the `conn_id` parameter below.
+
+## Create a DAG
+
+You are now ready to create an Airflow DAG that connects to Tobiko Cloud.
+
+This example code demonstrates the creation process, which requires:
+
+- Importing the `SQLMeshEnterpriseAirflow` operator
+- Creating a `SQLMeshEnterpriseAirflow` instance with your Airflow connection id (the name from [above](#connect-airflow-to-tobiko-cloud!))
+- Creating the DAG object with the `create_cadence_dag()` method
+
+
+```python linenums="1"
 # folder: dags/
 # file name: tobiko_cloud_airflow_integration.py
 
+# Import SQLMeshEnterpriseAirflow operator
 from tobikodata.scheduler_facades.airflow import SQLMeshEnterpriseAirflow
 
+# Create SQLMeshEnterpriseAirflow instance with connection ID
 tobiko_cloud = SQLMeshEnterpriseAirflow(conn_id="tobiko_cloud")
 
+# Create DAG for `prod` environment from SQLMeshEnterpriseAirflow instance
 first_task, last_task, dag = tobiko_cloud.create_cadence_dag(environment="prod")
 ```
 
-This is all that's required to integrate with Tobiko Cloud!
+This is all that's needed to integrate with Tobiko Cloud!
 
-Once this DAG is loaded by Airflow, it will be populated with your SQLMesh model structure for the specified `environment` and will be automatically configured to trigger at the same time as the next Cloud Scheduler run.
+## Monitor Tobiko Cloud actions
 
-You will get an entry in the DAG list:
-![dag_list](./airflow/dag_list.png)
+Once your DAG is loaded by Airflow, it will be populated with the SQLMesh models for the specified `environment` and will automatically trigger when the next Cloud Scheduler run happens.
 
-Which you can browse like any other DAG:
-![dag_view](./airflow/dag_view.png)
+You will see an entry in the DAG list:
+
+![Airflow UI list of DAGs](./airflow/dag_list.png)
+
+You can browse the DAG just like any other - each node is a SQLMesh model:
+
+![Airflow UI DAG view](./airflow/dag_view.png)
 
 ## How it works
 
-When the Airflow DAG runs, it tracks the progress of the equivalent Tobiko Cloud scheduler run. The local tasks reflect the outcome of the remote tasks which allows you to observe at a glance how your data pipeline is progressing, in context with your other pipelines without having to switch to Tobiko Cloud.
+Tobiko Cloud uses a custom approach to Airflow integration - this section describes how it works.
 
-This approach allows us to perform scheduling optimisations that are only possible within our SQLMesh-aware scheduler, while still allowing you to retain the flexibility to attach extra tasks or loop off extra logic within your usual orchestration environment.
+The Airflow DAG task mirrors the progress of the Tobiko Cloud scheduler run. Each local task reflects the outcome of its corresponding remote task.
 
-Due to the fact that runs are still triggered by the Tobiko Cloud scheduler and the tasks in the local DAG just report on the progress of their remote equivalent in Tobiko Cloud, we call the integration a *facade*.
+This allows you to observe at a glance how your data pipeline is progressing, displayed alongside your other pipelines in Airflow. No need to navigate to Tobiko Cloud!
+
+### Why a custom approach?
+
+Tobiko Cloud's scheduler performs multiple optimizations to ensure that your pipelines run correctly and efficiently. Those optimizations are only possible within our SQLMesh-aware scheduler.
+
+Our approach allows you to benefit from those optimizations while retaining the flexibility to attach extra tasks or logic to the DAG in your broader pipeline orchestration context.
+
+Because `run`s are still triggered by the Tobiko Cloud scheduler and tasks in the local DAG just reflect their remote equivalent in Tobiko Cloud, we call our custom approach a *facade*.
 
 ## Debugging
 
-Each task in the DAG writes some log output containing links to the remote task in Tobiko Cloud:
+Each task in the local DAG writes logs that include a link to its corresponding remote task in Tobiko Cloud.
 
-![task_logs](./airflow/task_logs.png)
+In the Airflow UI, find these logs in the task's Logs tab:
 
-Following this link allows you to debug the task in context in our [Debugger View](../debugger_view.md):
+![Airflow UI task logs](./airflow/task_logs.png)
 
-![cloud_debugger](./airflow/cloud_debugger.png)
+Clicking the link opens the remote task in the Tobiko Cloud [Debugger View](../debugger_view.md), which provides information and tools to aid debugging:
 
-## Configuration options
+![Tobiko Cloud UI debugger view](./airflow/cloud_debugger.png)
 
-We provide the ability to customise the generated DAG.
+## Extending the DAG
 
-When creating the `SQLMeshEnterpriseAirflow` object, the following parameters are supported:
+You may extend the local DAG with arguments to the `create_cadence_dag()` method.
+
+This section describes how to extend your local DAG and demonstrates some simple extensions.
+
+### Base DAG structure
+
+The local DAG represents your SQLMesh project's models and their activity in Tobiko Cloud. This section describes how the DAG is structured.
+
+The DAG is composed of SQLMesh models, but there must be a boundary around those models to separate them from your broader Airflow pipeline. The boundary consists of two tasks that serve as entry and exit nodes for the entire Tobiko Cloud run.
+
+The first and last tasks in the DAG are the boundary tasks. The tasks are the same in every local DAG instance:
+- First task: `Sensor` task that synchronizes with Tobiko Cloud
+- Last task: `DummyOperator` task that ensures all models without downstream dependencies have completed before declaring the DAG completed
+
+![Airflow DAG boundary tasks](./airflow/boundary_tasks.png)
+
+### Using `create_cadence_dag()`
+
+The local DAG is extended at the time of creation via arguments to the `create_cadence_dag()` method.
+
+Each DAG corresponds to a specific SQLMesh project environment (`prod` by default). Specify another environment by passing its name to `create_cadence_dag()`'s `environment` argument.
+
+The `create_cadence_dag()` method returns a tuple of references:
+
+- `first_task` - a reference to the first task in the DAG (always the `Sensor` boundary task)
+- `last_task` - a reference to the last task in the DAG (always the `DummyOperator` boundary task)
+- `dag` - a reference to the Airflow `DAG` object
+
+Use these references to manipulate the DAG and attach extra behavior.
+
+### Examples
+
+#### Slack notification when run begins
+
+Attach a task to the `first_task` to send a Slack notification when a `run` completes:
+
+```python
+# Create DAG
+first_task, last_task, dag = tobiko_cloud.create_cadence_dag(environment="prod")
+
+# Attach Slack operator to first_task
+first_task >> SlackAPIPostOperator(task_id="notify_slack", channel="#notifications", ...)
+```
+
+Airflow DAG view:
+
+![Airflow DAG with Slack notification task](./airflow/add_task_at_start.png)
+
+#### Send email and trigger DAG when run completes
+
+Attach tasks to the `last_task` to send an email and trigger another DAG on `run` completion:
+
+```python
+# Create DAG
+first_task, last_task, dag = tobiko_cloud.create_cadence_dag(environment="prod")
+
+# Attach Email operator to last_task
+last_task >> EmailOperator(task_id="notify_admin", to="admin@example.com", subject="SQLMesh run complete")
+
+# Attach DAG trigger operator to last_task
+last_task >> TriggerDagRunOperator(task_id="trigger_job", trigger_dag_id="some_downstream_job")
+```
+
+Airflow DAG view:
+
+![Airflow DAG with email and DAG trigger tasks on run completion](./airflow/add_task_at_end.png)
+
+#### Trigger DAG when specific model completes
+
+Trigger another DAG after a specific model has completed, without waiting for the entire run to complete:
+
+```python
+# Create DAG
+first_task, last_task, dag = tobiko_cloud.create_cadence_dag(environment="prod")
+
+# Get `sushi.customers` model task
+customers_task = dag.get_task("sushi.customers")
+
+# Attach DAG trigger operator to `sushi.customers` model task
+customers_task >> TriggerDagRunOperator(task_id="customers_updated", trigger_dag_id="some_other_pipeline", ...)
+```
+
+Airflow DAG view:
+
+![Airflow DAG with DAG trigger task on a specific model's completin](./airflow/add_task_after_specific_model.png)
+
+!!! info "Model task names"
+
+    Each model's Airflow `task_id` is the SQLMesh fully qualified model name. View a task's `task_id` by hovering over its node in the Airflow DAG view.
+
+    Each model's display name in the Airflow DAG view is just the *table* portion of the fully qualified model name. For example, a SQLMesh model named `foo.model_a` will be labeled `model_a` in the Airflow DAG view.
+
+## Configuration
+
+### `SQLMeshEnterpriseAirflow` parameters
 
 | Option    | Description                                                              | Type | Required |
 |-----------|--------------------------------------------------------------------------|:----:|:--------:|
 | `conn_id` | The Airflow connection ID containing the Tobiko Cloud connection details | str  | Y        |
 
-When calling `create_cadence_dag()`, the following parameters are supported:
+### `create_cadence_dag()` parameters
 
 | Option               | Description                                                                            | Type | Required |
 |----------------------|----------------------------------------------------------------------------------------|:----:|:--------:|
@@ -85,57 +225,3 @@ When calling `create_cadence_dag()`, the following parameters are supported:
 | `common_task_kwargs` | A dict of kwargs to pass to all task operators in the DAG                              | dict | N        |
 | `sensor_task_kwargs` | A dict of kwargs to pass to just the sensor task operators in the DAG                  | dict | N        |
 | `report_task_kwargs` | A dict of kwargs to pass to just the model / progress report task operators in the DAG | dict | N        |
-
-For example, to create the cadence dag with specific tags:
-
-```python
-first_task, last_task, dag = tobiko_cloud.create_cadence_dag(
-    environment="prod",
-    dag_kwargs=dict(
-        tags=["production", "data-engineering"]
-    )
-)
-```
-
-## Extending the DAG
-
-The `create_cadence_dag()` function returns a tuple of references:
-
-- `first_task` - a reference to the first task in the DAG, which is the `Sensor` task that synchronises with Tobiko Cloud before continuing
-- `last_task` - a reference to the last task in the DAG, which is the `DummyOperator` that ensures all the models with no downstream dependencies have completed before declaring the DAG completed
-- `dag` - a reference to the Airflow `DAG` object itself.
-
-You can use these references to manipulate the DAG and attach extra behaviour.
-
-For example, to trigger a Slack notification when a run completes:
-
-```python
-first_task, last_task, dag = tobiko_cloud.create_cadence_dag(environment="prod")
-
-first_task >> SlackAPIPostOperator(task_id="notify_slack", channel="#notifications", ...)
-```
-
-![add_task_at_start](./airflow/add_task_at_start.png)
-
-Or send an email and then trigger another DAG:
-
-```python
-last_task >> EmailOperator(task_id="notify_admin", to="admin@example.com", subject="SQLMesh run complete")
-last_task >> TriggerDagRunOperator(task_id="trigger_job", trigger_dag_id="some_downstream_job")
-```
-
-![add_task_at_end](./airflow/add_task_at_end.png)
-
-Or to trigger another DAG after a specific model has completed, without waiting for the entire DAG to complete:
-
-```python
-customers_task = dag.get_task("sushi.customers")
-customers_task >> TriggerDagRunOperator(task_id="customers_updated", trigger_dag_id="some_other_pipeline", ...)
-```
-
-![add_task_after_specific_model](./airflow/add_task_after_specific_model.png)
-
-!!!info
-
-    - The Task `task_id`'s are named after the fully qualified model name. You can hover over a task in the Airflow DAG view to check its `task_id`.
-    - The Task display names are the *table* portion of the model name. For example, a model called `foo.model_a` will show up as `model_a` in the Airflow DAG view, but the `task_id` will still be `foo.model_a`.
