@@ -929,14 +929,16 @@ def parse(
         virtual_update_statements = []
         start = chunks[pos][0][0].start
 
-        while chunks[pos - 1][0] == [] or chunks[pos - 1][0][-1].text != ON_VIRTUAL_UPDATE_END:
+        while (
+            chunks[pos - 1][0] == [] or chunks[pos - 1][0][-1].text.upper() != ON_VIRTUAL_UPDATE_END
+        ):
             chunk, chunk_type = chunks[pos]
             if chunk_type == ChunkType.JINJA_STATEMENT:
                 virtual_update_statements.append(parse_jinja_chunk(chunk, False))
             else:
                 virtual_update_statements.extend(
                     parse_sql_chunk(
-                        chunk[int(chunk[0].text == "ON_VIRTUAL_UPDATE_BEGIN") : -1], False
+                        chunk[int(chunk[0].text.upper() == ON_VIRTUAL_UPDATE_BEGIN) : -1], False
                     ),
                 )
             pos += 1

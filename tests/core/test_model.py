@@ -6751,11 +6751,11 @@ def test_model_on_virtual_update(make_snapshot: t.Callable):
 
         SELECT id from parent;
 
-        ON_VIRTUAL_UPDATE_BEGIN;
+        on_virtual_update_begin;
 
         {virtual_update_statements} 
 
-        ON_VIRTUAL_UPDATE_END;
+        on_virtual_update_end;
 
     """
     )
