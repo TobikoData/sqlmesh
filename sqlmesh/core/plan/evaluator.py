@@ -25,7 +25,7 @@ from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.notification_target import (
     NotificationTarget,
 )
-from sqlmesh.core.snapshot.definition import Interval
+from sqlmesh.core.snapshot.definition import Interval, to_view_mapping
 from sqlmesh.core.plan.definition import EvaluatablePlan
 from sqlmesh.core.scheduler import Scheduler
 from sqlmesh.core.snapshot import (
@@ -309,13 +309,13 @@ class BuiltInPlanEvaluator(PlanEvaluator):
 
         completed = False
         try:
-            added_snapshots = [snapshots[s.snapshot_id] for s in promotion_result.added]
             self._promote_snapshots(
                 plan,
-                added_snapshots,
+                [snapshots[s.snapshot_id] for s in promotion_result.added],
                 environment.naming_info,
                 deployability_index=deployability_index,
                 on_complete=lambda s: self.console.update_promotion_progress(s, True),
+                snapshots=snapshots,
             )
             if promotion_result.removed_environment_naming_info:
                 self._demote_snapshots(
@@ -323,20 +323,6 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                     promotion_result.removed,
                     promotion_result.removed_environment_naming_info,
                     on_complete=lambda s: self.console.update_promotion_progress(s, False),
-                )
-
-            if promoted_snapshots := [
-                s for s in added_snapshots if s.is_model and not s.is_symbolic
-            ]:
-                self.snapshot_evaluator._execute_virtual_statements(
-                    promoted_snapshots,
-                    snapshots,
-                    plan.start,
-                    plan.end,
-                    plan.execution_time or now(),
-                    plan.environment.naming_info,
-                    self.default_catalog,
-                    deployability_index,
                 )
 
             self.state_sync.finalize(environment)
@@ -349,14 +335,30 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         plan: EvaluatablePlan,
         target_snapshots: t.Iterable[Snapshot],
         environment_naming_info: EnvironmentNamingInfo,
+        snapshots: t.Dict[SnapshotId, Snapshot],
         deployability_index: t.Optional[DeployabilityIndex] = None,
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]] = None,
     ) -> None:
+        # Additional arguments to pass for rendering the virtual statements.
+        render_kwargs: t.Dict[str, t.Any] = dict(
+            start=plan.start,
+            end=plan.end,
+            execution_time=plan.execution_time or now(),
+            snapshots=snapshots,
+            table_mapping=to_view_mapping(
+                snapshots.values(),
+                environment_naming_info,
+                default_catalog=self.default_catalog,
+                dialect=self.snapshot_evaluator.adapter.dialect,
+            ),
+        )
+
         self.snapshot_evaluator.promote(
             target_snapshots,
             environment_naming_info,
             deployability_index=deployability_index,
             on_complete=on_complete,
+            **render_kwargs,
         )
 
     def _demote_snapshots(

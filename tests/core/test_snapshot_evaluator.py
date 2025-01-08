@@ -48,6 +48,7 @@ from sqlmesh.core.snapshot import (
     SnapshotEvaluator,
     SnapshotTableCleanupTask,
 )
+from sqlmesh.core.snapshot.definition import to_view_mapping
 from sqlmesh.core.snapshot.evaluator import CustomMaterialization
 from sqlmesh.utils.concurrency import NodeExecutionFailedError
 from sqlmesh.utils.date import to_timestamp
@@ -2745,13 +2746,20 @@ def test_on_virtual_update_statements(mocker: MockerFixture, adapter_mock, make_
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
     evaluator.create([snapshot], {}, DeployabilityIndex.none_deployable())
-    evaluator._execute_virtual_statements(
+
+    snapshots = {snapshot.name: snapshot}
+    environment_naming_info = EnvironmentNamingInfo(name="test_env")
+    evaluator.promote(
         [snapshot],
         start="2020-01-01",
         end="2020-01-01",
         execution_time="2020-01-01",
-        snapshots={snapshot.name: snapshot},
-        environment_naming_info=EnvironmentNamingInfo(name="test_env"),
+        snapshots=snapshots,
+        environment_naming_info=environment_naming_info,
+        table_mapping=to_view_mapping(
+            snapshots.values(),
+            environment_naming_info,
+        ),
     )
 
     call_args = adapter_mock.execute.call_args_list
@@ -2777,7 +2785,7 @@ def test_on_virtual_update_python_model_macro(mocker: MockerFixture, adapter_moc
     evaluator = SnapshotEvaluator(adapter_mock)
 
     @macro()
-    def create_index(
+    def create_index_2(
         evaluator: MacroEvaluator,
         index_name: str,
         model_name: str,
@@ -2786,10 +2794,10 @@ def test_on_virtual_update_python_model_macro(mocker: MockerFixture, adapter_moc
         return f"CREATE INDEX IF NOT EXISTS {index_name} ON {model_name}({column});"
 
     @model(
-        "db.test_model",
+        "db.test_model_3",
         kind="full",
         columns={"id": "string", "name": "string"},
-        on_virtual_update=["@CREATE_INDEX('idx', 'db.test_model', id)"],
+        on_virtual_update=["@CREATE_INDEX_2('idx', 'db.test_model_3', id)"],
     )
     def model_with_statements(context, **kwargs):
         return pd.DataFrame(
@@ -2801,7 +2809,7 @@ def test_on_virtual_update_python_model_macro(mocker: MockerFixture, adapter_moc
             ]
         )
 
-    python_model = model.get_registry()["db.test_model"].model(
+    python_model = model.get_registry()["db.test_model_3"].model(
         module_path=Path("."),
         path=Path("."),
         macros=macro.get_registry(),
@@ -2810,7 +2818,7 @@ def test_on_virtual_update_python_model_macro(mocker: MockerFixture, adapter_moc
 
     assert len(python_model.python_env) == 3
     assert len(python_model.on_virtual_update) == 1
-    assert isinstance(python_model.python_env["create_index"], Executable)
+    assert isinstance(python_model.python_env["create_index_2"], Executable)
     assert isinstance(python_model.on_virtual_update[0], MacroFunc)
 
     snapshot = make_snapshot(python_model)
@@ -2818,20 +2826,26 @@ def test_on_virtual_update_python_model_macro(mocker: MockerFixture, adapter_moc
 
     evaluator.create([snapshot], {}, DeployabilityIndex.none_deployable())
 
-    evaluator._execute_virtual_statements(
+    snapshots = {snapshot.name: snapshot}
+    environment_naming_info = EnvironmentNamingInfo(name="prod")
+    evaluator.promote(
         [snapshot],
         start="2020-01-01",
         end="2020-01-01",
         execution_time="2020-01-01",
-        snapshots={snapshot.name: snapshot},
-        environment_naming_info=EnvironmentNamingInfo(name="prod"),
+        snapshots=snapshots,
+        environment_naming_info=environment_naming_info,
+        table_mapping=to_view_mapping(
+            snapshots.values(),
+            environment_naming_info,
+        ),
     )
 
     call_args = adapter_mock.execute.call_args_list
     on_virtual_update_call = call_args[2][0][0][0]
     assert (
         on_virtual_update_call.sql(dialect="postgres")
-        == 'CREATE INDEX IF NOT EXISTS "idx" ON "db"."test_model" /* db.test_model */("id")'
+        == 'CREATE INDEX IF NOT EXISTS "idx" ON "db"."test_model_3" /* db.test_model_3 */("id")'
     )
 
 
