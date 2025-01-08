@@ -1771,6 +1771,14 @@ class RisingwaveConnectionConfig(ConnectionConfig):
 
         return connect
 
+    @property
+    def _cursor_init(self) -> t.Optional[t.Callable[[t.Any], None]]:
+        def init(cursor: t.Any) -> None:
+            sql = "SET RW_IMPLICIT_FLUSH TO true;"
+            cursor.execute(sql)
+
+        return init
+
 
 CONNECTION_CONFIG_TO_TYPE = {
     # Map all subclasses of ConnectionConfig to the value of their `type_` field.
