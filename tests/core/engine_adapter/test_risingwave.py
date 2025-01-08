@@ -6,12 +6,16 @@ import pytest
 from sqlglot import parse_one
 from sqlmesh.core.engine_adapter.risingwave import RisingwaveEngineAdapter
 
-pytestmark = [pytest.mark.engine, pytest.mark.postgres, pytest.mark.risingwave]
+pytestmark = [pytest.mark.engine, pytest.mark.risingwave]
 
 
-def test_create_view(make_mocked_engine_adapter: t.Callable):
+@pytest.fixture
+def adapter(make_mocked_engine_adapter):
     adapter = make_mocked_engine_adapter(RisingwaveEngineAdapter)
+    return adapter
 
+
+def test_create_view(adapter: t.Callable):
     adapter.create_view("db.view", parse_one("SELECT 1"), replace=True)
     adapter.create_view("db.view", parse_one("SELECT 1"), replace=False)
 
@@ -26,11 +30,7 @@ def test_create_view(make_mocked_engine_adapter: t.Callable):
     )
 
 
-def test_drop_view(make_mocked_engine_adapter: t.Callable):
-    adapter = make_mocked_engine_adapter(RisingwaveEngineAdapter)
-
-    adapter.SUPPORTS_MATERIALIZED_VIEWS = True
-
+def test_drop_view(adapter: t.Callable):
     adapter.drop_view("db.view")
 
     adapter.drop_view("db.view", materialized=True)

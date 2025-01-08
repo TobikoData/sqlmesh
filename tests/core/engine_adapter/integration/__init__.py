@@ -180,7 +180,7 @@ class TestContext:
 
     def _init_engine_adapter(self) -> None:
         schema = self.schema(TEST_SCHEMA)
-        self.engine_adapter.drop_schema(schema, ignore_if_not_exists=True, cascade=False)
+        self.engine_adapter.drop_schema(schema, ignore_if_not_exists=True, cascade=True)
         self.engine_adapter.create_schema(schema)
 
     def _format_df(self, data: pd.DataFrame, to_datetime: bool = True) -> pd.DataFrame:
