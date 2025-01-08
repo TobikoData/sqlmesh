@@ -108,7 +108,10 @@ nav:
       - cloud/features/debugger_view.md
   #     - cloud/features/data_catalog.md
   #     - cloud/features/model_freshness.md
-      - cloud/features/scheduler.md
+      - Scheduler:
+        - "Cloud": cloud/features/scheduler.md
+        - cloud/features/scheduler/airflow.md
+        - cloud/features/scheduler/dagster.md
   #     - Observability:
   #       - cloud/observability/monitoring.md
   #       - "Measures & Dashboards": cloud/observability/measures_dashboards.md
