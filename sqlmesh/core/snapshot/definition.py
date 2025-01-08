@@ -1081,6 +1081,8 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
 
     def apply_pending_restatement_intervals(self) -> None:
         """Applies the pending restatement intervals to the snapshot's intervals."""
+        if not self.is_model or self.model.disable_restatement:
+            return
         for pending_restatement_interval in self.pending_restatement_intervals:
             logger.info(
                 "Applying the auto restated interval (%s, %s) to snapshot %s",
@@ -1956,6 +1958,8 @@ def apply_auto_restatements(
         if s_id not in snapshots:
             continue
         snapshot = snapshots[s_id]
+        if not snapshot.is_model or snapshot.model.disable_restatement:
+            continue
 
         next_auto_restated_interval = snapshot.get_next_auto_restatement_interval(execution_time)
         auto_restated_intervals = [
