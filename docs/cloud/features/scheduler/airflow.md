@@ -22,26 +22,25 @@ $ pip install tobiko-cloud-scheduler-facade[airflow]
 
 ### Connect Airflow to Tobiko Cloud
 
-Next, add an Airflow [connection](https://airflow.apache.org/docs/apache-airflow/stable/howto/connection.html#creating-a-connection-with-the-ui) containing your Tobiko Cloud credentials. The connection can be specified in YAML or in the Airflow UI:
+Next, add an Airflow [connection](https://airflow.apache.org/docs/apache-airflow/stable/howto/connection.html#creating-a-connection-with-the-ui) containing your Tobiko Cloud credentials.
 
-=== "YAML"
+Specify these fields when adding the connection:
 
-    ```yaml
-    id: tobiko_cloud
-    type: HTTP
-    host: https://tobiko/cloud/base/url
-    password: <tobiko cloud API token>
-    ```
+- **Connection ID**: connection name of your choice
+    - May not contain spaces, single quotes `'`, or double quotes `"`
+- **Connection Type**: always HTTP
+- **Host**: URL for your Tobiko Cloud project
+- **Password**: your Tobiko Cloud API token
 
-=== "UI"
+The host URL and password values will be provided to you during your Tobiko Cloud onboarding.
 
-    Adding the connection:
+It is convenient to specify the connection in the Airflow UI, as in this example with the name `tobiko_cloud`:
 
-    ![Add a connection in the Airflow UI](./airflow/add_connection.png)
+![Add a connection in the Airflow UI](./airflow/add_connection.png)
 
-    Successful connection:
+If the connection is successful, it will appear in the connection list:
 
-    ![List of connections in the Airflow UI](./airflow/connection_list.png)
+![List of connections in the Airflow UI](./airflow/connection_list.png)
 
 !!! info "Remember the connection name!"
 
