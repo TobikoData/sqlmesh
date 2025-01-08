@@ -1277,9 +1277,9 @@ def replace_merge_table_aliases(expression: exp.Expression) -> exp.Expression:
     from sqlmesh.core.engine_adapter.base import MERGE_SOURCE_ALIAS, MERGE_TARGET_ALIAS
 
     if isinstance(expression, exp.Column):
-        if expression.table.lower() in ("target", "dbt_internal_dest"):
+        if expression.table.lower() in ("target", "dbt_internal_dest", "__merge_target__"):
             expression.set("table", exp.to_identifier(MERGE_TARGET_ALIAS))
-        elif expression.table.lower() in ("source", "dbt_internal_source"):
+        elif expression.table.lower() in ("source", "dbt_internal_source", "__merge_source__"):
             expression.set("table", exp.to_identifier(MERGE_SOURCE_ALIAS))
 
     return expression
