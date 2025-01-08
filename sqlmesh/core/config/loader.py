@@ -175,7 +175,7 @@ def load_config_from_env() -> t.Dict[str, t.Any]:
 
     for key, value in os.environ.items():
         key = key.lower()
-        if key.startswith(f"{c.SQLMESH}__"):
+        if key.startswith(f"{c.SQLMESH}__") and key != (c.DISABLE_SQLMESH_STATE_MIGRATION).lower():
             segments = key.split("__")[1:]
             if not segments or not segments[-1]:
                 raise ConfigError(f"Invalid SQLMesh configuration variable '{key}'.")
