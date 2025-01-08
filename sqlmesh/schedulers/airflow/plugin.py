@@ -31,7 +31,7 @@ class SqlmeshAirflowPlugin(AirflowPlugin):
             logger.info("MWAA Webserver instance detected. Skipping SQLMesh state migration...")
             return
 
-        if str_to_bool(os.environ.get("DISABLE_SQLMESH_STATE_MIGRATION", "0")):
+        if str_to_bool(os.environ.get(c.DISABLE_SQLMESH_STATE_MIGRATION, "0")):
             logger.info("SQLMesh state migration disabled. Must be handled outside of Airflow")
             return
 
