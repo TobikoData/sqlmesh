@@ -1251,10 +1251,8 @@ class PromotableStrategy(EvaluationStrategy):
             column_descriptions=model.column_descriptions if is_prod else None,
             view_properties=model.virtual_properties,
         )
-        if on_virtual_update := model.on_virtual_update:
-            adapter.execute(
-                model._render_statements(on_virtual_update, engine_adapter=adapter, **kwargs)
-            )
+        if model.on_virtual_update:
+            adapter.execute(model.render_on_virtual_update(engine_adapter=adapter, **kwargs))
 
     def demote(self, view_name: str, **kwargs: t.Any) -> None:
         logger.info("Dropping view '%s'", view_name)

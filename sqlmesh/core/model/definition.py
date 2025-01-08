@@ -421,6 +421,30 @@ class _Model(ModelMeta, frozen=True):
             **kwargs,
         )
 
+    def render_on_virtual_update(
+        self,
+        *,
+        start: t.Optional[TimeLike] = None,
+        end: t.Optional[TimeLike] = None,
+        execution_time: t.Optional[TimeLike] = None,
+        snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
+        expand: t.Iterable[str] = tuple(),
+        deployability_index: t.Optional[DeployabilityIndex] = None,
+        engine_adapter: t.Optional[EngineAdapter] = None,
+        **kwargs: t.Any,
+    ) -> t.List[exp.Expression]:
+        return self._render_statements(
+            self.on_virtual_update,
+            start=start,
+            end=end,
+            execution_time=execution_time,
+            snapshots=snapshots,
+            expand=expand,
+            deployability_index=deployability_index,
+            engine_adapter=engine_adapter,
+            **kwargs,
+        )
+
     def render_audit_query(
         self,
         audit: Audit,
