@@ -301,6 +301,7 @@ def test_load_config_from_env():
             feature_flags=FeatureFlag(dbt=DbtFeatureFlag(scd_type_2_support=False)),
         )
 
+
 def test_load_config_from_env_no_config_vars():
     with mock.patch.dict(
         os.environ,
