@@ -60,6 +60,7 @@ from sqlmesh.core.snapshot import (
     SnapshotInfoLike,
     SnapshotTableCleanupTask,
 )
+from sqlmesh.core.snapshot.definition import parent_snapshots_by_name
 from sqlmesh.utils import random_id
 from sqlmesh.utils.concurrency import (
     concurrent_apply_to_snapshots,
@@ -203,6 +204,11 @@ class SnapshotEvaluator:
         target_snapshots: t.Iterable[Snapshot],
         environment_naming_info: EnvironmentNamingInfo,
         deployability_index: t.Optional[DeployabilityIndex] = None,
+        start: t.Optional[TimeLike] = None,
+        end: t.Optional[TimeLike] = None,
+        execution_time: t.Optional[TimeLike] = None,
+        snapshots: t.Optional[t.Dict[SnapshotId, Snapshot]] = None,
+        table_mapping: t.Optional[t.Dict[str, str]] = None,
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]] = None,
     ) -> None:
         """Promotes the given collection of snapshots in the target environment by replacing a corresponding
@@ -229,9 +235,14 @@ class SnapshotEvaluator:
                 target_snapshots,
                 lambda s: self._promote_snapshot(
                     s,
-                    environment_naming_info,
-                    deployability_index,  # type: ignore
-                    on_complete,
+                    start=start,
+                    end=end,
+                    execution_time=execution_time,
+                    snapshots=snapshots,
+                    table_mapping=table_mapping,
+                    environment_naming_info=environment_naming_info,
+                    deployability_index=deployability_index,  # type: ignore
+                    on_complete=on_complete,
                 ),
                 self.ddl_concurrent_tasks,
             )
@@ -721,17 +732,12 @@ class SnapshotEvaluator:
         if not snapshot.is_model:
             return
 
-        parent_snapshots_by_name = {
-            snapshots[p_sid].name: snapshots[p_sid] for p_sid in snapshot.parents
-        }
-        parent_snapshots_by_name[snapshot.name] = snapshot
-
         deployability_index = deployability_index or DeployabilityIndex.all_deployable()
 
         adapter = self._get_adapter(snapshot.model.gateway)
         common_render_kwargs: t.Dict[str, t.Any] = dict(
             engine_adapter=adapter,
-            snapshots=parent_snapshots_by_name,
+            snapshots=parent_snapshots_by_name(snapshot, snapshots),
             runtime_stage=RuntimeStage.CREATING,
         )
         pre_post_render_kwargs = dict(
@@ -820,18 +826,13 @@ class SnapshotEvaluator:
         if not needs_migration:
             return
 
-        parent_snapshots_by_name = {
-            snapshots[p_sid].name: snapshots[p_sid] for p_sid in snapshot.parents
-        }
-        parent_snapshots_by_name[snapshot.name] = snapshot
-
         tmp_table_name = snapshot.table_name(is_deployable=False)
         target_table_name = snapshot.table_name()
         _evaluation_strategy(snapshot, adapter).migrate(
             target_table_name=target_table_name,
             source_table_name=tmp_table_name,
             snapshot=snapshot,
-            snapshots=parent_snapshots_by_name,
+            snapshots=parent_snapshots_by_name(snapshot, snapshots),
             allow_destructive_snapshots=allow_destructive_snapshots,
         )
 
@@ -841,6 +842,11 @@ class SnapshotEvaluator:
         environment_naming_info: EnvironmentNamingInfo,
         deployability_index: DeployabilityIndex,
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]],
+        start: t.Optional[TimeLike] = None,
+        end: t.Optional[TimeLike] = None,
+        execution_time: t.Optional[TimeLike] = None,
+        snapshots: t.Optional[t.Dict[SnapshotId, Snapshot]] = None,
+        table_mapping: t.Optional[t.Dict[str, str]] = None,
     ) -> None:
         if snapshot.is_model:
             adapter = self.adapter
@@ -854,6 +860,16 @@ class SnapshotEvaluator:
                 model=snapshot.model,
                 environment=environment_naming_info.name,
             )
+            render_kwargs: t.Dict[str, t.Any] = dict(
+                start=start,
+                end=end,
+                execution_time=execution_time,
+                engine_adapter=adapter,
+                snapshots=snapshots,
+                deployability_index=deployability_index,
+                table_mapping=table_mapping,
+            )
+            adapter.execute(snapshot.model.render_on_virtual_update(**render_kwargs))
 
         if on_complete is not None:
             on_complete(snapshot)
