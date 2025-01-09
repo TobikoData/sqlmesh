@@ -794,15 +794,15 @@ class TerminalConsole(Console):
 
             if not no_prompts:
                 self._prompt_backfill(plan_builder, auto_apply, default_catalog)
+                backfill_or_preview = "preview" if plan.is_dev and plan.forward_only else "backfill"
+                if not auto_apply and self._confirm(
+                    f"Apply - {backfill_or_preview.capitalize()} Tables"
+                ):
+                    plan_builder.apply()
 
-            backfill_or_preview = "preview" if plan.is_dev and plan.forward_only else "backfill"
-            if not auto_apply and self._confirm(
-                f"Apply - {backfill_or_preview.capitalize()} Tables"
-            ):
-                plan_builder.apply()
-        elif plan.has_changes and not auto_apply:
+        elif not no_prompts and plan.has_changes and not auto_apply:
             self._prompt_promote(plan_builder)
-        elif plan.has_unmodified_unpromoted and not auto_apply:
+        elif not no_prompts and plan.has_unmodified_unpromoted and not auto_apply:
             self.log_status_update("\n[bold]Virtually updating unmodified models\n")
             self._prompt_promote(plan_builder)
 
