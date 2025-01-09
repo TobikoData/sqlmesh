@@ -6815,47 +6815,53 @@ def test_model_on_virtual_update(make_snapshot: t.Callable):
     parent_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
     version = parent_snapshot.version
 
+    model_snapshot = make_snapshot(model)
+    model_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
     assert model.on_virtual_update == d.parse(virtual_update_statements)
 
     assert parent.on_virtual_update == d.parse(
         "JINJA_STATEMENT_BEGIN; GRANT SELECT ON VIEW {{this_model}} TO ROLE admin; JINJA_END;"
     )
 
-    table_mapping = {'"demo_db"."table"': "demo_db__dev.table"}
-    snapshots = {'"parent"': parent_snapshot}
+    table_mapping = {model.fqn: "demo_db__dev.table", parent.fqn: "default__dev.parent"}
+    snapshots = {
+        parent_snapshot.name: parent_snapshot,
+        model_snapshot.name: model_snapshot,
+    }
 
-    rendered_statements = model._render_statements(
-        model.on_virtual_update, snapshots=snapshots, table_mapping=table_mapping
+    rendered_on_virtual_update = model.render_on_virtual_update(
+        snapshots=snapshots, table_mapping=table_mapping
     )
 
-    assert len(rendered_statements) == 6
+    assert len(rendered_on_virtual_update) == 6
     assert (
-        rendered_statements[0].sql()
+        rendered_on_virtual_update[0].sql()
         == 'CREATE OR REPLACE VIEW "test_view" AS SELECT * FROM "demo_db__dev"."table" AS "table" /* demo_db.table */'
     )
     assert (
-        rendered_statements[1].sql()
+        rendered_on_virtual_update[1].sql()
         == 'GRANT SELECT ON VIEW "demo_db__dev"."table" /* demo_db.table */ TO ROLE "owner_name"'
     )
     assert (
-        rendered_statements[3].sql()
+        rendered_on_virtual_update[3].sql()
         == "GRANT REFERENCES, SELECT ON FUTURE VIEWS IN DATABASE demo_db TO ROLE owner_name"
     )
-    assert rendered_statements[4].sql() == f'"sqlmesh__default"."parent__{version}"'
+    assert rendered_on_virtual_update[4].sql() == f'"sqlmesh__default"."parent__{version}"'
 
     # When replace=false the table should remain as is
     assert (
-        rendered_statements[5].sql()
+        rendered_on_virtual_update[5].sql()
         == 'GRANT SELECT ON VIEW "demo_db"."table" /* sqlglot.meta replace=false */ TO ROLE "admin"'
     )
 
-    rendered_parent_statements = model._render_statements(
-        parent.on_virtual_update, snapshots=snapshots, table_mapping=table_mapping
+    rendered_parent_on_virtual_update = parent.render_on_virtual_update(
+        snapshots=snapshots, table_mapping=table_mapping
     )
+    assert len(rendered_parent_on_virtual_update) == 1
     assert (
-        rendered_statements[2].sql()
-        == rendered_parent_statements[0].sql()
-        == 'GRANT SELECT ON VIEW "demo_db__dev"."table" /* demo_db.table */ TO ROLE "admin"'
+        rendered_parent_on_virtual_update[0].sql()
+        == 'GRANT SELECT ON VIEW "default__dev"."parent" /* parent */ TO ROLE "admin"'
     )
 
 
