@@ -173,13 +173,15 @@ def configure_logging(
             os.remove(path)
 
     if debug:
-        from signal import SIGUSR1
         import faulthandler
 
         enable_debug_mode()
 
         # Enable threadumps.
         faulthandler.enable()
+
         # Windows doesn't support register so we check for it here
         if hasattr(faulthandler, "register"):
+            from signal import SIGUSR1
+
             faulthandler.register(SIGUSR1.value)
