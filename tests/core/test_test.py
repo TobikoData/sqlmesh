@@ -1234,6 +1234,30 @@ test_foo:
         ]
     )
 
+    test = _create_test(
+        body=load_yaml(
+            """
+test_foo:
+  model: xyz
+  outputs:
+    query:
+      - cur_timestamp: "2023-01-01 12:05:03+00:00"
+  vars:
+    execution_time: "2023-01-01 12:05:03+00:00"
+            """
+        ),
+        test_name="test_foo",
+        model=_create_model("SELECT CURRENT_TIMESTAMP AS cur_timestamp"),
+        context=Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="bigquery"))),
+    )
+
+    spy_execute = mocker.spy(test.engine_adapter, "_execute")
+    _check_successful_or_raise(test.run())
+
+    spy_execute.assert_has_calls(
+        [call('''SELECT CAST('2023-01-01 12:05:03+00:00' AS TIMESTAMPTZ) AS "cur_timestamp"''')]
+    )
+
     @model("py_model", columns={"ts1": "timestamptz", "ts2": "timestamptz"})
     def execute(context, start, end, execution_time, **kwargs):
         datetime_now_utc = datetime.datetime.now(tz=datetime.timezone.utc)
