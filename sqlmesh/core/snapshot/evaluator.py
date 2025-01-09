@@ -859,7 +859,6 @@ class SnapshotEvaluator:
                 view_name=view_name,
                 model=snapshot.model,
                 environment=environment_naming_info.name,
-                deployability_index=deployability_index,
             )
             render_kwargs: t.Dict[str, t.Any] = dict(
                 start=start,
