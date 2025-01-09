@@ -3654,7 +3654,7 @@ def test_multi_engine_python_model_with_macros(adapters, make_snapshot):
     assert view_args[0][0][0] == "db__test_env.multi_engine_test_model"
 
     # For the pre/post statements verify the model-specific gateway was used
-    engine_adapters["default"].execute.assert_not_called()
+    engine_adapters["default"].execute.assert_called_once()
     assert len(engine_adapters["secondary"].execute.call_args_list) == 2
 
     # Validate that the get_catalog_type method was called only on the secondary engine from the macro evaluator

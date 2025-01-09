@@ -339,8 +339,8 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         deployability_index: t.Optional[DeployabilityIndex] = None,
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]] = None,
     ) -> None:
-        # Additional arguments to pass for rendering the virtual statements.
-        render_kwargs: t.Dict[str, t.Any] = dict(
+        self.snapshot_evaluator.promote(
+            target_snapshots,
             start=plan.start,
             end=plan.end,
             execution_time=plan.execution_time or now(),
@@ -351,14 +351,9 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                 default_catalog=self.default_catalog,
                 dialect=self.snapshot_evaluator.adapter.dialect,
             ),
-        )
-
-        self.snapshot_evaluator.promote(
-            target_snapshots,
-            environment_naming_info,
+            environment_naming_info=environment_naming_info,
             deployability_index=deployability_index,
             on_complete=on_complete,
-            **render_kwargs,
         )
 
     def _demote_snapshots(

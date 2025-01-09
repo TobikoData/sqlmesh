@@ -204,8 +204,12 @@ class SnapshotEvaluator:
         target_snapshots: t.Iterable[Snapshot],
         environment_naming_info: EnvironmentNamingInfo,
         deployability_index: t.Optional[DeployabilityIndex] = None,
+        start: t.Optional[TimeLike] = None,
+        end: t.Optional[TimeLike] = None,
+        execution_time: t.Optional[TimeLike] = None,
+        snapshots: t.Optional[t.Dict[SnapshotId, Snapshot]] = None,
+        table_mapping: t.Optional[t.Dict[str, str]] = None,
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]] = None,
-        **kwargs: t.Any,
     ) -> None:
         """Promotes the given collection of snapshots in the target environment by replacing a corresponding
         view with a physical table associated with the given snapshot.
@@ -231,10 +235,14 @@ class SnapshotEvaluator:
                 target_snapshots,
                 lambda s: self._promote_snapshot(
                     s,
-                    environment_naming_info,
-                    deployability_index,  # type: ignore
-                    on_complete,
-                    **kwargs,
+                    start=start,
+                    end=end,
+                    execution_time=execution_time,
+                    snapshots=snapshots,
+                    table_mapping=table_mapping,
+                    environment_naming_info=environment_naming_info,
+                    deployability_index=deployability_index,  # type: ignore
+                    on_complete=on_complete,
                 ),
                 self.ddl_concurrent_tasks,
             )
@@ -834,7 +842,11 @@ class SnapshotEvaluator:
         environment_naming_info: EnvironmentNamingInfo,
         deployability_index: DeployabilityIndex,
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]],
-        **kwargs: t.Any,
+        start: t.Optional[TimeLike] = None,
+        end: t.Optional[TimeLike] = None,
+        execution_time: t.Optional[TimeLike] = None,
+        snapshots: t.Optional[t.Dict[SnapshotId, Snapshot]] = None,
+        table_mapping: t.Optional[t.Dict[str, str]] = None,
     ) -> None:
         if snapshot.is_model:
             adapter = self.adapter
@@ -848,8 +860,17 @@ class SnapshotEvaluator:
                 model=snapshot.model,
                 environment=environment_naming_info.name,
                 deployability_index=deployability_index,
-                **kwargs,
             )
+            render_kwargs: t.Dict[str, t.Any] = dict(
+                start=start,
+                end=end,
+                execution_time=execution_time,
+                engine_adapter=adapter,
+                snapshots=snapshots,
+                deployability_index=deployability_index,
+                table_mapping=table_mapping,
+            )
+            adapter.execute(snapshot.model.render_on_virtual_update(**render_kwargs))
 
         if on_complete is not None:
             on_complete(snapshot)
@@ -1243,16 +1264,13 @@ class PromotableStrategy(EvaluationStrategy):
     ) -> None:
         is_prod = environment == c.PROD
         logger.info("Updating view '%s' to point at table '%s'", view_name, table_name)
-        adapter = self.adapter
-        adapter.create_view(
+        self.adapter.create_view(
             view_name,
             exp.select("*").from_(table_name, dialect=self.adapter.dialect),
             table_description=model.description if is_prod else None,
             column_descriptions=model.column_descriptions if is_prod else None,
             view_properties=model.virtual_properties,
         )
-        if model.on_virtual_update:
-            adapter.execute(model.render_on_virtual_update(engine_adapter=adapter, **kwargs))
 
     def demote(self, view_name: str, **kwargs: t.Any) -> None:
         logger.info("Dropping view '%s'", view_name)
