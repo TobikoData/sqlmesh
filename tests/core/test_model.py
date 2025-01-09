@@ -2908,17 +2908,48 @@ def test_custom_interval_unit():
     )
 
     with pytest.raises(
-        ConfigError, match=r"Interval unit of '.*' is larger than cron period of '@daily'"
+        ConfigError, match=r"Cron '@daily' cannot be more frequent than interval unit 'month'."
     ):
         load_sql_based_model(
             d.parse("MODEL (name db.table, interval_unit month); SELECT a FROM tbl;")
         )
 
     with pytest.raises(
-        ConfigError, match=r"Interval unit of '.*' is larger than cron period of '@hourly'"
+        ConfigError,
+        match=r"Cron '@hourly' cannot be more frequent than interval unit 'day'. If this is intentional, set allow_partials to True.",
     ):
         load_sql_based_model(
             d.parse("MODEL (name db.table, interval_unit Day, cron '@hourly'); SELECT a FROM tbl;")
+        )
+
+
+def test_interval_unit_larger_than_cron_period():
+    # The interval unit can be larger than the cron period if allow_partials is True
+    model = load_sql_based_model(
+        d.parse(
+            "MODEL (name db.table, interval_unit day, cron '@hourly', allow_partials TRUE); SELECT a FROM tbl;"
+        )
+    )
+    assert model.interval_unit == IntervalUnit.DAY
+    assert model.cron == "@hourly"
+    assert model.allow_partials
+
+    with pytest.raises(
+        ConfigError,
+        match=r"Cron '@hourly' cannot be more frequent than interval unit 'day'. If this is intentional, set allow_partials to True.",
+    ):
+        load_sql_based_model(
+            d.parse("MODEL (name db.table, interval_unit day, cron '@hourly'); SELECT a FROM tbl;")
+        )
+
+    with pytest.raises(
+        ConfigError,
+        match=r"Cron '@hourly' cannot be more frequent than interval unit 'day'. If this is intentional, set allow_partials to True.",
+    ):
+        load_sql_based_model(
+            d.parse(
+                "MODEL (name db.table, interval_unit day, cron '@hourly', allow_partials FALSE); SELECT a FROM tbl;"
+            )
         )
 
 
