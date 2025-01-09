@@ -17,7 +17,7 @@ from sqlmesh.core.engine_adapter.shared import (
 
 
 if t.TYPE_CHECKING:
-    from sqlmesh.core._typing import SchemaName
+    from sqlmesh.core._typing import SchemaName, TableName
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +30,6 @@ class RisingwaveEngineAdapter(PostgresEngineAdapter):
     COMMENT_CREATION_TABLE = CommentCreationTable.COMMENT_COMMAND_ONLY
     COMMENT_CREATION_VIEW = CommentCreationView.UNSUPPORTED
     SUPPORTS_MATERIALIZED_VIEWS = True
-    # Temporarily set this because integration test: test_transaction uses truncate table operation, which is not supported in risingwave.
     SUPPORTS_TRANSACTIONS = False
 
     def drop_schema(
@@ -58,3 +57,6 @@ class RisingwaveEngineAdapter(PostgresEngineAdapter):
                         exists=ignore_if_not_exists,
                     )
         super().drop_schema(schema_name, ignore_if_not_exists=ignore_if_not_exists, cascade=False)
+
+    def _truncate_table(self, table_name: TableName) -> None:
+        return self.execute(exp.Delete(this=exp.to_table(table_name)))
