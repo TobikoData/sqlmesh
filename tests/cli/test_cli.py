@@ -445,14 +445,24 @@ def test_plan_dev_bad_create_from(runner, tmp_path):
 def test_plan_dev_no_prompts(runner, tmp_path):
     create_example_project(tmp_path)
 
-    # plan for non-prod environment doesn't prompt for dates but prompts to apply
+    # plan for non-prod environment doesn't prompt for dates but prompts to apply when there is no --no-prompts flag
     result = runner.invoke(
         cli, ["--log-file-dir", tmp_path, "--paths", tmp_path, "plan", "dev", "--no-prompts"]
     )
-    assert "Apply - Backfill Tables [y/n]: " in result.output
+    assert "Apply - Backfill Tables [y/n]: " not in result.output
     assert "Model versions created successfully" not in result.output
     assert "Model batches executed successfully" not in result.output
     assert "The target environment has been updated successfully" not in result.output
+
+
+def test_plan_dev_no_auto_apply(runner, tmp_path):
+    create_example_project(tmp_path)
+
+    # plan for non-prod environment doesn't prompt for dates but prompts to apply when there is no --no-prompts flag
+    result = runner.invoke(
+        cli, ["--log-file-dir", tmp_path, "--paths", tmp_path, "plan", "dev"], input="\n\n"
+    )
+    assert "Apply - Backfill Tables [y/n]: " in result.output
 
 
 def test_plan_dev_auto_apply(runner, tmp_path):
