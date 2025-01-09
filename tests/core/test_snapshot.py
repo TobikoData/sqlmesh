@@ -271,7 +271,11 @@ def test_add_interval_partial(snapshot: Snapshot, make_snapshot):
 def test_get_next_model_interval_start(make_snapshot):
     hourly_snapshot = make_snapshot(
         SqlModel(
-            name="late", kind=FullKind(), query=parse_one("SELECT 1, ds FROM name"), cron="@hourly"
+            name="late",
+            kind=FullKind(),
+            query=parse_one("SELECT 1, ds FROM name"),
+            cron="@hourly",
+            interval_unit=IntervalUnit.HALF_HOUR,
         )
     )
 
