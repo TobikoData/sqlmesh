@@ -8,6 +8,7 @@ from sqlglot import expressions as exp
 from sqlglot import parse_one
 
 from sqlmesh.core.engine_adapter import RedshiftEngineAdapter
+from sqlmesh.utils.errors import SQLMeshError
 from tests.core.engine_adapter import to_sql_calls
 
 pytestmark = [pytest.mark.engine, pytest.mark.redshift]
@@ -322,3 +323,84 @@ def test_alter_table_drop_column_cascade(adapter: t.Callable):
     assert to_sql_calls(adapter) == [
         'ALTER TABLE "test_table" DROP COLUMN "test_column" CASCADE',
     ]
+
+
+def test_merge(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(RedshiftEngineAdapter)
+
+    adapter.merge(
+        target_table=exp.to_table("target_table_name"),
+        source_table=t.cast(exp.Select, parse_one('SELECT "ID", ts, val FROM source')),
+        columns_to_types={
+            "ID": exp.DataType.build("int"),
+            "ts": exp.DataType.build("timestamp"),
+            "val": exp.DataType.build("int"),
+        },
+        unique_key=[exp.to_identifier("ID", quoted=True)],
+    )
+
+    # Test additional predicates in the merge_filter
+    adapter.merge(
+        target_table=exp.to_table("target_table_name"),
+        source_table=t.cast(exp.Select, parse_one('SELECT "ID", ts, val FROM source')),
+        columns_to_types={
+            "ID": exp.DataType.build("int"),
+            "ts": exp.DataType.build("timestamp"),
+            "val": exp.DataType.build("int"),
+        },
+        unique_key=[exp.to_identifier("ID", quoted=True)],
+        merge_filter=exp.and_(
+            exp.and_(exp.column("ID", "__merge_source__") > 0),
+            exp.column("ts", "__merge_target__") < exp.column("ts", "__merge_source__"),
+        ),
+    )
+
+    sql_calls = to_sql_calls(adapter)
+    assert sql_calls == [
+        'MERGE INTO "target_table_name" USING (SELECT "ID", "ts", "val" FROM "source") AS "__MERGE_SOURCE__" ON "target_table_name"."ID" = "__MERGE_SOURCE__"."ID" WHEN MATCHED THEN UPDATE SET "ID" = "__merge_source__"."ID", "ts" = "__merge_source__"."ts", "val" = "__merge_source__"."val" WHEN NOT MATCHED THEN INSERT ("ID", "ts", "val") VALUES ("__merge_source__"."ID", "__merge_source__"."ts", "__merge_source__"."val")',
+        'MERGE INTO "target_table_name" USING (SELECT "ID", "ts", "val" FROM "source") AS "__MERGE_SOURCE__" ON ("__merge_source__"."ID" > 0 AND "target_table_name"."ts" < "__merge_source__"."ts") AND "target_table_name"."ID" = "__MERGE_SOURCE__"."ID" WHEN MATCHED THEN UPDATE SET "ID" = "__merge_source__"."ID", "ts" = "__merge_source__"."ts", "val" = "__merge_source__"."val" WHEN NOT MATCHED THEN INSERT ("ID", "ts", "val") VALUES ("__merge_source__"."ID", "__merge_source__"."ts", "__merge_source__"."val")',
+    ]
+
+
+def test_merge_when_matched_error(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(RedshiftEngineAdapter)
+
+    with pytest.raises(
+        SQLMeshError,
+        match=r".*Redshift only supports a single WHEN MATCHED and WHEN NOT MATCHED clause*",
+    ):
+        adapter.merge(
+            target_table=exp.to_table("target_table_name"),
+            source_table=t.cast(exp.Select, parse_one('SELECT "ID", val FROM source')),
+            columns_to_types={
+                "ID": exp.DataType.build("int"),
+                "val": exp.DataType.build("int"),
+            },
+            unique_key=[exp.to_identifier("ID", quoted=True)],
+            when_matched=exp.Whens(
+                expressions=[
+                    exp.When(
+                        matched=True,
+                        condition=exp.column("ID", "__MERGE_SOURCE__").eq(exp.Literal.number(1)),
+                        then=exp.Update(
+                            expressions=[
+                                exp.column("val", "__MERGE_TARGET__").eq(
+                                    exp.column("val", "__MERGE_SOURCE__")
+                                ),
+                            ],
+                        ),
+                    ),
+                    exp.When(
+                        matched=True,
+                        source=False,
+                        then=exp.Update(
+                            expressions=[
+                                exp.column("val", "__MERGE_TARGET__").eq(
+                                    exp.column("val", "__MERGE_SOURCE__")
+                                ),
+                            ],
+                        ),
+                    ),
+                ]
+            ),
+        )
