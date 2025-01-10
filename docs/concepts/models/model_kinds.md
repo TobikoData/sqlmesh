@@ -349,8 +349,11 @@ MODEL (
 * BigQuery
 * Databricks
 * Postgres
+* Redshift
 * Snowflake
 * Spark
+
+Redshift supports only the `UPDATE` or `DELETE` actions for the `WHEN MATCHED` clause and does not allow multiple `WHEN MATCHED` expressions. For further information, refer to the [Redshift documentation](https://docs.aws.amazon.com/redshift/latest/dg/r_MERGE.html#r_MERGE-parameters).
 
 ### Merge Filter Expression
 
