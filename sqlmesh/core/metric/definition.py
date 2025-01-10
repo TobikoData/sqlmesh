@@ -10,11 +10,7 @@ from sqlmesh.core import dialect as d
 from sqlmesh.core.node import str_or_exp_to_str
 from sqlmesh.utils import UniqueKeyDict
 from sqlmesh.utils.errors import ConfigError
-from sqlmesh.utils.pydantic import (
-    PydanticModel,
-    field_validator,
-    field_validator_v1_args,
-)
+from sqlmesh.utils.pydantic import PydanticModel, ValidationInfo, field_validator
 
 MeasureAndDimTables = t.Tuple[str, t.Tuple[str, ...]]
 
@@ -83,7 +79,7 @@ class MetricMeta(PydanticModel, frozen=True):
     @field_validator("name", mode="before")
     @classmethod
     def _name_validator(cls, v: t.Any) -> str:
-        return cls._string_validator(v).lower()
+        return (cls._string_validator(v) or "").lower()
 
     @field_validator("dialect", "owner", "description", mode="before")
     @classmethod
@@ -91,14 +87,9 @@ class MetricMeta(PydanticModel, frozen=True):
         return str_or_exp_to_str(v)
 
     @field_validator("expression", mode="before")
-    @field_validator_v1_args
-    def _validate_expression(
-        cls,
-        v: t.Any,
-        values: t.Dict[str, t.Any],
-    ) -> exp.Expression:
+    def _validate_expression(cls, v: t.Any, info: ValidationInfo) -> exp.Expression:
         if isinstance(v, str):
-            dialect = values.get("dialect")
+            dialect = info.data.get("dialect")
             return d.parse_one(v, dialect=dialect)
         if isinstance(v, exp.Expression):
             return v

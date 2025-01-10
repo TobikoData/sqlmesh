@@ -23,9 +23,9 @@ from sqlmesh.utils.pydantic import (
     SQLGlotPositiveInt,
     SQLGlotString,
     SQLGlotCron,
+    ValidationInfo,
     column_validator,
     field_validator,
-    field_validator_v1_args,
     get_dialect,
     validate_string,
 )
@@ -237,49 +237,6 @@ class TimeColumn(PydanticModel):
     column: exp.Expression
     format: t.Optional[str] = None
 
-    @classmethod
-    def validator(cls) -> classmethod:
-        def _time_column_validator(v: t.Any, values: t.Any) -> TimeColumn:
-            dialect = get_dialect(values)
-
-            if isinstance(v, exp.Tuple):
-                column_expr = v.expressions[0]
-                column = (
-                    exp.column(column_expr)
-                    if isinstance(column_expr, exp.Identifier)
-                    else column_expr
-                )
-                format = v.expressions[1].name if len(v.expressions) > 1 else None
-            elif isinstance(v, exp.Expression):
-                column = exp.column(v) if isinstance(v, exp.Identifier) else v
-                format = None
-            elif isinstance(v, str):
-                column = d.parse_one(v, dialect=dialect)
-                column.meta.pop("sql")
-                format = None
-            elif isinstance(v, dict):
-                column_raw = v["column"]
-                column = (
-                    d.parse_one(column_raw, dialect=dialect)
-                    if isinstance(column_raw, str)
-                    else column_raw
-                )
-                format = v.get("format")
-            elif isinstance(v, TimeColumn):
-                column = v.column
-                format = v.format
-            else:
-                raise ConfigError(f"Invalid time_column: '{v}'.")
-
-            column = quote_identifiers(
-                normalize_identifiers(column, dialect=dialect), dialect=dialect
-            )
-            column.meta["dialect"] = dialect
-
-            return TimeColumn(column=column, format=format)
-
-        return field_validator("time_column", mode="before")(_time_column_validator)
-
     @field_validator("column", mode="before")
     @classmethod
     def _column_validator(cls, v: t.Union[str, exp.Expression]) -> exp.Expression:
@@ -321,9 +278,7 @@ def _kind_dialect_validator(cls: t.Type, v: t.Optional[str]) -> str:
     return v
 
 
-kind_dialect_validator = field_validator("dialect", mode="before", always=True)(
-    _kind_dialect_validator
-)
+kind_dialect_validator = field_validator("dialect", mode="before")(_kind_dialect_validator)
 
 
 class _Incremental(_ModelKind):
@@ -409,7 +364,42 @@ class IncrementalByTimeRangeKind(_IncrementalBy):
     time_column: TimeColumn
     auto_restatement_intervals: t.Optional[SQLGlotPositiveInt] = None
 
-    _time_column_validator = TimeColumn.validator()
+    @field_validator("time_column", mode="before")
+    @classmethod
+    def _time_column_validator(cls, v: t.Any, values: t.Any) -> TimeColumn:
+        dialect = get_dialect(values)
+
+        if isinstance(v, exp.Tuple):
+            column_expr = v.expressions[0]
+            column = (
+                exp.column(column_expr) if isinstance(column_expr, exp.Identifier) else column_expr
+            )
+            format = v.expressions[1].name if len(v.expressions) > 1 else None
+        elif isinstance(v, exp.Expression):
+            column = exp.column(v) if isinstance(v, exp.Identifier) else v
+            format = None
+        elif isinstance(v, str):
+            column = d.parse_one(v, dialect=dialect)
+            column.meta.pop("sql")
+            format = None
+        elif isinstance(v, dict):
+            column_raw = v["column"]
+            column = (
+                d.parse_one(column_raw, dialect=dialect)
+                if isinstance(column_raw, str)
+                else column_raw
+            )
+            format = v.get("format")
+        elif isinstance(v, TimeColumn):
+            column = v.column
+            format = v.format
+        else:
+            raise ConfigError(f"Invalid time_column: '{v}'.")
+
+        column = quote_identifiers(normalize_identifiers(column, dialect=dialect), dialect=dialect)
+        column.meta["dialect"] = dialect
+
+        return TimeColumn(column=column, format=format)
 
     def to_expression(
         self, expressions: t.Optional[t.List[exp.Expression]] = None, **kwargs: t.Any
@@ -450,11 +440,10 @@ class IncrementalByUniqueKeyKind(_IncrementalBy):
     batch_concurrency: t.Literal[1] = 1
 
     @field_validator("when_matched", mode="before")
-    @field_validator_v1_args
     def _when_matched_validator(
         cls,
         v: t.Optional[t.Union[str, exp.Whens]],
-        values: t.Dict[str, t.Any],
+        info: ValidationInfo,
     ) -> t.Optional[exp.Whens]:
         if v is None:
             return v
@@ -464,22 +453,21 @@ class IncrementalByUniqueKeyKind(_IncrementalBy):
             if v.startswith("("):
                 v = v[1:-1]
 
-            return t.cast(exp.Whens, d.parse_one(v, into=exp.Whens, dialect=get_dialect(values)))
+            return t.cast(exp.Whens, d.parse_one(v, into=exp.Whens, dialect=get_dialect(info.data)))
 
         return t.cast(exp.Whens, v.transform(d.replace_merge_table_aliases))
 
     @field_validator("merge_filter", mode="before")
-    @field_validator_v1_args
     def _merge_filter_validator(
         cls,
         v: t.Optional[exp.Expression],
-        values: t.Dict[str, t.Any],
+        info: ValidationInfo,
     ) -> t.Optional[exp.Expression]:
         if v is None:
             return v
         if isinstance(v, str):
             v = v.strip()
-            return d.parse_one(v, dialect=get_dialect(values))
+            return d.parse_one(v, dialect=get_dialect(info.data))
 
         return v.transform(d.replace_merge_table_aliases)
 
@@ -616,7 +604,7 @@ class SeedKind(_ModelKind):
         if v is None or isinstance(v, CsvSettings):
             return v
         if isinstance(v, exp.Expression):
-            tuple_exp = parse_properties(cls, v, {})
+            tuple_exp = parse_properties(cls, v)
             if not tuple_exp:
                 return None
             return CsvSettings(**{e.left.name: e.right for e in tuple_exp.expressions})
@@ -669,13 +657,11 @@ class _SCDType2Kind(_Incremental):
 
     _dialect_validator = kind_dialect_validator
 
-    # Remove once Pydantic 1 is deprecated
-    _always_validate_column = field_validator(
-        "valid_from_name", "valid_to_name", mode="before", always=True
-    )(column_validator)
+    _always_validate_column = field_validator("valid_from_name", "valid_to_name", mode="before")(
+        column_validator
+    )
 
-    # always=True can be removed once Pydantic 1 is deprecated
-    @field_validator("time_data_type", mode="before", always=True)
+    @field_validator("time_data_type", mode="before")
     @classmethod
     def _time_data_type_validator(
         cls, v: t.Union[str, exp.Expression], values: t.Any
@@ -742,8 +728,7 @@ class SCDType2ByTimeKind(_SCDType2Kind):
     updated_at_name: SQLGlotColumn = Field(exp.column("updated_at"), validate_default=True)
     updated_at_as_valid_from: SQLGlotBool = False
 
-    # Remove once Pydantic 1 is deprecated
-    _always_validate_updated_at = field_validator("updated_at_name", mode="before", always=True)(
+    _always_validate_updated_at = field_validator("updated_at_name", mode="before")(
         column_validator
     )
 
@@ -986,9 +971,10 @@ def create_model_kind(v: t.Any, dialect: str, defaults: t.Dict[str, t.Any]) -> M
     return model_kind_type_from_name(name)(name=name)  # type: ignore
 
 
-@field_validator_v1_args
-def _model_kind_validator(cls: t.Type, v: t.Any, values: t.Dict[str, t.Any]) -> ModelKind:
-    dialect = get_dialect(values)
+def _model_kind_validator(
+    cls: t.Type, v: t.Any, info: t.Optional[ValidationInfo] = None
+) -> ModelKind:
+    dialect = get_dialect(info.data) if info else ""
     return create_model_kind(v, dialect, {})
 
 

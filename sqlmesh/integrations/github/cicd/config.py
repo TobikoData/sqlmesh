@@ -6,7 +6,7 @@ from pydantic import Field
 from sqlmesh.core.config import CategorizerConfig
 from sqlmesh.core.config.base import BaseConfig
 from sqlmesh.utils.date import TimeLike
-from sqlmesh.utils.pydantic import model_validator, model_validator_v1_args
+from sqlmesh.utils.pydantic import model_validator
 
 
 class MergeMethod(str, Enum):
@@ -30,13 +30,15 @@ class GithubCICDBotConfig(BaseConfig):
     pr_environment_name: t.Optional[str] = None
 
     @model_validator(mode="before")
-    @model_validator_v1_args
-    def _validate(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
-        if values.get("enable_deploy_command") and not values.get("merge_method"):
-            raise ValueError("merge_method must be set if enable_deploy_command is True")
-        if values.get("command_namespace") and not values.get("enable_deploy_command"):
-            raise ValueError("enable_deploy_command must be set if command_namespace is set")
-        return values
+    @classmethod
+    def _validate(cls, data: t.Any) -> t.Any:
+        if isinstance(data, dict):
+            if data.get("enable_deploy_command") and not data.get("merge_method"):
+                raise ValueError("merge_method must be set if enable_deploy_command is True")
+            if data.get("command_namespace") and not data.get("enable_deploy_command"):
+                raise ValueError("enable_deploy_command must be set if command_namespace is set")
+
+        return data
 
     FIELDS_FOR_ANALYTICS: t.ClassVar[t.Set[str]] = {
         "invalidate_environment_after_deploy",
