@@ -13,6 +13,7 @@ Recall that SQLMesh determines when a model should run based on its `cron` value
 When the project is `run`, SQLMesh examines every model's `cron` and execution history. For each model, it determines how many and which intervals have elapsed since the model's previous execution.
 
 A model's freshness is calculated from the number of the unloaded intervals. The model is:
+
 - "Complete" if all completed intervals have been loaded
 - "Pending" if one completed interval has not been loaded
 - "Behind" if more than one completed interval has not been loaded
