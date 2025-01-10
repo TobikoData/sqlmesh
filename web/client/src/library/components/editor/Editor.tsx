@@ -24,6 +24,9 @@ import {
   useNotificationCenter,
 } from '~/library/pages/root/context/notificationCenter'
 
+const EDITOR_PANE_MIN_WIDTH = 32
+const INSPECTOR_PANE_WIDTH_THRESHOLD = 2
+
 function Editor(): JSX.Element {
   const tab = useStoreEditor(s => s.tab)
 
@@ -138,50 +141,21 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
     ] as KeyBinding[]
   }, [defaultKeymapsEditorTab, errors])
 
-  const handleEngineWorkerMessage = useCallback(
-    (e: MessageEvent): void => {
-      if (e.data.topic === 'dialects') {
-        const model = models.get(tab.file.path)
-
-        tab.dialect = model?.dialect ?? ''
-
-        setDialects(e.data.payload)
-        refreshTab(tab)
-      }
-
-      if (e.data.topic === 'format') {
-        if (isStringEmptyOrNil(e.data.payload)) return
-
-        tab.file.content = e.data.payload
-
-        refreshTab(tab)
-      }
-    },
-    [tab.id],
-  )
-
-  const updateFileContent = useCallback(
-    function updateFileContent(value: string): void {
-      tab.file.content = value
-
-      refreshTab(tab)
-    },
-    [tab.id],
-  )
-
   useEffect(() => {
-    engine.addEventListener('message', handleEngineWorkerMessage)
-
     setIsOpenInspector(false)
 
     if (isNil(selectedFile)) {
       setSelectedFile(tab?.file)
     }
+  }, [tab.id])
+
+  useEffect(() => {
+    engine.addEventListener('message', handleEngineWorkerMessage)
 
     return () => {
       engine.removeEventListener('message', handleEngineWorkerMessage)
     }
-  }, [tab.id])
+  }, [tab.id, tab.dialect])
 
   useEffect(() => {
     setPreviewQuery(undefined)
@@ -216,8 +190,30 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
     return showInspector ? [70, 30] : [100, 0]
   }
 
-  const EDITOR_PANE_MIN_WIDTH = 32
-  const INSPECTOR_PANE_WIDTH_THRESHOLD = 2
+  function updateFileContent(value: string): void {
+    tab.file.content = value
+
+    refreshTab(tab)
+  }
+
+  function handleEngineWorkerMessage(e: MessageEvent) {
+    if (e.data.topic === 'dialects') {
+      const model = models.get(tab.file.path)
+
+      tab.dialect = model?.dialect ?? tab.dialect ?? ''
+
+      setDialects(e.data.payload)
+      refreshTab(tab)
+    }
+
+    if (e.data.topic === 'format') {
+      if (isStringEmptyOrNil(e.data.payload)) return
+
+      tab.file.content = e.data.payload
+
+      refreshTab(tab)
+    }
+  }
 
   return (
     <SplitPane
