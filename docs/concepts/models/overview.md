@@ -227,10 +227,28 @@ Learn more about these properties and their default values in the [model configu
 :   Tags are one or more labels used to organize your models.
 
 ### cron
-:   Cron is used to schedule your model to process or refresh at a certain interval. It accepts a [cron expression](https://en.wikipedia.org/wiki/Cron) or any of `@hourly`, `@daily`, `@weekly`, or `@monthly`.
+:   Cron is used to schedule your model to process or refresh at a certain cadence. It accepts a [cron expression](https://en.wikipedia.org/wiki/Cron) or any of `@hourly`, `@daily`, `@weekly`, or `@monthly`.
 
 ### interval_unit
-:   Interval unit determines the granularity of data intervals for this model. By default the interval unit is automatically derived from the `cron` expression. Supported values are: `year`, `month`, `day`, `hour`, `half_hour`, `quarter_hour`, and `five_minute`.
+:   Interval unit determines the temporal granularity with which time intervals are calculated for the model. By default, the interval unit is automatically derived from the [`cron`](#cron) expression and does not need to be specified.
+
+    Supported values are: `year`, `month`, `day`, `hour`, `half_hour`, `quarter_hour`, and `five_minute`.
+
+    #### Relationship to [`cron`](#cron)
+
+    The SQLMesh scheduler needs two temporal pieces of information from a model: specific times when the model should run and the finest temporal granularity with which the data is processed or stored. The `interval_unit` specifies that granularity.
+
+    If a model's `cron` parameter is a frequency like `@daily`, the run times and `interval_unit` are simple to determine: the model is ready to run at the start of the day, and its `interval_unit` is `day`. Similarly, a `cron` of `@hourly` is ready to run at the start of each hour, and its `interval_unit` is `hour`.
+
+    If [`cron`](#cron) is specified with a cron expression, however, SQLMesh uses a more complex approach to derive the `interval_unit`.
+
+    A [cron expression](https://en.wikipedia.org/wiki/Cron) can generate complex time intervals, so SQLMesh does not parse it directly. Instead, it:
+
+      1. Generates the next five run times from the cron expression (relative to the time of calculation)
+      2. Calculates the duration of the intervals between those five values
+      3. Determines the model's `interval_unit` as the largest interval unit value that is less than or equal to the minimum duration from (2)
+
+    For example, consider a cron expression corresponding to "run every 43 minutes." Its `interval_unit` is `half_hour` because that is the largest `interval_unit` value *shorter* than 43 minutes.
 
 ### start
 :   Start is used to determine the earliest time needed to process the model. It can be an absolute date/time (`2022-01-01`), or a relative one (`1 year ago`).
@@ -377,17 +395,28 @@ Some properties are only available in specific model kinds - see the [model conf
         The `time_column` variable should be in the UTC time zone - learn more [here](./model_kinds.md#timezones).
 
 ### batch_size
-:   Batch size is used to optimize backfilling incremental data. It determines the maximum number of intervals to run in a single job.
+:   Batch size is used to backfill incremental data when the number of intervals to backfill is too large for the engine to execute in a single pass. It allows you to process sets of intervals in batches small enough to execute on your system. The `batch_size` parameter determines the maximum number of [`interval_unit`s](#interval_unit) of data to run in a single job.
 
-    For example, if a model specifies a cron of `@hourly` and a batch_size of `12`, when backfilling 3 days of data, the scheduler will spawn 6 jobs. (3 days * 24 hours/day = 72 hour intervals to fill. 72 intervals / 12 intervals per job = 6 jobs.)
+    For example, consider a model with an `@hourly` [`cron`](#cron) that has not run in 3 days. Because its [`cron`](#cron) is `@hourly`, its [`interval_unit`](#interval_unit) is `hour`.
+
+    First, let's calculate the total number of outstanding intervals to backfill: 3 days of unprocessed data * 24 hours/day = 72 `hour` intervals.
+
+    Different `batch_size` values correspond to different numbers of jobs:
+      - `batch_size` not specified: scheduler will spawn 1 job that processes all 72 intervals (SQLMesh's default behavior)
+      - `batch_size` of 1: scheduler will spawn [72 `hour` intervals / 1 interval per job] = 72 jobs
+      - `batch_size` of 12: scheduler will spawn [72 `hour` intervals / 12 intervals per job] = 6 jobs
 
 ### batch_concurrency
 :   The maximum number of [batches](#batch_size) that can run concurrently for this model. If not specified, the concurrency is only constrained by the number of concurrent tasks set in the connection settings.
 
 ### lookback
-:   Lookback is used with [incremental by time range](model_kinds.md#incremental_by_time_range) and [incremental by unique key](model_kinds.md#incremental_by_unique_key) models to capture late-arriving data. It must be a positive integer and specifies the number of interval time units prior to the current interval the model should include.
+:   Lookback is used with [incremental by time range](model_kinds.md#incremental_by_time_range) and [incremental by unique key](model_kinds.md#incremental_by_unique_key) models to capture late-arriving data. It allows the model to access data points not in the time interval currently being processed.
 
-    For example, a model with cron `@daily` and `lookback` of 7 would include the previous 7 days each time it ran, while a model with cron `@weekly` and `lookback` of 7 would include the previous 7 weeks each time it ran.
+    It must be a positive integer and specifies how many [`interval_unit`s](#interval_unit) intervals before the current interval the model should include.
+
+    For example, consider a model with cron `@daily` ([`interval_unit`](#interval_unit) `day`). If the model specified a `lookback` of 7, SQLMesh would include the 7 days prior to the time interval being processed. A model with cron `@weekly` and `lookback` of 7 would include the 7 weeks prior to the time interval being processed.
+
+    Or consider a model whose cron expression is "run every 6 hours" (`0 */6 * * *`). SQLMesh calculates its [`interval_unit`](#interval_unit) as `hour`. The `lookback` value is calculated in `interval_units`, so a `lookback` of 1 would include the 1 hour prior to the time interval being processed.
 
 ### forward_only
 :   Set this to true to indicate that all changes to this model should be [forward-only](../plans.md#forward-only-plans).
