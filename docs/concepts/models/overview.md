@@ -249,21 +249,62 @@ Learn more about these properties and their default values in the [model configu
       3. Determines the model's `interval_unit` as the largest interval unit value that is less than or equal to the minimum duration from (2)
 
     For example, consider a cron expression corresponding to "run every 43 minutes." Its `interval_unit` is `half_hour` because that is the largest `interval_unit` value *shorter* than 43 minutes. If the cron expression is "run every 67 minutes", its `interval_unit` is `hour` given the same logic.
-    
-However, the `interval_unit` can explicitly override how the cron expression determines it if you set the configuration `allow_partials True`.  See example below. **Please note this is an advanced use case.**
 
-  ```sql
-  MODEL (
-      name sqlmesh_example.demo,
-      kind INCREMENTAL_BY_TIME_RANGE (
-        time_column date_column,
-        lookback 2, -- 2 days of late-arriving data to backfill
-      ),
-      start '2024-11-01',
-      cron '@hourly', --tells sqlmesh to run hourly, not tied to the interval_unit
-      allow_partials true, -- allow partial hourly intervals to be written to the table while still respecting the interval_unit
-      interval_unit 'day', -- lowest granularity of data to be time bucketed
+    However, `interval_unit` does not have to be inferred from [`cron`](#cron) - you can specify it explicitly to customize how your backfill occurs.
+
+    #### Specifying `interval_unit`
+
+    Models often run on a regular cadence, where the same amount of time passes between each run and the same time length of data is processed in each run.
+
+    For example, a model might run at midnight every day (1 run per day) to process the previous day's data (1 day's worth of data per run). The length of time between runs and the time length of data processed in each run are both 1 day (or both 2 days if you miss a run).
+
+    However, the run cadence length and processed data length do not have to be the same.
+
+    Consider a model that runs every day at 7:30am and processes data up until 7am today. The model's `cron` is a cron expression for "run every day at 7:30am," from which SQLMesh infers an `interval_unit` of `day`.
+
+    What will happen when this model runs? First, SQLMesh will identify the most recent completed interval. The `interval_unit` was inferred to be `day`, so the last complete interval was yesterday. SQLMesh will not include any of today's data between 12:00am and 7:00am in the run.
+
+    To include today's data, manually specify an `interval_unit` of `hour`. When the model runs at 7:30am, SQLMesh will identify the most recent completed `hour` interval as 6:00-7:00am and include data through that interval in the backfill.
+
+    ```sql
+    MODEL (
+        name sqlmesh_example.up_until_7,
+        kind INCREMENTAL_BY_TIME_RANGE (
+          time_column date_column,
+        ),
+        start '2024-11-01',
+        cron '30 7 * * *', -- cron expression for "every day at 7:30am"
+        interval_unit 'hour', -- backfill up until the most recently completed hour (rather than day)
+      );
+    ```
+    <br></br>
+    **NOTE: the example below is an advanced use case. Use the `allow_partials` configuration option with caution.**
+
+    This section configures a model that:
+
+    - Runs every hour
+    - Processes data for the last two days on every run
+    - Processes the data that has accumulated so far today on every run
+
+    Configuring this model requires letting SQLMesh process partially completed intervals by setting the model configuration `allow_partials True`.
+
+    The data for partial intervals is only temporary - SQLMesh will reprocess the entire interval once it is complete.
+
+    ```sql
+    MODEL (
+        name sqlmesh_example.demo,
+        kind INCREMENTAL_BY_TIME_RANGE (
+          time_column date_column,
+          lookback 2, -- 2 days of late-arriving data to backfill
+        ),
+        start '2024-11-01',
+        cron '@hourly', -- run model hourly, not tied to the interval_unit
+        allow_partials true, -- allow partial intervals so today's data is processed in each run
+        interval_unit 'day', -- finest granularity of data to be time bucketed
     );
+    ```
+
+    The `lookback` is calculated in days because the model's `interval_unit` is specified as `day`.
 
 ### start
 :   Start is used to determine the earliest time needed to process the model. It can be an absolute date/time (`2022-01-01`), or a relative one (`1 year ago`).
@@ -416,7 +457,11 @@ Some properties are only available in specific model kinds - see the [model conf
 
     First, let's calculate the total number of outstanding intervals to backfill: 3 days of unprocessed data * 24 hours/day = 72 `hour` intervals.
 
-    Different `batch_size` values correspond to different numbers of jobs:
+    Now we can calculate the number of jobs for different `batch_size` values with this formula:
+
+      Number of Intervals / `batch_size` = Number of jobs to run
+
+    Let's look at the number of jobs for a few different `batch_size` values:
       - `batch_size` not specified: scheduler will spawn 1 job that processes all 72 intervals (SQLMesh's default behavior)
       - `batch_size` of 1: scheduler will spawn [72 `hour` intervals / 1 interval per job] = 72 jobs
       - `batch_size` of 12: scheduler will spawn [72 `hour` intervals / 12 intervals per job] = 6 jobs
