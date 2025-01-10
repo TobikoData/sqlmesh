@@ -346,8 +346,12 @@ class RedshiftEngineAdapter(
                 expression.set("table", exp.to_table(target_table))
             return expression
 
-        # Redshift does not support multiple "WHEN MATCHED" clauses.
-        if len(whens.expressions) != 2:
+        # Ensure that there is exactly one "WHEN MATCHED" and one "WHEN NOT MATCHED" clause.
+        # Since Redshift does not support multiple "WHEN MATCHED" clauses.
+        if (
+            len(whens.expressions) != 2
+            or whens.expressions[0].args["matched"] == whens.expressions[1].args["matched"]
+        ):
             raise SQLMeshError(
                 "Redshift only supports a single WHEN MATCHED and WHEN NOT MATCHED clause"
             )
