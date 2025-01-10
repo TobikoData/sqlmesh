@@ -248,7 +248,22 @@ Learn more about these properties and their default values in the [model configu
       2. Calculates the duration of the intervals between those five values
       3. Determines the model's `interval_unit` as the largest interval unit value that is less than or equal to the minimum duration from (2)
 
-    For example, consider a cron expression corresponding to "run every 43 minutes." Its `interval_unit` is `half_hour` because that is the largest `interval_unit` value *shorter* than 43 minutes.
+    For example, consider a cron expression corresponding to "run every 43 minutes." Its `interval_unit` is `half_hour` because that is the largest `interval_unit` value *shorter* than 43 minutes. If the cron expression is "run every 67 minutes", its `interval_unit` is `hour` given the same logic.
+    
+However, the `interval_unit` can explicitly override how the cron expression determines it if you set the configuration `allow_partials True`.  See example below. **Please note this is an advanced use case.**
+
+  ```sql
+  MODEL (
+      name sqlmesh_example.demo,
+      kind INCREMENTAL_BY_TIME_RANGE (
+        time_column date_column,
+        lookback 2, -- 2 days of late-arriving data to backfill
+      ),
+      start '2024-11-01',
+      cron '@hourly', --tells sqlmesh to run hourly, not tied to the interval_unit
+      allow_partials true, -- allow partial hourly intervals to be written to the table while still respecting the interval_unit
+      interval_unit 'day', -- lowest granularity of data to be time bucketed
+    );
 
 ### start
 :   Start is used to determine the earliest time needed to process the model. It can be an absolute date/time (`2022-01-01`), or a relative one (`1 year ago`).
