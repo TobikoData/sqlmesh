@@ -7004,7 +7004,7 @@ def test_compile_time_checks(tmp_path: Path, assert_exp_eq):
     assert len(snapshot.previous_versions) == 1
     assert snapshot.change_category == SnapshotChangeCategory.METADATA
 
-    # Ensure non-SQLModels raise if strict is set
+    # Ensure non-SQLModels raise if strict mode is set
     with pytest.raises(
         ConfigError,
         match=r"Query validation can only be enabled/disabled for SQL models at",
