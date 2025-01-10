@@ -1,6 +1,6 @@
 # Overview
 
-Remediating problems with data pipelines is challenging because there are so many potential causes.
+Fixing problems with data pipelines is challenging because there are so many potential causes.
 
 For transformation pipelines, those range from upstream source timeouts to SQL query errors to Python library conflicts (and more!).
 
