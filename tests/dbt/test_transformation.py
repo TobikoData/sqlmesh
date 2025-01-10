@@ -1125,10 +1125,37 @@ def test_is_incremental(sushi_test_project: Project, assert_exp_eq, mocker):
 
     snapshot = mocker.Mock()
     snapshot.intervals = [1]
+    snapshot.is_incremental = True
 
     assert_exp_eq(
         model_config.to_sqlmesh(context).render_query_or_raise(snapshot=snapshot).sql(),
         'SELECT 1 AS "one" FROM "tbl_a" AS "tbl_a" WHERE "ds" > (SELECT MAX("ds") FROM "model" AS "model")',
+    )
+
+
+@pytest.mark.xdist_group("dbt_manifest")
+def test_is_incremental_non_incremental_model(sushi_test_project: Project, assert_exp_eq, mocker):
+    model_config = ModelConfig(
+        name="model",
+        package_name="package",
+        schema="sushi",
+        alias="some_table",
+        sql="""
+        SELECT 1 AS one FROM tbl_a
+        {% if is_incremental() %}
+        WHERE ds > (SELECT MAX(ds) FROM model)
+        {% endif %}
+        """,
+    )
+    context = sushi_test_project.context
+
+    snapshot = mocker.Mock()
+    snapshot.intervals = [1]
+    snapshot.is_incremental = False
+
+    assert_exp_eq(
+        model_config.to_sqlmesh(context).render_query_or_raise(snapshot=snapshot).sql(),
+        'SELECT 1 AS "one" FROM "tbl_a" AS "tbl_a"',
     )
 
 
