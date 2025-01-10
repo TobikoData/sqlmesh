@@ -68,7 +68,7 @@ class BaseExpressionRenderer:
         self._cache: t.List[t.Optional[exp.Expression]] = []
         self._model_fqn = model_fqn
         self._optimize_query_flag = optimize_query is not False
-        self.validate_query = validate_query
+        self._validate_query = validate_query
 
     def update_schema(self, schema: t.Dict[str, t.Any]) -> None:
         self.schema = d.normalize_mapping_schema(schema, dialect=self._dialect)
@@ -484,7 +484,7 @@ class QueryRenderer(BaseExpressionRenderer):
                     query, default_catalog=self._default_catalog, dialect=self._dialect
                 )
 
-                query = self._optimize_query(query, deps, self.validate_query)
+                query = self._optimize_query(query, deps, self._validate_query)
 
                 if should_cache:
                     self._optimized_cache = query
