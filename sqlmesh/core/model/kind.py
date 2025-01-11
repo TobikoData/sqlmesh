@@ -659,7 +659,7 @@ class _SCDType2Kind(_Incremental):
     unique_key: SQLGlotListOfFields
     valid_from_name: SQLGlotColumn = Field(exp.column("valid_from"), validate_default=True)
     valid_to_name: SQLGlotColumn = Field(exp.column("valid_to"), validate_default=True)
-    invalidate_hard_deletes: SQLGlotBool = False
+    invalidate_hard_deletes: SQLGlotBool = True
     time_data_type: exp.DataType = Field(exp.DataType.build("TIMESTAMP"), validate_default=True)
 
     forward_only: SQLGlotBool = True
