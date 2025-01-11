@@ -1329,8 +1329,10 @@ class DeployabilityIndex(PydanticModel, frozen=True):
         )
 
     def is_representative(self, snapshot: SnapshotIdLike) -> bool:
-        """Returns true if the output produced by the given snapshot in a development environment can be reused
-        in (deployed to) production, or if this snapshot already represents what is currently in production.
+        """Returns true if the deployable (non-dev) table of the given snapshot should be used for reading, table mapping, and
+        computing missing intervals.
+
+        Note, that deployable snapshots are also representative, but the reverse is not always true.
 
         Unlike `is_deployable`, this variant also captures FORWARD_ONLY and INDIRECT_NON_BREAKING snapshots that
         are not deployable by their nature but are currently promoted in production. Therefore, it's safe to consider

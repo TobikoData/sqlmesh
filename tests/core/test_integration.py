@@ -1640,6 +1640,151 @@ def test_custom_materialization(init_and_plan_context: t.Callable):
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_indirect_non_breaking_view_model_non_representative_snapshot(
+    init_and_plan_context: t.Callable,
+):
+    context, _ = init_and_plan_context("examples/sushi")
+
+    # Forward-only parent
+    forward_only_model_name = "memory.sushi.test_forward_only_model"
+    forward_only_model_expressions = d.parse(
+        f"""
+        MODEL (
+            name {forward_only_model_name},
+            kind INCREMENTAL_BY_TIME_RANGE (
+                time_column ds,
+                forward_only true,
+            ),
+        );
+
+        SELECT '2023-01-01' AS ds, 'value' AS value;
+        """
+    )
+    forward_only_model = load_sql_based_model(forward_only_model_expressions)
+    assert forward_only_model.forward_only
+    context.upsert_model(forward_only_model)
+
+    # FULL downstream model.
+    full_downstream_model_name = "memory.sushi.test_full_downstream_model"
+    full_downstream_model_expressions = d.parse(
+        f"""
+        MODEL (
+            name {full_downstream_model_name},
+            kind FULL,
+        );
+
+        SELECT ds, value FROM {forward_only_model_name};
+        """
+    )
+    full_downstream_model = load_sql_based_model(full_downstream_model_expressions)
+    context.upsert_model(full_downstream_model)
+
+    # VIEW downstream of the previous FULL model.
+    view_downstream_model_name = "memory.sushi.test_view_downstream_model"
+    view_downstream_model_expressions = d.parse(
+        f"""
+        MODEL (
+            name {view_downstream_model_name},
+            kind VIEW,
+        );
+
+        SELECT ds, value FROM {full_downstream_model_name};
+        """
+    )
+    view_downstream_model = load_sql_based_model(view_downstream_model_expressions)
+    context.upsert_model(view_downstream_model)
+
+    # Apply the initial plan with all 3 models.
+    context.plan(auto_apply=True, no_prompts=True)
+
+    # Make a change to the forward-only model and apply it in dev.
+    context.upsert_model(add_projection_to_model(t.cast(SqlModel, forward_only_model)))
+    forward_only_model_snapshot_id = context.get_snapshot(forward_only_model_name).snapshot_id
+    full_downstream_model_snapshot_id = context.get_snapshot(full_downstream_model_name).snapshot_id
+    full_downstream_model_2_snapshot_id = context.get_snapshot(
+        view_downstream_model_name
+    ).snapshot_id
+    dev_plan = context.plan("dev", auto_apply=True, no_prompts=True)
+    assert (
+        dev_plan.snapshots[forward_only_model_snapshot_id].change_category
+        == SnapshotChangeCategory.FORWARD_ONLY
+    )
+    assert (
+        dev_plan.snapshots[full_downstream_model_snapshot_id].change_category
+        == SnapshotChangeCategory.FORWARD_ONLY
+    )
+    assert (
+        dev_plan.snapshots[full_downstream_model_2_snapshot_id].change_category
+        == SnapshotChangeCategory.FORWARD_ONLY
+    )
+    assert not dev_plan.missing_intervals
+
+    # Make a follow-up breaking change to the downstream full model.
+    new_full_downstream_model_expressions = d.parse(
+        f"""
+        MODEL (
+            name {full_downstream_model_name},
+            kind FULL,
+        );
+
+        SELECT ds, 'new_value' AS value FROM {forward_only_model_name};
+        """
+    )
+    new_full_downstream_model = load_sql_based_model(new_full_downstream_model_expressions)
+    context.upsert_model(new_full_downstream_model)
+    full_downstream_model_snapshot_id = context.get_snapshot(full_downstream_model_name).snapshot_id
+    full_downstream_model_2_snapshot_id = context.get_snapshot(
+        view_downstream_model_name
+    ).snapshot_id
+    dev_plan = context.plan(
+        "dev", categorizer_config=CategorizerConfig.all_full(), auto_apply=True, no_prompts=True
+    )
+    assert (
+        dev_plan.snapshots[full_downstream_model_snapshot_id].change_category
+        == SnapshotChangeCategory.BREAKING
+    )
+    assert (
+        dev_plan.snapshots[full_downstream_model_2_snapshot_id].change_category
+        == SnapshotChangeCategory.INDIRECT_BREAKING
+    )
+    assert len(dev_plan.missing_intervals) == 2
+    assert dev_plan.missing_intervals[0].snapshot_id == full_downstream_model_snapshot_id
+    assert dev_plan.missing_intervals[1].snapshot_id == full_downstream_model_2_snapshot_id
+
+    # Check that the representative view hasn't been created yet.
+    assert not context.engine_adapter.table_exists(
+        context.get_snapshot(view_downstream_model_name).table_name()
+    )
+
+    # Now promote the very first change to prod without promoting the 2nd breaking change.
+    context.upsert_model(full_downstream_model)
+    context.plan(auto_apply=True, no_prompts=True, categorizer_config=CategorizerConfig.all_full())
+
+    # Finally, make a non-breaking change to the full model in the same dev environment.
+    context.upsert_model(add_projection_to_model(t.cast(SqlModel, new_full_downstream_model)))
+    full_downstream_model_snapshot_id = context.get_snapshot(full_downstream_model_name).snapshot_id
+    full_downstream_model_2_snapshot_id = context.get_snapshot(
+        view_downstream_model_name
+    ).snapshot_id
+    dev_plan = context.plan(
+        "dev", categorizer_config=CategorizerConfig.all_full(), auto_apply=True, no_prompts=True
+    )
+    assert (
+        dev_plan.snapshots[full_downstream_model_snapshot_id].change_category
+        == SnapshotChangeCategory.NON_BREAKING
+    )
+    assert (
+        dev_plan.snapshots[full_downstream_model_2_snapshot_id].change_category
+        == SnapshotChangeCategory.INDIRECT_NON_BREAKING
+    )
+
+    # Check that the representative view has been created.
+    assert context.engine_adapter.table_exists(
+        context.get_snapshot(view_downstream_model_name).table_name()
+    )
+
+
+@time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_unaligned_start_snapshot_with_non_deployable_downstream(init_and_plan_context: t.Callable):
     context, _ = init_and_plan_context("examples/sushi")
 
