@@ -106,12 +106,13 @@ nav:
     - Cloud Features:
   #     - "Alerts & Notifications": cloud/features/alerts_notifications.md
       - cloud/features/debugger_view.md
-  #     - cloud/features/data_catalog.md
+      - cloud/features/data_catalog.md
   #     - cloud/features/model_freshness.md
       - Scheduler:
         - "Cloud": cloud/features/scheduler.md
         - cloud/features/scheduler/airflow.md
         - cloud/features/scheduler/dagster.md
+      - "Cost & Savings Estimates": cloud/features/costs_savings.md
   #     - Observability:
   #       - cloud/observability/monitoring.md
   #       - "Measures & Dashboards": cloud/observability/measures_dashboards.md
