@@ -2843,14 +2843,14 @@ ci.extend(Oy)
 function Le(n = Le('"message" is required')) {
   throw new vo(n)
 }
-function xt(n) {
+function $t(n) {
   return n === !1
 }
 function qt(n) {
   return [null, void 0].includes(n)
 }
 function ei(n) {
-  return ba(qt, xt)(n)
+  return ba(qt, $t)(n)
 }
 function Th(n) {
   return n instanceof Element
@@ -2876,7 +2876,7 @@ function Ph(n) {
   return typeof n == 'number' && Number.isFinite(n)
 }
 function Ly(n) {
-  return ba(Ph, xt)(n)
+  return ba(Ph, $t)(n)
 }
 function My(n) {
   return ['string', 'number', 'boolean', 'symbol'].includes(typeof n)
@@ -2909,7 +2909,7 @@ function By(n, r = Error) {
   return n instanceof r
 }
 function ne(n, r = 'Invalid value') {
-  if (qt(n) || xt(n)) throw new vo(r, By(r) ? { cause: r } : void 0)
+  if (qt(n) || $t(n)) throw new vo(r, By(r) ? { cause: r } : void 0)
   return !0
 }
 function Uy(n) {
@@ -3661,21 +3661,32 @@ function Iw(n) {
           (this.disabled = !1),
           (this.emit.EventDetail = zn)
       }
-      connectedCallback() {
-        super.connectedCallback(),
-          ei(window.htmx) &&
-            (window.htmx.process(this), window.htmx.process(this.renderRoot))
-      }
       firstUpdated() {
         var a
-        super.firstUpdated(),
+        if (
+          (super.firstUpdated(),
           (a = this.elsSlots) == null ||
             a.forEach(l =>
               l.addEventListener(
                 'slotchange',
                 this._handleSlotChange.bind(this),
               ),
-            )
+            ),
+          ei(window.htmx))
+        ) {
+          const l = Array.from(this.renderRoot.querySelectorAll('a'))
+          ;(this.closest('[hx-boost="true"]') ||
+            this.closest('[data-hx-boost="true"]')) &&
+            l.forEach(f => {
+              $t(f.hasAttribute('hx-boost')) &&
+                f.setAttribute(
+                  'hx-boost',
+                  this.hasAttribute('[hx-boost="false"]') ? 'false' : 'true',
+                )
+            }),
+            window.htmx.process(this),
+            window.htmx.process(this.renderRoot)
+        }
       }
       get elSlot() {
         var a
@@ -3720,7 +3731,7 @@ function Iw(n) {
           )),
           ei(l.detail))
         ) {
-          if (xt(l.detail instanceof zn) && Rh(l.detail))
+          if ($t(l.detail instanceof zn) && Rh(l.detail))
             if ('value' in l.detail) {
               const { value: d, ...f } = l.detail
               l.detail = new zn(d, void 0, f)
@@ -7431,8 +7442,8 @@ _o.exports
     }
     function hl(b, S, $, K, st) {
       return (
-        st(b, function (yt, Ut, $t) {
-          $ = K ? ((K = !1), yt) : S($, yt, Ut, $t)
+        st(b, function (yt, Ut, xt) {
+          $ = K ? ((K = !1), yt) : S($, yt, Ut, xt)
         }),
         $
       )
@@ -7582,13 +7593,13 @@ _o.exports
           st = S.Error,
           yt = S.Function,
           Ut = S.Math,
-          $t = S.Object,
+          xt = S.Object,
           is = S.RegExp,
           zf = S.String,
           Ee = S.TypeError,
           wi = $.prototype,
           Of = yt.prototype,
-          sr = $t.prototype,
+          sr = xt.prototype,
           $i = S['__core-js_shared__'],
           xi = Of.toString,
           wt = sr.hasOwnProperty,
@@ -7598,7 +7609,7 @@ _o.exports
             return t ? 'Symbol(src)_1.' + t : ''
           })(),
           Si = sr.toString,
-          Rf = xi.call($t),
+          Rf = xi.call(xt),
           Lf = Vt._,
           Mf = is(
             '^' +
@@ -7615,8 +7626,8 @@ _o.exports
           xn = S.Symbol,
           Ai = S.Uint8Array,
           bl = Ci ? Ci.allocUnsafe : i,
-          Ei = gl($t.getPrototypeOf, $t),
-          yl = $t.create,
+          Ei = gl(xt.getPrototypeOf, xt),
+          yl = xt.create,
           _l = sr.propertyIsEnumerable,
           ki = wi.splice,
           wl = xn ? xn.isConcatSpreadable : i,
@@ -7624,7 +7635,7 @@ _o.exports
           Bn = xn ? xn.toStringTag : i,
           Ti = (function () {
             try {
-              var t = Wn($t, 'defineProperty')
+              var t = Wn(xt, 'defineProperty')
               return t({}, '', {}), t
             } catch {}
           })(),
@@ -7633,11 +7644,11 @@ _o.exports
           Bf = S.setTimeout !== Vt.setTimeout && S.setTimeout,
           zi = Ut.ceil,
           Oi = Ut.floor,
-          os = $t.getOwnPropertySymbols,
+          os = xt.getOwnPropertySymbols,
           Uf = Ci ? Ci.isBuffer : i,
           $l = S.isFinite,
           Nf = wi.join,
-          Ff = gl($t.keys, $t),
+          Ff = gl(xt.keys, xt),
           Nt = Ut.max,
           jt = Ut.min,
           Hf = K.now,
@@ -7649,7 +7660,7 @@ _o.exports
           as = Wn(S, 'Promise'),
           ar = Wn(S, 'Set'),
           Br = Wn(S, 'WeakMap'),
-          Ur = Wn($t, 'create'),
+          Ur = Wn(xt, 'create'),
           Pi = Br && new Br(),
           lr = {},
           Yf = qn(ss),
@@ -8088,7 +8099,7 @@ _o.exports
         function kl(t, e, o) {
           var s = o.length
           if (t == null) return !s
-          for (t = $t(t); s--; ) {
+          for (t = xt(t); s--; ) {
             var c = o[s],
               h = e[c],
               p = t[c]
@@ -8208,7 +8219,7 @@ _o.exports
             ? t === i
               ? ed
               : Qh
-            : Bn && Bn in $t(t)
+            : Bn && Bn in xt(t)
             ? cg(t)
             : $g(t)
         }
@@ -8219,7 +8230,7 @@ _o.exports
           return t != null && wt.call(t, e)
         }
         function Tp(t, e) {
-          return t != null && e in $t(t)
+          return t != null && e in xt(t)
         }
         function zp(t, e, o) {
           return t >= jt(e, o) && t < Nt(e, o)
@@ -8324,7 +8335,7 @@ _o.exports
             h = c,
             p = !s
           if (t == null) return !h
-          for (t = $t(t); c--; ) {
+          for (t = xt(t); c--; ) {
             var g = o[c]
             if (p && g[2] ? g[1] !== t[g[0]] : !(g[0] in t)) return !1
           }
@@ -8371,7 +8382,7 @@ _o.exports
         function gs(t) {
           if (!Kr(t)) return Ff(t)
           var e = []
-          for (var o in $t(t)) wt.call(t, o) && o != 'constructor' && e.push(o)
+          for (var o in xt(t)) wt.call(t, o) && o != 'constructor' && e.push(o)
           return e
         }
         function Up(t) {
@@ -8783,7 +8794,7 @@ _o.exports
           return (e.lastIndex = t.lastIndex), e
         }
         function Jp(t) {
-          return Nr ? $t(Nr.call(t)) : {}
+          return Nr ? xt(Nr.call(t)) : {}
         }
         function Jl(t, e) {
           var o = e ? Cs(t.buffer) : t.buffer
@@ -8912,7 +8923,7 @@ _o.exports
             for (
               h = t.length > 3 && typeof h == 'function' ? (c--, h) : i,
                 p && te(o[0], o[1], p) && ((h = c < 3 ? i : h), (c = 1)),
-                e = $t(e);
+                e = xt(e);
               ++s < c;
 
             ) {
@@ -8927,7 +8938,7 @@ _o.exports
             if (o == null) return o
             if (!ie(o)) return t(o, s)
             for (
-              var c = o.length, h = e ? c : -1, p = $t(o);
+              var c = o.length, h = e ? c : -1, p = xt(o);
               (e ? h-- : ++h < c) && s(p[h], h, p) !== !1;
 
             );
@@ -8936,7 +8947,7 @@ _o.exports
         }
         function rc(t) {
           return function (e, o, s) {
-            for (var c = -1, h = $t(e), p = s(e), g = p.length; g--; ) {
+            for (var c = -1, h = xt(e), p = s(e), g = p.length; g--; ) {
               var y = p[t ? g : ++c]
               if (o(h[y], y, h) === !1) break
             }
@@ -9007,7 +9018,7 @@ _o.exports
         }
         function oc(t) {
           return function (e, o, s) {
-            var c = $t(e)
+            var c = xt(e)
             if (!ie(e)) {
               var h = Q(o, 3)
               ;(e = Kt(e)),
@@ -9428,7 +9439,7 @@ _o.exports
             ? function (t) {
                 return t == null
                   ? []
-                  : ((t = $t(t)),
+                  : ((t = xt(t)),
                     _n(os(t), function (e) {
                       return _l.call(t, e)
                     }))
@@ -9598,7 +9609,7 @@ _o.exports
             t == null ||
             be(t)
             ? !0
-            : hd.test(t) || !ud.test(t) || (e != null && t in $t(e))
+            : hd.test(t) || !ud.test(t) || (e != null && t in xt(e))
         }
         function vg(t) {
           var e = typeof t
@@ -9631,7 +9642,7 @@ _o.exports
         }
         function bc(t, e) {
           return function (o) {
-            return o == null ? !1 : o[t] === e && (e !== i || t in $t(o))
+            return o == null ? !1 : o[t] === e && (e !== i || t in xt(o))
           }
         }
         function yg(t) {
@@ -9674,7 +9685,7 @@ _o.exports
         }
         function wg(t) {
           var e = []
-          if (t != null) for (var o in $t(t)) e.push(o)
+          if (t != null) for (var o in xt(t)) e.push(o)
           return e
         }
         function $g(t) {
@@ -10780,7 +10791,7 @@ _o.exports
           return e == null ? o : El(o, e)
         }
         var Xm = ht(function (t, e) {
-            t = $t(t)
+            t = xt(t)
             var o = -1,
               s = e.length,
               c = s > 2 ? e[2] : i
@@ -12032,7 +12043,7 @@ class ju extends ue {
   async firstUpdated() {
     await super.firstUpdated()
     const i = 28
-    ;(this._widthIcon = xt(this.hideIcon) ? 24 : 0),
+    ;(this._widthIcon = $t(this.hideIcon) ? 24 : 0),
       (this._widthAdditional = this._widthIcon + i)
     const a = this.shadowRoot.querySelector('[part="hidden"]')
     if (this.mode === Je.None) return a.parentElement.removeChild(a)
@@ -12094,7 +12105,7 @@ class ju extends ue {
   }
   _renderCatalog() {
     return Tt(
-      xt(this._hideCatalog) && xt(this.hideCatalog),
+      $t(this._hideCatalog) && $t(this.hideCatalog),
       X`
         <span part="catalog">
           ${
@@ -12109,7 +12120,7 @@ class ju extends ue {
   }
   _renderSchema() {
     return Tt(
-      xt(this._hideSchema) && xt(this.hideSchema),
+      $t(this._hideSchema) && $t(this.hideSchema),
       X`
         <span part="schema">
           ${
@@ -12172,9 +12183,9 @@ class ju extends ue {
       ${this._renderIconModel()}
       <div part="text">
         <span part="hidden">
-          <span>${this._catalog}</span>
-          <span>${this._schema}</span>
-          <span>${this._model}</span>
+          <span>${decodeURI(this._catalog)}</span>
+          <span>${decodeURI(this._schema)}</span>
+          <span>${decodeURI(this._model)}</span>
         </span>
         ${this._renderCatalog()} ${this._renderSchema()} ${this._renderModel()}
       </div>
@@ -12190,7 +12201,7 @@ class ju extends ue {
           xo(d),
           `Model Name ${l.name} does not satisfy the pattern: catalog.schema.model or schema.model`,
         )
-      const f = d.join('.')
+      const f = decodeURI(d.join('.'))
       return qt(a[f]) && (a[f] = []), a[f].push(l), a
     }, {})
   }
@@ -12560,10 +12571,10 @@ class Ju extends ue {
       this.addEventListener(uo.Select, this._handleSelect.bind(this))
   }
   toggle(i) {
-    this.open = qt(i) ? xt(this.open) : i
+    this.open = qt(i) ? $t(this.open) : i
   }
   setActive(i) {
-    this.active = qt(i) ? xt(this.active) : i
+    this.active = qt(i) ? $t(this.active) : i
   }
   _handleMouseDown(i) {
     i.preventDefault(),
@@ -12615,7 +12626,7 @@ class Ju extends ue {
       <div part="base">
         <span part="header">
           ${Tt(
-            this.hasActiveIcon && xt(this.hideActiveIcon),
+            this.hasActiveIcon && $t(this.hideActiveIcon),
             X`
               <slot name="icon-active">
                 <tbk-icon
@@ -12628,7 +12639,7 @@ class Ju extends ue {
           )}
           <span part="label">
             ${Tt(
-              xt(this.hideIcon),
+              $t(this.hideIcon),
               X`
                 <slot name="icon">
                   <tbk-icon
@@ -12639,7 +12650,7 @@ class Ju extends ue {
               `,
             )}
             ${Tt(
-              xt(this.short),
+              $t(this.short),
               X`
                 <span part="text">
                   <slot></slot>
@@ -12655,7 +12666,7 @@ class Ju extends ue {
             X`
               <span part="toggle">
                 ${Tt(
-                  xt(this.hideItemsCounter),
+                  $t(this.hideItemsCounter),
                   X`<tbk-badge .size="${Pt.XS}">${this._items.length}</tbk-badge> `,
                 )}
                 <tbk-icon
@@ -12741,7 +12752,7 @@ class Qu extends ue {
       (i.has('short') || i.has('size')) && this._toggleChildren()
   }
   toggle(i) {
-    this.short = qt(i) ? xt(this.short) : i
+    this.short = qt(i) ? $t(this.short) : i
   }
   _toggleChildren() {
     this._sections.forEach(i => {
@@ -12751,7 +12762,7 @@ class Qu extends ue {
         ;(i.short = this.short),
           (i.size = this.size ?? i.size),
           this.selectable &&
-            ((i.hasActiveIcon = this.hasActiveIcon ? xt(i.hideActiveIcon) : !1),
+            ((i.hasActiveIcon = this.hasActiveIcon ? $t(i.hideActiveIcon) : !1),
             (i.selectable = qt(i.selectable) ? this.selectable : i.selectable))
       })
   }
@@ -13297,14 +13308,14 @@ class th extends ue {
           : (this.open = this._open))
   }
   toggle(i) {
-    this.open = qt(i) ? xt(this.open) : i
+    this.open = qt(i) ? $t(this.open) : i
   }
   _handleClick(i) {
     i.preventDefault(), i.stopPropagation(), this.toggle()
   }
   _toggleChildren() {
     this.elsSlotted.forEach((i, a) => {
-      xt(this._cache.has(i)) && this._cache.set(i, i.style.display),
+      $t(this._cache.has(i)) && this._cache.set(i, i.style.display),
         this._showMore || a < this.limit
           ? (i.style.display = this._cache.get(i, i.style.display))
           : (i.style.display = 'none')
@@ -13327,7 +13338,7 @@ class th extends ue {
               size="2xs"
               variant="secondary"
               @click="${() => {
-                ;(this._showMore = xt(this._showMore)), this._toggleChildren()
+                ;(this._showMore = $t(this._showMore)), this._toggleChildren()
               }}"
             >
               ${
@@ -13348,7 +13359,7 @@ class th extends ue {
     return X`
       <div part="base">
         ${Tt(
-          this.headline && xt(this.short),
+          this.headline && $t(this.short),
           X`
             <span part="headline">
               <small>${this.headline}</small>
@@ -13617,7 +13628,7 @@ class rh extends ue {
   }
   _toggleChildren() {
     this._children.forEach((i, a) => {
-      xt(this._cache.has(i)) && this._cache.set(i, i.style.display),
+      $t(this._cache.has(i)) && this._cache.set(i, i.style.display),
         this._showMore || a < this.limit
           ? (i.style.display = this._cache.get(i, i.style.display))
           : (i.style.display = 'none')
@@ -13631,7 +13642,7 @@ class rh extends ue {
           size="${Pt.XXS}"
           variant="${J$.Secondary}"
           @click="${() => {
-            ;(this._showMore = xt(this._showMore)), this._toggleChildren()
+            ;(this._showMore = $t(this._showMore)), this._toggleChildren()
           }}"
         >
           ${`${
@@ -13653,7 +13664,7 @@ class rh extends ue {
             200,
           )}"></slot>
           ${Tt(
-            this._children.length > this.limit && xt(this.hideActions),
+            this._children.length > this.limit && $t(this.hideActions),
             this._renderShowMore(),
           )}
         </div>
@@ -15290,7 +15301,7 @@ class dh extends mn(Wt) {
     })),
       (this.mutationObserver = new MutationObserver(i => {
         i.some(a =>
-          xt(['aria-labelledby', 'aria-controls'].includes(a.attributeName)),
+          $t(['aria-labelledby', 'aria-controls'].includes(a.attributeName)),
         ) && setTimeout(() => this.setAriaLabels()),
           i.some(a => a.attributeName === 'disabled') &&
             this.syncTabsAndPanels()
@@ -15579,7 +15590,7 @@ class ph extends mn(ue, Mw) {
   }
   renderTimezone() {
     return Tt(
-      xt(this.hideTimezone),
+      $t(this.hideTimezone),
       X`<span part="timezone">${this._displayTimezone}</span>`,
     )
   }
@@ -15610,7 +15621,7 @@ class ph extends mn(ue, Mw) {
       variant="${bt.Neutral}"
     >
       ${Tt(this.side === Qe.Left, this.renderTimezone())}
-      ${Tt(xt(this.hideDate), this.renderContent())}
+      ${Tt($t(this.hideDate), this.renderContent())}
       ${Tt(this.side === Qe.Right, this.renderTimezone())}
     </tbk-badge>`
   }

@@ -102,14 +102,14 @@ export default function PageModels({
                         hide-icon
                         active={pathname === `${to}/${model.name}`}
                         value={`${to}/${model.name}`}
-                        search-value={model.name}
+                        search-value={model.displayName}
                         compact
                       >
                         <TBKModelName
                           hide-schema
                           hide-catalog
                           hide-tooltip
-                          text={model.name}
+                          text={model.displayName}
                         >
                           <TBKBadge
                             size="2xs"
