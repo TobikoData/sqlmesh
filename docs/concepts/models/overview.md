@@ -227,10 +227,12 @@ Learn more about these properties and their default values in the [model configu
 :   Tags are one or more labels used to organize your models.
 
 ### cron
-:   Cron is used to schedule your model to process or refresh at a certain cadence. It accepts a [cron expression](https://en.wikipedia.org/wiki/Cron) or any of `@hourly`, `@daily`, `@weekly`, or `@monthly`.
+:   Cron is used to schedule when your model processes or refreshes data. It accepts a [cron expression](https://en.wikipedia.org/wiki/Cron) or any of `@hourly`, `@daily`, `@weekly`, or `@monthly`. All times are assumed to be UTC timezone - it is not possible to specify them in a different timezone.
 
 ### interval_unit
-:   Interval unit determines the temporal granularity with which time intervals are calculated for the model. By default, the interval unit is automatically derived from the [`cron`](#cron) expression and does not need to be specified.
+:   Interval unit determines the temporal granularity with which time intervals are calculated for the model.
+
+    By default, the interval unit is automatically derived from the [`cron`](#cron) expression and does not need to be specified.
 
     Supported values are: `year`, `month`, `day`, `hour`, `half_hour`, `quarter_hour`, and `five_minute`.
 
@@ -277,8 +279,14 @@ Learn more about these properties and their default values in the [model configu
         interval_unit 'hour', -- backfill up until the most recently completed hour (rather than day)
       );
     ```
-    <br></br>
-    **NOTE: the example below is an advanced use case. Use the `allow_partials` configuration option with caution.**
+
+    !!! warning "Caution: complex use case"
+
+        The example below is a complex use case that uses the `allow_partials` configuration option. We recommend that you do **NOT** use this option unless absolutely necessary.
+
+        When partials are allowed, you will not be able to determine the cause of missing data. A pipeline problem and a correctly executed partial backfill both result in missing data, so you may not be able to differentiate the two.
+
+        Overall, you risk sharing incomplete/incorrect data even when SQLMesh runs successfully. Learn more on the [Tobiko blog](https://tobikodata.com/data-completeness.html).
 
     This section configures a model that:
 
