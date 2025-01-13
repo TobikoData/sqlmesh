@@ -748,6 +748,7 @@ class SnapshotEvaluator:
 
         # It can still be useful for some strategies to know if the snapshot was actually deployable
         is_snapshot_deployable = deployability_index.is_deployable(snapshot)
+        is_snapshot_representative = deployability_index.is_representative(snapshot)
 
         evaluation_strategy = _evaluation_strategy(snapshot, adapter)
 
@@ -777,6 +778,7 @@ class SnapshotEvaluator:
                         **create_render_kwargs,
                     ),
                     is_snapshot_deployable=is_snapshot_deployable,
+                    is_snapshot_representative=is_snapshot_representative,
                 )
                 try:
                     adapter.clone_table(target_table_name, snapshot.table_name(), replace=True)
@@ -801,6 +803,7 @@ class SnapshotEvaluator:
                         is_table_deployable=is_table_deployable,
                         render_kwargs=create_render_kwargs,
                         is_snapshot_deployable=is_snapshot_deployable,
+                        is_snapshot_representative=is_snapshot_representative,
                         dry_run=dry_run,
                     )
 
@@ -1715,12 +1718,13 @@ class ViewStrategy(PromotableStrategy):
         render_kwargs: t.Dict[str, t.Any],
         **kwargs: t.Any,
     ) -> None:
-        is_snapshot_deployable: bool = kwargs["is_snapshot_deployable"]
-        if not is_snapshot_deployable and is_table_deployable:
-            # If the snapshot is not deployable, the query may contain references to non-deployable tables or views.
+        is_snapshot_representative: bool = kwargs["is_snapshot_representative"]
+        if not is_snapshot_representative and is_table_deployable:
+            # If the snapshot is not representative, the query may contain references to non-deployable tables or views.
+            # This may happen if there was a forward-only change upstream which now requires the view query to point at dev preview tables.
             # Therefore, we postpone the creation of the deployable view until the snapshot is deployed to production.
             logger.info(
-                "Skipping creation of the deployable view '%s' for the non-deployable snapshot",
+                "Skipping creation of the deployable view '%s' for the non-representative snapshot",
                 table_name,
             )
             return
