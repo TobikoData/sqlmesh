@@ -484,7 +484,7 @@ class QueryRenderer(BaseExpressionRenderer):
                     query, default_catalog=self._default_catalog, dialect=self._dialect
                 )
 
-                query = self._optimize_query(query, deps, self._validate_query)
+                query = self._optimize_query(query, deps)
 
                 if should_cache:
                     self._optimized_cache = query
@@ -513,9 +513,7 @@ class QueryRenderer(BaseExpressionRenderer):
         else:
             super().update_cache(expression)
 
-    def _optimize_query(
-        self, query: exp.Query, all_deps: t.Set[str], strict: t.Optional[bool] = None
-    ) -> exp.Query:
+    def _optimize_query(self, query: exp.Query, all_deps: t.Set[str]) -> exp.Query:
         # We don't want to normalize names in the schema because that's handled by the optimizer
         original = query
         missing_deps = set()
@@ -536,7 +534,7 @@ class QueryRenderer(BaseExpressionRenderer):
                 f"'{self._model_fqn}' can be rendered at parse time."
             )
 
-            if strict:
+            if self._validate_query:
                 raise_config_error(warning, self._path)
 
             logger.warning(warning)
@@ -562,7 +560,7 @@ class QueryRenderer(BaseExpressionRenderer):
                 f"{ex} for model '{self._model_fqn}', the column may not exist or is ambiguous"
             )
 
-            if strict:
+            if self._validate_query:
                 raise_config_error(warning, self._path)
 
             query = original
