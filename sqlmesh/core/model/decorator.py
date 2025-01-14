@@ -71,7 +71,9 @@ class model(registry_decorator):
             column_name: (
                 column_type
                 if isinstance(column_type, exp.DataType)
-                else exp.DataType.build(str(column_type))
+                else exp.DataType.build(
+                    str(column_type), dialect=self.kwargs.get("dialect", self._dialect)
+                )
             )
             for column_name, column_type in self.kwargs.pop("columns", {}).items()
         }
