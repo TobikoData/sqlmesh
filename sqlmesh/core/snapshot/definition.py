@@ -940,16 +940,6 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
 
         self.change_category = category
 
-    def set_unpaused_ts(self, unpaused_dt: t.Optional[TimeLike]) -> None:
-        """Sets the timestamp for when this snapshot was unpaused.
-
-        Args:
-            unpaused_dt: The datetime object of when this snapshot was unpaused.
-        """
-        self.unpaused_ts = (
-            to_timestamp(self.node.interval_unit.cron_floor(unpaused_dt)) if unpaused_dt else None
-        )
-
     def table_name(self, is_deployable: bool = True) -> str:
         """Full table name pointing to the materialized location of the snapshot.
 

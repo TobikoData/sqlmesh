@@ -1400,7 +1400,7 @@ def test_has_paused_forward_only(snapshot: Snapshot):
     snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
     assert has_paused_forward_only([snapshot], [snapshot])
 
-    snapshot.set_unpaused_ts("2023-01-01")
+    snapshot.unpaused_ts = to_timestamp("2023-01-01")
     assert not has_paused_forward_only([snapshot], [snapshot])
 
 

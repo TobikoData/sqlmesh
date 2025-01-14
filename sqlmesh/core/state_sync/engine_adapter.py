@@ -27,6 +27,7 @@ from pathlib import Path
 from datetime import datetime
 
 import pandas as pd
+from pydantic import Field
 from sqlglot import __version__ as SQLGLOT_VERSION
 from sqlglot import exp
 from sqlglot.helper import seq_get
@@ -37,10 +38,12 @@ from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import ModelKindName, SeedModel
+from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.snapshot import (
     Intervals,
     Node,
     Snapshot,
+    SnapshotChangeCategory,
     SnapshotFingerprint,
     SnapshotId,
     SnapshotIdLike,
@@ -73,6 +76,7 @@ from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import TimeLike, now, now_timestamp, time_like_to_str, to_timestamp
 from sqlmesh.utils.errors import ConflictingPlanError, SQLMeshError
 from sqlmesh.utils.migration import blob_text_type, index_text_type
+from sqlmesh.utils.pydantic import PydanticModel
 
 logger = logging.getLogger(__name__)
 
@@ -434,16 +438,20 @@ class EngineAdapterStateSync(StateSync):
         current_ts = now()
 
         target_snapshot_ids = {s.snapshot_id for s in snapshots}
-        snapshots = self._get_snapshots_with_same_version(snapshots, lock_for_update=True)
+        same_version_snapshots = self._get_snapshots_with_same_version(
+            snapshots, lock_for_update=True
+        )
         target_snapshots_by_version = {
-            (s.name, s.version): s for s in snapshots if s.snapshot_id in target_snapshot_ids
+            (s.name, s.version): s
+            for s in same_version_snapshots
+            if s.snapshot_id in target_snapshot_ids
         }
 
         unpaused_snapshots: t.Dict[int, t.List[SnapshotId]] = defaultdict(list)
         paused_snapshots: t.List[SnapshotId] = []
         unrestorable_snapshots: t.List[SnapshotId] = []
 
-        for snapshot in snapshots:
+        for snapshot in same_version_snapshots:
             is_target_snapshot = snapshot.snapshot_id in target_snapshot_ids
             if is_target_snapshot and not snapshot.unpaused_ts:
                 logger.info("Unpausing snapshot %s", snapshot.snapshot_id)
@@ -464,8 +472,14 @@ class EngineAdapterStateSync(StateSync):
                         snapshot.snapshot_id,
                         target_snapshot.snapshot_id,
                     )
+                    full_snapshot = snapshot.full_snapshot
                     self.remove_intervals(
-                        [(snapshot, snapshot.get_removal_interval(effective_from_ts, current_ts))]
+                        [
+                            (
+                                full_snapshot,
+                                full_snapshot.get_removal_interval(effective_from_ts, current_ts),
+                            )
+                        ]
                     )
 
                 if snapshot.unpaused_ts:
@@ -555,7 +569,7 @@ class EngineAdapterStateSync(StateSync):
             for snapshot in environment.snapshots
         }
 
-        def _is_snapshot_used(snapshot: Snapshot) -> bool:
+        def _is_snapshot_used(snapshot: SharedVersionSnapshot) -> bool:
             return (
                 snapshot.snapshot_id in promoted_snapshot_ids
                 or snapshot.snapshot_id not in expired_candidates
@@ -571,28 +585,26 @@ class EngineAdapterStateSync(StateSync):
             snapshots_by_temp_version = defaultdict(set)
             for s in snapshots:
                 snapshots_by_version[(s.name, s.version)].add(s.snapshot_id)
-                snapshots_by_temp_version[(s.name, s.temp_version_get_or_generate())].add(
-                    s.snapshot_id
-                )
+                snapshots_by_temp_version[(s.name, s.temp_version)].add(s.snapshot_id)
 
             expired_snapshots = [s for s in snapshots if not _is_snapshot_used(s)]
 
             if expired_snapshots:
-                self.delete_snapshots(expired_snapshots)
+                self.delete_snapshots([s.snapshot_id for s in expired_snapshots])
 
             for snapshot in expired_snapshots:
                 shared_version_snapshots = snapshots_by_version[(snapshot.name, snapshot.version)]
                 shared_version_snapshots.discard(snapshot.snapshot_id)
 
                 shared_temp_version_snapshots = snapshots_by_temp_version[
-                    (snapshot.name, snapshot.temp_version_get_or_generate())
+                    (snapshot.name, snapshot.temp_version)
                 ]
                 shared_temp_version_snapshots.discard(snapshot.snapshot_id)
 
                 if not shared_temp_version_snapshots:
                     cleanup_targets.append(
                         SnapshotTableCleanupTask(
-                            snapshot=snapshot.table_info,
+                            snapshot=snapshot.full_snapshot.table_info,
                             dev_table_only=bool(shared_version_snapshots),
                         )
                     )
@@ -903,7 +915,7 @@ class EngineAdapterStateSync(StateSync):
         self,
         snapshots: t.Collection[SnapshotNameVersionLike],
         lock_for_update: bool = False,
-    ) -> t.List[Snapshot]:
+    ) -> t.List[SharedVersionSnapshot]:
         """Fetches all snapshots that share the same version as the snapshots.
 
         The output includes the snapshots with the specified identifiers.
@@ -922,7 +934,15 @@ class EngineAdapterStateSync(StateSync):
 
         for where in self._snapshot_name_version_filter(snapshots):
             query = (
-                exp.select("snapshot", "updated_ts", "unpaused_ts", "unrestorable")
+                exp.select(
+                    "snapshot",
+                    "name",
+                    "identifier",
+                    "version",
+                    "updated_ts",
+                    "unpaused_ts",
+                    "unrestorable",
+                )
                 .from_(exp.to_table(self.snapshots_table).as_("snapshots"))
                 .where(where)
             )
@@ -932,15 +952,16 @@ class EngineAdapterStateSync(StateSync):
             snapshot_rows.extend(self._fetchall(query))
 
         return [
-            Snapshot(
-                **{
-                    **json.loads(snapshot),
-                    "updated_ts": updated_ts,
-                    "unpaused_ts": unpaused_ts,
-                    "unrestorable": unrestorable,
-                }
+            SharedVersionSnapshot.from_snapshot_record(
+                name=name,
+                identifier=identifier,
+                version=version,
+                updated_ts=updated_ts,
+                unpaused_ts=unpaused_ts,
+                unrestorable=unrestorable,
+                snapshot=snapshot,
             )
-            for snapshot, updated_ts, unpaused_ts, unrestorable in snapshot_rows
+            for snapshot, name, identifier, version, updated_ts, unpaused_ts, unrestorable in snapshot_rows
         ]
 
     def _get_versions(self, lock_for_update: bool = False) -> Versions:
@@ -1942,3 +1963,94 @@ class LazilyParsedSnapshots:
         if snapshot is None:
             raise KeyError(snapshot_id)
         return snapshot
+
+
+class SharedVersionSnapshot(PydanticModel):
+    """A stripped down version of a snapshot that is used for fetching snapshots that share the same version
+    with a significantly reduced parsing overhead.
+    """
+
+    name: str
+    version: str
+    temp_version_: t.Optional[str] = Field(alias="temp_version")
+    identifier: str
+    fingerprint: SnapshotFingerprint
+    interval_unit: IntervalUnit
+    change_category: SnapshotChangeCategory
+    updated_ts: int
+    unpaused_ts: t.Optional[int]
+    unrestorable: bool
+    disable_restatement: bool
+    effective_from: t.Optional[TimeLike]
+    raw_snapshot: t.Dict[str, t.Any]
+
+    @property
+    def snapshot_id(self) -> SnapshotId:
+        return SnapshotId(name=self.name, identifier=self.identifier)
+
+    @property
+    def is_forward_only(self) -> bool:
+        return self.change_category == SnapshotChangeCategory.FORWARD_ONLY
+
+    @property
+    def normalized_effective_from_ts(self) -> t.Optional[int]:
+        return (
+            to_timestamp(self.interval_unit.cron_floor(self.effective_from))
+            if self.effective_from
+            else None
+        )
+
+    @property
+    def temp_version(self) -> str:
+        return self.temp_version_ or self.fingerprint.to_version()
+
+    @property
+    def full_snapshot(self) -> Snapshot:
+        return Snapshot(
+            **{
+                **self.raw_snapshot,
+                "updated_ts": self.updated_ts,
+                "unpaused_ts": self.unpaused_ts,
+                "unrestorable": self.unrestorable,
+            }
+        )
+
+    def set_unpaused_ts(self, unpaused_dt: t.Optional[TimeLike]) -> None:
+        """Sets the timestamp for when this snapshot was unpaused.
+
+        Args:
+            unpaused_dt: The datetime object of when this snapshot was unpaused.
+        """
+        self.unpaused_ts = (
+            to_timestamp(self.interval_unit.cron_floor(unpaused_dt)) if unpaused_dt else None
+        )
+
+    @classmethod
+    def from_snapshot_record(
+        cls,
+        *,
+        name: str,
+        identifier: str,
+        version: str,
+        updated_ts: int,
+        unpaused_ts: t.Optional[int],
+        unrestorable: bool,
+        snapshot: str,
+    ) -> SharedVersionSnapshot:
+        raw_snapshot = json.loads(snapshot)
+        raw_node = raw_snapshot["node"]
+        return SharedVersionSnapshot(
+            name=name,
+            version=version,
+            temp_version=raw_snapshot.get("temp_version"),
+            identifier=identifier,
+            fingerprint=raw_snapshot["fingerprint"],
+            interval_unit=raw_node.get("interval_unit", IntervalUnit.from_cron(raw_node["cron"])),
+            change_category=raw_snapshot["change_category"],
+            updated_ts=updated_ts,
+            unpaused_ts=unpaused_ts,
+            unrestorable=unrestorable,
+            disable_restatement=raw_node.get("kind", {}).get("disable_restatement", False),
+            effective_from=raw_snapshot.get("effective_from"),
+            raw_snapshot=raw_snapshot,
+        )
