@@ -852,7 +852,7 @@ def test_plan_default_end(sushi_context_pre_scheduling: Context):
     ).build()
     assert forward_only_dev_plan.end is not None
     assert to_date(make_inclusive_end(forward_only_dev_plan.end)) == plan_end
-    assert forward_only_dev_plan.start == plan_end
+    assert to_timestamp(forward_only_dev_plan.start) == to_timestamp(plan_end)
 
 
 @pytest.mark.slow
