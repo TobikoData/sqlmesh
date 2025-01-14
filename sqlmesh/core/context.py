@@ -41,7 +41,6 @@ import time
 import traceback
 import typing as t
 import unittest.result
-from datetime import date, timedelta
 from functools import cached_property
 from io import StringIO
 from pathlib import Path
@@ -112,7 +111,7 @@ from sqlmesh.core.test import (
 from sqlmesh.core.user import User
 from sqlmesh.utils import UniqueKeyDict, sys_path
 from sqlmesh.utils.dag import DAG
-from sqlmesh.utils.date import TimeLike, now_ds, to_date
+from sqlmesh.utils.date import TimeLike, now_ds, to_timestamp
 from sqlmesh.utils.errors import (
     CircuitBreakerError,
     ConfigError,
@@ -1266,6 +1265,10 @@ class GenericContext(BaseContext, t.Generic[C]):
             or (backfill_models is not None and not backfill_models),
             ensure_finalized_snapshots=self.config.plan.use_finalized_state,
         )
+        modified_model_names = {
+            *context_diff.modified_snapshots,
+            *[s.name for s in context_diff.added],
+        }
 
         if (
             is_dev
@@ -1275,15 +1278,12 @@ class GenericContext(BaseContext, t.Generic[C]):
         ):
             # Only backfill modified and added models.
             # This ensures that no models outside the impacted sub-DAG(s) will be backfilled unexpectedly.
-            backfill_models = {
-                *context_diff.modified_snapshots,
-                *[s.name for s in context_diff.added],
-            } or None
+            backfill_models = modified_model_names or None
 
         # If no end date is specified, use the max interval end from prod
         # to prevent unintended evaluation of the entire DAG.
         default_end: t.Optional[int] = None
-        default_start: t.Optional[date] = None
+        default_start: t.Optional[int] = None
         max_interval_end_per_model: t.Optional[t.Dict[str, int]] = None
         if not run and not end:
             models_for_interval_end: t.Optional[t.Set[str]] = None
@@ -1308,9 +1308,25 @@ class GenericContext(BaseContext, t.Generic[C]):
             )
             if max_interval_end_per_model:
                 default_end = max(max_interval_end_per_model.values())
-                default_start = to_date(min(max_interval_end_per_model.values())) - timedelta(
-                    days=1
-                )
+                # Infer the default start by finding the smallest interval start that corresponds to the default end.
+                for model_name in (
+                    backfill_models or modified_model_names or max_interval_end_per_model
+                ):
+                    if model_name not in snapshots:
+                        continue
+                    interval_unit = snapshots[model_name].node.interval_unit
+                    default_start = min(
+                        default_start or sys.maxsize,
+                        to_timestamp(
+                            interval_unit.cron_prev(
+                                interval_unit.cron_floor(
+                                    max_interval_end_per_model.get(model_name, default_end),
+                                    estimate=True,
+                                ),
+                                estimate=True,
+                            )
+                        ),
+                    )
 
         return self.PLAN_BUILDER_TYPE(
             context_diff=context_diff,
