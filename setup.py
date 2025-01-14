@@ -47,7 +47,7 @@ setup(
         "rich[jupyter]",
         "ruamel.yaml",
         "setuptools; python_version>='3.12'",
-        "sqlglot[rs]~=26.0.1",
+        "sqlglot[rs]~=26.1.3",
         "tenacity",
         "time-machine",
     ],
