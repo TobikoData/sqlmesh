@@ -100,7 +100,7 @@ def test_forward_only_plan_with_effective_date(context_fixture: Context, request
         plan.context_diff.snapshots[top_waiters_snapshot.snapshot_id].change_category
         == SnapshotChangeCategory.FORWARD_ONLY
     )
-    assert plan.start == to_date("2023-01-07")
+    assert to_timestamp(plan.start) == to_timestamp("2023-01-07")
     assert plan.missing_intervals == [
         SnapshotIntervals(
             snapshot_id=top_waiters_snapshot.snapshot_id,
@@ -335,7 +335,7 @@ def test_forward_only_model_regular_plan_preview_enabled(init_and_plan_context: 
         plan.context_diff.snapshots[top_waiters_snapshot.snapshot_id].change_category
         == SnapshotChangeCategory.FORWARD_ONLY
     )
-    assert plan.start == to_date("2023-01-07")
+    assert to_timestamp(plan.start) == to_timestamp("2023-01-07")
     assert plan.missing_intervals == [
         SnapshotIntervals(
             snapshot_id=top_waiters_snapshot.snapshot_id,
@@ -472,7 +472,7 @@ def test_full_history_restatement_model_regular_plan_preview_enabled(
         == SnapshotChangeCategory.FORWARD_ONLY
     )
 
-    assert plan.start == to_date("2023-01-07")
+    assert to_timestamp(plan.start) == to_timestamp("2023-01-07")
     assert plan.missing_intervals == [
         SnapshotIntervals(
             snapshot_id=active_customers_snapshot.snapshot_id,
@@ -688,6 +688,50 @@ def test_cron_not_aligned_with_day_boundary(
                 intervals=expected_intervals,
             ),
         ]
+
+
+@time_machine.travel("2023-01-08 00:00:00 UTC")
+def test_forward_only_monthly_model(init_and_plan_context: t.Callable):
+    context, _ = init_and_plan_context("examples/sushi")
+
+    model = context.get_model("sushi.waiter_revenue_by_day")
+    model = SqlModel.parse_obj(
+        {
+            **model.dict(),
+            "kind": model.kind.copy(update={"forward_only": True}),
+            "cron": "0 0 1 * *",
+            "start": "2022-01-01",
+            "audits": [],
+        }
+    )
+    context.upsert_model(model)
+
+    plan = context.plan_builder("prod", skip_tests=True).build()
+    context.apply(plan)
+
+    waiter_revenue_by_day_snapshot = context.get_snapshot(model.name, raise_if_missing=True)
+    assert waiter_revenue_by_day_snapshot.intervals == [
+        (to_timestamp("2022-01-01"), to_timestamp("2023-01-01"))
+    ]
+
+    model = add_projection_to_model(t.cast(SqlModel, model), literal=True)
+    context.upsert_model(model)
+
+    waiter_revenue_by_day_snapshot = context.get_snapshot(
+        "sushi.waiter_revenue_by_day", raise_if_missing=True
+    )
+
+    plan = context.plan_builder(
+        "dev", select_models=[model.name], skip_tests=True, enable_preview=True
+    ).build()
+    assert to_timestamp(plan.start) == to_timestamp("2022-12-01")
+    assert to_timestamp(plan.end) == to_timestamp("2023-01-08")
+    assert plan.missing_intervals == [
+        SnapshotIntervals(
+            snapshot_id=waiter_revenue_by_day_snapshot.snapshot_id,
+            intervals=[(to_timestamp("2022-12-01"), to_timestamp("2023-01-01"))],
+        ),
+    ]
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
@@ -915,7 +959,7 @@ def test_non_breaking_change_after_forward_only_in_dev(
         plan.context_diff.snapshots[top_waiters_snapshot.snapshot_id].change_category
         == SnapshotChangeCategory.FORWARD_ONLY
     )
-    assert plan.start == to_date("2023-01-07")
+    assert to_timestamp(plan.start) == to_timestamp("2023-01-07")
     assert plan.missing_intervals == [
         SnapshotIntervals(
             snapshot_id=top_waiters_snapshot.snapshot_id,
@@ -947,7 +991,7 @@ def test_non_breaking_change_after_forward_only_in_dev(
         plan.context_diff.snapshots[top_waiters_snapshot.snapshot_id].change_category
         == SnapshotChangeCategory.NON_BREAKING
     )
-    assert plan.start == to_timestamp("2023-01-01")
+    assert to_timestamp(plan.start) == to_timestamp("2023-01-01")
     assert plan.missing_intervals == [
         SnapshotIntervals(
             snapshot_id=top_waiters_snapshot.snapshot_id,
