@@ -607,8 +607,11 @@ function ColumnDisplay({
           )}
           {truncate(decodedColumnName, 50, 20)}
         </span>
-        <span className="inline-block ml-2 text-[0.5rem] font-black opacity-60">
-          {columnType}
+        <span
+          title={columnType}
+          className="inline-block ml-2 text-[0.6rem] font-black opacity-60"
+        >
+          {truncate(columnType, 20, 10)}
         </span>
       </div>
       {isNotNil(columnDescription) && withDescription && (

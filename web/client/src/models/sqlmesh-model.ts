@@ -6,7 +6,7 @@ import {
   type ModelSql,
   ModelType,
   type ModelDefaultCatalog,
-  ModelDefinition,
+  type ModelDefinition,
 } from '@api/client'
 import { type Lineage } from '@context/editor'
 import { ModelInitial } from './initial'

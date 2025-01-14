@@ -75,7 +75,11 @@ def create_app() -> FastAPI:
         StaticFiles(directory=WEB_DIRECTORY / "client/dist/assets", check_dir=False),
         name="assets",
     )
-
+    app.mount(
+        "/css",
+        StaticFiles(directory=WEB_DIRECTORY / "client/dist/css", check_dir=False),
+        name="css",
+    )
     app.mount(
         "/favicons",
         StaticFiles(directory=WEB_DIRECTORY / "client/dist/favicons", check_dir=False),
