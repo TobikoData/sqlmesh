@@ -6595,23 +6595,28 @@ def test_model_optimize(tmp_path: Path, assert_exp_eq):
         context.plan(auto_apply=True, no_prompts=True)
 
     # Ensure non-SQLModels raise if optimize_query is not None
+    seed_path = tmp_path / "seed.csv"
+    model_kind = SeedKind(path=str(seed_path.absolute()))
+    with open(seed_path, "w", encoding="utf-8") as fd:
+        fd.write(
+            """
+col_a,col_b,col_c
+1,text_a,1.0
+2,text_b,2.0"""
+        )
+    model = create_seed_model("test_db.test_seed_model", model_kind, optimize_query=True)
+    context = Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb")))
+
     with pytest.raises(
         ConfigError,
-        match=r"SQLMesh query optimizer can only be enabled/disabled for SQL models",
+        match=r"SQLMesh query optimizer can only be enabled for SQL models",
     ):
-        seed_path = tmp_path / "seed.csv"
-        model_kind = SeedKind(path=str(seed_path.absolute()))
-        with open(seed_path, "w", encoding="utf-8") as fd:
-            fd.write(
-                """
-    col_a,col_b,col_c
-    1,text_a,1.0
-    2,text_b,2.0"""
-            )
-        model = create_seed_model("test_db.test_seed_model", model_kind, optimize_query=True)
-        context = Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb")))
         context.upsert_model(model)
         context.plan(auto_apply=True, no_prompts=True)
+
+    model = create_seed_model("test_db.test_seed_model", model_kind, optimize_query=False)
+    context.upsert_model(model)
+    context.plan(auto_apply=True, no_prompts=True)
 
 
 def test_column_description_metadata_change():
@@ -7004,20 +7009,25 @@ def test_compile_time_checks(tmp_path: Path, assert_exp_eq):
     assert len(snapshot.previous_versions) == 1
     assert snapshot.change_category == SnapshotChangeCategory.METADATA
 
-    # Ensure non-SQLModels raise if strict mode is set
+    # Ensure non-SQLModels raise if strict mode is set to True
+    seed_path = tmp_path / "seed.csv"
+    model_kind = SeedKind(path=str(seed_path.absolute()))
+    with open(seed_path, "w", encoding="utf-8") as fd:
+        fd.write(
+            """
+col_a,col_b,col_c
+1,text_a,1.0"""
+        )
+    model = create_seed_model("test_db.test_seed_model", model_kind, validate_query=True)
+    context = Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb")))
+
     with pytest.raises(
         ConfigError,
-        match=r"Query validation can only be enabled/disabled for SQL models at",
+        match=r"Query validation can only be enabled for SQL models at",
     ):
-        seed_path = tmp_path / "seed.csv"
-        model_kind = SeedKind(path=str(seed_path.absolute()))
-        with open(seed_path, "w", encoding="utf-8") as fd:
-            fd.write(
-                """
-    col_a,col_b,col_c
-    1,text_a,1.0"""
-            )
-        model = create_seed_model("test_db.test_seed_model", model_kind, validate_query=True)
-        context = Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb")))
         context.upsert_model(model)
         context.plan(auto_apply=True, no_prompts=True)
+
+    model = create_seed_model("test_db.test_seed_model", model_kind, validate_query=False)
+    context.upsert_model(model)
+    context.plan(auto_apply=True, no_prompts=True)

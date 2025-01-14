@@ -913,17 +913,17 @@ class _Model(ModelMeta, frozen=True):
                 self._path,
             )
 
-        # The following attributes should be defined only for SQL models
+        # The following attributes should be set only for SQL models
         if not self.is_sql:
-            if self.optimize_query is not None:
+            if self.optimize_query:
                 raise_config_error(
-                    "SQLMesh query optimizer can only be enabled/disabled for SQL models",
+                    "SQLMesh query optimizer can only be enabled for SQL models",
                     self._path,
                 )
 
-            if self.validate_query is not None:
+            if self.validate_query:
                 raise_config_error(
-                    "Query validation can only be enabled/disabled for SQL models",
+                    "Query validation can only be enabled for SQL models",
                     self._path,
                 )
 
