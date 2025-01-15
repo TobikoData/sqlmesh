@@ -350,15 +350,15 @@ def test_merge(make_mocked_engine_adapter: t.Callable):
         },
         unique_key=[exp.to_identifier("ID", quoted=True)],
         merge_filter=exp.and_(
-            exp.and_(exp.column("ID", "__merge_source__") > 0),
-            exp.column("ts", "__merge_target__") < exp.column("ts", "__merge_source__"),
+            exp.and_(exp.column("ID", "__MERGE_SOURCE__") > 0),
+            exp.column("ts", "__MERGE_TARGET__") < exp.column("ts", "__MERGE_SOURCE__"),
         ),
     )
 
     sql_calls = to_sql_calls(adapter)
     assert sql_calls == [
-        'MERGE INTO "target_table_name" USING (SELECT "ID", "ts", "val" FROM "source") AS "__MERGE_SOURCE__" ON "target_table_name"."ID" = "__MERGE_SOURCE__"."ID" WHEN MATCHED THEN UPDATE SET "ID" = "__merge_source__"."ID", "ts" = "__merge_source__"."ts", "val" = "__merge_source__"."val" WHEN NOT MATCHED THEN INSERT ("ID", "ts", "val") VALUES ("__merge_source__"."ID", "__merge_source__"."ts", "__merge_source__"."val")',
-        'MERGE INTO "target_table_name" USING (SELECT "ID", "ts", "val" FROM "source") AS "__MERGE_SOURCE__" ON ("__merge_source__"."ID" > 0 AND "target_table_name"."ts" < "__merge_source__"."ts") AND "target_table_name"."ID" = "__MERGE_SOURCE__"."ID" WHEN MATCHED THEN UPDATE SET "ID" = "__merge_source__"."ID", "ts" = "__merge_source__"."ts", "val" = "__merge_source__"."val" WHEN NOT MATCHED THEN INSERT ("ID", "ts", "val") VALUES ("__merge_source__"."ID", "__merge_source__"."ts", "__merge_source__"."val")',
+        'MERGE INTO "target_table_name" USING (SELECT "ID", "ts", "val" FROM "source") AS "__MERGE_SOURCE__" ON "target_table_name"."ID" = "__MERGE_SOURCE__"."ID" WHEN MATCHED THEN UPDATE SET "ID" = "__MERGE_SOURCE__"."ID", "ts" = "__MERGE_SOURCE__"."ts", "val" = "__MERGE_SOURCE__"."val" WHEN NOT MATCHED THEN INSERT ("ID", "ts", "val") VALUES ("__MERGE_SOURCE__"."ID", "__MERGE_SOURCE__"."ts", "__MERGE_SOURCE__"."val")',
+        'MERGE INTO "target_table_name" USING (SELECT "ID", "ts", "val" FROM "source") AS "__MERGE_SOURCE__" ON ("__MERGE_SOURCE__"."ID" > 0 AND "target_table_name"."ts" < "__MERGE_SOURCE__"."ts") AND "target_table_name"."ID" = "__MERGE_SOURCE__"."ID" WHEN MATCHED THEN UPDATE SET "ID" = "__MERGE_SOURCE__"."ID", "ts" = "__MERGE_SOURCE__"."ts", "val" = "__MERGE_SOURCE__"."val" WHEN NOT MATCHED THEN INSERT ("ID", "ts", "val") VALUES ("__MERGE_SOURCE__"."ID", "__MERGE_SOURCE__"."ts", "__MERGE_SOURCE__"."val")',
     ]
 
 
