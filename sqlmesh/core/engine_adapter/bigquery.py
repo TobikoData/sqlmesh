@@ -23,6 +23,7 @@ from sqlmesh.core.engine_adapter.shared import (
 )
 from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.schema_diff import SchemaDiffer
+from sqlmesh.utils import optional_import
 from sqlmesh.utils.date import to_datetime
 from sqlmesh.utils.errors import SQLMeshError
 
@@ -35,10 +36,14 @@ if t.TYPE_CHECKING:
     from google.cloud.bigquery.table import Table as BigQueryTable
 
     from sqlmesh.core._typing import SchemaName, SessionProperties, TableName
-    from sqlmesh.core.engine_adapter._typing import DF, Query
+    from sqlmesh.core.engine_adapter._typing import BigframeSession, DF, Query
     from sqlmesh.core.engine_adapter.base import QueryOrDF
 
+
 logger = logging.getLogger(__name__)
+
+bigframes = optional_import("bigframes")
+bigframes_pd = optional_import("bigframes.pandas")
 
 
 NestedField = t.Tuple[str, str, t.List[str]]
@@ -106,6 +111,17 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
         return self.connection._client
 
     @property
+    def bigframe(self) -> t.Optional[BigframeSession]:
+        if bigframes:
+            options = bigframes.BigQueryOptions(
+                credentials=self.client._credentials,
+                project=self.client.project,
+                location=self.client.location,
+            )
+            return bigframes.connect(context=options)
+        return None
+
+    @property
     def _job_params(self) -> t.Dict[str, t.Any]:
         from sqlmesh.core.config.connection import BigQueryPriority
 
@@ -140,7 +156,12 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
         )
 
         def query_factory() -> Query:
-            if not self.table_exists(temp_table):
+            if bigframes_pd and isinstance(df, bigframes_pd.DataFrame):
+                df.to_gbq(
+                    f"{temp_bq_table.project}.{temp_bq_table.dataset_id}.{temp_bq_table.table_id}",
+                    if_exists="replace",
+                )
+            elif not self.table_exists(temp_table):
                 # Make mypy happy
                 assert isinstance(df, pd.DataFrame)
                 self._db_call(self.client.create_table, table=temp_bq_table, exists_ok=False)
