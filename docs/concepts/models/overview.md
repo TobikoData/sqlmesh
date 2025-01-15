@@ -443,6 +443,9 @@ to `false` causes SQLMesh to disable query canonicalization & simplification. Th
 !!! warning
     Turning off the optimizer may prevent column-level lineage from working for the affected model and its descendants, unless all columns in the model's query are qualified and it contains no star projections (e.g. `SELECT *`).
 
+### validate_query
+:   Whether the model's query will be validated at compile time. This attribute is `false` by default. Setting it to `true` causes SQLMesh to raise an error instead of emitting warnings. This will display invalid columns in your SQL statements along with models containing `SELECT *` that cannot be automatically expanded to list out all columns. This ensures SQL is verified locally before time and money are spent running the SQL in your data warehouse.
+
 ## Incremental Model Properties
 
 These properties can be specified in an incremental model's `kind` definition.

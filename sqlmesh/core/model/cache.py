@@ -135,6 +135,7 @@ class OptimizedQueryCache:
         hash_data.append(str([gen(d) for d in model.macro_definitions]))
         hash_data.append(str([(k, v) for k, v in model.sorted_python_env]))
         hash_data.extend(model.jinja_macros.data_hash_values)
+        hash_data.extend(str(model.validate_query))
         return f"{model.name}_{crc32(hash_data)}"
 
 

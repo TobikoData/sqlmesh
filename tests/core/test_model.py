@@ -291,7 +291,7 @@ def test_model_qualification():
         model.render_query(needs_optimization=True)
         assert (
             mock_logger.call_args[0][0]
-            == "%s for model '%s', the column may not exist or is ambiguous"
+            == """Column '"a"' could not be resolved for model '"db"."table"', the column may not exist or is ambiguous"""
         )
 
 
@@ -1001,10 +1001,10 @@ def test_seed_on_virtual_update_statements():
         CREATE TABLE x{{ 1 + 1 }};
         JINJA_END;
 
-        ON_VIRTUAL_UPDATE_BEGIN; 
-        JINJA_STATEMENT_BEGIN;     
+        ON_VIRTUAL_UPDATE_BEGIN;
+        JINJA_STATEMENT_BEGIN;
         GRANT SELECT ON VIEW {{ this_model }} TO ROLE dev_role;
-        JINJA_END;  
+        JINJA_END;
         DROP TABLE x2;
         ON_VIRTUAL_UPDATE_END;
 
@@ -6595,23 +6595,28 @@ def test_model_optimize(tmp_path: Path, assert_exp_eq):
         context.plan(auto_apply=True, no_prompts=True)
 
     # Ensure non-SQLModels raise if optimize_query is not None
+    seed_path = tmp_path / "seed.csv"
+    model_kind = SeedKind(path=str(seed_path.absolute()))
+    with open(seed_path, "w", encoding="utf-8") as fd:
+        fd.write(
+            """
+col_a,col_b,col_c
+1,text_a,1.0
+2,text_b,2.0"""
+        )
+    model = create_seed_model("test_db.test_seed_model", model_kind, optimize_query=True)
+    context = Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb")))
+
     with pytest.raises(
         ConfigError,
-        match=r"SQLMesh query optimizer can only be enabled/disabled for SQL models",
+        match=r"SQLMesh query optimizer can only be enabled for SQL models",
     ):
-        seed_path = tmp_path / "seed.csv"
-        model_kind = SeedKind(path=str(seed_path.absolute()))
-        with open(seed_path, "w", encoding="utf-8") as fd:
-            fd.write(
-                """
-    col_a,col_b,col_c
-    1,text_a,1.0
-    2,text_b,2.0"""
-            )
-        model = create_seed_model("test_db.test_seed_model", model_kind, optimize_query=True)
-        context = Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb")))
         context.upsert_model(model)
         context.plan(auto_apply=True, no_prompts=True)
+
+    model = create_seed_model("test_db.test_seed_model", model_kind, optimize_query=False)
+    context.upsert_model(model)
+    context.plan(auto_apply=True, no_prompts=True)
 
 
 def test_column_description_metadata_change():
@@ -6762,7 +6767,7 @@ def test_model_on_virtual_update(make_snapshot: t.Callable):
     def resolve_parent_name(evaluator, name):
         return evaluator.resolve_table(name.name)
 
-    virtual_update_statements = """ 
+    virtual_update_statements = """
         CREATE OR REPLACE VIEW test_view FROM demo_db.table;
         GRANT SELECT ON VIEW @this_model TO ROLE owner_name;
         JINJA_STATEMENT_BEGIN;
@@ -6770,7 +6775,7 @@ def test_model_on_virtual_update(make_snapshot: t.Callable):
         JINJA_END;
         GRANT REFERENCES, SELECT ON FUTURE VIEWS IN DATABASE demo_db TO ROLE owner_name;
         @resolve_parent_name('parent');
-        GRANT SELECT ON VIEW demo_db.table /* sqlglot.meta replace=false */ TO ROLE admin; 
+        GRANT SELECT ON VIEW demo_db.table /* sqlglot.meta replace=false */ TO ROLE admin;
     """
 
     expressions = d.parse(
@@ -6784,7 +6789,7 @@ def test_model_on_virtual_update(make_snapshot: t.Callable):
 
         on_virtual_update_begin;
 
-        {virtual_update_statements} 
+        {virtual_update_statements}
 
         on_virtual_update_end;
 
@@ -6918,3 +6923,111 @@ def test_python_model_on_virtual_update():
         rendered_statements[2].sql()
         == "GRANT REFERENCES, SELECT ON FUTURE VIEWS IN DATABASE db TO ROLE dev_role"
     )
+
+
+def test_compile_time_checks(tmp_path: Path, assert_exp_eq):
+    # Strict SELECT * expansion
+    strict_query = d.parse(
+        """
+    MODEL (
+        name test,
+        validate_query True,
+    );
+
+    SELECT * FROM tbl
+    """
+    )
+
+    with pytest.raises(
+        ConfigError,
+        match=r".*cannot be expanded due to missing schema.*",
+    ):
+        load_sql_based_model(strict_query).render_query()
+
+    # Strict column resolution
+    strict_query = d.parse(
+        """
+    MODEL (
+        name test,
+        validate_query True,
+    );
+
+    SELECT foo
+    """
+    )
+
+    with pytest.raises(
+        ConfigError,
+        match=r"""Column '"foo"' could not be resolved for model.*""",
+    ):
+        load_sql_based_model(strict_query).render_query()
+
+    # Non-strict model with strict defaults raises error, otherwise can still render
+    strict_default = ModelDefaultsConfig(validate_query=True).dict()
+    query = d.parse(
+        """
+    MODEL (
+        name test,
+    );
+
+    SELECT * FROM tbl
+    """
+    )
+
+    with pytest.raises(
+        ConfigError,
+        match=r".*cannot be expanded due to missing schema.*",
+    ):
+        load_sql_based_model(query, defaults=strict_default).render_query()
+
+    assert_exp_eq(load_sql_based_model(query).render_query(), 'SELECT * FROM "tbl" AS "tbl"')
+
+    # Ensure plan works for valid queries & cache is invalidated if strict changes
+    context = Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb")))
+
+    query = d.parse(
+        """
+    MODEL (
+        name db.test,
+        validate_query True,
+    );
+
+    SELECT 1 AS col
+    """
+    )
+
+    context.upsert_model(load_sql_based_model(query, default_catalog=context.default_catalog))
+    context.plan(auto_apply=True, no_prompts=True)
+
+    context.upsert_model("db.test", validate_query=False)
+    plan = context.plan(no_prompts=True, auto_apply=True)
+
+    snapshots = list(plan.snapshots.values())
+    assert len(snapshots) == 1
+
+    snapshot = snapshots[0]
+    assert len(snapshot.previous_versions) == 1
+    assert snapshot.change_category == SnapshotChangeCategory.METADATA
+
+    # Ensure non-SQLModels raise if strict mode is set to True
+    seed_path = tmp_path / "seed.csv"
+    model_kind = SeedKind(path=str(seed_path.absolute()))
+    with open(seed_path, "w", encoding="utf-8") as fd:
+        fd.write(
+            """
+col_a,col_b,col_c
+1,text_a,1.0"""
+        )
+    model = create_seed_model("test_db.test_seed_model", model_kind, validate_query=True)
+    context = Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb")))
+
+    with pytest.raises(
+        ConfigError,
+        match=r"Query validation can only be enabled for SQL models at",
+    ):
+        context.upsert_model(model)
+        context.plan(auto_apply=True, no_prompts=True)
+
+    model = create_seed_model("test_db.test_seed_model", model_kind, validate_query=False)
+    context.upsert_model(model)
+    context.plan(auto_apply=True, no_prompts=True)
