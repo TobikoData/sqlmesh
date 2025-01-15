@@ -2,17 +2,6 @@
 
 When something is wrong with your data, you want to be the first to know. You do not want to find out from your stakeholders when their dashboards do not look right. Unit tests and audits help catch issues during development, but Tobiko Cloud can alert you when certain events happen or when a measure exceeds a threshold during runs. They allow you to be quickly informed when something is wrong with your data pipelines.
 
-## Events
-
-Tobiko Cloud Alerts can be triggered by the following events:
-
-- Plan start
-- Plan end
-- Plan failure
-- Run start
-- Run end
-- Run failure
-
 ## Alert Configuration
 
 Alerts can be configured in the Tobiko Cloud Settings section.
@@ -25,7 +14,26 @@ Then choose the type of alert you would like to configure, enter a descriptive n
 
 ![Image showing the add Alert page](./alerts_notifications/add_alert_page.png)
 
-Note that an alert will need a notification target to send the alerts to. Please see the following section on how to configure notification targets.
+Note that an alert will need a notification target to send the alerts to. Please see the section on how to configure notification targets.
+
+## Events
+
+Tobiko Cloud Alerts can be triggered by the following events:
+
+- Plan start
+- Plan end
+- Plan failure
+- Run start
+- Run end
+- Run failure
+
+![Image showing the add event Alert page](./alerts_notifications/add_event_alert_page.png)
+
+## Measures
+
+Tobiko Cloud Alerts can be triggered when a measure exceeds a threshold or meets a condition. This can be a measure for an evaluation or aggregated over a plan application or a run.
+
+![Image showing the add measure Alert page](./alerts_notifications/add_measure_alert_page.png)
 
 # Notification Targets
 
