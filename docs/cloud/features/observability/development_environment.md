@@ -13,7 +13,7 @@ Developers can easily see who is working on specific models, prevent workflow co
 
 **Performance Tracking**
 
-Performance monitoring is enhanced through robust historical tracking capabilities. Teams can monitor changes over time, review recent activities including successes and failures, and gain detailed insights into specific plan execution outcomes. This historical context proves invaluable for understanding system behaviour and identifying trends.
+You can monitor changes over time, review recent activities including successes and failures, and gain detailed insights into specific plan execution outcomes. You get a better sense of trends.
 
 **Simplified Communication and Team Alignment**
 
