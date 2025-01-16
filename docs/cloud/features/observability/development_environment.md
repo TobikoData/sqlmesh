@@ -15,7 +15,7 @@ Developers can easily see who is working on specific models, prevent workflow co
 
 Performance monitoring is enhanced through robust historical tracking capabilities. Teams can monitor changes over time, review recent activities including successes and failures, and gain detailed insights into specific plan execution outcomes. This historical context proves invaluable for understanding system behaviour and identifying trends.
 
-**Simplified Communication and Team Alignment**:
+**Simplified Communication and Team Alignment**
 
 The development environment streamlines team communication through shareable URLs, eliminating the need for manual methods like PRs or DMs. These URLs serve as comprehensive summaries, displaying crucial information including last run times, data intervals for incremental models, and detailed change information such as metadata modifications and model removals.
 
