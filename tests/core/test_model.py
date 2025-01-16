@@ -6677,3 +6677,37 @@ def test_gateway_specific_render(assert_exp_eq) -> None:
     )
     assert isinstance(context._get_engine_adapter("duckdb"), DuckDBEngineAdapter)
     assert len(context._engine_adapters) == 2
+
+
+def test_partition_interval_unit():
+    expressions = d.parse(
+        """
+        MODEL (
+            name test,
+            kind INCREMENTAL_BY_TIME_RANGE(
+                time_column ds,
+            ),
+            cron '0 0 1 * *'
+        );
+        SELECT '2024-01-01' AS ds;
+        """
+    )
+    model = load_sql_based_model(expressions)
+    assert model.partition_interval_unit == IntervalUnit.MONTH
+
+    # Partitioning was explicitly set by the user
+    expressions = d.parse(
+        """
+        MODEL (
+            name test,
+            kind INCREMENTAL_BY_TIME_RANGE(
+                time_column ds,
+            ),
+            cron '0 0 1 * *',
+            partitioned_by (ds)
+        );
+        SELECT '2024-01-01' AS ds;
+        """
+    )
+    model = load_sql_based_model(expressions)
+    assert model.partition_interval_unit is None
