@@ -29,9 +29,9 @@ The page's table includes a link to each environment's page, along with the envi
 
 ### Selecting and Individual Environment page
 
-Clicking an environment's name in the table takes you to its environment page.
+Clicking an environment's name from the main environments page takes you to its individual page.
 
-The page begins with a at-a-glance summary of the most recent plan applied to the environment, including:
+The page begins with an at-a-glance summary of the most recent plan applied to the environment, including:
 
 - Its completion status and time
 - The latest time interval backfilled by the plan
