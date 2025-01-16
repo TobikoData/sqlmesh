@@ -52,7 +52,7 @@ The page begins with an at-a-glance summary of the most recent plan applied to t
 
 ## Differences from Prod section
 
-Development environments are used to prepare and test changes before merging them to `prod`.
+Development environments are used to prepare and test changes before deploying them to `prod`.
 
 The `Differences From prod` section provides a summary of model differences between the environment and `prod`, with separate tabs for directly and indirectly modified models.
 
