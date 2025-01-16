@@ -47,7 +47,7 @@ The page begins with an at-a-glance summary of the most recent plan applied to t
 
     If a stakeholder or else anyone on your team is looking to understand an environment you own and are working on, you can share the URl link with them and they will be abel to access and see all of the information about your environment. 
     
-    Its a great place to start to have open conversations about what was recently added, removed or changed in a environment! 
+    It's a great place to start to have open conversations about what was recently added, removed or changed in an environment! 
 
 
 ## Differences from Prod section
