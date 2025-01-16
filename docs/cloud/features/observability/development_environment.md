@@ -11,7 +11,7 @@ At its core, this transforms development from a single-player to a multi-player 
 
 Developers can easily see who is working on specific models, prevent workflow conflicts, and avoid duplicate efforts.
 
-**Performance Tracking**:
+**Performance Tracking**
 
 Performance monitoring is enhanced through robust historical tracking capabilities. Teams can monitor changes over time, review recent activities including successes and failures, and gain detailed insights into specific plan execution outcomes. This historical context proves invaluable for understanding system behaviour and identifying trends.
 
