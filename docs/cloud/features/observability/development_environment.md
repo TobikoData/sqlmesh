@@ -8,7 +8,8 @@ At its core, this transforms development from a single-player to a multi-player 
 
 **Team Collaboration**
 
-Developers can easily see who is working on specific models, prevent workflow conflicts, and avoid duplicate efforts.
+Developers can easily see who is working on specific models, prevent workflow conflicts, and avoid duplicate efforts. 
+<May revert to: The platform helps foster team collaboration by providing clear visibility into team activities. Developers can easily see who is working on specific models, prevent workflow conflicts, and avoid duplicate efforts. This creates a truly collaborative development environment where the team can work together seamlessly, supporting a dynamic, multiplayer-like development experience.>
 
 **Performance Tracking**
 
@@ -27,23 +28,22 @@ The Environments page shows an overview of all the environments that exist in yo
 
 ![tcloud environment page](./development_environment/environments.png)
 
-The page's table includes a link to each environment's page, along with the environment's creation date, the date it was last updated, and the date it will expire if not updated again.
+The page's table includes a link to each environment's page, along with the environment's creation date, the date it was last updated, and the date it will expire if not updated again. Clicking an environment's name from the main environments page takes you to its individual page.
 
-### Selecting an Individual Environment page
+![tcloud development environment](./development_environment/tcloud_development_environment.png)
 
-Clicking an environment's name from the main environments page takes you to its individual page.
+## Individual Environment page
+The page begins with an at-a-glance summary of the most recent plan applied to the environment.
 
-The page begins with an at-a-glance summary of the most recent plan applied to the environment, including:
+![tcloud environment page layout](./development_environment/tcloud_dev_env_labelled.png)
 
-- Its completion status and time of the last plan applied
-- The latest time interval backfilled by the plan
-- Count of models present in the environment
-- An interactive visualization that summarizes the differences between the environment's models and the `prod` environment's models
+1. Its completion status and time of the last plan applied
+2. The latest time interval backfilled by the plan
+3. Count of models present in the environment
+4. An interactive visualization that summarizes the differences between the environment's models and the `prod` environment's models
     - The count of directly modified models is represented in blue
     - The count of added models is green
     - The count of removed models is red
-
-![tcloud development environment](./development_environment/tcloud_development_environment.png)
 
 ??? "ProTip:"
 
@@ -54,20 +54,22 @@ The page begins with an at-a-glance summary of the most recent plan applied to t
 
 ## Differences from Prod section
 
-Development environments are used to prepare and test changes before deploying them to `prod`, with separate tabs for each type of change (directly modified, indirectly modified, metadata-only changes, added, removed).
+Development environments are used to prepare and test changes before deploying them to `prod`, with separate tabs for each type of change (directly modified, indirectly modified, metadata-only changes, added, removed). Below is a screen shot from a environement version that shows all these tab options. 
 
-The `Differences From prod` section provides a summary of model differences between the environment and `prod`, with separate tabs for directly and indirectly modified models.
+![Prod Differences section with all options](./development_environment/dev_env_comprehensive.png)
 
-In the summary, each model's name is a link to [its model page](./model.md).
+In the summary, each model's name is a link to [its model page](./model.md). This links to the information about the version of the model used in _this environment_ not the overall prod model. This means that you can get insight into what your working on in dev instead of the "stale" version in prod ("stale" relative to your work).
 
 ## Plan history information
 
 The plan applications chart is a calendar visualization of all plans that have been applied to the environment in the previous 2 weeks.
 
+![Plan History Information](./development_environment/plan_history.png)
+
 The chart represents days on its `x-axis` (each column is a day with the corresponding date across the top) and the time of day on its `y-axis` (each day begins at the top and ends at the bottom). 
 
-Each day displays zero or more horizantal bars representing `plan` duration. If no `plan`s occurred on a day, no bars will be displayed. If multiple `plan`s occurred on the same day, their horizantal bars will be stacked.
+Each day displays zero or more horizantal bars representing `plan` duration. If no `plans` occurred on a day, no bars will be displayed. If multiple `plans` occurred on the same day, their horizantal bars will be stacked.
 
-The chart uses color to convey the staus of a `plan` at a glance. Green is completed, yellow is in progress, red is failed.
+The chart uses color to convey the staus of a `plan` at a glance. Green is completed, grey is in progress, red is failed.
 
-Hovering over a bar reveals summary information about the `plan`, including its completion status, start time, end time, total duration, and change summary. The summary includes a link to [the `plan`'s page](./plan.md).
+Hovering over a bar reveals summary information about the `plan`, including its completion status, start time, end time, total duration, and change summary. The summary includes a link to [the `plan`'s page](./plan.md). 
