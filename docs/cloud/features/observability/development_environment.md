@@ -1,6 +1,6 @@
 # Development Environment
 
-The transition from CLI to Tobiko Cloud represents a significant advancement in workflow management for the development environment page view. You will benefit from an enhanced experience that seamlessly moves you from command-line operations to a cloud-based interface. This transition enables smooth integration of SQLMesh capabilities into the UI-driven environment, fundamentally improving how you interact with and manage your dev processes.
+Tobiko Cloud extends the SQLMesh CLI to advance your development workflow. Instead of relying on a static terminal output isolated to your local machine when running `tcloud sqlmesh plan dev`, Tobiko Cloud tracks development history automatically displayed in a rich user interface. We want mental load at a minimum so you can focus on your most important work. 
 
 The new UI-driven approach enhances how you interact with the system. Instead of relying solely on command-line inputs like `tcloud sqlmesh plan dev`, you will now have clear visual feedback through an intuitive interface. This visual representation makes it significantly easier to understand and interpret changes to your environments, ***as well as teammate’s environments***.
 
