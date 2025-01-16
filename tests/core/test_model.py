@@ -7031,3 +7031,37 @@ col_a,col_b,col_c
     model = create_seed_model("test_db.test_seed_model", model_kind, validate_query=False)
     context.upsert_model(model)
     context.plan(auto_apply=True, no_prompts=True)
+
+
+def test_partition_interval_unit():
+    expressions = d.parse(
+        """
+        MODEL (
+            name test,
+            kind INCREMENTAL_BY_TIME_RANGE(
+                time_column ds,
+            ),
+            cron '0 0 1 * *'
+        );
+        SELECT '2024-01-01' AS ds;
+        """
+    )
+    model = load_sql_based_model(expressions)
+    assert model.partition_interval_unit == IntervalUnit.MONTH
+
+    # Partitioning was explicitly set by the user
+    expressions = d.parse(
+        """
+        MODEL (
+            name test,
+            kind INCREMENTAL_BY_TIME_RANGE(
+                time_column ds,
+            ),
+            cron '0 0 1 * *',
+            partitioned_by (ds)
+        );
+        SELECT '2024-01-01' AS ds;
+        """
+    )
+    model = load_sql_based_model(expressions)
+    assert model.partition_interval_unit is None
