@@ -265,7 +265,7 @@ test_parameterized_model:
   ...
 ```
 
-For example, assuming `gold` is a [config variable](../reference/configuration/#variables) with value `gold_db`, the above test would be rendered as:
+For example, assuming `gold` is a [config variable](../reference/configuration.md#variables) with value `gold_db`, the above test would be rendered as:
 
 ```yaml linenums="1"
 test_parameterized_model:
