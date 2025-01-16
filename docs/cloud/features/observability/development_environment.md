@@ -17,7 +17,7 @@ You can monitor changes over time, review recent activities including successes 
 
 **Simplified Communication and Team Alignment**
 
-The development environment streamlines team communication through shareable URLs, eliminating the need for manual methods like PRs or DMs. These URLs serve as comprehensive summaries, displaying crucial information including last run times, data intervals for incremental models, and detailed change information such as metadata modifications and model removals.
+Eliminate friction in sharing complex development context through manual pull requests or direct messages. These URLs serve as comprehensive summaries, displaying last run times, data intervals for incremental models, and detailed change information such as metadata modifications and model removals.
 
 ## Using the Environments Tab
 The Environments page shows an overview of all the environments that exist in your project (both yours and any your teammates have created).
