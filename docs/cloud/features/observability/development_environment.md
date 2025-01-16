@@ -2,7 +2,6 @@
 
 Tobiko Cloud extends the SQLMesh CLI to advance your development workflow. Instead of relying on a static terminal output isolated to your local machine when running `tcloud sqlmesh plan dev`, Tobiko Cloud tracks development history automatically displayed in a rich user interface. We want mental load at a minimum so you can focus on your most important work. 
 
-The new UI-driven approach enhances how you interact with the system. Instead of relying solely on command-line inputs like `tcloud sqlmesh plan dev`, you will now have clear visual feedback through an intuitive interface. This visual representation makes it significantly easier to understand and interpret changes to your environments, ***as well as teammate’s environments***.
 
 At its core, this transforms development from a single-player to a multi-player experience. Instead of sharing screenshots and scrolling through terminal history, all you have to do now is share a link to your work.
 
