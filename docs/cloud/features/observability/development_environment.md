@@ -19,7 +19,7 @@ Performance monitoring is enhanced through robust historical tracking capabiliti
 
 The development environment streamlines team communication through shareable URLs, eliminating the need for manual methods like PRs or DMs. These URLs serve as comprehensive summaries, displaying crucial information including last run times, data intervals for incremental models, and detailed change information such as metadata modifications and model removals.
 
-## Using the page
+## Using the Environments Tab
 The Environments page shows an overview of all the environments that exist in your project (both yours and any your teammates have created).
 
 ![tcloud environment page](./development_environment/environments.png)
