@@ -10,7 +10,7 @@ At its core, this transforms development from a single-player to a multi-player 
 
 **Team Collaboration**
 
-The platform excels in fostering team collaboration by providing clear visibility into team activities. Developers can easily see who is working on specific models, prevent workflow conflicts, and avoid duplicate efforts. This creates a truly collaborative development environment where team members can work together seamlessly, supporting a dynamic, multiplayer development experience.
+Developers can easily see who is working on specific models, prevent workflow conflicts, and avoid duplicate efforts.
 
 **Performance Tracking**:
 
