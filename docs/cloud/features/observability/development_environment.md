@@ -2,7 +2,6 @@
 
 Tobiko Cloud extends the SQLMesh CLI to advance your development workflow. Instead of relying on a static terminal output isolated to your local machine when running `tcloud sqlmesh plan dev`, Tobiko Cloud tracks development history automatically displayed in a rich user interface. We want mental load at a minimum so you can focus on your most important work. 
 
-
 At its core, this transforms development from a single-player to a multi-player experience. Instead of sharing screenshots and scrolling through terminal history, all you have to do now is share a link to your work.
 
 ### When you might use this
@@ -15,9 +14,13 @@ Developers can easily see who is working on specific models, prevent workflow co
 
 You can monitor changes over time, review recent activities including successes and failures, and gain detailed insights into specific plan execution outcomes. You get a better sense of trends.
 
+<TODO: add a screenshot with multiple plans and a glance at if things are running long or short.>
+
 **Simplified Communication and Team Alignment**
 
 Eliminate friction in sharing complex development context through manual pull requests or direct messages. These URLs serve as comprehensive summaries, displaying last run times, data intervals for incremental models, and detailed change information such as metadata modifications and model removals.
+
+<Add gif of url opening in a new tab to feel how fast it should be.>
 
 ## Using the Environments Tab
 The Environments page shows an overview of all the environments that exist in your project (both yours and any your teammates have created).
@@ -32,7 +35,7 @@ Clicking an environment's name from the main environments page takes you to its 
 
 The page begins with an at-a-glance summary of the most recent plan applied to the environment, including:
 
-- Its completion status and time
+- Its completion status and time of the last plan applied
 - The latest time interval backfilled by the plan
 - Count of models present in the environment
 - An interactive visualization that summarizes the differences between the environment's models and the `prod` environment's models
@@ -51,7 +54,7 @@ The page begins with an at-a-glance summary of the most recent plan applied to t
 
 ## Differences from Prod section
 
-Development environments are used to prepare and test changes before deploying them to `prod`.
+Development environments are used to prepare and test changes before deploying them to `prod`, with separate tabs for each type of change (directly modified, indirectly modified, metadata-only changes, added, removed).
 
 The `Differences From prod` section provides a summary of model differences between the environment and `prod`, with separate tabs for directly and indirectly modified models.
 
@@ -61,12 +64,10 @@ In the summary, each model's name is a link to [its model page](./model.md).
 
 The plan applications chart is a calendar visualization of all plans that have been applied to the environment in the previous 2 weeks.
 
-The chart represents time across days on its `x-axis`, where each column represents one day. The date corresponding to each day is displayed at the top of the chart.
+The chart represents days on its `x-axis` (each column is a day with the corresponding date across the top) and the time of day on its `y-axis` (each day begins at the top and ends at the bottom). 
 
-The chart represents time within a day on its `y-axis`, where each day begins at the top and ends at the bottom.
+Each day displays zero or more horizantal bars representing `plan` duration. If no `plan`s occurred on a day, no bars will be displayed. If multiple `plan`s occurred on the same day, their horizantal bars will be stacked.
 
-Each day displays zero or more vertical bars representing `plan` duration. If no `plan`s occurred on a day, no vertical bars will be displayed. If multiple `plan`s occurred on the same day, their vertical bars will be stacked.
-
-The chart uses color to convey the changes made by a `plan` at a glance. Models added by a plan are green, removed models are red, directly modified models are blue, indirectly modified models are orange, and metadata changes are grey.
+The chart uses color to convey the staus of a `plan` at a glance. Green is completed, yellow is in progress, red is failed.
 
 Hovering over a bar reveals summary information about the `plan`, including its completion status, start time, end time, total duration, and change summary. The summary includes a link to [the `plan`'s page](./plan.md).
