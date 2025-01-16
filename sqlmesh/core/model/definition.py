@@ -23,6 +23,7 @@ from sqlglot.time import format_time
 from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
 from sqlmesh.core.audit import Audit, ModelAudit
+from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.macros import MacroRegistry, macro
 from sqlmesh.core.model.common import (
     expression_validator,
@@ -1113,9 +1114,7 @@ class _Model(ModelMeta, frozen=True):
     @property
     def partitioned_by(self) -> t.List[exp.Expression]:
         """Columns to partition the model by, including the time column if it is not already included."""
-        if self.time_column and self.time_column.column not in {
-            col for expr in self.partitioned_by_ for col in expr.find_all(exp.Column)
-        }:
+        if self.time_column and not self._is_time_column_in_partitioned_by:
             return [
                 TIME_COL_PARTITION_FUNC.get(self.dialect, lambda x, y: x)(
                     self.time_column.column, self.columns_to_types
@@ -1123,6 +1122,16 @@ class _Model(ModelMeta, frozen=True):
                 *self.partitioned_by_,
             ]
         return self.partitioned_by_
+
+    @property
+    def partition_interval_unit(self) -> t.Optional[IntervalUnit]:
+        """The interval unit to use for partitioning if applicable."""
+        # Only return the interval unit for partitioning if the partitioning
+        # wasn't explicitly set by the user. Otherwise, the user-provided
+        # value should always take precedence.
+        if self.time_column and not self._is_time_column_in_partitioned_by:
+            return self.interval_unit
+        return None
 
     @property
     def audits_with_args(self) -> t.List[t.Tuple[Audit, t.Dict[str, exp.Expression]]]:
@@ -1139,6 +1148,12 @@ class _Model(ModelMeta, frozen=True):
                 audits_with_args[audit_name] = (audits_by_name[audit_name], {})
 
         return list(audits_with_args.values())
+
+    @property
+    def _is_time_column_in_partitioned_by(self) -> bool:
+        return self.time_column is not None and self.time_column.column in {
+            col for expr in self.partitioned_by_ for col in expr.find_all(exp.Column)
+        }
 
 
 class SqlModel(_Model):
