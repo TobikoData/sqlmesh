@@ -2087,6 +2087,9 @@ def _create_model(
         kwargs["kind"] = create_model_kind(raw_kind, dialect, defaults or {})
 
     defaults = {k: v for k, v in (defaults or {}).items() if k in klass.all_fields()}
+    if not issubclass(klass, SqlModel):
+        defaults.pop("optimize_query", None)
+        defaults.pop("validate_query", None)
 
     statements = []
 
