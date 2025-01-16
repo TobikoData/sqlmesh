@@ -26,7 +26,7 @@ The Environments page shows an overview of all the environments that exist in yo
 
 The page's table includes a link to each environment's page, along with the environment's creation date, the date it was last updated, and the date it will expire if not updated again.
 
-### Selecting and Individual Environment page
+### Selecting an Individual Environment page
 
 Clicking an environment's name from the main environments page takes you to its individual page.
 
