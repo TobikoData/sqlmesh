@@ -7054,6 +7054,17 @@ col_a,col_b,col_c
     context.upsert_model(model)
     context.plan(auto_apply=True, no_prompts=True)
 
+    # Ensure strict defaults don't break all non SQL models to which they weren't applicable in the first place
+    seed_strict_defaults = create_seed_model(
+        "test_db.test_seed_model", model_kind, defaults=strict_default
+    )
+    external_strict_defaults = create_external_model(
+        "test_db.test_external_model", columns={"a": "int", "limit": "int"}, defaults=strict_default
+    )
+    context.upsert_model(seed_strict_defaults)
+    context.upsert_model(external_strict_defaults)
+    context.plan(auto_apply=True, no_prompts=True)
+
 
 def test_partition_interval_unit():
     expressions = d.parse(
