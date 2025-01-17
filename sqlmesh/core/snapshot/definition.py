@@ -25,12 +25,10 @@ from sqlmesh.utils.date import (
     TimeLike,
     is_date,
     make_inclusive,
-    make_inclusive_end,
     make_exclusive,
     now,
     now_timestamp,
     time_like_to_str,
-    to_date,
     to_datetime,
     to_ds,
     to_timestamp,
@@ -986,20 +984,6 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             if earliest_interval:
                 return earliest_interval >= start_ts
         return True
-
-    def get_latest(self, default: t.Optional[TimeLike] = None) -> t.Optional[TimeLike]:
-        """The latest interval loaded for the snapshot. Default is used if intervals are not defined"""
-
-        def to_end_date(end: int, unit: IntervalUnit) -> TimeLike:
-            if unit.is_day:
-                return to_date(make_inclusive_end(end))
-            return end
-
-        return (
-            to_end_date(to_timestamp(self.intervals[-1][1]), self.node.interval_unit)
-            if self.intervals
-            else default
-        )
 
     def needs_destructive_check(
         self,

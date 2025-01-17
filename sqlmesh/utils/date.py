@@ -23,6 +23,8 @@ DatetimeRange = t.Tuple[datetime, datetime]
 DatetimeRanges = t.List[DatetimeRange]
 DATE_INT_FMT = "%Y%m%d"
 
+if t.TYPE_CHECKING:
+    from sqlglot.dialects.dialect import DialectType
 
 warnings.filterwarnings(
     "ignore",
@@ -216,8 +218,11 @@ def to_date(value: TimeLike, relative_base: t.Optional[datetime] = None) -> date
 
 
 def date_dict(
-    execution_time: TimeLike, start: t.Optional[TimeLike], end: t.Optional[TimeLike]
-) -> t.Dict[str, t.Union[str, datetime, date, float, int]]:
+    execution_time: TimeLike,
+    start: t.Optional[TimeLike],
+    end: t.Optional[TimeLike],
+    dialect: t.Optional[DialectType] = "",
+) -> t.Dict[str, TimeLike]:
     """Creates a kwarg dictionary of datetime variables for use in SQL Contexts.
 
     Keys are like start_date, start_ds, end_date, end_ds...
@@ -239,14 +244,16 @@ def date_dict(
     ]
 
     if start is not None:
-        prefixes.append(("start", to_datetime(start)))
+        prefixes.append(("start", start if dialect == "tsql" else to_datetime(start)))
     if end is not None:
-        prefixes.append(("end", to_datetime(end)))
+        prefixes.append(("end", end if dialect == "tsql" else to_datetime(end)))
 
     for prefix, time_like in prefixes:
         dt = to_datetime(time_like)
         millis = to_timestamp(time_like)
-        kwargs[f"{prefix}_dt"] = dt
+        kwargs[f"{prefix}_dt"] = (
+            time_like if dialect == "tsql" and prefix in {"start", "end"} else dt
+        )
         kwargs[f"{prefix}_date"] = to_date(dt)
         kwargs[f"{prefix}_ds"] = to_ds(time_like)
         kwargs[f"{prefix}_ts"] = to_ts(dt)
@@ -284,7 +291,9 @@ def is_date(obj: TimeLike) -> bool:
         return False
 
 
-def make_inclusive(start: TimeLike, end: TimeLike) -> DatetimeRange:
+def make_inclusive(
+    start: TimeLike, end: TimeLike, dialect: t.Optional[DialectType] = ""
+) -> t.Tuple[TimeLike, TimeLike]:
     """Adjust start and end times to to become inclusive datetimes.
 
     SQLMesh treats start and end times as inclusive so that filters can be written as
@@ -295,7 +304,8 @@ def make_inclusive(start: TimeLike, end: TimeLike) -> DatetimeRange:
     In the ds ('2020-01-01') case, because start_ds and end_ds are categorical, between works even if
     start_ds and end_ds are equivalent. However, when we move to ts ('2022-01-01 12:00:00'), because timestamps
     are numeric, using simple equality doesn't make sense. When the end is not a categorical date, then it is
-    treated as an exclusive range and converted to inclusive by subtracting 1 microsecond.
+    treated as an exclusive range and converted to inclusive by subtracting 1 microsecond. If the dialect is
+    T-SQL then 100 nanoseconds are subtracted to account for the increased precision.
 
     Args:
         start: Start timelike object.
@@ -308,6 +318,14 @@ def make_inclusive(start: TimeLike, end: TimeLike) -> DatetimeRange:
     Returns:
         A tuple of inclusive datetime objects.
     """
+
+    # For nanosecond precision in T-SQL; Python's datetime supports up to microsecond
+    if dialect == "tsql":
+        end_ts = to_utc_timestamp(end)
+        if is_date(end):
+            end_ts += pd.Timedelta(1, unit="day")
+        return (to_utc_timestamp(start), end_ts - pd.Timedelta(100, unit="ns"))
+
     return (to_datetime(start), make_inclusive_end(end))
 
 
@@ -320,6 +338,12 @@ def make_exclusive(time: TimeLike) -> datetime:
     if is_date(time):
         dt = dt + timedelta(days=1)
     return dt
+
+
+def to_utc_timestamp(time: TimeLike) -> pd.Timestamp:
+    if isinstance(time, datetime) and time.tzinfo is not None:
+        return pd.Timestamp(time).tz_convert("utc")
+    return pd.Timestamp(time, tz="utc")
 
 
 def validate_date_range(
@@ -378,6 +402,12 @@ def to_time_column(
                 ],
                 nullable=nullable or time_column_type.args.get("nullable", False),
             )
+
+    # To handle up to 100ns precision for T-SQL, since datetime objects have microsecond precision
+    if dialect == "tsql" and time_column_type.is_type(
+        *(TEMPORAL_TZ_TYPES | {exp.DataType.Type.DATETIME2, exp.DataType.Type.TIME})
+    ):
+        return exp.cast(exp.Literal.string(time_column), to=time_column_type)
 
     if isinstance(time_column, exp.Null):
         return exp.cast(time_column, to=time_column_type)

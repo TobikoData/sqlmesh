@@ -10,6 +10,9 @@ from sqlglot import expressions as exp
 from sqlglot import parse_one
 
 from sqlmesh.core.engine_adapter.mssql import MSSQLEngineAdapter
+from sqlmesh.core.snapshot import SnapshotEvaluator, SnapshotChangeCategory
+from sqlmesh.core.model import load_sql_based_model
+from sqlmesh.core import dialect as d
 from sqlmesh.core.engine_adapter.shared import (
     DataObject,
     DataObjectType,
@@ -150,6 +153,113 @@ def test_table_exists(make_mocked_engine_adapter: t.Callable):
     adapter.cursor.fetchone.return_value = None
     resp = adapter.table_exists("db.table")
     assert not resp
+
+
+@pytest.mark.parametrize(
+    "select_expr, input_time, expected_sql",
+    [
+        # Respect the user's precision for datetimeoffset, time, datetime2
+        (
+            "SELECT ds::datetime2",
+            "2022-01-01 00:00:00.1234567",
+            "CAST('2022-01-01 00:00:00.1234567' AS DATETIME2)",
+        ),
+        (
+            "SELECT ds::datetimeoffset(4)",
+            "2022-01-01 00:00:00.1234567",
+            "CAST('2022-01-01 00:00:00.1234567' AS DATETIMEOFFSET(4))",
+        ),
+        (
+            "SELECT ds::time",
+            "2022-01-01 00:00:00.1234567",
+            "CAST('2022-01-01 00:00:00.1234567' AS TIME)",
+        ),
+        # Respecting precision in datetimeoffset with time zone offsets
+        (
+            "SELECT ds::time(7)",
+            "2022-01-01 00:00:00.1234567+00:00",
+            "CAST('2022-01-01 00:00:00.1234567+00:00' AS TIME(7))",
+        ),
+        (
+            "SELECT ds::datetimeoffset(6)",
+            "2022-01-01 00:00:00.1234567+02:00",
+            "CAST('2022-01-01 00:00:00.1234567+02:00' AS DATETIMEOFFSET(6))",
+        ),
+        # For date types without nano-second precision, truncate as usual
+        (
+            "SELECT ds::datetime",
+            "2022-01-01 00:00:00.1234567+01:00",
+            "CAST('2021-12-31 23:00:00.123456' AS DATETIME)",
+        ),
+        (
+            "SELECT ds::smalldatetime",
+            "2022-01-01 00:00:00.1234567+00:00",
+            "CAST('2022-01-01 00:00:00.123456' AS SMALLDATETIME)",
+        ),
+        ("SELECT ds::date", "2022-01-01 00:00:00.001", "CAST('2022-01-01' AS DATE)"),
+    ],
+)
+def test_to_time_column(select_expr, input_time, expected_sql):
+    expressions = d.parse(
+        f"""
+        MODEL (
+            name db.table,
+            kind INCREMENTAL_BY_TIME_RANGE(
+                time_column (ds)
+            ),
+            dialect tsql
+        );
+
+        {select_expr}
+        """
+    )
+    model = load_sql_based_model(expressions)
+    assert model.convert_to_time_column(input_time).sql("tsql") == expected_sql
+
+
+def test_incremental_by_time_datetimeoffset_precision(
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture, make_snapshot
+):
+    adapter = make_mocked_engine_adapter(MSSQLEngineAdapter)
+    adapter.get_current_catalog = mocker.MagicMock(return_value="other_catalog")
+
+    evaluator = SnapshotEvaluator(adapter)
+    parsed = d.parse(  # type: ignore
+        """
+            MODEL (
+                name test_schema.test_model,
+                kind INCREMENTAL_BY_TIME_RANGE (time_column ds),
+            );
+
+            SELECT a::int, ds::datetimeoffset FROM tbl as t WHERE t.ds BETWEEN @start_dt and @end_dt;
+            """,
+    )
+
+    model = load_sql_based_model(parsed, dialect="tsql")
+
+    snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    evaluator.evaluate(
+        snapshot,
+        start="2020-01-01",
+        end="2020-01-02",
+        execution_time="2020-01-02",
+        snapshots={},
+    )
+
+    assert adapter.cursor.execute.call_args_list[0][0][0] == (
+        "MERGE INTO [sqlmesh__test_schema].[test_schema__test_model__4126580595] AS [__MERGE_TARGET__] USING "
+        "(SELECT [a] AS [a], [ds] AS [ds] FROM (SELECT CAST([a] AS INTEGER) AS [a], "
+        "CAST([ds] AS DATETIMEOFFSET) AS [ds] FROM [tbl] AS [t] WHERE [t].[ds] BETWEEN "
+        "CAST('2020-01-01 00:00:00+00:00' AS DATETIMEOFFSET) AT TIME ZONE 'UTC' AND "
+        "CAST('2020-01-02 23:59:59.999999900+00:00' AS DATETIMEOFFSET) AT TIME ZONE 'UTC') AS [_subquery] "
+        "WHERE [ds] BETWEEN CAST('2020-01-01 00:00:00+00:00' AS DATETIMEOFFSET) AND "
+        "CAST('2020-01-02 23:59:59.999999900+00:00' AS DATETIMEOFFSET)) AS [__MERGE_SOURCE__] ON (1 = 0) WHEN NOT "
+        "MATCHED BY SOURCE AND [ds] BETWEEN CAST('2020-01-01 00:00:00+00:00' AS DATETIMEOFFSET) AND "
+        "CAST('2020-01-02 23:59:59.999999900+00:00' AS DATETIMEOFFSET) THEN DELETE WHEN NOT MATCHED THEN INSERT "
+        "([a], [ds]) VALUES ([a], [ds]);"
+    )
 
 
 def test_insert_overwrite_by_time_partition_supports_insert_overwrite_pandas_not_exists(

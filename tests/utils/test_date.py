@@ -4,6 +4,7 @@ from datetime import date, datetime
 import pytest
 import time_machine
 from sqlglot import exp
+import pandas as pd
 
 from sqlmesh.utils.date import (
     UTC,
@@ -99,6 +100,42 @@ def test_make_inclusive(start_in, end_in, start_out, end_out) -> None:
 
 
 @pytest.mark.parametrize(
+    "start_in, end_in, start_out, end_out",
+    [
+        (
+            "2020-01-01",
+            date(2020, 1, 1),
+            "2020-01-01 00:00:00+00:00",
+            "2020-01-01 23:59:59.999999900+00:00",
+        ),
+        (
+            date(2020, 1, 1),
+            date(2020, 1, 1),
+            "2020-01-01 00:00:00+00:00",
+            "2020-01-01 23:59:59.999999900+00:00",
+        ),
+        (
+            "2020-01-01",
+            "2020-01-01 12:00:00",
+            "2020-01-01 00:00:00+00:00",
+            "2020-01-01 11:59:59.999999900+00:00",
+        ),
+        (
+            "2020-01-01",
+            to_datetime("2020-01-02"),
+            "2020-01-01 00:00:00+00:00",
+            "2020-01-01 23:59:59.999999900+00:00",
+        ),
+    ],
+)
+def test_tsql_make_inclusive(start_in, end_in, start_out, end_out) -> None:
+    assert make_inclusive(start_in, end_in, "tsql") == (
+        pd.Timestamp(start_out, tz="utc"),
+        pd.Timestamp(end_out, tz="utc"),
+    )
+
+
+@pytest.mark.parametrize(
     "expression, result",
     [
         ("1 second ago", False),
@@ -179,6 +216,20 @@ def test_to_tstz():
             "%Y%m%d",
             "20200101",
         ),
+        (
+            "2020-01-01 00:00:00+00:00",
+            exp.DataType.build("TIMESTAMPTZ"),
+            "tsql",
+            "%Y%m%d",
+            "CAST('2020-01-01 00:00:00+00:00' AS DATETIMEOFFSET)",
+        ),
+        (
+            "2020-01-01 00:00:00.1234567+00:00",
+            exp.DataType.build("DATETIME2", dialect="tsql"),
+            "tsql",
+            None,
+            "CAST('2020-01-01 00:00:00.1234567+00:00' AS DATETIME2)",
+        ),
     ],
 )
 def test_to_time_column(
@@ -189,7 +240,8 @@ def test_to_time_column(
     result: str,
 ):
     assert (
-        to_time_column(time_column, time_column_type, dialect, time_column_format).sql() == result
+        to_time_column(time_column, time_column_type, dialect, time_column_format).sql(dialect)
+        == result
     )
 
 
@@ -229,6 +281,39 @@ def test_date_dict():
         "start_hour": 0,
         "end_hour": 0,
     }
+
+
+@pytest.mark.parametrize(
+    "start, end, expected_start_dt, expected_end_dt",
+    [
+        (
+            "2020-01-01 00:00:00.1234567",
+            "2020-01-02",
+            pd.Timestamp("2020-01-01 00:00:00.1234567+00:00"),
+            pd.Timestamp("2020-01-02 23:59:59.9999999+00:00"),
+        ),
+        (
+            "2020-01-01 00:00:00.1234567",
+            "2020-01-02 00:00:00.1234567",
+            pd.Timestamp("2020-01-01 00:00:00.1234567+00:00"),
+            pd.Timestamp("2020-01-02 00:00:00.1234566+00:00"),
+        ),
+        (
+            "2020-01-01 00:00:00.1234567",
+            "2020-01-02 00:00:00",
+            pd.Timestamp("2020-01-01 00:00:00.1234567+00:00"),
+            pd.Timestamp("2020-01-01 23:59:59.9999999+00:00"),
+        ),
+    ],
+)
+def test_tsql_date_dict(start, end, expected_start_dt, expected_end_dt):
+    resp = date_dict(
+        "2020-01-02 01:00:00",
+        *make_inclusive(start, end, dialect="tsql"),
+        dialect="tsql",
+    )
+    assert resp["start_dt"] == expected_start_dt
+    assert resp["end_dt"] == expected_end_dt
 
 
 def test_format_tz_datetime():
