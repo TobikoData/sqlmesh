@@ -2075,12 +2075,13 @@ def _create_model(
 
     physical_schema_mapping = physical_schema_mapping or {}
     model_schema_name = exp.to_table(name, dialect=dialect).db
-    physical_schema_override: t.Optional[str] = None
+    physical_schema_override: t.Optional[str] = kwargs.pop("physical_schema_override", None)
 
-    for re_pattern, override_schema in physical_schema_mapping.items():
-        if re.match(re_pattern, model_schema_name):
-            physical_schema_override = override_schema
-            break
+    if not physical_schema_override:
+        for re_pattern, override_schema in physical_schema_mapping.items():
+            if re.match(re_pattern, model_schema_name):
+                physical_schema_override = override_schema
+                break
 
     raw_kind = kwargs.pop("kind", None)
     if raw_kind:

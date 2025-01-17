@@ -6303,6 +6303,27 @@ def test_physical_version():
         ).validate_definition()
 
 
+def test_physical_schema():
+    # in conjunction with physical_version, you can have sqlmesh manage an existing table without moving it
+    # or using a dedicated schema just for the physical_schema_mapping
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.table,
+            kind INCREMENTAL_BY_TIME_RANGE(
+                time_column a
+            ),
+            physical_schema_override db
+        );
+
+        SELECT a, b
+        """
+    )
+
+    model = load_sql_based_model(expressions)
+    assert model.physical_schema == "db"
+
+
 def test_trailing_comments():
     expressions = d.parse(
         """

@@ -166,8 +166,8 @@ class ModelMeta(_Node):
         dialect = str_or_exp_to_str(v)
         return dialect and dialect.lower()
 
-    @field_validator("physical_version", mode="before")
-    def _physical_version_validator(cls, v: t.Any) -> t.Optional[str]:
+    @field_validator("physical_version", "physical_schema_override", mode="before")
+    def _physical_version_and_schema_validator(cls, v: t.Any) -> t.Optional[str]:
         if v is None:
             return v
         return str_or_exp_to_str(v)

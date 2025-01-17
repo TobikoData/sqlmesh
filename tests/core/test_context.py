@@ -755,6 +755,13 @@ def test_physical_schema_mapping(tmp_path: pathlib.Path) -> None:
         "MODEL(name untouched.model_c); SELECT 1;",
     )
 
+    # a physical_schema_override at a model level takes precedence
+    create_temp_file(
+        tmp_path,
+        pathlib.Path(pathlib.Path("models"), "d.sql"),
+        "MODEL(name testone.model_d, physical_schema_override testing_critical); SELECT 1;",
+    )
+
     ctx = Context(
         config=Config(
             model_defaults=ModelDefaultsConfig(dialect="duckdb"),
@@ -776,9 +783,14 @@ def test_physical_schema_mapping(tmp_path: pathlib.Path) -> None:
         snapshot.qualified_view_name.schema_name for snapshot in sorted(ctx.snapshots.values())
     ]
 
-    assert len(physical_schemas) == len(view_schemas) == 3
-    assert physical_schemas == ["overridden_staging", "testing", "sqlmesh__untouched"]
-    assert view_schemas == ["foo_staging", "testone", "untouched"]
+    assert len(view_schemas) == len(physical_schemas) == 4
+    assert physical_schemas == [
+        "overridden_staging",
+        "testing",
+        "testing_critical",
+        "sqlmesh__untouched",
+    ]
+    assert view_schemas == ["foo_staging", "testone", "testone", "untouched"]
 
 
 @pytest.mark.slow
