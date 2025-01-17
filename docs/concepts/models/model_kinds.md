@@ -626,12 +626,7 @@ TABLE db.menu_items (
 
 A hard delete is when a record no longer exists in the source table. When this happens,
 
-If `invalidate_hard_deletes` is set to `true` (default):
-
-* `valid_to` column will be set to the time when the SQLMesh run started that detected the missing record (called `execution_time`).
-* If the record is added back, then the `valid_to` column will remain unchanged.
-
-If `invalidate_hard_deletes` is set to `false`:
+If `invalidate_hard_deletes` is set to `false` (default):
 
 * `valid_to` column will continue to be set to `NULL` (therefore still considered "valid")
 * If the record is added back, then the `valid_to` column will be set to the `valid_from` of the new record.
@@ -641,13 +636,18 @@ When a record is added back, the new record will be inserted into the table with
 * SCD_TYPE_2_BY_TIME: the largest of either the `updated_at` timestamp of the new record or the `valid_from` timestamp of the deleted record in the SCD Type 2 table
 * SCD_TYPE_2_BY_COLUMN: the `execution_time` when the record was detected again
 
-One way to think about `invalidate_hard_deletes` is that, if enabled, deletes are most accurately tracked in the SCD Type 2 table since it records when the delete occurred.
+If `invalidate_hard_deletes` is set to `true`:
+
+* `valid_to` column will be set to the time when the SQLMesh run started that detected the missing record (called `execution_time`).
+* If the record is added back, then the `valid_to` column will remain unchanged.
+
+One way to think about `invalidate_hard_deletes` is that, if `invalidate_hard_deletes` is set to `true`, deletes are most accurately tracked in the SCD Type 2 table since it records when the delete occurred.
 As a result though, you can have gaps between records if the there is a gap of time between when it was deleted and added back.
-If you would prefer to not have gaps, and a result consider missing records in source as still "valid", then you can set `invalidate_hard_deletes` to `false`.
+If you would prefer to not have gaps, and a result consider missing records in source as still "valid", then you can leave the default value or set `invalidate_hard_deletes` to `false`.
 
 ### Example of SCD Type 2 By Time in Action
 
-Lets say that you started with the following data in your source table:
+Lets say that you started with the following data in your source table and `invalidate_hard_deletes` is set to `true`:
 
 | ID | Name             | Price |     Updated At      |
 |----|------------------|:-----:|:-------------------:|
@@ -723,7 +723,7 @@ Since in this case the updated at timestamp did not change it is likely the item
 
 ### Example of SCD Type 2 By Column in Action
 
-Lets say that you started with the following data in your source table:
+Lets say that you started with the following data in your source table and `invalidate_hard_deletes` is set to `true`:
 
 | ID | Name             | Price |
 |----|------------------|:-----:|
@@ -798,12 +798,12 @@ This is the most accurate representation of the menu based on the source data pr
 
 ### Shared Configuration Options
 
-| Name                    | Description                                                                                                    | Type                      |
-|-------------------------|----------------------------------------------------------------------------------------------------------------|---------------------------|
-| unique_key              | Unique key used for identifying rows between source and target                                                 | List of strings or string |
-| valid_from_name         | The name of the `valid_from` column to create in the target table. Default: `valid_from`                       | string                    |
-| valid_to_name           | The name of the `valid_to` column to create in the target table. Default: `valid_to`                           | string                    |
-| invalidate_hard_deletes | If set to `true`, when a record is missing from the source table it will be marked as invalid. Default: `true` | bool                      |
+| Name                    | Description                                                                                                     | Type                      |
+|-------------------------|-----------------------------------------------------------------------------------------------------------------|---------------------------|
+| unique_key              | Unique key used for identifying rows between source and target                                                  | List of strings or string |
+| valid_from_name         | The name of the `valid_from` column to create in the target table. Default: `valid_from`                        | string                    |
+| valid_to_name           | The name of the `valid_to` column to create in the target table. Default: `valid_to`                            | string                    |
+| invalidate_hard_deletes | If set to `true`, when a record is missing from the source table it will be marked as invalid. Default: `false` | bool                      |
 
 !!! tip "Important"
 
