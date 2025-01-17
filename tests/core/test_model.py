@@ -10,6 +10,7 @@ import pandas as pd
 import pytest
 from pytest_mock.plugin import MockerFixture
 from sqlglot import exp, parse_one
+from sqlglot.errors import ParseError
 from sqlglot.schema import MappingSchema
 from sqlmesh.cli.example_project import init_example_project
 
@@ -5309,6 +5310,27 @@ def test_python_model_dialect():
 
     assert m.time_column.column.sql() == '"Y"'
     assert m.time_column.format == "%Y-%m-%d"
+
+    # column type parseable by default dialect: no error
+    model._dialect = "clickhouse"
+
+    @model("good", columns={'"COL"': "DateTime64(9)"})
+    def a_model(context):
+        pass
+
+    # column type not parseable by default dialect and no explicit dialect: error
+    model._dialect = "snowflake"
+
+    with pytest.raises(ParseError, match="No expression was parsed from 'DateTime64\(9\)'"):
+
+        @model("bad", columns={'"COL"': "DateTime64(9)"})
+        def a_model(context):
+            pass
+
+    # column type not parseable by default dialect and explicit dialect specified: no error
+    @model("good", columns={'"COL"': "DateTime64(9)"}, dialect="clickhouse")
+    def a_model(context):
+        pass
 
     model._dialect = None
 

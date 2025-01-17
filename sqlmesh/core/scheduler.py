@@ -313,13 +313,17 @@ class Scheduler:
         )
 
         if not merged_intervals:
-            next_ready_interval_start = get_next_model_interval_start(self.snapshots.values())
+            next_run_ready_msg = ""
 
-            utc_time = format_tz_datetime(next_ready_interval_start)
-            local_time = format_tz_datetime(next_ready_interval_start, use_local_timezone=True)
+            next_ready_interval_start = get_next_model_interval_start(self.snapshots.values())
+            if next_ready_interval_start:
+                utc_time = format_tz_datetime(next_ready_interval_start)
+                local_time = format_tz_datetime(next_ready_interval_start, use_local_timezone=True)
+                time_msg = local_time if local_time == utc_time else f"{local_time} ({utc_time})"
+                next_run_ready_msg = f"\n\nNext run will be ready at {time_msg}."
 
             self.console.log_status_update(
-                f"No models are ready to run. Please wait until a model `cron` interval has elapsed.\n\nNext run will be ready at {local_time} ({utc_time})."
+                f"No models are ready to run. Please wait until a model `cron` interval has elapsed.{next_run_ready_msg}"
             )
             return CompletionStatus.NOTHING_TO_DO
 

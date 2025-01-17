@@ -1014,7 +1014,7 @@ def extend_sqlglot() -> None:
                     exp.Whens: _whens_sql,
                 }
             )
-
+        if MacroDef not in generator.WITH_SEPARATED_COMMENTS:
             generator.WITH_SEPARATED_COMMENTS = (
                 *generator.WITH_SEPARATED_COMMENTS,
                 Model,
