@@ -103,7 +103,7 @@ class DuckDBEngineAdapter(LogicalMergeMixin, GetCurrentCatalogFromFunctionMixin,
                 )
                 .as_("type"),
             )
-            .from_(exp.to_table("information_schema.tables"))
+            .from_(exp.to_table("system.information_schema.tables"))
             .where(
                 exp.column("table_catalog").eq(catalog), exp.column("table_schema").eq(schema_name)
             )
