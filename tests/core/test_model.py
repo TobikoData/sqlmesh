@@ -1923,6 +1923,30 @@ def test_python_model_depends_on() -> None:
     assert m.depends_on == {'"foo"."bar"'}
 
 
+def test_python_model_variable_dependencies() -> None:
+    @model(
+        name="bla.test_model_var_dep",
+        kind="full",
+        columns={'"col"': "int"},
+        depends_on={"@schema_name.table_name"},
+    )
+    def my_model(context, **kwargs):
+        # Even though the argument is not statically resolvable, no error
+        # is raised, because the `depends_on` property is present
+        schema_name = context.var("schema_name")
+        table = context.resolve_table(f"{schema_name}.table_name")
+
+        return context.fetchdf(exp.select("*").from_(table))
+
+    m = model.get_registry()["bla.test_model_var_dep"].model(
+        module_path=Path("."),
+        path=Path("."),
+        variables={"schema_name": "foo"},
+    )
+
+    assert m.depends_on == {'"foo"."table_name"'}
+
+
 def test_python_model_with_session_properties():
     @model(
         name="python_model_prop",
@@ -5321,7 +5345,7 @@ def test_python_model_dialect():
     # column type not parseable by default dialect and no explicit dialect: error
     model._dialect = "snowflake"
 
-    with pytest.raises(ParseError, match="No expression was parsed from 'DateTime64\(9\)'"):
+    with pytest.raises(ParseError, match="No expression was parsed from 'DateTime64\\(9\\)'"):
 
         @model("bad", columns={'"COL"': "DateTime64(9)"})
         def a_model(context):

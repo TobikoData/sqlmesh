@@ -29,6 +29,7 @@ def make_python_env(
     used_variables: t.Optional[t.Set[str]] = None,
     path: t.Optional[str | Path] = None,
     python_env: t.Optional[t.Dict[str, Executable]] = None,
+    strict_resolution: bool = True,
 ) -> t.Dict[str, Executable]:
     python_env = {} if python_env is None else python_env
     variables = variables or {}
@@ -81,15 +82,25 @@ def make_python_env(
             build_env(used_macro.func, env=env, name=name, path=module_path)
 
     python_env.update(serialize_env(env, path=module_path))
-    return _add_variables_to_python_env(python_env, used_variables, variables)
+    return _add_variables_to_python_env(
+        python_env,
+        used_variables,
+        variables,
+        strict_resolution=strict_resolution,
+    )
 
 
 def _add_variables_to_python_env(
     python_env: t.Dict[str, Executable],
     used_variables: t.Optional[t.Set[str]],
     variables: t.Optional[t.Dict[str, t.Any]],
+    strict_resolution: bool = True,
 ) -> t.Dict[str, Executable]:
-    _, python_used_variables = parse_dependencies(python_env, None)
+    _, python_used_variables = parse_dependencies(
+        python_env,
+        None,
+        strict_resolution=strict_resolution,
+    )
     used_variables = (used_variables or set()) | python_used_variables
 
     variables = {k: v for k, v in (variables or {}).items() if k in used_variables}
@@ -100,12 +111,17 @@ def _add_variables_to_python_env(
 
 
 def parse_dependencies(
-    python_env: t.Dict[str, Executable], entrypoint: t.Optional[str]
+    python_env: t.Dict[str, Executable], entrypoint: t.Optional[str], strict_resolution: bool = True
 ) -> t.Tuple[t.Set[str], t.Set[str]]:
-    """Parses the source of a model function and finds upstream table dependencies and referenced variables based on calls to context / evaluator.
+    """
+    Parses the source of a model function and finds upstream table dependencies
+    and referenced variables based on calls to context / evaluator.
 
     Args:
         python_env: A dictionary of Python definitions.
+        entrypoint: The name of the function.
+        strict_resolution: If true, the arguments of `table` and `resolve_table` calls must
+            be resolvable at parse time, otherwise an exception will be raised.
 
     Returns:
         A tuple containing the set of upstream table dependencies and the set of referenced variables.
@@ -140,9 +156,11 @@ def parse_dependencies(
                         expression = to_source(first_arg)
                         return eval(expression, env)
                     except Exception:
-                        raise ConfigError(
-                            f"Error resolving dependencies for '{executable.path}'. Argument '{expression.strip()}' must be resolvable at parse time."
-                        )
+                        if strict_resolution:
+                            raise ConfigError(
+                                f"Error resolving dependencies for '{executable.path}'. "
+                                f"Argument '{expression.strip()}' must be resolvable at parse time."
+                            )
 
                 if func.value.id == "context" and func.attr in ("table", "resolve_table"):
                     depends_on.add(get_first_arg("model_name"))
