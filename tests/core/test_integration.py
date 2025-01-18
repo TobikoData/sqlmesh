@@ -1622,9 +1622,10 @@ def test_incremental_by_partition(init_and_plan_context: t.Callable):
         f"""
         MODEL (
             name {model_name},
-            kind INCREMENTAL_BY_PARTITION,
+            kind INCREMENTAL_BY_PARTITION (disable_restatement false),
             partitioned_by [key],
             allow_partials true,
+            start '2023-01-07',
         );
 
         SELECT key, value FROM {source_name};
@@ -1663,6 +1664,16 @@ def test_incremental_by_partition(init_and_plan_context: t.Callable):
     assert context.engine_adapter.fetchall(f"SELECT * FROM {model_name}") == [
         ("key_b", 1),
         ("key_a", 2),
+    ]
+
+    # model should fully refresh on restatement
+    context.engine_adapter.replace_query(
+        source_name,
+        d.parse_one("SELECT 'key_c' AS key, 3 AS value"),
+    )
+    context.plan(auto_apply=True, no_prompts=True, restate_models=[model_name])
+    assert context.engine_adapter.fetchall(f"SELECT * FROM {model_name}") == [
+        ("key_c", 3),
     ]
 
 

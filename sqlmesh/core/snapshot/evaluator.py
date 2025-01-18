@@ -1414,12 +1414,15 @@ class IncrementalByPartitionStrategy(MaterializableStrategy):
         is_first_insert: bool,
         **kwargs: t.Any,
     ) -> None:
-        self.adapter.insert_overwrite_by_partition(
-            table_name,
-            query_or_df,
-            partitioned_by=model.partitioned_by,
-            columns_to_types=model.columns_to_types,
-        )
+        if is_first_insert:
+            self._replace_query_for_model(model, table_name, query_or_df)
+        else:
+            self.adapter.insert_overwrite_by_partition(
+                table_name,
+                query_or_df,
+                partitioned_by=model.partitioned_by,
+                columns_to_types=model.columns_to_types,
+            )
 
 
 class IncrementalByTimeRangeStrategy(MaterializableStrategy):

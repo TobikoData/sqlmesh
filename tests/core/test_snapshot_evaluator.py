@@ -3012,6 +3012,8 @@ def test_evaluate_incremental_by_partition(mocker: MockerFixture, make_snapshot,
     snapshot = make_snapshot(model)
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
+    adapter_mock.columns.return_value = model.columns_to_types
+
     evaluator = SnapshotEvaluator(adapter_mock)
     evaluator.evaluate(
         snapshot,
@@ -3021,6 +3023,36 @@ def test_evaluate_incremental_by_partition(mocker: MockerFixture, make_snapshot,
         snapshots={},
     )
 
+    # uses `replace_query` on first model execution
+    adapter_mock.replace_query.assert_called_once_with(
+        snapshot.table_name(),
+        model.render_query(),
+        partitioned_by=[
+            exp.to_column("ds", quoted=True),
+            exp.to_column("b", quoted=True),
+        ],
+        columns_to_types=model.columns_to_types,
+        clustered_by=[],
+        table_properties={},
+        column_descriptions={},
+        partition_interval_unit=None,
+        storage_format=None,
+        table_description=None,
+        table_format=None,
+    )
+
+    adapter_mock.reset_mock()
+    snapshot.intervals = [(to_timestamp("2020-01-01"), to_timestamp("2020-01-02"))]
+
+    evaluator.evaluate(
+        snapshot,
+        start="2020-01-02",
+        end="2020-01-03",
+        execution_time="2020-01-03",
+        snapshots={},
+    )
+
+    # uses `insert_overwrite_by_partition` on all subsequent model executions
     adapter_mock.insert_overwrite_by_partition.assert_called_once_with(
         snapshot.table_name(),
         model.render_query(),
