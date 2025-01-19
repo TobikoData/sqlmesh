@@ -161,29 +161,29 @@ def test_table_exists(make_mocked_engine_adapter: t.Callable):
         # Respect the user's precision for datetimeoffset, time, datetime2
         (
             "SELECT ds::datetime2",
-            "2022-01-01 00:00:00.1234567",
-            "CAST('2022-01-01 00:00:00.1234567' AS DATETIME2)",
+            pd.Timestamp("2022-01-01 00:00:00.1234567"),
+            "CAST('2022-01-01 00:00:00.123456700' AS DATETIME2)",
         ),
         (
             "SELECT ds::datetimeoffset(4)",
-            "2022-01-01 00:00:00.1234567",
-            "CAST('2022-01-01 00:00:00.1234567' AS DATETIMEOFFSET(4))",
+            pd.Timestamp("2022-01-01 00:00:00.1234567"),
+            "CAST('2022-01-01 00:00:00.123456700' AS DATETIMEOFFSET(4))",
         ),
         (
             "SELECT ds::time",
-            "2022-01-01 00:00:00.1234567",
-            "CAST('2022-01-01 00:00:00.1234567' AS TIME)",
+            pd.Timestamp("2022-01-01 00:00:00.1234567"),
+            "CAST('2022-01-01 00:00:00.123456700' AS TIME)",
         ),
         # Respecting precision in datetimeoffset with time zone offsets
         (
             "SELECT ds::time(7)",
-            "2022-01-01 00:00:00.1234567+00:00",
-            "CAST('2022-01-01 00:00:00.1234567+00:00' AS TIME(7))",
+            pd.Timestamp("2022-01-01 00:00:00.1234567+00:00"),
+            "CAST('2022-01-01 00:00:00.123456700+00:00' AS TIME(7))",
         ),
         (
             "SELECT ds::datetimeoffset(6)",
-            "2022-01-01 00:00:00.1234567+02:00",
-            "CAST('2022-01-01 00:00:00.1234567+02:00' AS DATETIMEOFFSET(6))",
+            pd.Timestamp("2022-01-01 00:00:00.1234567+02:00"),
+            "CAST('2022-01-01 00:00:00.123456700+02:00' AS DATETIMEOFFSET(6))",
         ),
         # For date types without nano-second precision, truncate as usual
         (

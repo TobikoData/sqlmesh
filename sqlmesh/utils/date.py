@@ -308,7 +308,7 @@ def make_inclusive(start: TimeLike, end: TimeLike) -> DatetimeRange:
 
     Example:
         >>> make_inclusive("2020-01-01", "2020-01-01")
-        (datetime.datetime(2020, 1, 1, 0, 0, tzinfo=datetime.timezone.utc), datetime.datetime(2020, 1, 1, 23, 59, 59, 999999, tzinfo=datetime.timezone.utc))
+        (datetime.datetime(2020, 1, 1, 0, 0, tzinfo=datetime.timezone.utc), Timestamp('2020-01-01 23:59:59.999999999+0000', tz='UTC'))
 
     Returns:
         A tuple of inclusive datetime objects.
@@ -391,16 +391,19 @@ def to_time_column(
                 nullable=nullable or time_column_type.args.get("nullable", False),
             )
 
-    # To handle up to 100ns precision for T-SQL, since datetime objects have microsecond precision
-    if dialect == "tsql" and time_column_type.is_type(
-        *(TEMPORAL_TZ_TYPES | {exp.DataType.Type.DATETIME2, exp.DataType.Type.TIME})
-    ):
-        return exp.cast(exp.Literal.string(time_column), to=time_column_type)
-
     if isinstance(time_column, exp.Null):
         return exp.cast(time_column, to=time_column_type)
     if time_column_type.is_type(exp.DataType.Type.DATE, exp.DataType.Type.DATE32):
         return exp.cast(exp.Literal.string(to_ds(time_column)), to="date")
+    # To handle up to nanosecond precision for T-SQL, since datetime objects have microsecond precision
+    if (
+        dialect == "tsql"
+        and isinstance(time_column, datetime)
+        and time_column_type.is_type(
+            *(TEMPORAL_TZ_TYPES | {exp.DataType.Type.DATETIME2, exp.DataType.Type.TIME})
+        )
+    ):
+        return exp.cast(exp.Literal.string(time_column.isoformat(sep=" ")), to=time_column_type)
     if time_column_type.is_type(*TEMPORAL_TZ_TYPES):
         return exp.cast(exp.Literal.string(to_tstz(time_column)), to=time_column_type)
     if time_column_type.is_type(*exp.DataType.TEMPORAL_TYPES):

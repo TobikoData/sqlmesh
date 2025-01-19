@@ -188,11 +188,11 @@ def test_to_tstz():
             "CAST('2020-01-01 00:00:00+00:00' AS DATETIMEOFFSET)",
         ),
         (
-            "2020-01-01 00:00:00.1234567+00:00",
+            pd.Timestamp("2020-01-01 00:00:00.1234567+00:00"),
             exp.DataType.build("DATETIME2", dialect="tsql"),
             "tsql",
             None,
-            "CAST('2020-01-01 00:00:00.1234567+00:00' AS DATETIME2)",
+            "CAST('2020-01-01 00:00:00.123456700+00:00' AS DATETIME2)",
         ),
     ],
 )
