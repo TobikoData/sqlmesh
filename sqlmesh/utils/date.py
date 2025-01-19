@@ -7,7 +7,7 @@ import warnings
 
 from pandas.api.types import is_datetime64_any_dtype  # type: ignore
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timezone
 
 import dateparser
 import pandas as pd
@@ -244,16 +244,14 @@ def date_dict(
     ]
 
     if start is not None:
-        prefixes.append(("start", start if dialect == "tsql" else to_datetime(start)))
+        prefixes.append(("start", to_datetime(start)))
     if end is not None:
-        prefixes.append(("end", end if dialect == "tsql" else to_datetime(end)))
+        prefixes.append(("end", to_datetime(end)))
 
     for prefix, time_like in prefixes:
         dt = to_datetime(time_like)
         millis = to_timestamp(time_like)
-        kwargs[f"{prefix}_dt"] = (
-            time_like if dialect == "tsql" and prefix in {"start", "end"} else dt
-        )
+        kwargs[f"{prefix}_dt"] = end if dialect == "tsql" and end and prefix == "end" else dt
         kwargs[f"{prefix}_date"] = to_date(dt)
         kwargs[f"{prefix}_ds"] = to_ds(time_like)
         kwargs[f"{prefix}_ts"] = to_ts(dt)
@@ -291,9 +289,7 @@ def is_date(obj: TimeLike) -> bool:
         return False
 
 
-def make_inclusive(
-    start: TimeLike, end: TimeLike, dialect: t.Optional[DialectType] = ""
-) -> t.Tuple[TimeLike, TimeLike]:
+def make_inclusive(start: TimeLike, end: TimeLike) -> DatetimeRange:
     """Adjust start and end times to to become inclusive datetimes.
 
     SQLMesh treats start and end times as inclusive so that filters can be written as
@@ -304,8 +300,7 @@ def make_inclusive(
     In the ds ('2020-01-01') case, because start_ds and end_ds are categorical, between works even if
     start_ds and end_ds are equivalent. However, when we move to ts ('2022-01-01 12:00:00'), because timestamps
     are numeric, using simple equality doesn't make sense. When the end is not a categorical date, then it is
-    treated as an exclusive range and converted to inclusive by subtracting 1 microsecond. If the dialect is
-    T-SQL then 100 nanoseconds are subtracted to account for the increased precision.
+    treated as an exclusive range and converted to inclusive by subtracting 1 nanosecond.
 
     Args:
         start: Start timelike object.
@@ -319,29 +314,22 @@ def make_inclusive(
         A tuple of inclusive datetime objects.
     """
 
-    # For nanosecond precision in T-SQL; Python's datetime supports up to microsecond
-    if dialect == "tsql":
-        end_ts = to_utc_timestamp(end)
-        if is_date(end):
-            end_ts += pd.Timedelta(1, unit="day")
-        return (to_utc_timestamp(start), end_ts - pd.Timedelta(100, unit="ns"))
-
     return (to_datetime(start), make_inclusive_end(end))
 
 
 def make_inclusive_end(end: TimeLike) -> datetime:
-    return make_exclusive(end) - timedelta(microseconds=1)
+    return make_exclusive(end) - pd.Timedelta(1, unit="ns")
 
 
 def make_exclusive(time: TimeLike) -> datetime:
-    dt = to_datetime(time)
+    dt = to_utc_timestamp(to_datetime(time))
     if is_date(time):
-        dt = dt + timedelta(days=1)
+        dt = dt + pd.Timedelta(1, unit="day")
     return dt
 
 
-def to_utc_timestamp(time: TimeLike) -> pd.Timestamp:
-    if isinstance(time, datetime) and time.tzinfo is not None:
+def to_utc_timestamp(time: datetime) -> pd.Timestamp:
+    if time.tzinfo is not None:
         return pd.Timestamp(time).tz_convert("utc")
     return pd.Timestamp(time, tz="utc")
 

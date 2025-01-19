@@ -249,15 +249,15 @@ def test_incremental_by_time_datetimeoffset_precision(
     )
 
     assert adapter.cursor.execute.call_args_list[0][0][0] == (
-        "MERGE INTO [sqlmesh__test_schema].[test_schema__test_model__4126580595] AS [__MERGE_TARGET__] USING "
+        f"MERGE INTO [sqlmesh__test_schema].[test_schema__test_model__{snapshot.version}] AS [__MERGE_TARGET__] USING "
         "(SELECT [a] AS [a], [ds] AS [ds] FROM (SELECT CAST([a] AS INTEGER) AS [a], "
         "CAST([ds] AS DATETIMEOFFSET) AS [ds] FROM [tbl] AS [t] WHERE [t].[ds] BETWEEN "
         "CAST('2020-01-01 00:00:00+00:00' AS DATETIMEOFFSET) AT TIME ZONE 'UTC' AND "
-        "CAST('2020-01-02 23:59:59.999999900+00:00' AS DATETIMEOFFSET) AT TIME ZONE 'UTC') AS [_subquery] "
+        "CAST('2020-01-02 23:59:59.999999999+00:00' AS DATETIMEOFFSET) AT TIME ZONE 'UTC') AS [_subquery] "
         "WHERE [ds] BETWEEN CAST('2020-01-01 00:00:00+00:00' AS DATETIMEOFFSET) AND "
-        "CAST('2020-01-02 23:59:59.999999900+00:00' AS DATETIMEOFFSET)) AS [__MERGE_SOURCE__] ON (1 = 0) WHEN NOT "
+        "CAST('2020-01-02 23:59:59.999999999+00:00' AS DATETIMEOFFSET)) AS [__MERGE_SOURCE__] ON (1 = 0) WHEN NOT "
         "MATCHED BY SOURCE AND [ds] BETWEEN CAST('2020-01-01 00:00:00+00:00' AS DATETIMEOFFSET) AND "
-        "CAST('2020-01-02 23:59:59.999999900+00:00' AS DATETIMEOFFSET) THEN DELETE WHEN NOT MATCHED THEN INSERT "
+        "CAST('2020-01-02 23:59:59.999999999+00:00' AS DATETIMEOFFSET) THEN DELETE WHEN NOT MATCHED THEN INSERT "
         "([a], [ds]) VALUES ([a], [ds]);"
     )
 
