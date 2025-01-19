@@ -20,6 +20,18 @@ Make sure to include the `[airflow]` extra in the installation command:
 $ pip install tobiko-cloud-scheduler-facade[airflow]
 ```
 
+!!! info "Mac Users"
+
+    On Mac OS, you may get the following error:
+
+    `zsh: no matches found: tobiko-cloud-scheduler-facade[airflow]`
+
+    In which case, the argument to `pip install` needs to be quoted like so:
+
+    ```
+    $ pip install 'tobiko-cloud-scheduler-facade[airflow]'
+    ```
+
 ### Connect Airflow to Tobiko Cloud
 
 Next, add an Airflow [connection](https://airflow.apache.org/docs/apache-airflow/stable/howto/connection.html#creating-a-connection-with-the-ui) containing your Tobiko Cloud credentials.
@@ -126,6 +138,7 @@ The local DAG represents your SQLMesh project's models and their activity in Tob
 The DAG is composed of SQLMesh models, but there must be a boundary around those models to separate them from your broader Airflow pipeline. The boundary consists of two tasks that serve as entry and exit nodes for the entire Tobiko Cloud run.
 
 The first and last tasks in the DAG are the boundary tasks. The tasks are the same in every local DAG instance:
+
 - First task: `Sensor` task that synchronizes with Tobiko Cloud
 - Last task: `DummyOperator` task that ensures all models without downstream dependencies have completed before declaring the DAG completed
 
