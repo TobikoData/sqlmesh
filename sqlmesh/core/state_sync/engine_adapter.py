@@ -1177,7 +1177,11 @@ class EngineAdapterStateSync(StateSync):
                 .from_(exp.to_table(self.intervals_table).as_(table_alias))
                 .where(where, copy=False)
                 .where(
-                    exp.and_(exp.to_column("is_dev").not_(), exp.to_column("is_removed").not_()),
+                    exp.and_(
+                        exp.to_column("is_dev").not_(),
+                        exp.to_column("is_removed").not_(),
+                        exp.to_column("is_pending_restatement").not_(),
+                    ),
                     copy=False,
                 )
                 .group_by(name_col, version_col, copy=False)
