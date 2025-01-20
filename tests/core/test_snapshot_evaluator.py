@@ -28,6 +28,7 @@ from sqlmesh.core.model import (
     IncrementalByTimeRangeKind,
     IncrementalUnmanagedKind,
     IncrementalByPartitionKind,
+    IncrementalByUniqueKeyKind,
     PythonModel,
     SqlModel,
     TimeColumn,
@@ -2706,6 +2707,39 @@ def test_audit_wap(adapter_mock, make_snapshot):
 
     adapter_mock.wap_table_name.assert_called_once_with(snapshot.table_name(), wap_id)
     adapter_mock.wap_publish.assert_called_once_with(snapshot.table_name(), wap_id)
+
+
+def test_audit_with_datetime_macros(adapter_mock, make_snapshot):
+    evaluator = SnapshotEvaluator(adapter_mock)
+
+    model = SqlModel(
+        name="test_schema.test_table",
+        kind=IncrementalByUniqueKeyKind(unique_key="a"),
+        query=parse_one("SELECT a, start_ds FROM tbl"),
+        audits=[
+            (
+                "unique_combination_of_columns",
+                {
+                    "columns": exp.Array(expressions=[exp.to_column("a")]),
+                    "condition": d.MacroVar(this="start_ds").neq("2020-01-01"),
+                },
+            ),
+        ],
+    )
+    snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    adapter_mock.fetchone.return_value = (0,)
+    evaluator.audit(snapshot, snapshots={}, start="2020-01-01")
+
+    call_args = adapter_mock.fetchone.call_args_list
+    assert len(call_args) == 1
+
+    unique_combination_of_columns_query = call_args[0][0][0]
+    assert (
+        unique_combination_of_columns_query.sql(dialect="duckdb")
+        == """SELECT COUNT(*) FROM (SELECT "a" AS "a" FROM (SELECT * FROM "test_schema"."test_table" AS "test_table") AS "_q_0" WHERE '2020-01-01' <> '2020-01-01' GROUP BY "a" HAVING COUNT(*) > 1) AS audit"""
+    )
 
 
 def test_audit_set_blocking_at_use_site(adapter_mock, make_snapshot):
