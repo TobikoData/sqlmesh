@@ -788,6 +788,24 @@ def test_forward_only_parent_created_in_dev_child_created_in_prod(
     context.apply(plan)
 
 
+@time_machine.travel("2023-01-08 00:00:00 UTC")
+def test_new_forward_only_model(init_and_plan_context: t.Callable):
+    context, _ = init_and_plan_context("examples/sushi")
+
+    context.plan("dev", skip_tests=True, no_prompts=True, auto_apply=True)
+
+    snapshot = context.get_snapshot("sushi.marketing")
+
+    # The deployable table should not exist yet
+    assert not context.engine_adapter.table_exists(snapshot.table_name())
+    assert context.engine_adapter.table_exists(snapshot.table_name(is_deployable=False))
+
+    context.plan("prod", skip_tests=True, no_prompts=True, auto_apply=True)
+
+    assert context.engine_adapter.table_exists(snapshot.table_name())
+    assert context.engine_adapter.table_exists(snapshot.table_name(is_deployable=False))
+
+
 @time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_plan_set_choice_is_reflected_in_missing_intervals(init_and_plan_context: t.Callable):
     context, plan = init_and_plan_context("examples/sushi")

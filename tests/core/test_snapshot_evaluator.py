@@ -765,6 +765,54 @@ def test_create_only_dev_table_exists(mocker: MockerFixture, adapter_mock, make_
     )
 
 
+def test_create_new_forward_only_model(mocker: MockerFixture, adapter_mock, make_snapshot):
+    model = load_sql_based_model(
+        parse(  # type: ignore
+            """
+            MODEL (
+                name test_schema.test_model,
+                kind INCREMENTAL_BY_TIME_RANGE (
+                    time_column ds,
+                    forward_only true,
+                )
+            );
+
+            SELECT a::int, '2024-01-01' as ds FROM tbl;
+            """
+        ),
+    )
+
+    snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    adapter_mock.get_data_objects.return_value = []
+    adapter_mock.table_exists.return_value = False
+    evaluator = SnapshotEvaluator(adapter_mock)
+
+    evaluator.create([snapshot], {}, deployability_index=DeployabilityIndex.none_deployable())
+    adapter_mock.create_schema.assert_called_once_with(to_schema("sqlmesh__test_schema"))
+    # Only non-deployable table should be created
+    adapter_mock.create_table.assert_called_once_with(
+        f"sqlmesh__test_schema.test_schema__test_model__{snapshot.temp_version_get_or_generate()}__temp",
+        columns_to_types={"a": exp.DataType.build("int"), "ds": exp.DataType.build("varchar")},
+        table_format=None,
+        storage_format=None,
+        partitioned_by=model.partitioned_by,
+        partition_interval_unit=model.partition_interval_unit,
+        clustered_by=[],
+        table_properties={},
+        table_description=None,
+        column_descriptions=None,
+    )
+    adapter_mock.get_data_objects.assert_called_once_with(
+        schema_("sqlmesh__test_schema"),
+        {
+            f"test_schema__test_model__{snapshot.version}",
+            f"test_schema__test_model__{snapshot.temp_version_get_or_generate()}__temp",
+        },
+    )
+
+
 @pytest.mark.parametrize(
     "deployability_index,  snapshot_category, deployability_flags",
     [
@@ -1122,6 +1170,7 @@ def test_migrate(mocker: MockerFixture, make_snapshot):
             }
 
     adapter.columns = columns  # type: ignore
+    adapter.table_exists = lambda _: True  # type: ignore
 
     evaluator = SnapshotEvaluator(adapter)
 
@@ -1144,6 +1193,42 @@ def test_migrate(mocker: MockerFixture, make_snapshot):
             call(
                 'ALTER TABLE "sqlmesh__test_schema"."test_schema__test_model__1" ADD COLUMN "a" INT'
             ),
+        ]
+    )
+
+
+def test_migrate_missing_table(mocker: MockerFixture, make_snapshot):
+    connection_mock = mocker.NonCallableMock()
+    cursor_mock = mocker.Mock()
+    connection_mock.cursor.return_value = cursor_mock
+    adapter = EngineAdapter(lambda: connection_mock, "")
+
+    adapter.table_exists = lambda _: False  # type: ignore
+
+    evaluator = SnapshotEvaluator(adapter)
+
+    model = SqlModel(
+        name="test_schema.test_model",
+        kind=IncrementalByTimeRangeKind(
+            time_column="a", on_destructive_change=OnDestructiveChange.ALLOW
+        ),
+        storage_format="parquet",
+        query=parse_one("SELECT c, a FROM tbl WHERE ds BETWEEN @start_ds and @end_ds"),
+        pre_statements=[parse_one("CREATE TABLE pre (a INT)")],
+        post_statements=[parse_one("DROP TABLE pre")],
+    )
+    snapshot = make_snapshot(model, version="1")
+    snapshot.change_category = SnapshotChangeCategory.FORWARD_ONLY
+
+    evaluator.migrate([snapshot], {})
+
+    cursor_mock.execute.assert_has_calls(
+        [
+            call('CREATE TABLE "pre" ("a" INT)'),
+            call(
+                'CREATE TABLE IF NOT EXISTS "sqlmesh__test_schema"."test_schema__test_model__1" AS SELECT "c" AS "c", "a" AS "a" FROM "tbl" AS "tbl" WHERE "ds" BETWEEN \'1970-01-01\' AND \'1970-01-01\' AND FALSE LIMIT 0'
+            ),
+            call('DROP TABLE "pre"'),
         ]
     )
 
@@ -1386,6 +1471,14 @@ def test_create_clone_in_dev(mocker: MockerFixture, adapter_mock, make_snapshot)
     snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
     snapshot.previous_versions = snapshot.all_versions
 
+    adapter_mock.get_data_objects.return_value = [
+        DataObject(
+            name=f"test_schema__test_model__{snapshot.version}",
+            schema="sqlmesh__test_schema",
+            type=DataObjectType.TABLE,
+        ),
+    ]
+
     evaluator.create([snapshot], {})
 
     adapter_mock.create_table.assert_called_once_with(
@@ -1419,6 +1512,50 @@ def test_create_clone_in_dev(mocker: MockerFixture, adapter_mock, make_snapshot)
     )
 
 
+def test_create_clone_in_dev_missing_table(mocker: MockerFixture, adapter_mock, make_snapshot):
+    adapter_mock.SUPPORTS_CLONING = True
+    adapter_mock.get_alter_expressions.return_value = []
+    evaluator = SnapshotEvaluator(adapter_mock)
+
+    model = load_sql_based_model(
+        parse(  # type: ignore
+            """
+            MODEL (
+                name test_schema.test_model,
+                kind INCREMENTAL_BY_TIME_RANGE (
+                    time_column ds,
+                    forward_only true,
+                )
+            );
+
+            SELECT 1::INT as a, ds::DATE FROM a;
+            """
+        ),
+    )
+
+    snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    snapshot.previous_versions = snapshot.all_versions
+
+    evaluator.create([snapshot], {}, deployability_index=DeployabilityIndex.none_deployable())
+
+    adapter_mock.create_table.assert_called_once_with(
+        f"sqlmesh__test_schema.test_schema__test_model__{snapshot.temp_version_get_or_generate()}__temp",
+        columns_to_types={"a": exp.DataType.build("int"), "ds": exp.DataType.build("date")},
+        table_format=None,
+        storage_format=None,
+        partitioned_by=[exp.to_column("ds", quoted=True)],
+        partition_interval_unit=IntervalUnit.DAY,
+        clustered_by=[],
+        table_properties={},
+        table_description=None,
+        column_descriptions=None,
+    )
+
+    adapter_mock.clone_table.assert_not_called()
+    adapter_mock.alter_table.assert_not_called()
+
+
 def test_drop_clone_in_dev_when_migration_fails(mocker: MockerFixture, adapter_mock, make_snapshot):
     adapter_mock.SUPPORTS_CLONING = True
     adapter_mock.get_alter_expressions.return_value = []
@@ -1444,6 +1581,14 @@ def test_drop_clone_in_dev_when_migration_fails(mocker: MockerFixture, adapter_m
     snapshot = make_snapshot(model)
     snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
     snapshot.previous_versions = snapshot.all_versions
+
+    adapter_mock.get_data_objects.return_value = [
+        DataObject(
+            name=f"test_schema__test_model__{snapshot.version}",
+            schema="sqlmesh__test_schema",
+            type=DataObjectType.TABLE,
+        ),
+    ]
 
     evaluator.create([snapshot], {})
 
@@ -1493,6 +1638,14 @@ def test_create_clone_in_dev_self_referencing(mocker: MockerFixture, adapter_moc
     snapshot = make_snapshot(model)
     snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
     snapshot.previous_versions = snapshot.all_versions
+
+    adapter_mock.get_data_objects.return_value = [
+        DataObject(
+            name=f"test_schema__test_model__{snapshot.version}",
+            schema="sqlmesh__test_schema",
+            type=DataObjectType.TABLE,
+        ),
+    ]
 
     evaluator.create([snapshot], {})
 
