@@ -1303,7 +1303,7 @@ class SqlModel(_Model):
                 continue
             if not alias:
                 raise_config_error(
-                    f"Outer projection '{expression}' must have inferrable names or explicit aliases.",
+                    f"Outer projection '{expression.sql(dialect=self.dialect)}' must have inferrable names or explicit aliases.",
                     self._path,
                 )
             name_counts[alias] = name_counts.get(alias, 0) + 1
