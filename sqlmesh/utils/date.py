@@ -23,8 +23,6 @@ DatetimeRange = t.Tuple[datetime, datetime]
 DatetimeRanges = t.List[DatetimeRange]
 DATE_INT_FMT = "%Y%m%d"
 
-if t.TYPE_CHECKING:
-    from sqlglot.dialects.dialect import DialectType
 
 warnings.filterwarnings(
     "ignore",
@@ -221,7 +219,6 @@ def date_dict(
     execution_time: TimeLike,
     start: t.Optional[TimeLike],
     end: t.Optional[TimeLike],
-    dialect: t.Optional[DialectType] = "",
 ) -> t.Dict[str, TimeLike]:
     """Creates a kwarg dictionary of datetime variables for use in SQL Contexts.
 
@@ -251,7 +248,7 @@ def date_dict(
     for prefix, time_like in prefixes:
         dt = to_datetime(time_like)
         millis = to_timestamp(time_like)
-        kwargs[f"{prefix}_dt"] = end if dialect == "tsql" and end and prefix == "end" else dt
+        kwargs[f"{prefix}_dt"] = dt
         kwargs[f"{prefix}_date"] = to_date(dt)
         kwargs[f"{prefix}_ds"] = to_ds(time_like)
         kwargs[f"{prefix}_ts"] = to_ts(dt)
@@ -395,15 +392,6 @@ def to_time_column(
         return exp.cast(time_column, to=time_column_type)
     if time_column_type.is_type(exp.DataType.Type.DATE, exp.DataType.Type.DATE32):
         return exp.cast(exp.Literal.string(to_ds(time_column)), to="date")
-    # To handle up to nanosecond precision for T-SQL, since datetime objects have microsecond precision
-    if (
-        dialect == "tsql"
-        and isinstance(time_column, datetime)
-        and time_column_type.is_type(
-            *(TEMPORAL_TZ_TYPES | {exp.DataType.Type.DATETIME2, exp.DataType.Type.TIME})
-        )
-    ):
-        return exp.cast(exp.Literal.string(time_column.isoformat(sep=" ")), to=time_column_type)
     if time_column_type.is_type(*TEMPORAL_TZ_TYPES):
         return exp.cast(exp.Literal.string(to_tstz(time_column)), to=time_column_type)
     if time_column_type.is_type(*exp.DataType.TEMPORAL_TYPES):

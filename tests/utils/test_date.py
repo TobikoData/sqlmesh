@@ -192,7 +192,7 @@ def test_to_tstz():
             exp.DataType.build("DATETIME2", dialect="tsql"),
             "tsql",
             None,
-            "CAST('2020-01-01 00:00:00.123456700+00:00' AS DATETIME2)",
+            "CAST('2020-01-01 00:00:00.123456700' AS DATETIME2)",
         ),
     ],
 )
@@ -274,7 +274,6 @@ def test_tsql_date_dict(start, end, expected_start_dt, expected_end_dt):
     resp = date_dict(
         "2020-01-02 01:00:00",
         *make_inclusive(start, end),
-        dialect="tsql",
     )
     assert resp["start_dt"] == expected_start_dt
     assert resp["end_dt"] == expected_end_dt

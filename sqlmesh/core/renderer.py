@@ -130,7 +130,6 @@ class BaseExpressionRenderer:
                 to_datetime(execution_time or c.EPOCH),
                 start_time,
                 end_time,
-                dialect=self._dialect,
             ),
             **kwargs,
         }

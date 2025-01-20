@@ -167,7 +167,7 @@ def test_table_exists(make_mocked_engine_adapter: t.Callable):
         (
             "SELECT ds::datetimeoffset(4)",
             pd.Timestamp("2022-01-01 00:00:00.1234567"),
-            "CAST('2022-01-01 00:00:00.123456700' AS DATETIMEOFFSET(4))",
+            "CAST('2022-01-01 00:00:00.123456700+00:00' AS DATETIMEOFFSET(4))",
         ),
         (
             "SELECT ds::time",
@@ -178,12 +178,12 @@ def test_table_exists(make_mocked_engine_adapter: t.Callable):
         (
             "SELECT ds::time(7)",
             pd.Timestamp("2022-01-01 00:00:00.1234567+00:00"),
-            "CAST('2022-01-01 00:00:00.123456700+00:00' AS TIME(7))",
+            "CAST('2022-01-01 00:00:00.123456700' AS TIME(7))",
         ),
         (
             "SELECT ds::datetimeoffset(6)",
             pd.Timestamp("2022-01-01 00:00:00.1234567+02:00"),
-            "CAST('2022-01-01 00:00:00.123456700+02:00' AS DATETIMEOFFSET(6))",
+            "CAST('2021-12-31 22:00:00.123456700+00:00' AS DATETIMEOFFSET(6))",
         ),
         # For date types without nano-second precision, truncate as usual
         (
