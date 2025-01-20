@@ -1172,7 +1172,8 @@ def test_audits():
             name db.seed,
             audits (
                 audit_a,
-                audit_b(key='value')
+                audit_b(key='value'),
+                audit_c(key=@start_ds)
             ),
             tags (foo)
         );
@@ -1184,6 +1185,7 @@ def test_audits():
     assert model.audits == [
         ("audit_a", {}),
         ("audit_b", {"key": exp.Literal.string("value")}),
+        ("audit_c", {"key": d.MacroVar(this="start_ds")}),
     ]
     assert model.tags == ["foo"]
 

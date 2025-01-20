@@ -1765,11 +1765,13 @@ def load_sql_based_model(
 
     unrendered_merge_filter = None
     unrendered_signals = None
+    unrendered_audits = None
 
     for prop in meta.expressions:
         if prop.name.lower() == "signals":
             unrendered_signals = prop.args.get("value")
-
+        if prop.name.lower() == "audits":
+            unrendered_audits = prop.args.get("value")
         if (
             prop.name.lower() == "kind"
             and (value := prop.args.get("value"))
@@ -1816,9 +1818,12 @@ def load_sql_based_model(
         **kwargs,
     }
 
-    # Signals and merge_filter must remain unrendered, so that they can be rendered later at evaluation runtime.
+    # signals, audits and merge_filter must remain unrendered, so that they can be rendered later at evaluation runtime
     if unrendered_signals:
         meta_fields["signals"] = unrendered_signals
+
+    if unrendered_audits:
+        meta_fields["audits"] = unrendered_audits
 
     if unrendered_merge_filter:
         for idx, kind_prop in enumerate(meta_fields["kind"].expressions):
