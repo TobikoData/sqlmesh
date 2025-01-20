@@ -1334,6 +1334,9 @@ class GenericContext(BaseContext, t.Generic[C]):
                         ),
                     )
 
+        # Refresh snapshot intervals to ensure that they are up to date with values reflected in the max_interval_end_per_model.
+        self.state_sync.refresh_snapshot_intervals(context_diff.snapshots.values())
+
         return self.PLAN_BUILDER_TYPE(
             context_diff=context_diff,
             start=start,
