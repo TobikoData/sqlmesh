@@ -11,13 +11,12 @@ from sqlmesh.core.engine_adapter.shared import (
     set_catalog,
     CatalogSupport,
     CommentCreationView,
-    DataObjectType,
     CommentCreationTable,
 )
 
 
 if t.TYPE_CHECKING:
-    from sqlmesh.core._typing import SchemaName, TableName
+    from sqlmesh.core._typing import TableName
 
 logger = logging.getLogger(__name__)
 
@@ -31,32 +30,6 @@ class RisingwaveEngineAdapter(PostgresEngineAdapter):
     COMMENT_CREATION_VIEW = CommentCreationView.UNSUPPORTED
     SUPPORTS_MATERIALIZED_VIEWS = True
     SUPPORTS_TRANSACTIONS = False
-
-    def drop_schema(
-        self,
-        schema_name: SchemaName,
-        ignore_if_not_exists: bool = True,
-        cascade: bool = False,
-        **drop_args: t.Dict[str, exp.Expression],
-    ) -> None:
-        """
-        Risingwave doesn't support CASCADE clause and drops schemas unconditionally so far.
-        If cascade is supported later, this logic could be discarded.
-        """
-        if cascade:
-            objects = self._get_data_objects(schema_name)
-            for obj in objects:
-                if obj.type == DataObjectType.VIEW:
-                    self.drop_view(
-                        ".".join([obj.schema_name, obj.name]),
-                        ignore_if_not_exists=ignore_if_not_exists,
-                    )
-                else:
-                    self.drop_table(
-                        ".".join([obj.schema_name, obj.name]),
-                        exists=ignore_if_not_exists,
-                    )
-        super().drop_schema(schema_name, ignore_if_not_exists=ignore_if_not_exists, cascade=False)
 
     def _truncate_table(self, table_name: TableName) -> None:
         return self.execute(exp.Delete(this=exp.to_table(table_name)))
