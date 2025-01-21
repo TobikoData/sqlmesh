@@ -176,13 +176,8 @@ Now we're ready to connect your data warehouse to Tobiko Cloud:
     ```yaml linenums="1"
     gateways:
       tobiko_cloud: # this will use the config in tcloud.yaml for state_connection
-        connection:
-          type: bigquery
-          method: service-account-json
-          concurrent_tasks: 5
-          register_comments: true
-          keyfile_json: {{ env_var('GOOGLE_SQLMESH_CREDENTIALS') }} # uses the value in the GOOGLE_SQLMESH_CREDENTIALS environment variable
-          project: sqlmesh-public-demo
+        scheduler: # TODO: add the connection in the Tobiko Cloud Connections Page with the credentials for your data warehouse
+          type: cloud
 
     default_gateway: tobiko_cloud
 
