@@ -1,81 +1,128 @@
-import React from 'react'
-import { Disclosure } from '@headlessui/react'
-import { MinusCircleIcon, PlusCircleIcon } from '@heroicons/react/24/solid'
 import Markdown from 'react-markdown'
 import {
+  isArrayEmpty,
   isArrayNotEmpty,
   isFalse,
+  isFalseOrNil,
   isNotNil,
   isString,
   isTrue,
   toDateFormat,
-  truncate,
 } from '@utils/index'
-import clsx from 'clsx'
 import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
 import ModelColumns from '@components/graph/ModelColumns'
+import {
+  TBKMetadataSection,
+  TBKMetadata,
+  TBKMetadataItem,
+  TBKDetails,
+  TBKModelName,
+  TBKScroll,
+  TBKBadge,
+  TBKDatetime,
+  TBKResizeObserver,
+} from '@utils/additional-components'
 
 const Documentation = function Documentation({
   model,
-  withModel = true,
-  withDescription = true,
-  withColumns = true,
 }: {
   model: ModelSQLMeshModel
-  withModel?: boolean
-  withDescription?: boolean
-  withColumns?: boolean
 }): JSX.Element {
+  const topLevelDetails = new Set(
+    ['path', 'displayName', 'owner', 'cron', 'cron_prev', 'cron_next'].filter(
+      k => (model as any)[k] ?? (model.details as any)[k],
+    ),
+  )
+
   return (
-    <Container className="pt-2">
-      {withModel && (
-        <Section
-          headline="Model"
-          defaultOpen={true}
+    <TBKScroll className="w-full py-3">
+      <div className="px-3 flex flex-col gap-2 ">
+        <TBKDetails
+          summary="Model Details"
+          open
         >
-          <ul className="w-full">
-            {isNotNil(model.path) && (
-              <DetailsItem
-                name="Path"
-                value={model.path}
-              />
-            )}
-            <DetailsItem
-              name="Name"
-              title={model.displayName}
-              value={truncate(model.displayName, 50, 25)}
-            />
-            <DetailsItem
-              name="Dialect"
-              value={model.dialect}
-            />
-            <DetailsItem
-              name="Type"
-              value={model.type}
-            />
-            {Object.entries(model.details ?? {}).map(([key, value]) => (
-              <DetailsItem
-                key={key}
-                name={key.replaceAll('_', ' ')}
-                value={value}
-                isCapitalize={true}
-              />
-            ))}
-          </ul>
-        </Section>
-      )}
-      {withDescription && (
-        <Section
-          headline="Description"
-          defaultOpen={true}
-        >
-          <Markdown>{model.description ?? 'No description'}</Markdown>
-        </Section>
-      )}
-      {withColumns && (
-        <Section
-          headline="Columns"
-          defaultOpen={true}
+          <TBKResizeObserver update-selector="tbk-model-name">
+            <TBKMetadata>
+              <TBKMetadataSection limit={topLevelDetails.size}>
+                {isNotNil(model.path) && (
+                  <TBKMetadataItem
+                    label="Path"
+                    value={model.path}
+                  ></TBKMetadataItem>
+                )}
+                <TBKMetadataItem label="Name">
+                  <TBKModelName
+                    slot="value"
+                    text={model.displayName}
+                  ></TBKModelName>
+                </TBKMetadataItem>
+                {isNotNil(model.details.owner) && (
+                  <TBKMetadataItem
+                    label="Owner"
+                    value={model.details.owner}
+                  ></TBKMetadataItem>
+                )}
+                {isNotNil(model.details.cron) && (
+                  <TBKMetadataItem label="Cron">
+                    <TBKBadge
+                      slot="value"
+                      size="s"
+                      variant="info"
+                    >
+                      {model.details.cron}
+                    </TBKBadge>
+                  </TBKMetadataItem>
+                )}
+                {isNotNil(model.details.cron_prev) && (
+                  <TBKMetadataItem label="Prev Cron">
+                    <TBKDatetime
+                      slot="value"
+                      date={model.details.cron_prev}
+                    ></TBKDatetime>
+                  </TBKMetadataItem>
+                )}
+                {isNotNil(model.details.cron_next) && (
+                  <TBKMetadataItem label="Next Cron">
+                    <TBKDatetime
+                      slot="value"
+                      date={model.details.cron_next}
+                    ></TBKDatetime>
+                  </TBKMetadataItem>
+                )}
+                {Object.entries(model.details ?? {})
+                  .filter(([key, _]) => isFalse(topLevelDetails.has(key)))
+                  .map(([key, value]) => (
+                    <TBKMetadataItem
+                      className="capitalize"
+                      key={key}
+                      label={key.replaceAll('_', ' ')}
+                      value={getValue(value)}
+                    >
+                      {isArrayNotEmpty(value) ? (
+                        <TBKMetadataSection limit={5}>
+                          {value.map((v, idx) => (
+                            <TBKMetadataItem
+                              key={idx}
+                              className="capitalize"
+                              label={v.name.replaceAll('_', ' ')}
+                              value={`Unique: ${
+                                isFalseOrNil(v.unique) ? 'No' : 'Yes'
+                              }`}
+                            ></TBKMetadataItem>
+                          ))}
+                        </TBKMetadataSection>
+                      ) : (
+                        <></>
+                      )}
+                    </TBKMetadataItem>
+                  ))}
+              </TBKMetadataSection>
+            </TBKMetadata>
+          </TBKResizeObserver>
+        </TBKDetails>
+        <TBKDetails
+          summary="Columns"
+          open
         >
           <ModelColumns
             nodeId={model.fqn}
@@ -86,168 +133,21 @@ const Documentation = function Documentation({
             withDescription={true}
             limit={10}
           />
-        </Section>
-      )}
-    </Container>
-  )
-}
-
-function Headline({ headline }: { headline: string }): JSX.Element {
-  return (
-    <div
-      className="text-md font-bold whitespace-nowrap w-full"
-      id={headline}
-    >
-      <h3 className="py-2">{headline}</h3>
-    </div>
-  )
-}
-
-function NotFound(): JSX.Element {
-  return (
-    <Container className="font-bold whitespace-nowrap">
-      <div className="flex items-center justify-center w-full h-full">
-        Documentation Not Found
+        </TBKDetails>
+        <TBKDetails summary="Description">
+          <Markdown>{model.description ?? 'No description'}</Markdown>
+        </TBKDetails>
       </div>
-    </Container>
+    </TBKScroll>
   )
 }
-
-function Container({
-  children,
-  className,
-}: {
-  className?: string
-  children: React.ReactNode
-}): JSX.Element {
-  return (
-    <div className={clsx('w-full h-full rounded-xl', className)}>
-      <div className="w-full h-full overflow-auto scrollbar scrollbar--vertical scrollbar--horizontal">
-        {children}
-      </div>
-    </div>
-  )
-}
-
-function Section({
-  children,
-  className,
-  headline,
-  defaultOpen = false,
-}: {
-  headline: string
-  children: React.ReactNode
-  className?: string
-  defaultOpen?: boolean
-}): JSX.Element {
-  return (
-    <div className="px-1 text-neutral-500 dark:text-neutral-400">
-      <Disclosure defaultOpen={defaultOpen}>
-        {({ open }) => (
-          <>
-            <Disclosure.Button
-              className={clsx(
-                'flex items-center justify-between rounded-lg text-left w-full hover:bg-neutral-5 px-3 mb-1 overflow-hidden',
-                className,
-              )}
-            >
-              <Headline headline={headline} />
-              <div>
-                {open ? (
-                  <MinusCircleIcon className="w-4 text-neutral-50" />
-                ) : (
-                  <PlusCircleIcon className="w-4 text-neutral-50" />
-                )}
-              </div>
-            </Disclosure.Button>
-            <Disclosure.Panel className="pb-2 px-4 text-xs overflow-hidden">
-              {children}
-            </Disclosure.Panel>
-          </>
-        )}
-      </Disclosure>
-    </div>
-  )
-}
-
-function DetailsItem<TValue = Record<string, Primitive>>({
-  className,
-  name,
-  value,
-  isHighlighted = false,
-  isCapitalize = false,
-  children,
-  title,
-}: {
-  name: string
-  title?: string
-  value: Primitive | TValue[]
-  className?: string
-  isHighlighted?: boolean
-  isCapitalize?: boolean
-  children?: React.ReactNode
-}): JSX.Element {
-  return (
-    <li
-      className={clsx(
-        'w-full border-b last:border-b-0 border-neutral-10 py-1 mb-1 text-neutral-500 dark:text-neutral-400',
-        className,
-      )}
-    >
-      {isArrayNotEmpty<TValue>(value) ? (
-        <>
-          <strong
-            title={title}
-            className="mr-2 text-xs capitalize"
-          >
-            {name}
-          </strong>
-          {value.map((item, idx) => (
-            <ul
-              key={idx}
-              className="w-full flex flex-col whitespace-nowrap p-1 m-1 rounded-md overflow-hidden"
-            >
-              {Object.entries<Primitive>(item as Record<string, Primitive>).map(
-                ([key, val]) => (
-                  <li
-                    key={key}
-                    className="flex items-center justify-between text-xs border-b border-neutral-10 last:border-b-0 py-1"
-                  >
-                    <strong className="mr-2">{key}:</strong>
-                    <p className="text-xs">{getValue(val)}</p>
-                  </li>
-                ),
-              )}
-            </ul>
-          ))}
-        </>
-      ) : (
-        <div className="flex justify-between text-xs whitespace-nowrap">
-          <strong
-            className={clsx(
-              'mr-2',
-              isCapitalize && 'capitalize',
-              isHighlighted && 'text-brand-500',
-            )}
-          >
-            {name}
-          </strong>
-          <p className="text-xs rounded text-neutral-500 dark:text-neutral-400">
-            {getValue(value)}
-          </p>
-        </div>
-      )}
-      <p className="text-xs ">{children}</p>
-    </li>
-  )
-}
-
-Documentation.NotFound = NotFound
-Documentation.Container = Container
 
 export default Documentation
 
-function getValue(value: Primitive): string {
+function getValue(value: Primitive): Optional<string> {
+  if (isArrayNotEmpty(value)) return
+  if (isArrayEmpty(value)) return 'None'
+
   const maybeDate = new Date(value as string)
   const isDate = isString(value) && !isNaN(maybeDate.getTime())
   const isBoolean = typeof value === 'boolean'

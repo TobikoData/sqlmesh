@@ -10,6 +10,7 @@ import pandas as pd
 import pytest
 from pytest_mock.plugin import MockerFixture
 from sqlglot import exp, parse_one
+from sqlglot.errors import ParseError
 from sqlglot.schema import MappingSchema
 from sqlmesh.cli.example_project import init_example_project
 
@@ -291,7 +292,7 @@ def test_model_qualification():
         model.render_query(needs_optimization=True)
         assert (
             mock_logger.call_args[0][0]
-            == "%s for model '%s', the column may not exist or is ambiguous"
+            == """Column '"a"' could not be resolved for model '"db"."table"', the column may not exist or is ambiguous"""
         )
 
 
@@ -986,6 +987,40 @@ def test_seed_pre_statements_only():
     assert not model.post_statements
 
 
+def test_seed_on_virtual_update_statements():
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.seed,
+            kind SEED (
+              path '../seeds/waiter_names.csv',
+              batch_size 100,
+            )
+        );
+
+        JINJA_STATEMENT_BEGIN;
+        CREATE TABLE x{{ 1 + 1 }};
+        JINJA_END;
+
+        ON_VIRTUAL_UPDATE_BEGIN;
+        JINJA_STATEMENT_BEGIN;
+        GRANT SELECT ON VIEW {{ this_model }} TO ROLE dev_role;
+        JINJA_END;
+        DROP TABLE x2;
+        ON_VIRTUAL_UPDATE_END;
+
+    """
+    )
+
+    model = load_sql_based_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
+
+    assert model.pre_statements == [d.jinja_statement("CREATE TABLE x{{ 1 + 1 }};")]
+    assert model.on_virtual_update == [
+        d.jinja_statement("GRANT SELECT ON VIEW {{ this_model }} TO ROLE dev_role;"),
+        *d.parse("DROP TABLE x2;"),
+    ]
+
+
 def test_seed_model_custom_types(tmp_path):
     model_csv_path = (tmp_path / "model.csv").absolute()
 
@@ -1137,7 +1172,8 @@ def test_audits():
             name db.seed,
             audits (
                 audit_a,
-                audit_b(key='value')
+                audit_b(key='value'),
+                audit_c(key=@start_ds)
             ),
             tags (foo)
         );
@@ -1149,6 +1185,7 @@ def test_audits():
     assert model.audits == [
         ("audit_a", {}),
         ("audit_b", {"key": exp.Literal.string("value")}),
+        ("audit_c", {"key": d.MacroVar(this="start_ds")}),
     ]
     assert model.tags == ["foo"]
 
@@ -1886,6 +1923,30 @@ def test_python_model_depends_on() -> None:
     # We are not expecting the context.resolve_table() calls to be reflected in the
     # model's depends_on since we explicitly specified the depends_on argument.
     assert m.depends_on == {'"foo"."bar"'}
+
+
+def test_python_model_variable_dependencies() -> None:
+    @model(
+        name="bla.test_model_var_dep",
+        kind="full",
+        columns={'"col"': "int"},
+        depends_on={"@schema_name.table_name"},
+    )
+    def my_model(context, **kwargs):
+        # Even though the argument is not statically resolvable, no error
+        # is raised, because the `depends_on` property is present
+        schema_name = context.var("schema_name")
+        table = context.resolve_table(f"{schema_name}.table_name")
+
+        return context.fetchdf(exp.select("*").from_(table))
+
+    m = model.get_registry()["bla.test_model_var_dep"].model(
+        module_path=Path("."),
+        path=Path("."),
+        variables={"schema_name": "foo"},
+    )
+
+    assert m.depends_on == {'"foo"."table_name"'}
 
 
 def test_python_model_with_session_properties():
@@ -2908,17 +2969,48 @@ def test_custom_interval_unit():
     )
 
     with pytest.raises(
-        ConfigError, match=r"Interval unit of '.*' is larger than cron period of '@daily'"
+        ConfigError, match=r"Cron '@daily' cannot be more frequent than interval unit 'month'."
     ):
         load_sql_based_model(
             d.parse("MODEL (name db.table, interval_unit month); SELECT a FROM tbl;")
         )
 
     with pytest.raises(
-        ConfigError, match=r"Interval unit of '.*' is larger than cron period of '@hourly'"
+        ConfigError,
+        match=r"Cron '@hourly' cannot be more frequent than interval unit 'day'. If this is intentional, set allow_partials to True.",
     ):
         load_sql_based_model(
             d.parse("MODEL (name db.table, interval_unit Day, cron '@hourly'); SELECT a FROM tbl;")
+        )
+
+
+def test_interval_unit_larger_than_cron_period():
+    # The interval unit can be larger than the cron period if allow_partials is True
+    model = load_sql_based_model(
+        d.parse(
+            "MODEL (name db.table, interval_unit day, cron '@hourly', allow_partials TRUE); SELECT a FROM tbl;"
+        )
+    )
+    assert model.interval_unit == IntervalUnit.DAY
+    assert model.cron == "@hourly"
+    assert model.allow_partials
+
+    with pytest.raises(
+        ConfigError,
+        match=r"Cron '@hourly' cannot be more frequent than interval unit 'day'. If this is intentional, set allow_partials to True.",
+    ):
+        load_sql_based_model(
+            d.parse("MODEL (name db.table, interval_unit day, cron '@hourly'); SELECT a FROM tbl;")
+        )
+
+    with pytest.raises(
+        ConfigError,
+        match=r"Cron '@hourly' cannot be more frequent than interval unit 'day'. If this is intentional, set allow_partials to True.",
+    ):
+        load_sql_based_model(
+            d.parse(
+                "MODEL (name db.table, interval_unit day, cron '@hourly', allow_partials FALSE); SELECT a FROM tbl;"
+            )
         )
 
 
@@ -5245,6 +5337,27 @@ def test_python_model_dialect():
     assert m.time_column.column.sql() == '"Y"'
     assert m.time_column.format == "%Y-%m-%d"
 
+    # column type parseable by default dialect: no error
+    model._dialect = "clickhouse"
+
+    @model("good", columns={'"COL"': "DateTime64(9)"})
+    def a_model(context):
+        pass
+
+    # column type not parseable by default dialect and no explicit dialect: error
+    model._dialect = "snowflake"
+
+    with pytest.raises(ParseError, match="No expression was parsed from 'DateTime64\\(9\\)'"):
+
+        @model("bad", columns={'"COL"': "DateTime64(9)"})
+        def a_model(context):
+            pass
+
+    # column type not parseable by default dialect and explicit dialect specified: no error
+    @model("good", columns={'"COL"': "DateTime64(9)"}, dialect="clickhouse")
+    def a_model(context):
+        pass
+
     model._dialect = None
 
 
@@ -5990,7 +6103,7 @@ def test_merge_filter():
           MAX(ds)
         FROM db.test
       )
-      AND {MERGE_SOURCE_ALIAS}.ds > '1970-01-01'
+      AND {MERGE_SOURCE_ALIAS}.ds > @start_ds
       AND {MERGE_SOURCE_ALIAS}._operation <> 1
       AND {MERGE_TARGET_ALIAS}.start_date > DATEADD(day, -7, CURRENT_DATE)
     ),
@@ -6005,6 +6118,12 @@ SELECT
   purchase_order_id,
   start_date
 FROM db.upstream"""
+    )
+
+    rendered_merge_filters = model.render_merge_filter(start="2023-01-01", end="2023-01-02")
+    assert (
+        rendered_merge_filters.sql()
+        == "(__MERGE_SOURCE__.ds > (SELECT MAX(ds) FROM db.test) AND __MERGE_SOURCE__.ds > '2023-01-01' AND __MERGE_SOURCE__._operation <> 1 AND __MERGE_TARGET__.start_date > DATEADD(day, -7, CURRENT_DATE))"
     )
 
 
@@ -6022,7 +6141,7 @@ def test_merge_filter_macro():
           name db.incremental_model,
           kind INCREMENTAL_BY_UNIQUE_KEY (
             unique_key id,
-            merge_filter @predicate(update_datetime)
+            merge_filter @predicate(update_datetime) and target.update_datetime > @start_dt
           ),
           clustered_by update_datetime
         );
@@ -6030,13 +6149,19 @@ def test_merge_filter_macro():
     """
     )
 
-    expected_incremental_predicate = f"{MERGE_SOURCE_ALIAS}.update_datetime > DATE_ADD({MERGE_TARGET_ALIAS}.update_datetime, -7, 'DAY')"
+    unrendered_merge_filter = (
+        f"@predicate(update_datetime) AND {MERGE_TARGET_ALIAS}.update_datetime > @start_dt"
+    )
+    expected_merge_filter = f"{MERGE_SOURCE_ALIAS}.UPDATE_DATETIME > DATE_ADD({MERGE_TARGET_ALIAS}.UPDATE_DATETIME, -7, 'DAY') AND {MERGE_TARGET_ALIAS}.UPDATE_DATETIME > CAST('2023-01-01 15:00:00+00:00' AS TIMESTAMPTZ)"
 
     model = load_sql_based_model(expressions, dialect="snowflake")
-    assert model.kind.merge_filter.sql() == expected_incremental_predicate
+    assert model.kind.merge_filter.sql() == unrendered_merge_filter
 
     model = SqlModel.parse_raw(model.json())
-    assert model.kind.merge_filter.sql() == expected_incremental_predicate
+    assert model.kind.merge_filter.sql() == unrendered_merge_filter
+
+    rendered_merge_filters = model.render_merge_filter(start="2023-01-01 15:00:00")
+    assert rendered_merge_filters.sql() == expected_merge_filter
 
 
 @pytest.mark.parametrize(
@@ -6518,23 +6643,28 @@ def test_model_optimize(tmp_path: Path, assert_exp_eq):
         context.plan(auto_apply=True, no_prompts=True)
 
     # Ensure non-SQLModels raise if optimize_query is not None
+    seed_path = tmp_path / "seed.csv"
+    model_kind = SeedKind(path=str(seed_path.absolute()))
+    with open(seed_path, "w", encoding="utf-8") as fd:
+        fd.write(
+            """
+col_a,col_b,col_c
+1,text_a,1.0
+2,text_b,2.0"""
+        )
+    model = create_seed_model("test_db.test_seed_model", model_kind, optimize_query=True)
+    context = Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb")))
+
     with pytest.raises(
         ConfigError,
-        match=r"SQLMesh query optimizer can only be enabled/disabled for SQL models",
+        match=r"SQLMesh query optimizer can only be enabled for SQL models",
     ):
-        seed_path = tmp_path / "seed.csv"
-        model_kind = SeedKind(path=str(seed_path.absolute()))
-        with open(seed_path, "w", encoding="utf-8") as fd:
-            fd.write(
-                """
-    col_a,col_b,col_c
-    1,text_a,1.0
-    2,text_b,2.0"""
-            )
-        model = create_seed_model("test_db.test_seed_model", model_kind, optimize_query=True)
-        context = Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb")))
         context.upsert_model(model)
         context.plan(auto_apply=True, no_prompts=True)
+
+    model = create_seed_model("test_db.test_seed_model", model_kind, optimize_query=False)
+    context.upsert_model(model)
+    context.plan(auto_apply=True, no_prompts=True)
 
 
 def test_column_description_metadata_change():
@@ -6677,3 +6807,320 @@ def test_gateway_specific_render(assert_exp_eq) -> None:
     )
     assert isinstance(context._get_engine_adapter("duckdb"), DuckDBEngineAdapter)
     assert len(context._engine_adapters) == 2
+
+
+def test_model_on_virtual_update(make_snapshot: t.Callable):
+    # Macro to test resolution within virtual statement
+    @macro()
+    def resolve_parent_name(evaluator, name):
+        return evaluator.resolve_table(name.name)
+
+    virtual_update_statements = """
+        CREATE OR REPLACE VIEW test_view FROM demo_db.table;
+        GRANT SELECT ON VIEW @this_model TO ROLE owner_name;
+        JINJA_STATEMENT_BEGIN;
+        GRANT SELECT ON VIEW {{this_model}} TO ROLE admin;
+        JINJA_END;
+        GRANT REFERENCES, SELECT ON FUTURE VIEWS IN DATABASE demo_db TO ROLE owner_name;
+        @resolve_parent_name('parent');
+        GRANT SELECT ON VIEW demo_db.table /* sqlglot.meta replace=false */ TO ROLE admin;
+    """
+
+    expressions = d.parse(
+        f"""
+        MODEL (
+            name demo_db.table,
+            owner owner_name,
+        );
+
+        SELECT id from parent;
+
+        on_virtual_update_begin;
+
+        {virtual_update_statements}
+
+        on_virtual_update_end;
+
+    """
+    )
+
+    parent_expressions = d.parse(
+        """
+        MODEL (
+            name parent,
+        );
+
+        SELECT 1 from id;
+
+        ON_VIRTUAL_UPDATE_BEGIN;
+        JINJA_STATEMENT_BEGIN;
+        GRANT SELECT ON VIEW {{this_model}} TO ROLE admin;
+        JINJA_END;
+        ON_VIRTUAL_UPDATE_END;
+
+    """
+    )
+
+    model = load_sql_based_model(expressions)
+    parent = load_sql_based_model(parent_expressions)
+
+    parent_snapshot = make_snapshot(parent)
+    parent_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    version = parent_snapshot.version
+
+    model_snapshot = make_snapshot(model)
+    model_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    assert model.on_virtual_update == d.parse(virtual_update_statements)
+
+    assert parent.on_virtual_update == d.parse(
+        "JINJA_STATEMENT_BEGIN; GRANT SELECT ON VIEW {{this_model}} TO ROLE admin; JINJA_END;"
+    )
+
+    table_mapping = {model.fqn: "demo_db__dev.table", parent.fqn: "default__dev.parent"}
+    snapshots = {
+        parent_snapshot.name: parent_snapshot,
+        model_snapshot.name: model_snapshot,
+    }
+
+    rendered_on_virtual_update = model.render_on_virtual_update(
+        snapshots=snapshots, table_mapping=table_mapping
+    )
+
+    assert len(rendered_on_virtual_update) == 6
+    assert (
+        rendered_on_virtual_update[0].sql()
+        == 'CREATE OR REPLACE VIEW "test_view" AS SELECT * FROM "demo_db__dev"."table" AS "table" /* demo_db.table */'
+    )
+    assert (
+        rendered_on_virtual_update[1].sql()
+        == 'GRANT SELECT ON VIEW "demo_db__dev"."table" /* demo_db.table */ TO ROLE "owner_name"'
+    )
+    assert (
+        rendered_on_virtual_update[3].sql()
+        == "GRANT REFERENCES, SELECT ON FUTURE VIEWS IN DATABASE demo_db TO ROLE owner_name"
+    )
+    assert rendered_on_virtual_update[4].sql() == f'"sqlmesh__default"."parent__{version}"'
+
+    # When replace=false the table should remain as is
+    assert (
+        rendered_on_virtual_update[5].sql()
+        == 'GRANT SELECT ON VIEW "demo_db"."table" /* sqlglot.meta replace=false */ TO ROLE "admin"'
+    )
+
+    rendered_parent_on_virtual_update = parent.render_on_virtual_update(
+        snapshots=snapshots, table_mapping=table_mapping
+    )
+    assert len(rendered_parent_on_virtual_update) == 1
+    assert (
+        rendered_parent_on_virtual_update[0].sql()
+        == 'GRANT SELECT ON VIEW "default__dev"."parent" /* parent */ TO ROLE "admin"'
+    )
+
+
+def test_python_model_on_virtual_update():
+    macros = """
+    {% macro index_name(v) %}{{ v }}{% endmacro %}
+    """
+
+    jinja_macros = JinjaMacroRegistry()
+    jinja_macros.add_macros(MacroExtractor().extract(macros))
+
+    @model(
+        "db.test_model",
+        kind="full",
+        columns={"id": "string", "name": "string"},
+        on_virtual_update=[
+            "JINJA_STATEMENT_BEGIN;\nCREATE INDEX {{index_name('id_index')}} ON db.test_model(id);\nJINJA_END;",
+            parse_one("GRANT SELECT ON VIEW @this_model TO ROLE dev_role;"),
+            "GRANT REFERENCES, SELECT ON FUTURE VIEWS IN DATABASE db TO ROLE dev_role;",
+        ],
+    )
+    def model_with_virtual_statements(context, **kwargs):
+        return pd.DataFrame(
+            [
+                {
+                    "id": context.var("1"),
+                    "name": context.var("var"),
+                }
+            ]
+        )
+
+    python_model = model.get_registry()["db.test_model"].model(
+        module_path=Path("."), path=Path("."), dialect="duckdb", jinja_macros=jinja_macros
+    )
+
+    assert len(jinja_macros.root_macros) == 1
+    assert len(python_model.jinja_macros.root_macros) == 1
+    assert "index_name" in python_model.jinja_macros.root_macros
+    assert len(python_model.on_virtual_update) == 3
+
+    rendered_statements = python_model._render_statements(
+        python_model.on_virtual_update, table_mapping={'"db"."test_model"': "db.test_model"}
+    )
+
+    assert (
+        rendered_statements[0].sql()
+        == 'CREATE INDEX "id_index" ON "db"."test_model" /* db.test_model */("id" NULLS LAST)'
+    )
+    assert (
+        rendered_statements[1].sql()
+        == 'GRANT SELECT ON VIEW "db"."test_model" /* db.test_model */ TO ROLE "dev_role"'
+    )
+    assert (
+        rendered_statements[2].sql()
+        == "GRANT REFERENCES, SELECT ON FUTURE VIEWS IN DATABASE db TO ROLE dev_role"
+    )
+
+
+def test_compile_time_checks(tmp_path: Path, assert_exp_eq):
+    # Strict SELECT * expansion
+    strict_query = d.parse(
+        """
+    MODEL (
+        name test,
+        validate_query True,
+    );
+
+    SELECT * FROM tbl
+    """
+    )
+
+    with pytest.raises(
+        ConfigError,
+        match=r".*cannot be expanded due to missing schema.*",
+    ):
+        load_sql_based_model(strict_query).render_query()
+
+    # Strict column resolution
+    strict_query = d.parse(
+        """
+    MODEL (
+        name test,
+        validate_query True,
+    );
+
+    SELECT foo
+    """
+    )
+
+    with pytest.raises(
+        ConfigError,
+        match=r"""Column '"foo"' could not be resolved for model.*""",
+    ):
+        load_sql_based_model(strict_query).render_query()
+
+    # Non-strict model with strict defaults raises error, otherwise can still render
+    strict_default = ModelDefaultsConfig(validate_query=True).dict()
+    query = d.parse(
+        """
+    MODEL (
+        name test,
+    );
+
+    SELECT * FROM tbl
+    """
+    )
+
+    with pytest.raises(
+        ConfigError,
+        match=r".*cannot be expanded due to missing schema.*",
+    ):
+        load_sql_based_model(query, defaults=strict_default).render_query()
+
+    assert_exp_eq(load_sql_based_model(query).render_query(), 'SELECT * FROM "tbl" AS "tbl"')
+
+    # Ensure plan works for valid queries & cache is invalidated if strict changes
+    context = Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb")))
+
+    query = d.parse(
+        """
+    MODEL (
+        name db.test,
+        validate_query True,
+    );
+
+    SELECT 1 AS col
+    """
+    )
+
+    context.upsert_model(load_sql_based_model(query, default_catalog=context.default_catalog))
+    context.plan(auto_apply=True, no_prompts=True)
+
+    context.upsert_model("db.test", validate_query=False)
+    plan = context.plan(no_prompts=True, auto_apply=True)
+
+    snapshots = list(plan.snapshots.values())
+    assert len(snapshots) == 1
+
+    snapshot = snapshots[0]
+    assert len(snapshot.previous_versions) == 1
+    assert snapshot.change_category == SnapshotChangeCategory.METADATA
+
+    # Ensure non-SQLModels raise if strict mode is set to True
+    seed_path = tmp_path / "seed.csv"
+    model_kind = SeedKind(path=str(seed_path.absolute()))
+    with open(seed_path, "w", encoding="utf-8") as fd:
+        fd.write(
+            """
+col_a,col_b,col_c
+1,text_a,1.0"""
+        )
+    model = create_seed_model("test_db.test_seed_model", model_kind, validate_query=True)
+    context = Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb")))
+
+    with pytest.raises(
+        ConfigError,
+        match=r"Query validation can only be enabled for SQL models at",
+    ):
+        context.upsert_model(model)
+        context.plan(auto_apply=True, no_prompts=True)
+
+    model = create_seed_model("test_db.test_seed_model", model_kind, validate_query=False)
+    context.upsert_model(model)
+    context.plan(auto_apply=True, no_prompts=True)
+
+    # Ensure strict defaults don't break all non SQL models to which they weren't applicable in the first place
+    seed_strict_defaults = create_seed_model(
+        "test_db.test_seed_model", model_kind, defaults=strict_default
+    )
+    external_strict_defaults = create_external_model(
+        "test_db.test_external_model", columns={"a": "int", "limit": "int"}, defaults=strict_default
+    )
+    context.upsert_model(seed_strict_defaults)
+    context.upsert_model(external_strict_defaults)
+    context.plan(auto_apply=True, no_prompts=True)
+
+
+def test_partition_interval_unit():
+    expressions = d.parse(
+        """
+        MODEL (
+            name test,
+            kind INCREMENTAL_BY_TIME_RANGE(
+                time_column ds,
+            ),
+            cron '0 0 1 * *'
+        );
+        SELECT '2024-01-01' AS ds;
+        """
+    )
+    model = load_sql_based_model(expressions)
+    assert model.partition_interval_unit == IntervalUnit.MONTH
+
+    # Partitioning was explicitly set by the user
+    expressions = d.parse(
+        """
+        MODEL (
+            name test,
+            kind INCREMENTAL_BY_TIME_RANGE(
+                time_column ds,
+            ),
+            cron '0 0 1 * *',
+            partitioned_by (ds)
+        );
+        SELECT '2024-01-01' AS ds;
+        """
+    )
+    model = load_sql_based_model(expressions)
+    assert model.partition_interval_unit is None

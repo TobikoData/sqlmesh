@@ -780,15 +780,18 @@ def test_restate_models(sushi_context_pre_scheduling: Context):
 
 
 @pytest.mark.slow
-@time_machine.travel(now(), tick=False)
-def test_restate_models_with_existing_missing_intervals(sushi_context: Context):
+@time_machine.travel(now(minute_floor=False), tick=False)
+def test_restate_models_with_existing_missing_intervals(init_and_plan_context: t.Callable):
+    sushi_context, plan = init_and_plan_context("examples/sushi")
+    sushi_context.apply(plan)
+
     yesterday_ts = to_timestamp(yesterday_ds())
 
     assert not sushi_context.plan(no_prompts=True).requires_backfill
     waiter_revenue_by_day = sushi_context.snapshots['"memory"."sushi"."waiter_revenue_by_day"']
-    waiter_revenue_by_day.intervals = [
-        (waiter_revenue_by_day.intervals[0][0], yesterday_ts),
-    ]
+    sushi_context.state_sync.remove_intervals(
+        [(waiter_revenue_by_day, (yesterday_ts, waiter_revenue_by_day.intervals[0][1]))]
+    )
     assert sushi_context.plan(no_prompts=True).requires_backfill
 
     plan = sushi_context.plan(restate_models=["sushi.waiter_revenue_by_day"], no_prompts=True)

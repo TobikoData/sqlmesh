@@ -260,12 +260,12 @@ class _Node(PydanticModel):
     @model_validator_v1_args
     def _node_root_validator(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
         interval_unit = values.get("interval_unit_")
-        if interval_unit:
+        if interval_unit and not values.get("allow_partials"):
             cron = values["cron"]
             max_interval_unit = IntervalUnit.from_cron(cron)
             if interval_unit.seconds > max_interval_unit.seconds:
                 raise ConfigError(
-                    f"Interval unit of '{interval_unit}' is larger than cron period of '{cron}'"
+                    f"Cron '{cron}' cannot be more frequent than interval unit '{interval_unit.value}'. If this is intentional, set allow_partials to True."
                 )
         start = values.get("start")
         end = values.get("end")

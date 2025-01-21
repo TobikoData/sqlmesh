@@ -304,6 +304,7 @@ function FormActionsCustomSQL({ tab }: { tab: EditorTab }): JSX.Element {
               topic: 'format',
               payload: {
                 sql: tab.file.content,
+                dialect: tab.dialect,
               },
             })
           }}

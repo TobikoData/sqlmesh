@@ -71,7 +71,9 @@ class model(registry_decorator):
             column_name: (
                 column_type
                 if isinstance(column_type, exp.DataType)
-                else exp.DataType.build(str(column_type))
+                else exp.DataType.build(
+                    str(column_type), dialect=self.kwargs.get("dialect", self._dialect)
+                )
             )
             for column_name, column_type in self.kwargs.pop("columns", {}).items()
         }
@@ -135,7 +137,7 @@ class model(registry_decorator):
             **self.kwargs,
         }
 
-        for key in ("pre_statements", "post_statements"):
+        for key in ("pre_statements", "post_statements", "on_virtual_update"):
             statements = common_kwargs.get(key)
             if statements:
                 common_kwargs[key] = [

@@ -9,6 +9,8 @@ import {
   isDate,
   toDate,
   toDateFormat,
+  isStringEmpty,
+  ensureString,
 } from './index'
 
 describe('isArrayNotEmpty', () => {
@@ -151,5 +153,59 @@ describe('toDateFormat', () => {
     expect(toDateFormat(new Date('2023-02-07 00:00:00'), 'dd/mm/yyyy')).toBe(
       'Tue Feb 07 2023',
     )
+  })
+})
+
+describe('isStringEmpty', () => {
+  it('returns true for an empty string', () => {
+    expect(isStringEmpty('')).toBe(true)
+  })
+
+  it('returns false for a non-empty string', () => {
+    expect(isStringEmpty('hello')).toBe(false)
+  })
+
+  it('returns false for a string with only spaces', () => {
+    expect(isStringEmpty('   ')).toBe(false)
+  })
+
+  it('returns false for null', () => {
+    expect(isStringEmpty(null)).toBe(false)
+  })
+
+  it('returns false for undefined', () => {
+    expect(isStringEmpty(undefined)).toBe(false)
+  })
+
+  it('returns false for non-string values', () => {
+    expect(isStringEmpty(123)).toBe(false)
+    expect(isStringEmpty({})).toBe(false)
+    expect(isStringEmpty([])).toBe(false)
+    expect(isStringEmpty(true)).toBe(false)
+  })
+})
+
+describe('ensureString', () => {
+  it('returns the same string for string input', () => {
+    expect(ensureString('hello')).toBe('hello')
+  })
+
+  it('returns empty string for null', () => {
+    expect(ensureString(null)).toBe('')
+  })
+
+  it('returns empty string for undefined', () => {
+    expect(ensureString(undefined)).toBe('')
+  })
+
+  it('returns empty string for non-string values', () => {
+    expect(ensureString(123)).toBe('')
+    expect(ensureString({})).toBe('')
+    expect(ensureString([])).toBe('')
+    expect(ensureString(true)).toBe('')
+  })
+
+  it('returns empty string for empty string input', () => {
+    expect(ensureString('')).toBe('')
   })
 })

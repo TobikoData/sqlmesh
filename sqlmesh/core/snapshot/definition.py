@@ -712,7 +712,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
                 When previewing, we are not actually restating a model, but removing an interval to trigger
                 a run.
         """
-        end = execution_time or now() if self.depends_on_past else end
+        end = execution_time or now_timestamp() if self.depends_on_past else end
         if not is_preview and self.full_history_restatement_only and self.intervals:
             start = self.intervals[0][0]
         return self.inclusive_exclusive(start, end, strict)
@@ -722,7 +722,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         start: TimeLike,
         end: TimeLike,
         strict: bool = True,
-        allow_partial: bool = False,
+        allow_partial: t.Optional[bool] = None,
     ) -> Interval:
         """Transform the inclusive start and end into a [start, end) pair.
 
@@ -735,6 +735,8 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         Returns:
             A [start, end) pair.
         """
+        if allow_partial is None:
+            allow_partial = self.is_model and self.model.allow_partials
         return inclusive_exclusive(
             start,
             end,
@@ -833,7 +835,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         if not self.evaluatable or (self.is_seed and intervals):
             return []
 
-        allow_partials = not end_bounded and self.is_model and self.model.allow_partials
+        allow_partials = self.is_model and self.model.allow_partials
         start_ts, end_ts = (
             to_timestamp(ts)
             for ts in self.inclusive_exclusive(
@@ -845,20 +847,18 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         )
 
         interval_unit = self.node.interval_unit
-        upper_bound_ts = to_timestamp(execution_time or now())
+        execution_time_ts = to_timestamp(execution_time) if execution_time else now_timestamp()
+        upper_bound_ts = (
+            execution_time_ts
+            if ignore_cron
+            else to_timestamp(self.node.cron_floor(execution_time_ts))
+        )
+        if end_bounded:
+            upper_bound_ts = min(upper_bound_ts, end_ts)
+        if not allow_partials:
+            upper_bound_ts = to_timestamp(interval_unit.cron_floor(upper_bound_ts))
 
-        if allow_partials:
-            end_ts = min(end_ts, upper_bound_ts)
-        else:
-            if not ignore_cron:
-                upper_bound_ts = to_timestamp(self.node.cron_floor(upper_bound_ts))
-            if end_bounded:
-                upper_bound_ts = min(upper_bound_ts, end_ts)
-
-            end_ts = min(
-                end_ts,
-                to_timestamp(interval_unit.cron_floor(upper_bound_ts)),
-            )
+        end_ts = min(end_ts, upper_bound_ts)
 
         lookback = 0
         model_end_ts: t.Optional[int] = None
@@ -939,16 +939,6 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             self.version = self.fingerprint.to_version()
 
         self.change_category = category
-
-    def set_unpaused_ts(self, unpaused_dt: t.Optional[TimeLike]) -> None:
-        """Sets the timestamp for when this snapshot was unpaused.
-
-        Args:
-            unpaused_dt: The datetime object of when this snapshot was unpaused.
-        """
-        self.unpaused_ts = (
-            to_timestamp(self.node.interval_unit.cron_floor(unpaused_dt)) if unpaused_dt else None
-        )
 
     def table_name(self, is_deployable: bool = True) -> str:
         """Full table name pointing to the materialized location of the snapshot.
@@ -1081,6 +1071,8 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
 
     def apply_pending_restatement_intervals(self) -> None:
         """Applies the pending restatement intervals to the snapshot's intervals."""
+        if not self.is_model or self.model.disable_restatement:
+            return
         for pending_restatement_interval in self.pending_restatement_intervals:
             logger.info(
                 "Applying the auto restated interval (%s, %s) to snapshot %s",
@@ -1327,8 +1319,10 @@ class DeployabilityIndex(PydanticModel, frozen=True):
         )
 
     def is_representative(self, snapshot: SnapshotIdLike) -> bool:
-        """Returns true if the output produced by the given snapshot in a development environment can be reused
-        in (deployed to) production, or if this snapshot already represents what is currently in production.
+        """Returns true if the deployable (non-dev) table of the given snapshot should be used for reading, table mapping, and
+        computing missing intervals.
+
+        Note, that deployable snapshots are also representative, but the reverse is not always true.
 
         Unlike `is_deployable`, this variant also captures FORWARD_ONLY and INDIRECT_NON_BREAKING snapshots that
         are not deployable by their nature but are currently promoted in production. Therefore, it's safe to consider
@@ -1660,6 +1654,21 @@ def to_table_mapping(
     }
 
 
+def to_view_mapping(
+    snapshots: t.Iterable[Snapshot],
+    environment_naming_info: EnvironmentNamingInfo,
+    default_catalog: t.Optional[str] = None,
+    dialect: t.Optional[str] = None,
+) -> t.Dict[str, str]:
+    return {
+        snapshot.name: snapshot.display_name(
+            environment_naming_info, default_catalog=default_catalog, dialect=dialect
+        )
+        for snapshot in snapshots
+        if snapshot.is_model
+    }
+
+
 def has_paused_forward_only(
     targets: t.Iterable[SnapshotIdLike],
     snapshots: t.Union[t.List[Snapshot], t.Dict[SnapshotId, Snapshot]],
@@ -1687,7 +1696,7 @@ def missing_intervals(
     """Returns all missing intervals given a collection of snapshots."""
     missing = {}
     cache: t.Dict[str, datetime] = {}
-    end_date = end or now()
+    end_date = end or now_timestamp()
     start_dt = (
         to_datetime(start)
         if start
@@ -1956,6 +1965,8 @@ def apply_auto_restatements(
         if s_id not in snapshots:
             continue
         snapshot = snapshots[s_id]
+        if not snapshot.is_model or snapshot.model.disable_restatement:
+            continue
 
         next_auto_restated_interval = snapshot.get_next_auto_restatement_interval(execution_time)
         auto_restated_intervals = [
@@ -2016,6 +2027,16 @@ def apply_auto_restatements(
     ]
 
 
+def parent_snapshots_by_name(
+    snapshot: Snapshot, snapshots: t.Dict[SnapshotId, Snapshot]
+) -> t.Dict[str, Snapshot]:
+    parent_snapshots_by_name = {
+        snapshots[p_sid].name: snapshots[p_sid] for p_sid in snapshot.parents
+    }
+    parent_snapshots_by_name[snapshot.name] = snapshot
+    return parent_snapshots_by_name
+
+
 def _contiguous_intervals(intervals: Intervals) -> t.List[Intervals]:
     """Given a list of intervals with gaps, returns a list of sequences of contiguous intervals."""
     contiguous_intervals = []
@@ -2066,12 +2087,13 @@ def _check_ready_intervals(
     return checked_intervals
 
 
-def get_next_model_interval_start(snapshots: t.Iterable[Snapshot]) -> datetime:
+def get_next_model_interval_start(snapshots: t.Iterable[Snapshot]) -> t.Optional[datetime]:
     now_dt = now()
-    return min(
-        [
-            snap.node.interval_unit.cron_next(now_dt)
-            for snap in snapshots
-            if snap.is_model and not snap.is_symbolic and not snap.is_seed
-        ]
-    )
+
+    starts = [
+        snap.node.cron_next(now_dt)
+        for snap in snapshots
+        if snap.is_model and not snap.is_symbolic and not snap.is_seed
+    ]
+
+    return min(starts) if starts else None

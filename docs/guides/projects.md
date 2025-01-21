@@ -43,8 +43,10 @@ To create a project from the command line, follow these steps:
 1. Once you have activated your environment, run the following command and SQLMesh will build out your project:
 
     ```bash
-    sqlmesh init
+    sqlmesh init [SQL_DIALECT]
     ```
+
+    In the command above, you can use any [SQL dialect supported by sqlglot](https://sqlglot.com/sqlglot/dialects.html), for example "duckdb".
 
     The following directories and files will be created that you can use to organize your SQLMesh project:
 

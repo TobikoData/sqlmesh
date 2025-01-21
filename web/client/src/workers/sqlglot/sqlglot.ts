@@ -58,7 +58,11 @@ import('https://cdn.jsdelivr.net/pyodide/v0.23.2/full/pyodide.js')
       if (e.data.topic === 'format') {
         scope.postMessage({
           topic: 'format',
-          payload: sqlglot.get('format')?.(e.data.payload.sql) ?? '',
+          payload:
+            sqlglot.get('format')?.(
+              e.data.payload.sql,
+              e.data.payload.dialect,
+            ) ?? '',
         })
       }
 

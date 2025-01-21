@@ -91,9 +91,7 @@ export default function EditorFooter({ tab }: { tab: EditorTab }): JSX.Element {
                     ? 'sqlglot'
                     : d.dialect_name,
                 }))}
-                onChange={dialect => {
-                  updateTabDialect(dialect)
-                }}
+                onChange={updateTabDialect}
                 value={tab.dialect}
               />
             )}

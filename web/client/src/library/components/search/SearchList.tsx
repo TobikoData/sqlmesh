@@ -1,12 +1,19 @@
 import React, { Fragment, useMemo, useRef, useState } from 'react'
 import Input from '@components/input/Input'
-import { isArrayEmpty, isNil, isNotNil, truncate } from '@utils/index'
+import {
+  isArrayEmpty,
+  isFalseOrNil,
+  isNil,
+  isNotNil,
+  truncate,
+} from '@utils/index'
 import { EnumSize, type Size } from '~/types/enum'
 import { EMPTY_STRING, filterListBy, highlightMatch } from './help'
 import { useNavigate } from 'react-router-dom'
 import clsx from 'clsx'
 import { Popover, Transition } from '@headlessui/react'
 import { useClickAway } from '@uidotdev/usehooks'
+import { TBKModelName, TBKResizeObserver } from '@utils/additional-components'
 
 interface PropsSearchListInput {
   value: string
@@ -225,46 +232,48 @@ export default function SearchList<
               setActiveIndex(Number(index))
             }}
           >
-            {isArrayEmpty(found) && showSearchResults ? (
-              <div
-                key="not-found"
-                className={clsx(
-                  size === EnumSize.sm && 'p-1',
-                  size === EnumSize.md && 'p-2',
-                  size === EnumSize.lg && 'p-3',
-                )}
-              >
-                {isLoading ? 'Loading...' : 'No Results Found'}
-              </div>
-            ) : (
-              found.map(([item, index], idx) => (
+            <TBKResizeObserver update-selector="tbk-model-name">
+              {isArrayEmpty(found) && showSearchResults ? (
                 <div
-                  key={item[searchBy]}
-                  role="menuitem"
-                  data-index={idx}
+                  key="not-found"
                   className={clsx(
-                    'cursor-pointer rounded-lg',
-                    activeIndex === idx && 'bg-neutral-5',
+                    size === EnumSize.sm && 'p-1',
+                    size === EnumSize.md && 'p-2',
+                    size === EnumSize.lg && 'p-3',
                   )}
                 >
-                  <SearchResult<T>
-                    item={item}
-                    index={index}
-                    search={search}
-                    displayBy={displayBy}
-                    descriptionBy={descriptionBy}
-                    size={size}
-                    showIndex={showIndex}
-                    onClick={(e: React.MouseEvent) => {
-                      e.stopPropagation()
-                      e.preventDefault()
-
-                      selectListItem()
-                    }}
-                  />
+                  {isLoading ? 'Loading...' : 'No Results Found'}
                 </div>
-              ))
-            )}
+              ) : (
+                found.map(([item, index], idx) => (
+                  <div
+                    key={item[searchBy]}
+                    role="menuitem"
+                    data-index={idx}
+                    className={clsx(
+                      'cursor-pointer rounded-lg',
+                      activeIndex === idx && 'bg-neutral-5',
+                    )}
+                  >
+                    <SearchResult<T>
+                      item={item}
+                      index={index}
+                      search={search}
+                      displayBy={displayBy}
+                      descriptionBy={descriptionBy}
+                      size={size}
+                      showIndex={showIndex}
+                      onClick={(e: React.MouseEvent) => {
+                        e.stopPropagation()
+                        e.preventDefault()
+
+                        selectListItem()
+                      }}
+                    />
+                  </div>
+                ))
+              )}
+            </TBKResizeObserver>
           </Popover.Panel>
         </Transition>
       </Popover>
@@ -305,9 +314,13 @@ function SearchResult<T extends Record<string, any> = Record<string, any>>({
         <>
           <span
             title={item[displayBy]}
-            className="font-bold"
+            className="font-bold flex"
           >
-            {truncate(item[displayBy], 50, 20)}
+            {isFalseOrNil(item.isModel) ? (
+              truncate(item[displayBy], 50, 20)
+            ) : (
+              <TBKModelName text={item[displayBy]}></TBKModelName>
+            )}
           </span>
           <small
             className="block text-neutral-600 italic overflow-hidden whitespace-nowrap overflow-ellipsis"

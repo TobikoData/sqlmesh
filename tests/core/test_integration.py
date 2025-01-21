@@ -100,7 +100,7 @@ def test_forward_only_plan_with_effective_date(context_fixture: Context, request
         plan.context_diff.snapshots[top_waiters_snapshot.snapshot_id].change_category
         == SnapshotChangeCategory.FORWARD_ONLY
     )
-    assert plan.start == to_date("2023-01-07")
+    assert to_timestamp(plan.start) == to_timestamp("2023-01-07")
     assert plan.missing_intervals == [
         SnapshotIntervals(
             snapshot_id=top_waiters_snapshot.snapshot_id,
@@ -335,7 +335,7 @@ def test_forward_only_model_regular_plan_preview_enabled(init_and_plan_context: 
         plan.context_diff.snapshots[top_waiters_snapshot.snapshot_id].change_category
         == SnapshotChangeCategory.FORWARD_ONLY
     )
-    assert plan.start == to_date("2023-01-07")
+    assert to_timestamp(plan.start) == to_timestamp("2023-01-07")
     assert plan.missing_intervals == [
         SnapshotIntervals(
             snapshot_id=top_waiters_snapshot.snapshot_id,
@@ -472,7 +472,7 @@ def test_full_history_restatement_model_regular_plan_preview_enabled(
         == SnapshotChangeCategory.FORWARD_ONLY
     )
 
-    assert plan.start == to_date("2023-01-07")
+    assert to_timestamp(plan.start) == to_timestamp("2023-01-07")
     assert plan.missing_intervals == [
         SnapshotIntervals(
             snapshot_id=active_customers_snapshot.snapshot_id,
@@ -690,6 +690,50 @@ def test_cron_not_aligned_with_day_boundary(
         ]
 
 
+@time_machine.travel("2023-01-08 00:00:00 UTC")
+def test_forward_only_monthly_model(init_and_plan_context: t.Callable):
+    context, _ = init_and_plan_context("examples/sushi")
+
+    model = context.get_model("sushi.waiter_revenue_by_day")
+    model = SqlModel.parse_obj(
+        {
+            **model.dict(),
+            "kind": model.kind.copy(update={"forward_only": True}),
+            "cron": "0 0 1 * *",
+            "start": "2022-01-01",
+            "audits": [],
+        }
+    )
+    context.upsert_model(model)
+
+    plan = context.plan_builder("prod", skip_tests=True).build()
+    context.apply(plan)
+
+    waiter_revenue_by_day_snapshot = context.get_snapshot(model.name, raise_if_missing=True)
+    assert waiter_revenue_by_day_snapshot.intervals == [
+        (to_timestamp("2022-01-01"), to_timestamp("2023-01-01"))
+    ]
+
+    model = add_projection_to_model(t.cast(SqlModel, model), literal=True)
+    context.upsert_model(model)
+
+    waiter_revenue_by_day_snapshot = context.get_snapshot(
+        "sushi.waiter_revenue_by_day", raise_if_missing=True
+    )
+
+    plan = context.plan_builder(
+        "dev", select_models=[model.name], skip_tests=True, enable_preview=True
+    ).build()
+    assert to_timestamp(plan.start) == to_timestamp("2022-12-01")
+    assert to_timestamp(plan.end) == to_timestamp("2023-01-08")
+    assert plan.missing_intervals == [
+        SnapshotIntervals(
+            snapshot_id=waiter_revenue_by_day_snapshot.snapshot_id,
+            intervals=[(to_timestamp("2022-12-01"), to_timestamp("2023-01-01"))],
+        ),
+    ]
+
+
 @time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_forward_only_parent_created_in_dev_child_created_in_prod(
     init_and_plan_context: t.Callable,
@@ -742,6 +786,24 @@ def test_forward_only_parent_created_in_dev_child_created_in_prod(
     )
 
     context.apply(plan)
+
+
+@time_machine.travel("2023-01-08 00:00:00 UTC")
+def test_new_forward_only_model(init_and_plan_context: t.Callable):
+    context, _ = init_and_plan_context("examples/sushi")
+
+    context.plan("dev", skip_tests=True, no_prompts=True, auto_apply=True)
+
+    snapshot = context.get_snapshot("sushi.marketing")
+
+    # The deployable table should not exist yet
+    assert not context.engine_adapter.table_exists(snapshot.table_name())
+    assert context.engine_adapter.table_exists(snapshot.table_name(is_deployable=False))
+
+    context.plan("prod", skip_tests=True, no_prompts=True, auto_apply=True)
+
+    assert context.engine_adapter.table_exists(snapshot.table_name())
+    assert context.engine_adapter.table_exists(snapshot.table_name(is_deployable=False))
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
@@ -915,7 +977,7 @@ def test_non_breaking_change_after_forward_only_in_dev(
         plan.context_diff.snapshots[top_waiters_snapshot.snapshot_id].change_category
         == SnapshotChangeCategory.FORWARD_ONLY
     )
-    assert plan.start == to_date("2023-01-07")
+    assert to_timestamp(plan.start) == to_timestamp("2023-01-07")
     assert plan.missing_intervals == [
         SnapshotIntervals(
             snapshot_id=top_waiters_snapshot.snapshot_id,
@@ -947,7 +1009,7 @@ def test_non_breaking_change_after_forward_only_in_dev(
         plan.context_diff.snapshots[top_waiters_snapshot.snapshot_id].change_category
         == SnapshotChangeCategory.NON_BREAKING
     )
-    assert plan.start == to_timestamp("2023-01-01")
+    assert to_timestamp(plan.start) == to_timestamp("2023-01-01")
     assert plan.missing_intervals == [
         SnapshotIntervals(
             snapshot_id=top_waiters_snapshot.snapshot_id,
@@ -1560,9 +1622,10 @@ def test_incremental_by_partition(init_and_plan_context: t.Callable):
         f"""
         MODEL (
             name {model_name},
-            kind INCREMENTAL_BY_PARTITION,
+            kind INCREMENTAL_BY_PARTITION (disable_restatement false),
             partitioned_by [key],
             allow_partials true,
+            start '2023-01-07',
         );
 
         SELECT key, value FROM {source_name};
@@ -1595,10 +1658,22 @@ def test_incremental_by_partition(init_and_plan_context: t.Callable):
         source_name,
         d.parse_one("SELECT 'key_a' AS key, 2 AS value"),
     )
-    context.run(ignore_cron=True)
+    # Run 1 minute later.
+    with time_machine.travel("2023-01-08 15:01:00 UTC"):
+        context.run(ignore_cron=True)
     assert context.engine_adapter.fetchall(f"SELECT * FROM {model_name}") == [
         ("key_b", 1),
         ("key_a", 2),
+    ]
+
+    # model should fully refresh on restatement
+    context.engine_adapter.replace_query(
+        source_name,
+        d.parse_one("SELECT 'key_c' AS key, 3 AS value"),
+    )
+    context.plan(auto_apply=True, no_prompts=True, restate_models=[model_name])
+    assert context.engine_adapter.fetchall(f"SELECT * FROM {model_name}") == [
+        ("key_c", 3),
     ]
 
 
@@ -1635,6 +1710,151 @@ def test_custom_materialization(init_and_plan_context: t.Callable):
     context.plan(auto_apply=True, no_prompts=True)
 
     assert custom_insert_called
+
+
+@time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_indirect_non_breaking_view_model_non_representative_snapshot(
+    init_and_plan_context: t.Callable,
+):
+    context, _ = init_and_plan_context("examples/sushi")
+
+    # Forward-only parent
+    forward_only_model_name = "memory.sushi.test_forward_only_model"
+    forward_only_model_expressions = d.parse(
+        f"""
+        MODEL (
+            name {forward_only_model_name},
+            kind INCREMENTAL_BY_TIME_RANGE (
+                time_column ds,
+                forward_only true,
+            ),
+        );
+
+        SELECT '2023-01-01' AS ds, 'value' AS value;
+        """
+    )
+    forward_only_model = load_sql_based_model(forward_only_model_expressions)
+    assert forward_only_model.forward_only
+    context.upsert_model(forward_only_model)
+
+    # FULL downstream model.
+    full_downstream_model_name = "memory.sushi.test_full_downstream_model"
+    full_downstream_model_expressions = d.parse(
+        f"""
+        MODEL (
+            name {full_downstream_model_name},
+            kind FULL,
+        );
+
+        SELECT ds, value FROM {forward_only_model_name};
+        """
+    )
+    full_downstream_model = load_sql_based_model(full_downstream_model_expressions)
+    context.upsert_model(full_downstream_model)
+
+    # VIEW downstream of the previous FULL model.
+    view_downstream_model_name = "memory.sushi.test_view_downstream_model"
+    view_downstream_model_expressions = d.parse(
+        f"""
+        MODEL (
+            name {view_downstream_model_name},
+            kind VIEW,
+        );
+
+        SELECT ds, value FROM {full_downstream_model_name};
+        """
+    )
+    view_downstream_model = load_sql_based_model(view_downstream_model_expressions)
+    context.upsert_model(view_downstream_model)
+
+    # Apply the initial plan with all 3 models.
+    context.plan(auto_apply=True, no_prompts=True)
+
+    # Make a change to the forward-only model and apply it in dev.
+    context.upsert_model(add_projection_to_model(t.cast(SqlModel, forward_only_model)))
+    forward_only_model_snapshot_id = context.get_snapshot(forward_only_model_name).snapshot_id
+    full_downstream_model_snapshot_id = context.get_snapshot(full_downstream_model_name).snapshot_id
+    full_downstream_model_2_snapshot_id = context.get_snapshot(
+        view_downstream_model_name
+    ).snapshot_id
+    dev_plan = context.plan("dev", auto_apply=True, no_prompts=True)
+    assert (
+        dev_plan.snapshots[forward_only_model_snapshot_id].change_category
+        == SnapshotChangeCategory.FORWARD_ONLY
+    )
+    assert (
+        dev_plan.snapshots[full_downstream_model_snapshot_id].change_category
+        == SnapshotChangeCategory.FORWARD_ONLY
+    )
+    assert (
+        dev_plan.snapshots[full_downstream_model_2_snapshot_id].change_category
+        == SnapshotChangeCategory.FORWARD_ONLY
+    )
+    assert not dev_plan.missing_intervals
+
+    # Make a follow-up breaking change to the downstream full model.
+    new_full_downstream_model_expressions = d.parse(
+        f"""
+        MODEL (
+            name {full_downstream_model_name},
+            kind FULL,
+        );
+
+        SELECT ds, 'new_value' AS value FROM {forward_only_model_name};
+        """
+    )
+    new_full_downstream_model = load_sql_based_model(new_full_downstream_model_expressions)
+    context.upsert_model(new_full_downstream_model)
+    full_downstream_model_snapshot_id = context.get_snapshot(full_downstream_model_name).snapshot_id
+    full_downstream_model_2_snapshot_id = context.get_snapshot(
+        view_downstream_model_name
+    ).snapshot_id
+    dev_plan = context.plan(
+        "dev", categorizer_config=CategorizerConfig.all_full(), auto_apply=True, no_prompts=True
+    )
+    assert (
+        dev_plan.snapshots[full_downstream_model_snapshot_id].change_category
+        == SnapshotChangeCategory.BREAKING
+    )
+    assert (
+        dev_plan.snapshots[full_downstream_model_2_snapshot_id].change_category
+        == SnapshotChangeCategory.INDIRECT_BREAKING
+    )
+    assert len(dev_plan.missing_intervals) == 2
+    assert dev_plan.missing_intervals[0].snapshot_id == full_downstream_model_snapshot_id
+    assert dev_plan.missing_intervals[1].snapshot_id == full_downstream_model_2_snapshot_id
+
+    # Check that the representative view hasn't been created yet.
+    assert not context.engine_adapter.table_exists(
+        context.get_snapshot(view_downstream_model_name).table_name()
+    )
+
+    # Now promote the very first change to prod without promoting the 2nd breaking change.
+    context.upsert_model(full_downstream_model)
+    context.plan(auto_apply=True, no_prompts=True, categorizer_config=CategorizerConfig.all_full())
+
+    # Finally, make a non-breaking change to the full model in the same dev environment.
+    context.upsert_model(add_projection_to_model(t.cast(SqlModel, new_full_downstream_model)))
+    full_downstream_model_snapshot_id = context.get_snapshot(full_downstream_model_name).snapshot_id
+    full_downstream_model_2_snapshot_id = context.get_snapshot(
+        view_downstream_model_name
+    ).snapshot_id
+    dev_plan = context.plan(
+        "dev", categorizer_config=CategorizerConfig.all_full(), auto_apply=True, no_prompts=True
+    )
+    assert (
+        dev_plan.snapshots[full_downstream_model_snapshot_id].change_category
+        == SnapshotChangeCategory.NON_BREAKING
+    )
+    assert (
+        dev_plan.snapshots[full_downstream_model_2_snapshot_id].change_category
+        == SnapshotChangeCategory.INDIRECT_NON_BREAKING
+    )
+
+    # Check that the representative view has been created.
+    assert context.engine_adapter.table_exists(
+        context.get_snapshot(view_downstream_model_name).table_name()
+    )
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")

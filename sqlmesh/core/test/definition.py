@@ -114,10 +114,18 @@ class ModelTest(unittest.TestCase):
             exec_time = exp.Literal.string(self._execution_time)
             self._transforms = {
                 **self._transforms,
-                exp.CurrentDate: lambda self, _: self.sql(exp.cast(exec_time, "date")),
-                exp.CurrentDatetime: lambda self, _: self.sql(exp.cast(exec_time, "datetime")),
-                exp.CurrentTime: lambda self, _: self.sql(exp.cast(exec_time, "time")),
-                exp.CurrentTimestamp: lambda self, _: self.sql(exp.cast(exec_time, "timestamp")),
+                exp.CurrentDate: lambda self, _: self.sql(
+                    exp.cast(exec_time, "date", dialect=dialect)
+                ),
+                exp.CurrentDatetime: lambda self, _: self.sql(
+                    exp.cast(exec_time, "datetime", dialect=dialect)
+                ),
+                exp.CurrentTime: lambda self, _: self.sql(
+                    exp.cast(exec_time, "time", dialect=dialect)
+                ),
+                exp.CurrentTimestamp: lambda self, _: self.sql(
+                    exp.cast(exec_time, "timestamp", dialect=dialect)
+                ),
             }
 
         super().__init__()
