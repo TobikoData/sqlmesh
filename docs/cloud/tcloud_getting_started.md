@@ -64,10 +64,12 @@ First, open a terminal within your terminal/IDE (ex: VSCode). Then follow the fo
 2. Create a new file called `requirements.txt` and add `tcloud` to it:
 
     ```bash
-    echo 'tcloud==1.3.0' > requirements.txt
+    echo 'tcloud' > requirements.txt
     ```
 
     > Pypi source: [tcloud](https://pypi.org/project/tcloud/)
+
+    > Note: your Tobiko Solutions Architect will provide you a pinned version of `tcloud` as needed.
 
 3. Create a Python virtual environment and install `tcloud`:
 
