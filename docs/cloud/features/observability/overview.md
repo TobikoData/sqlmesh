@@ -33,15 +33,19 @@ This information allows you to:
 - Creation of custom visualizations and metrics
 - Troubleshoot problems and optimize inefficient operations
 
-Observability features are seamlessly integrated into Tobiko Cloud, making it simple to monitor and understand your project's behavior.
+Observability features are seamlessly integrated into Tobiko Cloud, making it simple to monitor and understand your project's behavior. For example, on the Tobiko Cloud Homepage, there is observability displayed for the production environment: 
+
+![Observability on the Homepage](./overview/observability_section_home.png)
 
 Instead of digging through complex logs or piecing together information from multiple sources, you can quickly access the relevant information from any part of your project.
 
+<!---
 Learn more about Tobiko Cloud Observability features on these pages:
 
-- [`prod` environment](prod_environment.md) health and recent activity
+- [`prod` environment](prod_environment.md) health and recent activity 
 - [Development environment](development_environment.md) differences from `prod` and recent activity
 - [Plan](plan.md) status and detailed model execution data
 - [Run](run.md) status and detailed model execution data
 - [Model](model.md) status and version history
 - [Dashboards](measures_dashboards.md) and custom visualizations of observability data
+-->
