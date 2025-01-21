@@ -207,7 +207,8 @@ def test_serialize_env() -> None:
     env = serialize_env(env, path=path)  # type: ignore
 
     assert prepare_env(env)
-    assert env == {
+
+    expected_env = {
         "MAIN": Executable(
             name="main_func",
             alias="MAIN",
@@ -315,5 +316,6 @@ def test_context_manager():
             payload="from tests.utils.test_metaprogramming import test_context_manager",
             kind=ExecutableKind.IMPORT,
         ),
-        "wraps": Executable(payload="from functools import wraps", kind=ExecutableKind.IMPORT),
     }
+
+    assert env == expected_env
