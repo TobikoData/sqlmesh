@@ -69,7 +69,7 @@ First, open a terminal within your terminal/IDE (ex: VSCode). Then follow the fo
 
     > Pypi source: [tcloud](https://pypi.org/project/tcloud/)
 
-    > Note: your Tobiko Solutions Architect will provide you a pinned version of `tcloud` as needed.
+    > Note: your Tobiko Solutions Architect will provide you a pinned version of `tcloud`
 
 3. Create a Python virtual environment and install `tcloud`:
 
