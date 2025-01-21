@@ -12,7 +12,7 @@ The platform helps foster team collaboration by providing clear visibility into 
 
 **Performance Tracking**
 
-You can monitor changes over time, review recent activities including successes and failures, and gain detailed insights into specific plan execution outcomes to get a better sense of trends. Check out the example image of a developement environment page with [multiple plan changes in a day.](#plan-history-image)
+You can monitor changes over time, review recent activities including successes and failures, and gain detailed insights into specific plan execution outcomes to get a better sense of trends. Check out the example image of a development environment page with [multiple plan changes in a day.](#plan-history-image)
 
 **Simplified Communication and Team Alignment**
 
