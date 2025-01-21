@@ -762,6 +762,8 @@ class SnapshotEvaluator:
                 and adapter.SUPPORTS_CLONING
                 # managed models cannot have their schema mutated because theyre based on queries, so clone + alter wont work
                 and not snapshot.is_managed
+                # If the deployable table is missing we can't clone it
+                and True not in deployability_flags
             ):
                 target_table_name = snapshot.table_name(is_deployable=False)
                 tmp_table_name = f"{target_table_name}__schema_migration_source"
@@ -797,6 +799,19 @@ class SnapshotEvaluator:
             else:
                 dry_run = len(deployability_flags) == 1
                 for is_table_deployable in deployability_flags:
+                    if (
+                        is_table_deployable
+                        and snapshot.model.forward_only
+                        and not is_snapshot_representative
+                    ):
+                        logger.info(
+                            "Skipping creation of the deployable table '%s' for the forward-only model %s. "
+                            "The table will be created when the snapshot is deployed to production",
+                            snapshot.table_name(is_deployable=is_table_deployable),
+                            snapshot.snapshot_id,
+                        )
+                        continue
+
                     evaluation_strategy.create(
                         table_name=snapshot.table_name(is_deployable=is_table_deployable),
                         model=snapshot.model,
@@ -829,15 +844,47 @@ class SnapshotEvaluator:
         if not needs_migration:
             return
 
-        tmp_table_name = snapshot.table_name(is_deployable=False)
+        evaluation_strategy = _evaluation_strategy(snapshot, adapter)
+
         target_table_name = snapshot.table_name()
-        _evaluation_strategy(snapshot, adapter).migrate(
-            target_table_name=target_table_name,
-            source_table_name=tmp_table_name,
-            snapshot=snapshot,
-            snapshots=parent_snapshots_by_name(snapshot, snapshots),
-            allow_destructive_snapshots=allow_destructive_snapshots,
-        )
+        if adapter.table_exists(target_table_name):
+            tmp_table_name = snapshot.table_name(is_deployable=False)
+            logger.info(
+                "Migrating table schema from '%s' to '%s'",
+                tmp_table_name,
+                target_table_name,
+            )
+            evaluation_strategy.migrate(
+                target_table_name=target_table_name,
+                source_table_name=tmp_table_name,
+                snapshot=snapshot,
+                snapshots=parent_snapshots_by_name(snapshot, snapshots),
+                allow_destructive_snapshots=allow_destructive_snapshots,
+            )
+        else:
+            logger.info(
+                "Creating table '%s' for the snapshot of the forward-only model %s",
+                target_table_name,
+                snapshot.snapshot_id,
+            )
+            render_kwargs: t.Dict[str, t.Any] = dict(
+                engine_adapter=adapter,
+                snapshots=parent_snapshots_by_name(snapshot, snapshots),
+                runtime_stage=RuntimeStage.CREATING,
+                deployability_index=DeployabilityIndex.all_deployable(),
+            )
+            with adapter.transaction(), adapter.session(snapshot.model.session_properties):
+                adapter.execute(snapshot.model.render_pre_statements(**render_kwargs))
+                evaluation_strategy.create(
+                    table_name=target_table_name,
+                    model=snapshot.model,
+                    is_table_deployable=True,
+                    render_kwargs=render_kwargs,
+                    is_snapshot_deployable=True,
+                    is_snapshot_representative=True,
+                    dry_run=False,
+                )
+                adapter.execute(snapshot.model.render_post_statements(**render_kwargs))
 
     def _promote_snapshot(
         self,
@@ -1367,12 +1414,15 @@ class IncrementalByPartitionStrategy(MaterializableStrategy):
         is_first_insert: bool,
         **kwargs: t.Any,
     ) -> None:
-        self.adapter.insert_overwrite_by_partition(
-            table_name,
-            query_or_df,
-            partitioned_by=model.partitioned_by,
-            columns_to_types=model.columns_to_types,
-        )
+        if is_first_insert:
+            self._replace_query_for_model(model, table_name, query_or_df)
+        else:
+            self.adapter.insert_overwrite_by_partition(
+                table_name,
+                query_or_df,
+                partitioned_by=model.partitioned_by,
+                columns_to_types=model.columns_to_types,
+            )
 
 
 class IncrementalByTimeRangeStrategy(MaterializableStrategy):

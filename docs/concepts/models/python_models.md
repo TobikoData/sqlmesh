@@ -200,6 +200,7 @@ def execute(
     Table resolution for these statements occurs at the virtual layer. This means that table names, including `@this_model` macro, are resolved to their qualified view names. For instance, when running the plan in an environment named `dev`, `db.test_model` and `@this_model` would resolve to `db__dev.test_model` and not to the physical table name.
 
 ## Dependencies
+
 In order to fetch data from an upstream model, you first get the table name using `context`'s `resolve_table` method. This returns the appropriate table name for the current runtime [environment](../environments.md):
 
 ```python linenums="1"
@@ -230,6 +231,21 @@ def execute(
     context.resolve_table("docs_example.another_dependency")
 ```
 
+User-defined [global variables](global-variables) can also be used in `resolve_table` calls, as long as the `depends_on` keyword argument is present and contains the required dependencies. This is shown in the following example:
+
+```python linenums="1"
+@model(
+    "@schema_name.test_model2",
+    kind="FULL",
+    columns={"id": "INT"},
+    depends_on=["@schema_name.test_model1"],
+)
+def execute(context, **kwargs):
+    schema_name = context.var("schema_name")
+    table = context.resolve_table(f"{schema_name}.test_model1")
+    select_query = exp.select("*").from_(table)
+    return context.fetchdf(select_query)
+```
 
 ## Returning empty dataframes
 

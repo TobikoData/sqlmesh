@@ -1476,10 +1476,6 @@ def test_sushi(ctx: TestContext, tmp_path_factory: pytest.TempPathFactory):
                 "table": "Sushi customer data",
                 "column": {"customer_id": "customer_id uniquely identifies customers"},
             },
-            "marketing": {
-                "table": "Sushi marketing data",
-                "column": {"customer_id": "customer_id uniquely identifies customers \\"},
-            },
             "orders": {
                 "table": "Table of sushi orders.",
             },

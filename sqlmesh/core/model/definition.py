@@ -1303,7 +1303,7 @@ class SqlModel(_Model):
                 continue
             if not alias:
                 raise_config_error(
-                    f"Outer projection '{expression}' must have inferrable names or explicit aliases.",
+                    f"Outer projection '{expression.sql(dialect=self.dialect)}' must have inferrable names or explicit aliases.",
                     self._path,
                 )
             name_counts[alias] = name_counts.get(alias, 0) + 1
@@ -1765,11 +1765,13 @@ def load_sql_based_model(
 
     unrendered_merge_filter = None
     unrendered_signals = None
+    unrendered_audits = None
 
     for prop in meta.expressions:
         if prop.name.lower() == "signals":
             unrendered_signals = prop.args.get("value")
-
+        if prop.name.lower() == "audits":
+            unrendered_audits = prop.args.get("value")
         if (
             prop.name.lower() == "kind"
             and (value := prop.args.get("value"))
@@ -1816,9 +1818,12 @@ def load_sql_based_model(
         **kwargs,
     }
 
-    # Signals and merge_filter must remain unrendered, so that they can be rendered later at evaluation runtime.
+    # signals, audits and merge_filter must remain unrendered, so that they can be rendered later at evaluation runtime
     if unrendered_signals:
         meta_fields["signals"] = unrendered_signals
+
+    if unrendered_audits:
+        meta_fields["audits"] = unrendered_audits
 
     if unrendered_merge_filter:
         for idx, kind_prop in enumerate(meta_fields["kind"].expressions):
@@ -1971,28 +1976,48 @@ def create_python_model(
         python_env: The Python environment of all objects referenced by the model implementation.
         path: An optional path to the model definition file.
         depends_on: The custom set of model's upstream dependencies.
+        variables: The variables to pass to the model.
     """
     # Find dependencies for python models by parsing code if they are not explicitly defined
     # Also remove self-references that are found
 
     dialect = kwargs.get("dialect")
+    renderer_kwargs = {
+        "module_path": module_path,
+        "macros": macros,
+        "jinja_macros": jinja_macros,
+        "variables": variables,
+        "path": path,
+        "dialect": dialect,
+        "default_catalog": kwargs.get("default_catalog"),
+    }
+
     name_renderer = _meta_renderer(
         expression=d.parse_one(name, dialect=dialect),
-        module_path=module_path,
-        macros=macros,
-        jinja_macros=jinja_macros,
-        variables=variables,
-        path=path,
-        dialect=dialect,
-        default_catalog=kwargs.get("default_catalog"),
+        **renderer_kwargs,  # type: ignore
     )
     name = t.cast(t.List[exp.Expression], name_renderer.render())[0].sql(dialect=dialect)
 
+    dependencies_unspecified = depends_on is None
+
     parsed_depends_on, referenced_variables = (
-        parse_dependencies(python_env, entrypoint) if python_env is not None else (set(), set())
+        parse_dependencies(python_env, entrypoint, strict_resolution=dependencies_unspecified)
+        if python_env is not None
+        else (set(), set())
     )
-    if depends_on is None:
+    if dependencies_unspecified:
         depends_on = parsed_depends_on - {name}
+    else:
+        depends_on_renderer = _meta_renderer(
+            expression=exp.Array(
+                expressions=[d.parse_one(dep, dialect=dialect) for dep in depends_on or []]
+            ),
+            **renderer_kwargs,  # type: ignore
+        )
+        depends_on = {
+            dep.sql(dialect=dialect)
+            for dep in t.cast(t.List[exp.Expression], depends_on_renderer.render())[0].expressions
+        }
 
     variables = {k: v for k, v in (variables or {}).items() if k in referenced_variables}
     if variables:
@@ -2161,6 +2186,7 @@ def _create_model(
         used_variables=used_variables,
         path=path,
         python_env=python_env,
+        strict_resolution=depends_on is None,
     )
 
     env: t.Dict[str, t.Any] = {}

@@ -2212,6 +2212,63 @@ def test_max_interval_end_per_model(
     assert state_sync.max_interval_end_per_model(environment_name, set()) == {}
 
 
+def test_max_interval_end_per_model_with_pending_restatements(
+    state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
+) -> None:
+    snapshot = make_snapshot(
+        SqlModel(
+            name="a",
+            cron="@daily",
+            query=parse_one("select 1, ds"),
+        ),
+    )
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    state_sync.push_snapshots([snapshot])
+
+    state_sync.add_interval(snapshot, "2023-01-01", "2023-01-01")
+    state_sync.add_interval(snapshot, "2023-01-02", "2023-01-02")
+    state_sync.add_interval(snapshot, "2023-01-03", "2023-01-03")
+    # Add a pending restatement interval
+    state_sync.add_snapshots_intervals(
+        [
+            SnapshotIntervals(
+                name=snapshot.name,
+                identifier=snapshot.identifier,
+                version=snapshot.version,
+                intervals=[],
+                dev_intervals=[],
+                pending_restatement_intervals=[
+                    (to_timestamp("2023-01-04"), to_timestamp("2023-01-05"))
+                ],
+            )
+        ]
+    )
+
+    snapshot = state_sync.get_snapshots([snapshot.snapshot_id])[snapshot.snapshot_id]
+    assert snapshot.intervals == [(to_timestamp("2023-01-01"), to_timestamp("2023-01-04"))]
+    assert snapshot.pending_restatement_intervals == [
+        (to_timestamp("2023-01-04"), to_timestamp("2023-01-05"))
+    ]
+
+    environment_name = "test_max_interval_end_for_environment"
+
+    state_sync.promote(
+        Environment(
+            name=environment_name,
+            snapshots=[snapshot.table_info],
+            start_at="2023-01-01",
+            end_at="2023-01-03",
+            plan_id="test_plan_id",
+            previous_finalized_snapshots=[],
+        )
+    )
+
+    assert state_sync.max_interval_end_per_model(environment_name) == {
+        snapshot.name: to_timestamp("2023-01-04")
+    }
+
+
 def test_max_interval_end_per_model_ensure_finalized_snapshots(
     state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
 ) -> None:
