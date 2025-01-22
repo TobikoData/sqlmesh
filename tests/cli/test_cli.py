@@ -294,7 +294,7 @@ def test_plan_dev_start_date(runner, tmp_path):
         input="\ny\n",
     )
     assert_plan_success(result, "dev")
-    assert "sqlmesh_example__dev.full_model: 2023-01-01" in result.output
+    assert "sqlmesh_example__dev.full_model: full refresh" in result.output
     assert "sqlmesh_example__dev.incremental_model: 2023-01-01" in result.output
 
 
@@ -308,7 +308,7 @@ def test_plan_dev_end_date(runner, tmp_path):
         input="\ny\n",
     )
     assert_plan_success(result, "dev")
-    assert "sqlmesh_example__dev.full_model: 2020-01-01 - 2023-01-01" in result.output
+    assert "sqlmesh_example__dev.full_model: full refresh" in result.output
     assert "sqlmesh_example__dev.incremental_model: 2020-01-01 - 2023-01-01" in result.output
 
 

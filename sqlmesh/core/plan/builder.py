@@ -601,7 +601,7 @@ class PlanBuilder:
             if (
                 snapshot.evaluatable
                 and not snapshot.disable_restatement
-                and not snapshot.full_history_restatement_only
+                and (not snapshot.full_history_restatement_only or not snapshot.is_incremental)
             ):
                 snapshot.effective_from = self._effective_from
 
