@@ -335,6 +335,7 @@ Options:
                                   application (prod environment only).
   --enable-preview                Enable preview for forward-only models when
                                   targeting a development environment.
+  --rendered-model-diff           Output text differences for the rendered versions of models
   -v, --verbose                   Verbose output.
   --help                          Show this message and exit.
 ```

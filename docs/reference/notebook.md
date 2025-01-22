@@ -103,7 +103,7 @@ options:
             [--no-auto-categorization] [--include-unmodified]
             [--select-model [SELECT_MODEL ...]]
             [--backfill-model [BACKFILL_MODEL ...]] [--no-diff] [--run]
-            [environment]
+            [environment] [--rendered-model-diff]
 
 Goes through a set of prompts to both establish a plan and apply it
 
@@ -153,6 +153,8 @@ options:
   --no-diff             Hide text differences for changed models.
   --run                 Run latest intervals as part of the plan application
                         (prod environment only).
+  --rendered-model-diff Output text differences for the rendered versions of models
+
 ```
 
 #### run_dag

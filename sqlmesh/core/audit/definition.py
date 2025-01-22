@@ -283,7 +283,7 @@ class StandaloneAudit(_Node, AuditMixin):
             self._metadata_hash = hash_data(data)
         return self._metadata_hash
 
-    def text_diff(self, other: Node) -> str:
+    def text_diff(self, other: Node, rendered_model_diff: bool = False) -> str:
         """Produce a text diff against another node.
 
         Args:

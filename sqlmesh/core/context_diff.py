@@ -76,6 +76,8 @@ class ContextDiff(PydanticModel):
     """Previous requirements."""
     requirements: t.Dict[str, str] = {}
     """Python dependencies."""
+    rendered_model_diff: t.Optional[bool] = None
+    """Whether the diff should compare raw vs rendered models"""
 
     @classmethod
     def create(
@@ -87,6 +89,7 @@ class ContextDiff(PydanticModel):
         ensure_finalized_snapshots: bool = False,
         provided_requirements: t.Optional[t.Dict[str, str]] = None,
         excluded_requirements: t.Optional[t.Set[str]] = None,
+        rendered_model_diff: t.Optional[bool] = None,
     ) -> ContextDiff:
         """Create a ContextDiff object.
 
@@ -212,6 +215,7 @@ class ContextDiff(PydanticModel):
             previous_finalized_snapshots=env.previous_finalized_snapshots if env else None,
             previous_requirements=env.requirements if env else {},
             requirements=requirements,
+            rendered_model_diff=rendered_model_diff,
         )
 
     @classmethod
@@ -390,7 +394,9 @@ class ContextDiff(PydanticModel):
 
         new, old = self.modified_snapshots[name]
         try:
-            return old.node.text_diff(new.node)
+            return old.node.text_diff(
+                new.node, rendered_model_diff=self.rendered_model_diff or False
+            )
         except SQLMeshError as e:
             logger.warning("Failed to diff model '%s': %s", name, str(e))
             return ""
