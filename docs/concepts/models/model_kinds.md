@@ -148,7 +148,7 @@ Models of the `INCREMENTAL_BY_PARTITION` kind are computed incrementally based o
 
     `INCREMENTAL_BY_PARTITION` models are inherently [non-idempotent](../glossary.md#idempotency), so restatements and other actions can cause data loss. This makes them more complex to manage than other model kinds.
 
-    In most scenarios, another model kind can meet your needs and will be easier to manage. The `INCREMENTAL_BY_PARTITION` model kind should only be used when the data must be loaded by partition (usually for performance reasons).
+    In most scenarios, an `INCREMENTAL_BY_TIME_RANGE` model can meet your needs and will be easier to manage. The `INCREMENTAL_BY_PARTITION` model kind should only be used when the data must be loaded by partition (usually for performance reasons).
 
 This model kind is designed for the scenario where data rows should be loaded and updated as a group based on their shared value for the partitioning key.
 
