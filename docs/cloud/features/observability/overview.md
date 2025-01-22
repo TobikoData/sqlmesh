@@ -4,6 +4,8 @@ Fixing problems with data pipelines is challenging because there are so many pot
 
 For transformation pipelines, those range from upstream source timeouts to SQL query errors to Python library conflicts (and more!).
 
+![Data Ops Observability](./overview/data-ops-light.png)
+
 A useful observation tool should make it easy to answer the following questions:
 
 - Did a problem occur?
