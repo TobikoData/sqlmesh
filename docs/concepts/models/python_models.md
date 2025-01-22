@@ -168,7 +168,7 @@ def execute(
 
 The optional on-virtual-update statements allow you to execute SQL commands after the completion of the [Virtual Update](#virtual-update).
 
-These can be used, for example, to grant privileges on views of the virtual layer. 
+These can be used, for example, to grant privileges on views of the virtual layer.
 
 Similar to pre/post-statements you can set the `on_virtual_update` argument in the `@model` decorator to a list of SQL strings, SQLGlot expressions, or macro calls.
 
@@ -269,29 +269,12 @@ def execute(
         yield df
 ```
 
+## User-defined variables
 
-## Global variables
+[User-defined global variables](../../reference/configuration.md#variables) can be accessed from within the Python model with the `context.var` method.
 
-[User-defined global variables](../../reference/configuration.md#variables) can be accessed from within the Python model using function arguments, where the name of the argument represents a variable key. For example:
+For example, this model access the user-defined variables `var` and `var_with_default`. It specifies a default value of `default_value` if `variable_with_default` resolves to a missing value.
 
-```python linenums="1" hl_lines="9"
-@model(
-    "my_model.name",
-)
-def execute(
-    context: ExecutionContext,
-    start: datetime,
-    end: datetime,
-    execution_time: datetime,
-    my_var: Optional[str] = None,
-    **kwargs: t.Any,
-) -> pd.DataFrame:
-    ...
-```
-
-Make sure to assign a default value to such arguments if you anticipate a missing variable key. Please note that arguments must be specified explicitly; in other words, variables can be accessed using `kwargs`.
-
-Alternatively, variables can be accessed using the `context.var` method. For example:
 ```python linenums="1" hl_lines="11 12"
 @model(
     "my_model.name",
@@ -303,10 +286,35 @@ def execute(
     execution_time: datetime,
     **kwargs: t.Any,
 ) -> pd.DataFrame:
-    var_value = context.var("<var_name>")
-    another_var_value = context.var("<another_var_name>", "default_value")
+    var_value = context.var("var")
+    var_with_default_value = context.var("var_with_default", "default_value")
     ...
 ```
+
+Alternatively, you can access global variables via `execute` function arguments, where the name of the argument corresponds to the name of a variable key.
+
+For example, this model specifies `my_var` as an argument to the `execute` method. The model code can reference the `my_var` object directly:
+
+```python linenums="1" hl_lines="9 12"
+@model(
+    "my_model.name",
+)
+def execute(
+    context: ExecutionContext,
+    start: datetime,
+    end: datetime,
+    execution_time: datetime,
+    my_var: Optional[str] = None,
+    **kwargs: t.Any,
+) -> pd.DataFrame:
+    my_var_plus1 = my_var + 1
+    ...
+```
+
+Make sure the argument has a default value if it's possible for the variable to be missing.
+
+Note that arguments must be specified explicitly - variables cannot be accessed using `kwargs`.
+
 ## Examples
 ### Basic
 The following is an example of a Python model returning a static Pandas DataFrame.
