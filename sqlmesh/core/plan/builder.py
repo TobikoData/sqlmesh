@@ -333,7 +333,7 @@ class PlanBuilder:
                     # This is a warning but we print this as error since the Console is lacking API for warnings.
                     self._console.log_error(
                         f"Cannot restate model '{model_fqn}'. "
-                        "Restatement is disabled for this model likely to prevent the data loss which may result from restating it. "
+                        "Restatement is disabled for this model to prevent possible data loss."
                         "If you want to restate this model, change the model's `disable_restatement` setting to `false`."
                     )
                     continue
