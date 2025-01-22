@@ -1248,7 +1248,9 @@ class EngineAdapter:
         )
         if not columns_to_types or not columns_to_types_all_known(columns_to_types):
             columns_to_types = self.columns(table_name)
-        low, high = [time_formatter(dt, columns_to_types) for dt in make_inclusive(start, end)]
+        low, high = [
+            time_formatter(dt, columns_to_types) for dt in make_inclusive(start, end, self.dialect)
+        ]
         if isinstance(time_column, TimeColumn):
             time_column = time_column.column
         where = exp.Between(

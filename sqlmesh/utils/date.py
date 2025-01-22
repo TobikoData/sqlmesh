@@ -7,7 +7,7 @@ import warnings
 
 from pandas.api.types import is_datetime64_any_dtype  # type: ignore
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import dateparser
 import pandas as pd
@@ -16,6 +16,9 @@ from dateparser.freshness_date_parser import freshness_date_parser
 from sqlglot import exp
 
 from sqlmesh.utils import ttl_cache
+
+if t.TYPE_CHECKING:
+    from sqlglot.dialects.dialect import DialectType
 
 UTC = timezone.utc
 TimeLike = t.Union[date, datetime, str, int, float]
@@ -286,7 +289,9 @@ def is_date(obj: TimeLike) -> bool:
         return False
 
 
-def make_inclusive(start: TimeLike, end: TimeLike) -> DatetimeRange:
+def make_inclusive(
+    start: TimeLike, end: TimeLike, dialect: t.Optional[DialectType] = ""
+) -> DatetimeRange:
     """Adjust start and end times to to become inclusive datetimes.
 
     SQLMesh treats start and end times as inclusive so that filters can be written as
@@ -297,7 +302,8 @@ def make_inclusive(start: TimeLike, end: TimeLike) -> DatetimeRange:
     In the ds ('2020-01-01') case, because start_ds and end_ds are categorical, between works even if
     start_ds and end_ds are equivalent. However, when we move to ts ('2022-01-01 12:00:00'), because timestamps
     are numeric, using simple equality doesn't make sense. When the end is not a categorical date, then it is
-    treated as an exclusive range and converted to inclusive by subtracting 1 nanosecond.
+    treated as an exclusive range and converted to inclusive by subtracting 1 microsecond. If the dialect is
+    T-SQL then 1 nanoseconds is subtracted to account for the increased precision.
 
     Args:
         start: Start timelike object.
@@ -305,23 +311,25 @@ def make_inclusive(start: TimeLike, end: TimeLike) -> DatetimeRange:
 
     Example:
         >>> make_inclusive("2020-01-01", "2020-01-01")
-        (datetime.datetime(2020, 1, 1, 0, 0, tzinfo=datetime.timezone.utc), Timestamp('2020-01-01 23:59:59.999999999+0000', tz='UTC'))
+        (datetime.datetime(2020, 1, 1, 0, 0, tzinfo=datetime.timezone.utc), datetime.datetime(2020, 1, 1, 23, 59, 59, 999999, tzinfo=datetime.timezone.utc))
 
     Returns:
         A tuple of inclusive datetime objects.
     """
+    return (to_datetime(start), make_inclusive_end(end, dialect=dialect))
 
-    return (to_datetime(start), make_inclusive_end(end))
 
-
-def make_inclusive_end(end: TimeLike) -> datetime:
-    return make_exclusive(end) - pd.Timedelta(1, unit="ns")
+def make_inclusive_end(end: TimeLike, dialect: t.Optional[DialectType] = "") -> datetime:
+    exclusive_end = make_exclusive(end)
+    if dialect == "tsql":
+        return to_utc_timestamp(exclusive_end) - pd.Timedelta(1, unit="ns")
+    return exclusive_end - timedelta(microseconds=1)
 
 
 def make_exclusive(time: TimeLike) -> datetime:
-    dt = to_utc_timestamp(to_datetime(time))
+    dt = to_datetime(time)
     if is_date(time):
-        dt = dt + pd.Timedelta(1, unit="day")
+        dt = dt + timedelta(days=1)
     return dt
 
 

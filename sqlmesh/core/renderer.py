@@ -120,7 +120,7 @@ class BaseExpressionRenderer:
         expressions = [self._expression]
 
         start_time, end_time = (
-            make_inclusive(start or c.EPOCH, end or c.EPOCH)
+            make_inclusive(start or c.EPOCH, end or c.EPOCH, self._dialect)
             if not self._only_execution_time
             else (None, None)
         )
