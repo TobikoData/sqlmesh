@@ -1269,9 +1269,6 @@ def test_truncate_table(ctx: TestContext):
     if ctx.test_type != "query":
         pytest.skip("Truncate table test does not change based on input data type")
 
-    if ctx.dialect == "risingwave":
-        pytest.skip("Risingwave doesn't support truncate table")
-
     table = ctx.table("test_table")
 
     ctx.engine_adapter.create_table(
