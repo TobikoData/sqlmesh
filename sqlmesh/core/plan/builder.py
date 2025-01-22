@@ -332,7 +332,9 @@ class PlanBuilder:
                 if not self._is_dev and snapshot.disable_restatement:
                     # This is a warning but we print this as error since the Console is lacking API for warnings.
                     self._console.log_error(
-                        f"Cannot restate model '{model_fqn}'. Restatement is disabled for this model."
+                        f"Cannot restate model '{model_fqn}'. "
+                        "Restatement is disabled for this model likely to prevent the data loss which may result from restating it. "
+                        "If you want to restate this model, change the model's `disable_restatement` setting to `false`."
                     )
                     continue
                 elif snapshot.is_symbolic or snapshot.is_seed:
