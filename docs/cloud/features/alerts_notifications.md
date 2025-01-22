@@ -75,7 +75,7 @@ Some measures, like run time, are most useful when accumulated over an entire `p
 
 Configure a cumulative measure alert by choosing an Artifact type of Plan or Run.
 
-Other measure alerts are useful when applied to individual models or steps in a `plan` or `run`. For example, you might know that your `users` model should process around 1000 new users each day. You could create a measure alert that notifies you if the number of users drops below 500.
+Other measure alerts are useful when applied to individual models or steps in a `plan` or `run`. For example, you might know that your `users` model should process around 1000 new users each day. You could [create a measure](../../guides/observer.md#custom-measures) to track the number of new users and an alert that notifies you if that number drops below 500.
 
 Configure a non-cumulative measure alert by choosing an Artifact type of Measure.
 
@@ -109,8 +109,12 @@ Tobiko Cloud supports the following notification target types, which require you
 
 - Slack API
     - API Token
-    - Channel
+        - Format: `xoxb-[13 digits]-[13 digits]-[24 alphanumeric characters]`
+    - Channel ID
+        - Example: T139Z25G8F4
 - Slack Webhook
     - Webhook URL
+        - Example: https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXXXXXX
 - PagerDuty
     - Routing Key
+        - Example: j16lxprdvoy21paigybthal0llk51kh5k
