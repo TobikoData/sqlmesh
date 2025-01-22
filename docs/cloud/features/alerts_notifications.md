@@ -20,7 +20,7 @@ Then add a new alert by clicking the `Add Alert` button in the top right.
 
 This opens the Add New Alert configuration page.
 
-Specify an informative name for the alert in the Name field. We describe the other configuration fields below.
+Specify an informative name for the alert in the Name field, and click the drop downs for when you want this to run. This is a simple `event` alert, but we'll go into more options below.
 
 After you're finished configuring the new alert, save it by clicking the `Save` button in the bottom right.
 
