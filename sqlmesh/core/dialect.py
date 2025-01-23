@@ -61,6 +61,10 @@ class JinjaStatement(Jinja):
     pass
 
 
+class VirtualUpdateStatement(exp.Expression):
+    arg_types = {"expressions": True}
+
+
 class ModelKind(exp.Expression):
     arg_types = {"this": True, "expressions": False}
 
@@ -577,7 +581,12 @@ def _create_parser(parser_type: t.Type[exp.Expression], table_keys: t.List[str])
                 if not field or isinstance(field, (MacroVar, MacroFunc)):
                     value = field
                 else:
-                    kind = ModelKindName[field.name.upper()]
+                    try:
+                        kind = ModelKindName[field.name.upper()]
+                    except KeyError:
+                        raise SQLMeshError(
+                            f"Model kind specified as '{field.name}', but that is not a valid model kind.\n\nPlease specify one of {', '.join(ModelKindName)}."
+                        )
 
                     if kind in (
                         ModelKindName.INCREMENTAL_BY_TIME_RANGE,
@@ -767,6 +776,8 @@ def _is_command_statement(command: str, tokens: t.List[Token], pos: int) -> bool
 JINJA_QUERY_BEGIN = "JINJA_QUERY_BEGIN"
 JINJA_STATEMENT_BEGIN = "JINJA_STATEMENT_BEGIN"
 JINJA_END = "JINJA_END"
+ON_VIRTUAL_UPDATE_BEGIN = "ON_VIRTUAL_UPDATE_BEGIN"
+ON_VIRTUAL_UPDATE_END = "ON_VIRTUAL_UPDATE_END"
 
 
 def _is_jinja_statement_begin(tokens: t.List[Token], pos: int) -> bool:
@@ -789,10 +800,24 @@ def jinja_statement(statement: str) -> JinjaStatement:
     return JinjaStatement(this=exp.Literal.string(statement.strip()))
 
 
+def _is_virtual_statement_begin(tokens: t.List[Token], pos: int) -> bool:
+    return _is_command_statement(ON_VIRTUAL_UPDATE_BEGIN, tokens, pos)
+
+
+def _is_virtual_statement_end(tokens: t.List[Token], pos: int) -> bool:
+    return _is_command_statement(ON_VIRTUAL_UPDATE_END, tokens, pos)
+
+
+def virtual_statement(statements: t.List[exp.Expression]) -> VirtualUpdateStatement:
+    return VirtualUpdateStatement(expressions=statements)
+
+
 class ChunkType(Enum):
     JINJA_QUERY = auto()
     JINJA_STATEMENT = auto()
     SQL = auto()
+    VIRTUAL_STATEMENT = auto()
+    VIRTUAL_JINJA_STATEMENT = auto()
 
 
 def parse_one(
@@ -832,9 +857,15 @@ def parse(
     total = len(tokens)
 
     pos = 0
+    virtual = False
     while pos < total:
         token = tokens[pos]
-        if _is_jinja_end(tokens, pos) or (
+        if _is_virtual_statement_end(tokens, pos):
+            chunks[-1][0].append(token)
+            virtual = False
+            chunks.append(([], ChunkType.SQL))
+            pos += 2
+        elif _is_jinja_end(tokens, pos) or (
             chunks[-1][1] == ChunkType.SQL
             and token.token_type == TokenType.SEMICOLON
             and pos < total - 1
@@ -845,13 +876,24 @@ def parse(
                 # Jinja end statement
                 chunks[-1][0].append(token)
                 pos += 2
-            chunks.append(([], ChunkType.SQL))
+            chunks.append(
+                (
+                    [],
+                    ChunkType.VIRTUAL_STATEMENT
+                    if virtual and tokens[pos] != ON_VIRTUAL_UPDATE_END
+                    else ChunkType.SQL,
+                )
+            )
         elif _is_jinja_query_begin(tokens, pos):
             chunks.append(([token], ChunkType.JINJA_QUERY))
             pos += 2
         elif _is_jinja_statement_begin(tokens, pos):
             chunks.append(([token], ChunkType.JINJA_STATEMENT))
             pos += 2
+        elif _is_virtual_statement_begin(tokens, pos):
+            chunks.append(([token], ChunkType.VIRTUAL_STATEMENT))
+            pos += 2
+            virtual = True
         else:
             chunks[-1][0].append(token)
             pos += 1
@@ -859,22 +901,68 @@ def parse(
     parser = dialect.parser()
     expressions: t.List[exp.Expression] = []
 
-    for chunk, chunk_type in chunks:
-        if chunk_type == ChunkType.SQL:
-            parsed_expressions: t.List[t.Optional[exp.Expression]] = (
-                parser.parse(chunk, sql) if into is None else parser.parse_into(into, chunk, sql)
-            )
-            for expression in parsed_expressions:
-                if expression:
+    def parse_sql_chunk(chunk: t.List[Token], meta_sql: bool = True) -> t.List[exp.Expression]:
+        parsed_expressions: t.List[t.Optional[exp.Expression]] = (
+            parser.parse(chunk, sql) if into is None else parser.parse_into(into, chunk, sql)
+        )
+        expressions = []
+        for expression in parsed_expressions:
+            if expression:
+                if meta_sql:
                     expression.meta["sql"] = parser._find_sql(chunk[0], chunk[-1])
-                    expressions.append(expression)
-        else:
-            start, *_, end = chunk
-            segment = sql[start.end + 2 : end.start - 1]
-            factory = jinja_query if chunk_type == ChunkType.JINJA_QUERY else jinja_statement
-            expression = factory(segment.strip())
+                expressions.append(expression)
+        return expressions
+
+    def parse_jinja_chunk(chunk: t.List[Token], meta_sql: bool = True) -> exp.Expression:
+        start, *_, end = chunk
+        segment = sql[start.end + 2 : end.start - 1]
+        factory = jinja_query if chunk_type == ChunkType.JINJA_QUERY else jinja_statement
+        expression = factory(segment.strip())
+        if meta_sql:
             expression.meta["sql"] = sql[start.start : end.end + 1]
-            expressions.append(expression)
+        return expression
+
+    def parse_virtual_statement(
+        chunks: t.List[t.Tuple[t.List[Token], ChunkType]], pos: int
+    ) -> t.Tuple[t.List[exp.Expression], int]:
+        # For virtual statements we need to handle both SQL and Jinja nested blocks within the chunk
+        virtual_update_statements = []
+        start = chunks[pos][0][0].start
+
+        while (
+            chunks[pos - 1][0] == [] or chunks[pos - 1][0][-1].text.upper() != ON_VIRTUAL_UPDATE_END
+        ):
+            chunk, chunk_type = chunks[pos]
+            if chunk_type == ChunkType.JINJA_STATEMENT:
+                virtual_update_statements.append(parse_jinja_chunk(chunk, False))
+            else:
+                virtual_update_statements.extend(
+                    parse_sql_chunk(
+                        chunk[int(chunk[0].text.upper() == ON_VIRTUAL_UPDATE_BEGIN) : -1], False
+                    ),
+                )
+            pos += 1
+
+        if virtual_update_statements:
+            statements = virtual_statement(virtual_update_statements)
+            end = chunk[-1].end + 1
+            statements.meta["sql"] = sql[start:end]
+            return [statements], pos
+
+        return [], pos
+
+    pos = 0
+    total_chunks = len(chunks)
+    while pos < total_chunks:
+        chunk, chunk_type = chunks[pos]
+        if chunk_type == ChunkType.VIRTUAL_STATEMENT:
+            virtual_expression, pos = parse_virtual_statement(chunks, pos)
+            expressions.extend(virtual_expression)
+        elif chunk_type == ChunkType.SQL:
+            expressions.extend(parse_sql_chunk(chunk))
+        else:
+            expressions.append(parse_jinja_chunk(chunk))
+        pos += 1
 
     return expressions
 
@@ -926,7 +1014,7 @@ def extend_sqlglot() -> None:
                     exp.Whens: _whens_sql,
                 }
             )
-
+        if MacroDef not in generator.WITH_SEPARATED_COMMENTS:
             generator.WITH_SEPARATED_COMMENTS = (
                 *generator.WITH_SEPARATED_COMMENTS,
                 Model,
@@ -1272,9 +1360,9 @@ def replace_merge_table_aliases(expression: exp.Expression) -> exp.Expression:
     from sqlmesh.core.engine_adapter.base import MERGE_SOURCE_ALIAS, MERGE_TARGET_ALIAS
 
     if isinstance(expression, exp.Column):
-        if expression.table.lower() in ("target", "dbt_internal_dest"):
+        if expression.table.lower() in ("target", "dbt_internal_dest", "__merge_target__"):
             expression.set("table", exp.to_identifier(MERGE_TARGET_ALIAS))
-        elif expression.table.lower() in ("source", "dbt_internal_source"):
+        elif expression.table.lower() in ("source", "dbt_internal_source", "__merge_source__"):
             expression.set("table", exp.to_identifier(MERGE_SOURCE_ALIAS))
 
     return expression

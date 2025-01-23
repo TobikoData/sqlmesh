@@ -1429,6 +1429,50 @@ def test_unpause_snapshots(state_sync: EngineAdapterStateSync, make_snapshot: t.
     assert not actual_snapshots[new_snapshot.snapshot_id].unrestorable
 
 
+def test_unpause_snapshots_hourly(state_sync: EngineAdapterStateSync, make_snapshot: t.Callable):
+    snapshot = make_snapshot(
+        SqlModel(
+            name="test_snapshot",
+            query=parse_one("select 1, ds"),
+            cron="@hourly",
+        ),
+    )
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    snapshot.version = "a"
+
+    assert not snapshot.unpaused_ts
+    state_sync.push_snapshots([snapshot])
+
+    # Unpaused timestamp not aligned with cron
+    unpaused_dt = "2022-01-01 01:22:33"
+    state_sync.unpause_snapshots([snapshot], unpaused_dt)
+
+    actual_snapshot = state_sync.get_snapshots([snapshot])[snapshot.snapshot_id]
+    assert actual_snapshot.unpaused_ts
+    assert actual_snapshot.unpaused_ts == to_timestamp("2022-01-01 01:00:00")
+
+    new_snapshot = make_snapshot(
+        SqlModel(
+            name="test_snapshot",
+            query=parse_one("select 2, ds"),
+            cron="@daily",
+            interval_unit="hour",
+        )
+    )
+    new_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    new_snapshot.version = "a"
+
+    assert not new_snapshot.unpaused_ts
+    state_sync.push_snapshots([new_snapshot])
+    state_sync.unpause_snapshots([new_snapshot], unpaused_dt)
+
+    actual_snapshots = state_sync.get_snapshots([snapshot, new_snapshot])
+    assert not actual_snapshots[snapshot.snapshot_id].unpaused_ts
+    assert actual_snapshots[new_snapshot.snapshot_id].unpaused_ts == to_timestamp(
+        "2022-01-01 01:00:00"
+    )
+
+
 def test_unrestorable_snapshot(state_sync: EngineAdapterStateSync, make_snapshot: t.Callable):
     snapshot = make_snapshot(
         SqlModel(
@@ -1526,6 +1570,45 @@ def test_unpause_snapshots_remove_intervals(
     ]
     assert actual_snapshots[snapshot.snapshot_id].intervals == [
         (to_timestamp("2023-01-01"), to_timestamp("2023-01-03")),
+    ]
+
+
+def test_unpause_snapshots_remove_intervals_disabled_restatement(
+    state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
+):
+    kind = dict(name="INCREMENTAL_BY_TIME_RANGE", time_column="ds", disable_restatement=True)
+    snapshot = make_snapshot(
+        SqlModel(
+            name="test_snapshot",
+            query=parse_one("select 1, ds"),
+            cron="@daily",
+            kind=kind,
+        ),
+        version="a",
+    )
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    snapshot.version = "a"
+    state_sync.push_snapshots([snapshot])
+    state_sync.add_interval(snapshot, "2023-01-01", "2023-01-05")
+
+    new_snapshot = make_snapshot(
+        SqlModel(name="test_snapshot", query=parse_one("select 2, ds"), cron="@daily", kind=kind),
+        version="a",
+    )
+    new_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    new_snapshot.version = "a"
+    new_snapshot.effective_from = "2023-01-03"
+    state_sync.push_snapshots([new_snapshot])
+    state_sync.add_interval(snapshot, "2023-01-06", "2023-01-06")
+    state_sync.unpause_snapshots([new_snapshot], "2023-01-06")
+
+    actual_snapshots = state_sync.get_snapshots([snapshot, new_snapshot])
+    assert actual_snapshots[new_snapshot.snapshot_id].intervals == [
+        (to_timestamp("2023-01-01"), to_timestamp("2023-01-03")),
+    ]
+    # The intervals shouldn't have been removed because restatement is disabled
+    assert actual_snapshots[snapshot.snapshot_id].intervals == [
+        (to_timestamp("2023-01-01"), to_timestamp("2023-01-07")),
     ]
 
 
@@ -2127,6 +2210,63 @@ def test_max_interval_end_per_model(
 
     assert state_sync.max_interval_end_per_model(environment_name, {"missing"}) == {}
     assert state_sync.max_interval_end_per_model(environment_name, set()) == {}
+
+
+def test_max_interval_end_per_model_with_pending_restatements(
+    state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
+) -> None:
+    snapshot = make_snapshot(
+        SqlModel(
+            name="a",
+            cron="@daily",
+            query=parse_one("select 1, ds"),
+        ),
+    )
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    state_sync.push_snapshots([snapshot])
+
+    state_sync.add_interval(snapshot, "2023-01-01", "2023-01-01")
+    state_sync.add_interval(snapshot, "2023-01-02", "2023-01-02")
+    state_sync.add_interval(snapshot, "2023-01-03", "2023-01-03")
+    # Add a pending restatement interval
+    state_sync.add_snapshots_intervals(
+        [
+            SnapshotIntervals(
+                name=snapshot.name,
+                identifier=snapshot.identifier,
+                version=snapshot.version,
+                intervals=[],
+                dev_intervals=[],
+                pending_restatement_intervals=[
+                    (to_timestamp("2023-01-04"), to_timestamp("2023-01-05"))
+                ],
+            )
+        ]
+    )
+
+    snapshot = state_sync.get_snapshots([snapshot.snapshot_id])[snapshot.snapshot_id]
+    assert snapshot.intervals == [(to_timestamp("2023-01-01"), to_timestamp("2023-01-04"))]
+    assert snapshot.pending_restatement_intervals == [
+        (to_timestamp("2023-01-04"), to_timestamp("2023-01-05"))
+    ]
+
+    environment_name = "test_max_interval_end_for_environment"
+
+    state_sync.promote(
+        Environment(
+            name=environment_name,
+            snapshots=[snapshot.table_info],
+            start_at="2023-01-01",
+            end_at="2023-01-03",
+            plan_id="test_plan_id",
+            previous_finalized_snapshots=[],
+        )
+    )
+
+    assert state_sync.max_interval_end_per_model(environment_name) == {
+        snapshot.name: to_timestamp("2023-01-04")
+    }
 
 
 def test_max_interval_end_per_model_ensure_finalized_snapshots(

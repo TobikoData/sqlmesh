@@ -29,7 +29,7 @@ class CategorizerConfig(BaseConfig):
     """
 
     external: AutoCategorizationMode = AutoCategorizationMode.FULL
-    python: AutoCategorizationMode = AutoCategorizationMode.OFF
+    python: AutoCategorizationMode = AutoCategorizationMode.FULL
     sql: AutoCategorizationMode = AutoCategorizationMode.FULL
     seed: AutoCategorizationMode = AutoCategorizationMode.FULL
 

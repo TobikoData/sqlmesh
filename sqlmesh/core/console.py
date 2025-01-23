@@ -411,7 +411,7 @@ class TerminalConsole(Console):
         if self.evaluation_progress_live:
             self.evaluation_progress_live.stop()
             if success:
-                self.log_success("All model batches have been executed successfully")
+                self.log_success("Model batches executed successfully")
 
         self.evaluation_progress_live = None
         self.evaluation_total_progress = None
@@ -458,7 +458,7 @@ class TerminalConsole(Console):
             self.creation_progress.stop()
             self.creation_progress = None
             if success:
-                self.log_success("All model versions have been created successfully")
+                self.log_success("Model versions created successfully")
 
         self.environment_naming_info = EnvironmentNamingInfo()
         self.default_catalog = None
@@ -535,7 +535,7 @@ class TerminalConsole(Console):
             self.promotion_progress.stop()
             self.promotion_progress = None
             if success:
-                self.log_success("The target environment has been updated successfully")
+                self.log_success("Target environment updated successfully")
 
         self.environment_naming_info = EnvironmentNamingInfo()
         self.default_catalog = None
@@ -561,7 +561,7 @@ class TerminalConsole(Console):
         if self.migration_progress is not None:
             self.migration_progress = None
             if success:
-                self.log_success("The migration has been completed successfully")
+                self.log_success("Migration completed successfully")
 
     def stop_snapshot_migration_progress(self, success: bool = True) -> None:
         """Stop the migration progress."""
@@ -569,7 +569,7 @@ class TerminalConsole(Console):
         if self.migration_progress is not None:
             self.migration_progress.stop()
             if success:
-                self.log_success("All snapshots have been migrated successfully")
+                self.log_success("Snapshots migrated successfully")
 
     def start_env_migration_progress(self, total_tasks: int) -> None:
         """Indicates that a new environment migration has begun."""
@@ -595,7 +595,7 @@ class TerminalConsole(Console):
             self.env_migration_progress.stop()
             self.env_migration_progress = None
             if success:
-                self.log_success("All environments have been migrated successfully")
+                self.log_success("Environments migrated successfully")
 
     def show_model_difference_summary(
         self,

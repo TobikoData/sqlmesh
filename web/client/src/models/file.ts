@@ -1,7 +1,13 @@
 import { type Status, type File } from '../api/client'
 import { type ModelDirectory } from './directory'
 import { type InitialArtifact, ModelArtifact } from './artifact'
-import { isFalse, isNil, isStringEmptyOrNil, toUniqueName } from '@utils/index'
+import {
+  ensureString,
+  isFalse,
+  isStringEmpty,
+  isStringNotEmpty,
+  toUniqueName,
+} from '@utils/index'
 
 export interface FormatFileStatus {
   path: string
@@ -35,21 +41,14 @@ export class ModelFile extends ModelArtifact<InitialFile> {
   isFormatted?: boolean
 
   constructor(initial?: File | ModelFile, parent?: ModelDirectory) {
-    super(
-      (initial as ModelFile)?.isModel
-        ? (initial as ModelFile).initial
-        : {
-            ...(initial as File),
-            extension: initial?.extension ?? EnumFileExtensions.SQL,
-            content: initial?.content ?? '',
-          },
-      parent,
-    )
+    super(ModelFile.getInitialArtifact(initial), parent)
 
-    this.extension =
-      ((initial?.extension ?? this.initial.extension) as FileExtensions) ?? ''
-    this._content = this.content =
-      initial?.content ?? this.initial.content ?? ''
+    this.content = this._content = ensureString(
+      initial?.content ?? this.initial.content,
+    )
+    this.extension = ensureString(
+      initial?.extension ?? this.initial.extension,
+    ) as FileExtensions
     this.isFormatted = (initial as ModelFile)?.isFormatted
   }
 
@@ -57,16 +56,12 @@ export class ModelFile extends ModelArtifact<InitialFile> {
     return this.name.replace(this.extension, '')
   }
 
-  get isSynced(): boolean {
-    return isFalse(isStringEmptyOrNil(this._content))
-  }
-
   get isEmpty(): boolean {
-    return isStringEmptyOrNil(this.content)
+    return isStringEmpty(this.content)
   }
 
   get isChanged(): boolean {
-    return this.content !== this._content
+    return isStringNotEmpty(this._content) && this.content !== this._content
   }
 
   get isSQL(): boolean {
@@ -74,7 +69,7 @@ export class ModelFile extends ModelArtifact<InitialFile> {
   }
 
   get fingerprint(): string {
-    return this._content + this.name + this.path
+    return `${this._content}${this.name}${this.path}`
   }
 
   removeChanges(): void {
@@ -82,32 +77,38 @@ export class ModelFile extends ModelArtifact<InitialFile> {
   }
 
   copyName(): string {
-    return `Copy of ${
-      this.name.split(this.extension)[0] ?? ''
-    }__${toUniqueName()}${this.extension}`
+    return `Copy of ${ensureString(
+      this.name.split(this.extension)[0],
+    )}__${toUniqueName()}${this.extension}`
   }
 
-  updateContent(newContent: string = ''): void {
+  update(newFile?: File): void {
+    const content = ensureString(newFile?.content)
     // When modifying a file locally, we only modify the content.
     // Therefore, if we have content but the variable "_content" is empty,
     // it is likely because we restored the file content from localStorage.
     // After updating "_content", we still want to retain the content
     // because it is unsaved changes.
-    if (this.isSynced || isFalse(this.isChanged)) {
-      this.content = newContent
+    if (isStringEmpty(this._content) || isFalse(this.isChanged)) {
+      this.content = content
     }
 
-    this._content = newContent
+    this._content = content
+    this.extension = ensureString(newFile?.extension) as FileExtensions
   }
 
-  update(newFile?: File): void {
-    if (isNil(newFile)) {
-      this.updateContent('')
-    } else {
-      this.extension =
-        (newFile.extension as FileExtensions) ?? EnumFileExtensions.None
+  private static getInitialArtifact(initial?: File | ModelFile): InitialFile {
+    return ModelFile.isModelFile(initial)
+      ? initial.initial
+      : {
+          name: ensureString(initial?.name),
+          path: ensureString(initial?.path),
+          extension: initial?.extension ?? EnumFileExtensions.SQL,
+          content: ensureString(initial?.content),
+        }
+  }
 
-      this.updateContent(newFile.content ?? '')
-    }
+  static isModelFile(file: any): file is ModelFile {
+    return file instanceof ModelFile
   }
 }

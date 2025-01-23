@@ -322,8 +322,12 @@ def test_gateway_specific_adapters(copy_to_temp_path, mocker):
     ctx = Context(paths=path, config="isolated_systems_config", gateway="prod")
     assert len(ctx._engine_adapters) == 1
     assert ctx.engine_adapter == ctx._engine_adapters["prod"]
+
     with pytest.raises(SQLMeshError):
-        assert ctx._get_engine_adapter("dev")
+        assert ctx._get_engine_adapter("non_existing")
+
+    # This will create the requested engine adapter
+    assert ctx._get_engine_adapter("dev") == ctx._engine_adapters["dev"]
 
     ctx = Context(paths=path, config="isolated_systems_config")
     assert len(ctx._engine_adapters) == 1
@@ -337,8 +341,7 @@ def test_gateway_specific_adapters(copy_to_temp_path, mocker):
 
     ctx = Context(paths=path, config="isolated_systems_config")
 
-    ctx._create_engine_adapters({"test"})
-    assert len(ctx._engine_adapters) == 2
+    assert len(ctx.engine_adapters) == 3
     assert ctx.engine_adapter == ctx._get_engine_adapter()
     assert ctx._get_engine_adapter("test") == ctx._engine_adapters["test"]
 
@@ -849,7 +852,7 @@ def test_plan_default_end(sushi_context_pre_scheduling: Context):
     ).build()
     assert forward_only_dev_plan.end is not None
     assert to_date(make_inclusive_end(forward_only_dev_plan.end)) == plan_end
-    assert forward_only_dev_plan.start == plan_end
+    assert to_timestamp(forward_only_dev_plan.start) == to_timestamp(plan_end)
 
 
 @pytest.mark.slow

@@ -49,6 +49,7 @@ from sqlmesh.utils.pandas import columns_to_types_from_df
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import SchemaName, SessionProperties, TableName
     from sqlmesh.core.engine_adapter._typing import (
+        BigframeSession,
         DF,
         PySparkDataFrame,
         PySparkSession,
@@ -158,6 +159,10 @@ class EngineAdapter:
 
     @property
     def snowpark(self) -> t.Optional[SnowparkSession]:
+        return None
+
+    @property
+    def bigframe(self) -> t.Optional[BigframeSession]:
         return None
 
     @property
@@ -1820,9 +1825,7 @@ class EngineAdapter:
             on = exp.and_(merge_filter, on)
 
         if not when_matched:
-            when_matched = exp.Whens()
-            when_matched.append(
-                "expressions",
+            match_expressions = [
                 exp.When(
                     matched=True,
                     source=False,
@@ -1834,28 +1837,32 @@ class EngineAdapter:
                             for col in columns_to_types
                         ],
                     ),
+                )
+            ]
+        else:
+            match_expressions = when_matched.copy().expressions
+
+        match_expressions.append(
+            exp.When(
+                matched=False,
+                source=False,
+                then=exp.Insert(
+                    this=exp.Tuple(expressions=[exp.column(col) for col in columns_to_types]),
+                    expression=exp.Tuple(
+                        expressions=[
+                            exp.column(col, MERGE_SOURCE_ALIAS) for col in columns_to_types
+                        ]
+                    ),
                 ),
             )
-
-        when_not_matched = exp.When(
-            matched=False,
-            source=False,
-            then=exp.Insert(
-                this=exp.Tuple(expressions=[exp.column(col) for col in columns_to_types]),
-                expression=exp.Tuple(
-                    expressions=[exp.column(col, MERGE_SOURCE_ALIAS) for col in columns_to_types]
-                ),
-            ),
         )
-        when_matched.append("expressions", when_not_matched)
-
         for source_query in source_queries:
             with source_query as query:
                 self._merge(
                     target_table=target_table,
                     query=query,
                     on=on,
-                    whens=when_matched,
+                    whens=exp.Whens(expressions=match_expressions),
                 )
 
     def rename_table(

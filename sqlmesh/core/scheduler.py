@@ -27,6 +27,7 @@ from sqlmesh.core.snapshot.definition import (
     Interval,
     expand_range,
     get_next_model_interval_start,
+    parent_snapshots_by_name,
 )
 from sqlmesh.core.state_sync import StateSync
 from sqlmesh.utils import format_exception
@@ -35,7 +36,6 @@ from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import (
     TimeLike,
     format_tz_datetime,
-    now,
     now_timestamp,
     to_timestamp,
     validate_date_range,
@@ -143,9 +143,9 @@ class Scheduler:
         snapshots_to_intervals = compute_interval_params(
             snapshots,
             start=start or earliest_start_date(snapshots),
-            end=end or now(),
+            end=end or now_timestamp(),
             deployability_index=deployability_index,
-            execution_time=execution_time or now(),
+            execution_time=execution_time or now_timestamp(),
             restatements=restatements,
             interval_end_per_model=interval_end_per_model,
             ignore_cron=ignore_cron,
@@ -183,10 +183,7 @@ class Scheduler:
         """
         validate_date_range(start, end)
 
-        snapshots = {
-            self.snapshots[p_sid].name: self.snapshots[p_sid] for p_sid in snapshot.parents
-        }
-        snapshots[snapshot.name] = snapshot
+        snapshots = parent_snapshots_by_name(snapshot, self.snapshots)
 
         is_deployable = deployability_index.is_deployable(snapshot)
 
@@ -290,9 +287,12 @@ class Scheduler:
             if environment_naming_info.name != c.PROD
             else DeployabilityIndex.all_deployable()
         )
-        execution_time = execution_time or now()
+        execution_time = execution_time or now_timestamp()
 
         self.state_sync.refresh_snapshot_intervals(self.snapshots.values())
+        for s_id, interval in (restatements or {}).items():
+            self.snapshots[s_id].remove_interval(interval)
+
         if auto_restatement_enabled:
             auto_restated_intervals = apply_auto_restatements(self.snapshots, execution_time)
             self.state_sync.add_snapshots_intervals(auto_restated_intervals)
@@ -313,13 +313,17 @@ class Scheduler:
         )
 
         if not merged_intervals:
-            next_ready_interval_start = get_next_model_interval_start(self.snapshots.values())
+            next_run_ready_msg = ""
 
-            utc_time = format_tz_datetime(next_ready_interval_start)
-            local_time = format_tz_datetime(next_ready_interval_start, use_local_timezone=True)
+            next_ready_interval_start = get_next_model_interval_start(self.snapshots.values())
+            if next_ready_interval_start:
+                utc_time = format_tz_datetime(next_ready_interval_start)
+                local_time = format_tz_datetime(next_ready_interval_start, use_local_timezone=True)
+                time_msg = local_time if local_time == utc_time else f"{local_time} ({utc_time})"
+                next_run_ready_msg = f"\n\nNext run will be ready at {time_msg}."
 
             self.console.log_status_update(
-                f"No models are ready to run. Please wait until a model `cron` interval has elapsed.\n\nNext run will be ready at {local_time} ({utc_time})."
+                f"No models are ready to run. Please wait until a model `cron` interval has elapsed.{next_run_ready_msg}"
             )
             return CompletionStatus.NOTHING_TO_DO
 
@@ -435,7 +439,7 @@ class Scheduler:
         Returns:
             A tuple of errors and skipped intervals.
         """
-        execution_time = execution_time or now()
+        execution_time = execution_time or now_timestamp()
 
         batched_intervals = self.batch_intervals(merged_intervals, start, end, execution_time)
 

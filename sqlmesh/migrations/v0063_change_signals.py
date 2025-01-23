@@ -18,6 +18,7 @@ def migrate(state_sync, **kwargs):  # type: ignore
 
     new_snapshots = []
 
+    signal_change = False
     for (
         name,
         identifier,
@@ -47,6 +48,7 @@ def migrate(state_sync, **kwargs):  # type: ignore
         signals = node.get("signals")
 
         if signals:
+            signal_change = True
             node["signals"] = []
 
             for signal in signals:
@@ -60,21 +62,21 @@ def migrate(state_sync, **kwargs):  # type: ignore
                     )
                 )
 
-            new_snapshots.append(
-                {
-                    "name": name,
-                    "identifier": identifier,
-                    "version": version,
-                    "snapshot": json.dumps(parsed_snapshot),
-                    "kind_name": kind_name,
-                    "updated_ts": updated_ts,
-                    "unpaused_ts": unpaused_ts,
-                    "ttl_ms": ttl_ms,
-                    "unrestorable": unrestorable,
-                }
-            )
+        new_snapshots.append(
+            {
+                "name": name,
+                "identifier": identifier,
+                "version": version,
+                "snapshot": json.dumps(parsed_snapshot),
+                "kind_name": kind_name,
+                "updated_ts": updated_ts,
+                "unpaused_ts": unpaused_ts,
+                "ttl_ms": ttl_ms,
+                "unrestorable": unrestorable,
+            }
+        )
 
-    if new_snapshots:
+    if signal_change and new_snapshots:
         engine_adapter.delete_from(snapshots_table, "TRUE")
         blob_type = blob_text_type(engine_adapter.dialect)
 

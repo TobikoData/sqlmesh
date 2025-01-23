@@ -25,7 +25,7 @@ from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.macros import MacroEvaluator, macro
 from sqlmesh.core.model import Model, SqlModel, load_sql_based_model, model
 from sqlmesh.core.test.definition import ModelTest, PythonModelTest, SqlModelTest
-from sqlmesh.utils.errors import ConfigError, TestError
+from sqlmesh.utils.errors import ConfigError, SQLMeshError, TestError
 from sqlmesh.utils.yaml import dump as dump_yaml
 from sqlmesh.utils.yaml import load as load_yaml
 
@@ -1234,6 +1234,30 @@ test_foo:
         ]
     )
 
+    test = _create_test(
+        body=load_yaml(
+            """
+test_foo:
+  model: xyz
+  outputs:
+    query:
+      - cur_timestamp: "2023-01-01 12:05:03+00:00"
+  vars:
+    execution_time: "2023-01-01 12:05:03+00:00"
+            """
+        ),
+        test_name="test_foo",
+        model=_create_model("SELECT CURRENT_TIMESTAMP AS cur_timestamp"),
+        context=Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="bigquery"))),
+    )
+
+    spy_execute = mocker.spy(test.engine_adapter, "_execute")
+    _check_successful_or_raise(test.run())
+
+    spy_execute.assert_has_calls(
+        [call('''SELECT CAST('2023-01-01 12:05:03+00:00' AS TIMESTAMPTZ) AS "cur_timestamp"''')]
+    )
+
     @model("py_model", columns={"ts1": "timestamptz", "ts2": "timestamptz"})
     def execute(context, start, end, execution_time, **kwargs):
         datetime_now_utc = datetime.datetime.now(tz=datetime.timezone.utc)
@@ -1989,3 +2013,53 @@ def test_test_generation_with_recursive_ctes(tmp_path: Path) -> None:
     }
 
     _check_successful_or_raise(context.test())
+
+
+def test_test_with_gateway_specific_model(tmp_path: Path, mocker: MockerFixture) -> None:
+    init_example_project(tmp_path, dialect="duckdb")
+
+    config = Config(
+        gateways={
+            "main": GatewayConfig(connection=DuckDBConnectionConfig()),
+            "second": GatewayConfig(connection=DuckDBConnectionConfig()),
+        },
+        default_gateway="main",
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+    )
+    gw_model_sql_file = tmp_path / "models" / "gw_model.sql"
+
+    # The model has a gateway specified which isn't the default
+    gw_model_sql_file.write_text(
+        "MODEL (name sqlmesh_example.gw_model, gateway second); SELECT c FROM sqlmesh_example.input_model;"
+    )
+    input_model_sql_file = tmp_path / "models" / "input_model.sql"
+    input_model_sql_file.write_text(
+        "MODEL (name sqlmesh_example.input_model); SELECT c FROM external_table;"
+    )
+
+    context = Context(paths=tmp_path, config=config)
+    input_queries = {'"memory"."sqlmesh_example"."input_model"': "SELECT 5 AS c"}
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.base.EngineAdapter.fetchdf",
+        return_value=pd.DataFrame({"c": [5]}),
+    )
+
+    assert context.engine_adapter == context._engine_adapters["main"]
+    with pytest.raises(
+        SQLMeshError, match=r"Gateway 'wrong' not found in the available engine adapters."
+    ):
+        context._get_engine_adapter("wrong")
+
+    # Create test should use the gateway specific engine adapter
+    context.create_test("sqlmesh_example.gw_model", input_queries=input_queries, overwrite=True)
+    assert context._get_engine_adapter("second") == context._engine_adapters["second"]
+    assert len(context._engine_adapters) == 2
+
+    test = load_yaml(context.path / c.TESTS / "test_gw_model.yaml")
+
+    assert len(test) == 1
+    assert "test_gw_model" in test
+    assert test["test_gw_model"]["inputs"] == {
+        '"memory"."sqlmesh_example"."input_model"': [{"c": 5}]
+    }
+    assert test["test_gw_model"]["outputs"] == {"query": [{"c": 5}]}

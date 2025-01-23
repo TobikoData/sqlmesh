@@ -58,7 +58,11 @@ bigquery_config = Config(
 test_config = Config(
     gateways={"in_memory": GatewayConfig(connection=DuckDBConnectionConfig())},
     default_gateway="in_memory",
-    plan=PlanConfig(auto_categorize_changes=CategorizerConfig(sql=AutoCategorizationMode.SEMI)),
+    plan=PlanConfig(
+        auto_categorize_changes=CategorizerConfig(
+            sql=AutoCategorizationMode.SEMI, python=AutoCategorizationMode.OFF
+        )
+    ),
     model_defaults=model_defaults,
 )
 

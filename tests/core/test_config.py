@@ -302,6 +302,17 @@ def test_load_config_from_env():
         )
 
 
+def test_load_config_from_env_no_config_vars():
+    with mock.patch.dict(
+        os.environ,
+        {
+            "SQLMESH__AIRFLOW__DISABLE_STATE_MIGRATION": "1",
+            "DUMMY_ENV_VAR": "dummy",
+        },
+    ):
+        assert load_config_from_env() == {}
+
+
 def test_load_config_from_env_invalid_variable_name():
     with mock.patch.dict(
         os.environ,
@@ -757,10 +768,8 @@ model_defaults:
         new_callable=mocker.PropertyMock(return_value={"snapshot": "athena"}),
     )
 
-    ctx._create_engine_adapters()
-
     assert isinstance(ctx._connection_config, RedshiftConnectionConfig)
-    assert len(ctx._engine_adapters) == 2
-    assert isinstance(ctx._engine_adapters["athena"], AthenaEngineAdapter)
-    assert isinstance(ctx._engine_adapters["redshift"], RedshiftEngineAdapter)
+    assert len(ctx.engine_adapters) == 2
+    assert isinstance(ctx.engine_adapters["athena"], AthenaEngineAdapter)
+    assert isinstance(ctx.engine_adapters["redshift"], RedshiftEngineAdapter)
     assert ctx.engine_adapter == ctx._get_engine_adapter("redshift")

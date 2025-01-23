@@ -152,7 +152,7 @@ class UnsupportedCatalogOperationError(EngineAdapterError):
 
 class CircuitBreakerError(SQLMeshError):
     def __init__(self) -> None:
-        super().__init__("Circuit breaker has been triggered.")
+        super().__init__("Circuit breaker triggered.")
 
 
 def raise_config_error(

@@ -236,9 +236,8 @@ class HttpStateSync(StateSync):
         Returns:
             The updated snapshots.
         """
-        raise NotImplementedError(
-            "Refreshing snapshot intervals is not supported by the Airflow state sync."
-        )
+        logger.warning("Refreshing snapshot intervals is not supported by the Airflow state sync")
+        return list(snapshots)
 
     def promote(
         self,

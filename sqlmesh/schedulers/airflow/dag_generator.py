@@ -134,6 +134,7 @@ class SnapshotDagGenerator:
                 common.SQLMESH_AIRFLOW_TAG,
                 common.SNAPSHOT_AIRFLOW_TAG,
                 snapshot.node.name[-AIRFLOW_TAG_CHARACTER_LIMIT:],
+                *[tag[:AIRFLOW_TAG_CHARACTER_LIMIT] for tag in snapshot.node.tags],
             ],
             default_args={
                 **DAG_DEFAULT_ARGS,

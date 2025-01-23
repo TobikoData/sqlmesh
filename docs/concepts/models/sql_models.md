@@ -10,6 +10,7 @@ The SQL-based definition of SQL models is the most common one, and consists of t
 * Optional pre-statements
 * A single query
 * Optional post-statements
+* Optional on-virtual-update-statements
 
 These models are designed to look and feel like you're simply using SQL, but they can be customized for advanced use cases.
 
@@ -90,6 +91,38 @@ MODEL (
 
 Note that the SQL command `UNCACHE TABLE countries` inside the `@IF()` macro does **not** end with a semi-colon. Instead, the semi-colon comes after the `@IF()` macro's closing parenthesis.
 
+### Optional on-virtual-update statements
+
+The optional on-virtual-update statements allow you to execute SQL commands after the completion of the [Virtual Update](#virtual-update).
+
+These can be used, for example, to grant privileges on views of the virtual layer. 
+
+These SQL statements must be enclosed within an `ON_VIRTUAL_UPDATE_BEGIN;` ...; `ON_VIRTUAL_UPDATE_END;` block like this:
+
+```sql linenums="1" hl_lines="10-15"
+MODEL (
+  name db.customers,
+  kind FULL
+);
+
+SELECT
+  r.id::INT
+FROM raw.restaurants AS r;
+
+ON_VIRTUAL_UPDATE_BEGIN; 
+GRANT SELECT ON VIEW @this_model TO ROLE role_name;
+JINJA_STATEMENT_BEGIN;     
+GRANT SELECT ON VIEW {{ this_model }} TO ROLE admin;
+JINJA_END;  
+ON_VIRTUAL_UPDATE_END;
+```
+
+[Jinja expressions](../macros/jinja_macros.md) can also be used within them, as demonstrated in the example above. These expressions must be properly nested within a `JINJA_STATEMENT_BEGIN;` and `JINJA_END;` block.
+
+!!! note
+
+    Table resolution for these statements occurs at the virtual layer. This means that table names, including `@this_model` macro, are resolved to their qualified view names. For instance, when running the plan in an environment named `dev`, `db.customers` and `@this_model` would resolve to `db__dev.customers` and not to the physical table name.
+
 ### The model query
 
 The model must contain a standalone query, which can be a single `SELECT` expression, or multiple `SELECT` expressions combined with the `UNION`, `INTERSECT`, or `EXCEPT` operators. The result of this query will be used to populate the model's table or view.
@@ -98,7 +131,7 @@ The model must contain a standalone query, which can be a single `SELECT` expres
 
 The Python-based definition of SQL models consists of a single python function, decorated with SQLMesh's `@model` [decorator](https://wiki.python.org/moin/PythonDecorators). The decorator is required to have the `is_sql` keyword argument set to `True` to distinguish it from [Python models](./python_models.md) that return DataFrame instances.
 
-This function's return value serves as the model's query, and it must be either a SQL string or a [SQLGlot expression](https://github.com/tobymao/sqlglot/blob/main/sqlglot/expressions.py). The `@model` decorator is used to define the model's [metadata](#MODEL-DDL) and, optionally its pre/post-statements that are also in the form of SQL strings or SQLGlot expressions.
+This function's return value serves as the model's query, and it must be either a SQL string or a [SQLGlot expression](https://github.com/tobymao/sqlglot/blob/main/sqlglot/expressions.py). The `@model` decorator is used to define the model's [metadata](#MODEL-DDL) and, optionally its pre/post-statements or on-virtual-update-statements that are also in the form of SQL strings or SQLGlot expressions.
 
 Defining a SQL model using Python can be beneficial in cases where its query is too complex to express cleanly in SQL, for example due to having many dynamic components that would require heavy use of [macros](../macros/overview/). Since Python-based models generate SQL, they support the same features as regular SQL models, such as column-level [lineage](../glossary/#lineage).
 
@@ -120,6 +153,7 @@ from sqlmesh.core.macros import MacroEvaluator
     kind="FULL",
     pre_statements=["CACHE TABLE countries AS SELECT * FROM raw.countries"],
     post_statements=["UNCACHE TABLE countries"],
+    on_virtual_update=["GRANT SELECT ON VIEW @this_model TO ROLE dev_role"],
 )
 def entrypoint(evaluator: MacroEvaluator) -> str | exp.Expression:
     return (
@@ -139,7 +173,7 @@ One could also define this model by simply returning a string that contained the
 
 The `@model` decorator is the Python equivalent of the `MODEL` DDL.
 
-In addition to model metadata and configuration information, one can also set the keyword arguments `pre_statements` and `post_statements` to a list of SQL strings and/or SQLGlot expressions to define the pre/post-statements of the model, respectively.
+In addition to model metadata and configuration information, one can also set the keyword arguments `pre_statements`, `post_statements` and `on_virtual_update` to a list of SQL strings and/or SQLGlot expressions to define the pre/post-statements and on-virtual-update-statements of the model, respectively. 
 
 !!! note
 

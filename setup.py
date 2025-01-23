@@ -47,7 +47,7 @@ setup(
         "rich[jupyter]",
         "ruamel.yaml",
         "setuptools; python_version>='3.12'",
-        "sqlglot[rs]~=26.0.1",
+        "sqlglot[rs]~=26.2.1",
         "tenacity",
         "time-machine",
     ],
@@ -58,6 +58,7 @@ setup(
             "google-cloud-bigquery[pandas]",
             "google-cloud-bigquery-storage",
         ],
+        "bigframes": ["bigframes>=1.32.0"],
         "clickhouse": ["clickhouse-connect"],
         "databricks": ["databricks-sql-connector"],
         "dev": [

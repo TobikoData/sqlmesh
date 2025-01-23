@@ -22,10 +22,18 @@ export function isPrimitive(value: unknown): value is Primitive {
   return isString(value) || isNumber(value) || typeof value === 'boolean'
 }
 
+export function isStringEmpty(value: unknown): value is '' {
+  return value === ''
+}
+
 export function isStringEmptyOrNil(
   value: unknown,
 ): value is undefined | null | '' {
-  return isNil(value) || value === ''
+  return isNil(value) || isStringEmpty(value)
+}
+
+export function ensureString(value: unknown): string {
+  return isString(value) ? value : ''
 }
 
 export function isStringNotEmpty(value: unknown): value is string {

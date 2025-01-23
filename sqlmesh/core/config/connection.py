@@ -372,7 +372,7 @@ class DuckDBAttachOptions(BaseConfig):
             f" AS {alias}" if not (self.type == "motherduck" or self.path.startswith("md:")) else ""
         )
         options_sql = f" ({', '.join(options)})" if options else ""
-        token_sql = "?" + self.token if self.token else ""
+        token_sql = "?motherduck_token=" + self.token if self.token else ""
         return f"ATTACH '{self.path}{token_sql}'{alias_sql}{options_sql}"
 
 

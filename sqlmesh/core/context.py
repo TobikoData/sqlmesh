@@ -41,7 +41,6 @@ import time
 import traceback
 import typing as t
 import unittest.result
-from datetime import date, timedelta
 from functools import cached_property
 from io import StringIO
 from pathlib import Path
@@ -112,7 +111,7 @@ from sqlmesh.core.test import (
 from sqlmesh.core.user import User
 from sqlmesh.utils import UniqueKeyDict, sys_path
 from sqlmesh.utils.dag import DAG
-from sqlmesh.utils.date import TimeLike, now_ds, to_date
+from sqlmesh.utils.date import TimeLike, now_ds, to_timestamp
 from sqlmesh.utils.errors import (
     CircuitBreakerError,
     ConfigError,
@@ -127,6 +126,7 @@ if t.TYPE_CHECKING:
     from typing_extensions import Literal
 
     from sqlmesh.core.engine_adapter._typing import (
+        BigframeSession,
         DF,
         PySparkDataFrame,
         PySparkSession,
@@ -167,6 +167,11 @@ class BaseContext(abc.ABC):
     def snowpark(self) -> t.Optional[SnowparkSession]:
         """Returns the snowpark session if it exists."""
         return self.engine_adapter.snowpark
+
+    @property
+    def bigframe(self) -> t.Optional[BigframeSession]:
+        """Returns the bigframe session if it exists."""
+        return self.engine_adapter.bigframe
 
     @property
     def default_catalog(self) -> t.Optional[str]:
@@ -418,12 +423,10 @@ class GenericContext(BaseContext, t.Generic[C]):
     @property
     def snapshot_evaluator(self) -> SnapshotEvaluator:
         if not self._snapshot_evaluator:
-            if self._snapshot_gateways:
-                self._create_engine_adapters(set(self._snapshot_gateways.values()))
             self._snapshot_evaluator = SnapshotEvaluator(
                 {
                     gateway: adapter.with_log_level(logging.INFO)
-                    for gateway, adapter in self._engine_adapters.items()
+                    for gateway, adapter in self.engine_adapters.items()
                 },
                 ddl_concurrent_tasks=self.concurrent_tasks,
                 selected_gateway=self.selected_gateway,
@@ -701,7 +704,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                 done = True
             except CircuitBreakerError:
                 logger.warning(
-                    "Environment '%s' has been modified while running. Restarting the run...",
+                    "Environment '%s' modified while running. Restarting the run...",
                     environment,
                 )
                 if exit_on_env_update:
@@ -1268,6 +1271,10 @@ class GenericContext(BaseContext, t.Generic[C]):
             or (backfill_models is not None and not backfill_models),
             ensure_finalized_snapshots=self.config.plan.use_finalized_state,
         )
+        modified_model_names = {
+            *context_diff.modified_snapshots,
+            *[s.name for s in context_diff.added],
+        }
 
         if (
             is_dev
@@ -1277,15 +1284,12 @@ class GenericContext(BaseContext, t.Generic[C]):
         ):
             # Only backfill modified and added models.
             # This ensures that no models outside the impacted sub-DAG(s) will be backfilled unexpectedly.
-            backfill_models = {
-                *context_diff.modified_snapshots,
-                *[s.name for s in context_diff.added],
-            } or None
+            backfill_models = modified_model_names or None
 
         # If no end date is specified, use the max interval end from prod
         # to prevent unintended evaluation of the entire DAG.
         default_end: t.Optional[int] = None
-        default_start: t.Optional[date] = None
+        default_start: t.Optional[int] = None
         max_interval_end_per_model: t.Optional[t.Dict[str, int]] = None
         if not run and not end:
             models_for_interval_end: t.Optional[t.Set[str]] = None
@@ -1310,9 +1314,28 @@ class GenericContext(BaseContext, t.Generic[C]):
             )
             if max_interval_end_per_model:
                 default_end = max(max_interval_end_per_model.values())
-                default_start = to_date(min(max_interval_end_per_model.values())) - timedelta(
-                    days=1
-                )
+                # Infer the default start by finding the smallest interval start that corresponds to the default end.
+                for model_name in (
+                    backfill_models or modified_model_names or max_interval_end_per_model
+                ):
+                    if model_name not in snapshots:
+                        continue
+                    interval_unit = snapshots[model_name].node.interval_unit
+                    default_start = min(
+                        default_start or sys.maxsize,
+                        to_timestamp(
+                            interval_unit.cron_prev(
+                                interval_unit.cron_floor(
+                                    max_interval_end_per_model.get(model_name, default_end),
+                                    estimate=True,
+                                ),
+                                estimate=True,
+                            )
+                        ),
+                    )
+
+        # Refresh snapshot intervals to ensure that they are up to date with values reflected in the max_interval_end_per_model.
+        self.state_sync.refresh_snapshot_intervals(context_diff.snapshots.values())
 
         return self.PLAN_BUILDER_TYPE(
             context_diff=context_diff,
@@ -1406,9 +1429,9 @@ class GenericContext(BaseContext, t.Generic[C]):
         self.state_sync.invalidate_environment(name)
         if sync:
             self._cleanup_environments()
-            self.console.log_success(f"Environment '{name}' has been deleted.")
+            self.console.log_success(f"Environment '{name}' deleted.")
         else:
-            self.console.log_success(f"Environment '{name}' has been invalidated.")
+            self.console.log_success(f"Environment '{name}' invalidated.")
 
     @python_api_analytics
     def diff(self, environment: t.Optional[str] = None, detailed: bool = False) -> bool:
@@ -1476,6 +1499,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         source_alias, target_alias = source, target
 
         adapter = self.engine_adapter
+
         if model_or_snapshot:
             model = self.get_model(model_or_snapshot, raise_if_missing=True)
             adapter = self._get_engine_adapter(model.gateway)
@@ -1641,6 +1665,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             test_adapter = self._test_connection_config.create_engine_adapter(
                 register_comments_override=False
             )
+
             generate_test(
                 model=model_to_test,
                 input_queries=input_queries,
@@ -2021,21 +2046,19 @@ class GenericContext(BaseContext, t.Generic[C]):
             if snapshot.is_model and snapshot.model.gateway
         }
 
-    def _create_engine_adapters(self, gateways: t.Optional[t.Set] = None) -> None:
-        """Create engine adapters for the gateways, when none provided include all defined in the configs."""
-
+    @cached_property
+    def engine_adapters(self) -> t.Dict[str, EngineAdapter]:
+        """Returns all the engine adapters for the gateways defined in the configuration."""
         for gateway_name in self.config.gateways:
-            if gateway_name != self.selected_gateway and (
-                gateways is None or gateway_name in gateways
-            ):
+            if gateway_name != self.selected_gateway:
                 connection = self.config.get_connection(gateway_name)
                 adapter = connection.create_engine_adapter()
-                self.concurrent_tasks = min(self.concurrent_tasks, connection.concurrent_tasks)
                 self._engine_adapters[gateway_name] = adapter
+        return self._engine_adapters
 
     def _get_engine_adapter(self, gateway: t.Optional[str] = None) -> EngineAdapter:
         if gateway:
-            if adapter := self._engine_adapters.get(gateway):
+            if adapter := self.engine_adapters.get(gateway):
                 return adapter
             raise SQLMeshError(f"Gateway '{gateway}' not found in the available engine adapters.")
         return self.engine_adapter

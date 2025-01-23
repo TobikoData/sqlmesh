@@ -122,6 +122,10 @@ The SQLite database is read-write, while the PostgreSQL database is read-only.
     )
     ```
 
+##### Catalogs for PostgreSQL
+
+In PostgreSQL, the catalog name must match the actual catalog name it is associated with, as shown in the example above, where the database name (`dbname` in the path) is the same as the catalog name.
+
 ##### Connectors without schemas
 
 Some connections, like SQLite, do not support schema names and therefore objects will be attached under the default schema name of `main`.

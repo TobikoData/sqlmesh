@@ -128,15 +128,15 @@ def assert_new_env(result, new_env="prod", from_env="prod", initialize=True) -> 
 
 
 def assert_model_versions_created(result) -> None:
-    assert "All model versions have been created successfully" in result.output
+    assert "Model versions created successfully" in result.output
 
 
 def assert_model_batches_executed(result) -> None:
-    assert "All model batches have been executed successfully" in result.output
+    assert "Model batches executed successfully" in result.output
 
 
 def assert_target_env_updated(result) -> None:
-    assert "The target environment has been updated successfully" in result.output
+    assert "Target environment updated successfully" in result.output
 
 
 def assert_backfill_success(result) -> None:
@@ -220,7 +220,8 @@ def test_plan_restate_model(runner, tmp_path):
     assert_duckdb_test(result)
     assert "No changes to plan: project files match the `prod` environment" in result.output
     assert "sqlmesh_example.full_model evaluated in" in result.output
-    assert_backfill_success(result)
+    assert_model_batches_executed(result)
+    assert_target_env_updated(result)
 
 
 @pytest.mark.parametrize("flag", ["--skip-backfill", "--dry-run"])
@@ -244,7 +245,7 @@ def test_plan_skip_backfill(runner, tmp_path, flag):
     )
     assert result.exit_code == 0
     assert_virtual_update(result)
-    assert "All model batches have been executed successfully" not in result.output
+    assert "Model batches executed successfully" not in result.output
 
 
 def test_plan_auto_apply(runner, tmp_path):
@@ -348,7 +349,6 @@ def test_plan_dev_create_from_virtual(runner, tmp_path):
     )
     assert result.exit_code == 0
     assert_new_env(result, "dev2", "dev", initialize=False)
-    assert_model_versions_created(result)
     assert_target_env_updated(result)
     assert_virtual_update(result)
 
@@ -450,8 +450,8 @@ def test_plan_dev_no_prompts(runner, tmp_path):
         cli, ["--log-file-dir", tmp_path, "--paths", tmp_path, "plan", "dev", "--no-prompts"]
     )
     assert "Apply - Backfill Tables [y/n]: " in result.output
-    assert "All model versions have been created successfully" not in result.output
-    assert "All model batches have been executed successfully" not in result.output
+    assert "Model versions created successfully" not in result.output
+    assert "Model batches executed successfully" not in result.output
     assert "The target environment has been updated successfully" not in result.output
 
 
@@ -896,50 +896,51 @@ WHERE
     assert incremental_model == expected_incremental_model
     assert nested_model == expected_nested_fillings_model
 
-    # Plan prod and backfill
-    result = runner.invoke(
-        cli, ["--log-file-dir", tmp_path, "--paths", tmp_path, "plan", "--auto-apply"]
-    )
+    try:
+        # Plan prod and backfill
+        result = runner.invoke(
+            cli, ["--log-file-dir", tmp_path, "--paths", tmp_path, "plan", "--auto-apply"]
+        )
 
-    assert result.exit_code == 0
-    assert_backfill_success(result)
+        assert result.exit_code == 0
+        assert_backfill_success(result)
 
-    # Remove and update with missing model
-    remove(dlt_waiters_model_path)
-    assert not dlt_waiters_model_path.exists()
+        # Remove and update with missing model
+        remove(dlt_waiters_model_path)
+        assert not dlt_waiters_model_path.exists()
 
-    # Update with force = False will generate only the missing model
-    context = Context(paths=tmp_path)
-    assert generate_dlt_models(context, "sushi", [], False) == [
-        "sushi_dataset_sqlmesh.incremental_waiters"
-    ]
-    assert dlt_waiters_model_path.exists()
+        # Update with force = False will generate only the missing model
+        context = Context(paths=tmp_path)
+        assert generate_dlt_models(context, "sushi", [], False) == [
+            "sushi_dataset_sqlmesh.incremental_waiters"
+        ]
+        assert dlt_waiters_model_path.exists()
 
-    # Remove all models
-    remove(dlt_waiters_model_path)
-    remove(dlt_loads_model_path)
-    remove(dlt_sushi_types_model_path)
-    remove(dlt_sushi_fillings_model_path)
-    remove(dlt_sushi_twice_nested_model_path)
+        # Remove all models
+        remove(dlt_waiters_model_path)
+        remove(dlt_loads_model_path)
+        remove(dlt_sushi_types_model_path)
+        remove(dlt_sushi_fillings_model_path)
+        remove(dlt_sushi_twice_nested_model_path)
 
-    # Update to generate a specific model: sushi_types
-    assert generate_dlt_models(context, "sushi", ["sushi_types"], False) == [
-        "sushi_dataset_sqlmesh.incremental_sushi_types"
-    ]
+        # Update to generate a specific model: sushi_types
+        assert generate_dlt_models(context, "sushi", ["sushi_types"], False) == [
+            "sushi_dataset_sqlmesh.incremental_sushi_types"
+        ]
 
-    # Only the sushi_types should be generated now
-    assert not dlt_waiters_model_path.exists()
-    assert not dlt_loads_model_path.exists()
-    assert not dlt_sushi_fillings_model_path.exists()
-    assert not dlt_sushi_twice_nested_model_path.exists()
-    assert dlt_sushi_types_model_path.exists()
+        # Only the sushi_types should be generated now
+        assert not dlt_waiters_model_path.exists()
+        assert not dlt_loads_model_path.exists()
+        assert not dlt_sushi_fillings_model_path.exists()
+        assert not dlt_sushi_twice_nested_model_path.exists()
+        assert dlt_sushi_types_model_path.exists()
 
-    # Update with force = True will generate all models and overwrite existing ones
-    generate_dlt_models(context, "sushi", [], True)
-    assert dlt_loads_model_path.exists()
-    assert dlt_sushi_types_model_path.exists()
-    assert dlt_waiters_model_path.exists()
-    assert dlt_sushi_fillings_model_path.exists()
-    assert dlt_sushi_twice_nested_model_path.exists()
-
-    remove(dataset_path)
+        # Update with force = True will generate all models and overwrite existing ones
+        generate_dlt_models(context, "sushi", [], True)
+        assert dlt_loads_model_path.exists()
+        assert dlt_sushi_types_model_path.exists()
+        assert dlt_waiters_model_path.exists()
+        assert dlt_sushi_fillings_model_path.exists()
+        assert dlt_sushi_twice_nested_model_path.exists()
+    finally:
+        remove(dataset_path)

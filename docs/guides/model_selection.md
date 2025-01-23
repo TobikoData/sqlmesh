@@ -62,7 +62,7 @@ The upstream/downstream indicator may be combined with the wildcard operator. Fo
 
 The combination of the upstream/downstream indicator, wildcards, and multiple `--select-model` arguments enables granular and complex model selections for a plan.
 
-Upstream/downstream indicators also apply to tags. For example, `--select-model "tag:+reporting*"` would select all models with tags that start with `reporting` and their upstream models.
+Upstream/downstream indicators also apply to tags. For example, `--select-model "+tag:reporting*"` would select all models with tags that start with `reporting` and their upstream models.
 
 ## Backfill
 

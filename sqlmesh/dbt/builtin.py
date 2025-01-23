@@ -372,7 +372,7 @@ def create_builtin_globals(
         builtin_globals["var"] = Var(variables)
 
     snapshot = jinja_globals.pop("snapshot", None)
-    is_incremental = bool(snapshot.intervals) if snapshot else False
+    is_incremental = bool(snapshot.intervals) and snapshot.is_incremental if snapshot else False
     builtin_globals["is_incremental"] = lambda: is_incremental
 
     builtin_globals["builtins"] = AttributeDict(

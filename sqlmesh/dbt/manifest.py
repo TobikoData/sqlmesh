@@ -289,6 +289,7 @@ class ManifestHelper:
         args: Namespace = Namespace(
             vars=variables,
             profile=self.profile_name,
+            project_dir=str(self.project_path),
             profiles_dir=str(self.profiles_path),
             target=self.target.name,
             macro_debugging=False,

@@ -1,0 +1,25 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  .scrollbar--horizontal::-webkit-scrollbar {
+    height: var(--scrollbar-size);
+  }
+  .scrollbar--vertical::-webkit-scrollbar {
+    width: var(--scrollbar-size);
+  }
+  .scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-backgroud);
+    border-radius: var(--scrollbar-radius);
+  }
+  .input-ring {
+    @apply ring-accent-200 ring-offset-accent-500;
+  }
+  .input-ring:focus {
+    @apply outline-none ring-offset-2 ring-4;
+  }
+}

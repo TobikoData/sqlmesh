@@ -33,7 +33,7 @@ The `execute` function is wrapped with the `@model` [decorator](https://wiki.pyt
 
 Because SQLMesh creates tables before evaluating models, the schema of the output DataFrame is a required argument. The `@model` argument `columns` contains a dictionary of column names to types.
 
-The function takes an `ExecutionContext` that is able to run queries and to retrieve the current time interval that is being processed, along with arbitrary key-value arguments passed in at runtime. The function can either return a Pandas, PySpark, or Snowpark Dataframe instance.
+The function takes an `ExecutionContext` that is able to run queries and to retrieve the current time interval that is being processed, along with arbitrary key-value arguments passed in at runtime. The function can either return a Pandas, PySpark, Bigframe, or Snowpark Dataframe instance.
 
 If the function output is too large, it can also be returned in chunks using Python generators.
 
@@ -164,7 +164,43 @@ def execute(
     context.fetchdf("CREATE INDEX idx ON example.pre_post_statements (id);")
 ```
 
+## Optional on-virtual-update statements
+
+The optional on-virtual-update statements allow you to execute SQL commands after the completion of the [Virtual Update](#virtual-update).
+
+These can be used, for example, to grant privileges on views of the virtual layer.
+
+Similar to pre/post-statements you can set the `on_virtual_update` argument in the `@model` decorator to a list of SQL strings, SQLGlot expressions, or macro calls.
+
+``` python linenums="1" hl_lines="8"
+@model(
+    "db.test_model",
+    kind="full",
+    columns={
+        "id": "int",
+        "name": "text",
+    },
+    on_virtual_update=["GRANT SELECT ON VIEW @this_model TO ROLE dev_role"],
+)
+def execute(
+    context: ExecutionContext,
+    start: datetime,
+    end: datetime,
+    execution_time: datetime,
+    **kwargs: t.Any,
+) -> pd.DataFrame:
+
+    return pd.DataFrame([
+        {"id": 1, "name": "name"}
+    ])
+```
+
+!!! note
+
+    Table resolution for these statements occurs at the virtual layer. This means that table names, including `@this_model` macro, are resolved to their qualified view names. For instance, when running the plan in an environment named `dev`, `db.test_model` and `@this_model` would resolve to `db__dev.test_model` and not to the physical table name.
+
 ## Dependencies
+
 In order to fetch data from an upstream model, you first get the table name using `context`'s `resolve_table` method. This returns the appropriate table name for the current runtime [environment](../environments.md):
 
 ```python linenums="1"
@@ -195,6 +231,21 @@ def execute(
     context.resolve_table("docs_example.another_dependency")
 ```
 
+User-defined [global variables](global-variables) can also be used in `resolve_table` calls, as long as the `depends_on` keyword argument is present and contains the required dependencies. This is shown in the following example:
+
+```python linenums="1"
+@model(
+    "@schema_name.test_model2",
+    kind="FULL",
+    columns={"id": "INT"},
+    depends_on=["@schema_name.test_model1"],
+)
+def execute(context, **kwargs):
+    schema_name = context.var("schema_name")
+    table = context.resolve_table(f"{schema_name}.test_model1")
+    select_query = exp.select("*").from_(table)
+    return context.fetchdf(select_query)
+```
 
 ## Returning empty dataframes
 
@@ -218,29 +269,12 @@ def execute(
         yield df
 ```
 
+## User-defined variables
 
-## Global variables
+[User-defined global variables](../../reference/configuration.md#variables) can be accessed from within the Python model with the `context.var` method.
 
-[User-defined global variables](../../reference/configuration.md#variables) can be accessed from within the Python model using function arguments, where the name of the argument represents a variable key. For example:
+For example, this model access the user-defined variables `var` and `var_with_default`. It specifies a default value of `default_value` if `variable_with_default` resolves to a missing value.
 
-```python linenums="1" hl_lines="9"
-@model(
-    "my_model.name",
-)
-def execute(
-    context: ExecutionContext,
-    start: datetime,
-    end: datetime,
-    execution_time: datetime,
-    my_var: Optional[str] = None,
-    **kwargs: t.Any,
-) -> pd.DataFrame:
-    ...
-```
-
-Make sure to assign a default value to such arguments if you anticipate a missing variable key. Please note that arguments must be specified explicitly; in other words, variables can be accessed using `kwargs`.
-
-Alternatively, variables can be accessed using the `context.var` method. For example:
 ```python linenums="1" hl_lines="11 12"
 @model(
     "my_model.name",
@@ -252,10 +286,35 @@ def execute(
     execution_time: datetime,
     **kwargs: t.Any,
 ) -> pd.DataFrame:
-    var_value = context.var("<var_name>")
-    another_var_value = context.var("<another_var_name>", "default_value")
+    var_value = context.var("var")
+    var_with_default_value = context.var("var_with_default", "default_value")
     ...
 ```
+
+Alternatively, you can access global variables via `execute` function arguments, where the name of the argument corresponds to the name of a variable key.
+
+For example, this model specifies `my_var` as an argument to the `execute` method. The model code can reference the `my_var` object directly:
+
+```python linenums="1" hl_lines="9 12"
+@model(
+    "my_model.name",
+)
+def execute(
+    context: ExecutionContext,
+    start: datetime,
+    end: datetime,
+    execution_time: datetime,
+    my_var: Optional[str] = None,
+    **kwargs: t.Any,
+) -> pd.DataFrame:
+    my_var_plus1 = my_var + 1
+    ...
+```
+
+Make sure the argument has a default value if it's possible for the variable to be missing.
+
+Note that arguments must be specified explicitly - variables cannot be accessed using `kwargs`.
+
 ## Examples
 ### Basic
 The following is an example of a Python model returning a static Pandas DataFrame.
@@ -267,6 +326,7 @@ import typing as t
 from datetime import datetime
 
 import pandas as pd
+from sqlglot.expressions import to_column
 from sqlmesh import ExecutionContext, model
 
 @model(
@@ -282,7 +342,7 @@ from sqlmesh import ExecutionContext, model
         "name": "Name corresponding to the ID",
     },
     audits=[
-        ("not_null", {"columns": ["id"]}),
+        ("not_null", {"columns": [to_column("id")]}),
     ],
 )
 def execute(
@@ -403,6 +463,57 @@ def execute(
     df = context.snowpark.create_dataframe([[1, "a", "usa"], [2, "b", "cad"]], schema=["id", "name", "country"])
     df = df.filter(df.id > 1)
     return df
+```
+
+### Bigframe
+This example demonstrates using the [Bigframe](https://cloud.google.com/bigquery/docs/use-bigquery-dataframes#pandas-examples) DataFrame API. If you use Bigquery, the Bigframe API is preferred to Pandas as all computation is done in Bigquery.
+
+```python linenums="1"
+import typing as t
+from datetime import datetime
+
+from bigframes.pandas import DataFrame
+
+from sqlmesh import ExecutionContext, model
+
+
+def get_bucket(num: int):
+    if not num:
+        return "NA"
+    boundary = 10
+    return "at_or_above_10" if num >= boundary else "below_10"
+
+
+@model(
+    "mart.wiki",
+    columns={
+        "title": "text",
+        "views": "int",
+        "bucket": "text",
+    },
+)
+def execute(
+    context: ExecutionContext,
+    start: datetime,
+    end: datetime,
+    execution_time: datetime,
+    **kwargs: t.Any,
+) -> DataFrame:
+    # Create a remote function to be used in the Bigframe DataFrame
+    remote_get_bucket = context.bigframe.remote_function([int], str)(get_bucket)
+
+    # Returns the Bigframe DataFrame handle, no data is computed locally
+    df = context.bigframe.read_gbq("bigquery-samples.wikipedia_pageviews.200809h")
+
+    df = (
+        # This runs entirely on the BigQuery engine lazily
+        df[df.title.str.contains(r"[Gg]oogle")]
+        .groupby(["title"], as_index=False)["views"]
+        .sum(numeric_only=True)
+        .sort_values("views", ascending=False)
+    )
+
+    return df.assign(bucket=df["views"].apply(remote_get_bucket))
 ```
 
 ### Batching

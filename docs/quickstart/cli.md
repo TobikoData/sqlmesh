@@ -1,6 +1,6 @@
 # CLI
 
-In this quick start guide, you'll use the SQLMesh command line interface (CLI) to get up and running with SQLMesh's scaffold generator. This example project will run locally on your computer using [DuckDB](https://duckdb.org/) as an embedded SQL engine.
+In this quickstart, you'll use the SQLMesh command line interface (CLI) to get up and running with SQLMesh's scaffold generator. This example project will run locally on your computer using [DuckDB](https://duckdb.org/) as an embedded SQL engine.
 
 Before beginning, ensure that you meet all the [prerequisites](../prerequisites.md) for using SQLMesh.
 
@@ -166,9 +166,9 @@ Line 3 of the output notes that `sqlmesh plan` successfully executed the project
 
 Line 5 describes what environments the plan will affect when applied - a new `prod` environment in this case.
 
-Lines 7-10 of the output show that SQLMesh detected three new models relative to the current empty environment.
+Lines 7-11 of the output show that SQLMesh detected three new models relative to the current empty environment.
 
-Lines 11-14 list each model that will be executed by the plan, along with the date intervals that will be run. Note that `full_model` and `incremental_model` both show `2020-01-01` as their start date because:
+Lines 12-15 list each model that will be executed by the plan, along with the date intervals that will be run. Note that `full_model` and `incremental_model` both show `2020-01-01` as their start date because:
 
 1. The incremental model specifies that date in the `start` property of its `MODEL` statement and
 2. The full model depends on the incremental model.
@@ -250,7 +250,7 @@ The `seed_model` date range begins on the same day the plan was made because `SE
     GROUP BY item_id
     ```
 
-Line 15 asks you whether to proceed with executing the model backfills described in lines 11-14. Enter `y` and press `Enter`, and SQLMesh will execute the models and return this output:
+Line 16 asks you whether to proceed with executing the model backfills described in lines 11-14. Enter `y` and press `Enter`, and SQLMesh will execute the models and return this output:
 
 ```bash linenums="1"
 Apply - Backfill Tables [y/n]: y

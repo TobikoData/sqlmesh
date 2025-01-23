@@ -7,10 +7,10 @@ import pandas as pd
 from sqlglot import exp
 
 from sqlmesh.core.dialect import to_schema
+from sqlmesh.core.engine_adapter.base import MERGE_SOURCE_ALIAS, MERGE_TARGET_ALIAS
 from sqlmesh.core.engine_adapter.base_postgres import BasePostgresEngineAdapter
 from sqlmesh.core.engine_adapter.mixins import (
     GetCurrentCatalogFromFunctionMixin,
-    LogicalMergeMixin,
     NonTransactionalTruncateMixin,
     VarcharSizeWorkaroundMixin,
     RowDiffMixin,
@@ -23,10 +23,11 @@ from sqlmesh.core.engine_adapter.shared import (
     set_catalog,
 )
 from sqlmesh.core.schema_diff import SchemaDiffer
+from sqlmesh.utils.errors import SQLMeshError
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import SchemaName, TableName
-    from sqlmesh.core.engine_adapter.base import QueryOrDF
+    from sqlmesh.core.engine_adapter.base import QueryOrDF, Query
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +35,6 @@ logger = logging.getLogger(__name__)
 @set_catalog()
 class RedshiftEngineAdapter(
     BasePostgresEngineAdapter,
-    LogicalMergeMixin,
     GetCurrentCatalogFromFunctionMixin,
     NonTransactionalTruncateMixin,
     VarcharSizeWorkaroundMixin,
@@ -328,6 +328,45 @@ class RedshiftEngineAdapter(
             )
             for row in df.itertuples()
         ]
+
+    def _merge(
+        self,
+        target_table: TableName,
+        query: Query,
+        on: exp.Expression,
+        whens: exp.Whens,
+    ) -> None:
+        # Redshift does not support table aliases in the target table of a MERGE statement.
+        # So we must use the actual table name instead of an alias, as we do with the source table.
+        def resolve_target_table(expression: exp.Expression) -> exp.Expression:
+            if (
+                isinstance(expression, exp.Column)
+                and expression.table.upper() == MERGE_TARGET_ALIAS
+            ):
+                expression.set("table", exp.to_table(target_table))
+            return expression
+
+        # Ensure that there is exactly one "WHEN MATCHED" and one "WHEN NOT MATCHED" clause.
+        # Since Redshift does not support multiple "WHEN MATCHED" clauses.
+        if (
+            len(whens.expressions) != 2
+            or whens.expressions[0].args["matched"] == whens.expressions[1].args["matched"]
+        ):
+            raise SQLMeshError(
+                "Redshift only supports a single WHEN MATCHED and WHEN NOT MATCHED clause"
+            )
+
+        using = exp.alias_(
+            exp.Subquery(this=query), alias=MERGE_SOURCE_ALIAS, copy=False, table=True
+        )
+        self.execute(
+            exp.Merge(
+                this=target_table,
+                using=using,
+                on=on.transform(resolve_target_table),
+                whens=whens.transform(resolve_target_table),
+            )
+        )
 
     def _normalize_decimal_value(self, expr: exp.Expression, precision: int) -> exp.Expression:
         # Redshift is finicky. It truncates when the data is already in a table, but rounds when the data is generated as part of a SELECT.
