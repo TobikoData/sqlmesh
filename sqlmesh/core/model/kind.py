@@ -237,6 +237,49 @@ class TimeColumn(PydanticModel):
     column: exp.Expression
     format: t.Optional[str] = None
 
+    @classmethod
+    def validator(cls) -> classmethod:
+        def _time_column_validator(v: t.Any, info: ValidationInfo) -> TimeColumn:
+            dialect = get_dialect(info.data)
+
+            if isinstance(v, exp.Tuple):
+                column_expr = v.expressions[0]
+                column = (
+                    exp.column(column_expr)
+                    if isinstance(column_expr, exp.Identifier)
+                    else column_expr
+                )
+                format = v.expressions[1].name if len(v.expressions) > 1 else None
+            elif isinstance(v, exp.Expression):
+                column = exp.column(v) if isinstance(v, exp.Identifier) else v
+                format = None
+            elif isinstance(v, str):
+                column = d.parse_one(v, dialect=dialect)
+                column.meta.pop("sql")
+                format = None
+            elif isinstance(v, dict):
+                column_raw = v["column"]
+                column = (
+                    d.parse_one(column_raw, dialect=dialect)
+                    if isinstance(column_raw, str)
+                    else column_raw
+                )
+                format = v.get("format")
+            elif isinstance(v, TimeColumn):
+                column = v.column
+                format = v.format
+            else:
+                raise ConfigError(f"Invalid time_column: '{v}'.")
+
+            column = quote_identifiers(
+                normalize_identifiers(column, dialect=dialect), dialect=dialect
+            )
+            column.meta["dialect"] = dialect
+
+            return TimeColumn(column=column, format=format)
+
+        return field_validator("time_column", mode="before")(_time_column_validator)
+
     @field_validator("column", mode="before")
     @classmethod
     def _column_validator(cls, v: t.Union[str, exp.Expression]) -> exp.Expression:
@@ -364,42 +407,7 @@ class IncrementalByTimeRangeKind(_IncrementalBy):
     time_column: TimeColumn
     auto_restatement_intervals: t.Optional[SQLGlotPositiveInt] = None
 
-    @field_validator("time_column", mode="before")
-    @classmethod
-    def _time_column_validator(cls, v: t.Any, values: t.Any) -> TimeColumn:
-        dialect = get_dialect(values)
-
-        if isinstance(v, exp.Tuple):
-            column_expr = v.expressions[0]
-            column = (
-                exp.column(column_expr) if isinstance(column_expr, exp.Identifier) else column_expr
-            )
-            format = v.expressions[1].name if len(v.expressions) > 1 else None
-        elif isinstance(v, exp.Expression):
-            column = exp.column(v) if isinstance(v, exp.Identifier) else v
-            format = None
-        elif isinstance(v, str):
-            column = d.parse_one(v, dialect=dialect)
-            column.meta.pop("sql")
-            format = None
-        elif isinstance(v, dict):
-            column_raw = v["column"]
-            column = (
-                d.parse_one(column_raw, dialect=dialect)
-                if isinstance(column_raw, str)
-                else column_raw
-            )
-            format = v.get("format")
-        elif isinstance(v, TimeColumn):
-            column = v.column
-            format = v.format
-        else:
-            raise ConfigError(f"Invalid time_column: '{v}'.")
-
-        column = quote_identifiers(normalize_identifiers(column, dialect=dialect), dialect=dialect)
-        column.meta["dialect"] = dialect
-
-        return TimeColumn(column=column, format=format)
+    _time_column_validator = TimeColumn.validator()
 
     def to_expression(
         self, expressions: t.Optional[t.List[exp.Expression]] = None, **kwargs: t.Any
