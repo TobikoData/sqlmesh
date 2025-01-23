@@ -104,7 +104,7 @@ nav:
     - "Overview": cloud/cloud_index.md
     - "Getting Started": cloud/tcloud_getting_started.md
     - Cloud Features:
-  #     - "Alerts & Notifications": cloud/features/alerts_notifications.md
+      - "Alerts & Notifications": cloud/features/alerts_notifications.md
       - cloud/features/debugger_view.md
       - cloud/features/data_catalog.md
       - Scheduler:

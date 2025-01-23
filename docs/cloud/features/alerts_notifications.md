@@ -111,10 +111,13 @@ Tobiko Cloud supports the following notification target types, which require you
     - API Token
         - Format: `xoxb-[13 digits]-[13 digits]-[24 alphanumeric characters]`
     - Channel ID
+        - Format: `T[10 capital letter or numeric characters]`
         - Example: T139Z25G8F4
 - Slack Webhook
     - Webhook URL
+        - Format: Web URL
         - Example: https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXXXXXX
 - PagerDuty
     - Routing Key
+        - Format: `[32 alphanumeric characters]`
         - Example: j16lxprdvoy21paigybthal0llk51kh5k
