@@ -21,3 +21,35 @@ This page provides information about how to use SQLMesh with the RisingWave stre
 RisingWave engine has some different features as streaming database. You can create a resource that RisingWave can read data from with `CREATE SOURCE`. You can also create an external target where you can send data processed in RisingWave with `CREATE SINK`.
 
 To use this in SQLMesh, you can refer to optional pre-statements and post-statements as [SQL models doc](https://sqlmesh.readthedocs.io/en/stable/concepts/models/sql_models/) here specify.
+
+Below is an example of creating sink in SQLMesh models as post-statement.
+
+```sql
+MODEL (
+    name sqlmesh_example.view_model,
+    kind VIEW (
+      materialized true
+    )
+);
+
+SELECT
+  item_id,
+  COUNT(DISTINCT id) AS num_orders,
+FROM
+  sqlmesh_example.incremental_model
+GROUP BY item_id;
+
+CREATE
+  SINK IF NOT EXISTS kafka_sink
+FROM
+  @this_model
+WITH (
+  connector='kafka',
+  "properties.bootstrap.server"='localhost:9092',
+  topic='test1',
+)
+FORMAT PLAIN
+ENCODE JSON (force_append_only=true);
+```
+
+here `@this_model` macro is used to represent "sqlmesh_example.view_model" model.
