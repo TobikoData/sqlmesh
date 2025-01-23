@@ -93,7 +93,6 @@ gateways:
     connection:
       type: risingwave
       user: root
-      password: risingwave
       database: dev
       host: {{ env_var('DOCKER_HOSTNAME', 'localhost') }}
       port: 4566

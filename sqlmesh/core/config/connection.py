@@ -1733,7 +1733,7 @@ class AthenaConnectionConfig(ConnectionConfig):
 class RisingwaveConnectionConfig(ConnectionConfig):
     host: str
     user: str
-    password: str
+    password: t.Optional[str] = None
     port: int
     database: str
     keepalives_idle: t.Optional[int] = None
