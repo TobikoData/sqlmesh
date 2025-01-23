@@ -18,7 +18,8 @@ You can monitor changes over time, review recent activities including successes 
 
 Eliminate friction in sharing complex development context through manual pull requests or direct messages. These URLs serve as comprehensive summaries, displaying last run times, data intervals for incremental models, and detailed change information such as metadata modifications and model removals.
 
-<Add gif of url opening in a new tab to feel how fast it should be.>
+![The feel and speed of sharing links in Tobiko Cloud](./development_environment/link_sharing_feel.gif)
+
 
 ## Using the Environments Tab
 The Environments page shows an overview of all the environments that exist in your project (both yours and any your teammates have created).
