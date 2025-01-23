@@ -190,7 +190,7 @@ class _Model(ModelMeta, frozen=True):
         self,
         include_python: bool = True,
         include_defaults: bool = False,
-        render_model: bool = False,
+        render_query: bool = False,
     ) -> t.List[exp.Expression]:
         """Returns the original list of sql expressions comprising the model definition.
 
@@ -677,12 +677,12 @@ class _Model(ModelMeta, frozen=True):
             )
         return query
 
-    def text_diff(self, other: Node, rendered_model_diff: bool = False) -> str:
+    def text_diff(self, other: Node, rendered: bool = False) -> str:
         """Produce a text diff against another node.
 
         Args:
             other: The node to diff against.
-            rendered_model_diff: Whether the diff should compare raw vs rendered models
+            diff_rendered: Whether the diff should compare raw vs rendered models
 
         Returns:
             A unified text diff showing additions and deletions.
@@ -693,8 +693,8 @@ class _Model(ModelMeta, frozen=True):
             )
 
         return d.text_diff(
-            self.render_definition(render_model=rendered_model_diff),
-            other.render_definition(render_model=rendered_model_diff),
+            self.render_definition(render_query=rendered),
+            other.render_definition(render_query=rendered),
             self.dialect,
             other.dialect,
         ).strip()
@@ -1227,13 +1227,13 @@ class SqlModel(_Model):
         self,
         include_python: bool = True,
         include_defaults: bool = False,
-        render_model: bool = False,
+        render_query: bool = False,
     ) -> t.List[exp.Expression]:
         result = super().render_definition(
             include_python=include_python, include_defaults=include_defaults
         )
 
-        if render_model:
+        if render_query:
             result.extend(self.render_pre_statements())
             result.append(self.render_query() or self.query)
             result.extend(self.render_post_statements())
@@ -1673,12 +1673,12 @@ class PythonModel(_Model):
         self,
         include_python: bool = True,
         include_defaults: bool = False,
-        render_model: bool = False,
+        render_query: bool = False,
     ) -> t.List[exp.Expression]:
         # Ignore the provided value for the include_python flag, since the Pyhon model's
         # definition without Python code is meaningless.
         return super().render_definition(
-            include_python=True, include_defaults=include_defaults, render_model=render_model
+            include_python=True, include_defaults=include_defaults, render_query=render_query
         )
 
     @property

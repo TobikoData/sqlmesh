@@ -1196,7 +1196,7 @@ def test_requirements(copy_to_temp_path: t.Callable):
 
 
 @pytest.mark.slow
-def test_rendered_model_diff():
+def test_rendered_diff():
     ctx = Context(config=Config())
 
     ctx.upsert_model(
@@ -1247,7 +1247,7 @@ def test_rendered_model_diff():
         )
     )
 
-    plan = ctx.plan("dev", auto_apply=True, no_prompts=True, rendered_model_diff=True)
+    plan = ctx.plan("dev", auto_apply=True, no_prompts=True, diff_rendered=True)
 
     assert '''@@ -4,13 +4,13 @@
 

@@ -365,7 +365,7 @@ class _Node(PydanticModel):
         """
         return self.croniter(self.cron_next(value, estimate=estimate)).get_prev(estimate=True)
 
-    def text_diff(self, other: Node) -> str:
+    def text_diff(self, other: Node, rendered: bool = False) -> str:
         """Produce a text diff against another node.
 
         Args:

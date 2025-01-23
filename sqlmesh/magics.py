@@ -419,10 +419,9 @@ class SQLMeshMagics(Magics):
         default=None,
     )
     @argument(
-        "--rendered-model-diff",
+        "--diff-rendered",
         action="store_true",
         help="Output text differences for the rendered versions of the models",
-        default=None,
     )
     @line_magic
     @pass_sqlmesh_context
@@ -452,7 +451,7 @@ class SQLMeshMagics(Magics):
             no_diff=args.no_diff,
             run=args.run,
             enable_preview=args.enable_preview,
-            rendered_model_diff=args.rendered_model_diff,
+            diff_rendered=args.diff_rendered,
         )
 
     @magic_arguments()
