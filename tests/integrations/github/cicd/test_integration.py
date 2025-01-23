@@ -379,8 +379,8 @@ def test_merge_pr_has_non_breaking_change_diff_start(
 - `sushi.top_waiters`
 
 
-**Models needing backfill (missing dates):**
-* `sushi.waiter_revenue_by_day`: 2022-12-25 - 2022-12-28
+**Models needing backfill [missing dates]:**
+* `sushi.waiter_revenue_by_day`: [2022-12-25 - 2022-12-28]
 """
     assert prod_plan_preview_checks_runs[2]["output"]["summary"] == expected_prod_plan
 
@@ -1066,8 +1066,8 @@ def test_no_merge_since_no_deploy_signal_no_approvers_defined(
 - `sushi.top_waiters`
 
 
-**Models needing backfill (missing dates):**
-* `sushi.waiter_revenue_by_day`: 2022-12-25 - 2022-12-29
+**Models needing backfill [missing dates]:**
+* `sushi.waiter_revenue_by_day`: [2022-12-25 - 2022-12-29]
 """
     assert prod_plan_preview_checks_runs[2]["output"]["title"] == "Prod Plan Preview"
     assert prod_plan_preview_checks_runs[2]["output"]["summary"] == expected_prod_plan
