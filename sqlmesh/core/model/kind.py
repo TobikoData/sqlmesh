@@ -136,6 +136,8 @@ class ModelKindMixin:
             ModelKindName.INCREMENTAL_BY_PARTITION,
             ModelKindName.SCD_TYPE_2,
             ModelKindName.MANAGED,
+            ModelKindName.FULL,
+            ModelKindName.VIEW,
         )
 
     @property

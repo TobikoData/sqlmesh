@@ -39,7 +39,7 @@ if t.TYPE_CHECKING:
 
     from sqlglot.dialects.dialect import DialectType
     from sqlmesh.core.context_diff import ContextDiff
-    from sqlmesh.core.plan import Plan, EvaluatablePlan, PlanBuilder
+    from sqlmesh.core.plan import Plan, EvaluatablePlan, PlanBuilder, SnapshotIntervals
     from sqlmesh.core.table_diff import RowDiff, SchemaDiff
 
     LayoutWidget = t.TypeVar("LayoutWidget", bound=t.Union[widgets.VBox, widgets.HBox])
@@ -899,9 +899,13 @@ class TerminalConsole(Console):
             if not plan.deployability_index.is_deployable(snapshot):
                 preview_modifier = " ([orange1]preview[/orange1])"
 
-            backfill.add(
-                f"{snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)}: {missing.format_intervals(snapshot.node.interval_unit)}{preview_modifier}"
+            display_name = snapshot.display_name(
+                plan.environment_naming_info, default_catalog, dialect=self.dialect
             )
+            backfill.add(
+                f"{display_name}: {_format_missing_intervals(snapshot, missing)}{preview_modifier}"
+            )
+
         if backfill:
             backfill = self._limit_model_names(backfill, self.verbose)
         self._print(backfill)
@@ -1730,8 +1734,11 @@ class MarkdownConsole(CaptureTerminalConsole):
             if not plan.deployability_index.is_deployable(snapshot):
                 preview_modifier = " (**preview**)"
 
+            display_name = snapshot.display_name(
+                plan.environment_naming_info, default_catalog, dialect=self.dialect
+            )
             snapshots.append(
-                f"* `{snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)}`: {missing.format_intervals(snapshot.node.interval_unit)}{preview_modifier}"
+                f"* `{display_name}`: {_format_missing_intervals(snapshot, missing)}{preview_modifier}"
             )
 
         length = len(snapshots)
@@ -2129,4 +2136,14 @@ def get_console(**kwargs: t.Any) -> TerminalConsole | DatabricksMagicConsole | N
         rich_console_kwargs["force_jupyter"] = True
     return runtime_env_mapping[runtime_env](
         **{**{"console": RichConsole(**rich_console_kwargs)}, **kwargs}
+    )
+
+
+def _format_missing_intervals(snapshot: Snapshot, missing: SnapshotIntervals) -> str:
+    return (
+        missing.format_intervals(snapshot.node.interval_unit)
+        if snapshot.is_incremental
+        else "recreate view"
+        if snapshot.is_view
+        else "full refresh"
     )

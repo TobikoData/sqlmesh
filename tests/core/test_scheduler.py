@@ -696,6 +696,7 @@ def test_signal_intervals(mocker: MockerFixture, make_snapshot, get_batched_miss
     assert batches == {
         a: [(to_timestamp("2023-01-01"), to_timestamp("2023-01-03"))],
         b: [(to_timestamp("2023-01-01 23:00:00"), to_timestamp("2023-01-04"))],
-        c: [(to_timestamp("2023-01-02"), to_timestamp("2023-01-03"))],
+        # Full models and models that depend on past can't run for a discontinuous range
+        c: [],
         d: [],
     }
