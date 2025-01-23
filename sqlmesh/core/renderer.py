@@ -15,7 +15,7 @@ from sqlglot.optimizer.simplify import simplify
 from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
 from sqlmesh.core.macros import MacroEvaluator, RuntimeStage
-from sqlmesh.utils.date import TimeLike, date_dict, make_inclusive_end, to_datetime
+from sqlmesh.utils.date import TimeLike, date_dict, make_inclusive, to_datetime
 from sqlmesh.utils.errors import (
     ConfigError,
     MacroEvalError,
@@ -119,11 +119,17 @@ class BaseExpressionRenderer:
 
         expressions = [self._expression]
 
+        start_time, end_time = (
+            make_inclusive(start or c.EPOCH, end or c.EPOCH, self._dialect)
+            if not self._only_execution_time
+            else (None, None)
+        )
+
         render_kwargs = {
             **date_dict(
                 to_datetime(execution_time or c.EPOCH),
-                to_datetime(start or c.EPOCH) if not self._only_execution_time else None,
-                make_inclusive_end(end or c.EPOCH) if not self._only_execution_time else None,
+                start_time,
+                end_time,
             ),
             **kwargs,
         }
