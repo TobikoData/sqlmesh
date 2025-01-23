@@ -314,17 +314,32 @@ This way SQLMesh will know to recompute data intervals starting from the specifi
 
 Models sometimes need to be re-evaluated for a given time range, even though the model definition has not changed.
 
-This could be due to an upstream issue with a dataset defined outside of SQLMesh, or when a [forward-only plan](#forward-only-plans) change needs to be applied retroactively to a bounded interval of historical data.
+For example, these scenarios all require re-evaluating model data that already exists:
 
-For this reason, the `plan` command supports the `--restate-model` selector, which allows specifying one or more model names or tags (using `tag:<tag name>` syntax) to be reprocessed. These can also refer to an external table defined outside SQLMesh.
+- Correcting an upstream data issue by reprocessing some of a model's existing data
+- Retroactively applying a [forward-only plan](#forward-only-plans) change to some historical data
+- Fully refreshing a model
 
-Applying a plan will trigger a cascading backfill for all specified models (other than external tables), as well as all models downstream from them. The plan's date range determines the data intervals that will be affected (learn more about the limitations of some model kinds [below](#model-kind-limitations)).
+In SQLMesh, reprocessing existing data is called a "restatement."
 
-Unlike regular plans, restatement plans will ignore local changes. They will only restate what is already in the target environment.
+Restate one or more models' data with the `plan` command's `--restate-model` selector. The [selector](../guides/model_selection.md) lets you specify which models to restate by name, wildcard, or tag (syntax [below](#restatement-examples)).
+
+!!! warning "No changes allowed"
+
+    Unlike regular plans, restatement plans ignore changes to local files. They can only restate the model versions already in the target environment.
+
+    You cannot restate a new model - it must already be present in the target environment. If it's not, add it first by running `sqlmesh plan` without the `--restate-model` option.
+
+Applying a restatement plan will trigger a cascading backfill for all selected models, as well as all models downstream from them. Models with restatement disabled will be skipped and not backfilled.
+
+You may restate external models. An [external model](./models/external_models.md) is just metadata about an external table, so the model does not actually reprocess anything. Instead, it triggers a cascading backfill of all downstream models.
+
+The plan's `--start` and `--end` date options determine which data intervals will be reprocessed. Some model kinds cannot be backfilled for limited date ranges, though - learn more [below](#model-kind-limitations).
 
 To prevent models from ever being restated, set the [disable_restatement](models/overview.md#disable_restatement) attribute to `true`.
 
-See examples below for how to restate both based on model names and model tags.
+<a name="restatement-examples"></a>
+These examples demonstrate how to select which models to restate based on model names or model tags.
 
 === "Names Only"
 
@@ -384,7 +399,7 @@ The reason for this is to prevent old data from getting promoted to `prod`. One 
 !!! info
     If restating data in `prod` did not also trigger a restatement in `dev`, when `sqlmesh plan` is run against `prod` to deploy changes, a table containing old data may be promoted.
 
-That this behaviour also triggers downstream tables that only exist in development environments to have the affected intervals cleared as well. Consider the following example:
+This behavior also clears the affected intervals for downstream tables that only exist in development environments. Consider the following example:
 
  - Table `A` exists in `prod`
  - A virtual environment `dev` is created with new tables `B` and `C` downstream of `A`
@@ -393,7 +408,8 @@ That this behaviour also triggers downstream tables that only exist in developme
  - A restatement plan is created against table `A` in `prod`
  - SQLMesh will ensure that the affected intervals are also cleared for `B` and `C` in `dev` even though those tables do not exist in `prod`
 
-!!! info
+!!! info "Bringing development environments up to date"
+
     If a restatement plan against `prod` cleared intervals from state for tables in development environments, you need to `sqlmesh run <env>` to trigger the reprocessing of that data.
 
-    This is because SQLMesh limits the work done in the `prod` restatement plan to just the `prod` environment to ensure the restatement can be applied as quickly as possible and to prevent potentially unnecessary work being done. We do not assume that all snapshots in a development environment will be eventually deployed to `prod`.
+    This is because SQLMesh limits the work done in the `prod` restatement plan to just the `prod` environment. That way the restatement can be applied as quickly as possible and avoid doing unnecessary work.
