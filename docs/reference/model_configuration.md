@@ -52,10 +52,15 @@ The SQLMesh project-level `model_defaults` key supports the following options, d
 - cron
 - owner
 - start
+- table_format
 - storage_format
+- physical_properties
+- virtual_properties
 - session_properties (on per key basis)
 - on_destructive_change (described [below](#incremental-models))
 - audits (described [here](../concepts/audits.md#generic-audits))
+- optimize_query
+- validate_query
 
 
 ### Model Naming
