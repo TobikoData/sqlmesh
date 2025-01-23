@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import typing as t
 from functools import cached_property
+from typing_extensions import Self
 
 from pydantic import Field
 from sqlglot import Dialect, exp
@@ -34,11 +35,10 @@ from sqlmesh.core.reference import Reference
 from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import (
+    ValidationInfo,
     field_validator,
-    field_validator_v1_args,
     list_of_fields_validator,
     model_validator,
-    model_validator_v1_args,
 )
 
 if t.TYPE_CHECKING:
@@ -124,15 +124,14 @@ class ModelMeta(_Node):
         return v or []
 
     @field_validator("tags", mode="before")
-    @field_validator_v1_args
-    def _value_or_tuple_validator(cls, v: t.Any, values: t.Dict[str, t.Any]) -> t.Any:
-        return ensure_list(cls._validate_value_or_tuple(v, values))
+    def _value_or_tuple_validator(cls, v: t.Any, info: ValidationInfo) -> t.Any:
+        return ensure_list(cls._validate_value_or_tuple(v, info.data))
 
     @classmethod
     def _validate_value_or_tuple(
-        cls, v: t.Dict[str, t.Any], values: t.Dict[str, t.Any], normalize: bool = False
+        cls, v: t.Dict[str, t.Any], data: t.Dict[str, t.Any], normalize: bool = False
     ) -> t.Any:
-        dialect = values.get("dialect")
+        dialect = data.get("dialect")
 
         def _normalize(value: t.Any) -> t.Any:
             return normalize_identifiers(value, dialect=dialect) if normalize else value
@@ -148,15 +147,14 @@ class ModelMeta(_Node):
             value = _normalize(v)
             return value.name if isinstance(value, exp.Expression) else value
         if isinstance(v, (list, tuple)):
-            return [cls._validate_value_or_tuple(elm, values, normalize=normalize) for elm in v]
+            return [cls._validate_value_or_tuple(elm, data, normalize=normalize) for elm in v]
 
         return v
 
     @field_validator("table_format", "storage_format", mode="before")
-    @field_validator_v1_args
-    def _format_validator(cls, v: t.Any, values: t.Dict[str, t.Any]) -> t.Optional[str]:
+    def _format_validator(cls, v: t.Any, info: ValidationInfo) -> t.Optional[str]:
         if isinstance(v, exp.Expression) and not (isinstance(v, (exp.Literal, exp.Identifier))):
-            return v.sql(values.get("dialect"))
+            return v.sql(info.data.get("dialect"))
         return str_or_exp_to_str(v)
 
     @field_validator("dialect", mode="before")
@@ -180,11 +178,10 @@ class ModelMeta(_Node):
         return gateway and gateway.lower()
 
     @field_validator("partitioned_by_", "clustered_by", mode="before")
-    @field_validator_v1_args
     def _partition_and_cluster_validator(
-        cls, v: t.Any, values: t.Dict[str, t.Any]
+        cls, v: t.Any, info: ValidationInfo
     ) -> t.List[exp.Expression]:
-        expressions = list_of_fields_validator(v, values)
+        expressions = list_of_fields_validator(v, info.data)
 
         for expression in expressions:
             num_cols = len(list(expression.find_all(exp.Column)))
@@ -203,12 +200,11 @@ class ModelMeta(_Node):
     @field_validator(
         "columns_to_types_", "derived_columns_to_types", mode="before", check_fields=False
     )
-    @field_validator_v1_args
     def _columns_validator(
-        cls, v: t.Any, values: t.Dict[str, t.Any]
+        cls, v: t.Any, info: ValidationInfo
     ) -> t.Optional[t.Dict[str, exp.DataType]]:
         columns_to_types = {}
-        dialect = values.get("dialect")
+        dialect = info.data.get("dialect")
 
         if isinstance(v, exp.Schema):
             for column in v.expressions:
@@ -230,11 +226,10 @@ class ModelMeta(_Node):
         return v
 
     @field_validator("column_descriptions_", mode="before")
-    @field_validator_v1_args
     def _column_descriptions_validator(
-        cls, vs: t.Any, values: t.Dict[str, t.Any]
+        cls, vs: t.Any, info: ValidationInfo
     ) -> t.Optional[t.Dict[str, str]]:
-        dialect = values.get("dialect")
+        dialect = info.data.get("dialect")
 
         if vs is None:
             return None
@@ -254,20 +249,19 @@ class ModelMeta(_Node):
             for k, v in raw_col_descriptions.items()
         }
 
-        columns_to_types = values.get("columns_to_types_")
+        columns_to_types = info.data.get("columns_to_types_")
         if columns_to_types:
             for column_name in col_descriptions:
                 if column_name not in columns_to_types:
                     raise ConfigError(
-                        f"In model '{values['name']}', a description is provided for column '{column_name}' but it is not a column in the model."
+                        f"In model '{info.data['name']}', a description is provided for column '{column_name}' but it is not a column in the model."
                     )
 
         return col_descriptions
 
     @field_validator("grains", "references", mode="before")
-    @field_validator_v1_args
-    def _refs_validator(cls, vs: t.Any, values: t.Dict[str, t.Any]) -> t.List[exp.Expression]:
-        dialect = values.get("dialect")
+    def _refs_validator(cls, vs: t.Any, info: ValidationInfo) -> t.List[exp.Expression]:
+        dialect = info.data.get("dialect")
 
         if isinstance(vs, exp.Paren):
             vs = vs.unnest()
@@ -290,66 +284,64 @@ class ModelMeta(_Node):
         return refs
 
     @model_validator(mode="before")
-    @model_validator_v1_args
-    def _pre_root_validator(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
-        grain = values.pop("grain", None)
+    def _pre_root_validator(cls, data: t.Any) -> t.Any:
+        if not isinstance(data, dict):
+            return data
+
+        grain = data.pop("grain", None)
         if grain:
-            grains = values.get("grains")
+            grains = data.get("grains")
             if grains:
                 raise ConfigError(
                     f"Cannot use argument 'grain' ({grain}) with 'grains' ({grains}), use only grains"
                 )
-            values["grains"] = ensure_list(grain)
+            data["grains"] = ensure_list(grain)
 
-        table_properties = values.pop("table_properties", None)
+        table_properties = data.pop("table_properties", None)
         if table_properties:
             if not isinstance(table_properties, str):
                 # Do not warn when deserializing from the state.
-                model_name = values["name"]
+                model_name = data["name"]
                 logger.warning(
                     f"Model '{model_name}' is using the `table_properties` attribute which is deprecated. Please use `physical_properties` instead."
                 )
-            physical_properties = values.get("physical_properties")
+            physical_properties = data.get("physical_properties")
             if physical_properties:
                 raise ConfigError(
                     f"Cannot use argument 'table_properties' ({table_properties}) with 'physical_properties' ({physical_properties}), use only physical_properties."
                 )
-            values["physical_properties"] = table_properties
-        return values
+
+            data["physical_properties"] = table_properties
+
+        return data
 
     @model_validator(mode="after")
-    @model_validator_v1_args
-    def _root_validator(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
-        values = cls._kind_validator(values)
+    def _root_validator(self) -> Self:
+        kind: t.Any = self.kind
+
+        for field in ("partitioned_by_", "clustered_by"):
+            if (
+                getattr(self, field, None)
+                and not kind.is_materialized
+                and not (kind.is_view and kind.materialized)
+            ):
+                name = field[:-1] if field.endswith("_") else field
+                raise ValueError(f"{name} field cannot be set for {kind} models")
+        if kind.is_incremental_by_partition and not getattr(self, "partitioned_by_", None):
+            raise ValueError(f"partitioned_by field is required for {kind.name} models")
 
         # needs to be in a mode=after model validator so that the field validators have run to convert from Expression -> str
-        if (storage_format := values.get("storage_format")) and storage_format.lower() in {
+        if (storage_format := self.storage_format) and storage_format.lower() in {
             "iceberg",
             "hive",
             "hudi",
             "delta",
         }:
             logger.warning(
-                f"Model {values['name']} has `storage_format` set to a table format '{storage_format}' which is deprecated. Please use the `table_format` property instead"
+                f"Model {self.name} has `storage_format` set to a table format '{storage_format}' which is deprecated. Please use the `table_format` property instead"
             )
 
-        return values
-
-    @classmethod
-    def _kind_validator(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
-        kind = values.get("kind")
-        if kind:
-            for field in ("partitioned_by_", "clustered_by"):
-                if (
-                    values.get(field)
-                    and not kind.is_materialized
-                    and not (kind.is_view and kind.materialized)
-                ):
-                    name = field[:-1] if field.endswith("_") else field
-                    raise ValueError(f"{name} field cannot be set for {kind} models")
-            if kind.is_incremental_by_partition and not values.get("partitioned_by_"):
-                raise ValueError(f"partitioned_by field is required for {kind.name} models")
-        return values
+        return self
 
     @property
     def time_column(self) -> t.Optional[TimeColumn]:

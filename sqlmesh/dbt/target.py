@@ -34,11 +34,7 @@ from sqlmesh.dbt.relation import Policy
 from sqlmesh.dbt.util import DBT_VERSION
 from sqlmesh.utils import AttributeDict, classproperty
 from sqlmesh.utils.errors import ConfigError
-from sqlmesh.utils.pydantic import (
-    field_validator,
-    model_validator,
-    model_validator_v1_args,
-)
+from sqlmesh.utils.pydantic import field_validator, model_validator
 
 logger = logging.getLogger(__name__)
 
@@ -167,20 +163,22 @@ class DuckDbConfig(TargetConfig):
     settings: t.Optional[t.Dict[str, t.Any]] = None
 
     @model_validator(mode="before")
-    @model_validator_v1_args
-    def validate_authentication(
-        cls, values: t.Dict[str, t.Union[t.Tuple[str, ...], t.Optional[str], t.Dict[str, t.Any]]]
-    ) -> t.Dict[str, t.Union[t.Tuple[str, ...], t.Optional[str], t.Dict[str, t.Any]]]:
-        if "database" not in values and DBT_VERSION >= (1, 5):
-            path = values.get("path")
-            values["database"] = (
+    def validate_authentication(cls, data: t.Any) -> t.Any:
+        if not isinstance(data, dict):
+            return data
+
+        if "database" not in data and DBT_VERSION >= (1, 5):
+            path = data.get("path")
+            data["database"] = (
                 "memory"
                 if path is None or path == DUCKDB_IN_MEMORY
                 else Path(t.cast(str, path)).stem
             )
-        if "threads" in values and t.cast(int, values["threads"]) > 1:
+
+        if "threads" in data and t.cast(int, data["threads"]) > 1:
             logger.warning("DuckDB does not support concurrency - setting threads to 1.")
-        return values
+
+        return data
 
     def default_incremental_strategy(self, kind: IncrementalKind) -> str:
         return "delete+insert"
@@ -257,17 +255,16 @@ class SnowflakeConfig(TargetConfig):
     retry_all: bool = False
 
     @model_validator(mode="before")
-    @model_validator_v1_args
-    def validate_authentication(
-        cls, values: t.Dict[str, t.Union[t.Tuple[str, ...], t.Optional[str], t.Dict[str, t.Any]]]
-    ) -> t.Dict[str, t.Union[t.Tuple[str, ...], t.Optional[str], t.Dict[str, t.Any]]]:
-        if (
-            values.get("password")
-            or values.get("authenticator")
-            or values.get("private_key")
-            or values.get("private_key_path")
+    @classmethod
+    def validate_authentication(cls, data: t.Any) -> t.Any:
+        if not isinstance(data, dict) or (
+            data.get("password")
+            or data.get("authenticator")
+            or data.get("private_key")
+            or data.get("private_key_path")
         ):
-            return values
+            return data
+
         raise ConfigError("No supported Snowflake authentication method found in target profile.")
 
     def default_incremental_strategy(self, kind: IncrementalKind) -> str:
@@ -339,14 +336,16 @@ class PostgresConfig(TargetConfig):
     sslmode: t.Optional[str] = None
 
     @model_validator(mode="before")
-    @model_validator_v1_args
-    def validate_database(
-        cls, values: t.Dict[str, t.Union[t.Tuple[str, ...], t.Optional[str], t.Dict[str, t.Any]]]
-    ) -> t.Dict[str, t.Union[t.Tuple[str, ...], t.Optional[str], t.Dict[str, t.Any]]]:
-        values["database"] = values.get("database") or values.get("dbname")
-        if not values["database"]:
+    @classmethod
+    def validate_database(cls, data: t.Any) -> t.Any:
+        if not isinstance(data, dict):
+            return data
+
+        data["database"] = data.get("database") or data.get("dbname")
+        if not data["database"]:
             raise ConfigError("Either database or dbname must be set")
-        return values
+
+        return data
 
     @field_validator("port")
     @classmethod
@@ -401,14 +400,16 @@ class RedshiftConfig(TargetConfig):
     sslmode: t.Optional[str] = None
 
     @model_validator(mode="before")
-    @model_validator_v1_args
-    def validate_database(
-        cls, values: t.Dict[str, t.Union[t.Tuple[str, ...], t.Optional[str], t.Dict[str, t.Any]]]
-    ) -> t.Dict[str, t.Union[t.Tuple[str, ...], t.Optional[str], t.Dict[str, t.Any]]]:
-        values["database"] = values.get("database") or values.get("dbname")
-        if not values["database"]:
+    @classmethod
+    def validate_database(cls, data: t.Any) -> t.Any:
+        if not isinstance(data, dict):
+            return data
+
+        data["database"] = data.get("database") or data.get("dbname")
+        if not data["database"]:
             raise ConfigError("Either database or dbname must be set")
-        return values
+
+        return data
 
     def default_incremental_strategy(self, kind: IncrementalKind) -> str:
         return "append"
@@ -546,17 +547,19 @@ class BigQueryConfig(TargetConfig):
     maximum_bytes_billed: t.Optional[int] = None
 
     @model_validator(mode="before")
-    @model_validator_v1_args
-    def validate_fields(
-        cls, values: t.Dict[str, t.Union[t.Tuple[str, ...], t.Optional[str], t.Dict[str, t.Any]]]
-    ) -> t.Dict[str, t.Union[t.Tuple[str, ...], t.Optional[str], t.Dict[str, t.Any]]]:
-        values["schema"] = values.get("schema") or values.get("dataset")
-        if not values["schema"]:
+    @classmethod
+    def validate_fields(cls, data: t.Any) -> t.Any:
+        if not isinstance(data, dict):
+            return data
+
+        data["schema"] = data.get("schema") or data.get("dataset")
+        if not data["schema"]:
             raise ConfigError("Either schema or dataset must be set")
-        values["database"] = values.get("database") or values.get("project")
-        if not values["database"]:
+        data["database"] = data.get("database") or data.get("project")
+        if not data["database"]:
             raise ConfigError("Either database or project must be set")
-        return values
+
+        return data
 
     def default_incremental_strategy(self, kind: IncrementalKind) -> str:
         return "merge"
@@ -661,23 +664,24 @@ class MSSQLConfig(TargetConfig):
     client_secret: t.Optional[str] = None  # Azure Active Directory auth
 
     @model_validator(mode="before")
-    @model_validator_v1_args
-    def validate_alias_fields(
-        cls, values: t.Dict[str, t.Union[t.Tuple[str, ...], t.Optional[str], t.Dict[str, t.Any]]]
-    ) -> t.Dict[str, t.Union[t.Tuple[str, ...], t.Optional[str], t.Dict[str, t.Any]]]:
-        values["host"] = values.get("host") or values.get("server")
-        if not values["host"]:
+    @classmethod
+    def validate_alias_fields(cls, data: t.Any) -> t.Any:
+        if not isinstance(data, dict):
+            return data
+
+        data["host"] = data.get("host") or data.get("server")
+        if not data["host"]:
             raise ConfigError("Either host or server must be set")
 
-        values["user"] = values.get("user") or values.get("username") or values.get("UID")
-        if not values["user"]:
+        data["user"] = data.get("user") or data.get("username") or data.get("UID")
+        if not data["user"]:
             raise ConfigError("One of user, username, or UID must be set")
 
-        values["password"] = values.get("password") or values.get("PWD")
-        if not values["password"]:
+        data["password"] = data.get("password") or data.get("PWD")
+        if not data["password"]:
             raise ConfigError("Either password or PWD must be set")
 
-        return values
+        return data
 
     @field_validator("authentication")
     @classmethod

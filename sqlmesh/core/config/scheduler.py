@@ -23,7 +23,7 @@ from sqlmesh.schedulers.airflow.client import AirflowClient
 from sqlmesh.schedulers.airflow.mwaa_client import MWAAClient
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.hashing import md5
-from sqlmesh.utils.pydantic import model_validator, model_validator_v1_args, field_validator
+from sqlmesh.utils.pydantic import model_validator, field_validator
 
 if t.TYPE_CHECKING:
     from google.auth.transport.requests import AuthorizedSession
@@ -381,15 +381,18 @@ class CloudComposerSchedulerConfig(_BaseAirflowSchedulerConfig, BaseConfig, extr
         )
 
     @model_validator(mode="before")
-    @model_validator_v1_args
-    def check_supported_fields(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
+    def check_supported_fields(cls, data: t.Any) -> t.Any:
+        if not isinstance(data, dict):
+            return data
+
         allowed_field_names = {field.alias or name for name, field in cls.all_field_infos().items()}
         allowed_field_names.add("session")
 
-        for field_name in values:
+        for field_name in data:
             if field_name not in allowed_field_names:
                 raise ValueError(f"Unsupported Field: {field_name}")
-        return values
+
+        return data
 
 
 class MWAASchedulerConfig(_EngineAdapterStateSyncSchedulerConfig, BaseConfig):

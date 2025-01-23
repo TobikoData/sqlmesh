@@ -40,11 +40,10 @@ from sqlmesh.core.loader import Loader, SqlMeshLoader
 from sqlmesh.core.notification_target import NotificationTarget
 from sqlmesh.core.user import User
 from sqlmesh.utils.errors import ConfigError
-from sqlmesh.utils.pydantic import (
-    field_validator,
-    model_validator,
-    model_validator_v1_args,
-)
+from sqlmesh.utils.pydantic import field_validator, model_validator
+
+if t.TYPE_CHECKING:
+    from sqlmesh.core._typing import Self
 
 logger = logging.getLogger(__name__)
 
@@ -144,7 +143,7 @@ class Config(BaseConfig):
     _scheduler_config_validator = scheduler_config_validator
     _variables_validator = variables_validator
 
-    @field_validator("gateways", mode="before", always=True)
+    @field_validator("gateways", mode="before")
     @classmethod
     def _gateways_ensure_dict(cls, value: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
         try:
@@ -168,50 +167,57 @@ class Config(BaseConfig):
         return compiled_regexes
 
     @model_validator(mode="before")
-    @model_validator_v1_args
-    def _normalize_and_validate_fields(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
-        if "gateways" not in values and "gateway" in values:
-            values["gateways"] = values.pop("gateway")
+    def _normalize_and_validate_fields(cls, data: t.Any) -> t.Any:
+        if not isinstance(data, dict):
+            return data
+
+        if "gateways" not in data and "gateway" in data:
+            data["gateways"] = data.pop("gateway")
 
         for plan_deprecated in ("auto_categorize_changes", "include_unmodified"):
-            if plan_deprecated in values:
+            if plan_deprecated in data:
                 raise ConfigError(
                     f"The `{plan_deprecated}` config is deprecated. Please use the `plan.{plan_deprecated}` config instead."
                 )
 
-        if "physical_schema_override" in values:
+        if "physical_schema_override" in data:
             logger.warning(
                 "`physical_schema_override` is deprecated. Please use `physical_schema_mapping` instead"
             )
 
-            if "physical_schema_mapping" in values:
+            if "physical_schema_mapping" in data:
                 raise ConfigError(
                     "Only one of `physical_schema_override` and `physical_schema_mapping` can be specified"
                 )
 
-            physical_schema_override: t.Dict[str, str] = values.pop("physical_schema_override")
+            physical_schema_override: t.Dict[str, str] = data.pop("physical_schema_override")
             # translate physical_schema_override to physical_schema_mapping
-            values["physical_schema_mapping"] = {
+            data["physical_schema_mapping"] = {
                 f"^{k}$": v for k, v in physical_schema_override.items()
             }
 
-        return values
+        return data
 
     @model_validator(mode="after")
-    @model_validator_v1_args
-    def _normalize_fields_after(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
-        dialect = values["model_defaults"].dialect
+    def _normalize_fields_after(self) -> Self:
+        dialect = self.model_defaults.dialect
 
         def _normalize_identifiers(key: str) -> None:
-            values[key] = {
-                k: normalize_identifiers(v, dialect=dialect).name
-                for k, v in values.get(key, {}).items()
-            }
+            setattr(
+                self,
+                key,
+                {
+                    k: normalize_identifiers(v, dialect=dialect).name
+                    for k, v in getattr(self, key, {}).items()
+                },
+            )
 
-        _normalize_identifiers("environment_catalog_mapping")
-        _normalize_identifiers("physical_schema_mapping")
+        if self.environment_catalog_mapping:
+            _normalize_identifiers("environment_catalog_mapping")
+        if self.physical_schema_mapping:
+            _normalize_identifiers("physical_schema_mapping")
 
-        return values
+        return self
 
     def get_default_test_connection(
         self,

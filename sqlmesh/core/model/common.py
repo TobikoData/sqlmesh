@@ -14,7 +14,7 @@ from sqlmesh.core.macros import MacroRegistry, MacroStrTemplate
 from sqlmesh.utils import str_to_bool
 from sqlmesh.utils.errors import ConfigError, SQLMeshError, raise_config_error
 from sqlmesh.utils.metaprogramming import Executable, build_env, prepare_env, serialize_env
-from sqlmesh.utils.pydantic import field_validator, field_validator_v1_args
+from sqlmesh.utils.pydantic import ValidationInfo, field_validator
 
 if t.TYPE_CHECKING:
     from sqlmesh.utils.jinja import MacroReference
@@ -194,11 +194,10 @@ def single_value_or_tuple(values: t.Sequence) -> exp.Identifier | exp.Tuple:
     )
 
 
-@field_validator_v1_args
 def parse_expression(
     cls: t.Type,
     v: t.Union[t.List[str], t.List[exp.Expression], str, exp.Expression, t.Callable, None],
-    values: t.Dict[str, t.Any],
+    info: t.Optional[ValidationInfo] = None,
 ) -> t.List[exp.Expression] | exp.Expression | t.Callable | None:
     """Helper method to deserialize SQLGlot expressions in Pydantic Models."""
     if v is None:
@@ -207,7 +206,7 @@ def parse_expression(
     if callable(v):
         return v
 
-    dialect = values.get("dialect")
+    dialect = info.data.get("dialect") if info else ""
 
     if isinstance(v, list):
         return [
@@ -231,12 +230,14 @@ def parse_bool(v: t.Any) -> bool:
     return str_to_bool(str(v or ""))
 
 
-@field_validator_v1_args
-def parse_properties(cls: t.Type, v: t.Any, values: t.Dict[str, t.Any]) -> t.Optional[exp.Tuple]:
+def parse_properties(
+    cls: t.Type, v: t.Any, info: t.Optional[ValidationInfo] = None
+) -> t.Optional[exp.Tuple]:
     if v is None:
         return v
 
-    dialect = values.get("dialect")
+    dialect = info.data.get("dialect") if info else ""
+
     if isinstance(v, str):
         v = d.parse_one(v, dialect=dialect)
     if isinstance(v, (exp.Array, exp.Paren, exp.Tuple)):
@@ -272,10 +273,9 @@ def default_catalog(cls: t.Type, v: t.Any) -> t.Optional[str]:
     return str(v)
 
 
-@field_validator_v1_args
-def depends_on(cls: t.Type, v: t.Any, values: t.Dict[str, t.Any]) -> t.Optional[t.Set[str]]:
-    dialect = values.get("dialect")
-    default_catalog = values.get("default_catalog")
+def depends_on(cls: t.Type, v: t.Any, info: ValidationInfo) -> t.Optional[t.Set[str]]:
+    dialect = info.data.get("dialect")
+    default_catalog = info.data.get("default_catalog")
 
     if isinstance(v, exp.Paren):
         v = v.unnest()

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import sys
 import typing as t
 from datetime import datetime
 from enum import Enum
@@ -17,17 +16,12 @@ from sqlmesh.utils.pydantic import (
     SQLGlotCron,
     field_validator,
     model_validator,
-    model_validator_v1_args,
     PRIVATE_FIELDS,
 )
 
 if t.TYPE_CHECKING:
+    from sqlmesh.core._typing import Self
     from sqlmesh.core.snapshot import Node
-
-    if sys.version_info >= (3, 11):
-        from typing import Self
-    else:
-        from typing_extensions import Self
 
 
 class IntervalUnit(str, Enum):
@@ -257,22 +251,24 @@ class _Node(PydanticModel):
         return v
 
     @model_validator(mode="after")
-    @model_validator_v1_args
-    def _node_root_validator(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
-        interval_unit = values.get("interval_unit_")
-        if interval_unit and not values.get("allow_partials"):
-            cron = values["cron"]
+    def _node_root_validator(self) -> Self:
+        interval_unit = self.interval_unit_
+        if interval_unit and not getattr(self, "allow_partials", None):
+            cron = self.cron
             max_interval_unit = IntervalUnit.from_cron(cron)
             if interval_unit.seconds > max_interval_unit.seconds:
                 raise ConfigError(
-                    f"Cron '{cron}' cannot be more frequent than interval unit '{interval_unit.value}'. If this is intentional, set allow_partials to True."
+                    f"Cron '{cron}' cannot be more frequent than interval unit '{interval_unit.value}'. "
+                    "If this is intentional, set allow_partials to True."
                 )
-        start = values.get("start")
-        end = values.get("end")
+
+        start = self.start
+        end = self.end
+
         if end is not None and start is None:
             raise ConfigError("Must define a start date if an end date is defined.")
         validate_date_range(start, end)
-        return values
+        return self
 
     @property
     def batch_size(self) -> t.Optional[int]:
