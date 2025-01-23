@@ -1736,8 +1736,6 @@ class RisingwaveConnectionConfig(ConnectionConfig):
     password: t.Optional[str] = None
     port: int
     database: str
-    keepalives_idle: t.Optional[int] = None
-    connect_timeout: int = 10
     role: t.Optional[str] = None
     sslmode: t.Optional[str] = None
 
@@ -1755,8 +1753,6 @@ class RisingwaveConnectionConfig(ConnectionConfig):
             "password",
             "port",
             "database",
-            "keepalives_idle",
-            "connect_timeout",
             "role",
             "sslmode",
         }

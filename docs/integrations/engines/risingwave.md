@@ -12,8 +12,6 @@ This page provides information about how to use SQLMesh with the RisingWave stre
 | `password`     | The password to use for authentication with the RisingWave engine | string | N        |
 | `port`         | The port number of the RisingWave engine server                          | int    | Y        |
 | `database`        | The name of the database instance to connect to                                 | string | Y        |
-| `keepalives_idle` | The number of seconds between each keepalive packet sent to the server.         | int    | N        |
-| `connect_timeout` | The number of seconds to wait for the connection to the server. (Default: `10`) | int    | N        |
 | `role`            | The role to use for authentication with the Postgres server                     | string | N        |
 | `sslmode`         | The security of the connection to the Postgres server                           | string | N        |
 
