@@ -330,7 +330,7 @@ Restate one or more models' data with the `plan` command's `--restate-model` sel
 
     You cannot restate a new model - it must already be present in the target environment. If it's not, add it first by running `sqlmesh plan` without the `--restate-model` option.
 
-Applying a restatement plan will trigger a cascading backfill for all selected models, as well as all models downstream from them.
+Applying a restatement plan will trigger a cascading backfill for all selected models, as well as all models downstream from them. Models with restatement disabled will be skipped and not backfilled.
 
 You may restate external models. An [external model](./models/external_models.md) is just metadata about an external table, so the model does not actually reprocess anything. Instead, it triggers a cascading backfill of all downstream models.
 
@@ -413,5 +413,3 @@ This behavior also clears the affected intervals for downstream tables that only
     If a restatement plan against `prod` cleared intervals from state for tables in development environments, you need to `sqlmesh run <env>` to trigger the reprocessing of that data.
 
     This is because SQLMesh limits the work done in the `prod` restatement plan to just the `prod` environment. That way the restatement can be applied as quickly as possible and avoid doing unnecessary work.
-
-    We do not assume that all snapshots in a development environment will eventually be deployed to `prod`.
