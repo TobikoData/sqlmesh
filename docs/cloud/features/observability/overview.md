@@ -6,20 +6,16 @@ For transformation pipelines, those range from upstream source timeouts to SQL q
 
 ![Data Ops Observability](./overview/data-ops-light.png)
 
-A useful observation tool should make it easy to answer the following questions:
+Tobiko Cloud makes it easy to detect and respond to changes in your pipelines:
 
-- Did a problem occur?
-- When did it occur?
-- What type of problem is it?
-- Where is the problem coming from?
-- What is causing the problem?
-
-Tobiko Cloud supports answering these questions in four ways:
-
-1. Automatically notifying users if a problem occurs
-2. Capturing, storing, and displaying historical information that reveals when a problem occurred
-3. Enabling easy navigation from aggregated to granular information about pipeline components to identify the problem source
-4. Centralizing error information from multiple sources to debug the problem
+- Did a problem occur? 
+    - **Alerts notify you immediately.**
+- When did the problem occur? 
+    - **Historical pipeline information reveals the moment.**
+-  Where is the problem coming from? 
+    - **Easy navigation through pipeline components lets you pinpoint the source.**
+-  What is causing the problem? 
+    - **Centralized logs and errors have all the details.**
 
 ## How it works
 
