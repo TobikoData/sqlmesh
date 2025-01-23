@@ -257,14 +257,13 @@ class SnowflakeConfig(TargetConfig):
     @model_validator(mode="before")
     @classmethod
     def validate_authentication(cls, data: t.Any) -> t.Any:
-        if isinstance(data, dict):
-            if (
-                data.get("password")
-                or data.get("authenticator")
-                or data.get("private_key")
-                or data.get("private_key_path")
-            ):
-                return data
+        if not isinstance(data, dict) or (
+            data.get("password")
+            or data.get("authenticator")
+            or data.get("private_key")
+            or data.get("private_key_path")
+        ):
+            return data
 
         raise ConfigError("No supported Snowflake authentication method found in target profile.")
 
@@ -403,10 +402,13 @@ class RedshiftConfig(TargetConfig):
     @model_validator(mode="before")
     @classmethod
     def validate_database(cls, data: t.Any) -> t.Any:
-        if isinstance(data, dict):
-            data["database"] = data.get("database") or data.get("dbname")
-            if not data["database"]:
-                raise ConfigError("Either database or dbname must be set")
+        if not isinstance(data, dict):
+            return data
+
+        data["database"] = data.get("database") or data.get("dbname")
+        if not data["database"]:
+            raise ConfigError("Either database or dbname must be set")
+
         return data
 
     def default_incremental_strategy(self, kind: IncrementalKind) -> str:

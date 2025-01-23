@@ -32,11 +32,13 @@ class GithubCICDBotConfig(BaseConfig):
     @model_validator(mode="before")
     @classmethod
     def _validate(cls, data: t.Any) -> t.Any:
-        if isinstance(data, dict):
-            if data.get("enable_deploy_command") and not data.get("merge_method"):
-                raise ValueError("merge_method must be set if enable_deploy_command is True")
-            if data.get("command_namespace") and not data.get("enable_deploy_command"):
-                raise ValueError("enable_deploy_command must be set if command_namespace is set")
+        if not isinstance(data, dict):
+            return data
+
+        if data.get("enable_deploy_command") and not data.get("merge_method"):
+            raise ValueError("merge_method must be set if enable_deploy_command is True")
+        if data.get("command_namespace") and not data.get("enable_deploy_command"):
+            raise ValueError("enable_deploy_command must be set if command_namespace is set")
 
         return data
 
