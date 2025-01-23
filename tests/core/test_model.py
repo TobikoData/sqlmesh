@@ -5500,7 +5500,7 @@ def test_incremental_by_partition(sushi_context, assert_exp_eq):
     )
     model = load_sql_based_model(expressions)
     assert model.kind.is_incremental_by_partition
-    assert model.kind.disable_restatement
+    assert not model.kind.disable_restatement
 
     expressions = d.parse(
         """
@@ -5848,7 +5848,7 @@ on_destructive_change 'ERROR'
         .sql()
         == """INCREMENTAL_BY_PARTITION (
 forward_only TRUE,
-disable_restatement TRUE,
+disable_restatement FALSE,
 on_destructive_change 'ERROR'
 )"""
     )

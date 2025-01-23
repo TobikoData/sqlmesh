@@ -512,7 +512,7 @@ class IncrementalByUniqueKeyKind(_IncrementalBy):
 class IncrementalByPartitionKind(_Incremental):
     name: t.Literal[ModelKindName.INCREMENTAL_BY_PARTITION] = ModelKindName.INCREMENTAL_BY_PARTITION
     forward_only: t.Literal[True] = True
-    disable_restatement: SQLGlotBool = True
+    disable_restatement: SQLGlotBool = False
 
     @field_validator("forward_only", mode="before")
     def _forward_only_validator(cls, v: t.Union[bool, exp.Expression]) -> t.Literal[True]:
