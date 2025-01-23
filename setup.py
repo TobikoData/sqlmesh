@@ -67,7 +67,7 @@ setup(
             "opentelemetry-proto==1.27.0",  # pip was having trouble resolving this transitive dependency of airflow
             "beautifulsoup4",
             "clickhouse-connect",
-            "cryptography~=42.0.4",
+            "cryptography",
             "custom-materializations",
             "databricks-sql-connector",
             "dbt-bigquery",
@@ -145,8 +145,7 @@ setup(
             "slack_sdk",
         ],
         "snowflake": [
-            # https://github.com/dbt-labs/dbt-snowflake/blob/main/dev-requirements.txt#L12
-            "cryptography~=42.0.4",
+            "cryptography",
             "snowflake-connector-python[pandas,secure-local-storage]",
             # as at 2024-08-05, snowflake-snowpark-python is only available up to Python 3.11
             "snowflake-snowpark-python; python_version<'3.12'",
