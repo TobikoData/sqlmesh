@@ -566,7 +566,7 @@ class ModelConfig(BaseModelConfig):
             self.canonical_name(context),
             query,
             dialect=model_dialect,
-            kind=self.model_kind(context),
+            kind=kind,
             start=self.start,
             audit_definitions=audit_definitions,
             # This ensures that we bypass query rendering that would otherwise be required to extract additional
