@@ -3,7 +3,9 @@ from __future__ import annotations
 import typing as t
 
 from airflow.providers.common.sql.hooks.sql import DbApiHook
-from clickhouse_connect.dbapi.connection import Connection
+
+if t.TYPE_CHECKING:
+    from clickhouse_connect.dbapi.connection import Connection
 
 
 class SQLMeshClickHouseHook(DbApiHook):
