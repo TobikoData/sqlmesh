@@ -147,6 +147,14 @@ def test_type(request):
             ],
         ),
         pytest.param(
+            "trino_nessie",
+            marks=[
+                pytest.mark.docker,
+                pytest.mark.engine,
+                pytest.mark.trino_nessie,
+            ],
+        ),
+        pytest.param(
             "spark",
             marks=[
                 pytest.mark.docker,

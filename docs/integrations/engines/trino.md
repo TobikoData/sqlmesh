@@ -47,7 +47,11 @@ iceberg.catalog.type=hive_metastore
 
 **Note**: The Trino Iceberg Connector must be configured with an `iceberg.catalog.type` that supports views. At the time of this writing, this is `hive_metastore`, `glue`, and `rest`.
 
-The `jdbc` and `nessie` catalogs do not support views and are thus incompatible with SQLMesh.
+The `jdbc` and `nessie` iceberg catalog types do not support views and are thus incompatible with SQLMesh.
+
+!!! info "Nessie"
+    Nessie is supported when used as an Iceberg REST Catalog (`iceberg.catalog.type=rest`).
+    For more information on how to configure the Trino Iceberg connector for this, see the [Nessie documentation](https://projectnessie.org/nessie-latest/trino/).
 
 #### Delta Lake Connector Configuration
 
