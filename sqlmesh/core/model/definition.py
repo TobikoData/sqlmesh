@@ -1386,6 +1386,10 @@ class SqlModel(_Model):
         data.extend(self.jinja_macros.data_hash_values)
         return data
 
+    @property
+    def _additional_metadata(self) -> t.List[str]:
+        return [*super()._additional_metadata, gen(self.query)]
+
 
 class SeedModel(_Model):
     """The model definition which uses a pre-built static dataset to source the data from.
