@@ -554,6 +554,13 @@ class ModelConfig(BaseModelConfig):
             if physical_properties:
                 model_kwargs["physical_properties"] = physical_properties
 
+        kind = self.model_kind(context)
+        allow_partials = model_kwargs.pop("allow_partials", None)
+        if allow_partials is None and kind.is_incremental_unmanaged:
+            # Set allow_partials to True for incremental unmanaged models to preserve the original
+            # dbt incremental semantics.
+            allow_partials = True
+
         model = create_sql_model(
             self.canonical_name(context),
             query,
@@ -565,6 +572,7 @@ class ModelConfig(BaseModelConfig):
             # dependencies from the model's SQL.
             # Note: any table dependencies that are not referenced using the `ref` macro will not be included.
             extract_dependencies_from_query=False,
+            allow_partials=allow_partials,
             **optional_kwargs,
             **model_kwargs,
         )
