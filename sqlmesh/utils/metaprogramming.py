@@ -132,8 +132,8 @@ class _ClassFinder(ast.NodeVisitor):
 
 
 class _DecoratorDependencyFinder(ast.NodeVisitor):
-    def __init__(self, dependencies: t.List[str]) -> None:
-        self.dependencies = dependencies
+    def __init__(self) -> None:
+        self.dependencies: t.List[str] = []
 
     def _extract_dependencies(self, node: ast.ClassDef | ast.FunctionDef) -> None:
         for decorator in node.decorator_list:
@@ -225,10 +225,10 @@ def decorator_vars(func: t.Callable, root_node: t.Optional[ast.Module] = None) -
     are referenced in their argument list. These objects may be transitive dependencies
     that we need to include in the serialized python environments.
     """
-    names: t.List[str] = []
     root_node = root_node or parse_source(func)
-    _DecoratorDependencyFinder(names).visit(root_node)
-    return unique(names)
+    finder = _DecoratorDependencyFinder()
+    finder.visit(root_node)
+    return unique(finder.dependencies)
 
 
 def normalize_source(obj: t.Any) -> str:
