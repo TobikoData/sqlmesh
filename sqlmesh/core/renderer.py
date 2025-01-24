@@ -198,7 +198,7 @@ class BaseExpressionRenderer:
         for definition in self._macro_definitions:
             try:
                 macro_evaluator.evaluate(definition)
-            except MacroEvalError as ex:
+            except Exception as ex:
                 raise_config_error(f"Failed to evaluate macro '{definition}'. {ex}", self._path)
 
         macro_evaluator.locals.update(render_kwargs)
