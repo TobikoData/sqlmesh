@@ -15,7 +15,6 @@ R = t.TypeVar("R")
 class NodeExecutionFailedError(t.Generic[H], SQLMeshError):
     def __init__(self, ex: Exception, node: H):
         self.node = node
-        self.full_exception = ex  # for logging full traceback
 
         node_name = ""
         if isinstance(node, SnapshotId):
@@ -24,19 +23,20 @@ class NodeExecutionFailedError(t.Generic[H], SQLMeshError):
             node_name = node[0]
         self.node_name = node_name
 
-        error_msg = str(ex)
+        # some engines return a tuple(int error code, [str|bytes] message)
+        error_msg = None
+        for arg in ex.args:
+            if not error_msg and isinstance(arg, (str, bytes)):
+                error_msg = arg.decode(errors="replace") if isinstance(arg, bytes) else arg
+        error_msg = str(ex) if not error_msg else error_msg
+
         if not isinstance(ex, PythonModelEvalError):
             error_class = str(ex.__class__).replace("<class '", "").replace("'>", "")
-            error_msg = error_msg.replace("\n", "\n      ")
-            error_msg = f"  {error_class}:\n    {error_msg}"
+            error_msg = "  " + error_msg.replace("\n", "\n  ")
+            error_msg = f"  {error_class}:\n{error_msg}"
+        error_msg = error_msg.replace("\n", "\n  ")
 
-        for delim in ["'", '"', "[", "]", "`"]:
-            node_name = node_name.replace(delim, "")
-
-        node_name = f"[red]{node_name}[/red]\n\n  "
-        msg = node_name + error_msg.replace("\n", "\n  ")
-
-        super().__init__(msg)
+        super().__init__(error_msg)
 
 
 class ConcurrentDAGExecutor(t.Generic[H]):
@@ -94,6 +94,7 @@ class ConcurrentDAGExecutor(t.Generic[H]):
                 self._submit_next_nodes(executor, node)
         except Exception as ex:
             error = NodeExecutionFailedError(ex, node)
+            error.__cause__ = ex
 
             if self.raise_on_error:
                 self._finished_future.set_exception(error)
@@ -247,6 +248,7 @@ def sequential_apply_to_dag(
             fn(node)
         except Exception as ex:
             error = NodeExecutionFailedError(ex, node)
+            error.__cause__ = ex
 
             if raise_on_error:
                 raise error

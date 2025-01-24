@@ -204,7 +204,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             interval_end_per_model=plan.interval_end_per_model,
         )
         if completion_status.is_failure:
-            self.console.log_status_update("[red]Error: Plan application failed.[/red]")
+            self.console.log_error("\nError: Plan application failed.")
             raise PlanError
 
     def _push(
@@ -245,12 +245,11 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             self.console.stop_creation_progress(success=False)
             progress_stopped = True
 
-            full_exception_msg = "\n".join(format_exception(ex.full_exception))
-            logger.info(f"EXECUTION ERROR\n{full_exception_msg}\n")
+            exception_msg = "\n".join(format_exception(ex.__cause__)) if ex.__cause__ else str(ex)
+            logger.info(f"EXECUTION ERROR\n{exception_msg}\n")
 
-            self.console.log_status_update("\n[red]Failed models[/red]\n")
-            self.console.log_status_update("  " + str(ex))
-            self.console.log_status_update("\n[red]Error: Plan application failed.[/red]")
+            self.console.log_failed_models({ex.node_name: str(ex)})
+            self.console.log_error("\nError: Plan application failed.")
 
             raise PlanError
         finally:
@@ -496,7 +495,7 @@ class BaseAirflowPlanEvaluator(PlanEvaluator):
                 self.dag_run_poll_interval_secs,
             )
             if not plan_application_succeeded:
-                msg = "ERROR: Plan application failed."
+                msg = "\nError: Plan application failed."
                 self.console.log_error(msg)
                 logger.info(msg)
                 raise PlanError

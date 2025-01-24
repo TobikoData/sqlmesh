@@ -160,9 +160,7 @@ class CircuitBreakerError(SQLMeshError):
 
 
 class PythonModelEvalError(SQLMeshError):
-    def __init__(self, message: str, full_exception: Exception) -> None:
-        super().__init__(message)
-        self.full_exception = full_exception
+    pass
 
 
 def raise_config_error(

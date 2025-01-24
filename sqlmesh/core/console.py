@@ -232,6 +232,14 @@ class Console(abc.ABC):
         """Display general status update to the user."""
 
     @abc.abstractmethod
+    def log_skipped_models(self, message: str) -> None:
+        """Display list of models skipped during evaluation to the user."""
+
+    @abc.abstractmethod
+    def log_failed_models(self, msg_dict: t.Dict[str, str]) -> None:
+        """Display list of models that failed during evaluation to the user."""
+
+    @abc.abstractmethod
     def log_error(self, message: str) -> None:
         """Display error info to the user."""
 
@@ -1002,6 +1010,23 @@ class TerminalConsole(Console):
 
     def log_status_update(self, message: str) -> None:
         self._print(message)
+
+    def log_skipped_models(self, message: str) -> None:
+        self._print(f"[dark_orange3]Skipped models[/dark_orange3]\n\n{message}")
+
+    def log_failed_models(self, msg_dict: t.Dict[str, str]) -> None:
+        self._print("\n[red]Failed models[/red]\n")
+
+        num_fails = len(msg_dict)
+        for i, (name, msg) in enumerate(msg_dict.items()):
+            for delim in ["'", '"', "[", "]", "`"]:
+                name = name.replace(delim, "")
+
+            msg = "  " + msg.replace("\n", "\n  ")
+            if i == (num_fails - 1):
+                msg = msg if msg.rstrip(" ").endswith("\n") else msg + "\n"
+
+            self._print(f"  [red]{name}[/red]\n\n{msg}")
 
     def log_error(self, message: str) -> None:
         self._print(f"[red]{message}[/red]")

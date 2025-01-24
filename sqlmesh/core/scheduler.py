@@ -38,7 +38,7 @@ from sqlmesh.utils.date import (
     to_timestamp,
     validate_date_range,
 )
-from sqlmesh.utils.errors import AuditError, CircuitBreakerError, SQLMeshError
+from sqlmesh.utils.errors import AuditError, CircuitBreakerError, PythonModelEvalError, SQLMeshError
 
 logger = logging.getLogger(__name__)
 SnapshotToIntervals = t.Dict[Snapshot, Intervals]
@@ -327,33 +327,39 @@ class Scheduler:
 
         skipped_snapshots = {i[0] for i in skipped_intervals}
         if skipped_snapshots:
-            skipped_message = "\n[dark_orange3]Skipped models[/dark_orange3]\n\n"
+            skipped_message = ""
             for skipped in skipped_snapshots:
                 skipped_name = skipped
                 for delim in ["'", '"', "[", "]", "`"]:
                     skipped_name = skipped_name.replace(delim, "")
                 skipped_message += f"  {skipped_name}\n"
 
-            self.console.log_status_update(skipped_message + "\n")
-            logger.info(skipped_message)
+            self.console.log_skipped_models(skipped_message)
+            logger.info("Skipped models:\n" + skipped_message)
 
         if errors:
-            err_msg = []
+            err_msg_dict = {}
             for i, error in enumerate(errors):
-                if isinstance(error.full_exception, CircuitBreakerError):
-                    raise error.full_exception
+                if isinstance(error.__cause__, CircuitBreakerError):
+                    raise error.__cause__
 
-                err_msg.append(str(error))
+                msg = []
+                msg.append(str(error))
 
-                if error.__cause__:
+                if error.__cause__ and not isinstance(error.__cause__, PythonModelEvalError):
                     cause_msg = str(error.__cause__).replace("\n", "\n  ")
-                    err_msg.append("  " + cause_msg)
+                    msg.append("  " + cause_msg)
 
-                full_exception_msg = "\n".join(format_exception(error.full_exception))
-                logger.info(f"EXECUTION ERROR\n{full_exception_msg}\n")
+                err_msg_dict[error.node_name] = "\n".join(msg)
 
-            self.console.log_status_update("[red]Failed models[/red]\n")
-            self.console.log_status_update("  " + "\n".join(err_msg) + "\n")
+                exception_msg = (
+                    "\n".join(format_exception(error.__cause__))
+                    if error.__cause__
+                    else "\n".join(msg)
+                )
+                logger.info(f"EXECUTION ERROR\n{exception_msg}\n")
+
+            self.console.log_failed_models(err_msg_dict)
 
         return CompletionStatus.FAILURE if errors else CompletionStatus.SUCCESS
 
