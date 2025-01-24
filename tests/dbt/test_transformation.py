@@ -1469,8 +1469,12 @@ def test_dbt_incremental_allow_partials_by_default():
         package_name="package",
         target_schema="test",
         sql="SELECT * FROM baz",
-        materialized=Materialization.INCREMENTAL.value,
+        materialized=Materialization.TABLE.value,
     )
+    assert model.allow_partials is None
+    assert not model.to_sqlmesh(context).allow_partials
+
+    model.materialized = Materialization.INCREMENTAL.value
     assert model.allow_partials is None
     assert model.to_sqlmesh(context).allow_partials
 

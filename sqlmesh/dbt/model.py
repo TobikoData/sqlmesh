@@ -556,9 +556,10 @@ class ModelConfig(BaseModelConfig):
 
         kind = self.model_kind(context)
         allow_partials = model_kwargs.pop("allow_partials", None)
-        if allow_partials is None and kind.is_incremental_unmanaged:
-            # Set allow_partials to True for incremental unmanaged models to preserve the original
-            # dbt incremental semantics.
+        if allow_partials is None and (
+            kind.is_incremental_unmanaged or kind.is_incremental_by_unique_key
+        ):
+            # Set allow_partials to True for dbt incremental models to preserve the original semantics.
             allow_partials = True
 
         model = create_sql_model(
