@@ -41,6 +41,17 @@ gateways:
       retries: 20
     state_connection:
       type: duckdb
+  inttest_trino_nessie:
+    connection:
+      type: trino
+      host: {{ env_var('DOCKER_HOSTNAME', 'localhost') }}
+      port: 8080
+      user: admin
+      catalog: datalake_nessie
+      http_scheme: http
+      retries: 20
+    state_connection:
+      type: duckdb
   inttest_spark:
     connection:
       type: spark

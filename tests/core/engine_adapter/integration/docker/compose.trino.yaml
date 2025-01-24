@@ -84,3 +84,27 @@ services:
       <<: *hive_metastore_environments
     depends_on:
       - metastore
+
+  nessie:
+    image: ghcr.io/projectnessie/nessie:0.102.2
+    restart: on-failure
+    ports:
+      - '19120:19120'
+    environment:
+      nessie.version.store.type: JDBC2
+      nessie.version.store.persist.jdbc.datasource: postgresql
+      quarkus.datasource.postgresql.jdbc.url: jdbc:postgresql://metastore:5432/nessie
+      quarkus.datasource.postgresql.username: hive
+      quarkus.datasource.postgresql.password: hive
+      nessie.catalog.default-warehouse: warehouse
+      nessie.catalog.warehouses.warehouse.location: s3://nessie/warehouse
+      nessie.catalog.service.s3.default-options.region: us-east-1
+      nessie.catalog.service.s3.default-options.path-style-access: 'true'
+      nessie.catalog.service.s3.default-options.access-key: urn:nessie-secret:quarkus:nessie.catalog.secrets.access-key
+      nessie.catalog.secrets.access-key.name: minio
+      nessie.catalog.secrets.access-key.secret: minio123
+      nessie.catalog.service.s3.default-options.endpoint: http://minio:9000/
+
+    depends_on:
+      - metastore
+

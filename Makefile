@@ -191,7 +191,7 @@ spark-test: engine-spark-up
 	pytest -n auto -x -m "spark or pyspark" --retries 3 --junitxml=test-results/junit-spark.xml
 
 trino-test: engine-trino-up
-	pytest -n auto -x -m "trino or trino_iceberg or trino_delta" --retries 3 --junitxml=test-results/junit-trino.xml
+	pytest -n auto -x -m "trino or trino_iceberg or trino_delta or trino_nessie" --retries 3 --junitxml=test-results/junit-trino.xml
 
 #################
 # Cloud Engines #
