@@ -612,7 +612,7 @@ class SeedKind(_ModelKind):
         if v is None or isinstance(v, CsvSettings):
             return v
         if isinstance(v, exp.Expression):
-            tuple_exp = parse_properties(cls, v)
+            tuple_exp = parse_properties(cls, v, None)
             if not tuple_exp:
                 return None
             return CsvSettings(**{e.left.name: e.right for e in tuple_exp.expressions})
@@ -979,9 +979,7 @@ def create_model_kind(v: t.Any, dialect: str, defaults: t.Dict[str, t.Any]) -> M
     return model_kind_type_from_name(name)(name=name)  # type: ignore
 
 
-def _model_kind_validator(
-    cls: t.Type, v: t.Any, info: t.Optional[ValidationInfo] = None
-) -> ModelKind:
+def _model_kind_validator(cls: t.Type, v: t.Any, info: t.Optional[ValidationInfo]) -> ModelKind:
     dialect = get_dialect(info.data) if info else ""
     return create_model_kind(v, dialect, {})
 
