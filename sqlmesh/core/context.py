@@ -94,6 +94,7 @@ from sqlmesh.core.snapshot import (
     SnapshotFingerprint,
     to_table_mapping,
 )
+from sqlmesh.core.snapshot.definition import get_next_model_interval_start
 from sqlmesh.core.state_sync import (
     CachingStateSync,
     StateReader,
@@ -111,7 +112,7 @@ from sqlmesh.core.test import (
 from sqlmesh.core.user import User
 from sqlmesh.utils import UniqueKeyDict, sys_path
 from sqlmesh.utils.dag import DAG
-from sqlmesh.utils.date import TimeLike, now_ds, to_timestamp
+from sqlmesh.utils.date import TimeLike, now_ds, to_timestamp, format_tz_datetime
 from sqlmesh.utils.errors import (
     CircuitBreakerError,
     ConfigError,
@@ -1951,7 +1952,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                 select_models, no_auto_upstream, snapshots.values()
             )
 
-        return scheduler.run(
+        completion_status = scheduler.run(
             environment,
             start=start,
             end=end,
@@ -1961,6 +1962,22 @@ class GenericContext(BaseContext, t.Generic[C]):
             selected_snapshots=select_models,
             auto_restatement_enabled=environment.lower() == c.PROD,
         )
+
+        if completion_status.is_nothing_to_do:
+            next_run_ready_msg = ""
+
+            next_ready_interval_start = get_next_model_interval_start(snapshots.values())
+            if next_ready_interval_start:
+                utc_time = format_tz_datetime(next_ready_interval_start)
+                local_time = format_tz_datetime(next_ready_interval_start, use_local_timezone=True)
+                time_msg = local_time if local_time == utc_time else f"{local_time} ({utc_time})"
+                next_run_ready_msg = f"\n\nNext run will be ready at {time_msg}."
+
+            self.console.log_status_update(
+                f"No models are ready to run. Please wait until a model `cron` interval has elapsed.{next_run_ready_msg}"
+            )
+
+        return completion_status
 
     def _apply(self, plan: Plan, circuit_breaker: t.Optional[t.Callable[[], bool]]) -> None:
         self._scheduler.create_plan_evaluator(self).evaluate(
