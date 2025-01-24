@@ -3256,6 +3256,13 @@ def test_empty_bacfkill(init_and_plan_context: t.Callable):
     assert not plan.missing_intervals
 
 
+@time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_dbt_requirements(sushi_dbt_context: Context):
+    assert set(sushi_dbt_context.requirements) == {"dbt-core", "dbt-duckdb"}
+    assert sushi_dbt_context.requirements["dbt-core"].startswith("1.")
+    assert sushi_dbt_context.requirements["dbt-duckdb"].startswith("1.")
+
+
 @pytest.mark.parametrize(
     "context_fixture",
     ["sushi_context", "sushi_dbt_context", "sushi_test_dbt_context", "sushi_no_default_catalog"],

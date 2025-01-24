@@ -876,6 +876,11 @@ class GenericContext(BaseContext, t.Generic[C]):
         return self._snapshots()
 
     @property
+    def requirements(self) -> t.Dict[str, str]:
+        """Returns the Python dependencies of the project loaded in this context."""
+        return self._requirements.copy()
+
+    @property
     def default_catalog(self) -> t.Optional[str]:
         if self._default_catalog is None:
             self._default_catalog = self._scheduler.get_default_catalog(self)
