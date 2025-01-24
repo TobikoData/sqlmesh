@@ -122,10 +122,9 @@ def discover_engine_operator(name: str, sql_only: bool = False) -> t.Type[BaseOp
     name = name.lower()
 
     try:
-        if name == 'clickhouse':
-            from sqlmesh.schedulers.airflow.operators.clickhouse import (
-                SQLMeshClickHouseOperator
-            )
+        if name == "clickhouse":
+            from sqlmesh.schedulers.airflow.operators.clickhouse import SQLMeshClickHouseOperator
+
             return SQLMeshClickHouseOperator
         if name == "spark":
             from sqlmesh.schedulers.airflow.operators.spark_submit import (
