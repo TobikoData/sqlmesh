@@ -81,7 +81,8 @@ class PydanticModel(pydantic.BaseModel):
     _hash_func_mapping: t.ClassVar[t.Dict[t.Type[t.Any], t.Callable[[t.Any], int]]] = {}
 
     def dict(self, **kwargs: t.Any) -> t.Dict[str, t.Any]:
-        return super().model_dump(**DEFAULT_ARGS, **kwargs)  # type: ignore
+        kwargs = {**DEFAULT_ARGS, **kwargs}
+        return super().model_dump(**kwargs)  # type: ignore
 
     def json(
         self,
