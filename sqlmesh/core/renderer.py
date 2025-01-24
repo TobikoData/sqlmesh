@@ -18,7 +18,6 @@ from sqlmesh.core.macros import MacroEvaluator, RuntimeStage
 from sqlmesh.utils.date import TimeLike, date_dict, make_inclusive, to_datetime
 from sqlmesh.utils.errors import (
     ConfigError,
-    MacroEvalError,
     ParsetimeAdapterCallError,
     SQLMeshError,
     raise_config_error,
@@ -198,7 +197,7 @@ class BaseExpressionRenderer:
         for definition in self._macro_definitions:
             try:
                 macro_evaluator.evaluate(definition)
-            except MacroEvalError as ex:
+            except Exception as ex:
                 raise_config_error(f"Failed to evaluate macro '{definition}'. {ex}", self._path)
 
         macro_evaluator.locals.update(render_kwargs)
@@ -211,8 +210,11 @@ class BaseExpressionRenderer:
         for expression in expressions:
             try:
                 transformed_expressions = ensure_list(macro_evaluator.transform(expression))
-            except MacroEvalError as ex:
-                raise_config_error(f"Failed to resolve macro for expression. {ex}", self._path)
+            except Exception as ex:
+                raise_config_error(
+                    f"Failed to resolve macros for\n{expression.sql(dialect=self._dialect, pretty=True)}\n{ex}",
+                    self._path,
+                )
 
             for expression in t.cast(t.List[exp.Expression], transformed_expressions):
                 with self._normalize_and_quote(expression) as expression:
