@@ -28,7 +28,7 @@ from sqlmesh.core.snapshot.definition import Interval, SnapshotId
 from sqlmesh.utils import columns_to_types_all_known, random_id
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import TimeLike, now, to_datetime, yesterday_ds, to_timestamp
-from sqlmesh.utils.errors import NoChangesPlanError, PlanError, SQLMeshError
+from sqlmesh.utils.errors import NoChangesPlanError, PlanBuilderError, SQLMeshError
 
 logger = logging.getLogger(__name__)
 
@@ -189,7 +189,7 @@ class PlanBuilder:
             choice: The user decision on how to version the target snapshot and its children.
         """
         if self._forward_only:
-            raise PlanError("Choice setting is not supported by a forward-only plan.")
+            raise PlanBuilderError("Choice setting is not supported by a forward-only plan.")
         if not self._is_new_snapshot(snapshot):
             raise SQLMeshError(
                 f"A choice can't be changed for the existing version of '{snapshot.name}'."
@@ -327,7 +327,7 @@ class PlanBuilder:
         for model_fqn in restate_models:
             snapshot = self._model_fqn_to_snapshot.get(model_fqn)
             if not snapshot:
-                raise PlanError(f"Cannot restate model '{model_fqn}'. Model does not exist.")
+                raise PlanBuilderError(f"Cannot restate model '{model_fqn}'. Model does not exist.")
             if not forward_only_preview_needed:
                 if not self._is_dev and snapshot.disable_restatement:
                     # This is a warning but we print this as error since the Console is lacking API for warnings.
@@ -495,7 +495,7 @@ class PlanBuilder:
                     if snapshot.model.on_destructive_change.is_warn:
                         logger.warning(warning_msg)
                     else:
-                        raise PlanError(
+                        raise PlanBuilderError(
                             f"{warning_msg} To allow this, change the model's `on_destructive_change` setting to `warn` or `allow` or include it in the plan's `--allow-destructive-model` option."
                         )
 
@@ -595,9 +595,9 @@ class PlanBuilder:
     def _apply_effective_from(self) -> None:
         if self._effective_from:
             if not self._forward_only:
-                raise PlanError("Effective date can only be set for a forward-only plan.")
+                raise PlanBuilderError("Effective date can only be set for a forward-only plan.")
             if to_datetime(self._effective_from) > now():
-                raise PlanError("Effective date cannot be in the future.")
+                raise PlanBuilderError("Effective date cannot be in the future.")
 
         for snapshot in self._context_diff.new_snapshots.values():
             if (
@@ -627,7 +627,7 @@ class PlanBuilder:
 
     def _ensure_valid_date_range(self) -> None:
         if (self.override_start or self.override_end) and not self.is_start_and_end_allowed:
-            raise PlanError(
+            raise PlanBuilderError(
                 "The start and end dates can't be set for a production plan without restatements."
             )
 
@@ -646,7 +646,7 @@ class PlanBuilder:
                 and not candidate.reuses_previous_version
                 and promoted.version == candidate.version
             ):
-                raise PlanError(
+                raise PlanBuilderError(
                     f"Attempted to revert to an unrevertable version of model '{name}'. Run `sqlmesh plan` again to mitigate the issue."
                 )
 
@@ -657,7 +657,7 @@ class PlanBuilder:
             } & {x for x in snapshot.node.depends_on}
             if broken_references:
                 broken_references_msg = ", ".join(f"'{x}'" for x in broken_references)
-                raise PlanError(
+                raise PlanBuilderError(
                     f"""Removed {broken_references_msg} are referenced in '{snapshot.name}'. Please remove broken references before proceeding."""
                 )
 
@@ -665,7 +665,7 @@ class PlanBuilder:
         if self._restate_models is not None and (
             self._context_diff.new_snapshots or self._context_diff.modified_snapshots
         ):
-            raise PlanError(
+            raise PlanBuilderError(
                 "Model changes and restatements can't be a part of the same plan. "
                 "Revert or apply changes before proceeding with restatements."
             )

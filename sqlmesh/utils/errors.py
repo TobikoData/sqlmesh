@@ -39,6 +39,10 @@ class PlanError(SQLMeshError):
     pass
 
 
+class PlanBuilderError(SQLMeshError):
+    pass
+
+
 class NoChangesPlanError(PlanError):
     pass
 
@@ -153,6 +157,12 @@ class UnsupportedCatalogOperationError(EngineAdapterError):
 class CircuitBreakerError(SQLMeshError):
     def __init__(self) -> None:
         super().__init__("Circuit breaker triggered.")
+
+
+class PythonModelEvalError(SQLMeshError):
+    def __init__(self, message: str, full_exception: Exception) -> None:
+        super().__init__(message)
+        self.full_exception = full_exception
 
 
 def raise_config_error(

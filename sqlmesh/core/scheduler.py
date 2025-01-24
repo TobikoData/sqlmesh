@@ -326,20 +326,34 @@ class Scheduler:
         self.console.stop_evaluation_progress(success=not errors)
 
         skipped_snapshots = {i[0] for i in skipped_intervals}
-        for skipped in skipped_snapshots:
-            log_message = f"SKIPPED snapshot {skipped}\n"
-            self.console.log_status_update(log_message)
-            logger.info(log_message)
+        if skipped_snapshots:
+            skipped_message = "\n[dark_orange3]Skipped models[/dark_orange3]\n\n"
+            for skipped in skipped_snapshots:
+                skipped_name = skipped
+                for delim in ["'", '"', "[", "]", "`"]:
+                    skipped_name = skipped_name.replace(delim, "")
+                skipped_message += f"  {skipped_name}\n"
 
-        for error in errors:
-            if isinstance(error.__cause__, CircuitBreakerError):
-                raise error.__cause__
-            sid = error.node[0]
-            formatted_exception = "".join(format_exception(error.__cause__ or error))
-            log_message = f"FAILED processing snapshot {sid}\n{formatted_exception}"
-            self.console.log_error(log_message)
-            # Log with INFO level to prevent duplicate messages in the console.
-            logger.info(log_message)
+            self.console.log_status_update(skipped_message + "\n")
+            logger.info(skipped_message)
+
+        if errors:
+            err_msg = []
+            for i, error in enumerate(errors):
+                if isinstance(error.full_exception, CircuitBreakerError):
+                    raise error.full_exception
+
+                err_msg.append(str(error))
+
+                if error.__cause__:
+                    cause_msg = str(error.__cause__).replace("\n", "\n  ")
+                    err_msg.append("  " + cause_msg)
+
+                full_exception_msg = "\n".join(format_exception(error.full_exception))
+                logger.info(f"EXECUTION ERROR\n{full_exception_msg}\n")
+
+            self.console.log_status_update("[red]Failed models[/red]\n")
+            self.console.log_status_update("  " + "\n".join(err_msg) + "\n")
 
         return CompletionStatus.FAILURE if errors else CompletionStatus.SUCCESS
 

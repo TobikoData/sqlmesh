@@ -17,7 +17,6 @@ Refer to `sqlmesh.core.plan`.
 import abc
 import logging
 import typing as t
-
 from sqlmesh.core import analytics
 from sqlmesh.core import constants as c
 from sqlmesh.core.console import Console, get_console
@@ -43,9 +42,11 @@ from sqlmesh.core.user import User
 from sqlmesh.schedulers.airflow import common as airflow_common
 from sqlmesh.schedulers.airflow.client import AirflowClient, BaseAirflowClient
 from sqlmesh.schedulers.airflow.mwaa_client import MWAAClient
+from sqlmesh.utils.concurrency import NodeExecutionFailedError
 from sqlmesh.utils.errors import PlanError, SQLMeshError
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import now
+from sqlmesh.utils import format_exception
 
 logger = logging.getLogger(__name__)
 
@@ -203,7 +204,8 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             interval_end_per_model=plan.interval_end_per_model,
         )
         if completion_status.is_failure:
-            raise PlanError("Plan application failed.")
+            self.console.log_status_update("[red]Error: Plan application failed.[/red]")
+            raise PlanError
 
     def _push(
         self,
@@ -226,6 +228,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         ]
 
         completed = False
+        progress_stopped = False
         try:
             self.snapshot_evaluator.create(
                 snapshots_to_create,
@@ -238,8 +241,21 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                 on_complete=self.console.update_creation_progress,
             )
             completed = True
+        except NodeExecutionFailedError as ex:
+            self.console.stop_creation_progress(success=False)
+            progress_stopped = True
+
+            full_exception_msg = "\n".join(format_exception(ex.full_exception))
+            logger.info(f"EXECUTION ERROR\n{full_exception_msg}\n")
+
+            self.console.log_status_update("\n[red]Failed models[/red]\n")
+            self.console.log_status_update("  " + str(ex))
+            self.console.log_status_update("\n[red]Error: Plan application failed.[/red]")
+
+            raise PlanError
         finally:
-            self.console.stop_creation_progress(success=completed)
+            if not progress_stopped:
+                self.console.stop_creation_progress(success=completed)
 
         self.state_sync.push_snapshots(plan.new_snapshots)
 
@@ -480,7 +496,10 @@ class BaseAirflowPlanEvaluator(PlanEvaluator):
                 self.dag_run_poll_interval_secs,
             )
             if not plan_application_succeeded:
-                raise PlanError("Plan application failed.")
+                msg = "ERROR: Plan application failed."
+                self.console.log_error(msg)
+                logger.info(msg)
+                raise PlanError
 
             self.console.log_success("Plan applied successfully")
 

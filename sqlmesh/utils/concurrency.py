@@ -4,7 +4,7 @@ from threading import Lock
 
 from sqlmesh.core.snapshot import SnapshotId, SnapshotInfoLike
 from sqlmesh.utils.dag import DAG
-from sqlmesh.utils.errors import ConfigError, SQLMeshError
+from sqlmesh.utils.errors import ConfigError, PythonModelEvalError, SQLMeshError
 
 H = t.TypeVar("H", bound=t.Hashable)
 S = t.TypeVar("S", bound=SnapshotInfoLike)
@@ -13,9 +13,30 @@ R = t.TypeVar("R")
 
 
 class NodeExecutionFailedError(t.Generic[H], SQLMeshError):
-    def __init__(self, node: H):
+    def __init__(self, ex: Exception, node: H):
         self.node = node
-        super().__init__(f"Execution failed for node {node}")
+        self.full_exception = ex  # for logging full traceback
+
+        node_name = ""
+        if isinstance(node, SnapshotId):
+            node_name = node.name
+        elif isinstance(node, tuple):
+            node_name = node[0]
+        self.node_name = node_name
+
+        error_msg = str(ex)
+        if not isinstance(ex, PythonModelEvalError):
+            error_class = str(ex.__class__).replace("<class '", "").replace("'>", "")
+            error_msg = error_msg.replace("\n", "\n      ")
+            error_msg = f"  {error_class}:\n    {error_msg}"
+
+        for delim in ["'", '"', "[", "]", "`"]:
+            node_name = node_name.replace(delim, "")
+
+        node_name = f"[red]{node_name}[/red]\n\n  "
+        msg = node_name + error_msg.replace("\n", "\n  ")
+
+        super().__init__(msg)
 
 
 class ConcurrentDAGExecutor(t.Generic[H]):
@@ -72,8 +93,7 @@ class ConcurrentDAGExecutor(t.Generic[H]):
                 self._unprocessed_nodes_num -= 1
                 self._submit_next_nodes(executor, node)
         except Exception as ex:
-            error = NodeExecutionFailedError(node)
-            error.__cause__ = ex
+            error = NodeExecutionFailedError(ex, node)
 
             if self.raise_on_error:
                 self._finished_future.set_exception(error)
@@ -226,11 +246,10 @@ def sequential_apply_to_dag(
         try:
             fn(node)
         except Exception as ex:
-            if raise_on_error:
-                raise NodeExecutionFailedError(node) from ex
+            error = NodeExecutionFailedError(ex, node)
 
-            error = NodeExecutionFailedError(node)
-            error.__cause__ = ex
+            if raise_on_error:
+                raise error
 
             node_errors.append(error)
             failed_or_skipped_nodes.add(node)
