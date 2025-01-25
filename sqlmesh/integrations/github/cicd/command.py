@@ -12,7 +12,7 @@ from sqlmesh.integrations.github.cicd.controller import (
     GithubController,
     TestFailure,
 )
-from sqlmesh.utils.errors import CICDBotError, ConflictingPlanError, PlanError, PlanBuilderError
+from sqlmesh.utils.errors import CICDBotError, ConflictingPlanError, PlanError
 
 logger = logging.getLogger(__name__)
 
@@ -164,7 +164,7 @@ def _deploy_production(controller: GithubController) -> bool:
             skip_reason=str(e),
         )
         return False
-    except (PlanError, PlanBuilderError):
+    except PlanError:
         controller.update_prod_environment_check(
             status=GithubCheckStatus.COMPLETED, conclusion=GithubCheckConclusion.ACTION_REQUIRED
         )

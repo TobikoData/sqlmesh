@@ -43,7 +43,7 @@ from sqlmesh.schedulers.airflow import common as airflow_common
 from sqlmesh.schedulers.airflow.client import AirflowClient, BaseAirflowClient
 from sqlmesh.schedulers.airflow.mwaa_client import MWAAClient
 from sqlmesh.utils.concurrency import NodeExecutionFailedError
-from sqlmesh.utils.errors import PlanError, SQLMeshError
+from sqlmesh.utils.errors import SQLMeshError, PlanApplyError
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import now
 from sqlmesh.utils import format_exception
@@ -205,7 +205,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         )
         if completion_status.is_failure:
             self.console.log_error("\nError: Plan application failed.")
-            raise PlanError
+            raise PlanApplyError
 
     def _push(
         self,
@@ -251,7 +251,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             self.console.log_failed_models({ex.node_name: str(ex)})
             self.console.log_error("\nError: Plan application failed.")
 
-            raise PlanError
+            raise PlanApplyError
         finally:
             if not progress_stopped:
                 self.console.stop_creation_progress(success=completed)
@@ -498,7 +498,7 @@ class BaseAirflowPlanEvaluator(PlanEvaluator):
                 msg = "\nError: Plan application failed."
                 self.console.log_error(msg)
                 logger.info(msg)
-                raise PlanError
+                raise PlanApplyError
 
             self.console.log_success("Plan applied successfully")
 

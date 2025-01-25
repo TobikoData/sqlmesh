@@ -39,7 +39,7 @@ class PlanError(SQLMeshError):
     pass
 
 
-class PlanBuilderError(SQLMeshError):
+class PlanApplyError(SQLMeshError):
     pass
 
 

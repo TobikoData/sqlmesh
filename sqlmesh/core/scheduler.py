@@ -38,7 +38,7 @@ from sqlmesh.utils.date import (
     to_timestamp,
     validate_date_range,
 )
-from sqlmesh.utils.errors import AuditError, CircuitBreakerError, PythonModelEvalError, SQLMeshError
+from sqlmesh.utils.errors import AuditError, CircuitBreakerError, SQLMeshError
 
 logger = logging.getLogger(__name__)
 SnapshotToIntervals = t.Dict[Snapshot, Intervals]
@@ -346,7 +346,7 @@ class Scheduler:
                 msg = []
                 msg.append(str(error))
 
-                if error.__cause__ and not isinstance(error.__cause__, PythonModelEvalError):
+                if error.__cause__ and not isinstance(error.__cause__, SQLMeshError):
                     cause_msg = str(error.__cause__).replace("\n", "\n  ")
                     msg.append("  " + cause_msg)
 

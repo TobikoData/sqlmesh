@@ -38,7 +38,7 @@ from sqlmesh.utils.errors import (
     CICDBotError,
     NoChangesPlanError,
     PlanError,
-    PlanBuilderError,
+    PlanApplyError,
     UncategorizedPlanError,
 )
 from sqlmesh.utils.pydantic import PydanticModel
@@ -468,8 +468,8 @@ class GithubController:
             if not difference_summary and not missing_dates:
                 return "No changes to apply."
             return f"{difference_summary}\n{missing_dates}"
-        except (PlanError, PlanBuilderError) as e:
-            err_str = f"Error: {e}" if isinstance(e, PlanBuilderError) else ""
+        except PlanError as e:
+            err_str = f"Error: {e}" if not isinstance(e, PlanApplyError) else ""
             return "Plan failed to generate. Check for pending or unresolved changes." + err_str
 
     def run_tests(self) -> t.Tuple[unittest.result.TestResult, str]:

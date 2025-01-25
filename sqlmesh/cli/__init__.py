@@ -7,7 +7,7 @@ from sqlglot.errors import SqlglotError
 
 from sqlmesh.core.context import Context
 from sqlmesh.utils import debug_mode_enabled
-from sqlmesh.utils.errors import SQLMeshError, PlanError, PlanBuilderError
+from sqlmesh.utils.errors import SQLMeshError, PlanError, PlanApplyError
 
 DECORATOR_RETURN_TYPE = t.TypeVar("DECORATOR_RETURN_TYPE")
 
@@ -37,9 +37,9 @@ def _default_exception_handler(
 ) -> DECORATOR_RETURN_TYPE:
     try:
         return func()
-    except PlanError:
+    except PlanApplyError:
         exit(1)
-    except (SQLMeshError, SqlglotError, PlanBuilderError, ValueError) as ex:
+    except (SQLMeshError, SqlglotError, ValueError) as ex:
         click.echo(click.style(f"\nError: {str(ex)}", fg="red"))
         exit(1)
     finally:
