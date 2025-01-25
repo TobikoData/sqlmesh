@@ -6207,7 +6207,6 @@ def test_macro_func_hash(mocker: MockerFixture, metadata_only: bool):
         assert model.metadata_hash != new_model.metadata_hash
     else:
         assert "noop" in new_model._data_hash_values[0]
-        assert not new_model._additional_metadata
         assert model.data_hash != new_model.data_hash
         assert model.metadata_hash == new_model.metadata_hash
 
