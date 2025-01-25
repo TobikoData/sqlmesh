@@ -35,6 +35,7 @@ class NodeExecutionFailedError(t.Generic[H], SQLMeshError):
             error_msg = "  " + error_msg.replace("\n", "\n  ")
             error_msg = f"  {error_class}:\n{error_msg}"
         error_msg = error_msg.replace("\n", "\n  ")
+        error_msg = error_msg + "\n" if not error_msg.rstrip(" ").endswith("\n") else error_msg
 
         super().__init__(error_msg)
 

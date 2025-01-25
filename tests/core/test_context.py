@@ -524,10 +524,7 @@ def test_python_model_empty_df_raises(sushi_context, capsys):
         sushi_context.plan(no_prompts=True, auto_apply=True)
 
     assert (
-        "Cannot construct source query from an empty \nDataFrame. This error "
-        "is commonly related to Python models that produce no data.\nFor such "
-        "models, consider yielding from an empty generator if the resulting set "
-        "\nis empty, i.e. use `yield from ()`"
+        "Cannot construct source query from an empty DataFrame. This error is \ncommonly related to Python models that produce no data. For such models, \nconsider yielding from an empty generator if the resulting set is empty, i.e. \nuse"
     ) in capsys.readouterr().out
 
 

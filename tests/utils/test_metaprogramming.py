@@ -45,9 +45,7 @@ def test_print_exception(mocker: MockerFixture):
     except Exception as ex:
         print_exception(ex, test_env, out_mock)
 
-    expected_message = f"""Traceback (most recent call last):
-
-  File "{__file__}", line 44, in test_print_exception
+    expected_message = """  File "/Users/trey/tobiko/sqlmesh/tests/utils/test_metaprogramming.py", line 43, in test_print_exception
     eval("test_fun()", env)
 
   File "<string>", line 1, in <module>
@@ -55,9 +53,7 @@ def test_print_exception(mocker: MockerFixture):
   File '/test/path.py' (or imported file), line 2, in test_fun
     def test_fun():
         raise RuntimeError("error")
-
-
-RuntimeError: error
+      RuntimeError: error
 """
     out_mock.write.assert_called_once_with(expected_message)
 
