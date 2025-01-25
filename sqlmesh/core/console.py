@@ -614,9 +614,9 @@ class TerminalConsole(Console):
         """
         if context_diff.is_new_environment:
             msg = (
-                f"`{context_diff.environment}` environment will be initialized"
+                f"\n`{context_diff.environment}` environment will be initialized"
                 if not context_diff.create_from_env_exists
-                else f"New environment `{context_diff.environment}` will be created from `{context_diff.create_from}`"
+                else f"\nNew environment `{context_diff.environment}` will be created from `{context_diff.create_from}`"
             )
             self._print(Tree(f"[bold]{msg}\n"))
             if not context_diff.has_snapshot_changes:
@@ -628,7 +628,7 @@ class TerminalConsole(Console):
             #   the PlanBuilder.
             self._print(
                 Tree(
-                    f"[bold]No changes to plan: project files match the `{context_diff.environment}` environment\n"
+                    f"\n[bold]No changes to plan: project files match the `{context_diff.environment}` environment\n"
                 )
             )
             return

@@ -300,7 +300,7 @@ class ContextDiff(PydanticModel):
         return {x.name: x for x in self.snapshots.values()}
 
     def requirements_diff(self) -> str:
-        return "\n".join(
+        return "    " + "\n    ".join(
             ndiff(
                 [
                     f"{k}=={self.previous_requirements[k]}"
