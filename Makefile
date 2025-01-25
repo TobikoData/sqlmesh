@@ -28,7 +28,7 @@ doc-test:
 	PYTEST_PLUGINS=tests.common_fixtures pytest --doctest-modules sqlmesh/core sqlmesh/utils
 
 package:
-	pip3 install wheel && python3 setup.py sdist bdist_wheel
+	pip3 install wheel && python3 setup.py bdist_wheel
 
 publish: package
 	pip3 install twine && python3 -m twine upload dist/*
