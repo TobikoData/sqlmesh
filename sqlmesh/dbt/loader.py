@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import sys
 import typing as t
 from pathlib import Path
 from sqlmesh.core import constants as c
@@ -24,11 +25,16 @@ from sqlmesh.utils import UniqueKeyDict
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.jinja import JinjaMacroRegistry
 
-logger = logging.getLogger(__name__)
+if sys.version_info >= (3, 12):
+    from importlib import metadata
+else:
+    import importlib_metadata as metadata  # type: ignore
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.audit import Audit, ModelAudit
     from sqlmesh.core.context import GenericContext
+
+logger = logging.getLogger(__name__)
 
 
 def sqlmesh_config(
@@ -202,6 +208,23 @@ class DbtLoader(Loader):
                 self._macros_max_mtime = max(macros_mtimes) if macros_mtimes else None
 
         return self._projects
+
+    def _load_requirements(self) -> t.Tuple[t.Dict[str, str], t.Set[str]]:
+        requirements, excluded_requirements = super()._load_requirements()
+
+        target_packages = ["dbt-core"]
+        for project in self._load_projects():
+            target_packages.append(f"dbt-{project.context.target.type}")
+
+        for target_package in target_packages:
+            if target_package in requirements or target_package in excluded_requirements:
+                continue
+            try:
+                requirements[target_package] = metadata.version(target_package)
+            except metadata.PackageNotFoundError:
+                logger.warning("dbt package %s is not installed", target_package)
+
+        return requirements, excluded_requirements
 
     def _compute_yaml_max_mtime_per_subfolder(self, root: Path) -> t.Dict[Path, float]:
         if not root.is_dir():
