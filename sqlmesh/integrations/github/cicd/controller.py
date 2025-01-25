@@ -469,7 +469,7 @@ class GithubController:
                 return "No changes to apply."
             return f"{difference_summary}\n{missing_dates}"
         except PlanError as e:
-            err_str = f"Error: {e}" if not isinstance(e, PlanApplyError) else ""
+            err_str = f" Error: {e}" if not isinstance(e, PlanApplyError) else ""
             return "Plan failed to generate. Check for pending or unresolved changes." + err_str
 
     def run_tests(self) -> t.Tuple[unittest.result.TestResult, str]:

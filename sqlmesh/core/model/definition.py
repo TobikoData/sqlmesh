@@ -1665,7 +1665,7 @@ class PythonModel(_Model):
             for df in df_or_iter:
                 yield df
         except Exception as e:
-            raise PythonModelEvalError(format_evaluated_code_exception(e, self.python_env)) from e
+            raise PythonModelEvalError(format_evaluated_code_exception(e, self.python_env))
 
     def render_definition(
         self,

@@ -7,7 +7,7 @@ from sqlglot.errors import SqlglotError
 
 from sqlmesh.core.context import Context
 from sqlmesh.utils import debug_mode_enabled
-from sqlmesh.utils.errors import SQLMeshError, PlanError, PlanApplyError
+from sqlmesh.utils.errors import SQLMeshError, PlanApplyError
 
 DECORATOR_RETURN_TYPE = t.TypeVar("DECORATOR_RETURN_TYPE")
 
@@ -52,7 +52,7 @@ def _debug_exception_handler(
 ) -> DECORATOR_RETURN_TYPE:
     try:
         return func()
-    except PlanError:
+    except PlanApplyError:
         exit()
     except Exception:
         logger.exception("Unhandled exception")

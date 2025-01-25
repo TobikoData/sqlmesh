@@ -345,11 +345,6 @@ class Scheduler:
 
                 msg = []
                 msg.append(str(error))
-
-                if error.__cause__ and not isinstance(error.__cause__, SQLMeshError):
-                    cause_msg = str(error.__cause__).replace("\n", "\n  ")
-                    msg.append("  " + cause_msg)
-
                 err_msg_dict[error.node_name] = "\n".join(msg)
 
                 exception_msg = (
