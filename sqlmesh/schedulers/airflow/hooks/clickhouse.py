@@ -27,7 +27,7 @@ class SQLMeshClickHouseHook(DbApiHook):
         return connect(
             host=db.host,
             port=db.port,
-            user=db.login,
+            username=db.login,
             password=db.password,
             database=db.schema,
             **db.extra_dejson,
