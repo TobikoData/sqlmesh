@@ -22,6 +22,7 @@ from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
 
 IGNORE_DECORATORS = {"macro", "model", "signal"}
+SERIALIZABLE_CALLABLES = (type, types.FunctionType)
 
 
 def _is_relative_to(path: t.Optional[Path | str], other: t.Optional[Path | str]) -> bool:
@@ -326,13 +327,13 @@ def build_env(
             # We only need to add the undecorated code of @macro() functions in env, which
             # is accessible through the `__wrapped__` attribute added by functools.wraps
             obj = obj.__wrapped__
-        elif callable(obj) and not isinstance(obj, (type, types.FunctionType)):
+        elif callable(obj) and not isinstance(obj, SERIALIZABLE_CALLABLES):
             obj = getattr(obj, "__wrapped__", None)
             name = getattr(obj, "__name__", "")
 
             # Callable class instances shouldn't be serialized (e.g. tenacity.Retrying).
             # We still want to walk the callables they decorate, though
-            if not isinstance(obj, (type, types.FunctionType)) or name in env:
+            if not isinstance(obj, SERIALIZABLE_CALLABLES) or name in env:
                 return
 
         env[name] = obj
