@@ -903,3 +903,21 @@ def test_audit_query_normalization():
         rendered_audit_query.sql("snowflake")
         == """SELECT * FROM (SELECT * FROM "DB"."TEST_MODEL" AS "TEST_MODEL") AS "_Q_0" WHERE "A" IS NULL AND TRUE"""
     )
+
+
+def test_rendered_diff():
+    audit1 = StandaloneAudit(
+        name="test_audit", query=parse_one("SELECT * FROM 'test' WHERE @AND(TRUE, NULL) > 2")
+    )
+
+    audit2 = StandaloneAudit(
+        name="test_audit", query=parse_one("SELECT * FROM 'test' WHERE @OR(FALSE, NULL) > 2")
+    )
+
+    assert """@@ -6,4 +6,4 @@
+
+   *
+ FROM "test" AS "test"
+ WHERE
+-  TRUE > 2
++  FALSE > 2""" in audit1.text_diff(audit2, rendered=True)

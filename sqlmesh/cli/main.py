@@ -415,6 +415,11 @@ def diff(ctx: click.Context, environment: t.Optional[str] = None) -> None:
     help="Enable preview for forward-only models when targeting a development environment.",
     default=None,
 )
+@click.option(
+    "--diff-rendered",
+    is_flag=True,
+    help="Output text differences for the rendered versions of the models and standalone audits",
+)
 @opt.verbose
 @click.pass_context
 @error_handler

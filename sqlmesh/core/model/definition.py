@@ -182,7 +182,10 @@ class _Model(ModelMeta, frozen=True):
         )
 
     def render_definition(
-        self, include_python: bool = True, include_defaults: bool = False
+        self,
+        include_python: bool = True,
+        include_defaults: bool = False,
+        render_query: bool = False,
     ) -> t.List[exp.Expression]:
         """Returns the original list of sql expressions comprising the model definition.
 
@@ -669,11 +672,12 @@ class _Model(ModelMeta, frozen=True):
             )
         return query
 
-    def text_diff(self, other: Node) -> str:
+    def text_diff(self, other: Node, rendered: bool = False) -> str:
         """Produce a text diff against another node.
 
         Args:
             other: The node to diff against.
+            rendered: Whether the diff should compare raw vs rendered models
 
         Returns:
             A unified text diff showing additions and deletions.
@@ -684,7 +688,10 @@ class _Model(ModelMeta, frozen=True):
             )
 
         return d.text_diff(
-            self.render_definition(), other.render_definition(), self.dialect, other.dialect
+            self.render_definition(render_query=rendered),
+            other.render_definition(render_query=rendered),
+            self.dialect,
+            other.dialect,
         ).strip()
 
     def set_time_format(self, default_time_format: str = c.DEFAULT_TIME_COLUMN_FORMAT) -> None:
@@ -1212,15 +1219,26 @@ class SqlModel(_Model):
         return query
 
     def render_definition(
-        self, include_python: bool = True, include_defaults: bool = False
+        self,
+        include_python: bool = True,
+        include_defaults: bool = False,
+        render_query: bool = False,
     ) -> t.List[exp.Expression]:
         result = super().render_definition(
             include_python=include_python, include_defaults=include_defaults
         )
-        result.extend(self.pre_statements)
-        result.append(self.query)
-        result.extend(self.post_statements)
-        result.extend(self.on_virtual_update)
+
+        if render_query:
+            result.extend(self.render_pre_statements())
+            result.append(self.render_query() or self.query)
+            result.extend(self.render_post_statements())
+            result.extend(self.render_on_virtual_update())
+        else:
+            result.extend(self.pre_statements)
+            result.append(self.query)
+            result.extend(self.post_statements)
+            result.extend(self.on_virtual_update)
+
         return result
 
     @property
@@ -1651,11 +1669,16 @@ class PythonModel(_Model):
             raise SQLMeshError(f"Error executing Python model '{self.name}'")
 
     def render_definition(
-        self, include_python: bool = True, include_defaults: bool = False
+        self,
+        include_python: bool = True,
+        include_defaults: bool = False,
+        render_query: bool = False,
     ) -> t.List[exp.Expression]:
         # Ignore the provided value for the include_python flag, since the Pyhon model's
         # definition without Python code is meaningless.
-        return super().render_definition(include_python=True, include_defaults=include_defaults)
+        return super().render_definition(
+            include_python=True, include_defaults=include_defaults, render_query=render_query
+        )
 
     @property
     def is_python(self) -> bool:

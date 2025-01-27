@@ -1074,6 +1074,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         enable_preview: t.Optional[bool] = None,
         no_diff: t.Optional[bool] = None,
         run: bool = False,
+        diff_rendered: bool = False,
     ) -> Plan:
         """Interactively creates a plan.
 
@@ -1117,6 +1118,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             enable_preview: Indicates whether to enable preview for forward-only models in development environments.
             no_diff: Hide text differences for changed models.
             run: Whether to run latest intervals as part of the plan application.
+            diff_rendered: Whether the diff should compare raw vs rendered models
 
         Returns:
             The populated Plan object.
@@ -1142,6 +1144,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             categorizer_config=categorizer_config,
             enable_preview=enable_preview,
             run=run,
+            diff_rendered=diff_rendered,
         )
 
         self.console.plan(
@@ -1178,6 +1181,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         categorizer_config: t.Optional[CategorizerConfig] = None,
         enable_preview: t.Optional[bool] = None,
         run: bool = False,
+        diff_rendered: bool = False,
     ) -> PlanBuilder:
         """Creates a plan builder.
 
@@ -1213,6 +1217,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             backfill_models: A list of model selection strings to filter the models for which the data should be backfilled.
             enable_preview: Indicates whether to enable preview for forward-only models in development environments.
             run: Whether to run latest intervals as part of the plan application.
+            diff_rendered: Whether the diff should compare raw vs rendered models
 
         Returns:
             The plan builder.
@@ -1276,6 +1281,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             force_no_diff=restate_models is not None
             or (backfill_models is not None and not backfill_models),
             ensure_finalized_snapshots=self.config.plan.use_finalized_state,
+            diff_rendered=diff_rendered,
         )
         modified_model_names = {
             *context_diff.modified_snapshots,
@@ -2164,6 +2170,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         create_from: t.Optional[str] = None,
         force_no_diff: bool = False,
         ensure_finalized_snapshots: bool = False,
+        diff_rendered: bool = False,
     ) -> ContextDiff:
         environment = Environment.sanitize_name(environment)
         if force_no_diff:
@@ -2177,6 +2184,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             provided_requirements=self._requirements,
             excluded_requirements=self._excluded_requirements,
             ensure_finalized_snapshots=ensure_finalized_snapshots,
+            diff_rendered=diff_rendered,
         )
 
     def _run_janitor(self, ignore_ttl: bool = False) -> None:
