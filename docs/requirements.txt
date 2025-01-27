@@ -3,4 +3,4 @@ mkdocs-include-markdown-plugin==6.0.6
 mkdocs-material==9.0.5
 mkdocs-material-extensions==1.1.1
 mkdocs-glightbox==0.3.7
-pdoc==13.0.1
+pdoc==14.5.1
