@@ -115,7 +115,7 @@ def test_context_manager():
 
 @retry(stop=stop_after_attempt(3))
 def fetch_data():
-    return "test data"
+    return "'test data'"
 
 
 def main_func(y: int, foo=exp.true(), *, bar=expressions.Literal.number(1) + 2) -> int:
@@ -316,8 +316,11 @@ class DataClass:
     return X + a""",
         ),
         "test_context_manager": Executable(
-            payload="from tests.utils.test_metaprogramming import test_context_manager",
-            kind=ExecutableKind.IMPORT,
+            payload="""@contextmanager
+def test_context_manager():
+    yield""",
+            name="test_context_manager",
+            path="test_metaprogramming.py",
         ),
         "wraps": Executable(payload="from functools import wraps", kind=ExecutableKind.IMPORT),
         "functools": Executable(payload="import functools", kind=ExecutableKind.IMPORT),
@@ -326,7 +329,10 @@ class DataClass:
             payload="from tenacity.stop import stop_after_attempt", kind=ExecutableKind.IMPORT
         ),
         "fetch_data": Executable(
-            payload="from tests.utils.test_metaprogramming import fetch_data",
-            kind=ExecutableKind.IMPORT,
+            payload='''@retry(stop=stop_after_attempt(3))
+def fetch_data():
+    return "'test data'"''',
+            name="fetch_data",
+            path="test_metaprogramming.py",
         ),
     }

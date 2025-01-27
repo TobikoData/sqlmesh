@@ -90,9 +90,9 @@ def func_globals(func: t.Callable, path: t.Optional[Path] = None) -> t.Dict[str,
             if ref:
                 variables[var] = ref
 
-        # Only extract values visible to the closure from a surrounding for those closures
-        # that are defined in the module's file. This is meant to block traversing third-party
-        # library closures, which could result in extract unnecessary global references
+        # Extract values visible to a closure (i.e., its "globals") only if it's defined in a
+        # file relative to the project's path. This is meant to block traversing third-party
+        # library closures, which could result in extracting unnecessary global references.
         if func.__closure__ and _is_relative_to(func.__globals__.get("__file__"), path):
             for var, value in zip(code.co_freevars, func.__closure__):
                 variables[var] = value.cell_contents
@@ -403,6 +403,9 @@ def serialize_env(env: t.Dict[str, t.Any], path: Path) -> t.Dict[str, Executable
 
     for k, v in env.items():
         if callable(v):
+            if hasattr(v, "__wrapped__"):
+                v = v.__wrapped__
+
             name = v.__name__
             name = k if name == "<lambda>" else name
 
