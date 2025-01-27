@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import typing as t
 from enum import Enum
+import re
 
 from sqlmesh.utils import classproperty
 from sqlmesh.utils.errors import ConfigError
@@ -86,3 +87,16 @@ variables_validator = field_validator(
     mode="before",
     check_fields=False,
 )(_variables_validator)
+
+
+def compile_regex_mapping(value: t.Dict[str | re.Pattern, t.Any]) -> t.Dict[re.Pattern, t.Any]:
+    """
+    Utility function to compile a dict of { "string regex pattern" : "string value" } into { "<re.Pattern>": "string value" }
+    """
+    compiled_regexes = {}
+    for k, v in value.items():
+        try:
+            compiled_regexes[re.compile(k)] = v
+        except re.error:
+            raise ConfigError(f"`{k}` is not a valid regular expression.")
+    return compiled_regexes
