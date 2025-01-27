@@ -37,7 +37,7 @@ Technical Requirements:
 
 - Tobiko Cloud requires Python version between 3.9 and 3.12
 
-??? "Installing Python"
+!!! note
     If you don't have a supported Python version installed, you can use [uv](https://docs.astral.sh/uv/getting-started/installation/#installation-methods) to install it.
     At the time of writing, these are the suggested commands to install uv and Python:
 
@@ -104,7 +104,15 @@ First, open a terminal within your terminal/IDE (ex: VSCode). Then follow the fo
 !!! note
     You may need to run `python3` or `pip3` instead of `python` or `pip`, depending on your python installation.
 
-4. Create an alias to ensure use of `tcloud`:
+    If you do not see `tcloud` in the virtual environment path above, you may need to reactivate the venv:
+
+    ```bash
+    source .venv/bin/activate
+    which tcloud
+    # expected path: /Users/person/Desktop/git_repos/tobiko-cloud-demo/.venv/bin/tcloud
+    ```
+
+- Create an alias to ensure use of `tcloud`:
 
     We recommend using a command line alias to ensure all `sqlmesh` commands run on Tobiko Cloud.
 
@@ -214,6 +222,7 @@ Now we're ready to connect your data warehouse to Tobiko Cloud:
     cicd_bot:
       type: github
       merge_method: squash
+      skip_pr_backfill: false
       enable_deploy_command: true
       auto_categorize_changes:
       external: full
@@ -223,7 +232,7 @@ Now we're ready to connect your data warehouse to Tobiko Cloud:
 
     # preview data for forward only models
     plan:
-    enable_preview: true
+      enable_preview: true
 
     # list of users that are allowed to approve PRs for synchronized deployments
     users:
