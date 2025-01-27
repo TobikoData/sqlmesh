@@ -57,7 +57,7 @@ def _code_globals(code: types.CodeType) -> t.Dict[str, None]:
     return variables
 
 
-def func_globals(func: t.Callable) -> t.Dict[str, t.Any]:
+def func_globals(func: t.Callable, path: t.Optional[Path] = None) -> t.Dict[str, t.Any]:
     """Finds all global references and closures in a function and nested functions.
 
     This function treats closures as global variables, which could cause problems in the future.
@@ -90,9 +90,16 @@ def func_globals(func: t.Callable) -> t.Dict[str, t.Any]:
             if ref:
                 variables[var] = ref
 
-        if func.__closure__:
+        # Only extract values visible to the closure from a surrounding for those closures
+        # that are defined in the module's file. This is meant to block traversing third-party
+        # library closures, which could result in extract unnecessary global references
+        if func.__closure__ and _is_relative_to(func.__globals__.get("__file__"), path):
             for var, value in zip(code.co_freevars, func.__closure__):
                 variables[var] = value.cell_contents
+
+        # If we can access the decorated function directly, then extract its globals too
+        if hasattr(func, "__wrapped__"):
+            variables.update(func_globals(func.__wrapped__, path=path))
 
     return variables
 
@@ -311,7 +318,7 @@ def build_env(
                     else:
                         build_env(v, env=env, name=v.__name__, path=path)
         elif callable(obj):
-            for k, v in func_globals(obj).items():
+            for k, v in func_globals(obj, path=path).items():
                 build_env(v, env=env, name=k, path=path)
 
     if name not in env:
