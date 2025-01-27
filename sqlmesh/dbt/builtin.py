@@ -14,6 +14,7 @@ from dbt.adapters.base import BaseRelation, Column
 from ruamel.yaml import YAMLError
 
 from sqlmesh.core.engine_adapter import EngineAdapter
+from sqlmesh.core.snapshot.definition import DeployabilityIndex
 from sqlmesh.dbt.adapter import BaseAdapter, ParsetimeAdapter, RuntimeAdapter
 from sqlmesh.dbt.relation import Policy
 from sqlmesh.dbt.target import TARGET_TYPE_TO_CONFIG_CLASS
@@ -371,8 +372,20 @@ def create_builtin_globals(
     if variables is not None:
         builtin_globals["var"] = Var(variables)
 
+    deployability_index = (
+        jinja_globals.get("deployability_index") or DeployabilityIndex.all_deployable()
+    )
     snapshot = jinja_globals.pop("snapshot", None)
-    is_incremental = bool(snapshot.intervals) and snapshot.is_incremental if snapshot else False
+
+    if snapshot and snapshot.is_incremental:
+        intervals = (
+            snapshot.intervals
+            if deployability_index.is_deployable(snapshot)
+            else snapshot.dev_intervals
+        )
+        is_incremental = bool(intervals)
+    else:
+        is_incremental = False
     builtin_globals["is_incremental"] = lambda: is_incremental
 
     builtin_globals["builtins"] = AttributeDict(
@@ -394,7 +407,7 @@ def create_builtin_globals(
             quote_policy=api.quote_policy,
             snapshots=jinja_globals.get("snapshots", {}),
             table_mapping=jinja_globals.get("table_mapping", {}),
-            deployability_index=jinja_globals.get("deployability_index"),
+            deployability_index=deployability_index,
             project_dialect=project_dialect,
         )
     else:
