@@ -233,11 +233,11 @@ class ModelTest(unittest.TestCase):
         for col, value in object_sentinel_values.items():
             # can't use `isinstance()` here - https://stackoverflow.com/a/68743663/1707525
             if type(value) is datetime.date:
-                expected[col] = pd.to_datetime(expected[col], errors="ignore").dt.date  # type: ignore
+                expected[col] = pd.to_datetime(expected[col]).dt.date
             elif type(value) is datetime.time:
-                expected[col] = pd.to_datetime(expected[col], errors="ignore").dt.time  # type: ignore
+                expected[col] = pd.to_datetime(expected[col]).dt.time
             elif type(value) is datetime.datetime:
-                expected[col] = pd.to_datetime(expected[col], errors="ignore").dt.to_pydatetime()  # type: ignore
+                expected[col] = pd.to_datetime(expected[col]).dt.to_pydatetime()
 
         actual = actual.replace({np.nan: None})
         expected = expected.replace({np.nan: None})
