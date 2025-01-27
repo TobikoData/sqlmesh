@@ -4,9 +4,38 @@ from pathlib import Path
 from dataclasses import dataclass
 
 import click
+
 from sqlglot import Dialect
 from sqlmesh.integrations.dlt import generate_dlt_models_and_settings
 from sqlmesh.utils.date import yesterday_ds
+
+from sqlmesh.core.config.connection import (
+    AthenaConnectionConfig,
+    BigQueryConnectionConfig,
+    ClickhouseConnectionConfig,
+    ConnectionConfig,
+    DatabricksConnectionConfig,
+    DuckDBConnectionConfig,
+    MSSQLConnectionConfig,
+    PostgresConnectionConfig,
+    RedshiftConnectionConfig,
+    SnowflakeConnectionConfig,
+    TrinoConnectionConfig,
+)
+
+DIALECT_TO_CONFIG_CLASS: t.Dict[str, t.Type[ConnectionConfig]] = {
+    "databricks": DatabricksConnectionConfig,
+    "duckdb": DuckDBConnectionConfig,
+    "postgres": PostgresConnectionConfig,
+    "redshift": RedshiftConnectionConfig,
+    "snowflake": SnowflakeConnectionConfig,
+    "bigquery": BigQueryConnectionConfig,
+    "sqlserver": MSSQLConnectionConfig,
+    "tsql": MSSQLConnectionConfig,
+    "trino": TrinoConnectionConfig,
+    "athena": AthenaConnectionConfig,
+    "clickhouse": ClickhouseConnectionConfig,
+}
 
 
 class ProjectTemplate(Enum):
@@ -23,11 +52,37 @@ def _gen_config(
     start: t.Optional[str],
     template: ProjectTemplate,
 ) -> str:
-    connection_settings = (
-        settings
-        or """      type: duckdb
+    if not settings:
+        if dialect in DIALECT_TO_CONFIG_CLASS:
+            required_fields = []
+            non_required_fields = []
+
+            for name, field in DIALECT_TO_CONFIG_CLASS[dialect].model_fields.items():
+                field_name = field.alias or name
+                default_value = field.get_default()
+
+                default_value = (
+                    default_value if isinstance(default_value, (str, int, bool)) else None
+                )
+
+                required = field.is_required() or field_name == "type"
+                option_str = (
+                    f"      {'# ' if not required else ''}{field_name}: {default_value or ''}\n"
+                )
+
+                if required:
+                    required_fields.append(option_str)
+                else:
+                    non_required_fields.append(option_str)
+
+            connection_settings = "".join(required_fields + non_required_fields)
+
+    else:
+        connection_settings = (
+            settings
+            or """      type: duckdb
       database: db.db"""
-    )
+        )
 
     default_configs = {
         ProjectTemplate.DEFAULT: f"""gateways:
@@ -44,7 +99,7 @@ model_defaults:
         ProjectTemplate.AIRFLOW: f"""gateways:
   local:
     connection:
-      {connection_settings}
+{connection_settings}
 
 default_gateway: local
 
