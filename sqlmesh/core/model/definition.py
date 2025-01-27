@@ -682,7 +682,7 @@ class _Model(ModelMeta, frozen=True):
 
         Args:
             other: The node to diff against.
-            diff_rendered: Whether the diff should compare raw vs rendered models
+            rendered: Whether the diff should compare raw vs rendered models
 
         Returns:
             A unified text diff showing additions and deletions.
