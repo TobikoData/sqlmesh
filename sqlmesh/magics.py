@@ -421,7 +421,7 @@ class SQLMeshMagics(Magics):
     @argument(
         "--diff-rendered",
         action="store_true",
-        help="Output text differences for the rendered versions of the models",
+        help="Output text differences for the rendered versions of the models and standalone audits",
     )
     @line_magic
     @pass_sqlmesh_context

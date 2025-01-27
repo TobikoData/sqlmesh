@@ -418,7 +418,7 @@ def diff(ctx: click.Context, environment: t.Optional[str] = None) -> None:
 @click.option(
     "--diff-rendered",
     is_flag=True,
-    help="Output text differences for the rendered versions of the models",
+    help="Output text differences for the rendered versions of the models and standalone audits",
 )
 @opt.verbose
 @click.pass_context
