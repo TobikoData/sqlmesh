@@ -197,7 +197,7 @@ def single_value_or_tuple(values: t.Sequence) -> exp.Identifier | exp.Tuple:
 def parse_expression(
     cls: t.Type,
     v: t.Union[t.List[str], t.List[exp.Expression], str, exp.Expression, t.Callable, None],
-    info: t.Optional[ValidationInfo] = None,
+    info: t.Optional[ValidationInfo],
 ) -> t.List[exp.Expression] | exp.Expression | t.Callable | None:
     """Helper method to deserialize SQLGlot expressions in Pydantic Models."""
     if v is None:
