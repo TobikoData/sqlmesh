@@ -727,7 +727,7 @@ def test_multi_gateway_config(tmp_path, mocker: MockerFixture):
         fd.write(
             """
 gateways:
-    redshift:  
+    redshift:
         connection:
             type: redshift
             user: user
@@ -747,7 +747,7 @@ gateways:
             aws_secret_access_key: accesskey
             work_group: group
             s3_warehouse_location: s3://location
-            
+
 default_gateway: redshift
 
 model_defaults:
@@ -773,3 +773,39 @@ model_defaults:
     assert isinstance(ctx.engine_adapters["athena"], AthenaEngineAdapter)
     assert isinstance(ctx.engine_adapters["redshift"], RedshiftEngineAdapter)
     assert ctx.engine_adapter == ctx._get_engine_adapter("redshift")
+
+
+def test_trino_schema_location_mapping_syntax(tmp_path):
+    config_path = tmp_path / "config_trino.yaml"
+    with open(config_path, "w", encoding="utf-8") as fd:
+        fd.write(
+            """
+    gateways:
+      trino:
+        connection:
+          type: trino
+          user: trino
+          host: trino
+          catalog: trino
+          schema_location_mapping:
+            '^utils$': 's3://utils-bucket/@{schema_name}'
+            '^landing\..*$': 's3://raw-data/@{catalog_name}/@{schema_name}'
+
+    default_gateway: trino
+
+    model_defaults:
+      dialect: trino
+    """
+        )
+
+    config = load_config_from_paths(
+        Config,
+        project_paths=[config_path],
+    )
+
+    from sqlmesh.core.config.connection import TrinoConnectionConfig
+
+    conn = config.gateways["trino"].connection
+    assert isinstance(conn, TrinoConnectionConfig)
+
+    assert len(conn.schema_location_mapping) == 2
