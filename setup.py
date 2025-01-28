@@ -82,7 +82,7 @@ setup(
             "pandas-stubs",
             "pre-commit",
             "psycopg2-binary",
-            "pydantic<2.6.0",
+            "pydantic",
             "PyAthena[Pandas]",
             "PyGithub",
             "pyspark~=3.5.0",

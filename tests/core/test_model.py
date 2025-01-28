@@ -534,7 +534,29 @@ def test_json_serde():
 
     deserialized_model = SqlModel.parse_raw(model_json)
 
-    assert deserialized_model == model
+    assert deserialized_model.dict() == model.dict()
+
+    expressions = parse(
+        """
+        MODEL (
+            name test_model,
+            kind FULL,
+            dialect duckdb,
+        );
+
+        SELECT
+          x ~ y AS c
+        """
+    )
+
+    model = load_sql_based_model(expressions)
+    model_json = model.json()
+    model_json_parsed = json.loads(model.json())
+
+    assert (
+        SqlModel.parse_obj(model_json_parsed).render_query().sql("duckdb")
+        == 'SELECT REGEXP_MATCHES("x", "y") AS "c"'
+    )
 
 
 def test_scd_type_2_by_col_serde():
