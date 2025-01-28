@@ -450,11 +450,13 @@ class IncrementalByUniqueKeyKind(_IncrementalBy):
     @field_validator("when_matched", mode="before")
     def _when_matched_validator(
         cls,
-        v: t.Optional[t.Union[str, exp.Whens]],
+        v: t.Optional[t.Union[str, list, exp.Whens]],
         info: ValidationInfo,
     ) -> t.Optional[exp.Whens]:
         if v is None:
             return v
+        if isinstance(v, list):
+            v = " ".join(v)
         if isinstance(v, str):
             # Whens wrap the WHEN clauses, but the parentheses aren't parsed by sqlglot
             v = v.strip()
