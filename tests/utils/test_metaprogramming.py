@@ -166,9 +166,7 @@ def test_func_globals() -> None:
 
         return closure
 
-    # We pass __file__ here because in practice `func_globals` will always be called
-    # by `build_env`, which in turn is expected to always pass to it the module's path
-    assert func_globals(closure_test(), path=Path(__file__)) == {
+    assert func_globals(closure_test()) == {
         "main_func": main_func,
         "y": 1,
     }
@@ -293,6 +291,14 @@ class DataClass:
             path="test_metaprogramming.py",
             payload="my_lambda = lambda : print('z')",
         ),
+        "func": Executable(
+            payload="""@contextmanager
+def test_context_manager():
+    yield""",
+            name="test_context_manager",
+            path="test_metaprogramming.py",
+            alias="func",
+        ),
         "noop_metadata": Executable(
             name="noop_metadata",
             path="test_metaprogramming.py",
@@ -328,11 +334,27 @@ def test_context_manager():
         "stop_after_attempt": Executable(
             payload="from tenacity.stop import stop_after_attempt", kind=ExecutableKind.IMPORT
         ),
+        "wrapped_f": Executable(
+            payload='''@retry(stop=stop_after_attempt(3))
+def fetch_data():
+    return "'test data'"''',
+            name="fetch_data",
+            path="test_metaprogramming.py",
+            alias="wrapped_f",
+        ),
         "fetch_data": Executable(
             payload='''@retry(stop=stop_after_attempt(3))
 def fetch_data():
     return "'test data'"''',
             name="fetch_data",
             path="test_metaprogramming.py",
+        ),
+        "f": Executable(
+            payload='''@retry(stop=stop_after_attempt(3))
+def fetch_data():
+    return "'test data'"''',
+            name="fetch_data",
+            path="test_metaprogramming.py",
+            alias="f",
         ),
     }
