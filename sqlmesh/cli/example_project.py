@@ -9,33 +9,7 @@ from sqlglot import Dialect
 from sqlmesh.integrations.dlt import generate_dlt_models_and_settings
 from sqlmesh.utils.date import yesterday_ds
 
-from sqlmesh.core.config.connection import (
-    AthenaConnectionConfig,
-    BigQueryConnectionConfig,
-    ClickhouseConnectionConfig,
-    ConnectionConfig,
-    DatabricksConnectionConfig,
-    DuckDBConnectionConfig,
-    MSSQLConnectionConfig,
-    PostgresConnectionConfig,
-    RedshiftConnectionConfig,
-    SnowflakeConnectionConfig,
-    TrinoConnectionConfig,
-)
-
-DIALECT_TO_CONFIG_CLASS: t.Dict[str, t.Type[ConnectionConfig]] = {
-    "databricks": DatabricksConnectionConfig,
-    "duckdb": DuckDBConnectionConfig,
-    "postgres": PostgresConnectionConfig,
-    "redshift": RedshiftConnectionConfig,
-    "snowflake": SnowflakeConnectionConfig,
-    "bigquery": BigQueryConnectionConfig,
-    "sqlserver": MSSQLConnectionConfig,
-    "tsql": MSSQLConnectionConfig,
-    "trino": TrinoConnectionConfig,
-    "athena": AthenaConnectionConfig,
-    "clickhouse": ClickhouseConnectionConfig,
-}
+from sqlmesh.core.config.connection import CONNECTION_CONFIG_TO_TYPE
 
 
 class ProjectTemplate(Enum):
@@ -53,11 +27,11 @@ def _gen_config(
     template: ProjectTemplate,
 ) -> str:
     if not settings:
-        if dialect in DIALECT_TO_CONFIG_CLASS:
+        if dialect in CONNECTION_CONFIG_TO_TYPE:
             required_fields = []
             non_required_fields = []
 
-            for name, field in DIALECT_TO_CONFIG_CLASS[dialect].model_fields.items():
+            for name, field in CONNECTION_CONFIG_TO_TYPE[dialect].model_fields.items():
                 field_name = field.alias or name
                 default_value = field.get_default()
 

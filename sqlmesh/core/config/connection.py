@@ -1755,6 +1755,8 @@ CONNECTION_CONFIG_TO_TYPE = {
         exclude=(ConnectionConfig, BaseDuckDBConnectionConfig),
     )
 }
+CONNECTION_CONFIG_TO_TYPE["tsql"] = CONNECTION_CONFIG_TO_TYPE["mssql"]
+CONNECTION_CONFIG_TO_TYPE["sqlserver"] = CONNECTION_CONFIG_TO_TYPE["mssql"]
 
 
 def parse_connection_config(v: t.Dict[str, t.Any]) -> ConnectionConfig:
