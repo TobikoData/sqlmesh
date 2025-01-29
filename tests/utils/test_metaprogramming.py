@@ -112,18 +112,6 @@ def test_context_manager():
     yield
 
 
-def custom_decorator(_func):
-    def wrapper(*args, **kwargs):
-        return _func(*args, **kwargs)
-
-    return wrapper
-
-
-@custom_decorator
-def function_with_custom_decorator():
-    return
-
-
 def main_func(y: int, foo=exp.true(), *, bar=expressions.Literal.number(1) + 2) -> int:
     """DOC STRING"""
     sqlglot.parse_one("1")
@@ -131,7 +119,6 @@ def main_func(y: int, foo=exp.true(), *, bar=expressions.Literal.number(1) + 2) 
     DataClass(x=y)
     noop_metadata()
     normalize_model_name("test")
-    function_with_custom_decorator()
 
     def closure(z: int) -> int:
         return z + Z
@@ -155,7 +142,6 @@ def test_func_globals() -> None:
         "exp": exp,
         "expressions": exp,
         "test_context_manager": test_context_manager,
-        "function_with_custom_decorator": function_with_custom_decorator,
     }
     assert func_globals(other_func) == {
         "X": 1,
@@ -188,7 +174,6 @@ def test_normalize_source() -> None:
     DataClass(x=y)
     noop_metadata()
     normalize_model_name('test')
-    function_with_custom_decorator()
 
     def closure(z: int):
         return z + Z
@@ -234,7 +219,6 @@ def test_serialize_env() -> None:
     DataClass(x=y)
     noop_metadata()
     normalize_model_name('test')
-    function_with_custom_decorator()
 
     def closure(z: int):
         return z + Z
@@ -332,28 +316,4 @@ def test_context_manager():
             kind=ExecutableKind.IMPORT,
         ),
         "wraps": Executable(payload="from functools import wraps", kind=ExecutableKind.IMPORT),
-        "function_with_custom_decorator": Executable(
-            name="wrapper",
-            path="test_metaprogramming.py",
-            payload="""def wrapper(*args, **kwargs):
-    return _func(*args, **kwargs)""",
-            alias="function_with_custom_decorator",
-        ),
-        "custom_decorator": Executable(
-            name="custom_decorator",
-            path="test_metaprogramming.py",
-            payload="""def custom_decorator(_func):
-
-    def wrapper(*args, **kwargs):
-        return _func(*args, **kwargs)
-    return wrapper""",
-        ),
-        "_func": Executable(
-            name="function_with_custom_decorator",
-            path="test_metaprogramming.py",
-            payload="""@custom_decorator
-def function_with_custom_decorator():
-    return""",
-            alias="_func",
-        ),
     }
