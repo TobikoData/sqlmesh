@@ -22,6 +22,7 @@ from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
 
 IGNORE_DECORATORS = {"macro", "model", "signal"}
+SERIALIZABLE_CALLABLES = (type, types.FunctionType)
 
 
 def _is_relative_to(path: t.Optional[Path | str], other: t.Optional[Path | str]) -> bool:
@@ -83,7 +84,9 @@ def func_globals(func: t.Callable) -> t.Dict[str, t.Any]:
         ]
 
         code = func.__code__
-        for var in arg_globals + list(_code_globals(code)) + decorators(func, root_node=root_node):
+        for var in (
+            arg_globals + list(_code_globals(code)) + decorator_vars(func, root_node=root_node)
+        ):
             ref = func.__globals__.get(var)
             if ref:
                 variables[var] = ref
@@ -127,6 +130,38 @@ class _ClassFinder(ast.NodeVisitor):
             raise ClassFoundException(line_number)
         self.generic_visit(node)
         self.stack.pop()
+
+
+class _DecoratorDependencyFinder(ast.NodeVisitor):
+    def __init__(self) -> None:
+        self.dependencies: t.List[str] = []
+
+    def _extract_dependencies(self, node: ast.ClassDef | ast.FunctionDef) -> None:
+        for decorator in node.decorator_list:
+            dependencies: t.List[str] = []
+            for n in ast.walk(decorator):
+                if isinstance(n, ast.Attribute):
+                    dep = n.attr
+                elif isinstance(n, ast.Name):
+                    dep = n.id
+                else:
+                    continue
+
+                if dep in IGNORE_DECORATORS:
+                    dependencies = []
+                    break
+
+                dependencies.append(dep)
+
+            self.dependencies.extend(dependencies)
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        self._extract_dependencies(node)
+
+    def visit_ClassDef(self, node: ast.ClassDef) -> None:
+        self._extract_dependencies(node)
+
+    visit_AsyncFunctionDef = visit_FunctionDef  # type: ignore
 
 
 def getsource(obj: t.Any) -> str:
@@ -179,25 +214,22 @@ def parse_source(func: t.Callable) -> ast.Module:
 
 
 def _decorator_name(decorator: ast.expr) -> str:
+    node = decorator
     if isinstance(decorator, ast.Call):
-        return decorator.func.id  # type: ignore
-    if isinstance(decorator, ast.Name):
-        return decorator.id
-    return ""
+        node = decorator.func
+    return node.id if isinstance(node, ast.Name) else ""
 
 
-def decorators(func: t.Callable, root_node: t.Optional[ast.Module] = None) -> t.List[str]:
-    """Finds a list of all the decorators of a callable."""
+def decorator_vars(func: t.Callable, root_node: t.Optional[ast.Module] = None) -> t.List[str]:
+    """
+    Returns a list of all the decorators of a callable, as well as names of objects that
+    are referenced in their argument list. These objects may be transitive dependencies
+    that we need to include in the serialized python environments.
+    """
     root_node = root_node or parse_source(func)
-    decorators = []
-
-    for node in ast.walk(root_node):
-        if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
-            for decorator in node.decorator_list:
-                name = _decorator_name(decorator)
-                if name not in IGNORE_DECORATORS:
-                    decorators.append(name)
-    return unique(decorators)
+    finder = _DecoratorDependencyFinder()
+    finder.visit(root_node)
+    return unique(finder.dependencies)
 
 
 def normalize_source(obj: t.Any) -> str:
@@ -254,12 +286,12 @@ def build_env(
 
     def walk(obj: t.Any) -> None:
         if inspect.isclass(obj):
-            for decorator in decorators(obj):
-                if obj_module and decorator in obj_module.__dict__:
+            for var in decorator_vars(obj):
+                if obj_module and var in obj_module.__dict__:
                     build_env(
-                        obj_module.__dict__[decorator],
+                        obj_module.__dict__[var],
                         env=env,
-                        name=decorator,
+                        name=var,
                         path=path,
                     )
 
@@ -284,10 +316,20 @@ def build_env(
                 build_env(v, env=env, name=k, path=path)
 
     if name not in env:
-        # We only need to add the undecorated code of @macro() functions in env, which
-        # is accessible through the `__wrapped__` attribute added by functools.wraps
-        env[name] = obj.__wrapped__ if hasattr(obj, c.SQLMESH_MACRO) else obj
+        if hasattr(obj, c.SQLMESH_MACRO):
+            # We only need to add the undecorated code of @macro() functions in env, which
+            # is accessible through the `__wrapped__` attribute added by functools.wraps
+            obj = obj.__wrapped__
+        elif callable(obj) and not isinstance(obj, SERIALIZABLE_CALLABLES):
+            obj = getattr(obj, "__wrapped__", None)
+            name = getattr(obj, "__name__", "")
 
+            # Callable class instances shouldn't be serialized (e.g. tenacity.Retrying).
+            # We still want to walk the callables they decorate, though
+            if not isinstance(obj, SERIALIZABLE_CALLABLES) or name in env:
+                return
+
+        env[name] = obj
         if (
             obj_module
             and hasattr(obj_module, "__file__")
@@ -362,10 +404,26 @@ def serialize_env(env: t.Dict[str, t.Any], path: Path) -> t.Dict[str, Executable
             # https://docs.python.org/3/library/inspect.html#inspect.getfile
             try:
                 file_path = Path(inspect.getfile(v))
+                relative_obj_file_path = _is_relative_to(file_path, path)
+
+                # A callable can be a "wrapper" that is defined in a third-party library [1], in which case the file
+                # containing its definition won't be relative to the project's path. This can lead to serializing
+                # it as a "relative import", such as `from models.some_python_model import foo`, because the `wraps`
+                # decorator preserves the wrapped function's module [2]. Payloads like this are invalid, as they
+                # can result in `ModuleNotFoundError`s when hydrating python environments, e.g. if a project's files
+                # are not available during a scheduled cadence run.
+                #
+                # [1]: https://github.com/jd/tenacity/blob/0d40e76f7d06d631fb127e1ec58c8bd776e70d49/tenacity/__init__.py#L322-L346
+                # [2]: https://github.com/python/cpython/blob/f502c8f6a6db4be27c97a0e5466383d117859b7f/Lib/functools.py#L33-L57
+                if not relative_obj_file_path and (wrapped := getattr(v, "__wrapped__", None)):
+                    v = wrapped
+                    file_path = Path(inspect.getfile(wrapped))
+                    relative_obj_file_path = _is_relative_to(file_path, path)
             except TypeError:
                 file_path = None
+                relative_obj_file_path = False
 
-            if _is_relative_to(file_path, path):
+            if relative_obj_file_path:
                 serialized[k] = Executable(
                     name=name,
                     payload=normalize_source(v),

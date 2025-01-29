@@ -2,6 +2,7 @@ import typing as t
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
+from tenacity import retry, stop_after_attempt
 
 import pandas as pd
 import pytest
@@ -46,7 +47,7 @@ def test_print_exception(mocker: MockerFixture):
 
     expected_message = f"""Traceback (most recent call last):
 
-  File "{__file__}", line 43, in test_print_exception
+  File "{__file__}", line 44, in test_print_exception
     eval("test_fun()", env)
 
   File "<string>", line 1, in <module>
@@ -112,6 +113,11 @@ def test_context_manager():
     yield
 
 
+@retry(stop=stop_after_attempt(3))
+def fetch_data():
+    return "'test data'"
+
+
 def main_func(y: int, foo=exp.true(), *, bar=expressions.Literal.number(1) + 2) -> int:
     """DOC STRING"""
     sqlglot.parse_one("1")
@@ -119,6 +125,7 @@ def main_func(y: int, foo=exp.true(), *, bar=expressions.Literal.number(1) + 2) 
     DataClass(x=y)
     noop_metadata()
     normalize_model_name("test")
+    fetch_data()
 
     def closure(z: int) -> int:
         return z + Z
@@ -141,6 +148,7 @@ def test_func_globals() -> None:
         "sqlglot": sqlglot,
         "exp": exp,
         "expressions": exp,
+        "fetch_data": fetch_data,
         "test_context_manager": test_context_manager,
     }
     assert func_globals(other_func) == {
@@ -174,6 +182,7 @@ def test_normalize_source() -> None:
     DataClass(x=y)
     noop_metadata()
     normalize_model_name('test')
+    fetch_data()
 
     def closure(z: int):
         return z + Z
@@ -219,6 +228,7 @@ def test_serialize_env() -> None:
     DataClass(x=y)
     noop_metadata()
     normalize_model_name('test')
+    fetch_data()
 
     def closure(z: int):
         return z + Z
@@ -312,8 +322,39 @@ def test_context_manager():
     return X + a""",
         ),
         "test_context_manager": Executable(
-            payload="from tests.utils.test_metaprogramming import test_context_manager",
-            kind=ExecutableKind.IMPORT,
+            payload="""@contextmanager
+def test_context_manager():
+    yield""",
+            name="test_context_manager",
+            path="test_metaprogramming.py",
         ),
         "wraps": Executable(payload="from functools import wraps", kind=ExecutableKind.IMPORT),
+        "functools": Executable(payload="import functools", kind=ExecutableKind.IMPORT),
+        "retry": Executable(payload="from tenacity import retry", kind=ExecutableKind.IMPORT),
+        "stop_after_attempt": Executable(
+            payload="from tenacity.stop import stop_after_attempt", kind=ExecutableKind.IMPORT
+        ),
+        "wrapped_f": Executable(
+            payload='''@retry(stop=stop_after_attempt(3))
+def fetch_data():
+    return "'test data'"''',
+            name="fetch_data",
+            path="test_metaprogramming.py",
+            alias="wrapped_f",
+        ),
+        "fetch_data": Executable(
+            payload='''@retry(stop=stop_after_attempt(3))
+def fetch_data():
+    return "'test data'"''',
+            name="fetch_data",
+            path="test_metaprogramming.py",
+        ),
+        "f": Executable(
+            payload='''@retry(stop=stop_after_attempt(3))
+def fetch_data():
+    return "'test data'"''',
+            name="fetch_data",
+            path="test_metaprogramming.py",
+            alias="f",
+        ),
     }

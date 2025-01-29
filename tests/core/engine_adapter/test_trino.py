@@ -514,7 +514,7 @@ def test_schema_location_mapping():
         catalog="catalog",
         schema_location_mapping={
             "^utils$": "s3://utils-bucket/@{schema_name}",
-            "^landing\..*$": "s3://raw-data/@{catalog_name}/@{schema_name}",
+            "^landing\\..*$": "s3://raw-data/@{catalog_name}/@{schema_name}",
             "^staging.*$": "s3://bucket/@{schema_name}_dev",
             "^sqlmesh.*$": "s3://sqlmesh-internal/dev/@{schema_name}",
         },
@@ -561,10 +561,10 @@ def test_create_schema_sets_location(make_mocked_engine_adapter: t.Callable, moc
         catalog="catalog",
         schema_location_mapping={
             "^utils$": "s3://utils-bucket/@{schema_name}",
-            "^landing\..*$": "s3://raw-data/@{catalog_name}/@{schema_name}",
+            "^landing\\..*$": "s3://raw-data/@{catalog_name}/@{schema_name}",
             "^staging.*$": "s3://bucket/@{schema_name}_dev",
             "^sqlmesh.*$": "s3://sqlmesh-internal/dev/@{schema_name}",
-            "^iceberg\.staging.*$": "s3://iceberg-catalog/foo_@{schema_name}",
+            "^iceberg\\.staging.*$": "s3://iceberg-catalog/foo_@{schema_name}",
         },
     )
 
