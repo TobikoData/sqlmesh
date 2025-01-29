@@ -397,9 +397,6 @@ def serialize_env(env: t.Dict[str, t.Any], path: Path) -> t.Dict[str, Executable
 
     for k, v in env.items():
         if callable(v):
-            if hasattr(v, "__wrapped__"):
-                v = v.__wrapped__
-
             name = v.__name__
             name = k if name == "<lambda>" else name
 
@@ -407,10 +404,26 @@ def serialize_env(env: t.Dict[str, t.Any], path: Path) -> t.Dict[str, Executable
             # https://docs.python.org/3/library/inspect.html#inspect.getfile
             try:
                 file_path = Path(inspect.getfile(v))
+                relative_obj_file_path = _is_relative_to(file_path, path)
+
+                # A callable can be a "wrapper" that is defined in a third-party library [1], in which case the file
+                # containing its definition won't be relative to the project's path. This can lead to serializing
+                # it as a "relative import", such as `from models.some_python_model import foo`, because the `wraps`
+                # decorator preserves the wrapped function's module [2]. Payloads like this are invalid, as they
+                # can result in `ModuleNotFoundError`s when hydrating python environments, e.g. if a project's files
+                # are not available during a scheduled cadence run.
+                #
+                # [1]: https://github.com/jd/tenacity/blob/0d40e76f7d06d631fb127e1ec58c8bd776e70d49/tenacity/__init__.py#L322-L346
+                # [2]: https://github.com/python/cpython/blob/f502c8f6a6db4be27c97a0e5466383d117859b7f/Lib/functools.py#L33-L57
+                if not relative_obj_file_path and (wrapped := getattr(v, "__wrapped__", None)):
+                    v = wrapped
+                    file_path = Path(inspect.getfile(wrapped))
+                    relative_obj_file_path = _is_relative_to(file_path, path)
             except TypeError:
                 file_path = None
+                relative_obj_file_path = False
 
-            if _is_relative_to(file_path, path):
+            if relative_obj_file_path:
                 serialized[k] = Executable(
                     name=name,
                     payload=normalize_source(v),

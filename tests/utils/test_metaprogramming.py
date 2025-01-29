@@ -286,11 +286,6 @@ class DataClass:
         "expressions": Executable(
             kind=ExecutableKind.IMPORT, payload="import sqlglot.expressions as expressions"
         ),
-        "my_lambda": Executable(
-            name="my_lambda",
-            path="test_metaprogramming.py",
-            payload="my_lambda = lambda : print('z')",
-        ),
         "func": Executable(
             payload="""@contextmanager
 def test_context_manager():
@@ -298,6 +293,11 @@ def test_context_manager():
             name="test_context_manager",
             path="test_metaprogramming.py",
             alias="func",
+        ),
+        "my_lambda": Executable(
+            name="my_lambda",
+            path="test_metaprogramming.py",
+            payload="my_lambda = lambda : print('z')",
         ),
         "noop_metadata": Executable(
             name="noop_metadata",
