@@ -4902,7 +4902,7 @@ def test_load_external_model_python(sushi_context) -> None:
 
 def test_variables_python_sql_model(mocker: MockerFixture) -> None:
     @model(
-        "test_variables_python_model",
+        "test_variables_python_model_@{bar}",
         is_sql=True,
         kind="full",
         columns={"a": "string", "b": "string", "c": "string"},
@@ -4914,12 +4914,13 @@ def test_variables_python_sql_model(mocker: MockerFixture) -> None:
             exp.convert(evaluator.var("test_var_c")).as_("c"),
         )
 
-    python_sql_model = model.get_registry()["test_variables_python_model"].model(
+    python_sql_model = model.get_registry()["test_variables_python_model_@{bar}"].model(
         module_path=Path("."),
         path=Path("."),
-        variables={"test_var_a": "test_value", "test_var_unused": 2},
+        variables={"test_var_a": "test_value", "test_var_unused": 2, "bar": "suffix"},
     )
 
+    assert python_sql_model.name == "test_variables_python_model_suffix"
     assert python_sql_model.python_env[c.SQLMESH_VARS] == Executable.value(
         {"test_var_a": "test_value"}
     )
@@ -4930,6 +4931,89 @@ def test_variables_python_sql_model(mocker: MockerFixture) -> None:
         query.sql()
         == """SELECT 'test_value' AS "a", 'default_value' AS "b", NULL AS "c" """.strip()
     )
+
+
+def test_macros_python_model(mocker: MockerFixture) -> None:
+    @model(
+        "foo_macro_model_@{bar}",
+        kind="full",
+        columns={"a": "string"},
+        enabled="@IF(@gateway = 'dev', True, False)",
+        start="@IF(@gateway = 'dev', '1 month ago', '2024-01-01')",
+    )
+    def model_with_macros(context, **kwargs):
+        return pd.DataFrame(
+            [
+                {
+                    "a": context.var("TEST_VAR_A"),
+                }
+            ]
+        )
+
+    python_model = model.get_registry()["foo_macro_model_@{bar}"].model(
+        module_path=Path("."),
+        path=Path("."),
+        variables={
+            "test_var_a": "test_value",
+            "gateway": "prod",
+            "bar": "suffix",
+            "time_column": "a",
+        },
+    )
+
+    assert python_model.name == "foo_macro_model_suffix"
+    assert python_model.python_env[c.SQLMESH_VARS] == Executable.value({"test_var_a": "test_value"})
+    assert not python_model.enabled
+    assert python_model.start == "'2024-01-01'"
+
+    context = ExecutionContext(mocker.Mock(), {}, None, None)
+    df = list(python_model.render(context=context))[0]
+    assert df.to_dict(orient="records") == [{"a": "test_value"}]
+
+
+def test_macros_python_sql_model(mocker: MockerFixture) -> None:
+    @macro()
+    def end_date_macro(evaluator: MacroEvaluator, var: bool):
+        return f"@IF({var} = True, '1 day ago', '2025-01-01 12:00:00')"
+
+    @model(
+        "test_macros_python_model_@{bar}",
+        is_sql=True,
+        kind="full",
+        columns={"a": "string"},
+        enabled="@IF(@gateway = 'dev', True, False)",
+        start="@IF(@gateway = 'dev', '1 month ago', '2024-01-01')",
+        end="@end_date_macro(@{global_var})",
+    )
+    def model_with_macros(evaluator, **kwargs):
+        return exp.select(
+            exp.convert(evaluator.var("TEST_VAR_A")).as_("a"),
+        )
+
+    python_sql_model = model.get_registry()["test_macros_python_model_@{bar}"].model(
+        module_path=Path("."),
+        path=Path("."),
+        macros=macro.get_registry(),
+        variables={
+            "test_var_a": "test_value",
+            "test_var_unused": 2,
+            "bar": "suffix",
+            "gateway": "dev",
+            "global_var": False,
+        },
+    )
+
+    assert python_sql_model.name == "test_macros_python_model_suffix"
+    assert python_sql_model.python_env[c.SQLMESH_VARS] == Executable.value(
+        {"test_var_a": "test_value"}
+    )
+    assert python_sql_model.enabled
+    assert python_sql_model.start == "'1 month ago'"
+    assert python_sql_model.end == "'2025-01-01 12:00:00'"
+
+    context = ExecutionContext(mocker.Mock(), {}, None, None)
+    query = list(python_sql_model.render(context=context))[0]
+    assert query.sql() == """SELECT 'test_value' AS "a" """.strip()
 
 
 def test_columns_python_sql_model() -> None:

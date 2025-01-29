@@ -11,9 +11,11 @@ from sqlglot.dialects.dialect import DialectType
 from sqlmesh.core.macros import MacroRegistry
 from sqlmesh.utils.jinja import JinjaMacroRegistry
 from sqlmesh.core import constants as c
-from sqlmesh.core.dialect import MacroFunc, parse_one
+from sqlmesh.core.dialect import SQLMESH_MACRO_PREFIX, MacroFunc, parse_one
+from sqlmesh.core import dialect as d
 from sqlmesh.core.model.definition import (
     Model,
+    _meta_renderer,
     create_python_model,
     create_sql_model,
     get_model_name,
@@ -118,21 +120,49 @@ class model(registry_decorator):
 
         build_env(self.func, env=env, name=entrypoint, path=module_path)
 
+        # Properties to be rendered at model creation time
+        expressions = [exp.Property(this="name", value=exp.to_table(self.name, dialect=dialect))]
+        for field_name in {"enabled", "start", "end"}:
+            if (
+                (field_value := self.kwargs.get(field_name))
+                and isinstance(field_value, exp.Expression)
+                or (isinstance(field_value, str) and field_value.startswith(SQLMESH_MACRO_PREFIX))
+            ):
+                expressions.append(
+                    exp.Property(
+                        this=field_name,
+                        value=parse_one(field_value, dialect=dialect)
+                        if isinstance(field_value, str)
+                        else field_value,
+                    )
+                )
+
+        renderer_kwargs = {
+            "module_path": module_path,
+            "macros": macros,
+            "jinja_macros": jinja_macros,
+            "variables": variables,
+            "path": path,
+            "dialect": dialect,
+            "default_catalog": default_catalog,
+        }
+        meta_renderer = _meta_renderer(
+            expression=d.Model(expressions=expressions),
+            **renderer_kwargs,  # type: ignore
+        )
+        if rendered := meta_renderer.render():
+            for prop in rendered[0].expressions:
+                self.kwargs[prop.this] = prop.args.get("value").sql(dialect=dialect)
+
         common_kwargs = {
             "defaults": defaults,
-            "path": path,
             "time_column_format": time_column_format,
             "python_env": serialize_env(env, path=module_path),
             "physical_schema_mapping": physical_schema_mapping,
             "project": project,
-            "default_catalog": default_catalog,
-            "variables": variables,
-            "dialect": dialect,
             "columns": self.columns if self.columns else None,
-            "module_path": module_path,
-            "macros": macros,
-            "jinja_macros": jinja_macros,
             "audit_definitions": audit_definitions,
+            **renderer_kwargs,
             **self.kwargs,
         }
 
@@ -146,5 +176,5 @@ class model(registry_decorator):
 
         if self.is_sql:
             query = MacroFunc(this=exp.Anonymous(this=entrypoint))
-            return create_sql_model(self.name, query, **common_kwargs)
-        return create_python_model(self.name, entrypoint, **common_kwargs)
+            return create_sql_model(query=query, **common_kwargs)
+        return create_python_model(entrypoint=entrypoint, **common_kwargs)

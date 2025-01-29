@@ -1054,6 +1054,27 @@ def test_disabled_model(copy_to_temp_path):
     assert not context.get_model("sushi.disabled_py")
 
 
+def test_disabled_model_python_macro(sushi_context):
+    @model(
+        "memory.sushi.disabled_model_2",
+        columns={"col": "int"},
+        enabled="@IF(@gateway = 'dev', True, False)",
+    )
+    def entrypoint(context, **kwargs):
+        yield pd.DataFrame({"col": []})
+
+    test_model = model.get_registry()["memory.sushi.disabled_model_2"].model(
+        module_path=Path("."), path=Path("."), variables={"gateway": "prod"}
+    )
+    assert not test_model.enabled
+
+    with pytest.raises(
+        SQLMeshError,
+        match="The disabled model 'memory.sushi.disabled_model_2' cannot be upserted",
+    ):
+        sushi_context.upsert_model(test_model)
+
+
 def test_get_model_mixed_dialects(copy_to_temp_path):
     path = copy_to_temp_path("examples/sushi")
 
