@@ -4,4 +4,5 @@ MODEL (
 
 SELECT
   1 AS col_a,
-  'b' AS col_b
+  'b' AS col_b,
+  @one() AS col_c

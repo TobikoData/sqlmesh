@@ -3,5 +3,6 @@ MODEL (
 );
 
 SELECT
-  *
+  *,
+  @two()
 FROM silver.c
