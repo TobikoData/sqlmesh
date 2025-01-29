@@ -2,7 +2,9 @@
 
 From the main environments list, you can access individual models to explore their comprehensive observability features and detailed summary information. This centralized view provides quick access to critical model metrics and performance data.
 
-Click the environment you want to explore from the environments list
+## Navigate to a model
+
+There are a number of ways you can navigate to a models page. This method shows you how to find your model directly from the Environments page. Click the environment you want to explore from the environments list. 
 
 ![Tobiko Cloud environment page](./model/tcloud_environments.png)
 
@@ -14,7 +16,9 @@ Browse through the model list and select your desired model to access its detail
 
 ![Tobiko Cloud environment models list](./model/tcloud_model_list.png)
 
-Each model presents a comprehensive summary overview that includes several key components and metrics for monitoring and analysis.
+## Model page information
+
+Each model page presents a comprehensive summary that includes several key components and metrics for monitoring and analysis. This is really a view into the model, its health and its status. From here you can understand or view any anomolies in the run time of the model, and get a sense for the overall processing time and how that is changing (or not) over time. You can also check model other critical metrics, like the source code for the model, its lineage in relation to other models, the number of versions of this model avaiable to you and even an approximation of how much this model is costing (if you have [cost savings set up](../costs_savings.md)). 
 
 The following detailed information outlines the different sections:
 
