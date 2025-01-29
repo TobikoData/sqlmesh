@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime
+import logging
 import typing as t
 import unittest
 from collections import Counter
@@ -32,6 +33,8 @@ if t.TYPE_CHECKING:
     from sqlglot.dialects.dialect import DialectType
 
     Row = t.Dict[str, t.Any]
+
+logger = logging.getLogger(__name__)
 
 TIME_KWARG_KEYS = {
     "start",
@@ -231,13 +234,19 @@ class ModelTest(unittest.TestCase):
             if is_object_dtype(actual_types[col]) and len(actual[col]) != 0
         }
         for col, value in object_sentinel_values.items():
-            # can't use `isinstance()` here - https://stackoverflow.com/a/68743663/1707525
-            if type(value) is datetime.date:
-                expected[col] = pd.to_datetime(expected[col], errors="coerce").dt.date
-            elif type(value) is datetime.time:
-                expected[col] = pd.to_datetime(expected[col], errors="coerce").dt.time
-            elif type(value) is datetime.datetime:
-                expected[col] = pd.to_datetime(expected[col], errors="coerce").dt.to_pydatetime()
+            try:
+                # can't use `isinstance()` here - https://stackoverflow.com/a/68743663/1707525
+                if type(value) is datetime.date:
+                    expected[col] = pd.to_datetime(expected[col]).dt.date
+                elif type(value) is datetime.time:
+                    expected[col] = pd.to_datetime(expected[col]).dt.time
+                elif type(value) is datetime.datetime:
+                    expected[col] = pd.to_datetime(expected[col]).dt.to_pydatetime()
+            except Exception as e:
+                logger.warning(
+                    f"Failed to convert expected value for {col} into `datetime` "
+                    f"for unit test '{str(self)}'. {str(e)}"
+                )
 
         actual = actual.replace({np.nan: None})
         expected = expected.replace({np.nan: None})
