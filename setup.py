@@ -87,7 +87,7 @@ setup(
             "PyGithub",
             "pyspark~=3.5.0",
             "pytest",
-            "pytest-asyncio<0.23.0",
+            "pytest-asyncio",
             "pytest-mock",
             "pytest-retry",
             "pytest-xdist",
