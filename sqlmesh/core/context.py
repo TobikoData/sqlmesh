@@ -45,10 +45,11 @@ from functools import cached_property
 from io import StringIO
 from pathlib import Path
 from shutil import rmtree
-from types import MappingProxyType, SimpleNamespace
+from types import MappingProxyType
 
 import pandas as pd
 from sqlglot import Dialect, exp
+from sqlglot.helper import first
 from sqlglot.lineage import GraphHTML
 
 from sqlmesh.core import analytics
@@ -73,10 +74,10 @@ from sqlmesh.core.dialect import (
 )
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.environment import Environment, EnvironmentNamingInfo
-from sqlmesh.core.loader import Loader, update_model_schemas
+from sqlmesh.core.loader import Loader
 from sqlmesh.core.macros import ExecutableOrMacro, macro
 from sqlmesh.core.metric import Metric, rewrite
-from sqlmesh.core.model import Model
+from sqlmesh.core.model import Model, update_model_schemas
 from sqlmesh.core.notification_target import (
     NotificationEvent,
     NotificationTarget,
@@ -110,7 +111,7 @@ from sqlmesh.core.test import (
     run_tests,
 )
 from sqlmesh.core.user import User
-from sqlmesh.utils import UniqueKeyDict, sys_path
+from sqlmesh.utils import UniqueKeyDict
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import TimeLike, now_ds, to_timestamp, format_tz_datetime
 from sqlmesh.utils.errors import (
@@ -334,7 +335,6 @@ class GenericContext(BaseContext, t.Generic[C]):
         self.configs = (
             config if isinstance(config, dict) else load_configs(config, self.CONFIG_TYPE, paths)
         )
-        self._loaders: UniqueKeyDict[str, SimpleNamespace] = UniqueKeyDict("loaders")
         self.dag: DAG[str] = DAG()
         self._models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
         self._audits: UniqueKeyDict[str, ModelAudit] = UniqueKeyDict("audits")
@@ -350,15 +350,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         self._loaded: bool = False
 
         self.path, self.config = t.cast(t.Tuple[Path, C], next(iter(self.configs.items())))
-        for path, config in self.configs.items():
-            project_type = c.DBT if config.loader.__name__.lower().startswith(c.DBT) else c.NATIVE
-            if project_type not in self._loaders:
-                self._loaders[project_type] = SimpleNamespace(
-                    loader=(loader or config.loader)(**config.loader_kwargs), configs={}
-                )
-            self._loaders[project_type].configs[path] = config
 
-        self.project_type = c.HYBRID if len(self._loaders) > 1 else project_type
         self._all_dialects: t.Set[str] = {self.config.dialect or ""}
 
         # This allows overriding the default dialect's normalization strategy, so for example
@@ -377,6 +369,11 @@ class GenericContext(BaseContext, t.Generic[C]):
         self.pinned_environments = Environment.sanitize_names(self.config.pinned_environments)
         self.auto_categorize_changes = self.config.plan.auto_categorize_changes
         self.selected_gateway = gateway or self.config.default_gateway_name
+
+        self._loaders = [
+            (loader or config.loader)(self, path, **config.loader_kwargs)
+            for path, config in self.configs.items()
+        ]
 
         self._connection_config = self.config.get_connection(self.gateway)
         self.concurrent_tasks = concurrent_tasks or self._connection_config.concurrent_tasks
@@ -548,18 +545,16 @@ class GenericContext(BaseContext, t.Generic[C]):
 
     def refresh(self) -> None:
         """Refresh all models that have been updated."""
-        if any(context_loader.loader.reload_needed() for context_loader in self._loaders.values()):
+        if any(loader.reload_needed() for loader in self._loaders):
             self.load()
 
     def load(self, update_schemas: bool = True) -> GenericContext[C]:
         """Load all files in the context's path."""
         load_start_ts = time.perf_counter()
 
-        projects = []
-        for context_loader in self._loaders.values():
-            with sys_path(*context_loader.configs):
-                projects.append(context_loader.loader.load(self, update_schemas))
+        projects = [loader.load() for loader in self._loaders]
 
+        self.dag = DAG()
         self._standalone_audits.clear()
         self._audits.clear()
         self._macros.clear()
@@ -567,6 +562,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         self._metrics.clear()
         self._requirements.clear()
         self._excluded_requirements.clear()
+
         for project in projects:
             self._jinja_macros = self._jinja_macros.merge(project.jinja_macros)
             self._macros.update(project.macros)
@@ -577,7 +573,18 @@ class GenericContext(BaseContext, t.Generic[C]):
             self._requirements.update(project.requirements)
             self._excluded_requirements.update(project.excluded_requirements)
 
-        self.dag = DAG({k: v for project in projects for k, v in project.dag.graph.items()})
+        for model in self._models.values():
+            self.dag.add(model.fqn, model.depends_on)
+
+        # This topologically sorts the DAG & caches the result in-memory for later;
+        # we do it here to detect any cycles as early as possible and fail if needed
+        self.dag.sorted
+
+        if update_schemas:
+            update_model_schemas(self.dag, models=self._models, context_path=self.path)
+            for model in self.models.values():
+                # The model definition can be validated correctly only after the schema is set.
+                model.validate_definition()
 
         duplicates = set(self._models) & set(self._standalone_audits)
         if duplicates:
@@ -589,8 +596,13 @@ class GenericContext(BaseContext, t.Generic[C]):
             self.default_dialect or ""
         }
 
+        project_types = {
+            c.DBT if loader.config.loader.__name__.lower().startswith(c.DBT) else c.NATIVE
+            for loader in self._loaders
+        }
+
         analytics.collector.on_project_loaded(
-            project_type=self.project_type,
+            project_type=c.HYBRID if len(project_types) > 1 else first(project_types),
             models_count=len(self._models),
             audits_count=len(self._audits),
             standalone_audits_count=len(self._standalone_audits),
@@ -647,7 +659,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             engine_type=self.snapshot_evaluator.adapter.dialect,
             state_sync_type=self.state_sync.state_type(),
         )
-        self._load_materializations_and_signals()
+        self._load_materializations()
 
         env_check_attempts_num = max(
             1,
@@ -1849,7 +1861,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         Please contact your SQLMesh administrator before doing this.
         """
         self.notification_target_manager.notify(NotificationEvent.MIGRATION_START)
-        self._load_materializations_and_signals()
+        self._load_materializations()
         try:
             self._new_state_sync().migrate(
                 default_catalog=self.default_catalog,
@@ -2244,11 +2256,10 @@ class GenericContext(BaseContext, t.Generic[C]):
             event_notifications, user_notification_targets, username=self.config.username
         )
 
-    def _load_materializations_and_signals(self) -> None:
+    def _load_materializations(self) -> None:
         if not self._loaded:
-            for context_loader in self._loaders.values():
-                with sys_path(*context_loader.configs):
-                    context_loader.loader.load_materializations(self)
+            for loader in self._loaders:
+                loader.load_materializations()
 
     def _select_models_for_run(
         self,

@@ -789,7 +789,7 @@ def test_trino_schema_location_mapping_syntax(tmp_path):
           catalog: trino
           schema_location_mapping:
             '^utils$': 's3://utils-bucket/@{schema_name}'
-            '^landing\..*$': 's3://raw-data/@{catalog_name}/@{schema_name}'
+            '^landing\\..*$': 's3://raw-data/@{catalog_name}/@{schema_name}'
 
     default_gateway: trino
 

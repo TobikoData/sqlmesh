@@ -74,17 +74,17 @@ def sqlmesh_config(
 
 
 class DbtLoader(Loader):
-    def __init__(self) -> None:
+    def __init__(self, context: GenericContext, path: Path) -> None:
         self._projects: t.List[Project] = []
         self._macros_max_mtime: t.Optional[float] = None
-        super().__init__()
+        super().__init__(context, path)
 
-    def load(self, context: GenericContext, update_schemas: bool = True) -> LoadedProject:
+    def load(self) -> LoadedProject:
         self._projects = []
-        return super().load(context, update_schemas)
+        return super().load()
 
     def _load_scripts(self) -> t.Tuple[MacroRegistry, JinjaMacroRegistry]:
-        macro_files = list(Path(self._context.path, "macros").glob("**/*.sql"))
+        macro_files = list(Path(self.config_path, "macros").glob("**/*.sql"))
 
         for file in macro_files:
             self._track_file(file)
@@ -163,49 +163,46 @@ class DbtLoader(Loader):
 
     def _load_projects(self) -> t.List[Project]:
         if not self._projects:
-            target_name = self._context.selected_gateway
+            target_name = self.context.selected_gateway
 
             self._projects = []
 
-            for path, config in self._context._loaders[c.DBT].configs.items():
-                project = Project.load(
-                    DbtContext(
-                        project_root=path,
-                        target_name=target_name,
-                        sqlmesh_config=config,
-                    ),
-                    variables=self._context.config.variables,
+            project = Project.load(
+                DbtContext(
+                    project_root=self.config_path,
+                    target_name=target_name,
+                    sqlmesh_config=self.config,
+                ),
+                variables=self.config.variables,
+            )
+
+            self._projects.append(project)
+
+            if project.context.target.database != (self.context.default_catalog or ""):
+                raise ConfigError("Project default catalog does not match context default catalog")
+            for path in project.project_files:
+                self._track_file(path)
+
+            context = project.context
+
+            macros_mtimes: t.List[float] = []
+
+            for package_name, package in project.packages.items():
+                context.add_sources(package.sources)
+                context.add_seeds(package.seeds)
+                context.add_models(package.models)
+                macros_mtimes.extend(
+                    [
+                        self._path_mtimes[m.path]
+                        for m in package.macros.values()
+                        if m.path in self._path_mtimes
+                    ]
                 )
 
-                self._projects.append(project)
+            for package_name, macro_infos in context.manifest.all_macros.items():
+                context.add_macros(macro_infos, package=package_name)
 
-                if project.context.target.database != (self._context.default_catalog or ""):
-                    raise ConfigError(
-                        "Project default catalog does not match context default catalog"
-                    )
-                for path in project.project_files:
-                    self._track_file(path)
-
-                context = project.context
-
-                macros_mtimes: t.List[float] = []
-
-                for package_name, package in project.packages.items():
-                    context.add_sources(package.sources)
-                    context.add_seeds(package.seeds)
-                    context.add_models(package.models)
-                    macros_mtimes.extend(
-                        [
-                            self._path_mtimes[m.path]
-                            for m in package.macros.values()
-                            if m.path in self._path_mtimes
-                        ]
-                    )
-
-                for package_name, macro_infos in context.manifest.all_macros.items():
-                    context.add_macros(macro_infos, package=package_name)
-
-                self._macros_max_mtime = max(macros_mtimes) if macros_mtimes else None
+            self._macros_max_mtime = max(macros_mtimes) if macros_mtimes else None
 
         return self._projects
 
@@ -267,7 +264,7 @@ class DbtLoader(Loader):
             self._yaml_max_mtimes = yaml_max_mtimes
 
             target = t.cast(TargetConfig, project.context.target)
-            cache_path = loader._context.path / c.CACHE / target.name
+            cache_path = loader.config_path / c.CACHE / target.name
             self._model_cache = ModelCache(cache_path)
 
         def get_or_load_model(self, target_path: Path, loader: t.Callable[[], Model]) -> Model:
@@ -296,7 +293,7 @@ class DbtLoader(Loader):
             return "__".join(
                 [
                     str(int(max_mtime)) if max_mtime is not None else "na",
-                    self._loader._context.config.fingerprint,
+                    self._loader.config.fingerprint,
                 ]
             )
 
