@@ -715,7 +715,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                 self.notification_target_manager.notify(
                     NotificationEvent.RUN_FAILURE, traceback.format_exc()
                 )
-                logger.error(f"Run Failure: {traceback.format_exc()}")
+                self.log_failure_error("Run")
                 analytics.collector.on_run_end(
                     run_id=analytics_run_id, succeeded=False, interrupted=False, error=e
                 )
@@ -1420,13 +1420,16 @@ class GenericContext(BaseContext, t.Generic[C]):
                 plan_id=plan.plan_id,
                 exc=traceback.format_exc(),
             )
-            logger.error(f"Apply Failure: {traceback.format_exc()}")
+            self.log_failure_error(method="Apply")
             raise e
         self.notification_target_manager.notify(
             NotificationEvent.APPLY_END,
             environment=plan.environment_naming_info.name,
             plan_id=plan.plan_id,
         )
+
+    def log_failure_error(self, method: t.Literal["Apply", "Run"]) -> None:
+        logger.error(f"{method} Failure: {traceback.format_exc()}")
 
     @python_api_analytics
     def invalidate_environment(self, name: str, sync: bool = False) -> None:
