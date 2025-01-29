@@ -74,10 +74,10 @@ from sqlmesh.core.dialect import (
 )
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.environment import Environment, EnvironmentNamingInfo
-from sqlmesh.core.loader import Loader, update_model_schemas
+from sqlmesh.core.loader import Loader
 from sqlmesh.core.macros import ExecutableOrMacro, macro
 from sqlmesh.core.metric import Metric, rewrite
-from sqlmesh.core.model import Model
+from sqlmesh.core.model import Model, update_model_schemas
 from sqlmesh.core.notification_target import (
     NotificationEvent,
     NotificationTarget,

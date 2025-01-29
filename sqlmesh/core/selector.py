@@ -12,7 +12,7 @@ from sqlglot.helper import seq_get
 
 from sqlmesh.core.dialect import normalize_model_name
 from sqlmesh.core.environment import Environment
-from sqlmesh.core.loader import update_model_schemas
+from sqlmesh.core.model import update_model_schemas
 from sqlmesh.utils import UniqueKeyDict
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.git import GitClient
