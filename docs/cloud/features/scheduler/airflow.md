@@ -103,7 +103,7 @@ Tobiko Cloud uses a custom approach to Airflow integration - this section descri
 
 The Airflow DAG task mirrors the progress of the Tobiko Cloud scheduler run. Each local task reflects the outcome of its corresponding remote task.
 
-This allows you to observe at a glance how your data pipeline is progressing, displayed alongside your other pipelines in Airflow. No need to navigate to Tobiko Cloud!
+This allows you to observe at a glance how your data pipeline is progressing, displayed alongside your other pipelines in Airflow. No need to context switch to Tobiko Cloud!
 
 ### Why a custom approach?
 
