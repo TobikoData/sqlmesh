@@ -286,14 +286,19 @@ def build_env(
     if name not in env:
         # We only need to add the undecorated code of @macro() functions in env, which
         # is accessible through the `__wrapped__` attribute added by functools.wraps
-        env[name] = obj.__wrapped__ if hasattr(obj, c.SQLMESH_MACRO) else obj
+        if hasattr(obj, c.SQLMESH_MACRO):
+            obj = obj.__wrapped__
 
+        # This makes sure the object's dependencies are included in the dictionary before it,
+        # which is important in order to avoid failing during the environment hydration phase
         if (
             obj_module
             and hasattr(obj_module, "__file__")
             and _is_relative_to(obj_module.__file__, path)
         ):
-            walk(env[name])
+            walk(obj)
+
+        env[name] = obj
     elif env[name] != obj:
         raise SQLMeshError(
             f"Cannot store {obj} in environment, duplicate definitions found for '{name}'"
