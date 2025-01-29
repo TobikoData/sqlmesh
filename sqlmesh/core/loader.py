@@ -88,7 +88,7 @@ class Loader(abc.ABC):
             linecache.clearcache()
             self._path_mtimes.clear()
 
-            self.load_materializations()
+            self._load_materializations()
             signals = self._load_signals()
 
             config_mtimes: t.Dict[Path, t.List[float]] = defaultdict(list)
@@ -175,6 +175,9 @@ class Loader(abc.ABC):
 
     def load_materializations(self) -> None:
         """Loads custom materializations."""
+
+    def _load_materializations(self) -> None:
+        pass
 
     def _load_signals(self) -> UniqueKeyDict[str, signal]:
         return UniqueKeyDict("signals")
@@ -479,7 +482,10 @@ class SqlMeshLoader(Loader):
         return models
 
     def load_materializations(self) -> None:
-        """Loads custom materializations."""
+        with sys_path(self.config_path):
+            self._load_materializations()
+
+    def _load_materializations(self) -> None:
         for path in self._glob_paths(
             self.config_path / c.MATERIALIZATIONS,
             ignore_patterns=self.config.ignore_patterns,
