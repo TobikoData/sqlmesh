@@ -2,11 +2,16 @@
 
 Tobiko Cloud's Dagster integration allows you to combine Dagster system monitoring with the powerful debugging tools in Tobiko Cloud.
 
+![Dagster UI Asset Lineage](./dagster/asset_lineage.png)
+
 ## Setup
 
 Your SQLMesh project must be configured and connected to Tobiko Cloud before using the Dagster integration.
 
 Learn more about connecting to Tobiko Cloud in the [Getting Started page](../../tcloud_getting_started.md).
+
+!!! info "Supported Dagster versions"
+    This integration is supported on Dagster 1.9.1 or later. Earlier versions may work but they are not tested.
 
 ### Install libraries
 
@@ -32,8 +37,8 @@ Here, we will describe the method for **local development**.
 In your Dagster project, add the following entries to the `.env` file (creating it if it doesnt exist):
 
 ```sh title=".env"
-TOBIKO_CLOUD_BASE_URL=<URL for your Tobiko Cloud project>
-TOBIKO_CLOUD_TOKEN=<your Tobiko Cloud API token>
+TOBIKO_CLOUD_BASE_URL=<URL for your Tobiko Cloud project> # ex: https://cloud.tobikodata.com/sqlmesh/tobiko/public-demo/
+TOBIKO_CLOUD_TOKEN=<your Tobiko Cloud API token> # ex: ioawjioefja1
 ```
 
 The base URL and password values will be provided to you during your Tobiko Cloud onboarding.
@@ -66,14 +71,14 @@ tobiko_cloud_definitions = sqlmesh.create_definitions(environment="prod")
     If there is an existing definitions object already declared in your Dagster project, you can merge in the Tobiko Cloud definitions like so:
 
     ```python
-    defs = Definitions(...)
+    defs = Definitions(...) # existing Definitions object
 
-    defs.merge(tobiko_cloud_definitions)
+    defs = Definitions.merge(defs, sqlmesh.create_definitions(environment="prod"))
     ```
 
 This is all that's needed to integrate with Tobiko Cloud!
 
-Once Dagster loads your project, you will see some new objects become available.
+Once Dagster loads your project, you will see new objects become available.
 
 ## Available Dagster objects
 
@@ -118,9 +123,9 @@ If you need to manually refresh materialization information for all models, you 
 
 Tobiko Cloud uses a custom approach to Dagster integration - this section describes how it works.
 
-The Mirror job mirrors the progress of the Tobiko Cloud scheduler run. Each local task reflects the outcome of its corresponding remote task. If an asset is materialized remotely, the job emits a Dagster materialization event.
+The `mirror` job mirrors the progress of the Tobiko Cloud scheduler run. Each local task reflects the outcome of its corresponding remote task. If an asset is materialized remotely, the job emits a Dagster materialization event.
 
-This allows you to observe at a glance how your data pipeline is progressing, displayed alongside your other pipelines in Dagster. No need to navigate to Tobiko Cloud!
+This allows you to observe at a glance how your data pipeline is progressing, displayed alongside your other pipelines in Dagster. No need to context switch to Tobiko Cloud!
 
 ### Why a custom approach?
 
@@ -160,7 +165,7 @@ However, it is possible to connect to the Dagster GraphQL API from within user c
 
 This is enabled by default if you specify the following extra parameters when instantiating `SQLMeshEnterpriseDagster`:
 
-```python title="definitions.py" linenums="4-5"
+```python title="definitions.py" linenums="1" hl_lines="4 5"
 sqlmesh = SQLMeshEnterpriseDagster(
     url=EnvVar("TOBIKO_CLOUD_BASE_URL").get_value(),
     token=EnvVar("TOBIKO_CLOUD_TOKEN").get_value(),
@@ -197,7 +202,7 @@ Dagster also provides a framework called [Declarative Automation](https://docs.d
 
 Here are some examples of running custom logic in response to Tobiko Cloud events.
 
-Note that Dagster has a lot of flexibility in how it can be configured and the methods we describe below arent necessarily the right choice for every configuration. We recommend familiarizing yourself with Dagster's [Automation](https://docs.dagster.io/concepts/automation) features to get the most out of your Tobiko Cloud deployment with Dagster.
+Note that Dagster has a lot of flexibility in how it can be configured and the methods we describe below aren't necessarily the right choice for every configuration. We recommend familiarizing yourself with Dagster's [Automation](https://docs.dagster.io/concepts/automation) features to get the most out of your Tobiko Cloud deployment with Dagster.
 
 #### Response to run status
 
@@ -224,6 +229,14 @@ You can also fetch a reference to the Tobiko Cloud mirror job from the Definitio
 
 ```python
 mirror_job = tobiko_cloud_definitions.get_job_def("tobiko_cloud_mirror_run_prod")
+```
+
+Or if the Tobiko Cloud definitions are in their own Code Location and are not directly accessible from your job code, you can create a [JobSelector](https://docs.dagster.io/concepts/partitions-schedules-sensors/sensors#cross-code-location-run-status-sensors) instead:
+
+```python
+from dagster import JobSelector
+
+mirror_job = JobSelector(job_name="tobiko_cloud_mirror_run_prod")
 ```
 
 With this, you can create a `@run_status_sensor` that listens to the mirror job and triggers your job when the mirror job ends:
@@ -266,10 +279,7 @@ def on_tobiko_cloud_start_run(context: RunStatusSensorContext):
     return RunRequest()
 ```
 
-!!! info
-
-    If your Tobiko Cloud definitions live in their own code location, you can use a [JobSelector](https://docs.dagster.io/concepts/partitions-schedules-sensors/sensors#cross-code-location-run-status-sensors) to target the Mirror job instead of the direct reference.
-
+![Dagster run status sensor](./dagster/run_status_sensor.png)
 
 #### Response to Asset Materialization
 
@@ -279,7 +289,7 @@ This gives you a hook to run custom logic as well. As before, you can do anythin
 
 To listen for Asset Materialization events, you can create an [Asset Sensor](https://docs.dagster.io/concepts/partitions-schedules-sensors/asset-sensors).
 
-For example, let's say your Tobiko Cloud project has a model called "postgres.crm.customers" and it's showing in the Asset Catalog under "postgres / crm / customers".
+For example, let's say your Tobiko Cloud project has a model called `postgres.crm.customers` and it's showing in the Asset Catalog under "postgres / crm / customers".
 
 You can listen for materialization events like so:
 
@@ -287,16 +297,19 @@ You can listen for materialization events like so:
 from dagster import AssetKey, SensorEvaluationContext, EventLogEntry
 
 @job
-def my_job():
+def internal_customers_pipeline():
     # custom job logic
+    pass
 
 @asset_sensor(
     asset_key=AssetKey(["postgres", "crm", "customers"]),
-    job=my_job
+    job=internal_customers_pipeline
 )
-def my_asset_sensor(context: SensorEvaluationContext, asset_event: EventLogEntry):
+def on_crm_customers_updated(context: SensorEvaluationContext, asset_event: EventLogEntry):
     yield RunRequest()
 ```
+
+![Dagster asset sensor](./dagster/asset_sensor.png)
 
 The sensor will trigger every time the Asset with the key `postgres / crm / customers` is materialized.
 
