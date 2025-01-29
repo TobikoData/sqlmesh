@@ -27,7 +27,7 @@ There are a number of ways you can navigate to a models page. This method shows 
 
 ## Model page information
 
-Each model page presents a comprehensive summary that includes several key components and metrics for monitoring and analysis. From here you can understand or view any anomolies in the run time of the model, and get a sense for the overall processing time and how that is changing (or not) over time. You can also check model other critical metrics, like the source code for the model, its lineage in relation to other models, the number of versions of this model avaiable to you and even an approximation of how much this model is costing (if you have [cost savings set up](../costs_savings.md)). 
+Each model page presents a comprehensive summary that includes several key components and metrics for monitoring and analysis. From here you can understand or view any anomolies in the run time of the model, and get a sense for the overall processing time and how that is changing (or not) over time. You can also check other model critical metrics, like the source code for the model, its lineage in relation to other models, the number of versions of this model avaiable to you and even an approximation of how much this model is costing (if you have [cost savings set up](../costs_savings.md)). 
 
 The following detailed information outlines the different sections:
 
