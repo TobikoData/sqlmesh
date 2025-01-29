@@ -957,7 +957,7 @@ def test_init_project_dialects(runner, tmp_path):
 
         assert (
             redshift_config
-            == "gateways:\n  local:\n    connection:\n      type: redshift\n      # concurrent_tasks: 4\n      # register_comments: True\n      # pre_ping: \n      # pretty_sql: \n      # user: \n      # password: \n      # database: \n      # host: \n      # port: \n      # source_address: \n      # unix_sock: \n      # ssl: \n      # sslmode: \n      # timeout: \n      # tcp_keepalive: \n      # application_name: \n      # preferred_role: \n      # principal_arn: \n      # credentials_provider: \n      # region: \n      # cluster_identifier: \n      # iam: \n      # is_serverless: \n      # serverless_acct_id: \n      # serverless_work_group: \n\n\ndefault_gateway: local\n\nmodel_defaults:\n  dialect: redshift\n  start: 2025-01-27\n"
+            == "gateways:\n  dev:\n    connection:\n      type: redshift\n      # concurrent_tasks: 4\n      # register_comments: True\n      # pre_ping: \n      # pretty_sql: \n      # user: \n      # password: \n      # database: \n      # host: \n      # port: \n      # source_address: \n      # unix_sock: \n      # ssl: \n      # sslmode: \n      # timeout: \n      # tcp_keepalive: \n      # application_name: \n      # preferred_role: \n      # principal_arn: \n      # credentials_provider: \n      # region: \n      # cluster_identifier: \n      # iam: \n      # is_serverless: \n      # serverless_acct_id: \n      # serverless_work_group: \n\n\ndefault_gateway: dev\n\nmodel_defaults:\n  dialect: redshift\n  start: 2025-01-28\n"
         )
         remove(tmp_path / "config.yaml")
 
@@ -967,6 +967,6 @@ def test_init_project_dialects(runner, tmp_path):
 
         assert (
             bq_config
-            == "gateways:\n  local:\n    connection:\n      type: bigquery\n      # concurrent_tasks: 1\n      # register_comments: True\n      # pre_ping: \n      # pretty_sql: \n      # method: oauth\n      # project: \n      # execution_project: \n      # quota_project: \n      # location: \n      # keyfile: \n      # keyfile_json: \n      # token: \n      # refresh_token: \n      # client_id: \n      # client_secret: \n      # token_uri: \n      # scopes: \n      # job_creation_timeout_seconds: \n      # job_execution_timeout_seconds: \n      # job_retries: 1\n      # job_retry_deadline_seconds: \n      # priority: \n      # maximum_bytes_billed: \n\n\ndefault_gateway: local\n\nmodel_defaults:\n  dialect: bigquery\n  start: 2025-01-27\n"
+            == "gateways:\n  dev:\n    connection:\n      type: bigquery\n      # concurrent_tasks: 1\n      # register_comments: True\n      # pre_ping: \n      # pretty_sql: \n      # method: oauth\n      # project: \n      # execution_project: \n      # quota_project: \n      # location: \n      # keyfile: \n      # keyfile_json: \n      # token: \n      # refresh_token: \n      # client_id: \n      # client_secret: \n      # token_uri: \n      # scopes: \n      # job_creation_timeout_seconds: \n      # job_execution_timeout_seconds: \n      # job_retries: 1\n      # job_retry_deadline_seconds: \n      # priority: \n      # maximum_bytes_billed: \n\n\ndefault_gateway: dev\n\nmodel_defaults:\n  dialect: bigquery\n  start: 2025-01-28\n"
         )
         remove(tmp_path / "config.yaml")

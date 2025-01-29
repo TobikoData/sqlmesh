@@ -4,7 +4,6 @@ from pathlib import Path
 from dataclasses import dataclass
 
 import click
-
 from sqlglot import Dialect
 from sqlmesh.integrations.dlt import generate_dlt_models_and_settings
 from sqlmesh.utils.date import yesterday_ds
@@ -27,6 +26,9 @@ def _gen_config(
     template: ProjectTemplate,
 ) -> str:
     if not settings:
+        connection_settings = """      type: duckdb
+      database: db.db"""
+
         if dialect in CONNECTION_CONFIG_TO_TYPE:
             required_fields = []
             non_required_fields = []
@@ -35,9 +37,10 @@ def _gen_config(
                 field_name = field.alias or name
                 default_value = field.get_default()
 
-                default_value = (
-                    default_value if isinstance(default_value, (str, int, bool)) else None
-                )
+                if isinstance(default_value, Enum):
+                    default_value = default_value.value
+                elif not isinstance(default_value, (str, int, bool)):
+                    default_value = None
 
                 required = field.is_required() or field_name == "type"
                 option_str = (
@@ -52,30 +55,26 @@ def _gen_config(
             connection_settings = "".join(required_fields + non_required_fields)
 
     else:
-        connection_settings = (
-            settings
-            or """      type: duckdb
-      database: db.db"""
-        )
+        connection_settings = settings
 
     default_configs = {
         ProjectTemplate.DEFAULT: f"""gateways:
-  local:
+  dev:
     connection:
 {connection_settings}
 
-default_gateway: local
+default_gateway: dev
 
 model_defaults:
   dialect: {dialect}
   start: {start or yesterday_ds()}
 """,
         ProjectTemplate.AIRFLOW: f"""gateways:
-  local:
+  dev:
     connection:
 {connection_settings}
 
-default_gateway: local
+default_gateway: dev
 
 default_scheduler:
   type: airflow
