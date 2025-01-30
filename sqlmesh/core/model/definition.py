@@ -1823,7 +1823,7 @@ def load_sql_based_model(
                 if kind_prop.name.lower() == "merge_filter":
                     unrendered_merge_filter = kind_prop
 
-    meta_renderer = _meta_renderer(
+    rendered_meta_exprs = render_meta(
         expression=meta,
         module_path=module_path,
         macros=macros,
@@ -1834,7 +1834,6 @@ def load_sql_based_model(
         default_catalog=default_catalog,
     )
 
-    rendered_meta_exprs = meta_renderer.render()
     if rendered_meta_exprs is None or len(rendered_meta_exprs) != 1:
         raise_config_error(
             f"Invalid MODEL statement:\n{meta.sql(dialect=dialect, pretty=True)}",
@@ -2024,21 +2023,6 @@ def create_python_model(
     # Also remove self-references that are found
 
     dialect = kwargs.get("dialect")
-    renderer_kwargs = {
-        "module_path": module_path,
-        "macros": macros,
-        "jinja_macros": jinja_macros,
-        "variables": variables,
-        "path": path,
-        "dialect": dialect,
-        "default_catalog": kwargs.get("default_catalog"),
-    }
-
-    name_renderer = _meta_renderer(
-        expression=d.parse_one(name, dialect=dialect),
-        **renderer_kwargs,  # type: ignore
-    )
-    name = t.cast(t.List[exp.Expression], name_renderer.render())[0].sql(dialect=dialect)
 
     dependencies_unspecified = depends_on is None
 
@@ -2050,15 +2034,21 @@ def create_python_model(
     if dependencies_unspecified:
         depends_on = parsed_depends_on - {name}
     else:
-        depends_on_renderer = _meta_renderer(
+        depends_on_rendered = render_meta(
             expression=exp.Array(
                 expressions=[d.parse_one(dep, dialect=dialect) for dep in depends_on or []]
             ),
-            **renderer_kwargs,  # type: ignore
+            module_path=module_path,
+            macros=macros,
+            jinja_macros=jinja_macros,
+            variables=variables,
+            path=path,
+            dialect=dialect,
+            default_catalog=kwargs.get("default_catalog"),
         )
         depends_on = {
             dep.sql(dialect=dialect)
-            for dep in t.cast(t.List[exp.Expression], depends_on_renderer.render())[0].expressions
+            for dep in t.cast(t.List[exp.Expression], depends_on_rendered)[0].expressions
         }
 
     variables = {k: v for k, v in (variables or {}).items() if k in referenced_variables}
@@ -2382,7 +2372,7 @@ def _refs_to_sql(values: t.Any) -> exp.Expression:
     return exp.Tuple(expressions=values)
 
 
-def _meta_renderer(
+def render_meta(
     expression: exp.Expression,
     module_path: Path,
     path: Path,
@@ -2391,7 +2381,7 @@ def _meta_renderer(
     dialect: DialectType = None,
     variables: t.Optional[t.Dict[str, t.Any]] = None,
     default_catalog: t.Optional[str] = None,
-) -> ExpressionRenderer:
+) -> t.Optional[t.List[exp.Expression]]:
     meta_python_env = make_python_env(
         expressions=expression,
         jinja_macro_references=None,
@@ -2410,7 +2400,7 @@ def _meta_renderer(
         default_catalog=default_catalog,
         quote_identifiers=False,
         normalize_identifiers=False,
-    )
+    ).render()
 
 
 META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {

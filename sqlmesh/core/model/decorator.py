@@ -15,10 +15,10 @@ from sqlmesh.core.dialect import SQLMESH_MACRO_PREFIX, MacroFunc, parse_one
 from sqlmesh.core import dialect as d
 from sqlmesh.core.model.definition import (
     Model,
-    _meta_renderer,
     create_python_model,
     create_sql_model,
     get_model_name,
+    render_meta,
 )
 from sqlmesh.core.model.kind import ModelKindName, _ModelKind
 from sqlmesh.utils import registry_decorator
@@ -121,48 +121,53 @@ class model(registry_decorator):
         build_env(self.func, env=env, name=entrypoint, path=module_path)
 
         # Properties to be rendered at model creation time
-        expressions = [exp.Property(this="name", value=exp.to_table(self.name, dialect=dialect))]
+        expressions = [
+            exp.Property(this=exp.var("name"), value=exp.to_table(self.name, dialect=dialect))
+        ]
         for field_name in {"enabled", "start", "end"}:
-            if (
-                (field_value := self.kwargs.get(field_name))
-                and isinstance(field_value, exp.Expression)
+            if (field_value := self.kwargs.get(field_name)) and (
+                isinstance(field_value, exp.Expression)
                 or (isinstance(field_value, str) and field_value.startswith(SQLMESH_MACRO_PREFIX))
             ):
                 expressions.append(
                     exp.Property(
-                        this=field_name,
-                        value=parse_one(field_value, dialect=dialect)
-                        if isinstance(field_value, str)
-                        else field_value,
+                        this=exp.var(field_name),
+                        value=exp.maybe_parse(field_value, dialect=dialect),
                     )
                 )
 
-        renderer_kwargs = {
-            "module_path": module_path,
-            "macros": macros,
-            "jinja_macros": jinja_macros,
-            "variables": variables,
-            "path": path,
-            "dialect": dialect,
-            "default_catalog": default_catalog,
-        }
-        meta_renderer = _meta_renderer(
-            expression=d.Model(expressions=expressions),
-            **renderer_kwargs,  # type: ignore
-        )
-        if rendered := meta_renderer.render():
-            for prop in rendered[0].expressions:
-                self.kwargs[prop.this] = prop.args.get("value").sql(dialect=dialect)
+        if expressions and (
+            rendered_meta := render_meta(
+                expression=d.Model(expressions=expressions),
+                module_path=module_path,
+                macros=macros,
+                jinja_macros=jinja_macros,
+                variables=variables,
+                path=path,
+                dialect=dialect,
+                default_catalog=default_catalog,
+            )
+        ):
+            for prop in rendered_meta[0].expressions:
+                self.kwargs[prop.this.name if isinstance(prop.this, exp.Var) else prop.this] = (
+                    prop.args.get("value").sql(dialect=dialect)
+                )
 
         common_kwargs = {
             "defaults": defaults,
+            "path": path,
             "time_column_format": time_column_format,
             "python_env": serialize_env(env, path=module_path),
             "physical_schema_mapping": physical_schema_mapping,
             "project": project,
+            "default_catalog": default_catalog,
+            "variables": variables,
+            "dialect": dialect,
             "columns": self.columns if self.columns else None,
+            "module_path": module_path,
+            "macros": macros,
+            "jinja_macros": jinja_macros,
             "audit_definitions": audit_definitions,
-            **renderer_kwargs,
             **self.kwargs,
         }
 
