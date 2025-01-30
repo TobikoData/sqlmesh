@@ -760,7 +760,7 @@ def test_fingerprint(model: Model, parent_model: Model):
 
     original_fingerprint = SnapshotFingerprint(
         data_hash="1312415267",
-        metadata_hash="2476734280",
+        metadata_hash="2967945306",
     )
 
     assert fingerprint == original_fingerprint
@@ -782,7 +782,7 @@ def test_fingerprint(model: Model, parent_model: Model):
     new_fingerprint = fingerprint_from_node(model, nodes={})
     assert new_fingerprint != fingerprint
     assert new_fingerprint.data_hash != fingerprint.data_hash
-    assert new_fingerprint.metadata_hash == fingerprint.metadata_hash
+    assert new_fingerprint.metadata_hash != fingerprint.metadata_hash
 
     model = SqlModel(**{**model.dict(), "query": parse_one("select 1, ds -- annotation")})
     fingerprint = fingerprint_from_node(model, nodes={})
@@ -796,13 +796,15 @@ def test_fingerprint(model: Model, parent_model: Model):
     fingerprint = fingerprint_from_node(model, nodes={})
     assert new_fingerprint != fingerprint
     assert new_fingerprint.data_hash != fingerprint.data_hash
-    assert new_fingerprint.metadata_hash == fingerprint.metadata_hash
+    assert new_fingerprint.metadata_hash != fingerprint.metadata_hash
+    assert fingerprint.metadata_hash == original_fingerprint.metadata_hash
 
     model = SqlModel(**{**original_model.dict(), "post_statements": [parse_one("DROP TABLE test")]})
     fingerprint = fingerprint_from_node(model, nodes={})
     assert new_fingerprint != fingerprint
     assert new_fingerprint.data_hash != fingerprint.data_hash
-    assert new_fingerprint.metadata_hash == fingerprint.metadata_hash
+    assert new_fingerprint.metadata_hash != fingerprint.metadata_hash
+    assert fingerprint.metadata_hash == original_fingerprint.metadata_hash
 
 
 def test_fingerprint_seed_model():
@@ -858,7 +860,7 @@ def test_fingerprint_jinja_macros(model: Model):
     )
     original_fingerprint = SnapshotFingerprint(
         data_hash="923305614",
-        metadata_hash="2476734280",
+        metadata_hash="2967945306",
     )
 
     fingerprint = fingerprint_from_node(model, nodes={})

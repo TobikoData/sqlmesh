@@ -204,4 +204,4 @@ $ sqlmesh -p examples/multi_hybrid/dbt_repo -p examples/multi_hybrid/sqlmesh_rep
 
 SQLMesh will automatically detect dependencies and lineage across both SQLMesh and dbt projects, even when models are sourcing from different project types.
 
-Additionally, macros can be reused across both project types. For an example of this setup, refer to the [mixed SQLMesh and dbt example](https://github.com/TobikoData/sqlmesh/tree/main/examples/multi_hybrid).
+For an example of this setup, refer to the [mixed SQLMesh and dbt example](https://github.com/TobikoData/sqlmesh/tree/main/examples/multi_hybrid).

@@ -524,10 +524,7 @@ def test_python_model_empty_df_raises(sushi_context, capsys):
         sushi_context.plan(no_prompts=True, auto_apply=True)
 
     assert (
-        "Cannot construct source query from an empty \nDataFrame. This error "
-        "is commonly related to Python models that produce no data.\nFor such "
-        "models, consider yielding from an empty generator if the resulting set "
-        "\nis empty, i.e. use `yield from ()`"
+        "Cannot construct source query from an empty DataFrame. This error is \ncommonly related to Python models that produce no data. For such models, \nconsider yielding from an empty generator if the resulting set is empty, i.e. \nuse"
     ) in capsys.readouterr().out
 
 
@@ -1072,7 +1069,7 @@ def test_get_model_mixed_dialects(copy_to_temp_path):
     model = load_sql_based_model(expression, default_catalog=context.default_catalog)
     context.upsert_model(model)
 
-    assert context.get_model("sushi.snowflake_dialect") == model
+    assert context.get_model("sushi.snowflake_dialect").dict() == model.dict()
 
 
 def test_override_dialect_normalization_strategy():
@@ -1193,3 +1190,78 @@ def test_requirements(copy_to_temp_path: t.Callable):
     diff = context.plan_builder("dev", skip_tests=True, skip_backfill=True).build().context_diff
     assert set(diff.previous_requirements) == requirements
     assert set(diff.requirements) == {"numpy", "pandas"}
+
+
+@pytest.mark.slow
+def test_rendered_diff():
+    ctx = Context(config=Config())
+
+    ctx.upsert_model(
+        load_sql_based_model(
+            parse(
+                """
+                MODEL (
+                    name test,
+                );
+
+                CREATE TABLE IF NOT EXISTS foo AS (SELECT @OR(FALSE, TRUE));
+
+                SELECT 4 + 2;
+
+                CREATE TABLE IF NOT EXISTS foo2 AS (SELECT @AND(TRUE, FALSE));
+
+                ON_VIRTUAL_UPDATE_BEGIN;
+                DROP VIEW @this_model
+                ON_VIRTUAL_UPDATE_END;
+
+                """
+            )
+        )
+    )
+
+    ctx.plan("dev", auto_apply=True, no_prompts=True)
+
+    # Alter the model's query and pre/post/virtual statements to cause the diff
+    ctx.upsert_model(
+        load_sql_based_model(
+            parse(
+                """
+                MODEL (
+                    name test,
+                );
+
+                CREATE TABLE IF NOT EXISTS foo AS (SELECT @AND(TRUE, NULL));
+
+                SELECT 5 + 2;
+
+                CREATE TABLE IF NOT EXISTS foo2 AS (SELECT @OR(TRUE, NULL));
+
+                ON_VIRTUAL_UPDATE_BEGIN;
+                DROP VIEW IF EXISTS @this_model
+                ON_VIRTUAL_UPDATE_END;
+                """
+            )
+        )
+    )
+
+    plan = ctx.plan("dev", auto_apply=True, no_prompts=True, diff_rendered=True)
+
+    assert '''@@ -4,13 +4,13 @@
+
+ CREATE TABLE IF NOT EXISTS "foo" AS
+ (
+   SELECT
+-    FALSE OR TRUE
++    TRUE
+ )
+ SELECT
+-  6 AS "_col_0"
++  7 AS "_col_0"
+ CREATE TABLE IF NOT EXISTS "foo2" AS
+ (
+   SELECT
+-    TRUE AND FALSE
++    TRUE
+ )
+-DROP VIEW "test"
++DROP VIEW IF EXISTS "test"''' in plan.context_diff.text_diff('"test"')

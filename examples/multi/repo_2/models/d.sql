@@ -3,5 +3,7 @@ MODEL (
 );
 
 SELECT
-  *
+  *,
+  @two() as two,
+  @dup() AS dup
 FROM silver.c

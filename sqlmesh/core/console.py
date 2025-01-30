@@ -32,7 +32,9 @@ from sqlmesh.core.snapshot import (
 )
 from sqlmesh.core.test import ModelTest
 from sqlmesh.utils import rich as srich
+from sqlmesh.utils.concurrency import NodeExecutionFailedError
 from sqlmesh.utils.date import time_like_to_str, to_date, yesterday_ds
+from sqlmesh.utils.errors import PythonModelEvalError
 
 if t.TYPE_CHECKING:
     import ipywidgets as widgets
@@ -230,6 +232,14 @@ class Console(abc.ABC):
     @abc.abstractmethod
     def log_status_update(self, message: str) -> None:
         """Display general status update to the user."""
+
+    @abc.abstractmethod
+    def log_skipped_models(self, snapshot_names: t.Set[str]) -> None:
+        """Display list of models skipped during evaluation to the user."""
+
+    @abc.abstractmethod
+    def log_failed_models(self, errors: t.List[NodeExecutionFailedError]) -> None:
+        """Display list of models that failed during evaluation to the user."""
 
     @abc.abstractmethod
     def log_error(self, message: str) -> None:
@@ -614,9 +624,9 @@ class TerminalConsole(Console):
         """
         if context_diff.is_new_environment:
             msg = (
-                f"`{context_diff.environment}` environment will be initialized"
+                f"\n`{context_diff.environment}` environment will be initialized"
                 if not context_diff.create_from_env_exists
-                else f"New environment `{context_diff.environment}` will be created from `{context_diff.create_from}`"
+                else f"\nNew environment `{context_diff.environment}` will be created from `{context_diff.create_from}`"
             )
             self._print(Tree(f"[bold]{msg}\n"))
             if not context_diff.has_snapshot_changes:
@@ -628,7 +638,7 @@ class TerminalConsole(Console):
             #   the PlanBuilder.
             self._print(
                 Tree(
-                    f"[bold]No changes to plan: project files match the `{context_diff.environment}` environment\n"
+                    f"\n[bold]No changes to plan: project files match the `{context_diff.environment}` environment\n"
                 )
             )
             return
@@ -889,7 +899,7 @@ class TerminalConsole(Console):
         missing_intervals = plan.missing_intervals
         if not missing_intervals:
             return
-        backfill = Tree("[bold]Models needing backfill \[missing dates]:")
+        backfill = Tree("[bold]Models needing backfill \\[missing dates]:")
         for missing in missing_intervals:
             snapshot = plan.context_diff.snapshots[missing.snapshot_id]
             if not snapshot.is_model:
@@ -903,7 +913,7 @@ class TerminalConsole(Console):
                 plan.environment_naming_info, default_catalog, dialect=self.dialect
             )
             backfill.add(
-                f"{display_name}: \[{_format_missing_intervals(snapshot, missing)}]{preview_modifier}"
+                f"{display_name}: \\[{_format_missing_intervals(snapshot, missing)}]{preview_modifier}"
             )
 
         if backfill:
@@ -1002,6 +1012,20 @@ class TerminalConsole(Console):
 
     def log_status_update(self, message: str) -> None:
         self._print(message)
+
+    def log_skipped_models(self, snapshot_names: t.Set[str]) -> None:
+        if snapshot_names:
+            msg = "  " + "\n  ".join(snapshot_names)
+            self._print(f"[dark_orange3]Skipped models[/dark_orange3]\n\n{msg}")
+
+    def log_failed_models(self, errors: t.List[NodeExecutionFailedError]) -> None:
+        if errors:
+            self._print("\n[red]Failed models[/red]\n")
+
+            error_messages = _format_node_errors(errors)
+
+            for node_name, msg in error_messages.items():
+                self._print(f"  [red]{node_name}[/red]\n\n{msg}")
 
     def log_error(self, message: str) -> None:
         self._print(f"[red]{message}[/red]")
@@ -1580,6 +1604,18 @@ class CaptureTerminalConsole(TerminalConsole):
         self._errors.append(message)
         super().log_error(message)
 
+    def log_skipped_models(self, snapshot_names: t.Set[str]) -> None:
+        if snapshot_names:
+            self._captured_outputs.append(
+                "\n".join([f"SKIPPED snapshot {skipped}\n" for skipped in snapshot_names])
+            )
+            super().log_skipped_models(snapshot_names)
+
+    def log_failed_models(self, errors: t.List[NodeExecutionFailedError]) -> None:
+        if errors:
+            self._errors.append("\n".join(str(ex) for ex in errors))
+            super().log_failed_models(errors)
+
     def _print(self, value: t.Any, **kwargs: t.Any) -> None:
         with self.console.capture() as capture:
             self.console.print(value, **kwargs)
@@ -1723,7 +1759,7 @@ class MarkdownConsole(CaptureTerminalConsole):
         missing_intervals = plan.missing_intervals
         if not missing_intervals:
             return
-        self._print("\n**Models needing backfill \[missing dates]:**")
+        self._print("\n**Models needing backfill \\[missing dates]:**")
         snapshots = []
         for missing in missing_intervals:
             snapshot = plan.context_diff.snapshots[missing.snapshot_id]
@@ -1800,6 +1836,22 @@ class MarkdownConsole(CaptureTerminalConsole):
                 if isinstance(test, ModelTest):
                     self._print(f"* Failure Test: `{test.model.name}` - `{test.test_name}`\n\n")
             self._print(f"```{output}```\n\n")
+
+    def log_skipped_models(self, snapshot_names: t.Set[str]) -> None:
+        if snapshot_names:
+            msg = "  " + "\n  ".join(snapshot_names)
+            self._print(f"**Skipped models**\n\n{msg}")
+
+    def log_failed_models(self, errors: t.List[NodeExecutionFailedError]) -> None:
+        if errors:
+            self._print("\n```\nFailed models\n")
+
+            error_messages = _format_node_errors(errors)
+
+            for node_name, msg in error_messages.items():
+                self._print(f"  **{node_name}**\n\n{msg}")
+
+            self._print("```\n")
 
     def log_error(self, message: str) -> None:
         super().log_error(f"```\n{message}```\n\n")
@@ -2147,3 +2199,39 @@ def _format_missing_intervals(snapshot: Snapshot, missing: SnapshotIntervals) ->
         if snapshot.is_view
         else "full refresh"
     )
+
+
+def _format_node_errors(errors: t.List[NodeExecutionFailedError]) -> t.Dict[str, str]:
+    """Formats a list of node execution errors for display."""
+
+    def _format_node_error(ex: NodeExecutionFailedError) -> str:
+        cause = ex.__cause__ if ex.__cause__ else ex
+
+        error_msg = str(cause)
+
+        if not isinstance(cause, (NodeExecutionFailedError, PythonModelEvalError)):
+            error_msg = "  " + error_msg.replace("\n", "\n  ")
+            error_msg = f"  {cause.__class__.__name__}:\n{error_msg}"
+        error_msg = error_msg.replace("\n", "\n  ")
+        error_msg = error_msg + "\n" if not error_msg.rstrip(" ").endswith("\n") else error_msg
+
+        return error_msg
+
+    error_messages = {}
+
+    num_fails = len(errors)
+    for i, error in enumerate(errors):
+        node_name = ""
+        if isinstance(error.node, SnapshotId):
+            node_name = error.node.name
+        elif isinstance(error.node, tuple):
+            node_name = error.node[0]
+
+        msg = _format_node_error(error)
+        msg = "  " + msg.replace("\n", "\n  ")
+        if i == (num_fails - 1):
+            msg = msg if msg.rstrip(" ").endswith("\n") else msg + "\n"
+
+        error_messages[node_name] = msg
+
+    return error_messages

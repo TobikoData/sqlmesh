@@ -415,6 +415,11 @@ def diff(ctx: click.Context, environment: t.Optional[str] = None) -> None:
     help="Enable preview for forward-only models when targeting a development environment.",
     default=None,
 )
+@click.option(
+    "--diff-rendered",
+    is_flag=True,
+    help="Output text differences for the rendered versions of the models and standalone audits",
+)
 @opt.verbose
 @click.pass_context
 @error_handler
@@ -474,7 +479,7 @@ def run(ctx: click.Context, environment: t.Optional[str] = None, **kwargs: t.Any
     select_models = kwargs.pop("select_model") or None
     completion_status = context.run(environment, select_models=select_models, **kwargs)
     if completion_status.is_failure:
-        raise click.ClickException("Run DAG Failed. See output for details.")
+        raise click.ClickException("Run failed.")
 
 
 @cli.command("invalidate")

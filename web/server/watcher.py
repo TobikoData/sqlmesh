@@ -76,14 +76,13 @@ async def watch_project() -> None:
                 if context:
                     in_paths = any(is_relative_to(path, p) for p in paths)
                     is_modified_new_file = change == Change.modified and any(
-                        path not in context_loader.loader._path_mtimes
-                        for context_loader in context._loaders.values()
+                        path not in loader._path_mtimes for loader in context._loaders
                     )
                     should_track_file = path.is_file() and in_paths
                     should_reset_mtime = Change.added or is_modified_new_file
                     if should_track_file and should_reset_mtime:
-                        for context_loader in context._loaders.values():
-                            context_loader.loader._path_mtimes[path] = 0
+                        for loader in context._loaders:
+                            loader._path_mtimes[path] = 0
 
             except Exception:
                 error = ApiException(

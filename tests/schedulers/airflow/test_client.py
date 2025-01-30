@@ -291,7 +291,8 @@ def test_get_environment(mocker: MockerFixture, snapshot: Snapshot):
     client = AirflowClient(airflow_url=common.AIRFLOW_LOCAL_URL, session=requests.Session())
     result = client.get_environment("dev")
 
-    assert result == environment
+    assert result is not None
+    assert result.dict() == environment.dict()
 
     get_environment_mock.assert_called_once_with(
         "http://localhost:8080/sqlmesh/api/v1/environments/dev"
@@ -318,7 +319,8 @@ def test_get_environments(mocker: MockerFixture, snapshot: Snapshot):
     client = AirflowClient(airflow_url=common.AIRFLOW_LOCAL_URL, session=requests.Session())
     result = client.get_environments()
 
-    assert result == [environment]
+    assert len(result) == 1
+    assert result[0].dict() == environment.dict()
 
     get_environments_mock.assert_called_once_with(
         "http://localhost:8080/sqlmesh/api/v1/environments"

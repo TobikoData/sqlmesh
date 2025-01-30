@@ -35,7 +35,8 @@ services:
       /usr/bin/mc mb --quiet myminio/trino/testing_iceberg;
       /usr/bin/mc mb --quiet myminio/trino/testing_delta;
       /usr/bin/mc mb --quiet myminio/spark/datalake;
-      /usr/bin/mc mb --quiet myminio/spark/testing
+      /usr/bin/mc mb --quiet myminio/spark/testing;
+      /usr/bin/mc mb --quiet myminio/nessie/warehouse;
       "
     depends_on:
       - minio

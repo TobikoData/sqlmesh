@@ -38,7 +38,7 @@ from sqlmesh.core.signal import SignalRegistry
 from sqlmesh.utils import columns_to_types_all_known, str_to_bool, UniqueKeyDict
 from sqlmesh.utils.cron import CroniterCache
 from sqlmesh.utils.date import TimeLike, make_inclusive, to_datetime, to_time_column
-from sqlmesh.utils.errors import ConfigError, SQLMeshError, raise_config_error
+from sqlmesh.utils.errors import ConfigError, SQLMeshError, raise_config_error, PythonModelEvalError
 from sqlmesh.utils.hashing import hash_data
 from sqlmesh.utils.jinja import JinjaMacroRegistry, extract_macro_references_and_variables
 from sqlmesh.utils.pydantic import PydanticModel, PRIVATE_FIELDS
@@ -46,8 +46,8 @@ from sqlmesh.utils.metaprogramming import (
     Executable,
     build_env,
     prepare_env,
-    print_exception,
     serialize_env,
+    format_evaluated_code_exception,
 )
 
 if t.TYPE_CHECKING:
@@ -182,7 +182,10 @@ class _Model(ModelMeta, frozen=True):
         )
 
     def render_definition(
-        self, include_python: bool = True, include_defaults: bool = False
+        self,
+        include_python: bool = True,
+        include_defaults: bool = False,
+        render_query: bool = False,
     ) -> t.List[exp.Expression]:
         """Returns the original list of sql expressions comprising the model definition.
 
@@ -669,11 +672,12 @@ class _Model(ModelMeta, frozen=True):
             )
         return query
 
-    def text_diff(self, other: Node) -> str:
+    def text_diff(self, other: Node, rendered: bool = False) -> str:
         """Produce a text diff against another node.
 
         Args:
             other: The node to diff against.
+            rendered: Whether the diff should compare raw vs rendered models
 
         Returns:
             A unified text diff showing additions and deletions.
@@ -684,7 +688,10 @@ class _Model(ModelMeta, frozen=True):
             )
 
         return d.text_diff(
-            self.render_definition(), other.render_definition(), self.dialect, other.dialect
+            self.render_definition(render_query=rendered),
+            other.render_definition(render_query=rendered),
+            self.dialect,
+            other.dialect,
         ).strip()
 
     def set_time_format(self, default_time_format: str = c.DEFAULT_TIME_COLUMN_FORMAT) -> None:
@@ -1212,15 +1219,26 @@ class SqlModel(_Model):
         return query
 
     def render_definition(
-        self, include_python: bool = True, include_defaults: bool = False
+        self,
+        include_python: bool = True,
+        include_defaults: bool = False,
+        render_query: bool = False,
     ) -> t.List[exp.Expression]:
         result = super().render_definition(
             include_python=include_python, include_defaults=include_defaults
         )
-        result.extend(self.pre_statements)
-        result.append(self.query)
-        result.extend(self.post_statements)
-        result.extend(self.on_virtual_update)
+
+        if render_query:
+            result.extend(self.render_pre_statements())
+            result.append(self.render_query() or self.query)
+            result.extend(self.render_post_statements())
+            result.extend(self.render_on_virtual_update())
+        else:
+            result.extend(self.pre_statements)
+            result.append(self.query)
+            result.extend(self.post_statements)
+            result.extend(self.on_virtual_update)
+
         return result
 
     @property
@@ -1385,6 +1403,10 @@ class SqlModel(_Model):
         data.append(gen(query))
         data.extend(self.jinja_macros.data_hash_values)
         return data
+
+    @property
+    def _additional_metadata(self) -> t.List[str]:
+        return [*super()._additional_metadata, gen(self.query)]
 
 
 class SeedModel(_Model):
@@ -1643,15 +1665,19 @@ class PythonModel(_Model):
             for df in df_or_iter:
                 yield df
         except Exception as e:
-            print_exception(e, self.python_env)
-            raise SQLMeshError(f"Error executing Python model '{self.name}'")
+            raise PythonModelEvalError(format_evaluated_code_exception(e, self.python_env))
 
     def render_definition(
-        self, include_python: bool = True, include_defaults: bool = False
+        self,
+        include_python: bool = True,
+        include_defaults: bool = False,
+        render_query: bool = False,
     ) -> t.List[exp.Expression]:
         # Ignore the provided value for the include_python flag, since the Pyhon model's
         # definition without Python code is meaningless.
-        return super().render_definition(include_python=True, include_defaults=include_defaults)
+        return super().render_definition(
+            include_python=True, include_defaults=include_defaults, render_query=render_query
+        )
 
     @property
     def is_python(self) -> bool:
@@ -2087,9 +2113,8 @@ def _create_model(
 ) -> Model:
     _validate_model_fields(klass, {"name", *kwargs} - {"grain", "table_properties"}, path)
 
-    kwargs["session_properties"] = _resolve_session_properties(
-        (defaults or {}).get("session_properties"), kwargs.get("session_properties")
-    )
+    for prop in ["session_properties", "physical_properties", "virtual_properties"]:
+        kwargs[prop] = _resolve_properties((defaults or {}).get(prop), kwargs.get(prop))
 
     dialect = dialect or ""
 
@@ -2270,25 +2295,27 @@ def _split_sql_model_statements(
     return query, sql_statements[:pos], sql_statements[pos + 1 :], on_virtual_update, inline_audits
 
 
-def _resolve_session_properties(
+def _resolve_properties(
     default: t.Optional[t.Dict[str, t.Any]],
     provided: t.Optional[exp.Expression | t.Dict[str, t.Any]],
 ) -> t.Optional[exp.Expression]:
     if isinstance(provided, dict):
-        session_properties = {k: exp.Literal.string(k).eq(v) for k, v in provided.items()}
+        properties = {k: exp.Literal.string(k).eq(v) for k, v in provided.items()}
     elif provided:
         if isinstance(provided, exp.Paren):
             provided = exp.Tuple(expressions=[provided.this])
-        session_properties = {expr.this.name: expr for expr in provided}
+        properties = {expr.this.name: expr for expr in provided}
     else:
-        session_properties = {}
+        properties = {}
 
     for k, v in (default or {}).items():
-        if k not in session_properties:
-            session_properties[k] = exp.Literal.string(k).eq(v)
+        if k not in properties:
+            properties[k] = exp.Literal.string(k).eq(v)
+        elif properties[k].expression.sql().lower() in {"none", "null"}:
+            del properties[k]
 
-    if session_properties:
-        return exp.Tuple(expressions=list(session_properties.values()))
+    if properties:
+        return exp.Tuple(expressions=list(properties.values()))
 
     return None
 

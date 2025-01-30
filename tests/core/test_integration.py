@@ -3256,6 +3256,13 @@ def test_empty_bacfkill(init_and_plan_context: t.Callable):
     assert not plan.missing_intervals
 
 
+@time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_dbt_requirements(sushi_dbt_context: Context):
+    assert set(sushi_dbt_context.requirements) == {"dbt-core", "dbt-duckdb"}
+    assert sushi_dbt_context.requirements["dbt-core"].startswith("1.")
+    assert sushi_dbt_context.requirements["dbt-duckdb"].startswith("1.")
+
+
 @pytest.mark.parametrize(
     "context_fixture",
     ["sushi_context", "sushi_dbt_context", "sushi_test_dbt_context", "sushi_no_default_catalog"],
@@ -3738,6 +3745,14 @@ def test_auto_categorization(sushi_context: Context):
 
 def test_multi(mocker):
     context = Context(paths=["examples/multi/repo_1", "examples/multi/repo_2"], gateway="memory")
+    assert (
+        context.render("bronze.a").sql()
+        == '''SELECT 1 AS "col_a", 'b' AS "col_b", 1 AS "one", 'repo_1' AS "dup"'''
+    )
+    assert (
+        context.render("silver.d").sql()
+        == '''SELECT "c"."col_a" AS "col_a", 2 AS "two", 'repo_2' AS "dup" FROM "memory"."silver"."c" AS "c"'''
+    )
     context._new_state_sync().reset(default_catalog=context.default_catalog)
     plan = context.plan_builder().build()
     assert len(plan.new_snapshots) == 4
@@ -3801,8 +3816,10 @@ def test_multi_hybrid(mocker):
     dbt_model_c = context.get_model("dbt_repo.c")
     assert sqlmesh_model_a.project == "sqlmesh_repo"
 
-    sqlmesh_rendered = 'SELECT ROUND(CAST(("col_a" / NULLIF(100, 0)) AS DECIMAL(16, 2)), 2) AS "col_a", "col_b" AS "col_b" FROM "memory"."dbt_repo"."e" AS "e"'
-    dbt_rendered = 'SELECT DISTINCT ROUND(CAST(("col_a" / NULLIF(100, 0)) AS DECIMAL(16, 2)), 2) AS "rounded_col_a" FROM "memory"."sqlmesh_repo"."b" AS "b"'
+    sqlmesh_rendered = (
+        'SELECT "e"."col_a" AS "col_a", "e"."col_b" AS "col_b" FROM "memory"."dbt_repo"."e" AS "e"'
+    )
+    dbt_rendered = 'SELECT DISTINCT ROUND(CAST(("b"."col_a" / NULLIF(100, 0)) AS DECIMAL(16, 2)), 2) AS "rounded_col_a" FROM "memory"."sqlmesh_repo"."b" AS "b"'
     assert sqlmesh_model_a.render_query().sql() == sqlmesh_rendered
     assert dbt_model_c.render_query().sql() == dbt_rendered
 

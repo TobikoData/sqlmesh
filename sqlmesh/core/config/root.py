@@ -15,7 +15,7 @@ from sqlmesh.cicd.config import CICDBotConfig
 from sqlmesh.core import constants as c
 from sqlmesh.core.config import EnvironmentSuffixTarget
 from sqlmesh.core.config.base import BaseConfig, UpdateStrategy
-from sqlmesh.core.config.common import variables_validator
+from sqlmesh.core.config.common import variables_validator, compile_regex_mapping
 from sqlmesh.core.config.connection import (
     ConnectionConfig,
     DuckDBConnectionConfig,
@@ -158,13 +158,7 @@ class Config(BaseConfig):
     def _validate_regex_keys(
         cls, value: t.Dict[str | re.Pattern, t.Any]
     ) -> t.Dict[re.Pattern, t.Any]:
-        compiled_regexes = {}
-        for k, v in value.items():
-            try:
-                compiled_regexes[re.compile(k)] = v
-            except re.error:
-                raise ConfigError(f"`{k}` is not a valid regular expression.")
-        return compiled_regexes
+        return compile_regex_mapping(value)
 
     @model_validator(mode="before")
     def _normalize_and_validate_fields(cls, data: t.Any) -> t.Any:

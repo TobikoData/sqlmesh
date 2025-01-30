@@ -418,6 +418,11 @@ class SQLMeshMagics(Magics):
         help="Enable preview for forward-only models when targeting a development environment.",
         default=None,
     )
+    @argument(
+        "--diff-rendered",
+        action="store_true",
+        help="Output text differences for the rendered versions of the models and standalone audits",
+    )
     @line_magic
     @pass_sqlmesh_context
     def plan(self, context: Context, line: str) -> None:
@@ -446,6 +451,7 @@ class SQLMeshMagics(Magics):
             no_diff=args.no_diff,
             run=args.run,
             enable_preview=args.enable_preview,
+            diff_rendered=args.diff_rendered,
         )
 
     @magic_arguments()

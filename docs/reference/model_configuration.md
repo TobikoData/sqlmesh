@@ -39,10 +39,74 @@ Configuration options for SQLMesh model properties. Supported by all model kinds
 | `enabled`             | Whether the model is enabled. This attribute is `true` by default. Setting it to `false` causes SQLMesh to ignore this model when loading the project.                                                                                                                                                                                                      |       bool        |    N     |
 | `gateway`             | Specifies the gateway to use for the execution of this model. When not specified, the default gateway is used.                                                                                                                                                                                                       |       str        |    N     |
 | `optimize_query`             | Whether the model's query should be optimized. This attribute is `true` by default. Setting it to `false` causes SQLMesh to disable query canonicalization & simplification. This should be turned off only if the optimized query leads to errors such as surpassing text limit.                                                                                                                                                                                                      |       bool        |    N     |
-| `validate_query`             | `validate_query`             | Whether the model's query will be strictly validated at compile time. This attribute is `false` by default. Setting it to `true` causes SQLMesh to raise an error instead of emitting warnings. This will display invalid columns in your SQL statements along with models containing `SELECT *` that cannot be automatically expanded to list out all columns.                                                                                                                                                                                              |       bool        |    N     |
+| `validate_query`             | Whether the model's query will be strictly validated at compile time. This attribute is `false` by default. Setting it to `true` causes SQLMesh to raise an error instead of emitting warnings. This will display invalid columns in your SQL statements along with models containing `SELECT *` that cannot be automatically expanded to list out all columns.                                                                                                                                                                                              |       bool        |    N     |
+
 ### Model defaults
 
 The SQLMesh project-level configuration must contain the `model_defaults` key and must specify a value for its `dialect` key. Other values are set automatically unless explicitly overridden in the model definition. Learn more about project-level configuration in the [configuration guide](../guides/configuration.md).
+
+In `physical_properties`, `virtual_properties`, and `session_properties`, when both project-level and model-specific properties are defined, they are merged, with model-level properties taking precedence. To unset a project-wide property for a specific model, set it to `None` in the `MODEL`'s DDL properties or within the `@model` decorator for Python models.
+
+For example, with the following `model_defaults` configuration:
+
+=== "YAML"
+
+    ```yaml linenums="1"
+    model_defaults:
+      dialect: snowflake
+      start: 2022-01-01
+      physical_properties:
+        partition_expiration_days: 7
+        require_partition_filter: True
+        project_level_property: "value"
+    ```
+
+=== "Python"
+
+    ```python linenums="1"
+    from sqlmesh.core.config import Config, ModelDefaultsConfig
+
+    config = Config(
+      model_defaults=ModelDefaultsConfig(
+        dialect="snowflake",
+        start="2022-01-01",
+        physical_properties={
+          "partition_expiration_days": 7,
+          "require_partition_filter": True,
+          "project_level_property": "value"
+        },
+      ),
+    )
+    ```
+
+To override `partition_expiration_days`, add a new `creatable_type` property and unset `project_level_property`, you can define the model as follows:
+
+=== "SQL"
+
+    ```sql linenums="1"
+    MODEL (
+      ...,
+      physical_properties (
+        partition_expiration_days = 14,
+        creatable_type = TRANSIENT,
+        project_level_property = None,
+      )
+    );
+    ```
+
+=== "Python"
+
+    ```python linenums="1"
+    @model(
+      ...,
+      physical_properties={
+        "partition_expiration_days": 14,
+        "creatable_type": "TRANSIENT",
+        "project_level_property": None
+      },
+    )
+    ```
+
 
 The SQLMesh project-level `model_defaults` key supports the following options, described in the [general model properties](#general-model-properties) table above:
 
@@ -51,10 +115,15 @@ The SQLMesh project-level `model_defaults` key supports the following options, d
 - cron
 - owner
 - start
+- table_format
 - storage_format
+- physical_properties
+- virtual_properties
 - session_properties (on per key basis)
 - on_destructive_change (described [below](#incremental-models))
 - audits (described [here](../concepts/audits.md#generic-audits))
+- optimize_query
+- validate_query
 
 
 ### Model Naming

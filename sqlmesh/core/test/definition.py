@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime
+import logging
 import typing as t
 import unittest
 from collections import Counter
@@ -11,7 +12,6 @@ from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
-import time_machine
 from io import StringIO
 from pandas.api.types import is_object_dtype
 from sqlglot import Dialect, exp
@@ -32,6 +32,8 @@ if t.TYPE_CHECKING:
     from sqlglot.dialects.dialect import DialectType
 
     Row = t.Dict[str, t.Any]
+
+logger = logging.getLogger(__name__)
 
 TIME_KWARG_KEYS = {
     "start",
@@ -231,13 +233,19 @@ class ModelTest(unittest.TestCase):
             if is_object_dtype(actual_types[col]) and len(actual[col]) != 0
         }
         for col, value in object_sentinel_values.items():
-            # can't use `isinstance()` here - https://stackoverflow.com/a/68743663/1707525
-            if type(value) is datetime.date:
-                expected[col] = pd.to_datetime(expected[col], errors="ignore").dt.date  # type: ignore
-            elif type(value) is datetime.time:
-                expected[col] = pd.to_datetime(expected[col], errors="ignore").dt.time  # type: ignore
-            elif type(value) is datetime.datetime:
-                expected[col] = pd.to_datetime(expected[col], errors="ignore").dt.to_pydatetime()  # type: ignore
+            try:
+                # can't use `isinstance()` here - https://stackoverflow.com/a/68743663/1707525
+                if type(value) is datetime.date:
+                    expected[col] = pd.to_datetime(expected[col]).dt.date
+                elif type(value) is datetime.time:
+                    expected[col] = pd.to_datetime(expected[col]).dt.time
+                elif type(value) is datetime.datetime:
+                    expected[col] = pd.to_datetime(expected[col]).dt.to_pydatetime()
+            except Exception as e:
+                logger.warning(
+                    f"Failed to convert expected value for {col} into `datetime` "
+                    f"for unit test '{str(self)}'. {str(e)}"
+                )
 
         actual = actual.replace({np.nan: None})
         expected = expected.replace({np.nan: None})
@@ -661,13 +669,15 @@ class PythonModelTest(ModelTest):
 
     def _execute_model(self) -> pd.DataFrame:
         """Executes the python model and returns a DataFrame."""
-        time_ctx = (
-            time_machine.travel(self._execution_time, tick=False)
-            if self._execution_time
-            else nullcontext()
-        )
+        if self._execution_time:
+            import time_machine
+
+            time_ctx: AbstractContextManager = time_machine.travel(self._execution_time, tick=False)
+        else:
+            time_ctx = nullcontext()
+
         with patch.dict(self._test_adapter_dialect.generator_class.TRANSFORMS, self._transforms):
-            with t.cast(AbstractContextManager, time_ctx):
+            with time_ctx:
                 variables = self.body.get("vars", {}).copy()
                 time_kwargs = {
                     key: variables.pop(key) for key in TIME_KWARG_KEYS if key in variables

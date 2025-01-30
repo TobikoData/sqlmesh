@@ -3,7 +3,7 @@
 SQLMesh currently offers three ways of scheduling model evaluation:
 
 * Using [SQLMesh's built-in scheduler](#built-in-scheduler)
-* Using [Tobiko Cloud](../cloud/features/scheduler.md)
+* Using [Tobiko Cloud](../cloud/features/scheduler/scheduler.md)
 * By [integrating with Airflow](#integrating-with-airflow)
 
 ## Built-in scheduler
