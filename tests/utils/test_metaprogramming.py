@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from tenacity import retry, stop_after_attempt
 
+import re
 import pandas as pd
 import pytest
 import sqlglot
@@ -45,21 +46,17 @@ def test_print_exception(mocker: MockerFixture):
     except Exception as ex:
         print_exception(ex, test_env, out_mock)
 
-    expected_message = f"""Traceback (most recent call last):
-
-  File "{__file__}", line 44, in test_print_exception
-    eval("test_fun()", env)
+    expected_message = """  File ".*?/tests/utils/test_metaprogramming\.py", line 45, in test_print_exception
+    eval\("test_fun\(\)", env\)
 
   File "<string>", line 1, in <module>
 
-  File '/test/path.py' (or imported file), line 2, in test_fun
-    def test_fun():
-        raise RuntimeError("error")
-
-
-RuntimeError: error
+  File '/test/path.py' \(or imported file\), line 2, in test_fun
+    def test_fun\(\):
+        raise RuntimeError\("error"\)
+      RuntimeError: error
 """
-    out_mock.write.assert_called_once_with(expected_message)
+    assert re.match(expected_message, out_mock.write.call_args_list[0][0][0])
 
 
 X = 1

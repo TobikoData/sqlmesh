@@ -29,7 +29,6 @@ from sqlmesh.core.snapshot.definition import (
     parent_snapshots_by_name,
 )
 from sqlmesh.core.state_sync import StateSync
-from sqlmesh.utils import format_exception
 from sqlmesh.utils.concurrency import concurrent_apply_to_dag, NodeExecutionFailedError
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import (
@@ -326,20 +325,16 @@ class Scheduler:
         self.console.stop_evaluation_progress(success=not errors)
 
         skipped_snapshots = {i[0] for i in skipped_intervals}
+        self.console.log_skipped_models(skipped_snapshots)
         for skipped in skipped_snapshots:
-            log_message = f"SKIPPED snapshot {skipped}\n"
-            self.console.log_status_update(log_message)
-            logger.info(log_message)
+            logger.info(f"SKIPPED snapshot {skipped}\n")
 
         for error in errors:
             if isinstance(error.__cause__, CircuitBreakerError):
                 raise error.__cause__
-            sid = error.node[0]
-            formatted_exception = "".join(format_exception(error.__cause__ or error))
-            log_message = f"FAILED processing snapshot {sid}\n{formatted_exception}"
-            self.console.log_error(log_message)
-            # Log with INFO level to prevent duplicate messages in the console.
-            logger.info(log_message)
+            logger.info(str(error), exc_info=error)
+
+        self.console.log_failed_models(errors)
 
         return CompletionStatus.FAILURE if errors else CompletionStatus.SUCCESS
 
