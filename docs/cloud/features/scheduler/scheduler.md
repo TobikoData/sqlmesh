@@ -61,7 +61,7 @@ To start using the cloud scheduler, configure the connection to your data wareho
 
 **Step 3**: Enter the name of the gateway in the Gateway field and the connection configuration in YAML format in the YAML Configuration field.
 
-The format follows the [connection configuration](../../guides/configuration.md#connections) in the SQLMesh Connections guide.
+The format follows the [connection configuration](../../../guides/configuration.md#connections) in the SQLMesh Connections guide.
 
 !!! warning "Gateway names must match"
 
@@ -149,7 +149,7 @@ Tobiko Cloud automatically manages Python dependencies of your Python macros and
 
 SQLMesh automatically infers which Python libraries are used by statically analyzing the code of your models and macros.
 
-For fine-grained control, dependencies can be specified, pinned, or excluded using the `sqlmesh-requirements.lock` file. See the [Python library dependencies](../../guides/configuration.md#python-library-dependencies) section in the SQLMesh configuration guide for more information.
+For fine-grained control, dependencies can be specified, pinned, or excluded using the `sqlmesh-requirements.lock` file. See the [Python library dependencies](../../../guides/configuration.md#python-library-dependencies) section in the SQLMesh configuration guide for more information.
 
 ## Hybrid Deployment (Self-hosted executors)
 
