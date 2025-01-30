@@ -782,10 +782,14 @@ def test_dlt_pipeline_errors(runner, tmp_path):
 def test_plan_dlt(runner, tmp_path):
     root_dir = path.abspath(getcwd())
     pipeline_path = root_dir + "/examples/sushi_dlt/sushi_pipeline.py"
+    dataset_path = root_dir + "/sushi.duckdb"
+
+    if path.exists(dataset_path):
+        remove(dataset_path)
+
     with open(pipeline_path) as file:
         exec(file.read())
 
-    dataset_path = root_dir + "/sushi.duckdb"
     init_example_project(tmp_path, "duckdb", ProjectTemplate.DLT, "sushi")
 
     expected_config = f"""gateways:
