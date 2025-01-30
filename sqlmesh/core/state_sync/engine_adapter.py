@@ -1451,6 +1451,10 @@ class EngineAdapterStateSync(StateSync):
                 self.engine_adapter.create_table_like(backup_name, table)
                 self.engine_adapter.insert_append(backup_name, exp.select("*").from_(table))
 
+    def _snapshot_count(self) -> int:
+        result = self._fetchone(exp.select("COUNT(*)").from_(self.snapshots_table))
+        return result[0] if result else 0
+
     def _apply_migrations(
         self,
         default_catalog: t.Optional[str],
@@ -1468,9 +1472,21 @@ class EngineAdapterStateSync(StateSync):
         if not skip_backup and should_backup:
             self._backup_state()
 
+        snapshot_count_before = self._snapshot_count() if versions.schema_version else None
+
         for migration in migrations:
             logger.info(f"Applying migration {migration}")
             migration.migrate(self, default_catalog=default_catalog)
+
+        snapshot_count_after = self._snapshot_count()
+
+        if snapshot_count_before is not None and snapshot_count_before != snapshot_count_after:
+            scripts = f"{versions.schema_version} - {versions.schema_version + len(migrations)}"
+            raise SQLMeshError(
+                f"Number of snapshots before ({snapshot_count_before}) and after "
+                f"({snapshot_count_after}) applying migration scripts {scripts} does not match. "
+                "Please file an issue issue at https://github.com/TobikoData/sqlmesh/issues/new."
+            )
 
         migrate_snapshots_and_environments = (
             bool(migrations) or major_minor(SQLGLOT_VERSION) != versions.minor_sqlglot_version
