@@ -504,15 +504,16 @@ def format_evaluated_code_exception(
     for error_line in format_exception(exception):
         traceback_match = error_line.startswith("Traceback (most recent call last):")
         model_def_match = re.search('File ".*?core/model/definition.py', error_line)
-        error_match = re.search("^.*?Error: ", error_line)
-        eval_code_match = re.search('File "<string>", line (.*), in (.*)', error_line)
-
         if traceback_match or model_def_match:
             continue
-        elif error_match:
+
+        error_match = re.search("^.*?Error: ", error_line)
+        if error_match:
             tb.append(f"{indent*2}  {error_line}")
             continue
-        elif not eval_code_match:
+
+        eval_code_match = re.search('File "<string>", line (.*), in (.*)', error_line)
+        if not eval_code_match:
             tb.append(f"{indent}{error_line}")
             continue
 

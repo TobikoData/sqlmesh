@@ -4,7 +4,7 @@ from threading import Lock
 
 from sqlmesh.core.snapshot import SnapshotId, SnapshotInfoLike
 from sqlmesh.utils.dag import DAG
-from sqlmesh.utils.errors import ConfigError, PythonModelEvalError, SQLMeshError
+from sqlmesh.utils.errors import ConfigError, SQLMeshError
 
 H = t.TypeVar("H", bound=t.Hashable)
 S = t.TypeVar("S", bound=SnapshotInfoLike)
@@ -13,31 +13,9 @@ R = t.TypeVar("R")
 
 
 class NodeExecutionFailedError(t.Generic[H], SQLMeshError):
-    def __init__(self, ex: Exception, node: H):
+    def __init__(self, node: H):
         self.node = node
-
-        node_name = ""
-        if isinstance(node, SnapshotId):
-            node_name = node.name
-        elif isinstance(node, tuple):
-            node_name = node[0]
-        self.node_name = node_name
-
-        # some engines return a tuple(int error code, [str|bytes] message)
-        error_msg = None
-        for arg in ex.args:
-            if not error_msg and isinstance(arg, (str, bytes)):
-                error_msg = arg.decode(errors="replace") if isinstance(arg, bytes) else arg
-        error_msg = str(ex) if not error_msg else error_msg
-
-        if not isinstance(ex, PythonModelEvalError):
-            error_class = str(ex.__class__).replace("<class '", "").replace("'>", "")
-            error_msg = "  " + error_msg.replace("\n", "\n  ")
-            error_msg = f"  {error_class}:\n{error_msg}"
-        error_msg = error_msg.replace("\n", "\n  ")
-        error_msg = error_msg + "\n" if not error_msg.rstrip(" ").endswith("\n") else error_msg
-
-        super().__init__(error_msg)
+        super().__init__(f"Execution failed for node {node}")
 
 
 class ConcurrentDAGExecutor(t.Generic[H]):
@@ -94,7 +72,7 @@ class ConcurrentDAGExecutor(t.Generic[H]):
                 self._unprocessed_nodes_num -= 1
                 self._submit_next_nodes(executor, node)
         except Exception as ex:
-            error = NodeExecutionFailedError(ex, node)
+            error = NodeExecutionFailedError(node)
             error.__cause__ = ex
 
             if self.raise_on_error:
@@ -248,7 +226,7 @@ def sequential_apply_to_dag(
         try:
             fn(node)
         except Exception as ex:
-            error = NodeExecutionFailedError(ex, node)
+            error = NodeExecutionFailedError(node)
             error.__cause__ = ex
 
             if raise_on_error:

@@ -29,7 +29,6 @@ from sqlmesh.core.snapshot.definition import (
     parent_snapshots_by_name,
 )
 from sqlmesh.core.state_sync import StateSync
-from sqlmesh.utils import format_exception
 from sqlmesh.utils.concurrency import concurrent_apply_to_dag, NodeExecutionFailedError
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import (
@@ -326,35 +325,16 @@ class Scheduler:
         self.console.stop_evaluation_progress(success=not errors)
 
         skipped_snapshots = {i[0] for i in skipped_intervals}
-        if skipped_snapshots:
-            skipped_message = ""
-            for skipped in skipped_snapshots:
-                skipped_name = skipped
-                for delim in ["'", '"', "[", "]", "`"]:
-                    skipped_name = skipped_name.replace(delim, "")
-                skipped_message += f"  {skipped_name}\n"
+        self.console.log_skipped_models(skipped_snapshots)
+        for skipped in skipped_snapshots:
+            logger.info(f"SKIPPED snapshot {skipped}\n")
 
-            self.console.log_skipped_models(skipped_message)
-            logger.info("Skipped models:\n" + skipped_message)
+        for error in errors:
+            if isinstance(error.__cause__, CircuitBreakerError):
+                raise error.__cause__
+            logger.info(str(error), exc_info=error)
 
-        if errors:
-            err_msg_dict = {}
-            for i, error in enumerate(errors):
-                if isinstance(error.__cause__, CircuitBreakerError):
-                    raise error.__cause__
-
-                msg = []
-                msg.append(str(error))
-                err_msg_dict[error.node_name] = "\n".join(msg)
-
-                exception_msg = (
-                    "\n".join(format_exception(error.__cause__))
-                    if error.__cause__
-                    else "\n".join(msg)
-                )
-                logger.info(f"EXECUTION ERROR\n{exception_msg}\n")
-
-            self.console.log_failed_models(err_msg_dict)
+        self.console.log_failed_models(errors)
 
         return CompletionStatus.FAILURE if errors else CompletionStatus.SUCCESS
 

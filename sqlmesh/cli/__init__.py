@@ -4,10 +4,9 @@ from functools import wraps
 
 import click
 from sqlglot.errors import SqlglotError
-
 from sqlmesh.core.context import Context
 from sqlmesh.utils import debug_mode_enabled
-from sqlmesh.utils.errors import SQLMeshError, PlanApplyError
+from sqlmesh.utils.errors import SQLMeshError
 
 DECORATOR_RETURN_TYPE = t.TypeVar("DECORATOR_RETURN_TYPE")
 
@@ -37,10 +36,8 @@ def _default_exception_handler(
 ) -> DECORATOR_RETURN_TYPE:
     try:
         return func()
-    except PlanApplyError:
-        exit(1)
     except (SQLMeshError, SqlglotError, ValueError) as ex:
-        click.echo(click.style(f"\nError: {str(ex)}", fg="red"))
+        click.echo(click.style("Error: " + str(ex), fg="red"))
         exit(1)
     finally:
         if context:
@@ -52,8 +49,6 @@ def _debug_exception_handler(
 ) -> DECORATOR_RETURN_TYPE:
     try:
         return func()
-    except PlanApplyError:
-        exit()
     except Exception:
         logger.exception("Unhandled exception")
         raise

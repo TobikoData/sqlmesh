@@ -1,7 +1,7 @@
 from __future__ import annotations
 import typing as t
 from unittest.mock import call, patch
-
+import re
 import logging
 import pytest
 import pandas as pd
@@ -51,6 +51,7 @@ from sqlmesh.core.snapshot import (
 )
 from sqlmesh.core.snapshot.definition import to_view_mapping
 from sqlmesh.core.snapshot.evaluator import CustomMaterialization
+from sqlmesh.utils.concurrency import NodeExecutionFailedError
 from sqlmesh.utils.date import to_timestamp
 from sqlmesh.utils.errors import ConfigError, SQLMeshError
 from sqlmesh.utils.metaprogramming import Executable
@@ -1706,11 +1707,15 @@ def test_on_destructive_change_runtime_check(
     snapshot = make_snapshot(model, version="1")
     snapshot.change_category = SnapshotChangeCategory.FORWARD_ONLY
 
-    with pytest.raises(
-        SQLMeshError,
-        match="""Plan results in a destructive change to forward-only table '"test_schema"."test_model"'s schema.""",
-    ):
+    with pytest.raises(NodeExecutionFailedError) as ex:
         evaluator.migrate([snapshot], {})
+
+    sqlmesh_err = ex.value.__cause__
+    assert isinstance(sqlmesh_err, SQLMeshError)
+    assert re.match(
+        """Plan results in a destructive change to forward-only table '"test_schema"."test_model"'s schema.""",
+        str(sqlmesh_err),
+    )
 
     # WARN
     model = SqlModel(
@@ -3553,8 +3558,15 @@ def test_migrate_managed(adapter_mock, make_snapshot, mocker: MockerFixture):
     # schema changes - exception thrown
     adapter_mock.get_alter_expressions.return_value = [exp.Alter()]
 
-    with pytest.raises(SQLMeshError, match=r".*cannot be updated in a forward-only fashion*"):
+    with pytest.raises(NodeExecutionFailedError) as ex:
         evaluator.migrate(target_snapshots=[snapshot], snapshots={})
+
+    sqlmesh_err = ex.value.__cause__
+    assert isinstance(sqlmesh_err, SQLMeshError)
+    assert re.match(
+        "The schema of the managed model '.*?' cannot be updated in a forward-only fashion",
+        str(sqlmesh_err),
+    )
 
     adapter_mock.create_table.assert_not_called()
     adapter_mock.ctas.assert_not_called()

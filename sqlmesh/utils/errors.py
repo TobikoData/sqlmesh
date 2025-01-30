@@ -39,10 +39,6 @@ class PlanError(SQLMeshError):
     pass
 
 
-class PlanApplyError(SQLMeshError):
-    pass
-
-
 class NoChangesPlanError(PlanError):
     pass
 

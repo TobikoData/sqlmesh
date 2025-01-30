@@ -43,10 +43,9 @@ from sqlmesh.schedulers.airflow import common as airflow_common
 from sqlmesh.schedulers.airflow.client import AirflowClient, BaseAirflowClient
 from sqlmesh.schedulers.airflow.mwaa_client import MWAAClient
 from sqlmesh.utils.concurrency import NodeExecutionFailedError
-from sqlmesh.utils.errors import SQLMeshError, PlanApplyError
+from sqlmesh.utils.errors import SQLMeshError, PlanError
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import now
-from sqlmesh.utils import format_exception
 
 logger = logging.getLogger(__name__)
 
@@ -204,8 +203,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             interval_end_per_model=plan.interval_end_per_model,
         )
         if completion_status.is_failure:
-            self.console.log_error("\nError: Plan application failed.")
-            raise PlanApplyError
+            raise PlanError("Plan application failed.")
 
     def _push(
         self,
@@ -245,13 +243,10 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             self.console.stop_creation_progress(success=False)
             progress_stopped = True
 
-            exception_msg = "\n".join(format_exception(ex.__cause__)) if ex.__cause__ else str(ex)
-            logger.info(f"EXECUTION ERROR\n{exception_msg}\n")
+            logger.info(str(ex), exc_info=ex)
+            self.console.log_failed_models([ex])
 
-            self.console.log_failed_models({ex.node_name: str(ex)})
-            self.console.log_error("\nError: Plan application failed.")
-
-            raise PlanApplyError
+            raise PlanError("Plan application failed.")
         finally:
             if not progress_stopped:
                 self.console.stop_creation_progress(success=completed)
@@ -495,10 +490,9 @@ class BaseAirflowPlanEvaluator(PlanEvaluator):
                 self.dag_run_poll_interval_secs,
             )
             if not plan_application_succeeded:
-                msg = "\nError: Plan application failed."
-                self.console.log_error(msg)
+                msg = "Plan application failed."
                 logger.info(msg)
-                raise PlanApplyError
+                raise PlanError(msg)
 
             self.console.log_success("Plan applied successfully")
 
