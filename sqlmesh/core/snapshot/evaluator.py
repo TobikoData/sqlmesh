@@ -1345,6 +1345,7 @@ class MaterializableStrategy(PromotableStrategy):
         **kwargs: t.Any,
     ) -> None:
         ctas_query = model.ctas_query(**render_kwargs)
+        rendered_physical_properties = model.render_physical_properties(**render_kwargs)
 
         logger.info("Creating table '%s'", table_name)
         if model.annotated:
@@ -1356,7 +1357,7 @@ class MaterializableStrategy(PromotableStrategy):
                 partitioned_by=model.partitioned_by,
                 partition_interval_unit=model.partition_interval_unit,
                 clustered_by=model.clustered_by,
-                table_properties=model.physical_properties,
+                table_properties=rendered_physical_properties,
                 table_description=model.description if is_table_deployable else None,
                 column_descriptions=model.column_descriptions if is_table_deployable else None,
             )
@@ -1380,7 +1381,7 @@ class MaterializableStrategy(PromotableStrategy):
                 partitioned_by=model.partitioned_by,
                 partition_interval_unit=model.partition_interval_unit,
                 clustered_by=model.clustered_by,
-                table_properties=model.physical_properties,
+                table_properties=rendered_physical_properties,
                 table_description=model.description if is_table_deployable else None,
                 column_descriptions=model.column_descriptions if is_table_deployable else None,
             )
@@ -1600,7 +1601,7 @@ class SCDType2Strategy(MaterializableStrategy):
                 partitioned_by=model.partitioned_by,
                 partition_interval_unit=model.partition_interval_unit,
                 clustered_by=model.clustered_by,
-                table_properties=model.physical_properties,
+                table_properties=model.render_physical_properties(**render_kwargs),
                 table_description=model.description if is_table_deployable else None,
                 column_descriptions=model.column_descriptions if is_table_deployable else None,
             )
@@ -1801,7 +1802,7 @@ class ViewStrategy(PromotableStrategy):
             replace=False,
             materialized=self._is_materialized_view(model),
             materialized_properties=materialized_properties,
-            view_properties=model.physical_properties,
+            view_properties=model.render_physical_properties(**render_kwargs),
             table_description=model.description if is_table_deployable else None,
             column_descriptions=model.column_descriptions if is_table_deployable else None,
         )
@@ -1928,7 +1929,7 @@ class EngineManagedStrategy(MaterializableStrategy):
                 columns_to_types=model.columns_to_types,
                 partitioned_by=model.partitioned_by,
                 clustered_by=model.clustered_by,
-                table_properties=model.physical_properties,
+                table_properties=model.render_physical_properties(**render_kwargs),
                 table_description=model.description,
                 column_descriptions=model.column_descriptions,
             )

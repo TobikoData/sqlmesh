@@ -5202,6 +5202,62 @@ def test_this_model() -> None:
     )
 
 
+def test_macros_in_physical_properties(make_snapshot):
+    expressions = d.parse(
+        """
+        MODEL (
+            name test.test_model,
+            kind FULL,
+            physical_properties (
+                location1 = @'s3://bucket/prefix/@schema_name/@table_name',
+                location2 = @IF(@gateway = 'dev', @'hdfs://@{catalog_name}/@schema_name/dev/@table_name', @'s3://prod/@{table_name}'),
+                sort_order = @IF(@gateway = 'prod', 'desc', 'asc')
+            )
+        );
+
+        SELECT 1;
+        """
+    )
+
+    model = load_sql_based_model(
+        expressions, variables={"gateway": "dev"}, default_catalog="unit_test"
+    )
+
+    assert model.name == "test.test_model"
+    assert "location1" in model.physical_properties
+    assert "location2" in model.physical_properties
+    assert "sort_order" in model.physical_properties
+
+    # the control flow structures get resolved at load time
+    assert (
+        model.physical_properties["location1"].text("this")
+        == "s3://bucket/prefix/@schema_name/@table_name"
+    )
+    assert (
+        model.physical_properties["location2"].text("this")
+        == "hdfs://@{catalog_name}/@schema_name/dev/@table_name"
+    )
+    assert model.physical_properties["sort_order"].text("this") == "asc"
+
+    # however, the catalog_name/schema_name/table_name are only known at runtime
+    snapshot: Snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    rendered_physical_properties = model.render_physical_properties(
+        snapshots={model.fqn: snapshot}
+    )  # to trigger @this_model generation
+
+    assert (
+        rendered_physical_properties["location1"].text("this")
+        == f"s3://bucket/prefix/sqlmesh__test/test__test_model__{snapshot.version}"
+    )
+    assert (
+        rendered_physical_properties["location2"].text("this")
+        == f"hdfs://unit_test/sqlmesh__test/dev/test__test_model__{snapshot.version}"
+    )
+    assert rendered_physical_properties["sort_order"].text("this") == "asc"
+
+
 def test_macros_in_model_statement(sushi_context, assert_exp_eq):
     @macro()
     def session_properties(evaluator, value):

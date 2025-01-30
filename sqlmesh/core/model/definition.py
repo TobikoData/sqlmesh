@@ -630,6 +630,27 @@ class _Model(ModelMeta, frozen=True):
             raise SQLMeshError(f"Expected one expression but got {len(rendered_exprs)}")
         return rendered_exprs[0].transform(d.replace_merge_table_aliases)
 
+    def render_physical_properties(self, **render_kwargs: t.Any) -> t.Dict[str, exp.Expression]:
+        def _render(expression: exp.Expression) -> exp.Expression:
+            if isinstance(expression, exp.Literal):
+                expression = d.MacroStrReplace(this=expression)
+
+            rendered_exprs = self._statement_renderer(expression).render(**render_kwargs)
+
+            if not rendered_exprs:
+                raise SQLMeshError(
+                    f"Expected rendering '{expression.sql(dialect=self.dialect)}' to return an expression"
+                )
+
+            if len(rendered_exprs) != 1:
+                raise SQLMeshError(
+                    f"Expected one result when rendering '{expression.sql(dialect=self.dialect)}' but got {len(rendered_exprs)}"
+                )
+
+            return rendered_exprs[0]
+
+        return {k: _render(v) for k, v in self.physical_properties.items()}
+
     def _create_renderer(self, expression: exp.Expression) -> ExpressionRenderer:
         return ExpressionRenderer(
             expression,

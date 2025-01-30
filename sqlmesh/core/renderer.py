@@ -154,6 +154,20 @@ class BaseExpressionRenderer:
                 dialect=self._dialect, identify=True, comments=False
             )
 
+            if isinstance(this_model, exp.Table):
+                # sometimes you want to render the parts rather than just a fqn string
+                # but the macro syntax doesnt support eg @{this_table.db}, so we break them out
+                # into their own variables here
+                #
+                # note that they are deliberately unquoted to so they can be used in filesystem paths
+                physical_table_parts = {
+                    "catalog_name": this_model.catalog,
+                    "schema_name": this_model.db,
+                    "table_name": this_model.name,
+                }
+                render_kwargs.update(physical_table_parts)
+                jinja_env_kwargs.update(physical_table_parts)
+
         jinja_env = self._jinja_macro_registry.build_environment(**jinja_env_kwargs)
 
         if isinstance(self._expression, d.Jinja):
