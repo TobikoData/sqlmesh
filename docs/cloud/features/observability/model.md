@@ -8,7 +8,7 @@ Model owners typically use this page to monitor and check their models. It provi
     1. Did the model suddenly take a really long time to run? 
     2. Is the model failing a lot due to audits or schema evolution? 
 2. Downstream impacts 
-    1. The model failed to run, using the lineage you can immediatly see what other models are affected 
+    1. If the model fails to run, using the lineage you can immediately see what other models are affected 
 3. The version that introduced errors
     1. The version history of the model is available to view and can be used to see schema changes that may have contributed to any issues 
 
@@ -27,19 +27,22 @@ There are a number of ways you can navigate to a models page. This method shows 
 
 ## Model page information
 
-Each model page presents a comprehensive summary that includes several key components and metrics for monitoring and analysis. From here you can understand or view any anomolies in the run time of the model, and get a sense for the overall processing time and how that is changing (or not) over time. You can also check other model critical metrics, like the source code for the model, its lineage in relation to other models, the number of versions of this model avaiable to you and even an approximation of how much this model is costing (if you have [cost savings set up](../costs_savings.md)). 
+Each model page presents a comprehensive summary that includes several key components and metrics for monitoring and analysis. From here you can understand or view any 
+anomalies in the run time of the model, and get a sense for the overall processing time and how that is changing (or not!) over time. You can also check other model-critical metrics, 
+like the source code for the model, its lineage in relation to other models, the number of versions of this model available to you and even an approximation of how much this model 
+is costing (if you have [cost savings set up](../costs_savings.md)). 
 
 The following detailed information outlines the different sections:
 
 ![Tobiko Cloud model status and metadata](./model/tcloud_model_status-metadata.png)
 
-- Current status Graphs: Provides visual representations of model health through freshness indicators and detailed daily execution graphs
-    - Freshness indicator: Shows the current status of the model and the percentage of up to date models in production (as long as this is green, you have nothing to worry about in your production environment)
-    - Historical Freshness graph: Gives an at a glance picture of the history of the model's freshness. 
-        - Green means its up to date and has run smoothly for every cron interval
+- Current status graphs: Provides visual representations of model health through freshness indicators and detailed daily execution graphs
+    - Freshness indicator: Shows the current status of the model and the percentage of up-to-date models in production (as long as this is green, you have nothing to worry about in your production environment)
+    - Historical Freshness graph: Gives an at-a-glance picture of the history of the model's freshness.
+        - Green means it's up to date and has run smoothly for every cron interval
         - Orange means that it is pending and will run on the latest cron
-        - Red means the model is behind by at least one cron interval. 
-    - Daily executions: tells you the length of time it took the model to run on each day displayed. This is a great place to quickly understand any anomalies in run time for the model (both running too long _or_ too short)
+        - Red means the model is behind by at least one cron interval.
+    - Daily executions: tells you the length of time it took the model to run on each day displayed. This is a great place to quickly understand any anomalies in run time for the model (both running too long *or* too short)
 - Model details: Features comprehensive tabs that display summary statistics, complete source code documentation, and interactive model lineage visualizations
 
 ![Tobiko Cloud model version history](./model/tcloud_model_2.png)
