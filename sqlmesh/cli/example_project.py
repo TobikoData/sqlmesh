@@ -11,6 +11,9 @@ from sqlmesh.utils.date import yesterday_ds
 from sqlmesh.core.config.connection import CONNECTION_CONFIG_TO_TYPE
 
 
+PRIMITIVES = (str, int, bool, float)
+
+
 class ProjectTemplate(Enum):
     AIRFLOW = "airflow"
     DBT = "dbt"
@@ -29,22 +32,22 @@ def _gen_config(
         connection_settings = """      type: duckdb
       database: db.db"""
 
-        doc_link = "# Visit https://sqlmesh.readthedocs.io/en/stable/integrations/engines{dialect_link} for more information on configuring the connection to your execution engine."
+        doc_link = "# Visit https://sqlmesh.readthedocs.io/en/stable/integrations/engines{engine_link} for more information on configuring the connection to your execution engine."
+        engine_link = ""
 
-        dialect_alias = "mssql" if dialect == "tsql" else dialect
+        engine = "mssql" if dialect == "tsql" else dialect
 
-        dialect_link = ""
-        if dialect_alias in CONNECTION_CONFIG_TO_TYPE:
+        if engine in CONNECTION_CONFIG_TO_TYPE:
             required_fields = []
             non_required_fields = []
 
-            for name, field in CONNECTION_CONFIG_TO_TYPE[dialect_alias].model_fields.items():
+            for name, field in CONNECTION_CONFIG_TO_TYPE[engine].model_fields.items():
                 field_name = field.alias or name
                 default_value = field.get_default()
 
                 if isinstance(default_value, Enum):
                     default_value = default_value.value
-                elif not isinstance(default_value, (str, int, bool)):
+                elif not isinstance(default_value, PRIMITIVES):
                     default_value = None
 
                 required = field.is_required() or field_name == "type"
@@ -59,10 +62,10 @@ def _gen_config(
 
             connection_settings = "".join(required_fields + non_required_fields)
 
-            dialect_link = f"/{dialect_alias}/#connection-options"
+            engine_link = f"/{engine}/#connection-options"
 
         connection_settings = (
-            f"      {doc_link.format(dialect_link=dialect_link)}\n{connection_settings}"
+            f"      {doc_link.format(engine_link=engine_link)}\n{connection_settings}"
         )
     else:
         connection_settings = settings
