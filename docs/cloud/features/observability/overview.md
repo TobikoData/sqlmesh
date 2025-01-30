@@ -31,7 +31,7 @@ This information allows you to:
 - Creation of custom visualizations and metrics
 - Troubleshoot problems and optimize inefficient operations
 
-Observability features are seamlessly integrated into Tobiko Cloud, making it simple to monitor and understand your project's behavior. For example, on the Tobiko Cloud Homepage, there is observability displayed for the production environment: 
+Observability features are seamlessly integrated into Tobiko Cloud, making it simple to monitor and understand your project's behavior. For example, on the Tobiko Cloud Homepage, there is run history, plan executions, and freshness displayed for the production environment: 
 
 ![Observability on the Homepage](./overview/observability_section_home.png)
 
