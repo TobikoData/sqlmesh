@@ -951,22 +951,23 @@ WHERE
 
 
 def test_init_project_dialects(runner, tmp_path):
-    init_example_project(tmp_path, "redshift")
-    with open(tmp_path / "config.yaml") as file:
-        redshift_config = file.read()
+    dialect_to_config = {
+        "redshift": "# concurrent_tasks: 4\n      # register_comments: True\n      # pre_ping: \n      # pretty_sql: \n      # user: \n      # password: \n      # database: \n      # host: \n      # port: \n      # source_address: \n      # unix_sock: \n      # ssl: \n      # sslmode: \n      # timeout: \n      # tcp_keepalive: \n      # application_name: \n      # preferred_role: \n      # principal_arn: \n      # credentials_provider: \n      # region: \n      # cluster_identifier: \n      # iam: \n      # is_serverless: \n      # serverless_acct_id: \n      # serverless_work_group: ",
+        "bigquery": "# concurrent_tasks: 1\n      # register_comments: True\n      # pre_ping: \n      # pretty_sql: \n      # method: oauth\n      # project: \n      # execution_project: \n      # quota_project: \n      # location: \n      # keyfile: \n      # keyfile_json: \n      # token: \n      # refresh_token: \n      # client_id: \n      # client_secret: \n      # token_uri: \n      # scopes: \n      # job_creation_timeout_seconds: \n      # job_execution_timeout_seconds: \n      # job_retries: 1\n      # job_retry_deadline_seconds: \n      # priority: \n      # maximum_bytes_billed: ",
+        "snowflake": "account: \n      # concurrent_tasks: 4\n      # register_comments: True\n      # pre_ping: \n      # pretty_sql: \n      # user: \n      # password: \n      # warehouse: \n      # database: \n      # role: \n      # authenticator: \n      # token: \n      # application: Tobiko_SQLMesh\n      # private_key: \n      # private_key_path: \n      # private_key_passphrase: \n      # session_parameters: ",
+        "databricks": "# concurrent_tasks: 1\n      # register_comments: True\n      # pre_ping: \n      # pretty_sql: \n      # server_hostname: \n      # http_path: \n      # access_token: \n      # auth_type: \n      # oauth_client_id: \n      # oauth_client_secret: \n      # catalog: \n      # http_headers: \n      # session_configuration: \n      # databricks_connect_server_hostname: \n      # databricks_connect_access_token: \n      # databricks_connect_cluster_id: \n      # databricks_connect_use_serverless: \n      # force_databricks_connect: \n      # disable_databricks_connect: \n      # disable_spark_session: ",
+        "postgres": "host: \n      user: \n      password: \n      port: \n      database: \n      # concurrent_tasks: 4\n      # register_comments: True\n      # pre_ping: True\n      # pretty_sql: \n      # keepalives_idle: \n      # connect_timeout: 10\n      # role: \n      # sslmode: ",
+    }
 
-        assert (
-            redshift_config
-            == f"gateways:\n  dev:\n    connection:\n      type: redshift\n      # concurrent_tasks: 4\n      # register_comments: True\n      # pre_ping: \n      # pretty_sql: \n      # user: \n      # password: \n      # database: \n      # host: \n      # port: \n      # source_address: \n      # unix_sock: \n      # ssl: \n      # sslmode: \n      # timeout: \n      # tcp_keepalive: \n      # application_name: \n      # preferred_role: \n      # principal_arn: \n      # credentials_provider: \n      # region: \n      # cluster_identifier: \n      # iam: \n      # is_serverless: \n      # serverless_acct_id: \n      # serverless_work_group: \n\n\ndefault_gateway: dev\n\nmodel_defaults:\n  dialect: redshift\n  start: {yesterday_ds()}\n"
-        )
-        remove(tmp_path / "config.yaml")
+    for dialect, expected_config in dialect_to_config.items():
+        init_example_project(tmp_path, dialect=dialect)
 
-    init_example_project(tmp_path, "bigquery")
-    with open(tmp_path / "config.yaml") as file:
-        bq_config = file.read()
+        config_start = f"gateways:\n  dev:\n    connection:\n      # Visit https://sqlmesh.readthedocs.io/en/stable/integrations/engines/{dialect}/#connection-options for more information on configuring the connection to your execution engine.\n      type: {dialect}\n      "
+        config_end = f"\n\n\ndefault_gateway: dev\n\nmodel_defaults:\n  dialect: {dialect}\n  start: 2025-01-29\n"
 
-        assert (
-            bq_config
-            == f"gateways:\n  dev:\n    connection:\n      type: bigquery\n      # concurrent_tasks: 1\n      # register_comments: True\n      # pre_ping: \n      # pretty_sql: \n      # method: oauth\n      # project: \n      # execution_project: \n      # quota_project: \n      # location: \n      # keyfile: \n      # keyfile_json: \n      # token: \n      # refresh_token: \n      # client_id: \n      # client_secret: \n      # token_uri: \n      # scopes: \n      # job_creation_timeout_seconds: \n      # job_execution_timeout_seconds: \n      # job_retries: 1\n      # job_retry_deadline_seconds: \n      # priority: \n      # maximum_bytes_billed: \n\n\ndefault_gateway: dev\n\nmodel_defaults:\n  dialect: bigquery\n  start: {yesterday_ds()}\n"
-        )
-        remove(tmp_path / "config.yaml")
+        with open(tmp_path / "config.yaml") as file:
+            config = file.read()
+
+            assert config == f"{config_start}{expected_config}{config_end}"
+
+            remove(tmp_path / "config.yaml")

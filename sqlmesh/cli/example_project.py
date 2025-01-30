@@ -29,11 +29,16 @@ def _gen_config(
         connection_settings = """      type: duckdb
       database: db.db"""
 
-        if dialect in CONNECTION_CONFIG_TO_TYPE:
+        doc_link = "# Visit https://sqlmesh.readthedocs.io/en/stable/integrations/engines{dialect_link} for more information on configuring the connection to your execution engine."
+
+        dialect_alias = "mssql" if dialect == "tsql" else dialect
+
+        dialect_link = ""
+        if dialect_alias in CONNECTION_CONFIG_TO_TYPE:
             required_fields = []
             non_required_fields = []
 
-            for name, field in CONNECTION_CONFIG_TO_TYPE[dialect].model_fields.items():
+            for name, field in CONNECTION_CONFIG_TO_TYPE[dialect_alias].model_fields.items():
                 field_name = field.alias or name
                 default_value = field.get_default()
 
@@ -54,6 +59,11 @@ def _gen_config(
 
             connection_settings = "".join(required_fields + non_required_fields)
 
+            dialect_link = f"/{dialect_alias}/#connection-options"
+
+        connection_settings = (
+            f"      {doc_link.format(dialect_link=dialect_link)}\n{connection_settings}"
+        )
     else:
         connection_settings = settings
 
