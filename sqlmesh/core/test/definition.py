@@ -12,7 +12,6 @@ from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
-import time_machine
 from io import StringIO
 from pandas.api.types import is_object_dtype
 from sqlglot import Dialect, exp
@@ -670,13 +669,15 @@ class PythonModelTest(ModelTest):
 
     def _execute_model(self) -> pd.DataFrame:
         """Executes the python model and returns a DataFrame."""
-        time_ctx = (
-            time_machine.travel(self._execution_time, tick=False)
-            if self._execution_time
-            else nullcontext()
-        )
+        if self._execution_time:
+            import time_machine
+
+            time_ctx: AbstractContextManager = time_machine.travel(self._execution_time, tick=False)
+        else:
+            time_ctx = nullcontext()
+
         with patch.dict(self._test_adapter_dialect.generator_class.TRANSFORMS, self._transforms):
-            with t.cast(AbstractContextManager, time_ctx):
+            with time_ctx:
                 variables = self.body.get("vars", {}).copy()
                 time_kwargs = {
                     key: variables.pop(key) for key in TIME_KWARG_KEYS if key in variables
