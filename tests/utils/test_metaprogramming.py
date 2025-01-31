@@ -46,7 +46,7 @@ def test_print_exception(mocker: MockerFixture):
     except Exception as ex:
         print_exception(ex, test_env, out_mock)
 
-    expected_message = """  File ".*?/tests/utils/test_metaprogramming\.py", line 45, in test_print_exception
+    expected_message = r"""  File ".*?/tests/utils/test_metaprogramming\.py", line 45, in test_print_exception
     eval\("test_fun\(\)", env\)
 
   File "<string>", line 1, in <module>

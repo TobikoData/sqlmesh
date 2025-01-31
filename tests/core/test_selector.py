@@ -512,6 +512,38 @@ def test_select_models_missing_env(mocker: MockerFixture, make_snapshot):
             ["model* & ^(tag:tag1 | tag:tag2)"],
             {'"model3"'},
         ),
+        (
+            [
+                ("model1", "tag1", None),
+                ("model2", "tag2", {"model1"}),
+                ("model3", "tag3", {"model1"}),
+            ],
+            ["(model1*)+"],
+            {'"model1"', '"model2"', '"model3"'},
+        ),
+        (
+            [
+                ("model1", "tag1", None),
+                ("model2", "tag2", {"model1"}),
+                ("model3", "tag3", {"model2"}),
+            ],
+            ["+(+model2*+)+"],
+            {'"model1"', '"model2"', '"model3"'},
+        ),
+        (
+            [
+                ("model1", "tag1", None),
+                ("model2", "tag2", {"model1"}),
+                ("model3", "tag3", {"model1"}),
+            ],
+            ["(model* & ^*1)+"],
+            {'"model2"', '"model3"'},
+        ),
+        (
+            [("model2", "tag1", None), ("model2_1", "tag2", None), ("model2_2", "tag3", None)],
+            ["*2_*"],
+            {'"model2_1"', '"model2_2"'},
+        ),
     ],
 )
 def test_expand_model_selections(

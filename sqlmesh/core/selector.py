@@ -6,8 +6,8 @@ from pathlib import Path
 
 from sqlglot import exp
 from sqlglot.errors import ParseError
-from sqlglot.tokens import Token, Tokenizer, TokenType
-from sqlglot.dialects.dialect import DialectType
+from sqlglot.tokens import Token, TokenType, Tokenizer as BaseTokenizer
+from sqlglot.dialects.dialect import Dialect, DialectType
 from sqlglot.helper import seq_get
 
 from sqlmesh.core.dialect import normalize_model_name
@@ -230,20 +230,25 @@ class Selector:
         return evaluate(node)
 
 
-class SelectorTokenizer(Tokenizer):
-    SINGLE_TOKENS = {
-        "(": TokenType.L_PAREN,
-        ")": TokenType.R_PAREN,
-        "&": TokenType.AMP,
-        "|": TokenType.PIPE,
-        "^": TokenType.CARET,
-        "+": TokenType.PLUS,
-        "*": TokenType.STAR,
-        ":": TokenType.COLON,
-    }
+class SelectorDialect(Dialect):
+    IDENTIFIERS_CAN_START_WITH_DIGIT = True
 
-    KEYWORDS = {}
-    IDENTIFIERS: t.List[str | t.Tuple[str, str]] = []
+    class Tokenizer(BaseTokenizer):
+        SINGLE_TOKENS = {
+            "(": TokenType.L_PAREN,
+            ")": TokenType.R_PAREN,
+            "&": TokenType.AMP,
+            "|": TokenType.PIPE,
+            "^": TokenType.CARET,
+            "+": TokenType.PLUS,
+            "*": TokenType.STAR,
+            ":": TokenType.COLON,
+        }
+
+        KEYWORDS = {}
+        IDENTIFIERS = ["\\"]  # there are no identifiers but need to put something here
+        IDENTIFIER_START = ""
+        IDENTIFIER_END = ""
 
 
 class Git(exp.Expression):
@@ -259,7 +264,7 @@ class Direction(exp.Expression):
 
 
 def parse(selector: str, dialect: DialectType = None) -> exp.Expression:
-    tokens = SelectorTokenizer().tokenize(selector)
+    tokens = SelectorDialect().tokenize(selector)
     i = 0
 
     def _curr() -> t.Optional[Token]:
@@ -304,28 +309,31 @@ def parse(selector: str, dialect: DialectType = None) -> exp.Expression:
 
     def _parse_var() -> exp.Expression:
         upstream = _match(TokenType.PLUS)
+        downstream = None
         tag = _parse_kind("tag")
         git = False if tag else _parse_kind("git")
         lstar = "*" if _match(TokenType.STAR) else ""
         directions = {}
 
-        if _match(TokenType.VAR):
+        if _match(TokenType.VAR) or _match(TokenType.NUMBER):
             name = _prev().text
             rstar = "*" if _match(TokenType.STAR) else ""
             downstream = _match(TokenType.PLUS)
             this: exp.Expression = exp.Var(this=f"{lstar}{name}{rstar}")
 
-            if upstream:
-                directions["up"] = True
-            if downstream:
-                directions["down"] = True
         elif _match(TokenType.L_PAREN):
             this = exp.Paren(this=_parse_conjunction())
+            downstream = _match(TokenType.PLUS)
             _match(TokenType.R_PAREN, True)
         elif lstar:
             this = exp.var("*")
         else:
             raise ParseError(_error("Expected model name."))
+
+        if upstream:
+            directions["up"] = True
+        if downstream:
+            directions["down"] = True
 
         if tag:
             this = Tag(this=this)
