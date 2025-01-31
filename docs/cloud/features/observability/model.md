@@ -22,7 +22,7 @@ There are a number of ways you can navigate to a model's page. This method shows
     ![Tobiko Cloud environment page](./model/tcloud_environments.png)
 3. Navigate to the Models section and click "Explore" to view available models
     ![Tobiko Cloud environment page explore models link](./model/tcloud_environment_explore-models.png)
-4. Browse through the model list and select your desired model to access its detailed information
+4. Browse through the model list and select a model to access its detailed information
     ![Tobiko Cloud environment models list](./model/tcloud_model_list.png)
 
 ## Model page information
