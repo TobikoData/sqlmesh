@@ -37,7 +37,7 @@ The following detailed information outlines the different sections:
 
 ![Tobiko Cloud model status and metadata](./model/tcloud_model_status-metadata.png)
 
-- Current status graphs: Provides visual representations of model health through freshness indicators and detailed daily execution graphs
+- Current status graphs: Provide visual representations of model health through freshness indicators and detailed daily execution graphs
     - Freshness indicator: Shows the current status of the model and the percentage of up-to-date models in production (as long as this is green, you have nothing to worry about in your production environment)
     - Historical Freshness graph: Gives an at-a-glance picture of the history of the model's freshness.
         - Green means it's up to date and has run smoothly for every cron interval
