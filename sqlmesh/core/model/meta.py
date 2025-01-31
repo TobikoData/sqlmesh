@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 import typing as t
 from functools import cached_property
 from typing_extensions import Self
@@ -11,6 +10,7 @@ from sqlglot.helper import ensure_collection, ensure_list
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
 from sqlmesh.core import dialect as d
+from sqlmesh.core.console import get_console
 from sqlmesh.core.dialect import normalize_model_name, extract_func_call
 from sqlmesh.core.model.common import (
     bool_validator,
@@ -45,8 +45,6 @@ if t.TYPE_CHECKING:
     from sqlmesh.core._typing import CustomMaterializationProperties, SessionProperties
 
 FunctionCall = t.Tuple[str, t.Dict[str, exp.Expression]]
-
-logger = logging.getLogger(__name__)
 
 
 class ModelMeta(_Node):
@@ -302,7 +300,7 @@ class ModelMeta(_Node):
             if not isinstance(table_properties, str):
                 # Do not warn when deserializing from the state.
                 model_name = data["name"]
-                logger.warning(
+                get_console().log_warning(
                     f"Model '{model_name}' is using the `table_properties` attribute which is deprecated. Please use `physical_properties` instead."
                 )
             physical_properties = data.get("physical_properties")
@@ -337,7 +335,7 @@ class ModelMeta(_Node):
             "hudi",
             "delta",
         }:
-            logger.warning(
+            get_console().log_warning(
                 f"Model {self.name} has `storage_format` set to a table format '{storage_format}' which is deprecated. Please use the `table_format` property instead"
             )
 

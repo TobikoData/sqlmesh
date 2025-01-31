@@ -18,10 +18,10 @@ import typing as t
 from difflib import ndiff
 from functools import cached_property
 from sqlmesh.core import constants as c
+from sqlmesh.core.console import get_console
 from sqlmesh.core.snapshot import Snapshot, SnapshotId, SnapshotTableInfo
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
-
 
 if sys.version_info >= (3, 12):
     from importlib import metadata
@@ -116,7 +116,7 @@ class ContextDiff(PydanticModel):
             env = state_reader.get_environment(create_from.lower())
 
             if not env and create_from != c.PROD:
-                logger.warning(
+                get_console().log_warning(
                     f"The environment name '{create_from}' was passed to the `plan` command's `--create-from` argument, but '{create_from}' does not exist. Initializing new environment '{environment}' from scratch."
                 )
 
@@ -396,7 +396,7 @@ class ContextDiff(PydanticModel):
         try:
             return old.node.text_diff(new.node, rendered=self.diff_rendered)
         except SQLMeshError as e:
-            logger.warning("Failed to diff model '%s': %s", name, str(e))
+            get_console().log_warning(f"Failed to diff model '{name}': {str(e)}")
             return ""
 
 

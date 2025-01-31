@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import inspect
-import logging
 import sys
 import types
 import typing as t
@@ -22,6 +21,7 @@ from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 from sqlglot.schema import MappingSchema
 
 from sqlmesh.core import constants as c
+from sqlmesh.core.console import get_console
 from sqlmesh.core.dialect import (
     SQLMESH_MACRO_PREFIX,
     Dialect,
@@ -55,9 +55,6 @@ if sys.version_info >= (3, 10):
     UNION_TYPES = (t.Union, types.UnionType)
 else:
     UNION_TYPES = (t.Union,)
-
-
-logger = logging.getLogger(__name__)
 
 
 class RuntimeStage(Enum):
@@ -773,7 +770,7 @@ def star(
     if exclude and not isinstance(exclude, (exp.Array, exp.Tuple)):
         raise SQLMeshError(f"Invalid exclude '{exclude}'. Expected an array.")
     if except_ != exp.tuple_():
-        logger.warning(
+        get_console().log_warning(
             "The 'except_' argument in @STAR will soon be deprecated. Use 'exclude' instead."
         )
         if not isinstance(exclude, (exp.Array, exp.Tuple)):
@@ -1303,10 +1300,7 @@ def _coerce(
     except Exception:
         if strict:
             raise
-        logger.error(
-            "Coercion of expression '%s' to type '%s' failed. Using non coerced expression at '%s'",
-            expr,
-            typ,
-            path,
+        get_console().log_error(
+            f"Coercion of expression '{expr}' to type '{typ}' failed. Using non coerced expression at '{path}'",
         )
         return expr

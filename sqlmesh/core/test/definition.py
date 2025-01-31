@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import datetime
-import logging
 import typing as t
 import unittest
 from collections import Counter
@@ -19,6 +18,7 @@ from sqlglot.optimizer.annotate_types import annotate_types
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
 from sqlmesh.core import constants as c
+from sqlmesh.core.console import get_console
 from sqlmesh.core.dialect import normalize_model_name, schema_
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.macros import RuntimeStage
@@ -33,7 +33,6 @@ if t.TYPE_CHECKING:
 
     Row = t.Dict[str, t.Any]
 
-logger = logging.getLogger(__name__)
 
 TIME_KWARG_KEYS = {
     "start",
@@ -242,7 +241,7 @@ class ModelTest(unittest.TestCase):
                 elif type(value) is datetime.datetime:
                     expected[col] = pd.to_datetime(expected[col]).dt.to_pydatetime()
             except Exception as e:
-                logger.warning(
+                get_console().log_warning(
                     f"Failed to convert expected value for {col} into `datetime` "
                     f"for unit test '{str(self)}'. {str(e)}"
                 )

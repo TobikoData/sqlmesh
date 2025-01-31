@@ -14,6 +14,7 @@ from sqlglot.optimizer.simplify import simplify
 
 from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
+from sqlmesh.core.console import get_console
 from sqlmesh.core.macros import MacroEvaluator, RuntimeStage
 from sqlmesh.utils.date import TimeLike, date_dict, make_inclusive, to_datetime
 from sqlmesh.utils.errors import (
@@ -546,6 +547,7 @@ class QueryRenderer(BaseExpressionRenderer):
                 raise_config_error(warning, self._path)
 
             logger.warning(warning)
+            get_console().log_warning(warning)
 
         try:
             if should_optimize:
@@ -574,6 +576,7 @@ class QueryRenderer(BaseExpressionRenderer):
             query = original
 
             logger.warning(warning)
+            get_console().log_warning(warning)
         except Exception as ex:
             raise_config_error(
                 f"Failed to optimize query, please file an issue at https://github.com/TobikoData/sqlmesh/issues/new. {ex}",

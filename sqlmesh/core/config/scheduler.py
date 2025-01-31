@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import abc
-import logging
 import typing as t
 
 from pydantic import Field
@@ -10,7 +9,7 @@ from requests import Session
 from sqlglot.helper import subclasses
 from sqlmesh.core.config.base import BaseConfig
 from sqlmesh.core.config.common import concurrent_tasks_validator
-from sqlmesh.core.console import Console
+from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.plan import (
     AirflowPlanEvaluator,
     BuiltInPlanEvaluator,
@@ -31,8 +30,6 @@ if t.TYPE_CHECKING:
     from sqlmesh.core.context import GenericContext
 
 from sqlmesh.utils.config import sensitive_fields, excluded_fields
-
-logger = logging.getLogger(__name__)
 
 
 class SchedulerConfig(abc.ABC):
@@ -88,7 +85,7 @@ class _EngineAdapterStateSyncSchedulerConfig(SchedulerConfig):
         ):
             # If we are using DuckDB, ensure that multithreaded mode gets enabled if necessary
             if warehouse_connection.concurrent_tasks > 1:
-                logger.warning(
+                get_console().log_warning(
                     "The duckdb state connection is configured for single threaded mode but the warehouse connection is configured for "
                     + f"multi threaded mode with {warehouse_connection.concurrent_tasks} concurrent tasks."
                     + " This can cause SQLMesh to hang. Overriding the duckdb state connection config to use multi threaded mode"
@@ -109,7 +106,7 @@ class _EngineAdapterStateSyncSchedulerConfig(SchedulerConfig):
             warehouse_connection, DuckDBConnectionConfig
         ):
             if not state_connection.is_recommended_for_state_sync:
-                logger.warning(
+                get_console().log_warning(
                     f"The {state_connection.type_} engine is not recommended for storing SQLMesh state in production deployments. Please see"
                     + " https://sqlmesh.readthedocs.io/en/stable/guides/configuration/#state-connection for a list of recommended engines and more information."
                 )
@@ -205,7 +202,7 @@ class _BaseAirflowSchedulerConfig(_EngineAdapterStateSyncSchedulerConfig):
 
 
 def _max_snapshot_ids_per_request_validator(v: t.Any) -> t.Optional[int]:
-    logger.warning(
+    get_console().log_warning(
         "The `max_snapshot_ids_per_request` field is deprecated and will be removed in a future release."
     )
     return None

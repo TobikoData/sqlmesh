@@ -246,6 +246,10 @@ class Console(abc.ABC):
         """Display error info to the user."""
 
     @abc.abstractmethod
+    def log_warning(self, message: str) -> None:
+        """Display warning info to the user."""
+
+    @abc.abstractmethod
     def log_success(self, message: str) -> None:
         """Display a general successful message to the user."""
 
@@ -302,6 +306,7 @@ class TerminalConsole(Console):
         console: t.Optional[RichConsole] = None,
         verbose: bool = False,
         dialect: DialectType = None,
+        ignore_warnings: bool = False,
         **kwargs: t.Any,
     ) -> None:
         self.console: RichConsole = console or srich.console
@@ -333,6 +338,7 @@ class TerminalConsole(Console):
 
         self.verbose = verbose
         self.dialect = dialect
+        self.ignore_warnings = ignore_warnings
 
     def _print(self, value: t.Any, **kwargs: t.Any) -> None:
         self.console.print(value, **kwargs)
@@ -1030,6 +1036,10 @@ class TerminalConsole(Console):
     def log_error(self, message: str) -> None:
         self._print(f"[red]{message}[/red]")
 
+    def log_warning(self, message: str) -> None:
+        if not self.ignore_warnings:
+            self._print(f"[yellow]{message}[/yellow]")
+
     def log_success(self, message: str) -> None:
         self._print(f"\n[green]{message}[/green]\n")
 
@@ -1628,6 +1638,9 @@ class MarkdownConsole(CaptureTerminalConsole):
     where you want to display a plan or test results in markdown.
     """
 
+    def __init__(self, **kwargs: t.Any) -> None:
+        super().__init__(**{**kwargs, "console": RichConsole(no_color=True)})
+
     def show_model_difference_summary(
         self,
         context_diff: ContextDiff,
@@ -1854,7 +1867,10 @@ class MarkdownConsole(CaptureTerminalConsole):
             self._print("```\n")
 
     def log_error(self, message: str) -> None:
-        super().log_error(f"```\n{message}```\n\n")
+        super().log_error(f"```\n\\[ERROR] {message}```\n\n")
+
+    def log_warning(self, message: str) -> None:
+        super().log_warning(f"```\n\\[WARNING] {message}```\n\n")
 
 
 class DatabricksMagicConsole(CaptureTerminalConsole):
@@ -2027,11 +2043,13 @@ class DebuggerTerminalConsole(TerminalConsole):
         console: t.Optional[RichConsole],
         *args: t.Any,
         dialect: DialectType = None,
+        ignore_warnings: bool = False,
         **kwargs: t.Any,
     ) -> None:
         self.console: RichConsole = console or srich.console
         self.dialect = dialect
         self.verbose = False
+        self.ignore_warnings = ignore_warnings
 
     def _write(self, msg: t.Any, *args: t.Any, **kwargs: t.Any) -> None:
         self.console.log(msg, *args, **kwargs)
@@ -2146,6 +2164,10 @@ class DebuggerTerminalConsole(TerminalConsole):
     def log_error(self, message: str) -> None:
         self._write(message, style="bold red")
 
+    def log_warning(self, message: str) -> None:
+        if not self.ignore_warnings:
+            self._write(message, style="bold yellow")
+
     def log_success(self, message: str) -> None:
         self._write(message, style="bold green")
 
@@ -2165,9 +2187,34 @@ class DebuggerTerminalConsole(TerminalConsole):
         self._write(row_diff)
 
 
-def get_console(**kwargs: t.Any) -> TerminalConsole | DatabricksMagicConsole | NotebookMagicConsole:
+_CONSOLE: t.Optional[Console] = None
+
+
+def set_console(console: Console) -> None:
+    """Sets the console instance."""
+    global _CONSOLE
+    _CONSOLE = console
+
+
+def configure_console(**kwargs: t.Any) -> None:
+    """Configures the console instance."""
+    global _CONSOLE
+    _CONSOLE = create_console(**kwargs)
+
+
+def get_console() -> Console:
+    """Returns the console instance or creates a new one if it hasn't been created yet."""
+    global _CONSOLE
+    if _CONSOLE is None:
+        _CONSOLE = create_console()
+    return _CONSOLE
+
+
+def create_console(
+    **kwargs: t.Any,
+) -> TerminalConsole | DatabricksMagicConsole | NotebookMagicConsole:
     """
-    Returns the console that is appropriate for the current runtime environment.
+    Creates a new console instance that is appropriate for the current runtime environment.
 
     Note: Google Colab environment is untested and currently assumes is compatible with the base
     NotebookMagicConsole.
