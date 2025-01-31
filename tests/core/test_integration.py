@@ -702,6 +702,72 @@ def test_cron_not_aligned_with_day_boundary(
 
 
 @time_machine.travel("2023-01-08 00:00:00 UTC")
+def test_cron_not_aligned_with_day_boundary_new_model(init_and_plan_context: t.Callable):
+    context, _ = init_and_plan_context("examples/sushi")
+
+    existing_model = context.get_model("sushi.waiter_revenue_by_day")
+    existing_model = SqlModel.parse_obj(
+        {
+            **existing_model.dict(),
+            "kind": existing_model.kind.copy(update={"forward_only": True}),
+        }
+    )
+    context.upsert_model(existing_model)
+
+    plan = context.plan_builder("prod", skip_tests=True).build()
+    context.apply(plan)
+
+    # Add a new model and make a change to a forward-only model.
+    # The cron of the new model is not aligned with the day boundary.
+    new_model = load_sql_based_model(
+        d.parse(
+            """
+        MODEL (
+            name memory.sushi.new_model,
+            kind FULL,
+            cron '0 8 * * *',
+            start '2023-01-01',
+        );
+
+        SELECT 1 AS one;
+        """
+        )
+    )
+    context.upsert_model(new_model)
+
+    existing_model = add_projection_to_model(t.cast(SqlModel, existing_model), literal=True)
+    context.upsert_model(existing_model)
+
+    plan = context.plan_builder("dev", skip_tests=True, enable_preview=True).build()
+    assert plan.missing_intervals == [
+        SnapshotIntervals(
+            snapshot_id=context.get_snapshot(
+                "memory.sushi.new_model", raise_if_missing=True
+            ).snapshot_id,
+            intervals=[(to_timestamp("2023-01-06"), to_timestamp("2023-01-07"))],
+        ),
+        SnapshotIntervals(
+            snapshot_id=context.get_snapshot(
+                "sushi.top_waiters", raise_if_missing=True
+            ).snapshot_id,
+            intervals=[
+                (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
+                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
+            ],
+        ),
+        SnapshotIntervals(
+            snapshot_id=context.get_snapshot(
+                "sushi.waiter_revenue_by_day", raise_if_missing=True
+            ).snapshot_id,
+            intervals=[
+                (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
+                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
+            ],
+        ),
+    ]
+
+
+@time_machine.travel("2023-01-08 00:00:00 UTC")
 def test_forward_only_monthly_model(init_and_plan_context: t.Callable):
     context, _ = init_and_plan_context("examples/sushi")
 

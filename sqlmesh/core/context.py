@@ -637,6 +637,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             True if the run was successful, False otherwise.
         """
         environment = environment or self.config.default_target_environment
+        environment = Environment.sanitize_name(environment)
         if not skip_janitor and environment.lower() == c.PROD:
             self._run_janitor()
 
@@ -1321,14 +1322,16 @@ class GenericContext(BaseContext, t.Generic[C]):
                 ):
                     if model_name not in snapshots:
                         continue
-                    interval_unit = snapshots[model_name].node.interval_unit
+                    node = snapshots[model_name].node
+                    interval_unit = node.interval_unit
                     default_start = min(
                         default_start or sys.maxsize,
                         to_timestamp(
                             interval_unit.cron_prev(
                                 interval_unit.cron_floor(
-                                    max_interval_end_per_model.get(model_name, default_end),
-                                    estimate=True,
+                                    max_interval_end_per_model.get(
+                                        model_name, node.cron_floor(default_end)
+                                    ),
                                 ),
                                 estimate=True,
                             )
