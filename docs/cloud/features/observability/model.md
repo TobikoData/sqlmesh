@@ -32,7 +32,6 @@ Each model page presents a comprehensive summary that includes the key component
 From here, you can identify anomalies in the model's run time based on historical run times and how they have been changing over time (or not!).
 
 You can also check other critical information, like the model's source code, its lineage relative to other models, its contents in previous versions, and even an approximation of how much it costs (if you have [cost savings set up](../costs_savings.md)).
-is costing (if you have [cost savings set up](../costs_savings.md)). 
 
 The following detailed information outlines the different sections:
 
