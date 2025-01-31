@@ -32,7 +32,7 @@ def _gen_config(
         connection_settings = """      type: duckdb
       database: db.db"""
 
-        doc_link = "# Visit https://sqlmesh.readthedocs.io/en/stable/integrations/engines{engine_link} for more information on configuring the connection to your execution engine."
+        doc_link = "https://sqlmesh.readthedocs.io/en/stable/integrations/engines{engine_link}"
         engine_link = ""
 
         engine = "mssql" if dialect == "tsql" else dialect
@@ -65,7 +65,9 @@ def _gen_config(
             engine_link = f"/{engine}/#connection-options"
 
         connection_settings = (
-            f"      {doc_link.format(engine_link=engine_link)}\n{connection_settings}"
+            "      # For more information on configuring the connection to your execution engine, visit:\n"
+            "      # https://sqlmesh.readthedocs.io/en/stable/reference/configuration/#connections\n"
+            f"      # {doc_link.format(engine_link=engine_link)}\n{connection_settings}"
         )
     else:
         connection_settings = settings
