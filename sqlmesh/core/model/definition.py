@@ -1823,7 +1823,7 @@ def load_sql_based_model(
                 if kind_prop.name.lower() == "merge_filter":
                     unrendered_merge_filter = kind_prop
 
-    rendered_meta_exprs = render_meta(
+    rendered_meta_exprs = render_expression(
         expression=meta,
         module_path=module_path,
         macros=macros,
@@ -2034,7 +2034,7 @@ def create_python_model(
     if dependencies_unspecified:
         depends_on = parsed_depends_on - {name}
     else:
-        depends_on_rendered = render_meta(
+        depends_on_rendered = render_expression(
             expression=exp.Array(
                 expressions=[d.parse_one(dep, dialect=dialect) for dep in depends_on or []]
             ),
@@ -2372,7 +2372,59 @@ def _refs_to_sql(values: t.Any) -> exp.Expression:
     return exp.Tuple(expressions=values)
 
 
-def render_meta(
+def render_meta_fields(
+    fields: t.Dict[str, t.Any],
+    module_path: Path,
+    path: Path,
+    jinja_macros: t.Optional[JinjaMacroRegistry] = None,
+    macros: t.Optional[MacroRegistry] = None,
+    dialect: DialectType = None,
+    variables: t.Optional[t.Dict[str, t.Any]] = None,
+    default_catalog: t.Optional[str] = None,
+) -> t.Dict[str, t.Any]:
+    def render_field_value(value: t.Any) -> t.Any:
+        if isinstance(value, exp.Expression) or (
+            isinstance(value, str) and d.SQLMESH_MACRO_PREFIX in value
+        ):
+            try:
+                rendered_expr = render_expression(
+                    expression=exp.maybe_parse(value, dialect=dialect),
+                    module_path=module_path,
+                    macros=macros,
+                    jinja_macros=jinja_macros,
+                    variables=variables,
+                    path=path,
+                    dialect=dialect,
+                    default_catalog=default_catalog,
+                )
+                assert rendered_expr and len(rendered_expr) == 1
+                return rendered_expr[0].sql(dialect=dialect)
+            except Exception:
+                pass
+
+        return value
+
+    for field_name, _ in ModelMeta.all_field_infos().items():
+        field_name = field_name[:-1] if field_name.endswith("_") else field_name
+        if (field_value := fields.get(field_name)) and field_name not in {
+            "audits",
+            "signals",
+            "physical_properties",
+            "virtual_properties",
+            "session_properties",
+        }:
+            if isinstance(field_value, t.Dict):
+                for key, value in field_value.items():
+                    if key != "merge_filter":
+                        fields[field_name][key] = render_field_value(value)
+            elif isinstance(field_value, t.List):
+                fields[field_name] = [render_field_value(value) for value in field_value]
+            else:
+                fields[field_name] = render_field_value(field_value)
+    return fields
+
+
+def render_expression(
     expression: exp.Expression,
     module_path: Path,
     path: Path,

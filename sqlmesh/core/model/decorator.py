@@ -11,14 +11,13 @@ from sqlglot.dialects.dialect import DialectType
 from sqlmesh.core.macros import MacroRegistry
 from sqlmesh.utils.jinja import JinjaMacroRegistry
 from sqlmesh.core import constants as c
-from sqlmesh.core.dialect import SQLMESH_MACRO_PREFIX, MacroFunc, parse_one
-from sqlmesh.core import dialect as d
+from sqlmesh.core.dialect import MacroFunc, parse_one
 from sqlmesh.core.model.definition import (
     Model,
     create_python_model,
     create_sql_model,
     get_model_name,
-    render_meta,
+    render_meta_fields,
 )
 from sqlmesh.core.model.kind import ModelKindName, _ModelKind
 from sqlmesh.utils import registry_decorator
@@ -120,39 +119,16 @@ class model(registry_decorator):
 
         build_env(self.func, env=env, name=entrypoint, path=module_path)
 
-        # Properties to be rendered at model creation time
-        expressions = [
-            exp.Property(this=exp.var("name"), value=exp.to_table(self.name, dialect=dialect))
-        ]
-        for field_name in {"enabled", "start", "end"}:
-            if (field_value := self.kwargs.get(field_name)) and (
-                isinstance(field_value, exp.Expression)
-                or (isinstance(field_value, str) and field_value.startswith(SQLMESH_MACRO_PREFIX))
-            ):
-                expressions.append(
-                    exp.Property(
-                        this=exp.var(field_name),
-                        value=exp.maybe_parse(field_value, dialect=dialect),
-                    )
-                )
-
-        if expressions and (
-            rendered_meta := render_meta(
-                expression=d.Model(expressions=expressions),
-                module_path=module_path,
-                macros=macros,
-                jinja_macros=jinja_macros,
-                variables=variables,
-                path=path,
-                dialect=dialect,
-                default_catalog=default_catalog,
-            )
-        ):
-            for prop in rendered_meta[0].expressions:
-                self.kwargs[prop.this.name if isinstance(prop.this, exp.Var) else prop.this] = (
-                    prop.args.get("value").sql(dialect=dialect)
-                )
-
+        rendered_fields = render_meta_fields(
+            fields={"name": self.name, **self.kwargs},
+            module_path=module_path,
+            macros=macros,
+            jinja_macros=jinja_macros,
+            variables=variables,
+            path=path,
+            dialect=dialect,
+            default_catalog=default_catalog,
+        )
         common_kwargs = {
             "defaults": defaults,
             "path": path,
@@ -168,7 +144,7 @@ class model(registry_decorator):
             "macros": macros,
             "jinja_macros": jinja_macros,
             "audit_definitions": audit_definitions,
-            **self.kwargs,
+            **rendered_fields,
         }
 
         for key in ("pre_statements", "post_statements", "on_virtual_update"):
