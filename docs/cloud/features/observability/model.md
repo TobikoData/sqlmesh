@@ -1,6 +1,6 @@
 # Models
 
-The model overview page lets you explore comprehensive observability features and detailed summary information. This centralized view gives you quick access to critical metrics and performance data—essentially providing a window into the model's health and status.
+The model overview page provides comprehensive observability features that let you explore detailed information about a model. This centralized view gives you quick access to critical metrics and performance data, providing a window into the model's health and status.
 
 Model owners typically use this page to monitor and check their models. It provides essential information in an easy-to-scan format, eliminating the need to debug issues through the command line interface. From this page you can quickly diagnose:
 
