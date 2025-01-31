@@ -54,7 +54,7 @@ In your Dagster project, create an `.env` file if it does not already exist. Nex
 
 ```sh title=".env"
 TOBIKO_CLOUD_BASE_URL=<URL for your Tobiko Cloud project> # ex: https://cloud.tobikodata.com/sqlmesh/tobiko/public-demo/
-TOBIKO_CLOUD_TOKEN=<your Tobiko Cloud API token> # ex: ioawjioefja1
+TOBIKO_CLOUD_TOKEN=<your Tobiko Cloud API token> # ex: 'ioawjioefja1'
 ```
 
 Your Solutions Architect will provide the base URL and token values during your Tobiko Cloud onboarding.
