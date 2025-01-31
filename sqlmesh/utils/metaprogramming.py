@@ -278,68 +278,74 @@ def build_env(
         name: Name of the object in the env.
         path: The module path to serialize. Other modules will not be walked and treated as imports.
     """
+    # We don't rely on `env` to keep track of visited objects, because it's populated in post-order
+    visited: t.Set[str] = set()
 
-    obj_module = inspect.getmodule(obj)
+    def walk(obj: t.Any, name: str) -> None:
+        obj_module = inspect.getmodule(obj)
+        if name in visited or (obj_module and obj_module.__name__ == "builtins"):
+            return
 
-    if obj_module and obj_module.__name__ == "builtins":
-        return
+        visited.add(name)
+        if name not in env:
+            if hasattr(obj, c.SQLMESH_MACRO):
+                # We only need to add the undecorated code of @macro() functions in env, which
+                # is accessible through the `__wrapped__` attribute added by functools.wraps
+                obj = obj.__wrapped__
+            elif callable(obj) and not isinstance(obj, SERIALIZABLE_CALLABLES):
+                obj = getattr(obj, "__wrapped__", None)
+                name = getattr(obj, "__name__", "")
 
-    def walk(obj: t.Any) -> None:
+                # Callable class instances shouldn't be serialized (e.g. tenacity.Retrying).
+                # We still want to walk the callables they decorate, though
+                if not isinstance(obj, SERIALIZABLE_CALLABLES) or name in env:
+                    return
+
+            if (
+                not obj_module
+                or not hasattr(obj_module, "__file__")
+                or not _is_relative_to(obj_module.__file__, path)
+            ):
+                env[name] = obj
+                return
+        elif env[name] != obj:
+            raise SQLMeshError(
+                f"Cannot store {obj} in environment, duplicate definitions found for '{name}'"
+            )
+
         if inspect.isclass(obj):
             for var in decorator_vars(obj):
                 if obj_module and var in obj_module.__dict__:
-                    build_env(
-                        obj_module.__dict__[var],
-                        env=env,
-                        name=var,
-                        path=path,
-                    )
+                    walk(obj_module.__dict__[var], var)
 
             for base in obj.__bases__:
-                build_env(base, env=env, name=base.__qualname__, path=path)
+                walk(base, base.__qualname__)
 
             for k, v in obj.__dict__.items():
                 if k.startswith("__"):
                     continue
-                # traverse methods in a class to find global references
+
+                # Traverse methods in a class to find global references
                 if isinstance(v, (classmethod, staticmethod)):
                     v = v.__func__
+
                 if callable(v):
-                    # if the method is a part of the object, walk it
-                    # else it is a global function and we just store it
+                    # Walk the method if it's part of the object, else it's a global function and we just store it
                     if v.__qualname__.startswith(obj.__qualname__):
-                        walk(v)
+                        for k, v in func_globals(v).items():
+                            walk(v, k)
                     else:
-                        build_env(v, env=env, name=v.__name__, path=path)
+                        walk(v, v.__name__)
         elif callable(obj):
             for k, v in func_globals(obj).items():
-                build_env(v, env=env, name=k, path=path)
+                walk(v, k)
 
-    if name not in env:
-        if hasattr(obj, c.SQLMESH_MACRO):
-            # We only need to add the undecorated code of @macro() functions in env, which
-            # is accessible through the `__wrapped__` attribute added by functools.wraps
-            obj = obj.__wrapped__
-        elif callable(obj) and not isinstance(obj, SERIALIZABLE_CALLABLES):
-            obj = getattr(obj, "__wrapped__", None)
-            name = getattr(obj, "__name__", "")
-
-            # Callable class instances shouldn't be serialized (e.g. tenacity.Retrying).
-            # We still want to walk the callables they decorate, though
-            if not isinstance(obj, SERIALIZABLE_CALLABLES) or name in env:
-                return
-
+        # We store the object in the environment after its dependencies, because otherwise we
+        # could crash at environment hydration time, since dicts are ordered and the top-level
+        # objects would be loaded before their dependencies.
         env[name] = obj
-        if (
-            obj_module
-            and hasattr(obj_module, "__file__")
-            and _is_relative_to(obj_module.__file__, path)
-        ):
-            walk(env[name])
-    elif env[name] != obj:
-        raise SQLMeshError(
-            f"Cannot store {obj} in environment, duplicate definitions found for '{name}'"
-        )
+
+    walk(obj, name)
 
 
 class ExecutableKind(str, Enum):
