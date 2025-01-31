@@ -42,7 +42,7 @@ The following detailed information outlines the different sections:
         - Green means it's up to date and has run smoothly for every cron interval
         - Orange means that it is pending and will run on the latest cron
         - Red means the model is behind by at least one cron interval.
-    - Daily executions: tells you the length of time it took the model to run on each day displayed. This is a great place to quickly understand any anomalies in run time for the model (both running too long *or* too short)
+    - Daily executions: tells you the length of time it took the model to run on each day. This is a great place to quickly identify anomalies in the model's run time (both running too long *or* too short).
 - Model details: Features comprehensive tabs that display summary statistics, complete source code documentation, and interactive model lineage visualizations
 
 ![Tobiko Cloud model version history](./model/tcloud_model_2.png)
