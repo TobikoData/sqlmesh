@@ -15,7 +15,7 @@ Model owners typically use this page to monitor and check their models. It provi
 
 ## Navigate to a model
 
-There are a number of ways you can navigate to a models page. This method shows you how to find your model directly from the Environments page. 
+There are a number of ways you can navigate to a model's page. This method shows you how to find your model directly from the Environments page. 
 
 1. Select "Environments" from the left hand menu
 2. Click the environment you want to explore from the list. 
