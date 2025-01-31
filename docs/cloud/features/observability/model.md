@@ -30,7 +30,8 @@ There are a number of ways you can navigate to a model's page. This method shows
 Each model page presents a comprehensive summary that includes the key components and metrics used to monitor model behavior. 
 
 From here, you can identify anomalies in the model's run time based on historical run times and how they have been changing over time (or not!).
-like the source code for the model, its lineage in relation to other models, the number of versions of this model available to you and even an approximation of how much this model 
+
+You can also check other critical information, like the model's source code, its lineage relative to other models, its contents in previous versions, and even an approximation of how much it costs (if you have [cost savings set up](../costs_savings.md)).
 is costing (if you have [cost savings set up](../costs_savings.md)). 
 
 The following detailed information outlines the different sections:
