@@ -1776,7 +1776,7 @@ def _connection_config_validator(
     return parse_connection_config(v)
 
 
-connection_config_validator = field_validator(
+connection_config_validator: t.Callable = field_validator(
     "connection",
     "state_connection",
     "test_connection",
