@@ -4,6 +4,22 @@ Tobiko Cloud's Dagster integration allows you to combine Dagster system monitori
 
 ![Dagster UI Asset Lineage](./dagster/asset_lineage.png)
 
+## How it works
+
+Tobiko Cloud uses a custom approach to Dagster integration.
+
+The `mirror` job mirrors the progress of the Tobiko Cloud scheduler run. Each local task reflects the outcome of its corresponding remote task. If an asset is materialized remotely, the job emits a Dagster materialization event.
+
+This allows you to observe at a glance how your data pipeline is progressing, displayed alongside your other pipelines in Dagster. No need to context switch to Tobiko Cloud!
+
+### Why a custom approach?
+
+Tobiko Cloud's scheduler performs multiple optimizations to ensure that your pipelines run correctly and efficiently. Those optimizations are only possible within our SQLMesh-aware scheduler.
+
+Our approach allows you to benefit from those optimizations while retaining the flexibility to attach extra tasks or logic to the Dagster Assets created by Tobiko Cloud.
+
+Because `run`s are still triggered by the Tobiko Cloud scheduler and tasks in the local DAG just reflect their remote equivalent in Tobiko Cloud, we call our custom approach a *facade*.
+
 ## Setup
 
 Your SQLMesh project must be configured and connected to Tobiko Cloud before using the Dagster integration.
@@ -131,22 +147,6 @@ To manually refresh materialization information for all models, run the `sync` j
 
 ![Manually run the sync job](./dagster/manual_sync_run.png)
 
-## How it works
-
-Tobiko Cloud uses a custom approach to Dagster integration - this section describes how it works.
-
-The `mirror` job mirrors the progress of the Tobiko Cloud scheduler run. Each local task reflects the outcome of its corresponding remote task. If an asset is materialized remotely, the job emits a Dagster materialization event.
-
-This allows you to observe at a glance how your data pipeline is progressing, displayed alongside your other pipelines in Dagster. No need to context switch over to the Tobiko Cloud UI!
-
-### Why a custom approach?
-
-Tobiko Cloud's scheduler performs multiple optimizations to ensure that your pipelines run correctly and efficiently. Those optimizations are only possible within our SQLMesh-aware scheduler.
-
-Our approach allows you to benefit from those optimizations while retaining the flexibility to attach extra tasks or logic to the Dagster Assets created by Tobiko Cloud.
-
-Because `run`s are still triggered by the Tobiko Cloud scheduler and tasks in the local DAG just reflect their remote equivalent in Tobiko Cloud, we call our custom approach a *facade*.
-
 ## Debugging
 
 When something goes wrong, the first priority is getting more information.
@@ -221,6 +221,8 @@ We recommend familiarizing yourself with Dagster's [Automation](https://docs.dag
 #### Respond to run status
 
 To listen for Tobiko Cloud run events, create a [Run Status Sensor](https://docs.dagster.io/concepts/partitions-schedules-sensors/sensors#run-status-sensors) that listens for events on the `mirror` job and triggers your custom job in response.
+
+![Dagster run status sensor](./dagster/run_status_sensor.png)
 
 Creating the Run Status Sensor has three steps: defining a custom job, detecting Tobiko Cloud events, and creating a Sensor that executes your custom job when events are detected.
 
@@ -309,11 +311,11 @@ def on_tobiko_cloud_start_run(context: RunStatusSensorContext):
     return RunRequest()
 ```
 
-![Dagster run status sensor](./dagster/run_status_sensor.png)
-
 #### Respond to Asset Materialization
 
 When Tobiko Cloud refreshes or adds new data to a model, a Materialization event occurs for its corresponding Asset in Dagster. The Materialization event provides a hook we can use to run custom logic.
+
+![Dagster asset sensor](./dagster/asset_sensor.png)
 
 As before, the custom logic can do anything you want, such as triggering the materialization of another Asset fully managed by Dagster or running some custom task. Triggering the materialization of Tobiko Cloud Assets will not work correctly, as they simply reflect the operations performed by Tobiko Cloud.
 
@@ -338,8 +340,6 @@ def internal_customers_pipeline():
 def on_crm_customers_updated(context: SensorEvaluationContext, asset_event: EventLogEntry):
     yield RunRequest()
 ```
-
-![Dagster asset sensor](./dagster/asset_sensor.png)
 
 The sensor will trigger every time the Asset with the key `postgres / crm / customers` is materialized.
 
