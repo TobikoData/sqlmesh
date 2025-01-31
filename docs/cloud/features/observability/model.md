@@ -41,7 +41,7 @@ The following detailed information outlines the different sections:
     - Freshness indicator: Shows the current status of the model and the percentage of up-to-date models in production (as long as this is green, you have nothing to worry about in your production environment)
     - Historical Freshness graph: Gives an at-a-glance picture of the history of the model's freshness.
         - Green means it's up to date and has run smoothly for every interval
-        - Orange means that it is pending and will run on the latest cron
+        - Orange means that one interval is pending and will be processed on the next run
         - Red means the model is behind by at least one cron interval.
     - Daily executions: tells you the length of time it took the model to run on each day. This is a great place to quickly identify anomalies in the model's run time (both running too long *or* too short).
 - Model details: Features tabs that display summary statistics, model source code, and interactive model lineage visualizations
