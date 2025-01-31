@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import logging
 import datetime
 import typing as t
 from pathlib import Path
-from unittest.mock import call
+from unittest.mock import call, patch
 
 import pandas as pd
 import pytest
@@ -1758,6 +1759,29 @@ test_recursive_ctes:
             context=Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))),
         ).run()
     )
+
+
+def test_unknown_model_warns(mocker: MockerFixture) -> None:
+    body = load_yaml(
+        """
+model: unknown
+outputs:
+  query:
+  - c: 1
+        """
+    )
+
+    logger = logging.getLogger("sqlmesh.core.test.definition")
+    with patch.object(logger, "warning") as mock_logger:
+        ModelTest.create_test(
+            body=body,
+            test_name="test_unknown_model",
+            models={},  # type: ignore
+            engine_adapter=mocker.Mock(),
+            dialect=None,
+            path=None,
+        )
+        assert mock_logger.mock_calls == [call("Model '\"unknown\"' was not found")]
 
 
 def test_test_generation(tmp_path: Path) -> None:
