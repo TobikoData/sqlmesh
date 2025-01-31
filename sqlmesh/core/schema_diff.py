@@ -10,7 +10,6 @@ from sqlglot.helper import ensure_list, seq_get
 
 from sqlmesh.utils import columns_to_types_to_struct
 from sqlmesh.utils.pydantic import PydanticModel
-from sqlmesh.core.console import get_console
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import TableName
@@ -382,6 +381,8 @@ class SchemaDiffer(PydanticModel):
         if current_type in self.coerceable_types:
             is_coerceable = new_type in self.coerceable_types[current_type]
             if is_coerceable:
+                from sqlmesh.core.console import get_console
+
                 warning = f"Coercing type {current_type} to {new_type} which means an alter will not be performed and therefore the resulting table structure will not match what is in the query.\nUpdate your model to cast the value to {current_type} type in order to remove this warning."
                 logger.warning(warning)
                 get_console().log_warning(warning)

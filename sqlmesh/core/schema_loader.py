@@ -52,7 +52,7 @@ def create_external_models_file(
         existing_model_fqns_str = ", ".join(existing_model_fqns)
         get_console().log_warning(
             f"The following models already exist and can't be converted to external: {existing_model_fqns_str}. "
-            "Perhaps these models have been removed, while downstream models that reference them weren't updated accordingly"
+            "Perhaps these models have been removed, while downstream models that reference them weren't updated accordingly."
         )
         external_model_fqns -= existing_model_fqns
 

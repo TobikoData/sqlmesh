@@ -12,7 +12,6 @@ from sqlmesh.core.macros import MacroRegistry
 from sqlmesh.utils.jinja import JinjaMacroRegistry
 from sqlmesh.core import constants as c
 from sqlmesh.core.dialect import MacroFunc, parse_one
-from sqlmesh.core.console import get_console
 from sqlmesh.core.model.definition import (
     Model,
     create_python_model,
@@ -106,6 +105,8 @@ class model(registry_decorator):
         kind = self.kwargs.get("kind", None)
         if kind is not None:
             if isinstance(kind, _ModelKind):
+                from sqlmesh.core.console import get_console
+
                 get_console().log_warning(
                     f"""Python model "{self.name}"'s `kind` argument was passed a SQLMesh `{type(kind).__name__}` object. This may result in unexpected behavior - provide a dictionary instead."""
                 )

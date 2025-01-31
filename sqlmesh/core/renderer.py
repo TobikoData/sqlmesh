@@ -14,7 +14,6 @@ from sqlglot.optimizer.simplify import simplify
 
 from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
-from sqlmesh.core.console import get_console
 from sqlmesh.core.macros import MacroEvaluator, RuntimeStage
 from sqlmesh.utils.date import TimeLike, date_dict, make_inclusive, to_datetime
 from sqlmesh.utils.errors import (
@@ -535,6 +534,8 @@ class QueryRenderer(BaseExpressionRenderer):
                 missing_deps.add(dep)
 
         if self._model_fqn and not should_optimize and any(s.is_star for s in query.selects):
+            from sqlmesh.core.console import get_console
+
             deps = ", ".join(f"'{dep}'" for dep in sorted(missing_deps))
 
             warning = (
@@ -566,6 +567,8 @@ class QueryRenderer(BaseExpressionRenderer):
                     )
                 )
         except SqlglotError as ex:
+            from sqlmesh.core.console import get_console
+
             warning = (
                 f"{ex} for model '{self._model_fqn}', the column may not exist or is ambiguous"
             )

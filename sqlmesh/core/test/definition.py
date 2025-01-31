@@ -18,7 +18,6 @@ from sqlglot.optimizer.annotate_types import annotate_types
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
 from sqlmesh.core import constants as c
-from sqlmesh.core.console import get_console
 from sqlmesh.core.dialect import normalize_model_name, schema_
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.macros import RuntimeStage
@@ -241,9 +240,11 @@ class ModelTest(unittest.TestCase):
                 elif type(value) is datetime.datetime:
                     expected[col] = pd.to_datetime(expected[col]).dt.to_pydatetime()
             except Exception as e:
+                from sqlmesh.core.console import get_console
+
                 get_console().log_warning(
                     f"Failed to convert expected value for {col} into `datetime` "
-                    f"for unit test '{str(self)}'. {str(e)}"
+                    f"for unit test '{str(self)}'. {str(e)}."
                 )
 
         actual = actual.replace({np.nan: None})

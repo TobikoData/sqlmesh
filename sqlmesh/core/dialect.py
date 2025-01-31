@@ -23,7 +23,6 @@ from sqlglot.schema import MappingSchema
 from sqlglot.tokens import Token
 
 from sqlmesh.core.constants import MAX_MODEL_DEFINITION_SIZE
-from sqlmesh.core.console import get_console
 from sqlmesh.utils.errors import SQLMeshError, ConfigError
 from sqlmesh.utils.pandas import columns_to_types_from_df
 
@@ -330,6 +329,8 @@ def _parse_join(
 
 
 def _warn_unsupported(self: Parser) -> None:
+    from sqlmesh.core.console import get_console
+
     sql = self._find_sql(self._tokens[0], self._tokens[-1])[: self.error_message_context]
 
     get_console().log_warning(

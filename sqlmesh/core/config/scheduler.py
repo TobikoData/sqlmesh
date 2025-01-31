@@ -88,7 +88,7 @@ class _EngineAdapterStateSyncSchedulerConfig(SchedulerConfig):
                 get_console().log_warning(
                     "The duckdb state connection is configured for single threaded mode but the warehouse connection is configured for "
                     + f"multi threaded mode with {warehouse_connection.concurrent_tasks} concurrent tasks."
-                    + " This can cause SQLMesh to hang. Overriding the duckdb state connection config to use multi threaded mode"
+                    + " This can cause SQLMesh to hang. Overriding the duckdb state connection config to use multi threaded mode."
                 )
                 # this triggers multithreaded mode and has to happen before the engine adapter is created below
                 state_connection.concurrent_tasks = warehouse_connection.concurrent_tasks

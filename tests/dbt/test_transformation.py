@@ -15,6 +15,7 @@ from sqlglot import exp, parse_one
 from sqlmesh.core import dialect as d
 from sqlmesh.core.audit import StandaloneAudit
 from sqlmesh.core.context import Context
+from sqlmesh.core.console import get_console
 from sqlmesh.core.model import (
     EmbeddedKind,
     FullKind,
@@ -73,8 +74,7 @@ def test_materialization():
     context.project_name = "Test"
     context.target = DuckDbConfig(name="target", schema="foo")
 
-    logger = logging.getLogger("sqlmesh.dbt.model")
-    with patch.object(logger, "warning") as mock_logger:
+    with patch.object(get_console(), "log_warning") as mock_logger:
         model_config = ModelConfig(
             name="model", alias="model", schema="schema", materialized="materialized_view"
         )

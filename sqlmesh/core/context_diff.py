@@ -12,7 +12,6 @@ another remote environment and determine if nodes have been added, removed, or m
 
 from __future__ import annotations
 
-import logging
 import sys
 import typing as t
 from difflib import ndiff
@@ -33,8 +32,6 @@ if t.TYPE_CHECKING:
     from sqlmesh.core.state_sync import StateReader
 
 IGNORED_PACKAGES = {"sqlmesh", "sqlglot"}
-
-logger = logging.getLogger(__name__)
 
 
 class ContextDiff(PydanticModel):
@@ -396,7 +393,7 @@ class ContextDiff(PydanticModel):
         try:
             return old.node.text_diff(new.node, rendered=self.diff_rendered)
         except SQLMeshError as e:
-            get_console().log_warning(f"Failed to diff model '{name}': {str(e)}")
+            get_console().log_warning(f"Failed to diff model '{name}': {str(e)}.")
             return ""
 
 
@@ -426,5 +423,7 @@ def _build_requirements(
                                 ):
                                     requirements[dist] = metadata.version(dist)
                     except metadata.PackageNotFoundError:
-                        logger.warning("Failed to find package for %s", lib)
+                        from sqlmesh.core.console import get_console
+
+                        get_console().log_warning(f"Failed to find package for {lib}.")
     return requirements

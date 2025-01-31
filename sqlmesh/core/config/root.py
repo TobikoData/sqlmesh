@@ -174,12 +174,12 @@ class Config(BaseConfig):
 
         if "physical_schema_override" in data:
             get_console().log_warning(
-                "`physical_schema_override` is deprecated. Please use `physical_schema_mapping` instead"
+                "`physical_schema_override` is deprecated. Please use `physical_schema_mapping` instead."
             )
 
             if "physical_schema_mapping" in data:
                 raise ConfigError(
-                    "Only one of `physical_schema_override` and `physical_schema_mapping` can be specified"
+                    "Only one of `physical_schema_override` and `physical_schema_mapping` can be specified."
                 )
 
             physical_schema_override: t.Dict[str, str] = data.pop("physical_schema_override")

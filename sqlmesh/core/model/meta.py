@@ -10,7 +10,6 @@ from sqlglot.helper import ensure_collection, ensure_list
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
 from sqlmesh.core import dialect as d
-from sqlmesh.core.console import get_console
 from sqlmesh.core.dialect import normalize_model_name, extract_func_call
 from sqlmesh.core.model.common import (
     bool_validator,
@@ -300,6 +299,8 @@ class ModelMeta(_Node):
             if not isinstance(table_properties, str):
                 # Do not warn when deserializing from the state.
                 model_name = data["name"]
+                from sqlmesh.core.console import get_console
+
                 get_console().log_warning(
                     f"Model '{model_name}' is using the `table_properties` attribute which is deprecated. Please use `physical_properties` instead."
                 )
@@ -335,8 +336,10 @@ class ModelMeta(_Node):
             "hudi",
             "delta",
         }:
+            from sqlmesh.core.console import get_console
+
             get_console().log_warning(
-                f"Model {self.name} has `storage_format` set to a table format '{storage_format}' which is deprecated. Please use the `table_format` property instead"
+                f"Model {self.name} has `storage_format` set to a table format '{storage_format}' which is deprecated. Please use the `table_format` property instead."
             )
 
         return self
