@@ -181,8 +181,8 @@ Specifically, we must use Dagster's GraphQL API, which is not enabled by default
 sqlmesh = SQLMeshEnterpriseDagster(
     url=EnvVar("TOBIKO_CLOUD_BASE_URL").get_value(),
     token=EnvVar("TOBIKO_CLOUD_TOKEN").get_value(),
-    dagster_graphql_host="localhost", # Example GraphQL host
-    dagster_graphql_port=3000 # Example GraphQL port
+    dagster_graphql_host="localhost", # Example GraphQL host (could be passed in an environment variable instead)
+    dagster_graphql_port=3000 # Example GraphQL port (could be passed in an environment variable instead)
 )
 ```
 
@@ -315,13 +315,13 @@ def on_tobiko_cloud_start_run(context: RunStatusSensorContext):
 
 When Tobiko Cloud refreshes or adds new data to a model, a Materialization event occurs for its corresponding Asset in Dagster. The Materialization event provides a hook we can use to run custom logic.
 
-As before, the custom logic can do anything you want, such as triggering the materialization of another Asset fully managed by Dagster or running some custom task. The logic may not trigger the materialization of other Tobiko Cloud Assets.
+As before, the custom logic can do anything you want, such as triggering the materialization of another Asset fully managed by Dagster or running some custom task. Triggering the materialization of Tobiko Cloud Assets will not work correctly, as they simply reflect the operations performed by Tobiko Cloud.
 
 To listen for Asset Materialization events, create an [Asset Sensor](https://docs.dagster.io/concepts/partitions-schedules-sensors/asset-sensors).
 
-For example, let's say your Tobiko Cloud project has a model called `postgres.crm.customers` and it's showing in the Dagster Asset Catalog under "postgres / crm / customers".
+For example, let's say your Tobiko Cloud project has a model called `postgres.crm.customers`, and it's showing in the Dagster Asset Catalog under "postgres / crm / customers".
 
-Define an Asset Sensor to respond to this model's materialization events like so:
+Define an Asset Sensor to respond to this model's materialization events like this:
 
 ```python
 from dagster import AssetKey, SensorEvaluationContext, EventLogEntry
@@ -343,7 +343,7 @@ def on_crm_customers_updated(context: SensorEvaluationContext, asset_event: Even
 
 The sensor will trigger every time the Asset with the key `postgres / crm / customers` is materialized.
 
-To identify the `AssetKey`'s of your Assets, you can check the Asset Catalog. Each part of the path is a segment of the Asset Key.
+To identify the `AssetKey`'s of your Assets, check Dagster's Asset Catalog. Each part of the path is a segment of the Asset Key.
 
 ![Dagster asset keys](./dagster/asset_keys.png)
 
