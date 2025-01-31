@@ -57,18 +57,18 @@ def run_tests(
                 ).create_engine_adapter(register_comments_override=False)
                 testing_adapter_by_gateway[gateway] = testing_engine_adapter
 
-            tests.append(
-                ModelTest.create_test(
-                    body=body,
-                    test_name=metadata.test_name,
-                    models=models,
-                    engine_adapter=testing_engine_adapter,
-                    dialect=dialect,
-                    path=metadata.path,
-                    default_catalog=default_catalog,
-                    preserve_fixtures=preserve_fixtures,
-                )
+            test = ModelTest.create_test(
+                body=body,
+                test_name=metadata.test_name,
+                models=models,
+                engine_adapter=testing_engine_adapter,
+                dialect=dialect,
+                path=metadata.path,
+                default_catalog=default_catalog,
+                preserve_fixtures=preserve_fixtures,
             )
+            if test:
+                tests.append(test)
 
         result = t.cast(
             ModelTextTestResult,
