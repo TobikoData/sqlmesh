@@ -56,7 +56,7 @@ The following detailed information outlines the different sections:
 ![Tobiko Cloud model version history](./model/tcloud_model_3.png)
 
 - Loaded intervals: these periods represent the time spans between consecutive cron job executions, from the start of one cron job to the end of the next cron job. These intervals are crucial for understanding the boundaries of data processing cycles
-    - the table displays which specific model version was responsible for generating and processing data during each distinct cron interval, enabling precise tracking of version-specific outputs
+    - The table displays the specific model version in effect during that job execution, enabling precise tracking of version-specific outputs
     - Helps track forward-only model changes by maintaining a clear chronological record of modifications, ensuring data consistency and preventing retroactive alterations
     - provides comprehensive visibility into completed data processing operations, allowing users to monitor progress and verify successful execution of scheduled tasks
 - Recent activity: Maintains a detailed log of version executions and comprehensive version audits
