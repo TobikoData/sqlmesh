@@ -10,7 +10,7 @@ Model owners typically use this page to monitor and check their models. It provi
 2. Downstream impacts 
     1. If the model fails to run, lineage lets you immediately see what other models are affected 
 3. Which version introduced errors
-    1. The version history of the model is available to view and can be used to see schema changes that may have contributed to any issues 
+    1. Use the model's version history to identify which changes caused a problem
 
 
 ## Navigate to a model
