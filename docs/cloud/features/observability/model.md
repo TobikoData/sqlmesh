@@ -6,7 +6,7 @@ Model owners typically use this page to monitor and check their models. It provi
 
 1. Model anomalies
     1. Did the model suddenly take a really long time to run? 
-    2. Is the model failing a lot due to audits or schema evolution? 
+    2. Is the model repeatedly failing due to audits or schema evolution? 
 2. Downstream impacts 
     1. If the model fails to run, using the lineage you can immediately see what other models are affected 
 3. The version that introduced errors
