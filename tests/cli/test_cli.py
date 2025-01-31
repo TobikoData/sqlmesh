@@ -962,7 +962,7 @@ def test_init_project_dialects(runner, tmp_path):
     for dialect, expected_config in dialect_to_config.items():
         init_example_project(tmp_path, dialect=dialect)
 
-        config_start = f"gateways:\n  dev:\n    connection:\n      # Visit https://sqlmesh.readthedocs.io/en/stable/integrations/engines/{dialect}/#connection-options for more information on configuring the connection to your execution engine.\n      type: {dialect}\n      "
+        config_start = f"gateways:\n  dev:\n    connection:\n      # For more information on configuring the connection to your execution engine, visit:\n      # https://sqlmesh.readthedocs.io/en/stable/reference/configuration/#connections\n      # https://sqlmesh.readthedocs.io/en/stable/integrations/engines/{dialect}/#connection-options\n      type: {dialect}\n      "
         config_end = f"\n\n\ndefault_gateway: dev\n\nmodel_defaults:\n  dialect: {dialect}\n  start: {yesterday_ds()}\n"
 
         with open(tmp_path / "config.yaml") as file:
