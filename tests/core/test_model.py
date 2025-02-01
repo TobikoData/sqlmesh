@@ -293,7 +293,7 @@ def test_model_qualification():
         model.render_query(needs_optimization=True)
         assert (
             mock_logger.call_args[0][0]
-            == """Column '"a"' could not be resolved for model '"db"."table"', the column may not exist or is ambiguous"""
+            == """Column '"a"' could not be resolved for model '"db"."table"', the column may not exist or is ambiguous."""
         )
 
 

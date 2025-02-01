@@ -283,6 +283,152 @@ class Console(abc.ABC):
         return tree
 
 
+class NoopConsole(Console):
+    def start_plan_evaluation(self, plan: EvaluatablePlan) -> None:
+        pass
+
+    def stop_plan_evaluation(self) -> None:
+        pass
+
+    def start_evaluation_progress(
+        self,
+        batches: t.Dict[Snapshot, int],
+        environment_naming_info: EnvironmentNamingInfo,
+        default_catalog: t.Optional[str],
+    ) -> None:
+        pass
+
+    def start_snapshot_evaluation_progress(self, snapshot: Snapshot) -> None:
+        pass
+
+    def update_snapshot_evaluation_progress(
+        self, snapshot: Snapshot, batch_idx: int, duration_ms: t.Optional[int]
+    ) -> None:
+        pass
+
+    def stop_evaluation_progress(self, success: bool = True) -> None:
+        pass
+
+    def start_creation_progress(
+        self,
+        total_tasks: int,
+        environment_naming_info: EnvironmentNamingInfo,
+        default_catalog: t.Optional[str],
+    ) -> None:
+        pass
+
+    def update_creation_progress(self, snapshot: SnapshotInfoLike) -> None:
+        pass
+
+    def stop_creation_progress(self, success: bool = True) -> None:
+        pass
+
+    def start_cleanup(self, ignore_ttl: bool) -> bool:
+        return True
+
+    def update_cleanup_progress(self, object_name: str) -> None:
+        pass
+
+    def stop_cleanup(self, success: bool = True) -> None:
+        pass
+
+    def start_promotion_progress(
+        self,
+        total_tasks: int,
+        environment_naming_info: EnvironmentNamingInfo,
+        default_catalog: t.Optional[str],
+    ) -> None:
+        pass
+
+    def update_promotion_progress(self, snapshot: SnapshotInfoLike, promoted: bool) -> None:
+        pass
+
+    def stop_promotion_progress(self, success: bool = True) -> None:
+        pass
+
+    def start_snapshot_migration_progress(self, total_tasks: int) -> None:
+        pass
+
+    def update_snapshot_migration_progress(self, num_tasks: int) -> None:
+        pass
+
+    def log_migration_status(self, success: bool = True) -> None:
+        pass
+
+    def stop_snapshot_migration_progress(self, success: bool = True) -> None:
+        pass
+
+    def start_env_migration_progress(self, total_tasks: int) -> None:
+        pass
+
+    def update_env_migration_progress(self, num_tasks: int) -> None:
+        pass
+
+    def stop_env_migration_progress(self, success: bool = True) -> None:
+        pass
+
+    def show_model_difference_summary(
+        self,
+        context_diff: ContextDiff,
+        environment_naming_info: EnvironmentNamingInfo,
+        default_catalog: t.Optional[str],
+        no_diff: bool = True,
+        ignored_snapshot_ids: t.Optional[t.Set[SnapshotId]] = None,
+    ) -> None:
+        pass
+
+    def plan(
+        self,
+        plan_builder: PlanBuilder,
+        auto_apply: bool,
+        default_catalog: t.Optional[str],
+        no_diff: bool = False,
+        no_prompts: bool = False,
+    ) -> None:
+        if auto_apply:
+            plan_builder.apply()
+
+    def log_test_results(
+        self, result: unittest.result.TestResult, output: t.Optional[str], target_dialect: str
+    ) -> None:
+        pass
+
+    def show_sql(self, sql: str) -> None:
+        pass
+
+    def log_status_update(self, message: str) -> None:
+        pass
+
+    def log_skipped_models(self, snapshot_names: t.Set[str]) -> None:
+        pass
+
+    def log_failed_models(self, errors: t.List[NodeExecutionFailedError]) -> None:
+        pass
+
+    def log_error(self, message: str) -> None:
+        pass
+
+    def log_warning(self, message: str) -> None:
+        pass
+
+    def log_success(self, message: str) -> None:
+        pass
+
+    def loading_start(self, message: t.Optional[str] = None) -> uuid.UUID:
+        return uuid.uuid4()
+
+    def loading_stop(self, id: uuid.UUID) -> None:
+        pass
+
+    def show_schema_diff(self, schema_diff: SchemaDiff) -> None:
+        pass
+
+    def show_row_diff(
+        self, row_diff: RowDiff, show_sample: bool = True, skip_grain_check: bool = False
+    ) -> None:
+        pass
+
+
 def make_progress_bar(message: str, console: t.Optional[RichConsole] = None) -> Progress:
     return Progress(
         TextColumn(f"[bold blue]{message}", justify="right"),
@@ -2187,7 +2333,7 @@ class DebuggerTerminalConsole(TerminalConsole):
         self._write(row_diff)
 
 
-_CONSOLE: t.Optional[Console] = None
+_CONSOLE: Console = NoopConsole()
 
 
 def set_console(console: Console) -> None:
@@ -2204,9 +2350,6 @@ def configure_console(**kwargs: t.Any) -> None:
 
 def get_console() -> Console:
     """Returns the console instance or creates a new one if it hasn't been created yet."""
-    global _CONSOLE
-    if _CONSOLE is None:
-        _CONSOLE = create_console()
     return _CONSOLE
 
 

@@ -570,7 +570,7 @@ class QueryRenderer(BaseExpressionRenderer):
             from sqlmesh.core.console import get_console
 
             warning = (
-                f"{ex} for model '{self._model_fqn}', the column may not exist or is ambiguous"
+                f"{ex} for model '{self._model_fqn}', the column may not exist or is ambiguous."
             )
 
             if self._validate_query:

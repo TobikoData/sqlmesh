@@ -38,7 +38,7 @@ INCREMENTAL_BY_UNIQUE_KEY_STRATEGIES = set(["merge"])
 
 
 def collection_to_str(collection: t.Iterable) -> str:
-    return ", ".join(f"'{item}'" for item in collection)
+    return ", ".join(f"'{item}'" for item in sorted(collection))
 
 
 class ModelConfig(BaseModelConfig):
