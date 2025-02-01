@@ -14,7 +14,7 @@ from sqlmesh.cli.example_project import ProjectTemplate, init_example_project
 from sqlmesh.core.analytics import cli_analytics
 from sqlmesh.core.config import load_configs
 from sqlmesh.core.context import Context
-from sqlmesh.utils.date import TimeLike
+from sqlmesh.utils.date import TimeLike, time_like_to_str
 from sqlmesh.utils.errors import MissingDependencyError
 
 logger = logging.getLogger(__name__)
@@ -966,3 +966,30 @@ def dlt_refresh(
         ctx.obj.console.log_success(f"Updated SQLMesh project with models:\n{model_names}")
     else:
         ctx.obj.console.log_success("All SQLMesh models are up to date.")
+
+
+@cli.command("environments")
+@click.option(
+    "-e",
+    "--expiry-ds",
+    is_flag=True,
+    help="Prints the expiration datetime of the environments.",
+    default=False,
+)
+@click.pass_obj
+@error_handler
+@cli_analytics
+def environments(obj: Context, expiry_ds: bool) -> None:
+    """Prints the list of SQLMesh environments with its expiration datetime."""
+    environments = {e.name: e.expiration_ts for e in obj.state_sync.get_environments()}
+    environment_names = list(environments.keys())
+    if expiry_ds:
+        max_width = len(max(environment_names, key=len))
+        print(
+            "\n".join(
+                f"{k:<{max_width}} {time_like_to_str(v)}" if v else f"{k:<{max_width}} no-expiry"
+                for k, v in environments.items()
+            ),
+        )
+        return
+    print("\n".join(environment_names))

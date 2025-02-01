@@ -29,7 +29,7 @@ from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import format_model_expressions, parse
 from sqlmesh.core.model import load_sql_based_model
 from sqlmesh.core.test import ModelTestMetadata, get_all_model_tests
-from sqlmesh.utils import sqlglot_dialects, yaml
+from sqlmesh.utils import date, sqlglot_dialects, yaml
 from sqlmesh.utils.errors import MagicError, MissingContextException, SQLMeshError
 
 logger = logging.getLogger(__name__)
@@ -1006,6 +1006,33 @@ class SQLMeshMagics(Magics):
         """Clears the SQLMesh cache and any build artifacts."""
         context.clear_caches()
         context.console.log_success("SQLMesh cache and build artifacts cleared")
+
+    @magic_arguments()
+    @argument(
+        "--expiry-ds",
+        "-e",
+        action="store_true",
+        help="Prints the expiration datetime of the environments.",
+    )
+    @line_magic
+    @pass_sqlmesh_context
+    def environments(self, context: Context, line: str) -> None:
+        """Prints the list of SQLMesh environments with its expiration datetime."""
+        args = parse_argstring(self.environments, line)
+        environments = {e.name: e.expiration_ts for e in context.state_sync.get_environments()}
+        environment_names = list(environments.keys())
+        if args.expiry_ds:
+            max_width = len(max(environment_names, key=len))
+            context.console.log_status_update(
+                "\n".join(
+                    f"{k:<{max_width}} {date.time_like_to_str(v)}"
+                    if v
+                    else f"{k:<{max_width}} no-expiry"
+                    for k, v in environments.items()
+                ),
+            )
+            return
+        context.console.log_status_update("\n".join(environment_names))
 
 
 def register_magics() -> None:

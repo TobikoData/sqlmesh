@@ -11,7 +11,7 @@ from sqlmesh.cli.example_project import ProjectTemplate, init_example_project
 from sqlmesh.cli.main import cli
 from sqlmesh.core.context import Context
 from sqlmesh.integrations.dlt import generate_dlt_models
-from sqlmesh.utils.date import yesterday_ds
+from sqlmesh.utils.date import now_ds, time_like_to_str, timedelta, to_datetime, yesterday_ds
 
 FREEZE_TIME = "2023-01-01 00:00:00 UTC"
 
@@ -971,3 +971,68 @@ def test_init_project_dialects(runner, tmp_path):
             assert config == f"{config_start}{expected_config}{config_end}"
 
             remove(tmp_path / "config.yaml")
+
+
+def test_environments(runner, tmp_path):
+    create_example_project(tmp_path)
+
+    # create dev environment and backfill
+    runner.invoke(
+        cli,
+        [
+            "--log-file-dir",
+            tmp_path,
+            "--paths",
+            tmp_path,
+            "plan",
+            "dev",
+            "--no-prompts",
+            "--auto-apply",
+        ],
+    )
+
+    # # create dev2 environment from dev environment
+    # # Input: `y` to apply and virtual update
+    runner.invoke(
+        cli,
+        [
+            "--log-file-dir",
+            tmp_path,
+            "--paths",
+            tmp_path,
+            "plan",
+            "dev2",
+            "--create-from",
+            "dev",
+            "--include-unmodified",
+        ],
+        input="y\n",
+    )
+
+    result = runner.invoke(
+        cli,
+        [
+            "--log-file-dir",
+            tmp_path,
+            "--paths",
+            tmp_path,
+            "environments",
+        ],
+    )
+    assert result.exit_code == 0
+    assert result.output == "dev\ndev2\n"
+
+    result = runner.invoke(
+        cli,
+        [
+            "--log-file-dir",
+            tmp_path,
+            "--paths",
+            tmp_path,
+            "environments",
+            "--expiry-ds",
+        ],
+    )
+    assert result.exit_code == 0
+    ttl = time_like_to_str(to_datetime(now_ds()) + timedelta(days=7))
+    assert result.output == f"dev  {ttl}\ndev2 {ttl}\n"

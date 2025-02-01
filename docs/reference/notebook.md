@@ -243,6 +243,14 @@ options:
   --force, -f              If set it will overwrite existing models with the new generated models from the DLT tables.
 ```
 
+#### environments
+```
+%environments [--expiry-ds]
+Prints the list of SQLMesh environments with its expiration datetime.
+options:
+  --expiry-ds, -e  If set will print the expiration datetime of the environments
+```
+
 #### fetchdf
 ```
 %%fetchdf [df_var]
