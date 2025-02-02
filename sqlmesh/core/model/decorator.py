@@ -129,6 +129,8 @@ class model(registry_decorator):
             dialect=dialect,
             default_catalog=default_catalog,
         )
+        if not isinstance(rendered_fields["name"], str):
+            rendered_fields["name"] = rendered_fields["name"].sql(dialect=dialect)
         common_kwargs = {
             "defaults": defaults,
             "path": path,

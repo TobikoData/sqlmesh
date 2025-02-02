@@ -4972,7 +4972,7 @@ def test_macros_python_model(mocker: MockerFixture) -> None:
     assert python_model.name == "foo_macro_model_suffix"
     assert python_model.python_env[c.SQLMESH_VARS] == Executable.value({"test_var_a": "test_value"})
     assert not python_model.enabled
-    assert python_model.start == "'2024-01-01'"
+    assert python_model.start == "2024-01-01"
     assert python_model.owner == "pr_1"
     assert python_model.stamp == "bump"
     assert python_model.time_column.column == exp.column("a", quoted=True)
@@ -4986,7 +4986,7 @@ def test_macros_python_model(mocker: MockerFixture) -> None:
 def test_macros_python_sql_model(mocker: MockerFixture) -> None:
     @macro()
     def end_date_macro(evaluator: MacroEvaluator, var: bool):
-        return f"@IF({var} = True, '1 day ago', '2025-01-01 12:00:00')"
+        return f"@IF({var} = False, '1 day ago', '2025-01-01 12:00:00')"
 
     @model(
         "test_macros_python_model_@{bar}",
@@ -5020,9 +5020,10 @@ def test_macros_python_sql_model(mocker: MockerFixture) -> None:
     assert python_sql_model.python_env[c.SQLMESH_VARS] == Executable.value(
         {"test_var_a": "test_value"}
     )
+
     assert python_sql_model.enabled
-    assert python_sql_model.start == "'1 month ago'"
-    assert python_sql_model.end == "'2025-01-01 12:00:00'"
+    assert python_sql_model.start == "1 month ago"
+    assert python_sql_model.end == "1 day ago"
 
     context = ExecutionContext(mocker.Mock(), {}, None, None)
     query = list(python_sql_model.render(context=context))[0]
