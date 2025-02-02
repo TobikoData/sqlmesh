@@ -1265,3 +1265,11 @@ def test_rendered_diff():
  )
 -DROP VIEW "test"
 +DROP VIEW IF EXISTS "test"''' in plan.context_diff.text_diff('"test"')
+
+
+def test_plan_enable_preview_default(sushi_context: Context, sushi_dbt_context: Context):
+    assert sushi_context._plan_preview_enabled
+    assert not sushi_dbt_context._plan_preview_enabled
+
+    sushi_dbt_context.engine_adapter.SUPPORTS_CLONING = True
+    assert sushi_dbt_context._plan_preview_enabled
