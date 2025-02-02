@@ -120,7 +120,7 @@ class ModelKindMixin:
 
     @property
     def is_materialized(self) -> bool:
-        return not (self.is_symbolic or self.is_view)
+        return self.model_kind_name is not None and not (self.is_symbolic or self.is_view)
 
     @property
     def only_execution_time(self) -> bool:
