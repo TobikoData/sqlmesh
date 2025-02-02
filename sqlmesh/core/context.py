@@ -596,13 +596,8 @@ class GenericContext(BaseContext, t.Generic[C]):
             self.default_dialect or ""
         }
 
-        project_types = {
-            c.DBT if loader.config.loader.__name__.lower().startswith(c.DBT) else c.NATIVE
-            for loader in self._loaders
-        }
-
         analytics.collector.on_project_loaded(
-            project_type=c.HYBRID if len(project_types) > 1 else first(project_types),
+            project_type=self._project_type,
             models_count=len(self._models),
             audits_count=len(self._audits),
             standalone_audits_count=len(self._standalone_audits),
@@ -1390,7 +1385,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             default_start=default_start,
             default_end=default_end,
             enable_preview=(
-                enable_preview if enable_preview is not None else self.config.plan.enable_preview
+                enable_preview if enable_preview is not None else self._plan_preview_enabled
             ),
             end_bounded=not run,
             ensure_finalized_snapshots=self.config.plan.use_finalized_state,
@@ -2278,6 +2273,23 @@ class GenericContext(BaseContext, t.Generic[C]):
         if not no_auto_upstream:
             result = set(dag.subdag(*result))
         return result
+
+    @cached_property
+    def _project_type(self) -> str:
+        project_types = {
+            c.DBT if loader.__class__.__name__.lower().startswith(c.DBT) else c.NATIVE
+            for loader in self._loaders
+        }
+        return c.HYBRID if len(project_types) > 1 else first(project_types)
+
+    @property
+    def _plan_preview_enabled(self) -> bool:
+        if self.config.plan.enable_preview is not None:
+            return self.config.plan.enable_preview
+        # It is dangerous to enable preview by default for dbt projects that rely on engines that don’t support cloning.
+        # Enabling previews in such cases can result in unintended full refreshes because dbt incremental models rely on
+        # the maximum timestamp value in the target table.
+        return self._project_type == c.NATIVE or self.engine_adapter.SUPPORTS_CLONING
 
 
 class Context(GenericContext[Config]):

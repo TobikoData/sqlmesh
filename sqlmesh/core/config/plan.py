@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import typing as t
+
 from sqlmesh.core.config.base import BaseConfig
 from sqlmesh.core.config.categorizer import CategorizerConfig
 
@@ -23,7 +25,7 @@ class PlanConfig(BaseConfig):
     forward_only: bool = False
     auto_categorize_changes: CategorizerConfig = CategorizerConfig()
     include_unmodified: bool = False
-    enable_preview: bool = False
+    enable_preview: t.Optional[bool] = None
     no_diff: bool = False
     no_prompts: bool = True
     auto_apply: bool = False
