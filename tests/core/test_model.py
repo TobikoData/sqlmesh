@@ -6570,6 +6570,36 @@ def test_resolve_table(make_snapshot: t.Callable):
         assert len(post_statements) == 1
         assert post_statements[0].sql() == f'"sqlmesh__default"."parent__{version}"'
 
+    # test with additional nesting level and default catalog
+    for post_statement in (
+        "JINJA_STATEMENT_BEGIN; {{ resolve_table('schema.parent') }}; JINJA_END;",
+        "@resolve_parent('schema.parent')",
+    ):
+        expressions = d.parse(
+            f"""
+            MODEL (name schema.child);
+
+            SELECT c FROM schema.parent;
+
+            {post_statement}
+            """
+        )
+        child = load_sql_based_model(expressions, default_catalog="main")
+        parent = load_sql_based_model(
+            d.parse("MODEL (name schema.parent); SELECT 1 AS c"), default_catalog="main"
+        )
+
+        parent_snapshot = make_snapshot(parent)
+        parent_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+        version = parent_snapshot.version
+
+        post_statements = child.render_post_statements(
+            snapshots={'"main"."schema"."parent"': parent_snapshot}
+        )
+
+        assert len(post_statements) == 1
+        assert post_statements[0].sql() == f'"main"."sqlmesh__schema"."schema__parent__{version}"'
+
 
 def test_cluster_with_complex_expression():
     expressions = d.parse(
