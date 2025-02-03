@@ -72,6 +72,7 @@ def convert_all_html_output_to_text():
     return _convert
 
 
+@t.no_type_check
 @pytest.fixture
 def convert_all_html_output_to_tags():
     def _convert_html_to_tags(html: str) -> t.List[str]:
