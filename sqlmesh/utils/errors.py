@@ -155,6 +155,10 @@ class CircuitBreakerError(SQLMeshError):
         super().__init__("Circuit breaker triggered.")
 
 
+class PythonModelEvalError(SQLMeshError):
+    pass
+
+
 def raise_config_error(
     msg: str,
     location: t.Optional[str | Path] = None,

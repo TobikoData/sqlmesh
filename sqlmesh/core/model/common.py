@@ -300,7 +300,7 @@ def depends_on(cls: t.Type, v: t.Any, info: ValidationInfo) -> t.Optional[t.Set[
     return v
 
 
-expression_validator = field_validator(
+expression_validator: t.Callable = field_validator(
     "query",
     "expressions_",
     "pre_statements_",
@@ -312,7 +312,7 @@ expression_validator = field_validator(
 )(parse_expression)
 
 
-bool_validator = field_validator(
+bool_validator: t.Callable = field_validator(
     "skip",
     "blocking",
     "forward_only",
@@ -327,7 +327,7 @@ bool_validator = field_validator(
 )(parse_bool)
 
 
-properties_validator = field_validator(
+properties_validator: t.Callable = field_validator(
     "physical_properties_",
     "virtual_properties_",
     "session_properties_",
@@ -337,14 +337,14 @@ properties_validator = field_validator(
 )(parse_properties)
 
 
-default_catalog_validator = field_validator(
+default_catalog_validator: t.Callable = field_validator(
     "default_catalog",
     mode="before",
     check_fields=False,
 )(default_catalog)
 
 
-depends_on_validator = field_validator(
+depends_on_validator: t.Callable = field_validator(
     "depends_on_",
     mode="before",
     check_fields=False,

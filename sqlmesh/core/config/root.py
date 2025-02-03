@@ -4,7 +4,6 @@ import pickle
 import re
 import typing as t
 import zlib
-import logging
 
 from pydantic import Field
 from sqlglot import exp
@@ -13,9 +12,10 @@ from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
 from sqlmesh.cicd.config import CICDBotConfig
 from sqlmesh.core import constants as c
+from sqlmesh.core.console import get_console
 from sqlmesh.core.config import EnvironmentSuffixTarget
 from sqlmesh.core.config.base import BaseConfig, UpdateStrategy
-from sqlmesh.core.config.common import variables_validator
+from sqlmesh.core.config.common import variables_validator, compile_regex_mapping
 from sqlmesh.core.config.connection import (
     ConnectionConfig,
     DuckDBConnectionConfig,
@@ -44,8 +44,6 @@ from sqlmesh.utils.pydantic import field_validator, model_validator
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import Self
-
-logger = logging.getLogger(__name__)
 
 
 class Config(BaseConfig):
@@ -158,13 +156,7 @@ class Config(BaseConfig):
     def _validate_regex_keys(
         cls, value: t.Dict[str | re.Pattern, t.Any]
     ) -> t.Dict[re.Pattern, t.Any]:
-        compiled_regexes = {}
-        for k, v in value.items():
-            try:
-                compiled_regexes[re.compile(k)] = v
-            except re.error:
-                raise ConfigError(f"`{k}` is not a valid regular expression.")
-        return compiled_regexes
+        return compile_regex_mapping(value)
 
     @model_validator(mode="before")
     def _normalize_and_validate_fields(cls, data: t.Any) -> t.Any:
@@ -181,13 +173,13 @@ class Config(BaseConfig):
                 )
 
         if "physical_schema_override" in data:
-            logger.warning(
-                "`physical_schema_override` is deprecated. Please use `physical_schema_mapping` instead"
+            get_console().log_warning(
+                "`physical_schema_override` is deprecated. Please use `physical_schema_mapping` instead."
             )
 
             if "physical_schema_mapping" in data:
                 raise ConfigError(
-                    "Only one of `physical_schema_override` and `physical_schema_mapping` can be specified"
+                    "Only one of `physical_schema_override` and `physical_schema_mapping` can be specified."
                 )
 
             physical_schema_override: t.Dict[str, str] = data.pop("physical_schema_override")

@@ -1,5 +1,4 @@
 import pytest
-import logging
 import typing as t
 from pathlib import Path
 from unittest.mock import patch
@@ -349,8 +348,7 @@ def test_missing_table(tmp_path: Path):
     model = SqlModel(name="a", query=parse_one("select * FROM tbl_source"))
 
     filename = tmp_path / c.EXTERNAL_MODELS_YAML
-    logger = logging.getLogger("sqlmesh.core.schema_loader")
-    with patch.object(logger, "warning") as mock_logger:
+    with patch.object(context.console, "log_warning") as mock_logger:
         create_external_models_file(
             filename,
             {"a": model},  # type: ignore

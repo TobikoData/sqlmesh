@@ -120,7 +120,7 @@ class ModelKindMixin:
 
     @property
     def is_materialized(self) -> bool:
-        return not (self.is_symbolic or self.is_view)
+        return self.model_kind_name is not None and not (self.is_symbolic or self.is_view)
 
     @property
     def only_execution_time(self) -> bool:
@@ -450,11 +450,13 @@ class IncrementalByUniqueKeyKind(_IncrementalBy):
     @field_validator("when_matched", mode="before")
     def _when_matched_validator(
         cls,
-        v: t.Optional[t.Union[str, exp.Whens]],
+        v: t.Optional[t.Union[str, list, exp.Whens]],
         info: ValidationInfo,
     ) -> t.Optional[exp.Whens]:
         if v is None:
             return v
+        if isinstance(v, list):
+            v = " ".join(v)
         if isinstance(v, str):
             # Whens wrap the WHEN clauses, but the parentheses aren't parsed by sqlglot
             v = v.strip()
@@ -984,7 +986,7 @@ def _model_kind_validator(cls: t.Type, v: t.Any, info: t.Optional[ValidationInfo
     return create_model_kind(v, dialect, {})
 
 
-model_kind_validator = field_validator("kind", mode="before")(_model_kind_validator)
+model_kind_validator: t.Callable = field_validator("kind", mode="before")(_model_kind_validator)
 
 
 def _property(name: str, value: t.Any) -> exp.Property:

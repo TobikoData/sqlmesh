@@ -1,4 +1,5 @@
 from __future__ import annotations
+import re
 import typing as t
 from functools import lru_cache
 import pandas as pd
@@ -62,6 +63,10 @@ class TrinoEngineAdapter(
     # some catalogs support microsecond (precision 6) but it has to be specifically enabled (Hive) or just isnt available (Delta / TIMESTAMP WITH TIME ZONE)
     # and even if you have a TIMESTAMP(6) the date formatting functions still only support millisecond precision
     MAX_TIMESTAMP_PRECISION = 3
+
+    @property
+    def schema_location_mapping(self) -> t.Optional[dict[re.Pattern, str]]:
+        return self._extra_config.get("schema_location_mapping")
 
     @property
     def catalog_support(self) -> CatalogSupport:
@@ -286,6 +291,25 @@ class TrinoEngineAdapter(
     def _block_until_table_exists(self, table_name: TableName) -> bool:
         return self.table_exists(table_name)
 
+    def _create_schema(
+        self,
+        schema_name: SchemaName,
+        ignore_if_exists: bool,
+        warn_on_error: bool,
+        properties: t.List[exp.Expression],
+        kind: str,
+    ) -> None:
+        if mapped_location := self._schema_location(schema_name):
+            properties.append(exp.LocationProperty(this=exp.Literal.string(mapped_location)))
+
+        return super()._create_schema(
+            schema_name=schema_name,
+            ignore_if_exists=ignore_if_exists,
+            warn_on_error=warn_on_error,
+            properties=properties,
+            kind=kind,
+        )
+
     def _create_table(
         self,
         table_name_or_schema: t.Union[exp.Schema, TableName],
@@ -322,3 +346,19 @@ class TrinoEngineAdapter(
             # (even if metadata TTL is set to 0s)
             # Blocking until the table shows up means that subsequent code expecting it to exist immediately will not fail
             self._block_until_table_exists(table_name)
+
+    def _schema_location(self, schema_name: SchemaName) -> t.Optional[str]:
+        if mapping := self.schema_location_mapping:
+            schema = to_schema(schema_name)
+            match_key = schema.db
+
+            # only consider the catalog if it is present
+            if catalog := schema.catalog:
+                match_key = f"{catalog}.{match_key}"
+
+            for k, v in mapping.items():
+                if re.match(k, match_key):
+                    return v.replace("@{schema_name}", schema.db).replace(
+                        "@{catalog_name}", schema.catalog
+                    )
+        return None

@@ -45,6 +45,69 @@ Configuration options for SQLMesh model properties. Supported by all model kinds
 
 The SQLMesh project-level configuration must contain the `model_defaults` key and must specify a value for its `dialect` key. Other values are set automatically unless explicitly overridden in the model definition. Learn more about project-level configuration in the [configuration guide](../guides/configuration.md).
 
+In `physical_properties`, `virtual_properties`, and `session_properties`, when both project-level and model-specific properties are defined, they are merged, with model-level properties taking precedence. To unset a project-wide property for a specific model, set it to `None` in the `MODEL`'s DDL properties or within the `@model` decorator for Python models.
+
+For example, with the following `model_defaults` configuration:
+
+=== "YAML"
+
+    ```yaml linenums="1"
+    model_defaults:
+      dialect: snowflake
+      start: 2022-01-01
+      physical_properties:
+        partition_expiration_days: 7
+        require_partition_filter: True
+        project_level_property: "value"
+    ```
+
+=== "Python"
+
+    ```python linenums="1"
+    from sqlmesh.core.config import Config, ModelDefaultsConfig
+
+    config = Config(
+      model_defaults=ModelDefaultsConfig(
+        dialect="snowflake",
+        start="2022-01-01",
+        physical_properties={
+          "partition_expiration_days": 7,
+          "require_partition_filter": True,
+          "project_level_property": "value"
+        },
+      ),
+    )
+    ```
+
+To override `partition_expiration_days`, add a new `creatable_type` property and unset `project_level_property`, you can define the model as follows:
+
+=== "SQL"
+
+    ```sql linenums="1"
+    MODEL (
+      ...,
+      physical_properties (
+        partition_expiration_days = 14,
+        creatable_type = TRANSIENT,
+        project_level_property = None,
+      )
+    );
+    ```
+
+=== "Python"
+
+    ```python linenums="1"
+    @model(
+      ...,
+      physical_properties={
+        "partition_expiration_days": 14,
+        "creatable_type": "TRANSIENT",
+        "project_level_property": None
+      },
+    )
+    ```
+
+
 The SQLMesh project-level `model_defaults` key supports the following options, described in the [general model properties](#general-model-properties) table above:
 
 - kind
@@ -52,10 +115,15 @@ The SQLMesh project-level `model_defaults` key supports the following options, d
 - cron
 - owner
 - start
+- table_format
 - storage_format
+- physical_properties
+- virtual_properties
 - session_properties (on per key basis)
 - on_destructive_change (described [below](#incremental-models))
 - audits (described [here](../concepts/audits.md#generic-audits))
+- optimize_query
+- validate_query
 
 
 ### Model Naming

@@ -45,10 +45,11 @@ from functools import cached_property
 from io import StringIO
 from pathlib import Path
 from shutil import rmtree
-from types import MappingProxyType, SimpleNamespace
+from types import MappingProxyType
 
 import pandas as pd
 from sqlglot import Dialect, exp
+from sqlglot.helper import first
 from sqlglot.lineage import GraphHTML
 
 from sqlmesh.core import analytics
@@ -61,7 +62,7 @@ from sqlmesh.core.config import (
     load_configs,
 )
 from sqlmesh.core.config.loader import C
-from sqlmesh.core.console import Console, get_console
+from sqlmesh.core.console import get_console
 from sqlmesh.core.context_diff import ContextDiff
 from sqlmesh.core.dialect import (
     format_model_expressions,
@@ -73,10 +74,10 @@ from sqlmesh.core.dialect import (
 )
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.environment import Environment, EnvironmentNamingInfo
-from sqlmesh.core.loader import Loader, update_model_schemas
+from sqlmesh.core.loader import Loader
 from sqlmesh.core.macros import ExecutableOrMacro, macro
 from sqlmesh.core.metric import Metric, rewrite
-from sqlmesh.core.model import Model
+from sqlmesh.core.model import Model, update_model_schemas
 from sqlmesh.core.notification_target import (
     NotificationEvent,
     NotificationTarget,
@@ -110,7 +111,7 @@ from sqlmesh.core.test import (
     run_tests,
 )
 from sqlmesh.core.user import User
-from sqlmesh.utils import UniqueKeyDict, sys_path
+from sqlmesh.utils import UniqueKeyDict
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import TimeLike, now_ds, to_timestamp, format_tz_datetime
 from sqlmesh.utils.errors import (
@@ -179,7 +180,7 @@ class BaseContext(abc.ABC):
         raise NotImplementedError
 
     def table(self, model_name: str) -> str:
-        logger.warning(
+        get_console().log_warning(
             "The SQLMesh context's `table` method is deprecated and will be removed "
             "in a future release. Please use the `resolve_table` method instead."
         )
@@ -328,13 +329,11 @@ class GenericContext(BaseContext, t.Generic[C]):
         concurrent_tasks: t.Optional[int] = None,
         loader: t.Optional[t.Type[Loader]] = None,
         load: bool = True,
-        console: t.Optional[Console] = None,
         users: t.Optional[t.List[User]] = None,
     ):
         self.configs = (
             config if isinstance(config, dict) else load_configs(config, self.CONFIG_TYPE, paths)
         )
-        self._loaders: UniqueKeyDict[str, SimpleNamespace] = UniqueKeyDict("loaders")
         self.dag: DAG[str] = DAG()
         self._models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
         self._audits: UniqueKeyDict[str, ModelAudit] = UniqueKeyDict("audits")
@@ -350,15 +349,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         self._loaded: bool = False
 
         self.path, self.config = t.cast(t.Tuple[Path, C], next(iter(self.configs.items())))
-        for path, config in self.configs.items():
-            project_type = c.DBT if config.loader.__name__.lower().startswith(c.DBT) else c.NATIVE
-            if project_type not in self._loaders:
-                self._loaders[project_type] = SimpleNamespace(
-                    loader=(loader or config.loader)(**config.loader_kwargs), configs={}
-                )
-            self._loaders[project_type].configs[path] = config
 
-        self.project_type = c.HYBRID if len(self._loaders) > 1 else project_type
         self._all_dialects: t.Set[str] = {self.config.dialect or ""}
 
         # This allows overriding the default dialect's normalization strategy, so for example
@@ -378,6 +369,11 @@ class GenericContext(BaseContext, t.Generic[C]):
         self.auto_categorize_changes = self.config.plan.auto_categorize_changes
         self.selected_gateway = gateway or self.config.default_gateway_name
 
+        self._loaders = [
+            (loader or config.loader)(self, path, **config.loader_kwargs)
+            for path, config in self.configs.items()
+        ]
+
         self._connection_config = self.config.get_connection(self.gateway)
         self.concurrent_tasks = concurrent_tasks or self._connection_config.concurrent_tasks
 
@@ -387,7 +383,9 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         self._snapshot_evaluator: t.Optional[SnapshotEvaluator] = None
 
-        self.console = console or get_console(dialect=self.engine_adapter.dialect)
+        self.console = get_console()
+        setattr(self.console, "dialect", self.engine_adapter.dialect)
+
         self._test_connection_config = self.config.get_test_connection(
             self.gateway, self.default_catalog, default_catalog_dialect=self.engine_adapter.DIALECT
         )
@@ -548,18 +546,16 @@ class GenericContext(BaseContext, t.Generic[C]):
 
     def refresh(self) -> None:
         """Refresh all models that have been updated."""
-        if any(context_loader.loader.reload_needed() for context_loader in self._loaders.values()):
+        if any(loader.reload_needed() for loader in self._loaders):
             self.load()
 
     def load(self, update_schemas: bool = True) -> GenericContext[C]:
         """Load all files in the context's path."""
         load_start_ts = time.perf_counter()
 
-        projects = []
-        for context_loader in self._loaders.values():
-            with sys_path(*context_loader.configs):
-                projects.append(context_loader.loader.load(self, update_schemas))
+        projects = [loader.load() for loader in self._loaders]
 
+        self.dag = DAG()
         self._standalone_audits.clear()
         self._audits.clear()
         self._macros.clear()
@@ -567,6 +563,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         self._metrics.clear()
         self._requirements.clear()
         self._excluded_requirements.clear()
+
         for project in projects:
             self._jinja_macros = self._jinja_macros.merge(project.jinja_macros)
             self._macros.update(project.macros)
@@ -577,7 +574,18 @@ class GenericContext(BaseContext, t.Generic[C]):
             self._requirements.update(project.requirements)
             self._excluded_requirements.update(project.excluded_requirements)
 
-        self.dag = DAG({k: v for project in projects for k, v in project.dag.graph.items()})
+        for model in self._models.values():
+            self.dag.add(model.fqn, model.depends_on)
+
+        # This topologically sorts the DAG & caches the result in-memory for later;
+        # we do it here to detect any cycles as early as possible and fail if needed
+        self.dag.sorted
+
+        if update_schemas:
+            update_model_schemas(self.dag, models=self._models, context_path=self.path)
+            for model in self.models.values():
+                # The model definition can be validated correctly only after the schema is set.
+                model.validate_definition()
 
         duplicates = set(self._models) & set(self._standalone_audits)
         if duplicates:
@@ -590,7 +598,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         }
 
         analytics.collector.on_project_loaded(
-            project_type=self.project_type,
+            project_type=self._project_type,
             models_count=len(self._models),
             audits_count=len(self._audits),
             standalone_audits_count=len(self._standalone_audits),
@@ -637,6 +645,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             True if the run was successful, False otherwise.
         """
         environment = environment or self.config.default_target_environment
+        environment = Environment.sanitize_name(environment)
         if not skip_janitor and environment.lower() == c.PROD:
             self._run_janitor()
 
@@ -647,7 +656,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             engine_type=self.snapshot_evaluator.adapter.dialect,
             state_sync_type=self.state_sync.state_type(),
         )
-        self._load_materializations_and_signals()
+        self._load_materializations()
 
         env_check_attempts_num = max(
             1,
@@ -715,7 +724,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                 self.notification_target_manager.notify(
                     NotificationEvent.RUN_FAILURE, traceback.format_exc()
                 )
-                logger.error(f"Run Failure: {traceback.format_exc()}")
+                logger.info("Run failed.", exc_info=e)
                 analytics.collector.on_run_end(
                     run_id=analytics_run_id, succeeded=False, interrupted=False, error=e
                 )
@@ -1332,14 +1341,16 @@ class GenericContext(BaseContext, t.Generic[C]):
                 ):
                     if model_name not in snapshots:
                         continue
-                    interval_unit = snapshots[model_name].node.interval_unit
+                    node = snapshots[model_name].node
+                    interval_unit = node.interval_unit
                     default_start = min(
                         default_start or sys.maxsize,
                         to_timestamp(
                             interval_unit.cron_prev(
                                 interval_unit.cron_floor(
-                                    max_interval_end_per_model.get(model_name, default_end),
-                                    estimate=True,
+                                    max_interval_end_per_model.get(
+                                        model_name, node.cron_floor(default_end)
+                                    ),
                                 ),
                                 estimate=True,
                             )
@@ -1375,7 +1386,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             default_start=default_start,
             default_end=default_end,
             enable_preview=(
-                enable_preview if enable_preview is not None else self.config.plan.enable_preview
+                enable_preview if enable_preview is not None else self._plan_preview_enabled
             ),
             end_bounded=not run,
             ensure_finalized_snapshots=self.config.plan.use_finalized_state,
@@ -1420,7 +1431,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                 plan_id=plan.plan_id,
                 exc=traceback.format_exc(),
             )
-            logger.error(f"Apply Failure: {traceback.format_exc()}")
+            logger.info("Plan application failed.", exc_info=e)
             raise e
         self.notification_target_manager.notify(
             NotificationEvent.APPLY_END,
@@ -1632,7 +1643,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         suffix = file_path.suffix
         if suffix != ".html":
             if suffix:
-                logger.warning(
+                get_console().log_warning(
                     f"The extension {suffix} does not designate an html file. A file with a `.html` extension will be created instead."
                 )
             path = str(file_path.with_suffix(".html"))
@@ -1846,7 +1857,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         Please contact your SQLMesh administrator before doing this.
         """
         self.notification_target_manager.notify(NotificationEvent.MIGRATION_START)
-        self._load_materializations_and_signals()
+        self._load_materializations()
         try:
             self._new_state_sync().migrate(
                 default_catalog=self.default_catalog,
@@ -2038,7 +2049,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                 )
             if not result.wasSuccessful():
                 raise PlanError(
-                    "Cannot generate plan due to failing test(s). Fix test(s) and run again"
+                    "Cannot generate plan due to failing test(s). Fix test(s) and run again."
                 )
             return result, test_output
         return None, None
@@ -2241,11 +2252,10 @@ class GenericContext(BaseContext, t.Generic[C]):
             event_notifications, user_notification_targets, username=self.config.username
         )
 
-    def _load_materializations_and_signals(self) -> None:
+    def _load_materializations(self) -> None:
         if not self._loaded:
-            for context_loader in self._loaders.values():
-                with sys_path(*context_loader.configs):
-                    context_loader.loader.load_materializations(self)
+            for loader in self._loaders:
+                loader.load_materializations()
 
     def _select_models_for_run(
         self,
@@ -2264,6 +2274,23 @@ class GenericContext(BaseContext, t.Generic[C]):
         if not no_auto_upstream:
             result = set(dag.subdag(*result))
         return result
+
+    @cached_property
+    def _project_type(self) -> str:
+        project_types = {
+            c.DBT if loader.__class__.__name__.lower().startswith(c.DBT) else c.NATIVE
+            for loader in self._loaders
+        }
+        return c.HYBRID if len(project_types) > 1 else first(project_types)
+
+    @property
+    def _plan_preview_enabled(self) -> bool:
+        if self.config.plan.enable_preview is not None:
+            return self.config.plan.enable_preview
+        # It is dangerous to enable preview by default for dbt projects that rely on engines that don’t support cloning.
+        # Enabling previews in such cases can result in unintended full refreshes because dbt incremental models rely on
+        # the maximum timestamp value in the target table.
+        return self._project_type == c.NATIVE or self.engine_adapter.SUPPORTS_CLONING
 
 
 class Context(GenericContext[Config]):

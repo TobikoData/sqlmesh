@@ -5,6 +5,7 @@ import base64
 import logging
 import os
 import pathlib
+import re
 import typing as t
 from enum import Enum
 from functools import partial, lru_cache
@@ -19,6 +20,7 @@ from sqlmesh.core.config.base import BaseConfig
 from sqlmesh.core.config.common import (
     concurrent_tasks_validator,
     http_headers_validator,
+    compile_regex_mapping,
 )
 from sqlmesh.core.engine_adapter.shared import CatalogSupport
 from sqlmesh.core.engine_adapter import EngineAdapter
@@ -1431,11 +1433,26 @@ class TrinoConnectionConfig(ConnectionConfig):
     client_private_key: t.Optional[str] = None
     cert: t.Optional[str] = None
 
+    # SQLMesh options
+    schema_location_mapping: t.Optional[dict[re.Pattern, str]] = None
     concurrent_tasks: int = 4
     register_comments: bool = True
     pre_ping: t.Literal[False] = False
 
     type_: t.Literal["trino"] = Field(alias="type", default="trino")
+
+    @field_validator("schema_location_mapping", mode="before")
+    @classmethod
+    def _validate_regex_keys(
+        cls, value: t.Dict[str | re.Pattern, str]
+    ) -> t.Dict[re.Pattern, t.Any]:
+        compiled = compile_regex_mapping(value)
+        for replacement in compiled.values():
+            if "@{schema_name}" not in replacement:
+                raise ConfigError(
+                    "schema_location_mapping needs to include the '@{schema_name}' placeholder in the value so SQLMesh knows where to substitute the schema name"
+                )
+        return compiled
 
     @model_validator(mode="after")
     def _root_validator(self) -> Self:
@@ -1536,6 +1553,10 @@ class TrinoConnectionConfig(ConnectionConfig):
             "verify": self.cert if self.cert is not None else self.verify,
             "source": "sqlmesh",
         }
+
+    @property
+    def _extra_engine_config(self) -> t.Dict[str, t.Any]:
+        return {"schema_location_mapping": self.schema_location_mapping}
 
 
 class ClickhouseConnectionConfig(ConnectionConfig):
@@ -1755,7 +1776,7 @@ def _connection_config_validator(
     return parse_connection_config(v)
 
 
-connection_config_validator = field_validator(
+connection_config_validator: t.Callable = field_validator(
     "connection",
     "state_connection",
     "test_connection",

@@ -12,16 +12,15 @@ another remote environment and determine if nodes have been added, removed, or m
 
 from __future__ import annotations
 
-import logging
 import sys
 import typing as t
 from difflib import ndiff
 from functools import cached_property
 from sqlmesh.core import constants as c
+from sqlmesh.core.console import get_console
 from sqlmesh.core.snapshot import Snapshot, SnapshotId, SnapshotTableInfo
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
-
 
 if sys.version_info >= (3, 12):
     from importlib import metadata
@@ -33,8 +32,6 @@ if t.TYPE_CHECKING:
     from sqlmesh.core.state_sync import StateReader
 
 IGNORED_PACKAGES = {"sqlmesh", "sqlglot"}
-
-logger = logging.getLogger(__name__)
 
 
 class ContextDiff(PydanticModel):
@@ -116,7 +113,7 @@ class ContextDiff(PydanticModel):
             env = state_reader.get_environment(create_from.lower())
 
             if not env and create_from != c.PROD:
-                logger.warning(
+                get_console().log_warning(
                     f"The environment name '{create_from}' was passed to the `plan` command's `--create-from` argument, but '{create_from}' does not exist. Initializing new environment '{environment}' from scratch."
                 )
 
@@ -396,7 +393,7 @@ class ContextDiff(PydanticModel):
         try:
             return old.node.text_diff(new.node, rendered=self.diff_rendered)
         except SQLMeshError as e:
-            logger.warning("Failed to diff model '%s': %s", name, str(e))
+            get_console().log_warning(f"Failed to diff model '{name}': {str(e)}.")
             return ""
 
 
@@ -426,5 +423,7 @@ def _build_requirements(
                                 ):
                                     requirements[dist] = metadata.version(dist)
                     except metadata.PackageNotFoundError:
-                        logger.warning("Failed to find package for %s", lib)
+                        from sqlmesh.core.console import get_console
+
+                        get_console().log_warning(f"Failed to find package for {lib}.")
     return requirements

@@ -1,4 +1,5 @@
 import base64
+import re
 import typing as t
 
 import pytest
@@ -15,6 +16,7 @@ from sqlmesh.core.config.connection import (
     MySQLConnectionConfig,
     PostgresConnectionConfig,
     SnowflakeConnectionConfig,
+    TrinoConnectionConfig,
     TrinoAuthenticationMethod,
     AthenaConnectionConfig,
     _connection_config_validator,
@@ -386,6 +388,35 @@ def test_trino(make_config):
         ConfigError, match="HTTP scheme can only be used with no-auth or basic method"
     ):
         make_config(method="ldap", http_scheme="http", **required_kwargs)
+
+
+def test_trino_schema_location_mapping(make_config):
+    required_kwargs = dict(
+        type="trino",
+        user="user",
+        host="host",
+        catalog="catalog",
+    )
+
+    with pytest.raises(
+        ConfigError, match=r".*needs to include the '@\{schema_name\}' placeholder.*"
+    ):
+        make_config(**required_kwargs, schema_location_mapping={".*": "s3://foo"})
+
+    config: TrinoConnectionConfig = make_config(
+        **required_kwargs,
+        schema_location_mapping={
+            "^utils$": "s3://utils-bucket/@{schema_name}",
+            "^staging.*$": "s3://bucket/@{schema_name}_dev",
+            "^sqlmesh.*$": "s3://sqlmesh-internal/dev/@{schema_name}",
+        },
+    )
+
+    assert config.schema_location_mapping is not None
+    assert len(config.schema_location_mapping) == 3
+
+    assert all((isinstance(k, re.Pattern) for k in config.schema_location_mapping))
+    assert all((isinstance(v, str) for v in config.schema_location_mapping.values()))
 
 
 def test_duckdb(make_config):

@@ -32,6 +32,9 @@ class ModelDefaultsConfig(BaseConfig):
         storage_format: The storage format used to store the physical table, only applicable in certain engines.
             (eg. 'parquet', 'orc')
         on_destructive_change: What should happen when a forward-only model requires a destructive schema change.
+        physical_properties: A key-value mapping of arbitrary properties that are applied to the model table / view in the physical layer.
+        virtual_properties: A key-value mapping of arbitrary properties that are applied to the model view in the virtual layer.
+        session_properties: A key-value mapping of properties specific to the target engine that are applied to the engine session.
         audits: The audits to be applied globally to all models in the project.
         optimize_query: Whether the SQL models should be optimized
     """
@@ -44,6 +47,8 @@ class ModelDefaultsConfig(BaseConfig):
     table_format: t.Optional[str] = None
     storage_format: t.Optional[str] = None
     on_destructive_change: t.Optional[OnDestructiveChange] = None
+    physical_properties: t.Optional[t.Dict[str, t.Any]] = None
+    virtual_properties: t.Optional[t.Dict[str, t.Any]] = None
     session_properties: t.Optional[t.Dict[str, t.Any]] = None
     audits: t.Optional[t.List[FunctionCall]] = None
     optimize_query: t.Optional[bool] = None

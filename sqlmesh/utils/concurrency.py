@@ -226,11 +226,11 @@ def sequential_apply_to_dag(
         try:
             fn(node)
         except Exception as ex:
-            if raise_on_error:
-                raise NodeExecutionFailedError(node) from ex
-
             error = NodeExecutionFailedError(node)
             error.__cause__ = ex
+
+            if raise_on_error:
+                raise error
 
             node_errors.append(error)
             failed_or_skipped_nodes.add(node)

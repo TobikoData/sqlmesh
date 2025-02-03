@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 import typing as t
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -8,13 +7,12 @@ from pathlib import Path
 from sqlglot import exp
 from sqlglot.dialects.dialect import DialectType
 
+from sqlmesh.core.console import get_console
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.model.definition import Model
 from sqlmesh.core.state_sync import StateReader
 from sqlmesh.utils import UniqueKeyDict, yaml
 from sqlmesh.utils.errors import SQLMeshError
-
-logger = logging.getLogger(__name__)
 
 
 def create_external_models_file(
@@ -51,10 +49,10 @@ def create_external_models_file(
     # Make sure we don't convert internal models into external ones.
     existing_model_fqns = state_reader.nodes_exist(external_model_fqns, exclude_external=True)
     if existing_model_fqns:
-        logger.warning(
-            "The following models already exist and can't be converted to external: %s."
-            "Perhaps these models have been removed, while downstream models that reference them weren't updated accordingly",
-            ", ".join(existing_model_fqns),
+        existing_model_fqns_str = ", ".join(existing_model_fqns)
+        get_console().log_warning(
+            f"The following models already exist and can't be converted to external: {existing_model_fqns_str}. "
+            "Perhaps these models have been removed, while downstream models that reference them weren't updated accordingly."
         )
         external_model_fqns -= existing_model_fqns
 
@@ -67,7 +65,7 @@ def create_external_models_file(
                 msg = f"Unable to get schema for '{table}': '{e}'."
                 if strict:
                     raise SQLMeshError(msg) from e
-                logger.warning(msg)
+                get_console().log_warning(msg)
                 return None
 
         gateway_part = {"gateway": gateway} if gateway else {}

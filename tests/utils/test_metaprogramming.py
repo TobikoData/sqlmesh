@@ -2,7 +2,9 @@ import typing as t
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
+from tenacity import retry, stop_after_attempt
 
+import re
 import pandas as pd
 import pytest
 import sqlglot
@@ -44,21 +46,17 @@ def test_print_exception(mocker: MockerFixture):
     except Exception as ex:
         print_exception(ex, test_env, out_mock)
 
-    expected_message = f"""Traceback (most recent call last):
-
-  File "{__file__}", line 43, in test_print_exception
-    eval("test_fun()", env)
+    expected_message = r"""  File ".*?/tests/utils/test_metaprogramming\.py", line 45, in test_print_exception
+    eval\("test_fun\(\)", env\)
 
   File "<string>", line 1, in <module>
 
-  File '/test/path.py' (or imported file), line 2, in test_fun
-    def test_fun():
-        raise RuntimeError("error")
-
-
-RuntimeError: error
+  File '/test/path.py' \(or imported file\), line 2, in test_fun
+    def test_fun\(\):
+        raise RuntimeError\("error"\)
+      RuntimeError: error
 """
-    out_mock.write.assert_called_once_with(expected_message)
+    assert re.match(expected_message, out_mock.write.call_args_list[0][0][0])
 
 
 X = 1
@@ -112,6 +110,23 @@ def test_context_manager():
     yield
 
 
+@retry(stop=stop_after_attempt(3))
+def fetch_data():
+    return "'test data'"
+
+
+def custom_decorator(_func):
+    def wrapper(*args, **kwargs):
+        return _func(*args, **kwargs)
+
+    return wrapper
+
+
+@custom_decorator
+def function_with_custom_decorator():
+    return
+
+
 def main_func(y: int, foo=exp.true(), *, bar=expressions.Literal.number(1) + 2) -> int:
     """DOC STRING"""
     sqlglot.parse_one("1")
@@ -119,6 +134,8 @@ def main_func(y: int, foo=exp.true(), *, bar=expressions.Literal.number(1) + 2) 
     DataClass(x=y)
     noop_metadata()
     normalize_model_name("test")
+    fetch_data()
+    function_with_custom_decorator()
 
     def closure(z: int) -> int:
         return z + Z
@@ -141,7 +158,9 @@ def test_func_globals() -> None:
         "sqlglot": sqlglot,
         "exp": exp,
         "expressions": exp,
+        "fetch_data": fetch_data,
         "test_context_manager": test_context_manager,
+        "function_with_custom_decorator": function_with_custom_decorator,
     }
     assert func_globals(other_func) == {
         "X": 1,
@@ -174,6 +193,8 @@ def test_normalize_source() -> None:
     DataClass(x=y)
     noop_metadata()
     normalize_model_name('test')
+    fetch_data()
+    function_with_custom_decorator()
 
     def closure(z: int):
         return z + Z
@@ -219,6 +240,8 @@ def test_serialize_env() -> None:
     DataClass(x=y)
     noop_metadata()
     normalize_model_name('test')
+    fetch_data()
+    function_with_custom_decorator()
 
     def closure(z: int):
         return z + Z
@@ -312,8 +335,63 @@ def test_context_manager():
     return X + a""",
         ),
         "test_context_manager": Executable(
-            payload="from tests.utils.test_metaprogramming import test_context_manager",
-            kind=ExecutableKind.IMPORT,
+            payload="""@contextmanager
+def test_context_manager():
+    yield""",
+            name="test_context_manager",
+            path="test_metaprogramming.py",
         ),
         "wraps": Executable(payload="from functools import wraps", kind=ExecutableKind.IMPORT),
+        "functools": Executable(payload="import functools", kind=ExecutableKind.IMPORT),
+        "retry": Executable(payload="from tenacity import retry", kind=ExecutableKind.IMPORT),
+        "stop_after_attempt": Executable(
+            payload="from tenacity.stop import stop_after_attempt", kind=ExecutableKind.IMPORT
+        ),
+        "wrapped_f": Executable(
+            payload='''@retry(stop=stop_after_attempt(3))
+def fetch_data():
+    return "'test data'"''',
+            name="fetch_data",
+            path="test_metaprogramming.py",
+            alias="wrapped_f",
+        ),
+        "fetch_data": Executable(
+            payload='''@retry(stop=stop_after_attempt(3))
+def fetch_data():
+    return "'test data'"''',
+            name="fetch_data",
+            path="test_metaprogramming.py",
+        ),
+        "f": Executable(
+            payload='''@retry(stop=stop_after_attempt(3))
+def fetch_data():
+    return "'test data'"''',
+            name="fetch_data",
+            path="test_metaprogramming.py",
+            alias="f",
+        ),
+        "function_with_custom_decorator": Executable(
+            name="wrapper",
+            path="test_metaprogramming.py",
+            payload="""def wrapper(*args, **kwargs):
+    return _func(*args, **kwargs)""",
+            alias="function_with_custom_decorator",
+        ),
+        "custom_decorator": Executable(
+            name="custom_decorator",
+            path="test_metaprogramming.py",
+            payload="""def custom_decorator(_func):
+
+    def wrapper(*args, **kwargs):
+        return _func(*args, **kwargs)
+    return wrapper""",
+        ),
+        "_func": Executable(
+            name="function_with_custom_decorator",
+            path="test_metaprogramming.py",
+            payload="""@custom_decorator
+def function_with_custom_decorator():
+    return""",
+            alias="_func",
+        ),
     }

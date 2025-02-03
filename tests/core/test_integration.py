@@ -232,7 +232,7 @@ def test_forward_only_model_regular_plan(init_and_plan_context: t.Callable):
     snapshot = context.get_snapshot(model, raise_if_missing=True)
     top_waiters_snapshot = context.get_snapshot("sushi.top_waiters", raise_if_missing=True)
 
-    plan = context.plan_builder("dev", skip_tests=True).build()
+    plan = context.plan_builder("dev", skip_tests=True, enable_preview=False).build()
     assert len(plan.new_snapshots) == 2
     assert (
         plan.context_diff.snapshots[snapshot.snapshot_id].change_category
@@ -253,7 +253,9 @@ def test_forward_only_model_regular_plan(init_and_plan_context: t.Callable):
     assert not dev_df["event_date"].tolist()
 
     # Run a restatement plan to preview changes
-    plan_builder = context.plan_builder("dev", skip_tests=True, restate_models=[model_name])
+    plan_builder = context.plan_builder(
+        "dev", skip_tests=True, restate_models=[model_name], enable_preview=False
+    )
     plan_builder.set_start("2023-01-06")
     assert plan_builder.build().missing_intervals == [
         SnapshotIntervals(
@@ -397,7 +399,7 @@ def test_forward_only_model_restate_full_history_in_dev(init_and_plan_context: t
     assert model.kind.full_history_restatement_only
     context.upsert_model(model)
 
-    context.plan("prod", skip_tests=True, auto_apply=True)
+    context.plan("prod", skip_tests=True, auto_apply=True, enable_preview=False)
 
     model_kwargs = {
         **model.dict(),
@@ -407,7 +409,7 @@ def test_forward_only_model_restate_full_history_in_dev(init_and_plan_context: t
     context.upsert_model(SqlModel.parse_obj(model_kwargs))
 
     # Apply the model change in dev
-    plan = context.plan_builder("dev", skip_tests=True).build()
+    plan = context.plan_builder("dev", skip_tests=True, enable_preview=False).build()
     assert not plan.missing_intervals
     context.apply(plan)
 
@@ -425,7 +427,7 @@ def test_forward_only_model_restate_full_history_in_dev(init_and_plan_context: t
     assert df["cnt"][0] == 1
 
     # Apply a restatement plan in dev
-    plan = context.plan("dev", restate_models=[model.name], auto_apply=True)
+    plan = context.plan("dev", restate_models=[model.name], auto_apply=True, enable_preview=False)
     assert len(plan.missing_intervals) == 1
 
     # Check that the dummy value is not present
@@ -702,6 +704,72 @@ def test_cron_not_aligned_with_day_boundary(
 
 
 @time_machine.travel("2023-01-08 00:00:00 UTC")
+def test_cron_not_aligned_with_day_boundary_new_model(init_and_plan_context: t.Callable):
+    context, _ = init_and_plan_context("examples/sushi")
+
+    existing_model = context.get_model("sushi.waiter_revenue_by_day")
+    existing_model = SqlModel.parse_obj(
+        {
+            **existing_model.dict(),
+            "kind": existing_model.kind.copy(update={"forward_only": True}),
+        }
+    )
+    context.upsert_model(existing_model)
+
+    plan = context.plan_builder("prod", skip_tests=True).build()
+    context.apply(plan)
+
+    # Add a new model and make a change to a forward-only model.
+    # The cron of the new model is not aligned with the day boundary.
+    new_model = load_sql_based_model(
+        d.parse(
+            """
+        MODEL (
+            name memory.sushi.new_model,
+            kind FULL,
+            cron '0 8 * * *',
+            start '2023-01-01',
+        );
+
+        SELECT 1 AS one;
+        """
+        )
+    )
+    context.upsert_model(new_model)
+
+    existing_model = add_projection_to_model(t.cast(SqlModel, existing_model), literal=True)
+    context.upsert_model(existing_model)
+
+    plan = context.plan_builder("dev", skip_tests=True, enable_preview=True).build()
+    assert plan.missing_intervals == [
+        SnapshotIntervals(
+            snapshot_id=context.get_snapshot(
+                "memory.sushi.new_model", raise_if_missing=True
+            ).snapshot_id,
+            intervals=[(to_timestamp("2023-01-06"), to_timestamp("2023-01-07"))],
+        ),
+        SnapshotIntervals(
+            snapshot_id=context.get_snapshot(
+                "sushi.top_waiters", raise_if_missing=True
+            ).snapshot_id,
+            intervals=[
+                (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
+                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
+            ],
+        ),
+        SnapshotIntervals(
+            snapshot_id=context.get_snapshot(
+                "sushi.waiter_revenue_by_day", raise_if_missing=True
+            ).snapshot_id,
+            intervals=[
+                (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
+                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
+            ],
+        ),
+    ]
+
+
+@time_machine.travel("2023-01-08 00:00:00 UTC")
 def test_forward_only_monthly_model(init_and_plan_context: t.Callable):
     context, _ = init_and_plan_context("examples/sushi")
 
@@ -767,7 +835,7 @@ def test_forward_only_parent_created_in_dev_child_created_in_prod(
     )
     top_waiters_snapshot = context.get_snapshot("sushi.top_waiters", raise_if_missing=True)
 
-    plan = context.plan_builder("dev", skip_tests=True).build()
+    plan = context.plan_builder("dev", skip_tests=True, enable_preview=False).build()
     assert len(plan.new_snapshots) == 2
     assert (
         plan.context_diff.snapshots[waiter_revenue_by_day_snapshot.snapshot_id].change_category
@@ -789,7 +857,7 @@ def test_forward_only_parent_created_in_dev_child_created_in_prod(
 
     top_waiters_snapshot = context.get_snapshot("sushi.top_waiters", raise_if_missing=True)
 
-    plan = context.plan_builder("prod", skip_tests=True).build()
+    plan = context.plan_builder("prod", skip_tests=True, enable_preview=False).build()
     assert len(plan.new_snapshots) == 1
     assert (
         plan.context_diff.snapshots[top_waiters_snapshot.snapshot_id].change_category
@@ -803,7 +871,7 @@ def test_forward_only_parent_created_in_dev_child_created_in_prod(
 def test_new_forward_only_model(init_and_plan_context: t.Callable):
     context, _ = init_and_plan_context("examples/sushi")
 
-    context.plan("dev", skip_tests=True, no_prompts=True, auto_apply=True)
+    context.plan("dev", skip_tests=True, no_prompts=True, auto_apply=True, enable_preview=False)
 
     snapshot = context.get_snapshot("sushi.marketing")
 
@@ -1090,7 +1158,7 @@ def test_indirect_non_breaking_change_after_forward_only_in_dev(init_and_plan_co
     context.upsert_model(model)
     snapshot = context.get_snapshot(model, raise_if_missing=True)
 
-    plan = context.plan_builder("dev", skip_tests=True).build()
+    plan = context.plan_builder("dev", skip_tests=True, enable_preview=False).build()
     assert (
         plan.context_diff.snapshots[snapshot.snapshot_id].change_category
         == SnapshotChangeCategory.FORWARD_ONLY
@@ -1103,7 +1171,7 @@ def test_indirect_non_breaking_change_after_forward_only_in_dev(init_and_plan_co
     context.upsert_model(add_projection_to_model(t.cast(SqlModel, model)))
     top_waiters_snapshot = context.get_snapshot("sushi.top_waiters", raise_if_missing=True)
 
-    plan = context.plan_builder("dev", skip_tests=True).build()
+    plan = context.plan_builder("dev", skip_tests=True, enable_preview=False).build()
     assert len(plan.new_snapshots) == 1
     assert (
         plan.context_diff.snapshots[top_waiters_snapshot.snapshot_id].change_category
@@ -1136,7 +1204,7 @@ def test_indirect_non_breaking_change_after_forward_only_in_dev(init_and_plan_co
     )
     top_waiters_snapshot = context.get_snapshot("sushi.top_waiters", raise_if_missing=True)
 
-    plan = context.plan_builder("dev", skip_tests=True).build()
+    plan = context.plan_builder("dev", skip_tests=True, enable_preview=False).build()
     assert len(plan.new_snapshots) == 2
     assert (
         plan.context_diff.snapshots[waiter_revenue_by_day_snapshot.snapshot_id].change_category
@@ -1167,7 +1235,7 @@ def test_indirect_non_breaking_change_after_forward_only_in_dev(init_and_plan_co
     assert not context.plan_builder("dev", skip_tests=True).build().requires_backfill
 
     # Deploy everything to prod.
-    plan = context.plan_builder("prod", skip_tests=True).build()
+    plan = context.plan_builder("prod", skip_tests=True, enable_preview=False).build()
     assert plan.start == to_timestamp("2023-01-01")
     assert plan.missing_intervals == [
         SnapshotIntervals(
@@ -1197,7 +1265,11 @@ def test_indirect_non_breaking_change_after_forward_only_in_dev(init_and_plan_co
     ]
 
     context.apply(plan)
-    assert not context.plan_builder("prod", skip_tests=True).build().requires_backfill
+    assert (
+        not context.plan_builder("prod", skip_tests=True, enable_preview=False)
+        .build()
+        .requires_backfill
+    )
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
@@ -1219,7 +1291,7 @@ def test_forward_only_precedence_over_indirect_non_breaking(init_and_plan_contex
     non_breaking_snapshot = context.get_snapshot(non_breaking_model, raise_if_missing=True)
     top_waiter_snapshot = context.get_snapshot("sushi.top_waiters", raise_if_missing=True)
 
-    plan = context.plan_builder("dev", skip_tests=True).build()
+    plan = context.plan_builder("dev", skip_tests=True, enable_preview=False).build()
     assert (
         plan.context_diff.snapshots[forward_only_snapshot.snapshot_id].change_category
         == SnapshotChangeCategory.FORWARD_ONLY
@@ -1249,7 +1321,11 @@ def test_forward_only_precedence_over_indirect_non_breaking(init_and_plan_contex
     ]
 
     context.apply(plan)
-    assert not context.plan_builder("dev", skip_tests=True).build().requires_backfill
+    assert (
+        not context.plan_builder("dev", skip_tests=True, enable_preview=False)
+        .build()
+        .requires_backfill
+    )
 
     # Deploy everything to prod.
     plan = context.plan_builder("prod", skip_tests=True).build()
@@ -1270,7 +1346,11 @@ def test_forward_only_precedence_over_indirect_non_breaking(init_and_plan_contex
     ]
 
     context.apply(plan)
-    assert not context.plan_builder("prod", skip_tests=True).build().requires_backfill
+    assert (
+        not context.plan_builder("prod", skip_tests=True, enable_preview=False)
+        .build()
+        .requires_backfill
+    )
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
@@ -1513,12 +1593,6 @@ def test_select_models_for_backfill(init_and_plan_context: t.Callable):
     context, _ = init_and_plan_context("examples/sushi")
 
     expected_intervals = [
-        (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
-        (to_timestamp("2023-01-02"), to_timestamp("2023-01-03")),
-        (to_timestamp("2023-01-03"), to_timestamp("2023-01-04")),
-        (to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
-        (to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
-        (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
         (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
     ]
 
@@ -1554,7 +1628,7 @@ def test_select_models_for_backfill(init_and_plan_context: t.Callable):
     dev_df = context.engine_adapter.fetchdf(
         "SELECT DISTINCT event_date FROM sushi__dev.waiter_revenue_by_day ORDER BY event_date"
     )
-    assert len(dev_df) == 7
+    assert len(dev_df) == 1
 
     schema_objects = context.engine_adapter.get_data_objects("sushi__dev")
     assert {o.name for o in schema_objects} == {
@@ -1788,7 +1862,7 @@ def test_indirect_non_breaking_view_model_non_representative_snapshot(
     full_downstream_model_2_snapshot_id = context.get_snapshot(
         view_downstream_model_name
     ).snapshot_id
-    dev_plan = context.plan("dev", auto_apply=True, no_prompts=True)
+    dev_plan = context.plan("dev", auto_apply=True, no_prompts=True, enable_preview=False)
     assert (
         dev_plan.snapshots[forward_only_model_snapshot_id].change_category
         == SnapshotChangeCategory.FORWARD_ONLY
@@ -1821,7 +1895,11 @@ def test_indirect_non_breaking_view_model_non_representative_snapshot(
         view_downstream_model_name
     ).snapshot_id
     dev_plan = context.plan(
-        "dev", categorizer_config=CategorizerConfig.all_full(), auto_apply=True, no_prompts=True
+        "dev",
+        categorizer_config=CategorizerConfig.all_full(),
+        auto_apply=True,
+        no_prompts=True,
+        enable_preview=False,
     )
     assert (
         dev_plan.snapshots[full_downstream_model_snapshot_id].change_category
@@ -1851,7 +1929,11 @@ def test_indirect_non_breaking_view_model_non_representative_snapshot(
         view_downstream_model_name
     ).snapshot_id
     dev_plan = context.plan(
-        "dev", categorizer_config=CategorizerConfig.all_full(), auto_apply=True, no_prompts=True
+        "dev",
+        categorizer_config=CategorizerConfig.all_full(),
+        auto_apply=True,
+        no_prompts=True,
+        enable_preview=False,
     )
     assert (
         dev_plan.snapshots[full_downstream_model_snapshot_id].change_category
@@ -3745,6 +3827,14 @@ def test_auto_categorization(sushi_context: Context):
 
 def test_multi(mocker):
     context = Context(paths=["examples/multi/repo_1", "examples/multi/repo_2"], gateway="memory")
+    assert (
+        context.render("bronze.a").sql()
+        == '''SELECT 1 AS "col_a", 'b' AS "col_b", 1 AS "one", 'repo_1' AS "dup"'''
+    )
+    assert (
+        context.render("silver.d").sql()
+        == '''SELECT "c"."col_a" AS "col_a", 2 AS "two", 'repo_2' AS "dup" FROM "memory"."silver"."c" AS "c"'''
+    )
     context._new_state_sync().reset(default_catalog=context.default_catalog)
     plan = context.plan_builder().build()
     assert len(plan.new_snapshots) == 4
@@ -3808,8 +3898,10 @@ def test_multi_hybrid(mocker):
     dbt_model_c = context.get_model("dbt_repo.c")
     assert sqlmesh_model_a.project == "sqlmesh_repo"
 
-    sqlmesh_rendered = 'SELECT ROUND(CAST(("col_a" / NULLIF(100, 0)) AS DECIMAL(16, 2)), 2) AS "col_a", "col_b" AS "col_b" FROM "memory"."dbt_repo"."e" AS "e"'
-    dbt_rendered = 'SELECT DISTINCT ROUND(CAST(("col_a" / NULLIF(100, 0)) AS DECIMAL(16, 2)), 2) AS "rounded_col_a" FROM "memory"."sqlmesh_repo"."b" AS "b"'
+    sqlmesh_rendered = (
+        'SELECT "e"."col_a" AS "col_a", "e"."col_b" AS "col_b" FROM "memory"."dbt_repo"."e" AS "e"'
+    )
+    dbt_rendered = 'SELECT DISTINCT ROUND(CAST(("b"."col_a" / NULLIF(100, 0)) AS DECIMAL(16, 2)), 2) AS "rounded_col_a" FROM "memory"."sqlmesh_repo"."b" AS "b"'
     assert sqlmesh_model_a.render_query().sql() == sqlmesh_rendered
     assert dbt_model_c.render_query().sql() == dbt_rendered
 

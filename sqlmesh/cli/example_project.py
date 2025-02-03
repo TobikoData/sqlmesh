@@ -8,6 +8,11 @@ from sqlglot import Dialect
 from sqlmesh.integrations.dlt import generate_dlt_models_and_settings
 from sqlmesh.utils.date import yesterday_ds
 
+from sqlmesh.core.config.connection import CONNECTION_CONFIG_TO_TYPE
+
+
+PRIMITIVES = (str, int, bool, float)
+
 
 class ProjectTemplate(Enum):
     AIRFLOW = "airflow"
@@ -23,30 +28,68 @@ def _gen_config(
     start: t.Optional[str],
     template: ProjectTemplate,
 ) -> str:
-    connection_settings = (
-        settings
-        or """      type: duckdb
+    if not settings:
+        connection_settings = """      type: duckdb
       database: db.db"""
-    )
+
+        doc_link = "https://sqlmesh.readthedocs.io/en/stable/integrations/engines{engine_link}"
+        engine_link = ""
+
+        engine = "mssql" if dialect == "tsql" else dialect
+
+        if engine in CONNECTION_CONFIG_TO_TYPE:
+            required_fields = []
+            non_required_fields = []
+
+            for name, field in CONNECTION_CONFIG_TO_TYPE[engine].model_fields.items():
+                field_name = field.alias or name
+                default_value = field.get_default()
+
+                if isinstance(default_value, Enum):
+                    default_value = default_value.value
+                elif not isinstance(default_value, PRIMITIVES):
+                    default_value = None
+
+                required = field.is_required() or field_name == "type"
+                option_str = (
+                    f"      {'# ' if not required else ''}{field_name}: {default_value or ''}\n"
+                )
+
+                if required:
+                    required_fields.append(option_str)
+                else:
+                    non_required_fields.append(option_str)
+
+            connection_settings = "".join(required_fields + non_required_fields)
+
+            engine_link = f"/{engine}/#connection-options"
+
+        connection_settings = (
+            "      # For more information on configuring the connection to your execution engine, visit:\n"
+            "      # https://sqlmesh.readthedocs.io/en/stable/reference/configuration/#connections\n"
+            f"      # {doc_link.format(engine_link=engine_link)}\n{connection_settings}"
+        )
+    else:
+        connection_settings = settings
 
     default_configs = {
         ProjectTemplate.DEFAULT: f"""gateways:
-  local:
+  dev:
     connection:
 {connection_settings}
 
-default_gateway: local
+default_gateway: dev
 
 model_defaults:
   dialect: {dialect}
   start: {start or yesterday_ds()}
 """,
         ProjectTemplate.AIRFLOW: f"""gateways:
-  local:
+  dev:
     connection:
-      {connection_settings}
+{connection_settings}
 
-default_gateway: local
+default_gateway: dev
 
 default_scheduler:
   type: airflow
