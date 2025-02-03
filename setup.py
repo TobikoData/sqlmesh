@@ -65,7 +65,7 @@ setup(
             "agate==1.7.1",
             f"apache-airflow=={os.environ.get('AIRFLOW_VERSION', '2.9.1')}",
             "opentelemetry-proto==1.27.0",  # pip was having trouble resolving this transitive dependency of airflow
-            "beautifulsoup4==4.12.3",
+            "beautifulsoup4",
             "clickhouse-connect",
             "cryptography",
             "custom-materializations",

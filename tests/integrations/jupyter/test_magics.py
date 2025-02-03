@@ -77,9 +77,9 @@ def convert_all_html_output_to_tags():
     def _convert_html_to_tags(html: str) -> t.List[str]:
         # BS4 automatically adds html and body tags so we remove those since they are not actually part of the output
         return [
-            tag.name
+            tag.name  # type: ignore
             for tag in BeautifulSoup(html, "html").find_all()
-            if tag.name not in {"html", "body"}
+            if tag.name not in {"html", "body"}  # type: ignore
         ]
 
     def _convert(output: CapturedIO) -> t.List[t.List[str]]:
