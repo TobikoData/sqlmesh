@@ -1,5 +1,7 @@
 # Tobiko Cloud: Getting Started
 
+<div style="position: relative; padding-bottom: 56.25%; height: 0;"><iframe src="https://www.loom.com/embed/bfd7da9166324b0e987c3824f824d929?sid=5d14308f-1e2c-4883-8ac0-29173a698f71" frameborder="0" webkitallowfullscreen mozallowfullscreen allowfullscreen style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"></iframe></div>
+
 Tobiko Cloud is a data platform that extends SQLMesh to make it easy to manage data at scale without the waste.
 
 We're here to make it easy to get started and feel confident that everything is working as expected. After you've completed the steps below, you'll have achieved the following:
@@ -225,10 +227,10 @@ Now we're ready to connect your data warehouse to Tobiko Cloud:
       skip_pr_backfill: false
       enable_deploy_command: true
       auto_categorize_changes:
-      external: full
-      python: full
-      sql: full
-      seed: full
+        external: full
+        python: full
+        sql: full
+        seed: full
 
     # preview data for forward only models
     plan:
