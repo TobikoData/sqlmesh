@@ -221,8 +221,8 @@ class MSSQLEngineAdapter(
                 self._convert_df_datetime(df, columns_to_types_create)
                 self.create_table(temp_table, columns_to_types_create)
                 rows: t.List[t.Tuple[t.Any, ...]] = list(
-                    df.replace({np.nan: None}).itertuples(index=False, name=None)
-                )  # type: ignore
+                    df.replace({np.nan: None}).itertuples(index=False, name=None)  # type: ignore
+                )
                 conn = self._connection_pool.get()
                 conn.bulk_copy(temp_table.sql(dialect=self.dialect), rows)
             return exp.select(*self._casted_columns(columns_to_types)).from_(temp_table)  # type: ignore

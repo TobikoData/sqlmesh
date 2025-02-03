@@ -16,6 +16,7 @@ from sqlmesh.cli.example_project import init_example_project
 
 from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
+from sqlmesh.core.console import get_console
 from sqlmesh.core.audit import ModelAudit, load_audit
 from sqlmesh.core.config import (
     Config,
@@ -292,7 +293,7 @@ def test_model_qualification():
         model.render_query(needs_optimization=True)
         assert (
             mock_logger.call_args[0][0]
-            == """Column '"a"' could not be resolved for model '"db"."table"', the column may not exist or is ambiguous"""
+            == """Column '"a"' could not be resolved for model '"db"."table"', the column may not exist or is ambiguous."""
         )
 
 
@@ -2082,8 +2083,6 @@ def test_python_models_returning_sql(assert_exp_eq) -> None:
 
 
 def test_python_model_decorator_kind() -> None:
-    logger = logging.getLogger("sqlmesh.core.model.decorator")
-
     # no kind specified -> default Full kind
     @model("default_kind", columns={'"COL"': "int"})
     def a_model(context):
@@ -2152,7 +2151,7 @@ def test_python_model_decorator_kind() -> None:
         pass
 
     # warning if kind is ModelKind instance
-    with patch.object(logger, "warning") as mock_logger:
+    with patch.object(get_console(), "log_warning") as mock_logger:
         python_model = model.get_registry()["kind_instance"].model(
             module_path=Path("."),
             path=Path("."),
@@ -2164,7 +2163,7 @@ def test_python_model_decorator_kind() -> None:
         )
 
     # no warning with valid kind dict
-    with patch.object(logger, "warning") as mock_logger:
+    with patch.object(get_console(), "log_warning") as mock_logger:
 
         @model("kind_valid_dict", kind=dict(name=ModelKindName.FULL), columns={'"COL"': "int"})
         def my_model(context):

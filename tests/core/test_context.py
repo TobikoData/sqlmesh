@@ -26,6 +26,7 @@ from sqlmesh.core.config import (
     load_configs,
 )
 from sqlmesh.core.context import Context
+from sqlmesh.core.console import create_console
 from sqlmesh.core.dialect import parse, schema_
 from sqlmesh.core.engine_adapter.duckdb import DuckDBEngineAdapter
 from sqlmesh.core.environment import Environment
@@ -459,8 +460,7 @@ def test_override_builtin_audit_blocking_mode():
         )
     )
 
-    logger = logging.getLogger("sqlmesh.core.scheduler")
-    with patch.object(logger, "warning") as mock_logger:
+    with patch.object(context.console, "log_warning") as mock_logger:
         plan = context.plan(auto_apply=True, no_prompts=True)
         new_snapshot = next(iter(plan.context_diff.new_snapshots.values()))
 
@@ -506,6 +506,8 @@ def test_override_builtin_audit_blocking_mode():
 
 
 def test_python_model_empty_df_raises(sushi_context, capsys):
+    sushi_context.console = create_console()
+
     @model(
         "memory.sushi.test_model",
         columns={"col": "int"},
@@ -524,8 +526,8 @@ def test_python_model_empty_df_raises(sushi_context, capsys):
         sushi_context.plan(no_prompts=True, auto_apply=True)
 
     assert (
-        "Cannot construct source query from an empty DataFrame. This error is \ncommonly related to Python models that produce no data. For such models, \nconsider yielding from an empty generator if the resulting set is empty, i.e. \nuse"
-    ) in capsys.readouterr().out
+        "Cannot construct source query from an empty DataFrame. This error is commonly related to Python models that produce no data. For such models, consider yielding from an empty generator if the resulting set is empty, i.e. use"
+    ) in capsys.readouterr().out.replace("\n", "")
 
 
 def test_env_and_default_schema_normalization(mocker: MockerFixture):
@@ -1008,8 +1010,7 @@ def test_load_external_models(copy_to_temp_path):
     assert context.resolve_table("raw.demographics") == '"memory"."raw"."demographics"'
     assert context.resolve_table("raw.model2") == '"memory"."raw"."model2"'
 
-    logger = logging.getLogger("sqlmesh.core.context")
-    with patch.object(logger, "warning") as mock_logger:
+    with patch.object(context.console, "log_warning") as mock_logger:
         context.table("raw.model1") == '"memory"."raw"."model1"'
 
         assert mock_logger.mock_calls == [

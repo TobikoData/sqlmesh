@@ -62,7 +62,7 @@ from sqlmesh.core.config import (
     load_configs,
 )
 from sqlmesh.core.config.loader import C
-from sqlmesh.core.console import Console, get_console
+from sqlmesh.core.console import get_console
 from sqlmesh.core.context_diff import ContextDiff
 from sqlmesh.core.dialect import (
     format_model_expressions,
@@ -180,7 +180,7 @@ class BaseContext(abc.ABC):
         raise NotImplementedError
 
     def table(self, model_name: str) -> str:
-        logger.warning(
+        get_console().log_warning(
             "The SQLMesh context's `table` method is deprecated and will be removed "
             "in a future release. Please use the `resolve_table` method instead."
         )
@@ -329,7 +329,6 @@ class GenericContext(BaseContext, t.Generic[C]):
         concurrent_tasks: t.Optional[int] = None,
         loader: t.Optional[t.Type[Loader]] = None,
         load: bool = True,
-        console: t.Optional[Console] = None,
         users: t.Optional[t.List[User]] = None,
     ):
         self.configs = (
@@ -384,7 +383,9 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         self._snapshot_evaluator: t.Optional[SnapshotEvaluator] = None
 
-        self.console = console or get_console(dialect=self.engine_adapter.dialect)
+        self.console = get_console()
+        setattr(self.console, "dialect", self.engine_adapter.dialect)
+
         self._test_connection_config = self.config.get_test_connection(
             self.gateway, self.default_catalog, default_catalog_dialect=self.engine_adapter.DIALECT
         )
@@ -1642,7 +1643,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         suffix = file_path.suffix
         if suffix != ".html":
             if suffix:
-                logger.warning(
+                get_console().log_warning(
                     f"The extension {suffix} does not designate an html file. A file with a `.html` extension will be created instead."
                 )
             path = str(file_path.with_suffix(".html"))

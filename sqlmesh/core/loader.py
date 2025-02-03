@@ -65,8 +65,10 @@ class Loader(abc.ABC):
         try:
             gateway = self.config.get_gateway(gateway_name)
         except ConfigError:
-            logger.warning(
-                "Gateway '%s' not found in project '%s'", gateway_name, self.config.project
+            from sqlmesh.core.console import get_console
+
+            get_console().log_warning(
+                f"Gateway '{gateway_name}' not found in project '{self.config.project}'."
             )
             gateway = None
         self._variables = {

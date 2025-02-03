@@ -235,6 +235,13 @@ def rescope_lineage_cache(request):
     yield
 
 
+@pytest.fixture(autouse=True)
+def reset_console():
+    from sqlmesh.core.console import set_console, NoopConsole
+
+    set_console(NoopConsole())
+
+
 @pytest.fixture
 def duck_conn() -> duckdb.DuckDBPyConnection:
     return duckdb.connect()

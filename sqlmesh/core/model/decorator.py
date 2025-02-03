@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 import typing as t
 from pathlib import Path
 import inspect
@@ -24,8 +23,6 @@ from sqlmesh.utils import registry_decorator
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.metaprogramming import build_env, serialize_env
 
-
-logger = logging.getLogger(__name__)
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.audit import ModelAudit
@@ -108,7 +105,9 @@ class model(registry_decorator):
         kind = self.kwargs.get("kind", None)
         if kind is not None:
             if isinstance(kind, _ModelKind):
-                logger.warning(
+                from sqlmesh.core.console import get_console
+
+                get_console().log_warning(
                     f"""Python model "{self.name}"'s `kind` argument was passed a SQLMesh `{type(kind).__name__}` object. This may result in unexpected behavior - provide a dictionary instead."""
                 )
             elif isinstance(kind, dict):

@@ -493,7 +493,7 @@ class PlanBuilder:
                     )
                     warning_msg = f"Plan results in a destructive change to forward-only model '{snapshot.name}'s schema{dropped_column_msg}."
                     if snapshot.model.on_destructive_change.is_warn:
-                        logger.warning(warning_msg)
+                        get_console().log_warning(warning_msg)
                     else:
                         raise PlanError(
                             f"{warning_msg} To allow this, change the model's `on_destructive_change` setting to `warn` or `allow` or include it in the plan's `--allow-destructive-model` option."

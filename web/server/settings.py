@@ -63,9 +63,11 @@ def get_settings() -> Settings:
 
 @lru_cache()
 def _get_context(path: str | Path, config: str, gateway: str) -> Context:
+    from sqlmesh.core.console import set_console
     from web.server.main import api_console
 
-    return Context(paths=str(path), config=config, console=api_console, gateway=gateway, load=False)
+    set_console(api_console)
+    return Context(paths=str(path), config=config, gateway=gateway, load=False)
 
 
 @lru_cache()

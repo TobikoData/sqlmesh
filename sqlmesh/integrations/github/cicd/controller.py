@@ -14,11 +14,10 @@ from typing import List
 
 import requests
 from hyperscript import Element, h
-from rich.console import Console
 from sqlglot.helper import seq_get
 
 from sqlmesh.core import constants as c
-from sqlmesh.core.console import SNAPSHOT_CHANGE_CATEGORY_STR, MarkdownConsole
+from sqlmesh.core.console import SNAPSHOT_CHANGE_CATEGORY_STR, get_console, MarkdownConsole
 from sqlmesh.core.context import Context
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.plan import Plan, PlanBuilder
@@ -303,7 +302,11 @@ class GithubController:
         self._prod_plan_builder: t.Optional[PlanBuilder] = None
         self._prod_plan_with_gaps_builder: t.Optional[PlanBuilder] = None
         self._check_run_mapping: t.Dict[str, CheckRun] = {}
-        self._console = MarkdownConsole(console=Console(no_color=True))
+
+        if not isinstance(get_console(), MarkdownConsole):
+            raise CICDBotError("Console must be a markdown console.")
+        self._console = t.cast(MarkdownConsole, get_console())
+
         self._client: Github = client or Github(
             base_url=os.environ["GITHUB_API_URL"],
             login_or_token=self._token,
@@ -326,7 +329,6 @@ class GithubController:
         self._context: Context = Context(
             paths=self._paths,
             config=self.config,
-            console=self._console,
         )
 
     @property

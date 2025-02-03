@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import datetime
-import logging
 import typing as t
 import unittest
 from collections import Counter
@@ -33,7 +32,6 @@ if t.TYPE_CHECKING:
 
     Row = t.Dict[str, t.Any]
 
-logger = logging.getLogger(__name__)
 
 TIME_KWARG_KEYS = {
     "start",
@@ -242,9 +240,11 @@ class ModelTest(unittest.TestCase):
                 elif type(value) is datetime.datetime:
                     expected[col] = pd.to_datetime(expected[col]).dt.to_pydatetime()
             except Exception as e:
-                logger.warning(
+                from sqlmesh.core.console import get_console
+
+                get_console().log_warning(
                     f"Failed to convert expected value for {col} into `datetime` "
-                    f"for unit test '{str(self)}'. {str(e)}"
+                    f"for unit test '{str(self)}'. {str(e)}."
                 )
 
         actual = actual.replace({np.nan: None})
