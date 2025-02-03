@@ -5060,6 +5060,11 @@ def test_unrendered_macros_python_model(mocker: MockerFixture) -> None:
             location1="@'s3://bucket/prefix/@{schema_name}/@{table_name}'",
             location2="@IF(@gateway = 'dev', @'hdfs://@{catalog_name}/@{schema_name}/dev/@{table_name}', @'s3://prod/@{table_name}')",
         ),
+        virtual_properties={"creatable_type": "@{create_type}"},
+        session_properties={
+            "spark.executor.cores": "@IF(@gateway = 'dev', 1, 2)",
+            "spark.executor.memory": "1G",
+        },
     )
     def model_with_macros(evaluator, **kwargs):
         return exp.select(
@@ -5075,6 +5080,7 @@ def test_unrendered_macros_python_model(mocker: MockerFixture) -> None:
             "bar": "suffix",
             "gateway": "dev",
             "key": "a",
+            "create_type": "'SECURE'",
         },
     )
 
@@ -5091,6 +5097,12 @@ def test_unrendered_macros_python_model(mocker: MockerFixture) -> None:
 
     assert "location1" in python_sql_model.physical_properties
     assert "location2" in python_sql_model.physical_properties
+
+    assert python_sql_model.session_properties == {
+        "spark.executor.cores": 1,
+        "spark.executor.memory": "1G",
+    }
+    assert python_sql_model.virtual_properties["creatable_type"].this == "SECURE"
 
     # The physical_properties will stay unrendered at load time
     assert (

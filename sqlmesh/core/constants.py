@@ -97,7 +97,5 @@ RUNTIME_RENDERED_MODEL_FIELDS = {
     "description",
     "cron",
     "physical_properties",
-    "virtual_properties",
-    "session_properties",
     "merge_filter",
 }
