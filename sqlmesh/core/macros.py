@@ -1183,6 +1183,59 @@ def date_spine(
     return exp.select(alias_name).from_(exploded)
 
 
+@macro()
+def physical_location(
+    evaluator: MacroEvaluator,
+    template: exp.Literal,
+    mode: exp.Literal = exp.Literal.string("literal"),
+) -> t.Union[exp.Literal, exp.Table]:
+    """
+    Generates a either a String literal or an exp.Table representing a physical table location, based on rendering the provided template String literal.
+
+    Note: It relies on the @this_model variable being available in the evaluation context (@this_model resolves to an exp.Table object
+    representing the current physical table).
+    Therefore, the @physical_location macro must be used at creation or evaluation time and not at load time.
+
+    Args:
+        template: Template string literal. Can contain the following placeholders:
+            @{catalog_name} -> replaced with the catalog of the exp.Table returned from @this_model
+            @{schema_name} -> replaced with the schema of the exp.Table returned from @this_model
+            @{table_name} -> replaced with the name of the exp.Table returned from @this_model
+        mode: What to return.
+            'literal' -> return an exp.Literal string
+            'table' -> return an exp.Table
+
+    Example:
+        >>> from sqlglot import parse_one, exp
+        >>> from sqlmesh.core.macros import MacroEvaluator, RuntimeStage
+        >>> sql = "@physical_location('s3://data-bucket/prod/@{catalog_name}/@{schema_name}/@{table_name}')"
+        >>> evaluator = MacroEvaluator(runtime_stage=RuntimeStage.CREATING)
+        >>> evaluator.locals.update({"this_model": exp.to_table("test_catalog.sqlmesh__test.test__test_model__2517971505")})
+        >>> evaluator.transform(parse_one(sql)).sql()
+        "'s3://data-bucket/prod/test_catalog/sqlmesh__test/test__test_model__2517971505'"
+    """
+    if evaluator.runtime_stage != "loading":
+        if "this_model" not in evaluator.locals:
+            raise SQLMeshError(
+                "@this_model must be present in the macro evaluation context in order to use @physical_location"
+            )
+
+        this_model = exp.to_table(evaluator.locals["this_model"])
+        template_str: str = template.this
+        result = (
+            template_str.replace("@{catalog_name}", this_model.catalog)
+            .replace("@{schema_name}", this_model.db)
+            .replace("@{table_name}", this_model.name)
+        )
+
+        if mode.this.lower() == "table":
+            return exp.to_table(result)
+        else:
+            return exp.Literal.string(result)
+
+    return template
+
+
 def normalize_macro_name(name: str) -> str:
     """Prefix macro name with @ and upcase"""
     return f"@{name.upper()}"

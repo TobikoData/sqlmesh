@@ -29,6 +29,7 @@ from sqlmesh.core.dialect import parse
 from sqlmesh.core.engine_adapter.base import MERGE_SOURCE_ALIAS, MERGE_TARGET_ALIAS
 from sqlmesh.core.engine_adapter.duckdb import DuckDBEngineAdapter
 from sqlmesh.core.macros import MacroEvaluator, macro
+from sqlmesh.core import constants as c
 from sqlmesh.core.model import (
     CustomKind,
     PythonModel,
@@ -58,6 +59,7 @@ from sqlmesh.utils.date import TimeLike, to_datetime, to_ds, to_timestamp
 from sqlmesh.utils.errors import ConfigError, SQLMeshError
 from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroInfo, MacroExtractor
 from sqlmesh.utils.metaprogramming import Executable
+from sqlmesh.core.macros import RuntimeStage
 
 
 def missing_schema_warning_msg(model, deps):
@@ -5245,6 +5247,62 @@ def test_this_model() -> None:
         )
         == 'SELECT 1 AS "COL", TRUE AS "THIS_MODEL_RESOLVES_TO_QUOTED_TABLE"'
     )
+
+
+def test_macros_in_physical_properties(make_snapshot):
+    expressions = d.parse(
+        """
+        MODEL (
+            name test.test_model,
+            kind FULL,
+            physical_properties (
+                location1 = @physical_location('s3://bucket/prefix/@{schema_name}/@{table_name}'),
+                location2 = @IF(
+                    @gateway = 'dev',
+                    @physical_location('hdfs://@{catalog_name}/@{schema_name}/dev/@{table_name}'),
+                    @physical_location('s3://prod/@{table_name}')
+                ),
+                sort_order = @IF(@gateway = 'prod', 'desc', 'asc')
+            )
+        );
+
+        SELECT 1;
+        """
+    )
+
+    model = load_sql_based_model(
+        expressions, variables={"gateway": "dev"}, default_catalog="unit_test"
+    )
+
+    assert model.name == "test.test_model"
+    assert "location1" in model.physical_properties
+    assert "location2" in model.physical_properties
+    assert "sort_order" in model.physical_properties
+
+    # load time is a no-op
+    assert isinstance(model.physical_properties["location1"], d.MacroFunc)
+    assert isinstance(model.physical_properties["location2"], d.MacroFunc)
+    assert isinstance(model.physical_properties["sort_order"], d.MacroFunc)
+
+    # substitution occurs at runtime
+    snapshot: Snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    rendered_physical_properties = model.render_physical_properties(
+        snapshots={model.fqn: snapshot},  # to trigger @this_model generation
+        runtime_stage=RuntimeStage.CREATING,
+        python_env=model.python_env,
+    )
+
+    assert (
+        rendered_physical_properties["location1"].text("this")
+        == f"s3://bucket/prefix/sqlmesh__test/test__test_model__{snapshot.version}"
+    )
+    assert (
+        rendered_physical_properties["location2"].text("this")
+        == f"hdfs://unit_test/sqlmesh__test/dev/test__test_model__{snapshot.version}"
+    )
+    assert rendered_physical_properties["sort_order"].text("this") == "asc"
 
 
 def test_macros_in_model_statement(sushi_context, assert_exp_eq):

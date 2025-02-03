@@ -8,6 +8,7 @@ from sqlmesh.core.dialect import StagedFilePath
 from sqlmesh.core.macros import SQL, MacroEvalError, MacroEvaluator, macro
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.metaprogramming import Executable
+from sqlmesh.core.macros import RuntimeStage
 
 
 @pytest.fixture
@@ -1020,3 +1021,60 @@ def test_macro_union(assert_exp_eq, macro_evaluator: MacroEvaluator):
     expected_sql = "SELECT 1 AS col UNION ALL SELECT 1 AS col"
 
     assert_exp_eq(macro_evaluator.transform(parse_one(sql)), expected_sql)
+
+
+def test_physical_location_literal():
+    parsed_sql = parse_one(
+        "@physical_location('s3://data-bucket/prod/@{catalog_name}/@{schema_name}/@{table_name}')"
+    )
+
+    # Loading
+    # During loading, this should passthrough / no-op
+    # This is because SQLMesh renders everything on load to figure out model dependencies and we dont want to throw an error
+    evaluator = MacroEvaluator(runtime_stage=RuntimeStage.LOADING)
+    assert evaluator.transform(parsed_sql) == exp.Literal.string(
+        "s3://data-bucket/prod/@{catalog_name}/@{schema_name}/@{table_name}"
+    )
+
+    # Creating
+    # This macro can work during creating / evaluating but only if @this_model is present in the context
+    evaluator = MacroEvaluator(runtime_stage=RuntimeStage.CREATING)
+    with pytest.raises(SQLMeshError) as e:
+        evaluator.transform(parsed_sql)
+
+    assert "this_model must be present" in str(e.value.__cause__)
+
+    evaluator.locals.update(
+        {"this_model": exp.to_table("test_catalog.sqlmesh__test.test__test_model__2517971505")}
+    )
+
+    assert (
+        evaluator.transform(parsed_sql).sql()
+        == "'s3://data-bucket/prod/test_catalog/sqlmesh__test/test__test_model__2517971505'"
+    )
+
+    # Evaluating
+    evaluator = MacroEvaluator(runtime_stage=RuntimeStage.EVALUATING)
+    evaluator.locals.update(
+        {"this_model": exp.to_table("test_catalog.sqlmesh__test.test__test_model__2517971505")}
+    )
+    assert (
+        evaluator.transform(parsed_sql).sql()
+        == "'s3://data-bucket/prod/test_catalog/sqlmesh__test/test__test_model__2517971505'"
+    )
+
+
+def test_physical_location_table():
+    parsed_sql = parse_one(
+        "SELECT * FROM @physical_location('@{catalog_name}.@{schema_name}.@{table_name}$partitions', mode := 'table')"
+    )
+
+    evaluator = MacroEvaluator(runtime_stage=RuntimeStage.CREATING)
+    evaluator.locals.update(
+        {"this_model": exp.to_table("test_catalog.sqlmesh__test.test__test_model__2517971505")}
+    )
+
+    assert (
+        evaluator.transform(parsed_sql).sql(identify=True)
+        == 'SELECT * FROM "test_catalog"."sqlmesh__test"."test__test_model__2517971505$partitions"'
+    )

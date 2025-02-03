@@ -185,14 +185,16 @@ This would perform the following mappings:
 
 Often, you dont need to configure an explicit table location because if you have configured explicit schema locations, table locations are automatically inferred by Trino to be a subdirectory under the schema location.
 
-However, if you need to, you can configure an explicit table location by adding a `location` property to the model `physical_properties`:
+However, if you need to, you can configure an explicit table location by adding a `location` property to the model `physical_properties`.
 
-```
+Note that you need to use the [@physical_location](../../concepts/macros/sqlmesh_macros.md#physical_location) macro to generate a unique table location for each model version. Otherwise, all model versions will be written to the same location and clobber each other.
+
+```sql hl_lines="5"
 MODEL (
   name staging.customers,
   kind FULL,
   physical_properties (
-    location = 's3://warehouse/staging/customers'
+    location = @physical_location('s3://warehouse/@{catalog_name}/@{schema_name}/@{table_name}')
   )
 );
 
