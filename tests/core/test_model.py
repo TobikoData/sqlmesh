@@ -4997,6 +4997,10 @@ def test_macros_python_sql_model(mocker: MockerFixture) -> None:
         enabled="@IF(@gateway = 'dev', True, False)",
         start="@IF(@gateway = 'dev', '1 month ago', '2024-01-01')",
         end="@end_date_macro(@{global_var})",
+        owner="@IF(@gateway = 'dev', @{dev_owner}, @{prod_owner})",
+        stamp="@{stamp}",
+        tags=["@{tag1}", "@{tag2}"],
+        description="Model desc @{test_}",
     )
     def model_with_macros(evaluator, **kwargs):
         return exp.select(
@@ -5013,6 +5017,12 @@ def test_macros_python_sql_model(mocker: MockerFixture) -> None:
             "bar": "suffix",
             "gateway": "dev",
             "global_var": False,
+            "dev_owner": "dv_1",
+            "prod_owner": "pr_1",
+            "stamp": "bump",
+            "time_col": "a",
+            "tag1": "tag__1",
+            "tag2": "tag__2",
         },
     )
 
@@ -5024,6 +5034,10 @@ def test_macros_python_sql_model(mocker: MockerFixture) -> None:
     assert python_sql_model.enabled
     assert python_sql_model.start == "1 month ago"
     assert python_sql_model.end == "1 day ago"
+    assert python_sql_model.owner == "dv_1"
+    assert python_sql_model.stamp == "bump"
+    assert python_sql_model.description == "Model desc @{test_}"
+    assert python_sql_model.tags == ["tag__1", "tag__2"]
 
     context = ExecutionContext(mocker.Mock(), {}, None, None)
     query = list(python_sql_model.render(context=context))[0]
@@ -5041,6 +5055,7 @@ def test_unrendered_macros_python_model(mocker: MockerFixture) -> None:
         ),
         cron="@daily",
         columns={"a": "string"},
+        allow_partials="@IF(@gateway = 'dev', True, False)",
         physical_properties=dict(
             location1="@'s3://bucket/prefix/@{schema_name}/@{table_name}'",
             location2="@IF(@gateway = 'dev', @'hdfs://@{catalog_name}/@{schema_name}/dev/@{table_name}', @'s3://prod/@{table_name}')",
@@ -5072,6 +5087,7 @@ def test_unrendered_macros_python_model(mocker: MockerFixture) -> None:
     context = ExecutionContext(mocker.Mock(), {}, None, None)
     query = list(python_sql_model.render(context=context))[0]
     assert query.sql() == """SELECT 'test_value' AS "a" """.strip()
+    assert python_sql_model.allow_partials
 
     assert "location1" in python_sql_model.physical_properties
     assert "location2" in python_sql_model.physical_properties
