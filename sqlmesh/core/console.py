@@ -5,6 +5,7 @@ import datetime
 import typing as t
 import unittest
 import uuid
+import logging
 
 from hyperscript import h
 from rich.console import Console as RichConsole
@@ -45,6 +46,9 @@ if t.TYPE_CHECKING:
     from sqlmesh.core.table_diff import RowDiff, SchemaDiff
 
     LayoutWidget = t.TypeVar("LayoutWidget", bound=t.Union[widgets.VBox, widgets.HBox])
+
+
+logger = logging.getLogger(__name__)
 
 
 SNAPSHOT_CHANGE_CATEGORY_STR = {
@@ -409,7 +413,7 @@ class NoopConsole(Console):
         pass
 
     def log_warning(self, message: str) -> None:
-        pass
+        logger.warning(message)
 
     def log_success(self, message: str) -> None:
         pass
@@ -1183,6 +1187,7 @@ class TerminalConsole(Console):
         self._print(f"[red]{message}[/red]")
 
     def log_warning(self, message: str) -> None:
+        logger.warning(message)
         if not self.ignore_warnings:
             self._print(f"[yellow]{message}[/yellow]")
 
@@ -2311,6 +2316,7 @@ class DebuggerTerminalConsole(TerminalConsole):
         self._write(message, style="bold red")
 
     def log_warning(self, message: str) -> None:
+        logger.warning(message)
         if not self.ignore_warnings:
             self._write(message, style="bold yellow")
 

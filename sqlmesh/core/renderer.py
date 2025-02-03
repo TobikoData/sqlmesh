@@ -547,7 +547,6 @@ class QueryRenderer(BaseExpressionRenderer):
             if self._validate_query:
                 raise_config_error(warning, self._path)
 
-            logger.warning(warning)
             get_console().log_warning(warning)
 
         try:
@@ -578,7 +577,6 @@ class QueryRenderer(BaseExpressionRenderer):
 
             query = original
 
-            logger.warning(warning)
             get_console().log_warning(warning)
         except Exception as ex:
             raise_config_error(
