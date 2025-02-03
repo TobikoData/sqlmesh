@@ -383,9 +383,10 @@ class SchemaDiffer(PydanticModel):
             if is_coerceable:
                 from sqlmesh.core.console import get_console
 
-                warning = f"Coercing type {current_type} to {new_type} which means an alter will not be performed and therefore the resulting table structure will not match what is in the query.\nUpdate your model to cast the value to {current_type} type in order to remove this warning."
-                logger.warning(warning)
-                get_console().log_warning(warning)
+                get_console().log_warning(
+                    f"Coercing type {current_type} to {new_type} which means an alter will not be performed and therefore the resulting table structure will not match what is in the query.\nUpdate your model to cast the value to {current_type} type in order to remove this warning."
+                )
+
             return is_coerceable
         return False
 

@@ -329,7 +329,11 @@ class ModelTest(unittest.TestCase):
         name = normalize_model_name(name, default_catalog=default_catalog, dialect=dialect)
         model = models.get(name)
         if not model:
-            logger.warning(f"Model '{name}' was not found{' at ' + str(path) if path else ''}")
+            from sqlmesh.core.console import get_console
+
+            get_console().log_warning(
+                f"Model '{name}' was not found{' at ' + str(path) if path else ''}"
+            )
             return None
 
         if isinstance(model, SqlModel):

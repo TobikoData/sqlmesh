@@ -1,6 +1,5 @@
 # ruff: noqa: F811
 import json
-import logging
 import typing as t
 from datetime import date, datetime
 from pathlib import Path
@@ -276,8 +275,7 @@ def test_model_validation_union_query():
 
 
 def test_model_qualification():
-    logger = logging.getLogger("sqlmesh.core.renderer")
-    with patch.object(logger, "warning") as mock_logger:
+    with patch.object(get_console(), "log_warning") as mock_logger:
         expressions = d.parse(
             """
             MODEL (
@@ -2677,8 +2675,7 @@ def test_update_schema():
     model.update_schema(schema)
     assert model.mapping_schema == {'"table_a"': {"a": "INT"}}
 
-    logger = logging.getLogger("sqlmesh.core.renderer")
-    with patch.object(logger, "warning") as mock_logger:
+    with patch.object(get_console(), "log_warning") as mock_logger:
         model.render_query(needs_optimization=True)
         assert mock_logger.call_args[0][0] == missing_schema_warning_msg(
             '"db"."table"', ('"table_b"',)
@@ -2694,8 +2691,6 @@ def test_update_schema():
 
 
 def test_missing_schema_warnings():
-    logger = logging.getLogger("sqlmesh.core.renderer")
-
     full_schema = MappingSchema(
         {
             "a": {"x": exp.DataType.build("int")},
@@ -2710,34 +2705,36 @@ def test_missing_schema_warnings():
         },
     )
 
+    console = get_console()
+
     # star, no schema, no deps
-    with patch.object(logger, "warning") as mock_logger:
+    with patch.object(console, "log_warning") as mock_logger:
         model = load_sql_based_model(d.parse("MODEL (name test); SELECT * FROM (SELECT 1 a) x"))
         model.render_query(needs_optimization=True)
         mock_logger.assert_not_called()
 
     # star, full schema
-    with patch.object(logger, "warning") as mock_logger:
+    with patch.object(console, "log_warning") as mock_logger:
         model = load_sql_based_model(d.parse("MODEL (name test); SELECT * FROM a CROSS JOIN b"))
         model.update_schema(full_schema)
         model.render_query(needs_optimization=True)
         mock_logger.assert_not_called()
 
     # star, partial schema
-    with patch.object(logger, "warning") as mock_logger:
+    with patch.object(console, "log_warning") as mock_logger:
         model = load_sql_based_model(d.parse("MODEL (name test); SELECT * FROM a CROSS JOIN b"))
         model.update_schema(partial_schema)
         model.render_query(needs_optimization=True)
         assert mock_logger.call_args[0][0] == missing_schema_warning_msg('"test"', ('"b"',))
 
     # star, no schema
-    with patch.object(logger, "warning") as mock_logger:
+    with patch.object(console, "log_warning") as mock_logger:
         model = load_sql_based_model(d.parse("MODEL (name test); SELECT * FROM b JOIN a"))
         model.render_query(needs_optimization=True)
         assert mock_logger.call_args[0][0] == missing_schema_warning_msg('"test"', ('"a"', '"b"'))
 
     # no star, full schema
-    with patch.object(logger, "warning") as mock_logger:
+    with patch.object(console, "log_warning") as mock_logger:
         model = load_sql_based_model(
             d.parse("MODEL (name test); SELECT x::INT FROM a CROSS JOIN b")
         )
@@ -2746,7 +2743,7 @@ def test_missing_schema_warnings():
         mock_logger.assert_not_called()
 
     # no star, partial schema
-    with patch.object(logger, "warning") as mock_logger:
+    with patch.object(console, "log_warning") as mock_logger:
         model = load_sql_based_model(
             d.parse("MODEL (name test); SELECT x::INT FROM a CROSS JOIN b")
         )
@@ -2755,7 +2752,7 @@ def test_missing_schema_warnings():
         mock_logger.assert_not_called()
 
     # no star, empty schema
-    with patch.object(logger, "warning") as mock_logger:
+    with patch.object(console, "log_warning") as mock_logger:
         model = load_sql_based_model(
             d.parse("MODEL (name test); SELECT x::INT FROM a CROSS JOIN b")
         )

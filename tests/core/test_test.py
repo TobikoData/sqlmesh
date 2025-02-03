@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 import datetime
 import typing as t
 from pathlib import Path
@@ -21,6 +20,7 @@ from sqlmesh.core.config import (
     ModelDefaultsConfig,
 )
 from sqlmesh.core.context import Context
+from sqlmesh.core.console import get_console
 from sqlmesh.core.dialect import parse
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.macros import MacroEvaluator, macro
@@ -1771,8 +1771,7 @@ outputs:
         """
     )
 
-    logger = logging.getLogger("sqlmesh.core.test.definition")
-    with patch.object(logger, "warning") as mock_logger:
+    with patch.object(get_console(), "log_warning") as mock_logger:
         ModelTest.create_test(
             body=body,
             test_name="test_unknown_model",
