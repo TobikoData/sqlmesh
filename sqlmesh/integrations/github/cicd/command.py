@@ -6,6 +6,7 @@ import traceback
 import click
 
 from sqlmesh.core.analytics import cli_analytics
+from sqlmesh.core.console import set_console, MarkdownConsole
 from sqlmesh.integrations.github.cicd.controller import (
     GithubCheckConclusion,
     GithubCheckStatus,
@@ -26,6 +27,7 @@ logger = logging.getLogger(__name__)
 @click.pass_context
 def github(ctx: click.Context, token: str) -> None:
     """Github Action CI/CD Bot. See https://sqlmesh.readthedocs.io/en/stable/integrations/github/ for details"""
+    set_console(MarkdownConsole())
     ctx.obj["github"] = GithubController(
         paths=ctx.obj["paths"],
         token=token,

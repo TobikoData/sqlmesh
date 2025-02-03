@@ -534,6 +534,8 @@ class QueryRenderer(BaseExpressionRenderer):
                 missing_deps.add(dep)
 
         if self._model_fqn and not should_optimize and any(s.is_star for s in query.selects):
+            from sqlmesh.core.console import get_console
+
             deps = ", ".join(f"'{dep}'" for dep in sorted(missing_deps))
 
             warning = (
@@ -546,6 +548,7 @@ class QueryRenderer(BaseExpressionRenderer):
                 raise_config_error(warning, self._path)
 
             logger.warning(warning)
+            get_console().log_warning(warning)
 
         try:
             if should_optimize:
@@ -564,8 +567,10 @@ class QueryRenderer(BaseExpressionRenderer):
                     )
                 )
         except SqlglotError as ex:
+            from sqlmesh.core.console import get_console
+
             warning = (
-                f"{ex} for model '{self._model_fqn}', the column may not exist or is ambiguous"
+                f"{ex} for model '{self._model_fqn}', the column may not exist or is ambiguous."
             )
 
             if self._validate_query:
@@ -574,6 +579,7 @@ class QueryRenderer(BaseExpressionRenderer):
             query = original
 
             logger.warning(warning)
+            get_console().log_warning(warning)
         except Exception as ex:
             raise_config_error(
                 f"Failed to optimize query, please file an issue at https://github.com/TobikoData/sqlmesh/issues/new. {ex}",

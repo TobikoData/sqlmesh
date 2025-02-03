@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import abc
-import logging
 import typing as t
 from pathlib import Path
 
 from dbt.adapters.base import BaseRelation, Column
 from pydantic import Field
 
+from sqlmesh.core.console import get_console
 from sqlmesh.core.config.connection import (
     AthenaConnectionConfig,
     BigQueryConnectionConfig,
@@ -35,8 +35,6 @@ from sqlmesh.dbt.util import DBT_VERSION
 from sqlmesh.utils import AttributeDict, classproperty
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import field_validator, model_validator
-
-logger = logging.getLogger(__name__)
 
 IncrementalKind = t.Union[
     t.Type[IncrementalByUniqueKeyKind],
@@ -176,7 +174,7 @@ class DuckDbConfig(TargetConfig):
             )
 
         if "threads" in data and t.cast(int, data["threads"]) > 1:
-            logger.warning("DuckDB does not support concurrency - setting threads to 1.")
+            get_console().log_warning("DuckDB does not support concurrency - setting threads to 1.")
 
         return data
 

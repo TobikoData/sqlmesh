@@ -604,7 +604,7 @@ def test_migrate(
 
 
 @pytest.mark.slow
-def test_create_external_models(notebook, loaded_sushi_context):
+def test_create_external_models(notebook, loaded_sushi_context, convert_all_html_output_to_text):
     external_model_file = loaded_sushi_context.path / "external_models.yaml"
     external_model_file.unlink()
     assert not external_model_file.exists()
@@ -614,7 +614,11 @@ def test_create_external_models(notebook, loaded_sushi_context):
 
     assert not output.stdout
     assert not output.stderr
-    assert not output.outputs
+    assert len(output.outputs) == 2
+    converted = sorted(convert_all_html_output_to_text(output))
+    assert 'Unable to get schema for \'"memory"."raw"."model1"\'' in converted[0]
+    assert 'Unable to get schema for \'"memory"."raw"."model2"\'' in converted[1]
+
     assert external_model_file.exists()
     assert (
         external_model_file.read_text()
