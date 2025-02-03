@@ -142,7 +142,7 @@ class BaseExpressionRenderer:
             "default_catalog": self._default_catalog,
             "runtime_stage": runtime_stage.value,
             "resolve_table": lambda table: self._resolve_table(
-                table,
+                d.normalize_model_name(table, self._default_catalog, self._dialect),
                 snapshots=snapshots,
                 table_mapping=table_mapping,
                 deployability_index=deployability_index,
