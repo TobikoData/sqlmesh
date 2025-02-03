@@ -687,12 +687,22 @@ class _Model(ModelMeta, frozen=True):
                 f"Cannot diff model '{self.name} against a non-model node '{other.name}'"
             )
 
-        return d.text_diff(
+        text_diff = d.text_diff(
             self.render_definition(render_query=rendered),
             other.render_definition(render_query=rendered),
             self.dialect,
             other.dialect,
         ).strip()
+
+        if not text_diff and not rendered:
+            text_diff = d.text_diff(
+                self.render_definition(render_query=True),
+                other.render_definition(render_query=True),
+                self.dialect,
+                other.dialect,
+            ).strip()
+
+        return text_diff
 
     def set_time_format(self, default_time_format: str = c.DEFAULT_TIME_COLUMN_FORMAT) -> None:
         """Sets the default time format for a model.
@@ -1255,8 +1265,12 @@ class SqlModel(_Model):
             if query is None:
                 return None
 
+            unknown = exp.DataType.build("unknown")
+
             self._columns_to_types = {
-                select.output_name: select.type or exp.DataType.build("unknown")
+                # copy data type because it is used in the engine to build CTAS and other queries
+                # this can change the parent which will mess up the diffing algo
+                select.output_name: (select.type or unknown).copy()
                 for select in query.selects
             }
 
@@ -1351,9 +1365,16 @@ class SqlModel(_Model):
             # Can't determine if there's a breaking change if we can't render the query.
             return None
 
-        edits = diff(
-            previous_query, this_query, matchings=[(previous_query, this_query)], delta_only=True
-        )
+        if previous_query is this_query:
+            edits = []
+        else:
+            edits = diff(
+                previous_query,
+                this_query,
+                matchings=[(previous_query, this_query)],
+                delta_only=True,
+                copy=False,
+            )
         inserted_expressions = {e.expression for e in edits if isinstance(e, Insert)}
 
         for edit in edits:

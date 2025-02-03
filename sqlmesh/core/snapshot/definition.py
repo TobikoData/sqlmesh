@@ -46,7 +46,6 @@ from sqlmesh.utils.pydantic import PydanticModel, field_validator
 if t.TYPE_CHECKING:
     from sqlglot.dialects.dialect import DialectType
     from sqlmesh.core.environment import EnvironmentNamingInfo
-    from sqlmesh.core.config import Config
 
 Interval = t.Tuple[int, int]
 Intervals = t.List[Interval]
@@ -596,7 +595,6 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         ttl: str = c.DEFAULT_SNAPSHOT_TTL,
         version: t.Optional[str] = None,
         cache: t.Optional[t.Dict[str, SnapshotFingerprint]] = None,
-        config: t.Optional[Config] = None,
     ) -> Snapshot:
         """Creates a new snapshot for a node.
 

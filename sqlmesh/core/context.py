@@ -334,6 +334,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         self.configs = (
             config if isinstance(config, dict) else load_configs(config, self.CONFIG_TYPE, paths)
         )
+        self._projects = {config.project for config in self.configs.values()}
         self.dag: DAG[str] = DAG()
         self._models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
         self._audits: UniqueKeyDict[str, ModelAudit] = UniqueKeyDict("audits")
@@ -553,7 +554,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         """Load all files in the context's path."""
         load_start_ts = time.perf_counter()
 
-        projects = [loader.load() for loader in self._loaders]
+        loaded_projects = [loader.load() for loader in self._loaders]
 
         self.dag = DAG()
         self._standalone_audits.clear()
@@ -564,7 +565,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         self._requirements.clear()
         self._excluded_requirements.clear()
 
-        for project in projects:
+        for project in loaded_projects:
             self._jinja_macros = self._jinja_macros.merge(project.jinja_macros)
             self._macros.update(project.macros)
             self._models.update(project.models)
@@ -574,15 +575,39 @@ class GenericContext(BaseContext, t.Generic[C]):
             self._requirements.update(project.requirements)
             self._excluded_requirements.update(project.excluded_requirements)
 
+        uncached = set()
+
+        if any(self._projects):
+            prod = self.state_reader.get_environment(c.PROD)
+
+            if prod:
+                for snapshot in self.state_reader.get_snapshots(prod.snapshots).values():
+                    if snapshot.node.project in self._projects:
+                        uncached.add(snapshot.name)
+                    else:
+                        store = self._standalone_audits if snapshot.is_audit else self._models
+                        store[snapshot.name] = snapshot.node  # type: ignore
+
         for model in self._models.values():
             self.dag.add(model.fqn, model.depends_on)
 
-        # This topologically sorts the DAG & caches the result in-memory for later;
-        # we do it here to detect any cycles as early as possible and fail if needed
-        self.dag.sorted
-
         if update_schemas:
+            for fqn in self.dag:
+                model = self._models.get(fqn)  # type: ignore
+
+                if not model or fqn in uncached:
+                    continue
+
+                # make a copy of remote models that depend on local models or in the downstream chain
+                # without this, a SELECT * FROM local will not propogate properly because the downstream
+                # model will get mutated (schema changes) but the object is the same as the remote cache
+                if any(dep in uncached for dep in model.depends_on):
+                    uncached.add(fqn)
+                    self._models.update({fqn: model.copy(update={"mapping_schema": {}})})
+                    continue
+
             update_model_schemas(self.dag, models=self._models, context_path=self.path)
+
             for model in self.models.values():
                 # The model definition can be validated correctly only after the schema is set.
                 model.validate_definition()
@@ -2105,63 +2130,39 @@ class GenericContext(BaseContext, t.Generic[C]):
     def _snapshots(
         self, models_override: t.Optional[UniqueKeyDict[str, Model]] = None
     ) -> t.Dict[str, Snapshot]:
-        projects = {config.project for config in self.configs.values()}
-
-        if any(projects):
-            prod = self.state_reader.get_environment(c.PROD)
-            remote_snapshots = (
-                {
-                    snapshot.name: snapshot
-                    for snapshot in self.state_reader.get_snapshots(prod.snapshots).values()
-                }
-                if prod
-                else {}
-            )
-        else:
-            remote_snapshots = {}
-
-        local_nodes = {**(models_override or self._models), **self._standalone_audits}
-        nodes = local_nodes.copy()
-
-        for name, snapshot in remote_snapshots.items():
-            if name not in nodes and snapshot.node.project not in projects:
-                nodes[name] = snapshot.node
-
         def _nodes_to_snapshots(nodes: t.Dict[str, Node]) -> t.Dict[str, Snapshot]:
             snapshots: t.Dict[str, Snapshot] = {}
             fingerprint_cache: t.Dict[str, SnapshotFingerprint] = {}
 
             for node in nodes.values():
-                if node.fqn not in local_nodes and node.fqn in remote_snapshots:
-                    ttl = remote_snapshots[node.fqn].ttl
-                else:
-                    config = self.config_for_node(node)
-                    ttl = config.snapshot_ttl
+                kwargs = {}
+                if node.project in self._projects:
+                    kwargs["ttl"] = self.config_for_node(node).snapshot_ttl
 
                 snapshot = Snapshot.from_node(
                     node,
                     nodes=nodes,
                     cache=fingerprint_cache,
-                    ttl=ttl,
-                    config=self.config_for_node(node),
+                    **kwargs,
                 )
                 snapshots[snapshot.name] = snapshot
             return snapshots
 
+        nodes = {**(models_override or self._models), **self._standalone_audits}
         snapshots = _nodes_to_snapshots(nodes)
         stored_snapshots = self.state_reader.get_snapshots(snapshots.values())
 
         unrestorable_snapshots = {
             snapshot
             for snapshot in stored_snapshots.values()
-            if snapshot.name in local_nodes and snapshot.unrestorable
+            if snapshot.name in nodes and snapshot.unrestorable
         }
         if unrestorable_snapshots:
             for snapshot in unrestorable_snapshots:
                 logger.info(
                     "Found a unrestorable snapshot %s. Restamping the model...", snapshot.name
                 )
-                node = local_nodes[snapshot.name]
+                node = nodes[snapshot.name]
                 nodes[snapshot.name] = node.copy(
                     update={"stamp": f"revert to {snapshot.identifier}"}
                 )

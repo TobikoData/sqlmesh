@@ -3837,7 +3837,7 @@ def test_multi(mocker):
     )
     context._new_state_sync().reset(default_catalog=context.default_catalog)
     plan = context.plan_builder().build()
-    assert len(plan.new_snapshots) == 4
+    assert len(plan.new_snapshots) == 5
     context.apply(plan)
 
     adapter = context.engine_adapter
@@ -3856,12 +3856,13 @@ def test_multi(mocker):
     assert set(snapshot.name for snapshot in plan.directly_modified) == {
         '"memory"."bronze"."a"',
         '"memory"."bronze"."b"',
+        '"memory"."silver"."e"',
     }
     assert sorted([x.name for x in list(plan.indirectly_modified.values())[0]]) == [
         '"memory"."silver"."c"',
         '"memory"."silver"."d"',
     ]
-    assert len(plan.missing_intervals) == 2
+    assert len(plan.missing_intervals) == 3
     context.apply(plan)
     validate_apply_basics(context, c.PROD, plan.snapshots.values())
 
