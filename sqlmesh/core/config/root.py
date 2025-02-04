@@ -28,6 +28,7 @@ from sqlmesh.core.config.gateway import GatewayConfig
 from sqlmesh.core.config.migration import MigrationConfig
 from sqlmesh.core.config.model import ModelDefaultsConfig
 from sqlmesh.core.config.naming import NameInferenceConfig as NameInferenceConfig
+from sqlmesh.core.config.linter import LinterConfig as LinterConfig
 from sqlmesh.core.config.plan import PlanConfig
 from sqlmesh.core.config.run import RunConfig
 from sqlmesh.core.config.scheduler import (
@@ -124,6 +125,7 @@ class Config(BaseConfig):
     disable_anonymized_analytics: bool = False
     before_all: t.Optional[t.List[str]] = None
     after_all: t.Optional[t.List[str]] = None
+    linter: LinterConfig = LinterConfig()
 
     _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {
         "gateways": UpdateStrategy.NESTED_UPDATE,
@@ -141,6 +143,7 @@ class Config(BaseConfig):
         "plan": UpdateStrategy.NESTED_UPDATE,
         "before_all": UpdateStrategy.EXTEND,
         "after_all": UpdateStrategy.EXTEND,
+        "linter": UpdateStrategy.NESTED_UPDATE,
     }
 
     _connection_config_validator = connection_config_validator
