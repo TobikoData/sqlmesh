@@ -1190,7 +1190,7 @@ def physical_location(
     mode: exp.Literal = exp.Literal.string("literal"),
 ) -> t.Union[exp.Literal, exp.Table]:
     """
-    Generates a either a String literal or an exp.Table representing a physical table location, based on rendering the provided template String literal.
+    Generates either a String literal or an exp.Table representing a physical table location, based on rendering the provided template String literal.
 
     Note: It relies on the @this_model variable being available in the evaluation context (@this_model resolves to an exp.Table object
     representing the current physical table).
