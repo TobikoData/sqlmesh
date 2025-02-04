@@ -71,7 +71,7 @@ def test_macros_in_physical_properties(
             name SCHEMA.test,
             kind FULL,
             physical_properties (
-                location = @physical_location('s3://trino/@{catalog_name}/@{schema_name}/@{table_name}'),
+                location = @resolve_template('s3://trino/@{catalog_name}/@{schema_name}/@{table_name}'),
                 sorted_by = @if(@gateway = 'inttest_trino_iceberg', ARRAY['col_a'], ARRAY['col_b'])
             )
         );

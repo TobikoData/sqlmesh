@@ -1023,9 +1023,9 @@ def test_macro_union(assert_exp_eq, macro_evaluator: MacroEvaluator):
     assert_exp_eq(macro_evaluator.transform(parse_one(sql)), expected_sql)
 
 
-def test_physical_location_literal():
+def test_resolve_template_literal():
     parsed_sql = parse_one(
-        "@physical_location('s3://data-bucket/prod/@{catalog_name}/@{schema_name}/@{table_name}')"
+        "@resolve_template('s3://data-bucket/prod/@{catalog_name}/@{schema_name}/@{table_name}')"
     )
 
     # Loading
@@ -1064,9 +1064,9 @@ def test_physical_location_literal():
     )
 
 
-def test_physical_location_table():
+def test_resolve_template_table():
     parsed_sql = parse_one(
-        "SELECT * FROM @physical_location('@{catalog_name}.@{schema_name}.@{table_name}$partitions', mode := 'table')"
+        "SELECT * FROM @resolve_template('@{catalog_name}.@{schema_name}.@{table_name}$partitions', mode := 'table')"
     )
 
     evaluator = MacroEvaluator(runtime_stage=RuntimeStage.CREATING)

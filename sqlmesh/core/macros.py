@@ -1184,7 +1184,7 @@ def date_spine(
 
 
 @macro()
-def physical_location(
+def resolve_template(
     evaluator: MacroEvaluator,
     template: exp.Literal,
     mode: exp.Literal = exp.Literal.string("literal"),
@@ -1194,7 +1194,7 @@ def physical_location(
 
     Note: It relies on the @this_model variable being available in the evaluation context (@this_model resolves to an exp.Table object
     representing the current physical table).
-    Therefore, the @physical_location macro must be used at creation or evaluation time and not at load time.
+    Therefore, the @resolve_template macro must be used at creation or evaluation time and not at load time.
 
     Args:
         template: Template string literal. Can contain the following placeholders:
@@ -1208,7 +1208,7 @@ def physical_location(
     Example:
         >>> from sqlglot import parse_one, exp
         >>> from sqlmesh.core.macros import MacroEvaluator, RuntimeStage
-        >>> sql = "@physical_location('s3://data-bucket/prod/@{catalog_name}/@{schema_name}/@{table_name}')"
+        >>> sql = "@resolve_template('s3://data-bucket/prod/@{catalog_name}/@{schema_name}/@{table_name}')"
         >>> evaluator = MacroEvaluator(runtime_stage=RuntimeStage.CREATING)
         >>> evaluator.locals.update({"this_model": exp.to_table("test_catalog.sqlmesh__test.test__test_model__2517971505")})
         >>> evaluator.transform(parse_one(sql)).sql()
@@ -1217,7 +1217,7 @@ def physical_location(
     if evaluator.runtime_stage != "loading":
         if "this_model" not in evaluator.locals:
             raise SQLMeshError(
-                "@this_model must be present in the macro evaluation context in order to use @physical_location"
+                "@this_model must be present in the macro evaluation context in order to use @resolve_template"
             )
 
         this_model = exp.to_table(evaluator.locals["this_model"])

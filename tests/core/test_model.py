@@ -5256,11 +5256,11 @@ def test_macros_in_physical_properties(make_snapshot):
             name test.test_model,
             kind FULL,
             physical_properties (
-                location1 = @physical_location('s3://bucket/prefix/@{schema_name}/@{table_name}'),
+                location1 = @resolve_template('s3://bucket/prefix/@{schema_name}/@{table_name}'),
                 location2 = @IF(
                     @gateway = 'dev',
-                    @physical_location('hdfs://@{catalog_name}/@{schema_name}/dev/@{table_name}'),
-                    @physical_location('s3://prod/@{table_name}')
+                    @resolve_template('hdfs://@{catalog_name}/@{schema_name}/dev/@{table_name}'),
+                    @resolve_template('s3://prod/@{table_name}')
                 ),
                 sort_order = @IF(@gateway = 'prod', 'desc', 'asc')
             )
