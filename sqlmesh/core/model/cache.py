@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.snapshot import SnapshotId
+    from sqlmesh.core.linter.definition import Linter
 
     T = t.TypeVar("T")
 
@@ -80,8 +81,9 @@ class OptimizedQueryCache:
         path: The path to the cache folder.
     """
 
-    def __init__(self, path: Path):
+    def __init__(self, path: Path, linters: t.Optional[t.Dict[str, Linter]] = None):
         self.path = path
+        self.linters = linters
         self._file_cache: FileCache[OptimizedQueryCacheEntry] = FileCache(
             path, prefix="optimized_query"
         )
@@ -130,6 +132,14 @@ class OptimizedQueryCache:
 
     def _put(self, name: str, model: SqlModel) -> None:
         optimized_query = model.render_query()
+
+        if self.linters:
+            linter = self.linters.get(model.project)
+            if linter and linter.rules.keys() & model.violated_rules_for_query.keys():
+                # Do not cache the optimized query if the renderer came across lint errors
+                # Note: The ordering of the intersection check matters here
+                return None
+
         new_entry = OptimizedQueryCacheEntry(optimized_rendered_query=optimized_query)
         self._file_cache.put(name, value=new_entry)
 
@@ -140,7 +150,6 @@ class OptimizedQueryCache:
         hash_data.append(str([gen(d) for d in model.macro_definitions]))
         hash_data.append(str([(k, v) for k, v in model.sorted_python_env]))
         hash_data.extend(model.jinja_macros.data_hash_values)
-        hash_data.extend(str(model.validate_query))
         return f"{model.name}_{crc32(hash_data)}"
 
 
