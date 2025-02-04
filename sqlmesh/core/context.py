@@ -75,6 +75,8 @@ from sqlmesh.core.dialect import (
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.environment import Environment, EnvironmentNamingInfo, EnvironmentStatements
 from sqlmesh.core.loader import Loader
+from sqlmesh.core.linter.definition import Linter
+from sqlmesh.core.linter.rules import BUILTIN_RULES
 from sqlmesh.core.macros import ExecutableOrMacro, macro
 from sqlmesh.core.metric import Metric, rewrite
 from sqlmesh.core.model import Model, update_model_schemas
@@ -112,6 +114,7 @@ from sqlmesh.core.test import (
     run_tests,
 )
 from sqlmesh.core.user import User
+from sqlmesh.core.linter.rule import RuleSet
 from sqlmesh.utils import UniqueKeyDict
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import TimeLike, now_ds, to_timestamp, format_tz_datetime
@@ -349,6 +352,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         self._environment_statements: t.List[EnvironmentStatements] = []
         self._excluded_requirements: t.Set[str] = set()
         self._default_catalog: t.Optional[str] = None
+        self._all_rules: RuleSet = BUILTIN_RULES
         self._loaded: bool = False
 
         self.path, self.config = t.cast(t.Tuple[Path, C], next(iter(self.configs.items())))
@@ -490,12 +494,20 @@ class GenericContext(BaseContext, t.Generic[C]):
             }
         )
 
-        update_model_schemas(self.dag, models=self._models, context_path=self.path)
+        update_model_schemas(
+            self.dag,
+            models=self._models,
+            context_path=self.path,
+            linter=self._linter,
+        )
 
         if model.dialect:
             self._all_dialects.add(model.dialect)
 
         model.validate_definition()
+
+        if self.config.linter.enabled:
+            self._linter.lint_model(model)
 
         return model
 
@@ -589,8 +601,11 @@ class GenericContext(BaseContext, t.Generic[C]):
             self._excluded_requirements.update(project.excluded_requirements)
             if project.environment_statements:
                 self._environment_statements.append(project.environment_statements)
+            self._all_rules = self._all_rules.union(project.user_rules)
 
         uncached = set()
+
+        self._linter = Linter.from_rules(self._all_rules, self.config.linter)
 
         if any(self._projects):
             prod = self.state_reader.get_environment(c.PROD)
@@ -621,11 +636,19 @@ class GenericContext(BaseContext, t.Generic[C]):
                     self._models.update({fqn: model.copy(update={"mapping_schema": {}})})
                     continue
 
-            update_model_schemas(self.dag, models=self._models, context_path=self.path)
+            update_model_schemas(
+                self.dag,
+                models=self._models,
+                context_path=self.path,
+                linter=self._linter,
+            )
 
             for model in self.models.values():
                 # The model definition can be validated correctly only after the schema is set.
                 model.validate_definition()
+
+                if self.config.linter.enabled:
+                    self._linter.lint_model(model)
 
         duplicates = set(self._models) & set(self._standalone_audits)
         if duplicates:
