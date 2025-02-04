@@ -18,15 +18,17 @@ if t.TYPE_CHECKING:
     from sqlmesh.core.model.definition import Model
     from sqlmesh.utils import UniqueKeyDict
     from sqlmesh.utils.dag import DAG
+    from sqlmesh.core.linter.definition import Linter
 
 
 def update_model_schemas(
     dag: DAG[str],
     models: UniqueKeyDict[str, Model],
     context_path: Path,
+    linter: t.Optional[Linter] = None,
 ) -> None:
     schema = MappingSchema(normalize=False)
-    optimized_query_cache: OptimizedQueryCache = OptimizedQueryCache(context_path / c.CACHE)
+    optimized_query_cache: OptimizedQueryCache = OptimizedQueryCache(context_path / c.CACHE, linter)
 
     if c.MAX_FORK_WORKERS == 1:
         _update_model_schemas_sequential(dag, models, schema, optimized_query_cache)
@@ -108,10 +110,13 @@ def _update_model_schemas_parallel(
         while futures:
             for future in as_completed(futures):
                 futures.remove(future)
-                fqn, entry_name, data_hash, metadata_hash, mapping_schema = future.result()
+                fqn, entry_name, data_hash, metadata_hash, mapping_schema, violated_rules = (
+                    future.result()
+                )
                 model = models[fqn]
                 model._data_hash = data_hash
                 model._metadata_hash = metadata_hash
+                model._render_violations = violated_rules
                 model.set_mapping_schema(mapping_schema)
                 optimized_query_cache.with_optimized_query(model, entry_name)
                 _update_schema_with_model(schema, model)
