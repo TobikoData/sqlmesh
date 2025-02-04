@@ -150,6 +150,8 @@ gateways:
       username: {{ env_var("CLICKHOUSE_CLOUD_USERNAME") }}
       password: {{ env_var("CLICKHOUSE_CLOUD_PASSWORD") }}
       connect_timeout: 30
+      connection_pool_options:
+        retries: 5
     state_connection:
       type: duckdb
 
