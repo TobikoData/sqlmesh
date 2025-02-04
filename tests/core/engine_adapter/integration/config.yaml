@@ -149,6 +149,7 @@ gateways:
       port: 8443
       username: {{ env_var("CLICKHOUSE_CLOUD_USERNAME") }}
       password: {{ env_var("CLICKHOUSE_CLOUD_PASSWORD") }}
+      connect_timeout: 30
     state_connection:
       type: duckdb
 
