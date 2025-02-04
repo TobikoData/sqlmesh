@@ -372,6 +372,15 @@ class SqlMeshLoader(Loader):
         models.update(self._load_external_models(audits, gateway))
         models.update(self._load_python_models(macros, jinja_macros, audits, signals))
 
+        linter = self.config.linter
+        if linter.enabled:
+            from sqlmesh.core.linter.definition import Linter
+
+            linter = Linter(config=linter)
+
+            for model in models.values():
+                linter.lint(model)
+
         return models
 
     def _load_sql_models(
@@ -421,6 +430,7 @@ class SqlMeshLoader(Loader):
                     variables=self._variables,
                     infer_names=self.config.model_naming.infer_names,
                     signal_definitions=signals,
+                    linter=self.config.linter,
                 )
 
             model = cache.get_or_load_model(path, _load)

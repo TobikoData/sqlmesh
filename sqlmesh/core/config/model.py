@@ -58,7 +58,6 @@ class ModelDefaultsConfig(BaseConfig):
     session_properties: t.Optional[t.Dict[str, t.Any]] = None
     audits: t.Optional[t.List[FunctionCall]] = None
     optimize_query: t.Optional[bool] = None
-    validate_query: t.Optional[bool] = None
     allow_partials: t.Optional[bool] = None
     interval_unit: t.Optional[IntervalUnit] = None
     enabled: t.Optional[bool] = None
