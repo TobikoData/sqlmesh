@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import typing as t
 
 import pandas as pd
@@ -16,7 +17,7 @@ from sqlmesh.core.engine_adapter.shared import (
 from sqlmesh.core.engine_adapter.spark import SparkEngineAdapter
 from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.schema_diff import SchemaDiffer
-from sqlmesh.utils.errors import SQLMeshError, MissingDefaultCatalogError
+from sqlmesh.utils.errors import SQLMeshError
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import SchemaName, TableName
@@ -92,6 +93,17 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
         )
 
     @property
+    def use_serverless(self) -> bool:
+        from sqlmesh import RuntimeEnv
+        from sqlmesh.utils import str_to_bool
+
+        if not self._use_spark_session:
+            return False
+        return (
+            RuntimeEnv.get().is_databricks and str_to_bool(os.environ.get("IS_SERVERLESS", "False"))
+        ) or bool(self._extra_config["databricks_connect_use_serverless"])
+
+    @property
     def is_spark_session_cursor(self) -> bool:
         from sqlmesh.engines.spark.db_api.spark_session import SparkSessionCursor
 
@@ -112,17 +124,12 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
         from databricks.connect import DatabricksSession
 
         if self._spark is None:
-            connect_kwargs = dict(
-                host=self._extra_config["databricks_connect_server_hostname"],
-                token=self._extra_config["databricks_connect_access_token"],
-            )
-            if "databricks_connect_use_serverless" in self._extra_config:
-                connect_kwargs["serverless"] = True
-            else:
-                connect_kwargs["cluster_id"] = self._extra_config["databricks_connect_cluster_id"]
-
             self._spark = (
-                DatabricksSession.builder.remote(**connect_kwargs)
+                DatabricksSession.builder.remote(
+                    host=self._extra_config["databricks_connect_server_hostname"],
+                    token=self._extra_config["databricks_connect_access_token"],
+                    cluster_id=self._extra_config["databricks_connect_cluster_id"],
+                )
                 .userAgent("sqlmesh")
                 .getOrCreate()
             )
@@ -150,8 +157,14 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
 
         def query_factory() -> Query:
             temp_table = self._get_temp_table(target_table or "spark", table_only=True)
-            df.createOrReplaceTempView(temp_table.sql(dialect=self.dialect))
-            self._connection_pool.set_attribute("requires_spark_session_temp_objects", True)
+            if self.use_serverless:
+                # Global temp views are not supported on Databricks Serverless
+                # This also means we can't mix Python SQL Connection and DB Connect since they wouldn't
+                # share the same temp objects.
+                df.createOrReplaceTempView(temp_table.sql(dialect=self.dialect))  # type: ignore
+            else:
+                df.createOrReplaceGlobalTempView(temp_table.sql(dialect=self.dialect))  # type: ignore
+                temp_table.set("db", "global_temp")
             return exp.select(*self._casted_columns(columns_to_types)).from_(temp_table)
 
         if self._use_spark_session:
@@ -186,50 +199,28 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
             return df.toPandas()
         return df
 
-    def _execute(
-        self,
-        sql: str,
-        **kwargs: t.Any,
-    ) -> None:
-        if self._connection_pool.get_attribute("requires_spark_session_temp_objects"):
-            self._fetch_native_df(sql)
-        else:
-            super()._execute(sql, **kwargs)
-
-    def _end_session(self) -> None:
-        """End the existing session."""
-        self._connection_pool.set_attribute("requires_spark_session_temp_objects", False)
-
     def get_current_catalog(self) -> t.Optional[str]:
-        pyspark_catalog = None
-        sql_connector_catalog = None
+        # Update the Dataframe API if we have a spark session
         if self._use_spark_session:
             from py4j.protocol import Py4JError
             from pyspark.errors.exceptions.connect import SparkConnectGrpcException
 
             try:
                 # Note: Spark 3.4+ Only API
-                pyspark_catalog = self.spark.catalog.currentCatalog()
+                return self.spark.catalog.currentCatalog()
             except (Py4JError, SparkConnectGrpcException):
                 pass
-        if not self.is_spark_session_cursor:
-            result = self.fetchone(exp.select(self.CURRENT_CATALOG_EXPRESSION))
-            sql_connector_catalog = result[0] if result else None
-        if (
-            self._use_spark_session
-            and not self.is_spark_session_cursor
-            and pyspark_catalog != sql_connector_catalog
-        ):
-            raise SQLMeshError(
-                f"Current catalog mismatch between Databricks SQL Connector and Databricks-Connect: `{sql_connector_catalog}` != `{pyspark_catalog}`. Set `catalog` connection property to make them the same."
-            )
-        return pyspark_catalog or sql_connector_catalog
+        result = self.fetchone(exp.select(self.CURRENT_CATALOG_EXPRESSION))
+        if result:
+            return result[0]
+        return None
 
     def set_current_catalog(self, catalog_name: str) -> None:
         # Since Databricks splits commands across the Dataframe API and the SQL Connector
         # (depending if databricks-connect is installed and a Dataframe is used) we need to ensure both
-        # are set to the same catalog since they maintain their default catalog separately
+        # are set to the same catalog since they maintain their default catalog seperately
         self.execute(exp.Use(this=exp.to_identifier(catalog_name), kind="CATALOG"))
+        # Update the Dataframe API is we have a spark session
         if self._use_spark_session:
             from py4j.protocol import Py4JError
             from pyspark.errors.exceptions.connect import SparkConnectGrpcException
@@ -265,15 +256,6 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
 
     def wap_supported(self, table_name: TableName) -> bool:
         return False
-
-    @property
-    def default_catalog(self) -> t.Optional[str]:
-        try:
-            return super().default_catalog
-        except MissingDefaultCatalogError as e:
-            raise MissingDefaultCatalogError(
-                "Could not determine default catalog. Define the connection property `catalog` since it can't be inferred from your connection. See SQLMesh Databricks documentation for details"
-            ) from e
 
     def _build_table_properties_exp(
         self,

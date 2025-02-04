@@ -43,11 +43,7 @@ from sqlmesh.core.schema_diff import SchemaDiffer
 from sqlmesh.utils import columns_to_types_all_known, random_id
 from sqlmesh.utils.connection_pool import create_connection_pool
 from sqlmesh.utils.date import TimeLike, make_inclusive, to_time_column
-from sqlmesh.utils.errors import (
-    SQLMeshError,
-    UnsupportedCatalogOperationError,
-    MissingDefaultCatalogError,
-)
+from sqlmesh.utils.errors import SQLMeshError, UnsupportedCatalogOperationError
 from sqlmesh.utils.pandas import columns_to_types_from_df
 
 if t.TYPE_CHECKING:
@@ -190,9 +186,7 @@ class EngineAdapter:
             return None
         default_catalog = self._default_catalog or self.get_current_catalog()
         if not default_catalog:
-            raise MissingDefaultCatalogError(
-                "Could not determine a default catalog despite it being supported."
-            )
+            raise SQLMeshError("Could not determine a default catalog despite it being supported.")
         return default_catalog
 
     @property
