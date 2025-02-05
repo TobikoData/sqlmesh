@@ -617,6 +617,12 @@ class DatabricksConnectionConfig(ConnectionConfig):
 
     @model_validator(mode="before")
     def _databricks_connect_validator(cls, data: t.Any) -> t.Any:
+        # SQLQueryContextLogger will output any error SQL queries even if they are in a try/except block.
+        # Disabling this allows SQLMesh to determine what should be shown to the user.
+        # Ex: We describe a table to see if it exists and therefore that execution can fail but we don't need to show
+        # the user since it is expected if the table doesn't exist. Without this change the user would see the error.
+        logging.getLogger("SQLQueryContextLogger").setLevel(logging.CRITICAL)
+
         if not isinstance(data, dict):
             return data
 
@@ -634,10 +640,6 @@ class DatabricksConnectionConfig(ConnectionConfig):
             data.get("access_token"),
             data.get("auth_type"),
         )
-
-        if databricks_connect_use_serverless:
-            data["force_databricks_connect"] = True
-            data["disable_databricks_connect"] = False
 
         if (not server_hostname or not http_path or not access_token) and (
             not databricks_connect_use_serverless and not auth_type
@@ -660,11 +662,12 @@ class DatabricksConnectionConfig(ConnectionConfig):
                 data["databricks_connect_access_token"] = access_token
             if not data.get("databricks_connect_server_hostname"):
                 data["databricks_connect_server_hostname"] = f"https://{server_hostname}"
-            if not databricks_connect_use_serverless:
-                if not data.get("databricks_connect_cluster_id"):
-                    if t.TYPE_CHECKING:
-                        assert http_path is not None
-                    data["databricks_connect_cluster_id"] = http_path.split("/")[-1]
+            if not databricks_connect_use_serverless and not data.get(
+                "databricks_connect_cluster_id"
+            ):
+                if t.TYPE_CHECKING:
+                    assert http_path is not None
+                data["databricks_connect_cluster_id"] = http_path.split("/")[-1]
 
         if auth_type:
             from databricks.sql.auth.auth import AuthType
