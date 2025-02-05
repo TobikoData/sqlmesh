@@ -90,12 +90,3 @@ NATIVE = "native"
 HYBRID = "hybrid"
 
 DISABLE_SQLMESH_STATE_MIGRATION = "SQLMESH__AIRFLOW__DISABLE_STATE_MIGRATION"
-
-RUNTIME_RENDERED_MODEL_FIELDS = {
-    "audits",
-    "signals",
-    "description",
-    "cron",
-    "physical_properties",
-    "merge_filter",
-}

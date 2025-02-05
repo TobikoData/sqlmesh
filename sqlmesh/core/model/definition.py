@@ -62,6 +62,15 @@ if t.TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+RUNTIME_RENDERED_MODEL_FIELDS = {
+    "audits",
+    "signals",
+    "description",
+    "cron",
+    "physical_properties",
+    "merge_filter",
+}
+
 
 class _Model(ModelMeta, frozen=True):
     """Model is the core abstraction for user defined datasets.
@@ -2386,8 +2395,9 @@ def render_meta_fields(
         if isinstance(value, exp.Expression) or (
             isinstance(value, str) and d.SQLMESH_MACRO_PREFIX in value
         ):
+            expression = exp.maybe_parse(value, dialect=dialect)
             rendered_expr = render_expression(
-                expression=exp.maybe_parse(value, dialect=dialect),
+                expression=expression,
                 module_path=module_path,
                 macros=macros,
                 jinja_macros=jinja_macros,
@@ -2396,19 +2406,28 @@ def render_meta_fields(
                 dialect=dialect,
                 default_catalog=default_catalog,
             )
-            if rendered_expr is None or len(rendered_expr) != 1:
-                raise SQLMeshError("Expected one expression.")
+            if rendered_expr is None:
+                raise SQLMeshError(
+                    f"Failed to render model: `{fields['name']}` at `{path}`\n"
+                    f"\tExpected rendering `{expression.sql(dialect=dialect)}` to return an expression"
+                )
+            if len(rendered_expr) != 1:
+                raise SQLMeshError(
+                    f"Failed to render model: `{fields['name']}` at `{path}`.\n"
+                    f"Expected rendering `{expression.sql(dialect=dialect)}` to return one result, but got {len(rendered_expr)}"
+                )
             return rendered_expr[0]
 
         return value
 
     for field_name, field_info in ModelMeta.all_field_infos().items():
         field = field_info.alias or field_name
-        if (field_value := fields.get(field)) and field not in c.RUNTIME_RENDERED_MODEL_FIELDS:
+        if field not in RUNTIME_RENDERED_MODEL_FIELDS and (field_value := fields.get(field)):
             if isinstance(field_value, dict):
-                for key, value in field_value.items():
-                    if key not in c.RUNTIME_RENDERED_MODEL_FIELDS:
-                        fields[field][key] = render_field_value(value)
+                dict_keys = list(field_value.keys())
+                for key in dict_keys:
+                    if key not in RUNTIME_RENDERED_MODEL_FIELDS:
+                        fields[field][key] = render_field_value(field_value[key])
             elif isinstance(field_value, list):
                 fields[field] = [render_field_value(value) for value in field_value]
             else:
