@@ -1187,7 +1187,7 @@ def date_spine(
 def resolve_template(
     evaluator: MacroEvaluator,
     template: exp.Literal,
-    mode: exp.Literal = exp.Literal.string("literal"),
+    mode: str = "literal",
 ) -> t.Union[exp.Literal, exp.Table]:
     """
     Generates either a String literal or an exp.Table representing a physical table location, based on rendering the provided template String literal.
@@ -1214,13 +1214,8 @@ def resolve_template(
         >>> evaluator.transform(parse_one(sql)).sql()
         "'s3://data-bucket/prod/test_catalog/sqlmesh__test/test__test_model__2517971505'"
     """
-    if evaluator.runtime_stage != "loading":
-        if "this_model" not in evaluator.locals:
-            raise SQLMeshError(
-                "@this_model must be present in the macro evaluation context in order to use @resolve_template"
-            )
-
-        this_model = exp.to_table(evaluator.locals["this_model"])
+    if "this_model" in evaluator.locals:
+        this_model = exp.to_table(evaluator.locals["this_model"], dialect=evaluator.dialect)
         template_str: str = template.this
         result = (
             template_str.replace("@{catalog_name}", this_model.catalog)
@@ -1228,10 +1223,15 @@ def resolve_template(
             .replace("@{table_name}", this_model.name)
         )
 
-        if mode.this.lower() == "table":
-            return exp.to_table(result)
-        else:
-            return exp.Literal.string(result)
+        if mode.lower() == "table":
+            return exp.to_table(result, dialect=evaluator.dialect)
+        return exp.Literal.string(result)
+    elif evaluator.runtime_stage != RuntimeStage.LOADING.value:
+        # only error if we are CREATING, EVALUATING or TESTING and @this_model is not present; this could indicate a bug
+        # otherwise, for LOADING, it's a no-op
+        raise SQLMeshError(
+            "@this_model must be present in the macro evaluation context in order to use @resolve_template"
+        )
 
     return template
 
