@@ -1,12 +1,25 @@
 # Prod Environment
 
-A data transformation system's most important component is the production environment, which provides the data your business runs on.
+A data transformation system's most important component is the production environment, which provides the data your business runs on. When you first log in, you'll see the production environment page. This page shows you at a glance if your data systems are working properly. We designed it to help data teams quickly check their work without having to dig through complicated logs - just look at the visual dashboard and you'll know if everything is running smoothly.
+
+## When you might use this
+
+**After a production update**
+
+The dashboard helps you check if your recent updates to production are working correctly. It uses a simple color system to show you what's happening: green means everything is good, and red shows where there might be problems. 
+
+If you see red in your current run, plan or freshness, it means there's a problem that needs your attention. Don't worry about red marks from the past (in the historical and previous runs/plans) - these are old issues that have already been fixed. Best part? You can check all of this in about 5-10 seconds.
+
+**Quick cost check** 
+
+The homepage also displays valuable cost metrics directly from your production environment, a feature exclusive to production (not available in staging environments). This allows teams to quickly understand and monitor their model execution costs without diving into detailed reports.
 
 Tobiko Cloud makes it easy to understand your production environment, embedding three observability features directly on your project's homepage:
 
 1. [Model Freshness chart](./model_freshness.md)
 2. Runs and plans chart
 3. Recent activity table
+4. Warehouse costs overview
 
 ![tcloud prod env](./prod_environment/tcloud_prod_environment_labelled.png)
 
@@ -52,3 +65,10 @@ For each activity entry, you can view its completion status, estimated cost of e
 ![tcloud recent activity](./prod_environment/recent_activity.png)
 
 The table provides the ability to filter which rows are displayed by typing into the text box in the top right. This helps you locate specific information within the activity log, making it easier to find and analyze particular events or patterns in your system's operational history.
+
+## Warehouse Costs Overview
+Managing data warehouse costs can be complex. Tobiko Cloud simplifies this by monitoring costs directly. For BigQuery and Snowflake projects, it tracks cost estimates per model and calculates savings from avoided model reruns.
+
+For your production environment you can see summary costs and savings over the last 30 days as well as get a chart view of the cost per day to run and host all the models in your production environment. This provides a great way to quickly see increases and decreases in daily running costs. To learn more (checkout the cost savings docs)[../costs_savings.md].
+
+![tcloud recent activity](./prod_environment/costs.png)
