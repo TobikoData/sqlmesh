@@ -918,6 +918,7 @@ class SnapshotEvaluator:
                 snapshots=snapshots,
                 deployability_index=deployability_index,
                 table_mapping=table_mapping,
+                runtime_stage=RuntimeStage.PROMOTING,
             )
             adapter.execute(snapshot.model.render_on_virtual_update(**render_kwargs))
 
@@ -1006,6 +1007,7 @@ class SnapshotEvaluator:
             "snapshots": snapshots,
             "deployability_index": deployability_index,
             "engine_adapter": adapter,
+            "runtime_stage": RuntimeStage.AUDITING,
             **audit_args,
             **kwargs,
         }
