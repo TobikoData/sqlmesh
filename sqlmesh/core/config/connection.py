@@ -76,11 +76,6 @@ class ConnectionConfig(abc.ABC, BaseConfig):
         return {}
 
     @property
-    def _cursor_kwargs(self) -> t.Optional[t.Dict[str, t.Any]]:
-        """Key-value arguments that will be passed during cursor construction."""
-        return None
-
-    @property
     def _cursor_init(self) -> t.Optional[t.Callable[[t.Any], None]]:
         """A function that is called to initialize the cursor"""
         return None
@@ -115,7 +110,6 @@ class ConnectionConfig(abc.ABC, BaseConfig):
         return self._engine_adapter(
             self._connection_factory_with_kwargs,
             multithreaded=self.concurrent_tasks > 1,
-            cursor_kwargs=self._cursor_kwargs,
             default_catalog=self.get_catalog(),
             cursor_init=self._cursor_init,
             register_comments=register_comments_override or self.register_comments,
@@ -1208,7 +1202,9 @@ class MySQLConnectionConfig(ConnectionConfig):
     user: str
     password: str
     port: t.Optional[int] = None
+    database: t.Optional[str] = None
     charset: t.Optional[str] = None
+    collation: t.Optional[str] = None
     ssl_disabled: t.Optional[bool] = None
 
     concurrent_tasks: int = 4
@@ -1218,23 +1214,20 @@ class MySQLConnectionConfig(ConnectionConfig):
     type_: t.Literal["mysql"] = Field(alias="type", default="mysql")
 
     @property
-    def _cursor_kwargs(self) -> t.Optional[t.Dict[str, t.Any]]:
-        """Key-value arguments that will be passed during cursor construction."""
-        return {"buffered": True}
-
-    @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
         connection_keys = {
             "host",
             "user",
             "password",
-            "port",
-            "database",
         }
         if self.port is not None:
             connection_keys.add("port")
+        if self.database is not None:
+            connection_keys.add("database")
         if self.charset is not None:
             connection_keys.add("charset")
+        if self.collation is not None:
+            connection_keys.add("collation")
         if self.ssl_disabled is not None:
             connection_keys.add("ssl_disabled")
         return connection_keys
@@ -1245,7 +1238,7 @@ class MySQLConnectionConfig(ConnectionConfig):
 
     @property
     def _connection_factory(self) -> t.Callable:
-        from mysql.connector import connect
+        from pymysql import connect
 
         return connect
 

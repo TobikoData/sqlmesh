@@ -99,6 +99,7 @@ setup(
             "trino",
             "types-croniter",
             "types-dateparser",
+            "types-PyMySQL",
             "types-python-dateutil",
             "types-pytz",
             "types-requests==2.28.8",
@@ -132,7 +133,7 @@ setup(
             "pymssql",
         ],
         "mysql": [
-            "mysql-connector-python",
+            "pymysql",
         ],
         "mwaa": [
             "boto3",
