@@ -132,7 +132,7 @@ setup(
             "pymssql",
         ],
         "mysql": [
-            "mysql-connector-python",
+            "pymysql",
         ],
         "mwaa": [
             "boto3",
