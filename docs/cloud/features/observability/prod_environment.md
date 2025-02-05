@@ -69,6 +69,6 @@ The table provides the ability to filter which rows are displayed by typing into
 ## Warehouse Costs Overview
 Managing data warehouse costs can be complex. Tobiko Cloud simplifies this by monitoring costs directly. For BigQuery and Snowflake projects, it tracks cost estimates per model and calculates savings from avoided model reruns.
 
-For your production environment you can see summary costs and savings over the last 30 days as well as get a chart view of the cost per day to run and host all the models in your production environment. This provides a great way to quickly see increases and decreases in daily running costs. To learn more (checkout the cost savings docs)[../costs_savings.md].
+For your production environment you can see summary costs and savings over the last 30 days as well as get a chart view of the cost per day to run and host all the models in your production environment. This provides a great way to quickly see increases and decreases in daily running costs. To learn more [checkout the cost savings docs](../costs_savings.md).
 
 ![tcloud recent activity](./prod_environment/costs.png)
