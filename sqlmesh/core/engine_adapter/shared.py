@@ -317,6 +317,7 @@ def set_catalog(override_mapping: t.Optional[t.Dict[str, CatalogSupport]] = None
             catalog_name = expression.catalog
             if not catalog_name:
                 return func(*list_args, **kwargs)
+
             # If we have a catalog and this engine doesn't support catalogs then we need to error
             if catalog_support.is_unsupported:
                 raise UnsupportedCatalogOperationError(

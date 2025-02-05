@@ -1478,7 +1478,7 @@ def table_name(
     table.set("this", exp.to_identifier(f"{name}__{version}{temp_suffix}"))
     table.set("db", exp.to_identifier(physical_schema))
     if not table.catalog and catalog:
-        table.set("catalog", exp.parse_identifier(catalog))
+        table.set("catalog", exp.to_identifier(catalog))
     return exp.table_name(table)
 
 

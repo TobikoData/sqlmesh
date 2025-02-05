@@ -1274,3 +1274,15 @@ def test_plan_enable_preview_default(sushi_context: Context, sushi_dbt_context: 
 
     sushi_dbt_context.engine_adapter.SUPPORTS_CLONING = True
     assert sushi_dbt_context._plan_preview_enabled
+
+
+def test_catalog_name_needs_to_be_quoted():
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        default_connection=DuckDBConnectionConfig(catalogs={'"foo--bar"': ":memory:"}),
+    )
+    context = Context(config=config)
+    parsed_model = parse("MODEL(name db.x, kind FULL); SELECT 1 AS c")
+    context.upsert_model(load_sql_based_model(parsed_model, default_catalog='"foo--bar"'))
+    context.plan(auto_apply=True, no_prompts=True)
+    assert context.fetchdf('select * from "foo--bar".db.x').to_dict() == {"c": {0: 1}}
