@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import typing as t
+from functools import partial
 
 import pandas as pd
 from sqlglot import exp
@@ -16,6 +17,7 @@ from sqlmesh.core.engine_adapter.shared import (
 from sqlmesh.core.engine_adapter.spark import SparkEngineAdapter
 from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.schema_diff import SchemaDiffer
+from sqlmesh.engines.spark.db_api.spark_session import connection, SparkSessionConnection
 from sqlmesh.utils.errors import SQLMeshError, MissingDefaultCatalogError
 
 if t.TYPE_CHECKING:
@@ -48,7 +50,7 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
 
     def __init__(self, *args: t.Any, **kwargs: t.Any):
         super().__init__(*args, **kwargs)
-        self._spark: t.Optional[PySparkSession] = None
+        self._set_spark_engine_adapter_if_needed()
 
     @classmethod
     def can_access_spark_session(cls, disable_spark_session: bool) -> bool:
@@ -92,10 +94,42 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
         )
 
     @property
-    def is_spark_session_cursor(self) -> bool:
-        from sqlmesh.engines.spark.db_api.spark_session import SparkSessionCursor
+    def is_spark_session_connection(self) -> bool:
+        return isinstance(self.connection, SparkSessionConnection)
 
-        return isinstance(self.cursor, SparkSessionCursor)
+    def _set_spark_engine_adapter_if_needed(self) -> None:
+        self._spark_engine_adapter = None
+
+        if not self._use_spark_session or self.is_spark_session_connection:
+            return
+
+        from databricks.connect import DatabricksSession
+
+        connect_kwargs = dict(
+            host=self._extra_config["databricks_connect_server_hostname"],
+            token=self._extra_config["databricks_connect_access_token"],
+        )
+        if "databricks_connect_use_serverless" in self._extra_config:
+            connect_kwargs["serverless"] = True
+        else:
+            connect_kwargs["cluster_id"] = self._extra_config["databricks_connect_cluster_id"]
+
+        catalog = self._extra_config.get("catalog")
+        spark = (
+            DatabricksSession.builder.remote(**connect_kwargs).userAgent("sqlmesh").getOrCreate()
+        )
+        self._spark_engine_adapter = SparkEngineAdapter(
+            partial(connection, spark=spark, catalog=catalog)
+        )
+
+    @property
+    def cursor(self) -> t.Any:
+        if (
+            self._connection_pool.get_attribute("use_spark_engine_adapter")
+            and not self.is_spark_session_connection
+        ):
+            return self._spark_engine_adapter.cursor  # type: ignore
+        return super().cursor
 
     @property
     def spark(self) -> PySparkSession:
@@ -105,35 +139,16 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
                 "Either run from a Databricks Notebook or "
                 "install `databricks-connect` and configure it to connect to your Databricks cluster."
             )
-
-        if self.is_spark_session_cursor:
-            return self._connection_pool.get().spark
-
-        from databricks.connect import DatabricksSession
-
-        if self._spark is None:
-            connect_kwargs = dict(
-                host=self._extra_config["databricks_connect_server_hostname"],
-                token=self._extra_config["databricks_connect_access_token"],
-            )
-            if "databricks_connect_use_serverless" in self._extra_config:
-                connect_kwargs["serverless"] = True
-            else:
-                connect_kwargs["cluster_id"] = self._extra_config["databricks_connect_cluster_id"]
-
-            self._spark = (
-                DatabricksSession.builder.remote(**connect_kwargs)
-                .userAgent("sqlmesh")
-                .getOrCreate()
-            )
-            catalog = self._extra_config.get("catalog")
-            if catalog:
-                self.set_current_catalog(catalog)
-        return self._spark
+        if self.is_spark_session_connection:
+            return self.connection.spark
+        return self._spark_engine_adapter.spark  # type: ignore
 
     @property
     def catalog_support(self) -> CatalogSupport:
         return CatalogSupport.FULL_SUPPORT
+
+    def _end_session(self) -> None:
+        self._connection_pool.set_attribute("use_spark_engine_adapter", False)
 
     def _df_to_source_queries(
         self,
@@ -151,7 +166,7 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
         def query_factory() -> Query:
             temp_table = self._get_temp_table(target_table or "spark", table_only=True)
             df.createOrReplaceTempView(temp_table.sql(dialect=self.dialect))
-            self._connection_pool.set_attribute("requires_spark_session_temp_objects", True)
+            self._connection_pool.set_attribute("use_spark_engine_adapter", True)
             return exp.select(*self._casted_columns(columns_to_types)).from_(temp_table)
 
         if self._use_spark_session:
@@ -162,16 +177,12 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
         self, query: t.Union[exp.Expression, str], quote_identifiers: bool = False
     ) -> DF:
         """Fetches a DataFrame that can be either Pandas or PySpark from the cursor"""
-        if self.is_spark_session_cursor:
+        if self.is_spark_session_connection:
             return super()._fetch_native_df(query, quote_identifiers=quote_identifiers)
         if self._use_spark_session:
-            sql = (
-                self._to_sql(query, quote=quote_identifiers)
-                if isinstance(query, exp.Expression)
-                else query
+            return self._spark_engine_adapter._fetch_native_df(  # type: ignore
+                query, quote_identifiers=quote_identifiers
             )
-            self._log_sql(sql)
-            return self.spark.sql(sql)
         self.execute(query)
         return self.cursor.fetchall_arrow().to_pandas()
 
@@ -186,41 +197,23 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
             return df.toPandas()
         return df
 
-    def _execute(
-        self,
-        sql: str,
-        **kwargs: t.Any,
-    ) -> None:
-        if self._connection_pool.get_attribute("requires_spark_session_temp_objects"):
-            self._fetch_native_df(sql)
-        else:
-            super()._execute(sql, **kwargs)
-
-    def _end_session(self) -> None:
-        """End the existing session."""
-        self._connection_pool.set_attribute("requires_spark_session_temp_objects", False)
-
     def get_current_catalog(self) -> t.Optional[str]:
         pyspark_catalog = None
         sql_connector_catalog = None
-        if self._use_spark_session:
+        if self._spark_engine_adapter:
             from py4j.protocol import Py4JError
             from pyspark.errors.exceptions.connect import SparkConnectGrpcException
 
             try:
                 # Note: Spark 3.4+ Only API
-                pyspark_catalog = self.spark.catalog.currentCatalog()
+                pyspark_catalog = self._spark_engine_adapter.get_current_catalog()
             except (Py4JError, SparkConnectGrpcException):
                 pass
-        if not self.is_spark_session_cursor:
+        if not self.is_spark_session_connection:
             result = self.fetchone(exp.select(self.CURRENT_CATALOG_EXPRESSION))
             sql_connector_catalog = result[0] if result else None
-        if (
-            self._use_spark_session
-            and not self.is_spark_session_cursor
-            and pyspark_catalog != sql_connector_catalog
-        ):
-            raise SQLMeshError(
+        if self._spark_engine_adapter and pyspark_catalog != sql_connector_catalog:
+            logger.warning(
                 f"Current catalog mismatch between Databricks SQL Connector and Databricks-Connect: `{sql_connector_catalog}` != `{pyspark_catalog}`. Set `catalog` connection property to make them the same."
             )
         return pyspark_catalog or sql_connector_catalog
@@ -236,7 +229,7 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
 
             try:
                 # Note: Spark 3.4+ Only API
-                self.spark.catalog.setCurrentCatalog(catalog_name)
+                self._spark_engine_adapter.set_current_catalog(catalog_name)  # type: ignore
             except (Py4JError, SparkConnectGrpcException):
                 pass
 
