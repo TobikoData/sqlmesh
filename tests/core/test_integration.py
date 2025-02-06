@@ -2872,6 +2872,35 @@ def test_prod_restatement_plan_missing_model_in_dev(
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_plan_snapshot_table_exists_for_promoted_snapshot(init_and_plan_context: t.Callable):
+    context, plan = init_and_plan_context("examples/sushi")
+    context.apply(plan)
+
+    model = context.get_model("sushi.waiter_revenue_by_day")
+    context.upsert_model(add_projection_to_model(t.cast(SqlModel, model)))
+
+    context.plan("dev", auto_apply=True, no_prompts=True, skip_tests=True)
+
+    # Drop the views and make sure SQLMesh recreates them later
+    top_waiters_snapshot = context.get_snapshot("sushi.top_waiters", raise_if_missing=True)
+    context.engine_adapter.drop_view(top_waiters_snapshot.table_name())
+    context.engine_adapter.drop_view(top_waiters_snapshot.table_name(False))
+
+    # Make the environment unfinalized to force recreation of all views in the virtual layer
+    context.state_sync.state_sync.engine_adapter.execute(
+        "UPDATE sqlmesh._environments SET finalized_ts = NULL WHERE name = 'dev'"
+    )
+
+    model = context.get_model("sushi.customers")
+    context.upsert_model(add_projection_to_model(t.cast(SqlModel, model)))
+
+    context.plan(
+        "dev", select_models=["sushi.customers"], auto_apply=True, no_prompts=True, skip_tests=True
+    )
+    assert context.engine_adapter.table_exists(top_waiters_snapshot.table_name())
+
+
+@time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_plan_against_expired_environment(init_and_plan_context: t.Callable):
     context, plan = init_and_plan_context("examples/sushi")
     context.apply(plan)
