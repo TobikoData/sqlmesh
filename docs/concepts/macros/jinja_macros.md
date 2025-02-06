@@ -72,7 +72,7 @@ JINJA_END;
 
 Because the two macro variables return string values, we must surround the curly braces with single quotes `'`. Other macro variables, such as `start_epoch`, return numeric values and do not require the single quotes.
 
-Unlike other predefined macro variables, the `gateway` variable name cannot be unquoted. Instead, it must use the `{{ var() }}` function like [user-defined variables](#global-variables) do: `{{ var('gateway') }}`.
+The `gateway` variable uses a slightly different syntax than other predefined variables because it is a function call. Instead of the bare name `{{ gateway }}`, it must include parentheses: `{{ gateway() }}`.
 
 ## User-defined variables
 
