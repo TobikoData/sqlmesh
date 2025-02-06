@@ -351,7 +351,7 @@ These examples demonstrate how to select which models to restate based on model 
 
     ```bash
     # All selected models (including upstream models) will also include their downstream models
-    sqlmesh plan --restate-model "+db.model_a" --restate-model "tag:+expensive"
+    sqlmesh plan --restate-model "+db.model_a" --restate-model "+tag:expensive"
     ```
 
 === "Wildcards"
@@ -363,7 +363,7 @@ These examples demonstrate how to select which models to restate based on model 
 === "Upstream + Wildcards"
 
     ```bash
-    sqlmesh plan --restate-model "+db*" --restate-model "tag:+exp*"
+    sqlmesh plan --restate-model "+db*" --restate-model "+tag:exp*"
     ```
 
 === "Specific Date Range"

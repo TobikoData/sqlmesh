@@ -47,7 +47,7 @@ setup(
         "rich[jupyter]",
         "ruamel.yaml",
         "setuptools; python_version>='3.12'",
-        "sqlglot[rs]~=26.3.9",
+        "sqlglot[rs]~=26.4.1",
         "tenacity",
         "time-machine",
     ],
@@ -99,6 +99,7 @@ setup(
             "trino",
             "types-croniter",
             "types-dateparser",
+            "types-PyMySQL",
             "types-python-dateutil",
             "types-pytz",
             "types-requests==2.28.8",
@@ -132,7 +133,7 @@ setup(
             "pymssql",
         ],
         "mysql": [
-            "mysql-connector-python",
+            "pymysql",
         ],
         "mwaa": [
             "boto3",

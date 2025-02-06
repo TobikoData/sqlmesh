@@ -219,7 +219,9 @@ class DbtLoader(Loader):
             try:
                 requirements[target_package] = metadata.version(target_package)
             except metadata.PackageNotFoundError:
-                logger.warning("dbt package %s is not installed", target_package)
+                from sqlmesh.core.console import get_console
+
+                get_console().log_warning(f"dbt package {target_package} is not installed.")
 
         return requirements, excluded_requirements
 

@@ -5,6 +5,7 @@ import datetime
 import typing as t
 import unittest
 import uuid
+import logging
 
 from hyperscript import h
 from rich.console import Console as RichConsole
@@ -45,6 +46,9 @@ if t.TYPE_CHECKING:
     from sqlmesh.core.table_diff import RowDiff, SchemaDiff
 
     LayoutWidget = t.TypeVar("LayoutWidget", bound=t.Union[widgets.VBox, widgets.HBox])
+
+
+logger = logging.getLogger(__name__)
 
 
 SNAPSHOT_CHANGE_CATEGORY_STR = {
@@ -246,6 +250,10 @@ class Console(abc.ABC):
         """Display error info to the user."""
 
     @abc.abstractmethod
+    def log_warning(self, message: str) -> None:
+        """Display warning info to the user."""
+
+    @abc.abstractmethod
     def log_success(self, message: str) -> None:
         """Display a general successful message to the user."""
 
@@ -279,6 +287,152 @@ class Console(abc.ABC):
         return tree
 
 
+class NoopConsole(Console):
+    def start_plan_evaluation(self, plan: EvaluatablePlan) -> None:
+        pass
+
+    def stop_plan_evaluation(self) -> None:
+        pass
+
+    def start_evaluation_progress(
+        self,
+        batches: t.Dict[Snapshot, int],
+        environment_naming_info: EnvironmentNamingInfo,
+        default_catalog: t.Optional[str],
+    ) -> None:
+        pass
+
+    def start_snapshot_evaluation_progress(self, snapshot: Snapshot) -> None:
+        pass
+
+    def update_snapshot_evaluation_progress(
+        self, snapshot: Snapshot, batch_idx: int, duration_ms: t.Optional[int]
+    ) -> None:
+        pass
+
+    def stop_evaluation_progress(self, success: bool = True) -> None:
+        pass
+
+    def start_creation_progress(
+        self,
+        total_tasks: int,
+        environment_naming_info: EnvironmentNamingInfo,
+        default_catalog: t.Optional[str],
+    ) -> None:
+        pass
+
+    def update_creation_progress(self, snapshot: SnapshotInfoLike) -> None:
+        pass
+
+    def stop_creation_progress(self, success: bool = True) -> None:
+        pass
+
+    def start_cleanup(self, ignore_ttl: bool) -> bool:
+        return True
+
+    def update_cleanup_progress(self, object_name: str) -> None:
+        pass
+
+    def stop_cleanup(self, success: bool = True) -> None:
+        pass
+
+    def start_promotion_progress(
+        self,
+        total_tasks: int,
+        environment_naming_info: EnvironmentNamingInfo,
+        default_catalog: t.Optional[str],
+    ) -> None:
+        pass
+
+    def update_promotion_progress(self, snapshot: SnapshotInfoLike, promoted: bool) -> None:
+        pass
+
+    def stop_promotion_progress(self, success: bool = True) -> None:
+        pass
+
+    def start_snapshot_migration_progress(self, total_tasks: int) -> None:
+        pass
+
+    def update_snapshot_migration_progress(self, num_tasks: int) -> None:
+        pass
+
+    def log_migration_status(self, success: bool = True) -> None:
+        pass
+
+    def stop_snapshot_migration_progress(self, success: bool = True) -> None:
+        pass
+
+    def start_env_migration_progress(self, total_tasks: int) -> None:
+        pass
+
+    def update_env_migration_progress(self, num_tasks: int) -> None:
+        pass
+
+    def stop_env_migration_progress(self, success: bool = True) -> None:
+        pass
+
+    def show_model_difference_summary(
+        self,
+        context_diff: ContextDiff,
+        environment_naming_info: EnvironmentNamingInfo,
+        default_catalog: t.Optional[str],
+        no_diff: bool = True,
+        ignored_snapshot_ids: t.Optional[t.Set[SnapshotId]] = None,
+    ) -> None:
+        pass
+
+    def plan(
+        self,
+        plan_builder: PlanBuilder,
+        auto_apply: bool,
+        default_catalog: t.Optional[str],
+        no_diff: bool = False,
+        no_prompts: bool = False,
+    ) -> None:
+        if auto_apply:
+            plan_builder.apply()
+
+    def log_test_results(
+        self, result: unittest.result.TestResult, output: t.Optional[str], target_dialect: str
+    ) -> None:
+        pass
+
+    def show_sql(self, sql: str) -> None:
+        pass
+
+    def log_status_update(self, message: str) -> None:
+        pass
+
+    def log_skipped_models(self, snapshot_names: t.Set[str]) -> None:
+        pass
+
+    def log_failed_models(self, errors: t.List[NodeExecutionFailedError]) -> None:
+        pass
+
+    def log_error(self, message: str) -> None:
+        pass
+
+    def log_warning(self, message: str) -> None:
+        logger.warning(message)
+
+    def log_success(self, message: str) -> None:
+        pass
+
+    def loading_start(self, message: t.Optional[str] = None) -> uuid.UUID:
+        return uuid.uuid4()
+
+    def loading_stop(self, id: uuid.UUID) -> None:
+        pass
+
+    def show_schema_diff(self, schema_diff: SchemaDiff) -> None:
+        pass
+
+    def show_row_diff(
+        self, row_diff: RowDiff, show_sample: bool = True, skip_grain_check: bool = False
+    ) -> None:
+        pass
+
+
 def make_progress_bar(message: str, console: t.Optional[RichConsole] = None) -> Progress:
     return Progress(
         TextColumn(f"[bold blue]{message}", justify="right"),
@@ -302,6 +456,7 @@ class TerminalConsole(Console):
         console: t.Optional[RichConsole] = None,
         verbose: bool = False,
         dialect: DialectType = None,
+        ignore_warnings: bool = False,
         **kwargs: t.Any,
     ) -> None:
         self.console: RichConsole = console or srich.console
@@ -333,6 +488,7 @@ class TerminalConsole(Console):
 
         self.verbose = verbose
         self.dialect = dialect
+        self.ignore_warnings = ignore_warnings
 
     def _print(self, value: t.Any, **kwargs: t.Any) -> None:
         self.console.print(value, **kwargs)
@@ -1030,6 +1186,11 @@ class TerminalConsole(Console):
     def log_error(self, message: str) -> None:
         self._print(f"[red]{message}[/red]")
 
+    def log_warning(self, message: str) -> None:
+        logger.warning(message)
+        if not self.ignore_warnings:
+            self._print(f"[yellow]{message}[/yellow]")
+
     def log_success(self, message: str) -> None:
         self._print(f"\n[green]{message}[/green]\n")
 
@@ -1628,6 +1789,9 @@ class MarkdownConsole(CaptureTerminalConsole):
     where you want to display a plan or test results in markdown.
     """
 
+    def __init__(self, **kwargs: t.Any) -> None:
+        super().__init__(**{**kwargs, "console": RichConsole(no_color=True)})
+
     def show_model_difference_summary(
         self,
         context_diff: ContextDiff,
@@ -1854,7 +2018,10 @@ class MarkdownConsole(CaptureTerminalConsole):
             self._print("```\n")
 
     def log_error(self, message: str) -> None:
-        super().log_error(f"```\n{message}```\n\n")
+        super().log_error(f"```\n\\[ERROR] {message}```\n\n")
+
+    def log_warning(self, message: str) -> None:
+        super().log_warning(f"```\n\\[WARNING] {message}```\n\n")
 
 
 class DatabricksMagicConsole(CaptureTerminalConsole):
@@ -2027,11 +2194,13 @@ class DebuggerTerminalConsole(TerminalConsole):
         console: t.Optional[RichConsole],
         *args: t.Any,
         dialect: DialectType = None,
+        ignore_warnings: bool = False,
         **kwargs: t.Any,
     ) -> None:
         self.console: RichConsole = console or srich.console
         self.dialect = dialect
         self.verbose = False
+        self.ignore_warnings = ignore_warnings
 
     def _write(self, msg: t.Any, *args: t.Any, **kwargs: t.Any) -> None:
         self.console.log(msg, *args, **kwargs)
@@ -2146,6 +2315,11 @@ class DebuggerTerminalConsole(TerminalConsole):
     def log_error(self, message: str) -> None:
         self._write(message, style="bold red")
 
+    def log_warning(self, message: str) -> None:
+        logger.warning(message)
+        if not self.ignore_warnings:
+            self._write(message, style="bold yellow")
+
     def log_success(self, message: str) -> None:
         self._write(message, style="bold green")
 
@@ -2165,9 +2339,31 @@ class DebuggerTerminalConsole(TerminalConsole):
         self._write(row_diff)
 
 
-def get_console(**kwargs: t.Any) -> TerminalConsole | DatabricksMagicConsole | NotebookMagicConsole:
+_CONSOLE: Console = NoopConsole()
+
+
+def set_console(console: Console) -> None:
+    """Sets the console instance."""
+    global _CONSOLE
+    _CONSOLE = console
+
+
+def configure_console(**kwargs: t.Any) -> None:
+    """Configures the console instance."""
+    global _CONSOLE
+    _CONSOLE = create_console(**kwargs)
+
+
+def get_console() -> Console:
+    """Returns the console instance or creates a new one if it hasn't been created yet."""
+    return _CONSOLE
+
+
+def create_console(
+    **kwargs: t.Any,
+) -> TerminalConsole | DatabricksMagicConsole | NotebookMagicConsole:
     """
-    Returns the console that is appropriate for the current runtime environment.
+    Creates a new console instance that is appropriate for the current runtime environment.
 
     Note: Google Colab environment is untested and currently assumes is compatible with the base
     NotebookMagicConsole.

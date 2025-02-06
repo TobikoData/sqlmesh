@@ -2,6 +2,24 @@
 
 Tobiko Cloud's Airflow integration allows you to combine Airflow system monitoring with the powerful debugging tools in Tobiko Cloud.
 
+![Airflow UI DAG view](./airflow/dag_view.png)
+
+## How it works
+
+Tobiko Cloud uses a custom approach to Airflow integration.
+
+The Airflow DAG task mirrors the progress of the Tobiko Cloud scheduler run. Each local task reflects the outcome of its corresponding remote task.
+
+This allows you to observe at a glance how your data pipeline is progressing, displayed alongside your other pipelines in Airflow. No need to context switch to Tobiko Cloud!
+
+### Why a custom approach?
+
+Tobiko Cloud's scheduler performs multiple optimizations to ensure that your pipelines run correctly and efficiently. Those optimizations are only possible within our SQLMesh-aware scheduler.
+
+Our approach allows you to benefit from those optimizations while retaining the flexibility to attach extra tasks or logic to the DAG in your broader pipeline orchestration context.
+
+Because `run`s are still triggered by the Tobiko Cloud scheduler and tasks in the local DAG just reflect their remote equivalent in Tobiko Cloud, we call our custom approach a *facade*.
+
 ## Setup
 
 Your SQLMesh project must be configured and connected to Tobiko Cloud before using the Airflow integration.
@@ -96,22 +114,6 @@ You will see an entry in the DAG list:
 You can browse the DAG just like any other - each node is a SQLMesh model:
 
 ![Airflow UI DAG view](./airflow/dag_view.png)
-
-## How it works
-
-Tobiko Cloud uses a custom approach to Airflow integration - this section describes how it works.
-
-The Airflow DAG task mirrors the progress of the Tobiko Cloud scheduler run. Each local task reflects the outcome of its corresponding remote task.
-
-This allows you to observe at a glance how your data pipeline is progressing, displayed alongside your other pipelines in Airflow. No need to navigate to Tobiko Cloud!
-
-### Why a custom approach?
-
-Tobiko Cloud's scheduler performs multiple optimizations to ensure that your pipelines run correctly and efficiently. Those optimizations are only possible within our SQLMesh-aware scheduler.
-
-Our approach allows you to benefit from those optimizations while retaining the flexibility to attach extra tasks or logic to the DAG in your broader pipeline orchestration context.
-
-Because `run`s are still triggered by the Tobiko Cloud scheduler and tasks in the local DAG just reflect their remote equivalent in Tobiko Cloud, we call our custom approach a *facade*.
 
 ## Debugging
 

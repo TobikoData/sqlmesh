@@ -4,6 +4,8 @@ import pytest
 from fastapi import FastAPI
 
 from sqlmesh.core.context import Context
+from sqlmesh.core.console import set_console
+
 from web.server.console import api_console
 from web.server.settings import Settings, get_loaded_context, get_settings
 
@@ -34,7 +36,8 @@ config = Config(model_defaults=ModelDefaultsConfig(dialect=''))
 
 @pytest.fixture
 def project_context(web_app: FastAPI, project_tmp_path: Path):
-    context = Context(paths=project_tmp_path, console=api_console)
+    set_console(api_console)
+    context = Context(paths=project_tmp_path)
 
     def get_loaded_context_override() -> Context:
         return context

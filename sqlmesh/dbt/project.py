@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-import logging
 import typing as t
+import logging
 from pathlib import Path
 
+from sqlmesh.core.console import get_console
 from sqlmesh.dbt.common import PROJECT_FILENAME, load_yaml
 from sqlmesh.dbt.context import DbtContext
 from sqlmesh.dbt.manifest import ManifestHelper
@@ -79,8 +80,8 @@ class Project:
         extra_fields = profile.target.extra
         if extra_fields:
             extra_str = ",".join(f"'{field}'" for field in extra_fields)
-            logger.warning(
-                "%s adapter does not currently support %s", profile.target.type, extra_str
+            get_console().log_warning(
+                f"{profile.target.type} adapter does not currently support {extra_str}."
             )
 
         packages = {}

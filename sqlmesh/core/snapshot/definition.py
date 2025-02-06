@@ -46,7 +46,6 @@ from sqlmesh.utils.pydantic import PydanticModel, field_validator
 if t.TYPE_CHECKING:
     from sqlglot.dialects.dialect import DialectType
     from sqlmesh.core.environment import EnvironmentNamingInfo
-    from sqlmesh.core.config import Config
 
 Interval = t.Tuple[int, int]
 Intervals = t.List[Interval]
@@ -596,7 +595,6 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         ttl: str = c.DEFAULT_SNAPSHOT_TTL,
         version: t.Optional[str] = None,
         cache: t.Optional[t.Dict[str, SnapshotFingerprint]] = None,
-        config: t.Optional[Config] = None,
     ) -> Snapshot:
         """Creates a new snapshot for a node.
 
@@ -1480,7 +1478,7 @@ def table_name(
     table.set("this", exp.to_identifier(f"{name}__{version}{temp_suffix}"))
     table.set("db", exp.to_identifier(physical_schema))
     if not table.catalog and catalog:
-        table.set("catalog", exp.parse_identifier(catalog))
+        table.set("catalog", exp.to_identifier(catalog))
     return exp.table_name(table)
 
 

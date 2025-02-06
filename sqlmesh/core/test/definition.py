@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import datetime
-import logging
 import typing as t
 import unittest
 from collections import Counter
@@ -33,7 +32,6 @@ if t.TYPE_CHECKING:
 
     Row = t.Dict[str, t.Any]
 
-logger = logging.getLogger(__name__)
 
 TIME_KWARG_KEYS = {
     "start",
@@ -242,9 +240,11 @@ class ModelTest(unittest.TestCase):
                 elif type(value) is datetime.datetime:
                     expected[col] = pd.to_datetime(expected[col]).dt.to_pydatetime()
             except Exception as e:
-                logger.warning(
+                from sqlmesh.core.console import get_console
+
+                get_console().log_warning(
                     f"Failed to convert expected value for {col} into `datetime` "
-                    f"for unit test '{str(self)}'. {str(e)}"
+                    f"for unit test '{str(self)}'. {str(e)}."
                 )
 
         actual = actual.replace({np.nan: None})
@@ -310,7 +310,7 @@ class ModelTest(unittest.TestCase):
         path: Path | None,
         preserve_fixtures: bool = False,
         default_catalog: str | None = None,
-    ) -> ModelTest:
+    ) -> t.Optional[ModelTest]:
         """Create a SqlModelTest or a PythonModelTest.
 
         Args:
@@ -329,7 +329,12 @@ class ModelTest(unittest.TestCase):
         name = normalize_model_name(name, default_catalog=default_catalog, dialect=dialect)
         model = models.get(name)
         if not model:
-            _raise_error(f"Model '{name}' was not found", path)
+            from sqlmesh.core.console import get_console
+
+            get_console().log_warning(
+                f"Model '{name}' was not found{' at ' + str(path) if path else ''}"
+            )
+            return None
 
         if isinstance(model, SqlModel):
             test_type: t.Type[ModelTest] = SqlModelTest
@@ -759,6 +764,8 @@ def generate_test(
         path=fixture_path,
         default_catalog=model.default_catalog,
     )
+    if not test:
+        return
 
     test.setUp()
 

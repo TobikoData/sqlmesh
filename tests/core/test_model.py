@@ -1,6 +1,5 @@
 # ruff: noqa: F811
 import json
-import logging
 import typing as t
 from datetime import date, datetime
 from pathlib import Path
@@ -16,6 +15,7 @@ from sqlmesh.cli.example_project import init_example_project
 
 from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
+from sqlmesh.core.console import get_console
 from sqlmesh.core.audit import ModelAudit, load_audit
 from sqlmesh.core.config import (
     Config,
@@ -275,8 +275,7 @@ def test_model_validation_union_query():
 
 
 def test_model_qualification():
-    logger = logging.getLogger("sqlmesh.core.renderer")
-    with patch.object(logger, "warning") as mock_logger:
+    with patch.object(get_console(), "log_warning") as mock_logger:
         expressions = d.parse(
             """
             MODEL (
@@ -292,7 +291,7 @@ def test_model_qualification():
         model.render_query(needs_optimization=True)
         assert (
             mock_logger.call_args[0][0]
-            == """Column '"a"' could not be resolved for model '"db"."table"', the column may not exist or is ambiguous"""
+            == """Column '"a"' could not be resolved for model '"db"."table"', the column may not exist or is ambiguous."""
         )
 
 
@@ -2082,8 +2081,6 @@ def test_python_models_returning_sql(assert_exp_eq) -> None:
 
 
 def test_python_model_decorator_kind() -> None:
-    logger = logging.getLogger("sqlmesh.core.model.decorator")
-
     # no kind specified -> default Full kind
     @model("default_kind", columns={'"COL"': "int"})
     def a_model(context):
@@ -2152,7 +2149,7 @@ def test_python_model_decorator_kind() -> None:
         pass
 
     # warning if kind is ModelKind instance
-    with patch.object(logger, "warning") as mock_logger:
+    with patch.object(get_console(), "log_warning") as mock_logger:
         python_model = model.get_registry()["kind_instance"].model(
             module_path=Path("."),
             path=Path("."),
@@ -2164,7 +2161,7 @@ def test_python_model_decorator_kind() -> None:
         )
 
     # no warning with valid kind dict
-    with patch.object(logger, "warning") as mock_logger:
+    with patch.object(get_console(), "log_warning") as mock_logger:
 
         @model("kind_valid_dict", kind=dict(name=ModelKindName.FULL), columns={'"COL"': "int"})
         def my_model(context):
@@ -2678,8 +2675,7 @@ def test_update_schema():
     model.update_schema(schema)
     assert model.mapping_schema == {'"table_a"': {"a": "INT"}}
 
-    logger = logging.getLogger("sqlmesh.core.renderer")
-    with patch.object(logger, "warning") as mock_logger:
+    with patch.object(get_console(), "log_warning") as mock_logger:
         model.render_query(needs_optimization=True)
         assert mock_logger.call_args[0][0] == missing_schema_warning_msg(
             '"db"."table"', ('"table_b"',)
@@ -2695,8 +2691,6 @@ def test_update_schema():
 
 
 def test_missing_schema_warnings():
-    logger = logging.getLogger("sqlmesh.core.renderer")
-
     full_schema = MappingSchema(
         {
             "a": {"x": exp.DataType.build("int")},
@@ -2711,34 +2705,36 @@ def test_missing_schema_warnings():
         },
     )
 
+    console = get_console()
+
     # star, no schema, no deps
-    with patch.object(logger, "warning") as mock_logger:
+    with patch.object(console, "log_warning") as mock_logger:
         model = load_sql_based_model(d.parse("MODEL (name test); SELECT * FROM (SELECT 1 a) x"))
         model.render_query(needs_optimization=True)
         mock_logger.assert_not_called()
 
     # star, full schema
-    with patch.object(logger, "warning") as mock_logger:
+    with patch.object(console, "log_warning") as mock_logger:
         model = load_sql_based_model(d.parse("MODEL (name test); SELECT * FROM a CROSS JOIN b"))
         model.update_schema(full_schema)
         model.render_query(needs_optimization=True)
         mock_logger.assert_not_called()
 
     # star, partial schema
-    with patch.object(logger, "warning") as mock_logger:
+    with patch.object(console, "log_warning") as mock_logger:
         model = load_sql_based_model(d.parse("MODEL (name test); SELECT * FROM a CROSS JOIN b"))
         model.update_schema(partial_schema)
         model.render_query(needs_optimization=True)
         assert mock_logger.call_args[0][0] == missing_schema_warning_msg('"test"', ('"b"',))
 
     # star, no schema
-    with patch.object(logger, "warning") as mock_logger:
+    with patch.object(console, "log_warning") as mock_logger:
         model = load_sql_based_model(d.parse("MODEL (name test); SELECT * FROM b JOIN a"))
         model.render_query(needs_optimization=True)
         assert mock_logger.call_args[0][0] == missing_schema_warning_msg('"test"', ('"a"', '"b"'))
 
     # no star, full schema
-    with patch.object(logger, "warning") as mock_logger:
+    with patch.object(console, "log_warning") as mock_logger:
         model = load_sql_based_model(
             d.parse("MODEL (name test); SELECT x::INT FROM a CROSS JOIN b")
         )
@@ -2747,7 +2743,7 @@ def test_missing_schema_warnings():
         mock_logger.assert_not_called()
 
     # no star, partial schema
-    with patch.object(logger, "warning") as mock_logger:
+    with patch.object(console, "log_warning") as mock_logger:
         model = load_sql_based_model(
             d.parse("MODEL (name test); SELECT x::INT FROM a CROSS JOIN b")
         )
@@ -2756,7 +2752,7 @@ def test_missing_schema_warnings():
         mock_logger.assert_not_called()
 
     # no star, empty schema
-    with patch.object(logger, "warning") as mock_logger:
+    with patch.object(console, "log_warning") as mock_logger:
         model = load_sql_based_model(
             d.parse("MODEL (name test); SELECT x::INT FROM a CROSS JOIN b")
         )
@@ -6569,6 +6565,36 @@ def test_resolve_table(make_snapshot: t.Callable):
 
         assert len(post_statements) == 1
         assert post_statements[0].sql() == f'"sqlmesh__default"."parent__{version}"'
+
+    # test with additional nesting level and default catalog
+    for post_statement in (
+        "JINJA_STATEMENT_BEGIN; {{ resolve_table('schema.parent') }}; JINJA_END;",
+        "@resolve_parent('schema.parent')",
+    ):
+        expressions = d.parse(
+            f"""
+            MODEL (name schema.child);
+
+            SELECT c FROM schema.parent;
+
+            {post_statement}
+            """
+        )
+        child = load_sql_based_model(expressions, default_catalog="main")
+        parent = load_sql_based_model(
+            d.parse("MODEL (name schema.parent); SELECT 1 AS c"), default_catalog="main"
+        )
+
+        parent_snapshot = make_snapshot(parent)
+        parent_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+        version = parent_snapshot.version
+
+        post_statements = child.render_post_statements(
+            snapshots={'"main"."schema"."parent"': parent_snapshot}
+        )
+
+        assert len(post_statements) == 1
+        assert post_statements[0].sql() == f'"main"."sqlmesh__schema"."schema__parent__{version}"'
 
 
 def test_cluster_with_complex_expression():

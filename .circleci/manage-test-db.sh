@@ -97,12 +97,16 @@ bigquery_init() {
     echo "$BIGQUERY_KEYFILE_CONTENTS" > $BIGQUERY_KEYFILE
 }
 
-bigquery_up() {
-    echo "BigQuery doesnt support creating databases"
-}
 
-bigquery_down() {
-    echo "BigQuery doesnt support dropping databases"
+# Clickhouse cloud
+clickhouse-cloud_init() {
+    # note: the ping endpoint doesnt seem to need any API keys
+    until curl https://$CLICKHOUSE_CLOUD_HOST:8443/ping
+    do
+        echo "Pinging Clickhouse Cloud service to ensure it's not in idle mode..."
+        sleep 5
+    done
+    echo "Clickhouse Cloud instance $CLICKHOUSE_CLOUD_HOST is up and running"
 }
 
 INIT_FUNC="${ENGINE}_init"
@@ -118,10 +122,10 @@ fi
 echo "Initializing $ENGINE"
 $INIT_FUNC
 
-if [ "$DIRECTION" == "up" ]; then
+if [ "$DIRECTION" == "up" ] && function_exists $UP_FUNC; then
     echo "Creating database $DB_NAME"
     $UP_FUNC $DB_NAME
-elif [ "$DIRECTION" == "down" ]; then
+elif [ "$DIRECTION" == "down" ] && function_exists $DOWN_FUNC; then
     echo "Dropping database $DB_NAME"
     $DOWN_FUNC $DB_NAME
 fi

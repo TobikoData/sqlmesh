@@ -8,20 +8,18 @@ At its core, this transforms development from a single-player to a multi-player 
 
 **Team Collaboration**
 
-Developers can easily see who is working on specific models, prevent workflow conflicts, and avoid duplicate efforts. 
-<May revert to: The platform helps foster team collaboration by providing clear visibility into team activities. Developers can easily see who is working on specific models, prevent workflow conflicts, and avoid duplicate efforts. This creates a truly collaborative development environment where the team can work together seamlessly, supporting a dynamic, multiplayer-like development experience.>
+The platform helps foster team collaboration by providing clear visibility into team activities. Developers can easily see who is working on specific models, prevent workflow conflicts, and avoid duplicate efforts. This creates a multiplayer development experience.
 
 **Performance Tracking**
 
-You can monitor changes over time, review recent activities including successes and failures, and gain detailed insights into specific plan execution outcomes. You get a better sense of trends.
-
-<TODO: add a screenshot with multiple plans and a glance at if things are running long or short.>
+You can monitor changes over time, review recent activities including successes and failures, and gain detailed insights into specific plan execution outcomes to get a better sense of trends. Check out the example image of a development environment page with [multiple plan changes in a day.](#plan-history-image)
 
 **Simplified Communication and Team Alignment**
 
 Eliminate friction in sharing complex development context through manual pull requests or direct messages. These URLs serve as comprehensive summaries, displaying last run times, data intervals for incremental models, and detailed change information such as metadata modifications and model removals.
 
-<Add gif of url opening in a new tab to feel how fast it should be.>
+![The feel and speed of sharing links in Tobiko Cloud](./development_environment/link_sharing_feel.gif)
+
 
 ## Using the Environments Tab
 The Environments page shows an overview of all the environments that exist in your project (both yours and any your teammates have created).
@@ -54,7 +52,8 @@ The page begins with an at-a-glance summary of the most recent plan applied to t
 
 ## Differences from Prod section
 
-Development environments are used to prepare and test changes before deploying them to `prod`, with separate tabs for each type of change (directly modified, indirectly modified, metadata-only changes, added, removed). Below is a screen shot from a environement version that shows all these tab options. 
+Development environments are used to prepare and test changes before deploying them to `prod`, with separate tabs for each type of change (directly modified, indirectly modified, metadata-only changes, added, removed). Below is a screenshot from an environment version that shows all these tab options. 
+
 
 ![Prod Differences section with all options](./development_environment/dev_env_comprehensive.png)
 
@@ -65,6 +64,7 @@ In the summary, each model's name is a link to [its model page](./model.md). Thi
 The plan applications chart is a calendar visualization of all plans that have been applied to the environment in the previous 2 weeks.
 
 ![Plan History Information](./development_environment/plan_history.png)
+<a id="plan-history-image"></a>
 
 The chart represents days on its `x-axis` (each column is a day with the corresponding date across the top) and the time of day on its `y-axis` (each day begins at the top and ends at the bottom). 
 

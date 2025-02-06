@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 import typing as t
 from concurrent.futures import as_completed
 from pathlib import Path
@@ -19,9 +18,6 @@ if t.TYPE_CHECKING:
     from sqlmesh.core.model.definition import Model
     from sqlmesh.utils import UniqueKeyDict
     from sqlmesh.utils.dag import DAG
-
-
-logger = logging.getLogger(__name__)
 
 
 def update_model_schemas(
@@ -45,7 +41,9 @@ def _update_schema_with_model(schema: MappingSchema, model: Model) -> None:
             schema.add_table(model.fqn, columns_to_types, dialect=model.dialect)
         except SchemaError as e:
             if "nesting level:" in str(e):
-                logger.error(
+                from sqlmesh.core.console import get_console
+
+                get_console().log_error(
                     "SQLMesh requires all model names and references to have the same level of nesting."
                 )
             raise
