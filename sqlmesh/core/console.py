@@ -1055,7 +1055,7 @@ class TerminalConsole(Console):
         missing_intervals = plan.missing_intervals
         if not missing_intervals:
             return
-        backfill = Tree("[bold]Models needing backfill \\[missing dates]:")
+        backfill = Tree("[bold]Models needing backfill:[/bold]")
         for missing in missing_intervals:
             snapshot = plan.context_diff.snapshots[missing.snapshot_id]
             if not snapshot.is_model:
@@ -1923,7 +1923,7 @@ class MarkdownConsole(CaptureTerminalConsole):
         missing_intervals = plan.missing_intervals
         if not missing_intervals:
             return
-        self._print("\n**Models needing backfill \\[missing dates]:**")
+        self._print("\n**Models needing backfill:**")
         snapshots = []
         for missing in missing_intervals:
             snapshot = plan.context_diff.snapshots[missing.snapshot_id]
