@@ -19,7 +19,10 @@ def test_replace_query_not_exists(mocker: MockFixture, make_mocked_engine_adapte
         "sqlmesh.core.engine_adapter.databricks.DatabricksEngineAdapter.table_exists",
         return_value=False,
     )
-    adapter = make_mocked_engine_adapter(DatabricksEngineAdapter)
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.databricks.DatabricksEngineAdapter.set_current_catalog"
+    )
+    adapter = make_mocked_engine_adapter(DatabricksEngineAdapter, default_catalog="test_catalog")
     adapter.replace_query(
         "test_table", parse_one("SELECT a FROM tbl"), {"a": exp.DataType.build("INT")}
     )
@@ -34,7 +37,10 @@ def test_replace_query_exists(mocker: MockFixture, make_mocked_engine_adapter: t
         "sqlmesh.core.engine_adapter.databricks.DatabricksEngineAdapter.table_exists",
         return_value=True,
     )
-    adapter = make_mocked_engine_adapter(DatabricksEngineAdapter)
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.databricks.DatabricksEngineAdapter.set_current_catalog"
+    )
+    adapter = make_mocked_engine_adapter(DatabricksEngineAdapter, default_catalog="test_catalog")
     adapter.replace_query("test_table", parse_one("SELECT a FROM tbl"), {"a": "int"})
 
     assert to_sql_calls(adapter) == [
@@ -49,7 +55,10 @@ def test_replace_query_pandas_not_exists(
         "sqlmesh.core.engine_adapter.databricks.DatabricksEngineAdapter.table_exists",
         return_value=False,
     )
-    adapter = make_mocked_engine_adapter(DatabricksEngineAdapter)
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.databricks.DatabricksEngineAdapter.set_current_catalog"
+    )
+    adapter = make_mocked_engine_adapter(DatabricksEngineAdapter, default_catalog="test_catalog")
     df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
     adapter.replace_query(
         "test_table", df, {"a": exp.DataType.build("INT"), "b": exp.DataType.build("INT")}
@@ -65,7 +74,10 @@ def test_replace_query_pandas_exists(mocker: MockFixture, make_mocked_engine_ada
         "sqlmesh.core.engine_adapter.databricks.DatabricksEngineAdapter.table_exists",
         return_value=True,
     )
-    adapter = make_mocked_engine_adapter(DatabricksEngineAdapter)
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.databricks.DatabricksEngineAdapter.set_current_catalog"
+    )
+    adapter = make_mocked_engine_adapter(DatabricksEngineAdapter, default_catalog="test_catalog")
     df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
     adapter.replace_query(
         "test_table", df, {"a": exp.DataType.build("int"), "b": exp.DataType.build("int")}
@@ -76,31 +88,40 @@ def test_replace_query_pandas_exists(mocker: MockFixture, make_mocked_engine_ada
     ]
 
 
-def test_clone_table(make_mocked_engine_adapter: t.Callable):
-    adapter = make_mocked_engine_adapter(DatabricksEngineAdapter)
+def test_clone_table(mocker: MockFixture, make_mocked_engine_adapter: t.Callable):
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.databricks.DatabricksEngineAdapter.set_current_catalog"
+    )
+    adapter = make_mocked_engine_adapter(DatabricksEngineAdapter, default_catalog="test_catalog")
     adapter.clone_table("target_table", "source_table")
     adapter.cursor.execute.assert_called_once_with(
         "CREATE TABLE `target_table` SHALLOW CLONE `source_table`"
     )
 
 
-def test_set_current_catalog(make_mocked_engine_adapter: t.Callable):
-    adapter = make_mocked_engine_adapter(DatabricksEngineAdapter)
-    adapter.set_current_catalog("test_catalog")
+def test_set_current_catalog(mocker: MockFixture, make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(DatabricksEngineAdapter, default_catalog="test_catalog")
+    adapter.set_current_catalog("test_catalog2")
 
-    assert to_sql_calls(adapter) == ["USE CATALOG `test_catalog`"]
+    assert to_sql_calls(adapter) == ["USE CATALOG `test_catalog`", "USE CATALOG `test_catalog2`"]
 
 
-def test_get_current_catalog(make_mocked_engine_adapter: t.Callable):
-    adapter = make_mocked_engine_adapter(DatabricksEngineAdapter)
+def test_get_current_catalog(mocker: MockFixture, make_mocked_engine_adapter: t.Callable):
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.databricks.DatabricksEngineAdapter.set_current_catalog"
+    )
+    adapter = make_mocked_engine_adapter(DatabricksEngineAdapter, default_catalog="test_catalog")
     adapter.cursor.fetchone.return_value = ("test_catalog",)
 
     assert adapter.get_current_catalog() == "test_catalog"
     assert to_sql_calls(adapter) == ["SELECT CURRENT_CATALOG()"]
 
 
-def test_get_current_database(make_mocked_engine_adapter: t.Callable):
-    adapter = make_mocked_engine_adapter(DatabricksEngineAdapter)
+def test_get_current_database(mocker: MockFixture, make_mocked_engine_adapter: t.Callable):
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.databricks.DatabricksEngineAdapter.set_current_catalog"
+    )
+    adapter = make_mocked_engine_adapter(DatabricksEngineAdapter, default_catalog="test_catalog")
     adapter.cursor.fetchone.return_value = ("test_database",)
 
     assert adapter.get_current_database() == "test_database"
@@ -110,7 +131,10 @@ def test_get_current_database(make_mocked_engine_adapter: t.Callable):
 def test_insert_overwrite_by_partition_query(
     make_mocked_engine_adapter: t.Callable, mocker: MockFixture, make_temp_table_name: t.Callable
 ):
-    adapter = make_mocked_engine_adapter(DatabricksEngineAdapter)
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.databricks.DatabricksEngineAdapter.set_current_catalog"
+    )
+    adapter = make_mocked_engine_adapter(DatabricksEngineAdapter, default_catalog="test_catalog")
 
     temp_table_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter._get_temp_table")
     table_name = "test_schema.test_table"
@@ -139,8 +163,11 @@ def test_insert_overwrite_by_partition_query(
     ]
 
 
-def test_materialized_view_properties(make_mocked_engine_adapter: t.Callable):
-    adapter = make_mocked_engine_adapter(DatabricksEngineAdapter)
+def test_materialized_view_properties(mocker: MockFixture, make_mocked_engine_adapter: t.Callable):
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.databricks.DatabricksEngineAdapter.set_current_catalog"
+    )
+    adapter = make_mocked_engine_adapter(DatabricksEngineAdapter, default_catalog="test_catalog")
 
     adapter.create_view(
         "test_table",
@@ -161,8 +188,11 @@ def test_materialized_view_properties(make_mocked_engine_adapter: t.Callable):
     ]
 
 
-def test_create_table_clustered_by(make_mocked_engine_adapter: t.Callable):
-    adapter = make_mocked_engine_adapter(DatabricksEngineAdapter)
+def test_create_table_clustered_by(mocker: MockFixture, make_mocked_engine_adapter: t.Callable):
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.databricks.DatabricksEngineAdapter.set_current_catalog"
+    )
+    adapter = make_mocked_engine_adapter(DatabricksEngineAdapter, default_catalog="test_catalog")
 
     columns_to_types = {
         "cola": exp.DataType.build("INT"),

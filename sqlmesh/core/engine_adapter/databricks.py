@@ -51,6 +51,8 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
     def __init__(self, *args: t.Any, **kwargs: t.Any):
         super().__init__(*args, **kwargs)
         self._set_spark_engine_adapter_if_needed()
+        # Set the default catalog for both connections to make sure they are aligned
+        self.set_current_catalog(self.default_catalog)  # type: ignore
 
     @classmethod
     def can_access_spark_session(cls, disable_spark_session: bool) -> bool:
