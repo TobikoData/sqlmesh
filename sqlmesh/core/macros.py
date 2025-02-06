@@ -60,6 +60,8 @@ class RuntimeStage(Enum):
     LOADING = "loading"
     CREATING = "creating"
     EVALUATING = "evaluating"
+    PROMOTING = "promoting"
+    AUDITING = "auditing"
     TESTING = "testing"
 
 

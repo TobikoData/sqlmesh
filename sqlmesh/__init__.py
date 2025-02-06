@@ -141,6 +141,9 @@ def configure_logging(
     log_limit: int = c.DEFAULT_LOG_LIMIT,
     log_file_dir: t.Optional[t.Union[str, Path]] = None,
 ) -> None:
+    # Remove noisy grpc logs that are not useful for users
+    os.environ["GRPC_VERBOSITY"] = os.environ.get("GRPC_VERBOSITY", "NONE")
+
     logger = logging.getLogger()
     debug = force_debug or debug_mode_enabled()
 

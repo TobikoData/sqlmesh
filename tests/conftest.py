@@ -440,6 +440,7 @@ def make_mocked_engine_adapter(mocker: MockerFixture) -> t.Callable:
         klass: t.Type[T],
         dialect: t.Optional[str] = None,
         register_comments: bool = True,
+        default_catalog: t.Optional[str] = None,
         **kwargs: t.Any,
     ) -> T:
         connection_mock = mocker.NonCallableMock()
@@ -450,6 +451,7 @@ def make_mocked_engine_adapter(mocker: MockerFixture) -> t.Callable:
             lambda: connection_mock,
             dialect=dialect or klass.DIALECT,
             register_comments=register_comments,
+            default_catalog=default_catalog,
             **kwargs,
         )
         if isinstance(adapter, SparkEngineAdapter):
