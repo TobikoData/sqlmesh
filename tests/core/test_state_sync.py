@@ -880,11 +880,23 @@ def test_promote_environment_expired(state_sync: EngineAdapterStateSync, make_sn
         end_at="2022-01-01",
         plan_id="new_plan_id",
         previous_plan_id=None,  # No previous plan ID since it's technically a new environment
+        expiration_ts=now_timestamp() + 3600,
     )
+    assert new_environment.expiration_ts
 
     # This call shouldn't fail.
     promotion_result = state_sync.promote(new_environment)
     assert promotion_result.added == [snapshot.table_info]
+    assert promotion_result.removed == []
+    assert promotion_result.removed_environment_naming_info is None
+
+    state_sync.finalize(new_environment)
+
+    new_environment.previous_plan_id = new_environment.plan_id
+    new_environment.plan_id = "another_plan_id"
+    promotion_result = state_sync.promote(new_environment)
+    #  Should be empty since the environment is no longer expired and nothing has changed
+    assert promotion_result.added == []
     assert promotion_result.removed == []
     assert promotion_result.removed_environment_naming_info is None
 
