@@ -2385,11 +2385,11 @@ def render_meta_fields(
     fields: t.Dict[str, t.Any],
     module_path: Path,
     path: Path,
-    jinja_macros: t.Optional[JinjaMacroRegistry] = None,
-    macros: t.Optional[MacroRegistry] = None,
-    dialect: DialectType = None,
-    variables: t.Optional[t.Dict[str, t.Any]] = None,
-    default_catalog: t.Optional[str] = None,
+    jinja_macros: t.Optional[JinjaMacroRegistry],
+    macros: t.Optional[MacroRegistry],
+    dialect: DialectType,
+    variables: t.Optional[t.Dict[str, t.Any]],
+    default_catalog: t.Optional[str],
 ) -> t.Dict[str, t.Any]:
     def render_field_value(value: t.Any) -> t.Any:
         if isinstance(value, exp.Expression) or (
@@ -2408,13 +2408,13 @@ def render_meta_fields(
             )
             if rendered_expr is None:
                 raise SQLMeshError(
-                    f"Failed to render model: `{fields['name']}` at `{path}`\n"
-                    f"Expected rendering `{expression.sql(dialect=dialect)}` to return an expression"
+                    f"Failed to render model attribute `{fields['name']}` at `{path}`\n"
+                    f"'{expression.sql(dialect=dialect)}' must return an expression"
                 )
             if len(rendered_expr) != 1:
                 raise SQLMeshError(
-                    f"Failed to render model: `{fields['name']}` at `{path}`.\n"
-                    f"Expected rendering `{expression.sql(dialect=dialect)}` to return one result, but got {len(rendered_expr)}"
+                    f"Failed to render model attribute `{fields['name']}` at `{path}`.\n"
+                    f"`{expression.sql(dialect=dialect)}` must return one result, but got {len(rendered_expr)}"
                 )
             return rendered_expr[0]
 
