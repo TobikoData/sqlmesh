@@ -112,6 +112,7 @@ def test_json(snapshot: Snapshot):
         "fingerprint": snapshot.fingerprint.dict(),
         "intervals": [],
         "dev_intervals": [],
+        "dev_table_suffix": "dev",
         "pending_restatement_intervals": [],
         "node": {
             "audits": [],
@@ -952,7 +953,7 @@ def test_table_name(snapshot: Snapshot, make_snapshot: t.Callable):
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
     snapshot.previous_versions = ()
     assert snapshot.table_name(is_deployable=True) == "sqlmesh__default.name__3078928823"
-    assert snapshot.table_name(is_deployable=False) == "sqlmesh__default.name__3078928823__temp"
+    assert snapshot.table_name(is_deployable=False) == "sqlmesh__default.name__3078928823__dev"
 
     assert not snapshot.dev_version
 
@@ -966,7 +967,7 @@ def test_table_name(snapshot: Snapshot, make_snapshot: t.Callable):
     snapshot.categorize_as(SnapshotChangeCategory.INDIRECT_NON_BREAKING)
     assert snapshot.table_name(is_deployable=True) == "sqlmesh__default.name__3078928823"
     # Indirect non-breaking snapshots reuse the dev table as well.
-    assert snapshot.table_name(is_deployable=False) == "sqlmesh__default.name__3078928823__temp"
+    assert snapshot.table_name(is_deployable=False) == "sqlmesh__default.name__3078928823__dev"
     assert snapshot.dev_version
 
     # Mimic a direct forward-only change.
@@ -976,7 +977,7 @@ def test_table_name(snapshot: Snapshot, make_snapshot: t.Callable):
     snapshot.previous_versions = (previous_data_version,)
     snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
     assert snapshot.table_name(is_deployable=True) == "sqlmesh__default.name__3078928823"
-    assert snapshot.table_name(is_deployable=False) == "sqlmesh__default.name__3049392110__temp"
+    assert snapshot.table_name(is_deployable=False) == "sqlmesh__default.name__3049392110__dev"
 
     fully_qualified_snapshot = make_snapshot(
         SqlModel(name='"my-catalog".db.table', query=parse_one("select 1, ds"))
@@ -1006,7 +1007,7 @@ def test_table_name_view(make_snapshot: t.Callable):
     assert snapshot.table_name(is_deployable=True) == f"sqlmesh__default.name__{snapshot.version}"
     assert (
         snapshot.table_name(is_deployable=False)
-        == f"sqlmesh__default.name__{snapshot.dev_version_get_or_generate()}__temp"
+        == f"sqlmesh__default.name__{snapshot.dev_version_get_or_generate()}__dev"
     )
 
     assert not snapshot.dev_version
@@ -1022,7 +1023,7 @@ def test_table_name_view(make_snapshot: t.Callable):
     # Indirect non-breaking view snapshots should not reuse the dev table.
     assert (
         new_snapshot.table_name(is_deployable=False)
-        == f"sqlmesh__default.name__{new_snapshot.dev_version_get_or_generate()}__temp"
+        == f"sqlmesh__default.name__{new_snapshot.dev_version_get_or_generate()}__dev"
     )
     assert not new_snapshot.dev_version
     assert new_snapshot.version == snapshot.version

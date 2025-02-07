@@ -60,6 +60,7 @@ def test_forward_only_plan_sets_version(make_snapshot, mocker: MockerFixture):
             ),
             version="test_version",
             change_category=SnapshotChangeCategory.FORWARD_ONLY,
+            dev_table_suffix="dev",
         ),
     )
     assert not snapshot_b.version
@@ -303,6 +304,7 @@ def test_paused_forward_only_parent(make_snapshot, mocker: MockerFixture):
             ),
             version="test_version",
             change_category=SnapshotChangeCategory.BREAKING,
+            dev_table_suffix="dev",
         ),
     )
     snapshot_a.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
@@ -518,6 +520,7 @@ def test_forward_only_model_on_destructive_change(
                 metadata_hash="test_metadata_hash",
             ),
             version="test_version",
+            dev_table_suffix="dev",
         ),
     )
 
@@ -575,6 +578,7 @@ def test_forward_only_model_on_destructive_change(
                 metadata_hash="test_metadata_hash",
             ),
             version="test_version",
+            dev_table_suffix="dev",
         ),
     )
 
@@ -597,6 +601,7 @@ def test_forward_only_model_on_destructive_change(
                 metadata_hash="test_metadata_hash",
             ),
             version="test_version",
+            dev_table_suffix="dev",
         ),
     )
 

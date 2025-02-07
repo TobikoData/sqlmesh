@@ -185,6 +185,7 @@ class SnapshotDataVersion(PydanticModel, frozen=True):
     dev_version: t.Optional[str] = None
     change_category: t.Optional[SnapshotChangeCategory] = None
     physical_schema_: t.Optional[str] = Field(default=None, alias="physical_schema")
+    dev_table_suffix: str
 
     def snapshot_id(self, name: str) -> SnapshotId:
         return SnapshotId(name=name, identifier=self.fingerprint.to_identifier())
@@ -279,6 +280,7 @@ class SnapshotInfoMixin(ModelKindMixin):
     # Added to support Migration # 34 (default catalog)
     # This can be removed from this model once Pydantic 1 support is dropped (must remain in `Snapshot` though)
     base_table_name_override: t.Optional[str]
+    dev_table_suffix: str
 
     @property
     def identifier(self) -> str:
@@ -395,8 +397,8 @@ class SnapshotInfoMixin(ModelKindMixin):
             self.physical_schema,
             base_table_name,
             version,
-            is_dev_table=is_dev_table,
             catalog=self.fully_qualified_table.catalog,
+            suffix=self.dev_table_suffix if is_dev_table else None,
         )
 
     @property
@@ -426,8 +428,8 @@ class SnapshotTableInfo(PydanticModel, SnapshotInfoMixin, frozen=True):
     # Added to support Migration # 34 (default catalog)
     # This can be removed from this model once Pydantic 1 support is dropped (must remain in `Snapshot` though)
     base_table_name_override: t.Optional[str] = None
-
     custom_materialization: t.Optional[str] = None
+    dev_table_suffix: str
 
     def __lt__(self, other: SnapshotTableInfo) -> bool:
         return self.name < other.name
@@ -461,6 +463,7 @@ class SnapshotTableInfo(PydanticModel, SnapshotInfoMixin, frozen=True):
             dev_version=self.dev_version,
             change_category=self.change_category,
             physical_schema=self.physical_schema,
+            dev_table_suffix=self.dev_table_suffix,
         )
 
     @property
@@ -542,6 +545,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     # Added to support Migration # 34 (default catalog)
     base_table_name_override: t.Optional[str] = None
     next_auto_restatement_ts: t.Optional[int] = None
+    dev_table_suffix: str = "dev"
 
     @field_validator("ttl")
     @classmethod
@@ -930,6 +934,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
                     previous_version.data_version.dev_version
                     or previous_version.fingerprint.to_version()
                 )
+                self.dev_table_suffix = previous_version.data_version.dev_table_suffix
         elif self.is_model and self.model.forward_only and not self.previous_version:
             # If this is a new model then use a deterministic version, independent of the fingerprint.
             self.version = hash_data([self.name, *self.model.kind.data_hash_values])
@@ -1109,6 +1114,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             kind_name=self.model_kind_name,
             node_type=self.node_type,
             custom_materialization=custom_materialization,
+            dev_table_suffix=self.dev_table_suffix,
         )
 
     @property
@@ -1120,6 +1126,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             dev_version=self.dev_version,
             change_category=self.change_category,
             physical_schema=self.physical_schema,
+            dev_table_suffix=self.dev_table_suffix,
         )
 
     @property
@@ -1466,16 +1473,16 @@ def table_name(
     physical_schema: str,
     name: str,
     version: str,
-    is_dev_table: bool = False,
     catalog: t.Optional[str] = None,
+    suffix: t.Optional[str] = None,
 ) -> str:
     table = exp.to_table(name)
 
     # bigquery projects usually have "-" in them which is illegal in the table name, so we aggressively prune
     name = "__".join(sanitize_name(part.name) for part in table.parts)
-    dev_suffix = "__temp" if is_dev_table else ""
+    suffix = f"__{suffix}" if suffix else ""
 
-    table.set("this", exp.to_identifier(f"{name}__{version}{dev_suffix}"))
+    table.set("this", exp.to_identifier(f"{name}__{version}{suffix}"))
     table.set("db", exp.to_identifier(physical_schema))
     if not table.catalog and catalog:
         table.set("catalog", exp.to_identifier(catalog))

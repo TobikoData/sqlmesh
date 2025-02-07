@@ -411,6 +411,7 @@ def make_snapshot_on_destructive_change(make_snapshot: t.Callable) -> t.Callable
                 ),
                 version="test_version",
                 change_category=SnapshotChangeCategory.FORWARD_ONLY,
+                dev_table_suffix="dev",
             ),
         )
 
