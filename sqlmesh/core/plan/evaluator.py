@@ -219,11 +219,23 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             plan: The plan to source snapshots from.
             deployability_index: Indicates which snapshots are deployable in the context of this creation.
         """
-        snapshots_to_create = [
-            s
-            for s in snapshots.values()
-            if s.is_model and not s.is_symbolic and plan.is_selected_for_backfill(s.name)
-        ]
+        promoted_snapshot_ids = (
+            set(plan.environment.promoted_snapshot_ids)
+            if plan.environment.promoted_snapshot_ids is not None
+            else None
+        )
+
+        def _should_create(s: Snapshot) -> bool:
+            if not s.is_model or s.is_symbolic:
+                return False
+            # Only create tables for snapshots that we're planning to promote or that were selected for backfill
+            return (
+                plan.is_selected_for_backfill(s.name)
+                or promoted_snapshot_ids is None
+                or s.snapshot_id in promoted_snapshot_ids
+            )
+
+        snapshots_to_create = [s for s in snapshots.values() if _should_create(s)]
 
         completed = False
         try:
