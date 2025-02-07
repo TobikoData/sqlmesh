@@ -89,7 +89,8 @@ def ctx(
     ctx = TestContext(test_type, engine_adapter, mark, gateway, is_remote=is_remote)
     ctx.init()
 
-    yield ctx
+    with ctx.engine_adapter.session({}):
+        yield ctx
 
     try:
         ctx.cleanup()
