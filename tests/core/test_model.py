@@ -4902,7 +4902,7 @@ def test_load_external_model_python(sushi_context) -> None:
 
 def test_variables_python_sql_model(mocker: MockerFixture) -> None:
     @model(
-        "test_variables_python_model",
+        "test_variables_python_model_@{bar}",
         is_sql=True,
         kind="full",
         columns={"a": "string", "b": "string", "c": "string"},
@@ -4914,12 +4914,13 @@ def test_variables_python_sql_model(mocker: MockerFixture) -> None:
             exp.convert(evaluator.var("test_var_c")).as_("c"),
         )
 
-    python_sql_model = model.get_registry()["test_variables_python_model"].model(
+    python_sql_model = model.get_registry()["test_variables_python_model_@{bar}"].model(
         module_path=Path("."),
         path=Path("."),
-        variables={"test_var_a": "test_value", "test_var_unused": 2},
+        variables={"test_var_a": "test_value", "test_var_unused": 2, "bar": "suffix"},
     )
 
+    assert python_sql_model.name == "test_variables_python_model_suffix"
     assert python_sql_model.python_env[c.SQLMESH_VARS] == Executable.value(
         {"test_var_a": "test_value"}
     )
@@ -4929,6 +4930,195 @@ def test_variables_python_sql_model(mocker: MockerFixture) -> None:
     assert (
         query.sql()
         == """SELECT 'test_value' AS "a", 'default_value' AS "b", NULL AS "c" """.strip()
+    )
+
+
+def test_macros_python_model(mocker: MockerFixture) -> None:
+    @model(
+        "foo_macro_model_@{bar}",
+        columns={"a": "string"},
+        kind=dict(name=ModelKindName.INCREMENTAL_BY_TIME_RANGE, time_column="@{time_col}"),
+        stamp="@{stamp}",
+        owner="@IF(@gateway = 'dev', @{dev_owner}, @{prod_owner})",
+        enabled="@IF(@gateway = 'dev', True, False)",
+        start="@IF(@gateway = 'dev', '1 month ago', '2024-01-01')",
+        partitioned_by=[
+            d.parse_one("DATETIME_TRUNC(@{time_col}, MONTH)"),
+        ],
+    )
+    def model_with_macros(context, **kwargs):
+        return pd.DataFrame(
+            [
+                {
+                    "a": context.var("TEST_VAR_A"),
+                }
+            ]
+        )
+
+    python_model = model.get_registry()["foo_macro_model_@{bar}"].model(
+        module_path=Path("."),
+        path=Path("."),
+        variables={
+            "test_var_a": "test_value",
+            "gateway": "prod",
+            "bar": "suffix",
+            "dev_owner": "dv_1",
+            "prod_owner": "pr_1",
+            "stamp": "bump",
+            "time_col": "a",
+        },
+    )
+
+    assert python_model.name == "foo_macro_model_suffix"
+    assert python_model.python_env[c.SQLMESH_VARS] == Executable.value({"test_var_a": "test_value"})
+    assert not python_model.enabled
+    assert python_model.start == "2024-01-01"
+    assert python_model.owner == "pr_1"
+    assert python_model.stamp == "bump"
+    assert python_model.time_column.column == exp.column("a", quoted=True)
+    assert python_model.partitioned_by[0].sql() == 'DATETIME_TRUNC("a", MONTH)'
+
+    context = ExecutionContext(mocker.Mock(), {}, None, None)
+    df = list(python_model.render(context=context))[0]
+    assert df.to_dict(orient="records") == [{"a": "test_value"}]
+
+
+def test_macros_python_sql_model(mocker: MockerFixture) -> None:
+    @macro()
+    def end_date_macro(evaluator: MacroEvaluator, var: bool):
+        return f"@IF({var} = False, '1 day ago', '2025-01-01 12:00:00')"
+
+    @model(
+        "test_macros_python_model_@{bar}",
+        is_sql=True,
+        kind="full",
+        cron="@daily",
+        columns={"a": "string"},
+        enabled="@IF(@gateway = 'dev', True, False)",
+        start="@IF(@gateway = 'dev', '1 month ago', '2024-01-01')",
+        end="@end_date_macro(@{global_var})",
+        owner="@IF(@gateway = 'dev', @{dev_owner}, @{prod_owner})",
+        stamp="@{stamp}",
+        tags=["@{tag1}", "@{tag2}"],
+        description="Model desc @{test_}",
+    )
+    def model_with_macros(evaluator, **kwargs):
+        return exp.select(
+            exp.convert(evaluator.var("TEST_VAR_A")).as_("a"),
+        )
+
+    python_sql_model = model.get_registry()["test_macros_python_model_@{bar}"].model(
+        module_path=Path("."),
+        path=Path("."),
+        macros=macro.get_registry(),
+        variables={
+            "test_var_a": "test_value",
+            "test_var_unused": 2,
+            "bar": "suffix",
+            "gateway": "dev",
+            "global_var": False,
+            "dev_owner": "dv_1",
+            "prod_owner": "pr_1",
+            "stamp": "bump",
+            "time_col": "a",
+            "tag1": "tag__1",
+            "tag2": "tag__2",
+        },
+    )
+
+    assert python_sql_model.name == "test_macros_python_model_suffix"
+    assert python_sql_model.python_env[c.SQLMESH_VARS] == Executable.value(
+        {"test_var_a": "test_value"}
+    )
+
+    assert python_sql_model.enabled
+    assert python_sql_model.start == "1 month ago"
+    assert python_sql_model.end == "1 day ago"
+    assert python_sql_model.owner == "dv_1"
+    assert python_sql_model.stamp == "bump"
+    assert python_sql_model.description == "Model desc @{test_}"
+    assert python_sql_model.tags == ["tag__1", "tag__2"]
+
+    context = ExecutionContext(mocker.Mock(), {}, None, None)
+    query = list(python_sql_model.render(context=context))[0]
+    assert query.sql() == """SELECT 'test_value' AS "a" """.strip()
+
+
+def test_unrendered_macros_python_model(mocker: MockerFixture) -> None:
+    @model(
+        "test_unrendered_macros_python_model_@{bar}",
+        is_sql=True,
+        kind=dict(
+            name=ModelKindName.INCREMENTAL_BY_UNIQUE_KEY,
+            unique_key="@{key}",
+            merge_filter="source.id > 0 and target.updated_at < @end_ds and source.updated_at > @start_ds",
+        ),
+        cron="@daily",
+        columns={"a": "string"},
+        allow_partials="@IF(@gateway = 'dev', True, False)",
+        physical_properties=dict(
+            location1="@'s3://bucket/prefix/@{schema_name}/@{table_name}'",
+            location2="@IF(@gateway = 'dev', @'hdfs://@{catalog_name}/@{schema_name}/dev/@{table_name}', @'s3://prod/@{table_name}')",
+        ),
+        virtual_properties={"creatable_type": "@{create_type}"},
+        session_properties={
+            "spark.executor.cores": "@IF(@gateway = 'dev', 1, 2)",
+            "spark.executor.memory": "1G",
+        },
+    )
+    def model_with_macros(evaluator, **kwargs):
+        return exp.select(
+            exp.convert(evaluator.var("TEST_VAR_A")).as_("a"),
+        )
+
+    python_sql_model = model.get_registry()["test_unrendered_macros_python_model_@{bar}"].model(
+        module_path=Path("."),
+        path=Path("."),
+        macros=macro.get_registry(),
+        variables={
+            "test_var_a": "test_value",
+            "bar": "suffix",
+            "gateway": "dev",
+            "key": "a",
+            "create_type": "'SECURE'",
+        },
+    )
+
+    assert python_sql_model.name == "test_unrendered_macros_python_model_suffix"
+    assert python_sql_model.python_env[c.SQLMESH_VARS] == Executable.value(
+        {"test_var_a": "test_value"}
+    )
+    assert python_sql_model.enabled
+
+    context = ExecutionContext(mocker.Mock(), {}, None, None)
+    query = list(python_sql_model.render(context=context))[0]
+    assert query.sql() == """SELECT 'test_value' AS "a" """.strip()
+    assert python_sql_model.allow_partials
+
+    assert "location1" in python_sql_model.physical_properties
+    assert "location2" in python_sql_model.physical_properties
+
+    assert python_sql_model.session_properties == {
+        "spark.executor.cores": 1,
+        "spark.executor.memory": "1G",
+    }
+    assert python_sql_model.virtual_properties["creatable_type"].this == "SECURE"
+
+    # The physical_properties will stay unrendered at load time
+    assert (
+        python_sql_model.physical_properties["location1"].text("this")
+        == "@'s3://bucket/prefix/@{schema_name}/@{table_name}'"
+    )
+    assert (
+        python_sql_model.physical_properties["location2"].text("this")
+        == "@IF(@gateway = 'dev', @'hdfs://@{catalog_name}/@{schema_name}/dev/@{table_name}', @'s3://prod/@{table_name}')"
+    )
+
+    # Merge_filter will stay unrendered as well
+    assert python_sql_model.unique_key[0] == exp.column("a", quoted=True)
+    assert (
+        python_sql_model.merge_filter.sql()
+        == "source.id > 0 AND target.updated_at < @end_ds AND source.updated_at > @start_ds"
     )
 
 

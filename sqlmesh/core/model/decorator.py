@@ -17,6 +17,7 @@ from sqlmesh.core.model.definition import (
     create_python_model,
     create_sql_model,
     get_model_name,
+    render_meta_fields,
 )
 from sqlmesh.core.model.kind import ModelKindName, _ModelKind
 from sqlmesh.utils import registry_decorator
@@ -118,6 +119,21 @@ class model(registry_decorator):
 
         build_env(self.func, env=env, name=entrypoint, path=module_path)
 
+        rendered_fields = render_meta_fields(
+            fields={"name": self.name, **self.kwargs},
+            module_path=module_path,
+            macros=macros,
+            jinja_macros=jinja_macros,
+            variables=variables,
+            path=path,
+            dialect=dialect,
+            default_catalog=default_catalog,
+        )
+
+        rendered_name = rendered_fields["name"]
+        if isinstance(rendered_name, exp.Expression):
+            rendered_fields["name"] = rendered_name.sql(dialect=dialect)
+
         common_kwargs = {
             "defaults": defaults,
             "path": path,
@@ -133,7 +149,7 @@ class model(registry_decorator):
             "macros": macros,
             "jinja_macros": jinja_macros,
             "audit_definitions": audit_definitions,
-            **self.kwargs,
+            **rendered_fields,
         }
 
         for key in ("pre_statements", "post_statements", "on_virtual_update"):
@@ -146,5 +162,5 @@ class model(registry_decorator):
 
         if self.is_sql:
             query = MacroFunc(this=exp.Anonymous(this=entrypoint))
-            return create_sql_model(self.name, query, **common_kwargs)
-        return create_python_model(self.name, entrypoint, **common_kwargs)
+            return create_sql_model(query=query, **common_kwargs)
+        return create_python_model(entrypoint=entrypoint, **common_kwargs)
