@@ -130,7 +130,7 @@
 
     If your project files have not changed, you execute `sqlmesh run` to run your project's models and audits.
 
-    `sqlmesh run` does not use models, macros, or audits from your local project files. Everything it executes is based on the model, macro, and audit versions currently promoted in the target environment. Those versions are stored in the data SQLMesh captures about the state of your environment.
+    `sqlmesh run` does not use models, macros, or audits from your local project files. Everything it executes is based on the model, macro, and audit versions currently promoted in the target environment. Those versions are stored in the metadata SQLMesh captures about the state of your environment.
 
     A sensible approach to executing `sqlmesh run` is to use Linux’s `cron` tool to execute `sqlmesh run` on a cadence at least as frequent as your briefest SQLMesh model `cron` parameter. For example, if your most frequent model’s `cron` is hour, your `cron` tool should execute `sqlmesh run` at least every hour.
 
