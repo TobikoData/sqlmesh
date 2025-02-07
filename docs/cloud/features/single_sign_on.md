@@ -1,6 +1,6 @@
 # SSO (Single sign-on) 
 
-### Overview
+## Overview
 
 Tobiko Cloud supports single sign-on (SSO) through OpenId and SAML 2.0 providers. 
 
@@ -113,7 +113,15 @@ $ tcloud auth login
 
 ![tcloud_login](./single_sign_on/tcloud_login.png)
 
-At this point your system browser should open and allow you to log in. If you are already logged in this might be a very quick process. When done you will be prompted with a success message in your browser and a message telling you that it's safe to close your browser window. Your terminal will then have the following result:
+At this point your system browser should open and allow you to log in. If you are already logged in this might be a very quick process. It will look like the below:
+
+![tcloud_auth_browser_login](./single_sign_on/tcloud_auth_browser_login.png)
+
+![tcloud_auth_browser_success](./single_sign_on/tcloud_auth_browser_success.png)
+
+
+
+When done you will be prompted with a success message in your browser and a message telling you that it's safe to close your browser window. Your terminal will then have the following result:
 
 ``` bash
 Success! ✅
