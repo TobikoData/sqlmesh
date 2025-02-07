@@ -53,6 +53,11 @@ def _gen_config(
                 required = field.is_required() or field_name == "type"
                 option_str = f"      {'# ' if not required else ''}{field_name}: {default_value}\n"
 
+                # specify the DuckDB database field so quickstart runs out of the box
+                if engine == "duckdb" and field_name == "database":
+                    option_str = "      database: db.db\n"
+                    required = True
+
                 if required:
                     required_fields.append(option_str)
                 else:
