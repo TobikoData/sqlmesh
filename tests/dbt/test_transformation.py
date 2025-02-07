@@ -1482,3 +1482,29 @@ def test_dbt_incremental_allow_partials_by_default():
 
     model.allow_partials = False
     assert not model.to_sqlmesh(context).allow_partials
+
+
+def test_grain():
+    context = DbtContext()
+    context._target = SnowflakeConfig(
+        name="target",
+        schema="test",
+        database="test",
+        account="account",
+        user="user",
+        password="password",
+    )
+
+    model = ModelConfig(
+        name="model",
+        alias="model",
+        package_name="package",
+        target_schema="test",
+        sql="SELECT * FROM baz",
+        materialized=Materialization.TABLE.value,
+        grain=["id_a", "id_b"],
+    )
+    assert model.to_sqlmesh(context).grains == [exp.to_column("id_a"), exp.to_column("id_b")]
+
+    model.grain = "id_a"
+    assert model.to_sqlmesh(context).grains == [exp.to_column("id_a")]
