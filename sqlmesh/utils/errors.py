@@ -111,6 +111,10 @@ class TestError(SQLMeshError):
     pass
 
 
+class DestructiveChangeError(SQLMeshError):
+    pass
+
+
 class NotificationTargetError(SQLMeshError):
     pass
 
@@ -180,3 +184,29 @@ def raise_for_status(response: Response) -> None:
         raise ApiClientError(response.text, response.status_code)
     if 500 <= response.status_code < 600:
         raise ApiServerError(response.text, response.status_code)
+
+
+def format_destructive_change_msg(
+    snapshot_name: str,
+    dropped_column_names: t.List[str],
+    alter_expressions: t.List[exp.Alter],
+    dialect: str,
+    error: bool = True,
+) -> str:
+    dropped_column_str = "', '".join(dropped_column_names) if dropped_column_names else None
+    dropped_column_msg = (
+        f" that drops column{'s' if dropped_column_names and len(dropped_column_names) > 1 else ''} '{dropped_column_str}'"
+        if dropped_column_str
+        else ""
+    )
+
+    alter_expr_msg = "\n\nSchema changes:\n  " + "\n  ".join(
+        [alter.sql(dialect) for alter in alter_expressions]
+    )
+
+    warning_msg = (
+        f"Plan requires a destructive change to forward-only model '{snapshot_name}'s schema"
+    )
+    err_msg = "\n\nTo allow the destructive change, set the model's `on_destructive_change` setting to `warn` or `allow` or include the model in the plan's `--allow-destructive-model` option.\n"
+
+    return f"\n{warning_msg}{dropped_column_msg}.{alter_expr_msg}{err_msg if error else ''}"

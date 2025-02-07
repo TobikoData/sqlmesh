@@ -67,7 +67,12 @@ from sqlmesh.utils.concurrency import (
     concurrent_apply_to_values,
 )
 from sqlmesh.utils.date import TimeLike, now, time_like_to_str
-from sqlmesh.utils.errors import ConfigError, SQLMeshError
+from sqlmesh.utils.errors import (
+    ConfigError,
+    DestructiveChangeError,
+    SQLMeshError,
+    format_destructive_change_msg,
+)
 
 if sys.version_info >= (3, 12):
     from importlib import metadata
@@ -2060,19 +2065,25 @@ def _check_destructive_schema_change(
     if snapshot.needs_destructive_check(allow_destructive_snapshots) and has_drop_alteration(
         alter_expressions
     ):
+        snapshot_name = snapshot.name
         dropped_column_names = get_dropped_column_names(alter_expressions)
-        dropped_column_str = "', '".join(dropped_column_names) if dropped_column_names else None
-        dropped_column_msg = (
-            f" that drops column{'s' if dropped_column_names and len(dropped_column_names) > 1 else ''} '{dropped_column_str}'"
-            if dropped_column_str
-            else ""
-        )
-        warning_msg = f"Plan results in a destructive change to forward-only table '{snapshot.name}'s schema{dropped_column_msg}."
+        model_dialect = snapshot.model.dialect
+
         if snapshot.model.on_destructive_change.is_warn:
-            logger.warning(warning_msg)
+            logger.warning(
+                format_destructive_change_msg(
+                    snapshot_name,
+                    dropped_column_names,
+                    alter_expressions,
+                    model_dialect,
+                    error=False,
+                )
+            )
             return
-        raise SQLMeshError(
-            f"{warning_msg} To allow this, change the model's `on_destructive_change` setting to `warn` or `allow` or include it in the plan's `--allow-destructive-model` option."
+        raise DestructiveChangeError(
+            format_destructive_change_msg(
+                snapshot_name, dropped_column_names, alter_expressions, model_dialect
+            )
         )
 
 

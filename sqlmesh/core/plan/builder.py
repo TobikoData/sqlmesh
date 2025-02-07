@@ -482,21 +482,24 @@ class PlanBuilder:
                 )
 
                 if has_drop_alteration(schema_diff):
+                    snapshot_name = snapshot.name
                     dropped_column_names = get_dropped_column_names(schema_diff)
-                    dropped_column_str = (
-                        "', '".join(dropped_column_names) if dropped_column_names else None
-                    )
-                    dropped_column_msg = (
-                        f" that drops column{'s' if dropped_column_names and len(dropped_column_names) > 1 else ''} '{dropped_column_str}'"
-                        if dropped_column_str
-                        else ""
-                    )
-                    warning_msg = f"Plan results in a destructive change to forward-only model '{snapshot.name}'s schema{dropped_column_msg}."
+                    model_dialect = snapshot.model.dialect
+
                     if snapshot.model.on_destructive_change.is_warn:
-                        get_console().log_warning(warning_msg)
+                        get_console().log_destructive_change(
+                            snapshot_name,
+                            dropped_column_names,
+                            schema_diff,
+                            model_dialect,
+                            error=False,
+                        )
                     else:
+                        get_console().log_destructive_change(
+                            snapshot_name, dropped_column_names, schema_diff, model_dialect
+                        )
                         raise PlanError(
-                            f"{warning_msg} To allow this, change the model's `on_destructive_change` setting to `warn` or `allow` or include it in the plan's `--allow-destructive-model` option."
+                            "Plan requires a destructive change to a forward-only model."
                         )
 
     def _categorize_snapshots(

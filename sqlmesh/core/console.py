@@ -35,11 +35,12 @@ from sqlmesh.core.test import ModelTest
 from sqlmesh.utils import rich as srich
 from sqlmesh.utils.concurrency import NodeExecutionFailedError
 from sqlmesh.utils.date import time_like_to_str, to_date, yesterday_ds
-from sqlmesh.utils.errors import PythonModelEvalError
+from sqlmesh.utils.errors import PythonModelEvalError, format_destructive_change_msg
 
 if t.TYPE_CHECKING:
     import ipywidgets as widgets
 
+    from sqlglot import exp
     from sqlglot.dialects.dialect import DialectType
     from sqlmesh.core.context_diff import ContextDiff
     from sqlmesh.core.plan import Plan, EvaluatablePlan, PlanBuilder, SnapshotIntervals
@@ -246,6 +247,17 @@ class Console(abc.ABC):
         """Display list of models that failed during evaluation to the user."""
 
     @abc.abstractmethod
+    def log_destructive_change(
+        self,
+        snapshot_name: str,
+        dropped_column_names: t.List[str],
+        alter_expressions: t.List[exp.Alter],
+        dialect: str,
+        error: bool = True,
+    ) -> None:
+        """Display a destructive change error or warning to the user."""
+
+    @abc.abstractmethod
     def log_error(self, message: str) -> None:
         """Display error info to the user."""
 
@@ -407,6 +419,16 @@ class NoopConsole(Console):
         pass
 
     def log_failed_models(self, errors: t.List[NodeExecutionFailedError]) -> None:
+        pass
+
+    def log_destructive_change(
+        self,
+        snapshot_name: str,
+        dropped_column_names: t.List[str],
+        alter_expressions: t.List[exp.Alter],
+        dialect: str,
+        error: bool = True,
+    ) -> None:
         pass
 
     def log_error(self, message: str) -> None:
@@ -1182,6 +1204,30 @@ class TerminalConsole(Console):
 
             for node_name, msg in error_messages.items():
                 self._print(f"  [red]{node_name}[/red]\n\n{msg}")
+
+    def log_destructive_change(
+        self,
+        snapshot_name: str,
+        dropped_column_names: t.List[str],
+        alter_expressions: t.List[exp.Alter],
+        dialect: str,
+        error: bool = True,
+    ) -> None:
+        if error:
+            self._print(
+                format_destructive_change_msg(
+                    snapshot_name, dropped_column_names, alter_expressions, dialect
+                )
+            )
+        else:
+            self._print(
+                f"[yellow]WARNING: Plan requires a destructive change to forward-only model '{snapshot_name}'s schema[/yellow]"
+            )
+            logger.warning(
+                format_destructive_change_msg(
+                    snapshot_name, dropped_column_names, alter_expressions, dialect, error
+                )
+            )
 
     def log_error(self, message: str) -> None:
         self._print(f"[red]{message}[/red]")

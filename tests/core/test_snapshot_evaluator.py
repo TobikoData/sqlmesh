@@ -53,7 +53,7 @@ from sqlmesh.core.snapshot.definition import to_view_mapping
 from sqlmesh.core.snapshot.evaluator import CustomMaterialization
 from sqlmesh.utils.concurrency import NodeExecutionFailedError
 from sqlmesh.utils.date import to_timestamp
-from sqlmesh.utils.errors import ConfigError, SQLMeshError
+from sqlmesh.utils.errors import ConfigError, SQLMeshError, DestructiveChangeError
 from sqlmesh.utils.metaprogramming import Executable
 
 
@@ -1710,11 +1710,11 @@ def test_on_destructive_change_runtime_check(
     with pytest.raises(NodeExecutionFailedError) as ex:
         evaluator.migrate([snapshot], {})
 
-    sqlmesh_err = ex.value.__cause__
-    assert isinstance(sqlmesh_err, SQLMeshError)
-    assert re.match(
-        """Plan results in a destructive change to forward-only table '"test_schema"."test_model"'s schema.""",
-        str(sqlmesh_err),
+    destructive_change_err = ex.value.__cause__
+    assert isinstance(destructive_change_err, DestructiveChangeError)
+    assert (
+        str(destructive_change_err)
+        == "\nPlan requires a destructive change to forward-only model '\"test_schema\".\"test_model\"'s schema that drops column 'b'.\n\nSchema changes:\n  ALTER TABLE sqlmesh__test_schema.test_schema__test_model__1 DROP COLUMN b\n  ALTER TABLE sqlmesh__test_schema.test_schema__test_model__1 ADD COLUMN a INT\n\nTo allow the destructive change, set the model's `on_destructive_change` setting to `warn` or `allow` or include the model in the plan's `--allow-destructive-model` option.\n"
     )
 
     # WARN
@@ -1733,7 +1733,7 @@ def test_on_destructive_change_runtime_check(
         evaluator.migrate([snapshot], {})
         assert (
             mock_logger.call_args[0][0]
-            == """Plan results in a destructive change to forward-only table '"test_schema"."test_model"'s schema that drops column 'b'."""
+            == "\nPlan requires a destructive change to forward-only model '\"test_schema\".\"test_model\"'s schema that drops column 'b'.\n\nSchema changes:\n  ALTER TABLE sqlmesh__test_schema.test_schema__test_model__1 DROP COLUMN b\n  ALTER TABLE sqlmesh__test_schema.test_schema__test_model__1 ADD COLUMN a INT"
         )
 
     # allow destructive
