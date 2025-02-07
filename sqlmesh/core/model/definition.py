@@ -1045,6 +1045,7 @@ class _Model(ModelMeta, frozen=True):
                 str(self.allow_partials),
                 gen(self.session_properties_) if self.session_properties_ else None,
                 str(self.validate_query) if self.validate_query is not None else None,
+                *[gen(g) for g in self.grains],
             ]
 
             for audit_name, audit_args in sorted(self.audits, key=lambda a: a[0]):
