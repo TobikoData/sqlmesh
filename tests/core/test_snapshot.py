@@ -954,7 +954,7 @@ def test_table_name(snapshot: Snapshot, make_snapshot: t.Callable):
     assert snapshot.table_name(is_deployable=True) == "sqlmesh__default.name__3078928823"
     assert snapshot.table_name(is_deployable=False) == "sqlmesh__default.name__3078928823__temp"
 
-    assert not snapshot.temp_version
+    assert not snapshot.dev_version
 
     # Mimic an indirect non-breaking change.
     previous_data_version = snapshot.data_version
@@ -967,7 +967,7 @@ def test_table_name(snapshot: Snapshot, make_snapshot: t.Callable):
     assert snapshot.table_name(is_deployable=True) == "sqlmesh__default.name__3078928823"
     # Indirect non-breaking snapshots reuse the dev table as well.
     assert snapshot.table_name(is_deployable=False) == "sqlmesh__default.name__3078928823__temp"
-    assert snapshot.temp_version
+    assert snapshot.dev_version
 
     # Mimic a direct forward-only change.
     snapshot.fingerprint = SnapshotFingerprint(
@@ -1006,10 +1006,10 @@ def test_table_name_view(make_snapshot: t.Callable):
     assert snapshot.table_name(is_deployable=True) == f"sqlmesh__default.name__{snapshot.version}"
     assert (
         snapshot.table_name(is_deployable=False)
-        == f"sqlmesh__default.name__{snapshot.temp_version_get_or_generate()}__temp"
+        == f"sqlmesh__default.name__{snapshot.dev_version_get_or_generate()}__temp"
     )
 
-    assert not snapshot.temp_version
+    assert not snapshot.dev_version
 
     # Mimic an indirect non-breaking change.
     new_snapshot = make_snapshot(SqlModel(name="name", query=parse_one("select 2"), kind="VIEW"))
@@ -1022,11 +1022,11 @@ def test_table_name_view(make_snapshot: t.Callable):
     # Indirect non-breaking view snapshots should not reuse the dev table.
     assert (
         new_snapshot.table_name(is_deployable=False)
-        == f"sqlmesh__default.name__{new_snapshot.temp_version_get_or_generate()}__temp"
+        == f"sqlmesh__default.name__{new_snapshot.dev_version_get_or_generate()}__temp"
     )
-    assert not new_snapshot.temp_version
+    assert not new_snapshot.dev_version
     assert new_snapshot.version == snapshot.version
-    assert new_snapshot.temp_version_get_or_generate() != snapshot.temp_version_get_or_generate()
+    assert new_snapshot.dev_version_get_or_generate() != snapshot.dev_version_get_or_generate()
 
 
 def test_categorize_change_sql(make_snapshot):
