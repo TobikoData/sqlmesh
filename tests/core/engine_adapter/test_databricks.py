@@ -103,7 +103,7 @@ def test_set_current_catalog(mocker: MockFixture, make_mocked_engine_adapter: t.
     adapter = make_mocked_engine_adapter(DatabricksEngineAdapter, default_catalog="test_catalog")
     adapter.set_current_catalog("test_catalog2")
 
-    assert to_sql_calls(adapter) == ["USE CATALOG `test_catalog`", "USE CATALOG `test_catalog2`"]
+    assert to_sql_calls(adapter) == ["USE CATALOG `test_catalog2`"]
 
 
 def test_get_current_catalog(mocker: MockFixture, make_mocked_engine_adapter: t.Callable):

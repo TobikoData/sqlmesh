@@ -21,7 +21,7 @@ from sqlmesh.engines.spark.db_api.spark_session import connection, SparkSessionC
 from sqlmesh.utils.errors import SQLMeshError, MissingDefaultCatalogError
 
 if t.TYPE_CHECKING:
-    from sqlmesh.core._typing import SchemaName, TableName
+    from sqlmesh.core._typing import SchemaName, TableName, SessionProperties
     from sqlmesh.core.engine_adapter._typing import DF, PySparkSession, Query
 
 logger = logging.getLogger(__name__)
@@ -48,11 +48,9 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
         },
     )
 
-    def __init__(self, *args: t.Any, **kwargs: t.Any):
+    def __init__(self, *args: t.Any, **kwargs: t.Any) -> None:
         super().__init__(*args, **kwargs)
         self._set_spark_engine_adapter_if_needed()
-        # Set the default catalog for both connections to make sure they are aligned
-        self.set_current_catalog(self.default_catalog)  # type: ignore
 
     @classmethod
     def can_access_spark_session(cls, disable_spark_session: bool) -> bool:
@@ -121,7 +119,8 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
             DatabricksSession.builder.remote(**connect_kwargs).userAgent("sqlmesh").getOrCreate()
         )
         self._spark_engine_adapter = SparkEngineAdapter(
-            partial(connection, spark=spark, catalog=catalog)
+            partial(connection, spark=spark, catalog=catalog),
+            default_catalog=catalog,
         )
 
     @property
@@ -148,6 +147,11 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
     @property
     def catalog_support(self) -> CatalogSupport:
         return CatalogSupport.FULL_SUPPORT
+
+    def _begin_session(self, properties: SessionProperties) -> t.Any:
+        """Begin a new session."""
+        # Align the different possible connectors to a single catalog
+        self.set_current_catalog(self.default_catalog)  # type: ignore
 
     def _end_session(self) -> None:
         self._connection_pool.set_attribute("use_spark_engine_adapter", False)
@@ -181,7 +185,7 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
         """Fetches a DataFrame that can be either Pandas or PySpark from the cursor"""
         if self.is_spark_session_connection:
             return super()._fetch_native_df(query, quote_identifiers=quote_identifiers)
-        if self._use_spark_session:
+        if self._spark_engine_adapter:
             return self._spark_engine_adapter._fetch_native_df(  # type: ignore
                 query, quote_identifiers=quote_identifiers
             )
@@ -211,6 +215,8 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
                 pyspark_catalog = self._spark_engine_adapter.get_current_catalog()
             except (Py4JError, SparkConnectGrpcException):
                 pass
+        elif self.is_spark_session_connection:
+            pyspark_catalog = self.connection.spark.catalog.currentCatalog()
         if not self.is_spark_session_connection:
             result = self.fetchone(exp.select(self.CURRENT_CATALOG_EXPRESSION))
             sql_connector_catalog = result[0] if result else None
@@ -221,19 +227,25 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
         return pyspark_catalog or sql_connector_catalog
 
     def set_current_catalog(self, catalog_name: str) -> None:
-        # Since Databricks splits commands across the Dataframe API and the SQL Connector
-        # (depending if databricks-connect is installed and a Dataframe is used) we need to ensure both
-        # are set to the same catalog since they maintain their default catalog separately
-        self.execute(exp.Use(this=exp.to_identifier(catalog_name), kind="CATALOG"))
-        if self._use_spark_session:
+        def _set_spark_session_current_catalog(spark: PySparkSession) -> None:
             from py4j.protocol import Py4JError
             from pyspark.errors.exceptions.connect import SparkConnectGrpcException
 
             try:
                 # Note: Spark 3.4+ Only API
-                self._spark_engine_adapter.set_current_catalog(catalog_name)  # type: ignore
+                spark.catalog.setCurrentCatalog(catalog_name)
             except (Py4JError, SparkConnectGrpcException):
                 pass
+
+        # Since Databricks splits commands across the Dataframe API and the SQL Connector
+        # (depending if databricks-connect is installed and a Dataframe is used) we need to ensure both
+        # are set to the same catalog since they maintain their default catalog separately
+        self.execute(exp.Use(this=exp.to_identifier(catalog_name), kind="CATALOG"))
+        if self.is_spark_session_connection:
+            _set_spark_session_current_catalog(self.connection.spark)
+
+        if self._spark_engine_adapter:
+            _set_spark_session_current_catalog(self._spark_engine_adapter.spark)
 
     def _get_data_objects(
         self, schema_name: SchemaName, object_names: t.Optional[t.Set[str]] = None
