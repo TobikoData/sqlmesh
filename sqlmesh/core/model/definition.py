@@ -2409,7 +2409,7 @@ def render_meta_fields(
             if rendered_expr is None:
                 raise SQLMeshError(
                     f"Failed to render model: `{fields['name']}` at `{path}`\n"
-                    f"\tExpected rendering `{expression.sql(dialect=dialect)}` to return an expression"
+                    f"Expected rendering `{expression.sql(dialect=dialect)}` to return an expression"
                 )
             if len(rendered_expr) != 1:
                 raise SQLMeshError(
@@ -2424,8 +2424,7 @@ def render_meta_fields(
         field = field_info.alias or field_name
         if field not in RUNTIME_RENDERED_MODEL_FIELDS and (field_value := fields.get(field)):
             if isinstance(field_value, dict):
-                dict_keys = list(field_value.keys())
-                for key in dict_keys:
+                for key in list(field_value.keys()):
                     if key not in RUNTIME_RENDERED_MODEL_FIELDS:
                         fields[field][key] = render_field_value(field_value[key])
             elif isinstance(field_value, list):
