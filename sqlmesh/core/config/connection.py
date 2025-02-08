@@ -1248,6 +1248,7 @@ class MySQLConnectionConfig(ConnectionConfig):
 
 class MSSQLConnectionConfig(ConnectionConfig):
     host: str
+    authentication: t.Optional[str] = None
     user: t.Optional[str] = None
     password: t.Optional[str] = None
     database: t.Optional[str] = ""
@@ -1270,6 +1271,7 @@ class MSSQLConnectionConfig(ConnectionConfig):
     def _connection_kwargs_keys(self) -> t.Set[str]:
         return {
             "host",
+            "authentication",
             "user",
             "password",
             "database",
@@ -1289,9 +1291,25 @@ class MSSQLConnectionConfig(ConnectionConfig):
 
     @property
     def _connection_factory(self) -> t.Callable:
-        import pymssql
-
-        return pymssql.connect
+        import pyodbc
+        
+        def create_connection(**kwargs) -> pyodbc.Connection:
+            conn_str = (
+                "Driver={ODBC Driver 18 for SQL Server};"
+                f"Server={kwargs.get('host')};"
+                f"UID={kwargs.get('user')};"
+                f"PWD={kwargs.get('password')};"
+                f"Database={kwargs.get('database')};"
+                "Encrypt=yes;"
+                "TrustServerCertificate=yes;"
+            )
+            
+            if kwargs.get('authentication') != None:
+                conn_str = conn_str + f"Authentication={kwargs.get('authentication')};"
+            
+            return pyodbc.connect(conn_str, autocommit=kwargs.get('autocommit', False))
+            
+        return create_connection
 
     @property
     def _extra_engine_config(self) -> t.Dict[str, t.Any]:
