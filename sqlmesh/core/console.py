@@ -1297,12 +1297,12 @@ class TerminalConsole(Console):
                 columns: dict[str, list[str]] = {}
                 source_prefix, source_name = (
                     (f"{source_name}__", source_name)
-                    if source_name != row_diff.source
+                    if source_name.lower() != row_diff.source.lower()
                     else ("s__", "SOURCE")
                 )
                 target_prefix, target_name = (
                     (f"{target_name}__", target_name)
-                    if target_name != row_diff.target
+                    if target_name.lower() != row_diff.target.lower()
                     else ("t__", "TARGET")
                 )
 
