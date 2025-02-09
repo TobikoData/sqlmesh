@@ -151,11 +151,11 @@ Options:
 ```
 Usage: sqlmesh environments [OPTIONS]
 
-  Prints the list of SQLMesh environments with its expiration datetime.
+  Prints the list of SQLMesh environments with its expiry datetime.
 
 Options:
-  -e, --expiry-ds  Prints the expiration datetime of the environments.
-  --help           Show this message and exit.
+  -e, --show-expiry  Prints the expiry datetime of the environments.
+  --help             Show this message and exit.
 ```
 
 ## evaluate

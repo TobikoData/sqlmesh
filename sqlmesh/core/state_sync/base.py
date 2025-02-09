@@ -136,6 +136,14 @@ class StateReader(abc.ABC):
         """
 
     @abc.abstractmethod
+    def get_environment_names(self, get_expiry_ts: bool = True) -> t.List[t.Tuple[str]] | t.List[t.Tuple[str, int]]:
+        """Fetches all environment names along with expiry datetime if get_expiry_ts is True.
+
+        Returns:
+            A list of all environment names along with expiry datetime if get_expiry_ts is True.
+        """
+
+    @abc.abstractmethod
     def max_interval_end_per_model(
         self,
         environment: str,

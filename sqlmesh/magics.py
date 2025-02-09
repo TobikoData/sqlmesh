@@ -1017,22 +1017,11 @@ class SQLMeshMagics(Magics):
     @line_magic
     @pass_sqlmesh_context
     def environments(self, context: Context, line: str) -> None:
-        """Prints the list of SQLMesh environments with its expiration datetime."""
+        """Prints the list of SQLMesh environments with its expiry datetime."""
         args = parse_argstring(self.environments, line)
-        environments = {e.name: e.expiration_ts for e in context.state_sync.get_environments()}
-        environment_names = list(environments.keys())
-        if args.expiry_ds:
-            max_width = len(max(environment_names, key=len))
-            context.console.log_status_update(
-                "\n".join(
-                    f"{k:<{max_width}} {date.time_like_to_str(v)}"
-                    if v
-                    else f"{k:<{max_width}} no-expiry"
-                    for k, v in environments.items()
-                ),
-            )
-            return
-        context.console.log_status_update("\n".join(environment_names))
+        environment_names = context.state_sync.get_environment_names(get_expiry_ts=args.show_expiry)
+        output = [f"{name} - {date.time_like_to_str(ts)}" for name, ts in environment_names] if args.show_expiry else [name[0] for name in environment_names]
+        context.console.log_status_update(f"Number of SQLMesh environments are: {len(output)}\n{"\n".join(output)}")
 
 
 def register_magics() -> None:

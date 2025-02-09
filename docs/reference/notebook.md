@@ -245,10 +245,10 @@ options:
 
 #### environments
 ```
-%environments [--expiry-ds]
-Prints the list of SQLMesh environments with its expiration datetime.
+%environments [--show-expiry]
+Prints the list of SQLMesh environments with its expiry datetime.
 options:
-  --expiry-ds, -e  If set will print the expiration datetime of the environments
+  --show-expiry, -e  If set will print the expiry datetime of the environments
 ```
 
 #### fetchdf

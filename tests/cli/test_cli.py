@@ -1020,7 +1020,7 @@ def test_environments(runner, tmp_path):
         ],
     )
     assert result.exit_code == 0
-    assert result.output == "dev\ndev2\n"
+    assert result.output == "Number of SQLMesh environments are: 2\ndev\ndev2\n"
 
     result = runner.invoke(
         cli,
@@ -1030,9 +1030,9 @@ def test_environments(runner, tmp_path):
             "--paths",
             tmp_path,
             "environments",
-            "--expiry-ds",
+            "--show-expiry",
         ],
     )
     assert result.exit_code == 0
     ttl = time_like_to_str(to_datetime(now_ds()) + timedelta(days=7))
-    assert result.output == f"dev  {ttl}\ndev2 {ttl}\n"
+    assert result.output == f"Number of SQLMesh environments are: 2\ndev - {ttl}\ndev2 - {ttl}\n"

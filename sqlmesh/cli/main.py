@@ -971,25 +971,17 @@ def dlt_refresh(
 @cli.command("environments")
 @click.option(
     "-e",
-    "--expiry-ds",
+    "--show-expiry",
     is_flag=True,
-    help="Prints the expiration datetime of the environments.",
+    help="Prints the expiry datetime of the environments.",
     default=False,
 )
-@click.pass_obj
+@click.pass_context
 @error_handler
 @cli_analytics
-def environments(obj: Context, expiry_ds: bool) -> None:
-    """Prints the list of SQLMesh environments with its expiration datetime."""
-    environments = {e.name: e.expiration_ts for e in obj.state_sync.get_environments()}
-    environment_names = list(environments.keys())
-    if expiry_ds:
-        max_width = len(max(environment_names, key=len))
-        print(
-            "\n".join(
-                f"{k:<{max_width}} {time_like_to_str(v)}" if v else f"{k:<{max_width}} no-expiry"
-                for k, v in environments.items()
-            ),
-        )
-        return
-    print("\n".join(environment_names))
+def environments(ctx: click.Context, show_expiry: bool) -> None:
+    """Prints the list of SQLMesh environments with its expiry datetime."""
+    context = ctx.obj
+    environment_names = context.state_sync.get_environment_names(get_expiry_ts=show_expiry)
+    output = [f"{name} - {time_like_to_str(ts)}" for name, ts in environment_names] if show_expiry else [name[0] for name in environment_names]
+    context.console.log_status_update(f"Number of SQLMesh environments are: {len(output)}\n{"\n".join(output)}")
