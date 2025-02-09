@@ -15,7 +15,7 @@ from sqlmesh.core.analytics import cli_analytics
 from sqlmesh.core.console import configure_console, get_console
 from sqlmesh.core.config import load_configs
 from sqlmesh.core.context import Context
-from sqlmesh.utils.date import TimeLike, time_like_to_str
+from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.errors import MissingDependencyError
 
 logger = logging.getLogger(__name__)
@@ -976,12 +976,9 @@ def dlt_refresh(
     help="Prints the expiry datetime of the environments.",
     default=False,
 )
-@click.pass_context
+@click.pass_obj
 @error_handler
 @cli_analytics
-def environments(ctx: click.Context, show_expiry: bool) -> None:
+def environments(obj: Context, show_expiry: bool) -> None:
     """Prints the list of SQLMesh environments with its expiry datetime."""
-    context = ctx.obj
-    environment_names = context.state_sync.get_environment_names(get_expiry_ts=show_expiry)
-    output = [f"{name} - {time_like_to_str(ts)}" for name, ts in environment_names] if show_expiry else [name[0] for name in environment_names]
-    context.console.log_status_update(f"Number of SQLMesh environments are: {len(output)}\n{"\n".join(output)}")
+    obj.print_environment_names(show_expiry=show_expiry)

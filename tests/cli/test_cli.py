@@ -990,6 +990,19 @@ def test_environments(runner, tmp_path):
         ],
     )
 
+    result = runner.invoke(
+        cli,
+        [
+            "--log-file-dir",
+            tmp_path,
+            "--paths",
+            tmp_path,
+            "environments",
+        ],
+    )
+    assert result.exit_code == 0
+    assert result.output == "Number of SQLMesh environments are: 1\ndev\n"
+
     # # create dev2 environment from dev environment
     # # Input: `y` to apply and virtual update
     runner.invoke(
@@ -1035,3 +1048,37 @@ def test_environments(runner, tmp_path):
     assert result.exit_code == 0
     ttl = time_like_to_str(to_datetime(now_ds()) + timedelta(days=7))
     assert result.output == f"Number of SQLMesh environments are: 2\ndev - {ttl}\ndev2 - {ttl}\n"
+
+    # Example project models have start dates, so there are no date prompts
+    # for the `prod` environment.
+    # Input: `y` to apply and backfill
+    runner.invoke(cli, ["--log-file-dir", tmp_path, "--paths", tmp_path, "plan"], input="y\n")
+    result = runner.invoke(
+        cli,
+        [
+            "--log-file-dir",
+            tmp_path,
+            "--paths",
+            tmp_path,
+            "environments",
+        ],
+    )
+    assert result.exit_code == 0
+    assert result.output == "Number of SQLMesh environments are: 3\ndev\ndev2\nprod\n"
+
+    result = runner.invoke(
+        cli,
+        [
+            "--log-file-dir",
+            tmp_path,
+            "--paths",
+            tmp_path,
+            "environments",
+            "--show-expiry",
+        ],
+    )
+    assert result.exit_code == 0
+    assert (
+        result.output
+        == f"Number of SQLMesh environments are: 3\ndev - {ttl}\ndev2 - {ttl}\nprod - No Expiry\n"
+    )

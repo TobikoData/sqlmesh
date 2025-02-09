@@ -733,14 +733,20 @@ class EngineAdapterStateSync(StateSync):
             self._environment_from_row(row) for row in self._fetchall(self._environments_query())
         ]
 
-    def get_environment_names(self, get_expiry_ts: bool = True) -> t.List[t.Tuple[str]] | t.List[t.Tuple[str, int]]:
+    def get_environment_names(
+        self, get_expiry_ts: bool = True
+    ) -> t.Optional[t.List[t.Tuple[str, ...]]]:
         """Fetches all environment names along with expiry datetime if get_expiry_ts is True.
 
         Returns:
             A list of all environment names along with expiry datetime if get_expiry_ts is True.
         """
         name_field = ["name"]
-        return self._fetchall(self._environments_query(required_fields=name_field if not get_expiry_ts else name_field + ["expiration_ts"]))
+        return self._fetchall(
+            self._environments_query(
+                required_fields=name_field if not get_expiry_ts else name_field + ["expiration_ts"]
+            ),
+        )
 
     def _environment_from_row(self, row: t.Tuple[str, ...]) -> Environment:
         return Environment(**{field: row[i] for i, field in enumerate(Environment.all_fields())})
@@ -751,9 +757,9 @@ class EngineAdapterStateSync(StateSync):
         lock_for_update: bool = False,
         required_fields: t.Optional[t.List[str]] = None,
     ) -> exp.Select:
-        required_fields = required_fields if required_fields else Environment.all_fields()
+        query_fields = required_fields if required_fields else Environment.all_fields()
         query = (
-            exp.select(*(exp.to_identifier(field) for field in required_fields))
+            exp.select(*(exp.to_identifier(field) for field in query_fields))
             .from_(self.environments_table)
             .where(where)
         )

@@ -29,7 +29,7 @@ from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import format_model_expressions, parse
 from sqlmesh.core.model import load_sql_based_model
 from sqlmesh.core.test import ModelTestMetadata, get_all_model_tests
-from sqlmesh.utils import date, sqlglot_dialects, yaml
+from sqlmesh.utils import sqlglot_dialects, yaml
 from sqlmesh.utils.errors import MagicError, MissingContextException, SQLMeshError
 
 logger = logging.getLogger(__name__)
@@ -1011,7 +1011,7 @@ class SQLMeshMagics(Magics):
 
     @magic_arguments()
     @argument(
-        "--expiry-ds",
+        "--show-expiry",
         "-e",
         action="store_true",
         help="Prints the expiration datetime of the environments.",
@@ -1021,9 +1021,7 @@ class SQLMeshMagics(Magics):
     def environments(self, context: Context, line: str) -> None:
         """Prints the list of SQLMesh environments with its expiry datetime."""
         args = parse_argstring(self.environments, line)
-        environment_names = context.state_sync.get_environment_names(get_expiry_ts=args.show_expiry)
-        output = [f"{name} - {date.time_like_to_str(ts)}" for name, ts in environment_names] if args.show_expiry else [name[0] for name in environment_names]
-        context.console.log_status_update(f"Number of SQLMesh environments are: {len(output)}\n{"\n".join(output)}")
+        context.print_environment_names(show_expiry=args.show_expiry)
 
 
 def register_magics() -> None:
