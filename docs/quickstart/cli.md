@@ -324,6 +324,7 @@ $ sqlmesh plan dev
 ======================================================================
 Successfully Ran 1 tests against duckdb
 ----------------------------------------------------------------------
+
 New environment `dev` will be created from `prod`
 
 Differences from the `prod` environment:
@@ -349,39 +350,36 @@ Models:
 Directly Modified: sqlmesh_example__dev.incremental_model (Non-breaking)
 └── Indirectly Modified Children:
     └── sqlmesh_example__dev.full_model (Indirect Non-breaking)
-Models needing backfill (missing dates):
-└── sqlmesh_example__dev.incremental_model: 2020-01-01 - 2023-05-31
-Enter the backfill start date (eg. '1 year', '2020-01-01') or blank to backfill from the beginning of history:
+Models needing backfill:
+└── sqlmesh_example__dev.incremental_model: [2020-01-01 - 2023-05-31]
+Apply - Backfill Tables [y/n]: y
 ```
 
-Line 5 of the output states that a new environment `dev` will be created from the existing `prod` environment.
+Line 6 of the output states that a new environment `dev` will be created from the existing `prod` environment.
 
-Lines 7-13 summarize the differences between the modified model and the `prod` environment, detecting that we directly modified `incremental_model` and that `full_model` was indirectly modified because it selects from the incremental model. Note that the model schemas are `sqlmesh_example__dev`, indicating that they are being created in the `dev` environment.
+Lines 8-14 summarize the differences between the modified model and the `prod` environment, detecting that we directly modified `incremental_model` and that `full_model` was indirectly modified because it selects from the incremental model. Note that the model schemas are `sqlmesh_example__dev`, indicating that they are being created in the `dev` environment.
 
-On line 27, we see that SQLMesh automatically classified the change as `Non-breaking` because it understood that the change was additive (added a column not used by `full_model`) and did not invalidate any data already in `prod`.
+On line 28, we see that SQLMesh automatically classified the change as `Non-breaking` because it understood that the change was additive (added a column not used by `full_model`) and did not invalidate any data already in `prod`.
 
-Hit `Enter` at the prompt to backfill data from our start date `2020-01-01`. Another prompt will appear asking for a backfill end date; hit `Enter` to backfill until now. Finally, enter `y` and press `Enter` to apply the plan and execute the backfill:
+Enter `y` at the prompt and press `Enter` to apply the plan and execute the backfill:
 
 ```bash linenums="1"
-Enter the backfill start date (eg. '1 year', '2020-01-01') or blank to backfill from the beginning of history:
-Enter the backfill end date (eg. '1 month ago', '2020-01-01') or blank to backfill up until now:
 Apply - Backfill Tables [y/n]: y
 Creating physical tables ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 2/2 • 0:00:00
 
-All model versions have been created successfully
+Model versions created successfully
 
 [1/1] sqlmesh_example__dev.incremental_model evaluated in 0.01s
 Evaluating models ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 1/1 • 0:00:00
 
-
-All model batches have been executed successfully
+Model batches executed successfully
 
 Virtually Updating 'dev' ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 0:00:00
 
-The target environment has been updated successfully
+Target environment updated successfully
 ```
 
-Line 8 of the output shows that SQLMesh applied the change and evaluated `sqlmesh_example__dev.incremental_model`.
+Line 6 of the output shows that SQLMesh applied the change and evaluated `sqlmesh_example__dev.incremental_model`.
 
 SQLMesh did not need to backfill anything for the `full_model` since the change was `Non-breaking`.
 
@@ -460,7 +458,7 @@ Directly Modified: sqlmesh_example.incremental_model (Non-breaking)
 Apply - Virtual Update [y/n]: y
 Virtually Updating 'prod' ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 0:00:00
 
-The target environment has been updated successfully
+Target environment updated successfully
 
 Virtual Update executed successfully
 ```

@@ -48,12 +48,15 @@ def _gen_config(
                 if isinstance(default_value, Enum):
                     default_value = default_value.value
                 elif not isinstance(default_value, PRIMITIVES):
-                    default_value = None
+                    default_value = ""
 
                 required = field.is_required() or field_name == "type"
-                option_str = (
-                    f"      {'# ' if not required else ''}{field_name}: {default_value or ''}\n"
-                )
+                option_str = f"      {'# ' if not required else ''}{field_name}: {default_value}\n"
+
+                # specify the DuckDB database field so quickstart runs out of the box
+                if engine == "duckdb" and field_name == "database":
+                    option_str = "      database: db.db\n"
+                    required = True
 
                 if required:
                     required_fields.append(option_str)
@@ -74,22 +77,22 @@ def _gen_config(
 
     default_configs = {
         ProjectTemplate.DEFAULT: f"""gateways:
-  dev:
+  {dialect}:
     connection:
 {connection_settings}
 
-default_gateway: dev
+default_gateway: {dialect}
 
 model_defaults:
   dialect: {dialect}
   start: {start or yesterday_ds()}
 """,
         ProjectTemplate.AIRFLOW: f"""gateways:
-  dev:
+  {dialect}:
     connection:
 {connection_settings}
 
-default_gateway: dev
+default_gateway: {dialect}
 
 default_scheduler:
   type: airflow

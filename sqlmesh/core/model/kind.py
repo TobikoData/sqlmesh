@@ -120,7 +120,7 @@ class ModelKindMixin:
 
     @property
     def is_materialized(self) -> bool:
-        return not (self.is_symbolic or self.is_view)
+        return self.model_kind_name is not None and not (self.is_symbolic or self.is_view)
 
     @property
     def only_execution_time(self) -> bool:
@@ -986,7 +986,7 @@ def _model_kind_validator(cls: t.Type, v: t.Any, info: t.Optional[ValidationInfo
     return create_model_kind(v, dialect, {})
 
 
-model_kind_validator = field_validator("kind", mode="before")(_model_kind_validator)
+model_kind_validator: t.Callable = field_validator("kind", mode="before")(_model_kind_validator)
 
 
 def _property(name: str, value: t.Any) -> exp.Property:

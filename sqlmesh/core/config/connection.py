@@ -76,11 +76,6 @@ class ConnectionConfig(abc.ABC, BaseConfig):
         return {}
 
     @property
-    def _cursor_kwargs(self) -> t.Optional[t.Dict[str, t.Any]]:
-        """Key-value arguments that will be passed during cursor construction."""
-        return None
-
-    @property
     def _cursor_init(self) -> t.Optional[t.Callable[[t.Any], None]]:
         """A function that is called to initialize the cursor"""
         return None
@@ -115,7 +110,6 @@ class ConnectionConfig(abc.ABC, BaseConfig):
         return self._engine_adapter(
             self._connection_factory_with_kwargs,
             multithreaded=self.concurrent_tasks > 1,
-            cursor_kwargs=self._cursor_kwargs,
             default_catalog=self.get_catalog(),
             cursor_init=self._cursor_init,
             register_comments=register_comments_override or self.register_comments,
@@ -623,6 +617,12 @@ class DatabricksConnectionConfig(ConnectionConfig):
 
     @model_validator(mode="before")
     def _databricks_connect_validator(cls, data: t.Any) -> t.Any:
+        # SQLQueryContextLogger will output any error SQL queries even if they are in a try/except block.
+        # Disabling this allows SQLMesh to determine what should be shown to the user.
+        # Ex: We describe a table to see if it exists and therefore that execution can fail but we don't need to show
+        # the user since it is expected if the table doesn't exist. Without this change the user would see the error.
+        logging.getLogger("SQLQueryContextLogger").setLevel(logging.CRITICAL)
+
         if not isinstance(data, dict):
             return data
 
@@ -640,10 +640,6 @@ class DatabricksConnectionConfig(ConnectionConfig):
             data.get("access_token"),
             data.get("auth_type"),
         )
-
-        if databricks_connect_use_serverless:
-            data["force_databricks_connect"] = True
-            data["disable_databricks_connect"] = False
 
         if (not server_hostname or not http_path or not access_token) and (
             not databricks_connect_use_serverless and not auth_type
@@ -666,11 +662,12 @@ class DatabricksConnectionConfig(ConnectionConfig):
                 data["databricks_connect_access_token"] = access_token
             if not data.get("databricks_connect_server_hostname"):
                 data["databricks_connect_server_hostname"] = f"https://{server_hostname}"
-            if not databricks_connect_use_serverless:
-                if not data.get("databricks_connect_cluster_id"):
-                    if t.TYPE_CHECKING:
-                        assert http_path is not None
-                    data["databricks_connect_cluster_id"] = http_path.split("/")[-1]
+            if not databricks_connect_use_serverless and not data.get(
+                "databricks_connect_cluster_id"
+            ):
+                if t.TYPE_CHECKING:
+                    assert http_path is not None
+                data["databricks_connect_cluster_id"] = http_path.split("/")[-1]
 
         if auth_type:
             from databricks.sql.auth.auth import AuthType
@@ -1208,7 +1205,9 @@ class MySQLConnectionConfig(ConnectionConfig):
     user: str
     password: str
     port: t.Optional[int] = None
+    database: t.Optional[str] = None
     charset: t.Optional[str] = None
+    collation: t.Optional[str] = None
     ssl_disabled: t.Optional[bool] = None
 
     concurrent_tasks: int = 4
@@ -1218,23 +1217,20 @@ class MySQLConnectionConfig(ConnectionConfig):
     type_: t.Literal["mysql"] = Field(alias="type", default="mysql")
 
     @property
-    def _cursor_kwargs(self) -> t.Optional[t.Dict[str, t.Any]]:
-        """Key-value arguments that will be passed during cursor construction."""
-        return {"buffered": True}
-
-    @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
         connection_keys = {
             "host",
             "user",
             "password",
-            "port",
-            "database",
         }
         if self.port is not None:
             connection_keys.add("port")
+        if self.database is not None:
+            connection_keys.add("database")
         if self.charset is not None:
             connection_keys.add("charset")
+        if self.collation is not None:
+            connection_keys.add("collation")
         if self.ssl_disabled is not None:
             connection_keys.add("ssl_disabled")
         return connection_keys
@@ -1245,7 +1241,7 @@ class MySQLConnectionConfig(ConnectionConfig):
 
     @property
     def _connection_factory(self) -> t.Callable:
-        from mysql.connector import connect
+        from pymysql import connect
 
         return connect
 
@@ -1776,7 +1772,7 @@ def _connection_config_validator(
     return parse_connection_config(v)
 
 
-connection_config_validator = field_validator(
+connection_config_validator: t.Callable = field_validator(
     "connection",
     "state_connection",
     "test_connection",

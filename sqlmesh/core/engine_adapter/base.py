@@ -43,7 +43,11 @@ from sqlmesh.core.schema_diff import SchemaDiffer
 from sqlmesh.utils import columns_to_types_all_known, random_id
 from sqlmesh.utils.connection_pool import create_connection_pool
 from sqlmesh.utils.date import TimeLike, make_inclusive, to_time_column
-from sqlmesh.utils.errors import SQLMeshError, UnsupportedCatalogOperationError
+from sqlmesh.utils.errors import (
+    SQLMeshError,
+    UnsupportedCatalogOperationError,
+    MissingDefaultCatalogError,
+)
 from sqlmesh.utils.pandas import columns_to_types_from_df
 
 if t.TYPE_CHECKING:
@@ -109,7 +113,6 @@ class EngineAdapter:
         dialect: str = "",
         sql_gen_kwargs: t.Optional[t.Dict[str, Dialect | bool | str]] = None,
         multithreaded: bool = False,
-        cursor_kwargs: t.Optional[t.Dict[str, t.Any]] = None,
         cursor_init: t.Optional[t.Callable[[t.Any], None]] = None,
         default_catalog: t.Optional[str] = None,
         execute_log_level: int = logging.DEBUG,
@@ -120,7 +123,7 @@ class EngineAdapter:
     ):
         self.dialect = dialect.lower() or self.DIALECT
         self._connection_pool = create_connection_pool(
-            connection_factory, multithreaded, cursor_kwargs=cursor_kwargs, cursor_init=cursor_init
+            connection_factory, multithreaded, cursor_init=cursor_init
         )
         self._sql_gen_kwargs = sql_gen_kwargs or {}
         self._default_catalog = default_catalog
@@ -186,7 +189,9 @@ class EngineAdapter:
             return None
         default_catalog = self._default_catalog or self.get_current_catalog()
         if not default_catalog:
-            raise SQLMeshError("Could not determine a default catalog despite it being supported.")
+            raise MissingDefaultCatalogError(
+                "Could not determine a default catalog despite it being supported."
+            )
         return default_catalog
 
     @property
@@ -2362,7 +2367,7 @@ class EngineAdapter:
             self.execute(self._build_create_comment_table_exp(table, table_comment, table_kind))
         except Exception:
             logger.warning(
-                f"Table comment for '{table.alias_or_name}' not registered - this may be due to limited permissions.",
+                f"Table comment for '{table.alias_or_name}' not registered - this may be due to limited permissions",
                 exc_info=True,
             )
 
@@ -2389,7 +2394,7 @@ class EngineAdapter:
                 self.execute(self._build_create_comment_column_exp(table, col, comment, table_kind))
             except Exception:
                 logger.warning(
-                    f"Column comments for column '{col}' in table '{table.alias_or_name}' not registered - this may be due to limited permissions.",
+                    f"Column comments for column '{col}' in table '{table.alias_or_name}' not registered - this may be due to limited permissions",
                     exc_info=True,
                 )
 

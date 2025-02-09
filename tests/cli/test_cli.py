@@ -2,7 +2,6 @@ import logging
 from contextlib import contextmanager
 from os import getcwd, path, remove
 from pathlib import Path
-from unittest.mock import patch
 import pytest
 from click.testing import CliRunner
 import time_machine
@@ -416,30 +415,28 @@ def test_plan_dev_bad_create_from(runner, tmp_path):
     update_incremental_model(tmp_path)
 
     # create dev2 environment from non-existent dev3
-    logger = logging.getLogger("sqlmesh.core.context_diff")
-    with patch.object(logger, "warning") as mock_logger:
-        result = runner.invoke(
-            cli,
-            [
-                "--log-file-dir",
-                tmp_path,
-                "--paths",
-                tmp_path,
-                "plan",
-                "dev2",
-                "--create-from",
-                "dev3",
-                "--no-prompts",
-                "--auto-apply",
-            ],
-        )
+    result = runner.invoke(
+        cli,
+        [
+            "--log-file-dir",
+            tmp_path,
+            "--paths",
+            tmp_path,
+            "plan",
+            "dev2",
+            "--create-from",
+            "dev3",
+            "--no-prompts",
+            "--auto-apply",
+        ],
+    )
 
-        assert result.exit_code == 0
-        assert_new_env(result, "dev2", "dev")
-        assert (
-            mock_logger.call_args[0][0]
-            == "The environment name 'dev3' was passed to the `plan` command's `--create-from` argument, but 'dev3' does not exist. Initializing new environment 'dev2' from scratch."
-        )
+    assert result.exit_code == 0
+    assert_new_env(result, "dev2", "dev")
+    assert (
+        "The environment name 'dev3' was passed to the `plan` command's `--create-from` argument, but 'dev3' does not exist. Initializing new environment 'dev2' from scratch."
+        in result.output.replace("\n", "")
+    )
 
 
 def test_plan_dev_no_prompts(runner, tmp_path):
@@ -779,6 +776,7 @@ def test_dlt_pipeline_errors(runner, tmp_path):
     assert "Error: Could not attach to pipeline" in result.output
 
 
+@time_machine.travel(FREEZE_TIME)
 def test_plan_dlt(runner, tmp_path):
     root_dir = path.abspath(getcwd())
     pipeline_path = root_dir + "/examples/sushi_dlt/sushi_pipeline.py"
@@ -793,12 +791,12 @@ def test_plan_dlt(runner, tmp_path):
     init_example_project(tmp_path, "duckdb", ProjectTemplate.DLT, "sushi")
 
     expected_config = f"""gateways:
-  dev:
+  duckdb:
     connection:
       type: duckdb
       database: {dataset_path}
 
-default_gateway: dev
+default_gateway: duckdb
 
 model_defaults:
   dialect: duckdb
@@ -950,20 +948,21 @@ WHERE
         remove(dataset_path)
 
 
-def test_init_project_dialects(runner, tmp_path):
+@time_machine.travel(FREEZE_TIME)
+def test_init_project_dialects(tmp_path):
     dialect_to_config = {
-        "redshift": "# concurrent_tasks: 4\n      # register_comments: True\n      # pre_ping: \n      # pretty_sql: \n      # user: \n      # password: \n      # database: \n      # host: \n      # port: \n      # source_address: \n      # unix_sock: \n      # ssl: \n      # sslmode: \n      # timeout: \n      # tcp_keepalive: \n      # application_name: \n      # preferred_role: \n      # principal_arn: \n      # credentials_provider: \n      # region: \n      # cluster_identifier: \n      # iam: \n      # is_serverless: \n      # serverless_acct_id: \n      # serverless_work_group: ",
-        "bigquery": "# concurrent_tasks: 1\n      # register_comments: True\n      # pre_ping: \n      # pretty_sql: \n      # method: oauth\n      # project: \n      # execution_project: \n      # quota_project: \n      # location: \n      # keyfile: \n      # keyfile_json: \n      # token: \n      # refresh_token: \n      # client_id: \n      # client_secret: \n      # token_uri: \n      # scopes: \n      # job_creation_timeout_seconds: \n      # job_execution_timeout_seconds: \n      # job_retries: 1\n      # job_retry_deadline_seconds: \n      # priority: \n      # maximum_bytes_billed: ",
-        "snowflake": "account: \n      # concurrent_tasks: 4\n      # register_comments: True\n      # pre_ping: \n      # pretty_sql: \n      # user: \n      # password: \n      # warehouse: \n      # database: \n      # role: \n      # authenticator: \n      # token: \n      # application: Tobiko_SQLMesh\n      # private_key: \n      # private_key_path: \n      # private_key_passphrase: \n      # session_parameters: ",
-        "databricks": "# concurrent_tasks: 1\n      # register_comments: True\n      # pre_ping: \n      # pretty_sql: \n      # server_hostname: \n      # http_path: \n      # access_token: \n      # auth_type: \n      # oauth_client_id: \n      # oauth_client_secret: \n      # catalog: \n      # http_headers: \n      # session_configuration: \n      # databricks_connect_server_hostname: \n      # databricks_connect_access_token: \n      # databricks_connect_cluster_id: \n      # databricks_connect_use_serverless: \n      # force_databricks_connect: \n      # disable_databricks_connect: \n      # disable_spark_session: ",
-        "postgres": "host: \n      user: \n      password: \n      port: \n      database: \n      # concurrent_tasks: 4\n      # register_comments: True\n      # pre_ping: True\n      # pretty_sql: \n      # keepalives_idle: \n      # connect_timeout: 10\n      # role: \n      # sslmode: ",
+        "redshift": "# concurrent_tasks: 4\n      # register_comments: True\n      # pre_ping: False\n      # pretty_sql: False\n      # user: \n      # password: \n      # database: \n      # host: \n      # port: \n      # source_address: \n      # unix_sock: \n      # ssl: \n      # sslmode: \n      # timeout: \n      # tcp_keepalive: \n      # application_name: \n      # preferred_role: \n      # principal_arn: \n      # credentials_provider: \n      # region: \n      # cluster_identifier: \n      # iam: \n      # is_serverless: \n      # serverless_acct_id: \n      # serverless_work_group: ",
+        "bigquery": "# concurrent_tasks: 1\n      # register_comments: True\n      # pre_ping: False\n      # pretty_sql: False\n      # method: oauth\n      # project: \n      # execution_project: \n      # quota_project: \n      # location: \n      # keyfile: \n      # keyfile_json: \n      # token: \n      # refresh_token: \n      # client_id: \n      # client_secret: \n      # token_uri: \n      # scopes: \n      # job_creation_timeout_seconds: \n      # job_execution_timeout_seconds: \n      # job_retries: 1\n      # job_retry_deadline_seconds: \n      # priority: \n      # maximum_bytes_billed: ",
+        "snowflake": "account: \n      # concurrent_tasks: 4\n      # register_comments: True\n      # pre_ping: False\n      # pretty_sql: False\n      # user: \n      # password: \n      # warehouse: \n      # database: \n      # role: \n      # authenticator: \n      # token: \n      # application: Tobiko_SQLMesh\n      # private_key: \n      # private_key_path: \n      # private_key_passphrase: \n      # session_parameters: ",
+        "databricks": "# concurrent_tasks: 1\n      # register_comments: True\n      # pre_ping: False\n      # pretty_sql: False\n      # server_hostname: \n      # http_path: \n      # access_token: \n      # auth_type: \n      # oauth_client_id: \n      # oauth_client_secret: \n      # catalog: \n      # http_headers: \n      # session_configuration: \n      # databricks_connect_server_hostname: \n      # databricks_connect_access_token: \n      # databricks_connect_cluster_id: \n      # databricks_connect_use_serverless: False\n      # force_databricks_connect: False\n      # disable_databricks_connect: False\n      # disable_spark_session: False",
+        "postgres": "host: \n      user: \n      password: \n      port: \n      database: \n      # concurrent_tasks: 4\n      # register_comments: True\n      # pre_ping: True\n      # pretty_sql: False\n      # keepalives_idle: \n      # connect_timeout: 10\n      # role: \n      # sslmode: ",
     }
 
     for dialect, expected_config in dialect_to_config.items():
         init_example_project(tmp_path, dialect=dialect)
 
-        config_start = f"gateways:\n  dev:\n    connection:\n      # For more information on configuring the connection to your execution engine, visit:\n      # https://sqlmesh.readthedocs.io/en/stable/reference/configuration/#connections\n      # https://sqlmesh.readthedocs.io/en/stable/integrations/engines/{dialect}/#connection-options\n      type: {dialect}\n      "
-        config_end = f"\n\n\ndefault_gateway: dev\n\nmodel_defaults:\n  dialect: {dialect}\n  start: {yesterday_ds()}\n"
+        config_start = f"gateways:\n  {dialect}:\n    connection:\n      # For more information on configuring the connection to your execution engine, visit:\n      # https://sqlmesh.readthedocs.io/en/stable/reference/configuration/#connections\n      # https://sqlmesh.readthedocs.io/en/stable/integrations/engines/{dialect}/#connection-options\n      type: {dialect}\n      "
+        config_end = f"\n\n\ndefault_gateway: {dialect}\n\nmodel_defaults:\n  dialect: {dialect}\n  start: {yesterday_ds()}\n"
 
         with open(tmp_path / "config.yaml") as file:
             config = file.read()

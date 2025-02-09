@@ -62,6 +62,15 @@ if t.TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+RUNTIME_RENDERED_MODEL_FIELDS = {
+    "audits",
+    "signals",
+    "description",
+    "cron",
+    "physical_properties",
+    "merge_filter",
+}
+
 
 class _Model(ModelMeta, frozen=True):
     """Model is the core abstraction for user defined datasets.
@@ -687,12 +696,22 @@ class _Model(ModelMeta, frozen=True):
                 f"Cannot diff model '{self.name} against a non-model node '{other.name}'"
             )
 
-        return d.text_diff(
+        text_diff = d.text_diff(
             self.render_definition(render_query=rendered),
             other.render_definition(render_query=rendered),
             self.dialect,
             other.dialect,
         ).strip()
+
+        if not text_diff and not rendered:
+            text_diff = d.text_diff(
+                self.render_definition(render_query=True),
+                other.render_definition(render_query=True),
+                self.dialect,
+                other.dialect,
+            ).strip()
+
+        return text_diff
 
     def set_time_format(self, default_time_format: str = c.DEFAULT_TIME_COLUMN_FORMAT) -> None:
         """Sets the default time format for a model.
@@ -1255,8 +1274,12 @@ class SqlModel(_Model):
             if query is None:
                 return None
 
+            unknown = exp.DataType.build("unknown")
+
             self._columns_to_types = {
-                select.output_name: select.type or exp.DataType.build("unknown")
+                # copy data type because it is used in the engine to build CTAS and other queries
+                # this can change the parent which will mess up the diffing algo
+                select.output_name: (select.type or unknown).copy()
                 for select in query.selects
             }
 
@@ -1351,9 +1374,16 @@ class SqlModel(_Model):
             # Can't determine if there's a breaking change if we can't render the query.
             return None
 
-        edits = diff(
-            previous_query, this_query, matchings=[(previous_query, this_query)], delta_only=True
-        )
+        if previous_query is this_query:
+            edits = []
+        else:
+            edits = diff(
+                previous_query,
+                this_query,
+                matchings=[(previous_query, this_query)],
+                delta_only=True,
+                copy=False,
+            )
         inserted_expressions = {e.expression for e in edits if isinstance(e, Insert)}
 
         for edit in edits:
@@ -1802,7 +1832,7 @@ def load_sql_based_model(
                 if kind_prop.name.lower() == "merge_filter":
                     unrendered_merge_filter = kind_prop
 
-    meta_renderer = _meta_renderer(
+    rendered_meta_exprs = render_expression(
         expression=meta,
         module_path=module_path,
         macros=macros,
@@ -1813,7 +1843,6 @@ def load_sql_based_model(
         default_catalog=default_catalog,
     )
 
-    rendered_meta_exprs = meta_renderer.render()
     if rendered_meta_exprs is None or len(rendered_meta_exprs) != 1:
         raise_config_error(
             f"Invalid MODEL statement:\n{meta.sql(dialect=dialect, pretty=True)}",
@@ -2003,21 +2032,6 @@ def create_python_model(
     # Also remove self-references that are found
 
     dialect = kwargs.get("dialect")
-    renderer_kwargs = {
-        "module_path": module_path,
-        "macros": macros,
-        "jinja_macros": jinja_macros,
-        "variables": variables,
-        "path": path,
-        "dialect": dialect,
-        "default_catalog": kwargs.get("default_catalog"),
-    }
-
-    name_renderer = _meta_renderer(
-        expression=d.parse_one(name, dialect=dialect),
-        **renderer_kwargs,  # type: ignore
-    )
-    name = t.cast(t.List[exp.Expression], name_renderer.render())[0].sql(dialect=dialect)
 
     dependencies_unspecified = depends_on is None
 
@@ -2029,15 +2043,21 @@ def create_python_model(
     if dependencies_unspecified:
         depends_on = parsed_depends_on - {name}
     else:
-        depends_on_renderer = _meta_renderer(
+        depends_on_rendered = render_expression(
             expression=exp.Array(
                 expressions=[d.parse_one(dep, dialect=dialect) for dep in depends_on or []]
             ),
-            **renderer_kwargs,  # type: ignore
+            module_path=module_path,
+            macros=macros,
+            jinja_macros=jinja_macros,
+            variables=variables,
+            path=path,
+            dialect=dialect,
+            default_catalog=kwargs.get("default_catalog"),
         )
         depends_on = {
             dep.sql(dialect=dialect)
-            for dep in t.cast(t.List[exp.Expression], depends_on_renderer.render())[0].expressions
+            for dep in t.cast(t.List[exp.Expression], depends_on_rendered)[0].expressions
         }
 
     variables = {k: v for k, v in (variables or {}).items() if k in referenced_variables}
@@ -2361,7 +2381,61 @@ def _refs_to_sql(values: t.Any) -> exp.Expression:
     return exp.Tuple(expressions=values)
 
 
-def _meta_renderer(
+def render_meta_fields(
+    fields: t.Dict[str, t.Any],
+    module_path: Path,
+    path: Path,
+    jinja_macros: t.Optional[JinjaMacroRegistry],
+    macros: t.Optional[MacroRegistry],
+    dialect: DialectType,
+    variables: t.Optional[t.Dict[str, t.Any]],
+    default_catalog: t.Optional[str],
+) -> t.Dict[str, t.Any]:
+    def render_field_value(value: t.Any) -> t.Any:
+        if isinstance(value, exp.Expression) or (
+            isinstance(value, str) and d.SQLMESH_MACRO_PREFIX in value
+        ):
+            expression = exp.maybe_parse(value, dialect=dialect)
+            rendered_expr = render_expression(
+                expression=expression,
+                module_path=module_path,
+                macros=macros,
+                jinja_macros=jinja_macros,
+                variables=variables,
+                path=path,
+                dialect=dialect,
+                default_catalog=default_catalog,
+            )
+            if rendered_expr is None:
+                raise SQLMeshError(
+                    f"Failed to render model attribute `{fields['name']}` at `{path}`\n"
+                    f"'{expression.sql(dialect=dialect)}' must return an expression"
+                )
+            if len(rendered_expr) != 1:
+                raise SQLMeshError(
+                    f"Failed to render model attribute `{fields['name']}` at `{path}`.\n"
+                    f"`{expression.sql(dialect=dialect)}` must return one result, but got {len(rendered_expr)}"
+                )
+            return rendered_expr[0]
+
+        return value
+
+    for field_name, field_info in ModelMeta.all_field_infos().items():
+        field = field_info.alias or field_name
+        if field not in RUNTIME_RENDERED_MODEL_FIELDS and (field_value := fields.get(field)):
+            if isinstance(field_value, dict):
+                for key in list(field_value.keys()):
+                    if key not in RUNTIME_RENDERED_MODEL_FIELDS:
+                        fields[field][key] = render_field_value(field_value[key])
+            elif isinstance(field_value, list):
+                fields[field] = [render_field_value(value) for value in field_value]
+            else:
+                fields[field] = render_field_value(field_value)
+
+    return fields
+
+
+def render_expression(
     expression: exp.Expression,
     module_path: Path,
     path: Path,
@@ -2370,7 +2444,7 @@ def _meta_renderer(
     dialect: DialectType = None,
     variables: t.Optional[t.Dict[str, t.Any]] = None,
     default_catalog: t.Optional[str] = None,
-) -> ExpressionRenderer:
+) -> t.Optional[t.List[exp.Expression]]:
     meta_python_env = make_python_env(
         expressions=expression,
         jinja_macro_references=None,
@@ -2389,7 +2463,7 @@ def _meta_renderer(
         default_catalog=default_catalog,
         quote_identifiers=False,
         normalize_identifiers=False,
-    )
+    ).render()
 
 
 META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {

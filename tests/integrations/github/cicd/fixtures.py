@@ -3,6 +3,7 @@ import typing as t
 import pytest
 from pytest_mock.plugin import MockerFixture
 
+from sqlmesh.core.console import set_console, MarkdownConsole
 from sqlmesh.integrations.github.cicd.config import GithubCICDBotConfig
 from sqlmesh.integrations.github.cicd.controller import (
     GithubController,
@@ -80,6 +81,7 @@ def make_controller(mocker: MockerFixture) -> t.Callable:
                 "sqlmesh.integrations.github.cicd.controller.GithubController.bot_config",
                 bot_config,
             )
+        set_console(MarkdownConsole())
         return GithubController(
             paths=["examples/sushi"],
             token="abc",

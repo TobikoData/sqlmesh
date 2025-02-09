@@ -24,7 +24,7 @@ from sqlmesh.cli.example_project import ProjectTemplate, init_example_project
 from sqlmesh.core import analytics
 from sqlmesh.core import constants as c
 from sqlmesh.core.config import load_configs
-from sqlmesh.core.console import get_console
+from sqlmesh.core.console import create_console, set_console, configure_console
 from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import format_model_expressions, parse
 from sqlmesh.core.model import load_sql_based_model
@@ -53,7 +53,9 @@ def pass_sqlmesh_context(func: t.Callable) -> t.Callable:
                 f"Context must be defined and initialized with one of these names: {', '.join(CONTEXT_VARIABLE_NAMES)}"
             )
         old_console = context.console
-        context.console = get_console(display=self.display)
+        new_console = create_console(display=self.display)
+        context.console = new_console
+        set_console(new_console)
         context.refresh()
 
         magic_name = func.__name__
@@ -81,6 +83,7 @@ def pass_sqlmesh_context(func: t.Callable) -> t.Callable:
         func(self, context, *args, **kwargs)
 
         context.console = old_console
+        set_console(old_console)
 
     return wrapper
 
@@ -128,9 +131,8 @@ class SQLMeshMagics(Magics):
         args = parse_argstring(self.context, line)
         configs = load_configs(args.config, Context.CONFIG_TYPE, args.paths)
         log_limit = list(configs.values())[0].log_limit
-        configure_logging(
-            args.debug, args.ignore_warnings, log_limit=log_limit, log_file_dir=args.log_file_dir
-        )
+        configure_logging(args.debug, log_limit=log_limit, log_file_dir=args.log_file_dir)
+        configure_console(ignore_warnings=args.ignore_warnings)
         try:
             context = Context(paths=args.paths, config=configs, gateway=args.gateway)
             self._shell.user_ns["context"] = context

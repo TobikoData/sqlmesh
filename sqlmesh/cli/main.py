@@ -12,6 +12,7 @@ from sqlmesh.cli import error_handler
 from sqlmesh.cli import options as opt
 from sqlmesh.cli.example_project import ProjectTemplate, init_example_project
 from sqlmesh.core.analytics import cli_analytics
+from sqlmesh.core.console import configure_console, get_console
 from sqlmesh.core.config import load_configs
 from sqlmesh.core.context import Context
 from sqlmesh.utils.date import TimeLike, time_like_to_str
@@ -91,9 +92,8 @@ def cli(
 
     configs = load_configs(config, Context.CONFIG_TYPE, paths)
     log_limit = list(configs.values())[0].log_limit
-    configure_logging(
-        debug, ignore_warnings, log_to_stdout, log_limit=log_limit, log_file_dir=log_file_dir
-    )
+    configure_logging(debug, log_to_stdout, log_limit=log_limit, log_file_dir=log_file_dir)
+    configure_console(ignore_warnings=ignore_warnings)
 
     try:
         context = Context(
@@ -433,7 +433,7 @@ def plan(
     select_models = kwargs.pop("select_model") or None
     allow_destructive_models = kwargs.pop("allow_destructive_model") or None
     backfill_models = kwargs.pop("backfill_model") or None
-    context.console.verbose = verbose
+    setattr(get_console(), "verbose", verbose)
     context.plan(
         environment,
         restate_models=restate_models,
