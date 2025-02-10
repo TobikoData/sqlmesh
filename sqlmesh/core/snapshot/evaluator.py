@@ -461,9 +461,6 @@ class SnapshotEvaluator:
         """
         deployability_index = deployability_index or DeployabilityIndex.all_deployable()
         adapter = self._get_adapter(snapshot.model_gateway)
-        if not deployability_index.is_deployable(snapshot) and not adapter.SUPPORTS_CLONING:
-            # We can't audit a temporary table.
-            return []
 
         if not snapshot.version:
             raise ConfigError(
@@ -491,10 +488,24 @@ class SnapshotEvaluator:
 
         audits_with_args = snapshot.node.audits_with_args
 
+        force_non_blocking = False
+
         if audits_with_args:
             logger.info("Auditing snapshot %s", snapshot.snapshot_id)
 
+            if not deployability_index.is_deployable(snapshot) and not adapter.SUPPORTS_CLONING:
+                # For dev preview tables that aren't based on clones of the production table, only a subset of the data is typically available
+                # However, users still expect audits to run anwyay. Some audits (such as row count) are practically guaranteed to fail
+                # when run on only a subset of data, so we switch all audits to non blocking and the user can decide if they still want to proceed
+                force_non_blocking = True
+
         for audit, audit_args in audits_with_args:
+            if force_non_blocking:
+                # remove any blocking indicator on the model itself
+                audit_args.pop("blocking", None)
+                # so that we can fall back to the audit's setting, which we override to blocking: False
+                audit = audit.model_copy(update={"blocking": False})
+
             results.append(
                 self._audit(
                     audit=audit,

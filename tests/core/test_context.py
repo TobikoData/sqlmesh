@@ -1307,3 +1307,71 @@ def test_catalog_name_needs_to_be_quoted():
     context.upsert_model(load_sql_based_model(parsed_model, default_catalog='"foo--bar"'))
     context.plan(auto_apply=True, no_prompts=True)
     assert context.fetchdf('select * from "foo--bar".db.x').to_dict() == {"c": {0: 1}}
+
+
+def test_plan_runs_audits_on_dev_previews(sushi_context: Context, capsys, caplog):
+    sushi_context.console = create_console()
+
+    test_model = """
+    MODEL (
+        name sushi.test_audit_model,
+        kind INCREMENTAL_BY_TIME_RANGE (
+            time_column event_date,
+            forward_only true
+        ),
+        audits (
+            number_of_rows(threshold := 10),
+            not_null(columns := id),
+            at_least_one_non_blocking(column := waiter_id)
+        )
+    );
+
+    SELECT * FROM sushi.orders WHERE event_date BETWEEN @start_ts AND @end_ts
+    """
+
+    sushi_context.upsert_model(
+        load_sql_based_model(parse(test_model), default_catalog=sushi_context.default_catalog)
+    )
+    plan = sushi_context.plan(auto_apply=True)
+
+    assert plan.new_snapshots[0].name == '"memory"."sushi"."test_audit_model"'
+    assert plan.deployability_index.is_deployable(plan.new_snapshots[0])
+
+    # now, we mutate the model and run a plan in dev to create a dev preview
+    test_model = """
+    MODEL (
+        name sushi.test_audit_model,
+        kind INCREMENTAL_BY_TIME_RANGE (
+            time_column event_date,
+            forward_only true
+        ),
+        audits (
+            not_null(columns := new_col),
+            at_least_one_non_blocking(column := new_col)
+        )
+    );
+
+    SELECT *, null as new_col FROM sushi.orders WHERE event_date BETWEEN @start_ts AND @end_ts
+    """
+
+    sushi_context.upsert_model(
+        load_sql_based_model(parse(test_model), default_catalog=sushi_context.default_catalog)
+    )
+
+    capsys.readouterr()  # clear output buffer
+    plan = sushi_context.plan(environment="dev", auto_apply=True)
+
+    assert len(plan.new_snapshots) == 1
+    dev_preview = plan.new_snapshots[0]
+    assert dev_preview.name == '"memory"."sushi"."test_audit_model"'
+    assert dev_preview.is_forward_only
+    assert not plan.deployability_index.is_deployable(
+        dev_preview
+    )  # if something is not deployable to prod, then its by definiton a dev preview
+
+    # we only see audit results if they fail
+    stdout = capsys.readouterr().out
+    log = caplog.text
+    assert "Audit 'not_null' for model 'sushi.test_audit_model' failed" in log
+    assert "Audit is non-blocking so proceeding with execution" in log
+    assert "Target environment updated successfully" in stdout
