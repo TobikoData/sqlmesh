@@ -601,6 +601,28 @@ class SnapshotEvaluator:
         # If there are no existing intervals yet; only consider this a first insert for the first snapshot in the batch
         is_first_insert = not _intervals(snapshot, deployability_index) and batch_index == 0
 
+        from sqlmesh.core.context import ExecutionContext
+
+        common_render_kwargs = dict(
+            start=start,
+            end=end,
+            execution_time=execution_time,
+            snapshot=snapshot,
+            runtime_stage=RuntimeStage.EVALUATING,
+            **kwargs,
+        )
+
+        render_statements_kwargs = dict(
+            engine_adapter=adapter,
+            snapshots=snapshots,
+            deployability_index=deployability_index,
+            **common_render_kwargs,
+        )
+
+        rendered_physical_properties = snapshot.model.render_physical_properties(
+            **render_statements_kwargs
+        )
+
         def apply(query_or_df: QueryOrDF, index: int = 0) -> None:
             if index > 0:
                 evaluation_strategy.append(
@@ -614,6 +636,7 @@ class SnapshotEvaluator:
                     start=start,
                     end=end,
                     execution_time=execution_time,
+                    physical_properties=rendered_physical_properties,
                 )
             else:
                 logger.info(
@@ -634,25 +657,8 @@ class SnapshotEvaluator:
                     start=start,
                     end=end,
                     execution_time=execution_time,
+                    physical_properties=rendered_physical_properties,
                 )
-
-        from sqlmesh.core.context import ExecutionContext
-
-        common_render_kwargs = dict(
-            start=start,
-            end=end,
-            execution_time=execution_time,
-            snapshot=snapshot,
-            runtime_stage=RuntimeStage.EVALUATING,
-            **kwargs,
-        )
-
-        render_statements_kwargs = dict(
-            engine_adapter=adapter,
-            snapshots=snapshots,
-            deployability_index=deployability_index,
-            **common_render_kwargs,
-        )
 
         with adapter.transaction(), adapter.session(snapshot.model.session_properties):
             wap_id: t.Optional[str] = None
@@ -765,6 +771,9 @@ class SnapshotEvaluator:
 
         with adapter.transaction(), adapter.session(snapshot.model.session_properties):
             adapter.execute(snapshot.model.render_pre_statements(**pre_post_render_kwargs))
+            rendered_physical_properties = snapshot.model.render_physical_properties(
+                **create_render_kwargs
+            )
 
             if (
                 snapshot.is_forward_only
@@ -792,6 +801,7 @@ class SnapshotEvaluator:
                     ),
                     is_snapshot_deployable=is_snapshot_deployable,
                     is_snapshot_representative=is_snapshot_representative,
+                    physical_properties=rendered_physical_properties,
                 )
                 try:
                     adapter.clone_table(target_table_name, snapshot.table_name(), replace=True)
@@ -831,6 +841,7 @@ class SnapshotEvaluator:
                         is_snapshot_deployable=is_snapshot_deployable,
                         is_snapshot_representative=is_snapshot_representative,
                         dry_run=dry_run,
+                        physical_properties=rendered_physical_properties,
                     )
 
             adapter.execute(snapshot.model.render_post_statements(**pre_post_render_kwargs))
@@ -894,6 +905,7 @@ class SnapshotEvaluator:
                     is_snapshot_deployable=True,
                     is_snapshot_representative=True,
                     dry_run=False,
+                    physical_properties=snapshot.model.render_physical_properties(**render_kwargs),
                 )
                 adapter.execute(snapshot.model.render_post_statements(**render_kwargs))
 
@@ -1217,7 +1229,9 @@ class EvaluationStrategy(abc.ABC):
             view_name: The name of the target view in the virtual layer.
         """
 
-    def _replace_query_for_model(self, model: Model, name: str, query_or_df: QueryOrDF) -> None:
+    def _replace_query_for_model(
+        self, model: Model, name: str, query_or_df: QueryOrDF, **kwargs: t.Any
+    ) -> None:
         """Replaces the table for the given model.
 
         Args:
@@ -1239,7 +1253,7 @@ class EvaluationStrategy(abc.ABC):
             partitioned_by=model.partitioned_by,
             partition_interval_unit=model.partition_interval_unit,
             clustered_by=model.clustered_by,
-            table_properties=model.physical_properties,
+            table_properties=kwargs.get("physical_properties", model.physical_properties),
             table_description=model.description,
             column_descriptions=model.column_descriptions,
             columns_to_types=columns_to_types,
@@ -1358,6 +1372,7 @@ class MaterializableStrategy(PromotableStrategy):
         **kwargs: t.Any,
     ) -> None:
         ctas_query = model.ctas_query(**render_kwargs)
+        physical_properties = kwargs.get("physical_properties", model.physical_properties)
 
         logger.info("Creating table '%s'", table_name)
         if model.annotated:
@@ -1369,7 +1384,7 @@ class MaterializableStrategy(PromotableStrategy):
                 partitioned_by=model.partitioned_by,
                 partition_interval_unit=model.partition_interval_unit,
                 clustered_by=model.clustered_by,
-                table_properties=model.physical_properties,
+                table_properties=physical_properties,
                 table_description=model.description if is_table_deployable else None,
                 column_descriptions=model.column_descriptions if is_table_deployable else None,
             )
@@ -1393,7 +1408,7 @@ class MaterializableStrategy(PromotableStrategy):
                 partitioned_by=model.partitioned_by,
                 partition_interval_unit=model.partition_interval_unit,
                 clustered_by=model.clustered_by,
-                table_properties=model.physical_properties,
+                table_properties=physical_properties,
                 table_description=model.description if is_table_deployable else None,
                 column_descriptions=model.column_descriptions if is_table_deployable else None,
             )
@@ -1428,7 +1443,7 @@ class IncrementalByPartitionStrategy(MaterializableStrategy):
         **kwargs: t.Any,
     ) -> None:
         if is_first_insert:
-            self._replace_query_for_model(model, table_name, query_or_df)
+            self._replace_query_for_model(model, table_name, query_or_df, **kwargs)
         else:
             self.adapter.insert_overwrite_by_partition(
                 table_name,
@@ -1468,7 +1483,7 @@ class IncrementalByUniqueKeyStrategy(MaterializableStrategy):
         **kwargs: t.Any,
     ) -> None:
         if is_first_insert:
-            self._replace_query_for_model(model, table_name, query_or_df)
+            self._replace_query_for_model(model, table_name, query_or_df, **kwargs)
         else:
             self.adapter.merge(
                 table_name,
@@ -1514,7 +1529,7 @@ class IncrementalUnmanagedStrategy(MaterializableStrategy):
         **kwargs: t.Any,
     ) -> None:
         if is_first_insert:
-            self._replace_query_for_model(model, table_name, query_or_df)
+            self._replace_query_for_model(model, table_name, query_or_df, **kwargs)
         elif isinstance(model.kind, IncrementalUnmanagedKind) and model.kind.insert_overwrite:
             self.adapter.insert_overwrite_by_partition(
                 table_name,
@@ -1540,7 +1555,7 @@ class FullRefreshStrategy(MaterializableStrategy):
         is_first_insert: bool,
         **kwargs: t.Any,
     ) -> None:
-        self._replace_query_for_model(model, table_name, query_or_df)
+        self._replace_query_for_model(model, table_name, query_or_df, **kwargs)
 
 
 class SeedStrategy(MaterializableStrategy):
@@ -1569,7 +1584,7 @@ class SeedStrategy(MaterializableStrategy):
             try:
                 for index, df in enumerate(model.render_seed()):
                     if index == 0:
-                        self._replace_query_for_model(model, table_name, df)
+                        self._replace_query_for_model(model, table_name, df, **kwargs)
                     else:
                         self.adapter.insert_append(
                             table_name, df, columns_to_types=model.columns_to_types
@@ -1613,7 +1628,7 @@ class SCDType2Strategy(MaterializableStrategy):
                 partitioned_by=model.partitioned_by,
                 partition_interval_unit=model.partition_interval_unit,
                 clustered_by=model.clustered_by,
-                table_properties=model.physical_properties,
+                table_properties=kwargs.get("physical_properties", model.physical_properties),
                 table_description=model.description if is_table_deployable else None,
                 column_descriptions=model.column_descriptions if is_table_deployable else None,
             )
@@ -1759,7 +1774,7 @@ class ViewStrategy(PromotableStrategy):
             model.columns_to_types,
             replace=not self.adapter.HAS_VIEW_BINDING,
             materialized=self._is_materialized_view(model),
-            view_properties=model.physical_properties,
+            view_properties=kwargs.get("physical_properties", model.physical_properties),
             table_description=model.description,
             column_descriptions=model.column_descriptions,
         )
@@ -1814,7 +1829,7 @@ class ViewStrategy(PromotableStrategy):
             replace=False,
             materialized=self._is_materialized_view(model),
             materialized_properties=materialized_properties,
-            view_properties=model.physical_properties,
+            view_properties=kwargs.get("physical_properties", model.physical_properties),
             table_description=model.description if is_table_deployable else None,
             column_descriptions=model.column_descriptions if is_table_deployable else None,
         )
@@ -1828,16 +1843,16 @@ class ViewStrategy(PromotableStrategy):
     ) -> None:
         logger.info("Migrating view '%s'", target_table_name)
         model = snapshot.model
+        render_kwargs = dict(
+            execution_time=now(), snapshots=kwargs["snapshots"], engine_adapter=self.adapter
+        )
+
         self.adapter.create_view(
             target_table_name,
-            model.render_query_or_raise(
-                execution_time=now(),
-                snapshots=kwargs["snapshots"],
-                engine_adapter=self.adapter,
-            ),
+            model.render_query_or_raise(**render_kwargs),
             model.columns_to_types,
             materialized=self._is_materialized_view(model),
-            view_properties=model.physical_properties,
+            view_properties=model.render_physical_properties(**render_kwargs),
             table_description=model.description,
             column_descriptions=model.column_descriptions,
         )
@@ -1941,7 +1956,7 @@ class EngineManagedStrategy(MaterializableStrategy):
                 columns_to_types=model.columns_to_types,
                 partitioned_by=model.partitioned_by,
                 clustered_by=model.clustered_by,
-                table_properties=model.physical_properties,
+                table_properties=kwargs.get("physical_properties", model.physical_properties),
                 table_description=model.description,
                 column_descriptions=model.column_descriptions,
             )
@@ -1977,7 +1992,7 @@ class EngineManagedStrategy(MaterializableStrategy):
                 columns_to_types=model.columns_to_types,
                 partitioned_by=model.partitioned_by,
                 clustered_by=model.clustered_by,
-                table_properties=model.physical_properties,
+                table_properties=kwargs.get("physical_properties", model.physical_properties),
                 table_description=model.description,
                 column_descriptions=model.column_descriptions,
             )
@@ -1989,7 +2004,9 @@ class EngineManagedStrategy(MaterializableStrategy):
                 table_name,
                 model.name,
             )
-            self._replace_query_for_model(model=model, name=table_name, query_or_df=query_or_df)
+            self._replace_query_for_model(
+                model=model, name=table_name, query_or_df=query_or_df, **kwargs
+            )
 
     def append(
         self,

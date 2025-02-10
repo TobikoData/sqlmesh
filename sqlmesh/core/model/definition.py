@@ -639,6 +639,26 @@ class _Model(ModelMeta, frozen=True):
             raise SQLMeshError(f"Expected one expression but got {len(rendered_exprs)}")
         return rendered_exprs[0].transform(d.replace_merge_table_aliases)
 
+    def render_physical_properties(self, **render_kwargs: t.Any) -> t.Dict[str, exp.Expression]:
+        def _render(expression: exp.Expression) -> exp.Expression:
+            # note: we use the _statement_renderer instead of _create_renderer because it sets model_fqn which
+            # in turn makes @this_model available in the evaluation context
+            rendered_exprs = self._statement_renderer(expression).render(**render_kwargs)
+
+            if not rendered_exprs:
+                raise SQLMeshError(
+                    f"Expected rendering '{expression.sql(dialect=self.dialect)}' to return an expression"
+                )
+
+            if len(rendered_exprs) != 1:
+                raise SQLMeshError(
+                    f"Expected one result when rendering '{expression.sql(dialect=self.dialect)}' but got {len(rendered_exprs)}"
+                )
+
+            return rendered_exprs[0]
+
+        return {k: _render(v) for k, v in self.physical_properties.items()}
+
     def _create_renderer(self, expression: exp.Expression) -> ExpressionRenderer:
         return ExpressionRenderer(
             expression,
@@ -1814,16 +1834,16 @@ def load_sql_based_model(
         meta = d.Model(expressions=[])  # Dummy meta node
         expressions.insert(0, meta)
 
+    # We deliberately hold off rendering some properties at load time because there is not enough information available
+    # at load time to render them. They will get rendered later at evaluation time
+    unrendered_properties = {}
     unrendered_merge_filter = None
-    unrendered_signals = None
-    unrendered_audits = None
 
     for prop in meta.expressions:
-        if prop.name.lower() == "signals":
-            unrendered_signals = prop.args.get("value")
-        if prop.name.lower() == "audits":
-            unrendered_audits = prop.args.get("value")
-        if (
+        prop_name = prop.name.lower()
+        if prop_name in ("signals", "audits", "physical_properties"):
+            unrendered_properties[prop_name] = prop.args.get("value")
+        elif (
             prop.name.lower() == "kind"
             and (value := prop.args.get("value"))
             and value.name.lower() == "incremental_by_unique_key"
@@ -1868,12 +1888,9 @@ def load_sql_based_model(
         **kwargs,
     }
 
-    # signals, audits and merge_filter must remain unrendered, so that they can be rendered later at evaluation runtime
-    if unrendered_signals:
-        meta_fields["signals"] = unrendered_signals
-
-    if unrendered_audits:
-        meta_fields["audits"] = unrendered_audits
+    # Discard the potentially half-rendered versions of these properties and replace them with the
+    # original unrendered versions. They will get rendered properly at evaluation time
+    meta_fields.update(unrendered_properties)
 
     if unrendered_merge_filter:
         for idx, kind_prop in enumerate(meta_fields["kind"].expressions):
@@ -2166,6 +2183,10 @@ def _create_model(
         statements.extend(kwargs["post_statements"])
     if "on_virtual_update" in kwargs:
         statements.extend(kwargs["on_virtual_update"])
+    if physical_properties := kwargs.get("physical_properties"):
+        # to allow variables like @gateway to be used in physical_properties
+        # since rendering shifted from load time to run time
+        statements.extend(physical_properties)
 
     jinja_macro_references, used_variables = extract_macro_references_and_variables(
         *(gen(e) for e in statements)
