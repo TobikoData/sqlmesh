@@ -1220,10 +1220,7 @@ class TerminalConsole(Console):
                 )
             )
         else:
-            self._print(
-                f"[yellow]WARNING: Plan requires a destructive change to forward-only model '{snapshot_name}'s schema[/yellow]"
-            )
-            logger.warning(
+            self.log_warning(
                 format_destructive_change_msg(
                     snapshot_name, dropped_column_names, alter_expressions, dialect, error
                 )

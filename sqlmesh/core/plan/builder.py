@@ -486,18 +486,14 @@ class PlanBuilder:
                     dropped_column_names = get_dropped_column_names(schema_diff)
                     model_dialect = snapshot.model.dialect
 
-                    if snapshot.model.on_destructive_change.is_warn:
-                        get_console().log_destructive_change(
-                            snapshot_name,
-                            dropped_column_names,
-                            schema_diff,
-                            model_dialect,
-                            error=False,
-                        )
-                    else:
-                        get_console().log_destructive_change(
-                            snapshot_name, dropped_column_names, schema_diff, model_dialect
-                        )
+                    get_console().log_destructive_change(
+                        snapshot_name,
+                        dropped_column_names,
+                        schema_diff,
+                        model_dialect,
+                        error=not snapshot.model.on_destructive_change.is_warn,
+                    )
+                    if snapshot.model.on_destructive_change.is_error:
                         raise PlanError(
                             "Plan requires a destructive change to a forward-only model."
                         )

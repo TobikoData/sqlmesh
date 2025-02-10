@@ -193,7 +193,7 @@ def format_destructive_change_msg(
     dialect: str,
     error: bool = True,
 ) -> str:
-    dropped_column_str = "', '".join(dropped_column_names) if dropped_column_names else None
+    dropped_column_str = "', '".join(dropped_column_names)
     dropped_column_msg = (
         f" that drops column{'s' if dropped_column_names and len(dropped_column_names) > 1 else ''} '{dropped_column_str}'"
         if dropped_column_str
