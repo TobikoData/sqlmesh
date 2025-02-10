@@ -294,11 +294,8 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                     snapshots,
                     plan.allow_destructive_models,
                 )
-            except NodeExecutionFailedError as ex:
-                logger.info(str(ex), exc_info=ex)
-                self.console.log_failed_models([ex])
-
-                raise PlanError("Plan application failed.")
+            except Exception as ex:
+                raise PlanError(str(ex.__cause__))
 
             if not plan.ensure_finalized_snapshots:
                 # Only unpause at this point if we don't have to use the finalized snapshots
