@@ -10,7 +10,6 @@ class LinterConfig(BaseConfig):
 
     Args:
         enabled: Flag indicating whether the linter should run
-        validate_query: Flag indicating whether SQL will be checked for correctness
 
         rules: A list of rules to be applied on models (None => ALL are applied)
         exclude_rules: A list of rules to be excluded/ignored from the linting process
@@ -19,7 +18,6 @@ class LinterConfig(BaseConfig):
     """
 
     enabled: bool = False
-    validate_query: bool = True
 
     rules: t.Optional[t.List[str] | str] = None
     exclude_rules: t.Optional[t.List[str] | str] = None

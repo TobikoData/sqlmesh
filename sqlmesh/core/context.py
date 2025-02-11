@@ -608,9 +608,16 @@ class GenericContext(BaseContext, t.Generic[C]):
 
             update_model_schemas(self.dag, models=self._models, context_path=self.path)
 
+            from sqlmesh.core.linter.definition import Linter
+
+            linter = Linter(config=self.config.linter) if self.config.linter.enabled else None
+
             for model in self.models.values():
                 # The model definition can be validated correctly only after the schema is set.
                 model.validate_definition()
+
+                if linter:
+                    linter.lint(model)
 
         duplicates = set(self._models) & set(self._standalone_audits)
         if duplicates:

@@ -23,6 +23,7 @@ from sqlmesh.core.config import (
     EnvironmentSuffixTarget,
     ModelDefaultsConfig,
     SnowflakeConnectionConfig,
+    LinterConfig,
     load_configs,
 )
 from sqlmesh.core.context import Context
@@ -1367,3 +1368,68 @@ def test_plan_runs_audits_on_dev_previews(sushi_context: Context, capsys, caplog
     assert "'not_null' audit error:" in log
     assert "'at_least_one_non_blocking' audit error:" in log
     assert "Target environment updated successfully" in stdout
+
+
+@pytest.mark.slow
+def test_model_linting(tmp_path: pathlib.Path) -> None:
+    create_temp_file(
+        tmp_path,
+        pathlib.Path(pathlib.Path("models"), "test.sql"),
+        "MODEL(name test); SELECT * FROM (SELECT 1 AS col);",
+    )
+
+    enabled_cfg = LinterConfig(enabled=True)
+
+    ctx = Context(
+        config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"), linter=enabled_cfg),
+        paths=tmp_path,
+        load=False,
+    )
+
+    # Case #1: Ensure load DOES NOT work if linter is enabled
+    with pytest.raises(
+        ConfigError,
+        match=r".*Query should not contain any SELECT.*",
+    ):
+        ctx.load()
+
+    # Case #2: Ensure load WORKS if linter is enabled but the rules are not
+    ignore_or_warn_cfgs = [
+        LinterConfig(enabled=True, warn_rules=["noselectstar"]),
+        LinterConfig(enabled=True, exclude_rules=["noselectstar"]),
+    ]
+    for cfg in ignore_or_warn_cfgs:
+        ctx.config.linter = cfg
+        ctx.load()
+
+    # Case #3: Ensure load DOES NOT work if LinterConfig has overlapping rules
+    invalid_cfgs = [
+        LinterConfig(enabled=True, rules=["noselectstar"], exclude_rules=["noselectstar"]),
+        LinterConfig(enabled=True, rules=["noselectstar"], warn_rules=["noselectstar"]),
+    ]
+
+    for cfg in invalid_cfgs:
+        ctx.config.linter = cfg
+
+        with pytest.raises(
+            ConfigError,
+            match=r"Included linter rules \[noselectstar\] are also added in excluded & warning rules",
+        ):
+            ctx.load()
+
+    # Case #4: Ensure model attribute overrides global config
+    ctx.config.linter = enabled_cfg
+
+    create_temp_file(
+        tmp_path,
+        pathlib.Path(pathlib.Path("models"), "test.sql"),
+        "MODEL(name test, ignore_lints ALL); SELECT * FROM (SELECT 1 AS col);",
+    )
+
+    create_temp_file(
+        tmp_path,
+        pathlib.Path(pathlib.Path("models"), "test2.sql"),
+        "MODEL(name test2, ignore_lints ['noselectstar']); SELECT * FROM (SELECT 1 AS col);",
+    )
+
+    ctx.load()

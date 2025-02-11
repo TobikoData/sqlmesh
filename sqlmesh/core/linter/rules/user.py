@@ -9,6 +9,7 @@ from sqlmesh.core.linter.rule import Rule, RuleViolation, RuleSet
 from sqlmesh.core.model import Model
 
 
+# TODO(vaggelis): Delete this rule, it's only for testing purposes!
 class NoVaggelisOwner(Rule):
     def check(self, model: Model) -> t.Optional[RuleViolation]:
         return RuleViolation(rule=self, model=model) if model.owner == "vaggelis" else None

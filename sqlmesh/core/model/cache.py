@@ -140,7 +140,6 @@ class OptimizedQueryCache:
         hash_data.append(str([gen(d) for d in model.macro_definitions]))
         hash_data.append(str([(k, v) for k, v in model.sorted_python_env]))
         hash_data.extend(model.jinja_macros.data_hash_values)
-        hash_data.extend(str(model.validate_query))
         return f"{model.name}_{crc32(hash_data)}"
 
 
@@ -176,7 +175,7 @@ def load_optimized_query(
 
 def load_optimized_query_and_mapping(
     model: Model, mapping: t.Dict
-) -> t.Tuple[str, t.Optional[str], str, str, t.Dict]:
+) -> t.Tuple[str, t.Optional[str], str, str, t.Dict, t.Optional[t.List]]:
     assert _optimized_query_cache
 
     schema = MappingSchema(normalize=False)
@@ -187,7 +186,9 @@ def load_optimized_query_and_mapping(
     if isinstance(model, SqlModel):
         entry_name = _optimized_query_cache._entry_name(model)
         _optimized_query_cache.with_optimized_query(model, entry_name)
+        violated_rules = model._query_renderer._violated_rules
     else:
+        violated_rules = None
         entry_name = None
 
     return (
@@ -196,6 +197,7 @@ def load_optimized_query_and_mapping(
         model.data_hash,
         model.metadata_hash,
         model.mapping_schema,
+        violated_rules,
     )
 
 
