@@ -1307,7 +1307,7 @@ def test_delete_expired_snapshots_shared_dev_table(
     new_snapshot.ttl = "in 10 seconds"
     new_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
     new_snapshot.version = snapshot.version
-    new_snapshot.temp_version = snapshot.temp_version_get_or_generate()
+    new_snapshot.dev_version = snapshot.dev_version_get_or_generate()
     new_snapshot.updated_ts = now_ts - 5000
 
     all_snapshots = [snapshot, new_snapshot]

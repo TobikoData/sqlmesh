@@ -748,10 +748,10 @@ The target environment has been updated successfully
 
 ```
 
-??? "Create another empty table with the proper schema that’s also versioned (ex: `__2896326998__temp__schema_migration_source`)."
+??? "Create another empty table with the proper schema that’s also versioned (ex: `__2896326998__dev__schema_migration_source`)."
 
     ```sql
-    CREATE TABLE IF NOT EXISTS `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__incrementals_demo__2896326998__temp__schema_migration_source` (
+    CREATE TABLE IF NOT EXISTS `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__incrementals_demo__2896326998__dev__schema_migration_source` (
       `transaction_id` STRING, `product_id` STRING, `customer_id` STRING, `transaction_amount` NUMERIC, `transaction_date` DATE,
       `transaction_timestamp_pst` DATETIME, `payment_method` STRING, `currency` STRING, `last_usage_date` TIMESTAMP, `usage_count` INT64,
       `feature_utilization_score` FLOAT64, `user_segment` STRING, `user_type` STRING, `days_since_last_usage` INT64
@@ -825,7 +825,7 @@ The target environment has been updated successfully
     This will NOT be reused when deployed to prod.
 
     ```sql
-    CREATE OR REPLACE TABLE `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__incrementals_demo__2896326998__temp`
+    CREATE OR REPLACE TABLE `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__incrementals_demo__2896326998__dev`
     CLONE `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__incrementals_demo__843752089`
     ```
 
@@ -862,7 +862,7 @@ The target environment has been updated successfully
       `ci`.`clustering_key` AS `clustering_key`
     FROM `sqlmesh-public-demo`.`sqlmesh__demo`.`INFORMATION_SCHEMA`.`TABLES`
     LEFT JOIN `clustering_info` AS `ci` USING (`table_catalog`, `table_schema`, `table_name`)
-    WHERE `table_name` IN ('demo__incrementals_demo__2896326998__temp')
+    WHERE `table_name` IN ('demo__incrementals_demo__2896326998__dev')
     ```
 
 ??? "Inspect metadata to track journey for the migration source schema"
@@ -895,19 +895,19 @@ The target environment has been updated successfully
       `ci`.`clustering_key` AS `clustering_key`
     FROM `sqlmesh-public-demo`.`sqlmesh__demo`.`INFORMATION_SCHEMA`.`TABLES`
     LEFT JOIN `clustering_info` AS `ci` USING (`table_catalog`, `table_schema`, `table_name`)
-    WHERE `table_name` IN ('demo__incrementals_demo__2896326998__temp__schema_migration_source')
+    WHERE `table_name` IN ('demo__incrementals_demo__2896326998__dev__schema_migration_source')
     ```
 
 ??? "Drop the migration source table because we have the metadata we need now for proper state tracking"
 
     ```sql
-    DROP TABLE IF EXISTS `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__incrementals_demo__2896326998__temp__schema_migration_source`
+    DROP TABLE IF EXISTS `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__incrementals_demo__2896326998__dev__schema_migration_source`
     ```
 
 ??? "Merge data into empty table for only the intervals I care about: 2024-10-27 to 'up until now'"
 
     ```sql
-    MERGE INTO `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__incrementals_demo__2896326998__temp` AS `__MERGE_TARGET__` USING (
+    MERGE INTO `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__incrementals_demo__2896326998__dev` AS `__MERGE_TARGET__` USING (
       WITH `sales_data` AS (
         SELECT
           `sales`.`transaction_id` AS `transaction_id`,
@@ -1007,7 +1007,7 @@ The target environment has been updated successfully
           ) AS `rank_`
         FROM (
           SELECT *
-          FROM `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__incrementals_demo__2896326998__temp` AS `demo__incrementals_demo__2896326998__temp`
+          FROM `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__incrementals_demo__2896326998__dev` AS `demo__incrementals_demo__2896326998__dev`
           WHERE `transaction_date` BETWEEN CAST('2024-10-27' AS DATE) AND CAST('2024-11-08' AS DATE)
         ) AS `_q_0`
       WHERE TRUE
@@ -1024,7 +1024,7 @@ The target environment has been updated successfully
         SELECT *
         FROM (
           SELECT *
-          FROM `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__incrementals_demo__2896326998__temp` AS `demo__incrementals_demo__2896326998__temp`
+          FROM `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__incrementals_demo__2896326998__dev` AS `demo__incrementals_demo__2896326998__dev`
         WHERE `transaction_date` BETWEEN CAST('2024-10-27' AS DATE) AND CAST('2024-11-08' AS DATE)
       ) AS `_q_0`
     WHERE
@@ -1043,7 +1043,7 @@ The target environment has been updated successfully
 
     ```sql
     CREATE OR REPLACE VIEW `sqlmesh-public-demo`.`demo__dev`.`incrementals_demo` AS
-    SELECT * FROM `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__incrementals_demo__2896326998__temp`
+    SELECT * FROM `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__incrementals_demo__2896326998__dev`
     ```
 
 Now I’m getting exactly what I expect when I preview the data.

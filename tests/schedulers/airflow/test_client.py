@@ -98,6 +98,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
                     "fingerprint": snapshot.fingerprint.dict(),
                     "intervals": [],
                     "dev_intervals": [],
+                    "dev_table_suffix": "dev",
                     "pending_restatement_intervals": [],
                     "node": {
                         "audits": [],
@@ -160,6 +161,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
                         "change_category": snapshot.change_category,
                         "parents": [],
                         "kind_name": "INCREMENTAL_BY_TIME_RANGE",
+                        "dev_table_suffix": "dev",
                     }
                 ],
                 "start_at": "2022-01-01",
