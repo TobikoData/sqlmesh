@@ -1018,6 +1018,7 @@ class SnapshotEvaluator:
         if audit.skip:
             return AuditResult(
                 audit=audit,
+                audit_args=audit_args,
                 model=snapshot.model_or_none,
                 skipped=True,
             )
@@ -1054,6 +1055,7 @@ class SnapshotEvaluator:
 
         return AuditResult(
             audit=audit,
+            audit_args=audit_args,
             model=snapshot.model_or_none,
             count=count,
             query=query,

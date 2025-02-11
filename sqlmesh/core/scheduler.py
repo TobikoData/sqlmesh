@@ -37,7 +37,7 @@ from sqlmesh.utils.date import (
     to_timestamp,
     validate_date_range,
 )
-from sqlmesh.utils.errors import AuditError, CircuitBreakerError, SQLMeshError
+from sqlmesh.utils.errors import AuditError, NodeAuditsErrors, CircuitBreakerError, SQLMeshError
 
 logger = logging.getLogger(__name__)
 SnapshotToIntervals = t.Dict[Snapshot, Intervals]
@@ -205,10 +205,11 @@ class Scheduler:
             **kwargs,
         )
 
-        audit_error_to_raise: t.Optional[AuditError] = None
+        audit_errors_to_raise: t.List[AuditError] = []
         for audit_result in (result for result in audit_results if result.count):
             error = AuditError(
                 audit_name=audit_result.audit.name,
+                audit_args=audit_result.audit_args,
                 model=snapshot.model_or_none,
                 count=t.cast(int, audit_result.count),
                 query=t.cast(exp.Query, audit_result.query),
@@ -220,14 +221,14 @@ class Scheduler:
                     NotificationEvent.AUDIT_FAILURE, snapshot.node.owner, error
                 )
             if audit_result.blocking:
-                audit_error_to_raise = error
+                audit_errors_to_raise.append(error)
             else:
                 get_console().log_warning(
-                    f"{error}\nAudit is non-blocking so proceeding with execution."
+                    f"{error}. Audit is non-blocking so proceeding with execution.\n{error.query.sql(error.adapter_dialect)}\n"
                 )
 
-        if audit_error_to_raise:
-            raise audit_error_to_raise
+        if audit_errors_to_raise:
+            raise NodeAuditsErrors(audit_errors_to_raise)
 
         self.state_sync.add_interval(snapshot, start, end, is_dev=not is_deployable)
 
