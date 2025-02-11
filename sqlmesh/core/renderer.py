@@ -51,7 +51,6 @@ class BaseExpressionRenderer:
         model_fqn: t.Optional[str] = None,
         normalize_identifiers: bool = True,
         optimize_query: t.Optional[bool] = True,
-        validate_query: t.Optional[bool] = False,
     ):
         self._expression = expression
         self._dialect = dialect
@@ -67,7 +66,7 @@ class BaseExpressionRenderer:
         self._cache: t.List[t.Optional[exp.Expression]] = []
         self._model_fqn = model_fqn
         self._optimize_query_flag = optimize_query is not False
-        self._validate_query = validate_query
+        self._violated_rules: t.List[t.Any] = []
 
     def update_schema(self, schema: t.Dict[str, t.Any]) -> None:
         self.schema = d.normalize_mapping_schema(schema, dialect=self._dialect)
@@ -535,20 +534,12 @@ class QueryRenderer(BaseExpressionRenderer):
                 missing_deps.add(dep)
 
         if self._model_fqn and not should_optimize and any(s.is_star for s in query.selects):
-            from sqlmesh.core.console import get_console
+            from sqlmesh.core.linter.rules.builtin import InvalidSelectStarExpansion
 
             deps = ", ".join(f"'{dep}'" for dep in sorted(missing_deps))
-
-            warning = (
-                f"SELECT * cannot be expanded due to missing schema(s) for model(s): {deps}. "
-                "Run `sqlmesh create_external_models` and / or make sure that the model "
-                f"'{self._model_fqn}' can be rendered at parse time."
+            self._violated_rules.append(
+                InvalidSelectStarExpansion(deps=deps, model_fqn=self._model_fqn)
             )
-
-            if self._validate_query:
-                raise_config_error(warning, self._path)
-
-            get_console().log_warning(warning)
 
         try:
             if should_optimize:
@@ -567,18 +558,12 @@ class QueryRenderer(BaseExpressionRenderer):
                     )
                 )
         except SqlglotError as ex:
-            from sqlmesh.core.console import get_console
+            from sqlmesh.core.linter.rules.builtin import AmbiguousOrInvalidColumn
 
-            warning = (
-                f"{ex} for model '{self._model_fqn}', the column may not exist or is ambiguous."
-            )
-
-            if self._validate_query:
-                raise_config_error(warning, self._path)
+            self._violated_rules.append(AmbiguousOrInvalidColumn(error=ex))
 
             query = original
 
-            get_console().log_warning(warning)
         except Exception as ex:
             raise_config_error(
                 f"Failed to optimize query, please file an issue at https://github.com/TobikoData/sqlmesh/issues/new. {ex}",

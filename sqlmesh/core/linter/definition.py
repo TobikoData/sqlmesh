@@ -5,12 +5,12 @@ import typing as t
 
 from sqlmesh.core.config.linter import LinterConfig
 
-from sqlmesh.core.model import Model
+from sqlmesh.core.model import Model, SqlModel
 
 from sqlmesh.utils.errors import raise_config_error
 from sqlmesh.core.console import get_console
 
-from sqlmesh.core.linter.rule import RuleSet
+from sqlmesh.core.linter.rule import RuleSet, RuleViolation
 from sqlmesh.core.linter.rules import ALL_RULES
 
 
@@ -18,10 +18,10 @@ class Linter:
     def gather_rules(
         self, rule_names: t.Optional[t.List[str] | str], defaults_to_all: bool = False
     ) -> RuleSet:
-        if isinstance(rule_names, str) and rule_names == "ALL":
-            return ALL_RULES
         if not rule_names:
             return ALL_RULES if defaults_to_all else RuleSet()
+        if rule_names == "ALL" or rule_names[0] == "ALL":
+            return ALL_RULES
 
         return RuleSet(ALL_RULES[rule_name] for rule_name in rule_names)
 
@@ -46,17 +46,42 @@ class Linter:
 
         self.rules: RuleSet = included_rules.difference(exclude_plus_warn_rules)
 
+    def _parse_model_noqa_rules(self, model: Model) -> t.Optional[RuleSet]:
+        noqa = []
+
+        with open(model._path, "r", encoding="utf-8") as file:
+            line = file.readline()
+            exclude_rules_str = line.split("linter: noqa:")
+            if len(exclude_rules_str) > 1:
+                noqa = list(
+                    filter(
+                        lambda x: x.strip(),
+                        [rule.strip() for rule in exclude_rules_str[1].split(",")],
+                    )
+                )
+
+        return self.gather_rules(noqa) if noqa else None
+
     def lint(self, model: Model) -> None:
-        if model.ignore_lints:
-            model_ignore_rules = self.gather_rules(model.ignore_lints)
-            rules = self.rules.difference(model_ignore_rules)
-            warn_rules = self.warn_rules.difference(model_ignore_rules)
+        model_noqa = self._parse_model_noqa_rules(model)
+
+        if model_noqa:
+            rules = self.rules.difference(model_noqa)
+            warn_rules = self.warn_rules.difference(model_noqa)
         else:
             rules = self.rules
             warn_rules = self.warn_rules
 
         error_violations = rules.check(model)
         warn_violations = warn_rules.check(model)
+
+        if isinstance(model, SqlModel):
+            violations = model._render_violations
+            for rule in violations:
+                if rule.name in rules:
+                    error_violations.append(RuleViolation(rule=rule, model=model))
+                elif rule.name in warn_rules:
+                    warn_violations.append(RuleViolation(rule=rule, model=model))
 
         if warn_violations:
             warn_msg = "\n".join(warn_violation.message for warn_violation in warn_violations)
