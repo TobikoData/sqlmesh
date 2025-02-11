@@ -35,13 +35,20 @@ After connecting your project to Tobiko Cloud, you're ready to set up the Dagste
 
 First, navigate to your Dagster project or [create a new one](https://docs.dagster.io/guides/build/projects/creating-a-new-project).
 
-Next, add the `tobiko-cloud-scheduler-facade` library to the `install_requires` section of your [Dagster project](https://docs.dagster.io/guides/understanding-dagster-project-files)'s `setup.py`:
+Next, add the `tobiko-cloud-scheduler-facade` library to the `dependencies` section of your [Dagster project](https://docs.dagster.io/guides/understanding-dagster-project-files)'s `pyproject.toml`:
 
-```python title="setup.py" hl_lines="3"
-install_requires=[
+```python title="pyproject.toml" hl_lines="4"
+[project]
+dependencies = [
     "dagster",
     "tobiko-cloud-scheduler-facade[dagster]"
 ],
+```
+
+And then install it into the Python environment used by your Dagster project:
+
+```sh
+$ pip install -e '.[dev]'
 ```
 
 ### Connect Dagster to Tobiko Cloud
