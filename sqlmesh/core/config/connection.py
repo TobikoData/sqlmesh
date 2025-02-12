@@ -925,9 +925,12 @@ class BigQueryConnectionConfig(ConnectionConfig):
             )
         else:
             raise ConfigError("Invalid BigQuery Connection Method")
+
         options = client_options.ClientOptions(quota_project_id=self.quota_project)
+        project = self.execution_project or self.project or None
+
         client = google.cloud.bigquery.Client(
-            project=self.execution_project or self.project,
+            project=project and exp.parse_identifier(project, dialect="bigquery").name,
             credentials=creds,
             location=self.location,
             client_info=client_info.ClientInfo(user_agent="sqlmesh"),
