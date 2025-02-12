@@ -3,7 +3,6 @@ from enum import Enum
 import logging
 import typing as t
 from sqlglot import exp
-
 from sqlmesh.core import constants as c
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.environment import EnvironmentNamingInfo
@@ -224,7 +223,7 @@ class Scheduler:
                 audit_errors_to_raise.append(error)
             else:
                 get_console().log_warning(
-                    f"{error}. Audit is non-blocking so proceeding with execution.\n{error.query.sql(error.adapter_dialect)}\n"
+                    f"\n{error}. Audit is non-blocking so proceeding with execution. Audit query:\n{error.query.sql(error.adapter_dialect)}\n"
                 )
 
         if audit_errors_to_raise:

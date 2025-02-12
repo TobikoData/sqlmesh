@@ -36,7 +36,11 @@ from sqlmesh.core.test import ModelTest
 from sqlmesh.utils import rich as srich
 from sqlmesh.utils.concurrency import NodeExecutionFailedError
 from sqlmesh.utils.date import time_like_to_str, to_date, yesterday_ds
-from sqlmesh.utils.errors import PythonModelEvalError, NodeAuditsErrors, format_destructive_change_msg
+from sqlmesh.utils.errors import (
+    PythonModelEvalError,
+    NodeAuditsErrors,
+    format_destructive_change_msg,
+)
 
 if t.TYPE_CHECKING:
     import ipywidgets as widgets
@@ -2489,7 +2493,7 @@ def _format_audits_errors(error: NodeAuditsErrors) -> str:
             audit_args_sql.append(f"{arg_name} := {arg_value.sql(dialect=err.adapter_dialect)}")
         audit_args_sql_msg = ("\n".join(audit_args_sql) + "\n\n") if audit_args_sql else ""
 
-        err_msg = f"'{err.audit_name}' audit error\n\n{err.count} {'row' if err.count == 1 else 'rows'} failed"
+        err_msg = f"'{err.audit_name}' audit error: {err.count} {'row' if err.count == 1 else 'rows'} failed"
 
         query = "\n  ".join(textwrap.wrap(err.sql(err.adapter_dialect), width=100))
         msg = f"{err_msg}\n\nAudit arguments\n  {audit_args_sql_msg}Audit query\n  {query}\n\n"
