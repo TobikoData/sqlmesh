@@ -71,6 +71,7 @@ class AuditError(SQLMeshError):
     def __init__(
         self,
         audit_name: str,
+        audit_args: t.Dict[t.Any, t.Any],
         count: int,
         query: exp.Query,
         model: t.Optional[Model] = None,
@@ -78,14 +79,15 @@ class AuditError(SQLMeshError):
         adapter_dialect: t.Optional[str] = None,
     ) -> None:
         self.audit_name = audit_name
+        self.audit_args = audit_args
         self.model = model
         self.count = count
         self.query = query
         self.adapter_dialect = adapter_dialect
 
-    def __str__(self) -> str:
-        model_str = f" for model '{self.model_name}'" if self.model_name else ""
-        return f"Audit '{self.audit_name}'{model_str} failed.\nGot {self.count} results, expected 0.\n{self.sql()}"
+        super().__init__(
+            f"'{self.audit_name}' audit error: {self.count} {'row' if self.count == 1 else 'rows'} failed"
+        )
 
     @property
     def model_name(self) -> t.Optional[str]:
@@ -104,6 +106,13 @@ class AuditError(SQLMeshError):
             The SQL string.
         """
         return self.query.sql(dialect=dialect or self.adapter_dialect, **opts)
+
+
+class NodeAuditsErrors(SQLMeshError):
+    def __init__(self, errors: t.List[AuditError]) -> None:
+        self.errors = errors
+
+        super().__init__(f"Audits failed: {', '.join([e.audit_name for e in errors])}")
 
 
 class TestError(SQLMeshError):

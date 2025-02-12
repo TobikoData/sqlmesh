@@ -103,6 +103,7 @@ def evaluate(
     if failed_audit_result:
         raise AuditError(
             audit_name=failed_audit_result.audit.name,
+            audit_args=failed_audit_result.audit_args,
             model=command_payload.snapshot.model_or_none,
             count=t.cast(int, failed_audit_result.count),
             query=t.cast(exp.Query, failed_audit_result.query),

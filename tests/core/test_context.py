@@ -465,14 +465,10 @@ def test_override_builtin_audit_blocking_mode():
         new_snapshot = next(iter(plan.context_diff.new_snapshots.values()))
 
         version = new_snapshot.fingerprint.to_version()
-        assert mock_logger.mock_calls == [
-            call(
-                "Audit 'not_null' for model 'db.x' failed.\n"
-                "Got 1 results, expected 0.\n"
-                f'SELECT * FROM (SELECT * FROM "sqlmesh__db"."db__x__{version}" AS "db__x__{version}") AS "_q_0" WHERE "c" IS NULL AND TRUE\n'
-                "Audit is non-blocking so proceeding with execution."
-            )
-        ]
+        assert (
+            mock_logger.call_args_list[0][0][0]
+            == f'\n\'not_null\' audit error: 1 row failed. Audit is non-blocking so proceeding with execution. Audit query:\nSELECT * FROM (SELECT * FROM "sqlmesh__db"."db__x__{version}" AS "db__x__{version}") AS "_q_0" WHERE "c" IS NULL AND TRUE\n'
+        )
 
     # Even though there are two builtin audits referenced in the above definition, we only
     # store the one that overrides `blocking` in the snapshot; the other one isn't needed
@@ -1372,6 +1368,8 @@ def test_plan_runs_audits_on_dev_previews(sushi_context: Context, capsys, caplog
     # we only see audit results if they fail
     stdout = capsys.readouterr().out
     log = caplog.text
-    assert "Audit 'not_null' for model 'sushi.test_audit_model' failed" in log
-    assert "Audit is non-blocking so proceeding with execution" in log
+    assert (
+        "\n'not_null' audit error: 22 rows failed. Audit is non-blocking so proceeding with execution. Audit query:\nSELECT"
+        in log
+    )
     assert "Target environment updated successfully" in stdout
