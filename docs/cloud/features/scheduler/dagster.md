@@ -2,7 +2,7 @@
 
 Tobiko Cloud's Dagster integration allows you to combine Dagster system monitoring with the powerful debugging tools in Tobiko Cloud.
 
-![Dagster UI Asset Lineage](./dagster/asset_lineage.png)
+<div style="position: relative; padding-bottom: 55.27756059421422%; height: 0;"><iframe src="https://www.loom.com/embed/18492cf6d4f94eab9f178bae7539d2ab?sid=c4f7b616-16bc-4964-985c-4f4bb5052a6d" frameborder="0" webkitallowfullscreen mozallowfullscreen allowfullscreen style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"></iframe></div>
 
 ## How it works
 
