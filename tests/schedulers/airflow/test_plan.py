@@ -144,6 +144,7 @@ def test_create_plan_dag_spec(
         change_category=SnapshotChangeCategory.BREAKING,
         kind_name=ModelKindName.FULL,
         node_type=NodeType.MODEL,
+        dev_table_suffix="dev",
     )
     old_environment = Environment(
         name=environment_name,

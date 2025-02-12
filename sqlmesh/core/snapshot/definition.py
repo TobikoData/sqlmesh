@@ -182,9 +182,10 @@ class SnapshotIntervals(PydanticModel, frozen=True):
 class SnapshotDataVersion(PydanticModel, frozen=True):
     fingerprint: SnapshotFingerprint
     version: str
-    temp_version: t.Optional[str] = None
+    dev_version: t.Optional[str] = None
     change_category: t.Optional[SnapshotChangeCategory] = None
     physical_schema_: t.Optional[str] = Field(default=None, alias="physical_schema")
+    dev_table_suffix: str
 
     def snapshot_id(self, name: str) -> SnapshotId:
         return SnapshotId(name=name, identifier=self.fingerprint.to_identifier())
@@ -272,13 +273,14 @@ class QualifiedViewName(PydanticModel, frozen=True):
 
 class SnapshotInfoMixin(ModelKindMixin):
     name: str
-    temp_version: t.Optional[str]
+    dev_version: t.Optional[str]
     change_category: t.Optional[SnapshotChangeCategory]
     fingerprint: SnapshotFingerprint
     previous_versions: t.Tuple[SnapshotDataVersion, ...]
     # Added to support Migration # 34 (default catalog)
     # This can be removed from this model once Pydantic 1 support is dropped (must remain in `Snapshot` though)
     base_table_name_override: t.Optional[str]
+    dev_table_suffix: str
 
     @property
     def identifier(self) -> str:
@@ -361,9 +363,9 @@ class SnapshotInfoMixin(ModelKindMixin):
     def data_hash_matches(self, other: t.Optional[SnapshotInfoMixin | SnapshotDataVersion]) -> bool:
         return other is not None and self.fingerprint.data_hash == other.fingerprint.data_hash
 
-    def temp_version_get_or_generate(self) -> str:
-        """Helper method to get the temp version or generate it from the fingerprint."""
-        return self.temp_version or self.fingerprint.to_version()
+    def dev_version_get_or_generate(self) -> str:
+        """Helper method to get the dev version or generate it from the fingerprint."""
+        return self.dev_version or self.fingerprint.to_version()
 
     def _table_name(self, version: str, is_deployable: bool) -> str:
         """Full table name pointing to the materialized location of the snapshot.
@@ -377,7 +379,7 @@ class SnapshotInfoMixin(ModelKindMixin):
 
         is_dev_table = not is_deployable
         if is_dev_table:
-            version = self.temp_version_get_or_generate()
+            version = self.dev_version_get_or_generate()
 
         if self.fully_qualified_table is None:
             raise SQLMeshError(
@@ -395,8 +397,8 @@ class SnapshotInfoMixin(ModelKindMixin):
             self.physical_schema,
             base_table_name,
             version,
-            is_dev_table=is_dev_table,
             catalog=self.fully_qualified_table.catalog,
+            suffix=self.dev_table_suffix if is_dev_table else None,
         )
 
     @property
@@ -416,7 +418,7 @@ class SnapshotTableInfo(PydanticModel, SnapshotInfoMixin, frozen=True):
     name: str
     fingerprint: SnapshotFingerprint
     version: str
-    temp_version: t.Optional[str] = None
+    dev_version: t.Optional[str] = None
     physical_schema_: str = Field(alias="physical_schema")
     parents: t.Tuple[SnapshotId, ...]
     previous_versions: t.Tuple[SnapshotDataVersion, ...] = ()
@@ -426,8 +428,8 @@ class SnapshotTableInfo(PydanticModel, SnapshotInfoMixin, frozen=True):
     # Added to support Migration # 34 (default catalog)
     # This can be removed from this model once Pydantic 1 support is dropped (must remain in `Snapshot` though)
     base_table_name_override: t.Optional[str] = None
-
     custom_materialization: t.Optional[str] = None
+    dev_table_suffix: str
 
     def __lt__(self, other: SnapshotTableInfo) -> bool:
         return self.name < other.name
@@ -458,9 +460,10 @@ class SnapshotTableInfo(PydanticModel, SnapshotInfoMixin, frozen=True):
         return SnapshotDataVersion(
             fingerprint=self.fingerprint,
             version=self.version,
-            temp_version=self.temp_version,
+            dev_version=self.dev_version,
             change_category=self.change_category,
             physical_schema=self.physical_schema,
+            dev_table_suffix=self.dev_table_suffix,
         )
 
     @property
@@ -533,7 +536,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     ttl: str
     previous_versions: t.Tuple[SnapshotDataVersion, ...] = ()
     version: t.Optional[str] = None
-    temp_version: t.Optional[str] = None
+    dev_version: t.Optional[str] = None
     change_category: t.Optional[SnapshotChangeCategory] = None
     unpaused_ts: t.Optional[int] = None
     effective_from: t.Optional[TimeLike] = None
@@ -542,6 +545,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     # Added to support Migration # 34 (default catalog)
     base_table_name_override: t.Optional[str] = None
     next_auto_restatement_ts: t.Optional[int] = None
+    dev_table_suffix: str = "dev"
 
     @field_validator("ttl")
     @classmethod
@@ -911,7 +915,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         Args:
             category: The change category to assign to this snapshot.
         """
-        self.temp_version = None
+        self.dev_version = None
         reuse_previous_version = category in (
             SnapshotChangeCategory.FORWARD_ONLY,
             SnapshotChangeCategory.INDIRECT_NON_BREAKING,
@@ -926,10 +930,11 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             self.physical_schema_ = previous_version.physical_schema
             if self.is_materialized and (category.is_indirect_non_breaking or category.is_metadata):
                 # Reuse the dev table for indirect non-breaking changes.
-                self.temp_version = (
-                    previous_version.data_version.temp_version
+                self.dev_version = (
+                    previous_version.data_version.dev_version
                     or previous_version.fingerprint.to_version()
                 )
+                self.dev_table_suffix = previous_version.data_version.dev_table_suffix
         elif self.is_model and self.model.forward_only and not self.previous_version:
             # If this is a new model then use a deterministic version, independent of the fingerprint.
             self.version = hash_data([self.name, *self.model.kind.data_hash_values])
@@ -1102,13 +1107,14 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             name=self.name,
             fingerprint=self.fingerprint,
             version=self.version,
-            temp_version=self.temp_version,
+            dev_version=self.dev_version,
             parents=self.parents,
             previous_versions=self.previous_versions,
             change_category=self.change_category,
             kind_name=self.model_kind_name,
             node_type=self.node_type,
             custom_materialization=custom_materialization,
+            dev_table_suffix=self.dev_table_suffix,
         )
 
     @property
@@ -1117,9 +1123,10 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         return SnapshotDataVersion(
             fingerprint=self.fingerprint,
             version=self.version,
-            temp_version=self.temp_version,
+            dev_version=self.dev_version,
             change_category=self.change_category,
             physical_schema=self.physical_schema,
+            dev_table_suffix=self.dev_table_suffix,
         )
 
     @property
@@ -1466,16 +1473,16 @@ def table_name(
     physical_schema: str,
     name: str,
     version: str,
-    is_dev_table: bool = False,
     catalog: t.Optional[str] = None,
+    suffix: t.Optional[str] = None,
 ) -> str:
     table = exp.to_table(name)
 
     # bigquery projects usually have "-" in them which is illegal in the table name, so we aggressively prune
     name = "__".join(sanitize_name(part.name) for part in table.parts)
-    temp_suffix = "__temp" if is_dev_table else ""
+    suffix = f"__{suffix}" if suffix else ""
 
-    table.set("this", exp.to_identifier(f"{name}__{version}{temp_suffix}"))
+    table.set("this", exp.to_identifier(f"{name}__{version}{suffix}"))
     table.set("db", exp.to_identifier(physical_schema))
     if not table.catalog and catalog:
         table.set("catalog", exp.to_identifier(catalog))

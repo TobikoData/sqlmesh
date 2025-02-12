@@ -110,6 +110,7 @@ class BaseModelConfig(GeneralConfig):
     dependencies: Dependencies = Dependencies()
     tests: t.List[TestConfig] = []
     dialect_: t.Optional[str] = Field(None, alias="dialect")
+    grain: t.Union[str, t.List[str]] = []
 
     # DBT configuration fields
     name: str = ""
@@ -294,6 +295,7 @@ class BaseModelConfig(GeneralConfig):
     ) -> t.Dict[str, t.Any]:
         """Get common sqlmesh model parameters"""
         self.check_for_circular_test_refs(context)
+        model_dialect = self.dialect(context)
         model_context = context.context_for_dependencies(
             self.dependencies.union(self.tests_ref_source_dependencies)
         )
@@ -337,6 +339,7 @@ class BaseModelConfig(GeneralConfig):
             "tags": self.tags,
             "physical_schema_mapping": context.sqlmesh_config.physical_schema_mapping,
             "default_catalog": context.target.database,
+            "grain": [d.parse_one(g, dialect=model_dialect) for g in ensure_list(self.grain)],
             **self.sqlmesh_config_kwargs,
         }
 

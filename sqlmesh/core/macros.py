@@ -1185,6 +1185,59 @@ def date_spine(
     return exp.select(alias_name).from_(exploded)
 
 
+@macro()
+def resolve_template(
+    evaluator: MacroEvaluator,
+    template: exp.Literal,
+    mode: str = "literal",
+) -> t.Union[exp.Literal, exp.Table]:
+    """
+    Generates either a String literal or an exp.Table representing a physical table location, based on rendering the provided template String literal.
+
+    Note: It relies on the @this_model variable being available in the evaluation context (@this_model resolves to an exp.Table object
+    representing the current physical table).
+    Therefore, the @resolve_template macro must be used at creation or evaluation time and not at load time.
+
+    Args:
+        template: Template string literal. Can contain the following placeholders:
+            @{catalog_name} -> replaced with the catalog of the exp.Table returned from @this_model
+            @{schema_name} -> replaced with the schema of the exp.Table returned from @this_model
+            @{table_name} -> replaced with the name of the exp.Table returned from @this_model
+        mode: What to return.
+            'literal' -> return an exp.Literal string
+            'table' -> return an exp.Table
+
+    Example:
+        >>> from sqlglot import parse_one, exp
+        >>> from sqlmesh.core.macros import MacroEvaluator, RuntimeStage
+        >>> sql = "@resolve_template('s3://data-bucket/prod/@{catalog_name}/@{schema_name}/@{table_name}')"
+        >>> evaluator = MacroEvaluator(runtime_stage=RuntimeStage.CREATING)
+        >>> evaluator.locals.update({"this_model": exp.to_table("test_catalog.sqlmesh__test.test__test_model__2517971505")})
+        >>> evaluator.transform(parse_one(sql)).sql()
+        "'s3://data-bucket/prod/test_catalog/sqlmesh__test/test__test_model__2517971505'"
+    """
+    if "this_model" in evaluator.locals:
+        this_model = exp.to_table(evaluator.locals["this_model"], dialect=evaluator.dialect)
+        template_str: str = template.this
+        result = (
+            template_str.replace("@{catalog_name}", this_model.catalog)
+            .replace("@{schema_name}", this_model.db)
+            .replace("@{table_name}", this_model.name)
+        )
+
+        if mode.lower() == "table":
+            return exp.to_table(result, dialect=evaluator.dialect)
+        return exp.Literal.string(result)
+    elif evaluator.runtime_stage != RuntimeStage.LOADING.value:
+        # only error if we are CREATING, EVALUATING or TESTING and @this_model is not present; this could indicate a bug
+        # otherwise, for LOADING, it's a no-op
+        raise SQLMeshError(
+            "@this_model must be present in the macro evaluation context in order to use @resolve_template"
+        )
+
+    return template
+
+
 def normalize_macro_name(name: str) -> str:
     """Prefix macro name with @ and upcase"""
     return f"@{name.upper()}"

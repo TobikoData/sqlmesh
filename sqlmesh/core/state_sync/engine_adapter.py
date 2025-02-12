@@ -582,10 +582,10 @@ class EngineAdapterStateSync(StateSync):
             snapshots = self._get_snapshots_with_same_version(versions_batch)
 
             snapshots_by_version = defaultdict(set)
-            snapshots_by_temp_version = defaultdict(set)
+            snapshots_by_dev_version = defaultdict(set)
             for s in snapshots:
                 snapshots_by_version[(s.name, s.version)].add(s.snapshot_id)
-                snapshots_by_temp_version[(s.name, s.temp_version)].add(s.snapshot_id)
+                snapshots_by_dev_version[(s.name, s.dev_version)].add(s.snapshot_id)
 
             expired_snapshots = [s for s in snapshots if not _is_snapshot_used(s)]
 
@@ -596,12 +596,12 @@ class EngineAdapterStateSync(StateSync):
                 shared_version_snapshots = snapshots_by_version[(snapshot.name, snapshot.version)]
                 shared_version_snapshots.discard(snapshot.snapshot_id)
 
-                shared_temp_version_snapshots = snapshots_by_temp_version[
-                    (snapshot.name, snapshot.temp_version)
+                shared_dev_version_snapshots = snapshots_by_dev_version[
+                    (snapshot.name, snapshot.dev_version)
                 ]
-                shared_temp_version_snapshots.discard(snapshot.snapshot_id)
+                shared_dev_version_snapshots.discard(snapshot.snapshot_id)
 
-                if not shared_temp_version_snapshots:
+                if not shared_dev_version_snapshots:
                     cleanup_targets.append(
                         SnapshotTableCleanupTask(
                             snapshot=snapshot.full_snapshot.table_info,
@@ -1632,8 +1632,8 @@ class EngineAdapterStateSync(StateSync):
             new_snapshot.effective_from = None
             new_snapshot.previous_versions = snapshot.all_versions
             new_snapshot.migrated = True
-            if not new_snapshot.temp_version:
-                new_snapshot.temp_version = snapshot.fingerprint.to_version()
+            if not new_snapshot.dev_version:
+                new_snapshot.dev_version = snapshot.fingerprint.to_version()
 
             self.console.update_snapshot_migration_progress(1)
 
@@ -2009,7 +2009,7 @@ class SharedVersionSnapshot(PydanticModel):
 
     name: str
     version: str
-    temp_version_: t.Optional[str] = Field(alias="temp_version")
+    dev_version_: t.Optional[str] = Field(alias="dev_version")
     identifier: str
     fingerprint: SnapshotFingerprint
     interval_unit: IntervalUnit
@@ -2038,8 +2038,8 @@ class SharedVersionSnapshot(PydanticModel):
         )
 
     @property
-    def temp_version(self) -> str:
-        return self.temp_version_ or self.fingerprint.to_version()
+    def dev_version(self) -> str:
+        return self.dev_version_ or self.fingerprint.to_version()
 
     @property
     def full_snapshot(self) -> Snapshot:
@@ -2079,7 +2079,7 @@ class SharedVersionSnapshot(PydanticModel):
         return SharedVersionSnapshot(
             name=name,
             version=version,
-            temp_version=raw_snapshot.get("temp_version"),
+            dev_version=raw_snapshot.get("dev_version"),
             identifier=identifier,
             fingerprint=raw_snapshot["fingerprint"],
             interval_unit=raw_node.get("interval_unit", IntervalUnit.from_cron(raw_node["cron"])),

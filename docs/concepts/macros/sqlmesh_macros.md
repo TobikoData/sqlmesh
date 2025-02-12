@@ -1000,6 +1000,46 @@ Note: This is DuckDB SQL and other dialects will be transpiled accordingly.
 - Recursive CTEs (common table expressions) will be used for `Redshift / MySQL / MSSQL`.
 - For `MSSQL` in particular, there's a recursion limit of approximately 100. If this becomes a problem, you can add an `OPTION (MAXRECURSION 0)` clause after the date spine macro logic to remove the limit. This applies for long date ranges.
 
+### @RESOLVE_TEMPLATE
+
+`@resolve_template` is a helper macro intended to be used in situations where you need to gain access to the *components* of the physical object name. It's intended for use in the following situations:
+
+- Providing explicit control over table locations on a per-model basis for engines that decouple storage and compute (such as Athena, Trino, Spark etc)
+- Generating references to engine-specific metadata tables that are derived from the physical table name, such as the [`<table>$properties`](https://trino.io/docs/current/connector/iceberg.html#metadata-tables) metadata table in Trino.
+
+Under the hood, it uses the `@this_model` variable so it can only be used during the `creating` and `evaluation` [runtime stages](./macro_variables.md#runtime-variables). Attempting to use it at the `loading` runtime stage will result in a no-op.
+
+The `@resolve_template` macro supports the following arguments:
+
+ - `template` - The string template to render into an AST node
+ - `mode` - What type of SQLGlot AST node to return after rendering the template. Valid values are `literal` or `table`. Defaults to `literal`.
+
+The `template` can contain the following placeholders that will be substituted:
+
+  - `@{catalog_name}` - The name of the catalog, eg `datalake`
+  - `@{schema_name}` - The name of the physical schema that SQLMesh is using for the model version table, eg `sqlmesh__landing`
+  - `@{table_name}` - The name of the physical table that SQLMesh is using for the model version, eg `landing__customers__2517971505`
+
+It can be used in a `MODEL` block:
+
+```sql linenums="1" hl_lines="5"
+MODEL (
+  name datalake.landing.customers,
+  ...
+  physical_properties (
+    location = @resolve_template('s3://warehouse-data/@{catalog_name}/prod/@{schema_name}/@{table_name}')
+  )
+);
+-- CREATE TABLE "datalake"."sqlmesh__landing"."landing__customers__2517971505" ...
+-- WITH (location = 's3://warehouse-data/datalake/prod/sqlmesh__landing/landing__customers__2517971505')
+```
+
+And also within a query, using `mode := 'table'`:
+
+```sql linenums="1"
+SELECT * FROM @resolve_template('@{catalog_name}.@{schema_name}.@{table_name}$properties', mode := 'table')
+-- SELECT * FROM "datalake"."sqlmesh__landing"."landing__customers__2517971505$properties"
+```
 
 ### @AND
 

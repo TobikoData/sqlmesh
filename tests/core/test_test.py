@@ -2086,3 +2086,45 @@ def test_test_with_gateway_specific_model(tmp_path: Path, mocker: MockerFixture)
         '"memory"."sqlmesh_example"."input_model"': [{"c": 5}]
     }
     assert test["test_gw_model"]["outputs"] == {"query": [{"c": 5}]}
+
+
+def test_test_with_resolve_template_macro(tmp_path: Path):
+    config = Config(
+        default_connection=DuckDBConnectionConfig(),
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+    )
+
+    models_dir = tmp_path / "models"
+    models_dir.mkdir()
+    (models_dir / "foo.sql").write_text(
+        """
+      MODEL (
+        name test.foo,
+        kind full,
+        physical_properties (
+          location = @resolve_template('file:///tmp/@{table_name}')
+        )
+      );
+
+      SELECT t.a + 1 as a
+      FROM @resolve_template('@{schema_name}.dev_@{table_name}', mode := 'table') as t
+      """
+    )
+
+    tests_dir = tmp_path / "tests"
+    tests_dir.mkdir()
+    (tests_dir / "test_foo.yaml").write_text(
+        """
+test_resolve_template_macro:
+  model: test.foo
+  inputs:
+    test.dev_foo:
+      - a: 1
+  outputs:
+    query:
+      - a: 2
+    """
+    )
+
+    context = Context(paths=tmp_path, config=config)
+    _check_successful_or_raise(context.test())

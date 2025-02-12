@@ -1787,6 +1787,7 @@ def test_scd_type_2_by_column(make_mocked_engine_adapter: t.Callable):
             "test_valid_to": exp.DataType.build("TIMESTAMP"),
         },
         execution_time=datetime(2020, 1, 1, 0, 0, 0),
+        extra_col_ignore="testing",
     )
 
     assert (

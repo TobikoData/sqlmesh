@@ -67,7 +67,12 @@ from sqlmesh.utils.concurrency import (
     concurrent_apply_to_values,
 )
 from sqlmesh.utils.date import TimeLike, now, time_like_to_str
-from sqlmesh.utils.errors import ConfigError, SQLMeshError
+from sqlmesh.utils.errors import (
+    ConfigError,
+    DestructiveChangeError,
+    SQLMeshError,
+    format_destructive_change_msg,
+)
 
 if sys.version_info >= (3, 12):
     from importlib import metadata
@@ -461,9 +466,6 @@ class SnapshotEvaluator:
         """
         deployability_index = deployability_index or DeployabilityIndex.all_deployable()
         adapter = self._get_adapter(snapshot.model_gateway)
-        if not deployability_index.is_deployable(snapshot) and not adapter.SUPPORTS_CLONING:
-            # We can't audit a temporary table.
-            return []
 
         if not snapshot.version:
             raise ConfigError(
@@ -491,10 +493,24 @@ class SnapshotEvaluator:
 
         audits_with_args = snapshot.node.audits_with_args
 
+        force_non_blocking = False
+
         if audits_with_args:
             logger.info("Auditing snapshot %s", snapshot.snapshot_id)
 
+            if not deployability_index.is_deployable(snapshot) and not adapter.SUPPORTS_CLONING:
+                # For dev preview tables that aren't based on clones of the production table, only a subset of the data is typically available
+                # However, users still expect audits to run anwyay. Some audits (such as row count) are practically guaranteed to fail
+                # when run on only a subset of data, so we switch all audits to non blocking and the user can decide if they still want to proceed
+                force_non_blocking = True
+
         for audit, audit_args in audits_with_args:
+            if force_non_blocking:
+                # remove any blocking indicator on the model itself
+                audit_args.pop("blocking", None)
+                # so that we can fall back to the audit's setting, which we override to blocking: False
+                audit = audit.model_copy(update={"blocking": False})
+
             results.append(
                 self._audit(
                     audit=audit,
@@ -590,6 +606,28 @@ class SnapshotEvaluator:
         # If there are no existing intervals yet; only consider this a first insert for the first snapshot in the batch
         is_first_insert = not _intervals(snapshot, deployability_index) and batch_index == 0
 
+        from sqlmesh.core.context import ExecutionContext
+
+        common_render_kwargs = dict(
+            start=start,
+            end=end,
+            execution_time=execution_time,
+            snapshot=snapshot,
+            runtime_stage=RuntimeStage.EVALUATING,
+            **kwargs,
+        )
+
+        render_statements_kwargs = dict(
+            engine_adapter=adapter,
+            snapshots=snapshots,
+            deployability_index=deployability_index,
+            **common_render_kwargs,
+        )
+
+        rendered_physical_properties = snapshot.model.render_physical_properties(
+            **render_statements_kwargs
+        )
+
         def apply(query_or_df: QueryOrDF, index: int = 0) -> None:
             if index > 0:
                 evaluation_strategy.append(
@@ -603,6 +641,7 @@ class SnapshotEvaluator:
                     start=start,
                     end=end,
                     execution_time=execution_time,
+                    physical_properties=rendered_physical_properties,
                 )
             else:
                 logger.info(
@@ -623,25 +662,8 @@ class SnapshotEvaluator:
                     start=start,
                     end=end,
                     execution_time=execution_time,
+                    physical_properties=rendered_physical_properties,
                 )
-
-        from sqlmesh.core.context import ExecutionContext
-
-        common_render_kwargs = dict(
-            start=start,
-            end=end,
-            execution_time=execution_time,
-            snapshot=snapshot,
-            runtime_stage=RuntimeStage.EVALUATING,
-            **kwargs,
-        )
-
-        render_statements_kwargs = dict(
-            engine_adapter=adapter,
-            snapshots=snapshots,
-            deployability_index=deployability_index,
-            **common_render_kwargs,
-        )
 
         with adapter.transaction(), adapter.session(snapshot.model.session_properties):
             wap_id: t.Optional[str] = None
@@ -754,6 +776,9 @@ class SnapshotEvaluator:
 
         with adapter.transaction(), adapter.session(snapshot.model.session_properties):
             adapter.execute(snapshot.model.render_pre_statements(**pre_post_render_kwargs))
+            rendered_physical_properties = snapshot.model.render_physical_properties(
+                **create_render_kwargs
+            )
 
             if (
                 snapshot.is_forward_only
@@ -781,6 +806,7 @@ class SnapshotEvaluator:
                     ),
                     is_snapshot_deployable=is_snapshot_deployable,
                     is_snapshot_representative=is_snapshot_representative,
+                    physical_properties=rendered_physical_properties,
                 )
                 try:
                     adapter.clone_table(target_table_name, snapshot.table_name(), replace=True)
@@ -820,6 +846,7 @@ class SnapshotEvaluator:
                         is_snapshot_deployable=is_snapshot_deployable,
                         is_snapshot_representative=is_snapshot_representative,
                         dry_run=dry_run,
+                        physical_properties=rendered_physical_properties,
                     )
 
             adapter.execute(snapshot.model.render_post_statements(**pre_post_render_kwargs))
@@ -883,6 +910,7 @@ class SnapshotEvaluator:
                     is_snapshot_deployable=True,
                     is_snapshot_representative=True,
                     dry_run=False,
+                    physical_properties=snapshot.model.render_physical_properties(**render_kwargs),
                 )
                 adapter.execute(snapshot.model.render_post_statements(**render_kwargs))
 
@@ -1206,7 +1234,9 @@ class EvaluationStrategy(abc.ABC):
             view_name: The name of the target view in the virtual layer.
         """
 
-    def _replace_query_for_model(self, model: Model, name: str, query_or_df: QueryOrDF) -> None:
+    def _replace_query_for_model(
+        self, model: Model, name: str, query_or_df: QueryOrDF, **kwargs: t.Any
+    ) -> None:
         """Replaces the table for the given model.
 
         Args:
@@ -1228,7 +1258,7 @@ class EvaluationStrategy(abc.ABC):
             partitioned_by=model.partitioned_by,
             partition_interval_unit=model.partition_interval_unit,
             clustered_by=model.clustered_by,
-            table_properties=model.physical_properties,
+            table_properties=kwargs.get("physical_properties", model.physical_properties),
             table_description=model.description,
             column_descriptions=model.column_descriptions,
             columns_to_types=columns_to_types,
@@ -1347,6 +1377,7 @@ class MaterializableStrategy(PromotableStrategy):
         **kwargs: t.Any,
     ) -> None:
         ctas_query = model.ctas_query(**render_kwargs)
+        physical_properties = kwargs.get("physical_properties", model.physical_properties)
 
         logger.info("Creating table '%s'", table_name)
         if model.annotated:
@@ -1358,7 +1389,7 @@ class MaterializableStrategy(PromotableStrategy):
                 partitioned_by=model.partitioned_by,
                 partition_interval_unit=model.partition_interval_unit,
                 clustered_by=model.clustered_by,
-                table_properties=model.physical_properties,
+                table_properties=physical_properties,
                 table_description=model.description if is_table_deployable else None,
                 column_descriptions=model.column_descriptions if is_table_deployable else None,
             )
@@ -1382,7 +1413,7 @@ class MaterializableStrategy(PromotableStrategy):
                 partitioned_by=model.partitioned_by,
                 partition_interval_unit=model.partition_interval_unit,
                 clustered_by=model.clustered_by,
-                table_properties=model.physical_properties,
+                table_properties=physical_properties,
                 table_description=model.description if is_table_deployable else None,
                 column_descriptions=model.column_descriptions if is_table_deployable else None,
             )
@@ -1417,7 +1448,7 @@ class IncrementalByPartitionStrategy(MaterializableStrategy):
         **kwargs: t.Any,
     ) -> None:
         if is_first_insert:
-            self._replace_query_for_model(model, table_name, query_or_df)
+            self._replace_query_for_model(model, table_name, query_or_df, **kwargs)
         else:
             self.adapter.insert_overwrite_by_partition(
                 table_name,
@@ -1457,7 +1488,7 @@ class IncrementalByUniqueKeyStrategy(MaterializableStrategy):
         **kwargs: t.Any,
     ) -> None:
         if is_first_insert:
-            self._replace_query_for_model(model, table_name, query_or_df)
+            self._replace_query_for_model(model, table_name, query_or_df, **kwargs)
         else:
             self.adapter.merge(
                 table_name,
@@ -1503,7 +1534,7 @@ class IncrementalUnmanagedStrategy(MaterializableStrategy):
         **kwargs: t.Any,
     ) -> None:
         if is_first_insert:
-            self._replace_query_for_model(model, table_name, query_or_df)
+            self._replace_query_for_model(model, table_name, query_or_df, **kwargs)
         elif isinstance(model.kind, IncrementalUnmanagedKind) and model.kind.insert_overwrite:
             self.adapter.insert_overwrite_by_partition(
                 table_name,
@@ -1529,7 +1560,7 @@ class FullRefreshStrategy(MaterializableStrategy):
         is_first_insert: bool,
         **kwargs: t.Any,
     ) -> None:
-        self._replace_query_for_model(model, table_name, query_or_df)
+        self._replace_query_for_model(model, table_name, query_or_df, **kwargs)
 
 
 class SeedStrategy(MaterializableStrategy):
@@ -1558,7 +1589,7 @@ class SeedStrategy(MaterializableStrategy):
             try:
                 for index, df in enumerate(model.render_seed()):
                     if index == 0:
-                        self._replace_query_for_model(model, table_name, df)
+                        self._replace_query_for_model(model, table_name, df, **kwargs)
                     else:
                         self.adapter.insert_append(
                             table_name, df, columns_to_types=model.columns_to_types
@@ -1602,7 +1633,7 @@ class SCDType2Strategy(MaterializableStrategy):
                 partitioned_by=model.partitioned_by,
                 partition_interval_unit=model.partition_interval_unit,
                 clustered_by=model.clustered_by,
-                table_properties=model.physical_properties,
+                table_properties=kwargs.get("physical_properties", model.physical_properties),
                 table_description=model.description if is_table_deployable else None,
                 column_descriptions=model.column_descriptions if is_table_deployable else None,
             )
@@ -1748,7 +1779,7 @@ class ViewStrategy(PromotableStrategy):
             model.columns_to_types,
             replace=not self.adapter.HAS_VIEW_BINDING,
             materialized=self._is_materialized_view(model),
-            view_properties=model.physical_properties,
+            view_properties=kwargs.get("physical_properties", model.physical_properties),
             table_description=model.description,
             column_descriptions=model.column_descriptions,
         )
@@ -1803,7 +1834,7 @@ class ViewStrategy(PromotableStrategy):
             replace=False,
             materialized=self._is_materialized_view(model),
             materialized_properties=materialized_properties,
-            view_properties=model.physical_properties,
+            view_properties=kwargs.get("physical_properties", model.physical_properties),
             table_description=model.description if is_table_deployable else None,
             column_descriptions=model.column_descriptions if is_table_deployable else None,
         )
@@ -1817,16 +1848,16 @@ class ViewStrategy(PromotableStrategy):
     ) -> None:
         logger.info("Migrating view '%s'", target_table_name)
         model = snapshot.model
+        render_kwargs = dict(
+            execution_time=now(), snapshots=kwargs["snapshots"], engine_adapter=self.adapter
+        )
+
         self.adapter.create_view(
             target_table_name,
-            model.render_query_or_raise(
-                execution_time=now(),
-                snapshots=kwargs["snapshots"],
-                engine_adapter=self.adapter,
-            ),
+            model.render_query_or_raise(**render_kwargs),
             model.columns_to_types,
             materialized=self._is_materialized_view(model),
-            view_properties=model.physical_properties,
+            view_properties=model.render_physical_properties(**render_kwargs),
             table_description=model.description,
             column_descriptions=model.column_descriptions,
         )
@@ -1930,7 +1961,7 @@ class EngineManagedStrategy(MaterializableStrategy):
                 columns_to_types=model.columns_to_types,
                 partitioned_by=model.partitioned_by,
                 clustered_by=model.clustered_by,
-                table_properties=model.physical_properties,
+                table_properties=kwargs.get("physical_properties", model.physical_properties),
                 table_description=model.description,
                 column_descriptions=model.column_descriptions,
             )
@@ -1966,7 +1997,7 @@ class EngineManagedStrategy(MaterializableStrategy):
                 columns_to_types=model.columns_to_types,
                 partitioned_by=model.partitioned_by,
                 clustered_by=model.clustered_by,
-                table_properties=model.physical_properties,
+                table_properties=kwargs.get("physical_properties", model.physical_properties),
                 table_description=model.description,
                 column_descriptions=model.column_descriptions,
             )
@@ -1978,7 +2009,9 @@ class EngineManagedStrategy(MaterializableStrategy):
                 table_name,
                 model.name,
             )
-            self._replace_query_for_model(model=model, name=table_name, query_or_df=query_or_df)
+            self._replace_query_for_model(
+                model=model, name=table_name, query_or_df=query_or_df, **kwargs
+            )
 
     def append(
         self,
@@ -2032,19 +2065,25 @@ def _check_destructive_schema_change(
     if snapshot.needs_destructive_check(allow_destructive_snapshots) and has_drop_alteration(
         alter_expressions
     ):
+        snapshot_name = snapshot.name
         dropped_column_names = get_dropped_column_names(alter_expressions)
-        dropped_column_str = "', '".join(dropped_column_names) if dropped_column_names else None
-        dropped_column_msg = (
-            f" that drops column{'s' if dropped_column_names and len(dropped_column_names) > 1 else ''} '{dropped_column_str}'"
-            if dropped_column_str
-            else ""
-        )
-        warning_msg = f"Plan results in a destructive change to forward-only table '{snapshot.name}'s schema{dropped_column_msg}."
+        model_dialect = snapshot.model.dialect
+
         if snapshot.model.on_destructive_change.is_warn:
-            logger.warning(warning_msg)
+            logger.warning(
+                format_destructive_change_msg(
+                    snapshot_name,
+                    dropped_column_names,
+                    alter_expressions,
+                    model_dialect,
+                    error=False,
+                )
+            )
             return
-        raise SQLMeshError(
-            f"{warning_msg} To allow this, change the model's `on_destructive_change` setting to `warn` or `allow` or include it in the plan's `--allow-destructive-model` option."
+        raise DestructiveChangeError(
+            format_destructive_change_msg(
+                snapshot_name, dropped_column_names, alter_expressions, model_dialect
+            )
         )
 
 

@@ -288,11 +288,15 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         )
 
         if not plan.is_dev:
-            self.snapshot_evaluator.migrate(
-                [s for s in snapshots.values() if s.is_paused],
-                snapshots,
-                plan.allow_destructive_models,
-            )
+            try:
+                self.snapshot_evaluator.migrate(
+                    [s for s in snapshots.values() if s.is_paused],
+                    snapshots,
+                    plan.allow_destructive_models,
+                )
+            except NodeExecutionFailedError as ex:
+                raise PlanError(str(ex.__cause__) if ex.__cause__ else str(ex))
+
             if not plan.ensure_finalized_snapshots:
                 # Only unpause at this point if we don't have to use the finalized snapshots
                 # for subsequent plan applications. Otherwise, unpause right before finalizing

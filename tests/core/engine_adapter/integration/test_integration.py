@@ -1520,7 +1520,7 @@ def test_sushi(ctx: TestContext, tmp_path_factory: pytest.TempPathFactory):
                     "is_view": x.type == DataObjectType.VIEW,
                 }
                 for x in layer_objects
-                if not x.name.endswith("__temp")
+                if not x.name.endswith("__dev")
             }
 
             for model_name, comment in comments.items():
@@ -1602,7 +1602,7 @@ def test_sushi(ctx: TestContext, tmp_path_factory: pytest.TempPathFactory):
                 if x.name.endswith(table_name_suffix)
             }
             if not check_temp_tables:
-                layer_models = {k: v for k, v in layer_models.items() if not k.endswith("__temp")}
+                layer_models = {k: v for k, v in layer_models.items() if not k.endswith("__dev")}
 
             for model_name, comment in comments.items():
                 layer_table_name = layer_models[model_name]["table_name"]

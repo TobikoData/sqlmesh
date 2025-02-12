@@ -294,6 +294,7 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         table_description: t.Optional[str] = None,
         table_kind: t.Optional[str] = None,
+        **kwargs: t.Any,
     ) -> t.Optional[exp.Properties]:
         properties = super()._build_table_properties_exp(
             catalog_name=catalog_name,
