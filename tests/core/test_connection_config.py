@@ -4,6 +4,7 @@ import typing as t
 
 import pytest
 from _pytest.fixtures import FixtureRequest
+from pytest_mock import MockerFixture
 
 from sqlmesh.core.config.connection import (
     BigQueryConnectionConfig,
@@ -679,6 +680,27 @@ def test_postgres(make_config):
     )
     assert isinstance(config, PostgresConnectionConfig)
     assert config.is_recommended_for_state_sync is True
+
+
+def test_postgres_cursor_init(make_config, mocker: MockerFixture):
+    config = make_config(
+        type="postgres",
+        host="host",
+        user="user",
+        password="password",
+        port=5432,
+        database="database",
+        role="foo-bar",
+    )
+
+    assert isinstance(config, PostgresConnectionConfig)
+    cursor_init = config._cursor_init
+    assert cursor_init
+
+    cursor_mock = mocker.MagicMock()
+    cursor_init(cursor_mock)
+
+    cursor_mock.execute.assert_called_with('SET ROLE "foo-bar"')
 
 
 def test_gcp_postgres(make_config):
