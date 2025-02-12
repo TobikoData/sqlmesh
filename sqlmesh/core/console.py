@@ -67,6 +67,9 @@ SNAPSHOT_CHANGE_CATEGORY_STR = {
     SnapshotChangeCategory.METADATA: "Metadata",
 }
 
+PROGRESS_BAR_WIDTH = 40
+LINE_WRAP_WIDTH = 100
+
 
 class Console(abc.ABC):
     """Abstract base class for defining classes used for displaying information to the user and also interact
@@ -267,7 +270,7 @@ class Console(abc.ABC):
         """Display error info to the user."""
 
     @abc.abstractmethod
-    def log_warning(self, message: str) -> None:
+    def log_warning(self, message: str, add_warning_label: bool = True) -> None:
         """Display warning info to the user."""
 
     @abc.abstractmethod
@@ -439,7 +442,7 @@ class NoopConsole(Console):
     def log_error(self, message: str) -> None:
         pass
 
-    def log_warning(self, message: str) -> None:
+    def log_warning(self, message: str, add_warning_label: bool = True) -> None:
         logger.warning(message)
 
     def log_success(self, message: str) -> None:
@@ -463,7 +466,7 @@ class NoopConsole(Console):
 def make_progress_bar(message: str, console: t.Optional[RichConsole] = None) -> Progress:
     return Progress(
         TextColumn(f"[bold blue]{message}", justify="right"),
-        BarColumn(bar_width=40),
+        BarColumn(bar_width=PROGRESS_BAR_WIDTH),
         "[progress.percentage]{task.percentage:>3.1f}%",
         "•",
         srich.BatchColumn(),
@@ -695,7 +698,7 @@ class TerminalConsole(Console):
                     f"[bold blue]Virtually Updating '{environment_naming_info.name}'",
                     justify="right",
                 ),
-                BarColumn(bar_width=40),
+                BarColumn(bar_width=PROGRESS_BAR_WIDTH),
                 "[progress.percentage]{task.percentage:>3.1f}%",
                 "•",
                 TimeElapsedColumn(),
@@ -1238,10 +1241,17 @@ class TerminalConsole(Console):
     def log_error(self, message: str) -> None:
         self._print(f"[red]{message}[/red]")
 
-    def log_warning(self, message: str) -> None:
+    def log_warning(self, message: str, add_warning_label: bool = True) -> None:
         logger.warning(message)
         if not self.ignore_warnings:
-            self._print(f"[yellow]{message}[/yellow]")
+            message_formatted = message
+            if add_warning_label:
+                message_lstrip = message.lstrip()
+                leading_whitespace = message[: -len(message_lstrip)]
+                message_formatted = (
+                    f"{leading_whitespace}[yellow]\\[WARNING] {message_lstrip}[/yellow]"
+                )
+            self._print(message_formatted)
 
     def log_success(self, message: str) -> None:
         self._print(f"\n[green]{message}[/green]\n")
@@ -2072,8 +2082,10 @@ class MarkdownConsole(CaptureTerminalConsole):
     def log_error(self, message: str) -> None:
         super().log_error(f"```\n\\[ERROR] {message}```\n\n")
 
-    def log_warning(self, message: str) -> None:
-        super().log_warning(f"```\n\\[WARNING] {message}```\n\n")
+    def log_warning(self, message: str, add_warning_label: bool = True) -> None:
+        # we add "[WARNING]" manually here instead of relying on the TerminalConsole
+        # method functionality because WARNING needs to be inside the ``` code block
+        super().log_warning(f"```\n\\[WARNING] {message}```\n\n", add_warning_label=False)
 
 
 class DatabricksMagicConsole(CaptureTerminalConsole):
@@ -2367,7 +2379,7 @@ class DebuggerTerminalConsole(TerminalConsole):
     def log_error(self, message: str) -> None:
         self._write(message, style="bold red")
 
-    def log_warning(self, message: str) -> None:
+    def log_warning(self, message: str, add_warning_label: bool = True) -> None:
         logger.warning(message)
         if not self.ignore_warnings:
             self._write(message, style="bold yellow")
@@ -2499,7 +2511,7 @@ def _format_audits_errors(error: NodeAuditsErrors) -> str:
 
         err_msg = f"'{err.audit_name}' audit error: {err.count} {'row' if err.count == 1 else 'rows'} failed"
 
-        query = "\n  ".join(textwrap.wrap(err.sql(err.adapter_dialect), width=100))
+        query = "\n  ".join(textwrap.wrap(err.sql(err.adapter_dialect), width=LINE_WRAP_WIDTH))
         msg = f"{err_msg}\n\nAudit arguments\n  {audit_args_sql_msg}Audit query\n  {query}\n\n"
         msg = msg.replace("\n", "\n  ")
         error_messages.append(msg)
