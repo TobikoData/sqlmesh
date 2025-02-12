@@ -273,6 +273,12 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
     def wap_supported(self, table_name: TableName) -> bool:
         return False
 
+    def close(self) -> t.Any:
+        """Closes all open connections and releases all allocated resources."""
+        super().close()
+        if self._spark_engine_adapter:
+            self._spark_engine_adapter.close()
+
     @property
     def default_catalog(self) -> t.Optional[str]:
         try:
