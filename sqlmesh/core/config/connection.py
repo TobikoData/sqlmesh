@@ -1197,10 +1197,8 @@ class PostgresConnectionConfig(ConnectionConfig):
         if not self.role:
             return None
 
-        role_identifier = exp.to_identifier(self.role).sql(dialect="postgres")
-
         def init(cursor: t.Any) -> None:
-            cursor.execute(f"SET ROLE {role_identifier}")
+            cursor.execute(f"SET ROLE {self.role}")
 
         return init
 
