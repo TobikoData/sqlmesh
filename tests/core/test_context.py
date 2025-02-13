@@ -1368,8 +1368,9 @@ def test_plan_runs_audits_on_dev_previews(sushi_context: Context, capsys, caplog
     # we only see audit results if they fail
     stdout = capsys.readouterr().out
     log = caplog.text
+    count = sushi_context.fetchdf("select count(*) from sushi__dev.test_audit_model").values[0][0]
     assert (
-        "\n'not_null' audit error: 22 rows failed. Audit is non-blocking so proceeding with execution. Audit query:\nSELECT"
+        f"\n'not_null' audit error: {count} rows failed. Audit is non-blocking so proceeding with execution. Audit query:\nSELECT"
         in log
     )
     assert "Target environment updated successfully" in stdout
