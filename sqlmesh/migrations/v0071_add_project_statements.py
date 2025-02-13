@@ -1,4 +1,4 @@
-"""Add the plan statements table."""
+"""Add the project statements table."""
 
 from sqlglot import exp
 
