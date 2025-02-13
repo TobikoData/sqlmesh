@@ -163,8 +163,51 @@ This gives you complete control over data security and network access while stil
 
 ### How it works
 
-Coming soon!
+Self-hosted executors as the name indicates are self-hosted workers that take on the responsibility of "executing" changes to the data warehouse. While Tobiko Cloud schedules and plans changes, the executors are responsible for executing those changes. Executors are docker containers that are configured to connect to Tobiko Cloud as well as your data warehouse. Connected to both, the executor pulls work from the cloud, whether it's a plan or scheduled background work from a run, and execute it on your data warehouse.
 
 ### Configuration
 
-Coming soon!
+Exact configuration is left to the user and will vary based on the infrastructure and setup of the user, for example the executors could be run on a Kubernetes cluster or as a standalone pair of Docker containers depending on the user's infrastructure. The following details are an example of how this is done for a Postgres data warehouse and a pair of local containers running in docker.
+
+Tobiko Cloud requires 2 docker instances to be running, one to pick up runs and one for plans. The entrypoint for both is `executor run` and `executor plan` respectively. The executor container can be found on [Docker Hub](https://hub.docker.com/r/tobikodata/tcloud). In addition to running the container, the user will need to configure the executor with environment variables that point to Tobiko Cloud as well as the data warehouse.
+
+To connect to the Tobiko Cloud, the user will need to provide the following environment variables, replaced with the user's own values.
+
+```env
+TCLOUD_URL=https://cloud.tobikodata.com/sqlmesh/acme/analytics_project
+TCLOUD_TOKEN=your_token
+```
+
+In addition to the above variables, a gateway is needed to provide a connection to a data warehouse. The following details are an example of how this is done for a Postgres data warehouse where the gateway is named `GATEWAY_A`. For more details on how to configure a gateway, see the details on other [engines](../../../integrations/overview.md#execution-engines) and how to [overide variables](../../../guides/configuration.md#overrides) as done below. 
+
+```env
+SQLMESH__DEFAULT_GATEWAY=GATEWAY_A
+SQLMESH__GATEWAYS__GATEWAY_A__CONNECTION__TYPE=postgres
+SQLMESH__GATEWAYS__GATEWAY_A__CONNECTION__HOST=10.10.10.10
+SQLMESH__GATEWAYS__GATEWAY_A__CONNECTION__PORT=5432
+SQLMESH__GATEWAYS__GATEWAY_A__CONNECTION__DATABASE=example_db
+SQLMESH__GATEWAYS__GATEWAY_A__CONNECTION__USER=example_user
+SQLMESH__GATEWAYS__GATEWAY_A__CONNECTION__PASSWORD=example_password
+```
+
+**Note**: If there are multiple gateways, each gateway will need to have its own set of environment variables. For example, if there are two gateways, `GATEWAY_A` and `GATEWAY_B`, the environment variables will need to be set for both gateways.
+
+```env
+SQLMESH__GATEWAYS__GATEWAY_A__CONNECTION__TYPE=<connection type>  
+# <Gateway A connection settings>  
+SQLMESH__GATEWAYS__GATEWAY_B__CONNECTION__TYPE=<connection type>  
+# <Gateway B connection settings>  
+```
+
+Once you have set up both sets of environment variables in a file named `local.env`, you can run the following command to start the executor:
+
+```shell
+docker run -d --env-file local.env tobikodata/tcloud:latest -- executor run
+docker run -d --env-file local.env tobikodata/tcloud:latest -- executor plan
+```
+
+After the executors are properly configured, they will appear in the cloud UI where they can be used to execute plans and scheduled tasks.
+
+![executors](../scheduler/executors.png)
+
+We recommend setting up monitoring for the executors to ensure they run smoothly and to help troubleshoot issues. This monitoring should include logs and system metrics like memory and CPU usage.
