@@ -1885,6 +1885,8 @@ def load_sql_based_model(
         "description": (
             "\n".join(comment.strip() for comment in rendered_meta.comments)
             if rendered_meta.comments
+            else description
+            if defaults and (description := defaults.get("description"))
             else None
         ),
         **{prop.name.lower(): prop.args.get("value") for prop in rendered_meta.expressions},
@@ -2153,7 +2155,12 @@ def _create_model(
 ) -> Model:
     _validate_model_fields(klass, {"name", *kwargs} - {"grain", "table_properties"}, path)
 
-    for prop in ["session_properties", "physical_properties", "virtual_properties"]:
+    for prop in [
+        "session_properties",
+        "physical_properties",
+        "virtual_properties",
+        "column_descriptions",
+    ]:
         kwargs[prop] = _resolve_properties((defaults or {}).get(prop), kwargs.get(prop))
 
     dialect = dialect or ""
