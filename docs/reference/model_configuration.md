@@ -127,7 +127,6 @@ The SQLMesh project-level `model_defaults` key supports the following options, d
 - allow_partials
 - enabled
 - interval_unit
-- description
 
 
 ### Model Naming
