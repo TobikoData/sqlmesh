@@ -957,7 +957,8 @@ class TerminalConsole(Console):
                     )
                 elif context_diff.indirectly_modified(name):
                     indirect.add(f"[indirect]{display_name}")
-                elif context_diff.metadata_updated(name):
+
+                if context_diff.metadata_updated(name):
                     metadata.add(
                         f"[metadata]{display_name}"
                         if no_diff
@@ -1051,7 +1052,7 @@ class TerminalConsole(Console):
             if context_diff.directly_modified(snapshot.name):
                 category_str = SNAPSHOT_CHANGE_CATEGORY_STR[snapshot.change_category]
                 tree = Tree(
-                    f"[bold][direct]Directly Modified: {snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)} ({category_str})"
+                    f"\n[bold][direct]Directly Modified: {snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)} ({category_str})"
                 )
                 indirect_tree = None
                 for child_sid in sorted(plan.indirectly_modified.get(snapshot.snapshot_id, set())):
@@ -1069,13 +1070,16 @@ class TerminalConsole(Console):
                     indirect_tree = self._limit_model_names(indirect_tree, self.verbose)
             elif context_diff.metadata_updated(snapshot.name):
                 tree = Tree(
-                    f"[bold][metadata]Metadata Updated: {snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)}"
+                    f"\n[bold][metadata]Metadata Updated: {snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)}"
                 )
             else:
                 continue
 
-            self._print(Syntax(context_diff.text_diff(snapshot.name), "sql", word_wrap=True))
-            self._print(tree)
+            text_diff = context_diff.text_diff(snapshot.name)
+            if text_diff:
+                self._print("")
+                self._print(Syntax(text_diff, "sql", word_wrap=True))
+                self._print(tree)
 
     def _show_missing_dates(self, plan: Plan, default_catalog: t.Optional[str]) -> None:
         """Displays the models with missing dates."""
