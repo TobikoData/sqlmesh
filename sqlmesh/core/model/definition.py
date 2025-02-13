@@ -1885,8 +1885,8 @@ def load_sql_based_model(
         "description": (
             "\n".join(comment.strip() for comment in rendered_meta.comments)
             if rendered_meta.comments
-            else description
-            if defaults and (description := defaults.get("description"))
+            else defaults.get("description")
+            if defaults
             else None
         ),
         **{prop.name.lower(): prop.args.get("value") for prop in rendered_meta.expressions},
