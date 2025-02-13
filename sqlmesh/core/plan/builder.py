@@ -640,6 +640,8 @@ class PlanBuilder:
         for name, (candidate, promoted) in self._context_diff.modified_snapshots.items():
             if (
                 candidate.snapshot_id not in self._context_diff.new_snapshots
+                and candidate.is_model
+                and not candidate.model.forward_only
                 and promoted.is_forward_only
                 and not promoted.is_paused
                 and not candidate.reuses_previous_version
