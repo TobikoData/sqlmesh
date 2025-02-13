@@ -2980,7 +2980,7 @@ def test_new_forward_only_model_concurrent_versions(init_and_plan_context: t.Cal
     )
     new_model_alt = load_sql_based_model(new_model_alt_expr)
 
-    # Add the second version of the model and apply it to dev_b.
+    # Add the second version of the model but don't apply it yet
     context.upsert_model(new_model_alt)
     snapshot_b = context.get_snapshot(new_model_alt.name)
     plan_b = context.plan_builder("dev_b").build()
@@ -2992,8 +2992,6 @@ def test_new_forward_only_model_concurrent_versions(init_and_plan_context: t.Cal
 
     assert snapshot_b.fingerprint != snapshot_a.fingerprint
     assert snapshot_b.version == snapshot_a.version
-
-    context.apply(plan_b)
 
     # Apply the 1st version to prod
     context.upsert_model(new_model)
@@ -3008,10 +3006,20 @@ def test_new_forward_only_model_concurrent_versions(init_and_plan_context: t.Cal
     df = context.fetchdf("SELECT * FROM memory.sushi.new_model")
     assert df.to_dict() == {"ds": {0: "2023-01-07"}, "a": {0: 1}}
 
+    # Modify the 1st version in prod to trigger a forward-only change
+    new_model = add_projection_to_model(t.cast(SqlModel, new_model))
+    context.upsert_model(new_model)
+    context.plan("prod", auto_apply=True, no_prompts=True, skip_tests=True)
+
+    # Apply the 2nd version to dev_b.
+    # At this point the snapshot of the 2nd version has already been categorized but not
+    # persisted in the state. This means that when the snapshot of the 1st version was
+    # being unpaused during promotion to prod, the state of the 2nd version snapshot was not updated
+    context.apply(plan_b)
+
     # Apply the 2nd version to prod
     context.upsert_model(new_model_alt)
     plan_prod_b = context.plan_builder("prod").build()
-    assert snapshot_b.snapshot_id in plan_prod_b.snapshots
     assert (
         plan_prod_b.snapshots[snapshot_b.snapshot_id].change_category
         == SnapshotChangeCategory.BREAKING
