@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from sqlglot.errors import SqlglotError
+from sqlglot import exp
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.audit import Audit, ModelAudit, StandaloneAudit, load_multiple_audits
@@ -26,18 +27,29 @@ from sqlmesh.core.model import (
     load_sql_based_models,
 )
 from sqlmesh.core.model import model as model_registry
+from sqlmesh.core.model.common import make_python_env
 from sqlmesh.core.signal import signal
 from sqlmesh.utils import UniqueKeyDict, sys_path
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroExtractor
 from sqlmesh.utils.metaprogramming import import_python_file
 from sqlmesh.utils.yaml import YAML
+from sqlmesh.utils.metaprogramming import Executable
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.context import GenericContext
 
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class ProjectStatements:
+    plan_before_all: t.List[str]
+    plan_after_all: t.List[str]
+    run_before_all: t.List[str]
+    run_after_all: t.List[str]
+    python_env: t.Dict[str, Executable]
 
 
 @dataclass
@@ -50,6 +62,7 @@ class LoadedProject:
     metrics: UniqueKeyDict[str, Metric]
     requirements: t.Dict[str, str]
     excluded_requirements: t.Set[str]
+    project_statements: ProjectStatements
 
 
 class Loader(abc.ABC):
@@ -114,6 +127,8 @@ class Loader(abc.ABC):
 
             requirements, excluded_requirements = self._load_requirements()
 
+            project_statements = self._load_project_statements(macros=macros)
+
             project = LoadedProject(
                 macros=macros,
                 jinja_macros=jinja_macros,
@@ -123,6 +138,7 @@ class Loader(abc.ABC):
                 metrics=expand_metrics(metrics),
                 requirements=requirements,
                 excluded_requirements=excluded_requirements,
+                project_statements=project_statements,
             )
             return project
 
@@ -159,6 +175,16 @@ class Loader(abc.ABC):
         self, macros: MacroRegistry, jinja_macros: JinjaMacroRegistry
     ) -> UniqueKeyDict[str, Audit]:
         """Loads all audits."""
+
+    def _load_project_statements(self, macros: MacroRegistry) -> ProjectStatements:
+        """Loads project statements."""
+        return ProjectStatements(
+            plan_before_all=[],
+            plan_after_all=[],
+            run_before_all=[],
+            run_after_all=[],
+            python_env={},
+        )
 
     def load_materializations(self) -> None:
         """Loads custom materializations."""
@@ -593,6 +619,27 @@ class SqlMeshLoader(Loader):
                     raise ConfigError(f"Failed to parse metric definitions at '{path}': {ex}.")
 
         return metrics
+
+    def _load_project_statements(self, macros: MacroRegistry) -> ProjectStatements:
+        """Loads project statements."""
+
+        statements = {
+            "plan_before_all": self.config.plan.before_all or [],
+            "plan_after_all": self.config.plan.after_all or [],
+            "run_before_all": self.config.run.before_all or [],
+            "run_after_all": self.config.run.after_all or [],
+        }
+
+        python_env = make_python_env(
+            [exp.maybe_parse(stmt) for stmts in statements.values() for stmt in stmts],
+            module_path=self.config_path,
+            jinja_macro_references=None,
+            macros=macros,
+            variables=self._variables,
+            path=self.config_path,
+        )
+
+        return ProjectStatements(**statements, python_env=python_env)
 
     class _Cache:
         def __init__(self, loader: SqlMeshLoader, config_path: Path):
