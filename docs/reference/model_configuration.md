@@ -45,7 +45,7 @@ Configuration options for SQLMesh model properties. Supported by all model kinds
 
 The SQLMesh project-level configuration must contain the `model_defaults` key and must specify a value for its `dialect` key. Other values are set automatically unless explicitly overridden in the model definition. Learn more about project-level configuration in the [configuration guide](../guides/configuration.md).
 
-In `column_descriptions`, `physical_properties`, `virtual_properties`, and `session_properties`, when both project-level and model-specific properties are defined, they are merged, with model-level properties taking precedence. To unset a project-wide property for a specific model, set it to `None` in the `MODEL`'s DDL properties or within the `@model` decorator for Python models.
+In `physical_properties`, `virtual_properties`, and `session_properties`, when both project-level and model-specific properties are defined, they are merged, with model-level properties taking precedence. To unset a project-wide property for a specific model, set it to `None` in the `MODEL`'s DDL properties or within the `@model` decorator for Python models.
 
 For example, with the following `model_defaults` configuration:
 
@@ -127,13 +127,7 @@ The SQLMesh project-level `model_defaults` key supports the following options, d
 - allow_partials
 - enabled
 - interval_unit
-- column_descriptions
 - description
-- grains
-- references
-- clustered_by
-- partitioned_by
-- tags
 
 
 ### Model Naming

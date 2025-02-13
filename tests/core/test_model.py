@@ -3402,13 +3402,6 @@ def test_project_level_properties(sushi_context):
         interval_unit="quarter_hour",
         validate_query=True,
         optimize_query=True,
-        description="Project wide description",
-        column_descriptions={"a": "Project description"},
-        grains=["a"],
-        references=["b"],
-        tags=["pii", "fact"],
-        clustered_by=["a"],
-        partitioned_by=["a"],
         cron="@hourly",
     )
 
@@ -3435,13 +3428,6 @@ def test_project_level_properties(sushi_context):
     assert model.interval_unit == IntervalUnit.QUARTER_HOUR
     assert model.optimize_query
     assert model.validate_query
-    assert model.grains == [exp.column("a", quoted=False)]
-    assert model.references == [exp.column("b", quoted=False)]
-    assert model.clustered_by == [exp.column("a", quoted=True)]
-    assert model.partitioned_by == [exp.column("a", quoted=True)]
-    assert model.tags == ["pii", "fact"]
-    assert model.description == "Project wide description"
-    assert model.column_descriptions == {"a": "Project description"}
     assert model.cron == "@hourly"
 
     assert model.session_properties == {
@@ -3464,14 +3450,7 @@ def test_project_level_properties(sushi_context):
         MODEL (
             name test_schema.test_model_2,
             kind FULL,
-            column_descriptions (
-                a = 'model description'
-            ),
             allow_partials False,
-            description 'custom model description',
-            tags ["some"],
-            partitioned_by b,
-            clustered_by b,
             interval_unit hour,
             cron '@daily'
 
@@ -3486,12 +3465,6 @@ def test_project_level_properties(sushi_context):
     # Validate overriding of project wide defaults
     assert not model_2.allow_partials
     assert model_2.interval_unit == IntervalUnit.HOUR
-    assert model_2.grains == [exp.column("a", quoted=False)]
-    assert model_2.clustered_by == [exp.column("b", quoted=True)]
-    assert model_2.partitioned_by == [exp.column("b", quoted=True)]
-    assert model_2.tags == ["some"]
-    assert model_2.description == "custom model description"
-    assert model_2.column_descriptions == {"a": "model description"}
     assert model_2.cron == "@daily"
 
 
@@ -3507,12 +3480,6 @@ def test_project_level_properties_python_model():
         "interval_unit": "quarter_hour",
         "validate_query": True,
         "optimize_query": True,
-        "column_descriptions": {"some_col": "Project description"},
-        "grains": ["some_col"],
-        "references": ["b"],
-        "tags": ["pii", "fact"],
-        "clustered_by": ["some_col"],
-        "partitioned_by": ["some_col"],
     }
 
     @model(
@@ -3543,13 +3510,6 @@ def test_project_level_properties_python_model():
     assert not m.enabled
     assert m.allow_partials
     assert m.interval_unit == IntervalUnit.QUARTER_HOUR
-    assert m.grains == [exp.column("some_col", quoted=False)]
-    assert m.references == [exp.column("b", quoted=False)]
-    assert m.clustered_by == [exp.column("some_col", quoted=True)]
-    assert m.partitioned_by == [exp.column("some_col", quoted=True)]
-    assert m.tags == ["pii", "fact"]
-    assert m.description == "general model description"
-    assert m.column_descriptions == {"some_col": "Project description"}
 
 
 def test_model_session_properties(sushi_context):

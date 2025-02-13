@@ -42,13 +42,6 @@ class ModelDefaultsConfig(BaseConfig):
         allow_partials: Whether the models can process partial (incomplete) data intervals.
         enabled: Whether the models are enabled.
         interval_unit: The temporal granularity of the models data intervals. By default computed from cron.
-        column_descriptions: A key-value mapping of column names to their descriptions.
-        description: Description of the models. Automatically registered in the SQL engine's table COMMENT field or equivalent.
-        grains: The column(s) whose combination uniquely identifies each row in the models.
-        references: The model column(s) used to join to models' grains.
-        clustered_by: The column(s) used to cluster the models' physical table.
-        partitioned_by: The column(s) used to define the models' partitioning key.
-        tags: Arbitrary strings used to organize or classify the models.
 
     """
 
@@ -69,13 +62,6 @@ class ModelDefaultsConfig(BaseConfig):
     allow_partials: t.Optional[bool] = None
     interval_unit: t.Optional[IntervalUnit] = None
     enabled: t.Optional[bool] = None
-    description: t.Optional[str] = None
-    column_descriptions: t.Optional[t.Dict[str, str]] = None
-    grains: t.Optional[t.List[str]] = None
-    references: t.Optional[t.List[str]] = None
-    clustered_by: t.Optional[t.Any] = None
-    partitioned_by: t.Optional[t.Any] = None
-    tags: t.Optional[t.List[str]] = None
 
     _model_kind_validator = model_kind_validator
     _on_destructive_change_validator = on_destructive_change_validator
