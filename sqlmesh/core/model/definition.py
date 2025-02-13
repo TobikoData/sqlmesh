@@ -2640,6 +2640,57 @@ def render_expression(
     ).render()
 
 
+def render_statements(
+    statements: t.List[str],
+    dialect: DialectType = None,
+    default_catalog: t.Optional[str] = None,
+    python_env: t.Optional[t.Dict[str, Executable]] = None,
+    **render_kwargs: t.Any,
+) -> t.List[str]:
+    rendered_exprs = []
+    for statement in statements:
+        rendered_exprs.append(
+            render_statement(
+                expression=statement,
+                dialect=dialect,
+                default_catalog=default_catalog,
+                python_env=python_env,
+                **render_kwargs,
+            )
+        )
+    return rendered_exprs
+
+
+def render_statement(
+    expression: str | exp.Expression,
+    dialect: DialectType = None,
+    default_catalog: t.Optional[str] = None,
+    python_env: t.Optional[t.Dict[str, Executable]] = None,
+    **kwargs: t.Any,
+) -> str:
+    statement = exp.maybe_parse(expression)
+    rendered = ExpressionRenderer(
+        statement,
+        dialect,
+        [],
+        python_env=python_env,
+        default_catalog=default_catalog,
+        quote_identifiers=False,
+        normalize_identifiers=False,
+    ).render(**kwargs)
+
+    if rendered is None:
+        raise SQLMeshError(
+            f"Rendering `{statement.sql(dialect=dialect)}` must return an expression"
+        )
+    if len(rendered) != 1:
+        raise SQLMeshError(
+            f"Rendering `{statement.sql(dialect=dialect)}` must return one result, but got {len(rendered)}"
+        )
+
+    return rendered[0].sql(dialect=dialect)
+
+
 META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
     "start": lambda value: exp.Literal.string(value),
     "cron": lambda value: exp.Literal.string(value),

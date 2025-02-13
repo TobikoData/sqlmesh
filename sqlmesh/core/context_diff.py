@@ -31,6 +31,9 @@ else:
 if t.TYPE_CHECKING:
     from sqlmesh.core.state_sync import StateReader
 
+from sqlmesh.utils.metaprogramming import Executable  # noqa
+from sqlmesh.core.loader import ProjectStatements
+
 IGNORED_PACKAGES = {"sqlmesh", "sqlglot"}
 
 
@@ -73,6 +76,10 @@ class ContextDiff(PydanticModel):
     """Previous requirements."""
     requirements: t.Dict[str, str] = {}
     """Python dependencies."""
+    previous_project_statements: t.Optional[str]
+    """Previous project statements."""
+    project_statements: t.List[ProjectStatements] = []
+    """Project statements."""
     diff_rendered: bool = False
     """Whether the diff should compare raw vs rendered models"""
 
@@ -87,6 +94,7 @@ class ContextDiff(PydanticModel):
         provided_requirements: t.Optional[t.Dict[str, str]] = None,
         excluded_requirements: t.Optional[t.Set[str]] = None,
         diff_rendered: bool = False,
+        project_statements: t.Optional[t.List[ProjectStatements]] = [],
     ) -> ContextDiff:
         """Create a ContextDiff object.
 
@@ -195,6 +203,8 @@ class ContextDiff(PydanticModel):
             snapshots.values(),
         )
 
+        previous_project_statements = state_reader.get_project_statements(environment)
+
         return ContextDiff(
             environment=environment,
             is_new_environment=is_new_environment,
@@ -213,6 +223,8 @@ class ContextDiff(PydanticModel):
             previous_requirements=env.requirements if env else {},
             requirements=requirements,
             diff_rendered=diff_rendered,
+            previous_project_statements=previous_project_statements,
+            project_statements=project_statements,
         )
 
     @classmethod
@@ -249,6 +261,7 @@ class ContextDiff(PydanticModel):
             previous_finalized_snapshots=env.previous_finalized_snapshots,
             previous_requirements=env.requirements,
             requirements=env.requirements,
+            previous_project_statements=None,
         )
 
     @property
@@ -258,11 +271,16 @@ class ContextDiff(PydanticModel):
             or self.is_new_environment
             or self.is_unfinalized_environment
             or self.has_requirement_changes
+            or self.has_project_statements_changes
         )
 
     @property
     def has_requirement_changes(self) -> bool:
         return self.previous_requirements != self.requirements
+
+    @property
+    def has_project_statements_changes(self) -> bool:
+        return self.json(include={"project_statements"}) != self.previous_project_statements
 
     @property
     def has_snapshot_changes(self) -> bool:

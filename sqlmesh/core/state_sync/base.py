@@ -10,6 +10,7 @@ from sqlglot import __version__ as SQLGLOT_VERSION
 
 from sqlmesh import migrations
 from sqlmesh.core.environment import Environment, EnvironmentNamingInfo
+from sqlmesh.core.plan.definition import EvaluatablePlan
 from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotId,
@@ -183,6 +184,22 @@ class StateReader(abc.ABC):
 
         Args:
             next_auto_restatement_ts: A dictionary of snapshot name / version pairs to the next auto restatement timestamp.
+        """
+
+    @abc.abstractmethod
+    def get_project_statements(self, environment: str) -> t.Optional[str]:
+        """Fetches project statements from the project_statements table.
+
+        Returns:
+            A tuple of (before_all, after_all) statements.
+        """
+
+    @abc.abstractmethod
+    def update_project_statements(self, plan: EvaluatablePlan) -> None:
+        """Updates the project statements for the given plan.
+
+        Args:
+            plan: The plan to update.
         """
 
     def get_versions(self, validate: bool = True) -> Versions:

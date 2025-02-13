@@ -21,6 +21,7 @@ from sqlmesh.core import analytics
 from sqlmesh.core import constants as c
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.environment import EnvironmentNamingInfo
+from sqlmesh.core.model.definition import render_statements
 from sqlmesh.core.notification_target import (
     NotificationTarget,
 )
@@ -120,6 +121,28 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                 after_promote_snapshots = all_names - before_promote_snapshots
                 deployability_index_for_evaluation = DeployabilityIndex.all_deployable()
 
+            self.state_sync.update_project_statements(plan)
+
+            dialect = self.snapshot_evaluator.adapter.dialect
+            render_kwargs = dict(
+                start=plan.start,
+                end=plan.end,
+                execution_time=plan.execution_time or now(),
+                snapshots=snapshots_by_name,
+            )
+
+            if statements := plan.project_statements:
+                for project_statements in statements:
+                    rendered_exprs = render_statements(
+                        project_statements.plan_before_all,
+                        dialect=dialect,
+                        default_catalog=self.default_catalog,
+                        python_env=project_statements.python_env,
+                        **render_kwargs,
+                    )
+                    for statement in rendered_exprs:
+                        self.snapshot_evaluator.adapter.execute(statement)
+
             self._push(plan, snapshots, deployability_index_for_creation)
             update_intervals_for_new_snapshots(plan.new_snapshots, self.state_sync)
             self._restate(plan, snapshots_by_name)
@@ -144,6 +167,19 @@ class BuiltInPlanEvaluator(PlanEvaluator):
 
             if not plan.requires_backfill:
                 self.console.log_success("Virtual Update executed successfully")
+
+            if statements := plan.project_statements:
+                for project_statements in statements:
+                    rendered_exprs = render_statements(
+                        getattr(project_statements, "plan_after_all"),
+                        dialect=dialect,
+                        default_catalog=self.default_catalog,
+                        python_env=project_statements.python_env,
+                        **render_kwargs,
+                    )
+                    for statement in rendered_exprs:
+                        self.snapshot_evaluator.adapter.execute(statement)
+
         except Exception as e:
             analytics.collector.on_plan_apply_end(plan_id=plan.plan_id, error=e)
             raise
