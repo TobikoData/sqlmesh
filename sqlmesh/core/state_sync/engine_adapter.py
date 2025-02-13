@@ -741,12 +741,8 @@ class EngineAdapterStateSync(StateSync):
         Returns:
             A list of all environment names along with expiry datetime if get_expiry_ts is True.
         """
-        name_field = ["name"]
-        return self._fetchall(
-            self._environments_query(
-                required_fields=name_field if not get_expiry_ts else name_field + ["expiration_ts"]
-            ),
-        )
+        required_fields = ["name", "expiration_ts"] if get_expiry_ts else ["name"]
+        return self._fetchall(self._environments_query(required_fields=required_fields))
 
     def _environment_from_row(self, row: t.Tuple[str, ...]) -> Environment:
         return Environment(**{field: row[i] for i, field in enumerate(Environment.all_fields())})

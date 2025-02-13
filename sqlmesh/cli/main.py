@@ -20,7 +20,7 @@ from sqlmesh.utils.errors import MissingDependencyError
 
 logger = logging.getLogger(__name__)
 
-SKIP_LOAD_COMMANDS = ("create_external_models", "migrate", "rollback", "run")
+SKIP_LOAD_COMMANDS = ("create_external_models", "migrate", "rollback", "run", "environments")
 SKIP_CONTEXT_COMMANDS = ("init", "ui")
 
 

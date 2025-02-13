@@ -1977,8 +1977,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         """Prints all environment names along with expiry datetime if show_expiry is True."""
         environment_names = self._new_state_sync().get_environment_names(get_expiry_ts=show_expiry)
         if not environment_names:
-            error_msg = "Environments were not found."
-            raise SQLMeshError(error_msg)
+            raise SQLMeshError("This project has no environments. Create an environment using the `sqlmesh plan` command.")
         output = (
             [
                 f"{name} - {time_like_to_str(ts)}" if ts else f"{name} - No Expiry"
