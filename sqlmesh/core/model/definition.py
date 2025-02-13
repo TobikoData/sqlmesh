@@ -1771,6 +1771,8 @@ Model = t.Union[SqlModel, SeedModel, PythonModel, ExternalModel]
 class AuditResult(PydanticModel):
     audit: Audit
     """The audit this result is for."""
+    audit_args: t.Dict[t.Any, t.Any]
+    """Arguments passed to the audit."""
     model: t.Optional[_Model] = None
     """The model this audit is for."""
     count: t.Optional[int] = None

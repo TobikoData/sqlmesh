@@ -41,7 +41,7 @@ from sqlmesh.core.engine_adapter.shared import (
 from sqlmesh.core.model.kind import TimeColumn
 from sqlmesh.core.schema_diff import SchemaDiffer
 from sqlmesh.utils import columns_to_types_all_known, random_id
-from sqlmesh.utils.connection_pool import create_connection_pool
+from sqlmesh.utils.connection_pool import create_connection_pool, ConnectionPool
 from sqlmesh.utils.date import TimeLike, make_inclusive, to_time_column
 from sqlmesh.utils.errors import (
     SQLMeshError,
@@ -79,7 +79,7 @@ class EngineAdapter:
     with the underlying engine and data store.
 
     Args:
-        connection_factory: a callable which produces a new Database API-compliant
+        connection_factory_or_pool: a callable which produces a new Database API-compliant
             connection on every call.
         dialect: The dialect with which this adapter is associated.
         multithreaded: Indicates whether this adapter will be used by more than one thread.
@@ -109,7 +109,7 @@ class EngineAdapter:
 
     def __init__(
         self,
-        connection_factory: t.Callable[[], t.Any],
+        connection_factory_or_pool: t.Union[t.Callable[[], t.Any], ConnectionPool],
         dialect: str = "",
         sql_gen_kwargs: t.Optional[t.Dict[str, Dialect | bool | str]] = None,
         multithreaded: bool = False,
@@ -122,8 +122,12 @@ class EngineAdapter:
         **kwargs: t.Any,
     ):
         self.dialect = dialect.lower() or self.DIALECT
-        self._connection_pool = create_connection_pool(
-            connection_factory, multithreaded, cursor_init=cursor_init
+        self._connection_pool = (
+            connection_factory_or_pool
+            if isinstance(connection_factory_or_pool, ConnectionPool)
+            else create_connection_pool(
+                connection_factory_or_pool, multithreaded, cursor_init=cursor_init
+            )
         )
         self._sql_gen_kwargs = sql_gen_kwargs or {}
         self._default_catalog = default_catalog
@@ -135,16 +139,15 @@ class EngineAdapter:
 
     def with_log_level(self, level: int) -> EngineAdapter:
         adapter = self.__class__(
-            lambda: None,
+            self._connection_pool,
             dialect=self.dialect,
             sql_gen_kwargs=self._sql_gen_kwargs,
             default_catalog=self._default_catalog,
             execute_log_level=level,
             register_comments=self._register_comments,
+            null_connection=True,
             **self._extra_config,
         )
-
-        adapter._connection_pool = self._connection_pool
 
         return adapter
 
