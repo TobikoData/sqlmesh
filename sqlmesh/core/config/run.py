@@ -3,6 +3,7 @@ from __future__ import annotations
 from sqlmesh.core.config.base import BaseConfig
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import field_validator
+import typing as t
 
 
 class RunConfig(BaseConfig):
@@ -15,6 +16,9 @@ class RunConfig(BaseConfig):
 
     environment_check_interval: int = 30
     environment_check_max_wait: int = 6 * 60 * 60  # 6 hours by default
+
+    before_all: t.Optional[t.List[str]] = None
+    after_all: t.Optional[t.List[str]] = None
 
     @field_validator("environment_check_interval", "environment_check_max_wait", mode="after")
     @classmethod

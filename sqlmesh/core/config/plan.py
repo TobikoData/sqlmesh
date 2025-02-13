@@ -30,3 +30,5 @@ class PlanConfig(BaseConfig):
     no_prompts: bool = True
     auto_apply: bool = False
     use_finalized_state: bool = False
+    before_all: t.Optional[t.List[str]] = None
+    after_all: t.Optional[t.List[str]] = None

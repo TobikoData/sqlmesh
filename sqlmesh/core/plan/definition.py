@@ -8,6 +8,8 @@ from functools import cached_property
 
 from sqlmesh.core.context_diff import ContextDiff
 from sqlmesh.core.environment import Environment, EnvironmentNamingInfo
+from sqlmesh.utils.metaprogramming import Executable  # noqa
+from sqlmesh.core.loader import ProjectStatements
 from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.snapshot import (
     DeployabilityIndex,
@@ -255,6 +257,7 @@ class Plan(PydanticModel, frozen=True):
             models_to_backfill=self.models_to_backfill,
             interval_end_per_model=self.interval_end_per_model,
             execution_time=self.execution_time,
+            project_statements=self.context_diff.project_statements,
         )
 
     @cached_property
@@ -285,6 +288,7 @@ class EvaluatablePlan(PydanticModel):
     models_to_backfill: t.Optional[t.Set[str]] = None
     interval_end_per_model: t.Optional[t.Dict[str, int]] = None
     execution_time: t.Optional[TimeLike] = None
+    project_statements: t.Optional[t.List[ProjectStatements]] = None
 
     def is_selected_for_backfill(self, model_fqn: str) -> bool:
         return self.models_to_backfill is None or model_fqn in self.models_to_backfill
