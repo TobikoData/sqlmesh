@@ -270,7 +270,7 @@ class Console(abc.ABC):
         """Display error info to the user."""
 
     @abc.abstractmethod
-    def log_warning(self, message: str, add_warning_label: bool = True) -> None:
+    def log_warning(self, message: str) -> None:
         """Display warning info to the user."""
 
     @abc.abstractmethod
@@ -442,7 +442,7 @@ class NoopConsole(Console):
     def log_error(self, message: str) -> None:
         pass
 
-    def log_warning(self, message: str, add_warning_label: bool = True) -> None:
+    def log_warning(self, message: str) -> None:
         logger.warning(message)
 
     def log_success(self, message: str) -> None:
@@ -1241,16 +1241,12 @@ class TerminalConsole(Console):
     def log_error(self, message: str) -> None:
         self._print(f"[red]{message}[/red]")
 
-    def log_warning(self, message: str, add_warning_label: bool = True) -> None:
+    def log_warning(self, message: str) -> None:
         logger.warning(message)
         if not self.ignore_warnings:
-            message_formatted = message
-            if add_warning_label:
-                message_lstrip = message.lstrip()
-                leading_whitespace = message[: -len(message_lstrip)]
-                message_formatted = (
-                    f"{leading_whitespace}[yellow]\\[WARNING] {message_lstrip}[/yellow]"
-                )
+            message_lstrip = message.lstrip()
+            leading_ws = message[: -len(message_lstrip)]
+            message_formatted = f"{leading_ws}[yellow]\\[WARNING] {message_lstrip}[/yellow]"
             self._print(message_formatted)
 
     def log_success(self, message: str) -> None:
@@ -2082,10 +2078,8 @@ class MarkdownConsole(CaptureTerminalConsole):
     def log_error(self, message: str) -> None:
         super().log_error(f"```\n\\[ERROR] {message}```\n\n")
 
-    def log_warning(self, message: str, add_warning_label: bool = True) -> None:
-        # we add "[WARNING]" manually here instead of relying on the TerminalConsole
-        # method functionality because WARNING needs to be inside the ``` code block
-        super().log_warning(f"```\n\\[WARNING] {message}```\n\n", add_warning_label=False)
+    def log_warning(self, message: str) -> None:
+        self._print(f"```\n\\[WARNING] {message}```\n\n")
 
 
 class DatabricksMagicConsole(CaptureTerminalConsole):
@@ -2379,7 +2373,7 @@ class DebuggerTerminalConsole(TerminalConsole):
     def log_error(self, message: str) -> None:
         self._write(message, style="bold red")
 
-    def log_warning(self, message: str, add_warning_label: bool = True) -> None:
+    def log_warning(self, message: str) -> None:
         logger.warning(message)
         if not self.ignore_warnings:
             self._write(message, style="bold yellow")
