@@ -2,7 +2,7 @@
 
 ## Overview
 
-Tobiko Cloud supports single sign-on (SSO) through OpenId and SAML 2.0 providers. 
+Tobiko Cloud supports single sign-on (SSO) through OpenID and SAML 2.0 providers. 
 
 This makes it easier to provision access to users and simplifies authentication. 
 
@@ -40,10 +40,10 @@ customer that would like to use a shared provider like Google, Github,
 Microsoft, etc. 
 
 
-Other customers that use Okta and other custom OpenID/OAuth2 providers need to add us
+If you use Okta and other custom OpenID/OAuth2 providers you need to add us
 as an Application or Client (terms differ across providers).
 
-The should need the following information to do this:
+You will need the following information to do this:
 
 | Name         | Purpose                                                                                                                              | Value                                                  |
 |--------------|--------------------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------|
@@ -51,10 +51,10 @@ The should need the following information to do this:
 | Logout URL   | Where users can go to log out of our system                                                                                          | `https://cloud.tobikodata.com/auth/logout`             |
 | Web Origin   | Which host names our OAuth service uses                                                                                              | `https://cloud.tobikodata.com`                         |
 
-Often only Redirect URI is required, but some providers like the other
+Often only a Redirect URI is required, but some providers like the additional
 information as well.
 
-We need some information from them as well once they set us up:
+We will need the following information from you once you set us up:
 
 | Name                      | Purpose                                                                                                                                                                                                          | Example                                                                                 |
 |---------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------|
@@ -70,8 +70,8 @@ to support SAML V2.0 authentication.
 
 #### Requirements
 
-Once we are ready to add a SAML provider we need to receive three pieces of
-information from the customer:
+If you are using a  SAML provider we need to receive three pieces of
+information from you below:
 
 | Name        | Purpose                                            | Example                                                                                                           |
 |-------------|----------------------------------------------------|-------------------------------------------------------------------------------------------------------------------|
@@ -79,7 +79,7 @@ information from the customer:
 | SSO URL     | This is the URL to use for SSO                     | `https://mocksaml.com/api/saml/sso`                                                                               |
 | Certificate | The certificate of the SAML Provider in PEM format | [PEM Certificates](https://www.ssl.com/guide/pem-der-crt-and-cer-x-509-encodings-and-conversions/#ftoc-heading-1) |
 
-We need to provider a simular set of information:
+We will provide a similar set of information below:
 
 | Name        | Purpose                               | Example                                                      |
 |-------------|---------------------------------------|--------------------------------------------------------------|
@@ -88,9 +88,13 @@ We need to provider a simular set of information:
 | Certificate | Our SAML Certificate                  | **TBD**                                                      |
 
 The SSO URL will change per provider. For example if we had a provider named
-`acme` our URL will be `https://cloud.tobikodata.com/auth/saml/callback/acme`.
+`acme`, our URL will be `https://cloud.tobikodata.com/auth/saml/callback/acme`.
 
-## Auth Workflow
+Here is what you would see if you are accessing Tobiko Cloud via Okta.
+
+![sso_okta](./single_sign_on/sso_okta.png)
+
+## Authentication Workflow
 
 ### Status
 
@@ -113,7 +117,7 @@ $ tcloud auth login
 
 ![tcloud_login](./single_sign_on/tcloud_login.png)
 
-At this point your system browser should open and allow you to log in. If you are already logged in this might be a very quick process. It will look like the below:
+At this point your system browser should open and allow you to log in. If you are already logged in, this should be a very quick process. It will look like the below:
 
 ![tcloud_auth_browser_login](./single_sign_on/tcloud_auth_browser_login.png)
 
@@ -121,7 +125,7 @@ At this point your system browser should open and allow you to log in. If you ar
 
 
 
-When done you will be prompted with a success message in your browser and a message telling you that it's safe to close your browser window. Your terminal will then have the following result:
+After you have authenticated, you will be prompted with a success message in your browser and a message telling you that it's safe to close your browser window. Your terminal will then have the following result:
 
 ``` bash
 Success! ✅
@@ -130,9 +134,9 @@ Current Tobiko Cloud SSO session expires in 1439 minutes
 ```
 
 
-### Logout
+### Logging Out
 
-In order to delete your session information you can use the logout command:
+In order to delete your session information you can use the log out command:
 
 ``` bash
 > tcloud auth logout
@@ -144,3 +148,4 @@ Not currently authenticated
 
 ![tcloud_logout](./single_sign_on/tcloud_logout.png)
 
+Otherwise, you will be logged out automatically when the SSO session expires (every 24 hours). 
