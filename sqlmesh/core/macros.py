@@ -9,7 +9,7 @@ from functools import reduce
 from itertools import chain
 from pathlib import Path
 from string import Template
-from datetime import datetime
+from datetime import datetime, date
 
 import sqlglot
 from jinja2 import Environment
@@ -38,7 +38,7 @@ from sqlmesh.utils import (
     columns_to_types_all_known,
     registry_decorator,
 )
-from sqlmesh.utils.date import DatetimeRanges
+from sqlmesh.utils.date import DatetimeRanges, to_datetime, to_date
 from sqlmesh.utils.errors import MacroEvalError, SQLMeshError
 from sqlmesh.utils.jinja import JinjaMacroRegistry, has_jinja
 from sqlmesh.utils.metaprogramming import Executable, prepare_env, print_exception
@@ -1335,6 +1335,10 @@ def _coerce(
             return expr.name
         if base is bool and isinstance(expr, exp.Boolean):
             return expr.this
+        if base is datetime and isinstance(expr, exp.Literal):
+            return to_datetime(expr.this)
+        if base is date and isinstance(expr, exp.Literal):
+            return to_date(expr.this)
         if base is tuple and isinstance(expr, (exp.Tuple, exp.Array)):
             generic = t.get_args(typ)
             if not generic:

@@ -1830,6 +1830,8 @@ SQLMesh supports common Python types for typed macros including:
 - `int`
 - `float`
 - `bool`
+- `datetime.datetime`
+- `datetime.date`
 - `SQL` -- When you want the SQL string representation of the argument that's passed in
 - `list[T]` - where `T` is any supported type including sqlglot expressions
 - `tuple[T]` - where `T` is any supported type including sqlglot expressions
