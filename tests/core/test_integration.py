@@ -3001,6 +3001,35 @@ def test_dev_restatement_of_prod_model(init_and_plan_context: t.Callable):
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_restatement_of_full_model_with_start(init_and_plan_context: t.Callable):
+    context, plan = init_and_plan_context("examples/sushi")
+    context.apply(plan)
+
+    restatement_plan = context.plan(
+        restate_models=["sushi.customers"],
+        start="2023-01-07",
+        auto_apply=True,
+        no_prompts=True,
+    )
+
+    restatement_end = to_timestamp("2023-01-08")
+    expected_intervals = {
+        context.get_snapshot("sushi.customers").snapshot_id: (
+            to_timestamp("2023-01-01"),
+            restatement_end,
+        ),
+        context.get_snapshot("sushi.waiter_as_customer_by_day").snapshot_id: (
+            to_timestamp("2023-01-07"),
+            restatement_end,
+        ),
+    }
+
+    for sid, expected_interval in expected_intervals.items():
+        actual_interval = restatement_plan.restatements[sid]
+        assert actual_interval == expected_interval
+
+
+@time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_plan_snapshot_table_exists_for_promoted_snapshot(init_and_plan_context: t.Callable):
     context, plan = init_and_plan_context("examples/sushi")
     context.apply(plan)
