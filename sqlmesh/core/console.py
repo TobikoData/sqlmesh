@@ -2079,6 +2079,7 @@ class MarkdownConsole(CaptureTerminalConsole):
         super().log_error(f"```\n\\[ERROR] {message}```\n\n")
 
     def log_warning(self, message: str) -> None:
+        logger.warning(message)
         self._print(f"```\n\\[WARNING] {message}```\n\n")
 
 
