@@ -2826,7 +2826,7 @@ def test_create_post_statements_use_deployable_table(
     snapshot = make_snapshot(model)
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
-    expected_call = f'CREATE INDEX IF NOT EXISTS "test_idx" ON "sqlmesh__test_schema"."test_schema__test_model__{snapshot.version}" /* test_schema.test_model */("a" NULLS FIRST)'
+    expected_call = f'CREATE INDEX IF NOT EXISTS "test_idx" ON "sqlmesh__test_schema"."test_schema__test_model__{snapshot.version}__dev" /* test_schema.test_model */("a" NULLS FIRST)'
 
     evaluator.create([snapshot], {}, DeployabilityIndex.none_deployable())
 
@@ -2890,7 +2890,7 @@ def test_create_pre_post_statements_python_model(
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
     evaluator.create([snapshot], {}, DeployabilityIndex.none_deployable())
-    expected_call = f'CREATE INDEX IF NOT EXISTS "idx" ON "sqlmesh__db"."db__test_model__{snapshot.version}" /* db.test_model */("id")'
+    expected_call = f'CREATE INDEX IF NOT EXISTS "idx" ON "sqlmesh__db"."db__test_model__{snapshot.version}__dev" /* db.test_model */("id")'
 
     call_args = adapter_mock.execute.call_args_list
     pre_calls = call_args[0][0][0]
@@ -2954,10 +2954,17 @@ def test_on_virtual_update_statements(mocker: MockerFixture, adapter_mock, make_
     assert len(post_calls) == 1
     assert (
         post_calls[0].sql(dialect="postgres")
+        == f'CREATE INDEX IF NOT EXISTS "test_idx" ON "sqlmesh__test_schema"."test_schema__test_model__{snapshot.version}__dev" /* test_schema.test_model */("a")'
+    )
+
+    post_calls = call_args[3][0][0]
+    assert len(post_calls) == 1
+    assert (
+        post_calls[0].sql(dialect="postgres")
         == f'CREATE INDEX IF NOT EXISTS "test_idx" ON "sqlmesh__test_schema"."test_schema__test_model__{snapshot.version}" /* test_schema.test_model */("a")'
     )
 
-    on_virtual_update_calls = call_args[2][0][0]
+    on_virtual_update_calls = call_args[4][0][0]
     assert (
         on_virtual_update_calls[0].sql(dialect="postgres")
         == 'GRANT SELECT ON VIEW "test_schema__test_env"."test_model" /* test_schema.test_model */ TO ROLE "admin"'
@@ -3029,7 +3036,7 @@ def test_on_virtual_update_python_model_macro(mocker: MockerFixture, adapter_moc
     )
 
     call_args = adapter_mock.execute.call_args_list
-    on_virtual_update_call = call_args[2][0][0][0]
+    on_virtual_update_call = call_args[4][0][0][0]
     assert (
         on_virtual_update_call.sql(dialect="postgres")
         == 'CREATE INDEX IF NOT EXISTS "idx" ON "db"."test_model_3" /* db.test_model_3 */("id")'
