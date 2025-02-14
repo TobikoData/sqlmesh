@@ -20,7 +20,7 @@ from sqlmesh.core.model.definition import (
     render_meta_fields,
 )
 from sqlmesh.core.model.kind import ModelKindName, _ModelKind
-from sqlmesh.utils import registry_decorator
+from sqlmesh.utils import registry_decorator, DECORATOR_RETURN_TYPE
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.metaprogramming import build_env, serialize_env
 
@@ -39,6 +39,7 @@ class model(registry_decorator):
         if not is_sql and "columns" not in kwargs:
             raise ConfigError("Python model must define column schema.")
 
+        self.name_provided = bool(name)
         self.name = name or ""
         self.is_sql = is_sql
         self.kwargs = kwargs
@@ -76,6 +77,13 @@ class model(registry_decorator):
             for column_name, column_type in self.kwargs.pop("columns", {}).items()
         }
 
+    def __call__(
+        self, func: t.Callable[..., DECORATOR_RETURN_TYPE]
+    ) -> t.Callable[..., DECORATOR_RETURN_TYPE]:
+        if not self.name_provided:
+            self.name = get_model_name(Path(inspect.getfile(func)))
+        return super().__call__(func)
+
     def model(
         self,
         *,
@@ -97,10 +105,7 @@ class model(registry_decorator):
         env: t.Dict[str, t.Any] = {}
         entrypoint = self.func.__name__
 
-        if not self.name and infer_names:
-            self.name = get_model_name(Path(inspect.getfile(self.func)))
-
-        if not self.name:
+        if not self.name_provided and not infer_names:
             raise ConfigError("Python model must have a name.")
 
         kind = self.kwargs.get("kind", None)

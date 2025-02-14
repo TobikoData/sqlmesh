@@ -6024,6 +6024,32 @@ def my_model(context, **kwargs):
     assert isinstance(context.get_model(expected_name), PythonModel)
 
 
+def test_python_model_name_inference_multiple_models(tmp_path: Path) -> None:
+    init_example_project(tmp_path, dialect="duckdb")
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        model_naming=NameInferenceConfig(infer_names=True),
+    )
+
+    path_a = tmp_path / "models/test_schema/test_model_a.py"
+    path_b = tmp_path / "models/test_schema/test_model_b.py"
+
+    model_payload = """from sqlmesh import model
+@model(
+    columns={'"COL"': "int"},
+)
+def my_model(context, **kwargs):
+    pass"""
+
+    path_a.parent.mkdir(parents=True, exist_ok=True)
+    path_a.write_text(model_payload)
+    path_b.write_text(model_payload)
+
+    context = Context(paths=tmp_path, config=config)
+    assert context.get_model("test_schema.test_model_a").name == "test_schema.test_model_a"
+    assert context.get_model("test_schema.test_model_b").name == "test_schema.test_model_b"
+
+
 def test_custom_kind():
     from sqlmesh import CustomMaterialization
 
