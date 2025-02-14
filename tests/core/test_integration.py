@@ -4421,6 +4421,30 @@ def execute(
     assert df["id"].to_list() == [1]
 
 
+@time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_restatement_of_full_model_with_start(init_and_plan_context: t.Callable):
+    context, plan = init_and_plan_context("examples/sushi")
+    context.apply(plan)
+
+    restatement_plan = context.plan(
+        restate_models=["sushi.customers"],
+        start="2023-01-07",
+        auto_apply=True,
+        no_prompts=True,
+    )
+
+    restatement_end = to_timestamp("2023-01-08")
+
+    sushi_customer_interval = restatement_plan.restatements[
+        context.get_snapshot("sushi.customers").snapshot_id
+    ]
+    assert sushi_customer_interval == (to_timestamp("2023-01-01"), restatement_end)
+    waiter_by_day_interval = restatement_plan.restatements[
+        context.get_snapshot("sushi.waiter_as_customer_by_day").snapshot_id
+    ]
+    assert waiter_by_day_interval == (to_timestamp("2023-01-07"), restatement_end)
+
+
 def initial_add(context: Context, environment: str):
     assert not context.state_reader.get_environment(environment)
 
