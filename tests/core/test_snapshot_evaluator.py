@@ -1616,14 +1616,18 @@ def test_drop_clone_in_dev_when_migration_fails(mocker: MockerFixture, adapter_m
     )
 
 
-def test_create_clone_in_dev_self_referencing(mocker: MockerFixture, adapter_mock, make_snapshot):
+@pytest.mark.parametrize("use_this_model", [True, False])
+def test_create_clone_in_dev_self_referencing(
+    mocker: MockerFixture, adapter_mock, make_snapshot, use_this_model: bool
+):
     adapter_mock.SUPPORTS_CLONING = True
     adapter_mock.get_alter_expressions.return_value = []
     evaluator = SnapshotEvaluator(adapter_mock)
 
+    from_table = "test_schema.test_model" if not use_this_model else "@this_model"
     model = load_sql_based_model(
         parse(  # type: ignore
-            """
+            f"""
             MODEL (
                 name test_schema.test_model,
                 kind INCREMENTAL_BY_TIME_RANGE (
@@ -1631,7 +1635,7 @@ def test_create_clone_in_dev_self_referencing(mocker: MockerFixture, adapter_moc
                 )
             );
 
-            SELECT 1::INT as a, ds::DATE FROM test_schema.test_model;
+            SELECT 1::INT as a, ds::DATE FROM {from_table};
             """
         ),
     )
@@ -1664,10 +1668,15 @@ def test_create_clone_in_dev_self_referencing(mocker: MockerFixture, adapter_moc
     )
 
     # Make sure the dry run references the correct ("...__schema_migration_source") table.
+    table_alias = (
+        "test_model"
+        if not use_this_model
+        else f"test_schema__test_model__{snapshot.version}__dev__schema_migration_source"
+    )
     dry_run_query = adapter_mock.fetchall.call_args[0][0].sql()
     assert (
         dry_run_query
-        == f'SELECT CAST(1 AS INT) AS "a", CAST("ds" AS DATE) AS "ds" FROM "sqlmesh__test_schema"."test_schema__test_model__{snapshot.version}__dev__schema_migration_source" AS "test_model" /* test_schema.test_model */ WHERE FALSE LIMIT 0'
+        == f'SELECT CAST(1 AS INT) AS "a", CAST("ds" AS DATE) AS "ds" FROM "sqlmesh__test_schema"."test_schema__test_model__{snapshot.version}__dev__schema_migration_source" AS "{table_alias}" /* test_schema.test_model */ WHERE FALSE LIMIT 0'
     )
 
 
@@ -2800,7 +2809,7 @@ def test_audit_set_blocking_at_use_site(adapter_mock, make_snapshot):
     assert results[0].blocking
 
 
-def test_create_post_statements_use_deployable_table(
+def test_create_post_statements_use_non_deployable_table(
     mocker: MockerFixture, adapter_mock, make_snapshot
 ):
     evaluator = SnapshotEvaluator(adapter_mock)
