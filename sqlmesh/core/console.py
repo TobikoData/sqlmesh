@@ -271,7 +271,12 @@ class Console(abc.ABC):
 
     @abc.abstractmethod
     def log_warning(self, message: str, logger_message: t.Optional[str] = None) -> None:
-        """Display warning info to the user."""
+        """Display warning info to the user.
+
+        Args:
+            message: The warning message to print to console.
+            logger_message: The warning message to log to file. If not provided, `message` is used.
+        """
 
     @abc.abstractmethod
     def log_success(self, message: str) -> None:
@@ -2382,7 +2387,7 @@ class DebuggerTerminalConsole(TerminalConsole):
         self._write(message, style="bold red")
 
     def log_warning(self, message: str, logger_message: t.Optional[str] = None) -> None:
-        logger.warning(message)
+        logger.warning(logger_message or message)
         if not self.ignore_warnings:
             self._write(message, style="bold yellow")
 
