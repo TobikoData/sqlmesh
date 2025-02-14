@@ -1846,6 +1846,12 @@ def test_disable_restatement(make_snapshot, mocker: MockerFixture):
         snapshot.snapshot_id: (to_timestamp(plan.start), to_timestamp(to_date("today")))
     }
 
+    # We don't want to restate a disable_restatement model if it is unpaused since that would be mean we are violating
+    # the model kind property
+    snapshot.unpaused_ts = 9999999999
+    plan = PlanBuilder(context_diff, schema_differ, is_dev=True, restate_models=['"a"']).build()
+    assert plan.restatements == {}
+
 
 def test_revert_to_previous_value(make_snapshot, mocker: MockerFixture):
     """
