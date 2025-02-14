@@ -329,9 +329,14 @@ class PlanBuilder:
             if not snapshot:
                 raise PlanError(f"Cannot restate model '{model_fqn}'. Model does not exist.")
             if not forward_only_preview_needed:
-                if (not self._is_dev or not snapshot.is_paused) and snapshot.disable_restatement:
-                    # This is a warning but we print this as error since the Console is lacking API for warnings.
-                    self._console.log_error(
+                if self._is_dev and not snapshot.is_paused:
+                    self._console.log_warning(
+                        f"Cannot restate model '{model_fqn}' because the current version is used in production. "
+                        "Run the restatement against the production environment instead to restate this model."
+                    )
+                    continue
+                elif (not self._is_dev or not snapshot.is_paused) and snapshot.disable_restatement:
+                    self._console.log_warning(
                         f"Cannot restate model '{model_fqn}'. "
                         "Restatement is disabled for this model to prevent possible data loss."
                         "If you want to restate this model, change the model's `disable_restatement` setting to `false`."
