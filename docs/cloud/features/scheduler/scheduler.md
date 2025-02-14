@@ -211,3 +211,7 @@ After the executors are properly configured, they will appear in the cloud UI wh
 ![executors](../scheduler/executors.png)
 
 We recommend setting up monitoring for the executors to ensure they run smoothly and to help troubleshoot issues. This monitoring should include logs and system metrics like memory and CPU usage.
+
+### Ingress
+
+No ingress is required from executor containers to user environments. All network requests are outbound from user environments to Tobiko Cloud.
