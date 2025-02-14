@@ -2326,7 +2326,7 @@ def test_contiguous_intervals():
 
 def test_check_ready_intervals(mocker: MockerFixture):
     def assert_always_signal(intervals):
-        _check_ready_intervals(lambda _: True, intervals) == intervals
+        assert _check_ready_intervals(lambda _: True, intervals) == intervals
 
     assert_always_signal([])
     assert_always_signal([(0, 1)])
@@ -2334,12 +2334,20 @@ def test_check_ready_intervals(mocker: MockerFixture):
     assert_always_signal([(0, 1), (2, 3)])
 
     def assert_never_signal(intervals):
-        _check_ready_intervals(lambda _: False, intervals) == []
+        assert _check_ready_intervals(lambda _: False, intervals) == []
 
     assert_never_signal([])
     assert_never_signal([(0, 1)])
     assert_never_signal([(0, 1), (1, 2)])
     assert_never_signal([(0, 1), (2, 3)])
+
+    def assert_empty_signal(intervals):
+        assert _check_ready_intervals(lambda _: [], intervals) == []
+
+    assert_empty_signal([])
+    assert_empty_signal([(0, 1)])
+    assert_empty_signal([(0, 1), (1, 2)])
+    assert_empty_signal([(0, 1), (2, 3)])
 
     def to_intervals(values: t.List[t.Tuple[int, int]]) -> DatetimeRanges:
         return [(to_datetime(s), to_datetime(e)) for s, e in values]
