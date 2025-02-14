@@ -2083,7 +2083,7 @@ def _check_ready_intervals(
             for i in ready_intervals:
                 if i not in batch:
                     raise SQLMeshError(f"Unknown interval {i} for signal")
-                batch = ready_intervals
+            batch = ready_intervals
         else:
             raise SQLMeshError(f"Expected bool | list, got {type(ready_intervals)} for signal")
 
