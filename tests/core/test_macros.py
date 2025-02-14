@@ -1,4 +1,5 @@
 import typing as t
+from datetime import datetime, date
 
 import pytest
 from sqlglot import MappingSchema, ParseError, exp, parse_one
@@ -6,6 +7,7 @@ from sqlglot import MappingSchema, ParseError, exp, parse_one
 from sqlmesh.core import constants as c, dialect as d
 from sqlmesh.core.dialect import StagedFilePath
 from sqlmesh.core.macros import SQL, MacroEvalError, MacroEvaluator, macro
+from sqlmesh.utils.date import to_datetime, to_date
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.metaprogramming import Executable
 from sqlmesh.core.macros import RuntimeStage
@@ -588,6 +590,8 @@ def test_macro_coercion(macro_evaluator: MacroEvaluator, assert_exp_eq):
     assert coerce(exp.Literal.number(1.1), float) == 1.1
     assert coerce(exp.Literal.string("Hi mom"), str) == "Hi mom"
     assert coerce(exp.true(), bool) is True
+    assert coerce(exp.Literal.string("2020-01-01"), datetime) == to_datetime("2020-01-01")
+    assert coerce(exp.Literal.string("2020-01-01"), date) == to_date("2020-01-01")
 
     # Coercing a string literal to a column should return a column with the same name
     assert_exp_eq(coerce(exp.Literal.string("order"), exp.Column), exp.column("order"))
