@@ -757,25 +757,14 @@ class SnapshotEvaluator:
         deployability_index = deployability_index or DeployabilityIndex.all_deployable()
 
         adapter = self._get_adapter(snapshot.model.gateway)
-        common_render_kwargs: t.Dict[str, t.Any] = dict(
+        create_render_kwargs: t.Dict[str, t.Any] = dict(
             engine_adapter=adapter,
             snapshots=parent_snapshots_by_name(snapshot, snapshots),
             runtime_stage=RuntimeStage.CREATING,
+            deployability_index=deployability_index,
         )
-        pre_post_render_kwargs = dict(
-            **common_render_kwargs,
-            deployability_index=deployability_index.with_deployable(snapshot),
-        )
-        create_render_kwargs = dict(**common_render_kwargs, deployability_index=deployability_index)
-
-        # It can still be useful for some strategies to know if the snapshot was actually deployable
-        is_snapshot_deployable = deployability_index.is_deployable(snapshot)
-        is_snapshot_representative = deployability_index.is_representative(snapshot)
-
-        evaluation_strategy = _evaluation_strategy(snapshot, adapter)
 
         with adapter.transaction(), adapter.session(snapshot.model.session_properties):
-            adapter.execute(snapshot.model.render_pre_statements(**pre_post_render_kwargs))
             rendered_physical_properties = snapshot.model.render_physical_properties(
                 **create_render_kwargs
             )
@@ -796,18 +785,16 @@ class SnapshotEvaluator:
 
                 logger.info(f"Cloning table '{source_table_name}' into '{target_table_name}'")
 
-                evaluation_strategy.create(
+                self._execute_create(
+                    snapshot=snapshot,
                     table_name=tmp_table_name,
-                    model=snapshot.model,
                     is_table_deployable=False,
-                    render_kwargs=dict(
-                        table_mapping={snapshot.name: tmp_table_name},
-                        **create_render_kwargs,
-                    ),
-                    is_snapshot_deployable=is_snapshot_deployable,
-                    is_snapshot_representative=is_snapshot_representative,
-                    physical_properties=rendered_physical_properties,
+                    deployability_index=deployability_index,
+                    create_render_kwargs=create_render_kwargs,
+                    rendered_physical_properties=rendered_physical_properties,
+                    dry_run=True,
                 )
+
                 try:
                     adapter.clone_table(target_table_name, snapshot.table_name(), replace=True)
                     alter_expressions = adapter.get_alter_expressions(
@@ -828,7 +815,7 @@ class SnapshotEvaluator:
                     if (
                         is_table_deployable
                         and snapshot.model.forward_only
-                        and not is_snapshot_representative
+                        and not deployability_index.is_representative(snapshot)
                     ):
                         logger.info(
                             "Skipping creation of the deployable table '%s' for the forward-only model %s. "
@@ -838,18 +825,15 @@ class SnapshotEvaluator:
                         )
                         continue
 
-                    evaluation_strategy.create(
+                    self._execute_create(
+                        snapshot=snapshot,
                         table_name=snapshot.table_name(is_deployable=is_table_deployable),
-                        model=snapshot.model,
                         is_table_deployable=is_table_deployable,
-                        render_kwargs=create_render_kwargs,
-                        is_snapshot_deployable=is_snapshot_deployable,
-                        is_snapshot_representative=is_snapshot_representative,
+                        deployability_index=deployability_index,
+                        create_render_kwargs=create_render_kwargs,
+                        rendered_physical_properties=rendered_physical_properties,
                         dry_run=dry_run,
-                        physical_properties=rendered_physical_properties,
                     )
-
-            adapter.execute(snapshot.model.render_post_statements(**pre_post_render_kwargs))
 
         if on_complete is not None:
             on_complete(snapshot)
@@ -871,10 +855,9 @@ class SnapshotEvaluator:
         if not needs_migration:
             return
 
-        evaluation_strategy = _evaluation_strategy(snapshot, adapter)
-
         target_table_name = snapshot.table_name()
         if adapter.table_exists(target_table_name):
+            evaluation_strategy = _evaluation_strategy(snapshot, adapter)
             tmp_table_name = snapshot.table_name(is_deployable=False)
             logger.info(
                 "Migrating table schema from '%s' to '%s'",
@@ -894,25 +877,25 @@ class SnapshotEvaluator:
                 target_table_name,
                 snapshot.snapshot_id,
             )
+            deployability_index = DeployabilityIndex.all_deployable()
             render_kwargs: t.Dict[str, t.Any] = dict(
                 engine_adapter=adapter,
                 snapshots=parent_snapshots_by_name(snapshot, snapshots),
                 runtime_stage=RuntimeStage.CREATING,
-                deployability_index=DeployabilityIndex.all_deployable(),
+                deployability_index=deployability_index,
             )
             with adapter.transaction(), adapter.session(snapshot.model.session_properties):
-                adapter.execute(snapshot.model.render_pre_statements(**render_kwargs))
-                evaluation_strategy.create(
+                self._execute_create(
+                    snapshot=snapshot,
                     table_name=target_table_name,
-                    model=snapshot.model,
                     is_table_deployable=True,
-                    render_kwargs=render_kwargs,
-                    is_snapshot_deployable=True,
-                    is_snapshot_representative=True,
+                    deployability_index=deployability_index,
+                    create_render_kwargs=render_kwargs,
+                    rendered_physical_properties=snapshot.model.render_physical_properties(
+                        **render_kwargs
+                    ),
                     dry_run=False,
-                    physical_properties=snapshot.model.render_physical_properties(**render_kwargs),
                 )
-                adapter.execute(snapshot.model.render_post_statements(**render_kwargs))
 
     def _promote_snapshot(
         self,
@@ -1084,6 +1067,40 @@ class SnapshotEvaluator:
                 return adapter
             raise SQLMeshError(f"Gateway '{gateway}' not found in the available engine adapters.")
         return self.adapter
+
+    def _execute_create(
+        self,
+        snapshot: Snapshot,
+        table_name: str,
+        is_table_deployable: bool,
+        deployability_index: DeployabilityIndex,
+        create_render_kwargs: t.Dict[str, t.Any],
+        rendered_physical_properties: t.Dict[str, exp.Expression],
+        dry_run: bool,
+    ) -> None:
+        adapter = self._get_adapter(snapshot.model.gateway)
+        evaluation_strategy = _evaluation_strategy(snapshot, adapter)
+
+        # It can still be useful for some strategies to know if the snapshot was actually deployable
+        is_snapshot_deployable = deployability_index.is_deployable(snapshot)
+        is_snapshot_representative = deployability_index.is_representative(snapshot)
+
+        create_render_kwargs = {
+            **create_render_kwargs,
+            "table_mapping": {snapshot.name: table_name},
+        }
+        adapter.execute(snapshot.model.render_pre_statements(**create_render_kwargs))
+        evaluation_strategy.create(
+            table_name=table_name,
+            model=snapshot.model,
+            is_table_deployable=is_table_deployable,
+            render_kwargs=create_render_kwargs,
+            is_snapshot_deployable=is_snapshot_deployable,
+            is_snapshot_representative=is_snapshot_representative,
+            dry_run=dry_run,
+            physical_properties=rendered_physical_properties,
+        )
+        adapter.execute(snapshot.model.render_post_statements(**create_render_kwargs))
 
 
 def _evaluation_strategy(snapshot: SnapshotInfoLike, adapter: EngineAdapter) -> EvaluationStrategy:

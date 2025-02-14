@@ -114,6 +114,7 @@ class BaseExpressionRenderer:
                 self._model_fqn,
                 snapshots={self._model_fqn: this_snapshot} if this_snapshot else None,
                 deployability_index=deployability_index,
+                table_mapping=table_mapping,
             )
 
         expressions = [self._expression]
