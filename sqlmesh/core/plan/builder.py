@@ -329,7 +329,7 @@ class PlanBuilder:
             if not snapshot:
                 raise PlanError(f"Cannot restate model '{model_fqn}'. Model does not exist.")
             if not forward_only_preview_needed:
-                if not self._is_dev and snapshot.disable_restatement:
+                if (not self._is_dev or not snapshot.is_paused) and snapshot.disable_restatement:
                     # This is a warning but we print this as error since the Console is lacking API for warnings.
                     self._console.log_error(
                         f"Cannot restate model '{model_fqn}'. "
