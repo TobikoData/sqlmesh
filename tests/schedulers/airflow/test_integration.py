@@ -115,6 +115,7 @@ def _create_evaluatable_plan(
         indirectly_modified_snapshots={},
         removed_snapshots=[],
         requires_backfill=True,
+        disabled_restatement_models=set(),
     )
 
 

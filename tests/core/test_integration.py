@@ -2172,6 +2172,118 @@ def test_restatement_plan_hourly_with_downstream_daily_restates_correct_interval
         ], f"Table {tbl} wasnt cleared"
 
 
+def test_restatement_plan_respects_disable_restatements(tmp_path: Path):
+    model_a = """
+    MODEL (
+        name test.a,
+        kind INCREMENTAL_BY_TIME_RANGE (
+            time_column "ts"
+        ),
+        start '2024-01-01',
+        cron '@daily'
+    );
+
+    select account_id, ts from test.external_table;
+    """
+
+    model_b = """
+    MODEL (
+        name test.b,
+        kind INCREMENTAL_BY_TIME_RANGE (
+            time_column "ts",
+            disable_restatement true,
+        ),
+        start '2024-01-01',
+        cron '@daily'
+    );
+
+    select account_id, ts from test.a;
+    """
+
+    models_dir = tmp_path / "models"
+    models_dir.mkdir()
+
+    for path, defn in {"a.sql": model_a, "b.sql": model_b}.items():
+        with open(models_dir / path, "w") as f:
+            f.write(defn)
+
+    config = Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))
+    ctx = Context(paths=[tmp_path], config=config)
+
+    engine_adapter = ctx.engine_adapter
+    engine_adapter.create_schema("test")
+
+    # source data
+    df = pd.DataFrame(
+        {
+            "account_id": [1001, 1002, 1003, 1004],
+            "ts": [
+                "2024-01-01 00:30:00",
+                "2024-01-01 01:30:00",
+                "2024-01-01 02:30:00",
+                "2024-01-02 00:30:00",
+            ],
+        }
+    )
+    columns_to_types = {
+        "account_id": exp.DataType.build("int"),
+        "ts": exp.DataType.build("timestamp"),
+    }
+    external_table = exp.table_(table="external_table", db="test", quoted=True)
+    engine_adapter.create_table(table_name=external_table, columns_to_types=columns_to_types)
+    engine_adapter.insert_append(
+        table_name=external_table, query_or_df=df, columns_to_types=columns_to_types
+    )
+
+    # plan + apply
+    ctx.plan(auto_apply=True, no_prompts=True)
+
+    def _dates_in_table(table_name: str) -> t.List[str]:
+        return [
+            str(r[0]) for r in engine_adapter.fetchall(f"select ts from {table_name} order by ts")
+        ]
+
+    def get_snapshot_intervals(snapshot_id):
+        return list(ctx.state_sync.get_snapshots([snapshot_id]).values())[0].intervals
+
+    # verify initial state
+    for tbl in ["test.a", "test.b"]:
+        assert _dates_in_table(tbl) == [
+            "2024-01-01 00:30:00",
+            "2024-01-01 01:30:00",
+            "2024-01-01 02:30:00",
+            "2024-01-02 00:30:00",
+        ]
+
+    # restate A and expect b to be ignored
+    starting_b_intervals = get_snapshot_intervals(ctx.snapshots['"memory"."test"."b"'].snapshot_id)
+    engine_adapter.execute("delete from test.external_table where ts = '2024-01-01 01:30:00'")
+    ctx.plan(
+        restate_models=["test.a"],
+        start="2024-01-01",
+        end="2024-01-02",
+        auto_apply=True,
+        no_prompts=True,
+    )
+
+    # verify A was changed and not b
+    assert _dates_in_table("test.a") == [
+        "2024-01-01 00:30:00",
+        "2024-01-01 02:30:00",
+        "2024-01-02 00:30:00",
+    ]
+    assert _dates_in_table("test.b") == [
+        "2024-01-01 00:30:00",
+        "2024-01-01 01:30:00",
+        "2024-01-01 02:30:00",
+        "2024-01-02 00:30:00",
+    ]
+
+    # Verify B intervals were not touched
+    b_intervals = get_snapshot_intervals(ctx.snapshots['"memory"."test"."b"'].snapshot_id)
+    assert starting_b_intervals == b_intervals
+
+
 def test_restatement_plan_clears_correct_intervals_across_environments(tmp_path: Path):
     model1 = """
     MODEL (
