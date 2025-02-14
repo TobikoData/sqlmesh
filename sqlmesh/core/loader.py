@@ -421,6 +421,7 @@ class SqlMeshLoader(Loader):
                     variables=self._variables,
                     infer_names=self.config.model_naming.infer_names,
                     signal_definitions=signals,
+                    linter=self.config.linter,
                 )
 
             model = cache.get_or_load_model(path, _load)

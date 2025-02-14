@@ -7354,26 +7354,6 @@ def test_compile_time_checks(tmp_path: Path, assert_exp_eq):
     ):
         load_sql_based_model(strict_query).render_query()
 
-    # Non-strict model with strict defaults raises error, otherwise can still render
-    strict_default = ModelDefaultsConfig(validate_query=True).dict()
-    query = d.parse(
-        """
-    MODEL (
-        name test,
-    );
-
-    SELECT * FROM tbl
-    """
-    )
-
-    with pytest.raises(
-        ConfigError,
-        match=r".*cannot be expanded due to missing schema.*",
-    ):
-        load_sql_based_model(query, defaults=strict_default).render_query()
-
-    assert_exp_eq(load_sql_based_model(query).render_query(), 'SELECT * FROM "tbl" AS "tbl"')
-
     # Ensure plan works for valid queries & cache is invalidated if strict changes
     context = Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb")))
 
@@ -7422,17 +7402,6 @@ col_a,col_b,col_c
 
     model = create_seed_model("test_db.test_seed_model", model_kind, validate_query=False)
     context.upsert_model(model)
-    context.plan(auto_apply=True, no_prompts=True)
-
-    # Ensure strict defaults don't break all non SQL models to which they weren't applicable in the first place
-    seed_strict_defaults = create_seed_model(
-        "test_db.test_seed_model", model_kind, defaults=strict_default
-    )
-    external_strict_defaults = create_external_model(
-        "test_db.test_external_model", columns={"a": "int", "limit": "int"}, defaults=strict_default
-    )
-    context.upsert_model(seed_strict_defaults)
-    context.upsert_model(external_strict_defaults)
     context.plan(auto_apply=True, no_prompts=True)
 
 
