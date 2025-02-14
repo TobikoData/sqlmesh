@@ -2984,6 +2984,23 @@ def test_prod_restatement_plan_missing_model_in_dev(
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_dev_restatement_of_prod_model(init_and_plan_context: t.Callable):
+    context, plan = init_and_plan_context("examples/sushi")
+    context.apply(plan)
+
+    model = context.get_model("sushi.waiter_revenue_by_day")
+    context.upsert_model(add_projection_to_model(t.cast(SqlModel, model)))
+
+    context.plan("dev", auto_apply=True, no_prompts=True, skip_tests=True)
+
+    restatement_plan = context.plan_builder("dev", restate_models=["*"]).build()
+    assert set(restatement_plan.restatements) == {
+        context.get_snapshot("sushi.waiter_revenue_by_day").snapshot_id,
+        context.get_snapshot("sushi.top_waiters").snapshot_id,
+    }
+
+
+@time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_plan_snapshot_table_exists_for_promoted_snapshot(init_and_plan_context: t.Callable):
     context, plan = init_and_plan_context("examples/sushi")
     context.apply(plan)

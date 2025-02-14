@@ -2697,3 +2697,59 @@ def test_unaligned_start_model_with_forward_only_preview(make_snapshot):
     assert set(plan.restatements) == {new_snapshot_a.snapshot_id, snapshot_b.snapshot_id}
     assert not plan.deployability_index.is_deployable(new_snapshot_a)
     assert not plan.deployability_index.is_deployable(snapshot_b)
+
+
+def test_restate_production_model_in_dev(make_snapshot, mocker: MockerFixture):
+    snapshot = make_snapshot(
+        SqlModel(
+            name="test_model_a",
+            dialect="duckdb",
+            query=parse_one("select 1, ds"),
+            kind=dict(name=ModelKindName.INCREMENTAL_BY_TIME_RANGE, time_column="ds"),
+        )
+    )
+
+    prod_snapshot = make_snapshot(
+        SqlModel(
+            name="test_model_b",
+            dialect="duckdb",
+            query=parse_one("select 2, ds"),
+            kind=dict(name=ModelKindName.INCREMENTAL_BY_TIME_RANGE, time_column="ds"),
+        )
+    )
+    prod_snapshot.unpaused_ts = 1
+
+    context_diff = ContextDiff(
+        environment="test_environment",
+        is_new_environment=False,
+        is_unfinalized_environment=True,
+        normalize_environment_name=True,
+        create_from="prod",
+        create_from_env_exists=True,
+        added=set(),
+        removed_snapshots={},
+        modified_snapshots={},
+        snapshots={snapshot.snapshot_id: snapshot, prod_snapshot.snapshot_id: prod_snapshot},
+        new_snapshots={},
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
+    )
+
+    mock_console = mocker.Mock()
+
+    plan = PlanBuilder(
+        context_diff,
+        DuckDBEngineAdapter.SCHEMA_DIFFER,
+        is_dev=True,
+        restate_models={snapshot.name, prod_snapshot.name},
+        console=mock_console,
+    ).build()
+
+    assert len(plan.restatements) == 1
+    assert prod_snapshot.snapshot_id not in plan.restatements
+
+    mock_console.log_warning.assert_called_once_with(
+        "Cannot restate model '\"test_model_b\"' because the current version is used in production. "
+        "Run the restatement against the production environment instead to restate this model."
+    )
