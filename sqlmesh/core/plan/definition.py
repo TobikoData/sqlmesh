@@ -255,6 +255,11 @@ class Plan(PydanticModel, frozen=True):
             models_to_backfill=self.models_to_backfill,
             interval_end_per_model=self.interval_end_per_model,
             execution_time=self.execution_time,
+            disabled_restatement_models={
+                s.name
+                for s in self.snapshots.values()
+                if s.is_model and s.model.disable_restatement
+            },
         )
 
     @cached_property
@@ -285,6 +290,7 @@ class EvaluatablePlan(PydanticModel):
     models_to_backfill: t.Optional[t.Set[str]] = None
     interval_end_per_model: t.Optional[t.Dict[str, int]] = None
     execution_time: t.Optional[TimeLike] = None
+    disabled_restatement_models: t.Set[str]
 
     def is_selected_for_backfill(self, model_fqn: str) -> bool:
         return self.models_to_backfill is None or model_fqn in self.models_to_backfill

@@ -125,6 +125,7 @@ def test_create_plan_dag_spec(
         interval_end_per_model=None,
         allow_destructive_models=set(),
         requires_backfill=True,
+        disabled_restatement_models=set(),
     )
 
     plan_request = common.PlanApplicationRequest(
@@ -268,6 +269,7 @@ def test_restatement(
         interval_end_per_model=None,
         allow_destructive_models=set(),
         requires_backfill=True,
+        disabled_restatement_models=set(),
     )
 
     plan_request = common.PlanApplicationRequest(
@@ -389,6 +391,7 @@ def test_select_models_for_backfill(mocker: MockerFixture, random_name, make_sna
         interval_end_per_model=None,
         allow_destructive_models=set(),
         requires_backfill=True,
+        disabled_restatement_models=set(),
     )
 
     plan_request = common.PlanApplicationRequest(
@@ -474,6 +477,7 @@ def test_create_plan_dag_spec_duplicated_snapshot(
         interval_end_per_model=None,
         allow_destructive_models=set(),
         requires_backfill=True,
+        disabled_restatement_models=set(),
     )
 
     plan_request = common.PlanApplicationRequest(
@@ -536,6 +540,7 @@ def test_create_plan_dag_spec_unbounded_end(
         interval_end_per_model=None,
         allow_destructive_models=set(),
         requires_backfill=True,
+        disabled_restatement_models=set(),
     )
 
     plan_request = common.PlanApplicationRequest(

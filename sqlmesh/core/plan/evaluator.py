@@ -395,7 +395,9 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         #
         # Without this rule, its possible that promoting a dev table to prod will introduce old data to prod
         snapshot_intervals_to_restate.update(
-            self._restatement_intervals_across_all_environments(plan.restatements)
+            self._restatement_intervals_across_all_environments(
+                plan.restatements, plan.disabled_restatement_models
+            )
         )
 
         self.state_sync.remove_intervals(
@@ -404,12 +406,12 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         )
 
     def _restatement_intervals_across_all_environments(
-        self, prod_restatements: t.Dict[str, Interval]
+        self, prod_restatements: t.Dict[str, Interval], disable_restatement_models: t.Set[str]
     ) -> t.Set[t.Tuple[SnapshotTableInfo, Interval]]:
         """
         Given a map of snapshot names + intervals to restate in prod:
          - Look up matching snapshots across all environments (match based on name - regardless of version)
-         - For each match, also match downstream snapshots
+         - For each match, also match downstream snapshots while filtering out models that have restatement disabled
          - Return all matches mapped to the intervals of the prod snapshot being restated
 
         The goal here is to produce a list of intervals to invalidate across all environments so that a cadence
@@ -430,7 +432,11 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             for restatement, intervals in prod_restatements.items():
                 if restatement not in keyed_snapshots:
                     continue
-                affected_snapshot_names = [restatement] + env_dag.downstream(restatement)
+                affected_snapshot_names = [
+                    x
+                    for x in ([restatement] + env_dag.downstream(restatement))
+                    if x not in disable_restatement_models
+                ]
                 snapshots_to_restate.update(
                     {(keyed_snapshots[a], intervals) for a in affected_snapshot_names}
                 )
