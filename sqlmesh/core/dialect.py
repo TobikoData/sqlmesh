@@ -543,11 +543,13 @@ def _parse_if(self: Parser) -> t.Optional[exp.Expression]:
         return exp.Anonymous(this="IF", expressions=[cond, stmt])
 
 
-def _create_parser(parser_type: t.Type[exp.Expression], table_keys: t.List[str]) -> t.Callable:
+def _create_parser(expression_type: t.Type[exp.Expression], table_keys: t.List[str]) -> t.Callable:
     def parse(self: Parser) -> t.Optional[exp.Expression]:
         from sqlmesh.core.model.kind import ModelKindName
 
         expressions: t.List[exp.Expression] = []
+        gateway: t.Optional[exp.Expression] = None
+        blueprints: t.List[exp.Expression] = []
 
         while True:
             prev_property = seq_get(expressions, -1)
@@ -611,12 +613,36 @@ def _create_parser(parser_type: t.Type[exp.Expression], table_keys: t.List[str])
             else:
                 value = self._parse_bracket(self._parse_field(any_token=True))
 
+                if key == "gateway":
+                    gateway = value
+                elif key == "blueprints":
+                    if isinstance(value, exp.Paren):
+                        blueprints = [value.this]
+                    elif isinstance(value, (exp.Tuple, exp.Array)):
+                        blueprints = value.expressions
+                    else:
+                        raise ConfigError(
+                            "The 'blueprints' values need to be enclosed in "
+                            f"parentheses or brackets, got {value} instead."
+                        )
+
+                    # We don't want to include blueprints in the property list
+                    continue
+
             if isinstance(value, exp.Expression):
                 value.meta["sql"] = self._find_sql(start, self._prev)
 
             expressions.append(self.expression(exp.Property, this=key, value=value))
 
-        return self.expression(parser_type, expressions=expressions)
+        expression = self.expression(expression_type, expressions=expressions)
+
+        # We store these properties in the meta to provide quick access at load time
+        if blueprints:
+            expression.meta["blueprints"] = blueprints
+            if gateway:
+                expression.meta["gateway"] = gateway
+
+        return expression
 
     return parse
 
