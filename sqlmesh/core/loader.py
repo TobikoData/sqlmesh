@@ -10,12 +10,14 @@ from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 
+from sqlglot import exp
 from sqlglot.errors import SqlglotError
+from sqlglot.helper import seq_get
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.audit import Audit, ModelAudit, StandaloneAudit, load_multiple_audits
-from sqlmesh.core.dialect import parse
-from sqlmesh.core.macros import MacroRegistry, macro
+from sqlmesh.core.dialect import parse, Model as ModelMeta
+from sqlmesh.core.macros import MacroRegistry, MacroVar, macro
 from sqlmesh.core.metric import Metric, MetricMeta, expand_metrics, load_metric_ddl
 from sqlmesh.core.model import (
     Model,
@@ -60,22 +62,7 @@ class Loader(abc.ABC):
         self.context = context
         self.config_path = path
         self.config = self.context.configs[self.config_path]
-
-        gateway_name = self.context.selected_gateway
-        try:
-            gateway = self.config.get_gateway(gateway_name)
-        except ConfigError:
-            from sqlmesh.core.console import get_console
-
-            get_console().log_warning(
-                f"Gateway '{gateway_name}' not found in project '{self.config.project}'."
-            )
-            gateway = None
-        self._variables = {
-            **self.config.variables,
-            **(gateway.variables if gateway else {}),
-            c.GATEWAY: gateway_name,
-        }
+        self._variables_by_gateway: t.Dict[str, t.Dict[str, t.Any]] = {}
 
     def load(self) -> LoadedProject:
         """
@@ -307,6 +294,26 @@ class Loader(abc.ABC):
         """Project file to track for modifications"""
         self._path_mtimes[path] = path.stat().st_mtime
 
+    def _get_variables(self, gateway_name: str) -> t.Dict[str, t.Any]:
+        if gateway_name not in self._variables_by_gateway:
+            try:
+                gateway = self.config.get_gateway(gateway_name)
+            except ConfigError:
+                from sqlmesh.core.console import get_console
+
+                get_console().log_warning(
+                    f"Gateway '{gateway_name}' not found in project '{self.config.project}'."
+                )
+                gateway = None
+
+            self._variables_by_gateway[gateway_name] = {
+                **self.config.variables,
+                **(gateway.variables if gateway else {}),
+                c.GATEWAY: gateway_name,
+            }
+
+        return self._variables_by_gateway[gateway_name]
+
 
 class SqlMeshLoader(Loader):
     """Loads macros and models for a context using the SQLMesh file formats"""
@@ -395,7 +402,7 @@ class SqlMeshLoader(Loader):
 
             self._track_file(path)
 
-            def _load() -> Model:
+            def _load() -> t.List[Model]:
                 with open(path, "r", encoding="utf-8") as file:
                     try:
                         expressions = parse(
@@ -404,32 +411,64 @@ class SqlMeshLoader(Loader):
                     except SqlglotError as ex:
                         raise ConfigError(f"Failed to parse a model definition at '{path}': {ex}.")
 
-                return load_sql_based_model(
-                    expressions,
-                    defaults=self.config.model_defaults.dict(),
-                    macros=macros,
-                    jinja_macros=jinja_macros,
-                    audit_definitions=audits,
-                    default_audits=self.config.model_defaults.audits,
-                    path=Path(path).absolute(),
-                    module_path=self.config_path,
-                    dialect=self.config.model_defaults.dialect,
-                    time_column_format=self.config.time_column_format,
-                    physical_schema_mapping=self.config.physical_schema_mapping,
-                    project=self.config.project,
-                    default_catalog=self.context.default_catalog,
-                    variables=self._variables,
-                    infer_names=self.config.model_naming.infer_names,
-                    signal_definitions=signals,
-                )
+                model_meta = seq_get(expressions, 0)
+                blueprints = isinstance(model_meta, ModelMeta) and model_meta.meta.get("blueprints")
 
-            model = cache.get_or_load_model(path, _load)
-            if model.enabled:
-                models[model.fqn] = model
+                loaded_models = []
+                for blueprint in blueprints or [None]:
+                    if not blueprint:
+                        blueprint_variables = {}
+                    elif isinstance(blueprint, (exp.Tuple, exp.Array)):
+                        blueprint_variables = {
+                            # Assumes the syntax: (k := v [, ...]) or [k := v [, ...]]
+                            e.left.name: e.right.sql(dialect=self.config.model_defaults.dialect)
+                            for e in blueprint.expressions
+                        }
+                    elif isinstance(blueprint, (exp.Column, exp.Literal)):
+                        blueprint_variables = {
+                            "blueprint": blueprint.sql(dialect=self.config.model_defaults.dialect)
+                        }
+                    else:
+                        # TODO: update docs link in this error message
+                        raise ConfigError(
+                            f"Invalid value for 'blueprints' {blueprints} at '{path}', please refer to <link>."
+                        )
 
-            if isinstance(model, SeedModel):
-                seed_path = model.seed_path
-                self._track_file(seed_path)
+                    gateway = t.cast(exp.Expression, model_meta).meta.get("gateway")
+                    if not isinstance(gateway, MacroVar) or not (
+                        gateway_name := blueprint_variables.get(gateway.name)
+                    ):
+                        gateway_name = self.context.selected_gateway
+
+                    loaded_model = load_sql_based_model(
+                        expressions,
+                        defaults=self.config.model_defaults.dict(),
+                        macros=macros,
+                        jinja_macros=jinja_macros,
+                        audit_definitions=audits,
+                        default_audits=self.config.model_defaults.audits,
+                        path=Path(path).absolute(),
+                        module_path=self.config_path,
+                        dialect=self.config.model_defaults.dialect,
+                        time_column_format=self.config.time_column_format,
+                        physical_schema_mapping=self.config.physical_schema_mapping,
+                        project=self.config.project,
+                        default_catalog=self.context.default_catalog,
+                        variables={**self._get_variables(gateway_name), **blueprint_variables},
+                        infer_names=self.config.model_naming.infer_names,
+                        signal_definitions=signals,
+                    )
+                    loaded_models.append(loaded_model)
+
+                return loaded_models
+
+            for model in cache.get_or_load_models(path, _load):
+                if model.enabled:
+                    models[model.fqn] = model
+
+                if isinstance(model, SeedModel):
+                    seed_path = model.seed_path
+                    self._track_file(seed_path)
 
         return models
 
@@ -461,23 +500,46 @@ class SqlMeshLoader(Loader):
                 new = registry.keys() - registered
                 registered |= new
                 for name in new:
-                    model = registry[name].model(
-                        path=path,
-                        module_path=self.config_path,
-                        defaults=self.config.model_defaults.dict(),
-                        macros=macros,
-                        jinja_macros=jinja_macros,
-                        dialect=self.config.model_defaults.dialect,
-                        time_column_format=self.config.time_column_format,
-                        physical_schema_mapping=self.config.physical_schema_mapping,
-                        project=self.config.project,
-                        default_catalog=self.context.default_catalog,
-                        variables=self._variables,
-                        infer_names=self.config.model_naming.infer_names,
-                        audit_definitions=audits,
-                    )
-                    if model.enabled:
-                        models[model.fqn] = model
+                    registered_entrypoint = registry[name]
+
+                    gateway = registered_entrypoint.kwargs.get("gateway") or ""
+                    blueprints = registered_entrypoint.kwargs.pop("blueprints", None)
+
+                    for blueprint in blueprints or [None]:
+                        if not blueprint:
+                            blueprint_variables = {}
+                        elif isinstance(blueprint, dict):
+                            blueprint_variables = blueprint
+                        elif isinstance(blueprint, str):
+                            blueprint_variables = {"blueprint": blueprint}
+                        else:
+                            # TODO: update docs link in this error message
+                            raise ConfigError(
+                                f"Invalid value for 'blueprints' {blueprints} at '{path}', please refer to <link>."
+                            )
+
+                        if not gateway.startswith("@") or not (
+                            gateway_name := blueprint_variables.get(gateway[1:])
+                        ):
+                            gateway_name = self.context.selected_gateway
+
+                        model = registry[name].model(
+                            path=path,
+                            module_path=self.config_path,
+                            defaults=self.config.model_defaults.dict(),
+                            macros=macros,
+                            jinja_macros=jinja_macros,
+                            dialect=self.config.model_defaults.dialect,
+                            time_column_format=self.config.time_column_format,
+                            physical_schema_mapping=self.config.physical_schema_mapping,
+                            project=self.config.project,
+                            default_catalog=self.context.default_catalog,
+                            variables={**self._get_variables(gateway_name), **blueprint_variables},
+                            infer_names=self.config.model_naming.infer_names,
+                            audit_definitions=audits,
+                        )
+                        if model.enabled:
+                            models[model.fqn] = model
         finally:
             model_registry._dialect = None
 
@@ -526,6 +588,7 @@ class SqlMeshLoader(Loader):
         """Loads all the model audits."""
         audits_by_name: UniqueKeyDict[str, Audit] = UniqueKeyDict("audits")
         audits_max_mtime: t.Optional[float] = None
+        variables = self._get_variables(self.context.selected_gateway)
 
         for path in self._glob_paths(
             self.config_path / c.AUDITS,
@@ -549,7 +612,7 @@ class SqlMeshLoader(Loader):
                     jinja_macros=jinja_macros,
                     dialect=self.config.model_defaults.dialect,
                     default_catalog=self.context.default_catalog,
-                    variables=self._variables,
+                    variables=variables,
                 )
                 for audit in audits:
                     audits_by_name[audit.name] = audit
@@ -588,14 +651,18 @@ class SqlMeshLoader(Loader):
             self.config_path = config_path
             self._model_cache = ModelCache(self.config_path / c.CACHE)
 
-        def get_or_load_model(self, target_path: Path, loader: t.Callable[[], Model]) -> Model:
-            model = self._model_cache.get_or_load(
+        def get_or_load_models(
+            self, target_path: Path, loader: t.Callable[[], t.List[Model]]
+        ) -> t.List[Model]:
+            models = self._model_cache.get_or_load(
                 self._cache_entry_name(target_path),
                 self._model_cache_entry_id(target_path),
                 loader=loader,
             )
-            model._path = target_path
-            return model
+            for model in models:
+                model._path = target_path
+
+            return models
 
         def _cache_entry_name(self, target_path: Path) -> str:
             return "__".join(target_path.relative_to(self.config_path).parts).replace(
