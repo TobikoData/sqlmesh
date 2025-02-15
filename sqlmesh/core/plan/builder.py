@@ -351,7 +351,7 @@ class PlanBuilder:
                 if is_restateable_snapshot(self._context_diff.snapshots[downstream_s_id]):
                     restatements[downstream_s_id] = dummy_interval
 
-        # Get restatement intervals for all restated snapshots and make sure that if a snapshot expands it's
+        # Get restatement intervals for all restated snapshots and make sure that if an incremental snapshot expands it's
         # restatement range that it's downstream dependencies all expand their restatement ranges as well.
         for s_id in dag:
             if s_id not in restatements:
@@ -368,7 +368,9 @@ class PlanBuilder:
             # the graph we just have to check our immediate parents in the graph and not the whole upstream graph.
             snapshot_dependencies = snapshot.parents
             possible_intervals = [
-                restatements.get(s, dummy_interval) for s in snapshot_dependencies
+                restatements.get(s, dummy_interval)
+                for s in snapshot_dependencies
+                if self._context_diff.snapshots[s].is_incremental
             ] + [interval]
             snapshot_start = min(i[0] for i in possible_intervals)
             snapshot_end = max(i[1] for i in possible_intervals)
