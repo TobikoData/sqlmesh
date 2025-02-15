@@ -224,7 +224,7 @@ class Scheduler:
             else:
                 get_console().log_warning(
                     f"\n{error}.",
-                    logger_message=f"{error}. Audit query:\n{error.query.sql(error.adapter_dialect)}",
+                    long_message=f"{error}. Audit query:\n{error.query.sql(error.adapter_dialect)}",
                 )
 
         if audit_errors_to_raise:
