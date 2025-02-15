@@ -270,12 +270,12 @@ class Console(abc.ABC):
         """Display error info to the user."""
 
     @abc.abstractmethod
-    def log_warning(self, message: str, logger_message: t.Optional[str] = None) -> None:
+    def log_warning(self, short_message: str, long_message: t.Optional[str] = None) -> None:
         """Display warning info to the user.
 
         Args:
-            message: The warning message to print to console.
-            logger_message: The warning message to log to file. If not provided, `message` is used.
+            short_message: The warning message to print to console.
+            long_message: The warning message to log to file. If not provided, `short_message` is used.
         """
 
     @abc.abstractmethod
@@ -447,8 +447,8 @@ class NoopConsole(Console):
     def log_error(self, message: str) -> None:
         pass
 
-    def log_warning(self, message: str, logger_message: t.Optional[str] = None) -> None:
-        logger.warning(message)
+    def log_warning(self, short_message: str, long_message: t.Optional[str] = None) -> None:
+        logger.warning(long_message or short_message)
 
     def log_success(self, message: str) -> None:
         pass
@@ -1246,18 +1246,18 @@ class TerminalConsole(Console):
     def log_error(self, message: str) -> None:
         self._print(f"[red]{message}[/red]")
 
-    def log_warning(self, message: str, logger_message: t.Optional[str] = None) -> None:
-        logger.warning(logger_message or message)
+    def log_warning(self, short_message: str, long_message: t.Optional[str] = None) -> None:
+        logger.warning(long_message or short_message)
         if not self.ignore_warnings:
-            if logger_message:
+            if long_message:
                 for handler in logger.root.handlers:
                     if isinstance(handler, logging.FileHandler):
                         file_path = handler.baseFilename
                         break
                 file_path_msg = f" Learn more in logs: {file_path}\n" if file_path else ""
-                message = f"{message}{file_path_msg}"
-            message_lstrip = message.lstrip()
-            leading_ws = message[: -len(message_lstrip)]
+                short_message = f"{short_message}{file_path_msg}"
+            message_lstrip = short_message.lstrip()
+            leading_ws = short_message[: -len(message_lstrip)]
             message_formatted = f"{leading_ws}[yellow]\\[WARNING] {message_lstrip}[/yellow]"
             self._print(message_formatted)
 
@@ -2090,9 +2090,9 @@ class MarkdownConsole(CaptureTerminalConsole):
     def log_error(self, message: str) -> None:
         super().log_error(f"```\n\\[ERROR] {message}```\n\n")
 
-    def log_warning(self, message: str, logger_message: t.Optional[str] = None) -> None:
-        logger.warning(logger_message or message)
-        self._print(f"```\n\\[WARNING] {message}```\n\n")
+    def log_warning(self, short_message: str, long_message: t.Optional[str] = None) -> None:
+        logger.warning(long_message or short_message)
+        self._print(f"```\n\\[WARNING] {short_message}```\n\n")
 
 
 class DatabricksMagicConsole(CaptureTerminalConsole):
@@ -2386,10 +2386,10 @@ class DebuggerTerminalConsole(TerminalConsole):
     def log_error(self, message: str) -> None:
         self._write(message, style="bold red")
 
-    def log_warning(self, message: str, logger_message: t.Optional[str] = None) -> None:
-        logger.warning(logger_message or message)
+    def log_warning(self, short_message: str, long_message: t.Optional[str] = None) -> None:
+        logger.warning(long_message or short_message)
         if not self.ignore_warnings:
-            self._write(message, style="bold yellow")
+            self._write(short_message, style="bold yellow")
 
     def log_success(self, message: str) -> None:
         self._write(message, style="bold green")
