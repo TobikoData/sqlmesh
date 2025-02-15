@@ -25,7 +25,9 @@ def cleanup_expired_views(
     ]
     for expired_catalog, expired_schema in {
         (
-            snapshot.qualified_view_name.catalog_for_environment(environment.naming_info),
+            snapshot.qualified_view_name.catalog_for_environment(
+                environment.naming_info, dialect=adapter.dialect
+            ),
             snapshot.qualified_view_name.schema_for_environment(
                 environment.naming_info, dialect=adapter.dialect
             ),
