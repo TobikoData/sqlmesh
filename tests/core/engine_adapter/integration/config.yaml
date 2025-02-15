@@ -100,6 +100,13 @@ gateways:
       cluster: cluster1
     state_connection:
       type: duckdb
+  inttest_risingwave:
+    connection:
+      type: risingwave
+      user: root
+      database: dev
+      host: {{ env_var('DOCKER_HOSTNAME', 'localhost') }}
+      port: 4566
 
 
   # Cloud databases

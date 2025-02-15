@@ -235,6 +235,14 @@ def test_type(request):
                 pytest.mark.athena,
             ],
         ),
+        pytest.param(
+            "risingwave",
+            marks=[
+                pytest.mark.docker,
+                pytest.mark.engine,
+                pytest.mark.risingwave,
+            ],
+        ),
     ]
 )
 def mark_gateway(request) -> t.Tuple[str, str]:
@@ -378,7 +386,7 @@ def test_create_table(ctx: TestContext):
         column_descriptions={"id": "test id column description"},
         table_format=ctx.default_table_format,
     )
-    results = ctx.get_metadata_results()
+    results = ctx.get_metadata_results(schema=table.db)
     assert len(results.tables) == 1
     assert len(results.views) == 0
     assert len(results.materialized_views) == 0
