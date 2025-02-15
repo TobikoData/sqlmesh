@@ -1644,6 +1644,15 @@ def test_qualified_view_name(qualified_view_name, environment_naming_info, expec
     assert qualified_view_name.for_environment(environment_naming_info) == expected
 
 
+def test_qualified_view_name_with_dialect():
+    qualified_view_name = QualifiedViewName(catalog="catalog", schema_name="db", table="table")
+    environment_naming_info = EnvironmentNamingInfo(name="dev", catalog_name_override="override")
+    assert (
+        qualified_view_name.for_environment(environment_naming_info, dialect="snowflake")
+        == "OVERRIDE.db__DEV.table"
+    )
+
+
 def test_multi_interval_merge(make_snapshot):
     a = make_snapshot(
         SqlModel(
@@ -1914,30 +1923,34 @@ def test_deployability_index_missing_parent(make_snapshot):
 
 
 @pytest.mark.parametrize(
-    "model_name, environment_naming_info, default_catalog, expected",
+    "model_name, environment_naming_info, default_catalog, dialect, expected",
     (
         (
             "test_db.test_model",
             EnvironmentNamingInfo(),
             None,
+            "duckdb",
             "test_db.test_model",
         ),
         (
             "test_db.test_model",
             EnvironmentNamingInfo(name="dev"),
             None,
+            "duckdb",
             "test_db__dev.test_model",
         ),
         (
             "test_db.test_model",
             EnvironmentNamingInfo(name="dev", suffix_target=EnvironmentSuffixTarget.SCHEMA),
             None,
+            "duckdb",
             "test_db__dev.test_model",
         ),
         (
             "test_db.test_model",
             EnvironmentNamingInfo(name="dev", suffix_target=EnvironmentSuffixTarget.TABLE),
             None,
+            "duckdb",
             "test_db.test_model__dev",
         ),
         (
@@ -1948,12 +1961,14 @@ def test_deployability_index_missing_parent(make_snapshot):
                 catalog_name_override="catalog_override",
             ),
             None,
+            "duckdb",
             "catalog_override.test_db.test_model__dev",
         ),
         (
             "original_catalog.test_db.test_model",
             EnvironmentNamingInfo(name="dev", suffix_target=EnvironmentSuffixTarget.TABLE),
             "default_catalog",
+            "duckdb",
             "original_catalog.test_db.test_model__dev",
         ),
         (
@@ -1964,6 +1979,7 @@ def test_deployability_index_missing_parent(make_snapshot):
                 catalog_name_override="catalog_override",
             ),
             "default_catalog",
+            "duckdb",
             "catalog_override.test_db.test_model__dev",
         ),
         (
@@ -1974,18 +1990,31 @@ def test_deployability_index_missing_parent(make_snapshot):
                 catalog_name_override="catalog_override",
             ),
             "default_catalog",
+            "duckdb",
             "catalog_override.test_db.test_model__dev",
         ),
         (
             "test_db.test_model",
             EnvironmentNamingInfo(name="dev", suffix_target=EnvironmentSuffixTarget.TABLE),
             "default_catalog",
+            "duckdb",
             "test_db.test_model__dev",
+        ),
+        (
+            "test_db.test_model",
+            EnvironmentNamingInfo(
+                name="dev",
+                suffix_target=EnvironmentSuffixTarget.TABLE,
+                catalog_name_override="catalog_override",
+            ),
+            "default_catalog",
+            "snowflake",
+            "CATALOG_OVERRIDE.test_db.test_model__DEV",
         ),
     ),
 )
 def test_display_name(
-    make_snapshot, model_name, environment_naming_info, default_catalog, expected
+    make_snapshot, model_name, environment_naming_info, default_catalog, dialect, expected
 ):
     input_model = SqlModel(
         name=model_name,
@@ -1994,7 +2023,10 @@ def test_display_name(
         default_catalog=default_catalog,
     )
     input_snapshot = make_snapshot(input_model)
-    assert display_name(input_snapshot, environment_naming_info, default_catalog) == expected
+    assert (
+        display_name(input_snapshot, environment_naming_info, default_catalog, dialect=dialect)
+        == expected
+    )
 
 
 def test_missing_intervals_node_start_end(make_snapshot):
