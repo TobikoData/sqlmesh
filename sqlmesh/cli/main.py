@@ -20,7 +20,7 @@ from sqlmesh.utils.errors import MissingDependencyError
 
 logger = logging.getLogger(__name__)
 
-SKIP_LOAD_COMMANDS = ("create_external_models", "migrate", "rollback", "run")
+SKIP_LOAD_COMMANDS = ("create_external_models", "migrate", "rollback", "run", "environments")
 SKIP_CONTEXT_COMMANDS = ("init", "ui")
 
 
@@ -966,3 +966,19 @@ def dlt_refresh(
         ctx.obj.console.log_success(f"Updated SQLMesh project with models:\n{model_names}")
     else:
         ctx.obj.console.log_success("All SQLMesh models are up to date.")
+
+
+@cli.command("environments")
+@click.option(
+    "-e",
+    "--show-expiry",
+    is_flag=True,
+    help="Prints the expiry datetime of the environments.",
+    default=False,
+)
+@click.pass_obj
+@error_handler
+@cli_analytics
+def environments(obj: Context, show_expiry: bool) -> None:
+    """Prints the list of SQLMesh environments with its expiry datetime."""
+    obj.print_environment_names(show_expiry=show_expiry)
