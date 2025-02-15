@@ -987,6 +987,7 @@ class GCPPostgresConnectionConfig(ConnectionConfig):
     password: t.Optional[str] = None
     enable_iam_auth: t.Optional[bool] = None
     db: str
+    ip_type: t.Union[t.Literal["public"], t.Literal["private"], t.Literal["psc"]] = "public"
     # Keyfile Auth
     keyfile: t.Optional[str] = None
     keyfile_json: t.Optional[t.Dict[str, t.Any]] = None
@@ -1052,7 +1053,15 @@ class GCPPostgresConnectionConfig(ConnectionConfig):
                 self.keyfile_json, scopes=self.scopes
             )
 
-        return Connector(credentials=creds).connect
+        kwargs = {
+            "credentials": creds,
+            "ip_type": self.ip_type,
+        }
+
+        if self.timeout:
+            kwargs["timeout"] = self.timeout
+
+        return Connector(**kwargs).connect  # type: ignore
 
 
 class RedshiftConnectionConfig(ConnectionConfig):

@@ -691,6 +691,16 @@ def test_gcp_postgres(make_config):
     )
     assert isinstance(config, GCPPostgresConnectionConfig)
     assert config.is_recommended_for_state_sync is True
+    assert config.ip_type == "public"
+    config = make_config(
+        type="gcp_postgres",
+        instance_connection_string="something",
+        user="user",
+        password="password",
+        db="database",
+        ip_type="private",
+    )
+    assert config.ip_type == "private"
 
 
 def test_mysql(make_config):
