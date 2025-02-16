@@ -715,9 +715,29 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
                 a run.
         """
         end = execution_time or now_timestamp() if self.depends_on_past else end
+        removal_interval = self.inclusive_exclusive(start, end, strict)
+
         if not is_preview and self.full_history_restatement_only and self.intervals:
-            start = self.intervals[0][0]
-        return self.inclusive_exclusive(start, end, strict)
+            expanded_removal_interval = self.inclusive_exclusive(self.intervals[0][0], end, strict)
+            requested_start, requested_end = removal_interval
+            expanded_start, expanded_end = expanded_removal_interval
+
+            is_subset = requested_start > expanded_start or requested_end < expanded_end
+
+            # only warn if the requested removal interval was a subset of the actual model intervals and was automatically expanded
+            # if the requested interval was the same or wider than the actual model intervals, no need to warn
+            if removal_interval != expanded_removal_interval and is_subset:
+                from sqlmesh.core.console import get_console
+
+                get_console().log_warning(
+                    f"Model '{self.model.name}' is '{self.model_kind_name}' which does not support partial restatement.\n"
+                    f"Expanding the requested restatement intervals from [{to_ts(requested_start)} - {to_ts(requested_end)}] "
+                    f"to [{to_ts(expanded_start)} - {to_ts(expanded_end)}] in order to fully restate the model."
+                )
+
+            removal_interval = expanded_removal_interval
+
+        return removal_interval
 
     def inclusive_exclusive(
         self,
