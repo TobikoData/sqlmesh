@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import logging
 import os
 import typing as t
@@ -19,7 +18,6 @@ from web.server.exceptions import ApiException
 from web.server.models import Mode
 
 logger = logging.getLogger(__name__)
-get_context_lock = asyncio.Lock()
 
 MODE_TO_MODULES = {
     models.Mode.IDE: {
@@ -93,18 +91,11 @@ async def get_path_to_model_mapping(
         return {}
 
 
-async def get_loaded_context(settings: Settings = Depends(get_settings)) -> t.AsyncGenerator:
-    loop = asyncio.get_running_loop()
-
+async def get_loaded_context(
+    settings: Settings = Depends(get_settings),
+) -> t.AsyncGenerator[Context, None]:
     try:
-        async with get_context_lock:
-            yield await loop.run_in_executor(
-                None,
-                _get_loaded_context,
-                settings.project_path,
-                settings.config,
-                settings.gateway,
-            )
+        yield _get_loaded_context(settings.project_path, settings.config, settings.gateway)
     except Exception:
         raise ApiException(
             message="Unable to create a loaded context",
@@ -114,8 +105,7 @@ async def get_loaded_context(settings: Settings = Depends(get_settings)) -> t.As
 
 async def get_context(settings: Settings = Depends(get_settings)) -> t.Optional[Context]:
     try:
-        async with get_context_lock:
-            return _get_context(settings.project_path, settings.config, settings.gateway)
+        return _get_context(settings.project_path, settings.config, settings.gateway)
     except Exception:
         return None
 
