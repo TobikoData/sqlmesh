@@ -45,11 +45,19 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ProjectStatements:
-    plan_before_all: t.List[str]
-    plan_after_all: t.List[str]
-    run_before_all: t.List[str]
-    run_after_all: t.List[str]
+    before_all: t.List[str]
+    after_all: t.List[str]
     python_env: t.Dict[str, Executable]
+
+    @staticmethod
+    def parse_obj(statements: t.Dict[str, t.Any]) -> ProjectStatements:
+        return ProjectStatements(
+            before_all=statements.get("before_all", []),
+            after_all=statements.get("after_all", []),
+            python_env={
+                key: Executable(**value) for key, value in statements.get("python_env", {}).items()
+            },
+        )
 
 
 @dataclass
@@ -179,10 +187,8 @@ class Loader(abc.ABC):
     def _load_project_statements(self, macros: MacroRegistry) -> ProjectStatements:
         """Loads project statements."""
         return ProjectStatements(
-            plan_before_all=[],
-            plan_after_all=[],
-            run_before_all=[],
-            run_after_all=[],
+            before_all=[],
+            after_all=[],
             python_env={},
         )
 
@@ -624,10 +630,8 @@ class SqlMeshLoader(Loader):
         """Loads project statements."""
 
         statements = {
-            "plan_before_all": self.config.plan.before_all or [],
-            "plan_after_all": self.config.plan.after_all or [],
-            "run_before_all": self.config.run.before_all or [],
-            "run_after_all": self.config.run.after_all or [],
+            "before_all": self.config.plan.before_all or [],
+            "after_all": self.config.plan.after_all or [],
         }
 
         python_env = make_python_env(
