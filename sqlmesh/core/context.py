@@ -1975,14 +1975,14 @@ class GenericContext(BaseContext, t.Generic[C]):
     @python_api_analytics
     def print_environment_names(self) -> None:
         """Prints all environment names along with expiry datetime."""
-        environment_names = self._new_state_sync().get_environments_summary()
-        if not environment_names:
+        environments_summary = self._new_state_sync().get_environments_summary()
+        if not environments_summary:
             raise SQLMeshError(
                 "This project has no environments. Create an environment using the `sqlmesh plan` command."
             )
         output = [
-                f"{name} - {time_like_to_str(ts)}" if ts else f"{name} - No Expiry"
-                for name, ts in environment_names
+            f"{name} - {time_like_to_str(ts)}" if ts else f"{name} - No Expiry"
+            for name, ts in environments_summary.items()
         ]
         output_str = "\n".join([str(len(output)), *output])
         self.console.log_status_update(f"Number of SQLMesh environments are: {output_str}")
