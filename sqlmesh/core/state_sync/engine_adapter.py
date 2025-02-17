@@ -740,7 +740,7 @@ class EngineAdapterStateSync(StateSync):
             A dict of all environment names along with expiry datetime.
         """
         return dict(
-            self._fetchall(self._environments_query(required_fields=["name", "expiration_ts"]))
+            self._fetchall(self._environments_query(required_fields=["name", "expiration_ts"])),
         )
 
     def _environment_from_row(self, row: t.Tuple[str, ...]) -> Environment:

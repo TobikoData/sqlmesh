@@ -113,7 +113,7 @@ from sqlmesh.core.test import (
 from sqlmesh.core.user import User
 from sqlmesh.utils import UniqueKeyDict
 from sqlmesh.utils.dag import DAG
-from sqlmesh.utils.date import TimeLike, now_ds, to_timestamp, format_tz_datetime, time_like_to_str
+from sqlmesh.utils.date import TimeLike, now_ds, to_timestamp, format_tz_datetime
 from sqlmesh.utils.errors import (
     CircuitBreakerError,
     ConfigError,
@@ -1975,17 +1975,12 @@ class GenericContext(BaseContext, t.Generic[C]):
     @python_api_analytics
     def print_environment_names(self) -> None:
         """Prints all environment names along with expiry datetime."""
-        environments_summary = self._new_state_sync().get_environments_summary()
-        if not environments_summary:
+        result = self._new_state_sync().get_environments_summary()
+        if not result:
             raise SQLMeshError(
                 "This project has no environments. Create an environment using the `sqlmesh plan` command."
             )
-        output = [
-            f"{name} - {time_like_to_str(ts)}" if ts else f"{name} - No Expiry"
-            for name, ts in environments_summary.items()
-        ]
-        output_str = "\n".join([str(len(output)), *output])
-        self.console.log_status_update(f"Number of SQLMesh environments are: {output_str}")
+        self.console.print_environments(result)
 
     def close(self) -> None:
         """Releases all resources allocated by this context."""

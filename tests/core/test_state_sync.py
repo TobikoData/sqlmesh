@@ -46,7 +46,7 @@ from sqlmesh.core.state_sync.base import (
     PromotionResult,
     Versions,
 )
-from sqlmesh.utils.date import now_timestamp, time_like_to_str, to_datetime, to_timestamp
+from sqlmesh.utils.date import now_timestamp, to_datetime, to_timestamp
 from sqlmesh.utils.errors import SQLMeshError
 
 pytestmark = pytest.mark.slow
@@ -2856,7 +2856,7 @@ def test_compact_intervals_pending_restatement_shared_version(
         ]
 
 
-def test_get_environmnets_summary(
+def test_get_environments_summary(
     state_sync: EngineAdapterStateSync,
     make_snapshot: t.Callable,
 ) -> None:
@@ -2903,7 +2903,7 @@ def test_get_environmnets_summary(
     assert actual == expected
 
 
-def test_get_environmnets_summary_only_prod(
+def test_get_environments_summary_only_prod(
     state_sync: EngineAdapterStateSync,
     make_snapshot: t.Callable,
 ) -> None:
@@ -2931,5 +2931,5 @@ def test_get_environmnets_summary_only_prod(
     assert actual == expected
 
 
-def test_get_environmnets_summary_no_env(state_sync: EngineAdapterStateSync) -> None:
+def test_get_environments_summary_no_env(state_sync: EngineAdapterStateSync) -> None:
     assert state_sync.get_environments_summary() == {}
