@@ -37,6 +37,7 @@ from sqlmesh.core import constants as c
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.environment import Environment
+from sqlmesh.core.loader import ProjectStatements
 from sqlmesh.core.model import ModelKindName, SeedModel
 from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.plan.definition import EvaluatablePlan
@@ -790,7 +791,7 @@ class EngineAdapterStateSync(StateSync):
             return query.lock(copy=False)
         return query
 
-    def get_project_statements(self, environment: str) -> t.Optional[str]:
+    def get_project_statements(self, environment: str) -> t.List[ProjectStatements]:
         """Fetches the environment's project statements from the project_statements table.
 
         Returns:
@@ -810,7 +811,12 @@ class EngineAdapterStateSync(StateSync):
         )
         result = self._fetchone(query)
 
-        return result[0] if result else None
+        if result and (statements := json.loads(result[0])["project_statements"]):
+            return [
+                ProjectStatements.parse_obj(project_statements) for project_statements in statements
+            ]
+
+        return []
 
     def get_snapshots(
         self,

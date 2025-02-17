@@ -122,26 +122,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                 deployability_index_for_evaluation = DeployabilityIndex.all_deployable()
 
             self.state_sync.update_project_statements(plan)
-
-            dialect = self.snapshot_evaluator.adapter.dialect
-            render_kwargs = dict(
-                start=plan.start,
-                end=plan.end,
-                execution_time=plan.execution_time or now(),
-                snapshots=snapshots_by_name,
-            )
-
-            if statements := plan.project_statements:
-                for project_statements in statements:
-                    rendered_exprs = render_statements(
-                        project_statements.plan_before_all,
-                        dialect=dialect,
-                        default_catalog=self.default_catalog,
-                        python_env=project_statements.python_env,
-                        **render_kwargs,
-                    )
-                    for statement in rendered_exprs:
-                        self.snapshot_evaluator.adapter.execute(statement)
+            self._execute_project_statements(plan, snapshots_by_name, "before_all")
 
             self._push(plan, snapshots, deployability_index_for_creation)
             update_intervals_for_new_snapshots(plan.new_snapshots, self.state_sync)
@@ -168,17 +149,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             if not plan.requires_backfill:
                 self.console.log_success("Virtual Update executed successfully")
 
-            if statements := plan.project_statements:
-                for project_statements in statements:
-                    rendered_exprs = render_statements(
-                        getattr(project_statements, "plan_after_all"),
-                        dialect=dialect,
-                        default_catalog=self.default_catalog,
-                        python_env=project_statements.python_env,
-                        **render_kwargs,
-                    )
-                    for statement in rendered_exprs:
-                        self.snapshot_evaluator.adapter.execute(statement)
+            self._execute_project_statements(plan, snapshots_by_name, "after_all")
 
         except Exception as e:
             analytics.collector.on_plan_apply_end(plan_id=plan.plan_id, error=e)
@@ -493,6 +464,33 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                 )
 
         return snapshots_to_restate
+
+    def _execute_project_statements(
+        self, plan: EvaluatablePlan, snapshots: t.Dict[str, Snapshot], execution_stage: str
+    ) -> None:
+        adapter = self.snapshot_evaluator.adapter
+        if (statements := plan.project_statements) and (
+            rendered_expressions := [
+                expr
+                for project_statements in statements
+                for expr in render_statements(
+                    statements=getattr(project_statements, execution_stage),
+                    dialect=adapter.dialect,
+                    default_catalog=self.default_catalog,
+                    python_env=project_statements.python_env,
+                    start=plan.start,
+                    end=plan.end,
+                    execution_time=plan.execution_time or now(),
+                    snapshots=snapshots,
+                )
+            ]
+        ):
+            with adapter.transaction():
+                for expr in rendered_expressions:
+                    adapter.execute(expr)
+            self.console.log_success(
+                f"Project's {execution_stage} statements executed successfully"
+            )
 
 
 class BaseAirflowPlanEvaluator(PlanEvaluator):

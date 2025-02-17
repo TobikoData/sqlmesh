@@ -853,6 +853,9 @@ class TerminalConsole(Console):
         if context_diff.has_requirement_changes:
             self._print(f"[bold]Requirements:\n{context_diff.requirements_diff()}")
 
+        if context_diff.has_project_statements_changes:
+            self._print(f"[bold]Project statements:\n{context_diff.project_statements_diff()}")
+
         self._show_summary_tree_for(
             context_diff,
             "Models",

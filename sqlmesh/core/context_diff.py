@@ -76,7 +76,7 @@ class ContextDiff(PydanticModel):
     """Previous requirements."""
     requirements: t.Dict[str, str] = {}
     """Python dependencies."""
-    previous_project_statements: t.Optional[str]
+    previous_project_statements: t.List[ProjectStatements] = []
     """Previous project statements."""
     project_statements: t.List[ProjectStatements] = []
     """Project statements."""
@@ -261,7 +261,7 @@ class ContextDiff(PydanticModel):
             previous_finalized_snapshots=env.previous_finalized_snapshots,
             previous_requirements=env.requirements,
             requirements=env.requirements,
-            previous_project_statements=None,
+            previous_project_statements=[],
         )
 
     @property
@@ -280,7 +280,7 @@ class ContextDiff(PydanticModel):
 
     @property
     def has_project_statements_changes(self) -> bool:
-        return self.json(include={"project_statements"}) != self.previous_project_statements
+        return self.project_statements != self.previous_project_statements
 
     @property
     def has_snapshot_changes(self) -> bool:
@@ -327,6 +327,31 @@ class ContextDiff(PydanticModel):
                 ],
                 [f"{k}=={self.requirements[k]}" for k in sorted(self.requirements)],
             )
+        )
+
+    def project_statements_diff(self) -> str:
+        before_all_diff = ndiff(
+            [
+                str(stmt)
+                for statements in self.previous_project_statements
+                for stmt in statements.before_all
+            ],
+            [str(stmt) for statements in self.project_statements for stmt in statements.before_all],
+        )
+        after_all_diff = ndiff(
+            [
+                str(stmt)
+                for statements in self.previous_project_statements
+                for stmt in statements.after_all
+            ],
+            [str(stmt) for statements in self.project_statements for stmt in statements.after_all],
+        )
+        return (
+            "  before-all:\n    "
+            + "\n    ".join(before_all_diff)
+            + "\n\n"
+            + "  after-all:\n    "
+            + "\n    ".join(after_all_diff)
         )
 
     @property

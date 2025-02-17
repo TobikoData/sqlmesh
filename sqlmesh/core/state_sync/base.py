@@ -10,6 +10,7 @@ from sqlglot import __version__ as SQLGLOT_VERSION
 
 from sqlmesh import migrations
 from sqlmesh.core.environment import Environment, EnvironmentNamingInfo
+from sqlmesh.core.loader import ProjectStatements
 from sqlmesh.core.plan.definition import EvaluatablePlan
 from sqlmesh.core.snapshot import (
     Snapshot,
@@ -187,7 +188,7 @@ class StateReader(abc.ABC):
         """
 
     @abc.abstractmethod
-    def get_project_statements(self, environment: str) -> t.Optional[str]:
+    def get_project_statements(self, environment: str) -> t.List[ProjectStatements]:
         """Fetches project statements from the project_statements table.
 
         Returns:
