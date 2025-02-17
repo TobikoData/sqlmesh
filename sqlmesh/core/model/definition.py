@@ -11,7 +11,7 @@ from pathlib import Path
 import pandas as pd
 import numpy as np
 from pydantic import Field
-from sqlglot import diff, exp
+from sqlglot import diff, exp, parse
 from sqlglot.diff import Insert
 from sqlglot.helper import seq_get
 from sqlglot.optimizer.qualify_columns import quote_identifiers
@@ -2647,48 +2647,27 @@ def render_statements(
     python_env: t.Optional[t.Dict[str, Executable]] = None,
     **render_kwargs: t.Any,
 ) -> t.List[str]:
-    rendered_exprs = []
+    rendered_statements: t.List[str] = []
     for statement in statements:
-        rendered_exprs.append(
-            render_statement(
-                expression=statement,
-                dialect=dialect,
-                default_catalog=default_catalog,
-                python_env=python_env,
-                **render_kwargs,
-            )
-        )
-    return rendered_exprs
+        for expression in parse(statement, dialect=dialect):
+            if expression:
+                rendered = ExpressionRenderer(
+                    expression,
+                    dialect,
+                    [],
+                    python_env=python_env,
+                    default_catalog=default_catalog,
+                    quote_identifiers=False,
+                    normalize_identifiers=False,
+                ).render(**render_kwargs)
 
+                if not rendered:
+                    raise SQLMeshError(
+                        f"Rendering `{expression.sql(dialect=dialect)}` must return an expression"
+                    )
 
-def render_statement(
-    expression: str | exp.Expression,
-    dialect: DialectType = None,
-    default_catalog: t.Optional[str] = None,
-    python_env: t.Optional[t.Dict[str, Executable]] = None,
-    **kwargs: t.Any,
-) -> str:
-    statement = exp.maybe_parse(expression)
-    rendered = ExpressionRenderer(
-        statement,
-        dialect,
-        [],
-        python_env=python_env,
-        default_catalog=default_catalog,
-        quote_identifiers=False,
-        normalize_identifiers=False,
-    ).render(**kwargs)
-
-    if rendered is None:
-        raise SQLMeshError(
-            f"Rendering `{statement.sql(dialect=dialect)}` must return an expression"
-        )
-    if len(rendered) != 1:
-        raise SQLMeshError(
-            f"Rendering `{statement.sql(dialect=dialect)}` must return one result, but got {len(rendered)}"
-        )
-
-    return rendered[0].sql(dialect=dialect)
+                rendered_statements.extend(expr.sql(dialect=dialect) for expr in rendered)
+    return rendered_statements
 
 
 META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {

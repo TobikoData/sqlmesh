@@ -482,6 +482,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                     end=plan.end,
                     execution_time=plan.execution_time or now(),
                     snapshots=snapshots,
+                    environment_naming_info=plan.environment.naming_info,
                 )
             ]
         ):

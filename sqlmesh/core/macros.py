@@ -48,6 +48,7 @@ if t.TYPE_CHECKING:
     from sqlmesh.core._typing import TableName
     from sqlmesh.core.engine_adapter import EngineAdapter
     from sqlmesh.core.snapshot import Snapshot
+    from sqlmesh.core.environment import EnvironmentNamingInfo
 
 
 if sys.version_info >= (3, 10):
@@ -155,6 +156,7 @@ class MacroEvaluator:
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         default_catalog: t.Optional[str] = None,
         path: Path = Path(),
+        environment_naming_info: t.Optional[EnvironmentNamingInfo] = None,
     ):
         self.dialect = dialect
         self.generator = MacroDialect().generator()
@@ -178,6 +180,7 @@ class MacroEvaluator:
         self._snapshots = snapshots if snapshots is not None else {}
         self.default_catalog = default_catalog
         self._path = path
+        self._environment_naming_info = environment_naming_info
 
         prepare_env(self.python_env, self.env)
         for k, v in self.python_env.items():
