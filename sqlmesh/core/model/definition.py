@@ -2153,7 +2153,11 @@ def _create_model(
 ) -> Model:
     _validate_model_fields(klass, {"name", *kwargs} - {"grain", "table_properties"}, path)
 
-    for prop in ["session_properties", "physical_properties", "virtual_properties"]:
+    for prop in [
+        "session_properties",
+        "physical_properties",
+        "virtual_properties",
+    ]:
         kwargs[prop] = _resolve_properties((defaults or {}).get(prop), kwargs.get(prop))
 
     dialect = dialect or ""

@@ -434,7 +434,7 @@ def test_plan_dev_bad_create_from(runner, tmp_path):
     assert result.exit_code == 0
     assert_new_env(result, "dev2", "dev")
     assert (
-        "The environment name 'dev3' was passed to the `plan` command's `--create-from` argument, but 'dev3' does not exist. Initializing new environment 'dev2' from scratch."
+        "[WARNING] The environment name 'dev3' was passed to the `plan` command's `--create-from` argument, but 'dev3' does not exist. Initializing new environment 'dev2' from scratch."
         in result.output.replace("\n", "")
     )
 

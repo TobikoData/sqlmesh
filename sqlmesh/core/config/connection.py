@@ -987,6 +987,7 @@ class GCPPostgresConnectionConfig(ConnectionConfig):
     password: t.Optional[str] = None
     enable_iam_auth: t.Optional[bool] = None
     db: str
+    ip_type: t.Union[t.Literal["public"], t.Literal["private"], t.Literal["psc"]] = "public"
     # Keyfile Auth
     keyfile: t.Optional[str] = None
     keyfile_json: t.Optional[t.Dict[str, t.Any]] = None
@@ -1052,7 +1053,15 @@ class GCPPostgresConnectionConfig(ConnectionConfig):
                 self.keyfile_json, scopes=self.scopes
             )
 
-        return Connector(credentials=creds).connect
+        kwargs = {
+            "credentials": creds,
+            "ip_type": self.ip_type,
+        }
+
+        if self.timeout:
+            kwargs["timeout"] = self.timeout
+
+        return Connector(**kwargs).connect  # type: ignore
 
 
 class RedshiftConnectionConfig(ConnectionConfig):
@@ -1197,10 +1206,8 @@ class PostgresConnectionConfig(ConnectionConfig):
         if not self.role:
             return None
 
-        role_identifier = exp.to_identifier(self.role).sql(dialect="postgres")
-
         def init(cursor: t.Any) -> None:
-            cursor.execute(f"SET ROLE {role_identifier}")
+            cursor.execute(f"SET ROLE {self.role}")
 
         return init
 

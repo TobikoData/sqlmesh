@@ -10,6 +10,7 @@ from sqlmesh.core.model.kind import (
     model_kind_validator,
     on_destructive_change_validator,
 )
+from sqlmesh.core.node import IntervalUnit
 from sqlmesh.utils.date import TimeLike
 from sqlmesh.core.model.meta import FunctionCall
 from sqlmesh.utils.pydantic import field_validator
@@ -36,7 +37,12 @@ class ModelDefaultsConfig(BaseConfig):
         virtual_properties: A key-value mapping of arbitrary properties that are applied to the model view in the virtual layer.
         session_properties: A key-value mapping of properties specific to the target engine that are applied to the engine session.
         audits: The audits to be applied globally to all models in the project.
-        optimize_query: Whether the SQL models should be optimized
+        optimize_query: Whether the SQL models should be optimized.
+        validate_query: Whether the SQL models should be validated at compile time.
+        allow_partials: Whether the models can process partial (incomplete) data intervals.
+        enabled: Whether the models are enabled.
+        interval_unit: The temporal granularity of the models data intervals. By default computed from cron.
+
     """
 
     kind: t.Optional[ModelKind] = None
@@ -53,6 +59,9 @@ class ModelDefaultsConfig(BaseConfig):
     audits: t.Optional[t.List[FunctionCall]] = None
     optimize_query: t.Optional[bool] = None
     validate_query: t.Optional[bool] = None
+    allow_partials: t.Optional[bool] = None
+    interval_unit: t.Optional[IntervalUnit] = None
+    enabled: t.Optional[bool] = None
 
     _model_kind_validator = model_kind_validator
     _on_destructive_change_validator = on_destructive_change_validator

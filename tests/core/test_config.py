@@ -809,3 +809,44 @@ def test_trino_schema_location_mapping_syntax(tmp_path):
     assert isinstance(conn, TrinoConnectionConfig)
 
     assert len(conn.schema_location_mapping) == 2
+
+
+def test_gcp_postgres_ip_and_scopes(tmp_path):
+    config_path = tmp_path / "config_gcp_postgres.yaml"
+    with open(config_path, "w", encoding="utf-8") as fd:
+        fd.write(
+            """
+    gateways:
+      gcp_postgres:
+        connection:
+          type: gcp_postgres
+          instance_connection_string: something
+          user: user
+          password: password
+          db: db
+          ip_type: private
+          scopes:
+          - https://www.googleapis.com/auth/cloud-platform
+          - https://www.googleapis.com/auth/sqlservice.admin
+
+    default_gateway: gcp_postgres
+
+    model_defaults:
+      dialect: postgres
+    """
+        )
+
+    config = load_config_from_paths(
+        Config,
+        project_paths=[config_path],
+    )
+
+    from sqlmesh.core.config.connection import GCPPostgresConnectionConfig
+
+    conn = config.gateways["gcp_postgres"].connection
+    assert isinstance(conn, GCPPostgresConnectionConfig)
+
+    assert len(conn.scopes) == 2
+    assert conn.scopes[0] == "https://www.googleapis.com/auth/cloud-platform"
+    assert conn.scopes[1] == "https://www.googleapis.com/auth/sqlservice.admin"
+    assert conn.ip_type == "private"

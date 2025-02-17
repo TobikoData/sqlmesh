@@ -3397,6 +3397,12 @@ def test_project_level_properties(sushi_context):
             "target_lag": "1 hour",
         },
         virtual_properties={"creatable_type": "SECURE"},
+        enabled=False,
+        allow_partials=True,
+        interval_unit="quarter_hour",
+        validate_query=True,
+        optimize_query=True,
+        cron="@hourly",
     )
 
     model = load_sql_based_model(
@@ -3404,9 +3410,10 @@ def test_project_level_properties(sushi_context):
             """
         MODEL (
             name test_schema.test_model,
+            kind FULL,
             virtual_properties (
                 creatable_type = None
-            )
+            ),
         );
         SELECT a FROM tbl;
         """,
@@ -3414,6 +3421,14 @@ def test_project_level_properties(sushi_context):
         ),
         defaults=model_defaults.dict(),
     )
+
+    # Validate use of project wide defaults
+    assert not model.enabled
+    assert model.allow_partials
+    assert model.interval_unit == IntervalUnit.QUARTER_HOUR
+    assert model.optimize_query
+    assert model.validate_query
+    assert model.cron == "@hourly"
 
     assert model.session_properties == {
         "some_bool": False,
@@ -3428,6 +3443,73 @@ def test_project_level_properties(sushi_context):
 
     # Validate disabling global property
     assert not model.virtual_properties
+
+    model_2 = load_sql_based_model(
+        d.parse(
+            """
+        MODEL (
+            name test_schema.test_model_2,
+            kind FULL,
+            allow_partials False,
+            interval_unit hour,
+            cron '@daily'
+
+        );
+        SELECT a, b FROM tbl;
+        """,
+            default_dialect="snowflake",
+        ),
+        defaults=model_defaults.dict(),
+    )
+
+    # Validate overriding of project wide defaults
+    assert not model_2.allow_partials
+    assert model_2.interval_unit == IntervalUnit.HOUR
+    assert model_2.cron == "@daily"
+
+
+def test_project_level_properties_python_model():
+    model_defaults = {
+        "physical_properties": {
+            "partition_expiration_days": 13,
+            "creatable_type": "TRANSIENT",
+        },
+        "description": "general model description",
+        "enabled": False,
+        "allow_partials": True,
+        "interval_unit": "quarter_hour",
+        "validate_query": True,
+        "optimize_query": True,
+    }
+
+    @model(
+        name="python_model_t_defaults",
+        kind="full",
+        columns={"some_col": "int"},
+        physical_properties={"partition_expiration_days": 7},
+    )
+    def python_model_prop(context, **kwargs):
+        context.resolve_table("foo")
+
+    m = model.get_registry()["python_model_t_defaults"].model(
+        module_path=Path("."),
+        path=Path("."),
+        dialect="duckdb",
+        defaults=model_defaults,
+    )
+
+    assert m.physical_properties == {
+        "partition_expiration_days": exp.convert(7),
+        "creatable_type": exp.convert("TRANSIENT"),
+    }
+
+    # Even if in the project wide defaults these are ignored for python models
+    assert not m.optimize_query
+    assert not m.validate_query
+
+    assert not m.enabled
+    assert m.allow_partials
+    assert m.interval_unit == IntervalUnit.QUARTER_HOUR
 
 
 def test_model_session_properties(sushi_context):
@@ -5940,6 +6022,32 @@ def my_model(context, **kwargs):
     context = Context(paths=tmp_path, config=config)
     assert context.get_model(expected_name).name == expected_name
     assert isinstance(context.get_model(expected_name), PythonModel)
+
+
+def test_python_model_name_inference_multiple_models(tmp_path: Path) -> None:
+    init_example_project(tmp_path, dialect="duckdb")
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        model_naming=NameInferenceConfig(infer_names=True),
+    )
+
+    path_a = tmp_path / "models/test_schema/test_model_a.py"
+    path_b = tmp_path / "models/test_schema/test_model_b.py"
+
+    model_payload = """from sqlmesh import model
+@model(
+    columns={'"COL"': "int"},
+)
+def my_model(context, **kwargs):
+    pass"""
+
+    path_a.parent.mkdir(parents=True, exist_ok=True)
+    path_a.write_text(model_payload)
+    path_b.write_text(model_payload)
+
+    context = Context(paths=tmp_path, config=config)
+    assert context.get_model("test_schema.test_model_a").name == "test_schema.test_model_a"
+    assert context.get_model("test_schema.test_model_b").name == "test_schema.test_model_b"
 
 
 def test_custom_kind():

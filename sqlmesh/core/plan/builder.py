@@ -329,9 +329,14 @@ class PlanBuilder:
             if not snapshot:
                 raise PlanError(f"Cannot restate model '{model_fqn}'. Model does not exist.")
             if not forward_only_preview_needed:
-                if not self._is_dev and snapshot.disable_restatement:
-                    # This is a warning but we print this as error since the Console is lacking API for warnings.
-                    self._console.log_error(
+                if self._is_dev and not snapshot.is_paused:
+                    self._console.log_warning(
+                        f"Cannot restate model '{model_fqn}' because the current version is used in production. "
+                        "Run the restatement against the production environment instead to restate this model."
+                    )
+                    continue
+                elif (not self._is_dev or not snapshot.is_paused) and snapshot.disable_restatement:
+                    self._console.log_warning(
                         f"Cannot restate model '{model_fqn}'. "
                         "Restatement is disabled for this model to prevent possible data loss."
                         "If you want to restate this model, change the model's `disable_restatement` setting to `false`."
@@ -346,7 +351,7 @@ class PlanBuilder:
                 if is_restateable_snapshot(self._context_diff.snapshots[downstream_s_id]):
                     restatements[downstream_s_id] = dummy_interval
 
-        # Get restatement intervals for all restated snapshots and make sure that if a snapshot expands it's
+        # Get restatement intervals for all restated snapshots and make sure that if an incremental snapshot expands it's
         # restatement range that it's downstream dependencies all expand their restatement ranges as well.
         for s_id in dag:
             if s_id not in restatements:
@@ -363,7 +368,9 @@ class PlanBuilder:
             # the graph we just have to check our immediate parents in the graph and not the whole upstream graph.
             snapshot_dependencies = snapshot.parents
             possible_intervals = [
-                restatements.get(s, dummy_interval) for s in snapshot_dependencies
+                restatements.get(s, dummy_interval)
+                for s in snapshot_dependencies
+                if self._context_diff.snapshots[s].is_incremental
             ] + [interval]
             snapshot_start = min(i[0] for i in possible_intervals)
             snapshot_end = max(i[1] for i in possible_intervals)
@@ -640,6 +647,8 @@ class PlanBuilder:
         for name, (candidate, promoted) in self._context_diff.modified_snapshots.items():
             if (
                 candidate.snapshot_id not in self._context_diff.new_snapshots
+                and candidate.is_model
+                and not candidate.model.forward_only
                 and promoted.is_forward_only
                 and not promoted.is_paused
                 and not candidate.reuses_previous_version
