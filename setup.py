@@ -84,7 +84,7 @@ setup(
             "psycopg2-binary",
             "pydantic",
             "PyAthena[Pandas]",
-            "PyGithub",
+            "PyGithub~=2.5.0",
             "pyspark~=3.5.0",
             "pytest",
             "pytest-asyncio",
@@ -123,7 +123,7 @@ setup(
             "cloud-sql-python-connector[pg8000]",
         ],
         "github": [
-            "PyGithub",
+            "PyGithub~=2.5.0",
         ],
         "llm": [
             "langchain",
