@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import asyncio
+import contextlib
 import logging
 import os
+import threading
 import typing as t
-from contextlib import asynccontextmanager
 from functools import lru_cache
 from pathlib import Path
 
@@ -19,7 +19,8 @@ from web.server.exceptions import ApiException
 from web.server.models import Mode
 
 logger = logging.getLogger(__name__)
-get_context_lock = asyncio.Lock()
+
+get_loaded_context_lock = threading.Lock()
 
 MODE_TO_MODULES = {
     models.Mode.IDE: {
@@ -82,29 +83,23 @@ def _get_path_to_model_mapping(context: Context) -> dict[Path, Model]:
     return {model._path: model for model in context._models.values()}
 
 
-async def get_path_to_model_mapping(
+def get_path_to_model_mapping(
     settings: Settings = Depends(get_settings),
 ) -> dict[Path, Model]:
     try:
-        async with asynccontextmanager(get_loaded_context)(settings) as context:
+        with contextlib.contextmanager(get_loaded_context)(settings) as context:
             return _get_path_to_model_mapping(context)
     except Exception:
         logger.exception("Error creating a context")
         return {}
 
 
-async def get_loaded_context(settings: Settings = Depends(get_settings)) -> t.AsyncGenerator:
-    loop = asyncio.get_running_loop()
-
+def get_loaded_context(
+    settings: Settings = Depends(get_settings),
+) -> t.Generator[Context, None]:
     try:
-        async with get_context_lock:
-            yield await loop.run_in_executor(
-                None,
-                _get_loaded_context,
-                settings.project_path,
-                settings.config,
-                settings.gateway,
-            )
+        with get_loaded_context_lock:
+            yield _get_loaded_context(settings.project_path, settings.config, settings.gateway)
     except Exception:
         raise ApiException(
             message="Unable to create a loaded context",
@@ -112,16 +107,15 @@ async def get_loaded_context(settings: Settings = Depends(get_settings)) -> t.As
         )
 
 
-async def get_context(settings: Settings = Depends(get_settings)) -> t.Optional[Context]:
+def get_context(settings: Settings = Depends(get_settings)) -> t.Optional[Context]:
     try:
-        async with get_context_lock:
-            return _get_context(settings.project_path, settings.config, settings.gateway)
+        return _get_context(settings.project_path, settings.config, settings.gateway)
     except Exception:
         return None
 
 
-async def get_context_or_raise(settings: Settings = Depends(get_settings)) -> Context:
-    context = await get_context(settings)
+def get_context_or_raise(settings: Settings = Depends(get_settings)) -> Context:
+    context = get_context(settings)
     if not context:
         raise ApiException(
             message="Unable to create a context",

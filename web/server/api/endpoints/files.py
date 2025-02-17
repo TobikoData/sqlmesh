@@ -25,9 +25,9 @@ router = APIRouter()
 
 
 @router.get("", response_model=models.Directory)
-async def get_files(settings: Settings = Depends(get_settings)) -> models.Directory:
+def get_files(settings: Settings = Depends(get_settings)) -> models.Directory:
     """Get all project files."""
-    return await _get_directory(settings.project_path, settings)
+    return _get_directory(settings.project_path, settings)
 
 
 @router.get("/{path:path}", response_model=models.File)
@@ -56,7 +56,7 @@ async def write_file(
     """Create, update, or rename a file."""
     path_or_new_path = path
     if new_path:
-        path_or_new_path = await validate_path(new_path, settings)
+        path_or_new_path = validate_path(new_path, settings)
         replace_file(settings.project_path / path, settings.project_path / path_or_new_path)
     else:
         full_path = settings.project_path / path
@@ -70,7 +70,7 @@ async def write_file(
             format_file_status = models.FormatFileStatus(
                 status=models.Status.INIT, path=path_or_new_path
             )
-            path_to_model_mapping = await get_path_to_model_mapping(settings=settings)
+            path_to_model_mapping = get_path_to_model_mapping(settings=settings)
             model = path_to_model_mapping.get(Path(full_path))
             default_dialect = config.dialect
             dialect = model.dialect if model and model.is_sql else default_dialect
@@ -118,8 +118,8 @@ async def delete_file(
         )
 
 
-async def _get_directory(path: str | Path, settings: Settings) -> models.Directory:
-    context = await get_context(settings)
+def _get_directory(path: str | Path, settings: Settings) -> models.Directory:
+    context = get_context(settings)
     ignore_patterns = context.config.ignore_patterns if context else c.IGNORE_PATTERNS
 
     def walk_path(
