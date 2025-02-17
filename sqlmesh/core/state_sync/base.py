@@ -136,13 +136,11 @@ class StateReader(abc.ABC):
         """
 
     @abc.abstractmethod
-    def get_environment_names(
-        self, get_expiry_ts: bool = True
-    ) -> t.Optional[t.List[t.Tuple[str, ...]]]:
-        """Fetches all environment names along with expiry datetime if get_expiry_ts is True.
+    def get_environments_summary(self) -> t.Optional[t.List[t.Tuple[str, int]]]:
+        """Fetches all environment names along with expiry datetime.
 
         Returns:
-            A list of all environment names along with expiry datetime if get_expiry_ts is True.
+            A list of all environment names along with expiry datetime.
         """
 
     @abc.abstractmethod

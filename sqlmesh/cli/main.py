@@ -969,16 +969,9 @@ def dlt_refresh(
 
 
 @cli.command("environments")
-@click.option(
-    "-e",
-    "--show-expiry",
-    is_flag=True,
-    help="Prints the expiry datetime of the environments.",
-    default=False,
-)
 @click.pass_obj
 @error_handler
 @cli_analytics
-def environments(obj: Context, show_expiry: bool) -> None:
+def environments(obj: Context) -> None:
     """Prints the list of SQLMesh environments with its expiry datetime."""
-    obj.print_environment_names(show_expiry=show_expiry)
+    obj.print_environment_names()
