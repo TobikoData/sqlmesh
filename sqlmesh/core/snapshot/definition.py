@@ -222,13 +222,20 @@ class QualifiedViewName(PydanticModel, frozen=True):
         return exp.table_(
             self.table_name_for_environment(environment_naming_info, dialect=dialect),
             db=self.schema_for_environment(environment_naming_info, dialect=dialect),
-            catalog=self.catalog_for_environment(environment_naming_info),
+            catalog=self.catalog_for_environment(environment_naming_info, dialect=dialect),
         )
 
     def catalog_for_environment(
-        self, environment_naming_info: EnvironmentNamingInfo
+        self, environment_naming_info: EnvironmentNamingInfo, dialect: DialectType = None
     ) -> t.Optional[str]:
-        return environment_naming_info.catalog_name_override or self.catalog
+        if environment_naming_info.catalog_name_override:
+            catalog_name = environment_naming_info.catalog_name_override
+            return (
+                normalize_identifiers(catalog_name, dialect=dialect).name
+                if environment_naming_info.normalize_name
+                else catalog_name
+            )
+        return self.catalog
 
     def schema_for_environment(
         self, environment_naming_info: EnvironmentNamingInfo, dialect: DialectType = None
