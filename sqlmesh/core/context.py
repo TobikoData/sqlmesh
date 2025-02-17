@@ -75,6 +75,7 @@ from sqlmesh.core.dialect import (
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.environment import Environment, EnvironmentNamingInfo
 from sqlmesh.core.loader import Loader
+from sqlmesh.core.linter.definition import Linter
 from sqlmesh.core.macros import ExecutableOrMacro, macro
 from sqlmesh.core.metric import Metric, rewrite
 from sqlmesh.core.model import Model, update_model_schemas
@@ -478,12 +479,17 @@ class GenericContext(BaseContext, t.Generic[C]):
             }
         )
 
-        update_model_schemas(self.dag, models=self._models, context_path=self.path)
+        update_model_schemas(self.dag, models=self._models, context_path=self.path, lint_cfg=self.config.linter)
 
         if model.dialect:
             self._all_dialects.add(model.dialect)
 
         model.validate_definition()
+
+        linter = Linter(config=self.config.linter) if self.config.linter.enabled else None
+        if linter:
+            print(f"linting {model}")
+            linter.lint(model)
 
         return model
 
@@ -606,12 +612,9 @@ class GenericContext(BaseContext, t.Generic[C]):
                     self._models.update({fqn: model.copy(update={"mapping_schema": {}})})
                     continue
 
-            update_model_schemas(self.dag, models=self._models, context_path=self.path)
-
-            from sqlmesh.core.linter.definition import Linter
+            update_model_schemas(self.dag, models=self._models, context_path=self.path, lint_cfg=self.config.linter)
 
             linter = Linter(config=self.config.linter) if self.config.linter.enabled else None
-
             for model in self.models.values():
                 # The model definition can be validated correctly only after the schema is set.
                 model.validate_definition()
