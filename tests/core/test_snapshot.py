@@ -23,6 +23,7 @@ from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.model import (
     FullKind,
     IncrementalByTimeRangeKind,
+    IncrementalByUniqueKeyKind,
     IncrementalUnmanagedKind,
     Model,
     Seed,
@@ -61,6 +62,7 @@ from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.date import DatetimeRanges, to_date, to_datetime, to_timestamp
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroInfo
+from sqlmesh.core.console import get_console
 
 
 @pytest.fixture
@@ -750,6 +752,63 @@ def test_get_removal_intervals_full_history_restatement_model(make_snapshot):
         "2023-01-01", "2023-01-01", execution_time=execution_time
     )
     assert interval == (to_timestamp("2023-01-01"), execution_time)
+
+
+def test_get_removal_intervals_warns_when_requested_range_automatically_widened(
+    make_snapshot: t.Callable[..., Snapshot], mocker: MockerFixture
+):
+    mock_logger = mocker.patch.object(get_console(), "log_warning")
+
+    # INCREMENTAL_BY_UNIQUE_KEY should warn
+    snapshot = make_snapshot(
+        SqlModel(
+            name="name",
+            kind=IncrementalByUniqueKeyKind(unique_key=[exp.to_column("id")]),
+            query=parse_one("select id from src"),
+        )
+    )
+
+    assert not snapshot.intervals
+    assert snapshot.full_history_restatement_only
+
+    snapshot.add_interval("2020-01-01", "2020-01-10")
+
+    # should warn if requested intervals are a subset of actual intervals and thus are automatically expanded
+    snapshot.get_removal_interval("2020-01-05", "2020-01-06")
+
+    msg = mock_logger.call_args[0][0]
+    assert "does not support partial restatement" in msg
+    assert "Expanding the requested restatement intervals" in msg
+
+    # should not warn if requested intervals are equal to actual intervals
+    mock_logger.reset_mock()
+
+    snapshot.get_removal_interval("2020-01-01", "2020-01-10")
+    mock_logger.assert_not_called()
+
+    # should not warn if requested intervals are a superset of actual intervals
+    mock_logger.reset_mock()
+
+    snapshot.get_removal_interval("2019-12-30", "2020-01-15")
+    mock_logger.assert_not_called()
+
+    # should not warn on models that support partial restatement, such as INCREMENTAL_BY_TIME_RANGE
+    mock_logger.reset_mock()
+    snapshot = make_snapshot(
+        SqlModel(
+            name="name",
+            kind=IncrementalByTimeRangeKind(time_column=TimeColumn(column="ds")),
+            query=parse_one("select ds from src"),
+        )
+    )
+
+    assert not snapshot.intervals
+    assert not snapshot.full_history_restatement_only
+
+    snapshot.add_interval("2020-01-01", "2020-01-10")
+
+    snapshot.get_removal_interval("2020-01-05", "2020-01-06")
+    mock_logger.assert_not_called()
 
 
 each_macro = lambda: "test"  # noqa: E731
