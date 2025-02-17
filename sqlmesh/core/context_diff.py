@@ -347,10 +347,10 @@ class ContextDiff(PydanticModel):
             [str(stmt) for statements in self.project_statements for stmt in statements.after_all],
         )
         return (
-            "  before-all:\n    "
+            "  before_all:\n    "
             + "\n    ".join(before_all_diff)
             + "\n\n"
-            + "  after-all:\n    "
+            + "  after_all:\n    "
             + "\n    ".join(after_all_diff)
         )
 
