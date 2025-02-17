@@ -223,7 +223,8 @@ class Scheduler:
                 audit_errors_to_raise.append(error)
             else:
                 get_console().log_warning(
-                    f"\n{error}. Audit is non-blocking so proceeding with execution. Audit query:\n{error.query.sql(error.adapter_dialect)}\n"
+                    f"\n{error}.",
+                    long_message=f"{error}. Audit query:\n{error.query.sql(error.adapter_dialect)}",
                 )
 
         if audit_errors_to_raise:
