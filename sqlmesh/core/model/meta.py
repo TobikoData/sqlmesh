@@ -76,7 +76,10 @@ class ModelMeta(_Node):
     physical_version: t.Optional[str] = None
     gateway: t.Optional[str] = None
     optimize_query: t.Optional[bool] = None
-    ignore_lints_: t.Optional[t.List[str] | str] = Field(default=None, alias="ignore_lints")
+
+    ignore_lints_: t.Optional[t.List[str] | str] = Field(
+        default=None, exclude=True, alias="ignore_lints"
+    )
 
     _bool_validator = bool_validator
     _model_kind_validator = model_kind_validator

@@ -1378,10 +1378,9 @@ def test_model_linting(tmp_path: pathlib.Path) -> None:
         "MODEL(name test); SELECT * FROM (SELECT 1 AS col);",
     )
 
-    enabled_cfg = LinterConfig(enabled=True)
-
+    cfg = LinterConfig(rules=["noselectstar"])
     ctx = Context(
-        config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"), linter=enabled_cfg),
+        config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"), linter=cfg),
         paths=tmp_path,
         load=False,
     )
@@ -1404,21 +1403,18 @@ def test_model_linting(tmp_path: pathlib.Path) -> None:
 
     # Case #3: Ensure load DOES NOT work if LinterConfig has overlapping rules
     invalid_cfgs = [
-        LinterConfig(enabled=True, rules=["noselectstar"], exclude_rules=["noselectstar"]),
-        LinterConfig(enabled=True, rules=["noselectstar"], warn_rules=["noselectstar"]),
+        {"rules": ["noselectstar"], "warn_rules": ["noselectstar"]},
     ]
 
     for cfg in invalid_cfgs:
-        ctx.config.linter = cfg
-
         with pytest.raises(
             ConfigError,
-            match=r"Included linter rules \[noselectstar\] are also added in excluded & warning rules",
+            match=r"Found overlapping rules {'noselectstar'} in lint config.",
         ):
-            ctx.load()
+            LinterConfig(**cfg)
 
     # Case #4: Ensure model attribute overrides global config
-    ctx.config.linter = enabled_cfg
+    ctx.config.linter = LinterConfig(rules=["noselectstar"])
 
     create_temp_file(
         tmp_path,

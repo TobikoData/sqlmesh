@@ -30,7 +30,6 @@ from sqlmesh.core.model.common import (
     parse_dependencies,
     single_value_or_tuple,
 )
-from sqlmesh.core.config.linter import LinterConfig
 from sqlmesh.core.model.meta import ModelMeta, FunctionCall
 from sqlmesh.core.model.kind import ModelKindName, SeedKind, ModelKind, FullKind, create_model_kind
 from sqlmesh.core.model.seed import CsvSeedReader, Seed, create_seed
@@ -133,7 +132,7 @@ class _Model(ModelMeta, frozen=True):
 
     _full_depends_on: t.Optional[t.Set[str]] = None
     _statement_renderer_cache: t.Dict[int, ExpressionRenderer] = {}
-    _render_violations: t.List[t.Any] = []
+    _render_violations: t.Dict[t.Any, t.Any] = {}
 
     pre_statements_: t.Optional[t.List[exp.Expression]] = Field(
         default=None, alias="pre_statements"
@@ -150,7 +149,6 @@ class _Model(ModelMeta, frozen=True):
     def __getstate__(self) -> t.Dict[t.Any, t.Any]:
         state = super().__getstate__()
         state["__dict__"] = state["__dict__"].copy()
-
         private = state[PRIVATE_FIELDS]
         private["_statement_renderer_cache"] = {}
         return state
@@ -233,6 +231,7 @@ class _Model(ModelMeta, frozen=True):
                     "enabled",
                     "inline_audits",
                     "optimize_query",
+                    "ignore_lints_",
                 ):
                     expressions.append(
                         exp.Property(
@@ -1252,8 +1251,8 @@ class SqlModel(_Model):
             engine_adapter=engine_adapter,
             **kwargs,
         )
-        # print(f"here {self} -> {id(self)} render {self._render_violations}")
-        self._render_violations.extend(self._query_renderer._violated_rules)
+
+        self._render_violations.update(self._query_renderer._violated_rules)
         return query
 
     def render_definition(
@@ -1798,7 +1797,6 @@ def load_sql_based_model(
     default_catalog: t.Optional[str] = None,
     variables: t.Optional[t.Dict[str, t.Any]] = None,
     infer_names: t.Optional[bool] = False,
-    linter: t.Optional[LinterConfig] = None,
     **kwargs: t.Any,
 ) -> Model:
     """Load a model from a parsed SQLMesh model SQL file.
@@ -1945,7 +1943,6 @@ def load_sql_based_model(
             name,
             query_or_seed_insert,
             time_column_format=time_column_format,
-            linter=linter,
             **common_kwargs,
         )
     else:
@@ -2148,7 +2145,6 @@ def _create_model(
     macros: t.Optional[MacroRegistry] = None,
     signal_definitions: t.Optional[SignalRegistry] = None,
     variables: t.Optional[t.Dict[str, t.Any]] = None,
-    linter: t.Optional[LinterConfig] = None,
     **kwargs: t.Any,
 ) -> Model:
     _validate_model_fields(klass, {"name", *kwargs} - {"grain", "table_properties"}, path)

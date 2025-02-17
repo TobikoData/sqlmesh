@@ -5,7 +5,6 @@ from __future__ import annotations
 import typing as t
 
 from sqlglot import exp
-from sqlglot.errors import SqlglotError
 
 from sqlmesh.core.linter.rule import Rule, RuleViolation, RuleSet
 from sqlmesh.core.model import Model, SqlModel
@@ -38,18 +37,17 @@ class NoSelectStar(Rule):
 
 
 class InvalidSelectStarExpansion(Rule):
-    def __init__(
-        self,
-        deps: t.Optional[str] = None,
-        model_fqn: t.Optional[str] = None,
-        name: t.Optional[str] = None,
-    ) -> None:
-        super().__init__(name=name)
-        self._deps = deps
-        self._model_fqn = model_fqn
-
     def check(self, model: Model) -> t.Optional[RuleViolation]:
-        return None
+        if not model._render_violations:
+            return None
+
+        deps = model._render_violations.get(InvalidSelectStarExpansion, None)
+        if not deps:
+            return None
+
+        self._deps = deps
+        self._model_fqn = model.fqn
+        return RuleViolation(rule=self, model=model)
 
     @property
     def summary(self) -> str:
@@ -65,15 +63,17 @@ class InvalidSelectStarExpansion(Rule):
 
 
 class AmbiguousOrInvalidColumn(Rule):
-    def __init__(
-        self, error: t.Optional[SqlglotError] = None, name: t.Optional[str] = None
-    ) -> None:
-        super().__init__(name=name)
-        self._error = error
-        self._model_fqn = ""
-
     def check(self, model: Model) -> t.Optional[RuleViolation]:
-        return None
+        if not model._render_violations:
+            return None
+
+        sqlglot_err = model._render_violations.get(AmbiguousOrInvalidColumn, None)
+        if not sqlglot_err:
+            return None
+
+        self._error = sqlglot_err
+        self._model_fqn = model.fqn
+        return RuleViolation(rule=self, model=model)
 
     @property
     def summary(self) -> str:

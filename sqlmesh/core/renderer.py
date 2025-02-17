@@ -66,7 +66,7 @@ class BaseExpressionRenderer:
         self._cache: t.List[t.Optional[exp.Expression]] = []
         self._model_fqn = model_fqn
         self._optimize_query_flag = optimize_query is not False
-        self._violated_rules: t.List[t.Any] = []
+        self._violated_rules: t.Dict[t.Any, t.Any] = {}
 
     def update_schema(self, schema: t.Dict[str, t.Any]) -> None:
         self.schema = d.normalize_mapping_schema(schema, dialect=self._dialect)
@@ -537,9 +537,7 @@ class QueryRenderer(BaseExpressionRenderer):
             from sqlmesh.core.linter.rules.builtin import InvalidSelectStarExpansion
 
             deps = ", ".join(f"'{dep}'" for dep in sorted(missing_deps))
-            self._violated_rules.append(
-                InvalidSelectStarExpansion(deps=deps, model_fqn=self._model_fqn)
-            )
+            self._violated_rules[InvalidSelectStarExpansion] = deps
 
         try:
             if should_optimize:
@@ -559,8 +557,8 @@ class QueryRenderer(BaseExpressionRenderer):
                 )
         except SqlglotError as ex:
             from sqlmesh.core.linter.rules.builtin import AmbiguousOrInvalidColumn
-
-            self._violated_rules.append(AmbiguousOrInvalidColumn(error=ex))
+            self._violated_rules[AmbiguousOrInvalidColumn] = ex
+            print(f"violated {self._violated_rules}")
 
             query = original
 
