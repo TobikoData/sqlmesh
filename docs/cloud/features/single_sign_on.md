@@ -4,16 +4,16 @@
 
 Tobiko Cloud supports single sign-on (SSO) through OpenID and SAML 2.0 providers. 
 
-This makes it easier to provision access to users and simplifies authentication. 
+This makes it easy to provision access to users and simplifies authentication. 
 
 
 ## Setup & Prerequsites 
 
 You must have an active Tobiko Cloud instance with SSO enabled. Please contact your account team to ensure this is enabled. 
 
-If your Tobiko Cloud instance is setup to require SSO then you won't need to provide a token in your tcloud.yml configuration. 
+If your Tobiko Cloud instance is setup to require SSO, then you won't need to provide a token in your `tcloud.yml` configuration. 
 
-Below is an example of `tcloud.yml` configuration:
+Below is an example of a `tcloud.yml` configuration:
 ```yaml
 projects:
     <Project name>:
@@ -29,16 +29,28 @@ default_project: <The name of a project to use by default>
 
 Tobiko Cloud currently supports OpenID and SAML 2.0. 
 
+### OpenID
+
 This provider implements [OpenID Connect Core
 1.0](https://openid.net/specs/openid-connect-core-1_0.html) in order to allow us
-to login with most OAuth 2 login providers.
-
-### OpenID
+to login with most OAuth2 login providers.
 
 There are two types of customers that might use OpenID Providers. The first is a
 customer that would like to use a shared provider like Google, Github,
 Microsoft, etc. 
 
+#### Google OAuth
+
+To enable Google OAuth, all we need is your domain. From here, we can switch SSO on with Google OAuth. 
+
+The login flow will look like the following: 
+
+<video width="100%" height="100%" controls>
+  <source src="google_oauth.mp4" type="video/mp4">
+</video>
+
+
+#### Other OAuth Providers 
 
 If you use Okta and other custom OpenID/OAuth2 providers you need to add us
 as an Application or Client (terms differ across providers).
@@ -47,7 +59,7 @@ You will need the following information to do this:
 
 | Name         | Purpose                                                                                                                              | Value                                                  |
 |--------------|--------------------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------|
-| Redirect URI | Where the OAuth provider should redirect users to after a successfull login. Can also be called "Callback URL" or something simular. | `https://cloud.tobikodata.com/auth/handler/<provider>` |
+| Redirect URI | Where the OAuth provider should redirect users to after a successfull login. Can also be called "Callback URL" or something similar. | `https://cloud.tobikodata.com/auth/handler/<provider>` |
 | Logout URL   | Where users can go to log out of our system                                                                                          | `https://cloud.tobikodata.com/auth/logout`             |
 | Web Origin   | Which host names our OAuth service uses                                                                                              | `https://cloud.tobikodata.com`                         |
 
@@ -62,6 +74,7 @@ We will need the following information from you once you set us up:
 | Client Secret             | The random secret we use to authentication with their OAuth service                                                                                                                                              | `<random string>`                                                                       |
 | Open ID Configuration URL | This is the URL we use to gather the rest of their OpenID Configuration. We can often find this on our own and don't need to request it from them, check with the onboarding engineer to make sure we know this. | 
 
+Once we have the above information, we can enable SSO on your account. You will then follow the login flow through your provider such as logging in through Okta. 
 
 ### SAML V2.0
 
@@ -83,14 +96,19 @@ We will provide a similar set of information below:
 
 | Name        | Purpose                               | Example                                                      |
 |-------------|---------------------------------------|--------------------------------------------------------------|
+| Metadata URL| TThis URL contains all of this information | `https://cloud.tobikodata.com/auth/saml/metadata/<provider>`                               |
 | Entity ID   | This is our Entity ID                 | `https://cloud.tobikodata.com`                               |
 | SSO URL     | This is our HTTP-Redirect Binding URL | `https://cloud.tobikodata.com/auth/saml/callback/<provider>` |
 | Certificate | Our SAML Certificate                  | **TBD**                                                      |
 
-The SSO URL will change per provider. For example if we had a provider named
-`acme`, our URL will be `https://cloud.tobikodata.com/auth/saml/callback/acme`.
+All data except the certificate will change per provider. For example if we had
+a provider named `acme`:
 
-Here is what you would see if you are accessing Tobiko Cloud via Okta.
+- **Metadata URL**: `https://cloud.tobikodata.com/auth/saml/metadata/acme`
+- **Entity ID**: `https://cloud.tobikodata.com/auth/saml/metadata/acme`
+- **SSO URL**: `https://cloud.tobikodata.com/auth/saml/callback/acme`
+
+Here is what you would see if you are accessing Tobiko Cloud via Okta. Click on the Tobiko Cloud icon to be redirected to the application. 
 
 ![sso_okta](./single_sign_on/sso_okta.png)
 
