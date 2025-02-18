@@ -543,7 +543,7 @@ def _parse_if(self: Parser) -> t.Optional[exp.Expression]:
         return exp.Anonymous(this="IF", expressions=[cond, stmt])
 
 
-def _create_parser(parser_type: t.Type[exp.Expression], table_keys: t.List[str]) -> t.Callable:
+def _create_parser(expression_type: t.Type[exp.Expression], table_keys: t.List[str]) -> t.Callable:
     def parse(self: Parser) -> t.Optional[exp.Expression]:
         from sqlmesh.core.model.kind import ModelKindName
 
@@ -616,7 +616,7 @@ def _create_parser(parser_type: t.Type[exp.Expression], table_keys: t.List[str])
 
             expressions.append(self.expression(exp.Property, this=key, value=value))
 
-        return self.expression(parser_type, expressions=expressions)
+        return self.expression(expression_type, expressions=expressions)
 
     return parse
 

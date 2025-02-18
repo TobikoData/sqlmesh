@@ -315,6 +315,10 @@ Make sure the argument has a default value if it's possible for the variable to 
 
 Note that arguments must be specified explicitly - variables cannot be accessed using `kwargs`.
 
+## Python model blueprinting
+
+A Python model can also serve as a template for creating multiple models, or _blueprints_, by specifying a list of key-value dicts in the `blueprints` property. Please refer to the Python-based SQL model [documentation page](./sql_models.md#Python-model-blueprinting)) for more details.
+
 ## Examples
 ### Basic
 The following is an example of a Python model returning a static Pandas DataFrame.

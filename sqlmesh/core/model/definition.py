@@ -5,7 +5,7 @@ import logging
 import types
 import re
 import typing as t
-from functools import cached_property
+from functools import cached_property, partial
 from pathlib import Path
 
 import pandas as pd
@@ -13,6 +13,7 @@ import numpy as np
 from pydantic import Field
 from sqlglot import diff, exp
 from sqlglot.diff import Insert
+from sqlglot.helper import seq_get
 from sqlglot.optimizer.qualify_columns import quote_identifiers
 from sqlglot.optimizer.simplify import gen
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
@@ -1784,6 +1785,118 @@ class AuditResult(PydanticModel):
     blocking: bool = True
 
 
+def _extract_blueprints(blueprints: t.Any, path: Path) -> t.List[t.Any]:
+    if not blueprints:
+        return [None]
+    if isinstance(blueprints, exp.Paren):
+        return [blueprints.unnest()]
+    if isinstance(blueprints, (exp.Tuple, exp.Array)):
+        return blueprints.expressions
+    if isinstance(blueprints, list):
+        return blueprints
+
+    raise_config_error(
+        "Expected a list or tuple consisting of key-value mappings for"
+        f"the 'blueprints' property, got '{blueprints}' instead",
+        path,
+    )
+    return []  # This is unreachable, but is done to satisfy mypy
+
+
+def _extract_blueprint_variables(
+    blueprint: t.Any,
+    dialect: DialectType,
+    path: Path,
+) -> t.Dict[str, str]:
+    if not blueprint:
+        return {}
+    if isinstance(blueprint, exp.Paren):
+        blueprint = blueprint.unnest()
+        return {blueprint.left.name: blueprint.right.sql(dialect=dialect)}
+    if isinstance(blueprint, (exp.Tuple, exp.Array)):
+        return {e.left.name: e.right.sql(dialect=dialect) for e in blueprint.expressions}
+    if isinstance(blueprint, dict):
+        return blueprint
+
+    raise_config_error(
+        f"Expected a key-value mapping for the blueprint value, got '{blueprint}' instead",
+        path,
+    )
+    return {}  # This is unreachable, but is done to satisfy mypy
+
+
+def create_models_from_blueprints(
+    gateway: t.Optional[str | exp.Expression],
+    blueprints: t.Any,
+    get_variables: t.Callable[[t.Optional[str]], t.Dict[str, str]],
+    loader: t.Callable[..., Model],
+    path: Path = Path(),
+    module_path: Path = Path(),
+    dialect: DialectType = None,
+    **loader_kwargs: t.Any,
+) -> t.List[Model]:
+    model_blueprints: t.List[Model] = []
+    for blueprint in _extract_blueprints(blueprints, path):
+        variables = _extract_blueprint_variables(blueprint, dialect, path)
+
+        if gateway:
+            rendered_gateway = render_expression(
+                expression=exp.maybe_parse(gateway, dialect=dialect),
+                module_path=module_path,
+                macros=loader_kwargs.get("macros"),
+                jinja_macros=loader_kwargs.get("jinja_macros"),
+                variables=variables,
+                path=path,
+                dialect=dialect,
+                default_catalog=loader_kwargs.get("default_catalog"),
+            )
+            gateway_name = rendered_gateway[0].name if rendered_gateway else None
+        else:
+            gateway_name = None
+
+        model_blueprints.append(
+            loader(
+                path=path,
+                module_path=module_path,
+                dialect=dialect,
+                variables={**get_variables(gateway_name), **variables},
+                **loader_kwargs,
+            )
+        )
+
+    return model_blueprints
+
+
+def load_sql_based_models(
+    expressions: t.List[exp.Expression],
+    get_variables: t.Callable[[t.Optional[str]], t.Dict[str, str]],
+    path: Path = Path(),
+    module_path: Path = Path(),
+    dialect: DialectType = None,
+    **loader_kwargs: t.Any,
+) -> t.List[Model]:
+    gateway: t.Optional[exp.Expression] = None
+    blueprints: t.Optional[t.List[t.Optional[exp.Expression]]] = None
+
+    model_meta = seq_get(expressions, 0)
+    for prop in (isinstance(model_meta, d.Model) and model_meta.expressions) or []:
+        if prop.name == "gateway":
+            gateway = prop.args["value"]
+        elif prop.name == "blueprints":
+            blueprints = prop.args["value"]
+
+    return create_models_from_blueprints(
+        gateway=gateway,
+        blueprints=blueprints,
+        get_variables=get_variables,
+        loader=partial(load_sql_based_model, expressions),
+        path=path,
+        module_path=module_path,
+        dialect=dialect,
+        **loader_kwargs,
+    )
+
+
 def load_sql_based_model(
     expressions: t.List[exp.Expression],
     *,
@@ -2151,6 +2264,9 @@ def _create_model(
     variables: t.Optional[t.Dict[str, t.Any]] = None,
     **kwargs: t.Any,
 ) -> Model:
+    # blueprints are not really part of the model meta, so we pop it off here before validation kicks in
+    kwargs.pop("blueprints", None)
+
     _validate_model_fields(klass, {"name", *kwargs} - {"grain", "table_properties"}, path)
 
     for prop in [
