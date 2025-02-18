@@ -6,8 +6,6 @@ from sqlglot import exp
 from sqlmesh.core import constants as c
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.environment import EnvironmentNamingInfo
-from sqlmesh.core.loader import ProjectStatements
-from sqlmesh.core.model.definition import render_statements
 from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.notification_target import (
     NotificationEvent,
@@ -317,17 +315,6 @@ class Scheduler:
         if not merged_intervals:
             return CompletionStatus.NOTHING_TO_DO
 
-        project_statements = self.state_sync.get_project_statements(
-            environment if isinstance(environment, str) else environment.name
-        )
-        self._execute_project_statements(
-            project_statements,
-            execution_stage="before_all",
-            start=start,
-            end=end,
-            execution_time=execution_time,
-        )
-
         errors, skipped_intervals = self.run_merged_intervals(
             merged_intervals=merged_intervals,
             deployability_index=deployability_index,
@@ -344,14 +331,6 @@ class Scheduler:
         self.console.log_skipped_models(skipped_snapshots)
         for skipped in skipped_snapshots:
             logger.info(f"SKIPPED snapshot {skipped}\n")
-
-        self._execute_project_statements(
-            project_statements,
-            execution_stage="after_all",
-            start=start,
-            end=end,
-            execution_time=execution_time,
-        )
 
         for error in errors:
             if isinstance(error.__cause__, CircuitBreakerError):
@@ -458,6 +437,19 @@ class Scheduler:
 
         snapshots_by_name = {snapshot.name: snapshot for snapshot in self.snapshots.values()}
 
+        project_statements = self.state_sync.get_project_statements(environment_naming_info.name)
+
+        self.snapshot_evaluator._execute_project_statements(
+            project_statements,
+            execution_stage="before_all",
+            snapshots=snapshots_by_name,
+            start=start,
+            end=end,
+            execution_time=execution_time,
+            default_catalog=self.default_catalog,
+            environment_naming_info=environment_naming_info,
+        )
+
         def evaluate_node(node: SchedulingUnit) -> None:
             if circuit_breaker and circuit_breaker():
                 raise CircuitBreakerError()
@@ -492,6 +484,17 @@ class Scheduler:
                 )
         finally:
             self.state_sync.recycle()
+
+        self.snapshot_evaluator._execute_project_statements(
+            project_statements,
+            execution_stage="after_all",
+            snapshots=snapshots_by_name,
+            start=start,
+            end=end,
+            execution_time=execution_time,
+            default_catalog=self.default_catalog,
+            environment_naming_info=environment_naming_info,
+        )
 
     def _dag(self, batches: SnapshotToIntervals) -> DAG[SchedulingUnit]:
         """Builds a DAG of snapshot intervals to be evaluated.
@@ -549,37 +552,6 @@ class Scheduler:
                         ],
                     )
         return dag
-
-    def _execute_project_statements(
-        self,
-        statements: t.List[ProjectStatements],
-        execution_stage: str,
-        execution_time: t.Optional[TimeLike] = None,
-        start: t.Optional[TimeLike] = None,
-        end: t.Optional[TimeLike] = None,
-    ) -> None:
-        adapter = self.snapshot_evaluator.adapter
-        snapshots_by_name = {snapshot.name: snapshot for snapshot in self.snapshots.values()}
-        if rendered_expressions := [
-            expr
-            for project_statements in statements
-            for expr in render_statements(
-                statements=getattr(project_statements, execution_stage),
-                dialect=adapter.dialect,
-                default_catalog=self.default_catalog,
-                python_env=project_statements.python_env,
-                snapshots=snapshots_by_name,
-                start=start,
-                end=end,
-                execution_time=execution_time,
-            )
-        ]:
-            with adapter.transaction():
-                for expr in rendered_expressions:
-                    adapter.execute(expr)
-            self.console.log_success(
-                f"Project's {execution_stage} statements executed successfully"
-            )
 
 
 def compute_interval_params(
