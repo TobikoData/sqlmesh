@@ -4143,6 +4143,14 @@ def test_multi(mocker):
     assert len(plan.new_snapshots) == 5
     context.apply(plan)
 
+    # Ensure before_all, after_all statements for multiple repos have executed
+    project_statements = context.state_reader.get_project_statements(c.PROD)
+    assert len(project_statements) == 2
+    assert context.fetchdf("select * from before_1").to_dict()["1"][0] == 1
+    assert context.fetchdf("select * from before_2").to_dict()["2"][0] == 2
+    assert context.fetchdf("select * from after_1").to_dict()["repo_1"][0] == "repo_1"
+    assert context.fetchdf("select * from after_2").to_dict()["repo_2"][0] == "repo_2"
+
     adapter = context.engine_adapter
     context = Context(
         paths=["examples/multi/repo_1"],
@@ -4168,6 +4176,16 @@ def test_multi(mocker):
     assert len(plan.missing_intervals) == 3
     context.apply(plan)
     validate_apply_basics(context, c.PROD, plan.snapshots.values())
+
+    # Ensure only repo_1's project statements have executed in this context
+    project_statements = context.state_reader.get_project_statements(c.PROD)
+    assert len(project_statements) == 1
+    assert project_statements[0].before_all == [
+        "CREATE TABLE IF NOT EXISTS before_1 AS select @one()"
+    ]
+    assert project_statements[0].after_all == [
+        "CREATE TABLE IF NOT EXISTS after_1 AS select @dup()"
+    ]
 
 
 def test_multi_dbt(mocker):
