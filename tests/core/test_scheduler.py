@@ -722,3 +722,47 @@ def test_signal_intervals(mocker: MockerFixture, make_snapshot, get_batched_miss
         c: [],
         d: [],
     }
+
+
+def test_run_project_statements(mocker, make_snapshot):
+    model = load_sql_based_model(
+        parse(  # type: ignore
+            """
+            MODEL (
+                name test_schema.test_statements_model,
+                kind FULL,
+                columns (id int),
+            );
+            SELECT 1;
+            """
+        ),
+    )
+
+    snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    evaluator = SnapshotEvaluator(adapters=mocker.MagicMock())
+    spy = mocker.spy(evaluator, "_execute_project_statements")
+
+    scheduler = Scheduler(
+        snapshots=[snapshot],
+        snapshot_evaluator=evaluator,
+        state_sync=mocker.MagicMock(),
+        max_workers=1,
+        default_catalog=None,
+    )
+    naming_info = EnvironmentNamingInfo(name="dev")
+    scheduler.run(
+        naming_info,
+        "2022-01-01",
+        "2022-01-01",
+        "2022-01-30",
+    )
+
+    call_args = spy.call_args_list
+    assert call_args[0][1]["execution_stage"] == "before_all"
+    assert call_args[0][1]["start"] == "2022-01-01"
+    assert call_args[0][1]["end"] == "2022-01-01"
+    assert call_args[0][1]["execution_time"] == "2022-01-30"
+    assert call_args[1][1]["execution_stage"] == "after_all"
+    assert call_args[1][1]["environment_naming_info"] == naming_info

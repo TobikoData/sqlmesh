@@ -16,6 +16,7 @@ from sqlmesh.core.config import EnvironmentSuffixTarget
 from sqlmesh.core.dialect import parse_one, schema_
 from sqlmesh.core.engine_adapter import create_engine_adapter
 from sqlmesh.core.environment import Environment
+from sqlmesh.core.loader import ProjectStatements
 from sqlmesh.core.model import (
     FullKind,
     IncrementalByTimeRangeKind,
@@ -26,6 +27,7 @@ from sqlmesh.core.model import (
     SqlModel,
 )
 from sqlmesh.core.model.definition import ExternalModel
+from sqlmesh.core.plan.definition import EvaluatablePlan
 from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotChangeCategory,
@@ -3428,4 +3430,72 @@ def test_compact_intervals_pending_restatement_many_snapshots_same_version(
         snapshots[0].snapshot_id
     ].pending_restatement_intervals == [
         (to_timestamp("2020-01-03"), to_timestamp("2020-01-05")),
+    ]
+
+
+def test_update_project_statements(state_sync: EngineAdapterStateSync):
+    assert state_sync.get_project_statements(environment="dev") == []
+
+    env = Environment(
+        name="dev",
+        snapshots=[],
+        start_at="2022-01-01",
+        end_at="2022-01-01",
+        plan_id="test_plan_id",
+    )
+    statements = [
+        ProjectStatements(
+            before_all=["CREATE OR REPLACE TABLE table_1 AS SELECT 'a'"],
+            after_all=["CREATE OR REPLACE TABLE table_2 AS SELECT 'b'"],
+            python_env={},
+        )
+    ]
+
+    plan = EvaluatablePlan(
+        start=env.start_at,
+        end=env.end_at,
+        new_snapshots=[],
+        environment=env,
+        no_gaps=False,
+        skip_backfill=False,
+        empty_backfill=False,
+        restatements={},
+        is_dev=False,
+        forward_only=False,
+        models_to_backfill=None,
+        end_bounded=False,
+        ensure_finalized_snapshots=False,
+        directly_modified_snapshots=[],
+        indirectly_modified_snapshots={},
+        removed_snapshots=[],
+        interval_end_per_model=None,
+        allow_destructive_models=set(),
+        requires_backfill=True,
+        disabled_restatement_models=set(),
+        project_statements=statements,
+    )
+
+    state_sync.update_project_statements(plan=plan)
+
+    project_statements = state_sync.get_project_statements(environment="dev")
+    assert project_statements[0].before_all == ["CREATE OR REPLACE TABLE table_1 AS SELECT 'a'"]
+    assert project_statements[0].after_all == ["CREATE OR REPLACE TABLE table_2 AS SELECT 'b'"]
+
+    plan.project_statements = [
+        ProjectStatements(
+            before_all=["CREATE OR REPLACE TABLE table_1 AS SELECT 'a'"],
+            after_all=[
+                "@grant_schema_usage()",
+                "@grant_select_privileges()",
+            ],
+            python_env={},
+        )
+    ]
+    state_sync.update_project_statements(plan=plan)
+
+    project_statements = state_sync.get_project_statements(environment="dev")
+    assert project_statements[0].before_all == ["CREATE OR REPLACE TABLE table_1 AS SELECT 'a'"]
+    assert project_statements[0].after_all == [
+        "@grant_schema_usage()",
+        "@grant_select_privileges()",
     ]

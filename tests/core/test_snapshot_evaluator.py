@@ -24,6 +24,7 @@ from sqlmesh.core.engine_adapter.shared import (
     InsertOverwriteStrategy,
 )
 from sqlmesh.core.environment import EnvironmentNamingInfo
+from sqlmesh.core.loader import ProjectStatements
 from sqlmesh.core.macros import RuntimeStage, macro, MacroEvaluator, MacroFunc
 from sqlmesh.core.model import (
     Model,
@@ -4028,3 +4029,22 @@ def test_multi_engine_python_model_with_macros(adapters, make_snapshot):
     # Validate that the get_catalog_type method was called only on the secondary engine from the macro evaluator
     engine_adapters["default"].get_catalog_type.assert_not_called()
     assert len(engine_adapters["secondary"].get_catalog_type.call_args_list) == 2
+
+
+def test_execute_project_statements(mocker: MockerFixture, adapter_mock, make_snapshot):
+    evaluator = SnapshotEvaluator(adapter_mock)
+
+    statements = [
+        ProjectStatements(
+            before_all=["CREATE OR REPLACE TABLE table_1 AS SELECT 'a'"],
+            after_all=["CREATE OR REPLACE TABLE table_2 AS SELECT 'b'"],
+            python_env={},
+        )
+    ]
+
+    evaluator._execute_project_statements(statements, execution_stage="before_all")
+    call_args = adapter_mock.execute.call_args_list
+    assert call_args[0][0][0] == "CREATE OR REPLACE TABLE table_1 AS SELECT 'a' AS a"
+    evaluator._execute_project_statements(statements, execution_stage="after_all")
+    call_args = adapter_mock.execute.call_args_list
+    assert call_args[1][0][0] == "CREATE OR REPLACE TABLE table_2 AS SELECT 'b' AS b"

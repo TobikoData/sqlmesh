@@ -485,16 +485,16 @@ class Scheduler:
         finally:
             self.state_sync.recycle()
 
-        self.snapshot_evaluator._execute_project_statements(
-            project_statements,
-            execution_stage="after_all",
-            snapshots=snapshots_by_name,
-            start=start,
-            end=end,
-            execution_time=execution_time,
-            default_catalog=self.default_catalog,
-            environment_naming_info=environment_naming_info,
-        )
+            self.snapshot_evaluator._execute_project_statements(
+                project_statements,
+                execution_stage="after_all",
+                snapshots=snapshots_by_name,
+                start=start,
+                end=end,
+                execution_time=execution_time,
+                default_catalog=self.default_catalog,
+                environment_naming_info=environment_naming_info,
+            )
 
     def _dag(self, batches: SnapshotToIntervals) -> DAG[SchedulingUnit]:
         """Builds a DAG of snapshot intervals to be evaluated.
