@@ -416,7 +416,7 @@ WHERE @AND(
     """,
 )
 
-# z_score_audit(column=column_name, threshold=3)
+# z_score(column=column_name, threshold=3)
 z_score_audit = ModelAudit(
     name="z_score",
     defaults={"condition": exp.true()},
@@ -436,7 +436,7 @@ WHERE ABS((@column - mean_@column) / NULLIF(stddev_@column, 0)) > @threshold
     """,
 )
 
-# string_length_between_audit(column=column_name, max_v=22)
+# string_length_between(column=column_name, max_v=22)
 string_length_between_audit = ModelAudit(
     name="string_length_between",
     defaults={
@@ -461,7 +461,7 @@ WHERE
     """,
 )
 
-# string_length_equal_audit(column=column_name, v=22)
+# string_length_equal(column=column_name, v=22)
 string_length_equal_audit = ModelAudit(
     name="string_length_equal",
     defaults={"condition": exp.true()},
