@@ -88,13 +88,19 @@ class model(registry_decorator):
     def models(
         self,
         get_variables: t.Callable[[t.Optional[str]], t.Dict[str, str]],
+        path: Path,
+        module_path: Path,
+        dialect: t.Optional[str] = None,
         **loader_kwargs: t.Any,
     ) -> t.List[Model]:
         return create_models_from_blueprints(
             gateway=self.kwargs.get("gateway"),
-            blueprints=self.kwargs.pop("blueprints", None),
+            blueprints=self.kwargs.get("blueprints"),
             get_variables=get_variables,
             loader=self.model,
+            path=path,
+            module_path=module_path,
+            dialect=dialect,
             **loader_kwargs,
         )
 

@@ -7593,13 +7593,23 @@ def test_model_blueprinting(tmp_path: Path) -> None:
         model_defaults=ModelDefaultsConfig(dialect="duckdb"),
     )
 
+    blueprint_sql = tmp_path / "macros" / "identity_macro.py"
+    blueprint_sql.parent.mkdir(parents=True, exist_ok=True)
+    blueprint_sql.write_text(
+        """from sqlmesh import macro
+
+@macro()
+def identity(evaluator, value):
+    return value
+"""
+    )
     blueprint_sql = tmp_path / "models" / "blueprint.sql"
     blueprint_sql.parent.mkdir(parents=True, exist_ok=True)
     blueprint_sql.write_text(
         """
         MODEL (
           name @{blueprint}.test_model_sql,
-          gateway @blueprint,
+          gateway @identity(@blueprint),
           blueprints ((blueprint := gw1), (blueprint := gw2)),
           kind FULL
         );

@@ -1785,54 +1785,83 @@ class AuditResult(PydanticModel):
     blocking: bool = True
 
 
+def _extract_blueprints(blueprints: t.Any, path: Path) -> t.List[t.Any]:
+    if not blueprints:
+        return [None]
+    if isinstance(blueprints, exp.Paren):
+        return [blueprints.unnest()]
+    if isinstance(blueprints, (exp.Tuple, exp.Array)):
+        return blueprints.expressions
+    if isinstance(blueprints, list):
+        return blueprints
+
+    raise_config_error(
+        "Expected a list or tuple consisting of key-value mappings for"
+        f"the 'blueprints' property, got '{blueprints}' instead",
+        path,
+    )
+    return []  # This is unreachable, but is done to satisfy mypy
+
+
+def _extract_blueprint_variables(
+    blueprint: t.Any,
+    dialect: DialectType,
+    path: Path,
+) -> t.Dict[str, str]:
+    if not blueprint:
+        return {}
+    if isinstance(blueprint, exp.Paren):
+        blueprint = blueprint.unnest()
+        return {blueprint.left.name: blueprint.right.sql(dialect=dialect)}
+    if isinstance(blueprint, (exp.Tuple, exp.Array)):
+        return {e.left.name: e.right.sql(dialect=dialect) for e in blueprint.expressions}
+    if isinstance(blueprint, dict):
+        return blueprint
+
+    raise_config_error(
+        f"Expected a key-value mapping for the blueprint value, got '{blueprint}' instead",
+        path,
+    )
+    return {}  # This is unreachable, but is done to satisfy mypy
+
+
 def create_models_from_blueprints(
     gateway: t.Optional[str | exp.Expression],
     blueprints: t.Any,
     get_variables: t.Callable[[t.Optional[str]], t.Dict[str, str]],
     loader: t.Callable[..., Model],
+    path: Path = Path(),
+    module_path: Path = Path(),
+    dialect: DialectType = None,
     **loader_kwargs: t.Any,
 ) -> t.List[Model]:
-    path = loader_kwargs.get("path")
-    dialect = loader_kwargs.get("dialect")
-
-    if not blueprints:
-        blueprints = [None]
-    elif isinstance(blueprints, exp.Paren):
-        blueprints = [blueprints.unnest()]
-    elif isinstance(blueprints, (exp.Tuple, exp.Array)):
-        blueprints = blueprints.expressions
-    elif not isinstance(blueprints, list):
-        # TODO: put docs link here
-        raise ConfigError(
-            f"Invalid 'blueprints' property '{blueprints}' at '{path}', please refer to <link>."
-        )
-
     model_blueprints: t.List[Model] = []
-    for blueprint in blueprints:
-        if not blueprint:
-            variables = {}
-        elif isinstance(blueprint, exp.Paren):
-            blueprint = blueprint.unnest()
-            variables = {blueprint.left.name: blueprint.right.sql(dialect=dialect)}
-        elif isinstance(blueprint, (exp.Tuple, exp.Array)):
-            variables = {e.left.name: e.right.sql(dialect=dialect) for e in blueprint.expressions}
-        elif isinstance(blueprint, dict):
-            variables = blueprint
-        else:
-            # TODO: put docs link here
-            raise ConfigError(
-                f"Invalid blueprint value: {blueprint} at '{path}', please refer to <link>."
-            )
+    for blueprint in _extract_blueprints(blueprints, path):
+        variables = _extract_blueprint_variables(blueprint, dialect, path)
 
-        if isinstance(gateway, d.MacroVar):
-            gateway_name = variables.get(gateway.name)
-        elif isinstance(gateway, str) and gateway.startswith("@"):
-            gateway_name = variables.get(gateway[1:])
+        if gateway:
+            rendered_gateway = render_expression(
+                expression=exp.maybe_parse(gateway, dialect=dialect),
+                module_path=module_path,
+                macros=loader_kwargs.get("macros"),
+                jinja_macros=loader_kwargs.get("jinja_macros"),
+                variables=variables,
+                path=path,
+                dialect=dialect,
+                default_catalog=loader_kwargs.get("default_catalog"),
+            )
+            gateway_name = rendered_gateway[0].name if rendered_gateway else None
         else:
             gateway_name = None
 
         model_blueprints.append(
-            loader(variables={**get_variables(gateway_name), **variables}, **loader_kwargs)
+            loader(
+                path=path,
+                module_path=module_path,
+                dialect=dialect,
+                variables={**get_variables(gateway_name), **variables},
+                **loader_kwargs,
+            )
         )
 
     return model_blueprints
@@ -1841,6 +1870,9 @@ def create_models_from_blueprints(
 def load_sql_based_models(
     expressions: t.List[exp.Expression],
     get_variables: t.Callable[[t.Optional[str]], t.Dict[str, str]],
+    path: Path = Path(),
+    module_path: Path = Path(),
+    dialect: DialectType = None,
     **loader_kwargs: t.Any,
 ) -> t.List[Model]:
     gateway: t.Optional[exp.Expression] = None
@@ -1851,14 +1883,16 @@ def load_sql_based_models(
         if prop.name == "gateway":
             gateway = prop.args["value"]
         elif prop.name == "blueprints":
-            # We pop the blueprints property here because it shouldn't be part of the model
-            blueprints = prop.pop().args["value"]
+            blueprints = prop.args["value"]
 
     return create_models_from_blueprints(
         gateway=gateway,
         blueprints=blueprints,
         get_variables=get_variables,
         loader=partial(load_sql_based_model, expressions),
+        path=path,
+        module_path=module_path,
+        dialect=dialect,
         **loader_kwargs,
     )
 
@@ -2230,6 +2264,9 @@ def _create_model(
     variables: t.Optional[t.Dict[str, t.Any]] = None,
     **kwargs: t.Any,
 ) -> Model:
+    # blueprints are not really part of the model meta, so we pop it off here before validation kicks in
+    kwargs.pop("blueprints", None)
+
     _validate_model_fields(klass, {"name", *kwargs} - {"grain", "table_properties"}, path)
 
     for prop in [
