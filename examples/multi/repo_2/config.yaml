@@ -12,5 +12,11 @@ gateways:
 
 default_gateway: local
 
+plan:
+  before_all:
+    - CREATE TABLE IF NOT EXISTS before_2 AS select @two()
+  after_all:
+    - CREATE TABLE IF NOT EXISTS after_2 AS select @dup()
+
 model_defaults:
   dialect: 'duckdb'
