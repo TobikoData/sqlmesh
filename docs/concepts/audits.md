@@ -378,7 +378,7 @@ MODEL (
 );
 ```
 
-#### string_length_equal_audit, string_length_equal_audit_non_blocking
+#### string_length_equal, string_length_equal_non_blocking
 Ensures that all rows of a column contain a string with the specified number of characters.
 
 This example asserts that all `zip` values are 5 characters long:
@@ -387,12 +387,12 @@ This example asserts that all `zip` values are 5 characters long:
 MODEL (
   name sushi.customers,
   audits (
-    string_length_equal_audit(column := zip, v := 5)
+    string_length_equal(column := zip, v := 5)
     )
 );
 ```
 
-#### string_length_between_audit, string_length_between_audit_non_blocking
+#### string_length_between, string_length_between_non_blocking
 Ensures that all rows of a column contain a string with number of characters in the specified range. Range is inclusive by default, such that values equal to the range boundaries will pass the audit.
 
 This example asserts that all `name` values have 5 or more and 50 or fewer characters:
@@ -401,7 +401,7 @@ This example asserts that all `name` values have 5 or more and 50 or fewer chara
 MODEL (
   name sushi.customers,
   audits (
-    string_length_between_audit(column := name, min_v := 5, max_v := 50)
+    string_length_between(column := name, min_v := 5, max_v := 50)
     )
 );
 ```
@@ -412,7 +412,7 @@ This example specifies the `inclusive := false` argument to assert that all rows
 MODEL (
   name sushi.customers,
   audits (
-    string_length_between_audit(column := zip, min_v := 4, max_v := 60, inclusive := false)
+    string_length_between(column := zip, min_v := 4, max_v := 60, inclusive := false)
     )
 );
 ```
