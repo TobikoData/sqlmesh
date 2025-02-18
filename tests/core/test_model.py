@@ -7600,7 +7600,7 @@ def test_model_blueprinting(tmp_path: Path) -> None:
         MODEL (
           name @{blueprint}.test_model_sql,
           gateway @blueprint,
-          blueprints (gw1, gw2),
+          blueprints ((blueprint := gw1), (blueprint := gw2)),
           kind FULL
         );
 
@@ -7619,7 +7619,7 @@ from sqlmesh import model
 @model(
     "@{blueprint}.test_model_pydf",
     gateway="@blueprint",
-    blueprints=["gw1", "gw2"],
+    blueprints=[{"blueprint": "gw1"}, {"blueprint": "gw2"}],
     kind="FULL",
     columns={"x": "INT"},
 )
@@ -7637,7 +7637,7 @@ from sqlmesh import model
 @model(
     "@{blueprint}.test_model_pysql",
     gateway="@blueprint",
-    blueprints=["gw1", "gw2"],
+    blueprints=[{"blueprint": "gw1"}, {"blueprint": "gw2"}],
     kind="FULL",
     is_sql=True,
 )
@@ -7669,7 +7669,10 @@ def entrypoint(evaluator):
         """
         MODEL (
           name @{customer}.my_table,
-          blueprints [(customer=customer1, foo='bar'), (customer=customer2, foo=qux)],
+          blueprints (
+            (customer := customer1, foo := 'bar'),
+            (customer := customer2, foo := qux),
+          ),
           kind FULL
         );
 

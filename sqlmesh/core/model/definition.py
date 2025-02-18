@@ -5,7 +5,7 @@ import logging
 import types
 import re
 import typing as t
-from functools import cached_property
+from functools import cached_property, partial
 from pathlib import Path
 
 import pandas as pd
@@ -13,6 +13,7 @@ import numpy as np
 from pydantic import Field
 from sqlglot import diff, exp
 from sqlglot.diff import Insert
+from sqlglot.helper import seq_get
 from sqlglot.optimizer.qualify_columns import quote_identifiers
 from sqlglot.optimizer.simplify import gen
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
@@ -1782,6 +1783,84 @@ class AuditResult(PydanticModel):
     skipped: bool = False
     """Whether or not the audit was blocking. This can be overriden by the user."""
     blocking: bool = True
+
+
+def create_model_blueprints(
+    gateway: t.Optional[str | exp.Expression],
+    blueprints: t.Any,
+    get_variables: t.Callable[[t.Optional[str]], t.Dict[str, str]],
+    loader: t.Callable[..., Model],
+    **loader_kwargs: t.Any,
+) -> t.List[Model]:
+    path = loader_kwargs.get("path")
+    dialect = loader_kwargs.get("dialect")
+
+    if not blueprints:
+        blueprints = [None]
+    elif isinstance(blueprints, exp.Paren):
+        blueprints = [blueprints.unnest()]
+    elif isinstance(blueprints, (exp.Tuple, exp.Array)):
+        blueprints = blueprints.expressions
+    elif not isinstance(blueprints, list):
+        # TODO: put docs link here
+        raise ConfigError(
+            f"Invalid 'blueprints' property '{blueprints}' at '{path}', please refer to <link>."
+        )
+
+    model_blueprints: t.List[Model] = []
+    for blueprint in blueprints:
+        if not blueprint:
+            variables = {}
+        elif isinstance(blueprint, exp.Paren):
+            blueprint = blueprint.unnest()
+            variables = {blueprint.left.name: blueprint.right.sql(dialect=dialect)}
+        elif isinstance(blueprint, (exp.Tuple, exp.Array)):
+            variables = {e.left.name: e.right.sql(dialect=dialect) for e in blueprint.expressions}
+        elif isinstance(blueprint, dict):
+            variables = blueprint
+        else:
+            # TODO: put docs link here
+            raise ConfigError(
+                f"Invalid blueprint value: {blueprint} at '{path}', please refer to <link>."
+            )
+
+        if isinstance(gateway, d.MacroVar):
+            gateway_name = variables.get(gateway.name)
+        elif isinstance(gateway, str) and gateway.startswith("@"):
+            gateway_name = variables.get(gateway[1:])
+        else:
+            gateway_name = None
+
+        model_blueprints.append(
+            loader(variables={**get_variables(gateway_name), **variables}, **loader_kwargs)
+        )
+
+    return model_blueprints
+
+
+def load_sql_based_models(
+    expressions: t.List[exp.Expression],
+    get_variables: t.Callable[[t.Optional[str]], t.Dict[str, str]],
+    **loader_kwargs: t.Any,
+) -> t.List[Model]:
+    gateway: t.Optional[exp.Expression] = None
+    blueprints: t.Optional[t.List[t.Optional[exp.Expression]]] = None
+
+    model_meta = seq_get(expressions, 0)
+    for prop in (isinstance(model_meta, d.Model) and model_meta.expressions) or []:
+        if prop.name == "gateway":
+            gateway = prop.args["value"]
+        elif prop.name == "blueprints":
+            # We pop the blueprints property here because it shouldn't be part of the model
+            blueprints = prop.pop().args["value"]
+
+    return create_model_blueprints(
+        gateway=gateway,
+        blueprints=blueprints,
+        get_variables=get_variables,
+        loader=partial(load_sql_based_model, expressions),
+        **loader_kwargs,
+    )
 
 
 def load_sql_based_model(

@@ -548,8 +548,6 @@ def _create_parser(expression_type: t.Type[exp.Expression], table_keys: t.List[s
         from sqlmesh.core.model.kind import ModelKindName
 
         expressions: t.List[exp.Expression] = []
-        gateway: t.Optional[exp.Expression] = None
-        blueprints: t.List[exp.Expression] = []
 
         while True:
             prev_property = seq_get(expressions, -1)
@@ -613,36 +611,12 @@ def _create_parser(expression_type: t.Type[exp.Expression], table_keys: t.List[s
             else:
                 value = self._parse_bracket(self._parse_field(any_token=True))
 
-                if key == "gateway":
-                    gateway = value
-                elif key == "blueprints":
-                    if isinstance(value, exp.Paren):
-                        blueprints = [value.this]
-                    elif isinstance(value, (exp.Tuple, exp.Array)):
-                        blueprints = value.expressions
-                    else:
-                        raise ConfigError(
-                            "The 'blueprints' values need to be enclosed in "
-                            f"parentheses or brackets, got {value} instead."
-                        )
-
-                    # We don't want to include blueprints in the property list
-                    continue
-
             if isinstance(value, exp.Expression):
                 value.meta["sql"] = self._find_sql(start, self._prev)
 
             expressions.append(self.expression(exp.Property, this=key, value=value))
 
-        expression = self.expression(expression_type, expressions=expressions)
-
-        # We store these properties in the meta to provide quick access at load time
-        if blueprints:
-            expression.meta["blueprints"] = blueprints
-            if gateway:
-                expression.meta["gateway"] = gateway
-
-        return expression
+        return self.expression(expression_type, expressions=expressions)
 
     return parse
 
