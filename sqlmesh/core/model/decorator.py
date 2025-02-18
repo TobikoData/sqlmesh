@@ -16,7 +16,7 @@ from sqlmesh.core.model.definition import (
     Model,
     create_python_model,
     create_sql_model,
-    create_model_blueprints,
+    create_models_from_blueprints,
     get_model_name,
     render_meta_fields,
 )
@@ -90,7 +90,7 @@ class model(registry_decorator):
         get_variables: t.Callable[[t.Optional[str]], t.Dict[str, str]],
         **loader_kwargs: t.Any,
     ) -> t.List[Model]:
-        return create_model_blueprints(
+        return create_models_from_blueprints(
             gateway=self.kwargs.get("gateway"),
             blueprints=self.kwargs.pop("blueprints", None),
             get_variables=get_variables,

@@ -1785,7 +1785,7 @@ class AuditResult(PydanticModel):
     blocking: bool = True
 
 
-def create_model_blueprints(
+def create_models_from_blueprints(
     gateway: t.Optional[str | exp.Expression],
     blueprints: t.Any,
     get_variables: t.Callable[[t.Optional[str]], t.Dict[str, str]],
@@ -1854,7 +1854,7 @@ def load_sql_based_models(
             # We pop the blueprints property here because it shouldn't be part of the model
             blueprints = prop.pop().args["value"]
 
-    return create_model_blueprints(
+    return create_models_from_blueprints(
         gateway=gateway,
         blueprints=blueprints,
         get_variables=get_variables,
