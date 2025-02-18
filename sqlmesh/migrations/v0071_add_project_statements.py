@@ -23,5 +23,5 @@ def migrate(state_sync, **kwargs):  # type: ignore
             "plan_id": exp.DataType.build("text"),
             "project_statements": exp.DataType.build(blob_type),
         },
-        primary_key=("environment_name", "plan_id"),
+        primary_key=("environment_name",),
     )
