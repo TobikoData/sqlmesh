@@ -280,6 +280,13 @@ class ContextDiff(PydanticModel):
 
     @property
     def has_project_statements_changes(self) -> bool:
+        if (
+            not self.previous_project_statements
+            and self.project_statements
+            and not any([stmt.before_all for stmt in self.project_statements])
+            and not any([stmt.after_all for stmt in self.project_statements])
+        ):
+            return False
         return self.project_statements != self.previous_project_statements
 
     @property
