@@ -5557,7 +5557,7 @@ def test_macros_in_physical_properties(make_snapshot):
     assert isinstance(model.physical_properties["sort_order"], d.MacroFunc)
 
     # substitution occurs at runtime
-    snapshot: Snapshot = make_snapshot(model)
+    snapshot = make_snapshot(model)
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
     rendered_physical_properties = model.render_physical_properties(

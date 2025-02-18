@@ -504,7 +504,7 @@ def test_schema_location_mapping():
         catalog="catalog",
     )
 
-    adapter: TrinoEngineAdapter = config.create_engine_adapter()
+    adapter = config.create_engine_adapter()
     assert adapter.schema_location_mapping is None
     assert adapter._schema_location("foo") is None
 
@@ -519,7 +519,7 @@ def test_schema_location_mapping():
             "^sqlmesh.*$": "s3://sqlmesh-internal/dev/@{schema_name}",
         },
     )
-    adapter: TrinoEngineAdapter = config.create_engine_adapter()
+    adapter = config.create_engine_adapter()
     assert adapter.schema_location_mapping is not None
     assert adapter._schema_location("foo") is None
     assert adapter._schema_location("utils_dev") is None
