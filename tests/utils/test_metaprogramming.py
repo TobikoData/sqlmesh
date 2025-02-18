@@ -144,6 +144,10 @@ def main_func(y: int, foo=exp.true(), *, bar=expressions.Literal.number(1) + 2) 
     with test_context_manager():
         pass
 
+    match 5:
+        case 5:
+            pass
+
     return closure(y) + other_func(Y)
 
 
@@ -187,8 +191,7 @@ def test_func_globals() -> None:
 def test_normalize_source() -> None:
     assert (
         normalize_source(main_func)
-        == """def main_func(y: int, foo=exp.true(), *, bar=expressions.Literal.number(1) + 2
-    ):
+        == """def main_func(y: int, foo=exp.true(), *, bar=expressions.Literal.number(1) + 2):
     sqlglot.parse_one('1')
     MyClass()
     DataClass(x=y)
@@ -201,6 +204,9 @@ def test_normalize_source() -> None:
         return z + Z
     with test_context_manager():
         pass
+    match 5:
+        case 5:
+            pass
     return closure(y) + other_func(Y)"""
     )
 
@@ -237,8 +243,7 @@ def test_serialize_env() -> None:
             name="main_func",
             alias="MAIN",
             path="test_metaprogramming.py",
-            payload="""def main_func(y: int, foo=exp.true(), *, bar=expressions.Literal.number(1) + 2
-    ):
+            payload="""def main_func(y: int, foo=exp.true(), *, bar=expressions.Literal.number(1) + 2):
     sqlglot.parse_one('1')
     MyClass()
     DataClass(x=y)
@@ -251,6 +256,9 @@ def test_serialize_env() -> None:
         return z + Z
     with test_context_manager():
         pass
+    match 5:
+        case 5:
+            pass
     return closure(y) + other_func(Y)""",
         ),
         "X": Executable(payload="1", kind=ExecutableKind.VALUE),
@@ -314,7 +322,7 @@ def test_context_manager():
         "my_lambda": Executable(
             name="my_lambda",
             path="test_metaprogramming.py",
-            payload="my_lambda = lambda : print('z')",
+            payload="my_lambda = lambda: print('z')",
         ),
         "noop_metadata": Executable(
             name="noop_metadata",
