@@ -10,7 +10,7 @@ from sqlmesh.cli.example_project import ProjectTemplate, init_example_project
 from sqlmesh.cli.main import cli
 from sqlmesh.core.context import Context
 from sqlmesh.integrations.dlt import generate_dlt_models
-from sqlmesh.utils.date import yesterday_ds
+from sqlmesh.utils.date import now_ds, time_like_to_str, timedelta, to_datetime, yesterday_ds
 
 FREEZE_TIME = "2023-01-01 00:00:00 UTC"
 
@@ -970,3 +970,87 @@ def test_init_project_dialects(tmp_path):
             assert config == f"{config_start}{expected_config}{config_end}"
 
             remove(tmp_path / "config.yaml")
+
+
+def test_environments(runner, tmp_path):
+    create_example_project(tmp_path)
+    ttl = time_like_to_str(to_datetime(now_ds()) + timedelta(days=7))
+
+    # create dev environment and backfill
+    runner.invoke(
+        cli,
+        [
+            "--log-file-dir",
+            tmp_path,
+            "--paths",
+            tmp_path,
+            "plan",
+            "dev",
+            "--no-prompts",
+            "--auto-apply",
+        ],
+    )
+
+    result = runner.invoke(
+        cli,
+        [
+            "--log-file-dir",
+            tmp_path,
+            "--paths",
+            tmp_path,
+            "environments",
+        ],
+    )
+    assert result.exit_code == 0
+    assert result.output == f"Number of SQLMesh environments are: 1\ndev - {ttl}\n"
+
+    # # create dev2 environment from dev environment
+    # # Input: `y` to apply and virtual update
+    runner.invoke(
+        cli,
+        [
+            "--log-file-dir",
+            tmp_path,
+            "--paths",
+            tmp_path,
+            "plan",
+            "dev2",
+            "--create-from",
+            "dev",
+            "--include-unmodified",
+        ],
+        input="y\n",
+    )
+
+    result = runner.invoke(
+        cli,
+        [
+            "--log-file-dir",
+            tmp_path,
+            "--paths",
+            tmp_path,
+            "environments",
+        ],
+    )
+    assert result.exit_code == 0
+    assert result.output == f"Number of SQLMesh environments are: 2\ndev - {ttl}\ndev2 - {ttl}\n"
+
+    # Example project models have start dates, so there are no date prompts
+    # for the `prod` environment.
+    # Input: `y` to apply and backfill
+    runner.invoke(cli, ["--log-file-dir", tmp_path, "--paths", tmp_path, "plan"], input="y\n")
+    result = runner.invoke(
+        cli,
+        [
+            "--log-file-dir",
+            tmp_path,
+            "--paths",
+            tmp_path,
+            "environments",
+        ],
+    )
+    assert result.exit_code == 0
+    assert (
+        result.output
+        == f"Number of SQLMesh environments are: 3\ndev - {ttl}\ndev2 - {ttl}\nprod - No Expiry\n"
+    )

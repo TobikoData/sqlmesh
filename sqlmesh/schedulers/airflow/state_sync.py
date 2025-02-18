@@ -68,6 +68,12 @@ class HttpStateSync(StateSync):
         """
         return self._client.get_environments()
 
+    def get_environments_summary(self) -> t.Dict[str, int]:
+        """Fetches all environment names along with expiry datetime."""
+        raise NotImplementedError(
+            "get_environments_summary method is not implemented for the Airflow state sync."
+        )
+
     def max_interval_end_per_model(
         self,
         environment: str,
