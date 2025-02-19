@@ -1332,55 +1332,14 @@ class GenericContext(BaseContext, t.Generic[C]):
             # This ensures that no models outside the impacted sub-DAG(s) will be backfilled unexpectedly.
             backfill_models = modified_model_names or None
 
+        max_interval_end_per_model = self._get_max_interval_end_per_model(
+            snapshots, backfill_models
+        )
         # If no end date is specified, use the max interval end from prod
         # to prevent unintended evaluation of the entire DAG.
-        default_end: t.Optional[int] = None
-        default_start: t.Optional[int] = None
-        max_interval_end_per_model: t.Optional[t.Dict[str, int]] = None
-        if not run and not end:
-            models_for_interval_end: t.Optional[t.Set[str]] = None
-            if backfill_models is not None:
-                models_for_interval_end = set()
-                models_stack = list(backfill_models)
-                while models_stack:
-                    next_model = models_stack.pop()
-                    if next_model not in snapshots:
-                        continue
-                    models_for_interval_end.add(next_model)
-                    models_stack.extend(
-                        s.name
-                        for s in snapshots[next_model].parents
-                        if s.name not in models_for_interval_end
-                    )
-
-            max_interval_end_per_model = self.state_sync.max_interval_end_per_model(
-                c.PROD,
-                models=models_for_interval_end,
-                ensure_finalized_snapshots=self.config.plan.use_finalized_state,
-            )
-            if max_interval_end_per_model:
-                default_end = max(max_interval_end_per_model.values())
-                # Infer the default start by finding the smallest interval start that corresponds to the default end.
-                for model_name in (
-                    backfill_models or modified_model_names or max_interval_end_per_model
-                ):
-                    if model_name not in snapshots:
-                        continue
-                    node = snapshots[model_name].node
-                    interval_unit = node.interval_unit
-                    default_start = min(
-                        default_start or sys.maxsize,
-                        to_timestamp(
-                            interval_unit.cron_prev(
-                                interval_unit.cron_floor(
-                                    max_interval_end_per_model.get(
-                                        model_name, node.cron_floor(default_end)
-                                    ),
-                                ),
-                                estimate=True,
-                            )
-                        ),
-                    )
+        default_start, default_end = self._get_plan_default_start_end(
+            snapshots, max_interval_end_per_model, backfill_models, modified_model_names
+        )
 
         # Refresh snapshot intervals to ensure that they are up to date with values reflected in the max_interval_end_per_model.
         self.state_sync.refresh_snapshot_intervals(context_diff.snapshots.values())
@@ -2130,26 +2089,8 @@ class GenericContext(BaseContext, t.Generic[C]):
     def _snapshots(
         self, models_override: t.Optional[UniqueKeyDict[str, Model]] = None
     ) -> t.Dict[str, Snapshot]:
-        def _nodes_to_snapshots(nodes: t.Dict[str, Node]) -> t.Dict[str, Snapshot]:
-            snapshots: t.Dict[str, Snapshot] = {}
-            fingerprint_cache: t.Dict[str, SnapshotFingerprint] = {}
-
-            for node in nodes.values():
-                kwargs = {}
-                if node.project in self._projects:
-                    kwargs["ttl"] = self.config_for_node(node).snapshot_ttl
-
-                snapshot = Snapshot.from_node(
-                    node,
-                    nodes=nodes,
-                    cache=fingerprint_cache,
-                    **kwargs,
-                )
-                snapshots[snapshot.name] = snapshot
-            return snapshots
-
         nodes = {**(models_override or self._models), **self._standalone_audits}
-        snapshots = _nodes_to_snapshots(nodes)
+        snapshots = self._nodes_to_snapshots(nodes)
         stored_snapshots = self.state_reader.get_snapshots(snapshots.values())
 
         unrestorable_snapshots = {
@@ -2166,7 +2107,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                 nodes[snapshot.name] = node.copy(
                     update={"stamp": f"revert to {snapshot.identifier}"}
                 )
-            snapshots = _nodes_to_snapshots(nodes)
+            snapshots = self._nodes_to_snapshots(nodes)
             stored_snapshots = self.state_reader.get_snapshots(snapshots.values())
 
         for snapshot in stored_snapshots.values():
@@ -2284,6 +2225,24 @@ class GenericContext(BaseContext, t.Generic[C]):
         }
         return c.HYBRID if len(project_types) > 1 else first(project_types)
 
+    def _nodes_to_snapshots(self, nodes: t.Dict[str, Node]) -> t.Dict[str, Snapshot]:
+        snapshots: t.Dict[str, Snapshot] = {}
+        fingerprint_cache: t.Dict[str, SnapshotFingerprint] = {}
+
+        for node in nodes.values():
+            kwargs = {}
+            if node.project in self._projects:
+                kwargs["ttl"] = self.config_for_node(node).snapshot_ttl
+
+            snapshot = Snapshot.from_node(
+                node,
+                nodes=nodes,
+                cache=fingerprint_cache,
+                **kwargs,
+            )
+            snapshots[snapshot.name] = snapshot
+        return snapshots
+
     @property
     def _plan_preview_enabled(self) -> bool:
         if self.config.plan.enable_preview is not None:
@@ -2292,6 +2251,71 @@ class GenericContext(BaseContext, t.Generic[C]):
         # Enabling previews in such cases can result in unintended full refreshes because dbt incremental models rely on
         # the maximum timestamp value in the target table.
         return self._project_type == c.NATIVE or self.engine_adapter.SUPPORTS_CLONING
+
+    def _get_plan_default_start_end(
+        self,
+        snapshots: t.Dict[str, Snapshot],
+        max_interval_end_per_model: t.Dict[str, int],
+        backfill_models: t.Optional[t.Set[str]],
+        modified_model_names: t.Set[str],
+    ) -> t.Tuple[t.Optional[int], t.Optional[int]]:
+        if not max_interval_end_per_model:
+            return None, None
+
+        default_end = max(max_interval_end_per_model.values())
+        default_start: t.Optional[int] = None
+        # Infer the default start by finding the smallest interval start that corresponds to the default end.
+        for model_name in backfill_models or modified_model_names or max_interval_end_per_model:
+            if model_name not in snapshots:
+                continue
+            node = snapshots[model_name].node
+            interval_unit = node.interval_unit
+            default_start = min(
+                default_start or sys.maxsize,
+                to_timestamp(
+                    interval_unit.cron_prev(
+                        interval_unit.cron_floor(
+                            max_interval_end_per_model.get(
+                                model_name, node.cron_floor(default_end)
+                            ),
+                        ),
+                        estimate=True,
+                    )
+                ),
+            )
+        return default_start, default_end
+
+    def _get_max_interval_end_per_model(
+        self, snapshots: t.Dict[str, Snapshot], backfill_models: t.Optional[t.Set[str]]
+    ) -> t.Dict[str, int]:
+        models_for_interval_end = (
+            self._get_models_for_interval_end(snapshots, backfill_models)
+            if backfill_models is not None
+            else None
+        )
+        return self.state_sync.max_interval_end_per_model(
+            c.PROD,
+            models=models_for_interval_end,
+            ensure_finalized_snapshots=self.config.plan.use_finalized_state,
+        )
+
+    @staticmethod
+    def _get_models_for_interval_end(
+        snapshots: t.Dict[str, Snapshot], backfill_models: t.Set[str]
+    ) -> t.Set[str]:
+        models_for_interval_end = set()
+        models_stack = list(backfill_models)
+        while models_stack:
+            next_model = models_stack.pop()
+            if next_model not in snapshots:
+                continue
+            models_for_interval_end.add(next_model)
+            models_stack.extend(
+                s.name
+                for s in snapshots[next_model].parents
+                if s.name not in models_for_interval_end
+            )
+        return models_for_interval_end
 
 
 class Context(GenericContext[Config]):
