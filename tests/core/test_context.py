@@ -32,7 +32,7 @@ from sqlmesh.core.dialect import parse, schema_
 from sqlmesh.core.engine_adapter.duckdb import DuckDBEngineAdapter
 from sqlmesh.core.environment import Environment, EnvironmentNamingInfo
 from sqlmesh.core.model import load_sql_based_model, model
-from sqlmesh.core.model.definition import render_statements
+from sqlmesh.core.renderer import render_statements
 from sqlmesh.core.model.kind import ModelKindName
 from sqlmesh.core.plan import BuiltInPlanEvaluator, PlanBuilder
 from sqlmesh.core.state_sync.cache import CachingStateSync

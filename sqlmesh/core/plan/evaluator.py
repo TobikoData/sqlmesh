@@ -270,6 +270,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                 snapshots,
                 allow_destructive_snapshots=plan.allow_destructive_models,
                 deployability_index=deployability_index,
+                environment_naming_info=plan.environment.naming_info,
                 on_start=lambda x: self.console.start_creation_progress(
                     x, plan.environment, self.default_catalog
                 ),

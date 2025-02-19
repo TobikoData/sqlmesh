@@ -11,7 +11,7 @@ from pathlib import Path
 import pandas as pd
 import numpy as np
 from pydantic import Field
-from sqlglot import diff, exp, parse
+from sqlglot import diff, exp
 from sqlglot.diff import Insert
 from sqlglot.helper import seq_get
 from sqlglot.optimizer.qualify_columns import quote_identifiers
@@ -2638,36 +2638,6 @@ def render_expression(
         quote_identifiers=False,
         normalize_identifiers=False,
     ).render()
-
-
-def render_statements(
-    statements: t.List[str],
-    dialect: DialectType = None,
-    default_catalog: t.Optional[str] = None,
-    python_env: t.Optional[t.Dict[str, Executable]] = None,
-    **render_kwargs: t.Any,
-) -> t.List[str]:
-    rendered_statements: t.List[str] = []
-    for statement in statements:
-        for expression in parse(statement, dialect=dialect):
-            if expression:
-                rendered = ExpressionRenderer(
-                    expression,
-                    dialect,
-                    [],
-                    python_env=python_env,
-                    default_catalog=default_catalog,
-                    quote_identifiers=False,
-                    normalize_identifiers=False,
-                ).render(**render_kwargs)
-
-                if not rendered:
-                    raise SQLMeshError(
-                        f"Rendering `{expression.sql(dialect=dialect)}` must return an expression"
-                    )
-
-                rendered_statements.extend(expr.sql(dialect=dialect) for expr in rendered)
-    return rendered_statements
 
 
 META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {

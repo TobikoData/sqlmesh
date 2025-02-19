@@ -246,6 +246,7 @@ class Scheduler:
         circuit_breaker: t.Optional[t.Callable[[], bool]] = None,
         deployability_index: t.Optional[DeployabilityIndex] = None,
         auto_restatement_enabled: bool = False,
+        is_run_command: bool = False,
     ) -> CompletionStatus:
         """Concurrently runs all snapshots in topological order.
 
@@ -323,6 +324,7 @@ class Scheduler:
             circuit_breaker=circuit_breaker,
             start=start,
             end=end,
+            is_run_command=is_run_command,
         )
 
         self.console.stop_evaluation_progress(success=not errors)
@@ -408,6 +410,7 @@ class Scheduler:
         circuit_breaker: t.Optional[t.Callable[[], bool]] = None,
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
+        is_run_command: bool = False,
     ) -> t.Tuple[t.List[NodeExecutionFailedError[SchedulingUnit]], t.List[SchedulingUnit]]:
         """Runs precomputed batches of missing intervals.
 
@@ -437,18 +440,17 @@ class Scheduler:
 
         snapshots_by_name = {snapshot.name: snapshot for snapshot in self.snapshots.values()}
 
-        project_statements = self.state_sync.get_project_statements(environment_naming_info.name)
-
-        self.snapshot_evaluator._execute_project_statements(
-            project_statements,
-            execution_stage="before_all",
-            snapshots=snapshots_by_name,
-            start=start,
-            end=end,
-            execution_time=execution_time,
-            default_catalog=self.default_catalog,
-            environment_naming_info=environment_naming_info,
-        )
+        if is_run_command:
+            self.snapshot_evaluator._execute_project_statements(
+                self.state_sync.get_project_statements(environment_naming_info.name),
+                execution_stage="before_all",
+                snapshots=snapshots_by_name,
+                start=start,
+                end=end,
+                execution_time=execution_time,
+                default_catalog=self.default_catalog,
+                environment_naming_info=environment_naming_info,
+            )
 
         def evaluate_node(node: SchedulingUnit) -> None:
             if circuit_breaker and circuit_breaker():
@@ -467,7 +469,15 @@ class Scheduler:
             try:
                 assert execution_time  # mypy
                 assert deployability_index  # mypy
-                self.evaluate(snapshot, start, end, execution_time, deployability_index, batch_idx)
+                self.evaluate(
+                    snapshot=snapshot,
+                    start=start,
+                    end=end,
+                    execution_time=execution_time,
+                    deployability_index=deployability_index,
+                    batch_index=batch_idx,
+                    environment_naming_info=environment_naming_info,
+                )
                 evaluation_duration_ms = now_timestamp() - execution_start_ts
             finally:
                 self.console.update_snapshot_evaluation_progress(
@@ -485,16 +495,17 @@ class Scheduler:
         finally:
             self.state_sync.recycle()
 
-            self.snapshot_evaluator._execute_project_statements(
-                project_statements,
-                execution_stage="after_all",
-                snapshots=snapshots_by_name,
-                start=start,
-                end=end,
-                execution_time=execution_time,
-                default_catalog=self.default_catalog,
-                environment_naming_info=environment_naming_info,
-            )
+            if is_run_command:
+                self.snapshot_evaluator._execute_project_statements(
+                    self.state_sync.get_project_statements(environment_naming_info.name),
+                    execution_stage="after_all",
+                    snapshots=snapshots_by_name,
+                    start=start,
+                    end=end,
+                    execution_time=execution_time,
+                    default_catalog=self.default_catalog,
+                    environment_naming_info=environment_naming_info,
+                )
 
     def _dag(self, batches: SnapshotToIntervals) -> DAG[SchedulingUnit]:
         """Builds a DAG of snapshot intervals to be evaluated.
