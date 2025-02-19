@@ -21,8 +21,8 @@ from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
 
 IGNORED_DECORATORS = {"macro", "model", "signal"}
-IGNORED_DECORATOR_CALL_RE = re.compile(
-    rf'(?s)@({"|".join(d for d in IGNORED_DECORATORS)})\s*\(.*?\)(\s|#.*?\n)*def'
+IGNORED_DECORATOR_CALL_REGEX = re.compile(
+    rf'(?s)@({"|".join(IGNORED_DECORATORS)})\s*\(.*?\)(\s|#.*?\n)*def'
 )
 
 SERIALIZABLE_CALLABLES = (type, types.FunctionType)
@@ -159,15 +159,13 @@ def decorator_vars(func: t.Callable, root_node: t.Optional[ast.Module] = None) -
 
 
 def remove_ignored_decorators(source: str) -> str:
-    matched = IGNORED_DECORATOR_CALL_RE.search(source)
-    if matched:
-        at_index = matched.start()
-        def_index = matched.end() - 3
+    """
+    Removes decorator calls like @model(...) from the Python source code.
 
-        # If, e.g., we have "<anything>@model(...) def ...", this makes it "<anything> def ..."
-        source = source[:at_index] + source[def_index:]
-
-    return source
+    We do this because we don't need to serialize the decorator or any value within its argument
+    list when hydrating the python environment; we only need the function definition itself.
+    """
+    return IGNORED_DECORATOR_CALL_REGEX.sub("def", source)
 
 
 def build_env(

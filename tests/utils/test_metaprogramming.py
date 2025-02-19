@@ -1,3 +1,4 @@
+import sys
 import typing as t
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -143,11 +144,14 @@ def main_func(y: int, foo=exp.true(), *, bar=expressions.Literal.number(1) + 2) 
     with test_context_manager():
         pass
 
-    match 5:
-        case 5:
-            pass
+    if sys.version_info >= (3, 10):
+        from tests.core.metaprogramming_test_helper import match_expression
 
-    return closure(y) + other_func(Y)
+        match_expression_value = match_expression()
+    else:
+        match_expression_value = 0
+
+    return closure(y) + other_func(Y) + match_expression_value
 
 
 def test_func_globals() -> None:
@@ -165,6 +169,7 @@ def test_func_globals() -> None:
         "fetch_data": fetch_data,
         "test_context_manager": test_context_manager,
         "function_with_custom_decorator": function_with_custom_decorator,
+        "sys": sys,
     }
     assert func_globals(other_func) == {
         "X": 1,
@@ -225,11 +230,14 @@ def test_serialize_env() -> None:
     with test_context_manager():
         pass
 
-    match 5:
-        case 5:
-            pass
+    if sys.version_info >= (3, 10):
+        from tests.core.metaprogramming_test_helper import match_expression
 
-    return closure(y) + other_func(Y)''',
+        match_expression_value = match_expression()
+    else:
+        match_expression_value = 0
+
+    return closure(y) + other_func(Y) + match_expression_value''',
         ),
         "X": Executable(payload="1", kind=ExecutableKind.VALUE),
         "Y": Executable(payload="2", kind=ExecutableKind.VALUE),
@@ -327,6 +335,7 @@ def test_context_manager():
         "stop_after_attempt": Executable(
             payload="from tenacity.stop import stop_after_attempt", kind=ExecutableKind.IMPORT
         ),
+        "sys": Executable(payload="import sys", kind=ExecutableKind.IMPORT),
         "wrapped_f": Executable(
             payload='''@retry(stop=stop_after_attempt(3))
 def fetch_data():
