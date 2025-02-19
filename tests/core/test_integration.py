@@ -40,6 +40,7 @@ from sqlmesh.core.model import (
     SqlModel,
     PythonModel,
     ViewKind,
+    CustomKind,
     TimeColumn,
     load_sql_based_model,
 )
@@ -1439,6 +1440,7 @@ def test_run_with_select_models(
             '"memory"."sushi"."items"': to_timestamp("2023-01-09"),
             '"memory"."sushi"."customer_revenue_lifetime"': to_timestamp("2023-01-08"),
             '"memory"."sushi"."customer_revenue_by_day"': to_timestamp("2023-01-08"),
+            '"memory"."sushi"."latest_order"': to_timestamp("2023-01-08"),
             '"memory"."sushi"."waiter_names"': to_timestamp("2023-01-08"),
             '"memory"."sushi"."raw_marketing"': to_timestamp("2023-01-08"),
             '"memory"."sushi"."marketing"': to_timestamp("2023-01-08"),
@@ -1475,6 +1477,7 @@ def test_run_with_select_models_no_auto_upstream(
             '"memory"."sushi"."items"': to_timestamp("2023-01-08"),
             '"memory"."sushi"."customer_revenue_lifetime"': to_timestamp("2023-01-08"),
             '"memory"."sushi"."customer_revenue_by_day"': to_timestamp("2023-01-08"),
+            '"memory"."sushi"."latest_order"': to_timestamp("2023-01-08"),
             '"memory"."sushi"."waiter_names"': to_timestamp("2023-01-08"),
             '"memory"."sushi"."raw_marketing"': to_timestamp("2023-01-08"),
             '"memory"."sushi"."marketing"': to_timestamp("2023-01-08"),
@@ -1862,6 +1865,65 @@ def test_custom_materialization(init_and_plan_context: t.Callable):
     context.plan(auto_apply=True, no_prompts=True)
 
     assert custom_insert_called
+
+
+# needs to be defined at the top level. If its defined within the test body,
+# adding to the snapshot cache fails with: AttributeError: Can't pickle local object
+class TestCustomKind(CustomKind):
+    custom_property: t.Optional[str] = None
+
+    @property
+    def data_hash_values(self) -> t.List[t.Optional[str]]:
+        return [*super().data_hash_values, self.custom_property]
+
+
+@time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_custom_materialization_with_custom_kind(init_and_plan_context: t.Callable):
+    context, _ = init_and_plan_context("examples/sushi")
+
+    custom_insert_call_count = 0
+
+    class CustomFullMaterialization(CustomMaterialization[TestCustomKind]):
+        NAME = "test_custom_full_with_custom_kind"
+
+        def insert(
+            self,
+            table_name: str,
+            query_or_df: QueryOrDF,
+            model: Model,
+            is_first_insert: bool,
+            **kwargs: t.Any,
+        ) -> None:
+            nonlocal custom_insert_call_count
+            custom_insert_call_count += 1
+
+            assert isinstance(model.kind, TestCustomKind)
+
+            self._replace_query_for_model(model, table_name, query_or_df)
+
+    model = context.get_model("sushi.top_waiters")
+    kwargs = {
+        **model.dict(),
+        # Make a breaking change.
+        "kind": dict(name="CUSTOM", materialization="test_custom_full_with_custom_kind"),
+    }
+    context.upsert_model(SqlModel.parse_obj(kwargs))
+
+    context.plan(auto_apply=True)
+
+    assert custom_insert_call_count == 1
+
+    # no changes
+    context.plan(auto_apply=True)
+
+    assert custom_insert_call_count == 1
+
+    # change a property on the custom kind, breaking change
+    kwargs["kind"]["custom_property"] = "some value"
+    context.upsert_model(SqlModel.parse_obj(kwargs))
+    context.plan(auto_apply=True)
+
+    assert custom_insert_call_count == 2
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
@@ -4242,7 +4304,7 @@ def test_environment_suffix_target_table(init_and_plan_context: t.Callable):
     assert set(metadata.schemas) - starting_schemas == {"raw"}
     prod_views = {x for x in metadata.qualified_views if x.db in environments_schemas}
     # Make sure that all models are present
-    assert len(prod_views) == 13
+    assert len(prod_views) == 14
     apply_to_environment(context, "dev")
     # Make sure no new schemas are created
     assert set(metadata.schemas) - starting_schemas == {"raw"}
@@ -4300,9 +4362,9 @@ def test_environment_catalog_mapping(init_and_plan_context: t.Callable):
         user_default_tables,
         non_default_tables,
     ) = get_default_catalog_and_non_tables(metadata, context.default_catalog)
-    assert len(prod_views) == 13
+    assert len(prod_views) == 14
     assert len(dev_views) == 0
-    assert len(user_default_tables) == 16
+    assert len(user_default_tables) == 17
     assert state_metadata.schemas == ["sqlmesh"]
     assert {x.sql() for x in state_metadata.qualified_tables}.issuperset(
         {
@@ -4319,9 +4381,9 @@ def test_environment_catalog_mapping(init_and_plan_context: t.Callable):
         user_default_tables,
         non_default_tables,
     ) = get_default_catalog_and_non_tables(metadata, context.default_catalog)
-    assert len(prod_views) == 13
-    assert len(dev_views) == 13
-    assert len(user_default_tables) == 16
+    assert len(prod_views) == 14
+    assert len(dev_views) == 14
+    assert len(user_default_tables) == 17
     assert len(non_default_tables) == 0
     assert state_metadata.schemas == ["sqlmesh"]
     assert {x.sql() for x in state_metadata.qualified_tables}.issuperset(
@@ -4339,9 +4401,9 @@ def test_environment_catalog_mapping(init_and_plan_context: t.Callable):
         user_default_tables,
         non_default_tables,
     ) = get_default_catalog_and_non_tables(metadata, context.default_catalog)
-    assert len(prod_views) == 13
-    assert len(dev_views) == 26
-    assert len(user_default_tables) == 16
+    assert len(prod_views) == 14
+    assert len(dev_views) == 28
+    assert len(user_default_tables) == 17
     assert len(non_default_tables) == 0
     assert state_metadata.schemas == ["sqlmesh"]
     assert {x.sql() for x in state_metadata.qualified_tables}.issuperset(
@@ -4360,9 +4422,9 @@ def test_environment_catalog_mapping(init_and_plan_context: t.Callable):
         user_default_tables,
         non_default_tables,
     ) = get_default_catalog_and_non_tables(metadata, context.default_catalog)
-    assert len(prod_views) == 13
-    assert len(dev_views) == 13
-    assert len(user_default_tables) == 16
+    assert len(prod_views) == 14
+    assert len(dev_views) == 14
+    assert len(user_default_tables) == 17
     assert len(non_default_tables) == 0
     assert state_metadata.schemas == ["sqlmesh"]
     assert {x.sql() for x in state_metadata.qualified_tables}.issuperset(

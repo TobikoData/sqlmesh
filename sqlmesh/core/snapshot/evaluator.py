@@ -49,6 +49,7 @@ from sqlmesh.core.model import (
     SCDType2ByColumnKind,
     SCDType2ByTimeKind,
     ViewKind,
+    CustomKind,
 )
 from sqlmesh.core.schema_diff import has_drop_alteration, get_dropped_column_names
 from sqlmesh.core.snapshot import (
@@ -1130,7 +1131,7 @@ def _evaluation_strategy(snapshot: SnapshotInfoLike, adapter: EngineAdapter) -> 
             raise SQLMeshError(
                 f"Missing the name of a custom evaluation strategy in model '{snapshot.name}'."
             )
-        klass = get_custom_materialization_type(snapshot.custom_materialization)
+        _, klass = get_custom_materialization_type(snapshot.custom_materialization)
         return klass(adapter)
     elif snapshot.is_managed:
         klass = EngineManagedStrategy
@@ -1897,7 +1898,10 @@ class ViewStrategy(PromotableStrategy):
         return isinstance(model.kind, ViewKind) and model.kind.materialized
 
 
-class CustomMaterialization(MaterializableStrategy):
+C = t.TypeVar("C", bound=CustomKind)
+
+
+class CustomMaterialization(MaterializableStrategy, t.Generic[C]):
     """Base class for custom materializations."""
 
     def insert(
@@ -1924,14 +1928,36 @@ class CustomMaterialization(MaterializableStrategy):
         )
 
 
-_custom_materialization_type_cache: t.Optional[t.Dict[str, t.Type[CustomMaterialization]]] = None
+_custom_materialization_type_cache: t.Optional[
+    t.Dict[str, t.Tuple[t.Type[CustomKind], t.Type[CustomMaterialization]]]
+] = None
 
 
-def get_custom_materialization_type(name: str) -> t.Type[CustomMaterialization]:
+def get_custom_materialization_kind_type(st: t.Type[CustomMaterialization]) -> t.Type[CustomKind]:
+    # try to read if there is a custom 'kind' type in use by inspecting the type signature
+    # eg try to read 'MyCustomKind' from:
+    # >>>> class MyCustomMaterialization(CustomMaterialization[MyCustomKind])
+    # and fall back to base CustomKind if there is no generic type declared
+    if hasattr(st, "__orig_bases__"):
+        for base in st.__orig_bases__:
+            if hasattr(base, "__origin__") and base.__origin__ == CustomMaterialization:
+                for generic_arg in t.get_args(base):
+                    if not issubclass(generic_arg, CustomKind):
+                        raise SQLMeshError(
+                            f"Custom materialization kind '{generic_arg.__name__}' must be a subclass of CustomKind"
+                        )
+
+                    return generic_arg
+
+    return CustomKind
+
+
+def get_custom_materialization_type(
+    name: str,
+) -> t.Tuple[t.Type[CustomKind], t.Type[CustomMaterialization]]:
     global _custom_materialization_type_cache
 
     strategy_key = name.lower()
-
     if (
         _custom_materialization_type_cache is None
         or strategy_key not in _custom_materialization_type_cache
@@ -1948,16 +1974,22 @@ def get_custom_materialization_type(name: str) -> t.Type[CustomMaterialization]:
             strategy_types.append(strategy_type)
 
         _custom_materialization_type_cache = {
-            getattr(strategy_type, "NAME", strategy_type.__name__).lower(): strategy_type
+            getattr(strategy_type, "NAME", strategy_type.__name__).lower(): (
+                get_custom_materialization_kind_type(strategy_type),
+                strategy_type,
+            )
             for strategy_type in strategy_types
         }
 
     if strategy_key not in _custom_materialization_type_cache:
         raise ConfigError(f"Materialization strategy with name '{name}' was not found.")
 
-    strategy_type = _custom_materialization_type_cache[strategy_key]
-    logger.debug("Resolved custom materialization '%s' to '%s'", name, strategy_type)
-    return strategy_type
+    strategy_kind_type, strategy_type = _custom_materialization_type_cache[strategy_key]
+    logger.debug(
+        "Resolved custom materialization '%s' to '%s' (%s)", name, strategy_type, strategy_kind_type
+    )
+
+    return strategy_kind_type, strategy_type
 
 
 class EngineManagedStrategy(MaterializableStrategy):
