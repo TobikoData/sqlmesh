@@ -124,20 +124,6 @@ class FileCache(t.Generic[T]):
         """
         return self._cache_entry_path(name, entry_id).exists()
 
-    # def remove(self, name: str, entry_id: str = "") -> bool:
-    #     """Returns true if the cache entry with the given name and ID was removed, false otherwise.
-
-    #     Args:
-    #         name: The name of the entry.
-    #         entry_id: The unique entry identifier. Used for cache invalidation.
-    #     """
-    #     path = self._cache_entry_path(name, entry_id)
-    #     if not path.exists():
-    #         return False
-
-    #     path.unlink()
-    #     return True
-
     def clear(self) -> None:
         try:
             shutil.rmtree(str(self._path.absolute()))

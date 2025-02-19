@@ -148,7 +148,6 @@ class _Model(ModelMeta, frozen=True):
 
     def __getstate__(self) -> t.Dict[t.Any, t.Any]:
         state = super().__getstate__()
-        state["__dict__"] = state["__dict__"].copy()
         private = state[PRIVATE_FIELDS]
         private["_statement_renderer_cache"] = {}
         return state
