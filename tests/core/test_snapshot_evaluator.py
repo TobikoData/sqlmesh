@@ -4049,3 +4049,171 @@ def test_execute_project_statements(mocker: MockerFixture, adapter_mock, make_sn
     evaluator._execute_project_statements(statements, execution_stage="after_all")
     call_args = adapter_mock.execute.call_args_list
     assert call_args[1][0][0] == "CREATE OR REPLACE TABLE table_2 AS SELECT 'b' AS b"
+
+
+def test_this_env_macro_in_statements(mocker: MockerFixture, adapter_mock, make_snapshot):
+    evaluator = SnapshotEvaluator(adapter_mock)
+    environment_naming_info = EnvironmentNamingInfo(name="prod")
+
+    statements = [
+        ProjectStatements(
+            before_all=[
+                "@IF(@this_env = 'prod', CREATE TABLE IF NOT EXISTS @{this_env}_table AS SELECT @this_env AS environment)",
+            ],
+            after_all=[
+                "@IF(@this_env = 'dev3', \"CREATE TABLE IF NOT EXISTS not_create AS SELECT 1\")",
+            ],
+            python_env={},
+        )
+    ]
+
+    evaluator._execute_project_statements(
+        statements, execution_stage="before_all", environment_naming_info=environment_naming_info
+    )
+    evaluator._execute_project_statements(
+        statements, execution_stage="after_all", environment_naming_info=environment_naming_info
+    )
+    project_statement_calls = adapter_mock.execute.call_args_list
+    assert len(project_statement_calls) == 1
+    assert (
+        project_statement_calls[0][0][0]
+        == "CREATE TABLE IF NOT EXISTS prod_table AS SELECT 'prod' AS environment"
+    )
+
+    @macro()
+    def grant_prod_schema(evaluator: MacroEvaluator):
+        if evaluator._environment_naming_info and evaluator._environment_naming_info.name == "prod":
+            prod_schemas = {
+                snapshot.qualified_view_name.schema_name
+                for snapshot in evaluator._snapshots.values()
+                if snapshot.is_model
+            }
+            return [f"GRANT USAGE ON SCHEMA {schema} TO admin_role" for schema in prod_schemas]
+
+    model = load_sql_based_model(
+        d.parse(
+            """
+            MODEL (
+                name test_schema.test_env_model,
+                kind FULL,
+            );
+
+            @IF(@this_env = 'prod', CREATE TABLE IF NOT EXISTS @{this_env}_PRE AS SELECT @this_env);
+
+            SELECT 1 AS a, @this_env AS b;
+
+            @IF(@this_env = 'prod', CREATE TABLE IF NOT EXISTS @{this_env}_POST AS SELECT @this_env);
+
+            ON_VIRTUAL_UPDATE_BEGIN;
+            @grant_prod_schema();
+            ON_VIRTUAL_UPDATE_END;
+
+            """
+        ),
+        macros=macro.get_registry(),
+    )
+
+    snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    evaluator.create(
+        [snapshot],
+        {},
+        DeployabilityIndex.none_deployable(),
+        environment_naming_info=environment_naming_info,
+    )
+
+    snapshots = {snapshot.name: snapshot}
+    evaluator.promote(
+        [snapshot],
+        start="2020-01-01",
+        end="2020-01-01",
+        execution_time="2020-01-01",
+        snapshots=snapshots,
+        environment_naming_info=environment_naming_info,
+    )
+
+    call_args = adapter_mock.execute.call_args_list
+    assert (
+        call_args[1][0][0][0].sql()
+        == 'CREATE TABLE IF NOT EXISTS "prod_pre" AS SELECT \'prod\' AS "prod"'
+    )
+    assert (
+        call_args[2][0][0][0].sql()
+        == 'CREATE TABLE IF NOT EXISTS "prod_post" AS SELECT \'prod\' AS "prod"'
+    )
+    assert call_args[5][0][0][0].sql() == 'GRANT USAGE ON SCHEMA "test_schema" TO "admin_role"'
+
+
+def test_this_env_python_model(mocker: MockerFixture, adapter_mock, make_snapshot):
+    evaluator = SnapshotEvaluator(adapter_mock)
+    environment_naming_info = EnvironmentNamingInfo(name="prod")
+
+    @macro()
+    def grant_prod_schema_usage(evaluator: MacroEvaluator):
+        if evaluator._environment_naming_info and evaluator._environment_naming_info.name == "prod":
+            prod_schemas = {
+                snapshot.qualified_view_name.schema_name
+                for snapshot in evaluator._snapshots.values()
+                if snapshot.is_model
+            }
+            return [f"GRANT USAGE ON SCHEMA {schema} TO admin_role" for schema in prod_schemas]
+
+    @model(
+        "db.test_this_env_model",
+        kind="full",
+        columns={"id": "string", "name": "string"},
+        pre_statements=["CREATE TABLE IF NOT EXISTS @{this_env}_pre AS SELECT @this_env"],
+        post_statements=[
+            "@IF(@this_env = 'prod', CREATE TABLE IF NOT EXISTS @{this_env}_post AS SELECT @this_env)"
+        ],
+        on_virtual_update=["@grant_prod_schema_usage()"],
+    )
+    def model_with_env_statements(context, **kwargs):
+        return pd.DataFrame(
+            [
+                {
+                    "id": context.var("1"),
+                    "name": context.var("var"),
+                }
+            ]
+        )
+
+    python_model = model.get_registry()["db.test_this_env_model"].model(
+        module_path=Path("."),
+        path=Path("."),
+        macros=macro.get_registry(),
+        dialect="postgres",
+    )
+
+    snapshot = make_snapshot(python_model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    evaluator.create(
+        [snapshot],
+        {},
+        DeployabilityIndex.none_deployable(),
+        environment_naming_info=environment_naming_info,
+    )
+
+    snapshots = {snapshot.name: snapshot}
+    evaluator.promote(
+        [snapshot],
+        start="2020-01-01",
+        end="2020-01-01",
+        execution_time="2020-01-01",
+        snapshots=snapshots,
+        environment_naming_info=environment_naming_info,
+    )
+
+    call_args = adapter_mock.execute.call_args_list
+
+    assert (
+        call_args[0][0][0][0].sql()
+        == 'CREATE TABLE IF NOT EXISTS "prod_pre" AS SELECT \'prod\' AS "prod"'
+    )
+    assert (
+        call_args[1][0][0][0].sql()
+        == 'CREATE TABLE IF NOT EXISTS "prod_post" AS SELECT \'prod\' AS "prod"'
+    )
+    assert call_args[4][0][0][0].sql() == 'GRANT USAGE ON SCHEMA "db" TO "admin_role"'

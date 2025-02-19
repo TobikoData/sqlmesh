@@ -771,7 +771,7 @@ class SnapshotEvaluator:
             snapshots=parent_snapshots_by_name(snapshot, snapshots),
             runtime_stage=RuntimeStage.CREATING,
             deployability_index=deployability_index,
-            enviornment_naming_info=environment_naming_info,
+            environment_naming_info=environment_naming_info,
         )
 
         with adapter.transaction(), adapter.session(snapshot.model.session_properties):

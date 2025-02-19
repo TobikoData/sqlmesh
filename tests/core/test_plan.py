@@ -2858,3 +2858,4 @@ def test_restate_daily_to_monthly(make_snapshot, mocker: MockerFixture):
         snapshot_d.snapshot_id: (1739577600000, 1740355200000),
         snapshot_e.snapshot_id: (1739577600000, 1740355200000),
     }
+
