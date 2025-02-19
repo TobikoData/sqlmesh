@@ -1,4 +1,4 @@
-# SSO (Single sign-on) 
+# SSO (Single Sign-On) 
 
 ## Overview
 
@@ -18,7 +18,7 @@ Below is an example of a `tcloud.yml` configuration:
 projects:
     <Project name>:
         url: <The project URL>
-        token: <The access token>
+        token: <The access token> # you won't need this anymore
         gateway: <The name of the SQLMesh gateway to use with this project>
         extras: <Optional - Any extras that should be installed with sqlmesh-enterprise>
         pip_executable: <Optional - The path to the pip executable to use. Ex: `uv pip` or `pip3`. Must install packages to the python environment running the tcloud command>
@@ -35,20 +35,17 @@ This provider implements [OpenID Connect Core
 1.0](https://openid.net/specs/openid-connect-core-1_0.html) in order to allow us
 to login with most OAuth2 login providers.
 
-There are two types of customers that might use OpenID Providers. The first is a
-customer that would like to use a shared provider like Google, Github,
+There are two ways to use OpenID Providers. The first is a
+if you use a shared provider like Google, Github,
 Microsoft, etc. 
 
 #### Google OAuth
 
-To enable Google OAuth, all we need is your domain. From here, we can switch SSO on with Google OAuth. 
+To enable Google OAuth, all we need is your domain (ex: `yourname@companyname.com`, `companyname.com` is the domain). From here, we can switch SSO on with Google OAuth. 
 
-The login flow will look like the following if you access cloud.tobikodata.com/auth/login directly from your browser. If authenticating through CLI see [here](https://sqlmesh.readthedocs.io/en/stable/cloud/features/single_sign_on/#status) for more details. 
+The login  flow will look like the following if you access [cloud.tobikodata.com/auth/login](https://cloud.tobikodata.com/auth/login) directly from your browser. If authenticating through CLI see [here](https://sqlmesh.readthedocs.io/en/stable/cloud/features/single_sign_on/#status) for more details. 
 
-<video width="100%" height="100%" controls>
-  <source src="google_oauth.mp4" type="video/mp4">
-</video>
-
+<div style="position: relative; padding-bottom: 56.25%; height: 0;"><iframe src="https://www.loom.com/embed/71da13d6fa284daca7ebc0c1f68758fe?sid=85e5f795-f40b-496d-bdf7-098ee6093468" frameborder="0" webkitallowfullscreen mozallowfullscreen allowfullscreen style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"></iframe></div>
 
 #### Other OAuth Providers 
 
@@ -111,11 +108,11 @@ a provider named `acme`:
 ### Okta Integration
 
 The following instructions will walk you through configuring Okta as your identity provider. 
-1. Log into your Okta account. Navigate to Application and create a new app. You will want to select SAML 2.0
+Log into your Okta account. Navigate to Application and create a new app. You will want to select SAML 2.0
 
 ![okta_setup_1](./single_sign_on/okta_setup_1.png)
 
-2. Next, name your app "Tobiko Cloud". You can add the app logo by downloading the image [here](https://avatars.githubusercontent.com/u/113925670?s=200&v=4). 
+Next, name your app "Tobiko Cloud". You can add the app logo by downloading the image [here](https://avatars.githubusercontent.com/u/113925670?s=200&v=4). 
 
 ![okta_setup_2](./single_sign_on/okta_setup_2.png)
 
@@ -137,7 +134,7 @@ The following instructions will walk you through configuring Okta as your identi
 
     ![okta_setup_5](./single_sign_on/okta_setup_5.png)
 
-Here is what you would see if you are accessing Tobiko Cloud via Okta. Click on the Tobiko Cloud icon to be redirected to the application. 
+Here is what you will see if you are accessing Tobiko Cloud via Okta. Click on the Tobiko Cloud icon to be redirected to the application. 
 
 ![sso_okta](./single_sign_on/sso_okta.png)
 
