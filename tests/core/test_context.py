@@ -1402,16 +1402,16 @@ def test_model_linting(tmp_path: pathlib.Path) -> None:
         ctx.load()
 
     # Case #3: Ensure load DOES NOT work if LinterConfig has overlapping rules
-    invalid_cfgs = [
+    invalid_cfgs_dict = [
         {"rules": ["noselectstar"], "warn_rules": ["noselectstar"]},
     ]
 
-    for cfg in invalid_cfgs:
+    for dict in invalid_cfgs_dict:
         with pytest.raises(
             ConfigError,
             match=r"Found overlapping rules {'noselectstar'} in lint config.",
         ):
-            LinterConfig(**cfg)
+            LinterConfig(**dict)
 
     # Case #4: Ensure model attribute overrides global config
     ctx.config.linter = LinterConfig(rules=["noselectstar"])

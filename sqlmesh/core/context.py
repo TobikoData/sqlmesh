@@ -479,7 +479,9 @@ class GenericContext(BaseContext, t.Generic[C]):
             }
         )
 
-        update_model_schemas(self.dag, models=self._models, context_path=self.path, lint_cfg=self.config.linter)
+        update_model_schemas(
+            self.dag, models=self._models, context_path=self.path, lint_cfg=self.config.linter
+        )
 
         if model.dialect:
             self._all_dialects.add(model.dialect)
@@ -488,7 +490,6 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         linter = Linter(config=self.config.linter) if self.config.linter.enabled else None
         if linter:
-            print(f"linting {model}")
             linter.lint(model)
 
         return model
@@ -612,7 +613,9 @@ class GenericContext(BaseContext, t.Generic[C]):
                     self._models.update({fqn: model.copy(update={"mapping_schema": {}})})
                     continue
 
-            update_model_schemas(self.dag, models=self._models, context_path=self.path, lint_cfg=self.config.linter)
+            update_model_schemas(
+                self.dag, models=self._models, context_path=self.path, lint_cfg=self.config.linter
+            )
 
             linter = Linter(config=self.config.linter) if self.config.linter.enabled else None
             for model in self.models.values():
