@@ -5,6 +5,7 @@ import re
 import logging
 import pytest
 import pandas as pd
+from pydantic import field_validator, ValidationInfo, ValidationError
 from pathlib import Path
 from pytest_mock.plugin import MockerFixture
 from sqlglot import expressions as exp
@@ -33,6 +34,7 @@ from sqlmesh.core.model import (
     SqlModel,
     TimeColumn,
     ViewKind,
+    CustomKind,
     load_sql_based_model,
     ExternalModel,
     model,
@@ -55,6 +57,7 @@ from sqlmesh.utils.concurrency import NodeExecutionFailedError
 from sqlmesh.utils.date import to_timestamp
 from sqlmesh.utils.errors import ConfigError, SQLMeshError, DestructiveChangeError
 from sqlmesh.utils.metaprogramming import Executable
+from sqlmesh.utils.pydantic import list_of_fields_validator
 
 
 if t.TYPE_CHECKING:
@@ -3131,6 +3134,7 @@ def test_custom_materialization_strategy(adapter_mock, make_snapshot):
             nonlocal custom_insert_called
             custom_insert_called = True
 
+            assert isinstance(model.kind, CustomKind)
             assert model.custom_materialization_properties == {"test_property": "test_value"}
 
             assert isinstance(query_or_df, exp.Query)
@@ -3147,6 +3151,83 @@ def test_custom_materialization_strategy(adapter_mock, make_snapshot):
                     materialization_properties (
                         'test_property' = 'test_value'
                     )
+                )
+            );
+
+            SELECT * FROM tbl;
+            """
+        )
+    )
+
+    snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    evaluator.evaluate(
+        snapshot,
+        start="2020-01-01",
+        end="2020-01-02",
+        execution_time="2020-01-02",
+        snapshots={},
+    )
+
+    assert custom_insert_called
+
+
+def test_custom_materialization_strategy_with_custom_properties(adapter_mock, make_snapshot):
+    custom_insert_called = False
+
+    class TestCustomKind(CustomKind):
+        primary_key: t.List[exp.Expression]
+
+        @field_validator("primary_key", mode="before")
+        @classmethod
+        def _validate_primary_key(cls, value: t.Any, info: ValidationInfo) -> t.Any:
+            return list_of_fields_validator(value, info.data)
+
+    class TestCustomMaterializationStrategy(CustomMaterialization[TestCustomKind]):
+        NAME = "custom_materialization_test"
+
+        def insert(
+            self,
+            table_name: str,
+            query_or_df: QueryOrDF,
+            model: Model,
+            is_first_insert: bool,
+            **kwargs: t.Any,
+        ) -> None:
+            nonlocal custom_insert_called
+            custom_insert_called = True
+
+            assert isinstance(model.kind, TestCustomKind)
+            assert model.kind.primary_key == [exp.column("id")]
+            assert not model.custom_materialization_properties
+
+    evaluator = SnapshotEvaluator(adapter_mock)
+
+    with pytest.raises(ValidationError, match=r".*primary_key\n.*Field required.*"):
+        model = load_sql_based_model(
+            parse(  # type: ignore
+                """
+                MODEL (
+                    name test_schema.test_model,
+                    kind CUSTOM (
+                        materialization 'custom_materialization_test',
+                    )
+                );
+
+                SELECT * FROM tbl;
+                """
+            )
+        )
+
+    model = load_sql_based_model(
+        parse(  # type: ignore
+            """
+            MODEL (
+                name test_schema.test_model,
+                kind CUSTOM (
+                    materialization 'custom_materialization_test',
+                    primary_key id
                 )
             );
 

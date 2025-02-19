@@ -300,7 +300,7 @@ def test_plan(
 
     # TODO: Should this be going to stdout? This is printing the status updates for when each batch finishes for
     # the models and how long it took
-    assert len(output.stdout.strip().split("\n")) == 23
+    assert len(output.stdout.strip().split("\n")) == 24
     assert not output.stderr
     assert len(output.outputs) == 4
     text_output = convert_all_html_output_to_text(output)
@@ -558,7 +558,7 @@ def test_info(notebook, sushi_context, convert_all_html_output_to_text, get_all_
     assert not output.stderr
     assert len(output.outputs) == 6
     assert convert_all_html_output_to_text(output) == [
-        "Models: 17",
+        "Models: 18",
         "Macros: 7",
         "",
         "Connection:\n  type: duckdb\n  concurrent_tasks: 1\n  register_comments: true\n  pre_ping: false\n  pretty_sql: false\n  extensions: []\n  connector_config: {}",
@@ -566,7 +566,7 @@ def test_info(notebook, sushi_context, convert_all_html_output_to_text, get_all_
         "Data warehouse connection succeeded",
     ]
     assert get_all_html_output(output) == [
-        "<pre style=\"white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace\">Models: <span style=\"color: #008080; text-decoration-color: #008080; font-weight: bold\">17</span></pre>",
+        "<pre style=\"white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace\">Models: <span style=\"color: #008080; text-decoration-color: #008080; font-weight: bold\">18</span></pre>",
         "<pre style=\"white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace\">Macros: <span style=\"color: #008080; text-decoration-color: #008080; font-weight: bold\">7</span></pre>",
         "<pre style=\"white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace\"></pre>",
         '<pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,\'DejaVu Sans Mono\',consolas,\'Courier New\',monospace">Connection:  type: duckdb  concurrent_tasks: <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">1</span>  register_comments: true  pre_ping: false  pretty_sql: false  extensions: <span style="font-weight: bold">[]</span>  connector_config: <span style="font-weight: bold">{}</span></pre>',
