@@ -1411,7 +1411,8 @@ def test_model_linting(tmp_path: pathlib.Path) -> None:
             ConfigError,
             match=r"Found overlapping rules \[noselectstar\] in lint config.",
         ):
-            LinterConfig(**dict)
+            ctx.config.linter = LinterConfig(**dict)
+            ctx.load()
 
     # Case #4: Ensure model attribute overrides global config
     ctx.config.linter = LinterConfig(rules=["noselectstar"])

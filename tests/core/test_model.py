@@ -2505,10 +2505,10 @@ def test_model_cache_gateway(tmp_path: Path, mocker: MockerFixture):
     patched_cache_put = mocker.patch("sqlmesh.utils.cache.FileCache.put")
 
     Context(paths=tmp_path, config=config)
-    assert patched_cache_put.call_count == 0
+    assert patched_cache_put.call_count == 2
 
     Context(paths=tmp_path, config=config, gateway="secondary")
-    assert patched_cache_put.call_count == 4
+    assert patched_cache_put.call_count == 6
 
 
 @pytest.mark.slow
@@ -7480,6 +7480,8 @@ def test_compile_time_checks(tmp_path: Path, assert_exp_eq):
     SELECT * FROM tbl
     """
     )
+
+    ctx.load()
 
     with pytest.raises(
         ConfigError,

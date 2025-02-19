@@ -6,7 +6,7 @@ import typing as t
 
 from sqlglot import exp
 
-from sqlmesh.core.linter.rule import Rule, RuleViolation, RuleSet
+from sqlmesh.core.linter.rule import Rule, RuleViolation
 from sqlmesh.core.model import Model, SqlModel
 
 
@@ -31,10 +31,6 @@ class NoSelectStar(Rule):
     def summary(self) -> str:
         return "Query should not contain any SELECT *, even if they can be expanded."
 
-    @property
-    def description(self) -> str:
-        return ""
-
 
 class InvalidSelectStarExpansion(Rule):
     def check(self, model: Model) -> t.Optional[RuleViolation]:
@@ -57,10 +53,6 @@ class InvalidSelectStarExpansion(Rule):
             f"'{self._model_fqn}' can be rendered at parse time."
         )
 
-    @property
-    def description(self) -> str:
-        return ""
-
 
 class AmbiguousOrInvalidColumn(Rule):
     def check(self, model: Model) -> t.Optional[RuleViolation]:
@@ -78,14 +70,3 @@ class AmbiguousOrInvalidColumn(Rule):
     @property
     def summary(self) -> str:
         return f"{self._error} for model '{self._model_fqn}', the column may not exist or is ambiguous."
-
-    @property
-    def description(self) -> str:
-        return ""
-
-
-BUILTIN_RULES = RuleSet.from_args(
-    NoSelectStar,
-    InvalidSelectStarExpansion,
-    AmbiguousOrInvalidColumn,
-)

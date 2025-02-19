@@ -36,11 +36,6 @@ class Rule(abc.ABC):
         """A one-line summary of what this rule checks for."""
 
     @property
-    @abc.abstractmethod
-    def description(self) -> str:
-        """The explanation for why this rule matters and how to best resolve this"""
-
-    @property
     def name(self) -> str:
         """The name of this rule."""
         return self._name

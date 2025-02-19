@@ -15,6 +15,7 @@ from sqlglot.errors import SqlglotError
 from sqlmesh.core import constants as c
 from sqlmesh.core.audit import Audit, ModelAudit, StandaloneAudit, load_multiple_audits
 from sqlmesh.core.dialect import parse
+from sqlmesh.core.linter.rule import RuleSet
 from sqlmesh.core.macros import MacroRegistry, macro
 from sqlmesh.core.metric import Metric, MetricMeta, expand_metrics, load_metric_ddl
 from sqlmesh.core.model import (
@@ -50,6 +51,7 @@ class LoadedProject:
     metrics: UniqueKeyDict[str, Metric]
     requirements: t.Dict[str, str]
     excluded_requirements: t.Set[str]
+    user_rules: RuleSet
 
 
 class Loader(abc.ABC):
@@ -114,6 +116,8 @@ class Loader(abc.ABC):
 
             requirements, excluded_requirements = self._load_requirements()
 
+            user_rules = self._load_linting_rules()
+
             project = LoadedProject(
                 macros=macros,
                 jinja_macros=jinja_macros,
@@ -123,6 +127,7 @@ class Loader(abc.ABC):
                 metrics=expand_metrics(metrics),
                 requirements=requirements,
                 excluded_requirements=excluded_requirements,
+                user_rules=user_rules,
             )
             return project
 
@@ -253,6 +258,10 @@ class Loader(abc.ABC):
                     requirements[dep] = ver
 
         return requirements, excluded_requirements
+
+    def _load_linting_rules(self) -> RuleSet:
+        """Loads custom linting rules"""
+        return RuleSet()
 
     def _glob_paths(
         self,
@@ -426,7 +435,6 @@ class SqlMeshLoader(Loader):
                         default_catalog=self.context.default_catalog,
                         infer_names=self.config.model_naming.infer_names,
                         signal_definitions=signals,
-                        linter=self.config.linter,
                     )
                 except Exception as ex:
                     raise ConfigError(f"Failed to load model definition at '{path}'.\n{ex}")
@@ -594,6 +602,21 @@ class SqlMeshLoader(Loader):
                     raise ConfigError(f"Failed to parse metric definitions at '{path}': {ex}.")
 
         return metrics
+
+    def _load_linting_rules(self) -> RuleSet:
+        rs = None
+        for path in self._glob_paths(
+            self.config_path / c.LINTER,
+            ignore_patterns=self.config.ignore_patterns,
+            extension=".py",
+        ):
+            if os.path.getsize(path):
+                module = import_python_file(path, self.config_path)
+                if hasattr(module, "USER_RULES"):
+                    rs = module.USER_RULES
+                    break
+
+        return rs or RuleSet()
 
     class _Cache:
         def __init__(self, loader: SqlMeshLoader, config_path: Path):

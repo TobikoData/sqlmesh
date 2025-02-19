@@ -112,6 +112,7 @@ from sqlmesh.core.test import (
     run_tests,
 )
 from sqlmesh.core.user import User
+from sqlmesh.core.linter.rule import RuleSet
 from sqlmesh.utils import UniqueKeyDict
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import TimeLike, now_ds, to_timestamp, format_tz_datetime
@@ -348,6 +349,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         self._requirements: t.Dict[str, str] = {}
         self._excluded_requirements: t.Set[str] = set()
         self._default_catalog: t.Optional[str] = None
+        self._user_rules: RuleSet = RuleSet()
         self._loaded: bool = False
 
         self.path, self.config = t.cast(t.Tuple[Path, C], next(iter(self.configs.items())))
@@ -581,6 +583,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             self._standalone_audits.update(project.standalone_audits)
             self._requirements.update(project.requirements)
             self._excluded_requirements.update(project.excluded_requirements)
+            self._user_rules = self._user_rules.union(project.user_rules)
 
         uncached = set()
 
@@ -617,7 +620,9 @@ class GenericContext(BaseContext, t.Generic[C]):
                 self.dag, models=self._models, context_path=self.path, lint_cfg=self.config.linter
             )
 
+            self.config.linter.fill_rules(self._user_rules)
             linter = Linter(config=self.config.linter) if self.config.linter.enabled else None
+
             for model in self.models.values():
                 # The model definition can be validated correctly only after the schema is set.
                 model.validate_definition()
