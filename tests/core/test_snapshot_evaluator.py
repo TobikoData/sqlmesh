@@ -3250,6 +3250,33 @@ def test_custom_materialization_strategy_with_custom_properties(adapter_mock, ma
     assert custom_insert_called
 
 
+def test_custom_materialization_strategy_with_custom_kind_must_be_correct_type():
+    # note: deliberately doesnt extend CustomKind
+    class TestCustomKind:
+        pass
+
+    class TestCustomMaterializationStrategy(CustomMaterialization[TestCustomKind]):  # type: ignore
+        NAME = "custom_materialization_test_2"
+
+    with pytest.raises(
+        SQLMeshError, match=r"kind 'TestCustomKind' must be a subclass of CustomKind"
+    ):
+        load_sql_based_model(
+            parse(  # type: ignore
+                """
+                MODEL (
+                    name test_schema.test_model,
+                    kind CUSTOM (
+                        materialization 'custom_materialization_test_2',
+                    )
+                );
+
+                SELECT * FROM tbl;
+                """
+            )
+        )
+
+
 def test_create_managed(adapter_mock, make_snapshot, mocker: MockerFixture):
     evaluator = SnapshotEvaluator(adapter_mock)
 

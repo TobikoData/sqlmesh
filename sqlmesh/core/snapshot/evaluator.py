@@ -1944,7 +1944,7 @@ def get_custom_materialization_kind_type(st: t.Type[CustomMaterialization]) -> t
                 for generic_arg in t.get_args(base):
                     if not issubclass(generic_arg, CustomKind):
                         raise SQLMeshError(
-                            "Custom materialization kind '{generic_arg.__name__}' must be a subclass of CustomKind"
+                            f"Custom materialization kind '{generic_arg.__name__}' must be a subclass of CustomKind"
                         )
 
                     return generic_arg
