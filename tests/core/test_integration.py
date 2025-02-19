@@ -770,6 +770,73 @@ def test_cron_not_aligned_with_day_boundary_new_model(init_and_plan_context: t.C
 
 
 @time_machine.travel("2023-01-08 00:00:00 UTC")
+def test_forward_only_preview_child_that_runs_before_parent(init_and_plan_context: t.Callable):
+    context, _ = init_and_plan_context("examples/sushi")
+
+    # This model runs at minute 30 of every hour
+    upstream_model = load_sql_based_model(
+        d.parse(
+            """
+        MODEL (
+            name memory.sushi.upstream_model,
+            kind FULL,
+            cron '30 * * * *',
+            start '2023-01-01',
+        );
+
+        SELECT 1 AS a;
+        """
+        )
+    )
+    context.upsert_model(upstream_model)
+
+    # This model runs at minute 0 of every hour, so it runs before the upstream model
+    downstream_model = load_sql_based_model(
+        d.parse(
+            """
+        MODEL (
+            name memory.sushi.downstream_model,
+            kind INCREMENTAL_BY_TIME_RANGE(
+               time_column event_date,
+               forward_only True,
+            ),
+            cron '0 * * * *',
+            start '2023-01-01',
+        );
+
+        SELECT a, '2023-01-06' AS event_date FROM memory.sushi.upstream_model;
+        """
+        )
+    )
+    context.upsert_model(downstream_model)
+
+    context.plan("prod", skip_tests=True, auto_apply=True)
+
+    with time_machine.travel("2023-01-08 00:05:00 UTC"):
+        # The downstream model runs but not the upstream model
+        context.run("prod")
+
+    # Now it's time for the upstream model to run but it hasn't run yet
+    with time_machine.travel("2023-01-08 00:35:00 UTC"):
+        # Make a change to the downstream model.
+        downstream_model = add_projection_to_model(t.cast(SqlModel, downstream_model), literal=True)
+        context.upsert_model(downstream_model)
+
+        # The plan should only backfill the downstream model despite upstream missing intervals
+        plan = context.plan_builder("dev", skip_tests=True, enable_preview=True).build()
+        assert plan.missing_intervals == [
+            SnapshotIntervals(
+                snapshot_id=context.get_snapshot(
+                    downstream_model.name, raise_if_missing=True
+                ).snapshot_id,
+                intervals=[
+                    (to_timestamp("2023-01-07 23:00:00"), to_timestamp("2023-01-08 00:00:00"))
+                ],
+            ),
+        ]
+
+
+@time_machine.travel("2023-01-08 00:00:00 UTC")
 def test_forward_only_monthly_model(init_and_plan_context: t.Callable):
     context, _ = init_and_plan_context("examples/sushi")
 
