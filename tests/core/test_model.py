@@ -7717,3 +7717,39 @@ def entrypoint(evaluator):
     assert t.cast(exp.Expression, customer2_model.render_query()).sql() == (
         '''SELECT 'qux' AS "foo" FROM "db"."customer2"."my_source" AS "my_source"'''
     )
+
+
+def test_dynamic_date_spine_model(assert_exp_eq):
+    @macro()
+    def get_current_date(evaluator):
+        from sqlmesh.utils.date import now
+
+        return f"'{now().date()}'"
+
+    expressions = d.parse(
+        """
+        MODEL (name test_model, dialect duckdb);
+
+        @DEF(curr_date, @get_current_date());
+
+        WITH discount_promotion_dates AS (
+          @date_spine('day', @curr_date::date - 90, @curr_date::date)
+        )
+
+        SELECT * FROM discount_promotion_dates
+        """
+    )
+    model = load_sql_based_model(expressions)
+    assert_exp_eq(
+        model.render_query(),
+        """
+        WITH "discount_promotion_dates" AS (
+          SELECT
+            "_exploded"."date_day" AS "date_day"
+          FROM UNNEST(CAST(GENERATE_SERIES(CAST('2025-02-19' AS DATE) - 90, CAST('2025-02-19' AS DATE), INTERVAL '1' DAY) AS DATE[])) AS "_exploded"("date_day")
+        )
+        SELECT
+          "discount_promotion_dates"."date_day" AS "date_day"
+        FROM "discount_promotion_dates" AS "discount_promotion_dates"
+        """,
+    )
