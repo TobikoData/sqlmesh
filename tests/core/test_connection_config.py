@@ -16,7 +16,6 @@ from sqlmesh.core.config.connection import (
     MySQLConnectionConfig,
     PostgresConnectionConfig,
     SnowflakeConnectionConfig,
-    TrinoConnectionConfig,
     TrinoAuthenticationMethod,
     AthenaConnectionConfig,
     _connection_config_validator,
@@ -403,7 +402,7 @@ def test_trino_schema_location_mapping(make_config):
     ):
         make_config(**required_kwargs, schema_location_mapping={".*": "s3://foo"})
 
-    config: TrinoConnectionConfig = make_config(
+    config = make_config(
         **required_kwargs,
         schema_location_mapping={
             "^utils$": "s3://utils-bucket/@{schema_name}",

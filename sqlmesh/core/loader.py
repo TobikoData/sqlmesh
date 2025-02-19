@@ -403,32 +403,32 @@ class SqlMeshLoader(Loader):
             self._track_file(path)
 
             def _load() -> t.List[Model]:
-                with open(path, "r", encoding="utf-8") as file:
-                    try:
+                try:
+                    with open(path, "r", encoding="utf-8") as file:
                         expressions = parse(
                             file.read(), default_dialect=self.config.model_defaults.dialect
                         )
-                    except SqlglotError as ex:
-                        raise ConfigError(f"Failed to parse a model definition at '{path}': {ex}.")
 
-                return load_sql_based_models(
-                    expressions,
-                    self._get_variables,
-                    defaults=self.config.model_defaults.dict(),
-                    macros=macros,
-                    jinja_macros=jinja_macros,
-                    audit_definitions=audits,
-                    default_audits=self.config.model_defaults.audits,
-                    path=Path(path).absolute(),
-                    module_path=self.config_path,
-                    dialect=self.config.model_defaults.dialect,
-                    time_column_format=self.config.time_column_format,
-                    physical_schema_mapping=self.config.physical_schema_mapping,
-                    project=self.config.project,
-                    default_catalog=self.context.default_catalog,
-                    infer_names=self.config.model_naming.infer_names,
-                    signal_definitions=signals,
-                )
+                    return load_sql_based_models(
+                        expressions,
+                        self._get_variables,
+                        defaults=self.config.model_defaults.dict(),
+                        macros=macros,
+                        jinja_macros=jinja_macros,
+                        audit_definitions=audits,
+                        default_audits=self.config.model_defaults.audits,
+                        path=Path(path).absolute(),
+                        module_path=self.config_path,
+                        dialect=self.config.model_defaults.dialect,
+                        time_column_format=self.config.time_column_format,
+                        physical_schema_mapping=self.config.physical_schema_mapping,
+                        project=self.config.project,
+                        default_catalog=self.context.default_catalog,
+                        infer_names=self.config.model_naming.infer_names,
+                        signal_definitions=signals,
+                    )
+                except Exception as ex:
+                    raise ConfigError(f"Failed to load model definition at '{path}'.\n{ex}")
 
             for model in cache.get_or_load_models(path, _load):
                 if model.enabled:
@@ -464,27 +464,31 @@ class SqlMeshLoader(Loader):
                     continue
 
                 self._track_file(path)
-                import_python_file(path, self.config_path)
-                new = registry.keys() - registered
-                registered |= new
-                for name in new:
-                    for model in registry[name].models(
-                        self._get_variables,
-                        path=path,
-                        module_path=self.config_path,
-                        defaults=self.config.model_defaults.dict(),
-                        macros=macros,
-                        jinja_macros=jinja_macros,
-                        dialect=self.config.model_defaults.dialect,
-                        time_column_format=self.config.time_column_format,
-                        physical_schema_mapping=self.config.physical_schema_mapping,
-                        project=self.config.project,
-                        default_catalog=self.context.default_catalog,
-                        infer_names=self.config.model_naming.infer_names,
-                        audit_definitions=audits,
-                    ):
-                        if model.enabled:
-                            models[model.fqn] = model
+                try:
+                    import_python_file(path, self.config_path)
+                    new = registry.keys() - registered
+                    registered |= new
+                    for name in new:
+                        for model in registry[name].models(
+                            self._get_variables,
+                            path=path,
+                            module_path=self.config_path,
+                            defaults=self.config.model_defaults.dict(),
+                            macros=macros,
+                            jinja_macros=jinja_macros,
+                            dialect=self.config.model_defaults.dialect,
+                            time_column_format=self.config.time_column_format,
+                            physical_schema_mapping=self.config.physical_schema_mapping,
+                            project=self.config.project,
+                            default_catalog=self.context.default_catalog,
+                            infer_names=self.config.model_naming.infer_names,
+                            audit_definitions=audits,
+                        ):
+                            if model.enabled:
+                                models[model.fqn] = model
+                except Exception as ex:
+                    raise ConfigError(f"Failed to load model definition at '{path}'.\n{ex}")
+
         finally:
             model_registry._dialect = None
 
