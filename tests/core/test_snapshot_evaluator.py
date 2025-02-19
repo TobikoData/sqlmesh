@@ -3449,6 +3449,7 @@ def test_create_snapshot(
         snapshots={},
         deployability_flags=deployability_flags,
         deployability_index=deployability_index,
+        environment_naming_info=None,
         on_complete=None,
         allow_destructive_snapshots=set(),
     )

@@ -752,12 +752,7 @@ def test_run_project_statements(mocker, make_snapshot):
         default_catalog=None,
     )
     naming_info = EnvironmentNamingInfo(name="dev")
-    scheduler.run(
-        naming_info,
-        "2022-01-01",
-        "2022-01-01",
-        "2022-01-30",
-    )
+    scheduler.run(naming_info, "2022-01-01", "2022-01-01", "2022-01-30", is_run_command=True)
 
     call_args = spy.call_args_list
     assert call_args[0][1]["execution_stage"] == "before_all"
