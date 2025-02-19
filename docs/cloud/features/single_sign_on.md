@@ -43,7 +43,7 @@ Microsoft, etc.
 
 To enable Google OAuth, all we need is your domain. From here, we can switch SSO on with Google OAuth. 
 
-The login flow will look like the following: 
+The login flow will look like the following if you access cloud.tobikodata.com/auth/login directly from your browser. If authenticating through CLI see [here](https://sqlmesh.readthedocs.io/en/stable/cloud/features/single_sign_on/#status) for more details. 
 
 <video width="100%" height="100%" controls>
   <source src="google_oauth.mp4" type="video/mp4">
@@ -107,6 +107,35 @@ a provider named `acme`:
 - **Metadata URL**: `https://cloud.tobikodata.com/auth/saml/metadata/acme`
 - **Entity ID**: `https://cloud.tobikodata.com/auth/saml/metadata/acme`
 - **SSO URL**: `https://cloud.tobikodata.com/auth/saml/callback/acme`
+
+### Okta Integration
+
+The following instructions will walk you through configuring Okta as your identity provider. 
+1. Log into your Okta account. Navigate to Application and create a new app. You will want to select SAML 2.0
+
+![okta_setup_1](./single_sign_on/okta_setup_1.png)
+
+2. Next, name your app "Tobiko Cloud". You can add the app logo by downloading the image [here](https://avatars.githubusercontent.com/u/113925670?s=200&v=4). 
+
+![okta_setup_2](./single_sign_on/okta_setup_2.png)
+
+#### SAML Configurations and Settings
+
+1. We now need to fill in the SAML Settings. Please enter the following values: 
+
+
+    - **Single sign-on URL**: `https://cloud.tobikodata.com/auth/saml/callback/acme`   
+    - **Audience URI (SP Entity ID)**: `https://cloud.tobikodata.com/auth/saml/metadata/acme`
+
+    ![okta_setup_3](./single_sign_on/okta_setup_3.png)
+
+2. Fill in the Attribute Statements section with email, first_name, and last_name: These are required to properly map to your users. 
+
+    ![okta_setup_4](./single_sign_on/okta_setup_4.png)
+
+3. Click next and now you are on the last step. Check off the box `Contact app vendor` and hit `Finish`. Now you're all set! 
+
+    ![okta_setup_5](./single_sign_on/okta_setup_5.png)
 
 Here is what you would see if you are accessing Tobiko Cloud via Okta. Click on the Tobiko Cloud icon to be redirected to the application. 
 
