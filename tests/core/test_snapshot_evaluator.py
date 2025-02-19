@@ -3185,7 +3185,7 @@ def test_custom_materialization_strategy_with_custom_properties(adapter_mock, ma
             return list_of_fields_validator(value, info.data)
 
     class TestCustomMaterializationStrategy(CustomMaterialization[TestCustomKind]):
-        NAME = "custom_materialization_test"
+        NAME = "custom_materialization_test_1"
 
         def insert(
             self,
@@ -3211,7 +3211,7 @@ def test_custom_materialization_strategy_with_custom_properties(adapter_mock, ma
                 MODEL (
                     name test_schema.test_model,
                     kind CUSTOM (
-                        materialization 'custom_materialization_test',
+                        materialization 'custom_materialization_test_1',
                     )
                 );
 
@@ -3226,7 +3226,7 @@ def test_custom_materialization_strategy_with_custom_properties(adapter_mock, ma
             MODEL (
                 name test_schema.test_model,
                 kind CUSTOM (
-                    materialization 'custom_materialization_test',
+                    materialization 'custom_materialization_test_1',
                     primary_key id
                 )
             );

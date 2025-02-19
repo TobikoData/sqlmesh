@@ -10,7 +10,7 @@ if t.TYPE_CHECKING:
     from sqlmesh import QueryOrDF
 
 
-class CustomCustomKind(CustomKind):
+class ExtendedCustomKind(CustomKind):
     custom_property: t.Optional[str] = None
 
     @field_validator("custom_property", mode="before")
@@ -19,7 +19,7 @@ class CustomCustomKind(CustomKind):
         return validate_string(v)
 
 
-class CustomFullWithCustomKindMaterialization(CustomMaterialization[CustomCustomKind]):
+class CustomFullWithCustomKindMaterialization(CustomMaterialization[ExtendedCustomKind]):
     NAME = "custom_full_with_custom_kind"
 
     def insert(
@@ -30,6 +30,6 @@ class CustomFullWithCustomKindMaterialization(CustomMaterialization[CustomCustom
         is_first_insert: bool,
         **kwargs: t.Any,
     ) -> None:
-        assert type(model.kind).__name__ == "CustomCustomKind"
+        assert type(model.kind).__name__ == "ExtendedCustomKind"
 
         self._replace_query_for_model(model, table_name, query_or_df)

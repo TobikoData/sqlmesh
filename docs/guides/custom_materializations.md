@@ -243,7 +243,7 @@ In this example, this means that:
 
 ### Data vs Metadata changes
 
-Subclasses of `CustomKind` that add extra properties can also decide if they are data properties (changes trigger the recreation of the underlying tables) or metadata properties (changes just update metadata about the model).
+Subclasses of `CustomKind` that add extra properties can also decide if they are data properties (changes may trigger the creation of new snapshots) or metadata properties (changes just update metadata about the model).
 
 They can also decide if they are relevant for text diffing when SQLMesh detects changes to a model.
 
