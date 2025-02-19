@@ -4061,7 +4061,7 @@ def test_this_env_macro_in_statements(mocker: MockerFixture, adapter_mock, make_
                 "@IF(@this_env = 'prod', CREATE TABLE IF NOT EXISTS @{this_env}_table AS SELECT @this_env AS environment)",
             ],
             after_all=[
-                "@IF(@this_env = 'dev3', \"CREATE TABLE IF NOT EXISTS not_create AS SELECT 1\")",
+                "@IF(@this_env = 'dev3', CREATE TABLE IF NOT EXISTS not_create AS SELECT 1)",
             ],
             python_env={},
         )
