@@ -461,7 +461,9 @@ def serialize_env(env: t.Dict[str, t.Any], path: Path) -> t.Dict[str, Executable
                 )
         else:
             raise SQLMeshError(
-                f"'{v}' cannot be serialized because it is a constant object. Import the module and call it from within the macro instead:\nimport module\n\ndef my_macro():\n    module.{v}"
+                f"Object '{v}' cannot be serialized. If it's defined in a library, import the corresponding "
+                "module and reference the object using its fully-qualified name. For example, the datetime "
+                "module's 'UTC' object should be accessed as 'datetime.UTC'."
             )
 
     return serialized
