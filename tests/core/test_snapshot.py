@@ -2289,11 +2289,10 @@ def test_missing_intervals_interval_end_per_model(make_snapshot):
             snapshot_a.name: to_timestamp("2023-01-09"),
             snapshot_b.name: to_timestamp(
                 "2023-01-06"
-            ),  # The interval end is before the start. This should be ignored.
+            ),  # The interval end is before the start. The snapshot will be skipped
         },
     ) == {
         snapshot_a: [(to_timestamp("2023-01-08"), to_timestamp("2023-01-09"))],
-        snapshot_b: [(to_timestamp("2023-01-08"), to_timestamp("2023-01-09"))],
     }
 
 

@@ -1742,16 +1742,20 @@ def missing_intervals(
         snapshot_start_date = start_dt
         snapshot_end_date: TimeLike = end_date
 
-        existing_interval_end = interval_end_per_model.get(snapshot.name)
-        if existing_interval_end and existing_interval_end > to_timestamp(snapshot_start_date):
-            snapshot_end_date = existing_interval_end
-
-        interval = restatements.get(snapshot.snapshot_id)
-        if interval:
-            snapshot_start_date, snapshot_end_date = (to_datetime(i) for i in interval)
+        restated_interval = restatements.get(snapshot.snapshot_id)
+        if restated_interval:
+            snapshot_start_date, snapshot_end_date = (to_datetime(i) for i in restated_interval)
             snapshot = snapshot.copy()
             snapshot.intervals = snapshot.intervals.copy()
-            snapshot.remove_interval(interval)
+            snapshot.remove_interval(restated_interval)
+        else:
+            existing_interval_end = interval_end_per_model.get(snapshot.name)
+            if existing_interval_end:
+                if to_timestamp(snapshot_start_date) >= existing_interval_end:
+                    # The start exceeds the provided interval end, so we can skip this snapshot
+                    # since it doesn't have missing intervals by definition
+                    continue
+                snapshot_end_date = existing_interval_end
 
         missing_interval_end_date = snapshot_end_date
         node_end_date = snapshot.node.end
