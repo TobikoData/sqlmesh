@@ -1409,7 +1409,7 @@ def test_model_linting(tmp_path: pathlib.Path) -> None:
     for dict in invalid_cfgs_dict:
         with pytest.raises(
             ConfigError,
-            match=r"Found overlapping rules {'noselectstar'} in lint config.",
+            match=r"Found overlapping rules \[noselectstar\] in lint config.",
         ):
             LinterConfig(**dict)
 

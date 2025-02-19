@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import typing as t
 
 from sqlmesh.core.config.linter import LinterConfig
 
@@ -9,33 +8,16 @@ from sqlmesh.core.model import Model
 from sqlmesh.utils.errors import raise_config_error
 from sqlmesh.core.console import get_console
 
-from sqlmesh.core.linter.rule import RuleSet
-from sqlmesh.core.linter.rules import ALL_RULES
-
 
 class Linter:
-    def gather_rules(self, rule_names: t.List[str] | str) -> RuleSet:
-        if rule_names == "ALL":
-            return ALL_RULES
-
-        return RuleSet(ALL_RULES[rule_name] for rule_name in rule_names)
-
     def __init__(self, config: LinterConfig) -> None:
         self.config = config
 
-        self.rules: RuleSet = self.gather_rules(config.rules)
-        self.exclude_rules: RuleSet = self.gather_rules(config.exclude_rules)
-        self.warn_rules: RuleSet = self.gather_rules(config.warn_rules)
-
     def lint(self, model: Model) -> None:
-        model_noqa = self.gather_rules(model.ignore_lints) if model.ignore_lints else None
+        model_noqa = LinterConfig.gather_rules(model.ignore_lints or [])
 
-        if model_noqa:
-            rules = self.rules.difference(model_noqa)
-            warn_rules = self.warn_rules.difference(model_noqa)
-        else:
-            rules = self.rules
-            warn_rules = self.warn_rules
+        rules = self.config.rules.difference(model_noqa)
+        warn_rules = self.config.warn_rules.difference(model_noqa)
 
         error_violations = rules.check(model)
         warn_violations = warn_rules.check(model)
