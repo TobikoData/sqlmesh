@@ -110,7 +110,7 @@ class BaseExpressionRenderer:
         kwargs["this_env"] = (
             getattr(environment_naming_info, "name", "this_env")
             if environment_naming_info
-            else "this_env"
+            else "@this_env"
         )
 
         this_model = kwargs.pop("this_model", None)
