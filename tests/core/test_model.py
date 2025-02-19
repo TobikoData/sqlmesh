@@ -897,6 +897,8 @@ def test_seed_csv_settings():
               csv_settings (
                 quotechar = '''',
                 escapechar = '\\',
+                keep_default_na = false,
+                na_values = (id = [1, '2', false, null], alias = ('foo'))
               ),
             ),
             columns (
@@ -910,7 +912,39 @@ def test_seed_csv_settings():
     model = load_sql_based_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
 
     assert isinstance(model.kind, SeedKind)
-    assert model.kind.csv_settings == CsvSettings(quotechar="'", escapechar="\\")
+    assert model.kind.csv_settings == CsvSettings(
+        quotechar="'",
+        escapechar="\\",
+        na_values={"id": [1, "2", False, None], "alias": ["foo"]},
+        keep_default_na=False,
+    )
+    assert model.kind.data_hash_values == [
+        "SEED",
+        "'",
+        "\\",
+        "{'id': [1, '2', False, None], 'alias': ['foo']}",
+        "False",
+    ]
+
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.seed,
+            kind SEED (
+              path '../seeds/waiter_names.csv',
+              csv_settings (
+                na_values = ('#N/A', 'other')
+              ),
+            ),
+        );
+    """
+    )
+
+    model = load_sql_based_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
+
+    assert isinstance(model.kind, SeedKind)
+    assert model.kind.csv_settings == CsvSettings(na_values=["#N/A", "other"])
+    assert model.kind.data_hash_values == ["SEED", "['#N/A', 'other']"]
 
 
 def test_seed_marker_substitution():
@@ -7755,3 +7789,33 @@ def test_dynamic_date_spine_model(assert_exp_eq):
         FROM "discount_promotion_dates" AS "discount_promotion_dates"
         """,
     )
+
+
+def test_seed_dont_coerce_na_into_null(tmp_path):
+    model_csv_path = (tmp_path / "model.csv").absolute()
+
+    with open(model_csv_path, "w", encoding="utf-8") as fd:
+        fd.write("code\nNA")
+
+    expressions = d.parse(
+        f"""
+        MODEL (
+            name db.seed,
+            kind SEED (
+              path '{str(model_csv_path)}',
+              csv_settings (
+                -- override NaN handling, such that no value can be coerced into NaN
+                keep_default_na = false,
+                na_values = (),
+              ),
+            ),
+        );
+    """
+    )
+
+    model = load_sql_based_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
+
+    assert isinstance(model.kind, SeedKind)
+    assert model.seed is not None
+    assert len(model.seed.content) > 0
+    assert next(model.render(context=None)).to_dict() == {"code": {0: "NA"}}
