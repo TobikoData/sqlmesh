@@ -639,7 +639,7 @@ class SqlMeshLoader(Loader):
             module_path=self.config_path,
             jinja_macro_references=None,
             macros=macros,
-            variables=self._variables,
+            variables=self._get_variables(),
             path=self.config_path,
         )
 
