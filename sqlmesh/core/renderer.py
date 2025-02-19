@@ -557,8 +557,8 @@ class QueryRenderer(BaseExpressionRenderer):
                 )
         except SqlglotError as ex:
             from sqlmesh.core.linter.rules.builtin import AmbiguousOrInvalidColumn
+
             self._violated_rules[AmbiguousOrInvalidColumn] = ex
-            print(f"violated {self._violated_rules}")
 
             query = original
 

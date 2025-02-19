@@ -25,10 +25,12 @@ def update_model_schemas(
     dag: DAG[str],
     models: UniqueKeyDict[str, Model],
     context_path: Path,
-    lint_cfg: LinterConfig
+    lint_cfg: t.Optional[LinterConfig] = None,
 ) -> None:
     schema = MappingSchema(normalize=False)
-    optimized_query_cache: OptimizedQueryCache = OptimizedQueryCache(context_path / c.CACHE, lint_cfg)
+    optimized_query_cache: OptimizedQueryCache = OptimizedQueryCache(
+        context_path / c.CACHE, lint_cfg
+    )
 
     if c.MAX_FORK_WORKERS == 1:
         _update_model_schemas_sequential(dag, models, schema, optimized_query_cache)

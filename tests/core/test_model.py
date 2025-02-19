@@ -7429,7 +7429,9 @@ def test_python_model_on_virtual_update():
 
 
 def test_compile_time_checks(tmp_path: Path, assert_exp_eq):
-    ctx = Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb")), paths=tmp_path)
+    ctx = Context(
+        config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb")), paths=tmp_path
+    )
 
     # Strict SELECT * expansion
     linter_cfg = LinterConfig(rules=["ambiguousorinvalidcolumn", "invalidselectstarexpansion"])
