@@ -5,6 +5,7 @@ from datetime import date, datetime
 from pathlib import Path
 from unittest.mock import patch, PropertyMock
 
+import time_machine
 import pandas as pd
 import pytest
 from pytest_mock.plugin import MockerFixture
@@ -7719,6 +7720,7 @@ def entrypoint(evaluator):
     )
 
 
+@time_machine.travel("2020-01-01 00:00:00 UTC")
 def test_dynamic_date_spine_model(assert_exp_eq):
     @macro()
     def get_current_date(evaluator):
@@ -7746,7 +7748,7 @@ def test_dynamic_date_spine_model(assert_exp_eq):
         WITH "discount_promotion_dates" AS (
           SELECT
             "_exploded"."date_day" AS "date_day"
-          FROM UNNEST(CAST(GENERATE_SERIES(CAST('2025-02-19' AS DATE) - 90, CAST('2025-02-19' AS DATE), INTERVAL '1' DAY) AS DATE[])) AS "_exploded"("date_day")
+          FROM UNNEST(CAST(GENERATE_SERIES(CAST('2020-01-01' AS DATE) - 90, CAST('2020-01-01' AS DATE), INTERVAL '1' DAY) AS DATE[])) AS "_exploded"("date_day")
         )
         SELECT
           "discount_promotion_dates"."date_day" AS "date_day"
