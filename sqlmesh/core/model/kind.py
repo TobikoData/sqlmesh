@@ -975,6 +975,21 @@ def create_model_kind(v: t.Any, dialect: str, defaults: t.Dict[str, t.Any]) -> M
         ):
             props["on_destructive_change"] = defaults.get("on_destructive_change")
 
+        if kind_type == CustomKind:
+            # load the custom materialization class and check if it uses a custom kind type
+            from sqlmesh.core.snapshot.evaluator import get_custom_materialization_type
+
+            if "materialization" not in props:
+                raise ConfigError(
+                    "The 'materialization' property is required for models of the CUSTOM kind"
+                )
+
+            actual_kind_type, _ = get_custom_materialization_type(
+                validate_string(props.get("materialization"))
+            )
+
+            return actual_kind_type(**props)
+
         return kind_type(**props)
 
     name = (v.name if isinstance(v, exp.Expression) else str(v)).upper()

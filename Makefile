@@ -1,16 +1,10 @@
 .PHONY: docs
 
 install-dev:
-	pip3 install -e ".[dev,web,slack,dlt]"
-
-install-cicd-test:
-	pip3 install -e ".[dev,web,slack,cicdtest,dlt]"
+	pip3 install -e ".[dev,web,slack,dlt]" ./examples/custom_materializations
 
 install-doc:
 	pip3 install -r ./docs/requirements.txt
-
-install-engine-test:
-	pip3 install -e ".[dev,web,slack,mysql,postgres,databricks,redshift,bigquery,snowflake,trino,mssql,clickhouse,athena]"
 
 install-pre-commit:
 	pre-commit install
@@ -153,7 +147,7 @@ guard-%:
 	fi
 
 engine-%-install:
-	pip3 install -e ".[dev,web,slack,${*}]"
+	pip3 install -e ".[dev,web,slack,${*}]" ./examples/custom_materializations
 
 engine-docker-%-up:
 	docker compose -f ./tests/core/engine_adapter/integration/docker/compose.${*}.yaml up -d
