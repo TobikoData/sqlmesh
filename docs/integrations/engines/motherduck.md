@@ -8,7 +8,7 @@ It begins with a [Connection Quickstart](#connection-quickstart) that demonstrat
 
 Connecting to cloud warehouses involves a few steps, so this connection quickstart provides the info you need to get up and running with MotherDuck.
 
-It demonstrates connecting to MotherDuck with the `connector` library bundled with SQLMesh. 
+It demonstrates connecting to MotherDuck with the `duckdb` library bundled with SQLMesh. 
 
 MotherDuck provides a single way to authorize a connection. This quickstart demonstrates authenticating with a token.
 
