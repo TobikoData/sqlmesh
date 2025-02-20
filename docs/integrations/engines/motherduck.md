@@ -23,7 +23,7 @@ Before working through this quickstart guide, ensure that:
 
 1. You have a motherduck account and an access token.  
 2. Your computer has SQLMesh installed with the DuckDB extra available.  
-   1. Install from command line with the command `pip install “sqlmesh[DuckDB]”`  
+   1. Install from command line with the command `pip install “sqlmesh[duckdb]”`  
 3. You have initialized a SQLMesh example project on your computer  
    1. Open a command line interface and navigate to the directory where the project files should go.  
    2. Initialize the project with the command `sqlmesh init motherduck`
