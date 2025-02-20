@@ -280,7 +280,6 @@ class SnapshotEvaluator:
         target_snapshots: t.Iterable[Snapshot],
         snapshots: t.Dict[SnapshotId, Snapshot],
         deployability_index: t.Optional[DeployabilityIndex] = None,
-        environment_naming_info: t.Optional[EnvironmentNamingInfo] = None,
         on_start: t.Optional[t.Callable] = None,
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]] = None,
         allow_destructive_snapshots: t.Set[str] = set(),
@@ -359,7 +358,6 @@ class SnapshotEvaluator:
             snapshots=snapshots,
             target_deployability_flags=target_deployability_flags,
             deployability_index=deployability_index,
-            environment_naming_info=environment_naming_info,
             on_complete=on_complete,
             allow_destructive_snapshots=allow_destructive_snapshots,
         )
@@ -370,7 +368,6 @@ class SnapshotEvaluator:
         snapshots: t.Dict[SnapshotId, Snapshot],
         target_deployability_flags: t.Dict[str, t.List[bool]],
         deployability_index: t.Optional[DeployabilityIndex],
-        environment_naming_info: t.Optional[EnvironmentNamingInfo],
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]],
         allow_destructive_snapshots: t.Set[str],
     ) -> None:
@@ -383,7 +380,6 @@ class SnapshotEvaluator:
                     snapshots=snapshots,
                     deployability_flags=target_deployability_flags[s.name],
                     deployability_index=deployability_index,
-                    environment_naming_info=environment_naming_info,
                     on_complete=on_complete,
                     allow_destructive_snapshots=allow_destructive_snapshots,
                 ),
@@ -755,7 +751,6 @@ class SnapshotEvaluator:
         snapshots: t.Dict[SnapshotId, Snapshot],
         deployability_flags: t.List[bool],
         deployability_index: t.Optional[DeployabilityIndex],
-        environment_naming_info: t.Optional[EnvironmentNamingInfo],
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]],
         allow_destructive_snapshots: t.Set[str],
     ) -> None:
@@ -770,7 +765,6 @@ class SnapshotEvaluator:
             snapshots=parent_snapshots_by_name(snapshot, snapshots),
             runtime_stage=RuntimeStage.CREATING,
             deployability_index=deployability_index,
-            environment_naming_info=environment_naming_info,
         )
 
         with adapter.transaction(), adapter.session(snapshot.model.session_properties):
@@ -939,7 +933,6 @@ class SnapshotEvaluator:
                 deployability_index=deployability_index,
                 table_mapping=table_mapping,
                 runtime_stage=RuntimeStage.PROMOTING,
-                environment_naming_info=environment_naming_info,
             )
             adapter.execute(snapshot.model.render_on_virtual_update(**render_kwargs))
 
