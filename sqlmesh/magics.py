@@ -493,7 +493,7 @@ class SQLMeshMagics(Magics):
         """Evaluate the DAG of models using the built-in scheduler."""
         args = parse_argstring(self.run_dag, line)
 
-        success = context.run(
+        completion_status = context.run(
             args.environment,
             start=args.start,
             end=args.end,
@@ -503,7 +503,7 @@ class SQLMeshMagics(Magics):
             exit_on_env_update=args.exit_on_env_update,
             no_auto_upstream=args.no_auto_upstream,
         )
-        if not success:
+        if completion_status.is_failure:
             raise SQLMeshError("Error Running DAG. Check logs for details.")
 
     @magic_arguments()
