@@ -36,6 +36,6 @@ make install-dev
 
 # Migrate and make sure the diff is empty
 pushd $SUSHI_DIR
-sqlmesh --gateway $GATEWAY_NAME migrate
-sqlmesh --gateway $GATEWAY_NAME diff prod
+SQLMESH_DEBUG=1 sqlmesh --gateway $GATEWAY_NAME migrate
+SQLMESH_DEBUG=1 sqlmesh --gateway $GATEWAY_NAME diff prod
 popd

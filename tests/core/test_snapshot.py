@@ -11,6 +11,7 @@ from _pytest.monkeypatch import MonkeyPatch
 from pytest_mock.plugin import MockerFixture
 from sqlglot import exp, to_column
 
+from sqlmesh.core import constants as c
 from sqlmesh.core.audit import StandaloneAudit
 from sqlmesh.core.config import (
     AutoCategorizationMode,
@@ -35,6 +36,7 @@ from sqlmesh.core.model import (
 )
 from sqlmesh.core.model.kind import TimeColumn, ModelKindName
 from sqlmesh.core.node import IntervalUnit
+from sqlmesh.core.signal import signal
 from sqlmesh.core.snapshot import (
     DeployabilityIndex,
     QualifiedViewName,
@@ -2802,3 +2804,29 @@ def test_apply_auto_restatements_disable_restatement_downstream(make_snapshot):
     assert snapshot_b.intervals == [
         (to_timestamp("2020-01-01"), to_timestamp("2020-01-06")),
     ]
+
+
+def test_render_signal(make_snapshot):
+    @signal()
+    def check_types(batch, env: str, default: int = 0):
+        if env != "in_memory" or not default == 0:
+            raise
+        return True
+
+    sql_model = load_sql_based_model(
+        parse(
+            """
+        MODEL (
+            name test_schema.test_model,
+            signals check_types(env := @gateway)
+        );
+        SELECT a FROM tbl;
+        """
+        ),
+        variables={
+            c.GATEWAY: "in_memory",
+        },
+        signal_definitions=signal.get_registry(),
+    )
+    snapshot_a = make_snapshot(sql_model)
+    assert snapshot_a.check_ready_intervals([(0, 1)]) == [(0, 1)]

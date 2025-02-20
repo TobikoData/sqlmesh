@@ -909,7 +909,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         Note that this will handle gaps in the provided intervals. The returned intervals
         may introduce new gaps.
         """
-        signals = self.is_model and self.model.signals
+        signals = self.is_model and self.model.render_signal_calls()
 
         if not signals:
             return intervals
@@ -917,7 +917,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         python_env = self.model.python_env
         env = prepare_env(python_env)
 
-        for signal_name, kwargs in signals:
+        for signal_name, kwargs in signals.items():
             try:
                 intervals = _check_ready_intervals(
                     env[signal_name],
