@@ -302,11 +302,17 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
         for data_file in data_files:
             key = data_file if isinstance(data_file, str) else data_file.path
             if adapter := BaseDuckDBConnectionConfig._data_file_to_adapter.get(key):
-                logger.info(f"Using existing DuckDB adapter due to overlapping data file: {key}")
+                logger.info(
+                    f"Using existing DuckDB adapter due to overlapping data file: {self._mask_motherduck_token(key)}"
+                )
                 return adapter
 
         if data_files:
-            logger.info(f"Creating new DuckDB adapter for data files: {data_files}")
+            masked_files = {
+                self._mask_motherduck_token(file if isinstance(file, str) else file.path)
+                for file in data_files
+            }
+            logger.info(f"Creating new DuckDB adapter for data files: {masked_files}")
         else:
             logger.info("Creating new DuckDB adapter for in-memory database")
         adapter = super().create_engine_adapter(register_comments_override)
@@ -322,6 +328,16 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
         if self.catalogs:
             return list(self.catalogs)[0]
         return None
+
+    def _mask_motherduck_token(self, path: str) -> str:
+        token_regex = r"(\?motherduck_token=)(\S*)"
+        if token_match := re.search(token_regex, path):
+            path = re.sub(
+                token_regex,
+                r"\1" + "*" * len(token_match.group(2)),
+                path,
+            )
+        return path
 
 
 class MotherDuckConnectionConfig(BaseDuckDBConnectionConfig):
