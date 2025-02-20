@@ -330,10 +330,10 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
         return None
 
     def _mask_motherduck_token(self, path: str) -> str:
-        token_regex = r"(\?motherduck_token=)(\S*)"
-        if token_match := re.search(token_regex, path):
+        MOTHERDUCK_TOKEN_REGEX = re.compile(r"(\?motherduck_token=)(\S*)")
+        if token_match := MOTHERDUCK_TOKEN_REGEX.search(path):
             path = re.sub(
-                token_regex,
+                MOTHERDUCK_TOKEN_REGEX,
                 r"\1" + "*" * len(token_match.group(2)),
                 path,
             )
