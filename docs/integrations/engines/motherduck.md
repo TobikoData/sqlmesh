@@ -30,7 +30,7 @@ Before working through this quickstart guide, ensure that:
 
 #### Access control permissions
 
-SQLMesh must have sufficient permissions to create and access your MotherDuck databases. Since permission is granted to specific databases for a specific user, you should create a service account with SQLMesh that will contain the credentials for writing to MotherDuck.
+SQLMesh must have sufficient permissions to create and access your MotherDuck databases. Since permission is granted to specific databases for a specific user, you should create a service account for SQLMesh that will contain the credentials for writing to MotherDuck.
 
 ### Configure the connection
 
