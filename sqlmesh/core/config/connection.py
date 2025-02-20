@@ -303,13 +303,13 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
             key = data_file if isinstance(data_file, str) else data_file.path
             if adapter := BaseDuckDBConnectionConfig._data_file_to_adapter.get(key):
                 logger.info(
-                    f"Using existing DuckDB adapter due to overlapping data file: {self._mask_motherduck_token(key)}"
+                    f"Using existing DuckDB adapter due to overlapping data file: {_mask_motherduck_token(key)}"
                 )
                 return adapter
 
         if data_files:
             masked_files = {
-                self._mask_motherduck_token(file if isinstance(file, str) else file.path)
+                _mask_motherduck_token(file if isinstance(file, str) else str(file))
                 for file in data_files
             }
             logger.info(f"Creating new DuckDB adapter for data files: {masked_files}")
@@ -329,15 +329,16 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
             return list(self.catalogs)[0]
         return None
 
-    def _mask_motherduck_token(self, path: str) -> str:
-        MOTHERDUCK_TOKEN_REGEX = re.compile(r"(\?motherduck_token=)(\S*)")
-        if token_match := MOTHERDUCK_TOKEN_REGEX.search(path):
-            path = re.sub(
-                MOTHERDUCK_TOKEN_REGEX,
-                r"\1" + "*" * len(token_match.group(2)),
-                path,
-            )
-        return path
+
+def _mask_motherduck_token(path: str) -> str:
+    MOTHERDUCK_TOKEN_REGEX = re.compile(r"(\?motherduck_token=)(\S*)")
+    if token_match := MOTHERDUCK_TOKEN_REGEX.search(path):
+        path = re.sub(
+            MOTHERDUCK_TOKEN_REGEX,
+            r"\1" + "*" * len(token_match.group(2)),
+            path,
+        )
+    return path
 
 
 class MotherDuckConnectionConfig(BaseDuckDBConnectionConfig):
@@ -368,6 +369,12 @@ class DuckDBAttachOptions(BaseConfig):
     path: str
     read_only: bool = False
     token: t.Optional[str] = None
+
+    def __str__(self) -> str:
+        return f"DuckDBAttachOptions(type={self.type}, path={_mask_motherduck_token(self.path)}, read_only={self.read_only}, token={'*' * len(self.token) if self.token else None})"
+
+    def __repr__(self) -> str:
+        return self.__str__()
 
     def to_sql(self, alias: str) -> str:
         options = []

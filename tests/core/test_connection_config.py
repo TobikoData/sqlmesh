@@ -20,6 +20,7 @@ from sqlmesh.core.config.connection import (
     TrinoAuthenticationMethod,
     AthenaConnectionConfig,
     _connection_config_validator,
+    _mask_motherduck_token,
 )
 from sqlmesh.utils.errors import ConfigError
 
@@ -649,25 +650,59 @@ def test_duckdb_multithreaded_connection_factory(make_config):
 def test_motherduck_token_mask(make_config):
     config = make_config(
         type="motherduck",
+        catalogs={
+            "test1": DuckDBAttachOptions(
+                type="motherduck",
+                path="md:whodunnit?motherduck_token=short",
+            ),
+            "test2": DuckDBAttachOptions(type="motherduck", path="test3", token="secret123"),
+            "test3": DuckDBAttachOptions(
+                type="motherduck", path="test4", token="longtoken123456789"
+            ),
+            "test4": DuckDBAttachOptions(
+                type="motherduck",
+                path="test5",
+            ),
+        },
     )
     assert isinstance(config, MotherDuckConnectionConfig)
     assert (
-        config._mask_motherduck_token("?motherduck_token=secret1235")
-        == "?motherduck_token=**********"
+        str(config.catalogs["test1"])
+        == "DuckDBAttachOptions(type=motherduck, path=md:whodunnit?motherduck_token=*****, read_only=False, token=None)"
     )
     assert (
-        config._mask_motherduck_token("md:whodunnit?motherduck_token=short")
+        str(config.catalogs["test2"])
+        == "DuckDBAttachOptions(type=motherduck, path=test3, read_only=False, token=*********)"
+    )
+    assert (
+        str(config.catalogs["test3"])
+        == "DuckDBAttachOptions(type=motherduck, path=test4, read_only=False, token=******************)"
+    )
+    assert (
+        str(config.catalogs["test4"])
+        == "DuckDBAttachOptions(type=motherduck, path=test5, read_only=False, token=None)"
+    )
+
+    # Ensure accessing the token or path with token still return the actual value
+    assert not config.catalogs["test1"].token
+    assert config.catalogs["test1"].path == "md:whodunnit?motherduck_token=short"
+    assert config.catalogs["test2"].token == "secret123"
+    assert config.catalogs["test3"].token == "longtoken123456789"
+    assert not config.catalogs["test4"].token
+
+    assert _mask_motherduck_token("?motherduck_token=secret1235") == "?motherduck_token=**********"
+    assert (
+        _mask_motherduck_token("md:whodunnit?motherduck_token=short")
         == "md:whodunnit?motherduck_token=*****"
     )
     assert (
-        config._mask_motherduck_token("md:whodunnit?motherduck_token=longtoken123456789")
+        _mask_motherduck_token("md:whodunnit?motherduck_token=longtoken123456789")
         == "md:whodunnit?motherduck_token=******************"
     )
     assert (
-        config._mask_motherduck_token("md:whodunnit?motherduck_token=")
-        == "md:whodunnit?motherduck_token="
+        _mask_motherduck_token("md:whodunnit?motherduck_token=") == "md:whodunnit?motherduck_token="
     )
-    assert config._mask_motherduck_token(":memory:") == ":memory:"
+    assert _mask_motherduck_token(":memory:") == ":memory:"
 
 
 def test_bigquery(make_config):
