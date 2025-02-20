@@ -1291,7 +1291,7 @@ def call_macro(
 
 
 def _coerce(
-    expr: exp.Expression,
+    expr: t.Any,
     typ: t.Any,
     dialect: DialectType,
     path: Path,
@@ -1300,7 +1300,7 @@ def _coerce(
     """Coerces the given expression to the specified type on a best-effort basis."""
     base_err_msg = f"Failed to coerce expression '{expr}' to type '{typ}'."
     try:
-        if typ is None or typ is t.Any:
+        if typ is None or typ is t.Any or not isinstance(expr, exp.Expression):
             return expr
         base = t.get_origin(typ) or typ
 

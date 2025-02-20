@@ -621,6 +621,15 @@ class _Model(ModelMeta, frozen=True):
             {k: _render(v) for k, v in signal.items()} for name, signal in self.signals if not name
         ]
 
+    def render_signal_calls(self) -> t.Dict[str, t.Dict[str, t.Optional[exp.Expression]]]:
+        return {
+            name: {
+                k: seq_get(self._create_renderer(v).render() or [], 0) for k, v in kwargs.items()
+            }
+            for name, kwargs in self.signals
+            if name
+        }
+
     def render_merge_filter(
         self,
         *,
@@ -2358,6 +2367,9 @@ def _create_model(
     model.audit_definitions.update(audit_definitions)
 
     statements.extend(audit.query for audit in audit_definitions.values())
+
+    for _, kwargs in model.signals:
+        statements.extend(kwargs.values())
 
     python_env = python_env or {}
 
