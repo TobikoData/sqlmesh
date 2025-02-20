@@ -476,7 +476,6 @@ class Scheduler:
                     execution_time=execution_time,
                     deployability_index=deployability_index,
                     batch_index=batch_idx,
-                    environment_naming_info=environment_naming_info,
                 )
                 evaluation_duration_ms = now_timestamp() - execution_start_ts
             finally:

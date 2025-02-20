@@ -4645,7 +4645,7 @@ def test_plan_production_project_statements(tmp_path: Path):
 
     @IF(
         @runtime_stage = 'creating',
-        INSERT INTO schema_names_for_@this_env (physical_schema_name) VALUES (@resolve_template('@{schema_name}'))
+        INSERT INTO schema_names_for_prod (physical_schema_name) VALUES (@resolve_template('@{schema_name}'))
     );
 
     SELECT 1 AS account_id
