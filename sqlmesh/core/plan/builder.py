@@ -32,7 +32,6 @@ from sqlmesh.utils.date import (
     to_datetime,
     yesterday_ds,
     to_timestamp,
-    time_like_to_str,
 )
 from sqlmesh.utils.errors import NoChangesPlanError, PlanError, SQLMeshError
 
@@ -344,28 +343,20 @@ class PlanBuilder:
             if not forward_only_preview_needed:
                 if self._is_dev and not snapshot.is_paused:
                     self._console.log_warning(
-                        f"Cannot restate model '{model_fqn}' because the current version is used in production. "
+                        f"Cannot restate model '{snapshot.name}' because the current version is used in production. "
                         "Run the restatement against the production environment instead to restate this model."
                     )
                     continue
                 elif (not self._is_dev or not snapshot.is_paused) and snapshot.disable_restatement:
                     self._console.log_warning(
-                        f"Cannot restate model '{model_fqn}'. "
+                        f"Cannot restate model '{snapshot.name}'. "
                         "Restatement is disabled for this model to prevent possible data loss."
                         "If you want to restate this model, change the model's `disable_restatement` setting to `false`."
                     )
                     continue
                 elif snapshot.is_symbolic or snapshot.is_seed:
-                    logger.info("Skipping restatement for model '%s'", model_fqn)
+                    logger.info("Skipping restatement for model '%s'", snapshot.name)
                     continue
-
-            removal_interval = snapshot.get_removal_interval(
-                start,
-                end,
-                self._execution_time,
-                strict=False,
-                is_preview=is_preview,
-            )
 
             # Since we are traversing the graph in topological order and the largest interval range is pushed down
             # the graph we just have to check our immediate parents in the graph and not the whole upstream graph.
@@ -375,17 +366,19 @@ class PlanBuilder:
 
             if not restating_parents and snapshot.name not in restate_models:
                 continue
-            if not removal_interval:
-                self._console.log_error(
-                    f"Skipping restatement of {snapshot.name} because provided range"
-                    f" [{time_like_to_str(start)} - {time_like_to_str(end)}]"
-                    f" is not a complete {snapshot.node.interval_unit}."
-                )
-                continue
 
             possible_intervals = {
                 restatements[p.snapshot_id] for p in restating_parents if p.is_incremental
-            } | {removal_interval}
+            }
+            possible_intervals.add(
+                snapshot.get_removal_interval(
+                    start,
+                    end,
+                    self._execution_time,
+                    strict=False,
+                    is_preview=is_preview,
+                )
+            )
             snapshot_start = min(i[0] for i in possible_intervals)
             snapshot_end = max(i[1] for i in possible_intervals)
 
