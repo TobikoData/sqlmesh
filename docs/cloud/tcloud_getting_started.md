@@ -65,7 +65,10 @@ Technical Requirements:
 The first step to setting up Tobiko Cloud is logging in to the web interface:
 
 1. Open a browser and navigate to the Tobiko Cloud URL (ex: https://cloud.tobikodata.com/sqlmesh/tobiko/public-demo/observer/)
-2. Leave the username blank and use the temporary password you received from the Solutions Architect in the temporary password link
+2. We will want to authenticate into your Tobiko Cloud instance. To do this, go to `https://cloud.tobikodata.com/auth/login`. If it is your first time going through this flow, your Solutions Architect will guide you on how to get SSO configured. 
+
+    If you do not have SSO enabled then leave the username blank and use the temporary password you received from the Solutions Architect in the temporary password link
+
 3. Once logged in, you should see the home page. Your view should be empty, but the figure below shows a populated example with Tobiko Cloud running in production:
 
 <br></br>
@@ -143,7 +146,14 @@ Now we're ready to connect your data warehouse to Tobiko Cloud:
     default_project: public-demo # TODO: update this for the project name in the URL
     ```
 
-2. Export the token from the Solutions Architect:
+2. If you are going through the SSO flow then you can run the following command:
+    `tcloud sqlmesh auth` and this will fire off the SSO flow and open a link in your browser to authenticate. 
+
+    Once authenticated, you will see the following screen. 
+
+    ![tcloud_auth_success](./tcloud_getting_started/tcloud_auth_success.png)
+
+    If you are not using the SSO flow then, export the token from the Solutions Architect:
 
     `tcloud` provides your security token to Tobiko Cloud via the `TCLOUD_TOKEN` environment variable, so we must create and export it.
 
