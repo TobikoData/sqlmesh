@@ -1023,7 +1023,7 @@ class EngineAdapterStateSync(StateSync):
     @transactional()
     def add_snapshots_intervals(self, snapshots_intervals: t.Sequence[SnapshotIntervals]) -> None:
         def remove_partial_intervals(
-            intervals: t.List[Interval], snapshot_id: SnapshotId, *, is_dev: bool
+            intervals: t.List[Interval], snapshot_id: t.Optional[SnapshotId], *, is_dev: bool
         ) -> t.List[Interval]:
             results = []
             for start_ts, end_ts in intervals:
@@ -1067,11 +1067,7 @@ class EngineAdapterStateSync(StateSync):
                 intervals_to_insert.append(snapshot_intervals)
 
         if intervals_to_insert:
-            self.engine_adapter.insert_append(
-                self.intervals_table,
-                _snapshots_intervals_to_df(intervals_to_insert, is_removed=False),
-                columns_to_types=self._interval_columns_to_types,
-            )
+            self._push_snapshot_intervals(intervals_to_insert)
 
     @transactional()
     def remove_intervals(
@@ -1123,7 +1119,7 @@ class EngineAdapterStateSync(StateSync):
             "Compacting %s intervals for %s snapshots", len(interval_ids), len(snapshot_intervals)
         )
 
-        self._push_snapshot_intervals(snapshot_intervals)
+        self._push_snapshot_intervals(snapshot_intervals, is_compacted=True)
 
         if interval_ids:
             for interval_id_batch in self._batches(
@@ -1203,6 +1199,81 @@ class EngineAdapterStateSync(StateSync):
         snapshots: t.Optional[t.Collection[SnapshotNameVersionLike]] = None,
         uncompacted_only: bool = False,
     ) -> t.Tuple[t.Set[str], t.List[SnapshotIntervals]]:
+        if not snapshots and snapshots is not None:
+            return (set(), [])
+
+        query = self._get_snapshot_intervals_query(uncompacted_only)
+
+        interval_ids: t.Set[str] = set()
+        snapshot_intervals = []
+
+        for where in (
+            self._snapshot_name_version_filter(snapshots, "intervals") if snapshots else [None]
+        ):
+            pending_restatement_intervals: t.Dict[t.Tuple[str, str], Intervals] = defaultdict(list)
+
+            intervals: t.Dict[t.Tuple[str, str, str], Intervals] = defaultdict(list)
+            dev_intervals: t.Dict[t.Tuple[str, str, str], Intervals] = defaultdict(list)
+            for (
+                interval_id,
+                name,
+                identifier,
+                version,
+                start,
+                end,
+                is_dev,
+                is_removed,
+                is_pending_restatement,
+            ) in self._fetchall(query.where(where)):
+                interval_ids.add(interval_id)
+                intervals_key = (name, identifier, version)
+                target_intervals = intervals if not is_dev else dev_intervals
+                if is_removed:
+                    target_intervals[intervals_key] = remove_interval(
+                        target_intervals[intervals_key], start, end
+                    )
+                elif is_pending_restatement:
+                    pending_restatement_intervals[(name, version)] = merge_intervals(
+                        [*pending_restatement_intervals[(name, version)], (start, end)]
+                    )
+                else:
+                    target_intervals[intervals_key] = merge_intervals(
+                        [*target_intervals[intervals_key], (start, end)]
+                    )
+                    if not is_dev:
+                        # Remove all pending restatement intervals recorded before the current interval has been added
+                        pending_restatement_intervals[(name, version)] = remove_interval(
+                            pending_restatement_intervals[(name, version)], start, end
+                        )
+
+            for name, identifier, version in {**intervals, **dev_intervals}:
+                snapshot_intervals.append(
+                    SnapshotIntervals(
+                        name=name,
+                        identifier=identifier,
+                        version=version,
+                        intervals=intervals.get((name, identifier, version), []),
+                        dev_intervals=dev_intervals.get((name, identifier, version), []),
+                        pending_restatement_intervals=[],
+                    )
+                )
+            for (name, version), pending_intervals in pending_restatement_intervals.items():
+                if not pending_intervals:
+                    continue
+                snapshot_intervals.append(
+                    SnapshotIntervals(
+                        name=name,
+                        version=version,
+                        identifier=None,
+                        intervals=[],
+                        dev_intervals=[],
+                        pending_restatement_intervals=pending_intervals,
+                    )
+                )
+
+        return interval_ids, snapshot_intervals
+
+    def _get_snapshot_intervals_query(self, uncompacted_only: bool) -> exp.Select:
         query = (
             exp.select(
                 "id",
@@ -1224,7 +1295,6 @@ class EngineAdapterStateSync(StateSync):
                 "is_pending_restatement",
             )
         )
-
         if uncompacted_only:
             query.join(
                 exp.select("name", "version")
@@ -1242,93 +1312,27 @@ class EngineAdapterStateSync(StateSync):
                 ),
                 copy=False,
             )
-
-        if not snapshots and snapshots is not None:
-            return (set(), [])
-
-        interval_ids: t.Set[str] = set()
-        snapshot_intervals = []
-
-        for where in (
-            self._snapshot_name_version_filter(snapshots, "intervals") if snapshots else [None]
-        ):
-            rows = self._fetchall(query.where(where))
-            interval_ids.update(row[0] for row in rows)
-
-            # Pending restatement intervals are aggregated per (name, version) as opposed to snapshot ID
-            pending_restatement_intervals: t.Dict[t.Tuple[str, str], Intervals] = defaultdict(list)
-            last_seen_identifier_per_version: t.Dict[t.Tuple[str, str], str] = {}
-
-            intervals: t.Dict[t.Tuple[str, str, str], Intervals] = defaultdict(list)
-            dev_intervals: t.Dict[t.Tuple[str, str, str], Intervals] = defaultdict(list)
-            for row in rows:
-                (
-                    _,
-                    name,
-                    identifier,
-                    version,
-                    start,
-                    end,
-                    is_dev,
-                    is_removed,
-                    is_pending_restatement,
-                ) = row
-                intervals_key = (name, identifier, version)
-                target_intervals = intervals if not is_dev else dev_intervals
-                if is_removed:
-                    target_intervals[intervals_key] = remove_interval(
-                        target_intervals[intervals_key], start, end
-                    )
-                elif is_pending_restatement:
-                    pending_restatement_intervals[(name, version)] = merge_intervals(
-                        [*pending_restatement_intervals[(name, version)], (start, end)]
-                    )
-                    last_seen_identifier_per_version[(name, version)] = identifier
-                else:
-                    target_intervals[intervals_key] = merge_intervals(
-                        [*target_intervals[intervals_key], (start, end)]
-                    )
-                    if not is_dev:
-                        # Remove all pending restatement intervals recorded before the current interval has been added
-                        pending_restatement_intervals[(name, version)] = remove_interval(
-                            pending_restatement_intervals[(name, version)], start, end
-                        )
-                        last_seen_identifier_per_version[(name, version)] = identifier
-
-            for name, identifier, version in {**intervals, **dev_intervals}:
-                # Only set the pending restatement intervals for the last seen snapshot per version
-                # FIXME: Remove this logic once intervals are stored per (name, version)
-                pending_restatement_intervals_for_snapshot = (
-                    pending_restatement_intervals.get((name, version), [])
-                    if last_seen_identifier_per_version.get((name, version)) == identifier
-                    else []
-                )
-                snapshot_intervals.append(
-                    SnapshotIntervals(
-                        name=name,
-                        identifier=identifier,
-                        version=version,
-                        intervals=intervals.get((name, identifier, version), []),
-                        dev_intervals=dev_intervals.get((name, identifier, version), []),
-                        pending_restatement_intervals=pending_restatement_intervals_for_snapshot,
-                    )
-                )
-
-        return interval_ids, snapshot_intervals
+        return query
 
     def _push_snapshot_intervals(
-        self, snapshots: t.Iterable[t.Union[Snapshot, SnapshotIntervals]]
+        self,
+        snapshots: t.Iterable[t.Union[Snapshot, SnapshotIntervals]],
+        is_compacted: bool = False,
     ) -> None:
         new_intervals = []
         for snapshot in snapshots:
             logger.info("Pushing intervals for snapshot %s", snapshot.snapshot_id)
             for start_ts, end_ts in snapshot.intervals:
                 new_intervals.append(
-                    _interval_to_df(snapshot, start_ts, end_ts, is_dev=False, is_compacted=True)
+                    _interval_to_df(
+                        snapshot, start_ts, end_ts, is_dev=False, is_compacted=is_compacted
+                    )
                 )
             for start_ts, end_ts in snapshot.dev_intervals:
                 new_intervals.append(
-                    _interval_to_df(snapshot, start_ts, end_ts, is_dev=True, is_compacted=True)
+                    _interval_to_df(
+                        snapshot, start_ts, end_ts, is_dev=True, is_compacted=is_compacted
+                    )
                 )
 
         # Make sure that all pending restatement intervals are recorded last
@@ -1340,7 +1344,7 @@ class EngineAdapterStateSync(StateSync):
                         start_ts,
                         end_ts,
                         is_dev=False,
-                        is_compacted=True,
+                        is_compacted=is_compacted,
                         is_pending_restatement=True,
                     )
                 )
@@ -1816,29 +1820,6 @@ def _intervals_to_df(
     )
 
 
-def _snapshots_intervals_to_df(
-    snapshots_intervals: t.Sequence[SnapshotIntervals],
-    is_removed: bool = False,
-) -> pd.DataFrame:
-    interval_dicts = []
-    for snapshot_intervals in snapshots_intervals:
-        for interval_attr in ("dev_intervals", "intervals", "pending_restatement_intervals"):
-            is_pending_restatement = interval_attr == "pending_restatement_intervals"
-            is_dev = interval_attr == "dev_intervals"
-            for start_ts, end_ts in getattr(snapshot_intervals, interval_attr):
-                interval_dicts.append(
-                    _interval_to_df(
-                        snapshot_intervals,
-                        start_ts,
-                        end_ts,
-                        is_dev=is_dev,
-                        is_removed=is_removed,
-                        is_pending_restatement=is_pending_restatement,
-                    )
-                )
-    return pd.DataFrame(interval_dicts)
-
-
 def _interval_to_df(
     snapshot: t.Union[SnapshotInfoLike, SnapshotIntervals],
     start_ts: int,
@@ -1852,7 +1833,7 @@ def _interval_to_df(
         "id": random_id(),
         "created_ts": now_timestamp(),
         "name": snapshot.name,
-        "identifier": snapshot.identifier,
+        "identifier": snapshot.identifier if not is_pending_restatement else None,
         "version": snapshot.version,
         "start_ts": start_ts,
         "end_ts": end_ts,

@@ -649,9 +649,15 @@ def update_intervals_for_new_snapshots(
     for snapshot in state_sync.refresh_snapshot_intervals(snapshots):
         if snapshot.is_forward_only:
             snapshot.dev_intervals = snapshot.intervals.copy()
-            snapshot_intervals = snapshot.snapshot_intervals
-            snapshot_intervals.intervals.clear()
-            snapshots_intervals.append(snapshot_intervals)
+            snapshots_intervals.append(
+                SnapshotIntervals(
+                    name=snapshot.name,
+                    identifier=snapshot.identifier,
+                    version=snapshot.version,
+                    intervals=[],
+                    dev_intervals=snapshot.dev_intervals,
+                )
+            )
 
     if snapshots_intervals:
         state_sync.add_snapshots_intervals(snapshots_intervals)

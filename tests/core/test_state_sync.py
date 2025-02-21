@@ -2582,50 +2582,56 @@ def test_compact_intervals_pending_restatement(
     with time_machine.travel("2020-01-05 01:00:00 UTC"):
         # Backfill one of the pending restatement intervals.
         state_sync.add_interval(snapshot, "2020-01-03", "2020-01-03")
-        assert get_snapshot_intervals(snapshot).intervals == [
+        snapshot = state_sync.get_snapshots([snapshot])[snapshot.snapshot_id]
+        assert snapshot.intervals == [
             (to_timestamp("2020-01-01"), to_timestamp("2020-01-05")),
         ]
-        assert get_snapshot_intervals(snapshot).pending_restatement_intervals == [
+        assert snapshot.pending_restatement_intervals == [
             (to_timestamp("2020-01-04"), to_timestamp("2020-01-05")),
         ]
 
         state_sync.compact_intervals()
-        assert get_snapshot_intervals(snapshot).intervals == [
+        snapshot = state_sync.get_snapshots([snapshot])[snapshot.snapshot_id]
+        assert snapshot.intervals == [
             (to_timestamp("2020-01-01"), to_timestamp("2020-01-05")),
         ]
-        assert get_snapshot_intervals(snapshot).pending_restatement_intervals == [
+        assert snapshot.pending_restatement_intervals == [
             (to_timestamp("2020-01-04"), to_timestamp("2020-01-05")),
         ]
 
         # Make sure compaction is idempotent.
         state_sync.compact_intervals()
-        assert get_snapshot_intervals(snapshot).intervals == [
+        snapshot = state_sync.get_snapshots([snapshot])[snapshot.snapshot_id]
+        assert snapshot.intervals == [
             (to_timestamp("2020-01-01"), to_timestamp("2020-01-05")),
         ]
-        assert get_snapshot_intervals(snapshot).pending_restatement_intervals == [
+        assert snapshot.pending_restatement_intervals == [
             (to_timestamp("2020-01-04"), to_timestamp("2020-01-05")),
         ]
 
     with time_machine.travel("2020-01-05 02:00:00 UTC"):
         # Backfill the remaining pending restatement interval.
         state_sync.add_interval(snapshot, "2020-01-04", "2020-01-04")
-        assert get_snapshot_intervals(snapshot).intervals == [
+        snapshot = state_sync.get_snapshots([snapshot])[snapshot.snapshot_id]
+        assert snapshot.intervals == [
             (to_timestamp("2020-01-01"), to_timestamp("2020-01-05")),
         ]
-        assert get_snapshot_intervals(snapshot).pending_restatement_intervals == []
+        assert snapshot.pending_restatement_intervals == []
 
         state_sync.compact_intervals()
-        assert get_snapshot_intervals(snapshot).intervals == [
+        snapshot = state_sync.get_snapshots([snapshot])[snapshot.snapshot_id]
+        assert snapshot.intervals == [
             (to_timestamp("2020-01-01"), to_timestamp("2020-01-05")),
         ]
-        assert get_snapshot_intervals(snapshot).pending_restatement_intervals == []
+        assert snapshot.pending_restatement_intervals == []
 
         # Make sure compaction is idempotent.
         state_sync.compact_intervals()
-        assert get_snapshot_intervals(snapshot).intervals == [
+        snapshot = state_sync.get_snapshots([snapshot])[snapshot.snapshot_id]
+        assert snapshot.intervals == [
             (to_timestamp("2020-01-01"), to_timestamp("2020-01-05")),
         ]
-        assert get_snapshot_intervals(snapshot).pending_restatement_intervals == []
+        assert snapshot.pending_restatement_intervals == []
 
 
 @time_machine.travel("2020-01-05 00:00:00 UTC")
@@ -2675,6 +2681,16 @@ def test_compact_intervals_pending_restatement_shared_version(
 
     expected_intervals = [
         SnapshotIntervals(
+            name=snapshot_b.name,
+            identifier=None,
+            version=snapshot_b.version,
+            intervals=[],
+            dev_intervals=[],
+            pending_restatement_intervals=[
+                (to_timestamp("2020-01-04"), to_timestamp("2020-01-06")),
+            ],
+        ),
+        SnapshotIntervals(
             name=snapshot_a.name,
             identifier=snapshot_a.identifier,
             version=snapshot_a.version,
@@ -2692,12 +2708,10 @@ def test_compact_intervals_pending_restatement_shared_version(
                 (to_timestamp("2020-01-03"), to_timestamp("2020-01-04")),
             ],
             dev_intervals=[],
-            pending_restatement_intervals=[
-                (to_timestamp("2020-01-04"), to_timestamp("2020-01-06")),
-            ],
+            pending_restatement_intervals=[],
         ),
     ]
-    expected_intervals = sorted(expected_intervals, key=lambda x: (x.name, x.identifier))
+    expected_intervals = sorted(expected_intervals, key=lambda x: (x.name, x.identifier or ""))
 
     with time_machine.travel("2020-01-05 01:00:00 UTC"):
         # Add a new interval for the new snapshot
@@ -2705,7 +2719,7 @@ def test_compact_intervals_pending_restatement_shared_version(
         assert (
             sorted(
                 state_sync._get_snapshot_intervals([snapshot_a, snapshot_b])[1],
-                key=lambda x: (x.name, x.identifier),
+                key=lambda x: (x.name, x.identifier or ""),
             )
             == expected_intervals
         )
@@ -2750,15 +2764,23 @@ def test_compact_intervals_pending_restatement_shared_version(
     expected_intervals = [
         SnapshotIntervals(
             name=snapshot_a.name,
+            identifier=None,
+            version=snapshot_a.version,
+            intervals=[],
+            dev_intervals=[],
+            pending_restatement_intervals=[
+                (to_timestamp("2020-01-05"), to_timestamp("2020-01-06")),
+            ],
+        ),
+        SnapshotIntervals(
+            name=snapshot_a.name,
             identifier=snapshot_a.identifier,
             version=snapshot_a.version,
             intervals=[
                 (to_timestamp("2020-01-01"), to_timestamp("2020-01-06")),
             ],
             dev_intervals=[],
-            pending_restatement_intervals=[
-                (to_timestamp("2020-01-05"), to_timestamp("2020-01-06")),
-            ],
+            pending_restatement_intervals=[],
         ),
         SnapshotIntervals(
             name=snapshot_b.name,
@@ -2771,7 +2793,7 @@ def test_compact_intervals_pending_restatement_shared_version(
             pending_restatement_intervals=[],
         ),
     ]
-    expected_intervals = sorted(expected_intervals, key=lambda x: (x.name, x.identifier))
+    expected_intervals = sorted(expected_intervals, key=lambda x: (x.name, x.identifier or ""))
 
     with time_machine.travel("2020-01-05 02:00:00 UTC"):
         # Add a new interval for the previous snapshot
@@ -2779,7 +2801,7 @@ def test_compact_intervals_pending_restatement_shared_version(
         assert (
             sorted(
                 state_sync._get_snapshot_intervals([snapshot_a, snapshot_b])[1],
-                key=lambda x: (x.name, x.identifier),
+                key=lambda x: (x.name, x.identifier or ""),
             )
             == expected_intervals
         )
@@ -2829,14 +2851,14 @@ def test_compact_intervals_pending_restatement_shared_version(
             pending_restatement_intervals=[],
         ),
     ]
-    expected_intervals = sorted(expected_intervals, key=lambda x: (x.name, x.identifier))
+    expected_intervals = sorted(expected_intervals, key=lambda x: (x.name, x.identifier or ""))
 
     with time_machine.travel("2020-01-05 03:00:00 UTC"):
         state_sync.add_interval(snapshot_b, "2020-01-05", "2020-01-05")
         assert (
             sorted(
                 state_sync._get_snapshot_intervals([snapshot_a, snapshot_b])[1],
-                key=lambda x: (x.name, x.identifier),
+                key=lambda x: (x.name, x.identifier or ""),
             )
             == expected_intervals
         )

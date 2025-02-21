@@ -164,14 +164,16 @@ class SnapshotNameVersion(PydanticModel, frozen=True):
 
 class SnapshotIntervals(PydanticModel, frozen=True):
     name: str
-    identifier: str
+    identifier: t.Optional[str]
     version: str
     intervals: Intervals
     dev_intervals: Intervals
     pending_restatement_intervals: Intervals = []
 
     @property
-    def snapshot_id(self) -> SnapshotId:
+    def snapshot_id(self) -> t.Optional[SnapshotId]:
+        if not self.identifier:
+            return None
         return SnapshotId(name=self.name, identifier=self.identifier)
 
     @property
