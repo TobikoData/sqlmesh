@@ -5,7 +5,7 @@ import re
 import logging
 import pytest
 import pandas as pd
-from pydantic import field_validator, ValidationInfo, ValidationError
+from pydantic import field_validator, ValidationError
 from pathlib import Path
 from pytest_mock.plugin import MockerFixture
 from sqlglot import expressions as exp
@@ -3181,7 +3181,7 @@ def test_custom_materialization_strategy_with_custom_properties(adapter_mock, ma
 
         @field_validator("primary_key", mode="before")
         @classmethod
-        def _validate_primary_key(cls, value: t.Any, info: ValidationInfo) -> t.Any:
+        def _validate_primary_key(cls, value, info):
             return list_of_fields_validator(value, info.data)
 
     class TestCustomMaterializationStrategy(CustomMaterialization[TestCustomKind]):

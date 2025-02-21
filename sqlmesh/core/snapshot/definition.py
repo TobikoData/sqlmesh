@@ -709,7 +709,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         *,
         strict: bool = True,
         is_preview: bool = False,
-    ) -> Interval:
+    ) -> t.Optional[Interval]:
         """Get the interval that should be removed from the snapshot.
 
         Args:
@@ -742,7 +742,9 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
 
             removal_interval = expanded_removal_interval
 
-        return removal_interval
+        if removal_interval[0] < removal_interval[1]:
+            return removal_interval
+        return None
 
     def inclusive_exclusive(
         self,
@@ -1883,12 +1885,20 @@ def inclusive_exclusive(
         A [start, end) pair.
     """
     start_ts = to_timestamp(interval_unit.cron_floor(start))
-    if start_ts < to_timestamp(start) and not model_allow_partials:
-        start_ts = to_timestamp(interval_unit.cron_next(start_ts))
+    #if start_ts < to_timestamp(start) and not model_allow_partials:
+    #    start_ts = to_timestamp(interval_unit.cron_next(start_ts))
 
     if is_date(end):
         end = to_datetime(end) + timedelta(days=1)
-    end_ts = to_timestamp(interval_unit.cron_floor(end) if not allow_partial else end)
+
+    if allow_partial:
+        end_ts = end
+    else:
+        end_ts = interval_unit.cron_floor(end)
+        if end_ts != to_datetime(end):
+            end_ts = interval_unit.cron_next(end_ts)
+
+    end_ts = to_timestamp(end_ts)
     if end_ts < start_ts and to_timestamp(end) > to_timestamp(start) and not strict:
         # This can happen when the interval unit is coarser than the size of the input interval.
         # For example, if the interval unit is monthly, but the input interval is only 1 hour long.
@@ -2039,10 +2049,11 @@ def apply_auto_restatements(
                 interval_to_remove_start, interval_to_remove_end, execution_time=execution_time
             )
 
-            auto_restated_intervals_per_snapshot[s_id] = removal_interval
-            snapshot.pending_restatement_intervals = merge_intervals(
-                [*snapshot.pending_restatement_intervals, removal_interval]
-            )
+            if removal_interval:
+                auto_restated_intervals_per_snapshot[s_id] = removal_interval
+                snapshot.pending_restatement_intervals = merge_intervals(
+                    [*snapshot.pending_restatement_intervals, removal_interval]
+                )
 
         snapshot.apply_pending_restatement_intervals()
         snapshot.update_next_auto_restatement_ts(execution_time)

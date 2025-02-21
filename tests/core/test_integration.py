@@ -2153,7 +2153,7 @@ def test_restatement_plan_ignores_changes(init_and_plan_context: t.Callable):
     assert not plan.new_snapshots
     assert plan.requires_backfill
     assert plan.restatements == {
-        restated_snapshot.snapshot_id: (to_timestamp("2023-01-01"), to_timestamp("2023-01-08"))
+        restated_snapshot.snapshot_id: (to_timestamp("2023-01-01"), to_timestamp("2023-01-09"))
     }
     assert plan.missing_intervals == [
         SnapshotIntervals(
@@ -4562,15 +4562,17 @@ def test_restatement_of_full_model_with_start(init_and_plan_context: t.Callable)
         no_prompts=True,
     )
 
-    restatement_end = to_timestamp("2023-01-08")
+    restatement_end = to_timestamp("2023-01-09")
 
     sushi_customer_interval = restatement_plan.restatements[
         context.get_snapshot("sushi.customers").snapshot_id
     ]
+    print(to_datetime(sushi_customer_interval[1]))
     assert sushi_customer_interval == (to_timestamp("2023-01-01"), restatement_end)
     waiter_by_day_interval = restatement_plan.restatements[
         context.get_snapshot("sushi.waiter_as_customer_by_day").snapshot_id
     ]
+    print(to_datetime(waiter_by_day_interval[1]))
     assert waiter_by_day_interval == (to_timestamp("2023-01-07"), restatement_end)
 
 
