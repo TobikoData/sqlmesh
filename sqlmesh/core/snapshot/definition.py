@@ -709,7 +709,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         *,
         strict: bool = True,
         is_preview: bool = False,
-    ) -> Interval:
+    ) -> t.Optional[Interval]:
         """Get the interval that should be removed from the snapshot.
 
         Args:
@@ -742,7 +742,9 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
 
             removal_interval = expanded_removal_interval
 
-        return removal_interval
+        if removal_interval[0] < removal_interval[1]:
+            return removal_interval
+        return None
 
     def inclusive_exclusive(
         self,
@@ -2039,10 +2041,11 @@ def apply_auto_restatements(
                 interval_to_remove_start, interval_to_remove_end, execution_time=execution_time
             )
 
-            auto_restated_intervals_per_snapshot[s_id] = removal_interval
-            snapshot.pending_restatement_intervals = merge_intervals(
-                [*snapshot.pending_restatement_intervals, removal_interval]
-            )
+            if removal_interval:
+                auto_restated_intervals_per_snapshot[s_id] = removal_interval
+                snapshot.pending_restatement_intervals = merge_intervals(
+                    [*snapshot.pending_restatement_intervals, removal_interval]
+                )
 
         snapshot.apply_pending_restatement_intervals()
         snapshot.update_next_auto_restatement_ts(execution_time)

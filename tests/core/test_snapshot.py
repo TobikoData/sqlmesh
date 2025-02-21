@@ -708,7 +708,7 @@ def test_missing_interval_smaller_than_interval_unit(make_snapshot):
     ]
 
 
-def test_remove_intervals(snapshot: Snapshot):
+def test_remove_intervals(snapshot):
     snapshot.add_interval("2020-01-01", "2020-01-01")
     snapshot.remove_interval(snapshot.get_removal_interval("2020-01-01", "2020-01-01"))
     assert snapshot.intervals == []
