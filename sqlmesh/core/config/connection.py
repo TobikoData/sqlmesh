@@ -330,14 +330,8 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
             return list(self.catalogs)[0]
         return None
 
-    def _mask_motherduck_token(self, path: str) -> str:
-        if token_match := MOTHERDUCK_TOKEN_REGEX.search(path):
-            path = re.sub(
-                MOTHERDUCK_TOKEN_REGEX,
-                r"\1" + "*" * len(token_match.group(2)),
-                path,
-            )
-        return path
+    def _mask_motherduck_token(self, string: str) -> str:
+        return MOTHERDUCK_TOKEN_REGEX.sub(lambda m: f"{m.group(1)}{'*' * len(m.group(2))}", string)
 
 
 class MotherDuckConnectionConfig(BaseDuckDBConnectionConfig):
