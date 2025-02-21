@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import typing as t
 import zlib
 from io import StringIO
@@ -8,11 +9,17 @@ from pathlib import Path
 import pandas as pd
 from sqlglot import exp
 from sqlglot.dialects.dialect import UNESCAPED_SEQUENCES
+from sqlglot.helper import seq_get
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
 from sqlmesh.core.model.common import parse_bool
 from sqlmesh.utils.pandas import columns_to_types_from_df
 from sqlmesh.utils.pydantic import PydanticModel, field_validator
+
+logger = logging.getLogger(__name__)
+
+NaHashables = t.List[t.Union[int, str, bool, t.Literal[None]]]
+NaValues = t.Union[NaHashables, t.Dict[str, NaHashables]]
 
 
 class CsvSettings(PydanticModel):
@@ -25,8 +32,10 @@ class CsvSettings(PydanticModel):
     skipinitialspace: t.Optional[bool] = None
     lineterminator: t.Optional[str] = None
     encoding: t.Optional[str] = None
+    na_values: t.Optional[NaValues] = None
+    keep_default_na: t.Optional[bool] = None
 
-    @field_validator("doublequote", "skipinitialspace", mode="before")
+    @field_validator("doublequote", "skipinitialspace", "keep_default_na", mode="before")
     @classmethod
     def _bool_validator(cls, v: t.Any) -> t.Optional[bool]:
         if v is None:
@@ -45,6 +54,36 @@ class CsvSettings(PydanticModel):
         # an escape character, so we map them back to the corresponding escaped sequence
         v = v.this
         return UNESCAPED_SEQUENCES.get(v, v)
+
+    @field_validator("na_values", mode="before")
+    @classmethod
+    def _na_values_validator(cls, v: t.Any) -> t.Optional[NaValues]:
+        if v is None or not isinstance(v, exp.Expression):
+            return v
+
+        try:
+            if isinstance(v, exp.Paren) or not isinstance(v, (exp.Tuple, exp.Array)):
+                v = exp.Tuple(expressions=[v.unnest()])
+
+            expressions = v.expressions
+            if isinstance(seq_get(expressions, 0), (exp.PropertyEQ, exp.EQ)):
+                return {
+                    e.left.name: [
+                        rhs_val.to_py()
+                        for rhs_val in (
+                            [e.right.unnest()]
+                            if isinstance(e.right, exp.Paren)
+                            else e.right.expressions
+                        )
+                    ]
+                    for e in expressions
+                }
+
+            return [e.to_py() for e in expressions]
+        except ValueError as e:
+            logger.warning(f"Failed to coerce na_values '{v}', proceeding with defaults. {str(e)}")
+
+        return None
 
 
 class CsvSeedReader:

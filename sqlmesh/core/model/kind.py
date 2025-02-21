@@ -640,9 +640,10 @@ class SeedKind(_ModelKind):
 
     @property
     def data_hash_values(self) -> t.List[t.Optional[str]]:
+        csv_setting_values = (self.csv_settings or CsvSettings()).dict().values()
         return [
             *super().data_hash_values,
-            *(self.csv_settings or CsvSettings()).dict().values(),
+            *(v if isinstance(v, (str, type(None))) else str(v) for v in csv_setting_values),
         ]
 
     @property
