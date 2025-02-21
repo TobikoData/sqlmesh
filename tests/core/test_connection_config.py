@@ -649,8 +649,23 @@ def test_duckdb_multithreaded_connection_factory(make_config):
 def test_motherduck_token_mask(make_config):
     config = make_config(
         type="motherduck",
+        catalogs={
+            "test2": DuckDBAttachOptions(
+                type="motherduck",
+                path="md:whodunnit?motherduck_token=short",
+            ),
+            "test1": DuckDBAttachOptions(
+                type="motherduck", path="md:whodunnit", token="longtoken123456789"
+            ),
+        },
     )
     assert isinstance(config, MotherDuckConnectionConfig)
+
+    assert config._mask_motherduck_token(config.catalogs["test1"].path) == "md:whodunnit"
+    assert (
+        config._mask_motherduck_token(config.catalogs["test2"].path)
+        == "md:whodunnit?motherduck_token=*****"
+    )
     assert (
         config._mask_motherduck_token("?motherduck_token=secret1235")
         == "?motherduck_token=**********"
