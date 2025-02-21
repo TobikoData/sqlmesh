@@ -850,3 +850,46 @@ def test_gcp_postgres_ip_and_scopes(tmp_path):
     assert conn.scopes[0] == "https://www.googleapis.com/auth/cloud-platform"
     assert conn.scopes[1] == "https://www.googleapis.com/auth/sqlservice.admin"
     assert conn.ip_type == "private"
+
+
+def test_project_statements_config(tmp_path):
+    config_path = tmp_path / "config_before_after_all.yaml"
+    with open(config_path, "w", encoding="utf-8") as fd:
+        fd.write(
+            """
+    gateways:
+      postgres:
+        connection:
+          type: postgres
+          database: db
+          user: postgres
+          password: postgres
+          host: localhost
+          port: 5432
+
+    default_gateway: postgres
+
+    plan:
+      before_all:
+        - CREATE TABLE IF NOT EXISTS custom_analytics (physical_table VARCHAR, evaluation_time VARCHAR);
+      after_all:
+        - "@grant_schema_privileges()"
+        - "GRANT REFERENCES ON FUTURE VIEWS IN DATABASE db TO ROLE admin_role;"
+
+    model_defaults:
+      dialect: postgres
+    """
+        )
+
+    config = load_config_from_paths(
+        Config,
+        project_paths=[config_path],
+    )
+
+    assert config.plan.before_all == [
+        "CREATE TABLE IF NOT EXISTS custom_analytics (physical_table VARCHAR, evaluation_time VARCHAR);"
+    ]
+    assert config.plan.after_all == [
+        "@grant_schema_privileges()",
+        "GRANT REFERENCES ON FUTURE VIEWS IN DATABASE db TO ROLE admin_role;",
+    ]

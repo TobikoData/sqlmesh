@@ -25,6 +25,7 @@ from sqlmesh.core.config import (
     ModelDefaultsConfig,
     DuckDBConnectionConfig,
 )
+from sqlmesh.core.config.plan import PlanConfig
 from sqlmesh.core.console import Console
 from sqlmesh.core.context import Context
 from sqlmesh.core.config.categorizer import CategorizerConfig
@@ -4135,6 +4136,14 @@ def test_multi(mocker):
     assert len(plan.new_snapshots) == 5
     context.apply(plan)
 
+    # Ensure before_all, after_all statements for multiple repos have executed
+    project_statements = context.state_reader.get_project_statements(c.PROD)
+    assert len(project_statements) == 2
+    assert context.fetchdf("select * from before_1").to_dict()["1"][0] == 1
+    assert context.fetchdf("select * from before_2").to_dict()["2"][0] == 2
+    assert context.fetchdf("select * from after_1").to_dict()["repo_1"][0] == "repo_1"
+    assert context.fetchdf("select * from after_2").to_dict()["repo_2"][0] == "repo_2"
+
     adapter = context.engine_adapter
     context = Context(
         paths=["examples/multi/repo_1"],
@@ -4160,6 +4169,16 @@ def test_multi(mocker):
     assert len(plan.missing_intervals) == 3
     context.apply(plan)
     validate_apply_basics(context, c.PROD, plan.snapshots.values())
+
+    # Ensure only repo_1's project statements have executed in this context
+    project_statements = context.state_reader.get_project_statements(c.PROD)
+    assert len(project_statements) == 1
+    assert project_statements[0].before_all == [
+        "CREATE TABLE IF NOT EXISTS before_1 AS select @one()"
+    ]
+    assert project_statements[0].after_all == [
+        "CREATE TABLE IF NOT EXISTS after_1 AS select @dup()"
+    ]
 
 
 def test_multi_dbt(mocker):
@@ -4582,6 +4601,56 @@ def initial_add(context: Context, environment: str):
 
     context.apply(plan)
     validate_apply_basics(context, environment, plan.snapshots.values())
+
+
+def test_plan_production_project_statements(tmp_path: Path):
+    model_a = """
+    MODEL (
+        name test_schema.a,
+        kind FULL,
+    );
+
+    @IF(
+        @runtime_stage = 'creating',
+        INSERT INTO schema_names_for_prod (physical_schema_name) VALUES (@resolve_template('@{schema_name}'))
+    );
+
+    SELECT 1 AS account_id
+    """
+
+    models_dir = tmp_path / "models"
+    models_dir.mkdir()
+
+    for path, defn in {"a.sql": model_a}.items():
+        with open(models_dir / path, "w") as f:
+            f.write(defn)
+
+    before_all = [
+        "CREATE TABLE IF NOT EXISTS schema_names_for_@this_env (physical_schema_name VARCHAR)"
+    ]
+    after_all = ["@IF(@this_env = 'prod', CREATE TABLE IF NOT EXISTS after_t AS SELECT @var_5)"]
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        plan=PlanConfig(
+            before_all=before_all,
+            after_all=after_all,
+        ),
+        variables={"var_5": 5},
+    )
+    ctx = Context(paths=[tmp_path], config=config)
+    ctx.plan(auto_apply=True, no_prompts=True)
+
+    before_t = ctx.fetchdf("select * from schema_names_for_prod").to_dict()
+    assert before_t["physical_schema_name"][0] == "sqlmesh__test_schema"
+
+    after_t = ctx.fetchdf("select * from after_t").to_dict()
+    assert after_t["5"][0] == 5
+
+    project_statements = ctx.state_reader.get_project_statements(c.PROD)
+    assert project_statements[0].before_all == before_all
+    assert project_statements[0].after_all == after_all
+    assert project_statements[0].python_env.keys() == {"__sqlmesh__vars__"}
+    assert project_statements[0].python_env["__sqlmesh__vars__"].payload == "{'var_5': 5}"
 
 
 def apply_to_environment(

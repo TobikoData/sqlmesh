@@ -846,6 +846,9 @@ class TerminalConsole(Console):
         if context_diff.has_requirement_changes:
             self._print(f"[bold]Requirements:\n{context_diff.requirements_diff()}")
 
+        if context_diff.has_project_statements_changes:
+            self._print(f"[bold]Project statements:\n{context_diff.project_statements_diff()}")
+
         self._show_summary_tree_for(
             context_diff,
             "Models",
@@ -1893,6 +1896,9 @@ class MarkdownConsole(CaptureTerminalConsole):
         if context_diff.has_requirement_changes:
             self._print(f"Requirements:\n{context_diff.requirements_diff()}")
 
+        if context_diff.has_project_statements_changes:
+            self._print(f"Project statements:\n{context_diff.project_statements_diff()}")
+
         added_snapshots = {context_diff.snapshots[s_id] for s_id in context_diff.added}
         added_snapshot_models = {s for s in added_snapshots if s.is_model}
         if added_snapshot_models:
@@ -2364,6 +2370,9 @@ class DebuggerTerminalConsole(TerminalConsole):
 
         if context_diff.has_requirement_changes:
             self._write(f"Requirements:\n{context_diff.requirements_diff()}")
+
+        if context_diff.has_project_statements_changes:
+            self._write(f"Project statements:\n{context_diff.project_statements_diff()}")
 
         for added in context_diff.new_snapshots:
             self._write(f"  Added: {added}")

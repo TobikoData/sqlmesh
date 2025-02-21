@@ -5,6 +5,8 @@ import typing as t
 
 from sqlmesh.core.console import Console
 from sqlmesh.core.environment import Environment
+from sqlmesh.core.loader import ProjectStatements
+from sqlmesh.core.plan.definition import EvaluatablePlan
 from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotId,
@@ -315,6 +317,16 @@ class HttpStateSync(StateSync):
     ) -> None:
         raise NotImplementedError(
             "Updating auto restatements is not supported by the Airflow state sync."
+        )
+
+    def update_project_statements(self, plan: EvaluatablePlan) -> None:
+        raise NotImplementedError(
+            "Updating project statements is not supported by the Airflow state sync."
+        )
+
+    def get_project_statements(self, environment: str) -> t.List[ProjectStatements]:
+        raise NotImplementedError(
+            "Fetching project statements is not supported by the Airflow state sync."
         )
 
     def migrate(
