@@ -473,14 +473,13 @@ class EngineAdapterStateSync(StateSync):
                         target_snapshot.snapshot_id,
                     )
                     full_snapshot = snapshot.full_snapshot
-                    self.remove_intervals(
-                        [
-                            (
-                                full_snapshot,
-                                full_snapshot.get_removal_interval(effective_from_ts, current_ts),
-                            )
-                        ]
+
+                    removal_interval = full_snapshot.get_removal_interval(
+                        effective_from_ts, current_ts
                     )
+
+                    if removal_interval:
+                        self.remove_intervals([(full_snapshot, removal_interval)])
 
                 if snapshot.unpaused_ts:
                     logger.info("Pausing snapshot %s", snapshot.snapshot_id)
