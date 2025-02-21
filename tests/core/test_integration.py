@@ -32,6 +32,7 @@ from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.macros import macro
 from sqlmesh.core.model import (
+    FullKind,
     IncrementalByTimeRangeKind,
     IncrementalByUniqueKeyKind,
     Model,
@@ -1216,8 +1217,12 @@ def test_non_breaking_change_after_forward_only_in_dev(
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_indirect_non_breaking_change_after_forward_only_in_dev(init_and_plan_context: t.Callable):
-    context, plan = init_and_plan_context("examples/sushi")
-    context.apply(plan)
+    context, _ = init_and_plan_context("examples/sushi")
+    # Make sure that the most downstream model is a materialized model.
+    model = context.get_model("sushi.top_waiters")
+    model = model.copy(update={"kind": FullKind()})
+    context.upsert_model(model)
+    context.plan("prod", skip_tests=True, auto_apply=True, no_prompts=True)
 
     # Make sushi.orders a forward-only model.
     model = context.get_model("sushi.orders")

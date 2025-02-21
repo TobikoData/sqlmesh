@@ -176,6 +176,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                         name=snapshot.name,
                         identifier=snapshot.identifier,
                         version=snapshot.version,
+                        dev_version=snapshot.dev_version_get_or_generate(),
                         intervals=intervals if is_deployable else [],
                         dev_intervals=intervals if not is_deployable else [],
                     )
@@ -654,7 +655,7 @@ def update_intervals_for_new_snapshots(
                     name=snapshot.name,
                     identifier=snapshot.identifier,
                     version=snapshot.version,
-                    intervals=[],
+                    dev_version=snapshot.dev_version_get_or_generate(),
                     dev_intervals=snapshot.dev_intervals,
                 )
             )

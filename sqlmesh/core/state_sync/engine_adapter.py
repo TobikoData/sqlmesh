@@ -40,7 +40,6 @@ from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import ModelKindName, SeedModel
 from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.snapshot import (
-    Intervals,
     Node,
     Snapshot,
     SnapshotChangeCategory,
@@ -60,8 +59,6 @@ from sqlmesh.core.snapshot.cache import SnapshotCache
 from sqlmesh.core.snapshot.definition import (
     Interval,
     _parents_from_node,
-    merge_intervals,
-    remove_interval,
 )
 from sqlmesh.core.state_sync.base import (
     MIGRATIONS,
@@ -167,7 +164,8 @@ class EngineAdapterStateSync(StateSync):
             "created_ts": exp.DataType.build("bigint"),
             "name": exp.DataType.build(index_type),
             "identifier": exp.DataType.build("text"),
-            "version": exp.DataType.build("text"),
+            "version": exp.DataType.build(index_type),
+            "dev_version": exp.DataType.build(index_type),
             "start_ts": exp.DataType.build("bigint"),
             "end_ts": exp.DataType.build("bigint"),
             "is_dev": exp.DataType.build("boolean"),
@@ -1085,10 +1083,15 @@ class EngineAdapterStateSync(StateSync):
                 all_snapshots.extend(
                     [
                         SnapshotIntervals(
-                            name=r[0], identifier=r[1], version=r[2], intervals=[], dev_intervals=[]
+                            name=r[0],
+                            identifier=r[1],
+                            version=r[2],
+                            dev_version=r[3],
+                            intervals=[],
+                            dev_intervals=[],
                         )
                         for r in self._fetchall(
-                            exp.select("name", "identifier", "version")
+                            exp.select("name", "identifier", "version", "dev_version")
                             .from_(self.intervals_table)
                             .where(where)
                             .distinct()
@@ -1205,73 +1208,73 @@ class EngineAdapterStateSync(StateSync):
         query = self._get_snapshot_intervals_query(uncompacted_only)
 
         interval_ids: t.Set[str] = set()
-        snapshot_intervals = []
+        intervals: t.Dict[t.Tuple[str, str, t.Optional[str]], SnapshotIntervals] = {}
+        pending_restatement_intervals: t.Dict[t.Tuple[str, str], SnapshotIntervals] = {}
 
         for where in (
             self._snapshot_name_version_filter(snapshots, "intervals") if snapshots else [None]
         ):
-            pending_restatement_intervals: t.Dict[t.Tuple[str, str], Intervals] = defaultdict(list)
-
-            intervals: t.Dict[t.Tuple[str, str, str], Intervals] = defaultdict(list)
-            dev_intervals: t.Dict[t.Tuple[str, str, str], Intervals] = defaultdict(list)
+            rows = self._fetchall(query.where(where))
             for (
                 interval_id,
                 name,
                 identifier,
                 version,
+                dev_version,
                 start,
                 end,
                 is_dev,
                 is_removed,
                 is_pending_restatement,
-            ) in self._fetchall(query.where(where)):
+            ) in rows:
                 interval_ids.add(interval_id)
-                intervals_key = (name, identifier, version)
-                target_intervals = intervals if not is_dev else dev_intervals
-                if is_removed:
-                    target_intervals[intervals_key] = remove_interval(
-                        target_intervals[intervals_key], start, end
-                    )
-                elif is_pending_restatement:
-                    pending_restatement_intervals[(name, version)] = merge_intervals(
-                        [*pending_restatement_intervals[(name, version)], (start, end)]
-                    )
-                else:
-                    target_intervals[intervals_key] = merge_intervals(
-                        [*target_intervals[intervals_key], (start, end)]
-                    )
-                    if not is_dev:
-                        # Remove all pending restatement intervals recorded before the current interval has been added
-                        pending_restatement_intervals[(name, version)] = remove_interval(
-                            pending_restatement_intervals[(name, version)], start, end
-                        )
+                # Include version into the merge key since identifier can sometimes be null
+                interval_merge_key = (name, version, identifier)
+                # Pending restatement intervals are merged by name and version
+                pending_restatement_interval_merge_key = (name, version)
 
-            for name, identifier, version in {**intervals, **dev_intervals}:
-                snapshot_intervals.append(
-                    SnapshotIntervals(
+                if interval_merge_key not in intervals:
+                    intervals[interval_merge_key] = SnapshotIntervals(
                         name=name,
                         identifier=identifier,
                         version=version,
-                        intervals=intervals.get((name, identifier, version), []),
-                        dev_intervals=dev_intervals.get((name, identifier, version), []),
-                        pending_restatement_intervals=[],
+                        dev_version=dev_version,
                     )
-                )
-            for (name, version), pending_intervals in pending_restatement_intervals.items():
-                if not pending_intervals:
-                    continue
-                snapshot_intervals.append(
-                    SnapshotIntervals(
-                        name=name,
-                        version=version,
-                        identifier=None,
-                        intervals=[],
-                        dev_intervals=[],
-                        pending_restatement_intervals=pending_intervals,
-                    )
-                )
 
-        return interval_ids, snapshot_intervals
+                if pending_restatement_interval_merge_key not in pending_restatement_intervals:
+                    pending_restatement_intervals[pending_restatement_interval_merge_key] = (
+                        SnapshotIntervals(
+                            name=name,
+                            identifier=None,
+                            version=version,
+                            dev_version=None,
+                        )
+                    )
+
+                if is_removed:
+                    if is_dev:
+                        intervals[interval_merge_key].remove_dev_interval(start, end)
+                    else:
+                        intervals[interval_merge_key].remove_interval(start, end)
+                elif is_pending_restatement:
+                    pending_restatement_intervals[
+                        pending_restatement_interval_merge_key
+                    ].add_pending_restatement_interval(start, end)
+                else:
+                    if is_dev:
+                        intervals[interval_merge_key].add_dev_interval(start, end)
+                    else:
+                        intervals[interval_merge_key].add_interval(start, end)
+                        # Remove all pending restatement intervals recorded before the current interval has been added
+                        pending_restatement_intervals[
+                            pending_restatement_interval_merge_key
+                        ].remove_pending_restatement_interval(start, end)
+
+        return interval_ids, [
+            i
+            for i in [*intervals.values(), *pending_restatement_intervals.values()]
+            if not i.is_empty()
+        ]
 
     def _get_snapshot_intervals_query(self, uncompacted_only: bool) -> exp.Select:
         query = (
@@ -1280,6 +1283,7 @@ class EngineAdapterStateSync(StateSync):
                 exp.column("name", table="intervals"),
                 exp.column("identifier", table="intervals"),
                 exp.column("version", table="intervals"),
+                exp.column("dev_version", table="intervals"),
                 "start_ts",
                 "end_ts",
                 "is_dev",
@@ -1835,6 +1839,7 @@ def _interval_to_df(
         "name": snapshot.name,
         "identifier": snapshot.identifier if not is_pending_restatement else None,
         "version": snapshot.version,
+        "dev_version": snapshot.dev_version if not is_pending_restatement else None,
         "start_ts": start_ts,
         "end_ts": end_ts,
         "is_dev": is_dev,

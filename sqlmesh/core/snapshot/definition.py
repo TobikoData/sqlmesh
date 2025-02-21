@@ -162,12 +162,13 @@ class SnapshotNameVersion(PydanticModel, frozen=True):
         return self
 
 
-class SnapshotIntervals(PydanticModel, frozen=True):
+class SnapshotIntervals(PydanticModel):
     name: str
     identifier: t.Optional[str]
     version: str
-    intervals: Intervals
-    dev_intervals: Intervals
+    dev_version: t.Optional[str]
+    intervals: Intervals = []
+    dev_intervals: Intervals = []
     pending_restatement_intervals: Intervals = []
 
     @property
@@ -179,6 +180,39 @@ class SnapshotIntervals(PydanticModel, frozen=True):
     @property
     def name_version(self) -> SnapshotNameVersion:
         return SnapshotNameVersion(name=self.name, version=self.version)
+
+    def add_interval(self, start: int, end: int) -> None:
+        self._add_interval(start, end, "intervals")
+
+    def add_dev_interval(self, start: int, end: int) -> None:
+        self._add_interval(start, end, "dev_intervals")
+
+    def add_pending_restatement_interval(self, start: int, end: int) -> None:
+        self._add_interval(start, end, "pending_restatement_intervals")
+
+    def remove_interval(self, start: int, end: int) -> None:
+        self._remove_interval(start, end, "intervals")
+
+    def remove_dev_interval(self, start: int, end: int) -> None:
+        self._remove_interval(start, end, "dev_intervals")
+
+    def remove_pending_restatement_interval(self, start: int, end: int) -> None:
+        self._remove_interval(start, end, "pending_restatement_intervals")
+
+    def is_empty(self) -> bool:
+        return (
+            not self.intervals and not self.dev_intervals and not self.pending_restatement_intervals
+        )
+
+    def _add_interval(self, start: int, end: int, interval_attr: str) -> None:
+        target_intervals = getattr(self, interval_attr)
+        target_intervals = merge_intervals([*target_intervals, (start, end)])
+        setattr(self, interval_attr, target_intervals)
+
+    def _remove_interval(self, start: int, end: int, interval_attr: str) -> None:
+        target_intervals = getattr(self, interval_attr)
+        target_intervals = remove_interval(target_intervals, start, end)
+        setattr(self, interval_attr, target_intervals)
 
 
 class SnapshotDataVersion(PydanticModel, frozen=True):
@@ -792,13 +826,9 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             if not apply_effective_from or end <= effective_from_ts:
                 self.add_interval(start, end)
 
-        previous_ids = {s.snapshot_id(self.name) for s in self.previous_versions}
-        if self.identifier == other.identifier or (
-            # Indirect Non-Breaking snapshots share the dev table with its previous version.
-            # The same applies to migrated snapshots.
-            (self.is_indirect_non_breaking or self.is_metadata or self.migrated)
-            and other.snapshot_id in previous_ids
-        ):
+        if self.dev_version_get_or_generate() == other.dev_version:
+            # Merge dev intervals if the dev versions match which would mean
+            # that this and the other snapshot are pointing to the same dev table.
             for start, end in other.dev_intervals:
                 self.add_interval(start, end, is_dev=True)
 
@@ -942,7 +972,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         Args:
             category: The change category to assign to this snapshot.
         """
-        self.dev_version = None
+        self.dev_version = self.fingerprint.to_version()
         reuse_previous_version = category in (
             SnapshotChangeCategory.FORWARD_ONLY,
             SnapshotChangeCategory.INDIRECT_NON_BREAKING,
@@ -1163,6 +1193,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             name=self.name,
             identifier=self.identifier,
             version=self.version,
+            dev_version=self.dev_version_get_or_generate(),
             intervals=self.intervals.copy(),
             dev_intervals=self.dev_intervals.copy(),
             pending_restatement_intervals=self.pending_restatement_intervals.copy(),
@@ -2052,8 +2083,9 @@ def apply_auto_restatements(
     return [
         SnapshotIntervals(
             name=snapshots[s_id].name,
-            identifier=snapshots[s_id].identifier,
+            identifier=None,
             version=snapshots[s_id].version,
+            dev_version=None,
             intervals=[],
             dev_intervals=[],
             pending_restatement_intervals=[interval],

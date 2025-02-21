@@ -2248,6 +2248,7 @@ def test_max_interval_end_per_model_with_pending_restatements(
                 name=snapshot.name,
                 identifier=snapshot.identifier,
                 version=snapshot.version,
+                dev_version=snapshot.dev_version_get_or_generate(),
                 intervals=[],
                 dev_intervals=[],
                 pending_restatement_intervals=[
@@ -2572,6 +2573,7 @@ def test_compact_intervals_pending_restatement(
                 name=snapshot.name,
                 identifier=snapshot.identifier,
                 version=snapshot.version,
+                dev_version=snapshot.dev_version_get_or_generate(),
                 intervals=[],
                 dev_intervals=[],
                 pending_restatement_intervals=pending_restatement_intervals,
@@ -2670,6 +2672,7 @@ def test_compact_intervals_pending_restatement_shared_version(
                 name=snapshot_a.name,
                 identifier=snapshot_a.identifier,
                 version=snapshot_a.version,
+                dev_version=snapshot_a.dev_version_get_or_generate(),
                 intervals=[],
                 dev_intervals=[],
                 pending_restatement_intervals=[
@@ -2684,6 +2687,7 @@ def test_compact_intervals_pending_restatement_shared_version(
             name=snapshot_b.name,
             identifier=None,
             version=snapshot_b.version,
+            dev_version=None,
             intervals=[],
             dev_intervals=[],
             pending_restatement_intervals=[
@@ -2694,6 +2698,7 @@ def test_compact_intervals_pending_restatement_shared_version(
             name=snapshot_a.name,
             identifier=snapshot_a.identifier,
             version=snapshot_a.version,
+            dev_version=snapshot_a.dev_version_get_or_generate(),
             intervals=[
                 (to_timestamp("2020-01-01"), to_timestamp("2020-01-06")),
             ],
@@ -2704,6 +2709,7 @@ def test_compact_intervals_pending_restatement_shared_version(
             name=snapshot_b.name,
             identifier=snapshot_b.identifier,
             version=snapshot_b.version,
+            dev_version=snapshot_b.dev_version_get_or_generate(),
             intervals=[
                 (to_timestamp("2020-01-03"), to_timestamp("2020-01-04")),
             ],
@@ -2766,6 +2772,7 @@ def test_compact_intervals_pending_restatement_shared_version(
             name=snapshot_a.name,
             identifier=None,
             version=snapshot_a.version,
+            dev_version=None,
             intervals=[],
             dev_intervals=[],
             pending_restatement_intervals=[
@@ -2776,6 +2783,7 @@ def test_compact_intervals_pending_restatement_shared_version(
             name=snapshot_a.name,
             identifier=snapshot_a.identifier,
             version=snapshot_a.version,
+            dev_version=snapshot_a.dev_version_get_or_generate(),
             intervals=[
                 (to_timestamp("2020-01-01"), to_timestamp("2020-01-06")),
             ],
@@ -2786,6 +2794,7 @@ def test_compact_intervals_pending_restatement_shared_version(
             name=snapshot_b.name,
             identifier=snapshot_b.identifier,
             version=snapshot_b.version,
+            dev_version=snapshot_b.dev_version_get_or_generate(),
             intervals=[
                 (to_timestamp("2020-01-03"), to_timestamp("2020-01-04")),
             ],
@@ -2833,6 +2842,7 @@ def test_compact_intervals_pending_restatement_shared_version(
             name=snapshot_a.name,
             identifier=snapshot_a.identifier,
             version=snapshot_a.version,
+            dev_version=snapshot_a.dev_version_get_or_generate(),
             intervals=[
                 (to_timestamp("2020-01-01"), to_timestamp("2020-01-06")),
             ],
@@ -2843,6 +2853,7 @@ def test_compact_intervals_pending_restatement_shared_version(
             name=snapshot_b.name,
             identifier=snapshot_b.identifier,
             version=snapshot_b.version,
+            dev_version=snapshot_b.dev_version_get_or_generate(),
             intervals=[
                 (to_timestamp("2020-01-03"), to_timestamp("2020-01-04")),
                 (to_timestamp("2020-01-05"), to_timestamp("2020-01-06")),
@@ -2913,6 +2924,7 @@ def test_compact_intervals_pending_restatement_many_snapshots_same_version(
                 name=snapshots[0].name,
                 identifier=snapshots[0].identifier,
                 version=snapshots[0].version,
+                dev_version=snapshots[0].dev_version_get_or_generate(),
                 intervals=[],
                 dev_intervals=[],
                 pending_restatement_intervals=pending_restatement_intervals,
