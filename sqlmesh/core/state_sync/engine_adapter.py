@@ -576,6 +576,7 @@ class EngineAdapterStateSync(StateSync):
         unique_expired_versions = unique(expired_candidates.values())
         version_batches = self._batches(unique_expired_versions)
         cleanup_targets = []
+        expired_snapshot_ids = set()
         for versions_batch in version_batches:
             snapshots = self._get_snapshots_with_same_version(versions_batch)
 
@@ -586,9 +587,7 @@ class EngineAdapterStateSync(StateSync):
                 snapshots_by_dev_version[(s.name, s.dev_version)].add(s.snapshot_id)
 
             expired_snapshots = [s for s in snapshots if not _is_snapshot_used(s)]
-
-            if expired_snapshots:
-                self.delete_snapshots([s.snapshot_id for s in expired_snapshots])
+            expired_snapshot_ids.update([s.snapshot_id for s in expired_snapshots])
 
             for snapshot in expired_snapshots:
                 shared_version_snapshots = snapshots_by_version[(snapshot.name, snapshot.version)]
@@ -606,6 +605,11 @@ class EngineAdapterStateSync(StateSync):
                             dev_table_only=bool(shared_version_snapshots),
                         )
                     )
+
+        if expired_snapshot_ids:
+            self.delete_snapshots(expired_snapshot_ids)
+
+        self._cleanup_intervals(cleanup_targets, expired_snapshot_ids)
 
         return cleanup_targets
 
@@ -632,6 +636,8 @@ class EngineAdapterStateSync(StateSync):
         return environments
 
     def delete_snapshots(self, snapshot_ids: t.Iterable[SnapshotIdLike]) -> None:
+        if not snapshot_ids:
+            return
         for where in self._snapshot_id_filter(snapshot_ids):
             self.engine_adapter.delete_from(self.snapshots_table, where=where)
 
@@ -1167,7 +1173,7 @@ class EngineAdapterStateSync(StateSync):
 
         result: t.Dict[str, int] = {}
 
-        for where in self._snapshot_name_version_filter(snapshots, table_alias):
+        for where in self._snapshot_name_version_filter(snapshots, alias=table_alias):
             query = (
                 exp.select(
                     name_col,
@@ -1197,6 +1203,59 @@ class EngineAdapterStateSync(StateSync):
     def close(self) -> None:
         self.engine_adapter.close()
 
+    def _cleanup_intervals(
+        self,
+        cleanup_targets: t.List[SnapshotTableCleanupTask],
+        expired_snapshot_ids: t.Collection[SnapshotIdLike],
+    ) -> None:
+        # Cleanup can only happen for compacted intervals
+        self.compact_intervals()
+        self._delete_intervals_by_dev_version(cleanup_targets)
+        self._delete_interlals_by_version(cleanup_targets)
+        self._update_intervals_for_deleted_snapshots(expired_snapshot_ids)
+
+    def _update_intervals_for_deleted_snapshots(
+        self, snapshot_ids: t.Collection[SnapshotIdLike]
+    ) -> None:
+        """Nullifies the snapshot identifiers of interval records for snapshots that have been deleted,
+        so that they can be compacted efficiently.
+        """
+        if not snapshot_ids:
+            return
+
+        for where in self._snapshot_id_filter(snapshot_ids, alias=None):
+            self.engine_adapter.update_table(
+                self.intervals_table,
+                {"identifier": None},
+                where=where,
+            )
+
+    def _delete_intervals_by_dev_version(self, targets: t.List[SnapshotTableCleanupTask]) -> None:
+        """Deletes dev intervals for snapshot dev versions that are no longer used."""
+        if not targets:
+            return
+
+        dev_keys_to_delete = [
+            SnapshotNameVersion(name=t.snapshot.name, version=t.snapshot.dev_version)
+            for t in targets
+            if t.snapshot.dev_version
+        ]
+        for where in self._snapshot_name_version_filter(
+            dev_keys_to_delete, version_column_name="dev_version", alias=None
+        ):
+            self.engine_adapter.delete_from(self.intervals_table, where.and_(exp.column("is_dev")))
+
+    def _delete_interlals_by_version(self, targets: t.List[SnapshotTableCleanupTask]) -> None:
+        """Deletes intervals for snapshot versions that are no longer used."""
+        non_dev_keys_to_delete = [t.snapshot for t in targets if not t.dev_table_only]
+        if not non_dev_keys_to_delete:
+            return
+
+        for where in self._snapshot_name_version_filter(non_dev_keys_to_delete, alias=None):
+            self.engine_adapter.delete_from(
+                self.intervals_table, where.and_(exp.column("is_dev").not_())
+            )
+
     def _get_snapshot_intervals(
         self,
         snapshots: t.Optional[t.Collection[SnapshotNameVersionLike]] = None,
@@ -1208,11 +1267,15 @@ class EngineAdapterStateSync(StateSync):
         query = self._get_snapshot_intervals_query(uncompacted_only)
 
         interval_ids: t.Set[str] = set()
-        intervals: t.Dict[t.Tuple[str, str, t.Optional[str]], SnapshotIntervals] = {}
+        intervals: t.Dict[
+            t.Tuple[str, str, t.Optional[str], t.Optional[str]], SnapshotIntervals
+        ] = {}
         pending_restatement_intervals: t.Dict[t.Tuple[str, str], SnapshotIntervals] = {}
 
         for where in (
-            self._snapshot_name_version_filter(snapshots, "intervals") if snapshots else [None]
+            self._snapshot_name_version_filter(snapshots, alias="intervals")
+            if snapshots
+            else [None]
         ):
             rows = self._fetchall(query.where(where))
             for (
@@ -1228,8 +1291,8 @@ class EngineAdapterStateSync(StateSync):
                 is_pending_restatement,
             ) in rows:
                 interval_ids.add(interval_id)
-                # Include version into the merge key since identifier can sometimes be null
-                interval_merge_key = (name, version, identifier)
+                # Include version and dev_version into the merge key since identifier can sometimes be null
+                interval_merge_key = (name, version, dev_version, identifier)
                 # Pending restatement intervals are merged by name and version
                 pending_restatement_interval_merge_key = (name, version)
 
@@ -1756,6 +1819,7 @@ class EngineAdapterStateSync(StateSync):
     def _snapshot_name_version_filter(
         self,
         snapshot_name_versions: t.Iterable[SnapshotNameVersionLike],
+        version_column_name: str = "version",
         alias: t.Optional[str] = "snapshots",
         column_prefix: t.Optional[str] = None,
     ) -> t.Iterator[exp.Condition]:
@@ -1763,7 +1827,6 @@ class EngineAdapterStateSync(StateSync):
         batches = self._batches(name_versions)
 
         name_column_name = "name"
-        version_column_name = "version"
         if column_prefix:
             name_column_name = f"{column_prefix}_{name_column_name}"
             version_column_name = f"{column_prefix}_{version_column_name}"

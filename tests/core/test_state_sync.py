@@ -1371,6 +1371,291 @@ def test_delete_expired_snapshots_ignore_ttl(
     ]
 
 
+def test_delete_expired_snapshots_cleanup_intervals(
+    state_sync: EngineAdapterStateSync,
+    make_snapshot: t.Callable,
+    get_snapshot_intervals: t.Callable,
+):
+    now_ts = now_timestamp()
+
+    # Expired snapshot
+    snapshot = make_snapshot(
+        SqlModel(
+            name="a",
+            query=parse_one("select a, ds"),
+        ),
+    )
+    snapshot.ttl = "in 10 seconds"
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    snapshot.updated_ts = now_ts - 15000
+
+    # Another expired snapshot with the same version
+    new_snapshot = make_snapshot(
+        SqlModel(
+            name="a",
+            query=parse_one("select a, b, ds"),
+        ),
+    )
+    new_snapshot.ttl = "in 10 seconds"
+    new_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    new_snapshot.version = snapshot.version
+    new_snapshot.updated_ts = now_ts - 12000
+
+    state_sync.push_snapshots([snapshot, new_snapshot])
+    state_sync.add_interval(snapshot, "2023-01-01", "2023-01-03")
+    state_sync.add_interval(snapshot, "2023-01-04", "2023-01-05", is_dev=True)
+    state_sync.add_interval(new_snapshot, "2023-01-04", "2023-01-05")
+
+    # Check old snapshot's intervals
+    stored_snapshot = state_sync.get_snapshots([snapshot])[snapshot.snapshot_id]
+    assert stored_snapshot.intervals == [
+        (to_timestamp("2023-01-01"), to_timestamp("2023-01-06")),
+    ]
+    assert stored_snapshot.dev_intervals == [
+        (to_timestamp("2023-01-04"), to_timestamp("2023-01-06")),
+    ]
+
+    # Check new snapshot's intervals
+    stored_new_snapshot = state_sync.get_snapshots([new_snapshot])[new_snapshot.snapshot_id]
+    assert stored_new_snapshot.intervals == [
+        (to_timestamp("2023-01-01"), to_timestamp("2023-01-06")),
+    ]
+    assert not stored_new_snapshot.dev_intervals
+
+    assert state_sync.delete_expired_snapshots() == [
+        SnapshotTableCleanupTask(snapshot=snapshot.table_info, dev_table_only=True),
+        SnapshotTableCleanupTask(snapshot=new_snapshot.table_info, dev_table_only=False),
+    ]
+
+    assert not get_snapshot_intervals(snapshot)
+
+
+def test_delete_expired_snapshots_cleanup_intervals_shared_version(
+    state_sync: EngineAdapterStateSync,
+    make_snapshot: t.Callable,
+):
+    now_ts = now_timestamp()
+
+    # Expired snapshot
+    snapshot = make_snapshot(
+        SqlModel(
+            name="a",
+            query=parse_one("select a, ds"),
+        ),
+    )
+    snapshot.ttl = "in 10 seconds"
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    snapshot.updated_ts = now_ts - 15000
+
+    # New non-expired snapshot with the same version
+    new_snapshot = make_snapshot(
+        SqlModel(
+            name="a",
+            query=parse_one("select a, b, ds"),
+        ),
+    )
+    new_snapshot.ttl = "in 10 seconds"
+    new_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    new_snapshot.version = snapshot.version
+    new_snapshot.updated_ts = now_ts - 5000
+
+    state_sync.push_snapshots([snapshot, new_snapshot])
+    state_sync.add_interval(snapshot, "2023-01-01", "2023-01-03")
+    state_sync.add_interval(snapshot, "2023-01-01", "2023-01-03", is_dev=True)
+    state_sync.add_interval(new_snapshot, "2023-01-04", "2023-01-07")
+    state_sync.remove_intervals(
+        [(new_snapshot, (to_timestamp("2023-01-06"), to_timestamp("2023-01-08")))]
+    )
+
+    # Check new snapshot's intervals
+    stored_new_snapshot = state_sync.get_snapshots([new_snapshot])[new_snapshot.snapshot_id]
+    assert stored_new_snapshot.intervals == [
+        (to_timestamp("2023-01-01"), to_timestamp("2023-01-06")),
+    ]
+    assert not stored_new_snapshot.dev_intervals
+
+    # Check old snapshot's intervals
+    stored_snapshot = state_sync.get_snapshots([snapshot])[snapshot.snapshot_id]
+    assert stored_snapshot.intervals == [
+        (to_timestamp("2023-01-01"), to_timestamp("2023-01-06")),
+    ]
+    assert stored_snapshot.dev_intervals == [
+        (to_timestamp("2023-01-01"), to_timestamp("2023-01-04")),
+    ]
+
+    # Check all intervals
+    assert sorted(
+        state_sync._get_snapshot_intervals([snapshot, new_snapshot])[1],
+        key=lambda x: x.identifier or "",
+    ) == [
+        SnapshotIntervals(
+            name='"a"',
+            identifier=snapshot.identifier,
+            version=snapshot.version,
+            dev_version=snapshot.dev_version,
+            intervals=[(to_timestamp("2023-01-01"), to_timestamp("2023-01-04"))],
+            dev_intervals=[(to_timestamp("2023-01-01"), to_timestamp("2023-01-04"))],
+        ),
+        SnapshotIntervals(
+            name='"a"',
+            identifier=new_snapshot.identifier,
+            version=snapshot.version,
+            dev_version=new_snapshot.dev_version,
+            intervals=[(to_timestamp("2023-01-04"), to_timestamp("2023-01-06"))],
+        ),
+    ]
+
+    # Delete the expired snapshot
+    assert state_sync.delete_expired_snapshots() == [
+        SnapshotTableCleanupTask(snapshot=snapshot.table_info, dev_table_only=True),
+    ]
+    assert not state_sync.get_snapshots([snapshot])
+
+    # Check new snapshot's intervals
+    stored_new_snapshot = state_sync.get_snapshots([new_snapshot])[new_snapshot.snapshot_id]
+    assert stored_new_snapshot.intervals == [
+        (to_timestamp("2023-01-01"), to_timestamp("2023-01-06")),
+    ]
+    assert not stored_new_snapshot.dev_intervals
+
+    # Check all intervals
+    assert sorted(
+        state_sync._get_snapshot_intervals([snapshot, new_snapshot])[1],
+        key=lambda x: x.identifier or "",
+    ) == [
+        # The intervals of the old snapshot is preserved with the null identifier
+        SnapshotIntervals(
+            name='"a"',
+            identifier=None,
+            version=snapshot.version,
+            dev_version=snapshot.dev_version,
+            intervals=[(to_timestamp("2023-01-01"), to_timestamp("2023-01-04"))],
+        ),
+        # The intervals of the new snapshot has identifier
+        SnapshotIntervals(
+            name='"a"',
+            identifier=new_snapshot.identifier,
+            version=snapshot.version,
+            dev_version=new_snapshot.dev_version,
+            intervals=[(to_timestamp("2023-01-04"), to_timestamp("2023-01-06"))],
+        ),
+    ]
+
+
+def test_delete_expired_snapshots_cleanup_intervals_shared_dev_table(
+    state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
+):
+    now_ts = now_timestamp()
+
+    snapshot = make_snapshot(
+        SqlModel(
+            name="a",
+            query=parse_one("select a, ds"),
+        ),
+    )
+    snapshot.ttl = "in 10 seconds"
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    snapshot.updated_ts = now_ts - 15000
+
+    new_snapshot = make_snapshot(
+        SqlModel(
+            name="a",
+            query=parse_one("select a, b, ds"),
+        ),
+    )
+    new_snapshot.ttl = "in 10 seconds"
+    new_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    new_snapshot.version = snapshot.version
+    new_snapshot.dev_version = snapshot.dev_version_get_or_generate()
+    new_snapshot.updated_ts = now_ts - 5000
+
+    state_sync.push_snapshots([snapshot, new_snapshot])
+
+    state_sync.add_interval(snapshot, "2023-01-01", "2023-01-03")
+    state_sync.add_interval(snapshot, "2023-01-04", "2023-01-07", is_dev=True)
+    state_sync.add_interval(new_snapshot, "2023-01-08", "2023-01-10", is_dev=True)
+    state_sync.remove_intervals(
+        [(new_snapshot, (to_timestamp("2023-01-10"), to_timestamp("2023-01-11")))]
+    )
+
+    # Check new snapshot's intervals
+    stored_new_snapshot = state_sync.get_snapshots([new_snapshot])[new_snapshot.snapshot_id]
+    assert stored_new_snapshot.intervals == [
+        (to_timestamp("2023-01-01"), to_timestamp("2023-01-04")),
+    ]
+    assert stored_new_snapshot.dev_intervals == [
+        (to_timestamp("2023-01-04"), to_timestamp("2023-01-10")),
+    ]
+
+    # Check old snapshot's intervals
+    stored_snapshot = state_sync.get_snapshots([snapshot])[snapshot.snapshot_id]
+    assert stored_snapshot.intervals == [
+        (to_timestamp("2023-01-01"), to_timestamp("2023-01-04")),
+    ]
+    assert stored_snapshot.dev_intervals == [
+        (to_timestamp("2023-01-04"), to_timestamp("2023-01-10")),
+    ]
+
+    # Check all intervals
+    assert sorted(
+        state_sync._get_snapshot_intervals([snapshot, new_snapshot])[1],
+        key=lambda x: x.identifier or "",
+    ) == [
+        SnapshotIntervals(
+            name='"a"',
+            identifier=snapshot.identifier,
+            version=snapshot.version,
+            dev_version=snapshot.dev_version,
+            intervals=[(to_timestamp("2023-01-01"), to_timestamp("2023-01-04"))],
+            dev_intervals=[(to_timestamp("2023-01-04"), to_timestamp("2023-01-08"))],
+        ),
+        SnapshotIntervals(
+            name='"a"',
+            identifier=new_snapshot.identifier,
+            version=snapshot.version,
+            dev_version=new_snapshot.dev_version,
+            dev_intervals=[(to_timestamp("2023-01-08"), to_timestamp("2023-01-10"))],
+        ),
+    ]
+
+    # Delete the expired snapshot
+    assert state_sync.delete_expired_snapshots() == []
+    assert not state_sync.get_snapshots([snapshot])
+
+    # Check new snapshot's intervals
+    stored_new_snapshot = state_sync.get_snapshots([new_snapshot])[new_snapshot.snapshot_id]
+    assert stored_new_snapshot.intervals == [
+        (to_timestamp("2023-01-01"), to_timestamp("2023-01-04")),
+    ]
+    assert stored_new_snapshot.dev_intervals == [
+        (to_timestamp("2023-01-04"), to_timestamp("2023-01-10")),
+    ]
+
+    # Check all intervals
+    assert sorted(
+        state_sync._get_snapshot_intervals([snapshot, new_snapshot])[1],
+        key=lambda x: x.identifier or "",
+    ) == [
+        # The intervals of the old snapshot is preserved with the null identifier
+        SnapshotIntervals(
+            name='"a"',
+            identifier=None,
+            version=snapshot.version,
+            dev_version=snapshot.dev_version,
+            intervals=[(to_timestamp("2023-01-01"), to_timestamp("2023-01-04"))],
+            dev_intervals=[(to_timestamp("2023-01-04"), to_timestamp("2023-01-08"))],
+        ),
+        # The intervals of the new snapshot has identifier
+        SnapshotIntervals(
+            name='"a"',
+            identifier=new_snapshot.identifier,
+            version=snapshot.version,
+            dev_version=new_snapshot.dev_version,
+            dev_intervals=[(to_timestamp("2023-01-08"), to_timestamp("2023-01-10"))],
+        ),
+    ]
+
+
 def test_environment_start_as_timestamp(
     state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
 ):
