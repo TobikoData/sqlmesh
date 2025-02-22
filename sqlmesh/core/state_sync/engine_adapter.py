@@ -1210,8 +1210,11 @@ class EngineAdapterStateSync(StateSync):
     ) -> None:
         # Cleanup can only happen for compacted intervals
         self.compact_intervals()
+        # Delete dev intervals for dev tables that are no longer used
         self._delete_intervals_by_dev_version(cleanup_targets)
+        # Delete intervals for non-dev tables that are no longer used
         self._delete_interlals_by_version(cleanup_targets)
+        # Nullify the snapshot identifiers of interval records for snapshots that have been deleted
         self._update_intervals_for_deleted_snapshots(expired_snapshot_ids)
 
     def _update_intervals_for_deleted_snapshots(
@@ -1689,8 +1692,8 @@ class EngineAdapterStateSync(StateSync):
             new_snapshot.effective_from = None
             new_snapshot.previous_versions = snapshot.all_versions
             new_snapshot.migrated = True
-            if not new_snapshot.dev_version:
-                new_snapshot.dev_version = snapshot.fingerprint.to_version()
+            if not new_snapshot.dev_version_:
+                new_snapshot.dev_version_ = snapshot.dev_version
 
             self.console.update_snapshot_migration_progress(1)
 

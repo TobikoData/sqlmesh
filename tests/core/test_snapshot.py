@@ -224,7 +224,7 @@ def test_add_interval(snapshot: Snapshot, make_snapshot):
 
 def test_add_interval_dev(snapshot: Snapshot, make_snapshot):
     snapshot.version = "existing_version"
-    snapshot.dev_version = "existing_dev_version"
+    snapshot.dev_version_ = "existing_dev_version"
     snapshot.change_category = SnapshotChangeCategory.FORWARD_ONLY
 
     snapshot.add_interval("2020-01-01", "2020-01-01")
@@ -240,7 +240,7 @@ def test_add_interval_dev(snapshot: Snapshot, make_snapshot):
     assert new_snapshot.dev_intervals == []
 
     new_snapshot = make_snapshot(snapshot.model)
-    new_snapshot.dev_version = snapshot.dev_version
+    new_snapshot.dev_version_ = snapshot.dev_version
     new_snapshot.merge_intervals(snapshot)
     assert new_snapshot.intervals == [(to_timestamp("2020-01-01"), to_timestamp("2020-01-02"))]
     assert new_snapshot.dev_intervals == [(to_timestamp("2020-01-02"), to_timestamp("2020-01-03"))]
@@ -1067,7 +1067,7 @@ def test_table_name_view(make_snapshot: t.Callable):
     assert snapshot.table_name(is_deployable=True) == f"sqlmesh__default.name__{snapshot.version}"
     assert (
         snapshot.table_name(is_deployable=False)
-        == f"sqlmesh__default.name__{snapshot.dev_version_get_or_generate()}__dev"
+        == f"sqlmesh__default.name__{snapshot.dev_version}__dev"
     )
 
     assert snapshot.dev_version == snapshot.fingerprint.to_version()
@@ -1083,11 +1083,11 @@ def test_table_name_view(make_snapshot: t.Callable):
     # Indirect non-breaking view snapshots should not reuse the dev table.
     assert (
         new_snapshot.table_name(is_deployable=False)
-        == f"sqlmesh__default.name__{new_snapshot.dev_version_get_or_generate()}__dev"
+        == f"sqlmesh__default.name__{new_snapshot.dev_version}__dev"
     )
     assert new_snapshot.dev_version == new_snapshot.fingerprint.to_version()
     assert new_snapshot.version == snapshot.version
-    assert new_snapshot.dev_version_get_or_generate() != snapshot.dev_version_get_or_generate()
+    assert new_snapshot.dev_version != snapshot.dev_version
 
 
 def test_categorize_change_sql(make_snapshot):

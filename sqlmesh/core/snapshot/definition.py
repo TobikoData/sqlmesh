@@ -218,13 +218,17 @@ class SnapshotIntervals(PydanticModel):
 class SnapshotDataVersion(PydanticModel, frozen=True):
     fingerprint: SnapshotFingerprint
     version: str
-    dev_version: t.Optional[str] = None
+    dev_version_: t.Optional[str] = Field(default=None, alias="dev_version")
     change_category: t.Optional[SnapshotChangeCategory] = None
     physical_schema_: t.Optional[str] = Field(default=None, alias="physical_schema")
     dev_table_suffix: str
 
     def snapshot_id(self, name: str) -> SnapshotId:
         return SnapshotId(name=name, identifier=self.fingerprint.to_identifier())
+
+    @property
+    def dev_version(self) -> str:
+        return self.dev_version_ or self.fingerprint.to_version()
 
     @property
     def physical_schema(self) -> str:
@@ -316,7 +320,7 @@ class QualifiedViewName(PydanticModel, frozen=True):
 
 class SnapshotInfoMixin(ModelKindMixin):
     name: str
-    dev_version: t.Optional[str]
+    dev_version_: t.Optional[str]
     change_category: t.Optional[SnapshotChangeCategory]
     fingerprint: SnapshotFingerprint
     previous_versions: t.Tuple[SnapshotDataVersion, ...]
@@ -348,6 +352,10 @@ class SnapshotInfoMixin(ModelKindMixin):
         if self.previous_versions:
             return self.previous_versions[-1]
         return None
+
+    @property
+    def dev_version(self) -> str:
+        return self.dev_version_ or self.fingerprint.to_version()
 
     @property
     def physical_schema(self) -> str:
@@ -406,10 +414,6 @@ class SnapshotInfoMixin(ModelKindMixin):
     def data_hash_matches(self, other: t.Optional[SnapshotInfoMixin | SnapshotDataVersion]) -> bool:
         return other is not None and self.fingerprint.data_hash == other.fingerprint.data_hash
 
-    def dev_version_get_or_generate(self) -> str:
-        """Helper method to get the dev version or generate it from the fingerprint."""
-        return self.dev_version or self.fingerprint.to_version()
-
     def _table_name(self, version: str, is_deployable: bool) -> str:
         """Full table name pointing to the materialized location of the snapshot.
 
@@ -422,7 +426,7 @@ class SnapshotInfoMixin(ModelKindMixin):
 
         is_dev_table = not is_deployable
         if is_dev_table:
-            version = self.dev_version_get_or_generate()
+            version = self.dev_version
 
         if self.fully_qualified_table is None:
             raise SQLMeshError(
@@ -461,7 +465,7 @@ class SnapshotTableInfo(PydanticModel, SnapshotInfoMixin, frozen=True):
     name: str
     fingerprint: SnapshotFingerprint
     version: str
-    dev_version: t.Optional[str] = None
+    dev_version_: t.Optional[str] = Field(default=None, alias="dev_version")
     physical_schema_: str = Field(alias="physical_schema")
     parents: t.Tuple[SnapshotId, ...]
     previous_versions: t.Tuple[SnapshotDataVersion, ...] = ()
@@ -579,7 +583,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     ttl: str
     previous_versions: t.Tuple[SnapshotDataVersion, ...] = ()
     version: t.Optional[str] = None
-    dev_version: t.Optional[str] = None
+    dev_version_: t.Optional[str] = Field(default=None, alias="dev_version")
     change_category: t.Optional[SnapshotChangeCategory] = None
     unpaused_ts: t.Optional[int] = None
     effective_from: t.Optional[TimeLike] = None
@@ -604,7 +608,6 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     def hydrate_with_intervals_by_version(
         snapshots: t.Iterable[Snapshot],
         intervals: t.Iterable[SnapshotIntervals],
-        is_dev: bool = False,
     ) -> t.List[Snapshot]:
         """Hydrates target snapshots with given intervals.
 
@@ -613,7 +616,6 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         Args:
             snapshots: Target snapshots.
             intervals: Target snapshot intervals.
-            is_dev: If in development mode ignores same version intervals for paused forward-only snapshots.
 
         Returns:
             List of target snapshots with hydrated intervals.
@@ -826,7 +828,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             if not apply_effective_from or end <= effective_from_ts:
                 self.add_interval(start, end)
 
-        if self.dev_version_get_or_generate() == other.dev_version:
+        if self.dev_version == other.dev_version:
             # Merge dev intervals if the dev versions match which would mean
             # that this and the other snapshot are pointing to the same dev table.
             for start, end in other.dev_intervals:
@@ -972,7 +974,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         Args:
             category: The change category to assign to this snapshot.
         """
-        self.dev_version = self.fingerprint.to_version()
+        self.dev_version_ = self.fingerprint.to_version()
         reuse_previous_version = category in (
             SnapshotChangeCategory.FORWARD_ONLY,
             SnapshotChangeCategory.INDIRECT_NON_BREAKING,
@@ -987,7 +989,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             self.physical_schema_ = previous_version.physical_schema
             if self.is_materialized and (category.is_indirect_non_breaking or category.is_metadata):
                 # Reuse the dev table for indirect non-breaking changes.
-                self.dev_version = (
+                self.dev_version_ = (
                     previous_version.data_version.dev_version
                     or previous_version.fingerprint.to_version()
                 )
@@ -1193,7 +1195,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             name=self.name,
             identifier=self.identifier,
             version=self.version,
-            dev_version=self.dev_version_get_or_generate(),
+            dev_version=self.dev_version,
             intervals=self.intervals.copy(),
             dev_intervals=self.dev_intervals.copy(),
             pending_restatement_intervals=self.pending_restatement_intervals.copy(),
