@@ -1401,7 +1401,7 @@ def test_plan_runs_audits_on_dev_previews(sushi_context: Context, capsys, caplog
     assert "Target environment updated successfully" in stdout
 
 
-def test_project_statements(tmp_path: pathlib.Path):
+def test_environment_statements(tmp_path: pathlib.Path):
     models_dir = pathlib.Path("models")
     macros_dir = pathlib.Path("macros")
     dialect = "postgres"
@@ -1483,10 +1483,10 @@ def grant_schema_usage(evaluator):
     context = Context(paths=tmp_path, config=config)
     snapshots = {s.name: s for s in context.snapshots.values()}
 
-    project_statements = context._project_statements[0]
-    before_all = project_statements.before_all
-    after_all = project_statements.after_all
-    python_env = project_statements.python_env
+    environment_statements = context._environment_statements[0]
+    before_all = environment_statements.before_all
+    after_all = environment_statements.after_all
+    python_env = environment_statements.python_env
 
     assert isinstance(python_env["to_view_mapping"], Executable)
     assert isinstance(python_env["grant_select_privileges"], Executable)
@@ -1526,7 +1526,7 @@ def grant_schema_usage(evaluator):
     ]
 
 
-def test_plan_project_statements(tmp_path: pathlib.Path):
+def test_plan_environment_statements(tmp_path: pathlib.Path):
     models_dir = pathlib.Path("models")
     macros_dir = pathlib.Path("macros")
     dialect = "duckdb"
@@ -1581,11 +1581,11 @@ def create_stats_table(evaluator):
 
     context = Context(paths=tmp_path, config=config)
 
-    assert context._project_statements[0].before_all == ["@create_stats_table()"]
-    assert context._project_statements[0].after_all == [
+    assert context._environment_statements[0].before_all == ["@create_stats_table()"]
+    assert context._environment_statements[0].after_all == [
         "CREATE TABLE IF NOT EXISTS after_table AS SELECT @some_var"
     ]
-    assert context._project_statements[0].python_env["create_stats_table"]
+    assert context._environment_statements[0].python_env["create_stats_table"]
 
     context.plan(auto_apply=True, no_prompts=True)
 
@@ -1615,7 +1615,7 @@ def create_stats_table(evaluator):
 
     assert context.fetchdf("select * from memory.after_table").to_dict()["5"][0] == 5
 
-    state_table = context.state_reader.get_project_statements(c.PROD)
-    assert state_table[0].before_all == context._project_statements[0].before_all
-    assert state_table[0].after_all == context._project_statements[0].after_all
-    assert state_table[0].python_env == context._project_statements[0].python_env
+    state_table = context.state_reader.get_environment_statements(c.PROD)
+    assert state_table[0].before_all == context._environment_statements[0].before_all
+    assert state_table[0].after_all == context._environment_statements[0].after_all
+    assert state_table[0].python_env == context._environment_statements[0].python_env

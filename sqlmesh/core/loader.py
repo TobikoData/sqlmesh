@@ -16,6 +16,7 @@ from sqlglot import exp
 from sqlmesh.core import constants as c
 from sqlmesh.core.audit import Audit, ModelAudit, StandaloneAudit, load_multiple_audits
 from sqlmesh.core.dialect import parse
+from sqlmesh.core.environment import EnvironmentStatements
 from sqlmesh.core.macros import MacroRegistry, macro
 from sqlmesh.core.metric import Metric, MetricMeta, expand_metrics, load_metric_ddl
 from sqlmesh.core.model import (
@@ -34,30 +35,12 @@ from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroExtractor
 from sqlmesh.utils.metaprogramming import import_python_file
 from sqlmesh.utils.yaml import YAML
-from sqlmesh.utils.metaprogramming import Executable
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.context import GenericContext
 
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class ProjectStatements:
-    before_all: t.List[str]
-    after_all: t.List[str]
-    python_env: t.Dict[str, Executable]
-
-    @staticmethod
-    def parse_obj(statements: t.Dict[str, t.Any]) -> ProjectStatements:
-        return ProjectStatements(
-            before_all=statements.get("before_all", []),
-            after_all=statements.get("after_all", []),
-            python_env={
-                key: Executable(**value) for key, value in statements.get("python_env", {}).items()
-            },
-        )
 
 
 @dataclass
@@ -70,7 +53,7 @@ class LoadedProject:
     metrics: UniqueKeyDict[str, Metric]
     requirements: t.Dict[str, str]
     excluded_requirements: t.Set[str]
-    project_statements: ProjectStatements
+    environment_statements: EnvironmentStatements
 
 
 class Loader(abc.ABC):
@@ -135,7 +118,7 @@ class Loader(abc.ABC):
 
             requirements, excluded_requirements = self._load_requirements()
 
-            project_statements = self._load_project_statements(macros=macros)
+            environment_statements = self._load_environment_statements(macros=macros)
 
             project = LoadedProject(
                 macros=macros,
@@ -146,7 +129,7 @@ class Loader(abc.ABC):
                 metrics=expand_metrics(metrics),
                 requirements=requirements,
                 excluded_requirements=excluded_requirements,
-                project_statements=project_statements,
+                environment_statements=environment_statements,
             )
             return project
 
@@ -184,9 +167,9 @@ class Loader(abc.ABC):
     ) -> UniqueKeyDict[str, Audit]:
         """Loads all audits."""
 
-    def _load_project_statements(self, macros: MacroRegistry) -> ProjectStatements:
-        """Loads project statements."""
-        return ProjectStatements(
+    def _load_environment_statements(self, macros: MacroRegistry) -> EnvironmentStatements:
+        """Loads environment statements."""
+        return EnvironmentStatements(
             before_all=[],
             after_all=[],
             python_env={},
@@ -626,8 +609,8 @@ class SqlMeshLoader(Loader):
 
         return metrics
 
-    def _load_project_statements(self, macros: MacroRegistry) -> ProjectStatements:
-        """Loads project statements."""
+    def _load_environment_statements(self, macros: MacroRegistry) -> EnvironmentStatements:
+        """Loads environment statements."""
 
         statements = {
             "before_all": self.config.plan.before_all or [],
@@ -643,7 +626,7 @@ class SqlMeshLoader(Loader):
             path=self.config_path,
         )
 
-        return ProjectStatements(**statements, python_env=python_env)
+        return EnvironmentStatements(**statements, python_env=python_env)
 
     class _Cache:
         def __init__(self, loader: SqlMeshLoader, config_path: Path):

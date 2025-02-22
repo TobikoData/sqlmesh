@@ -40,7 +40,6 @@ from sqlmesh.core.audit import Audit, StandaloneAudit
 from sqlmesh.core.dialect import schema_
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.engine_adapter.shared import InsertOverwriteStrategy
-from sqlmesh.core.loader import ProjectStatements
 from sqlmesh.core.macros import RuntimeStage
 from sqlmesh.core.model import (
     AuditResult,
@@ -85,7 +84,7 @@ else:
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.engine_adapter._typing import DF, QueryOrDF
-    from sqlmesh.core.environment import EnvironmentNamingInfo
+    from sqlmesh.core.environment import EnvironmentNamingInfo, EnvironmentStatements
 
 logger = logging.getLogger(__name__)
 
@@ -1106,9 +1105,9 @@ class SnapshotEvaluator:
         )
         adapter.execute(snapshot.model.render_post_statements(**create_render_kwargs))
 
-    def _execute_project_statements(
+    def _execute_environment_statements(
         self,
-        statements: t.List[ProjectStatements],
+        statements: t.List[EnvironmentStatements],
         execution_stage: str,
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         execution_time: t.Optional[TimeLike] = None,
@@ -1120,12 +1119,12 @@ class SnapshotEvaluator:
         adapter = self.adapter
         if rendered_expressions := [
             expr
-            for project_statements in statements
+            for environment_statements in statements
             for expr in render_statements(
-                statements=getattr(project_statements, execution_stage),
+                statements=getattr(environment_statements, execution_stage),
                 dialect=adapter.dialect,
                 default_catalog=default_catalog,
-                python_env=project_statements.python_env,
+                python_env=environment_statements.python_env,
                 snapshots=snapshots,
                 start=start,
                 end=end,

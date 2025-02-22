@@ -724,7 +724,7 @@ def test_signal_intervals(mocker: MockerFixture, make_snapshot, get_batched_miss
     }
 
 
-def test_run_project_statements(mocker, make_snapshot):
+def test_run_environment_statements(mocker, make_snapshot):
     model = load_sql_based_model(
         parse(  # type: ignore
             """
@@ -742,7 +742,7 @@ def test_run_project_statements(mocker, make_snapshot):
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
     evaluator = SnapshotEvaluator(adapters=mocker.MagicMock())
-    spy = mocker.spy(evaluator, "_execute_project_statements")
+    spy = mocker.spy(evaluator, "_execute_environment_statements")
 
     scheduler = Scheduler(
         snapshots=[snapshot],

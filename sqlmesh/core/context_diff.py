@@ -32,7 +32,7 @@ if t.TYPE_CHECKING:
     from sqlmesh.core.state_sync import StateReader
 
 from sqlmesh.utils.metaprogramming import Executable  # noqa
-from sqlmesh.core.loader import ProjectStatements
+from sqlmesh.core.environment import EnvironmentStatements
 
 IGNORED_PACKAGES = {"sqlmesh", "sqlglot"}
 
@@ -76,10 +76,10 @@ class ContextDiff(PydanticModel):
     """Previous requirements."""
     requirements: t.Dict[str, str] = {}
     """Python dependencies."""
-    previous_project_statements: t.List[ProjectStatements] = []
-    """Previous project statements."""
-    project_statements: t.List[ProjectStatements] = []
-    """Project statements."""
+    previous_environment_statements: t.List[EnvironmentStatements] = []
+    """Previous environment statements."""
+    environment_statements: t.List[EnvironmentStatements] = []
+    """Environment statements."""
     diff_rendered: bool = False
     """Whether the diff should compare raw vs rendered models"""
 
@@ -94,7 +94,7 @@ class ContextDiff(PydanticModel):
         provided_requirements: t.Optional[t.Dict[str, str]] = None,
         excluded_requirements: t.Optional[t.Set[str]] = None,
         diff_rendered: bool = False,
-        project_statements: t.Optional[t.List[ProjectStatements]] = [],
+        environment_statements: t.Optional[t.List[EnvironmentStatements]] = [],
     ) -> ContextDiff:
         """Create a ContextDiff object.
 
@@ -203,7 +203,7 @@ class ContextDiff(PydanticModel):
             snapshots.values(),
         )
 
-        previous_project_statements = state_reader.get_project_statements(environment)
+        previous_environment_statements = state_reader.get_environment_statements(environment)
 
         return ContextDiff(
             environment=environment,
@@ -223,8 +223,8 @@ class ContextDiff(PydanticModel):
             previous_requirements=env.requirements if env else {},
             requirements=requirements,
             diff_rendered=diff_rendered,
-            previous_project_statements=previous_project_statements,
-            project_statements=project_statements,
+            previous_environment_statements=previous_environment_statements,
+            environment_statements=environment_statements,
         )
 
     @classmethod
@@ -261,7 +261,7 @@ class ContextDiff(PydanticModel):
             previous_finalized_snapshots=env.previous_finalized_snapshots,
             previous_requirements=env.requirements,
             requirements=env.requirements,
-            previous_project_statements=[],
+            previous_environment_statements=[],
         )
 
     @property
@@ -271,7 +271,7 @@ class ContextDiff(PydanticModel):
             or self.is_new_environment
             or self.is_unfinalized_environment
             or self.has_requirement_changes
-            or self.has_project_statements_changes
+            or self.has_environment_statements_changes
         )
 
     @property
@@ -279,15 +279,15 @@ class ContextDiff(PydanticModel):
         return self.previous_requirements != self.requirements
 
     @property
-    def has_project_statements_changes(self) -> bool:
+    def has_environment_statements_changes(self) -> bool:
         if (
-            not self.previous_project_statements
-            and self.project_statements
-            and not any([stmt.before_all for stmt in self.project_statements])
-            and not any([stmt.after_all for stmt in self.project_statements])
+            not self.previous_environment_statements
+            and self.environment_statements
+            and not any([stmt.before_all for stmt in self.environment_statements])
+            and not any([stmt.after_all for stmt in self.environment_statements])
         ):
             return False
-        return self.project_statements != self.previous_project_statements
+        return self.environment_statements != self.previous_environment_statements
 
     @property
     def has_snapshot_changes(self) -> bool:
@@ -336,22 +336,30 @@ class ContextDiff(PydanticModel):
             )
         )
 
-    def project_statements_diff(self) -> str:
+    def environment_statements_diff(self) -> str:
         before_all_diff = ndiff(
             [
                 str(stmt)
-                for statements in self.previous_project_statements
+                for statements in self.previous_environment_statements
                 for stmt in statements.before_all
             ],
-            [str(stmt) for statements in self.project_statements for stmt in statements.before_all],
+            [
+                str(stmt)
+                for statements in self.environment_statements
+                for stmt in statements.before_all
+            ],
         )
         after_all_diff = ndiff(
             [
                 str(stmt)
-                for statements in self.previous_project_statements
+                for statements in self.previous_environment_statements
                 for stmt in statements.after_all
             ],
-            [str(stmt) for statements in self.project_statements for stmt in statements.after_all],
+            [
+                str(stmt)
+                for statements in self.environment_statements
+                for stmt in statements.after_all
+            ],
         )
         return (
             "  before_all:\n    "

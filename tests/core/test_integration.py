@@ -4145,8 +4145,8 @@ def test_multi(mocker):
     context.apply(plan)
 
     # Ensure before_all, after_all statements for multiple repos have executed
-    project_statements = context.state_reader.get_project_statements(c.PROD)
-    assert len(project_statements) == 2
+    environment_statements = context.state_reader.get_environment_statements(c.PROD)
+    assert len(environment_statements) == 2
     assert context.fetchdf("select * from before_1").to_dict()["1"][0] == 1
     assert context.fetchdf("select * from before_2").to_dict()["2"][0] == 2
     assert context.fetchdf("select * from after_1").to_dict()["repo_1"][0] == "repo_1"
@@ -4178,13 +4178,13 @@ def test_multi(mocker):
     context.apply(plan)
     validate_apply_basics(context, c.PROD, plan.snapshots.values())
 
-    # Ensure only repo_1's project statements have executed in this context
-    project_statements = context.state_reader.get_project_statements(c.PROD)
-    assert len(project_statements) == 1
-    assert project_statements[0].before_all == [
+    # Ensure only repo_1's environment statements have executed in this context
+    environment_statements = context.state_reader.get_environment_statements(c.PROD)
+    assert len(environment_statements) == 1
+    assert environment_statements[0].before_all == [
         "CREATE TABLE IF NOT EXISTS before_1 AS select @one()"
     ]
-    assert project_statements[0].after_all == [
+    assert environment_statements[0].after_all == [
         "CREATE TABLE IF NOT EXISTS after_1 AS select @dup()"
     ]
 
@@ -4636,7 +4636,7 @@ def initial_add(context: Context, environment: str):
     validate_apply_basics(context, environment, plan.snapshots.values())
 
 
-def test_plan_production_project_statements(tmp_path: Path):
+def test_plan_production_environment_statements(tmp_path: Path):
     model_a = """
     MODEL (
         name test_schema.a,
@@ -4679,11 +4679,11 @@ def test_plan_production_project_statements(tmp_path: Path):
     after_t = ctx.fetchdf("select * from after_t").to_dict()
     assert after_t["5"][0] == 5
 
-    project_statements = ctx.state_reader.get_project_statements(c.PROD)
-    assert project_statements[0].before_all == before_all
-    assert project_statements[0].after_all == after_all
-    assert project_statements[0].python_env.keys() == {"__sqlmesh__vars__"}
-    assert project_statements[0].python_env["__sqlmesh__vars__"].payload == "{'var_5': 5}"
+    environment_statements = ctx.state_reader.get_environment_statements(c.PROD)
+    assert environment_statements[0].before_all == before_all
+    assert environment_statements[0].after_all == after_all
+    assert environment_statements[0].python_env.keys() == {"__sqlmesh__vars__"}
+    assert environment_statements[0].python_env["__sqlmesh__vars__"].payload == "{'var_5': 5}"
 
 
 def apply_to_environment(

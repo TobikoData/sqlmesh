@@ -7,9 +7,8 @@ from enum import Enum
 from functools import cached_property
 
 from sqlmesh.core.context_diff import ContextDiff
-from sqlmesh.core.environment import Environment, EnvironmentNamingInfo
+from sqlmesh.core.environment import Environment, EnvironmentNamingInfo, EnvironmentStatements
 from sqlmesh.utils.metaprogramming import Executable  # noqa
-from sqlmesh.core.loader import ProjectStatements
 from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.snapshot import (
     DeployabilityIndex,
@@ -262,7 +261,7 @@ class Plan(PydanticModel, frozen=True):
                 for s in self.snapshots.values()
                 if s.is_model and s.model.disable_restatement
             },
-            project_statements=self.context_diff.project_statements,
+            environment_statements=self.context_diff.environment_statements,
         )
 
     @cached_property
@@ -294,7 +293,7 @@ class EvaluatablePlan(PydanticModel):
     interval_end_per_model: t.Optional[t.Dict[str, int]] = None
     execution_time: t.Optional[TimeLike] = None
     disabled_restatement_models: t.Set[str]
-    project_statements: t.Optional[t.List[ProjectStatements]] = None
+    environment_statements: t.Optional[t.List[EnvironmentStatements]] = None
 
     def is_selected_for_backfill(self, model_fqn: str) -> bool:
         return self.models_to_backfill is None or model_fqn in self.models_to_backfill

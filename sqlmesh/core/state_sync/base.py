@@ -9,8 +9,7 @@ import typing as t
 from sqlglot import __version__ as SQLGLOT_VERSION
 
 from sqlmesh import migrations
-from sqlmesh.core.environment import Environment, EnvironmentNamingInfo
-from sqlmesh.core.loader import ProjectStatements
+from sqlmesh.core.environment import Environment, EnvironmentNamingInfo, EnvironmentStatements
 from sqlmesh.core.plan.definition import EvaluatablePlan
 from sqlmesh.core.snapshot import (
     Snapshot,
@@ -188,16 +187,16 @@ class StateReader(abc.ABC):
         """
 
     @abc.abstractmethod
-    def get_project_statements(self, environment: str) -> t.List[ProjectStatements]:
-        """Fetches project statements from the project_statements table.
+    def get_environment_statements(self, environment: str) -> t.List[EnvironmentStatements]:
+        """Fetches environment statements from the environment_statements table.
 
         Returns:
             A tuple of (before_all, after_all) statements.
         """
 
     @abc.abstractmethod
-    def update_project_statements(self, plan: EvaluatablePlan) -> None:
-        """Updates the project statements for the given plan.
+    def update_environment_statements(self, plan: EvaluatablePlan) -> None:
+        """Updates the environment statements for the given plan.
 
         Args:
             plan: The plan to update.

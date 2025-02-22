@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 import json
 import re
 import typing as t
@@ -11,6 +12,7 @@ from sqlmesh.core.config import EnvironmentSuffixTarget
 from sqlmesh.core.snapshot import SnapshotId, SnapshotTableInfo
 from sqlmesh.utils import word_characters_only
 from sqlmesh.utils.date import TimeLike, now_timestamp
+from sqlmesh.utils.metaprogramming import Executable
 from sqlmesh.utils.pydantic import PydanticModel, field_validator
 
 T = t.TypeVar("T", bound="EnvironmentNamingInfo")
@@ -208,3 +210,20 @@ class Environment(EnvironmentNamingInfo):
         if not value:
             return []
         return value if isinstance(value[0], dict) else [v.dict() for v in value]
+
+
+@dataclass
+class EnvironmentStatements:
+    before_all: t.List[str]
+    after_all: t.List[str]
+    python_env: t.Dict[str, Executable]
+
+    @staticmethod
+    def parse_obj(statements: t.Dict[str, t.Any]) -> EnvironmentStatements:
+        return EnvironmentStatements(
+            before_all=statements.get("before_all", []),
+            after_all=statements.get("after_all", []),
+            python_env={
+                key: Executable(**value) for key, value in statements.get("python_env", {}).items()
+            },
+        )

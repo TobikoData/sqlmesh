@@ -15,8 +15,7 @@ from sqlmesh.core import constants as c
 from sqlmesh.core.config import EnvironmentSuffixTarget
 from sqlmesh.core.dialect import parse_one, schema_
 from sqlmesh.core.engine_adapter import create_engine_adapter
-from sqlmesh.core.environment import Environment
-from sqlmesh.core.loader import ProjectStatements
+from sqlmesh.core.environment import Environment, EnvironmentStatements
 from sqlmesh.core.model import (
     FullKind,
     IncrementalByTimeRangeKind,
@@ -3433,8 +3432,8 @@ def test_compact_intervals_pending_restatement_many_snapshots_same_version(
     ]
 
 
-def test_update_project_statements(state_sync: EngineAdapterStateSync):
-    assert state_sync.get_project_statements(environment="dev") == []
+def test_update_environment_statements(state_sync: EngineAdapterStateSync):
+    assert state_sync.get_environment_statements(environment="dev") == []
 
     env = Environment(
         name="dev",
@@ -3444,7 +3443,7 @@ def test_update_project_statements(state_sync: EngineAdapterStateSync):
         plan_id="test_plan_id",
     )
     statements = [
-        ProjectStatements(
+        EnvironmentStatements(
             before_all=["CREATE OR REPLACE TABLE table_1 AS SELECT 'a'"],
             after_all=["CREATE OR REPLACE TABLE table_2 AS SELECT 'b'"],
             python_env={},
@@ -3472,17 +3471,17 @@ def test_update_project_statements(state_sync: EngineAdapterStateSync):
         allow_destructive_models=set(),
         requires_backfill=True,
         disabled_restatement_models=set(),
-        project_statements=statements,
+        environment_statements=statements,
     )
 
-    state_sync.update_project_statements(plan=plan)
+    state_sync.update_environment_statements(plan=plan)
 
-    project_statements = state_sync.get_project_statements(environment="dev")
-    assert project_statements[0].before_all == ["CREATE OR REPLACE TABLE table_1 AS SELECT 'a'"]
-    assert project_statements[0].after_all == ["CREATE OR REPLACE TABLE table_2 AS SELECT 'b'"]
+    environment_statements = state_sync.get_environment_statements(environment="dev")
+    assert environment_statements[0].before_all == ["CREATE OR REPLACE TABLE table_1 AS SELECT 'a'"]
+    assert environment_statements[0].after_all == ["CREATE OR REPLACE TABLE table_2 AS SELECT 'b'"]
 
-    plan.project_statements = [
-        ProjectStatements(
+    plan.environment_statements = [
+        EnvironmentStatements(
             before_all=["CREATE OR REPLACE TABLE table_1 AS SELECT 'a'"],
             after_all=[
                 "@grant_schema_usage()",
@@ -3491,11 +3490,11 @@ def test_update_project_statements(state_sync: EngineAdapterStateSync):
             python_env={},
         )
     ]
-    state_sync.update_project_statements(plan=plan)
+    state_sync.update_environment_statements(plan=plan)
 
-    project_statements = state_sync.get_project_statements(environment="dev")
-    assert project_statements[0].before_all == ["CREATE OR REPLACE TABLE table_1 AS SELECT 'a'"]
-    assert project_statements[0].after_all == [
+    environment_statements = state_sync.get_environment_statements(environment="dev")
+    assert environment_statements[0].before_all == ["CREATE OR REPLACE TABLE table_1 AS SELECT 'a'"]
+    assert environment_statements[0].after_all == [
         "@grant_schema_usage()",
         "@grant_select_privileges()",
     ]

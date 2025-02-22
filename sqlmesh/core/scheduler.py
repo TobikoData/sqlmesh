@@ -441,8 +441,8 @@ class Scheduler:
         snapshots_by_name = {snapshot.name: snapshot for snapshot in self.snapshots.values()}
 
         if is_run_command:
-            self.snapshot_evaluator._execute_project_statements(
-                self.state_sync.get_project_statements(environment_naming_info.name),
+            self.snapshot_evaluator._execute_environment_statements(
+                self.state_sync.get_environment_statements(environment_naming_info.name),
                 execution_stage="before_all",
                 snapshots=snapshots_by_name,
                 start=start,
@@ -495,8 +495,8 @@ class Scheduler:
             self.state_sync.recycle()
 
             if is_run_command:
-                self.snapshot_evaluator._execute_project_statements(
-                    self.state_sync.get_project_statements(environment_naming_info.name),
+                self.snapshot_evaluator._execute_environment_statements(
+                    self.state_sync.get_environment_statements(environment_naming_info.name),
                     execution_stage="after_all",
                     snapshots=snapshots_by_name,
                     start=start,
