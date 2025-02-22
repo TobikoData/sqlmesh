@@ -650,28 +650,54 @@ class EngineAdapter:
         Build a schema expression for a table, columns, column comments, and additional schema properties.
         """
         expressions = expressions or []
+
+        return exp.Schema(
+            this=table,
+            expressions=self._build_column_defs(
+                columns_to_types=columns_to_types,
+                column_descriptions=column_descriptions,
+                is_view=is_view,
+            )
+            + expressions,
+        )
+
+    def _build_column_defs(
+        self,
+        columns_to_types: t.Dict[str, exp.DataType],
+        column_descriptions: t.Optional[t.Dict[str, str]] = None,
+        is_view: bool = False,
+    ) -> t.List[exp.ColumnDef]:
         engine_supports_schema_comments = (
             self.COMMENT_CREATION_VIEW.supports_schema_def
             if is_view
             else self.COMMENT_CREATION_TABLE.supports_schema_def
         )
-        return exp.Schema(
-            this=table,
-            expressions=[
-                exp.ColumnDef(
-                    this=exp.to_identifier(column),
-                    kind=None if is_view else kind,  # don't include column data type for views
-                    constraints=(
-                        self._build_col_comment_exp(column, column_descriptions)
-                        if column_descriptions
-                        and engine_supports_schema_comments
-                        and self.comments_enabled
-                        else None
-                    ),
-                )
-                for column, kind in columns_to_types.items()
-            ]
-            + expressions,
+        return [
+            self._build_column_def(
+                column,
+                column_descriptions=column_descriptions,
+                engine_supports_schema_comments=engine_supports_schema_comments,
+                col_type=None if is_view else kind,  # don't include column data type for views
+            )
+            for column, kind in columns_to_types.items()
+        ]
+
+    def _build_column_def(
+        self,
+        col_name: str,
+        column_descriptions: t.Optional[t.Dict[str, str]] = None,
+        engine_supports_schema_comments: bool = False,
+        col_type: t.Optional[exp.DATA_TYPE] = None,
+        nested_names: t.List[str] = [],
+    ) -> exp.ColumnDef:
+        return exp.ColumnDef(
+            this=exp.to_identifier(col_name),
+            kind=col_type,
+            constraints=(
+                self._build_col_comment_exp(col_name, column_descriptions)
+                if engine_supports_schema_comments and self.comments_enabled and column_descriptions
+                else None
+            ),
         )
 
     def _build_col_comment_exp(
