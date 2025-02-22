@@ -1210,10 +1210,10 @@ class EngineAdapterStateSync(StateSync):
     ) -> None:
         # Cleanup can only happen for compacted intervals
         self.compact_intervals()
-        # Delete dev intervals for dev tables that are no longer used
-        self._delete_intervals_by_dev_version(cleanup_targets)
         # Delete intervals for non-dev tables that are no longer used
         self._delete_interlals_by_version(cleanup_targets)
+        # Delete dev intervals for dev tables that are no longer used
+        self._delete_intervals_by_dev_version(cleanup_targets)
         # Nullify the snapshot identifiers of interval records for snapshots that have been deleted
         self._update_intervals_for_deleted_snapshots(expired_snapshot_ids)
 
@@ -1235,14 +1235,14 @@ class EngineAdapterStateSync(StateSync):
 
     def _delete_intervals_by_dev_version(self, targets: t.List[SnapshotTableCleanupTask]) -> None:
         """Deletes dev intervals for snapshot dev versions that are no longer used."""
-        if not targets:
-            return
-
         dev_keys_to_delete = [
             SnapshotNameVersion(name=t.snapshot.name, version=t.snapshot.dev_version)
             for t in targets
-            if t.snapshot.dev_version
+            if t.dev_table_only
         ]
+        if not dev_keys_to_delete:
+            return
+
         for where in self._snapshot_name_version_filter(
             dev_keys_to_delete, version_column_name="dev_version", alias=None
         ):
@@ -1255,9 +1255,7 @@ class EngineAdapterStateSync(StateSync):
             return
 
         for where in self._snapshot_name_version_filter(non_dev_keys_to_delete, alias=None):
-            self.engine_adapter.delete_from(
-                self.intervals_table, where.and_(exp.column("is_dev").not_())
-            )
+            self.engine_adapter.delete_from(self.intervals_table, where)
 
     def _get_snapshot_intervals(
         self,
