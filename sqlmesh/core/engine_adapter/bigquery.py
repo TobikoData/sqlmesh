@@ -665,13 +665,22 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
             # convert Table object to dict
             table_def = table.to_api_repr()
 
-            # set the column descriptions
-            for i in range(len(table_def["schema"]["fields"])):
-                comment = column_comments.get(table_def["schema"]["fields"][i]["name"], None)
-                if comment:
-                    table_def["schema"]["fields"][i]["description"] = self._truncate_comment(
-                        comment, self.MAX_COLUMN_COMMENT_LENGTH
-                    )
+            # Set column descriptions, supporting nested fields (e.g. record.field.nested_field)
+            for column, comment in column_comments.items():
+                fields = table_def["schema"]["fields"]
+                field_names = column.split(".")
+
+                # Traverse the fields with nested fields down to leaf level
+                for name in field_names:
+                    if fields and (
+                        field := next((field for field in fields if field["name"] == name), None)
+                    ):
+                        if name == field_names[-1]:
+                            field["description"] = self._truncate_comment(
+                                comment, self.MAX_COLUMN_COMMENT_LENGTH
+                            )
+                        else:
+                            fields = field.get("fields", None)
 
             # An "etag" is BQ versioning metadata that changes when an object is updated/modified. `update_table`
             # compares the etags of the table object passed to it and the remote table, erroring if the etags
@@ -778,6 +787,50 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
         if properties:
             return exp.Properties(expressions=properties)
         return None
+
+    def _build_column_def(
+        self,
+        col_name: str,
+        column_descriptions: t.Optional[t.Dict[str, str]] = None,
+        engine_supports_schema_comments: bool = False,
+        col_type: t.Optional[exp.DATA_TYPE] = None,
+        nested_names: t.List[str] = [],
+    ) -> exp.ColumnDef:
+        # For BigQuery's nested fields we have to recursively build the column descriptions
+        if (
+            col_type
+            and isinstance(col_type, exp.DataType)
+            and col_type.is_type(exp.DataType.Type.STRUCT)
+            and (column_defs := col_type.expressions)
+        ):
+            column_expressions = []
+            for column_def in column_defs:
+                if isinstance(column_def, exp.ColumnDef):
+                    column = self._build_column_def(
+                        col_name=column_def.name,
+                        column_descriptions=column_descriptions,
+                        engine_supports_schema_comments=engine_supports_schema_comments,
+                        col_type=column_def.kind,
+                        nested_names=nested_names + [col_name],
+                    )
+                else:
+                    column = column_def
+                column_expressions.append(column)
+            col_type = exp.DataType(
+                this=exp.DataType.Type.STRUCT, expressions=column_expressions, nested=True
+            )
+
+        return exp.ColumnDef(
+            this=exp.to_identifier(col_name),
+            kind=col_type,
+            constraints=(
+                self._build_col_comment_exp(
+                    ".".join(nested_names + [col_name]), column_descriptions
+                )
+                if engine_supports_schema_comments and self.comments_enabled and column_descriptions
+                else None
+            ),
+        )
 
     def _build_col_comment_exp(
         self, col_name: str, column_descriptions: t.Dict[str, str]
