@@ -238,7 +238,7 @@ class ModelMeta(_Node):
             vs = vs.expressions
 
         raw_col_descriptions = (
-            vs if isinstance(vs, dict) else {v.this.name: v.expression.name for v in vs}
+            vs if isinstance(vs, dict) else {v.this.sql(dialect): v.expression.name for v in vs}
         )
 
         col_descriptions = {
