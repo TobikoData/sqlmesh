@@ -117,7 +117,7 @@ setup(
             "dlt",
         ],
         "gcppostgres": [
-            "cloud-sql-python-connector[pg8000]",
+            "cloud-sql-python-connector[pg8000]>=1.8.0",
         ],
         "github": [
             "PyGithub~=2.5.0",
