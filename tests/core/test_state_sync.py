@@ -2856,6 +2856,85 @@ def test_compact_intervals_pending_restatement_shared_version(
         ]
 
 
+def test_get_environments_summary(
+    state_sync: EngineAdapterStateSync,
+    make_snapshot: t.Callable,
+) -> None:
+    snapshot = make_snapshot(
+        SqlModel(
+            name="a",
+            query=parse_one("select a, ds"),
+        ),
+    )
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    state_sync.push_snapshots([snapshot])
+
+    now_ts = now_timestamp()
+    env_a_ttl = now_ts - 1000
+
+    env_a = Environment(
+        name="test_environment_a",
+        snapshots=[snapshot.table_info],
+        start_at="2022-01-01",
+        end_at="2022-01-01",
+        plan_id="test_plan_id",
+        previous_plan_id="test_plan_id",
+        expiration_ts=env_a_ttl,
+    )
+    state_sync.promote(env_a)
+
+    env_b_ttl = now_ts + 1000
+    env_b = env_a.copy(update={"name": "test_environment_b", "expiration_ts": env_b_ttl})
+    state_sync.promote(env_b)
+
+    prod = Environment(
+        name="prod",
+        snapshots=[snapshot.table_info],
+        start_at="2022-01-01",
+        end_at="2022-01-01",
+        plan_id="test_plan_id",
+        previous_plan_id="test_plan_id",
+    )
+    state_sync.promote(prod)
+
+    actual = state_sync.get_environments_summary()
+    expected = {"prod": None, "test_environment_a": env_a_ttl, "test_environment_b": env_b_ttl}
+    assert actual == expected
+
+
+def test_get_environments_summary_only_prod(
+    state_sync: EngineAdapterStateSync,
+    make_snapshot: t.Callable,
+) -> None:
+    snapshot = make_snapshot(
+        SqlModel(
+            name="a",
+            query=parse_one("select a, ds"),
+        ),
+    )
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    state_sync.push_snapshots([snapshot])
+
+    prod = Environment(
+        name="prod",
+        snapshots=[snapshot.table_info],
+        start_at="2022-01-01",
+        end_at="2022-01-01",
+        plan_id="test_plan_id",
+        previous_plan_id="test_plan_id",
+    )
+    state_sync.promote(prod)
+    actual = state_sync.get_environments_summary()
+    expected = {"prod": None}
+    assert actual == expected
+
+
+def test_get_environments_summary_no_env(state_sync: EngineAdapterStateSync) -> None:
+    assert state_sync.get_environments_summary() == {}
+
+
 @time_machine.travel("2020-01-05 00:00:00 UTC")
 def test_compact_intervals_pending_restatement_many_snapshots_same_version(
     state_sync: EngineAdapterStateSync,

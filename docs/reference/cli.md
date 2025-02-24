@@ -25,6 +25,7 @@ Commands:
   dag                     Render the DAG as an html file.
   diff                    Show the diff between the local state and the...
   dlt_refresh             Attaches to a DLT pipeline with the option to...
+  environments            Prints the list of SQLMesh environments with...
   evaluate                Evaluate a model and return a dataframe with a...
   fetchdf                 Run a SQL query and display the results.
   format                  Format all SQL models and audits.
@@ -144,6 +145,16 @@ Usage: sqlmesh diff [OPTIONS] ENVIRONMENT
 
 Options:
   --help  Show this message and exit.
+```
+
+## environments
+```
+Usage: sqlmesh environments [OPTIONS]
+
+  Prints the list of SQLMesh environments with its expiry datetime.
+
+Options:
+  --help             Show this message and exit.
 ```
 
 ## evaluate

@@ -1009,6 +1009,13 @@ class SQLMeshMagics(Magics):
         context.clear_caches()
         context.console.log_success("SQLMesh cache and build artifacts cleared")
 
+    @magic_arguments()
+    @line_magic
+    @pass_sqlmesh_context
+    def environments(self, context: Context, line: str) -> None:
+        """Prints the list of SQLMesh environments with its expiry datetime."""
+        context.print_environment_names()
+
 
 def register_magics() -> None:
     try:

@@ -1931,6 +1931,16 @@ class GenericContext(BaseContext, t.Generic[C]):
         if state_connection:
             self._try_connection("state backend", state_connection.connection_validator())
 
+    @python_api_analytics
+    def print_environment_names(self) -> None:
+        """Prints all environment names along with expiry datetime."""
+        result = self._new_state_sync().get_environments_summary()
+        if not result:
+            raise SQLMeshError(
+                "This project has no environments. Create an environment using the `sqlmesh plan` command."
+            )
+        self.console.print_environments(result)
+
     def close(self) -> None:
         """Releases all resources allocated by this context."""
         if self._snapshot_evaluator:
