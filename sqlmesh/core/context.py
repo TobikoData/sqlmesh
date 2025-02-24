@@ -78,6 +78,7 @@ from sqlmesh.core.loader import Loader
 from sqlmesh.core.macros import ExecutableOrMacro, macro
 from sqlmesh.core.metric import Metric, rewrite
 from sqlmesh.core.model import Model, update_model_schemas
+from sqlmesh.core.config.model import ModelDefaultsConfig
 from sqlmesh.core.notification_target import (
     NotificationEvent,
     NotificationTarget,
@@ -381,6 +382,17 @@ class GenericContext(BaseContext, t.Generic[C]):
         self._engine_adapters: t.Dict[str, EngineAdapter] = {
             self.selected_gateway: self._connection_config.create_engine_adapter()
         }
+
+        if self.selected_gateway:
+            gw_model_defaults = self.config.gateways[self.selected_gateway]
+            if gw_model_defaults.model_defaults:
+                # Merge global model defaults with the selected gateway's, if it's overriden
+                global_defaults = self.config.model_defaults.model_dump(exclude_unset=True)
+                gateway_defaults = gw_model_defaults.model_defaults.model_dump(exclude_unset=True)
+
+                self.config.model_defaults = ModelDefaultsConfig(
+                    **{**global_defaults, **gateway_defaults}
+                )
 
         self._snapshot_evaluator: t.Optional[SnapshotEvaluator] = None
 
