@@ -167,7 +167,6 @@ In many cases, the above usage of a custom materialization will suffice.
 
 However, you may still want tighter integration with SQLMesh's internals:
 
-- You may want more control over what is considered a metadata change vs a data change
 - You may want to validate custom properties are correct before any database connections are made
 - You may want to leverage existing functionality of SQLMesh that relies on specific properties being present
 
@@ -176,43 +175,52 @@ During project load, SQLMesh will instantiate your *subclass* instead of `Custom
 
 This allows you to run custom validators at load time rather than having to perform extra validation when `insert()` is invoked on your `CustomMaterialization`.
 
-This approach also allows you set "top-level" properties directly in the `kind (...)` block rather than nesting them under `materialization_properties`.
+You can also define standard Python `@property` methods to "hoist" properties declared inside `materialization_properties` to the top level on your `Kind` object. This can make using them from within your custom materialization easier.
 
 To extend `CustomKind`, first you define a subclass like so:
 
 ```python linenums="1" hl_lines="7"
-from sqlmesh import CustomKind
+from typing_extensions import Self
 from pydantic import field_validator, ValidationInfo
+from sqlmesh import CustomKind
 from sqlmesh.utils.pydantic import list_of_fields_validator
+from sqlmesh.utils.errors import ConfigError
 
 class MyCustomKind(CustomKind):
 
-    primary_key: t.List[exp.Expression]
+    _primary_key: t.List[exp.Expression]
 
-    @field_validator("primary_key", mode="before")
-    @classmethod
-    def _validate_primary_key(cls, value: t.Any, info: ValidationInfo) -> t.Any:
-        return list_of_fields_validator(value, info.data)
+    @model_validator(mode="after")
+    def _validate_model(self) -> Self:
+        self._primary_key = list_of_fields_validator(
+            self.materialization_properties.get("primary_key"),
+            { "dialect": self.dialect }
+        )
+        if not self.primary_key:
+            raise ConfigError("primary_key must be specified")
+        return self
+
+    @property
+    def primary_key(self) -> t.List[exp.Expression]:
+        return self._primary_key
 
 ```
 
-In this example, we define a field called `primary_key` that takes a list of fields. Notice that the field validation is just a simple Pydantic `@field_validator` with the [exact same usage](https://github.com/TobikoData/sqlmesh/blob/ade5f7245950822f3cfe5a68a0c243f91ceca600/sqlmesh/core/model/kind.py#L470) as the standard SQLMesh model kinds.
-
 To use it within a model, we can do something like:
 
-```sql linenums="1" hl_lines="5"
+```sql linenums="1" hl_lines="4"
 MODEL (
   name my_db.my_model,
   kind CUSTOM (
     materialization 'my_custom_full',
-    primary_key (col1, col2)
+    materialization_properties (
+        primary_key = (col1, col2)
+    )
   )
 );
 ```
 
-Notice that the `primary_key` field we declared is top-level within the `kind` block instead of being nested under `materialization_properties`.
-
-To indicate to SQLMesh that it should use this subclass, specify it as a generic type parameter on your custom materialization class like so:
+To indicate to SQLMesh that it should use the `MyCustomKind` subclass instead of `CustomKind`, specify it as a generic type parameter on your custom materialization class like so:
 
 ```python linenums="1" hl_lines="1 16"
 class CustomFullMaterialization(CustomMaterialization[MyCustomKind]):
@@ -238,20 +246,8 @@ When SQLMesh loads your custom materialization, it will inspect the Python type 
 
 In this example, this means that:
 
-- Validation for `primary_key` happens at load time instead of evaluation time.
+- Validation for `primary_key` happens at load time instead of evaluation time. So if there is an issue, you can abort early rather than halfway through applying a plan.
 - When your custom materialization is called to load data into tables, `model.kind` will resolve to your custom kind object so you can access the extra properties you defined without first needing to validate them / coerce them to a usable type.
-
-### Data vs Metadata changes
-
-Subclasses of `CustomKind` that add extra properties can also decide if they are data properties (changes may trigger the creation of new snapshots) or metadata properties (changes just update metadata about the model).
-
-They can also decide if they are relevant for text diffing when SQLMesh detects changes to a model.
-
-You can opt in to SQLMesh's change tracking by overriding the following methods:
-
- - If changing the property should change the data fingerprint, add it to [data_hash_values()](https://github.com/TobikoData/sqlmesh/blob/ade5f7245950822f3cfe5a68a0c243f91ceca600/sqlmesh/core/model/kind.py#L858)
- - If changing the property should change the metadata fingerprint, add it to [metadata_hash_values()](https://github.com/TobikoData/sqlmesh/blob/ade5f7245950822f3cfe5a68a0c243f91ceca600/sqlmesh/core/model/kind.py#L867)
- - If the property should show up in context diffs, add it to [to_expression()](https://github.com/TobikoData/sqlmesh/blob/ade5f7245950822f3cfe5a68a0c243f91ceca600/sqlmesh/core/model/kind.py#L880)
 
 
 ## Sharing custom materializations

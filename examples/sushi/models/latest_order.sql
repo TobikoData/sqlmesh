@@ -2,7 +2,9 @@ MODEL (
   name sushi.latest_order,
   kind CUSTOM (
     materialization 'custom_full_with_custom_kind',
-    custom_property 'sushi!!!'
+    materialization_properties (
+      custom_property = 'sushi!!!'
+    )
   ),
   cron '@daily'
 );

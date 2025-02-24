@@ -4,19 +4,15 @@ import typing as t
 
 from sqlmesh import CustomMaterialization, CustomKind, Model
 from sqlmesh.utils.pydantic import validate_string
-from pydantic import field_validator
 
 if t.TYPE_CHECKING:
     from sqlmesh import QueryOrDF
 
 
 class ExtendedCustomKind(CustomKind):
-    custom_property: t.Optional[str] = None
-
-    @field_validator("custom_property", mode="before")
-    @classmethod
-    def _validate_custom_property(cls, v: t.Any) -> str:
-        return validate_string(v)
+    @property
+    def custom_property(self) -> str:
+        return validate_string(self.materialization_properties.get("custom_property"))
 
 
 class CustomFullWithCustomKindMaterialization(CustomMaterialization[ExtendedCustomKind]):

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import typing as t
 from enum import Enum
+from typing_extensions import Self
 
 from pydantic import Field
 from sqlglot import exp
@@ -240,43 +241,7 @@ class TimeColumn(PydanticModel):
     @classmethod
     def validator(cls) -> classmethod:
         def _time_column_validator(v: t.Any, info: ValidationInfo) -> TimeColumn:
-            dialect = get_dialect(info.data)
-
-            if isinstance(v, exp.Tuple):
-                column_expr = v.expressions[0]
-                column = (
-                    exp.column(column_expr)
-                    if isinstance(column_expr, exp.Identifier)
-                    else column_expr
-                )
-                format = v.expressions[1].name if len(v.expressions) > 1 else None
-            elif isinstance(v, exp.Expression):
-                column = exp.column(v) if isinstance(v, exp.Identifier) else v
-                format = None
-            elif isinstance(v, str):
-                column = d.parse_one(v, dialect=dialect)
-                column.meta.pop("sql")
-                format = None
-            elif isinstance(v, dict):
-                column_raw = v["column"]
-                column = (
-                    d.parse_one(column_raw, dialect=dialect)
-                    if isinstance(column_raw, str)
-                    else column_raw
-                )
-                format = v.get("format")
-            elif isinstance(v, TimeColumn):
-                column = v.column
-                format = v.format
-            else:
-                raise ConfigError(f"Invalid time_column: '{v}'.")
-
-            column = quote_identifiers(
-                normalize_identifiers(column, dialect=dialect), dialect=dialect
-            )
-            column.meta["dialect"] = dialect
-
-            return TimeColumn(column=column, format=format)
+            return TimeColumn.create(v, get_dialect(info.data))
 
         return field_validator("time_column", mode="before")(_time_column_validator)
 
@@ -313,6 +278,40 @@ class TimeColumn(PydanticModel):
 
     def to_property(self, dialect: str = "") -> exp.Property:
         return exp.Property(this="time_column", value=self.to_expression(dialect))
+
+    @classmethod
+    def create(cls, v: t.Any, dialect: str) -> Self:
+        if isinstance(v, exp.Tuple):
+            column_expr = v.expressions[0]
+            column = (
+                exp.column(column_expr) if isinstance(column_expr, exp.Identifier) else column_expr
+            )
+            format = v.expressions[1].name if len(v.expressions) > 1 else None
+        elif isinstance(v, exp.Expression):
+            column = exp.column(v) if isinstance(v, exp.Identifier) else v
+            format = None
+        elif isinstance(v, str):
+            column = d.parse_one(v, dialect=dialect)
+            column.meta.pop("sql")
+            format = None
+        elif isinstance(v, dict):
+            column_raw = v["column"]
+            column = (
+                d.parse_one(column_raw, dialect=dialect)
+                if isinstance(column_raw, str)
+                else column_raw
+            )
+            format = v.get("format")
+        elif isinstance(v, TimeColumn):
+            column = v.column
+            format = v.format
+        else:
+            raise ConfigError(f"Invalid time_column: '{v}'.")
+
+        column = quote_identifiers(normalize_identifiers(column, dialect=dialect), dialect=dialect)
+        column.meta["dialect"] = dialect
+
+        return cls(column=column, format=format)
 
 
 def _kind_dialect_validator(cls: t.Type, v: t.Optional[str]) -> str:
@@ -836,17 +835,16 @@ class CustomKind(_ModelKind):
     auto_restatement_cron: t.Optional[SQLGlotCron] = None
     auto_restatement_intervals: t.Optional[SQLGlotPositiveInt] = None
 
+    # so that CustomKind subclasses know the dialect when validating / normalizing / interpreting values in `materialization_properties`
+    dialect: str = Field(exclude=True)
+
     _properties_validator = properties_validator
 
     @field_validator("materialization", mode="before")
     @classmethod
     def _validate_materialization(cls, v: t.Any) -> str:
-        from sqlmesh.core.snapshot.evaluator import get_custom_materialization_type
-
-        materialization = validate_string(v)
-        # The below call fails if a materialization with the given name doesn't exist.
-        get_custom_materialization_type(materialization)
-        return materialization
+        # note: create_model_kind() validates the custom materialization class
+        return validate_string(v)
 
     @property
     def materialization_properties(self) -> CustomMaterializationProperties:
@@ -985,11 +983,15 @@ def create_model_kind(v: t.Any, dialect: str, defaults: t.Dict[str, t.Any]) -> M
                     "The 'materialization' property is required for models of the CUSTOM kind"
                 )
 
-            actual_kind_type, _ = get_custom_materialization_type(
-                validate_string(props.get("materialization"))
-            )
-
-            return actual_kind_type(**props)
+            # The below call will print a warning if a materialization with the given name doesn't exist
+            # we dont want to throw an error here because we still want Models with a CustomKind to be able
+            # to be serialized / deserialized in contexts where the custom materialization class may not be available,
+            # such as in HTTP request handlers
+            if custom_materialization := get_custom_materialization_type(
+                validate_string(props.get("materialization")), raise_errors=False
+            ):
+                actual_kind_type, _ = custom_materialization
+                return actual_kind_type(**props)
 
         return kind_type(**props)
 

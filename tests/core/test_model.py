@@ -13,7 +13,10 @@ from sqlglot import exp, parse_one
 from sqlglot.errors import ParseError
 from sqlglot.schema import MappingSchema
 from sqlmesh.cli.example_project import init_example_project, ProjectTemplate
+from sqlmesh.core.model.kind import TimeColumn
 
+from sqlmesh import CustomMaterialization, CustomKind
+from pydantic import model_validator
 from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
 from sqlmesh.core.console import get_console
@@ -6086,8 +6089,6 @@ def my_model(context, **kwargs):
 
 
 def test_custom_kind():
-    from sqlmesh import CustomMaterialization
-
     expressions = d.parse(
         """
         MODEL (
@@ -6115,7 +6116,8 @@ def test_custom_kind():
     with pytest.raises(
         ConfigError, match=r"Materialization strategy with name 'MyTestStrategy' was not found.*"
     ):
-        load_sql_based_model(expressions)
+        model = load_sql_based_model(expressions)
+        model.validate_definition()
 
     class MyTestStrategy(CustomMaterialization):
         pass
@@ -6149,6 +6151,70 @@ batch_concurrency 2,
 lookback 3
 )"""
     )
+
+
+def test_time_column_format_in_custom_kind():
+    class TimeColumnCustomKind(CustomKind):  # type: ignore[no-untyped-def]
+        _time_column: TimeColumn
+
+        @model_validator(mode="after")
+        def _validate(self):
+            self._time_column = TimeColumn.create(
+                self.materialization_properties.get("time_column"), self.dialect
+            )
+
+        @property
+        def time_column(self):
+            return self._time_column
+
+    class TimeColumnMaterialization(CustomMaterialization[TimeColumnCustomKind]):
+        NAME = "time_column_custom_strategy"
+
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.table,
+            kind CUSTOM (
+                materialization 'time_column_custom_strategy',
+                materialization_properties (
+                  time_column = ts
+                ),
+            ),
+            dialect duckdb
+        );
+
+        SELECT a, b, '2020-01-01' as ts
+        """
+    )
+
+    model = load_sql_based_model(expressions, time_column_format="%d-%m-%Y")
+    assert isinstance(model.kind, TimeColumnCustomKind)
+    assert model.kind.time_column.column == exp.to_column("ts", quoted=True)
+    assert model.kind.time_column.format == "%d-%m-%Y"
+    assert model.kind.dialect == "duckdb"
+    assert "dialect" not in json.loads(
+        model.kind.json()
+    )  # dialect should not be serialized against the kind
+
+    # explicit time_column format within the model
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.table,
+            kind CUSTOM (
+                materialization 'time_column_custom_strategy',
+                materialization_properties (
+                  time_column = (ts, '%Y-%m-%d')
+                ),
+            )
+        );
+
+        SELECT a, b, '2020-01-01' as ts
+        """
+    )
+
+    model = load_sql_based_model(expressions, time_column_format="%d-%m-%Y")
+    assert model.time_column.format == "%Y-%m-%d"
 
 
 def test_model_kind_to_expression():

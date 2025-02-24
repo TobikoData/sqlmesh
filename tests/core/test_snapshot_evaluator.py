@@ -1,11 +1,13 @@
 from __future__ import annotations
 import typing as t
+from typing_extensions import Self
 from unittest.mock import call, patch
 import re
 import logging
 import pytest
 import pandas as pd
-from pydantic import field_validator, ValidationInfo, ValidationError
+import json
+from pydantic import model_validator
 from pathlib import Path
 from pytest_mock.plugin import MockerFixture
 from sqlglot import expressions as exp
@@ -3118,7 +3120,8 @@ def test_evaluate_incremental_by_partition(mocker: MockerFixture, make_snapshot,
 
 
 def test_custom_materialization_strategy(adapter_mock, make_snapshot):
-    custom_insert_called = False
+    custom_insert_kind = None
+    custom_insert_query_or_df = None
 
     class TestCustomMaterializationStrategy(CustomMaterialization):
         NAME = "custom_materialization_test"
@@ -3131,14 +3134,11 @@ def test_custom_materialization_strategy(adapter_mock, make_snapshot):
             is_first_insert: bool,
             **kwargs: t.Any,
         ) -> None:
-            nonlocal custom_insert_called
-            custom_insert_called = True
+            nonlocal custom_insert_kind
+            nonlocal custom_insert_query_or_df
 
-            assert isinstance(model.kind, CustomKind)
-            assert model.custom_materialization_properties == {"test_property": "test_value"}
-
-            assert isinstance(query_or_df, exp.Query)
-            assert query_or_df.sql() == 'SELECT * FROM "tbl" AS "tbl"'
+            custom_insert_kind = model.kind
+            custom_insert_query_or_df = query_or_df
 
     evaluator = SnapshotEvaluator(adapter_mock)
     model = load_sql_based_model(
@@ -3170,19 +3170,32 @@ def test_custom_materialization_strategy(adapter_mock, make_snapshot):
         snapshots={},
     )
 
-    assert custom_insert_called
+    assert custom_insert_kind
+    assert isinstance(custom_insert_kind, CustomKind)
+    assert model.custom_materialization_properties == {"test_property": "test_value"}
+
+    assert isinstance(custom_insert_query_or_df, exp.Query)
+    assert custom_insert_query_or_df.sql() == 'SELECT * FROM "tbl" AS "tbl"'
 
 
 def test_custom_materialization_strategy_with_custom_properties(adapter_mock, make_snapshot):
-    custom_insert_called = False
+    custom_insert_kind = None
 
-    class TestCustomKind(CustomKind):
-        primary_key: t.List[exp.Expression]
+    class TestCustomKind(CustomKind):  # type: ignore[no-untyped-def]
+        _primary_key: t.List[exp.Expression]
 
-        @field_validator("primary_key", mode="before")
-        @classmethod
-        def _validate_primary_key(cls, value: t.Any, info: ValidationInfo) -> t.Any:
-            return list_of_fields_validator(value, info.data)
+        @model_validator(mode="after")
+        def _validate_model(self) -> Self:
+            self._primary_key = list_of_fields_validator(
+                self.materialization_properties.get("primary_key"), {}
+            )
+            if not self.primary_key:
+                raise ConfigError("primary_key must be specified")
+            return self
+
+        @property
+        def primary_key(self) -> t.List[exp.Expression]:
+            return self._primary_key
 
     class TestCustomMaterializationStrategy(CustomMaterialization[TestCustomKind]):
         NAME = "custom_materialization_test_1"
@@ -3195,16 +3208,12 @@ def test_custom_materialization_strategy_with_custom_properties(adapter_mock, ma
             is_first_insert: bool,
             **kwargs: t.Any,
         ) -> None:
-            nonlocal custom_insert_called
-            custom_insert_called = True
-
-            assert isinstance(model.kind, TestCustomKind)
-            assert model.kind.primary_key == [exp.column("id")]
-            assert not model.custom_materialization_properties
+            nonlocal custom_insert_kind
+            custom_insert_kind = model.kind
 
     evaluator = SnapshotEvaluator(adapter_mock)
 
-    with pytest.raises(ValidationError, match=r".*primary_key\n.*Field required.*"):
+    with pytest.raises(ConfigError, match=r"primary_key must be specified"):
         model = load_sql_based_model(
             parse(  # type: ignore
                 """
@@ -3227,7 +3236,9 @@ def test_custom_materialization_strategy_with_custom_properties(adapter_mock, ma
                 name test_schema.test_model,
                 kind CUSTOM (
                     materialization 'custom_materialization_test_1',
-                    primary_key id
+                    materialization_properties (
+                        primary_key = id
+                    )
                 )
             );
 
@@ -3247,7 +3258,15 @@ def test_custom_materialization_strategy_with_custom_properties(adapter_mock, ma
         snapshots={},
     )
 
-    assert custom_insert_called
+    assert custom_insert_kind
+    assert isinstance(custom_insert_kind, TestCustomKind)
+    assert custom_insert_kind.primary_key == [exp.column("id", quoted=True)]
+    assert model.custom_materialization_properties["primary_key"]
+
+    # show that the _primary_key property is transient
+    as_json = json.loads(model.json())
+    assert "primary_key" not in as_json["kind"]
+    assert "_primary_key" not in as_json["kind"]
 
 
 def test_custom_materialization_strategy_with_custom_kind_must_be_correct_type():
@@ -3258,12 +3277,9 @@ def test_custom_materialization_strategy_with_custom_kind_must_be_correct_type()
     class TestCustomMaterializationStrategy(CustomMaterialization[TestCustomKind]):  # type: ignore
         NAME = "custom_materialization_test_2"
 
-    with pytest.raises(
-        SQLMeshError, match=r"kind 'TestCustomKind' must be a subclass of CustomKind"
-    ):
-        load_sql_based_model(
-            parse(  # type: ignore
-                """
+    model = load_sql_based_model(
+        parse(  # type: ignore
+            """
                 MODEL (
                     name test_schema.test_model,
                     kind CUSTOM (
@@ -3273,8 +3289,13 @@ def test_custom_materialization_strategy_with_custom_kind_must_be_correct_type()
 
                 SELECT * FROM tbl;
                 """
-            )
         )
+    )
+
+    with pytest.raises(
+        SQLMeshError, match=r"kind 'TestCustomKind' must be a subclass of CustomKind"
+    ):
+        model.validate_definition()
 
 
 def test_create_managed(adapter_mock, make_snapshot, mocker: MockerFixture):
