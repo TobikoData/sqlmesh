@@ -226,6 +226,7 @@ def test_add_interval(snapshot: Snapshot, make_snapshot):
 
 def test_add_interval_dev(snapshot: Snapshot, make_snapshot):
     snapshot.version = "existing_version"
+    snapshot.dev_version_ = "existing_dev_version"
     snapshot.change_category = SnapshotChangeCategory.FORWARD_ONLY
 
     snapshot.add_interval("2020-01-01", "2020-01-01")
@@ -241,8 +242,7 @@ def test_add_interval_dev(snapshot: Snapshot, make_snapshot):
     assert new_snapshot.dev_intervals == []
 
     new_snapshot = make_snapshot(snapshot.model)
-    new_snapshot.previous_versions = snapshot.all_versions
-    new_snapshot.migrated = True
+    new_snapshot.dev_version_ = snapshot.dev_version
     new_snapshot.merge_intervals(snapshot)
     assert new_snapshot.intervals == [(to_timestamp("2020-01-01"), to_timestamp("2020-01-02"))]
     assert new_snapshot.dev_intervals == [(to_timestamp("2020-01-02"), to_timestamp("2020-01-03"))]
@@ -1016,7 +1016,7 @@ def test_table_name(snapshot: Snapshot, make_snapshot: t.Callable):
     assert snapshot.table_name(is_deployable=True) == "sqlmesh__default.name__3078928823"
     assert snapshot.table_name(is_deployable=False) == "sqlmesh__default.name__3078928823__dev"
 
-    assert not snapshot.dev_version
+    assert snapshot.dev_version == snapshot.fingerprint.to_version()
 
     # Mimic an indirect non-breaking change.
     previous_data_version = snapshot.data_version
@@ -1029,7 +1029,8 @@ def test_table_name(snapshot: Snapshot, make_snapshot: t.Callable):
     assert snapshot.table_name(is_deployable=True) == "sqlmesh__default.name__3078928823"
     # Indirect non-breaking snapshots reuse the dev table as well.
     assert snapshot.table_name(is_deployable=False) == "sqlmesh__default.name__3078928823__dev"
-    assert snapshot.dev_version
+    assert snapshot.dev_version != snapshot.fingerprint.to_version()
+    assert snapshot.dev_version == previous_data_version.dev_version
 
     # Mimic a direct forward-only change.
     snapshot.fingerprint = SnapshotFingerprint(
@@ -1068,10 +1069,10 @@ def test_table_name_view(make_snapshot: t.Callable):
     assert snapshot.table_name(is_deployable=True) == f"sqlmesh__default.name__{snapshot.version}"
     assert (
         snapshot.table_name(is_deployable=False)
-        == f"sqlmesh__default.name__{snapshot.dev_version_get_or_generate()}__dev"
+        == f"sqlmesh__default.name__{snapshot.dev_version}__dev"
     )
 
-    assert not snapshot.dev_version
+    assert snapshot.dev_version == snapshot.fingerprint.to_version()
 
     # Mimic an indirect non-breaking change.
     new_snapshot = make_snapshot(SqlModel(name="name", query=parse_one("select 2"), kind="VIEW"))
@@ -1084,11 +1085,11 @@ def test_table_name_view(make_snapshot: t.Callable):
     # Indirect non-breaking view snapshots should not reuse the dev table.
     assert (
         new_snapshot.table_name(is_deployable=False)
-        == f"sqlmesh__default.name__{new_snapshot.dev_version_get_or_generate()}__dev"
+        == f"sqlmesh__default.name__{new_snapshot.dev_version}__dev"
     )
-    assert not new_snapshot.dev_version
+    assert new_snapshot.dev_version == new_snapshot.fingerprint.to_version()
     assert new_snapshot.version == snapshot.version
-    assert new_snapshot.dev_version_get_or_generate() != snapshot.dev_version_get_or_generate()
+    assert new_snapshot.dev_version != snapshot.dev_version
 
 
 def test_categorize_change_sql(make_snapshot):
@@ -2650,8 +2651,9 @@ def test_apply_auto_restatements(make_snapshot):
     assert sorted(restated_intervals, key=lambda x: x.name) == [
         SnapshotIntervals(
             name=snapshot_a.name,
-            identifier=snapshot_a.identifier,
+            identifier=None,
             version=snapshot_a.version,
+            dev_version=None,
             intervals=[],
             dev_intervals=[],
             pending_restatement_intervals=[
@@ -2660,8 +2662,9 @@ def test_apply_auto_restatements(make_snapshot):
         ),
         SnapshotIntervals(
             name=snapshot_b.name,
-            identifier=snapshot_b.identifier,
+            identifier=None,
             version=snapshot_b.version,
+            dev_version=None,
             intervals=[],
             dev_intervals=[],
             pending_restatement_intervals=[
@@ -2670,8 +2673,9 @@ def test_apply_auto_restatements(make_snapshot):
         ),
         SnapshotIntervals(
             name=snapshot_c.name,
-            identifier=snapshot_c.identifier,
+            identifier=None,
             version=snapshot_c.version,
+            dev_version=None,
             intervals=[],
             dev_intervals=[],
             pending_restatement_intervals=[
@@ -2680,8 +2684,9 @@ def test_apply_auto_restatements(make_snapshot):
         ),
         SnapshotIntervals(
             name=snapshot_d.name,
-            identifier=snapshot_d.identifier,
+            identifier=None,
             version=snapshot_d.version,
+            dev_version=None,
             intervals=[],
             dev_intervals=[],
             pending_restatement_intervals=[
@@ -2690,8 +2695,9 @@ def test_apply_auto_restatements(make_snapshot):
         ),
         SnapshotIntervals(
             name=snapshot_e.name,
-            identifier=snapshot_e.identifier,
+            identifier=None,
             version=snapshot_e.version,
+            dev_version=None,
             intervals=[],
             dev_intervals=[],
             pending_restatement_intervals=[
@@ -2700,8 +2706,9 @@ def test_apply_auto_restatements(make_snapshot):
         ),
         SnapshotIntervals(
             name=snapshot_f.name,
-            identifier=snapshot_f.identifier,
+            identifier=None,
             version=snapshot_f.version,
+            dev_version=None,
             intervals=[],
             dev_intervals=[],
             pending_restatement_intervals=[
@@ -2777,8 +2784,9 @@ def test_apply_auto_restatements_disable_restatement_downstream(make_snapshot):
     assert sorted(restated_intervals, key=lambda x: x.name) == [
         SnapshotIntervals(
             name=snapshot_a.name,
-            identifier=snapshot_a.identifier,
+            identifier=None,
             version=snapshot_a.version,
+            dev_version=None,
             intervals=[],
             dev_intervals=[],
             pending_restatement_intervals=[

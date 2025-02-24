@@ -797,7 +797,7 @@ def test_create_new_forward_only_model(mocker: MockerFixture, adapter_mock, make
     adapter_mock.create_schema.assert_called_once_with(to_schema("sqlmesh__test_schema"))
     # Only non-deployable table should be created
     adapter_mock.create_table.assert_called_once_with(
-        f"sqlmesh__test_schema.test_schema__test_model__{snapshot.dev_version_get_or_generate()}__dev",
+        f"sqlmesh__test_schema.test_schema__test_model__{snapshot.dev_version}__dev",
         columns_to_types={"a": exp.DataType.build("int"), "ds": exp.DataType.build("varchar")},
         table_format=None,
         storage_format=None,
@@ -812,7 +812,7 @@ def test_create_new_forward_only_model(mocker: MockerFixture, adapter_mock, make
         schema_("sqlmesh__test_schema"),
         {
             f"test_schema__test_model__{snapshot.version}",
-            f"test_schema__test_model__{snapshot.dev_version_get_or_generate()}__dev",
+            f"test_schema__test_model__{snapshot.dev_version}__dev",
         },
     )
 
@@ -1544,7 +1544,7 @@ def test_create_clone_in_dev_missing_table(mocker: MockerFixture, adapter_mock, 
     evaluator.create([snapshot], {}, deployability_index=DeployabilityIndex.none_deployable())
 
     adapter_mock.create_table.assert_called_once_with(
-        f"sqlmesh__test_schema.test_schema__test_model__{snapshot.dev_version_get_or_generate()}__dev",
+        f"sqlmesh__test_schema.test_schema__test_model__{snapshot.dev_version}__dev",
         columns_to_types={"a": exp.DataType.build("int"), "ds": exp.DataType.build("date")},
         table_format=None,
         storage_format=None,

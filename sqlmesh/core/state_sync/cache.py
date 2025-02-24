@@ -118,7 +118,15 @@ class CachingStateSync(DelegatingStateSync):
 
     def add_snapshots_intervals(self, snapshots_intervals: t.Sequence[SnapshotIntervals]) -> None:
         for snapshot_intervals in snapshots_intervals:
-            self.snapshot_cache.pop(snapshot_intervals.snapshot_id, None)
+            if snapshot_intervals.snapshot_id:
+                self.snapshot_cache.pop(snapshot_intervals.snapshot_id, None)
+            else:
+                # Evict all snapshots that share the same name
+                self.snapshot_cache = {
+                    snapshot_id: value
+                    for snapshot_id, value in self.snapshot_cache.items()
+                    if snapshot_id.name != snapshot_intervals.name
+                }
         self.state_sync.add_snapshots_intervals(snapshots_intervals)
 
     def remove_intervals(
