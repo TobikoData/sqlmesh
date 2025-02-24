@@ -134,9 +134,10 @@ class DbtLoader(Loader):
                             "Skipping loading Snapshot (SCD Type 2) models due to the feature flag disabling this feature"
                         )
                         continue
-                    sqlmesh_model = cache.get_or_load_model(
-                        model.path, loader=lambda: _to_sqlmesh(model, context)
-                    )
+
+                    sqlmesh_model = cache.get_or_load_models(
+                        model.path, loader=lambda: [_to_sqlmesh(model, context)]
+                    )[0]
 
                     models[sqlmesh_model.fqn] = sqlmesh_model
 
@@ -269,14 +270,18 @@ class DbtLoader(Loader):
             cache_path = loader.config_path / c.CACHE / target.name
             self._model_cache = ModelCache(cache_path)
 
-        def get_or_load_model(self, target_path: Path, loader: t.Callable[[], Model]) -> Model:
-            model = self._model_cache.get_or_load(
+        def get_or_load_models(
+            self, target_path: Path, loader: t.Callable[[], t.List[Model]]
+        ) -> t.List[Model]:
+            models = self._model_cache.get_or_load(
                 self._cache_entry_name(target_path),
                 self._cache_entry_id(target_path),
                 loader=loader,
             )
-            model._path = target_path
-            return model
+            for model in models:
+                model._path = target_path
+
+            return models
 
         def _cache_entry_name(self, target_path: Path) -> str:
             try:

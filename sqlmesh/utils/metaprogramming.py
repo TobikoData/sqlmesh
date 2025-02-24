@@ -12,6 +12,7 @@ import textwrap
 import types
 import typing as t
 from enum import Enum
+from numbers import Number
 from pathlib import Path
 
 from astor import to_source
@@ -23,6 +24,7 @@ from sqlmesh.utils.pydantic import PydanticModel
 
 IGNORE_DECORATORS = {"macro", "model", "signal"}
 SERIALIZABLE_CALLABLES = (type, types.FunctionType)
+LITERALS = (Number, str, bytes, tuple, list, dict, set, bool)
 
 
 def _is_relative_to(path: t.Optional[Path | str], other: t.Optional[Path | str]) -> bool:
@@ -402,7 +404,20 @@ def serialize_env(env: t.Dict[str, t.Any], path: Path) -> t.Dict[str, Executable
     serialized = {}
 
     for k, v in env.items():
-        if callable(v):
+        if isinstance(v, LITERALS) or v is None:
+            serialized[k] = Executable.value(v)
+        elif inspect.ismodule(v):
+            name = v.__name__
+            if hasattr(v, "__file__") and _is_relative_to(v.__file__, path):
+                raise SQLMeshError(
+                    f"Cannot serialize 'import {name}'. Use 'from {name} import ...' instead."
+                )
+            postfix = "" if name == k else f" as {k}"
+            serialized[k] = Executable(
+                payload=f"import {name}{postfix}",
+                kind=ExecutableKind.IMPORT,
+            )
+        elif callable(v):
             name = v.__name__
             name = k if name == "<lambda>" else name
 
@@ -444,19 +459,12 @@ def serialize_env(env: t.Dict[str, t.Any], path: Path) -> t.Dict[str, Executable
                     payload=f"from {v.__module__} import {name}",
                     kind=ExecutableKind.IMPORT,
                 )
-        elif inspect.ismodule(v):
-            name = v.__name__
-            if hasattr(v, "__file__") and _is_relative_to(v.__file__, path):
-                raise SQLMeshError(
-                    f"Cannot serialize 'import {name}'. Use 'from {name} import ...' instead."
-                )
-            postfix = "" if name == k else f" as {k}"
-            serialized[k] = Executable(
-                payload=f"import {name}{postfix}",
-                kind=ExecutableKind.IMPORT,
-            )
         else:
-            serialized[k] = Executable.value(v)
+            raise SQLMeshError(
+                f"Object '{v}' cannot be serialized. If it's defined in a library, import the corresponding "
+                "module and reference the object using its fully-qualified name. For example, the datetime "
+                "module's 'UTC' object should be accessed as 'datetime.UTC'."
+            )
 
     return serialized
 

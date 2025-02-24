@@ -41,6 +41,7 @@ FORBIDDEN_STATE_SYNC_ENGINES = {
     # Nullable types are problematic
     "clickhouse",
 }
+MOTHERDUCK_TOKEN_REGEX = re.compile(r"(\?motherduck_token=)(\S*)")
 
 
 class ConnectionConfig(abc.ABC, BaseConfig):
@@ -302,11 +303,17 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
         for data_file in data_files:
             key = data_file if isinstance(data_file, str) else data_file.path
             if adapter := BaseDuckDBConnectionConfig._data_file_to_adapter.get(key):
-                logger.info(f"Using existing DuckDB adapter due to overlapping data file: {key}")
+                logger.info(
+                    f"Using existing DuckDB adapter due to overlapping data file: {self._mask_motherduck_token(key)}"
+                )
                 return adapter
 
         if data_files:
-            logger.info(f"Creating new DuckDB adapter for data files: {data_files}")
+            masked_files = {
+                self._mask_motherduck_token(file if isinstance(file, str) else file.path)
+                for file in data_files
+            }
+            logger.info(f"Creating new DuckDB adapter for data files: {masked_files}")
         else:
             logger.info("Creating new DuckDB adapter for in-memory database")
         adapter = super().create_engine_adapter(register_comments_override)
@@ -322,6 +329,9 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
         if self.catalogs:
             return list(self.catalogs)[0]
         return None
+
+    def _mask_motherduck_token(self, string: str) -> str:
+        return MOTHERDUCK_TOKEN_REGEX.sub(lambda m: f"{m.group(1)}{'*' * len(m.group(2))}", string)
 
 
 class MotherDuckConnectionConfig(BaseDuckDBConnectionConfig):

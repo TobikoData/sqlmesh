@@ -5,13 +5,14 @@ from datetime import date, datetime
 from pathlib import Path
 from unittest.mock import patch, PropertyMock
 
+import time_machine
 import pandas as pd
 import pytest
 from pytest_mock.plugin import MockerFixture
 from sqlglot import exp, parse_one
 from sqlglot.errors import ParseError
 from sqlglot.schema import MappingSchema
-from sqlmesh.cli.example_project import init_example_project
+from sqlmesh.cli.example_project import init_example_project, ProjectTemplate
 
 from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
@@ -896,6 +897,8 @@ def test_seed_csv_settings():
               csv_settings (
                 quotechar = '''',
                 escapechar = '\\',
+                keep_default_na = false,
+                na_values = (id = [1, '2', false, null], alias = ('foo'))
               ),
             ),
             columns (
@@ -909,7 +912,39 @@ def test_seed_csv_settings():
     model = load_sql_based_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
 
     assert isinstance(model.kind, SeedKind)
-    assert model.kind.csv_settings == CsvSettings(quotechar="'", escapechar="\\")
+    assert model.kind.csv_settings == CsvSettings(
+        quotechar="'",
+        escapechar="\\",
+        na_values={"id": [1, "2", False, None], "alias": ["foo"]},
+        keep_default_na=False,
+    )
+    assert model.kind.data_hash_values == [
+        "SEED",
+        "'",
+        "\\",
+        "{'id': [1, '2', False, None], 'alias': ['foo']}",
+        "False",
+    ]
+
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.seed,
+            kind SEED (
+              path '../seeds/waiter_names.csv',
+              csv_settings (
+                na_values = ('#N/A', 'other')
+              ),
+            ),
+        );
+    """
+    )
+
+    model = load_sql_based_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
+
+    assert isinstance(model.kind, SeedKind)
+    assert model.kind.csv_settings == CsvSettings(na_values=["#N/A", "other"])
+    assert model.kind.data_hash_values == ["SEED", "['#N/A', 'other']"]
 
 
 def test_seed_marker_substitution():
@@ -2437,16 +2472,16 @@ def test_model_cache(tmp_path: Path, mocker: MockerFixture):
 
     model = load_sql_based_model([e for e in expressions if e])
 
-    loader = mocker.Mock(return_value=model)
+    loader = mocker.Mock(return_value=[model])
 
-    assert cache.get_or_load("test_model", "test_entry_a", loader=loader).dict() == model.dict()
-    assert cache.get_or_load("test_model", "test_entry_a", loader=loader).dict() == model.dict()
+    assert cache.get_or_load("test_model", "test_entry_a", loader=loader)[0].dict() == model.dict()
+    assert cache.get_or_load("test_model", "test_entry_a", loader=loader)[0].dict() == model.dict()
 
-    assert cache.get_or_load("test_model", "test_entry_b", loader=loader).dict() == model.dict()
-    assert cache.get_or_load("test_model", "test_entry_b", loader=loader).dict() == model.dict()
+    assert cache.get_or_load("test_model", "test_entry_b", loader=loader)[0].dict() == model.dict()
+    assert cache.get_or_load("test_model", "test_entry_b", loader=loader)[0].dict() == model.dict()
 
-    assert cache.get_or_load("test_model", "test_entry_a", loader=loader).dict() == model.dict()
-    assert cache.get_or_load("test_model", "test_entry_a", loader=loader).dict() == model.dict()
+    assert cache.get_or_load("test_model", "test_entry_a", loader=loader)[0].dict() == model.dict()
+    assert cache.get_or_load("test_model", "test_entry_a", loader=loader)[0].dict() == model.dict()
 
     assert loader.call_count == 2
 
@@ -5557,7 +5592,7 @@ def test_macros_in_physical_properties(make_snapshot):
     assert isinstance(model.physical_properties["sort_order"], d.MacroFunc)
 
     # substitution occurs at runtime
-    snapshot: Snapshot = make_snapshot(model)
+    snapshot = make_snapshot(model)
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
     rendered_physical_properties = model.render_physical_properties(
@@ -7576,3 +7611,211 @@ def test_partition_interval_unit():
     )
     model = load_sql_based_model(expressions)
     assert model.partition_interval_unit is None
+
+
+def test_model_blueprinting(tmp_path: Path) -> None:
+    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+
+    db_path = str(tmp_path / "db.db")
+    db_connection = DuckDBConnectionConfig(database=db_path)
+
+    gateways = {
+        "gw1": GatewayConfig(connection=db_connection, variables={"x": 1}),
+        "gw2": GatewayConfig(connection=db_connection, variables={"x": 2}),
+    }
+    config = Config(
+        gateways=gateways,
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+    )
+
+    blueprint_sql = tmp_path / "macros" / "identity_macro.py"
+    blueprint_sql.parent.mkdir(parents=True, exist_ok=True)
+    blueprint_sql.write_text(
+        """from sqlmesh import macro
+
+@macro()
+def identity(evaluator, value):
+    return value
+"""
+    )
+    blueprint_sql = tmp_path / "models" / "blueprint.sql"
+    blueprint_sql.parent.mkdir(parents=True, exist_ok=True)
+    blueprint_sql.write_text(
+        """
+        MODEL (
+          name @{blueprint}.test_model_sql,
+          gateway @identity(@blueprint),
+          blueprints ((blueprint := gw1), (blueprint := gw2)),
+          kind FULL
+        );
+
+        SELECT
+          @x AS x
+        """
+    )
+    blueprint_pydf = tmp_path / "models" / "blueprint_df.py"
+    blueprint_pydf.parent.mkdir(parents=True, exist_ok=True)
+    blueprint_pydf.write_text(
+        """
+import pandas as pd
+from sqlmesh import model
+
+
+@model(
+    "@{blueprint}.test_model_pydf",
+    gateway="@blueprint",
+    blueprints=[{"blueprint": "gw1"}, {"blueprint": "gw2"}],
+    kind="FULL",
+    columns={"x": "INT"},
+)
+def entrypoint(context, *args, **kwargs):
+    x_var = context.var("x")
+    return pd.DataFrame({"x": [x_var]})"""
+    )
+    blueprint_pysql = tmp_path / "models" / "blueprint_sql.py"
+    blueprint_pysql.parent.mkdir(parents=True, exist_ok=True)
+    blueprint_pysql.write_text(
+        """
+from sqlmesh import model
+
+
+@model(
+    "@{blueprint}.test_model_pysql",
+    gateway="@blueprint",
+    blueprints=[{"blueprint": "gw1"}, {"blueprint": "gw2"}],
+    kind="FULL",
+    is_sql=True,
+)
+def entrypoint(evaluator):
+    x_var = evaluator.var("x")
+    return f'SELECT {x_var} AS x'"""
+    )
+
+    context = Context(paths=tmp_path, config=config)
+    models = context.models
+
+    # Each of the three model files "expands" into two models
+    assert len(models) == 6
+
+    context.plan(no_prompts=True, auto_apply=True, no_diff=True)
+
+    for model_name in ("test_model_sql", "test_model_pydf", "test_model_pysql"):
+        for gateway_no in range(1, 3):
+            model = models.get(f'"db"."gw{gateway_no}"."{model_name}"')
+
+            assert model is not None
+            assert "blueprints" not in model.all_fields()
+            assert model.python_env.get(c.SQLMESH_VARS) == Executable.value({"x": gateway_no})
+            assert context.fetchdf(f"from {model.fqn}").to_dict() == {"x": {0: gateway_no}}
+
+    multi_variable_blueprint_example = tmp_path / "models" / "multi_variable_blueprint_example.sql"
+    multi_variable_blueprint_example.parent.mkdir(parents=True, exist_ok=True)
+    multi_variable_blueprint_example.write_text(
+        """
+        MODEL (
+          name @{customer}.my_table,
+          blueprints (
+            (customer := customer1, foo := 'bar'),
+            (customer := customer2, foo := qux),
+          ),
+          kind FULL
+        );
+
+        SELECT
+          @VAR('foo') AS foo,
+        FROM @VAR('customer').my_source
+        """
+    )
+
+    context = Context(paths=tmp_path, config=config)
+    models = context.models
+
+    # The new model expands into another 2 new models
+    assert len(models) == 8
+
+    customer1_model = models.get('"db"."customer1"."my_table"')
+
+    assert customer1_model is not None
+    assert customer1_model.python_env.get(c.SQLMESH_VARS) == Executable.value(
+        {"customer": "customer1", "foo": "'bar'"}
+    )
+    assert t.cast(exp.Expression, customer1_model.render_query()).sql() == (
+        """SELECT '''bar''' AS "foo" FROM "db"."customer1"."my_source" AS "my_source\""""
+    )
+
+    customer2_model = models.get('"db"."customer2"."my_table"')
+
+    assert customer2_model is not None
+    assert customer2_model.python_env.get(c.SQLMESH_VARS) == Executable.value(
+        {"customer": "customer2", "foo": "qux"}
+    )
+    assert t.cast(exp.Expression, customer2_model.render_query()).sql() == (
+        '''SELECT 'qux' AS "foo" FROM "db"."customer2"."my_source" AS "my_source"'''
+    )
+
+
+@time_machine.travel("2020-01-01 00:00:00 UTC")
+def test_dynamic_date_spine_model(assert_exp_eq):
+    @macro()
+    def get_current_date(evaluator):
+        from sqlmesh.utils.date import now
+
+        return f"'{now().date()}'"
+
+    expressions = d.parse(
+        """
+        MODEL (name test_model, dialect duckdb);
+
+        @DEF(curr_date, @get_current_date());
+
+        WITH discount_promotion_dates AS (
+          @date_spine('day', @curr_date::date - 90, @curr_date::date)
+        )
+
+        SELECT * FROM discount_promotion_dates
+        """
+    )
+    model = load_sql_based_model(expressions)
+    assert_exp_eq(
+        model.render_query(),
+        """
+        WITH "discount_promotion_dates" AS (
+          SELECT
+            "_exploded"."date_day" AS "date_day"
+          FROM UNNEST(CAST(GENERATE_SERIES(CAST('2020-01-01' AS DATE) - 90, CAST('2020-01-01' AS DATE), INTERVAL '1' DAY) AS DATE[])) AS "_exploded"("date_day")
+        )
+        SELECT
+          "discount_promotion_dates"."date_day" AS "date_day"
+        FROM "discount_promotion_dates" AS "discount_promotion_dates"
+        """,
+    )
+
+
+def test_seed_dont_coerce_na_into_null(tmp_path):
+    model_csv_path = (tmp_path / "model.csv").absolute()
+
+    with open(model_csv_path, "w", encoding="utf-8") as fd:
+        fd.write("code\nNA")
+
+    expressions = d.parse(
+        f"""
+        MODEL (
+            name db.seed,
+            kind SEED (
+              path '{str(model_csv_path)}',
+              csv_settings (
+                -- override NaN handling, such that no value can be coerced into NaN
+                keep_default_na = false,
+                na_values = (),
+              ),
+            ),
+        );
+    """
+    )
+
+    model = load_sql_based_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
+
+    assert isinstance(model.kind, SeedKind)
+    assert model.seed is not None
+    assert len(model.seed.content) > 0
+    assert next(model.render(context=None)).to_dict() == {"code": {0: "NA"}}

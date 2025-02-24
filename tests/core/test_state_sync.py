@@ -2933,3 +2933,56 @@ def test_get_environments_summary_only_prod(
 
 def test_get_environments_summary_no_env(state_sync: EngineAdapterStateSync) -> None:
     assert state_sync.get_environments_summary() == {}
+
+
+@time_machine.travel("2020-01-05 00:00:00 UTC")
+def test_compact_intervals_pending_restatement_many_snapshots_same_version(
+    state_sync: EngineAdapterStateSync,
+    make_snapshot: t.Callable,
+    get_snapshot_intervals: t.Callable,
+) -> None:
+    snapshots = [
+        make_snapshot(
+            SqlModel(
+                name="a",
+                cron="@daily",
+                query=parse_one(f"select {i}, ds"),
+            ),
+            version="a",
+        )
+        for i in range(100)
+    ]
+
+    state_sync.push_snapshots(snapshots)
+
+    for snapshot in snapshots:
+        state_sync.add_interval(snapshot, "2020-01-01", "2020-01-01")
+        state_sync.add_interval(snapshot, "2020-01-02", "2020-01-02")
+        state_sync.add_interval(snapshot, "2020-01-03", "2020-01-03")
+        state_sync.add_interval(snapshot, "2020-01-04", "2020-01-04")
+
+    pending_restatement_intervals = [
+        (to_timestamp("2020-01-03"), to_timestamp("2020-01-05")),
+    ]
+    state_sync.add_snapshots_intervals(
+        [
+            SnapshotIntervals(
+                name=snapshots[0].name,
+                identifier=snapshots[0].identifier,
+                version=snapshots[0].version,
+                intervals=[],
+                dev_intervals=[],
+                pending_restatement_intervals=pending_restatement_intervals,
+            )
+        ]
+    )
+
+    # Because of the number of snapshots requiring compaction, some compacted records will have different creation
+    # timestamps.
+    state_sync.compact_intervals()
+
+    assert state_sync.get_snapshots([snapshots[0].snapshot_id])[
+        snapshots[0].snapshot_id
+    ].pending_restatement_intervals == [
+        (to_timestamp("2020-01-03"), to_timestamp("2020-01-05")),
+    ]

@@ -2,7 +2,7 @@
 
 Tobiko Cloud's Airflow integration allows you to combine Airflow system monitoring with the powerful debugging tools in Tobiko Cloud.
 
-![Airflow UI DAG view](./airflow/dag_view.png)
+<div style="position: relative; padding-bottom: 55.12118842845973%; height: 0;"><iframe src="https://www.loom.com/embed/64202790139b43afb6e92ddc31174f8b?sid=6f1c5807-b91b-4f3c-9182-60f9fb28b706" frameborder="0" webkitallowfullscreen mozallowfullscreen allowfullscreen style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"></iframe></div>
 
 ## How it works
 

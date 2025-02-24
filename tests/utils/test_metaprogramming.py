@@ -12,6 +12,7 @@ from pytest_mock.plugin import MockerFixture
 from sqlglot import exp
 from sqlglot import exp as expressions
 from sqlglot.expressions import to_table
+from sqlglot.optimizer.pushdown_projections import SELECT_ALL
 
 import tests.utils.test_date as test_date
 from sqlmesh.core.dialect import normalize_model_name
@@ -46,7 +47,7 @@ def test_print_exception(mocker: MockerFixture):
     except Exception as ex:
         print_exception(ex, test_env, out_mock)
 
-    expected_message = r"""  File ".*?/tests/utils/test_metaprogramming\.py", line 45, in test_print_exception
+    expected_message = r"""  File ".*?/tests/utils/test_metaprogramming\.py", line 46, in test_print_exception
     eval\("test_fun\(\)", env\)
 
   File "<string>", line 1, in <module>
@@ -219,6 +220,9 @@ def test_serialize_env_error() -> None:
     with pytest.raises(SQLMeshError):
         # pretend to be the module pandas
         serialize_env({"test_date": test_date}, path=Path("tests/utils"))
+
+    with pytest.raises(SQLMeshError):
+        serialize_env({"select_all": SELECT_ALL}, path=Path("tests/utils"))
 
 
 def test_serialize_env() -> None:

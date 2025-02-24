@@ -1139,30 +1139,35 @@ def date_spine(
         "SELECT date_week FROM UNNEST(GENERATE_DATE_ARRAY(CAST(\'2022-01-20\' AS DATE), CAST(\'2024-12-16\' AS DATE), INTERVAL \'1\' WEEK)) AS _exploded(date_week)"
     """
     datepart_name = datepart.name.lower()
-    start_date_name = start_date.name
-    end_date_name = end_date.name
-
     if datepart_name not in ("day", "week", "month", "quarter", "year"):
         raise SQLMeshError(
             f"Invalid datepart '{datepart_name}'. Expected: 'day', 'week', 'month', 'quarter', or 'year'"
         )
 
+    start_date_name = start_date.name
+    end_date_name = end_date.name
+
     try:
-        start_date_obj = datetime.strptime(start_date_name, "%Y-%m-%d").date()
-        end_date_obj = datetime.strptime(end_date_name, "%Y-%m-%d").date()
+        if start_date.is_string and end_date.is_string:
+            start_date_obj = datetime.strptime(start_date_name, "%Y-%m-%d").date()
+            end_date_obj = datetime.strptime(end_date_name, "%Y-%m-%d").date()
+        else:
+            start_date_obj = None
+            end_date_obj = None
     except Exception as e:
         raise SQLMeshError(
             f"Invalid date format - start_date and end_date must be in format: YYYY-MM-DD. Error: {e}"
         )
 
-    if start_date_obj > end_date_obj:
-        raise SQLMeshError(
-            f"Invalid date range - start_date '{start_date_name}' is after end_date '{end_date_name}'."
-        )
+    if start_date_obj and end_date_obj:
+        if start_date_obj > end_date_obj:
+            raise SQLMeshError(
+                f"Invalid date range - start_date '{start_date_name}' is after end_date '{end_date_name}'."
+            )
 
-    alias_name = f"date_{datepart_name}"
-    start_date_column = exp.cast(start_date, "DATE")
-    end_date_column = exp.cast(end_date, "DATE")
+        start_date = exp.cast(start_date, "DATE")
+        end_date = exp.cast(end_date, "DATE")
+
     if datepart_name == "quarter" and evaluator.dialect in (
         "spark",
         "spark2",
@@ -1175,11 +1180,12 @@ def date_spine(
 
     generate_date_array = exp.func(
         "GENERATE_DATE_ARRAY",
-        start_date_column,
-        end_date_column,
+        start_date,
+        end_date,
         date_interval,
     )
 
+    alias_name = f"date_{datepart_name}"
     exploded = exp.alias_(exp.func("unnest", generate_date_array), "_exploded", table=[alias_name])
 
     return exp.select(alias_name).from_(exploded)
@@ -1285,7 +1291,7 @@ def call_macro(
 
 
 def _coerce(
-    expr: exp.Expression,
+    expr: t.Any,
     typ: t.Any,
     dialect: DialectType,
     path: Path,
@@ -1294,7 +1300,7 @@ def _coerce(
     """Coerces the given expression to the specified type on a best-effort basis."""
     base_err_msg = f"Failed to coerce expression '{expr}' to type '{typ}'."
     try:
-        if typ is None or typ is t.Any:
+        if typ is None or typ is t.Any or not isinstance(expr, exp.Expression):
             return expr
         base = t.get_origin(typ) or typ
 

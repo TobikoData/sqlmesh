@@ -3,6 +3,7 @@ import pytest
 from tests.core.engine_adapter.integration import TestContext
 import pandas as pd
 from sqlglot import exp, parse_one
+from sqlmesh.core.snapshot import SnapshotChangeCategory
 
 
 @pytest.fixture(
@@ -545,3 +546,27 @@ def test_inc_by_time_auto_partition_string(ctx: TestContext):
     # The automatic time partitioning creates one partition per week. The 4 input data points
     # are located in three distinct weeks, which should have one partition each.
     assert len(partitions) == 3
+
+
+def test_diff_requires_dialect(ctx: TestContext):
+    sql = """
+        MODEL (
+          name test_schema.some_view,
+          kind VIEW,
+          dialect clickhouse
+        );
+
+        SELECT
+          maxIf('2020-01-01'::Date, 1={rhs})::Nullable(Date) as col
+    """
+
+    sqlmesh_context, model = ctx.upsert_sql_model(sql.format(rhs="1"))
+    sqlmesh_context.plan(no_prompts=True, auto_apply=True)
+
+    _, model = ctx.upsert_sql_model(sql.format(rhs="2"))
+    sqlmesh_context.upsert_model(model)
+
+    plan = sqlmesh_context.plan(no_prompts=True, auto_apply=True, no_diff=True)
+
+    new_snapshot = plan.context_diff.modified_snapshots['"test_schema"."some_view"'][0]
+    assert new_snapshot.change_category == SnapshotChangeCategory.BREAKING

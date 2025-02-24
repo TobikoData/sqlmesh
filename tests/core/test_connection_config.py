@@ -13,10 +13,10 @@ from sqlmesh.core.config.connection import (
     DuckDBAttachOptions,
     DuckDBConnectionConfig,
     GCPPostgresConnectionConfig,
+    MotherDuckConnectionConfig,
     MySQLConnectionConfig,
     PostgresConnectionConfig,
     SnowflakeConnectionConfig,
-    TrinoConnectionConfig,
     TrinoAuthenticationMethod,
     AthenaConnectionConfig,
     _connection_config_validator,
@@ -403,7 +403,7 @@ def test_trino_schema_location_mapping(make_config):
     ):
         make_config(**required_kwargs, schema_location_mapping={".*": "s3://foo"})
 
-    config: TrinoConnectionConfig = make_config(
+    config = make_config(
         **required_kwargs,
         schema_location_mapping={
             "^utils$": "s3://utils-bucket/@{schema_name}",
@@ -644,6 +644,45 @@ def test_duckdb_multithreaded_connection_factory(make_config):
     assert adapter.fetchone("select 1") == (1,)
     adapter.recycle()
     assert adapter.fetchone("select 1") == (1,)
+
+
+def test_motherduck_token_mask(make_config):
+    config = make_config(
+        type="motherduck",
+        catalogs={
+            "test2": DuckDBAttachOptions(
+                type="motherduck",
+                path="md:whodunnit?motherduck_token=short",
+            ),
+            "test1": DuckDBAttachOptions(
+                type="motherduck", path="md:whodunnit", token="longtoken123456789"
+            ),
+        },
+    )
+    assert isinstance(config, MotherDuckConnectionConfig)
+
+    assert config._mask_motherduck_token(config.catalogs["test1"].path) == "md:whodunnit"
+    assert (
+        config._mask_motherduck_token(config.catalogs["test2"].path)
+        == "md:whodunnit?motherduck_token=*****"
+    )
+    assert (
+        config._mask_motherduck_token("?motherduck_token=secret1235")
+        == "?motherduck_token=**********"
+    )
+    assert (
+        config._mask_motherduck_token("md:whodunnit?motherduck_token=short")
+        == "md:whodunnit?motherduck_token=*****"
+    )
+    assert (
+        config._mask_motherduck_token("md:whodunnit?motherduck_token=longtoken123456789")
+        == "md:whodunnit?motherduck_token=******************"
+    )
+    assert (
+        config._mask_motherduck_token("md:whodunnit?motherduck_token=")
+        == "md:whodunnit?motherduck_token="
+    )
+    assert config._mask_motherduck_token(":memory:") == ":memory:"
 
 
 def test_bigquery(make_config):

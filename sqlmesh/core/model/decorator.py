@@ -16,6 +16,7 @@ from sqlmesh.core.model.definition import (
     Model,
     create_python_model,
     create_sql_model,
+    create_models_from_blueprints,
     get_model_name,
     render_meta_fields,
 )
@@ -83,6 +84,25 @@ class model(registry_decorator):
         if not self.name_provided:
             self.name = get_model_name(Path(inspect.getfile(func)))
         return super().__call__(func)
+
+    def models(
+        self,
+        get_variables: t.Callable[[t.Optional[str]], t.Dict[str, str]],
+        path: Path,
+        module_path: Path,
+        dialect: t.Optional[str] = None,
+        **loader_kwargs: t.Any,
+    ) -> t.List[Model]:
+        return create_models_from_blueprints(
+            gateway=self.kwargs.get("gateway"),
+            blueprints=self.kwargs.get("blueprints"),
+            get_variables=get_variables,
+            loader=self.model,
+            path=path,
+            module_path=module_path,
+            dialect=dialect,
+            **loader_kwargs,
+        )
 
     def model(
         self,

@@ -1342,6 +1342,9 @@ class EngineAdapterStateSync(StateSync):
                 new_intervals.append(
                     _interval_to_df(snapshot, start_ts, end_ts, is_dev=True, is_compacted=True)
                 )
+
+        # Make sure that all pending restatement intervals are recorded last
+        for snapshot in snapshots:
             for start_ts, end_ts in snapshot.pending_restatement_intervals:
                 new_intervals.append(
                     _interval_to_df(
