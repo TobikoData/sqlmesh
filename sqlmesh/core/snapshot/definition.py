@@ -675,8 +675,9 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
                 f"Attempted to add an Invalid interval ({start}, {end}) to snapshot {self.snapshot_id}"
             )
 
-        start_ts, end_ts = self.inclusive_exclusive(start, end, strict=False)
-        if start_ts >= end_ts:
+        start_ts, end_ts = self.inclusive_exclusive(start, end, strict=False, expand=False)
+
+        if end_ts <= start_ts:
             # Skipping partial interval.
             return
 
@@ -709,7 +710,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         *,
         strict: bool = True,
         is_preview: bool = False,
-    ) -> Interval:
+    ) -> t.Optional[Interval]:
         """Get the interval that should be removed from the snapshot.
 
         Args:
@@ -742,7 +743,9 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
 
             removal_interval = expanded_removal_interval
 
-        return removal_interval
+        if removal_interval[0] < removal_interval[1]:
+            return removal_interval
+        return None
 
     def inclusive_exclusive(
         self,
@@ -750,6 +753,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         end: TimeLike,
         strict: bool = True,
         allow_partial: t.Optional[bool] = None,
+        expand: bool = True,
     ) -> Interval:
         """Transform the inclusive start and end into a [start, end) pair.
 
@@ -768,9 +772,9 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             start,
             end,
             self.node.interval_unit,
-            model_allow_partials=self.is_model and self.model.allow_partials,
             strict=strict,
             allow_partial=allow_partial,
+            expand=expand,
         )
 
     def merge_intervals(self, other: t.Union[Snapshot, SnapshotIntervals]) -> None:
@@ -869,7 +873,6 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
                 start,
                 end,
                 strict=False,
-                allow_partial=allow_partials,
             )
         )
 
@@ -1865,8 +1868,8 @@ def inclusive_exclusive(
     start: TimeLike,
     end: TimeLike,
     interval_unit: IntervalUnit,
-    model_allow_partials: bool,
     strict: bool = True,
+    expand: bool = True,
     allow_partial: bool = False,
 ) -> Interval:
     """Transform the inclusive start and end into a [start, end) pair.
@@ -1875,20 +1878,32 @@ def inclusive_exclusive(
         start: The start date/time of the interval (inclusive)
         end: The end date/time of the interval (inclusive)
         interval_unit: The interval unit.
-        model_allow_partials: Whether or not the model allows partials.
         strict: Whether to fail when the inclusive start is the same as the exclusive end.
         allow_partial: Whether the interval can be partial or not.
 
     Returns:
         A [start, end) pair.
     """
-    start_ts = to_timestamp(interval_unit.cron_floor(start))
-    if start_ts < to_timestamp(start) and not model_allow_partials:
-        start_ts = to_timestamp(interval_unit.cron_next(start_ts))
+    start_ts = interval_unit.cron_floor(start)
+
+    if not expand and not allow_partial and start_ts < to_datetime(start):
+        start_ts = interval_unit.cron_next(start_ts)
+
+    start_ts = to_timestamp(start_ts)
 
     if is_date(end):
         end = to_datetime(end) + timedelta(days=1)
-    end_ts = to_timestamp(interval_unit.cron_floor(end) if not allow_partial else end)
+
+    if allow_partial:
+        end_ts = end
+    else:
+        end_ts = interval_unit.cron_floor(end)
+
+        if expand and end_ts != to_datetime(end):
+            end_ts = interval_unit.cron_next(end_ts)
+
+    end_ts = to_timestamp(end_ts)
+
     if end_ts < start_ts and to_timestamp(end) > to_timestamp(start) and not strict:
         # This can happen when the interval unit is coarser than the size of the input interval.
         # For example, if the interval unit is monthly, but the input interval is only 1 hour long.
@@ -2039,10 +2054,11 @@ def apply_auto_restatements(
                 interval_to_remove_start, interval_to_remove_end, execution_time=execution_time
             )
 
-            auto_restated_intervals_per_snapshot[s_id] = removal_interval
-            snapshot.pending_restatement_intervals = merge_intervals(
-                [*snapshot.pending_restatement_intervals, removal_interval]
-            )
+            if removal_interval:
+                auto_restated_intervals_per_snapshot[s_id] = removal_interval
+                snapshot.pending_restatement_intervals = merge_intervals(
+                    [*snapshot.pending_restatement_intervals, removal_interval]
+                )
 
         snapshot.apply_pending_restatement_intervals()
         snapshot.update_next_auto_restatement_ts(execution_time)
