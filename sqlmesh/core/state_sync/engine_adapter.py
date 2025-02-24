@@ -37,8 +37,10 @@ from sqlmesh.core import constants as c
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.environment import Environment
+from sqlmesh.core.loader import ProjectStatements
 from sqlmesh.core.model import ModelKindName, SeedModel
 from sqlmesh.core.node import IntervalUnit
+from sqlmesh.core.plan.definition import EvaluatablePlan
 from sqlmesh.core.snapshot import (
     Intervals,
     Node,
@@ -129,6 +131,7 @@ class EngineAdapterStateSync(StateSync):
         self.intervals_table = exp.table_("_intervals", db=self.schema)
         self.plan_dags_table = exp.table_("_plan_dags", db=self.schema)
         self.auto_restatements_table = exp.table_("_auto_restatements", db=self.schema)
+        self.project_statements_table = exp.table_("_project_statements", db=self.schema)
         self.versions_table = exp.table_("_versions", db=self.schema)
 
         index_type = index_text_type(engine_adapter.dialect)
@@ -186,6 +189,12 @@ class EngineAdapterStateSync(StateSync):
             "schema_version": exp.DataType.build("int"),
             "sqlglot_version": exp.DataType.build(index_type),
             "sqlmesh_version": exp.DataType.build(index_type),
+        }
+
+        self._project_statements_columns_to_types = {
+            "environment_name": exp.DataType.build(index_type),
+            "plan_id": exp.DataType.build("text"),
+            "project_statements": exp.DataType.build(blob_type),
         }
 
         self._snapshot_cache = SnapshotCache(context_path / c.CACHE)
@@ -690,6 +699,22 @@ class EngineAdapterStateSync(StateSync):
             columns_to_types=self._auto_restatement_columns_to_types,
         )
 
+    @transactional()
+    def update_project_statements(self, plan: EvaluatablePlan) -> None:
+        self.engine_adapter.delete_from(
+            self.project_statements_table,
+            where=exp.EQ(
+                this=exp.column("environment_name"),
+                expression=exp.Literal.string(plan.environment.name),
+            ),
+        )
+
+        self.engine_adapter.insert_append(
+            self.project_statements_table,
+            _project_statements_to_df(plan),
+            columns_to_types=self._project_statements_columns_to_types,
+        )
+
     def _update_environment(self, environment: Environment) -> None:
         self.engine_adapter.delete_from(
             self.environments_table,
@@ -761,6 +786,33 @@ class EngineAdapterStateSync(StateSync):
         if lock_for_update:
             return query.lock(copy=False)
         return query
+
+    def get_project_statements(self, environment: str) -> t.List[ProjectStatements]:
+        """Fetches the environment's project statements from the project_statements table.
+
+        Returns:
+
+        """
+        query = (
+            exp.select(
+                exp.to_identifier("project_statements"),
+            )
+            .from_(self.project_statements_table)
+            .where(
+                exp.EQ(
+                    this=exp.column("environment_name"),
+                    expression=exp.Literal.string(environment),
+                )
+            )
+        )
+        result = self._fetchone(query)
+
+        if result and (statements := json.loads(result[0])["project_statements"]):
+            return [
+                ProjectStatements.parse_obj(project_statements) for project_statements in statements
+            ]
+
+        return []
 
     def get_snapshots(
         self,
@@ -1427,7 +1479,12 @@ class EngineAdapterStateSync(StateSync):
         """Rollback to the previous migration."""
         logger.info("Starting migration rollback.")
         tables = (self.snapshots_table, self.environments_table, self.versions_table)
-        optional_tables = (self.intervals_table, self.plan_dags_table, self.auto_restatements_table)
+        optional_tables = (
+            self.intervals_table,
+            self.plan_dags_table,
+            self.auto_restatements_table,
+            self.project_statements_table,
+        )
         versions = self.get_versions(validate=False)
         if versions.schema_version == 0:
             # Clean up state tables
@@ -1459,6 +1516,7 @@ class EngineAdapterStateSync(StateSync):
             self.intervals_table,
             self.plan_dags_table,
             self.auto_restatements_table,
+            self.project_statements_table,
         ):
             if self.engine_adapter.table_exists(table):
                 backup_name = _backup_table_name(table)
@@ -1938,10 +1996,30 @@ def _auto_restatements_to_df(auto_restatements: t.Dict[SnapshotNameVersion, int]
     )
 
 
+def _project_statements_to_df(plan: EvaluatablePlan) -> pd.DataFrame:
+    return pd.DataFrame(
+        [
+            {
+                "environment_name": plan.environment.name,
+                "plan_id": plan.plan_id,
+                "project_statements": _project_statements_to_json(plan),
+            }
+        ]
+    )
+
+
 def _backup_table_name(table_name: TableName) -> exp.Table:
     table = exp.to_table(table_name).copy()
     table.set("this", exp.to_identifier(table.name + "_backup"))
     return table
+
+
+def _project_statements_to_json(plan: EvaluatablePlan) -> str:
+    return plan.json(
+        include={
+            "project_statements",
+        }
+    )
 
 
 def _snapshot_to_json(snapshot: Snapshot) -> str:

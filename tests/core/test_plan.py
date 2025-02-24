@@ -12,6 +12,7 @@ from sqlmesh.core.context import Context
 from sqlmesh.core.context_diff import ContextDiff
 from sqlmesh.core.engine_adapter import DuckDBEngineAdapter
 from sqlmesh.core.environment import EnvironmentNamingInfo
+from sqlmesh.core.loader import ProjectStatements
 from sqlmesh.core.model import (
     ExternalModel,
     FullKind,
@@ -2752,4 +2753,50 @@ def test_restate_production_model_in_dev(make_snapshot, mocker: MockerFixture):
     mock_console.log_warning.assert_called_once_with(
         "Cannot restate model '\"test_model_b\"' because the current version is used in production. "
         "Run the restatement against the production environment instead to restate this model."
+    )
+
+
+def test_plan_project_statements_diff(make_snapshot):
+    snapshot = make_snapshot(
+        SqlModel(
+            name="test_model_a",
+            dialect="duckdb",
+            query=parse_one("select 1, ds"),
+            kind=dict(name=ModelKindName.INCREMENTAL_BY_TIME_RANGE, time_column="ds"),
+        )
+    )
+
+    context_diff = ContextDiff(
+        environment="test_environment",
+        is_new_environment=False,
+        is_unfinalized_environment=True,
+        normalize_environment_name=True,
+        create_from="prod",
+        create_from_env_exists=True,
+        added=set(),
+        removed_snapshots={},
+        modified_snapshots={},
+        snapshots={snapshot.snapshot_id: snapshot},
+        new_snapshots={},
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
+        project_statements=[
+            ProjectStatements(
+                before_all=["CREATE OR REPLACE TABLE table_1 AS SELECT 1"],
+                after_all=["CREATE OR REPLACE TABLE table_2 AS SELECT 2"],
+                python_env={},
+            )
+        ],
+    )
+
+    assert context_diff.has_changes
+    assert context_diff.has_project_statements_changes
+    assert (
+        context_diff.project_statements_diff()
+        == """  before_all:
+    + CREATE OR REPLACE TABLE table_1 AS SELECT 1
+
+  after_all:
+    + CREATE OR REPLACE TABLE table_2 AS SELECT 2"""
     )

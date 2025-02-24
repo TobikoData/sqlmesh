@@ -120,6 +120,18 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                 after_promote_snapshots = all_names - before_promote_snapshots
                 deployability_index_for_evaluation = DeployabilityIndex.all_deployable()
 
+            self.state_sync.update_project_statements(plan)
+            self.snapshot_evaluator._execute_project_statements(
+                plan.project_statements or [],
+                execution_stage="before_all",
+                snapshots=snapshots_by_name,
+                start=plan.start,
+                end=plan.end,
+                execution_time=plan.execution_time,
+                default_catalog=self.default_catalog,
+                environment_naming_info=plan.environment.naming_info,
+            )
+
             self._push(plan, snapshots, deployability_index_for_creation)
             update_intervals_for_new_snapshots(plan.new_snapshots, self.state_sync)
             self._restate(plan, snapshots_by_name)
@@ -144,6 +156,18 @@ class BuiltInPlanEvaluator(PlanEvaluator):
 
             if not plan.requires_backfill:
                 self.console.log_success("Virtual Update executed successfully")
+
+            self.snapshot_evaluator._execute_project_statements(
+                plan.project_statements or [],
+                execution_stage="after_all",
+                snapshots=snapshots_by_name,
+                start=plan.start,
+                end=plan.end,
+                execution_time=plan.execution_time,
+                default_catalog=self.default_catalog,
+                environment_naming_info=plan.environment.naming_info,
+            )
+
         except Exception as e:
             analytics.collector.on_plan_apply_end(plan_id=plan.plan_id, error=e)
             raise
