@@ -287,6 +287,11 @@ class Config(BaseConfig):
 
     @property
     def dialect(self) -> t.Optional[str]:
+        if self.default_gateway:
+            gateway_config = self.gateways[self.default_gateway]
+            if gateway_config.model_defaults:
+                return gateway_config.model_defaults.dialect
+
         return self.model_defaults.dialect
 
     @property
