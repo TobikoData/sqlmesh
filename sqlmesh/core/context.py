@@ -384,11 +384,11 @@ class GenericContext(BaseContext, t.Generic[C]):
         }
 
         if self.selected_gateway:
-            gw_model_defaults = self.config.gateways[self.selected_gateway]
-            if gw_model_defaults.model_defaults:
+            gw_model_defaults = self.config.gateways[self.selected_gateway].model_defaults
+            if gw_model_defaults:
                 # Merge global model defaults with the selected gateway's, if it's overriden
                 global_defaults = self.config.model_defaults.model_dump(exclude_unset=True)
-                gateway_defaults = gw_model_defaults.model_defaults.model_dump(exclude_unset=True)
+                gateway_defaults = gw_model_defaults.model_dump(exclude_unset=True)
 
                 self.config.model_defaults = ModelDefaultsConfig(
                     **{**global_defaults, **gateway_defaults}
