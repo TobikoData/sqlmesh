@@ -53,7 +53,10 @@ setup(
     ],
     extras_require={
         "athena": ["PyAthena[Pandas]"],
-        "azuresql": ["pymssql"],
+        "azuresql": [
+            "pymssql",
+            "pyodbc"
+        ],
         "bigquery": [
             "google-cloud-bigquery[pandas]",
             "google-cloud-bigquery-storage",
@@ -128,6 +131,7 @@ setup(
         ],
         "mssql": [
             "pymssql",
+            "pyodbc"
         ],
         "mysql": [
             "pymysql",
