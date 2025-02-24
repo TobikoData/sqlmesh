@@ -1404,7 +1404,16 @@ def test_delete_expired_snapshots_cleanup_intervals(
     state_sync.push_snapshots([snapshot, new_snapshot])
     state_sync.add_interval(snapshot, "2023-01-01", "2023-01-03")
     state_sync.add_interval(snapshot, "2023-01-04", "2023-01-05", is_dev=True)
+    state_sync.add_interval(snapshot, "2023-01-06", "2023-01-07")
+    state_sync.remove_intervals(
+        [(snapshot, (to_timestamp("2023-01-06"), to_timestamp("2023-01-08")))]
+    )
+
     state_sync.add_interval(new_snapshot, "2023-01-04", "2023-01-05")
+    state_sync.add_interval(new_snapshot, "2023-01-06", "2023-01-07")
+    state_sync.remove_intervals(
+        [(new_snapshot, (to_timestamp("2023-01-06"), to_timestamp("2023-01-08")))]
+    )
 
     # Check old snapshot's intervals
     stored_snapshot = state_sync.get_snapshots([snapshot])[snapshot.snapshot_id]
@@ -1528,7 +1537,7 @@ def test_delete_expired_snapshots_cleanup_intervals_shared_version(
             name='"a"',
             identifier=None,
             version=snapshot.version,
-            dev_version=snapshot.dev_version,
+            dev_version=None,
             intervals=[(to_timestamp("2023-01-01"), to_timestamp("2023-01-04"))],
         ),
         # The intervals of the new snapshot has identifier
@@ -1542,7 +1551,7 @@ def test_delete_expired_snapshots_cleanup_intervals_shared_version(
     ]
 
 
-def test_delete_expired_snapshots_cleanup_intervals_shared_dev_table(
+def test_delete_expired_snapshots_cleanup_intervals_shared_dev_version(
     state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
 ):
     now_ts = now_timestamp()
@@ -1636,16 +1645,20 @@ def test_delete_expired_snapshots_cleanup_intervals_shared_dev_table(
         state_sync._get_snapshot_intervals([snapshot, new_snapshot])[1],
         key=lambda x: x.identifier or "",
     ) == [
-        # The intervals of the old snapshot is preserved with the null identifier
+        SnapshotIntervals(
+            name='"a"',
+            identifier=None,
+            version=snapshot.version,
+            dev_version=None,
+            intervals=[(to_timestamp("2023-01-01"), to_timestamp("2023-01-04"))],
+        ),
         SnapshotIntervals(
             name='"a"',
             identifier=None,
             version=snapshot.version,
             dev_version=snapshot.dev_version,
-            intervals=[(to_timestamp("2023-01-01"), to_timestamp("2023-01-04"))],
             dev_intervals=[(to_timestamp("2023-01-04"), to_timestamp("2023-01-08"))],
         ),
-        # The intervals of the new snapshot has identifier
         SnapshotIntervals(
             name='"a"',
             identifier=new_snapshot.identifier,
@@ -1654,6 +1667,109 @@ def test_delete_expired_snapshots_cleanup_intervals_shared_dev_table(
             dev_intervals=[(to_timestamp("2023-01-08"), to_timestamp("2023-01-10"))],
         ),
     ]
+
+
+def test_compact_intervals_after_cleanup(
+    state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
+):
+    now_ts = now_timestamp()
+
+    # Original expired snapshot
+    snapshot_a = make_snapshot(
+        SqlModel(
+            name="a",
+            query=parse_one("select a, ds"),
+        ),
+    )
+    snapshot_a.ttl = "in 10 seconds"
+    snapshot_a.categorize_as(SnapshotChangeCategory.BREAKING)
+    snapshot_a.updated_ts = now_ts - 15000
+
+    # A forward-only change on top of the original snapshot. Also expired.
+    # This snapshot reuses only prod table
+    snapshot_b = make_snapshot(
+        SqlModel(
+            name="a",
+            query=parse_one("select a, b, ds"),
+        ),
+    )
+    snapshot_b.previous_versions = snapshot_a.all_versions
+    snapshot_b.ttl = "in 10 seconds"
+    snapshot_b.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    snapshot_b.updated_ts = now_ts - 12000
+
+    # An indirect non-breaking change on top of the forward-only change. Not expired.
+    # This snapshot reuses both prod and dev tables
+    snapshot_c = make_snapshot(snapshot_b.model.copy(update={"stamp": "1"}))
+    snapshot_c.previous_versions = snapshot_b.all_versions
+    snapshot_c.ttl = "in 10 seconds"
+    snapshot_c.change_category = SnapshotChangeCategory.INDIRECT_NON_BREAKING
+    snapshot_c.version = snapshot_b.version
+    snapshot_c.dev_version_ = snapshot_b.dev_version
+    snapshot_c.updated_ts = now_ts - 5000
+
+    state_sync.push_snapshots([snapshot_a, snapshot_b, snapshot_c])
+
+    state_sync.add_interval(snapshot_a, "2023-01-01", "2023-01-03")
+    state_sync.add_interval(snapshot_a, "2023-01-01", "2023-01-03", is_dev=True)
+    state_sync.add_interval(snapshot_b, "2023-01-04", "2023-01-06")
+    state_sync.add_interval(snapshot_b, "2023-01-04", "2023-01-06", is_dev=True)
+    state_sync.add_interval(snapshot_c, "2023-01-07", "2023-01-09")
+    state_sync.add_interval(snapshot_c, "2023-01-07", "2023-01-09", is_dev=True)
+
+    # Only the dev table of the original snapshot should be deleted
+    assert state_sync.delete_expired_snapshots() == [
+        SnapshotTableCleanupTask(snapshot=snapshot_a.table_info, dev_table_only=True),
+    ]
+
+    assert state_sync.engine_adapter.fetchone("SELECT COUNT(*) FROM sqlmesh._intervals")[0] == 5  # type: ignore
+
+    expected_intervals = [
+        # Combined intervals from the original and the forward-only expired snapshots
+        SnapshotIntervals(
+            name='"a"',
+            identifier=None,
+            version=snapshot_a.version,
+            dev_version=None,
+            intervals=[(to_timestamp("2023-01-01"), to_timestamp("2023-01-07"))],
+        ),
+        # Dev intervals from the forward-only expired snapshot
+        SnapshotIntervals(
+            name='"a"',
+            identifier=None,
+            version=snapshot_b.version,
+            dev_version=snapshot_b.dev_version,
+            dev_intervals=[(to_timestamp("2023-01-04"), to_timestamp("2023-01-07"))],
+        ),
+        # Intervals from the indirect non-breaking snapshot
+        SnapshotIntervals(
+            name='"a"',
+            identifier=snapshot_c.identifier,
+            version=snapshot_c.version,
+            dev_version=snapshot_c.dev_version,
+            intervals=[(to_timestamp("2023-01-07"), to_timestamp("2023-01-10"))],
+            dev_intervals=[(to_timestamp("2023-01-07"), to_timestamp("2023-01-10"))],
+        ),
+    ]
+
+    assert (
+        sorted(
+            state_sync._get_snapshot_intervals([snapshot_a, snapshot_b, snapshot_c])[1],
+            key=lambda x: (x.identifier or "", x.dev_version or ""),
+        )
+        == expected_intervals
+    )
+
+    state_sync.compact_intervals()
+
+    assert state_sync.engine_adapter.fetchone("SELECT COUNT(*) FROM sqlmesh._intervals")[0] == 4  # type: ignore
+    assert (
+        sorted(
+            state_sync._get_snapshot_intervals([snapshot_a, snapshot_b, snapshot_c])[1],
+            key=lambda x: (x.identifier or "", x.dev_version or ""),
+        )
+        == expected_intervals
+    )
 
 
 def test_environment_start_as_timestamp(

@@ -104,6 +104,7 @@ def _migrate_intervals(
         if (name, identifier) not in snapshot_ids_to_dev_versions:
             # If the snapshot associated with this interval no longer exists, we can nullify the interval's identifier
             # to improve compaction
+            is_compacted = False
             identifier = None
             if not is_dev:
                 # If the interval is not dev, we can safely nullify the dev version as well
