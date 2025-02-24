@@ -338,6 +338,39 @@ SELECT
 FROM db.employees;
 ```
 
+??? "Example SQL sequence when applying this model kind (ex: BigQuery)"
+
+    Create a model with the following definition:
+    ```sql
+    MODEL (
+      name demo.example_view,
+      kind VIEW,
+      cron '@daily',
+    );
+
+    SELECT
+      'hello there' as a_column
+
+    ```
+
+    Apply a plan like the following:
+    ```shell
+    sqlmesh plan dev
+    ```
+
+    SQLMesh will create a versioned view in the physical layer. Note the fingerprint of the view is `1024042926`.
+    ```sql
+    CREATE OR REPLACE VIEW `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__example_view__1024042926`
+    (`a_column`) AS SELECT 'hello there' AS `a_column`
+    ```
+
+    SQLMesh will create a view in the virtual layer pointing to the physical layer view.
+    ```sql
+    CREATE OR REPLACE VIEW `sqlmesh-public-demo`.`demo__dev`.`example_view` AS 
+    SELECT * FROM `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__example_view__1024042926`
+    ```
+
+
 ### Materialized Views
 The `VIEW` model kind can be configured to represent a materialized view by setting the `materialized` flag to `true`:
 ```sql linenums="1" hl_lines="4"
