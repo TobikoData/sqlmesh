@@ -28,6 +28,7 @@ from sqlmesh.core.plan import Plan
 from sqlmesh.core.snapshot import Snapshot, SnapshotChangeCategory
 from sqlmesh.utils.date import now, to_date, to_time_column
 from sqlmesh.core.table_diff import TableDiff
+from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
 from tests.conftest import SushiDataValidator
 from tests.core.engine_adapter.integration import (
@@ -335,8 +336,11 @@ def test_drop_schema_catalog(ctx: TestContext, caplog):
 
     schema = ctx.schema("drop_schema_catalog_test", catalog_name)
     if ctx.engine_adapter.catalog_support.is_single_catalog_only:
-        drop_schema_and_validate(schema)
-        assert "requires that all catalog operations be against a single catalog" in caplog.text
+        with pytest.raises(
+            SQLMeshError, match="requires that all catalog operations be against a single catalog"
+        ):
+            drop_schema_and_validate(schema)
+            create_objects_and_validate(schema)
         return
     drop_schema_and_validate(schema)
     create_objects_and_validate(schema)
