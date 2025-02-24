@@ -5,7 +5,7 @@ SQLMesh is licensed under [Apache 2.0](https://github.com/TobikoData/sqlmesh/blo
 * Docker
 * Docker Compose V2
 * OpenJDK >= 11
-* Python >= 3.8 < 3.13
+* Python >= 3.9 < 3.13
 
 ## Commands reference
 
