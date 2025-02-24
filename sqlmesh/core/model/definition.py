@@ -32,7 +32,14 @@ from sqlmesh.core.model.common import (
     single_value_or_tuple,
 )
 from sqlmesh.core.model.meta import ModelMeta, FunctionCall
-from sqlmesh.core.model.kind import ModelKindName, SeedKind, ModelKind, FullKind, create_model_kind
+from sqlmesh.core.model.kind import (
+    ModelKindName,
+    SeedKind,
+    ModelKind,
+    FullKind,
+    create_model_kind,
+    CustomKind,
+)
 from sqlmesh.core.model.seed import CsvSeedReader, Seed, create_seed
 from sqlmesh.core.renderer import ExpressionRenderer, QueryRenderer
 from sqlmesh.core.signal import SignalRegistry
@@ -145,6 +152,7 @@ class _Model(ModelMeta, frozen=True):
     )
 
     _expressions_validator = expression_validator
+    _default_time_format: t.Optional[str] = None
 
     def __getstate__(self) -> t.Dict[t.Any, t.Any]:
         state = super().__getstate__()
@@ -749,6 +757,8 @@ class _Model(ModelMeta, frozen=True):
         Args:
             default_time_format: A python time format used as the default format when none is provided.
         """
+        self._default_time_format = default_time_format
+
         if not self.time_column:
             return
 
@@ -978,6 +988,22 @@ class _Model(ModelMeta, frozen=True):
                     "Query validation can only be enabled for SQL models",
                     self._path,
                 )
+
+        if isinstance(self.kind, CustomKind):
+            # Validate custom kinds here instead of as part of deserialization
+            # This allows the python types to be used in contexts where the custom materialization classes are not available
+            from sqlmesh.core.snapshot.evaluator import get_custom_materialization_type
+
+            # The below call fails if a materialization with the given name doesn't exist.
+            kind_subclass, _ = get_custom_materialization_type(self.kind.materialization)
+
+            if kind_subclass != CustomKind:
+                # hack because the Pydantic model is meant to be immutable
+                self.__dict__["kind"] = kind_subclass(**self.kind.dict(), dialect=self.kind.dialect)
+
+                # reapply the project `time_column_format` in case a custom materialization has a time_column and needs it
+                if self._default_time_format:
+                    self.set_time_format(self._default_time_format)
 
     def is_breaking_change(self, previous: Model) -> t.Optional[bool]:
         """Determines whether this model is a breaking change in relation to the `previous` model.
