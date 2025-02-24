@@ -1127,7 +1127,7 @@ def test_different_gateway_normalization_strategy(tmp_path: pathlib.Path):
     dialect = Dialect.get_or_raise(ctx.config.dialect)
 
     assert dialect == "snowflake"
-    assert dialect.normalization_strategy == NormalizationStrategy.CASE_INSENSITIVE
+    assert Snowflake.NORMALIZATION_STRATEGY == NormalizationStrategy.CASE_INSENSITIVE
 
     Snowflake.NORMALIZATION_STRATEGY = NormalizationStrategy.UPPERCASE
 
