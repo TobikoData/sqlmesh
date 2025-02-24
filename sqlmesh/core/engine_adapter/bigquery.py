@@ -796,29 +796,44 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
         col_type: t.Optional[exp.DATA_TYPE] = None,
         nested_names: t.List[str] = [],
     ) -> exp.ColumnDef:
-        # For BigQuery's nested fields we have to recursively build the column descriptions
-        if (
-            col_type
-            and isinstance(col_type, exp.DataType)
-            and col_type.is_type(exp.DataType.Type.STRUCT)
-            and (column_defs := col_type.expressions)
-        ):
+        # Helper function to build column definitions with column descriptions
+        def build_nested_column_defs(
+            col_type: exp.DataType,
+            nested_names: t.List[str],
+        ) -> exp.DataType:
             column_expressions = []
-            for column_def in column_defs:
+            for column_def in col_type.expressions:
                 if isinstance(column_def, exp.ColumnDef):
                     column = self._build_column_def(
                         col_name=column_def.name,
                         column_descriptions=column_descriptions,
                         engine_supports_schema_comments=engine_supports_schema_comments,
                         col_type=column_def.kind,
-                        nested_names=nested_names + [col_name],
+                        nested_names=nested_names,
                     )
                 else:
                     column = column_def
                 column_expressions.append(column)
-            col_type = exp.DataType(
-                this=exp.DataType.Type.STRUCT, expressions=column_expressions, nested=True
-            )
+            return exp.DataType(this=col_type.this, expressions=column_expressions, nested=True)
+
+        # Recursively build column definitions for BigQuery's RECORDs (struct) and REPEATED RECORDs (array of struct)
+        if (
+            col_type
+            and isinstance(col_type, exp.DataType)
+            and (expressions := col_type.expressions)
+        ):
+            if col_type.is_type(exp.DataType.Type.STRUCT):
+                col_type = build_nested_column_defs(col_type, nested_names + [col_name])
+            elif col_type.is_type(exp.DataType.Type.ARRAY) and expressions[0].is_type(
+                exp.DataType.Type.STRUCT
+            ):
+                col_type = exp.DataType(
+                    this=exp.DataType.Type.ARRAY,
+                    expressions=[
+                        build_nested_column_defs(col_type.expressions[0], nested_names + [col_name])
+                    ],
+                    nested=True,
+                )
 
         return exp.ColumnDef(
             this=exp.to_identifier(col_name),
