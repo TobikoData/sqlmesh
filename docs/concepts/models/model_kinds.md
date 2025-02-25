@@ -246,14 +246,14 @@ MODEL (
 * Snowflake
 * Spark
 
-In Redshift's case, to enable the use of the native `MERGE` statement, you need to pass the `merge_operation` flag in the connection and set it to `true`. It is disabled by default.
+In Redshift's case, to enable the use of the native `MERGE` statement, you need to pass the `enable_merge` flag in the connection and set it to `true`. It is disabled by default.
 
 ```yaml linenums="1"
 gateways:
   redshift:
     connection:
       type: redshift
-      merge_operation: true
+      enable_merge: true
 ```
 
 Redshift supports only the `UPDATE` or `DELETE` actions for the `WHEN MATCHED` clause and does not allow multiple `WHEN MATCHED` expressions. For further information, refer to the [Redshift documentation](https://docs.aws.amazon.com/redshift/latest/dg/r_MERGE.html#r_MERGE-parameters).

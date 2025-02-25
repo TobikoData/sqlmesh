@@ -891,7 +891,7 @@ gateways:
             password: '1234'
             host: host
             database: db
-            merge_operation: true
+            enable_merge: true
     default:
         connection:
             type: redshift
@@ -913,11 +913,11 @@ model_defaults:
     )
     redshift_connection = config.get_connection("redshift")
     assert isinstance(redshift_connection, RedshiftConnectionConfig)
-    assert redshift_connection.merge_operation
+    assert redshift_connection.enable_merge
     adapter = redshift_connection.create_engine_adapter()
     assert isinstance(adapter, RedshiftEngineAdapter)
-    assert adapter.merge_operation
+    assert adapter.enable_merge
 
     adapter_2 = config.get_connection("default").create_engine_adapter()
     assert isinstance(adapter_2, RedshiftEngineAdapter)
-    assert not adapter_2.merge_operation
+    assert not adapter_2.enable_merge

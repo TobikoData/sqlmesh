@@ -468,7 +468,7 @@ def make_mocked_engine_adapter(mocker: MockerFixture) -> t.Callable:
             )
         if isinstance(adapter, RedshiftEngineAdapter):
             mocker.patch(
-                "sqlmesh.core.engine_adapter.redshift.RedshiftEngineAdapter.merge_operation",
+                "sqlmesh.core.engine_adapter.redshift.RedshiftEngineAdapter.enable_merge",
                 new_callable=PropertyMock(return_value=True),
             )
         return adapter

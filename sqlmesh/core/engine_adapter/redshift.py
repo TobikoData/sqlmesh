@@ -123,10 +123,10 @@ class RedshiftEngineAdapter(
         }
 
     @property
-    def merge_operation(self) -> bool:
+    def enable_merge(self) -> bool:
         # Redshift supports the MERGE operation but we use the logical merge
-        # unless the user has opted in by setting merge_operation in the connection.
-        return self._extra_config.get("merge_operation") or self.MERGE_OPERATION
+        # unless the user has opted in by setting enable_merge in the connection.
+        return self._extra_config.get("enable_merge") or self.MERGE_OPERATION
 
     @property
     def cursor(self) -> t.Any:
@@ -346,7 +346,7 @@ class RedshiftEngineAdapter(
         when_matched: t.Optional[exp.Whens] = None,
         merge_filter: t.Optional[exp.Expression] = None,
     ) -> None:
-        if self.merge_operation:
+        if self.enable_merge:
             # By default we use the logical merge unless the user has opted in
             super().merge(
                 target_table=target_table,
