@@ -4349,6 +4349,55 @@ def test_when_matched_multiple():
     assert whens.expressions[1].sql() == expected_when_matched[1]
 
 
+def test_when_matched_merge_filter_multi_part_columns():
+    expressions = d.parse(
+        """
+        MODEL (
+          name @{schema}.records_model,
+          kind INCREMENTAL_BY_UNIQUE_KEY (
+            unique_key name,
+            when_matched (WHEN MATCHED AND source.record.nested_record.field = 1  THEN UPDATE SET target.repeated_record.sub_repeated_record.sub_field = COALESCE(source.repeated_record.sub_repeated_record.sub_field, target.repeated_record.sub_repeated_record.sub_field),
+            WHEN MATCHED THEN UPDATE SET target.repeated_record.sub_repeated_record.sub_field = COALESCE(source.repeated_record.sub_repeated_record.sub_field, target.repeated_record.sub_repeated_record.sub_field)),
+            merge_filter source.record.nested_record.field < target.record.nested_record.field AND
+            target.repeated_record.sub_repeated_record.sub_field > source.repeated_record.sub_repeated_record.sub_field
+          )
+        );
+        SELECT
+            id,
+            [STRUCT([STRUCT(sub_field AS sub_field)] AS sub_repeated_record)] AS repeated_record,
+            STRUCT(
+                STRUCT([2, 3] AS array, field AS field) AS nested_record
+            ) AS record
+        FROM
+            @{schema}.seed_model;
+    """
+    )
+
+    expected_when_matched = [
+        "WHEN MATCHED AND __MERGE_SOURCE__.record.nested_record.field = 1 THEN UPDATE SET __MERGE_TARGET__.repeated_record.sub_repeated_record.sub_field = COALESCE(__MERGE_SOURCE__.repeated_record.sub_repeated_record.sub_field, __MERGE_TARGET__.repeated_record.sub_repeated_record.sub_field)",
+        "WHEN MATCHED THEN UPDATE SET __MERGE_TARGET__.repeated_record.sub_repeated_record.sub_field = COALESCE(__MERGE_SOURCE__.repeated_record.sub_repeated_record.sub_field, __MERGE_TARGET__.repeated_record.sub_repeated_record.sub_field)",
+    ]
+
+    expected_merge_filter = (
+        "__MERGE_SOURCE__.record.nested_record.field < __MERGE_TARGET__.record.nested_record.field AND "
+        "__MERGE_TARGET__.repeated_record.sub_repeated_record.sub_field > __MERGE_SOURCE__.repeated_record.sub_repeated_record.sub_field"
+    )
+
+    model = load_sql_based_model(expressions, dialect="bigquery", variables={"schema": "db"})
+    whens = model.kind.when_matched
+    assert len(whens.expressions) == 2
+    assert whens.expressions[0].sql() == expected_when_matched[0]
+    assert whens.expressions[1].sql() == expected_when_matched[1]
+    assert model.merge_filter.sql() == expected_merge_filter
+
+    model = SqlModel.parse_raw(model.json())
+    whens = model.kind.when_matched
+    assert len(whens.expressions) == 2
+    assert whens.expressions[0].sql() == expected_when_matched[0]
+    assert whens.expressions[1].sql() == expected_when_matched[1]
+    assert model.merge_filter.sql() == expected_merge_filter
+
+
 def test_default_catalog_sql(assert_exp_eq):
     """
     This test validates the hashing behavior of the system as it relates to the default catalog.
