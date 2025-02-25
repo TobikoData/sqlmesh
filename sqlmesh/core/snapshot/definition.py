@@ -1785,9 +1785,7 @@ def expand_range(start_ts: int, end_ts: int, interval_unit: IntervalUnit) -> t.L
         ts = to_timestamp(croniter.get_next(estimate=True))
 
         if ts > end_ts:
-            if len(timestamps) > 1:
-                timestamps[-1] = end_ts
-            else:
+            if timestamps and timestamps[-1] != end_ts:
                 timestamps.append(end_ts)
             break
 
