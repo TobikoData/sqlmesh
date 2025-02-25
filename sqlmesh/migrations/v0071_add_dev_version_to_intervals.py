@@ -33,6 +33,7 @@ def migrate(state_sync, **kwargs):  # type: ignore
 
     used_dev_versions: t.Set[t.Tuple[str, str]] = set()
     used_versions: t.Set[t.Tuple[str, str]] = set()
+    used_snapshot_ids: t.Set[t.Tuple[str, str]] = set()
     snapshot_ids_to_dev_versions: t.Dict[t.Tuple[str, str], str] = {}
 
     _migrate_snapshots(
@@ -40,6 +41,7 @@ def migrate(state_sync, **kwargs):  # type: ignore
         snapshots_table,
         used_dev_versions,
         used_versions,
+        used_snapshot_ids,
         snapshot_ids_to_dev_versions,
     )
     _migrate_intervals(
@@ -47,6 +49,7 @@ def migrate(state_sync, **kwargs):  # type: ignore
         intervals_table,
         used_dev_versions,
         used_versions,
+        used_snapshot_ids,
         snapshot_ids_to_dev_versions,
     )
 
@@ -56,6 +59,7 @@ def _migrate_intervals(
     intervals_table: str,
     used_dev_versions: t.Set[t.Tuple[str, str]],
     used_versions: t.Set[t.Tuple[str, str]],
+    used_snapshot_ids: t.Set[t.Tuple[str, str]],
     snapshot_ids_to_dev_versions: t.Dict[t.Tuple[str, str], str],
 ) -> None:
     index_type = index_text_type(engine_adapter.dialect)
@@ -101,7 +105,7 @@ def _migrate_intervals(
             # If the interval's dev version is no longer used and this is a dev interval, we can safely delete it
             continue
 
-        if (name, identifier) not in snapshot_ids_to_dev_versions:
+        if (name, identifier) not in used_snapshot_ids:
             # If the snapshot associated with this interval no longer exists, we can nullify the interval's identifier
             # to improve compaction
             is_compacted = False
@@ -141,6 +145,7 @@ def _migrate_snapshots(
     snapshots_table: str,
     used_dev_versions: t.Set[t.Tuple[str, str]],
     used_versions: t.Set[t.Tuple[str, str]],
+    used_snapshot_ids: t.Set[t.Tuple[str, str]],
     snapshot_ids_to_dev_versions: t.Dict[t.Tuple[str, str], str],
 ) -> None:
     index_type = index_text_type(engine_adapter.dialect)
@@ -180,6 +185,7 @@ def _migrate_snapshots(
 
         used_dev_versions.add((name, dev_version))
         used_versions.add((name, version))
+        used_snapshot_ids.add((name, identifier))
         snapshot_ids_to_dev_versions[(name, identifier)] = dev_version
 
         for previous_version in parsed_snapshot.get("previous_versions", []):

@@ -1211,7 +1211,7 @@ class EngineAdapterStateSync(StateSync):
         # Cleanup can only happen for compacted intervals
         self.compact_intervals()
         # Delete intervals for non-dev tables that are no longer used
-        self._delete_interlals_by_version(cleanup_targets)
+        self._delete_intervals_by_version(cleanup_targets)
         # Delete dev intervals for dev tables that are no longer used
         self._delete_intervals_by_dev_version(cleanup_targets)
         # Nullify the snapshot identifiers of interval records for snapshots that have been deleted
@@ -1234,7 +1234,7 @@ class EngineAdapterStateSync(StateSync):
                 {"identifier": None, "is_compacted": False},
                 where=where.and_(exp.column("is_dev")),
             )
-            # Nullify bote identifier and dev version for non-dev intervals
+            # Nullify both identifier and dev version for non-dev intervals
             # Set is_compacted to False so that it's compacted during the next compaction
             self.engine_adapter.update_table(
                 self.intervals_table,
@@ -1257,7 +1257,7 @@ class EngineAdapterStateSync(StateSync):
         ):
             self.engine_adapter.delete_from(self.intervals_table, where.and_(exp.column("is_dev")))
 
-    def _delete_interlals_by_version(self, targets: t.List[SnapshotTableCleanupTask]) -> None:
+    def _delete_intervals_by_version(self, targets: t.List[SnapshotTableCleanupTask]) -> None:
         """Deletes intervals for snapshot versions that are no longer used."""
         non_dev_keys_to_delete = [t.snapshot for t in targets if not t.dev_table_only]
         if not non_dev_keys_to_delete:
