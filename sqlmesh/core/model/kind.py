@@ -813,7 +813,6 @@ class ManagedKind(_ModelKind):
 
 class EmbeddedKind(_ModelKind):
     name: t.Literal[ModelKindName.EMBEDDED] = ModelKindName.EMBEDDED
-    disable_restatement: t.Literal[True] = True
 
     @property
     def supports_python_models(self) -> bool:
@@ -822,7 +821,6 @@ class EmbeddedKind(_ModelKind):
 
 class ExternalKind(_ModelKind):
     name: t.Literal[ModelKindName.EXTERNAL] = ModelKindName.EXTERNAL
-    disable_restatement: t.Literal[True] = True
 
 
 class CustomKind(_ModelKind):

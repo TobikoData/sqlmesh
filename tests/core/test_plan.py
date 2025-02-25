@@ -789,6 +789,21 @@ def test_restate_models(sushi_context_pre_scheduling: Context):
     assert not plan.restatements
     assert plan.models_to_backfill is None
 
+    plan = sushi_context_pre_scheduling.plan(restate_models=["raw.demographics"], no_prompts=True)
+    assert not plan.has_changes
+    assert plan.restatements
+    assert plan.models_to_backfill == {
+        '"memory"."raw"."demographics"',
+        '"memory"."sushi"."active_customers"',
+        '"memory"."sushi"."customers"',
+        '"memory"."sushi"."marketing"',
+        '"memory"."sushi"."orders"',
+        '"memory"."sushi"."raw_marketing"',
+        '"memory"."sushi"."waiter_as_customer_by_day"',
+        '"memory"."sushi"."waiter_names"',
+        '"memory"."sushi"."waiters"',
+    }
+
 
 @pytest.mark.slow
 @time_machine.travel(now(minute_floor=False), tick=False)
@@ -884,7 +899,7 @@ def test_restate_symbolic_model(make_snapshot, mocker: MockerFixture):
     plan = PlanBuilder(
         context_diff, DuckDBEngineAdapter.SCHEMA_DIFFER, restate_models=[snapshot_a.name]
     ).build()
-    assert not plan.restatements
+    assert plan.restatements
 
 
 def test_restate_seed_model(make_snapshot, mocker: MockerFixture):

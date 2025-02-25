@@ -349,7 +349,7 @@ class PlanBuilder:
                         "If you want to restate this model, change the model's `disable_restatement` setting to `false`."
                     )
                     continue
-                elif snapshot.is_symbolic or snapshot.is_seed:
+                elif snapshot.is_seed:
                     logger.info("Skipping restatement for model '%s'", snapshot.name)
                     continue
 
