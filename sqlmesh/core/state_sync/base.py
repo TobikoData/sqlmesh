@@ -447,6 +447,7 @@ class StateSync(StateReader, abc.ABC):
             name=snapshot.name,
             identifier=snapshot.identifier,
             version=snapshot.version,
+            dev_version=snapshot.dev_version,
             intervals=intervals if not is_dev else [],
             dev_intervals=intervals if is_dev else [],
         )
