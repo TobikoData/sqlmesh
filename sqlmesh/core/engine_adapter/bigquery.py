@@ -679,7 +679,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
                                 comment, self.MAX_COLUMN_COMMENT_LENGTH
                             )
                         else:
-                            fields = field.get("fields", [])
+                            fields = field.get("fields") or []
 
             # An "etag" is BQ versioning metadata that changes when an object is updated/modified. `update_table`
             # compares the etags of the table object passed to it and the remote table, erroring if the etags
@@ -802,6 +802,8 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
         ) -> exp.DataType:
             column_expressions = []
             for column_def in col_type.expressions:
+                # The is expected to always be true, but this check is included as a
+                # precautionary measure in case of an unexpected edge case
                 if isinstance(column_def, exp.ColumnDef):
                     column = self._build_column_def(
                         col_name=column_def.name,

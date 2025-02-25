@@ -673,12 +673,14 @@ def test_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture)
 def test_nested_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
     adapter = make_mocked_engine_adapter(BigQueryEngineAdapter)
 
+    allowed_column_comment_length = BigQueryEngineAdapter.MAX_COLUMN_COMMENT_LENGTH
+
     execute_mock = mocker.patch(
         "sqlmesh.core.engine_adapter.bigquery.BigQueryEngineAdapter.execute"
     )
 
     nested_columns_to_types = {
-        "record": exp.DataType.build(
+        "record with space": exp.DataType.build(
             "STRUCT<"
             "'int_field': INT, "
             "'record_field': STRUCT<"
@@ -691,25 +693,37 @@ def test_nested_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerF
             "'nested_repeated_record': ARRAY<STRUCT<"
             "'int_field': INT, "
             "'array_field': ARRAY<INT64>, "
-            "'struct_field': STRUCT<"
+            "'struct_field with space': STRUCT<"
             "'nested_field': INT"
+            ">>>"
+            ">>>"
+        ),
+        "same_name_": exp.DataType.build(
+            "ARRAY<STRUCT<"
+            "'same_name_': ARRAY<STRUCT<"
+            "'same_name_': STRUCT<"
+            "'same_name_': INT"
             ">>>"
             ">>>"
         ),
     }
 
     long_column_descriptions = {
-        "record": "Top Record",
-        "record.int_field": "Record Int Field",
-        "record.record_field": "Record Nested Record Field",
-        "record.record_field.sub_record_field": "Record Nested Records Subfield",
-        "record.record_field.sub_record_field.nest_array": "Record Nested Records Nested Array",
+        "record with space": "Top Record",
+        "record with space.int_field": "Record Int Field",
+        "record with space.record_field": "Record Nested Record Field",
+        "record with space.record_field.sub_record_field": "Record Nested Records Subfield",
+        "record with space.record_field.sub_record_field.nest_array": "Record Nested Records Nested Array",
         "repeated_record": "Top Repeated Record",
         "repeated_record.nested_repeated_record": "Nested Repeated Record",
         "repeated_record.nested_repeated_record.int_field": "Nested Repeated Record Int Field",
         "repeated_record.nested_repeated_record.array_field": "Nested Repeated Array Field",
-        "repeated_record.nested_repeated_record.struct_field": "Nested Repeated Struct Field",
-        "repeated_record.nested_repeated_record.struct_field.nested_field": "Nested Repeated Record Nested Field",
+        "repeated_record.nested_repeated_record.struct_field with space": "Nested Repeated Struct Field",
+        "repeated_record.nested_repeated_record.struct_field with space.nested_field": "Nested Repeated Record Nested Field",
+        "same_name_": "Level 1",
+        "same_name_.same_name_": "Level 2",
+        "same_name_.same_name_.same_name_": "Level 3",
+        "same_name_.same_name_.same_name_.same_name_": "4" * allowed_column_comment_length + "X",
     }
 
     adapter.create_table(
@@ -727,10 +741,10 @@ def test_nested_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerF
 
     sql_calls = _to_sql_calls(execute_mock)
 
-    # The comments should have been added in the correct nested field with appropriate truncation
+    # The comments should be added in the correct nested field with appropriate truncation
     assert sql_calls[0] == (
         "CREATE TABLE IF NOT EXISTS `test_table` ("
-        "`record` STRUCT<"
+        "`record with space` STRUCT<"
         "`int_field` INT64 OPTIONS (description='Record Int Field'), "
         "`record_field` STRUCT<"
         "`sub_record_field` STRUCT<"
@@ -742,16 +756,23 @@ def test_nested_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerF
         "`nested_repeated_record` ARRAY<STRUCT<"
         "`int_field` INT64 OPTIONS (description='Nested Repeated Record Int Field'), "
         "`array_field` ARRAY<INT64> OPTIONS (description='Nested Repeated Array Field'), "
-        "`struct_field` STRUCT<"
+        "`struct_field with space` STRUCT<"
         "`nested_field` INT64 OPTIONS (description='Nested Repeated Record Nested Field')> "
         "OPTIONS (description='Nested Repeated Struct Field')>> "
         "OPTIONS (description='Nested Repeated Record')>> "
-        "OPTIONS (description='Top Repeated Record'))"
+        "OPTIONS (description='Top Repeated Record'), "
+        "`same_name_` ARRAY<STRUCT<"
+        "`same_name_` ARRAY<STRUCT<"
+        "`same_name_` STRUCT<"
+        f"`same_name_` INT64 OPTIONS (description='{'4' * allowed_column_comment_length}')> "
+        "OPTIONS (description='Level 3')>> "
+        "OPTIONS (description='Level 2')>> "
+        "OPTIONS (description='Level 1'))"
     )
 
     assert sql_calls[1] == (
         "CREATE TABLE IF NOT EXISTS `test_table` ("
-        "`record` STRUCT<"
+        "`record with space` STRUCT<"
         "`int_field` INT64 OPTIONS (description='Record Int Field'), "
         "`record_field` STRUCT<"
         "`sub_record_field` STRUCT<"
@@ -763,15 +784,21 @@ def test_nested_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerF
         "`nested_repeated_record` ARRAY<STRUCT<"
         "`int_field` INT64 OPTIONS (description='Nested Repeated Record Int Field'), "
         "`array_field` ARRAY<INT64> OPTIONS (description='Nested Repeated Array Field'), "
-        "`struct_field` STRUCT<"
+        "`struct_field with space` STRUCT<"
         "`nested_field` INT64 OPTIONS (description='Nested Repeated Record Nested Field')> "
         "OPTIONS (description='Nested Repeated Struct Field')>> "
         "OPTIONS (description='Nested Repeated Record')>> "
-        "OPTIONS (description='Top Repeated Record'))"
-        " AS SELECT CAST(`record` AS STRUCT<`int_field` INT64, `record_field`"
-        " STRUCT<`sub_record_field` STRUCT<`nest_array` ARRAY<INT64>>>>) AS `record`, "
-        "CAST(`repeated_record` AS ARRAY<STRUCT<`nested_repeated_record` ARRAY<STRUCT<`int_field` INT64, "
-        "`array_field` ARRAY<INT64>, `struct_field` STRUCT<`nested_field` INT64>>>>>) AS `repeated_record` "
+        "OPTIONS (description='Top Repeated Record'), "
+        "`same_name_` ARRAY<STRUCT<"
+        "`same_name_` ARRAY<STRUCT<"
+        "`same_name_` STRUCT<"
+        f"`same_name_` INT64 OPTIONS (description='{'4' * allowed_column_comment_length}')> "
+        "OPTIONS (description='Level 3')>> "
+        "OPTIONS (description='Level 2')>> "
+        "OPTIONS (description='Level 1'))"
+        " AS SELECT CAST(`record with space` AS STRUCT<`int_field` INT64, `record_field` STRUCT<`sub_record_field` STRUCT<`nest_array` ARRAY<INT64>>>>) AS `record with space`, "
+        "CAST(`repeated_record` AS ARRAY<STRUCT<`nested_repeated_record` ARRAY<STRUCT<`int_field` INT64, `array_field` ARRAY<INT64>, `struct_field with space` STRUCT<`nested_field` INT64>>>>>) AS `repeated_record`, "
+        "CAST(`same_name_` AS ARRAY<STRUCT<`same_name_` ARRAY<STRUCT<`same_name_` STRUCT<`same_name_` INT64>>>>>) AS `same_name_` "
         "FROM (SELECT * FROM `source_table`) AS `_subquery`"
     )
 
