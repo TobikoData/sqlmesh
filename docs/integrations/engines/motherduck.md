@@ -43,12 +43,10 @@ gateways:
     motherduck:  
         connection:   
             type: motherduck  
-            catalogs:  
-                persistent: ‘md:’  
-                ephemeral: ‘:memory:’  
-            token: \<your\_token\>
+            database: <your_db_name>
+            token: <your_token>
 
-default\_gateway: motherduck  
+default_gateway: motherduck
 ```
 
 !!! warning
