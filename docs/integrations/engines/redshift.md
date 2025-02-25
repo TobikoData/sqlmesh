@@ -32,6 +32,8 @@ pip install "sqlmesh[redshift]"
 | `is_serverless`         | If the Amazon Redshift cluster is serverless (Default: `False`)                                             |  bool  |    N     |
 | `serverless_acct_id`    | The account ID of the serverless cluster                                                                    | string |    N     |
 | `serverless_work_group` | The name of work group for serverless end point                                                             | string |    N     |
+| `merge_operation`         | Whether the incremental_by_unique_key model kind will use the native Redshift MERGE operation or SQLMesh's logical merge. (Default: `False`)           |  bool  |    N     |
+
 
 ## Airflow Scheduler
 **Engine Name:** `redshift`

@@ -876,3 +876,48 @@ def test_gateway_model_defaults(tmp_path):
     )
 
     assert ctx.config.model_defaults == expected
+
+
+def test_redshift_merge_flag(tmp_path, mocker: MockerFixture):
+    config_path = tmp_path / "config_redshift_merge.yaml"
+    with open(config_path, "w", encoding="utf-8") as fd:
+        fd.write(
+            """
+gateways:
+    redshift:
+        connection:
+            type: redshift
+            user: user
+            password: '1234'
+            host: host
+            database: db
+            merge_operation: true
+    default:
+        connection:
+            type: redshift
+            user: user
+            password: '1234'
+            host: host
+            database: db
+
+default_gateway: redshift
+
+model_defaults:
+    dialect: redshift
+        """
+        )
+
+    config = load_config_from_paths(
+        Config,
+        project_paths=[config_path],
+    )
+    redshift_connection = config.get_connection("redshift")
+    assert isinstance(redshift_connection, RedshiftConnectionConfig)
+    assert redshift_connection.merge_operation
+    adapter = redshift_connection.create_engine_adapter()
+    assert isinstance(adapter, RedshiftEngineAdapter)
+    assert adapter.merge_operation
+
+    adapter_2 = config.get_connection("default").create_engine_adapter()
+    assert isinstance(adapter_2, RedshiftEngineAdapter)
+    assert not adapter_2.merge_operation

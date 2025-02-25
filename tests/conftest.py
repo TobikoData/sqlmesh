@@ -23,6 +23,7 @@ from sqlmesh.core.config import BaseDuckDBConnectionConfig
 from sqlmesh.core.context import Context
 from sqlmesh.core.engine_adapter import MSSQLEngineAdapter, SparkEngineAdapter
 from sqlmesh.core.engine_adapter.base import EngineAdapter
+from sqlmesh.core.engine_adapter.redshift import RedshiftEngineAdapter
 from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core import lineage
 from sqlmesh.core.macros import macro
@@ -464,6 +465,11 @@ def make_mocked_engine_adapter(mocker: MockerFixture) -> t.Callable:
             mocker.patch(
                 "sqlmesh.core.engine_adapter.mssql.MSSQLEngineAdapter.catalog_support",
                 new_callable=PropertyMock(return_value=CatalogSupport.REQUIRES_SET_CATALOG),
+            )
+        if isinstance(adapter, RedshiftEngineAdapter):
+            mocker.patch(
+                "sqlmesh.core.engine_adapter.redshift.RedshiftEngineAdapter.merge_operation",
+                new_callable=PropertyMock(return_value=True),
             )
         return adapter
 

@@ -1104,6 +1104,7 @@ class RedshiftConnectionConfig(ConnectionConfig):
         serverless_acct_id: The account ID of the serverless. Default value None
         serverless_work_group: The name of work group for serverless end point. Default value None.
         pre_ping: Whether or not to pre-ping the connection before starting a new transaction to ensure it is still alive.
+        merge_operation: Whether to use the Redshift merge operation instead of the SQLMesh logical merge.
     """
 
     user: t.Optional[str] = None
@@ -1127,6 +1128,7 @@ class RedshiftConnectionConfig(ConnectionConfig):
     is_serverless: t.Optional[bool] = None
     serverless_acct_id: t.Optional[str] = None
     serverless_work_group: t.Optional[str] = None
+    merge_operation: t.Optional[bool] = None
 
     concurrent_tasks: int = 4
     register_comments: bool = True
@@ -1169,6 +1171,10 @@ class RedshiftConnectionConfig(ConnectionConfig):
         from redshift_connector import connect
 
         return connect
+
+    @property
+    def _extra_engine_config(self) -> t.Dict[str, t.Any]:
+        return {"merge_operation": self.merge_operation}
 
 
 class PostgresConnectionConfig(ConnectionConfig):
