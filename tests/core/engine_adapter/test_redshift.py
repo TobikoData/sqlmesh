@@ -326,8 +326,12 @@ def test_alter_table_drop_column_cascade(adapter: t.Callable):
     ]
 
 
-def test_merge(make_mocked_engine_adapter: t.Callable):
+def test_merge(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
     adapter = make_mocked_engine_adapter(RedshiftEngineAdapter)
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.redshift.RedshiftEngineAdapter.enable_merge",
+        new_callable=PropertyMock(return_value=True),
+    )
 
     adapter.merge(
         target_table=exp.to_table("target_table_name"),
@@ -363,8 +367,12 @@ def test_merge(make_mocked_engine_adapter: t.Callable):
     ]
 
 
-def test_merge_when_matched_error(make_mocked_engine_adapter: t.Callable):
+def test_merge_when_matched_error(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
     adapter = make_mocked_engine_adapter(RedshiftEngineAdapter)
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.redshift.RedshiftEngineAdapter.enable_merge",
+        new_callable=PropertyMock(return_value=True),
+    )
 
     with pytest.raises(
         SQLMeshError,
@@ -437,10 +445,6 @@ def test_merge_logical(
     make_mocked_engine_adapter: t.Callable, make_temp_table_name: t.Callable, mocker: MockerFixture
 ):
     adapter = make_mocked_engine_adapter(RedshiftEngineAdapter)
-    mocker.patch(
-        "sqlmesh.core.engine_adapter.redshift.RedshiftEngineAdapter.enable_merge",
-        new_callable=PropertyMock(return_value=False),
-    )
 
     temp_table_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter._get_temp_table")
     table_name = "test"
