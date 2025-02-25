@@ -404,6 +404,11 @@ def test_missing_intervals_partial(make_snapshot):
     assert snapshot.missing_intervals(start, start, execution_time=start, ignore_cron=True) == []
     assert snapshot.missing_intervals(start, start, execution_time=end_ts, end_bounded=True) == []
 
+    assert snapshot.missing_intervals(start, to_timestamp("2023-01-02 12:00:00")) == [
+        (to_timestamp(start), to_timestamp("2023-01-02")),
+        (to_timestamp("2023-01-02"), to_timestamp("2023-01-02 12:00:00")),
+    ]
+
 
 def test_missing_intervals_end_bounded_with_lookback(make_snapshot):
     snapshot = make_snapshot(
