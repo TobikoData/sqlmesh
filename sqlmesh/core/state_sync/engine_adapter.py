@@ -793,7 +793,9 @@ class EngineAdapterStateSync(StateSync):
         lock_for_update: bool = False,
         required_fields: t.Optional[t.List[str]] = None,
     ) -> exp.Select:
-        query_fields = required_fields if required_fields else Environment.all_fields() - {"statements"}
+        query_fields = (
+            required_fields if required_fields else Environment.all_fields() - {"statements"}
+        )
         query = (
             exp.select(*(exp.to_identifier(field) for field in query_fields))
             .from_(self.environments_table)
