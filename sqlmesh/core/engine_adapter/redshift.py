@@ -46,7 +46,7 @@ class RedshiftEngineAdapter(
     # Redshift doesn't support comments for VIEWs WITH NO SCHEMA BINDING (which we always use)
     COMMENT_CREATION_VIEW = CommentCreationView.UNSUPPORTED
     SUPPORTS_REPLACE_TABLE = False
-    MERGE_OPERATION = False
+
     SCHEMA_DIFFER = SchemaDiffer(
         parameterized_type_defaults={
             exp.DataType.build("VARBYTE", dialect=DIALECT).this: [(64000,)],
@@ -126,7 +126,7 @@ class RedshiftEngineAdapter(
     def enable_merge(self) -> bool:
         # Redshift supports the MERGE operation but we use the logical merge
         # unless the user has opted in by setting enable_merge in the connection.
-        return self._extra_config.get("enable_merge") or self.MERGE_OPERATION
+        return bool(self._extra_config.get("enable_merge"))
 
     @property
     def cursor(self) -> t.Any:
