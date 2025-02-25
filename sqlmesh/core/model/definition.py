@@ -32,7 +32,14 @@ from sqlmesh.core.model.common import (
     single_value_or_tuple,
 )
 from sqlmesh.core.model.meta import ModelMeta, FunctionCall
-from sqlmesh.core.model.kind import ModelKindName, SeedKind, ModelKind, FullKind, create_model_kind
+from sqlmesh.core.model.kind import (
+    ModelKindName,
+    SeedKind,
+    ModelKind,
+    FullKind,
+    create_model_kind,
+    CustomKind,
+)
 from sqlmesh.core.model.seed import CsvSeedReader, Seed, create_seed
 from sqlmesh.core.renderer import ExpressionRenderer, QueryRenderer
 from sqlmesh.core.signal import SignalRegistry
@@ -978,6 +985,12 @@ class _Model(ModelMeta, frozen=True):
                     "Query validation can only be enabled for SQL models",
                     self._path,
                 )
+
+        if isinstance(self.kind, CustomKind):
+            from sqlmesh.core.snapshot.evaluator import get_custom_materialization_type_or_raise
+
+            # Will raise if the custom materialization points to an invalid class
+            get_custom_materialization_type_or_raise(self.kind.materialization)
 
     def is_breaking_change(self, previous: Model) -> t.Optional[bool]:
         """Determines whether this model is a breaking change in relation to the `previous` model.

@@ -33,6 +33,7 @@ from sqlmesh.core.model import (
     SqlModel,
     create_seed_model,
     load_sql_based_model,
+    CustomKind,
 )
 from sqlmesh.core.model.kind import TimeColumn, ModelKindName
 from sqlmesh.core.node import IntervalUnit
@@ -165,6 +166,36 @@ def test_json(snapshot: Snapshot):
         "migrated": False,
         "unrestorable": False,
     }
+
+
+def test_json_custom_materialization(make_snapshot: t.Callable):
+    model = SqlModel(
+        name="name",
+        kind=dict(name=ModelKindName.CUSTOM, materialization="non_existent_should_still_work"),
+        owner="owner",
+        dialect="spark",
+        cron="1 0 * * *",
+        start="2020-01-01",
+        query=parse_one("SELECT @EACH([1, 2], x -> x), ds FROM parent.tbl"),
+    )
+
+    snapshot = make_snapshot(
+        model,
+        nodes={model.fqn: model},
+    )
+    snapshot.version = snapshot.fingerprint.to_version()
+
+    # this should not throw an error even though the 'non_existent_should_still_work' custom materialization doesnt exist
+    # this is so we can always deserialize a snapshot based on a custom materialization without the custom materialization class being loaded
+    new_snapshot = Snapshot.model_validate_json(snapshot.json())
+    assert new_snapshot == snapshot
+    assert isinstance(new_snapshot.model.kind, CustomKind)
+    assert new_snapshot.model.kind.materialization == "non_existent_should_still_work"
+    assert new_snapshot.model.kind.materialization_properties == {}
+
+    # this, however, should throw an error
+    with pytest.raises(SQLMeshError, match=r"Materialization strategy.*was not found"):
+        new_snapshot.model.validate_definition()
 
 
 def test_add_interval(snapshot: Snapshot, make_snapshot):
