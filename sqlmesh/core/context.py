@@ -78,6 +78,7 @@ from sqlmesh.core.loader import Loader
 from sqlmesh.core.macros import ExecutableOrMacro, macro
 from sqlmesh.core.metric import Metric, rewrite
 from sqlmesh.core.model import Model, update_model_schemas
+from sqlmesh.core.config.model import ModelDefaultsConfig
 from sqlmesh.core.notification_target import (
     NotificationEvent,
     NotificationTarget,
@@ -353,13 +354,6 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         self._all_dialects: t.Set[str] = {self.config.dialect or ""}
 
-        # This allows overriding the default dialect's normalization strategy, so for example
-        # one can do `dialect="duckdb,normalization_strategy=lowercase"` and this will be
-        # applied to the DuckDB dialect globally
-        if "normalization_strategy" in str(self.config.dialect):
-            dialect = Dialect.get_or_raise(self.config.dialect)
-            type(dialect).NORMALIZATION_STRATEGY = dialect.normalization_strategy
-
         if self.config.disable_anonymized_analytics:
             analytics.disable_analytics()
 
@@ -369,6 +363,23 @@ class GenericContext(BaseContext, t.Generic[C]):
         self.pinned_environments = Environment.sanitize_names(self.config.pinned_environments)
         self.auto_categorize_changes = self.config.plan.auto_categorize_changes
         self.selected_gateway = gateway or self.config.default_gateway_name
+
+        gw_model_defaults = self.config.gateways[self.selected_gateway].model_defaults
+        if gw_model_defaults:
+            # Merge global model defaults with the selected gateway's, if it's overriden
+            global_defaults = self.config.model_defaults.model_dump(exclude_unset=True)
+            gateway_defaults = gw_model_defaults.model_dump(exclude_unset=True)
+
+            self.config.model_defaults = ModelDefaultsConfig(
+                **{**global_defaults, **gateway_defaults}
+            )
+
+        # This allows overriding the default dialect's normalization strategy, so for example
+        # one can do `dialect="duckdb,normalization_strategy=lowercase"` and this will be
+        # applied to the DuckDB dialect globally
+        if "normalization_strategy" in str(self.config.dialect):
+            dialect = Dialect.get_or_raise(self.config.dialect)
+            type(dialect).NORMALIZATION_STRATEGY = dialect.normalization_strategy
 
         self._loaders = [
             (loader or config.loader)(self, path, **config.loader_kwargs)

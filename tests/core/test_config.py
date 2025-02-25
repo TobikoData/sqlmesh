@@ -850,3 +850,29 @@ def test_gcp_postgres_ip_and_scopes(tmp_path):
     assert conn.scopes[0] == "https://www.googleapis.com/auth/cloud-platform"
     assert conn.scopes[1] == "https://www.googleapis.com/auth/sqlservice.admin"
     assert conn.ip_type == "private"
+
+
+def test_gateway_model_defaults(tmp_path):
+    global_defaults = ModelDefaultsConfig(
+        dialect="snowflake", owner="foo", optimize_query=True, enabled=True, cron="@daily"
+    )
+    gateway_defaults = ModelDefaultsConfig(dialect="duckdb", owner="baz", optimize_query=False)
+
+    config = Config(
+        gateways={
+            "duckdb": GatewayConfig(
+                connection=DuckDBConnectionConfig(database="db.db"),
+                model_defaults=gateway_defaults,
+            )
+        },
+        model_defaults=global_defaults,
+        default_gateway="duckdb",
+    )
+
+    ctx = Context(paths=tmp_path, config=config, gateway="duckdb")
+
+    expected = ModelDefaultsConfig(
+        dialect="duckdb", owner="baz", optimize_query=False, enabled=True, cron="@daily"
+    )
+
+    assert ctx.config.model_defaults == expected

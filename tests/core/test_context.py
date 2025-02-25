@@ -11,7 +11,7 @@ import pytest
 import pandas as pd
 from pathlib import Path
 from pytest_mock.plugin import MockerFixture
-from sqlglot import exp, parse_one
+from sqlglot import exp, parse_one, Dialect
 from sqlglot.errors import SchemaError
 
 from sqlmesh.core.config.gateway import GatewayConfig
@@ -1101,6 +1101,35 @@ def test_override_dialect_normalization_strategy():
 
     # The above change is applied globally so we revert it to avoid breaking other tests
     DuckDB.NORMALIZATION_STRATEGY = NormalizationStrategy.CASE_INSENSITIVE
+
+
+def test_different_gateway_normalization_strategy(tmp_path: pathlib.Path):
+    config = Config(
+        gateways={
+            "duckdb": GatewayConfig(
+                connection=DuckDBConnectionConfig(database="db.db"),
+                model_defaults=ModelDefaultsConfig(
+                    dialect="snowflake, normalization_strategy=case_insensitive"
+                ),
+            )
+        },
+        model_defaults=ModelDefaultsConfig(dialect="snowflake"),
+        default_gateway="duckdb",
+    )
+
+    from sqlglot.dialects import Snowflake
+    from sqlglot.dialects.dialect import NormalizationStrategy
+
+    assert Snowflake.NORMALIZATION_STRATEGY == NormalizationStrategy.UPPERCASE
+
+    ctx = Context(paths=tmp_path, config=config, gateway="duckdb")
+
+    dialect = Dialect.get_or_raise(ctx.config.dialect)
+
+    assert dialect == "snowflake"
+    assert Snowflake.NORMALIZATION_STRATEGY == NormalizationStrategy.CASE_INSENSITIVE
+
+    Snowflake.NORMALIZATION_STRATEGY = NormalizationStrategy.UPPERCASE
 
 
 def test_access_self_columns_to_types_in_macro(tmp_path: pathlib.Path):
