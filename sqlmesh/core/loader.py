@@ -613,8 +613,8 @@ class SqlMeshLoader(Loader):
         """Loads environment statements."""
 
         statements = {
-            "before_all": self.config.plan.before_all or [],
-            "after_all": self.config.plan.after_all or [],
+            "before_all": self.config.before_all or [],
+            "after_all": self.config.after_all or [],
         }
 
         python_env = make_python_env(

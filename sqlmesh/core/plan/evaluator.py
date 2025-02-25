@@ -20,10 +20,11 @@ import typing as t
 from sqlmesh.core import analytics
 from sqlmesh.core import constants as c
 from sqlmesh.core.console import Console, get_console
-from sqlmesh.core.environment import EnvironmentNamingInfo
+from sqlmesh.core.environment import EnvironmentNamingInfo, ExecutionStage
 from sqlmesh.core.notification_target import (
     NotificationTarget,
 )
+from sqlmesh.core.renderer import render_statements
 from sqlmesh.core.snapshot.definition import Interval, to_view_mapping
 from sqlmesh.core.plan.definition import EvaluatablePlan
 from sqlmesh.core.scheduler import Scheduler
@@ -120,17 +121,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                 after_promote_snapshots = all_names - before_promote_snapshots
                 deployability_index_for_evaluation = DeployabilityIndex.all_deployable()
 
-            self.state_sync.update_environment_statements(plan)
-            self.snapshot_evaluator._execute_environment_statements(
-                plan.environment_statements or [],
-                execution_stage="before_all",
-                snapshots=snapshots_by_name,
-                start=plan.start,
-                end=plan.end,
-                execution_time=plan.execution_time,
-                default_catalog=self.default_catalog,
-                environment_naming_info=plan.environment.naming_info,
-            )
+            self.execute_environment_statements(ExecutionStage.BEFORE_ALL, plan, snapshots_by_name)
 
             self._push(plan, snapshots, deployability_index_for_creation)
             update_intervals_for_new_snapshots(plan.new_snapshots, self.state_sync)
@@ -157,16 +148,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             if not plan.requires_backfill:
                 self.console.log_success("Virtual Update executed successfully")
 
-            self.snapshot_evaluator._execute_environment_statements(
-                plan.environment_statements or [],
-                execution_stage="after_all",
-                snapshots=snapshots_by_name,
-                start=plan.start,
-                end=plan.end,
-                execution_time=plan.execution_time,
-                default_catalog=self.default_catalog,
-                environment_naming_info=plan.environment.naming_info,
-            )
+            self.execute_environment_statements(ExecutionStage.AFTER_ALL, plan, snapshots_by_name)
 
         except Exception as e:
             analytics.collector.on_plan_apply_end(plan_id=plan.plan_id, error=e)
@@ -175,6 +157,34 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             analytics.collector.on_plan_apply_end(plan_id=plan.plan_id)
         finally:
             self.console.stop_plan_evaluation()
+
+    def execute_environment_statements(
+        self,
+        execution_stage: ExecutionStage,
+        plan: EvaluatablePlan,
+        snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
+    ) -> None:
+        adapter = self.snapshot_evaluator.adapter
+        if (environment_statements := plan.environment.statements) and (
+            rendered_expressions := [
+                expr
+                for statements in environment_statements
+                for expr in render_statements(
+                    statements=getattr(statements, execution_stage.value),
+                    dialect=adapter.dialect,
+                    default_catalog=self.default_catalog,
+                    python_env=statements.python_env,
+                    snapshots=snapshots,
+                    start=plan.start,
+                    end=plan.end,
+                    execution_time=plan.execution_time,
+                    environment_naming_info=plan.environment.naming_info,
+                )
+            ]
+        ):
+            with adapter.transaction():
+                for expression in rendered_expressions:
+                    adapter.execute(expression)
 
     def _backfill(
         self,

@@ -26,7 +26,6 @@ from sqlmesh.core.model import (
     SqlModel,
 )
 from sqlmesh.core.model.definition import ExternalModel
-from sqlmesh.core.plan.definition import EvaluatablePlan
 from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotChangeCategory,
@@ -1075,6 +1074,13 @@ def test_delete_expired_environments(state_sync: EngineAdapterStateSync, make_sn
         plan_id="test_plan_id",
         previous_plan_id="test_plan_id",
         expiration_ts=now_ts - 1000,
+        statements=[
+            EnvironmentStatements(
+                before_all=["CREATE OR REPLACE TABLE table_1 AS SELECT 'a'"],
+                after_all=["CREATE OR REPLACE TABLE table_2 AS SELECT 'b'"],
+                python_env={},
+            )
+        ],
     )
     state_sync.promote(env_a)
 
@@ -1087,11 +1093,18 @@ def test_delete_expired_environments(state_sync: EngineAdapterStateSync, make_sn
     assert state_sync.get_environment(env_a.name) == env_a
     assert state_sync.get_environment(env_b.name) == env_b
 
+    assert env_a.statements == state_sync.get_environment_statements(env_a.name)
+    assert env_b.statements == state_sync.get_environment_statements(env_b.name)
+
     deleted_environments = state_sync.delete_expired_environments()
     assert deleted_environments == [env_a]
 
     assert state_sync.get_environment(env_a.name) is None
     assert state_sync.get_environment(env_b.name) == env_b
+
+    # Deleting the environments should remove the corresponding environment's statements
+    assert state_sync.get_environment_statements(env_a.name) == []
+    assert env_b.statements == state_sync.get_environment_statements(env_b.name)
 
 
 def test_delete_expired_snapshots(state_sync: EngineAdapterStateSync, make_snapshot: t.Callable):
@@ -2429,8 +2442,17 @@ def test_invalidate_environment(state_sync: EngineAdapterStateSync, make_snapsho
         plan_id="test_plan_id",
         previous_plan_id="test_plan_id",
         expiration_ts=original_expiration_ts,
+        statements=[
+            EnvironmentStatements(
+                before_all=["CREATE OR REPLACE TABLE table_1 AS SELECT 'a'"],
+                after_all=["CREATE OR REPLACE TABLE table_2 AS SELECT 'b'"],
+                python_env={},
+            )
+        ],
     )
     state_sync.promote(env)
+
+    assert state_sync.get_environment_statements(env.name) == env.statements
 
     assert not state_sync.delete_expired_environments()
     state_sync.invalidate_environment("test_environment")
@@ -2442,6 +2464,8 @@ def test_invalidate_environment(state_sync: EngineAdapterStateSync, make_snapsho
     deleted_environments = state_sync.delete_expired_environments()
     assert len(deleted_environments) == 1
     assert deleted_environments[0].name == "test_environment"
+    assert deleted_environments[0].statements == env.statements
+    assert state_sync.get_environment_statements(env.name) == []
 
     with pytest.raises(SQLMeshError, match="Cannot invalidate the production environment."):
         state_sync.invalidate_environment("prod")
@@ -3435,52 +3459,28 @@ def test_compact_intervals_pending_restatement_many_snapshots_same_version(
 def test_update_environment_statements(state_sync: EngineAdapterStateSync):
     assert state_sync.get_environment_statements(environment="dev") == []
 
-    env = Environment(
+    environment = Environment(
         name="dev",
         snapshots=[],
         start_at="2022-01-01",
         end_at="2022-01-01",
         plan_id="test_plan_id",
-    )
-    statements = [
-        EnvironmentStatements(
-            before_all=["CREATE OR REPLACE TABLE table_1 AS SELECT 'a'"],
-            after_all=["CREATE OR REPLACE TABLE table_2 AS SELECT 'b'"],
-            python_env={},
-        )
-    ]
-
-    plan = EvaluatablePlan(
-        start=env.start_at,
-        end=env.end_at,
-        new_snapshots=[],
-        environment=env,
-        no_gaps=False,
-        skip_backfill=False,
-        empty_backfill=False,
-        restatements={},
-        is_dev=False,
-        forward_only=False,
-        models_to_backfill=None,
-        end_bounded=False,
-        ensure_finalized_snapshots=False,
-        directly_modified_snapshots=[],
-        indirectly_modified_snapshots={},
-        removed_snapshots=[],
-        interval_end_per_model=None,
-        allow_destructive_models=set(),
-        requires_backfill=True,
-        disabled_restatement_models=set(),
-        environment_statements=statements,
+        statements=[
+            EnvironmentStatements(
+                before_all=["CREATE OR REPLACE TABLE table_1 AS SELECT 'a'"],
+                after_all=["CREATE OR REPLACE TABLE table_2 AS SELECT 'b'"],
+                python_env={},
+            )
+        ],
     )
 
-    state_sync.update_environment_statements(plan=plan)
+    state_sync._update_environment(environment=environment)
 
     environment_statements = state_sync.get_environment_statements(environment="dev")
     assert environment_statements[0].before_all == ["CREATE OR REPLACE TABLE table_1 AS SELECT 'a'"]
     assert environment_statements[0].after_all == ["CREATE OR REPLACE TABLE table_2 AS SELECT 'b'"]
 
-    plan.environment_statements = [
+    environment.statements = [
         EnvironmentStatements(
             before_all=["CREATE OR REPLACE TABLE table_1 AS SELECT 'a'"],
             after_all=[
@@ -3490,7 +3490,7 @@ def test_update_environment_statements(state_sync: EngineAdapterStateSync):
             python_env={},
         )
     ]
-    state_sync.update_environment_statements(plan=plan)
+    state_sync._update_environment(environment=environment)
 
     environment_statements = state_sync.get_environment_statements(environment="dev")
     assert environment_statements[0].before_all == ["CREATE OR REPLACE TABLE table_1 AS SELECT 'a'"]

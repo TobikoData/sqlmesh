@@ -10,7 +10,6 @@ from sqlglot import __version__ as SQLGLOT_VERSION
 
 from sqlmesh import migrations
 from sqlmesh.core.environment import Environment, EnvironmentNamingInfo, EnvironmentStatements
-from sqlmesh.core.plan.definition import EvaluatablePlan
 from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotId,
@@ -191,15 +190,7 @@ class StateReader(abc.ABC):
         """Fetches environment statements from the environment_statements table.
 
         Returns:
-            A tuple of (before_all, after_all) statements.
-        """
-
-    @abc.abstractmethod
-    def update_environment_statements(self, plan: EvaluatablePlan) -> None:
-        """Updates the environment statements for the given plan.
-
-        Args:
-            plan: The plan to update.
+            A list of the Environment Statements.
         """
 
     def get_versions(self, validate: bool = True) -> Versions:

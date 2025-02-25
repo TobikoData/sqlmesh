@@ -39,7 +39,6 @@ from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.environment import Environment, EnvironmentStatements
 from sqlmesh.core.model import ModelKindName, SeedModel
 from sqlmesh.core.node import IntervalUnit
-from sqlmesh.core.plan.definition import EvaluatablePlan
 from sqlmesh.core.snapshot import (
     Node,
     Snapshot,
@@ -191,7 +190,7 @@ class EngineAdapterStateSync(StateSync):
         self._environment_statements_columns_to_types = {
             "environment_name": exp.DataType.build(index_type),
             "plan_id": exp.DataType.build("text"),
-            "environment_statements": exp.DataType.build(blob_type),
+            "statements": exp.DataType.build(blob_type),
         }
 
         self._snapshot_cache = SnapshotCache(context_path / c.CACHE)
@@ -641,6 +640,16 @@ class EngineAdapterStateSync(StateSync):
             where=filter_expr,
         )
 
+        # Delete the expired environments' corresponding environment statements
+        if expired_environments := [
+            exp.EQ(this=exp.column("environment_name"), expression=exp.Literal.string(env.name))
+            for env in environments
+        ]:
+            self.engine_adapter.delete_from(
+                self.environment_statements_table,
+                where=exp.or_(*expired_environments),
+            )
+
         return environments
 
     def delete_snapshots(self, snapshot_ids: t.Iterable[SnapshotIdLike]) -> None:
@@ -702,23 +711,8 @@ class EngineAdapterStateSync(StateSync):
             columns_to_types=self._auto_restatement_columns_to_types,
         )
 
-    @transactional()
-    def update_environment_statements(self, plan: EvaluatablePlan) -> None:
-        self.engine_adapter.delete_from(
-            self.environment_statements_table,
-            where=exp.EQ(
-                this=exp.column("environment_name"),
-                expression=exp.Literal.string(plan.environment.name),
-            ),
-        )
-
-        self.engine_adapter.insert_append(
-            self.environment_statements_table,
-            _environment_statements_to_df(plan),
-            columns_to_types=self._environment_statements_columns_to_types,
-        )
-
     def _update_environment(self, environment: Environment) -> None:
+        # Update the environment table
         self.engine_adapter.delete_from(
             self.environments_table,
             where=exp.EQ(
@@ -731,6 +725,21 @@ class EngineAdapterStateSync(StateSync):
             self.environments_table,
             _environment_to_df(environment),
             columns_to_types=self._environment_columns_to_types,
+        )
+
+        # Update the environment's statements table
+        self.engine_adapter.delete_from(
+            self.environment_statements_table,
+            where=exp.EQ(
+                this=exp.column("environment_name"),
+                expression=exp.Literal.string(environment.name),
+            ),
+        )
+
+        self.engine_adapter.insert_append(
+            self.environment_statements_table,
+            _environment_statements_to_df(environment),
+            columns_to_types=self._environment_statements_columns_to_types,
         )
 
     def _update_snapshots(
@@ -772,7 +781,11 @@ class EngineAdapterStateSync(StateSync):
         )
 
     def _environment_from_row(self, row: t.Tuple[str, ...]) -> Environment:
-        return Environment(**{field: row[i] for i, field in enumerate(Environment.all_fields())})
+        environment = Environment(
+            **{field: row[i] for i, field in enumerate(Environment.all_fields() - {"statements"})}
+        )
+        environment.statements = self.get_environment_statements(environment.name)
+        return environment
 
     def _environments_query(
         self,
@@ -780,7 +793,7 @@ class EngineAdapterStateSync(StateSync):
         lock_for_update: bool = False,
         required_fields: t.Optional[t.List[str]] = None,
     ) -> exp.Select:
-        query_fields = required_fields if required_fields else Environment.all_fields()
+        query_fields = required_fields if required_fields else Environment.all_fields() - {"statements"}
         query = (
             exp.select(*(exp.to_identifier(field) for field in query_fields))
             .from_(self.environments_table)
@@ -798,7 +811,7 @@ class EngineAdapterStateSync(StateSync):
         """
         query = (
             exp.select(
-                exp.to_identifier("environment_statements"),
+                exp.to_identifier("statements"),
             )
             .from_(self.environment_statements_table)
             .where(
@@ -809,8 +822,11 @@ class EngineAdapterStateSync(StateSync):
             )
         )
         result = self._fetchone(query)
-
-        if result and (statements := json.loads(result[0])["environment_statements"]):
+        if (
+            result
+            and (deserialized := json.loads(result[0]))
+            and (statements := deserialized.get("statements", None))
+        ):
             return [
                 EnvironmentStatements.parse_obj(environment_statements)
                 for environment_statements in statements
@@ -2047,13 +2063,17 @@ def _auto_restatements_to_df(auto_restatements: t.Dict[SnapshotNameVersion, int]
     )
 
 
-def _environment_statements_to_df(plan: EvaluatablePlan) -> pd.DataFrame:
+def _environment_statements_to_df(environment: Environment) -> pd.DataFrame:
     return pd.DataFrame(
         [
             {
-                "environment_name": plan.environment.name,
-                "plan_id": plan.plan_id,
-                "environment_statements": _environment_statements_to_json(plan),
+                "environment_name": environment.name,
+                "plan_id": environment.plan_id,
+                "statements": environment.json(
+                    include={
+                        "statements",
+                    }
+                ),
             }
         ]
     )
@@ -2063,14 +2083,6 @@ def _backup_table_name(table_name: TableName) -> exp.Table:
     table = exp.to_table(table_name).copy()
     table.set("this", exp.to_identifier(table.name + "_backup"))
     return table
-
-
-def _environment_statements_to_json(plan: EvaluatablePlan) -> str:
-    return plan.json(
-        include={
-            "environment_statements",
-        }
-    )
 
 
 def _snapshot_to_json(snapshot: Snapshot) -> str:

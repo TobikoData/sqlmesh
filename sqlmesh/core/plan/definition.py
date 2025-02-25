@@ -220,6 +220,7 @@ class Plan(PydanticModel, frozen=True):
             promoted_snapshot_ids=promoted_snapshot_ids,
             previous_finalized_snapshots=previous_finalized_snapshots,
             requirements=self.context_diff.requirements,
+            statements=self.context_diff.environment_statements,
             **self.environment_naming_info.dict(),
         )
 
@@ -261,7 +262,6 @@ class Plan(PydanticModel, frozen=True):
                 for s in self.snapshots.values()
                 if s.is_model and s.model.disable_restatement
             },
-            environment_statements=self.context_diff.environment_statements,
         )
 
     @cached_property

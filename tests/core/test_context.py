@@ -15,7 +15,6 @@ from sqlglot import exp, parse_one, Dialect
 from sqlglot.errors import SchemaError
 
 from sqlmesh.core.config.gateway import GatewayConfig
-from sqlmesh.core.config.plan import PlanConfig
 import sqlmesh.core.constants
 from sqlmesh.core import dialect as d, constants as c
 from sqlmesh.core.config import (
@@ -1408,15 +1407,13 @@ def test_environment_statements(tmp_path: pathlib.Path):
 
     config = Config(
         model_defaults=ModelDefaultsConfig(dialect=dialect),
-        plan=PlanConfig(
-            before_all=[
-                "CREATE TABLE IF NOT EXISTS analytic_stats (physical_table VARCHAR, evaluation_time VARCHAR)"
-            ],
-            after_all=[
-                "@grant_schema_usage()",
-                "@grant_select_privileges()",
-            ],
-        ),
+        before_all=[
+            "CREATE TABLE IF NOT EXISTS analytic_stats (physical_table VARCHAR, evaluation_time VARCHAR)"
+        ],
+        after_all=[
+            "@grant_schema_usage()",
+            "@grant_select_privileges()",
+        ],
     )
 
     expression = """
@@ -1533,10 +1530,8 @@ def test_plan_environment_statements(tmp_path: pathlib.Path):
 
     config = Config(
         model_defaults=ModelDefaultsConfig(dialect=dialect),
-        plan=PlanConfig(
-            before_all=["@create_stats_table()"],
-            after_all=["CREATE TABLE IF NOT EXISTS after_table AS SELECT @some_var"],
-        ),
+        before_all=["@create_stats_table()"],
+        after_all=["CREATE TABLE IF NOT EXISTS after_table AS SELECT @some_var"],
         variables={"some_var": 5},
     )
 

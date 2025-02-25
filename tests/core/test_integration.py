@@ -25,7 +25,6 @@ from sqlmesh.core.config import (
     ModelDefaultsConfig,
     DuckDBConnectionConfig,
 )
-from sqlmesh.core.config.plan import PlanConfig
 from sqlmesh.core.console import Console
 from sqlmesh.core.context import Context
 from sqlmesh.core.config.categorizer import CategorizerConfig
@@ -4664,10 +4663,8 @@ def test_plan_production_environment_statements(tmp_path: Path):
     after_all = ["@IF(@this_env = 'prod', CREATE TABLE IF NOT EXISTS after_t AS SELECT @var_5)"]
     config = Config(
         model_defaults=ModelDefaultsConfig(dialect="duckdb"),
-        plan=PlanConfig(
-            before_all=before_all,
-            after_all=after_all,
-        ),
+        before_all=before_all,
+        after_all=after_all,
         variables={"var_5": 5},
     )
     ctx = Context(paths=[tmp_path], config=config)

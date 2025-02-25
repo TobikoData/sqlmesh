@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import Enum
 import json
 import re
 import typing as t
@@ -17,6 +18,11 @@ from sqlmesh.utils.pydantic import PydanticModel, field_validator
 
 T = t.TypeVar("T", bound="EnvironmentNamingInfo")
 PydanticType = t.TypeVar("PydanticType", bound="PydanticModel")
+
+
+class ExecutionStage(Enum):
+    BEFORE_ALL = "before_all"
+    AFTER_ALL = "after_all"
 
 
 class EnvironmentNamingInfo(PydanticModel):
@@ -120,6 +126,7 @@ class Environment(EnvironmentNamingInfo):
         default=None, alias="previous_finalized_snapshots"
     )
     requirements: t.Dict[str, str] = {}
+    statements: t.Optional[t.List[t.Any]] = None
 
     @field_validator("snapshots_", "previous_finalized_snapshots_", mode="before")
     @classmethod
@@ -144,6 +151,14 @@ class Environment(EnvironmentNamingInfo):
         if isinstance(v, str):
             v = json.loads(v)
         return v or {}
+
+    @field_validator("statements", mode="before")
+    def _load_statements(cls, v: t.Any) -> t.Any:
+        if isinstance(v, str):
+            v = [json.loads(v)]
+        if isinstance(v, list):
+            return [EnvironmentStatements(**val) if isinstance(val, dict) else val for val in v]
+        return v or []
 
     @property
     def snapshots(self) -> t.List[SnapshotTableInfo]:
@@ -221,8 +236,8 @@ class EnvironmentStatements:
     @staticmethod
     def parse_obj(statements: t.Dict[str, t.Any]) -> EnvironmentStatements:
         return EnvironmentStatements(
-            before_all=statements.get("before_all", []),
-            after_all=statements.get("after_all", []),
+            before_all=statements.get(ExecutionStage.BEFORE_ALL.value, []),
+            after_all=statements.get(ExecutionStage.AFTER_ALL.value, []),
             python_env={
                 key: Executable(**value) for key, value in statements.get("python_env", {}).items()
             },

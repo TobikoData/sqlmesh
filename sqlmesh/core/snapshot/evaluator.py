@@ -52,7 +52,6 @@ from sqlmesh.core.model import (
     CustomKind,
 )
 
-from sqlmesh.core.renderer import render_statements
 from sqlmesh.core.schema_diff import has_drop_alteration, get_dropped_column_names
 from sqlmesh.core.snapshot import (
     DeployabilityIndex,
@@ -84,7 +83,7 @@ else:
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.engine_adapter._typing import DF, QueryOrDF
-    from sqlmesh.core.environment import EnvironmentNamingInfo, EnvironmentStatements
+    from sqlmesh.core.environment import EnvironmentNamingInfo
 
 logger = logging.getLogger(__name__)
 
@@ -1104,37 +1103,6 @@ class SnapshotEvaluator:
             physical_properties=rendered_physical_properties,
         )
         adapter.execute(snapshot.model.render_post_statements(**create_render_kwargs))
-
-    def _execute_environment_statements(
-        self,
-        statements: t.List[EnvironmentStatements],
-        execution_stage: str,
-        snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
-        execution_time: t.Optional[TimeLike] = None,
-        start: t.Optional[TimeLike] = None,
-        end: t.Optional[TimeLike] = None,
-        default_catalog: t.Optional[str] = None,
-        environment_naming_info: t.Optional[EnvironmentNamingInfo] = None,
-    ) -> None:
-        adapter = self.adapter
-        if rendered_expressions := [
-            expr
-            for environment_statements in statements
-            for expr in render_statements(
-                statements=getattr(environment_statements, execution_stage),
-                dialect=adapter.dialect,
-                default_catalog=default_catalog,
-                python_env=environment_statements.python_env,
-                snapshots=snapshots,
-                start=start,
-                end=end,
-                execution_time=execution_time,
-                environment_naming_info=environment_naming_info,
-            )
-        ]:
-            with adapter.transaction():
-                for expr in rendered_expressions:
-                    adapter.execute(expr)
 
 
 def _evaluation_strategy(snapshot: SnapshotInfoLike, adapter: EngineAdapter) -> EvaluationStrategy:

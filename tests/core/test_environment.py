@@ -60,7 +60,7 @@ def test_lazy_loading(sushi_context):
 
     df = _environment_to_df(env)
     row = df.to_dict(orient="records")[0]
-    env = Environment(**{field: row[field] for field in Environment.all_fields()})
+    env = Environment(**{field: row[field] for field in Environment.all_fields() - {"statements"}})
 
     assert all(isinstance(snapshot, dict) for snapshot in env.snapshots_)
     assert all(isinstance(snapshot, SnapshotTableInfo) for snapshot in env.snapshots)

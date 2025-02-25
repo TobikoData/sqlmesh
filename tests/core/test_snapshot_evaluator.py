@@ -23,7 +23,7 @@ from sqlmesh.core.engine_adapter.shared import (
     DataObjectType,
     InsertOverwriteStrategy,
 )
-from sqlmesh.core.environment import EnvironmentNamingInfo, EnvironmentStatements
+from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.macros import RuntimeStage, macro, MacroEvaluator, MacroFunc
 from sqlmesh.core.model import (
     Model,
@@ -4028,52 +4028,3 @@ def test_multi_engine_python_model_with_macros(adapters, make_snapshot):
     # Validate that the get_catalog_type method was called only on the secondary engine from the macro evaluator
     engine_adapters["default"].get_catalog_type.assert_not_called()
     assert len(engine_adapters["secondary"].get_catalog_type.call_args_list) == 2
-
-
-def test_execute_environment_statements(mocker: MockerFixture, adapter_mock, make_snapshot):
-    evaluator = SnapshotEvaluator(adapter_mock)
-
-    statements = [
-        EnvironmentStatements(
-            before_all=["CREATE OR REPLACE TABLE table_1 AS SELECT 'a'"],
-            after_all=["CREATE OR REPLACE TABLE table_2 AS SELECT 'b'"],
-            python_env={},
-        )
-    ]
-
-    evaluator._execute_environment_statements(statements, execution_stage="before_all")
-    call_args = adapter_mock.execute.call_args_list
-    assert call_args[0][0][0] == "CREATE OR REPLACE TABLE table_1 AS SELECT 'a' AS a"
-    evaluator._execute_environment_statements(statements, execution_stage="after_all")
-    call_args = adapter_mock.execute.call_args_list
-    assert call_args[1][0][0] == "CREATE OR REPLACE TABLE table_2 AS SELECT 'b' AS b"
-
-
-def test_this_env_macro_in_statements(mocker: MockerFixture, adapter_mock, make_snapshot):
-    evaluator = SnapshotEvaluator(adapter_mock)
-    environment_naming_info = EnvironmentNamingInfo(name="prod")
-
-    statements = [
-        EnvironmentStatements(
-            before_all=[
-                "@IF(@this_env = 'prod', CREATE TABLE IF NOT EXISTS @{this_env}_table AS SELECT @this_env AS environment)",
-            ],
-            after_all=[
-                "@IF(@this_env = 'dev3', CREATE TABLE IF NOT EXISTS not_create AS SELECT 1)",
-            ],
-            python_env={},
-        )
-    ]
-
-    evaluator._execute_environment_statements(
-        statements, execution_stage="before_all", environment_naming_info=environment_naming_info
-    )
-    evaluator._execute_environment_statements(
-        statements, execution_stage="after_all", environment_naming_info=environment_naming_info
-    )
-    project_statement_calls = adapter_mock.execute.call_args_list
-    assert len(project_statement_calls) == 1
-    assert (
-        project_statement_calls[0][0][0]
-        == "CREATE TABLE IF NOT EXISTS prod_table AS SELECT 'prod' AS environment"
-    )

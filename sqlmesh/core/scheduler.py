@@ -5,12 +5,13 @@ import typing as t
 from sqlglot import exp
 from sqlmesh.core import constants as c
 from sqlmesh.core.console import Console, get_console
-from sqlmesh.core.environment import EnvironmentNamingInfo
+from sqlmesh.core.environment import EnvironmentNamingInfo, ExecutionStage
 from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.notification_target import (
     NotificationEvent,
     NotificationTargetManager,
 )
+from sqlmesh.core.renderer import render_statements
 from sqlmesh.core.snapshot import (
     DeployabilityIndex,
     Snapshot,
@@ -441,15 +442,13 @@ class Scheduler:
         snapshots_by_name = {snapshot.name: snapshot for snapshot in self.snapshots.values()}
 
         if is_run_command:
-            self.snapshot_evaluator._execute_environment_statements(
-                self.state_sync.get_environment_statements(environment_naming_info.name),
-                execution_stage="before_all",
+            self.execute_environment_statements(
+                execution_stage=ExecutionStage.BEFORE_ALL,
+                environment_naming_info=environment_naming_info,
                 snapshots=snapshots_by_name,
                 start=start,
                 end=end,
                 execution_time=execution_time,
-                default_catalog=self.default_catalog,
-                environment_naming_info=environment_naming_info,
             )
 
         def evaluate_node(node: SchedulingUnit) -> None:
@@ -492,19 +491,52 @@ class Scheduler:
                     raise_on_error=False,
                 )
         finally:
-            self.state_sync.recycle()
-
             if is_run_command:
-                self.snapshot_evaluator._execute_environment_statements(
-                    self.state_sync.get_environment_statements(environment_naming_info.name),
-                    execution_stage="after_all",
+                self.execute_environment_statements(
+                    execution_stage=ExecutionStage.AFTER_ALL,
+                    environment_naming_info=environment_naming_info,
                     snapshots=snapshots_by_name,
                     start=start,
                     end=end,
                     execution_time=execution_time,
+                )
+
+            self.state_sync.recycle()
+
+    def execute_environment_statements(
+        self,
+        execution_stage: ExecutionStage,
+        environment_naming_info: EnvironmentNamingInfo,
+        snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
+        start: t.Optional[TimeLike] = None,
+        end: t.Optional[TimeLike] = None,
+        execution_time: t.Optional[TimeLike] = None,
+    ) -> None:
+        adapter = self.snapshot_evaluator.adapter
+        if (
+            environment_statements := self.state_sync.get_environment_statements(
+                environment_naming_info.name
+            )
+        ) and (
+            rendered_expressions := [
+                expr
+                for statements in environment_statements
+                for expr in render_statements(
+                    statements=getattr(statements, execution_stage.value),
+                    dialect=adapter.dialect,
                     default_catalog=self.default_catalog,
+                    python_env=statements.python_env,
+                    snapshots=snapshots,
+                    start=start,
+                    end=end,
+                    execution_time=execution_time,
                     environment_naming_info=environment_naming_info,
                 )
+            ]
+        ):
+            with adapter.transaction():
+                for expr in rendered_expressions:
+                    adapter.execute(expr)
 
     def _dag(self, batches: SnapshotToIntervals) -> DAG[SchedulingUnit]:
         """Builds a DAG of snapshot intervals to be evaluated.
