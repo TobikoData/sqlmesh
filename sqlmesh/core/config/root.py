@@ -139,6 +139,8 @@ class Config(BaseConfig):
         "ui": UpdateStrategy.NESTED_UPDATE,
         "loader_kwargs": UpdateStrategy.KEY_UPDATE,
         "plan": UpdateStrategy.NESTED_UPDATE,
+        "before_all": UpdateStrategy.EXTEND,
+        "after_all": UpdateStrategy.EXTEND,
     }
 
     _connection_config_validator = connection_config_validator
