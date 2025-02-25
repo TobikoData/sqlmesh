@@ -143,7 +143,7 @@ def test_push_snapshots(
         snapshot_b.snapshot_id: snapshot_b,
     }
 
-    logger = logging.getLogger("sqlmesh.core.state_sync.engine_adapter")
+    logger = logging.getLogger("sqlmesh.core.state_sync.engine_adapter.facade")
     with patch.object(logger, "error") as mock_logger:
         state_sync.push_snapshots([snapshot_a])
         assert str({snapshot_a.snapshot_id}) == mock_logger.call_args[0][1]
@@ -214,7 +214,7 @@ def test_snapshots_exists(state_sync: EngineAdapterStateSync, snapshots: t.List[
 @pytest.fixture
 def get_snapshot_intervals(state_sync) -> t.Callable[[Snapshot], t.Optional[SnapshotIntervals]]:
     def _get_snapshot_intervals(snapshot: Snapshot) -> t.Optional[SnapshotIntervals]:
-        intervals = state_sync._get_snapshot_intervals([snapshot])[-1]
+        intervals = state_sync.interval_state.get_snapshot_intervals([snapshot])
         return intervals[0] if intervals else None
 
     return _get_snapshot_intervals
@@ -500,7 +500,7 @@ def test_compact_intervals_delete_batches(
     )
 
     delete_from_mock = mocker.patch.object(state_sync.engine_adapter, "delete_from")
-    state_sync.INTERVAL_BATCH_SIZE = 2
+    state_sync.interval_state.INTERVAL_BATCH_SIZE = 2
 
     state_sync.push_snapshots([snapshot])
 
@@ -512,7 +512,9 @@ def test_compact_intervals_delete_batches(
 
     state_sync.compact_intervals()
 
-    delete_from_mock.assert_has_calls([call(state_sync.intervals_table, mocker.ANY)] * 3)
+    delete_from_mock.assert_has_calls(
+        [call(state_sync.interval_state.intervals_table, mocker.ANY)] * 3
+    )
 
 
 def test_promote_snapshots(state_sync: EngineAdapterStateSync, make_snapshot: t.Callable):
@@ -1234,7 +1236,7 @@ def test_delete_expired_snapshots_promoted(
     env.snapshots_ = []
     state_sync.promote(env)
 
-    now_timestamp_mock = mocker.patch("sqlmesh.core.state_sync.engine_adapter.now_timestamp")
+    now_timestamp_mock = mocker.patch("sqlmesh.core.state_sync.engine_adapter.facade.now_timestamp")
     now_timestamp_mock.return_value = now_timestamp() + 11000
 
     assert state_sync.delete_expired_snapshots() == [
@@ -1494,7 +1496,7 @@ def test_delete_expired_snapshots_cleanup_intervals_shared_version(
 
     # Check all intervals
     assert sorted(
-        state_sync._get_snapshot_intervals([snapshot, new_snapshot])[1],
+        state_sync.interval_state.get_snapshot_intervals([snapshot, new_snapshot]),
         key=lambda x: x.identifier or "",
     ) == [
         SnapshotIntervals(
@@ -1529,7 +1531,7 @@ def test_delete_expired_snapshots_cleanup_intervals_shared_version(
 
     # Check all intervals
     assert sorted(
-        state_sync._get_snapshot_intervals([snapshot, new_snapshot])[1],
+        state_sync.interval_state.get_snapshot_intervals([snapshot, new_snapshot]),
         key=lambda x: x.identifier or "",
     ) == [
         # The intervals of the old snapshot is preserved with the null identifier
@@ -1607,7 +1609,7 @@ def test_delete_expired_snapshots_cleanup_intervals_shared_dev_version(
 
     # Check all intervals
     assert sorted(
-        state_sync._get_snapshot_intervals([snapshot, new_snapshot])[1],
+        state_sync.interval_state.get_snapshot_intervals([snapshot, new_snapshot]),
         key=lambda x: x.identifier or "",
     ) == [
         SnapshotIntervals(
@@ -1642,7 +1644,7 @@ def test_delete_expired_snapshots_cleanup_intervals_shared_dev_version(
 
     # Check all intervals
     assert sorted(
-        state_sync._get_snapshot_intervals([snapshot, new_snapshot])[1],
+        state_sync.interval_state.get_snapshot_intervals([snapshot, new_snapshot]),
         key=lambda x: x.identifier or "",
     ) == [
         SnapshotIntervals(
@@ -1754,7 +1756,7 @@ def test_compact_intervals_after_cleanup(
 
     assert (
         sorted(
-            state_sync._get_snapshot_intervals([snapshot_a, snapshot_b, snapshot_c])[1],
+            state_sync.interval_state.get_snapshot_intervals([snapshot_a, snapshot_b, snapshot_c]),
             key=lambda x: (x.identifier or "", x.dev_version or ""),
         )
         == expected_intervals
@@ -1765,7 +1767,7 @@ def test_compact_intervals_after_cleanup(
     assert state_sync.engine_adapter.fetchone("SELECT COUNT(*) FROM sqlmesh._intervals")[0] == 4  # type: ignore
     assert (
         sorted(
-            state_sync._get_snapshot_intervals([snapshot_a, snapshot_b, snapshot_c])[1],
+            state_sync.interval_state.get_snapshot_intervals([snapshot_a, snapshot_b, snapshot_c]),
             key=lambda x: (x.identifier or "", x.dev_version or ""),
         )
         == expected_intervals
@@ -2216,7 +2218,7 @@ def test_first_migration_failure(duck_conn, mocker: MockerFixture, tmp_path) -> 
     assert not state_sync.engine_adapter.table_exists(state_sync.snapshots_table)
     assert not state_sync.engine_adapter.table_exists(state_sync.environments_table)
     assert not state_sync.engine_adapter.table_exists(state_sync.versions_table)
-    assert not state_sync.engine_adapter.table_exists(state_sync.intervals_table)
+    assert not state_sync.engine_adapter.table_exists(state_sync.interval_state.intervals_table)
 
 
 def test_migrate_rows(state_sync: EngineAdapterStateSync, mocker: MockerFixture) -> None:
@@ -3125,7 +3127,7 @@ def test_compact_intervals_pending_restatement_shared_version(
         state_sync.add_interval(snapshot_b, "2020-01-03", "2020-01-03")
         assert (
             sorted(
-                state_sync._get_snapshot_intervals([snapshot_a, snapshot_b])[1],
+                state_sync.interval_state.get_snapshot_intervals([snapshot_a, snapshot_b]),
                 key=lambda x: (x.name, x.identifier or ""),
             )
             == expected_intervals
@@ -3210,7 +3212,7 @@ def test_compact_intervals_pending_restatement_shared_version(
         state_sync.add_interval(snapshot_a, "2020-01-04", "2020-01-04")
         assert (
             sorted(
-                state_sync._get_snapshot_intervals([snapshot_a, snapshot_b])[1],
+                state_sync.interval_state.get_snapshot_intervals([snapshot_a, snapshot_b]),
                 key=lambda x: (x.name, x.identifier or ""),
             )
             == expected_intervals
@@ -3269,7 +3271,7 @@ def test_compact_intervals_pending_restatement_shared_version(
         state_sync.add_interval(snapshot_b, "2020-01-05", "2020-01-05")
         assert (
             sorted(
-                state_sync._get_snapshot_intervals([snapshot_a, snapshot_b])[1],
+                state_sync.interval_state.get_snapshot_intervals([snapshot_a, snapshot_b]),
                 key=lambda x: (x.name, x.identifier or ""),
             )
             == expected_intervals

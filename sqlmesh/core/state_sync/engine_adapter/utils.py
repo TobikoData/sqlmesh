@@ -1,0 +1,109 @@
+from __future__ import annotations
+
+import typing as t
+
+from sqlglot import exp
+from sqlmesh.core.engine_adapter import EngineAdapter
+from sqlmesh.core.snapshot import SnapshotIdLike, SnapshotNameVersionLike
+
+
+T = t.TypeVar("T")
+
+
+DEFAULT_BATCH_SIZE = 1000
+
+
+def snapshot_id_filter(
+    engine_adapter: EngineAdapter,
+    snapshot_ids: t.Iterable[SnapshotIdLike],
+    alias: t.Optional[str] = None,
+    batch_size: int = DEFAULT_BATCH_SIZE,
+) -> t.Iterator[exp.Condition]:
+    name_identifiers = sorted(
+        {(snapshot_id.name, snapshot_id.identifier) for snapshot_id in snapshot_ids}
+    )
+    batches = create_batches(name_identifiers, batch_size=batch_size)
+
+    if not name_identifiers:
+        yield exp.false()
+    elif engine_adapter.SUPPORTS_TUPLE_IN:
+        for identifiers in batches:
+            yield t.cast(
+                exp.Tuple,
+                exp.convert(
+                    (
+                        exp.column("name", table=alias),
+                        exp.column("identifier", table=alias),
+                    )
+                ),
+            ).isin(*identifiers)
+    else:
+        for identifiers in batches:
+            yield exp.or_(
+                *[
+                    exp.and_(
+                        exp.column("name", table=alias).eq(name),
+                        exp.column("identifier", table=alias).eq(identifier),
+                    )
+                    for name, identifier in identifiers
+                ]
+            )
+
+
+def snapshot_name_version_filter(
+    engine_adapter: EngineAdapter,
+    snapshot_name_versions: t.Iterable[SnapshotNameVersionLike],
+    version_column_name: str = "version",
+    alias: t.Optional[str] = "snapshots",
+    column_prefix: t.Optional[str] = None,
+    batch_size: int = DEFAULT_BATCH_SIZE,
+) -> t.Iterator[exp.Condition]:
+    name_versions = sorted({(s.name, s.version) for s in snapshot_name_versions})
+    batches = create_batches(name_versions, batch_size=batch_size)
+
+    name_column_name = "name"
+    if column_prefix:
+        name_column_name = f"{column_prefix}_{name_column_name}"
+        version_column_name = f"{column_prefix}_{version_column_name}"
+
+    name_column = exp.column(name_column_name, table=alias)
+    version_column = exp.column(version_column_name, table=alias)
+
+    if not name_versions:
+        yield exp.false()
+    elif engine_adapter.SUPPORTS_TUPLE_IN:
+        for versions in batches:
+            yield t.cast(
+                exp.Tuple,
+                exp.convert(
+                    (
+                        name_column,
+                        version_column,
+                    )
+                ),
+            ).isin(*versions)
+    else:
+        for versions in batches:
+            yield exp.or_(
+                *[
+                    exp.and_(
+                        name_column.eq(name),
+                        version_column.eq(version),
+                    )
+                    for name, version in versions
+                ]
+            )
+
+
+def create_batches(l: t.List[T], batch_size: int = 1000) -> t.List[t.List[T]]:
+    return [l[i : i + batch_size] for i in range(0, len(l), batch_size)]
+
+
+def fetchone(
+    engine_adapter: EngineAdapter, query: t.Union[exp.Expression, str]
+) -> t.Optional[t.Tuple]:
+    return engine_adapter.fetchone(query, ignore_unsupported_errors=True, quote_identifiers=True)
+
+
+def fetchall(engine_adapter: EngineAdapter, query: t.Union[exp.Expression, str]) -> t.List[t.Tuple]:
+    return engine_adapter.fetchall(query, ignore_unsupported_errors=True, quote_identifiers=True)
