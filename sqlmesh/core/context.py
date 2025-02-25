@@ -1181,6 +1181,10 @@ class GenericContext(BaseContext, t.Generic[C]):
             diff_rendered=diff_rendered,
         )
 
+        if no_auto_categorization:
+            # Prompts are required if the auto categorization is disabled
+            no_prompts = False
+
         self.console.plan(
             plan_builder,
             auto_apply if auto_apply is not None else self.config.plan.auto_apply,
