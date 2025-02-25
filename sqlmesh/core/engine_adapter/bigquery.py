@@ -669,18 +669,17 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
             for column, comment in column_comments.items():
                 fields = table_def["schema"]["fields"]
                 field_names = column.split(".")
+                last_index = len(field_names) - 1
 
                 # Traverse the fields with nested fields down to leaf level
-                for name in field_names:
-                    if fields and (
-                        field := next((field for field in fields if field["name"] == name), None)
-                    ):
-                        if name == field_names[-1]:
+                for idx, name in enumerate(field_names):
+                    if field := next((field for field in fields if field["name"] == name), None):
+                        if idx == last_index:
                             field["description"] = self._truncate_comment(
                                 comment, self.MAX_COLUMN_COMMENT_LENGTH
                             )
                         else:
-                            fields = field.get("fields", None)
+                            fields = field.get("fields", [])
 
             # An "etag" is BQ versioning metadata that changes when an object is updated/modified. `update_table`
             # compares the etags of the table object passed to it and the remote table, erroring if the etags
@@ -797,7 +796,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
         nested_names: t.List[str] = [],
     ) -> exp.ColumnDef:
         # Helper function to build column definitions with column descriptions
-        def build_nested_column_defs(
+        def _build_struct_with_descriptions(
             col_type: exp.DataType,
             nested_names: t.List[str],
         ) -> exp.DataType:
@@ -817,20 +816,18 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
             return exp.DataType(this=col_type.this, expressions=column_expressions, nested=True)
 
         # Recursively build column definitions for BigQuery's RECORDs (struct) and REPEATED RECORDs (array of struct)
-        if (
-            col_type
-            and isinstance(col_type, exp.DataType)
-            and (expressions := col_type.expressions)
-        ):
+        if isinstance(col_type, exp.DataType) and (expressions := col_type.expressions):
             if col_type.is_type(exp.DataType.Type.STRUCT):
-                col_type = build_nested_column_defs(col_type, nested_names + [col_name])
+                col_type = _build_struct_with_descriptions(col_type, nested_names + [col_name])
             elif col_type.is_type(exp.DataType.Type.ARRAY) and expressions[0].is_type(
                 exp.DataType.Type.STRUCT
             ):
                 col_type = exp.DataType(
                     this=exp.DataType.Type.ARRAY,
                     expressions=[
-                        build_nested_column_defs(col_type.expressions[0], nested_names + [col_name])
+                        _build_struct_with_descriptions(
+                            col_type.expressions[0], nested_names + [col_name]
+                        )
                     ],
                     nested=True,
                 )

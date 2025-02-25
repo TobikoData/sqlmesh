@@ -672,7 +672,6 @@ def test_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture)
 
 def test_nested_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
     adapter = make_mocked_engine_adapter(BigQueryEngineAdapter)
-    allowed_column_comment_length = BigQueryEngineAdapter.MAX_COLUMN_COMMENT_LENGTH
 
     execute_mock = mocker.patch(
         "sqlmesh.core.engine_adapter.bigquery.BigQueryEngineAdapter.execute"
@@ -680,30 +679,37 @@ def test_nested_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerF
 
     nested_columns_to_types = {
         "record": exp.DataType.build(
-            "STRUCT<'int_field': INT, 'record_field': STRUCT<'sub_record_field': STRUCT<'nest_array' ARRAY<INT64>>>"
+            "STRUCT<"
+            "'int_field': INT, "
+            "'record_field': STRUCT<"
+            "'sub_record_field': STRUCT<"
+            "'nest_array': ARRAY<INT64>"
+            ">>>"
         ),
         "repeated_record": exp.DataType.build(
-            "ARRAY<STRUCT<'nested_repeated_record' ARRAY<STRUCT<'int_field': INT, 'array_field': ARRAY<INT64>, 'struct_field' STRUCT<'nested_field': INT>>>>>"
+            "ARRAY<STRUCT<"
+            "'nested_repeated_record': ARRAY<STRUCT<"
+            "'int_field': INT, "
+            "'array_field': ARRAY<INT64>, "
+            "'struct_field': STRUCT<"
+            "'nested_field': INT"
+            ">>>"
+            ">>>"
         ),
     }
 
     long_column_descriptions = {
-        "record": "1" * (allowed_column_comment_length * 2),
-        "record.int_field": "2" * (allowed_column_comment_length * 2),
-        "record.record_field": "3" * (allowed_column_comment_length * 2),
-        "record.record_field.sub_record_field": "4" * (allowed_column_comment_length * 2),
-        "record.record_field.sub_record_field.nest_array": "5"
-        * (allowed_column_comment_length * 2),
-        "repeated_record": "1" * (allowed_column_comment_length * 2),
-        "repeated_record.nested_repeated_record": "2" * (allowed_column_comment_length * 2),
-        "repeated_record.nested_repeated_record.int_field": "3"
-        * (allowed_column_comment_length * 2),
-        "repeated_record.nested_repeated_record.array_field": "4"
-        * (allowed_column_comment_length * 2),
-        "repeated_record.nested_repeated_record.struct_field": "5"
-        * (allowed_column_comment_length * 2),
-        "repeated_record.nested_repeated_record.struct_field.nested_field": "6"
-        * (allowed_column_comment_length * 2),
+        "record": "Top Record",
+        "record.int_field": "Record Int Field",
+        "record.record_field": "Record Nested Record Field",
+        "record.record_field.sub_record_field": "Record Nested Records Subfield",
+        "record.record_field.sub_record_field.nest_array": "Record Nested Records Nested Array",
+        "repeated_record": "Top Repeated Record",
+        "repeated_record.nested_repeated_record": "Nested Repeated Record",
+        "repeated_record.nested_repeated_record.int_field": "Nested Repeated Record Int Field",
+        "repeated_record.nested_repeated_record.array_field": "Nested Repeated Array Field",
+        "repeated_record.nested_repeated_record.struct_field": "Nested Repeated Struct Field",
+        "repeated_record.nested_repeated_record.struct_field.nested_field": "Nested Repeated Record Nested Field",
     }
 
     adapter.create_table(
@@ -723,50 +729,50 @@ def test_nested_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerF
 
     # The comments should have been added in the correct nested field with appropriate truncation
     assert sql_calls[0] == (
-        f"CREATE TABLE IF NOT EXISTS `test_table` ("
-        f"`record` STRUCT<"
-        f"`int_field` INT64 OPTIONS (description='{'2' * allowed_column_comment_length}'), "
-        f"`record_field` STRUCT<"
-        f"`sub_record_field` STRUCT<"
-        f"`nest_array` ARRAY<INT64> OPTIONS (description='{'5' * allowed_column_comment_length}')> "
-        f"OPTIONS (description='{'4' * allowed_column_comment_length}')> "
-        f"OPTIONS (description='{'3' * allowed_column_comment_length}')> "
-        f"OPTIONS (description='{'1' * allowed_column_comment_length}'), "
-        f"`repeated_record` ARRAY<STRUCT<"
-        f"`nested_repeated_record` ARRAY<STRUCT<"
-        f"`int_field` INT64 OPTIONS (description='{'3' * allowed_column_comment_length}'), "
-        f"`array_field` ARRAY<INT64> OPTIONS (description='{'4' * allowed_column_comment_length}'), "
-        f"`struct_field` STRUCT<"
-        f"`nested_field` INT64 OPTIONS (description='{'6' * allowed_column_comment_length}')> "
-        f"OPTIONS (description='{'5' * allowed_column_comment_length}')>> "
-        f"OPTIONS (description='{'2' * allowed_column_comment_length}')>> "
-        f"OPTIONS (description='{'1' * allowed_column_comment_length}'))"
+        "CREATE TABLE IF NOT EXISTS `test_table` ("
+        "`record` STRUCT<"
+        "`int_field` INT64 OPTIONS (description='Record Int Field'), "
+        "`record_field` STRUCT<"
+        "`sub_record_field` STRUCT<"
+        "`nest_array` ARRAY<INT64> OPTIONS (description='Record Nested Records Nested Array')> "
+        "OPTIONS (description='Record Nested Records Subfield')> "
+        "OPTIONS (description='Record Nested Record Field')> "
+        "OPTIONS (description='Top Record'), "
+        "`repeated_record` ARRAY<STRUCT<"
+        "`nested_repeated_record` ARRAY<STRUCT<"
+        "`int_field` INT64 OPTIONS (description='Nested Repeated Record Int Field'), "
+        "`array_field` ARRAY<INT64> OPTIONS (description='Nested Repeated Array Field'), "
+        "`struct_field` STRUCT<"
+        "`nested_field` INT64 OPTIONS (description='Nested Repeated Record Nested Field')> "
+        "OPTIONS (description='Nested Repeated Struct Field')>> "
+        "OPTIONS (description='Nested Repeated Record')>> "
+        "OPTIONS (description='Top Repeated Record'))"
     )
 
     assert sql_calls[1] == (
-        f"CREATE TABLE IF NOT EXISTS `test_table` ("
-        f"`record` STRUCT<"
-        f"`int_field` INT64 OPTIONS (description='{'2' * allowed_column_comment_length}'), "
-        f"`record_field` STRUCT<"
-        f"`sub_record_field` STRUCT<"
-        f"`nest_array` ARRAY<INT64> OPTIONS (description='{'5' * allowed_column_comment_length}')> "
-        f"OPTIONS (description='{'4' * allowed_column_comment_length}')> "
-        f"OPTIONS (description='{'3' * allowed_column_comment_length}')> "
-        f"OPTIONS (description='{'1' * allowed_column_comment_length}'), "
-        f"`repeated_record` ARRAY<STRUCT<"
-        f"`nested_repeated_record` ARRAY<STRUCT<"
-        f"`int_field` INT64 OPTIONS (description='{'3' * allowed_column_comment_length}'), "
-        f"`array_field` ARRAY<INT64> OPTIONS (description='{'4' * allowed_column_comment_length}'), "
-        f"`struct_field` STRUCT<"
-        f"`nested_field` INT64 OPTIONS (description='{'6' * allowed_column_comment_length}')> "
-        f"OPTIONS (description='{'5' * allowed_column_comment_length}')>> "
-        f"OPTIONS (description='{'2' * allowed_column_comment_length}')>> "
-        f"OPTIONS (description='{'1' * allowed_column_comment_length}'))"
-        f" AS SELECT CAST(`record` AS STRUCT<`int_field` INT64, `record_field`"
-        f" STRUCT<`sub_record_field` STRUCT<`nest_array` ARRAY<INT64>>>>) AS `record`, "
-        f"CAST(`repeated_record` AS ARRAY<STRUCT<`nested_repeated_record` ARRAY<STRUCT<`int_field` INT64, "
-        f"`array_field` ARRAY<INT64>, `struct_field` STRUCT<`nested_field` INT64>>>>>) AS `repeated_record` "
-        f"FROM (SELECT * FROM `source_table`) AS `_subquery`"
+        "CREATE TABLE IF NOT EXISTS `test_table` ("
+        "`record` STRUCT<"
+        "`int_field` INT64 OPTIONS (description='Record Int Field'), "
+        "`record_field` STRUCT<"
+        "`sub_record_field` STRUCT<"
+        "`nest_array` ARRAY<INT64> OPTIONS (description='Record Nested Records Nested Array')> "
+        "OPTIONS (description='Record Nested Records Subfield')> "
+        "OPTIONS (description='Record Nested Record Field')> "
+        "OPTIONS (description='Top Record'), "
+        "`repeated_record` ARRAY<STRUCT<"
+        "`nested_repeated_record` ARRAY<STRUCT<"
+        "`int_field` INT64 OPTIONS (description='Nested Repeated Record Int Field'), "
+        "`array_field` ARRAY<INT64> OPTIONS (description='Nested Repeated Array Field'), "
+        "`struct_field` STRUCT<"
+        "`nested_field` INT64 OPTIONS (description='Nested Repeated Record Nested Field')> "
+        "OPTIONS (description='Nested Repeated Struct Field')>> "
+        "OPTIONS (description='Nested Repeated Record')>> "
+        "OPTIONS (description='Top Repeated Record'))"
+        " AS SELECT CAST(`record` AS STRUCT<`int_field` INT64, `record_field`"
+        " STRUCT<`sub_record_field` STRUCT<`nest_array` ARRAY<INT64>>>>) AS `record`, "
+        "CAST(`repeated_record` AS ARRAY<STRUCT<`nested_repeated_record` ARRAY<STRUCT<`int_field` INT64, "
+        "`array_field` ARRAY<INT64>, `struct_field` STRUCT<`nested_field` INT64>>>>>) AS `repeated_record` "
+        "FROM (SELECT * FROM `source_table`) AS `_subquery`"
     )
 
 
