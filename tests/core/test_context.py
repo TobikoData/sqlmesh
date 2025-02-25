@@ -1131,7 +1131,7 @@ def post_statement(evaluator):
 def test_wildcard(copy_to_temp_path: t.Callable):
     parent_path = copy_to_temp_path("examples/multi")[0]
 
-    context = Context(paths=f"{parent_path}/*")
+    context = Context(paths=f"{parent_path}/*", gateway="memory")
     assert len(context.models) == 5
 
 
