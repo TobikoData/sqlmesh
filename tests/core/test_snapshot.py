@@ -370,6 +370,7 @@ def test_missing_intervals(snapshot: Snapshot):
     assert snapshot.missing_intervals("2020-01-03 00:00:01", "2020-01-05 00:00:02") == []
     assert snapshot.missing_intervals("2020-01-03 00:00:01", "2020-01-07 00:00:02") == [
         (to_timestamp("2020-01-06"), to_timestamp("2020-01-07")),
+        (to_timestamp("2020-01-07"), to_timestamp("2020-01-08")),
     ]
 
 
@@ -708,7 +709,7 @@ def test_missing_interval_smaller_than_interval_unit(make_snapshot):
     ]
 
 
-def test_remove_intervals(snapshot: Snapshot):
+def test_remove_intervals(snapshot):
     snapshot.add_interval("2020-01-01", "2020-01-01")
     snapshot.remove_interval(snapshot.get_removal_interval("2020-01-01", "2020-01-01"))
     assert snapshot.intervals == []
@@ -1548,12 +1549,12 @@ def test_inclusive_exclusive_monthly(make_snapshot):
 
     assert snapshot.inclusive_exclusive("2023-01-01", "2023-07-01") == (
         to_timestamp("2023-01-01"),
-        to_timestamp("2023-07-01"),
+        to_timestamp("2023-08-01"),
     )
 
     assert snapshot.inclusive_exclusive("2023-01-01", "2023-07-06") == (
         to_timestamp("2023-01-01"),
-        to_timestamp("2023-07-01"),
+        to_timestamp("2023-08-01"),
     )
 
     assert snapshot.inclusive_exclusive("2023-01-01", "2023-07-31") == (

@@ -439,7 +439,7 @@ class StateSync(StateReader, abc.ABC):
             end: The end of the interval to add.
             is_dev: Indicates whether the given interval is being added while in development mode
         """
-        start_ts, end_ts = snapshot.inclusive_exclusive(start, end, strict=False)
+        start_ts, end_ts = snapshot.inclusive_exclusive(start, end, strict=False, expand=False)
         if not snapshot.version:
             raise SQLMeshError("Snapshot version must be set to add an interval.")
         intervals = [(start_ts, end_ts)]

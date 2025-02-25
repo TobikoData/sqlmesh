@@ -675,7 +675,8 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
                 f"Attempted to add an Invalid interval ({start}, {end}) to snapshot {self.snapshot_id}"
             )
 
-        start_ts, end_ts = self.inclusive_exclusive(start, end, strict=False)
+        start_ts, end_ts = self.inclusive_exclusive(start, end, strict=False, expand=False)
+
         if start_ts >= end_ts:
             # Skipping partial interval.
             return
@@ -744,12 +745,17 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
 
         return removal_interval
 
+    @property
+    def allow_partials(self) -> bool:
+        return self.is_model and self.model.allow_partials
+
     def inclusive_exclusive(
         self,
         start: TimeLike,
         end: TimeLike,
         strict: bool = True,
         allow_partial: t.Optional[bool] = None,
+        expand: bool = True,
     ) -> Interval:
         """Transform the inclusive start and end into a [start, end) pair.
 
@@ -758,19 +764,18 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             end: The end date/time of the interval (inclusive)
             strict: Whether to fail when the inclusive start is the same as the exclusive end.
             allow_partial: Whether the interval can be partial or not.
+            expand: Whether or not partial intervals are expanded outwards.
 
         Returns:
             A [start, end) pair.
         """
-        if allow_partial is None:
-            allow_partial = self.is_model and self.model.allow_partials
         return inclusive_exclusive(
             start,
             end,
             self.node.interval_unit,
-            model_allow_partials=self.is_model and self.model.allow_partials,
             strict=strict,
-            allow_partial=allow_partial,
+            allow_partial=self.allow_partials if allow_partial is None else allow_partial,
+            expand=expand,
         )
 
     def merge_intervals(self, other: t.Union[Snapshot, SnapshotIntervals]) -> None:
@@ -847,9 +852,10 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         # If the amount of time being checked is less than the size of a single interval then we
         # know that there can't being missing intervals within that range and return
         validate_date_range(start, end)
+
         if (
             not is_date(end)
-            and not (self.is_model and self.model.allow_partials)
+            and not self.allow_partials
             and to_timestamp(end) - to_timestamp(start) < self.node.interval_unit.milliseconds
         ):
             return []
@@ -862,16 +868,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         if not self.evaluatable or (self.is_seed and intervals):
             return []
 
-        allow_partials = self.is_model and self.model.allow_partials
-        start_ts, end_ts = (
-            to_timestamp(ts)
-            for ts in self.inclusive_exclusive(
-                start,
-                end,
-                strict=False,
-                allow_partial=allow_partials,
-            )
-        )
+        start_ts, end_ts = (to_timestamp(ts) for ts in self.inclusive_exclusive(start, end))
 
         interval_unit = self.node.interval_unit
         execution_time_ts = to_timestamp(execution_time) if execution_time else now_timestamp()
@@ -882,7 +879,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         )
         if end_bounded:
             upper_bound_ts = min(upper_bound_ts, end_ts)
-        if not allow_partials:
+        if not self.allow_partials:
             upper_bound_ts = to_timestamp(interval_unit.cron_floor(upper_bound_ts))
 
         end_ts = min(end_ts, upper_bound_ts)
@@ -1865,9 +1862,9 @@ def inclusive_exclusive(
     start: TimeLike,
     end: TimeLike,
     interval_unit: IntervalUnit,
-    model_allow_partials: bool,
     strict: bool = True,
     allow_partial: bool = False,
+    expand: bool = True,
 ) -> Interval:
     """Transform the inclusive start and end into a [start, end) pair.
 
@@ -1875,26 +1872,34 @@ def inclusive_exclusive(
         start: The start date/time of the interval (inclusive)
         end: The end date/time of the interval (inclusive)
         interval_unit: The interval unit.
-        model_allow_partials: Whether or not the model allows partials.
         strict: Whether to fail when the inclusive start is the same as the exclusive end.
         allow_partial: Whether the interval can be partial or not.
+        expand: Whether or not partial intervals are expanded outwards.
 
     Returns:
         A [start, end) pair.
     """
-    start_ts = to_timestamp(interval_unit.cron_floor(start))
-    if start_ts < to_timestamp(start) and not model_allow_partials:
-        start_ts = to_timestamp(interval_unit.cron_next(start_ts))
+    start_dt = interval_unit.cron_floor(start)
+
+    if not expand and not allow_partial and start_dt < to_datetime(start):
+        start_dt = interval_unit.cron_next(start_dt)
+
+    start_ts = to_timestamp(start_dt)
 
     if is_date(end):
         end = to_datetime(end) + timedelta(days=1)
-    end_ts = to_timestamp(interval_unit.cron_floor(end) if not allow_partial else end)
-    if end_ts < start_ts and to_timestamp(end) > to_timestamp(start) and not strict:
-        # This can happen when the interval unit is coarser than the size of the input interval.
-        # For example, if the interval unit is monthly, but the input interval is only 1 hour long.
-        return (start_ts, end_ts)
 
-    if (strict and start_ts >= end_ts) or (start_ts > end_ts):
+    if allow_partial:
+        end_dt = end
+    else:
+        end_dt = interval_unit.cron_floor(end)
+
+        if expand and end_dt != to_datetime(end):
+            end_dt = interval_unit.cron_next(end_dt)
+
+    end_ts = to_timestamp(end_dt)
+
+    if strict and start_ts >= end_ts:
         raise ValueError(
             f"`end` ({to_datetime(end_ts)}) must be greater than `start` ({to_datetime(start_ts)})"
         )
