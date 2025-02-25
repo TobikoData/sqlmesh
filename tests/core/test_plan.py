@@ -738,30 +738,34 @@ def test_restate_models(sushi_context_pre_scheduling: Context):
     plan = sushi_context_pre_scheduling.plan(
         restate_models=["sushi.waiter_revenue_by_day", "tag:expensive"], no_prompts=True
     )
+
+    start = to_timestamp(plan.start)
+    tomorrow = to_timestamp(to_date("tomorrow"))
+
     assert plan.restatements == {
         sushi_context_pre_scheduling.get_snapshot(
             "sushi.waiter_revenue_by_day", raise_if_missing=True
         ).snapshot_id: (
-            to_timestamp(plan.start),
-            to_timestamp(to_date("today")),
+            start,
+            tomorrow,
         ),
         sushi_context_pre_scheduling.get_snapshot(
             "sushi.top_waiters", raise_if_missing=True
         ).snapshot_id: (
-            to_timestamp(plan.start),
-            to_timestamp(to_date("today")),
+            start,
+            tomorrow,
         ),
         sushi_context_pre_scheduling.get_snapshot(
             "sushi.customer_revenue_by_day", raise_if_missing=True
         ).snapshot_id: (
-            to_timestamp(plan.start),
-            to_timestamp(to_date("today")),
+            start,
+            tomorrow,
         ),
         sushi_context_pre_scheduling.get_snapshot(
             "sushi.customer_revenue_lifetime", raise_if_missing=True
         ).snapshot_id: (
-            to_timestamp(plan.start),
-            to_timestamp(to_date("today")),
+            start,
+            tomorrow,
         ),
     }
     assert plan.requires_backfill
@@ -828,7 +832,7 @@ def test_restate_models_with_existing_missing_intervals(init_and_plan_context: t
         ),
         top_waiters_snapshot_id: (
             plan_start_ts,
-            today_ts,
+            to_timestamp(to_date("tomorrow")),
         ),
     }
     assert plan.missing_intervals == [
@@ -1850,7 +1854,7 @@ def test_disable_restatement(make_snapshot, mocker: MockerFixture):
     # Restatements should still be supported when in dev.
     plan = PlanBuilder(context_diff, schema_differ, is_dev=True, restate_models=['"a"']).build()
     assert plan.restatements == {
-        snapshot.snapshot_id: (to_timestamp(plan.start), to_timestamp(to_date("today")))
+        snapshot.snapshot_id: (to_timestamp(plan.start), to_timestamp(to_date("tomorrow")))
     }
 
     # We don't want to restate a disable_restatement model if it is unpaused since that would be mean we are violating
@@ -2753,3 +2757,104 @@ def test_restate_production_model_in_dev(make_snapshot, mocker: MockerFixture):
         "Cannot restate model '\"test_model_b\"' because the current version is used in production. "
         "Run the restatement against the production environment instead to restate this model."
     )
+
+
+@time_machine.travel("2025-02-23 15:00:00 UTC")
+def test_restate_daily_to_monthly(make_snapshot, mocker: MockerFixture):
+    snapshot_a = make_snapshot(
+        SqlModel(
+            name="a",
+            query=parse_one("select 1 as one"),
+            cron="@daily",
+            start="2025-01-01",
+        ),
+    )
+
+    snapshot_b = make_snapshot(
+        SqlModel(
+            name="b",
+            query=parse_one("select one from a"),
+            cron="@monthly",
+            start="2025-01-01",
+        ),
+        nodes={'"a"': snapshot_a.model},
+    )
+
+    snapshot_c = make_snapshot(
+        SqlModel(
+            name="c",
+            query=parse_one("select one from b"),
+            cron="@daily",
+            start="2025-01-01",
+        ),
+        nodes={
+            '"a"': snapshot_a.model,
+            '"b"': snapshot_b.model,
+        },
+    )
+
+    snapshot_d = make_snapshot(
+        SqlModel(
+            name="d",
+            query=parse_one("select one from b union all select one from a"),
+            cron="@daily",
+            start="2025-01-01",
+        ),
+        nodes={
+            '"a"': snapshot_a.model,
+            '"b"': snapshot_b.model,
+        },
+    )
+    snapshot_e = make_snapshot(
+        SqlModel(
+            name="e",
+            query=parse_one("select one from b"),
+            cron="@daily",
+            start="2025-01-01",
+        ),
+        nodes={
+            '"a"': snapshot_a.model,
+            '"b"': snapshot_b.model,
+        },
+    )
+
+    context_diff = ContextDiff(
+        environment="prod",
+        is_new_environment=False,
+        is_unfinalized_environment=True,
+        normalize_environment_name=True,
+        create_from="prod",
+        create_from_env_exists=True,
+        added=set(),
+        removed_snapshots={},
+        modified_snapshots={},
+        snapshots={
+            snapshot_a.snapshot_id: snapshot_a,
+            snapshot_b.snapshot_id: snapshot_b,
+            snapshot_c.snapshot_id: snapshot_c,
+            snapshot_d.snapshot_id: snapshot_d,
+            snapshot_e.snapshot_id: snapshot_e,
+        },
+        new_snapshots={},
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
+    )
+
+    schema_differ = DuckDBEngineAdapter.SCHEMA_DIFFER
+
+    plan = PlanBuilder(
+        context_diff,
+        schema_differ,
+        restate_models=[snapshot_a.name, snapshot_e.name],
+        start="2025-02-15",
+        end="2025-02-20",
+    ).build()
+
+    assert plan.restatements == {
+        snapshot_a.snapshot_id: (1739577600000, 1740355200000),
+        snapshot_b.snapshot_id: (1738368000000, 1740787200000),
+        snapshot_c.snapshot_id: (1739577600000, 1740355200000),
+        snapshot_d.snapshot_id: (1739577600000, 1740355200000),
+        snapshot_e.snapshot_id: (1739577600000, 1740355200000),
+    }
