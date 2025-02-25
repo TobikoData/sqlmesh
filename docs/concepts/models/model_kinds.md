@@ -304,6 +304,54 @@ FROM db.employees
 GROUP BY title;
 ```
 
+??? "Example SQL sequence when applying this model kind (ex: BigQuery)"
+
+    Create a model with the following definition:
+    ```sql
+    MODEL (
+      name demo.full_model_example,
+      kind FULL,
+      cron '@daily',
+      grain item_id,
+    );
+
+    SELECT
+      item_id,
+      COUNT(DISTINCT id) AS num_orders
+    FROM demo.incremental_model
+    GROUP BY
+      item_id
+    ```
+
+    Apply a plan like the following:
+    ```shell
+    sqlmesh plan dev
+    ```
+
+    SQLMesh will create a versioned table in the physical layer. Note the fingerprint of the table is `2345651858`.
+    ```sql
+    CREATE TABLE IF NOT EXISTS `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__full_model_example__2345651858` (`item_id` INT64, `num_orders` INT64)
+    ```
+
+    SQLMesh will validate model's query.
+    ```sql
+    SELECT `incremental_model`.`item_id` AS `item_id`, COUNT(DISTINCT `incremental_model`.`id`) AS `num_orders` 
+    FROM `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__incremental_model__89556012` AS `incremental_model` 
+    WHERE FALSE 
+    GROUP BY `incremental_model`.`item_id` LIMIT 0
+    ```
+
+    SQLMesh will create the dev schema if it doesn't exist.
+    ```sql
+    CREATE SCHEMA IF NOT EXISTS `sqlmesh-public-demo`.`demo__dev`
+    ```
+
+    SQLMesh will create a view in the virtual layer pointing to the physical layer table.
+    ```sql
+    CREATE OR REPLACE VIEW `sqlmesh-public-demo`.`demo__dev`.`full_model_example` AS 
+    SELECT * FROM `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__full_model_example__2345651858`
+    ```
+
 ### Materialization strategy
 Depending on the target engine, models of the `FULL` kind are materialized using the following strategies:
 
