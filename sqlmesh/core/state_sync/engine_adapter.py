@@ -190,7 +190,7 @@ class EngineAdapterStateSync(StateSync):
         self._environment_statements_columns_to_types = {
             "environment_name": exp.DataType.build(index_type),
             "plan_id": exp.DataType.build("text"),
-            "statements": exp.DataType.build(blob_type),
+            "environment_statements": exp.DataType.build(blob_type),
         }
 
         self._snapshot_cache = SnapshotCache(context_path / c.CACHE)
@@ -267,6 +267,7 @@ class EngineAdapterStateSync(StateSync):
         self,
         environment: Environment,
         no_gaps_snapshot_names: t.Optional[t.Set[str]] = None,
+        environment_statements: t.Optional[str] = None,
     ) -> PromotionResult:
         """Update the environment to reflect the current state.
 
@@ -343,6 +344,10 @@ class EngineAdapterStateSync(StateSync):
             added_table_infos -= set(existing_environment.promoted_snapshots)
 
         self._update_environment(environment)
+        if environment_statements:
+            self._update_environment_statements(
+                environment.name, environment.plan_id, environment_statements
+            )
 
         removed = {existing_table_infos[name] for name in missing_models}.union(
             views_that_changed_location
@@ -712,7 +717,6 @@ class EngineAdapterStateSync(StateSync):
         )
 
     def _update_environment(self, environment: Environment) -> None:
-        # Update the environment table
         self.engine_adapter.delete_from(
             self.environments_table,
             where=exp.EQ(
@@ -727,18 +731,20 @@ class EngineAdapterStateSync(StateSync):
             columns_to_types=self._environment_columns_to_types,
         )
 
-        # Update the environment's statements table
+    def _update_environment_statements(
+        self, environment_name: str, plan_id: str, environment_statements: str
+    ) -> None:
         self.engine_adapter.delete_from(
             self.environment_statements_table,
             where=exp.EQ(
                 this=exp.column("environment_name"),
-                expression=exp.Literal.string(environment.name),
+                expression=exp.Literal.string(environment_name),
             ),
         )
 
         self.engine_adapter.insert_append(
             self.environment_statements_table,
-            _environment_statements_to_df(environment),
+            _environment_statements_to_df(environment_name, plan_id, environment_statements),
             columns_to_types=self._environment_statements_columns_to_types,
         )
 
@@ -781,11 +787,7 @@ class EngineAdapterStateSync(StateSync):
         )
 
     def _environment_from_row(self, row: t.Tuple[str, ...]) -> Environment:
-        environment = Environment(
-            **{field: row[i] for i, field in enumerate(Environment.all_fields() - {"statements"})}
-        )
-        environment.statements = self.get_environment_statements(environment.name)
-        return environment
+        return Environment(**{field: row[i] for i, field in enumerate(Environment.all_fields())})
 
     def _environments_query(
         self,
@@ -793,9 +795,7 @@ class EngineAdapterStateSync(StateSync):
         lock_for_update: bool = False,
         required_fields: t.Optional[t.List[str]] = None,
     ) -> exp.Select:
-        query_fields = (
-            required_fields if required_fields else Environment.all_fields() - {"statements"}
-        )
+        query_fields = required_fields if required_fields else Environment.all_fields()
         query = (
             exp.select(*(exp.to_identifier(field) for field in query_fields))
             .from_(self.environments_table)
@@ -813,7 +813,7 @@ class EngineAdapterStateSync(StateSync):
         """
         query = (
             exp.select(
-                exp.to_identifier("statements"),
+                exp.to_identifier("environment_statements"),
             )
             .from_(self.environment_statements_table)
             .where(
@@ -827,7 +827,7 @@ class EngineAdapterStateSync(StateSync):
         if (
             result
             and (deserialized := json.loads(result[0]))
-            and (statements := deserialized.get("statements", None))
+            and (statements := deserialized.get("environment_statements", None))
         ):
             return [
                 EnvironmentStatements.parse_obj(environment_statements)
@@ -2065,17 +2065,15 @@ def _auto_restatements_to_df(auto_restatements: t.Dict[SnapshotNameVersion, int]
     )
 
 
-def _environment_statements_to_df(environment: Environment) -> pd.DataFrame:
+def _environment_statements_to_df(
+    environment_name: str, plan_id: str, environment_statements: str
+) -> pd.DataFrame:
     return pd.DataFrame(
         [
             {
-                "environment_name": environment.name,
-                "plan_id": environment.plan_id,
-                "statements": environment.json(
-                    include={
-                        "statements",
-                    }
-                ),
+                "environment_name": environment_name,
+                "plan_id": plan_id,
+                "environment_statements": environment_statements,
             }
         ]
     )

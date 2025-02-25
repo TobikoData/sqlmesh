@@ -64,6 +64,8 @@ class RuntimeStage(Enum):
     PROMOTING = "promoting"
     AUDITING = "auditing"
     TESTING = "testing"
+    BEFORE_ALL = "before_all"
+    AFTER_ALL = "after_all"
 
 
 class MacroStrTemplate(Template):

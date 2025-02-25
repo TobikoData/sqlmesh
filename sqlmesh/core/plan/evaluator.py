@@ -20,7 +20,8 @@ import typing as t
 from sqlmesh.core import analytics
 from sqlmesh.core import constants as c
 from sqlmesh.core.console import Console, get_console
-from sqlmesh.core.environment import EnvironmentNamingInfo, ExecutionStage
+from sqlmesh.core.environment import EnvironmentNamingInfo
+from sqlmesh.core.macros import RuntimeStage
 from sqlmesh.core.notification_target import (
     NotificationTarget,
 )
@@ -121,7 +122,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                 after_promote_snapshots = all_names - before_promote_snapshots
                 deployability_index_for_evaluation = DeployabilityIndex.all_deployable()
 
-            self.execute_environment_statements(ExecutionStage.BEFORE_ALL, plan, snapshots_by_name)
+            self.execute_environment_statements(RuntimeStage.BEFORE_ALL, plan, snapshots_by_name)
 
             self._push(plan, snapshots, deployability_index_for_creation)
             update_intervals_for_new_snapshots(plan.new_snapshots, self.state_sync)
@@ -148,7 +149,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             if not plan.requires_backfill:
                 self.console.log_success("Virtual Update executed successfully")
 
-            self.execute_environment_statements(ExecutionStage.AFTER_ALL, plan, snapshots_by_name)
+            self.execute_environment_statements(RuntimeStage.AFTER_ALL, plan, snapshots_by_name)
 
         except Exception as e:
             analytics.collector.on_plan_apply_end(plan_id=plan.plan_id, error=e)
@@ -160,17 +161,17 @@ class BuiltInPlanEvaluator(PlanEvaluator):
 
     def execute_environment_statements(
         self,
-        execution_stage: ExecutionStage,
+        runtime_stage: RuntimeStage,
         plan: EvaluatablePlan,
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
     ) -> None:
         adapter = self.snapshot_evaluator.adapter
-        if (environment_statements := plan.environment.statements) and (
+        if (environment_statements := plan.environment_statements) and (
             rendered_expressions := [
                 expr
                 for statements in environment_statements
                 for expr in render_statements(
-                    statements=getattr(statements, execution_stage.value),
+                    statements=getattr(statements, runtime_stage.value),
                     dialect=adapter.dialect,
                     default_catalog=self.default_catalog,
                     python_env=statements.python_env,
@@ -320,6 +321,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         promotion_result = self.state_sync.promote(
             plan.environment,
             no_gaps_snapshot_names=no_gaps_snapshot_names if plan.no_gaps else set(),
+            environment_statements=plan.json(include={"environment_statements"}),
         )
 
         if not plan.is_dev:

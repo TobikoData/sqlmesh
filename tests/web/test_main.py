@@ -476,7 +476,6 @@ def test_get_environments(client: TestClient, project_context: Context) -> None:
         start_at="1970-01-01",
         plan_id="",
         suffix_target="schema",
-        statements=[],
     )
     assert response_json["pinned_environments"] == list(project_context.config.pinned_environments)
     assert (

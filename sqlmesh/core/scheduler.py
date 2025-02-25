@@ -5,7 +5,8 @@ import typing as t
 from sqlglot import exp
 from sqlmesh.core import constants as c
 from sqlmesh.core.console import Console, get_console
-from sqlmesh.core.environment import EnvironmentNamingInfo, ExecutionStage
+from sqlmesh.core.environment import EnvironmentNamingInfo
+from sqlmesh.core.macros import RuntimeStage
 from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.notification_target import (
     NotificationEvent,
@@ -443,7 +444,7 @@ class Scheduler:
 
         if is_run_command:
             self.execute_environment_statements(
-                execution_stage=ExecutionStage.BEFORE_ALL,
+                runtime_stage=RuntimeStage.BEFORE_ALL,
                 environment_naming_info=environment_naming_info,
                 snapshots=snapshots_by_name,
                 start=start,
@@ -493,7 +494,7 @@ class Scheduler:
         finally:
             if is_run_command:
                 self.execute_environment_statements(
-                    execution_stage=ExecutionStage.AFTER_ALL,
+                    runtime_stage=RuntimeStage.AFTER_ALL,
                     environment_naming_info=environment_naming_info,
                     snapshots=snapshots_by_name,
                     start=start,
@@ -505,7 +506,7 @@ class Scheduler:
 
     def execute_environment_statements(
         self,
-        execution_stage: ExecutionStage,
+        runtime_stage: RuntimeStage,
         environment_naming_info: EnvironmentNamingInfo,
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         start: t.Optional[TimeLike] = None,
@@ -522,7 +523,7 @@ class Scheduler:
                 expr
                 for statements in environment_statements
                 for expr in render_statements(
-                    statements=getattr(statements, execution_stage.value),
+                    statements=getattr(statements, runtime_stage.value),
                     dialect=adapter.dialect,
                     default_catalog=self.default_catalog,
                     python_env=statements.python_env,
