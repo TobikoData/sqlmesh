@@ -2381,6 +2381,8 @@ def _create_model(
     model.audit_definitions.update(audit_definitions)
 
     statements.extend(audit.query for audit in audit_definitions.values())
+    for _, audit_args in model.audits:
+        statements.extend(audit_args.values())
 
     for _, kwargs in model.signals:
         statements.extend(kwargs.values())
