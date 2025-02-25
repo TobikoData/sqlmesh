@@ -6859,7 +6859,7 @@ def test_managed_kind_python():
 
     with pytest.raises(
         SQLMeshError,
-        match=r".*Cannot create Python model.*the 'MANAGED' kind doesnt support Python models",
+        match=r".*Cannot create Python model.*the 'MANAGED' kind doesn't support Python models",
     ):
         model.get_registry()["test_managed_python_model"].model(
             module_path=Path("."),
