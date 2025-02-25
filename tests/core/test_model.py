@@ -13,7 +13,7 @@ from sqlglot import exp, parse_one
 from sqlglot.errors import ParseError
 from sqlglot.schema import MappingSchema
 from sqlmesh.cli.example_project import init_example_project, ProjectTemplate
-from sqlmesh.core.model.kind import TimeColumn
+from sqlmesh.core.model.kind import TimeColumn, ModelKindName
 
 from sqlmesh import CustomMaterialization, CustomKind
 from pydantic import model_validator
@@ -2156,23 +2156,6 @@ def test_python_model_decorator_kind() -> None:
             path=Path("."),
         )
 
-    @model("kind_view", kind="view", columns={'"COL"': "int"})
-    def kind_view(context):
-        pass
-
-    # error if kind = view
-    with pytest.raises(
-        SQLMeshError, match=r".*Cannot create Python model.*doesnt support Python models"
-    ):
-        python_model = (
-            model.get_registry()["kind_view"]
-            .model(
-                module_path=Path("."),
-                path=Path("."),
-            )
-            .validate_definition()
-        )
-
     @model("kind_dict_badname", kind=dict(name="test"), columns={'"COL"': "int"})
     def my_model_1(context):
         pass
@@ -2244,6 +2227,29 @@ def test_python_model_decorator_col_descriptions() -> None:
             module_path=Path("."),
             path=Path("."),
         )
+
+
+def test_python_model_unsupported_kind() -> None:
+    kinds = {
+        "seed": {"name": ModelKindName.SEED, "path": "."},
+        "view": {"name": ModelKindName.VIEW},
+        "managed": {"name": ModelKindName.MANAGED},
+        "embedded": {"name": ModelKindName.EMBEDDED},
+    }
+
+    for kindname in kinds:
+
+        @model(f"kind_{kindname}", kind=kinds[kindname], columns={'"COL"': "int"})
+        def the_kind(context):
+            pass
+
+        with pytest.raises(
+            SQLMeshError, match=r".*Cannot create Python model.*doesn't support Python models"
+        ):
+            model.get_registry()[f"kind_{kindname}"].model(
+                module_path=Path("."),
+                path=Path("."),
+            ).validate_definition()
 
 
 def test_star_expansion(assert_exp_eq) -> None:
