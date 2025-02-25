@@ -4,6 +4,7 @@ import typing as t
 import pandas as pd
 import pytest
 from pytest_mock.plugin import MockerFixture
+from unittest.mock import PropertyMock
 from sqlglot import expressions as exp
 from sqlglot import parse_one
 
@@ -325,8 +326,12 @@ def test_alter_table_drop_column_cascade(adapter: t.Callable):
     ]
 
 
-def test_merge(make_mocked_engine_adapter: t.Callable):
+def test_merge(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
     adapter = make_mocked_engine_adapter(RedshiftEngineAdapter)
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.redshift.RedshiftEngineAdapter.enable_merge",
+        new_callable=PropertyMock(return_value=True),
+    )
 
     adapter.merge(
         target_table=exp.to_table("target_table_name"),
@@ -362,8 +367,12 @@ def test_merge(make_mocked_engine_adapter: t.Callable):
     ]
 
 
-def test_merge_when_matched_error(make_mocked_engine_adapter: t.Callable):
+def test_merge_when_matched_error(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
     adapter = make_mocked_engine_adapter(RedshiftEngineAdapter)
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.redshift.RedshiftEngineAdapter.enable_merge",
+        new_callable=PropertyMock(return_value=True),
+    )
 
     with pytest.raises(
         SQLMeshError,
@@ -404,3 +413,58 @@ def test_merge_when_matched_error(make_mocked_engine_adapter: t.Callable):
                 ]
             ),
         )
+
+
+def test_merge_logical_filter_error(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
+    adapter = make_mocked_engine_adapter(RedshiftEngineAdapter)
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.redshift.RedshiftEngineAdapter.enable_merge",
+        new_callable=PropertyMock(return_value=False),
+    )
+
+    with pytest.raises(
+        SQLMeshError,
+        match=r".*This engine does not support MERGE expressions and therefore `merge_filter` is not supported.*",
+    ):
+        adapter.merge(
+            target_table=exp.to_table("target_table_name_2"),
+            source_table=t.cast(exp.Select, parse_one('SELECT "ID", ts FROM source')),
+            columns_to_types={
+                "ID": exp.DataType.build("int"),
+                "ts": exp.DataType.build("timestamp"),
+            },
+            unique_key=[exp.to_identifier("ID", quoted=True)],
+            merge_filter=exp.and_(
+                exp.and_(exp.column("ID", "__MERGE_SOURCE__") > 0),
+                exp.column("ts", "__MERGE_TARGET__") < exp.column("ts", "__MERGE_SOURCE__"),
+            ),
+        )
+
+
+def test_merge_logical(
+    make_mocked_engine_adapter: t.Callable, make_temp_table_name: t.Callable, mocker: MockerFixture
+):
+    adapter = make_mocked_engine_adapter(RedshiftEngineAdapter)
+
+    temp_table_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter._get_temp_table")
+    table_name = "test"
+    temp_table_id = "abcdefgh"
+    temp_table_mock.return_value = make_temp_table_name(table_name, temp_table_id)
+
+    adapter.merge(
+        target_table=exp.to_table("target"),
+        source_table=t.cast(exp.Select, parse_one('SELECT "ID", ts FROM source')),
+        columns_to_types={
+            "ID": exp.DataType.build("int"),
+            "ts": exp.DataType.build("timestamp"),
+        },
+        unique_key=[exp.to_identifier("ID", quoted=True)],
+    )
+
+    sql_calls = to_sql_calls(adapter)
+    assert sql_calls == [
+        'CREATE TABLE "__temp_test_abcdefgh" AS SELECT CAST("ID" AS INTEGER) AS "ID", CAST("ts" AS TIMESTAMP) AS "ts" FROM (SELECT "ID", "ts" FROM "source") AS "_subquery"',
+        'DELETE FROM "target" WHERE "ID" IN (SELECT "ID" FROM "__temp_test_abcdefgh")',
+        'INSERT INTO "target" ("ID", "ts") SELECT "ID", "ts" FROM (SELECT "ID" AS "ID", "ts" AS "ts", ROW_NUMBER() OVER (PARTITION BY "ID" ORDER BY "ID") AS _row_number FROM "__temp_test_abcdefgh") AS _t WHERE _row_number = 1',
+        'DROP TABLE IF EXISTS "__temp_test_abcdefgh"',
+    ]

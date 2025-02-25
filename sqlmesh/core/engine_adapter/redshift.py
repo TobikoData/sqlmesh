@@ -14,6 +14,7 @@ from sqlmesh.core.engine_adapter.mixins import (
     NonTransactionalTruncateMixin,
     VarcharSizeWorkaroundMixin,
     RowDiffMixin,
+    logical_merge,
 )
 from sqlmesh.core.engine_adapter.shared import (
     CommentCreationView,
@@ -45,6 +46,7 @@ class RedshiftEngineAdapter(
     # Redshift doesn't support comments for VIEWs WITH NO SCHEMA BINDING (which we always use)
     COMMENT_CREATION_VIEW = CommentCreationView.UNSUPPORTED
     SUPPORTS_REPLACE_TABLE = False
+    MERGE_OPERATION = False
     SCHEMA_DIFFER = SchemaDiffer(
         parameterized_type_defaults={
             exp.DataType.build("VARBYTE", dialect=DIALECT).this: [(64000,)],
@@ -119,6 +121,12 @@ class RedshiftEngineAdapter(
             column_name: exp.DataType.build(data_type, dialect=self.dialect)
             for column_name, data_type in columns
         }
+
+    @property
+    def enable_merge(self) -> bool:
+        # Redshift supports the MERGE operation but we use the logical merge
+        # unless the user has opted in by setting enable_merge in the connection.
+        return self._extra_config.get("enable_merge") or self.MERGE_OPERATION
 
     @property
     def cursor(self) -> t.Any:
@@ -328,6 +336,36 @@ class RedshiftEngineAdapter(
             )
             for row in df.itertuples()
         ]
+
+    def merge(
+        self,
+        target_table: TableName,
+        source_table: QueryOrDF,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
+        unique_key: t.Sequence[exp.Expression],
+        when_matched: t.Optional[exp.Whens] = None,
+        merge_filter: t.Optional[exp.Expression] = None,
+    ) -> None:
+        if self.enable_merge:
+            # By default we use the logical merge unless the user has opted in
+            super().merge(
+                target_table=target_table,
+                source_table=source_table,
+                columns_to_types=columns_to_types,
+                unique_key=unique_key,
+                when_matched=when_matched,
+                merge_filter=merge_filter,
+            )
+        else:
+            logical_merge(
+                self,
+                target_table,
+                source_table,
+                columns_to_types,
+                unique_key,
+                when_matched=when_matched,
+                merge_filter=merge_filter,
+            )
 
     def _merge(
         self,
