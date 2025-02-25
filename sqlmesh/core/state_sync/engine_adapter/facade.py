@@ -69,11 +69,12 @@ from sqlmesh.core.state_sync.base import (
 )
 from sqlmesh.core.state_sync.common import transactional
 from sqlmesh.core.state_sync.engine_adapter.interval import IntervalState
+from sqlmesh.core.state_sync.engine_adapter.environment import EnvironmentState
 from sqlmesh.utils import major_minor, unique
 from sqlmesh.utils.dag import DAG
-from sqlmesh.utils.date import TimeLike, now, now_timestamp, time_like_to_str, to_timestamp
+from sqlmesh.utils.date import TimeLike, now, now_timestamp, to_timestamp
 from sqlmesh.utils.errors import ConflictingPlanError, SQLMeshError
-from sqlmesh.utils.migration import blob_text_type, index_text_type
+from sqlmesh.utils.migration import index_text_type
 from sqlmesh.utils.pydantic import PydanticModel
 
 logger = logging.getLogger(__name__)
@@ -118,18 +119,17 @@ class EngineAdapterStateSync(StateSync):
         context_path: Path = Path(),
     ):
         self.interval_state = IntervalState(engine_adapter, schema=schema)
+        self.environment_state = EnvironmentState(engine_adapter, schema=schema)
         # Make sure that if an empty string is provided that we treat it as None
         self.schema = schema or None
         self.engine_adapter = engine_adapter
         self.console = console or get_console()
         self.snapshots_table = exp.table_("_snapshots", db=self.schema)
-        self.environments_table = exp.table_("_environments", db=self.schema)
         self.plan_dags_table = exp.table_("_plan_dags", db=self.schema)
         self.auto_restatements_table = exp.table_("_auto_restatements", db=self.schema)
         self.versions_table = exp.table_("_versions", db=self.schema)
 
         index_type = index_text_type(engine_adapter.dialect)
-        blob_type = blob_text_type(engine_adapter.dialect)
         self._snapshot_columns_to_types = {
             "name": exp.DataType.build(index_type),
             "identifier": exp.DataType.build(index_type),
@@ -140,23 +140,6 @@ class EngineAdapterStateSync(StateSync):
             "unpaused_ts": exp.DataType.build("bigint"),
             "ttl_ms": exp.DataType.build("bigint"),
             "unrestorable": exp.DataType.build("boolean"),
-        }
-
-        self._environment_columns_to_types = {
-            "name": exp.DataType.build(index_type),
-            "snapshots": exp.DataType.build(blob_type),
-            "start_at": exp.DataType.build("text"),
-            "end_at": exp.DataType.build("text"),
-            "plan_id": exp.DataType.build("text"),
-            "previous_plan_id": exp.DataType.build("text"),
-            "expiration_ts": exp.DataType.build("bigint"),
-            "finalized_ts": exp.DataType.build("bigint"),
-            "promoted_snapshot_ids": exp.DataType.build(blob_type),
-            "suffix_target": exp.DataType.build("text"),
-            "catalog_name_override": exp.DataType.build("text"),
-            "previous_finalized_snapshots": exp.DataType.build(blob_type),
-            "normalize_name": exp.DataType.build("boolean"),
-            "requirements": exp.DataType.build(blob_type),
         }
 
         self._auto_restatement_columns_to_types = {
@@ -270,7 +253,9 @@ class EngineAdapterStateSync(StateSync):
                 f"Missing snapshots {missing}. Make sure to push and backfill your snapshots."
             )
 
-        existing_environment = self._get_environment(environment.name, lock_for_update=True)
+        existing_environment = self.environment_state.get_environment(
+            environment.name, lock_for_update=True
+        )
 
         existing_table_infos = (
             {table_info.name: table_info for table_info in existing_environment.promoted_snapshots}
@@ -320,7 +305,7 @@ class EngineAdapterStateSync(StateSync):
             # Only promote new snapshots.
             added_table_infos -= set(existing_environment.promoted_snapshots)
 
-        self._update_environment(environment)
+        self.environment_state.update_environment(environment)
 
         removed = {existing_table_infos[name] for name in missing_models}.union(
             views_that_changed_location
@@ -385,34 +370,7 @@ class EngineAdapterStateSync(StateSync):
         Args:
             environment: The target environment to finalize.
         """
-        logger.info("Finalizing environment '%s'", environment.name)
-
-        environment_filter = exp.column("name").eq(exp.Literal.string(environment.name))
-
-        stored_plan_id_query = (
-            exp.select("plan_id")
-            .from_(self.environments_table)
-            .where(environment_filter, copy=False)
-            .lock(copy=False)
-        )
-        stored_plan_id_row = self._fetchone(stored_plan_id_query)
-
-        if not stored_plan_id_row:
-            raise SQLMeshError(f"Missing environment '{environment.name}' can't be finalized")
-
-        stored_plan_id = stored_plan_id_row[0]
-        if stored_plan_id != environment.plan_id:
-            raise SQLMeshError(
-                f"Plan '{environment.plan_id}' is no longer valid for the target environment '{environment.name}'. "
-                f"Stored plan ID: '{stored_plan_id}'. Please recreate the plan and try again"
-            )
-
-        environment.finalized_ts = now_timestamp()
-        self.engine_adapter.update_table(
-            self.environments_table,
-            {"finalized_ts": environment.finalized_ts},
-            where=environment_filter,
-        )
+        self.environment_state.finalize(environment)
 
     @transactional()
     def unpause_snapshots(
@@ -512,17 +470,7 @@ class EngineAdapterStateSync(StateSync):
         )
 
     def invalidate_environment(self, name: str) -> None:
-        name = name.lower()
-        if name == c.PROD:
-            raise SQLMeshError("Cannot invalidate the production environment.")
-
-        filter_expr = exp.column("name").eq(name)
-
-        self.engine_adapter.update_table(
-            self.environments_table,
-            {"expiration_ts": now_timestamp()},
-            where=filter_expr,
-        )
+        self.environment_state.invalidate_environment(name)
 
     @transactional()
     def delete_expired_snapshots(
@@ -599,26 +547,7 @@ class EngineAdapterStateSync(StateSync):
         return cleanup_targets
 
     def delete_expired_environments(self) -> t.List[Environment]:
-        now_ts = now_timestamp()
-        filter_expr = exp.LTE(
-            this=exp.column("expiration_ts"),
-            expression=exp.Literal.number(now_ts),
-        )
-
-        rows = self._fetchall(
-            self._environments_query(
-                where=filter_expr,
-                lock_for_update=True,
-            )
-        )
-        environments = [self._environment_from_row(r) for r in rows]
-
-        self.engine_adapter.delete_from(
-            self.environments_table,
-            where=filter_expr,
-        )
-
-        return environments
+        return self.environment_state.delete_expired_environments()
 
     def delete_snapshots(self, snapshot_ids: t.Iterable[SnapshotIdLike]) -> None:
         if not snapshot_ids:
@@ -649,7 +578,7 @@ class EngineAdapterStateSync(StateSync):
         """Resets the state store to the state when it was first initialized."""
         for table in (
             self.snapshots_table,
-            self.environments_table,
+            self.environment_state.environments_table,
             self.interval_state.intervals_table,
             self.plan_dags_table,
             self.versions_table,
@@ -679,21 +608,6 @@ class EngineAdapterStateSync(StateSync):
             columns_to_types=self._auto_restatement_columns_to_types,
         )
 
-    def _update_environment(self, environment: Environment) -> None:
-        self.engine_adapter.delete_from(
-            self.environments_table,
-            where=exp.EQ(
-                this=exp.column("name"),
-                expression=exp.Literal.string(environment.name),
-            ),
-        )
-
-        self.engine_adapter.insert_append(
-            self.environments_table,
-            _environment_to_df(environment),
-            columns_to_types=self._environment_columns_to_types,
-        )
-
     def _update_snapshots(
         self,
         snapshots: t.Iterable[SnapshotIdLike],
@@ -710,7 +624,7 @@ class EngineAdapterStateSync(StateSync):
             )
 
     def get_environment(self, environment: str) -> t.Optional[Environment]:
-        return self._get_environment(environment)
+        return self.environment_state.get_environment(environment)
 
     def get_environments(self) -> t.List[Environment]:
         """Fetches all environments.
@@ -718,9 +632,7 @@ class EngineAdapterStateSync(StateSync):
         Returns:
             A list of all environments.
         """
-        return [
-            self._environment_from_row(row) for row in self._fetchall(self._environments_query())
-        ]
+        return self.environment_state.get_environments()
 
     def get_environments_summary(self) -> t.Dict[str, int]:
         """Fetches all environment names along with expiry datetime.
@@ -728,28 +640,7 @@ class EngineAdapterStateSync(StateSync):
         Returns:
             A dict of all environment names along with expiry datetime.
         """
-        return dict(
-            self._fetchall(self._environments_query(required_fields=["name", "expiration_ts"])),
-        )
-
-    def _environment_from_row(self, row: t.Tuple[str, ...]) -> Environment:
-        return Environment(**{field: row[i] for i, field in enumerate(Environment.all_fields())})
-
-    def _environments_query(
-        self,
-        where: t.Optional[str | exp.Expression] = None,
-        lock_for_update: bool = False,
-        required_fields: t.Optional[t.List[str]] = None,
-    ) -> exp.Select:
-        query_fields = required_fields if required_fields else Environment.all_fields()
-        query = (
-            exp.select(*(exp.to_identifier(field) for field in query_fields))
-            .from_(self.environments_table)
-            .where(where)
-        )
-        if lock_for_update:
-            return query.lock(copy=False)
-        return query
+        return self.environment_state.get_environments_summary()
 
     def get_snapshots(
         self,
@@ -983,34 +874,6 @@ class EngineAdapterStateSync(StateSync):
             schema_version=row[0], sqlglot_version=row[1], sqlmesh_version=seq_get(row, 2)
         )
 
-    def _get_environment(
-        self, environment: str, lock_for_update: bool = False
-    ) -> t.Optional[Environment]:
-        """Fetches the environment if it exists.
-
-        Args:
-            environment: The environment
-            lock_for_update: Lock the snapshot rows for future update
-
-        Returns:
-            The environment object.
-        """
-        row = self._fetchone(
-            self._environments_query(
-                where=exp.EQ(
-                    this=exp.column("name"),
-                    expression=exp.Literal.string(environment),
-                ),
-                lock_for_update=lock_for_update,
-            )
-        )
-
-        if not row:
-            return None
-
-        env = self._environment_from_row(row)
-        return env
-
     @transactional()
     def add_interval(
         self,
@@ -1046,7 +909,7 @@ class EngineAdapterStateSync(StateSync):
         models: t.Optional[t.Set[str]] = None,
         ensure_finalized_snapshots: bool = False,
     ) -> t.Dict[str, int]:
-        env = self._get_environment(environment)
+        env = self.get_environment(environment)
         if not env:
             return {}
 
@@ -1129,7 +992,11 @@ class EngineAdapterStateSync(StateSync):
     def rollback(self) -> None:
         """Rollback to the previous migration."""
         logger.info("Starting migration rollback.")
-        tables = (self.snapshots_table, self.environments_table, self.versions_table)
+        tables = (
+            self.snapshots_table,
+            self.environment_state.environments_table,
+            self.versions_table,
+        )
         optional_tables = (
             self.interval_state.intervals_table,
             self.plan_dags_table,
@@ -1161,7 +1028,7 @@ class EngineAdapterStateSync(StateSync):
     def _backup_state(self) -> None:
         for table in (
             self.snapshots_table,
-            self.environments_table,
+            self.environment_state.environments_table,
             self.versions_table,
             self.interval_state.intervals_table,
             self.plan_dags_table,
@@ -1406,7 +1273,7 @@ class EngineAdapterStateSync(StateSync):
         self.console.start_env_migration_progress(len(updated_environments))
 
         for environment in updated_environments:
-            self._update_environment(environment)
+            self.environment_state.update_environment(environment)
             self.console.update_env_migration_progress(1)
 
         if updated_prod_environment:
@@ -1532,37 +1399,6 @@ def _snapshots_to_df(snapshots: t.Iterable[Snapshot]) -> pd.DataFrame:
                 "unrestorable": snapshot.unrestorable,
             }
             for snapshot in snapshots
-        ]
-    )
-
-
-def _environment_to_df(environment: Environment) -> pd.DataFrame:
-    return pd.DataFrame(
-        [
-            {
-                "name": environment.name,
-                "snapshots": json.dumps(environment.snapshot_dicts()),
-                "start_at": time_like_to_str(environment.start_at),
-                "end_at": time_like_to_str(environment.end_at) if environment.end_at else None,
-                "plan_id": environment.plan_id,
-                "previous_plan_id": environment.previous_plan_id,
-                "expiration_ts": environment.expiration_ts,
-                "finalized_ts": environment.finalized_ts,
-                "promoted_snapshot_ids": (
-                    json.dumps(environment.promoted_snapshot_id_dicts())
-                    if environment.promoted_snapshot_ids is not None
-                    else None
-                ),
-                "suffix_target": environment.suffix_target.value,
-                "catalog_name_override": environment.catalog_name_override,
-                "previous_finalized_snapshots": (
-                    json.dumps(environment.previous_finalized_snapshot_dicts())
-                    if environment.previous_finalized_snapshots is not None
-                    else None
-                ),
-                "normalize_name": environment.normalize_name,
-                "requirements": json.dumps(environment.requirements),
-            }
         ]
     )
 

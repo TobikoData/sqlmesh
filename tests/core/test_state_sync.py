@@ -2216,7 +2216,9 @@ def test_first_migration_failure(duck_conn, mocker: MockerFixture, tmp_path) -> 
     ):
         state_sync.migrate(default_catalog=None)
     assert not state_sync.engine_adapter.table_exists(state_sync.snapshots_table)
-    assert not state_sync.engine_adapter.table_exists(state_sync.environments_table)
+    assert not state_sync.engine_adapter.table_exists(
+        state_sync.environment_state.environments_table
+    )
     assert not state_sync.engine_adapter.table_exists(state_sync.versions_table)
     assert not state_sync.engine_adapter.table_exists(state_sync.interval_state.intervals_table)
 
