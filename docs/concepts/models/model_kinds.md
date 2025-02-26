@@ -26,6 +26,294 @@ MODEL (
 <a id="timezones"></a>
 In addition to specifying a time column in the `MODEL` DDL, the model's query must contain a `WHERE` clause that filters the upstream records by time range. SQLMesh provides special macros that represent the start and end of the time range being processed: `@start_date` / `@end_date` and `@start_ds` / `@end_ds`. Refer to [Macros](../macros/macro_variables.md) for more information.
 
+??? "Example SQL sequence when applying this model kind (ex: BigQuery)"
+    This is borrowred from the full walkthrough: [Incremental by Time Range](../../examples/incremental_time_full_walkthrough.md)
+
+    Create a model with the following definition and run `sqlmesh plan dev`:
+
+    ```sql
+    MODEL (
+      name demo.incrementals_demo,
+      kind INCREMENTAL_BY_TIME_RANGE (
+        -- How does this model kind behave?
+        --   DELETE by time range, then INSERT
+        time_column transaction_date,
+
+        -- How do I handle late-arriving data?
+        --   Handle late-arriving events for the past 2 (2*1) days based on cron
+        --   interval. Each time it runs, it will process today, yesterday, and
+        --   the day before yesterday.
+        lookback 2,
+      ),
+
+      -- Don't backfill data before this date
+      start '2024-10-25',
+
+      -- What schedule should I run these at?
+      --   Daily at Midnight UTC
+      cron '@daily',
+
+      -- Good documentation for the primary key
+      grain transaction_id,
+
+      -- How do I test this data?
+      --   Validate that the `transaction_id` primary key values are both unique
+      --   and non-null. Data audit tests only run for the processed intervals,
+      --   not for the entire table.
+      -- audits (
+      --   UNIQUE_VALUES(columns = (transaction_id)),
+      --   NOT_NULL(columns = (transaction_id))
+      -- )
+    );
+
+    WITH sales_data AS (
+      SELECT
+        transaction_id,
+        product_id,
+        customer_id,
+        transaction_amount,
+        -- How do I account for UTC vs. PST (California baby) timestamps?
+        --   Make sure all time columns are in UTC and convert them to PST in the
+        --   presentation layer downstream.
+        transaction_timestamp,
+        payment_method,
+        currency
+      FROM sqlmesh-public-demo.tcloud_raw_data.sales  -- Source A: sales data
+      -- How do I make this run fast and only process the necessary intervals?
+      --   Use our date macros that will automatically run the necessary intervals.
+      --   Because SQLMesh manages state, it will know what needs to run each time
+      --   you invoke `sqlmesh run`.
+      WHERE transaction_timestamp BETWEEN @start_dt AND @end_dt
+    ),
+
+    product_usage AS (
+      SELECT
+        product_id,
+        customer_id,
+        last_usage_date,
+        usage_count,
+        feature_utilization_score,
+        user_segment
+      FROM sqlmesh-public-demo.tcloud_raw_data.product_usage  -- Source B
+      -- Include usage data from the 30 days before the interval
+      WHERE last_usage_date BETWEEN DATE_SUB(@start_dt, INTERVAL 30 DAY) AND @end_dt
+    )
+
+    SELECT
+      s.transaction_id,
+      s.product_id,
+      s.customer_id,
+      s.transaction_amount,
+      -- Extract the date from the timestamp to partition by day
+      DATE(s.transaction_timestamp) as transaction_date,
+      -- Convert timestamp to PST using a SQL function in the presentation layer for end users
+      DATETIME(s.transaction_timestamp, 'America/Los_Angeles') as transaction_timestamp_pst,
+      s.payment_method,
+      s.currency,
+      -- Product usage metrics
+      p.last_usage_date,
+      p.usage_count,
+      p.feature_utilization_score,
+      p.user_segment,
+      -- Derived metrics
+      CASE
+        WHEN p.usage_count > 100 AND p.feature_utilization_score > 0.8 THEN 'Power User'
+        WHEN p.usage_count > 50 THEN 'Regular User'
+        WHEN p.usage_count IS NULL THEN 'New User'
+        ELSE 'Light User'
+      END as user_type,
+      -- Time since last usage
+      DATE_DIFF(s.transaction_timestamp, p.last_usage_date, DAY) as days_since_last_usage
+    FROM sales_data s
+    LEFT JOIN product_usage p
+      ON s.product_id = p.product_id
+      AND s.customer_id = p.customer_id
+    ```
+
+    SQLMesh will create a versioned table in the physical layer. Note the fingerprint of the table is `50975949`.
+
+    ```sql
+    CREATE TABLE IF NOT EXISTS `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__incrementals_demo__50975949` (
+      `transaction_id` STRING,
+      `product_id` STRING,
+      `customer_id` STRING,
+      `transaction_amount` NUMERIC,
+      `transaction_date` DATE OPTIONS (description='We extract the date from the timestamp to partition by day'),
+      `transaction_timestamp_pst` DATETIME OPTIONS (description='Convert this to PST using a SQL function'),
+      `payment_method` STRING,
+      `currency` STRING,
+      `last_usage_date` TIMESTAMP,
+      `usage_count` INT64,
+      `feature_utilization_score` FLOAT64,
+      `user_segment` STRING,
+      `user_type` STRING OPTIONS (description='Derived metrics'),
+      `days_since_last_usage` INT64 OPTIONS (description='Time since last usage')
+      )
+      PARTITION BY `transaction_date`
+    ```
+
+    SQLmesh will validate the SQL before processing data (note the `WHERE FALSE LIMIT 0` and the placeholder timestamps).
+
+    ```sql
+    WITH `sales_data` AS (
+      SELECT
+        `sales`.`transaction_id` AS `transaction_id`,
+        `sales`.`product_id` AS `product_id`,
+        `sales`.`customer_id` AS `customer_id`,
+        `sales`.`transaction_amount` AS `transaction_amount`,
+        `sales`.`transaction_timestamp` AS `transaction_timestamp`,
+        `sales`.`payment_method` AS `payment_method`,
+        `sales`.`currency` AS `currency`
+      FROM `sqlmesh-public-demo`.`tcloud_raw_data`.`sales` AS `sales`
+      WHERE (
+        `sales`.`transaction_timestamp` <= CAST('1970-01-01 23:59:59.999999+00:00' AS TIMESTAMP) AND
+        `sales`.`transaction_timestamp` >= CAST('1970-01-01 00:00:00+00:00' AS TIMESTAMP)) AND
+        FALSE
+    ),
+    `product_usage` AS (
+      SELECT
+        `product_usage`.`product_id` AS `product_id`,
+        `product_usage`.`customer_id` AS `customer_id`,
+        `product_usage`.`last_usage_date` AS `last_usage_date`,
+        `product_usage`.`usage_count` AS `usage_count`,
+        `product_usage`.`feature_utilization_score` AS `feature_utilization_score`,
+        `product_usage`.`user_segment` AS `user_segment`
+      FROM `sqlmesh-public-demo`.`tcloud_raw_data`.`product_usage` AS `product_usage`
+      WHERE (
+        `product_usage`.`last_usage_date` <= CAST('1970-01-01 23:59:59.999999+00:00' AS TIMESTAMP) AND
+        `product_usage`.`last_usage_date` >= CAST('1969-12-02 00:00:00+00:00' AS TIMESTAMP)
+        ) AND
+        FALSE
+    )
+
+    SELECT
+      `s`.`transaction_id` AS `transaction_id`,
+      `s`.`product_id` AS `product_id`,
+      `s`.`customer_id` AS `customer_id`,
+      CAST(`s`.`transaction_amount` AS NUMERIC) AS `transaction_amount`,
+      DATE(`s`.`transaction_timestamp`) AS `transaction_date`,
+      DATETIME(`s`.`transaction_timestamp`, 'America/Los_Angeles') AS `transaction_timestamp_pst`,
+      `s`.`payment_method` AS `payment_method`,
+      `s`.`currency` AS `currency`,
+      `p`.`last_usage_date` AS `last_usage_date`,
+      `p`.`usage_count` AS `usage_count`,
+      `p`.`feature_utilization_score` AS `feature_utilization_score`,
+      `p`.`user_segment` AS `user_segment`,
+      CASE
+        WHEN `p`.`feature_utilization_score` > 0.8 AND `p`.`usage_count` > 100 THEN 'Power User'
+        WHEN `p`.`usage_count` > 50 THEN 'Regular User'
+        WHEN `p`.`usage_count` IS NULL THEN 'New User'
+        ELSE 'Light User'
+      END AS `user_type`,
+      DATE_DIFF(`s`.`transaction_timestamp`, `p`.`last_usage_date`, DAY) AS `days_since_last_usage`
+    FROM `sales_data` AS `s`
+    LEFT JOIN `product_usage` AS `p`
+      ON `p`.`customer_id` = `s`.`customer_id` AND
+      `p`.`product_id` = `s`.`product_id`
+    WHERE FALSE
+    LIMIT 0
+    ```
+
+    SQLmesh will merge data into the empty table.
+
+    ```sql
+    MERGE INTO `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__incrementals_demo__50975949` AS `__MERGE_TARGET__` USING (
+      WITH `sales_data` AS (
+        SELECT
+          `transaction_id`,
+          `product_id`,
+          `customer_id`,
+          `transaction_amount`,
+          `transaction_timestamp`,
+          `payment_method`,
+          `currency`
+        FROM `sqlmesh-public-demo`.`tcloud_raw_data`.`sales` AS `sales`
+        WHERE `transaction_timestamp` BETWEEN CAST('2024-10-25 00:00:00+00:00' AS TIMESTAMP) AND CAST('2024-11-04 23:59:59.999999+00:00' AS TIMESTAMP)
+      ),
+      `product_usage` AS (
+        SELECT
+          `product_id`,
+          `customer_id`,
+          `last_usage_date`,
+          `usage_count`,
+          `feature_utilization_score`,
+          `user_segment`
+        FROM `sqlmesh-public-demo`.`tcloud_raw_data`.`product_usage` AS `product_usage`
+        WHERE `last_usage_date` BETWEEN DATE_SUB(CAST('2024-10-25 00:00:00+00:00' AS TIMESTAMP), INTERVAL '30' DAY) AND CAST('2024-11-04 23:59:59.999999+00:00' AS TIMESTAMP)
+      )
+
+      SELECT
+        `transaction_id`,
+        `product_id`,
+        `customer_id`,
+        `transaction_amount`,
+        `transaction_date`,
+        `transaction_timestamp_pst`,
+        `payment_method`,
+        `currency`,
+        `last_usage_date`,
+        `usage_count`,
+        `feature_utilization_score`,
+        `user_segment`,
+        `user_type`,
+        `days_since_last_usage`
+      FROM (
+        SELECT
+          `s`.`transaction_id` AS `transaction_id`,
+          `s`.`product_id` AS `product_id`,
+          `s`.`customer_id` AS `customer_id`,
+          `s`.`transaction_amount` AS `transaction_amount`,
+          DATE(`s`.`transaction_timestamp`) AS `transaction_date`,
+          DATETIME(`s`.`transaction_timestamp`, 'America/Los_Angeles') AS `transaction_timestamp_pst`,
+          `s`.`payment_method` AS `payment_method`,
+          `s`.`currency` AS `currency`,
+          `p`.`last_usage_date` AS `last_usage_date`,
+          `p`.`usage_count` AS `usage_count`,
+          `p`.`feature_utilization_score` AS `feature_utilization_score`,
+          `p`.`user_segment` AS `user_segment`,
+          CASE
+            WHEN `p`.`usage_count` > 100 AND `p`.`feature_utilization_score` > 0.8 THEN 'Power User'
+            WHEN `p`.`usage_count` > 50 THEN 'Regular User'
+            WHEN `p`.`usage_count` IS NULL THEN 'New User'
+            ELSE 'Light User'
+          END AS `user_type`,
+          DATE_DIFF(`s`.`transaction_timestamp`, `p`.`last_usage_date`, DAY) AS `days_since_last_usage`
+        FROM `sales_data` AS `s`
+        LEFT JOIN `product_usage` AS `p`
+          ON `s`.`product_id` = `p`.`product_id`
+          AND `s`.`customer_id` = `p`.`customer_id`
+      ) AS `_subquery`
+      WHERE `transaction_date` BETWEEN CAST('2024-10-25' AS DATE) AND CAST('2024-11-04' AS DATE)
+    ) AS `__MERGE_SOURCE__`
+    ON FALSE
+    WHEN NOT MATCHED BY SOURCE AND `transaction_date` BETWEEN CAST('2024-10-25' AS DATE) AND CAST('2024-11-04' AS DATE) THEN DELETE
+    WHEN NOT MATCHED THEN
+      INSERT (
+        `transaction_id`, `product_id`, `customer_id`, `transaction_amount`, `transaction_date`, `transaction_timestamp_pst`,
+        `payment_method`, `currency`, `last_usage_date`, `usage_count`, `feature_utilization_score`, `user_segment`, `user_type`,
+        `days_since_last_usage`
+      )
+      VALUES (
+        `transaction_id`, `product_id`, `customer_id`, `transaction_amount`, `transaction_date`, `transaction_timestamp_pst`,
+        `payment_method`, `currency`, `last_usage_date`, `usage_count`, `feature_utilization_score`, `user_segment`, `user_type`,
+        `days_since_last_usage`
+      )
+    ```
+
+    SQLmesh will create a `dev` schema based on the name of the plan environment.
+  
+    ```sql
+    CREATE SCHEMA IF NOT EXISTS `sqlmesh-public-demo`.`demo__dev`
+    ```
+
+    SQLmesh will create a view in the virtual layer to pointing to the versioned table in the physical layer.
+
+    ```sql
+    CREATE OR REPLACE VIEW `sqlmesh-public-demo`.`demo__dev`.`incrementals_demo` AS
+    SELECT *
+    FROM `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__incrementals_demo__50975949`
+    ```
+
 !!! tip "Important"
 
     A model's `time_column` should be in the [UTC time zone](https://en.wikipedia.org/wiki/Coordinated_Universal_Time) to ensure correct interaction with SQLMesh's scheduler and predefined macro variables.
