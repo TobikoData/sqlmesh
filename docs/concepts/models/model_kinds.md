@@ -27,7 +27,7 @@ MODEL (
 In addition to specifying a time column in the `MODEL` DDL, the model's query must contain a `WHERE` clause that filters the upstream records by time range. SQLMesh provides special macros that represent the start and end of the time range being processed: `@start_date` / `@end_date` and `@start_ds` / `@end_ds`. Refer to [Macros](../macros/macro_variables.md) for more information.
 
 ??? "Example SQL sequence when applying this model kind (ex: BigQuery)"
-    This is borrowred from the full walkthrough: [Incremental by Time Range](../../examples/incremental_time_full_walkthrough.md)
+    This is borrowed from the full walkthrough: [Incremental by Time Range](../../examples/incremental_time_full_walkthrough.md)
 
     Create a model with the following definition and run `sqlmesh plan dev`:
 
