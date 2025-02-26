@@ -462,7 +462,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         if not prod_restatements:
             return set()
 
-        snapshots_to_restate: t.Set[t.Tuple[SnapshotTableInfo, Interval]] = set()
+        snapshots_to_restate: t.Dict[SnapshotId, t.Tuple[SnapshotTableInfo, Interval]] = {}
 
         for env in self.state_sync.get_environments():
             keyed_snapshots = {s.name: s.table_info for s in env.snapshots}
@@ -480,10 +480,31 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                     if x not in disable_restatement_models
                 ]
                 snapshots_to_restate.update(
-                    {(keyed_snapshots[a], intervals) for a in affected_snapshot_names}
+                    {
+                        keyed_snapshots[a].snapshot_id: (keyed_snapshots[a], intervals)
+                        for a in affected_snapshot_names
+                    }
                 )
 
-        return snapshots_to_restate
+        # for any affected full_history_restatement_only snapshots, we need to widen the intervals being restated to
+        # include the whole time range for that snapshot. This requires a call to state to load the full snapshot record,
+        # so we only do it if necessary
+        if full_history_restatement_snapshot_ids := [
+            s_id for s_id, s in snapshots_to_restate.items() if s[0].full_history_restatement_only
+        ]:
+            full_snapshots = self.state_sync.get_snapshots(full_history_restatement_snapshot_ids)
+
+            for full_snapshot_id, full_snapshot in full_snapshots.items():
+                _, original_intervals = snapshots_to_restate[full_snapshot_id]
+                original_start, original_end = original_intervals
+
+                # get_removal_interval() widens intervals if necessary
+                new_intervals = full_snapshot.get_removal_interval(
+                    start=original_start, end=original_end
+                )
+                snapshots_to_restate[full_snapshot_id] = (full_snapshot.table_info, new_intervals)
+
+        return set(snapshots_to_restate.values())
 
 
 class BaseAirflowPlanEvaluator(PlanEvaluator):
