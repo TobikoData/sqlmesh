@@ -4,7 +4,6 @@ import ast
 import dis
 import importlib
 import inspect
-import linecache
 import os
 import re
 import sys
@@ -15,14 +14,17 @@ from enum import Enum
 from numbers import Number
 from pathlib import Path
 
-from astor import to_source
 
 from sqlmesh.core import constants as c
 from sqlmesh.utils import format_exception, unique
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
 
-IGNORE_DECORATORS = {"macro", "model", "signal"}
+IGNORED_DECORATORS = {"macro", "model", "signal"}
+IGNORED_DECORATOR_CALL_REGEX = re.compile(
+    rf'(?s)@({"|".join(IGNORED_DECORATORS)})\s*\(.*?\)(\s|#.*?\n)*def'
+)
+
 SERIALIZABLE_CALLABLES = (type, types.FunctionType)
 LITERALS = (Number, str, bytes, tuple, list, dict, set, bool)
 
@@ -100,40 +102,6 @@ def func_globals(func: t.Callable) -> t.Dict[str, t.Any]:
     return variables
 
 
-class ClassFoundException(Exception):
-    pass
-
-
-class _ClassFinder(ast.NodeVisitor):
-    def __init__(self, qualname: str) -> None:
-        self.stack: t.List[str] = []
-        self.qualname = qualname
-
-    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
-        self.stack.append(node.name)
-        self.stack.append("<locals>")
-        self.generic_visit(node)
-        self.stack.pop()
-        self.stack.pop()
-
-    visit_AsyncFunctionDef = visit_FunctionDef  # type: ignore
-
-    def visit_ClassDef(self, node: ast.ClassDef) -> None:
-        self.stack.append(node.name)
-        if self.qualname == ".".join(self.stack):
-            # Return the decorator for the class if present
-            if node.decorator_list:
-                line_number = node.decorator_list[0].lineno
-            else:
-                line_number = node.lineno
-
-            # decrement by one since lines starts with indexing by zero
-            line_number -= 1
-            raise ClassFoundException(line_number)
-        self.generic_visit(node)
-        self.stack.pop()
-
-
 class _DecoratorDependencyFinder(ast.NodeVisitor):
     def __init__(self) -> None:
         self.dependencies: t.List[str] = []
@@ -149,7 +117,7 @@ class _DecoratorDependencyFinder(ast.NodeVisitor):
                 else:
                     continue
 
-                if dep in IGNORE_DECORATORS:
+                if dep in IGNORED_DECORATORS:
                     dependencies = []
                     break
 
@@ -166,53 +134,9 @@ class _DecoratorDependencyFinder(ast.NodeVisitor):
     visit_AsyncFunctionDef = visit_FunctionDef  # type: ignore
 
 
-def getsource(obj: t.Any) -> str:
-    """Get the source of a function or class.
-
-    inspect.getsource doesn't find decorators in python < 3.9
-    https://github.com/python/cpython/commit/696136b993e11b37c4f34d729a0375e5ad544ade
-    """
-    path = inspect.getsourcefile(obj)
-    if path:
-        module = inspect.getmodule(obj, path)
-
-        if module:
-            lines = linecache.getlines(path, module.__dict__)
-        else:
-            lines = linecache.getlines(path)
-
-        def join_source(lnum: int) -> str:
-            return "".join(inspect.getblock(lines[lnum:]))
-
-        if inspect.isclass(obj):
-            qualname = obj.__qualname__
-            source = "".join(lines)
-            tree = ast.parse(source)
-            class_finder = _ClassFinder(qualname)
-            try:
-                class_finder.visit(tree)
-            except ClassFoundException as e:
-                return join_source(e.args[0])
-        elif inspect.isfunction(obj):
-            obj = obj.__code__
-            if hasattr(obj, "co_firstlineno"):
-                lnum = obj.co_firstlineno - 1
-                pat = re.compile(r"^(\s*def\s)|(\s*async\s+def\s)|(.*(?<!\w)lambda(:|\s))|^(\s*@)")
-                while lnum > 0:
-                    try:
-                        line = lines[lnum]
-                    except IndexError:
-                        raise OSError("lineno is out of bounds")
-                    if pat.match(line):
-                        break
-                    lnum = lnum - 1
-                return join_source(lnum)
-    raise SQLMeshError(f"Cannot find source for {obj}")
-
-
 def parse_source(func: t.Callable) -> ast.Module:
     """Parse a function and returns an ast node."""
-    return ast.parse(textwrap.dedent(getsource(func)))
+    return ast.parse(textwrap.dedent(inspect.getsource(func)))
 
 
 def _decorator_name(decorator: ast.expr) -> str:
@@ -234,33 +158,14 @@ def decorator_vars(func: t.Callable, root_node: t.Optional[ast.Module] = None) -
     return unique(finder.dependencies)
 
 
-def normalize_source(obj: t.Any) -> str:
-    """Rewrites an object's source with formatting and doc strings removed by using Python ast.
-
-    Args:
-        obj: The object to fetch source from and convert to a string.
-
-    Returns:
-        A string representation of the normalized function.
+def remove_ignored_decorators(source: str) -> str:
     """
-    root_node = parse_source(obj)
+    Removes decorator calls like @model(...) from the Python source code.
 
-    for node in ast.walk(root_node):
-        if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
-            for decorator in node.decorator_list:
-                if _decorator_name(decorator) in IGNORE_DECORATORS:
-                    node.decorator_list.remove(decorator)
-
-            # remove docstrings
-            body = node.body
-            if body and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Str):
-                node.body = body[1:]
-
-            # remove function return type annotation
-            if isinstance(node, ast.FunctionDef):
-                node.returns = None
-
-    return to_source(root_node).strip()
+    We do this because we don't need to serialize the decorator or any value within its argument
+    list when hydrating the python environment; we only need the function definition itself.
+    """
+    return IGNORED_DECORATOR_CALL_REGEX.sub("def", source)
 
 
 def build_env(
@@ -447,7 +352,7 @@ def serialize_env(env: t.Dict[str, t.Any], path: Path) -> t.Dict[str, Executable
             if relative_obj_file_path:
                 serialized[k] = Executable(
                     name=name,
-                    payload=normalize_source(v),
+                    payload=remove_ignored_decorators(inspect.getsource(v).strip()),
                     kind=ExecutableKind.DEFINITION,
                     # Do `as_posix` to serialize windows path back to POSIX
                     path=t.cast(Path, file_path).relative_to(path.absolute()).as_posix(),
