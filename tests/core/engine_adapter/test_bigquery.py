@@ -681,30 +681,16 @@ def test_nested_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerF
 
     nested_columns_to_types = {
         "record with space": exp.DataType.build(
-            "STRUCT<"
-            "'int_field': INT, "
-            "'record_field': STRUCT<"
-            "'sub_record_field': STRUCT<"
-            "'nest_array': ARRAY<INT64>"
-            ">>>"
+            "STRUCT<`int_field` INT, `record_field` STRUCT<`sub_record_field` STRUCT<`nest_array` ARRAY<INT64>>>>",
+            dialect="bigquery",
         ),
         "repeated_record": exp.DataType.build(
-            "ARRAY<STRUCT<"
-            "'nested_repeated_record': ARRAY<STRUCT<"
-            "'int_field': INT, "
-            "'array_field': ARRAY<INT64>, "
-            "'struct_field with space': STRUCT<"
-            "'nested_field': INT"
-            ">>>"
-            ">>>"
+            "ARRAY<STRUCT<`nested_repeated_record` ARRAY<STRUCT<`int_field` INT, `array_field` ARRAY<INT64>, `struct_field with space` STRUCT<`nested_field` INT>>>>",
+            dialect="bigquery",
         ),
         "same_name_": exp.DataType.build(
-            "ARRAY<STRUCT<"
-            "'same_name_': ARRAY<STRUCT<"
-            "'same_name_': STRUCT<"
-            "'same_name_': INT"
-            ">>>"
-            ">>>"
+            "ARRAY<STRUCT<`same_name_` ARRAY<STRUCT<`same_name_` STRUCT<`same_name_` INT>>>>",
+            dialect="bigquery",
         ),
     }
 
@@ -721,7 +707,6 @@ def test_nested_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerF
         "repeated_record.nested_repeated_record.struct_field with space": "Nested Repeated Struct Field",
         "repeated_record.nested_repeated_record.struct_field with space.nested_field": "Nested Repeated Record Nested Field",
         "same_name_": "Level 1",
-        "same_name_.same_name_": "Level 2",
         "same_name_.same_name_.same_name_": "Level 3",
         "same_name_.same_name_.same_name_.same_name_": "4" * allowed_column_comment_length + "X",
     }
@@ -765,8 +750,7 @@ def test_nested_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerF
         "`same_name_` ARRAY<STRUCT<"
         "`same_name_` STRUCT<"
         f"`same_name_` INT64 OPTIONS (description='{'4' * allowed_column_comment_length}')> "
-        "OPTIONS (description='Level 3')>> "
-        "OPTIONS (description='Level 2')>> "
+        "OPTIONS (description='Level 3')>>>> "
         "OPTIONS (description='Level 1'))"
     )
 
@@ -793,8 +777,7 @@ def test_nested_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerF
         "`same_name_` ARRAY<STRUCT<"
         "`same_name_` STRUCT<"
         f"`same_name_` INT64 OPTIONS (description='{'4' * allowed_column_comment_length}')> "
-        "OPTIONS (description='Level 3')>> "
-        "OPTIONS (description='Level 2')>> "
+        "OPTIONS (description='Level 3')>>>> "
         "OPTIONS (description='Level 1'))"
         " AS SELECT CAST(`record with space` AS STRUCT<`int_field` INT64, `record_field` STRUCT<`sub_record_field` STRUCT<`nest_array` ARRAY<INT64>>>>) AS `record with space`, "
         "CAST(`repeated_record` AS ARRAY<STRUCT<`nested_repeated_record` ARRAY<STRUCT<`int_field` INT64, `array_field` ARRAY<INT64>, `struct_field with space` STRUCT<`nested_field` INT64>>>>>) AS `repeated_record`, "

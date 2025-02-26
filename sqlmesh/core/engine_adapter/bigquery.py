@@ -802,7 +802,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
         ) -> exp.DataType:
             column_expressions = []
             for column_def in col_type.expressions:
-                # The is expected to always be true, but this check is included as a
+                # This is expected to  be true, but this check is included as a
                 # precautionary measure in case of an unexpected edge case
                 if isinstance(column_def, exp.ColumnDef):
                     column = self._build_column_def(
