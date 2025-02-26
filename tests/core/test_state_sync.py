@@ -106,7 +106,7 @@ def promote_snapshots(
 
 
 def delete_versions(state_sync: EngineAdapterStateSync) -> None:
-    state_sync.engine_adapter.drop_table(state_sync.versions_table)
+    state_sync.engine_adapter.drop_table(state_sync.version_state.versions_table)
 
 
 def test_push_snapshots(
@@ -2053,7 +2053,7 @@ def test_version_schema(state_sync: EngineAdapterStateSync, tmp_path) -> None:
     state_sync.migrate(default_catalog=None)
 
     # migration version is behind, always raise
-    state_sync._update_versions(schema_version=SCHEMA_VERSION + 1)
+    state_sync.version_state.update_versions(schema_version=SCHEMA_VERSION + 1)
     error = (
         rf"SQLMesh \(local\) is using version '{SCHEMA_VERSION}' which is behind '{SCHEMA_VERSION + 1}' \(remote\). "
         rf"""Please upgrade SQLMesh \('pip install --upgrade "sqlmesh=={SQLMESH_VERSION}"' command\)."""
@@ -2066,7 +2066,7 @@ def test_version_schema(state_sync: EngineAdapterStateSync, tmp_path) -> None:
     state_sync.get_versions(validate=False)
 
     # migration version is ahead, only raise when validate is true
-    state_sync._update_versions(schema_version=SCHEMA_VERSION - 1)
+    state_sync.version_state.update_versions(schema_version=SCHEMA_VERSION - 1)
     with pytest.raises(
         SQLMeshError,
         match=rf"SQLMesh \(local\) is using version '{SCHEMA_VERSION}' which is ahead of '{SCHEMA_VERSION - 1}'",
@@ -2087,7 +2087,7 @@ def test_version_sqlmesh(state_sync: EngineAdapterStateSync) -> None:
         else f"{int(patch) + 1}"
     )
     sqlmesh_version_patch_bump = f"{major}.{minor}.{new_patch}"
-    state_sync._update_versions(sqlmesh_version=sqlmesh_version_patch_bump)
+    state_sync.version_state.update_versions(sqlmesh_version=sqlmesh_version_patch_bump)
     state_sync.get_versions(validate=False)
 
     # sqlmesh version is behind
@@ -2096,7 +2096,7 @@ def test_version_sqlmesh(state_sync: EngineAdapterStateSync) -> None:
         rf"SQLMesh \(local\) is using version '{SQLMESH_VERSION}' which is behind '{sqlmesh_version_minor_bump}' \(remote\). "
         rf"""Please upgrade SQLMesh \('pip install --upgrade "sqlmesh=={sqlmesh_version_minor_bump}"' command\)."""
     )
-    state_sync._update_versions(sqlmesh_version=sqlmesh_version_minor_bump)
+    state_sync.version_state.update_versions(sqlmesh_version=sqlmesh_version_minor_bump)
     with pytest.raises(SQLMeshError, match=error):
         state_sync.get_versions()
     state_sync.get_versions(validate=False)
@@ -2104,7 +2104,7 @@ def test_version_sqlmesh(state_sync: EngineAdapterStateSync) -> None:
     # sqlmesh version is ahead
     sqlmesh_version_minor_decrease = f"{major}.{int(minor) - 1}.{patch}"
     error = rf"SQLMesh \(local\) is using version '{SQLMESH_VERSION}' which is ahead of '{sqlmesh_version_minor_decrease}'"
-    state_sync._update_versions(sqlmesh_version=sqlmesh_version_minor_decrease)
+    state_sync.version_state.update_versions(sqlmesh_version=sqlmesh_version_minor_decrease)
     with pytest.raises(SQLMeshError, match=error):
         state_sync.get_versions()
     state_sync.get_versions(validate=False)
@@ -2114,7 +2114,7 @@ def test_version_sqlglot(state_sync: EngineAdapterStateSync) -> None:
     # patch version sqlglot doesn't matter
     major, minor, patch, *_ = SQLGLOT_VERSION.split(".")
     sqlglot_version = f"{major}.{minor}.{int(patch) + 1}"
-    state_sync._update_versions(sqlglot_version=sqlglot_version)
+    state_sync.version_state.update_versions(sqlglot_version=sqlglot_version)
     state_sync.get_versions(validate=False)
 
     # sqlglot version is behind
@@ -2123,7 +2123,7 @@ def test_version_sqlglot(state_sync: EngineAdapterStateSync) -> None:
         rf"SQLGlot \(local\) is using version '{SQLGLOT_VERSION}' which is behind '{sqlglot_version}' \(remote\). "
         rf"""Please upgrade SQLGlot \('pip install --upgrade "sqlglot=={sqlglot_version}"' command\)."""
     )
-    state_sync._update_versions(sqlglot_version=sqlglot_version)
+    state_sync.version_state.update_versions(sqlglot_version=sqlglot_version)
     with pytest.raises(SQLMeshError, match=error):
         state_sync.get_versions()
     state_sync.get_versions(validate=False)
@@ -2131,7 +2131,7 @@ def test_version_sqlglot(state_sync: EngineAdapterStateSync) -> None:
     # sqlglot version is ahead
     sqlglot_version = f"{major}.{int(minor) - 1}.{patch}"
     error = rf"SQLGlot \(local\) is using version '{SQLGLOT_VERSION}' which is ahead of '{sqlglot_version}'"
-    state_sync._update_versions(sqlglot_version=sqlglot_version)
+    state_sync.version_state.update_versions(sqlglot_version=sqlglot_version)
     with pytest.raises(SQLMeshError, match=error):
         state_sync.get_versions()
     state_sync.get_versions(validate=False)
@@ -2221,7 +2221,7 @@ def test_first_migration_failure(duck_conn, mocker: MockerFixture, tmp_path) -> 
     assert not state_sync.engine_adapter.table_exists(
         state_sync.environment_state.environments_table
     )
-    assert not state_sync.engine_adapter.table_exists(state_sync.versions_table)
+    assert not state_sync.engine_adapter.table_exists(state_sync.version_state.versions_table)
     assert not state_sync.engine_adapter.table_exists(state_sync.interval_state.intervals_table)
 
 

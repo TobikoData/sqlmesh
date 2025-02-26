@@ -252,11 +252,8 @@ class StateReader(abc.ABC):
         return versions
 
     @abc.abstractmethod
-    def _get_versions(self, lock_for_update: bool = False) -> Versions:
+    def _get_versions(self) -> Versions:
         """Queries the store to get the current versions of SQLMesh and deps.
-
-        Args:
-            lock_for_update: Whether or not the usage of this method plans to update the row.
 
         Returns:
             The versions object.

@@ -25,10 +25,8 @@ from copy import deepcopy
 from pathlib import Path
 from datetime import datetime
 
-import pandas as pd
 from sqlglot import __version__ as SQLGLOT_VERSION
 from sqlglot import exp
-from sqlglot.helper import seq_get
 
 from sqlmesh.core import analytics
 from sqlmesh.core import constants as c
@@ -55,7 +53,6 @@ from sqlmesh.core.snapshot.definition import (
 )
 from sqlmesh.core.state_sync.base import (
     MIGRATIONS,
-    SCHEMA_VERSION,
     PromotionResult,
     StateSync,
     Versions,
@@ -64,11 +61,12 @@ from sqlmesh.core.state_sync.common import transactional
 from sqlmesh.core.state_sync.engine_adapter.interval import IntervalState
 from sqlmesh.core.state_sync.engine_adapter.environment import EnvironmentState
 from sqlmesh.core.state_sync.engine_adapter.snapshot import SnapshotState
+from sqlmesh.core.state_sync.engine_adapter.version import VersionState
+from sqlmesh.core.state_sync.engine_adapter.utils import snapshot_id_filter, SQLMESH_VERSION
 from sqlmesh.utils import major_minor
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import TimeLike, now_timestamp, to_timestamp
 from sqlmesh.utils.errors import ConflictingPlanError, SQLMeshError
-from sqlmesh.utils.migration import index_text_type
 
 logger = logging.getLogger(__name__)
 
@@ -78,14 +76,6 @@ T = t.TypeVar("T")
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import TableName
-
-try:
-    # We can't import directly from the root package due to circular dependency
-    from sqlmesh._version import __version__ as SQLMESH_VERSION  # type: ignore
-except ImportError:
-    logger.error(
-        'Unable to set __version__, run "pip install -e ." or "python setup.py develop" first.'
-    )
 
 
 class EngineAdapterStateSync(StateSync):
@@ -116,19 +106,12 @@ class EngineAdapterStateSync(StateSync):
         self.snapshot_state = SnapshotState(
             engine_adapter, schema=schema, context_path=context_path
         )
+        self.version_state = VersionState(engine_adapter, schema=schema)
         # Make sure that if an empty string is provided that we treat it as None
         self.schema = schema or None
         self.engine_adapter = engine_adapter
         self.console = console or get_console()
         self.plan_dags_table = exp.table_("_plan_dags", db=self.schema)
-        self.versions_table = exp.table_("_versions", db=self.schema)
-
-        index_type = index_text_type(engine_adapter.dialect)
-        self._version_columns_to_types = {
-            "schema_version": exp.DataType.build("int"),
-            "sqlglot_version": exp.DataType.build(index_type),
-            "sqlmesh_version": exp.DataType.build(index_type),
-        }
 
     def _fetchone(self, query: t.Union[exp.Expression, str]) -> t.Optional[t.Tuple]:
         return self.engine_adapter.fetchone(
@@ -173,7 +156,7 @@ class EngineAdapterStateSync(StateSync):
 
         snapshots = snapshots_by_id.values()
         if snapshots:
-            self.snapshot_state.push_snapshots(snapshots)
+            self._push_snapshots(snapshots)
 
     @transactional()
     def promote(
@@ -271,49 +254,6 @@ class EngineAdapterStateSync(StateSync):
             ),
         )
 
-    def _ensure_no_gaps(
-        self,
-        target_snapshots: t.Iterable[Snapshot],
-        target_environment: Environment,
-        snapshot_names: t.Optional[t.Set[str]],
-    ) -> None:
-        target_snapshots_by_name = {s.name: s for s in target_snapshots}
-
-        changed_version_prev_snapshots_by_name = {
-            s.name: s
-            for s in target_environment.snapshots
-            if s.name in target_snapshots_by_name
-            and target_snapshots_by_name[s.name].version != s.version
-        }
-
-        prev_snapshots = self.get_snapshots(
-            changed_version_prev_snapshots_by_name.values()
-        ).values()
-        cache: t.Dict[str, datetime] = {}
-
-        for prev_snapshot in prev_snapshots:
-            target_snapshot = target_snapshots_by_name[prev_snapshot.name]
-            if (
-                (snapshot_names is None or prev_snapshot.name in snapshot_names)
-                and target_snapshot.is_incremental
-                and prev_snapshot.is_incremental
-                and prev_snapshot.intervals
-            ):
-                start = to_timestamp(
-                    start_date(target_snapshot, target_snapshots_by_name.values(), cache)
-                )
-                end = prev_snapshot.intervals[-1][1]
-
-                if start < end:
-                    missing_intervals = target_snapshot.missing_intervals(
-                        start, end, end_bounded=True
-                    )
-
-                    if missing_intervals:
-                        raise SQLMeshError(
-                            f"Detected gaps in snapshot {target_snapshot.snapshot_id}: {missing_intervals}"
-                        )
-
     @transactional()
     def finalize(self, environment: Environment) -> None:
         """Finalize the target environment, indicating that this environment has been
@@ -329,28 +269,6 @@ class EngineAdapterStateSync(StateSync):
         self, snapshots: t.Collection[SnapshotInfoLike], unpaused_dt: TimeLike
     ) -> None:
         self.snapshot_state.unpause_snapshots(snapshots, unpaused_dt, self.interval_state)
-
-    def _update_versions(
-        self,
-        schema_version: int = SCHEMA_VERSION,
-        sqlglot_version: str = SQLGLOT_VERSION,
-        sqlmesh_version: str = SQLMESH_VERSION,
-    ) -> None:
-        self.engine_adapter.delete_from(self.versions_table, "TRUE")
-
-        self.engine_adapter.insert_append(
-            self.versions_table,
-            pd.DataFrame(
-                [
-                    {
-                        "schema_version": schema_version,
-                        "sqlglot_version": sqlglot_version,
-                        "sqlmesh_version": sqlmesh_version,
-                    }
-                ]
-            ),
-            columns_to_types=self._version_columns_to_types,
-        )
 
     def invalidate_environment(self, name: str) -> None:
         self.environment_state.invalidate_environment(name)
@@ -385,7 +303,7 @@ class EngineAdapterStateSync(StateSync):
             self.environment_state.environments_table,
             self.interval_state.intervals_table,
             self.plan_dags_table,
-            self.versions_table,
+            self.version_state.versions_table,
         ):
             self.engine_adapter.drop_table(table)
         self.snapshot_state.clear_cache()
@@ -432,24 +350,6 @@ class EngineAdapterStateSync(StateSync):
         intervals = self.interval_state.get_snapshot_intervals(snapshots.values())
         Snapshot.hydrate_with_intervals_by_version(snapshots.values(), intervals)
         return snapshots
-
-    def _get_versions(self, lock_for_update: bool = False) -> Versions:
-        no_version = Versions()
-
-        if not self.engine_adapter.table_exists(self.versions_table):
-            return no_version
-
-        query = exp.select("*").from_(self.versions_table)
-        if lock_for_update:
-            query.lock(copy=False)
-
-        row = self._fetchone(query)
-        if not row:
-            return no_version
-
-        return Versions(
-            schema_version=row[0], sqlglot_version=row[1], sqlmesh_version=seq_get(row, 2)
-        )
 
     @transactional()
     def add_interval(
@@ -507,6 +407,9 @@ class EngineAdapterStateSync(StateSync):
     def close(self) -> None:
         self.engine_adapter.close()
 
+    def _get_versions(self) -> Versions:
+        return self.version_state.get_versions()
+
     def _restore_table(
         self,
         table_name: TableName,
@@ -540,7 +443,7 @@ class EngineAdapterStateSync(StateSync):
                 self._migrate_rows(promoted_snapshots_only)
                 # Cleanup plan DAGs since we currently don't migrate snapshot records that are in there.
                 self.engine_adapter.delete_from(self.plan_dags_table, "TRUE")
-            self._update_versions()
+            self.version_state.update_versions()
 
             analytics.collector.on_migration_end(
                 from_sqlmesh_version=versions.sqlmesh_version,
@@ -572,7 +475,7 @@ class EngineAdapterStateSync(StateSync):
         tables = (
             self.snapshot_state.snapshots_table,
             self.environment_state.environments_table,
-            self.versions_table,
+            self.version_state.versions_table,
         )
         optional_tables = (
             self.interval_state.intervals_table,
@@ -606,7 +509,7 @@ class EngineAdapterStateSync(StateSync):
         for table in (
             self.snapshot_state.snapshots_table,
             self.environment_state.environments_table,
-            self.versions_table,
+            self.version_state.versions_table,
             self.interval_state.intervals_table,
             self.plan_dags_table,
             self.snapshot_state.auto_restatements_table,
@@ -723,7 +626,7 @@ class EngineAdapterStateSync(StateSync):
             ]
             if new_snapshots_to_push:
                 logger.info("Pushing %s migrated snapshots", len(new_snapshots_to_push))
-                self.snapshot_state.push_snapshots(new_snapshots_to_push)
+                self._push_snapshots(new_snapshots_to_push)
             new_snapshots.clear()
             snapshot_id_mapping.clear()
 
@@ -861,41 +764,59 @@ class EngineAdapterStateSync(StateSync):
         self,
         snapshot_ids: t.Iterable[SnapshotIdLike],
         alias: t.Optional[str] = None,
-        batch_size: t.Optional[int] = None,
     ) -> t.Iterator[exp.Condition]:
-        name_identifiers = sorted(
-            {(snapshot_id.name, snapshot_id.identifier) for snapshot_id in snapshot_ids}
+        yield from snapshot_id_filter(
+            self.engine_adapter,
+            snapshot_ids,
+            alias=alias,
+            batch_size=self.SNAPSHOT_BATCH_SIZE,
         )
-        batches = self._batches(name_identifiers, batch_size=batch_size)
 
-        if not name_identifiers:
-            yield exp.false()
-        elif self.engine_adapter.SUPPORTS_TUPLE_IN:
-            for identifiers in batches:
-                yield t.cast(
-                    exp.Tuple,
-                    exp.convert(
-                        (
-                            exp.column("name", table=alias),
-                            exp.column("identifier", table=alias),
-                        )
-                    ),
-                ).isin(*identifiers)
-        else:
-            for identifiers in batches:
-                yield exp.or_(
-                    *[
-                        exp.and_(
-                            exp.column("name", table=alias).eq(name),
-                            exp.column("identifier", table=alias).eq(identifier),
-                        )
-                        for name, identifier in identifiers
-                    ]
+    def _push_snapshots(self, snapshots: t.Iterable[Snapshot], overwrite: bool = False) -> None:
+        self.snapshot_state.push_snapshots(snapshots, overwrite=overwrite)
+
+    def _ensure_no_gaps(
+        self,
+        target_snapshots: t.Iterable[Snapshot],
+        target_environment: Environment,
+        snapshot_names: t.Optional[t.Set[str]],
+    ) -> None:
+        target_snapshots_by_name = {s.name: s for s in target_snapshots}
+
+        changed_version_prev_snapshots_by_name = {
+            s.name: s
+            for s in target_environment.snapshots
+            if s.name in target_snapshots_by_name
+            and target_snapshots_by_name[s.name].version != s.version
+        }
+
+        prev_snapshots = self.get_snapshots(
+            changed_version_prev_snapshots_by_name.values()
+        ).values()
+        cache: t.Dict[str, datetime] = {}
+
+        for prev_snapshot in prev_snapshots:
+            target_snapshot = target_snapshots_by_name[prev_snapshot.name]
+            if (
+                (snapshot_names is None or prev_snapshot.name in snapshot_names)
+                and target_snapshot.is_incremental
+                and prev_snapshot.is_incremental
+                and prev_snapshot.intervals
+            ):
+                start = to_timestamp(
+                    start_date(target_snapshot, target_snapshots_by_name.values(), cache)
                 )
+                end = prev_snapshot.intervals[-1][1]
 
-    def _batches(self, l: t.List[T], batch_size: t.Optional[int] = None) -> t.List[t.List[T]]:
-        batch_size = batch_size or self.SNAPSHOT_BATCH_SIZE
-        return [l[i : i + batch_size] for i in range(0, len(l), batch_size)]
+                if start < end:
+                    missing_intervals = target_snapshot.missing_intervals(
+                        start, end, end_bounded=True
+                    )
+
+                    if missing_intervals:
+                        raise SQLMeshError(
+                            f"Detected gaps in snapshot {target_snapshot.snapshot_id}: {missing_intervals}"
+                        )
 
     @contextlib.contextmanager
     def _transaction(self) -> t.Iterator[None]:

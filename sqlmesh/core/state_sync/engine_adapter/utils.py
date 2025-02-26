@@ -1,10 +1,22 @@
 from __future__ import annotations
 
 import typing as t
+import logging
 
 from sqlglot import exp
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.snapshot import SnapshotIdLike, SnapshotNameVersionLike
+
+
+logger = logging.getLogger(__name__)
+
+try:
+    # We can't import directly from the root package due to circular dependency
+    from sqlmesh._version import __version__ as SQLMESH_VERSION  # noqa
+except ImportError:
+    logger.error(
+        'Unable to set __version__, run "pip install -e ." or "python setup.py develop" first.'
+    )
 
 
 T = t.TypeVar("T")
