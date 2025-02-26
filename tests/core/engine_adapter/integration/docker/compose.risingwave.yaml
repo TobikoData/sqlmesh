@@ -1,5 +1,5 @@
 services:
   risingwave:
-    image: risingwavelabs/risingwave:nightly-20250119
+    image: risingwavelabs/risingwave:nightly-20250225
     ports:
       - "4566:4566"
