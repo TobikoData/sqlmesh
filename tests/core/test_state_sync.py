@@ -1,4 +1,3 @@
-from dataclasses import asdict
 import json
 import logging
 import re
@@ -1077,12 +1076,13 @@ def test_delete_expired_environments(state_sync: EngineAdapterStateSync, make_sn
         expiration_ts=now_ts - 1000,
     )
 
-    statements = EnvironmentStatements(
-        before_all=["CREATE OR REPLACE TABLE table_1 AS SELECT 'a'"],
-        after_all=["CREATE OR REPLACE TABLE table_2 AS SELECT 'b'"],
-        python_env={},
-    )
-    environment_statements = json.dumps({"environment_statements": [asdict(statements)]})
+    environment_statements = [
+        EnvironmentStatements(
+            before_all=["CREATE OR REPLACE TABLE table_1 AS SELECT 'a'"],
+            after_all=["CREATE OR REPLACE TABLE table_2 AS SELECT 'b'"],
+            python_env={},
+        )
+    ]
 
     state_sync.promote(env_a, environment_statements=environment_statements)
 
@@ -1096,7 +1096,7 @@ def test_delete_expired_environments(state_sync: EngineAdapterStateSync, make_sn
     assert state_sync.get_environment(env_b.name) == env_b
 
     assert not state_sync.get_environment_statements(env_b.name)
-    assert state_sync.get_environment_statements(env_a.name) == [statements]
+    assert state_sync.get_environment_statements(env_a.name) == environment_statements
 
     deleted_environments = state_sync.delete_expired_environments()
     assert deleted_environments == [env_a]
@@ -2444,15 +2444,17 @@ def test_invalidate_environment(state_sync: EngineAdapterStateSync, make_snapsho
         previous_plan_id="test_plan_id",
         expiration_ts=original_expiration_ts,
     )
-    statements = EnvironmentStatements(
-        before_all=["CREATE OR REPLACE TABLE table_1 AS SELECT 'a'"],
-        after_all=["CREATE OR REPLACE TABLE table_2 AS SELECT 'b'"],
-        python_env={},
-    )
-    environment_statements = json.dumps({"environment_statements": [asdict(statements)]})
+    environment_statements = [
+        EnvironmentStatements(
+            before_all=["CREATE OR REPLACE TABLE table_1 AS SELECT 'a'"],
+            after_all=["CREATE OR REPLACE TABLE table_2 AS SELECT 'b'"],
+            python_env={},
+        )
+    ]
+
     state_sync.promote(env, environment_statements=environment_statements)
 
-    assert state_sync.get_environment_statements(env.name) == [statements]
+    assert state_sync.get_environment_statements(env.name) == environment_statements
 
     assert not state_sync.delete_expired_environments()
     state_sync.invalidate_environment("test_environment")
@@ -3465,16 +3467,16 @@ def test_update_environment_statements(state_sync: EngineAdapterStateSync):
         end_at="2022-01-01",
         plan_id="test_plan_id",
     )
-    statements = EnvironmentStatements(
-        before_all=["CREATE OR REPLACE TABLE table_1 AS SELECT 'a'"],
-        after_all=["CREATE OR REPLACE TABLE table_2 AS SELECT 'b'"],
-        python_env={},
-    )
+    environment_statements = [
+        EnvironmentStatements(
+            before_all=["CREATE OR REPLACE TABLE table_1 AS SELECT 'a'"],
+            after_all=["CREATE OR REPLACE TABLE table_2 AS SELECT 'b'"],
+            python_env={},
+        )
+    ]
 
-    environment_statements = json.dumps({"environment_statements": [asdict(statements)]})
-
-    state_sync._update_environment(environment=environment)
-    state_sync._update_environment_statements(
+    state_sync.environment_state.update_environment(environment=environment)
+    state_sync.environment_state.update_environment_statements(
         environment.name, environment.plan_id, environment_statements
     )
 
@@ -3486,19 +3488,19 @@ def test_update_environment_statements(state_sync: EngineAdapterStateSync):
         "CREATE OR REPLACE TABLE table_2 AS SELECT 'b'"
     ]
 
-    statements = EnvironmentStatements(
-        before_all=["CREATE OR REPLACE TABLE table_1 AS SELECT 'a'"],
-        after_all=[
-            "@grant_schema_usage()",
-            "@grant_select_privileges()",
-        ],
-        python_env={},
-    )
+    environment_statements = [
+        EnvironmentStatements(
+            before_all=["CREATE OR REPLACE TABLE table_1 AS SELECT 'a'"],
+            after_all=[
+                "@grant_schema_usage()",
+                "@grant_select_privileges()",
+            ],
+            python_env={},
+        )
+    ]
 
-    environment_statements = json.dumps({"environment_statements": [asdict(statements)]})
-
-    state_sync._update_environment(environment=environment)
-    state_sync._update_environment_statements(
+    state_sync.environment_state.update_environment(environment=environment)
+    state_sync.environment_state.update_environment_statements(
         environment.name, environment.plan_id, environment_statements
     )
 

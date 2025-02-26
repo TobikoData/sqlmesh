@@ -249,7 +249,7 @@ class HttpStateSync(StateSync):
         self,
         environment: Environment,
         no_gaps_snapshot_names: t.Optional[t.Set[str]] = None,
-        environment_statements: t.Optional[str] = None,
+        environment_statements: t.Optional[t.List[EnvironmentStatements]] = None,
     ) -> PromotionResult:
         """Update the environment to reflect the current state.
 

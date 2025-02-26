@@ -12,7 +12,7 @@ from sqlmesh.core.state_sync.db.utils import (
     fetchall,
     fetchone,
 )
-from sqlmesh.core.environment import Environment
+from sqlmesh.core.environment import Environment, EnvironmentStatements
 from sqlmesh.utils.migration import index_text_type, blob_text_type
 from sqlmesh.utils.date import now_timestamp, time_like_to_str
 from sqlmesh.utils.errors import SQLMeshError
@@ -29,6 +29,7 @@ class EnvironmentState:
     ):
         self.engine_adapter = engine_adapter
         self.environments_table = exp.table_("_environments", db=schema)
+        self.environment_statements_table = exp.table_("_environment_statements", db=schema)
 
         index_type = index_text_type(engine_adapter.dialect)
         blob_type = blob_text_type(engine_adapter.dialect)
@@ -50,6 +51,12 @@ class EnvironmentState:
             "requirements": exp.DataType.build(blob_type),
         }
 
+        self._environment_statements_columns_to_types = {
+            "environment_name": exp.DataType.build(index_type),
+            "plan_id": exp.DataType.build("text"),
+            "environment_statements": exp.DataType.build(blob_type),
+        }
+
     def update_environment(self, environment: Environment) -> None:
         """Updates the environment.
 
@@ -68,6 +75,35 @@ class EnvironmentState:
             self.environments_table,
             _environment_to_df(environment),
             columns_to_types=self._environment_columns_to_types,
+        )
+
+    def update_environment_statements(
+        self,
+        environment_name: str,
+        plan_id: str,
+        environment_statements: t.List[EnvironmentStatements],
+    ) -> None:
+        """Updates the environment's statements.
+
+        Args:
+            environment_name: The environment name
+            plan_id: The environment's plan ID
+            environment_statements: The environment statements
+
+        """
+
+        self.engine_adapter.delete_from(
+            self.environment_statements_table,
+            where=exp.EQ(
+                this=exp.column("environment_name"),
+                expression=exp.Literal.string(environment_name),
+            ),
+        )
+
+        self.engine_adapter.insert_append(
+            self.environment_statements_table,
+            _environment_statements_to_df(environment_name, plan_id, environment_statements),
+            columns_to_types=self._environment_statements_columns_to_types,
         )
 
     def invalidate_environment(self, name: str) -> None:
@@ -150,6 +186,16 @@ class EnvironmentState:
             where=filter_expr,
         )
 
+        # Delete the expired environments' corresponding environment statements
+        if expired_environments := [
+            exp.EQ(this=exp.column("environment_name"), expression=exp.Literal.string(env.name))
+            for env in environments
+        ]:
+            self.engine_adapter.delete_from(
+                self.environment_statements_table,
+                where=exp.or_(*expired_environments),
+            )
+
         return environments
 
     def get_environments(self) -> t.List[Environment]:
@@ -205,6 +251,40 @@ class EnvironmentState:
         env = self._environment_from_row(row)
         return env
 
+    def get_environment_statements(self, environment: str) -> t.List[EnvironmentStatements]:
+        """Fetches the environment's statements from the environment_statements table.
+        Args:
+            environment: The environment name
+
+        Returns:
+            A list of the environment statements.
+
+        """
+        query = (
+            exp.select(
+                exp.to_identifier("environment_statements"),
+            )
+            .from_(self.environment_statements_table)
+            .where(
+                exp.EQ(
+                    this=exp.column("environment_name"),
+                    expression=exp.Literal.string(environment),
+                )
+            )
+        )
+        result = fetchone(engine_adapter=self.engine_adapter, query=query)
+        if (
+            result
+            and (deserialized := json.loads(result[0]))
+            and (statements := deserialized.get("environment_statements", None))
+        ):
+            return [
+                EnvironmentStatements.parse_obj(environment_statements)
+                for environment_statements in statements
+            ]
+
+        return []
+
     def _environment_from_row(self, row: t.Tuple[str, ...]) -> Environment:
         return Environment(**{field: row[i] for i, field in enumerate(Environment.all_fields())})
 
@@ -251,6 +331,22 @@ def _environment_to_df(environment: Environment) -> pd.DataFrame:
                 ),
                 "normalize_name": environment.normalize_name,
                 "requirements": json.dumps(environment.requirements),
+            }
+        ]
+    )
+
+
+def _environment_statements_to_df(
+    environment_name: str, plan_id: str, environment_statements: t.List[EnvironmentStatements]
+) -> pd.DataFrame:
+    return pd.DataFrame(
+        [
+            {
+                "environment_name": environment_name,
+                "plan_id": plan_id,
+                "environment_statements": json.dumps(
+                    {"environment_statements": [e.to_dict() for e in environment_statements]}
+                ),
             }
         ]
     )

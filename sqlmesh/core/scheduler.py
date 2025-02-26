@@ -5,7 +5,8 @@ import typing as t
 from sqlglot import exp
 from sqlmesh.core import constants as c
 from sqlmesh.core.console import Console, get_console
-from sqlmesh.core.environment import EnvironmentNamingInfo
+from sqlmesh.core.engine_adapter.base import EngineAdapter
+from sqlmesh.core.environment import EnvironmentNamingInfo, EnvironmentStatements
 from sqlmesh.core.macros import RuntimeStage
 from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.notification_target import (
@@ -443,9 +444,15 @@ class Scheduler:
         snapshots_by_name = {snapshot.name: snapshot for snapshot in self.snapshots.values()}
 
         if is_run_command:
-            self.execute_environment_statements(
+            environment_statements = self.state_sync.get_environment_statements(
+                environment_naming_info.name
+            )
+            execute_environment_statements(
+                adapter=self.snapshot_evaluator.adapter,
+                environment_statements=environment_statements,
                 runtime_stage=RuntimeStage.BEFORE_ALL,
                 environment_naming_info=environment_naming_info,
+                default_catalog=self.default_catalog,
                 snapshots=snapshots_by_name,
                 start=start,
                 end=end,
@@ -493,9 +500,12 @@ class Scheduler:
                 )
         finally:
             if is_run_command:
-                self.execute_environment_statements(
+                execute_environment_statements(
+                    adapter=self.snapshot_evaluator.adapter,
+                    environment_statements=environment_statements,
                     runtime_stage=RuntimeStage.AFTER_ALL,
                     environment_naming_info=environment_naming_info,
+                    default_catalog=self.default_catalog,
                     snapshots=snapshots_by_name,
                     start=start,
                     end=end,
@@ -503,41 +513,6 @@ class Scheduler:
                 )
 
             self.state_sync.recycle()
-
-    def execute_environment_statements(
-        self,
-        runtime_stage: RuntimeStage,
-        environment_naming_info: EnvironmentNamingInfo,
-        snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
-        start: t.Optional[TimeLike] = None,
-        end: t.Optional[TimeLike] = None,
-        execution_time: t.Optional[TimeLike] = None,
-    ) -> None:
-        adapter = self.snapshot_evaluator.adapter
-        if (
-            environment_statements := self.state_sync.get_environment_statements(
-                environment_naming_info.name
-            )
-        ) and (
-            rendered_expressions := [
-                expr
-                for statements in environment_statements
-                for expr in render_statements(
-                    statements=getattr(statements, runtime_stage.value),
-                    dialect=adapter.dialect,
-                    default_catalog=self.default_catalog,
-                    python_env=statements.python_env,
-                    snapshots=snapshots,
-                    start=start,
-                    end=end,
-                    execution_time=execution_time,
-                    environment_naming_info=environment_naming_info,
-                )
-            ]
-        ):
-            with adapter.transaction():
-                for expr in rendered_expressions:
-                    adapter.execute(expr)
 
     def _dag(self, batches: SnapshotToIntervals) -> DAG[SchedulingUnit]:
         """Builds a DAG of snapshot intervals to be evaluated.
@@ -595,6 +570,37 @@ class Scheduler:
                         ],
                     )
         return dag
+
+
+def execute_environment_statements(
+    adapter: EngineAdapter,
+    environment_statements: t.List[EnvironmentStatements],
+    runtime_stage: RuntimeStage,
+    environment_naming_info: EnvironmentNamingInfo,
+    default_catalog: t.Optional[str] = None,
+    snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
+    start: t.Optional[TimeLike] = None,
+    end: t.Optional[TimeLike] = None,
+    execution_time: t.Optional[TimeLike] = None,
+) -> None:
+    if rendered_expressions := [
+        expr
+        for statements in environment_statements
+        for expr in render_statements(
+            statements=getattr(statements, runtime_stage.value),
+            dialect=adapter.dialect,
+            default_catalog=default_catalog,
+            python_env=statements.python_env,
+            snapshots=snapshots,
+            start=start,
+            end=end,
+            execution_time=execution_time,
+            environment_naming_info=environment_naming_info,
+        )
+    ]:
+        with adapter.transaction():
+            for expr in rendered_expressions:
+                adapter.execute(expr)
 
 
 def compute_interval_params(

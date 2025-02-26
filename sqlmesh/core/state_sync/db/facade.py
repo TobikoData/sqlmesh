@@ -26,7 +26,7 @@ from sqlglot import exp
 
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.engine_adapter import EngineAdapter
-from sqlmesh.core.environment import Environment
+from sqlmesh.core.environment import Environment, EnvironmentStatements
 from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotId,
@@ -146,6 +146,7 @@ class EngineAdapterStateSync(StateSync):
         self,
         environment: Environment,
         no_gaps_snapshot_names: t.Optional[t.Set[str]] = None,
+        environment_statements: t.Optional[t.List[EnvironmentStatements]] = None,
     ) -> PromotionResult:
         """Update the environment to reflect the current state.
 
@@ -224,6 +225,10 @@ class EngineAdapterStateSync(StateSync):
             added_table_infos -= set(existing_environment.promoted_snapshots)
 
         self.environment_state.update_environment(environment)
+        if environment_statements:
+            self.environment_state.update_environment_statements(
+                environment.name, environment.plan_id, environment_statements
+            )
 
         removed = {existing_table_infos[name] for name in missing_models}.union(
             views_that_changed_location
@@ -301,6 +306,9 @@ class EngineAdapterStateSync(StateSync):
 
     def get_environment(self, environment: str) -> t.Optional[Environment]:
         return self.environment_state.get_environment(environment)
+
+    def get_environment_statements(self, environment: str) -> t.List[EnvironmentStatements]:
+        return self.environment_state.get_environment_statements(environment)
 
     def get_environments(self) -> t.List[Environment]:
         """Fetches all environments.
