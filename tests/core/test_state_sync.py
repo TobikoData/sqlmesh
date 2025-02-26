@@ -143,7 +143,7 @@ def test_push_snapshots(
         snapshot_b.snapshot_id: snapshot_b,
     }
 
-    logger = logging.getLogger("sqlmesh.core.state_sync.engine_adapter.facade")
+    logger = logging.getLogger("sqlmesh.core.state_sync.db.facade")
     with patch.object(logger, "error") as mock_logger:
         state_sync.push_snapshots([snapshot_a])
         assert str({snapshot_a.snapshot_id}) == mock_logger.call_args[0][1]
@@ -1236,9 +1236,7 @@ def test_delete_expired_snapshots_promoted(
     env.snapshots_ = []
     state_sync.promote(env)
 
-    now_timestamp_mock = mocker.patch(
-        "sqlmesh.core.state_sync.engine_adapter.snapshot.now_timestamp"
-    )
+    now_timestamp_mock = mocker.patch("sqlmesh.core.state_sync.db.snapshot.now_timestamp")
     now_timestamp_mock.return_value = now_timestamp() + 11000
 
     assert state_sync.delete_expired_snapshots() == [
@@ -2151,10 +2149,10 @@ def test_migrate(state_sync: EngineAdapterStateSync, mocker: MockerFixture, tmp_
     from sqlmesh import __version__ as SQLMESH_VERSION
 
     migrate_rows_mock = mocker.patch(
-        "sqlmesh.core.state_sync.engine_adapter.migrator.StateMigrator._migrate_rows"
+        "sqlmesh.core.state_sync.db.migrator.StateMigrator._migrate_rows"
     )
     backup_state_mock = mocker.patch(
-        "sqlmesh.core.state_sync.engine_adapter.migrator.StateMigrator._backup_state"
+        "sqlmesh.core.state_sync.db.migrator.StateMigrator._backup_state"
     )
     state_sync.migrate(default_catalog=None)
     migrate_rows_mock.assert_not_called()
@@ -2353,7 +2351,7 @@ def test_restore_snapshots_table(state_sync: EngineAdapterStateSync) -> None:
     state_sync.engine_adapter.delete_from("sqlmesh._snapshots", "TRUE")
     snapshots_count = state_sync.engine_adapter.fetchone("select count(*) from sqlmesh._snapshots")
     assert snapshots_count == (0,)
-    state_sync._restore_table(
+    state_sync.migrator._restore_table(
         table_name="sqlmesh._snapshots",
         backup_table_name="sqlmesh._snapshots_backup",
     )

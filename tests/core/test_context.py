@@ -34,7 +34,7 @@ from sqlmesh.core.model import load_sql_based_model, model
 from sqlmesh.core.model.kind import ModelKindName
 from sqlmesh.core.plan import BuiltInPlanEvaluator, PlanBuilder
 from sqlmesh.core.state_sync.cache import CachingStateSync
-from sqlmesh.core.state_sync.engine_adapter import EngineAdapterStateSync
+from sqlmesh.core.state_sync.db import EngineAdapterStateSync
 from sqlmesh.utils.connection_pool import SingletonConnectionPool, ThreadLocalConnectionPool
 from sqlmesh.utils.date import (
     make_inclusive_end,

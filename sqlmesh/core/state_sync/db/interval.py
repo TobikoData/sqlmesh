@@ -7,7 +7,7 @@ import pandas as pd
 from sqlglot import exp
 
 from sqlmesh.core.engine_adapter import EngineAdapter
-from sqlmesh.core.state_sync.engine_adapter.utils import (
+from sqlmesh.core.state_sync.db.utils import (
     snapshot_name_version_filter,
     snapshot_id_filter,
     create_batches,

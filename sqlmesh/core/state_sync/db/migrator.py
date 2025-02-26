@@ -29,11 +29,11 @@ from sqlmesh.core.state_sync.base import (
     MIGRATIONS,
 )
 from sqlmesh.core.state_sync.base import StateSync
-from sqlmesh.core.state_sync.engine_adapter.environment import EnvironmentState
-from sqlmesh.core.state_sync.engine_adapter.interval import IntervalState
-from sqlmesh.core.state_sync.engine_adapter.snapshot import SnapshotState
-from sqlmesh.core.state_sync.engine_adapter.version import VersionState
-from sqlmesh.core.state_sync.engine_adapter.utils import (
+from sqlmesh.core.state_sync.db.environment import EnvironmentState
+from sqlmesh.core.state_sync.db.interval import IntervalState
+from sqlmesh.core.state_sync.db.snapshot import SnapshotState
+from sqlmesh.core.state_sync.db.version import VersionState
+from sqlmesh.core.state_sync.db.utils import (
     SQLMESH_VERSION,
     snapshot_id_filter,
     fetchall,
@@ -389,7 +389,7 @@ class StateMigrator:
         self.console.start_env_migration_progress(len(updated_environments))
 
         for environment in updated_environments:
-            self.environment_state.update_environment(environment)
+            self._update_environment(environment)
             self.console.update_env_migration_progress(1)
 
         if updated_prod_environment:
@@ -424,6 +424,9 @@ class StateMigrator:
             old_table_name=backup_table_name,
             new_table_name=table_name,
         )
+
+    def _update_environment(self, environment: Environment) -> None:
+        self.environment_state.update_environment(environment)
 
     def _push_snapshots(self, snapshots: t.Iterable[Snapshot]) -> None:
         self.snapshot_state.push_snapshots(snapshots)

@@ -11,7 +11,7 @@ from pydantic import Field
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.engine_adapter import EngineAdapter
-from sqlmesh.core.state_sync.engine_adapter.utils import (
+from sqlmesh.core.state_sync.db.utils import (
     snapshot_name_version_filter,
     snapshot_id_filter,
     fetchall,
@@ -39,7 +39,7 @@ from sqlmesh.utils.pydantic import PydanticModel
 from sqlmesh.utils import unique
 
 if t.TYPE_CHECKING:
-    from sqlmesh.core.state_sync.engine_adapter.interval import IntervalState
+    from sqlmesh.core.state_sync.db.interval import IntervalState
 
 
 logger = logging.getLogger(__name__)
@@ -409,13 +409,8 @@ class SnapshotState:
                 where=where,
             )
 
-    def _push_snapshots(self, snapshots: t.Iterable[Snapshot], overwrite: bool = False) -> None:
-        if overwrite:
-            snapshots = tuple(snapshots)
-            self.delete_snapshots(snapshots)
-
+    def _push_snapshots(self, snapshots: t.Iterable[Snapshot]) -> None:
         snapshots_to_store = []
-
         for snapshot in snapshots:
             if isinstance(snapshot.node, SeedModel):
                 seed_model = t.cast(SeedModel, snapshot.node)

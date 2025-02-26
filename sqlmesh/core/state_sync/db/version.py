@@ -9,7 +9,7 @@ from sqlglot import exp
 from sqlglot.helper import seq_get
 
 from sqlmesh.core.engine_adapter import EngineAdapter
-from sqlmesh.core.state_sync.engine_adapter.utils import (
+from sqlmesh.core.state_sync.db.utils import (
     fetchone,
     SQLMESH_VERSION,
 )

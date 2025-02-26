@@ -47,11 +47,11 @@ from sqlmesh.core.state_sync.base import (
     Versions,
 )
 from sqlmesh.core.state_sync.common import transactional
-from sqlmesh.core.state_sync.engine_adapter.interval import IntervalState
-from sqlmesh.core.state_sync.engine_adapter.environment import EnvironmentState
-from sqlmesh.core.state_sync.engine_adapter.snapshot import SnapshotState
-from sqlmesh.core.state_sync.engine_adapter.version import VersionState
-from sqlmesh.core.state_sync.engine_adapter.migrator import StateMigrator
+from sqlmesh.core.state_sync.db.interval import IntervalState
+from sqlmesh.core.state_sync.db.environment import EnvironmentState
+from sqlmesh.core.state_sync.db.snapshot import SnapshotState
+from sqlmesh.core.state_sync.db.version import VersionState
+from sqlmesh.core.state_sync.db.migrator import StateMigrator
 from sqlmesh.utils.date import TimeLike, to_timestamp
 from sqlmesh.utils.errors import ConflictingPlanError, SQLMeshError
 
@@ -62,7 +62,7 @@ T = t.TypeVar("T")
 
 
 if t.TYPE_CHECKING:
-    from sqlmesh.core._typing import TableName
+    pass
 
 
 class EngineAdapterStateSync(StateSync):
@@ -266,6 +266,7 @@ class EngineAdapterStateSync(StateSync):
         self.interval_state.cleanup_intervals(cleanup_targets, expired_snapshot_ids)
         return cleanup_targets
 
+    @transactional()
     def delete_expired_environments(self) -> t.List[Environment]:
         return self.environment_state.delete_expired_environments()
 
@@ -413,8 +414,8 @@ class EngineAdapterStateSync(StateSync):
     def state_type(self) -> str:
         return self.engine_adapter.dialect
 
-    def _push_snapshots(self, snapshots: t.Iterable[Snapshot], overwrite: bool = False) -> None:
-        self.snapshot_state.push_snapshots(snapshots, overwrite=overwrite)
+    def _push_snapshots(self, snapshots: t.Iterable[Snapshot]) -> None:
+        self.snapshot_state.push_snapshots(snapshots)
 
     def _get_versions(self) -> Versions:
         return self.version_state.get_versions()

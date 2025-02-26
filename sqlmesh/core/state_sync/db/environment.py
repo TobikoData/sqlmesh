@@ -8,7 +8,7 @@ from sqlglot import exp
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.engine_adapter import EngineAdapter
-from sqlmesh.core.state_sync.engine_adapter.utils import (
+from sqlmesh.core.state_sync.db.utils import (
     fetchall,
     fetchone,
 )
