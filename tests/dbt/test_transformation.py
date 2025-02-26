@@ -27,7 +27,7 @@ from sqlmesh.core.model import (
     ViewKind,
 )
 from sqlmesh.core.model.kind import SCDType2ByColumnKind, SCDType2ByTimeKind
-from sqlmesh.core.state_sync.engine_adapter.facade import _snapshot_to_json
+from sqlmesh.core.state_sync.engine_adapter.snapshot import _snapshot_to_json
 from sqlmesh.dbt.builtin import _relation_info_to_relation
 from sqlmesh.dbt.column import (
     ColumnConfig,

@@ -26,10 +26,9 @@ class EnvironmentState:
         self,
         engine_adapter: EngineAdapter,
         schema: t.Optional[str] = None,
-        table_name: t.Optional[str] = None,
     ):
         self.engine_adapter = engine_adapter
-        self.environments_table = exp.table_(table_name or "_environments", db=schema)
+        self.environments_table = exp.table_("_environments", db=schema)
 
         index_type = index_text_type(engine_adapter.dialect)
         blob_type = blob_text_type(engine_adapter.dialect)

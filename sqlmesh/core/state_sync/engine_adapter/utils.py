@@ -10,14 +10,11 @@ from sqlmesh.core.snapshot import SnapshotIdLike, SnapshotNameVersionLike
 T = t.TypeVar("T")
 
 
-DEFAULT_BATCH_SIZE = 1000
-
-
 def snapshot_id_filter(
     engine_adapter: EngineAdapter,
     snapshot_ids: t.Iterable[SnapshotIdLike],
+    batch_size: int,
     alias: t.Optional[str] = None,
-    batch_size: int = DEFAULT_BATCH_SIZE,
 ) -> t.Iterator[exp.Condition]:
     name_identifiers = sorted(
         {(snapshot_id.name, snapshot_id.identifier) for snapshot_id in snapshot_ids}
@@ -53,10 +50,10 @@ def snapshot_id_filter(
 def snapshot_name_version_filter(
     engine_adapter: EngineAdapter,
     snapshot_name_versions: t.Iterable[SnapshotNameVersionLike],
+    batch_size: int,
     version_column_name: str = "version",
     alias: t.Optional[str] = "snapshots",
     column_prefix: t.Optional[str] = None,
-    batch_size: int = DEFAULT_BATCH_SIZE,
 ) -> t.Iterator[exp.Condition]:
     name_versions = sorted({(s.name, s.version) for s in snapshot_name_versions})
     batches = create_batches(name_versions, batch_size=batch_size)
@@ -95,7 +92,7 @@ def snapshot_name_version_filter(
             )
 
 
-def create_batches(l: t.List[T], batch_size: int = 1000) -> t.List[t.List[T]]:
+def create_batches(l: t.List[T], batch_size: int) -> t.List[t.List[T]]:
     return [l[i : i + batch_size] for i in range(0, len(l), batch_size)]
 
 

@@ -34,6 +34,7 @@ logger = logging.getLogger(__name__)
 
 class IntervalState:
     INTERVAL_BATCH_SIZE = 1000
+    SNAPSHOT_BATCH_SIZE = 1000
 
     def __init__(
         self,
@@ -120,7 +121,10 @@ class IntervalState:
             name_version_mapping = {s.name_version: interval for s, interval in snapshot_intervals}
             all_snapshots = []
             for where in snapshot_name_version_filter(
-                self.engine_adapter, name_version_mapping, alias=None
+                self.engine_adapter,
+                name_version_mapping,
+                alias=None,
+                batch_size=self.SNAPSHOT_BATCH_SIZE,
             ):
                 all_snapshots.extend(
                     [
@@ -202,7 +206,7 @@ class IntervalState:
         result: t.Dict[str, int] = {}
 
         for where in snapshot_name_version_filter(
-            self.engine_adapter, snapshots, alias=table_alias
+            self.engine_adapter, snapshots, alias=table_alias, batch_size=self.SNAPSHOT_BATCH_SIZE
         ):
             query = (
                 exp.select(
@@ -299,7 +303,12 @@ class IntervalState:
         ] = {}
 
         for where in (
-            snapshot_name_version_filter(self.engine_adapter, snapshots, alias="intervals")
+            snapshot_name_version_filter(
+                self.engine_adapter,
+                snapshots,
+                alias="intervals",
+                batch_size=self.SNAPSHOT_BATCH_SIZE,
+            )
             if snapshots
             else [None]
         ):
@@ -409,7 +418,9 @@ class IntervalState:
         if not snapshot_ids:
             return
 
-        for where in snapshot_id_filter(self.engine_adapter, snapshot_ids, alias=None):
+        for where in snapshot_id_filter(
+            self.engine_adapter, snapshot_ids, alias=None, batch_size=self.SNAPSHOT_BATCH_SIZE
+        ):
             # Nullify the identifier for dev intervals
             # Set is_compacted to False so that it's compacted during the next compaction
             self.engine_adapter.update_table(
@@ -436,7 +447,11 @@ class IntervalState:
             return
 
         for where in snapshot_name_version_filter(
-            self.engine_adapter, dev_keys_to_delete, version_column_name="dev_version", alias=None
+            self.engine_adapter,
+            dev_keys_to_delete,
+            version_column_name="dev_version",
+            alias=None,
+            batch_size=self.SNAPSHOT_BATCH_SIZE,
         ):
             self.engine_adapter.delete_from(self.intervals_table, where.and_(exp.column("is_dev")))
 
@@ -447,7 +462,10 @@ class IntervalState:
             return
 
         for where in snapshot_name_version_filter(
-            self.engine_adapter, non_dev_keys_to_delete, alias=None
+            self.engine_adapter,
+            non_dev_keys_to_delete,
+            alias=None,
+            batch_size=self.SNAPSHOT_BATCH_SIZE,
         ):
             self.engine_adapter.delete_from(self.intervals_table, where)
 

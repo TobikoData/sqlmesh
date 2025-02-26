@@ -195,10 +195,10 @@ def test_duplicates(state_sync: EngineAdapterStateSync, make_snapshot: t.Callabl
     snapshot_b.updated_ts = snapshot_a.updated_ts + 1
     snapshot_c.updated_ts = 0
     state_sync.push_snapshots([snapshot_a])
-    state_sync._push_snapshots([snapshot_a])
-    state_sync._push_snapshots([snapshot_b])
-    state_sync._push_snapshots([snapshot_c])
-    state_sync._snapshot_cache.clear()
+    state_sync.snapshot_state.push_snapshots([snapshot_a])
+    state_sync.snapshot_state.push_snapshots([snapshot_b])
+    state_sync.snapshot_state.push_snapshots([snapshot_c])
+    state_sync.snapshot_state.clear_cache()
     assert (
         state_sync.get_snapshots([snapshot_a])[snapshot_a.snapshot_id].updated_ts
         == snapshot_b.updated_ts
@@ -1236,7 +1236,9 @@ def test_delete_expired_snapshots_promoted(
     env.snapshots_ = []
     state_sync.promote(env)
 
-    now_timestamp_mock = mocker.patch("sqlmesh.core.state_sync.engine_adapter.facade.now_timestamp")
+    now_timestamp_mock = mocker.patch(
+        "sqlmesh.core.state_sync.engine_adapter.snapshot.now_timestamp"
+    )
     now_timestamp_mock.return_value = now_timestamp() + 11000
 
     assert state_sync.delete_expired_snapshots() == [
@@ -2215,7 +2217,7 @@ def test_first_migration_failure(duck_conn, mocker: MockerFixture, tmp_path) -> 
         match="SQLMesh migration failed.",
     ):
         state_sync.migrate(default_catalog=None)
-    assert not state_sync.engine_adapter.table_exists(state_sync.snapshots_table)
+    assert not state_sync.engine_adapter.table_exists(state_sync.snapshot_state.snapshots_table)
     assert not state_sync.engine_adapter.table_exists(
         state_sync.environment_state.environments_table
     )
@@ -2379,7 +2381,7 @@ def test_seed_hydration(
     assert snapshot.model.is_hydrated
     assert snapshot.model.seed.content == "header\n1\n2"
 
-    state_sync._snapshot_cache.clear()
+    state_sync.snapshot_state.clear_cache()
     stored_snapshot = state_sync.get_snapshots([snapshot.snapshot_id])[snapshot.snapshot_id]
     assert isinstance(stored_snapshot.model, SeedModel)
     assert not stored_snapshot.model.is_hydrated
@@ -2770,8 +2772,8 @@ def test_get_snapshots(mocker):
 def test_snapshot_batching(state_sync, mocker, make_snapshot):
     mock = mocker.Mock()
 
-    state_sync.SNAPSHOT_BATCH_SIZE = 2
-    state_sync.engine_adapter = mock
+    state_sync.snapshot_state.SNAPSHOT_BATCH_SIZE = 2
+    state_sync.snapshot_state.engine_adapter = mock
 
     snapshot_a = make_snapshot(SqlModel(name="a", query=parse_one("select 1")), "1")
     snapshot_b = make_snapshot(SqlModel(name="a", query=parse_one("select 2")), "2")
@@ -2842,13 +2844,12 @@ def test_snapshot_batching(state_sync, mocker, make_snapshot):
         ],
     ]
 
-    snapshots = state_sync._get_snapshots(
+    snapshots = state_sync.snapshot_state.get_snapshots(
         (
             SnapshotId(name="a", identifier="1"),
             SnapshotId(name="a", identifier="2"),
             SnapshotId(name="a", identifier="3"),
         ),
-        hydrate_intervals=False,
     )
     assert len(snapshots) == 3
     calls = mock.fetchall.call_args_list
@@ -2887,13 +2888,12 @@ def test_snapshot_cache(
     state_sync: EngineAdapterStateSync, make_snapshot: t.Callable, mocker: MockerFixture
 ):
     cache_mock = mocker.Mock()
-    state_sync._snapshot_cache = cache_mock
+    state_sync.snapshot_state._snapshot_cache = cache_mock
 
     snapshot = make_snapshot(SqlModel(name="a", query=parse_one("select 1")))
     cache_mock.get_or_load.return_value = ({snapshot.snapshot_id: snapshot}, {snapshot.snapshot_id})
 
-    # Use _push_snapshots to bypass cache.
-    state_sync._push_snapshots([snapshot])
+    state_sync.snapshot_state.push_snapshots([snapshot])
 
     assert state_sync.get_snapshots([snapshot.snapshot_id]) == {snapshot.snapshot_id: snapshot}
     cache_mock.get_or_load.assert_called_once_with({snapshot.snapshot_id}, mocker.ANY)
@@ -2901,7 +2901,9 @@ def test_snapshot_cache(
     # Update the snapshot in the state and make sure this update is reflected on the cached instance.
     assert snapshot.unpaused_ts is None
     assert not snapshot.unrestorable
-    state_sync._update_snapshots([snapshot.snapshot_id], unpaused_ts=1, unrestorable=True)
+    state_sync.snapshot_state._update_snapshots(
+        [snapshot.snapshot_id], unpaused_ts=1, unrestorable=True
+    )
     new_snapshot = state_sync.get_snapshots([snapshot.snapshot_id])[snapshot.snapshot_id]
     assert new_snapshot.unpaused_ts == 1
     assert new_snapshot.unrestorable
@@ -2916,7 +2918,7 @@ def test_update_auto_restatements(state_sync: EngineAdapterStateSync, make_snaps
     snapshot_b = make_snapshot(SqlModel(name="b", query=parse_one("select 2")), version="2")
     snapshot_c = make_snapshot(SqlModel(name="c", query=parse_one("select 3")), version="3")
 
-    state_sync._push_snapshots([snapshot_a, snapshot_b, snapshot_c])
+    state_sync.snapshot_state.push_snapshots([snapshot_a, snapshot_b, snapshot_c])
 
     next_auto_restatement_ts: t.Dict[SnapshotNameVersion, t.Optional[int]] = {
         snapshot_a.name_version: 1,
