@@ -300,7 +300,7 @@ In addition to specifying a time column in the `MODEL` DDL, the model's query mu
       )
     ```
 
-    SQLmesh will create a `dev` schema based on the name of the plan environment.
+    SQLmesh will create a suffixed `__dev` schema based on the name of the plan environment.
   
     ```sql
     CREATE SCHEMA IF NOT EXISTS `sqlmesh-public-demo`.`demo__dev`
@@ -627,7 +627,7 @@ GROUP BY title;
     GROUP BY `incremental_model`.`item_id` LIMIT 0
     ```
 
-    SQLMesh will create the dev schema if it doesn't exist.
+    SQLmesh will create a suffixed `__dev` schema based on the name of the plan environment.
 
     ```sql
     CREATE SCHEMA IF NOT EXISTS `sqlmesh-public-demo`.`demo__dev`
@@ -696,7 +696,7 @@ FROM db.employees;
     (`a_column`) AS SELECT 'hello there' AS `a_column`
     ```
 
-    SQLMesh will create the dev schema if it doesn't exist.
+    SQLmesh will create a suffixed `__dev` schema based on the name of the plan environment.
 
     ```sql
     CREATE SCHEMA IF NOT EXISTS `sqlmesh-public-demo`.`demo__dev`
