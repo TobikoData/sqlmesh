@@ -595,6 +595,7 @@ GROUP BY title;
 ??? "Example SQL sequence when applying this model kind (ex: BigQuery)"
 
     Create a model with the following definition and run `sqlmesh plan dev`:
+
     ```sql
     MODEL (
       name demo.full_model_example,
@@ -612,11 +613,13 @@ GROUP BY title;
     ```
 
     SQLMesh will create a versioned table in the physical layer. Note the fingerprint of the table is `2345651858`.
+
     ```sql
     CREATE TABLE IF NOT EXISTS `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__full_model_example__2345651858` (`item_id` INT64, `num_orders` INT64)
     ```
 
     SQLMesh will validate the model's query.
+
     ```sql
     SELECT `incremental_model`.`item_id` AS `item_id`, COUNT(DISTINCT `incremental_model`.`id`) AS `num_orders` 
     FROM `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__incremental_model__89556012` AS `incremental_model` 
@@ -625,11 +628,13 @@ GROUP BY title;
     ```
 
     SQLMesh will create the dev schema if it doesn't exist.
+
     ```sql
     CREATE SCHEMA IF NOT EXISTS `sqlmesh-public-demo`.`demo__dev`
     ```
 
-    SQLMesh will create a view in the virtual layer pointing to the physical layer table.
+    SQLMesh will create a view in the virtual layer pointing to the versioned table in the physical layer.
+
     ```sql
     CREATE OR REPLACE VIEW `sqlmesh-public-demo`.`demo__dev`.`full_model_example` AS 
     SELECT * FROM `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__full_model_example__2345651858`
@@ -672,6 +677,7 @@ FROM db.employees;
 ??? "Example SQL sequence when applying this model kind (ex: BigQuery)"
 
     Create a model with the following definition and run `sqlmesh plan dev`:
+
     ```sql
     MODEL (
       name demo.example_view,
@@ -684,12 +690,20 @@ FROM db.employees;
     ```
 
     SQLMesh will create a versioned view in the physical layer. Note the fingerprint of the view is `1024042926`.
+
     ```sql
     CREATE OR REPLACE VIEW `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__example_view__1024042926`
     (`a_column`) AS SELECT 'hello there' AS `a_column`
     ```
 
-    SQLMesh will create a view in the virtual layer pointing to the physical layer view.
+    SQLMesh will create the dev schema if it doesn't exist.
+
+    ```sql
+    CREATE SCHEMA IF NOT EXISTS `sqlmesh-public-demo`.`demo__dev`
+    ```
+
+    SQLMesh will create a view in the virtual layer pointing to the versioned view in the physical layer.
+
     ```sql
     CREATE OR REPLACE VIEW `sqlmesh-public-demo`.`demo__dev`.`example_view` AS 
     SELECT * FROM `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__example_view__1024042926`
