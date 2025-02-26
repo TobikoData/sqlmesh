@@ -11,7 +11,6 @@ from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
-import time_machine
 from io import StringIO
 from pandas.api.types import is_object_dtype
 from sqlglot import Dialect, exp
@@ -32,6 +31,7 @@ if t.TYPE_CHECKING:
     from sqlglot.dialects.dialect import DialectType
 
     Row = t.Dict[str, t.Any]
+
 
 TIME_KWARG_KEYS = {
     "start",
@@ -231,13 +231,21 @@ class ModelTest(unittest.TestCase):
             if is_object_dtype(actual_types[col]) and len(actual[col]) != 0
         }
         for col, value in object_sentinel_values.items():
-            # can't use `isinstance()` here - https://stackoverflow.com/a/68743663/1707525
-            if type(value) is datetime.date:
-                expected[col] = pd.to_datetime(expected[col], errors="ignore").dt.date  # type: ignore
-            elif type(value) is datetime.time:
-                expected[col] = pd.to_datetime(expected[col], errors="ignore").dt.time  # type: ignore
-            elif type(value) is datetime.datetime:
-                expected[col] = pd.to_datetime(expected[col], errors="ignore").dt.to_pydatetime()  # type: ignore
+            try:
+                # can't use `isinstance()` here - https://stackoverflow.com/a/68743663/1707525
+                if type(value) is datetime.date:
+                    expected[col] = pd.to_datetime(expected[col]).dt.date
+                elif type(value) is datetime.time:
+                    expected[col] = pd.to_datetime(expected[col]).dt.time
+                elif type(value) is datetime.datetime:
+                    expected[col] = pd.to_datetime(expected[col]).dt.to_pydatetime()
+            except Exception as e:
+                from sqlmesh.core.console import get_console
+
+                get_console().log_warning(
+                    f"Failed to convert expected value for {col} into `datetime` "
+                    f"for unit test '{str(self)}'. {str(e)}."
+                )
 
         actual = actual.replace({np.nan: None})
         expected = expected.replace({np.nan: None})
@@ -302,7 +310,7 @@ class ModelTest(unittest.TestCase):
         path: Path | None,
         preserve_fixtures: bool = False,
         default_catalog: str | None = None,
-    ) -> ModelTest:
+    ) -> t.Optional[ModelTest]:
         """Create a SqlModelTest or a PythonModelTest.
 
         Args:
@@ -321,7 +329,12 @@ class ModelTest(unittest.TestCase):
         name = normalize_model_name(name, default_catalog=default_catalog, dialect=dialect)
         model = models.get(name)
         if not model:
-            _raise_error(f"Model '{name}' was not found", path)
+            from sqlmesh.core.console import get_console
+
+            get_console().log_warning(
+                f"Model '{name}' was not found{' at ' + str(path) if path else ''}"
+            )
+            return None
 
         if isinstance(model, SqlModel):
             test_type: t.Type[ModelTest] = SqlModelTest
@@ -661,13 +674,15 @@ class PythonModelTest(ModelTest):
 
     def _execute_model(self) -> pd.DataFrame:
         """Executes the python model and returns a DataFrame."""
-        time_ctx = (
-            time_machine.travel(self._execution_time, tick=False)
-            if self._execution_time
-            else nullcontext()
-        )
+        if self._execution_time:
+            import time_machine
+
+            time_ctx: AbstractContextManager = time_machine.travel(self._execution_time, tick=False)
+        else:
+            time_ctx = nullcontext()
+
         with patch.dict(self._test_adapter_dialect.generator_class.TRANSFORMS, self._transforms):
-            with t.cast(AbstractContextManager, time_ctx):
+            with time_ctx:
                 variables = self.body.get("vars", {}).copy()
                 time_kwargs = {
                     key: variables.pop(key) for key in TIME_KWARG_KEYS if key in variables
@@ -749,6 +764,8 @@ def generate_test(
         path=fixture_path,
         default_catalog=model.default_catalog,
     )
+    if not test:
+        return
 
     test.setUp()
 

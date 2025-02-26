@@ -77,9 +77,9 @@ def convert_all_html_output_to_tags():
     def _convert_html_to_tags(html: str) -> t.List[str]:
         # BS4 automatically adds html and body tags so we remove those since they are not actually part of the output
         return [
-            tag.name
+            tag.name  # type: ignore
             for tag in BeautifulSoup(html, "html").find_all()
-            if tag.name not in {"html", "body"}
+            if tag.name not in {"html", "body"}  # type: ignore
         ]
 
     def _convert(output: CapturedIO) -> t.List[t.List[str]]:
@@ -238,7 +238,7 @@ def test_diff(sushi_context, notebook, convert_all_html_output_to_text, get_all_
     assert len(output.outputs) == 2
     assert convert_all_html_output_to_text(output) == [
         "Differences from the `prod` environment:",
-        "Models:\n└── Directly Modified:\n    └── sqlmesh_example.test",
+        "Models:\n├── Directly Modified:\n│   └── sqlmesh_example.test\n└── Metadata Updated:\n    └── sqlmesh_example.test",
     ]
     assert get_all_html_output(output) == [
         str(
@@ -266,12 +266,21 @@ def test_diff(sushi_context, notebook, convert_all_html_output_to_text, get_all_
                         autoescape=False,
                     )
                 )
-                + "└── "
+                + "├── "
                 + str(
                     h(
                         "span",
                         {"style": "font-weight: bold"},
                         "Directly Modified:",
+                        autoescape=False,
+                    )
+                )
+                + "│   └── sqlmesh_example.test└── "
+                + str(
+                    h(
+                        "span",
+                        {"style": "font-weight: bold"},
+                        "Metadata Updated:",
                         autoescape=False,
                     )
                 )
@@ -291,7 +300,7 @@ def test_plan(
 
     # TODO: Should this be going to stdout? This is printing the status updates for when each batch finishes for
     # the models and how long it took
-    assert len(output.stdout.strip().split("\n")) == 23
+    assert len(output.stdout.strip().split("\n")) == 24
     assert not output.stderr
     assert len(output.outputs) == 4
     text_output = convert_all_html_output_to_text(output)
@@ -549,16 +558,16 @@ def test_info(notebook, sushi_context, convert_all_html_output_to_text, get_all_
     assert not output.stderr
     assert len(output.outputs) == 6
     assert convert_all_html_output_to_text(output) == [
-        "Models: 17",
-        "Macros: 7",
+        "Models: 18",
+        "Macros: 8",
         "",
         "Connection:\n  type: duckdb\n  concurrent_tasks: 1\n  register_comments: true\n  pre_ping: false\n  pretty_sql: false\n  extensions: []\n  connector_config: {}",
         "Test Connection:\n  type: duckdb\n  concurrent_tasks: 1\n  register_comments: true\n  pre_ping: false\n  pretty_sql: false\n  extensions: []\n  connector_config: {}",
         "Data warehouse connection succeeded",
     ]
     assert get_all_html_output(output) == [
-        "<pre style=\"white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace\">Models: <span style=\"color: #008080; text-decoration-color: #008080; font-weight: bold\">17</span></pre>",
-        "<pre style=\"white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace\">Macros: <span style=\"color: #008080; text-decoration-color: #008080; font-weight: bold\">7</span></pre>",
+        "<pre style=\"white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace\">Models: <span style=\"color: #008080; text-decoration-color: #008080; font-weight: bold\">18</span></pre>",
+        "<pre style=\"white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace\">Macros: <span style=\"color: #008080; text-decoration-color: #008080; font-weight: bold\">8</span></pre>",
         "<pre style=\"white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace\"></pre>",
         '<pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,\'DejaVu Sans Mono\',consolas,\'Courier New\',monospace">Connection:  type: duckdb  concurrent_tasks: <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">1</span>  register_comments: true  pre_ping: false  pretty_sql: false  extensions: <span style="font-weight: bold">[]</span>  connector_config: <span style="font-weight: bold">{}</span></pre>',
         '<pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,\'DejaVu Sans Mono\',consolas,\'Courier New\',monospace">Test Connection:  type: duckdb  concurrent_tasks: <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">1</span>  register_comments: true  pre_ping: false  pretty_sql: false  extensions: <span style="font-weight: bold">[]</span>  connector_config: <span style="font-weight: bold">{}</span></pre>',
@@ -604,7 +613,7 @@ def test_migrate(
 
 
 @pytest.mark.slow
-def test_create_external_models(notebook, loaded_sushi_context):
+def test_create_external_models(notebook, loaded_sushi_context, convert_all_html_output_to_text):
     external_model_file = loaded_sushi_context.path / "external_models.yaml"
     external_model_file.unlink()
     assert not external_model_file.exists()
@@ -614,7 +623,11 @@ def test_create_external_models(notebook, loaded_sushi_context):
 
     assert not output.stdout
     assert not output.stderr
-    assert not output.outputs
+    assert len(output.outputs) == 2
+    converted = sorted(convert_all_html_output_to_text(output))
+    assert 'Unable to get schema for \'"memory"."raw"."model1"\'' in converted[0]
+    assert 'Unable to get schema for \'"memory"."raw"."model2"\'' in converted[1]
+
     assert external_model_file.exists()
     assert (
         external_model_file.read_text()

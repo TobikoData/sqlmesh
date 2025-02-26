@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import json
 import typing as t
-from functools import wraps
 
 import pydantic
+from pydantic import ValidationInfo as ValidationInfo
 from pydantic.fields import FieldInfo
 from sqlglot import exp, parse_one
 from sqlglot.helper import ensure_list
@@ -27,14 +27,10 @@ PYDANTIC_MAJOR_VERSION, PYDANTIC_MINOR_VERSION = [int(p) for p in pydantic.__ver
 
 
 def field_validator(*args: t.Any, **kwargs: t.Any) -> t.Callable[[t.Any], t.Any]:
-    # Pydantic v2 doesn't support "always" argument. The validator behaves as if "always" is True.
-    kwargs.pop("always", None)
     return pydantic.field_validator(*args, **kwargs)
 
 
 def model_validator(*args: t.Any, **kwargs: t.Any) -> t.Callable[[t.Any], t.Any]:
-    # Pydantic v2 doesn't support "always" argument. The validator behaves as if "always" is True.
-    kwargs.pop("always", None)
     return pydantic.model_validator(*args, **kwargs)
 
 
@@ -85,7 +81,8 @@ class PydanticModel(pydantic.BaseModel):
     _hash_func_mapping: t.ClassVar[t.Dict[t.Type[t.Any], t.Callable[[t.Any], int]]] = {}
 
     def dict(self, **kwargs: t.Any) -> t.Dict[str, t.Any]:
-        return super().model_dump(**DEFAULT_ARGS, **kwargs)  # type: ignore
+        kwargs = {**DEFAULT_ARGS, **kwargs}
+        return super().model_dump(**kwargs)  # type: ignore
 
     def json(
         self,
@@ -179,30 +176,6 @@ class PydanticModel(pydantic.BaseModel):
 
     def __repr__(self) -> str:
         return str(self)
-
-
-def model_validator_v1_args(func: t.Callable[..., t.Any]) -> t.Callable[..., t.Any]:
-    @wraps(func)
-    def wrapper(cls: t.Type, values: t.Any, *args: t.Any, **kwargs: t.Any) -> t.Any:
-        is_values_dict = isinstance(values, dict)
-        values_dict = values if is_values_dict else values.__dict__
-        result = func(cls, values_dict, *args, **kwargs)
-        if is_values_dict:
-            return result
-        else:
-            values.__dict__.update(result)
-            return values
-
-    return wrapper
-
-
-def field_validator_v1_args(func: t.Callable[..., t.Any]) -> t.Callable[..., t.Any]:
-    @wraps(func)
-    def wrapper(cls: t.Type, v: t.Any, values: t.Any, *args: t.Any, **kwargs: t.Any) -> t.Any:
-        values_dict = values if isinstance(values, dict) else values.data
-        return func(cls, v, values_dict, *args, **kwargs)
-
-    return wrapper
 
 
 def validate_list_of_strings(v: t.Any) -> t.List[str]:

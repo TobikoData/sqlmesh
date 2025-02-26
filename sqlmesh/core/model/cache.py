@@ -7,6 +7,7 @@ from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 from sqlglot import exp
+from sqlglot.helper import seq_get
 from sqlglot.optimizer.simplify import gen
 from sqlglot.schema import MappingSchema
 
@@ -34,12 +35,14 @@ class ModelCache:
 
     def __init__(self, path: Path):
         self.path = path
-        self._file_cache: FileCache[Model] = FileCache(
+        self._file_cache: FileCache[t.List[Model]] = FileCache(
             path,
             prefix="model_definition",
         )
 
-    def get_or_load(self, name: str, entry_id: str = "", *, loader: t.Callable[[], Model]) -> Model:
+    def get_or_load(
+        self, name: str, entry_id: str = "", *, loader: t.Callable[[], t.List[Model]]
+    ) -> t.List[Model]:
         """Returns an existing cached model definition or loads and caches a new one.
 
         Args:
@@ -51,16 +54,18 @@ class ModelCache:
             The model definition.
         """
         cache_entry = self._file_cache.get(name, entry_id)
-        if isinstance(cache_entry, _Model):
+        if isinstance(cache_entry, list) and isinstance(seq_get(cache_entry, 0), _Model):
             return cache_entry
 
-        model = loader()
-        if isinstance(model, SqlModel):
+        models = loader()
+        if isinstance(models, list) and isinstance(seq_get(models, 0), SqlModel):
             # make sure we preload full_depends_on
-            model.full_depends_on
-            self._file_cache.put(name, entry_id, value=model)
+            for model in models:
+                model.full_depends_on
 
-        return model
+            self._file_cache.put(name, entry_id, value=models)
+
+        return models
 
 
 @dataclass

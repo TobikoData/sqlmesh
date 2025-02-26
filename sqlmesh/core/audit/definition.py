@@ -28,14 +28,10 @@ from sqlmesh.utils.jinja import (
     extract_macro_references_and_variables,
 )
 from sqlmesh.utils.metaprogramming import Executable
-from sqlmesh.utils.pydantic import (
-    PydanticModel,
-    field_validator,
-    model_validator,
-    model_validator_v1_args,
-)
+from sqlmesh.utils.pydantic import PydanticModel, field_validator, model_validator
 
 if t.TYPE_CHECKING:
+    from sqlmesh.core._typing import Self
     from sqlmesh.core.snapshot import DeployabilityIndex, Node, Snapshot
 
 
@@ -175,12 +171,10 @@ class StandaloneAudit(_Node, AuditMixin):
     _depends_on_validator = depends_on_validator
 
     @model_validator(mode="after")
-    @model_validator_v1_args
-    def _node_root_validator(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
-        if values.get("blocking"):
-            name = values.get("name")
-            raise AuditConfigError(f"Standalone audits cannot be blocking: '{name}'.")
-        return values
+    def _node_root_validator(self) -> Self:
+        if self.blocking:
+            raise AuditConfigError(f"Standalone audits cannot be blocking: '{self.name}'.")
+        return self
 
     def render_audit_query(
         self,
@@ -283,11 +277,12 @@ class StandaloneAudit(_Node, AuditMixin):
             self._metadata_hash = hash_data(data)
         return self._metadata_hash
 
-    def text_diff(self, other: Node) -> str:
+    def text_diff(self, other: Node, rendered: bool = False) -> str:
         """Produce a text diff against another node.
 
         Args:
             other: The node to diff against.
+            rendered: Whether the diff should be between raw vs rendered nodes
 
         Returns:
             A unified text diff showing additions and deletions.
@@ -298,11 +293,17 @@ class StandaloneAudit(_Node, AuditMixin):
             )
 
         return d.text_diff(
-            self.render_definition(), other.render_definition(), self.dialect, other.dialect
+            self.render_definition(render_query=rendered),
+            other.render_definition(render_query=rendered),
+            self.dialect,
+            other.dialect,
         ).strip()
 
     def render_definition(
-        self, include_python: bool = True, include_defaults: bool = False
+        self,
+        include_python: bool = True,
+        include_defaults: bool = False,
+        render_query: bool = False,
     ) -> t.List[exp.Expression]:
         """Returns the original list of sql expressions comprising the model definition.
 
@@ -348,7 +349,13 @@ class StandaloneAudit(_Node, AuditMixin):
 
             jinja_expressions = self.jinja_macros.to_expressions()
 
-        return [audit, *python_expressions, *jinja_expressions, *self.expressions, self.query]
+        return [
+            audit,
+            *python_expressions,
+            *jinja_expressions,
+            *self.expressions,
+            self.render_audit_query() if render_query else self.query,
+        ]
 
     @property
     def is_audit(self) -> bool:

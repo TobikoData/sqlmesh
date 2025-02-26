@@ -1,16 +1,10 @@
 .PHONY: docs
 
 install-dev:
-	pip3 install -e ".[dev,web,slack,dlt]"
-
-install-cicd-test:
-	pip3 install -e ".[dev,web,slack,cicdtest,dlt]"
+	pip3 install -e ".[dev,web,slack,dlt]" ./examples/custom_materializations
 
 install-doc:
 	pip3 install -r ./docs/requirements.txt
-
-install-engine-test:
-	pip3 install -e ".[dev,web,slack,mysql,postgres,databricks,redshift,bigquery,snowflake,trino,mssql,clickhouse,athena]"
 
 install-pre-commit:
 	pre-commit install
@@ -153,7 +147,7 @@ guard-%:
 	fi
 
 engine-%-install:
-	pip3 install -e ".[dev,web,slack,${*}]"
+	pip3 install -e ".[dev,web,slack,${*}]" ./examples/custom_materializations
 
 engine-docker-%-up:
 	docker compose -f ./tests/core/engine_adapter/integration/docker/compose.${*}.yaml up -d
@@ -191,7 +185,7 @@ spark-test: engine-spark-up
 	pytest -n auto -x -m "spark or pyspark" --retries 3 --junitxml=test-results/junit-spark.xml
 
 trino-test: engine-trino-up
-	pytest -n auto -x -m "trino or trino_iceberg or trino_delta" --retries 3 --junitxml=test-results/junit-trino.xml
+	pytest -n auto -x -m "trino or trino_iceberg or trino_delta or trino_nessie" --retries 3 --junitxml=test-results/junit-trino.xml
 
 risingwave-test: engine-risingwave-up
 	pytest -n auto -x -m "risingwave" --retries 3 --junitxml=test-results/junit-risingwave.xml
@@ -214,7 +208,7 @@ redshift-test: guard-REDSHIFT_HOST guard-REDSHIFT_USER guard-REDSHIFT_PASSWORD g
 	pytest -n auto -x -m "redshift" --retries 3 --junitxml=test-results/junit-redshift.xml
 
 clickhouse-cloud-test: guard-CLICKHOUSE_CLOUD_HOST guard-CLICKHOUSE_CLOUD_USERNAME guard-CLICKHOUSE_CLOUD_PASSWORD engine-clickhouse-install
-	pytest -n auto -x -m "clickhouse_cloud" --retries 3 --junitxml=test-results/junit-clickhouse-cloud.xml
+	pytest -n 1 -m "clickhouse_cloud" --retries 3 --junitxml=test-results/junit-clickhouse-cloud.xml
 
 athena-test: guard-AWS_ACCESS_KEY_ID guard-AWS_SECRET_ACCESS_KEY guard-ATHENA_S3_WAREHOUSE_LOCATION engine-athena-install
 	pytest -n auto -x -m "athena" --retries 3 --retry-delay 10 --junitxml=test-results/junit-athena.xml

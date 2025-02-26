@@ -7,12 +7,10 @@ import logging
 import os
 import typing as t
 from collections import defaultdict
-from concurrent.futures import as_completed
 from dataclasses import dataclass
 from pathlib import Path
 
-from sqlglot.errors import SchemaError, SqlglotError
-from sqlglot.schema import MappingSchema
+from sqlglot.errors import SqlglotError
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.audit import Audit, ModelAudit, StandaloneAudit, load_multiple_audits
@@ -23,23 +21,19 @@ from sqlmesh.core.model import (
     Model,
     ExternalModel,
     ModelCache,
-    OptimizedQueryCache,
     SeedModel,
     create_external_model,
-    load_sql_based_model,
+    load_sql_based_models,
 )
-from sqlmesh.core.model.cache import load_optimized_query_and_mapping, optimized_query_cache_pool
 from sqlmesh.core.model import model as model_registry
 from sqlmesh.core.signal import signal
-from sqlmesh.utils import UniqueKeyDict
-from sqlmesh.utils.dag import DAG
+from sqlmesh.utils import UniqueKeyDict, sys_path
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroExtractor
 from sqlmesh.utils.metaprogramming import import_python_file
 from sqlmesh.utils.yaml import YAML
 
 if t.TYPE_CHECKING:
-    from sqlmesh.core.config import Config
     from sqlmesh.core.context import GenericContext
 
 
@@ -54,7 +48,6 @@ class LoadedProject:
     standalone_audits: UniqueKeyDict[str, StandaloneAudit]
     audits: UniqueKeyDict[str, ModelAudit]
     metrics: UniqueKeyDict[str, Metric]
-    dag: DAG[str]
     requirements: t.Dict[str, str]
     excluded_requirements: t.Set[str]
 
@@ -62,98 +55,76 @@ class LoadedProject:
 class Loader(abc.ABC):
     """Abstract base class to load macros and models for a context"""
 
-    def __init__(self) -> None:
+    def __init__(self, context: GenericContext, path: Path) -> None:
         self._path_mtimes: t.Dict[Path, float] = {}
-        self._dag: DAG[str] = DAG()
+        self.context = context
+        self.config_path = path
+        self.config = self.context.configs[self.config_path]
+        self._variables_by_gateway: t.Dict[str, t.Dict[str, t.Any]] = {}
 
-    def load(self, context: GenericContext, update_schemas: bool = True) -> LoadedProject:
+    def load(self) -> LoadedProject:
         """
         Loads all macros and models in the context's path.
 
-        Args:
-            context: The context to load macros and models for.
-            update_schemas: Convert star projections to explicit columns.
+        Returns:
+            A loaded project object.
         """
-        # python files are cached by the system
-        # need to manually clear here so we can reload macros
-        linecache.clearcache()
+        with sys_path(self.config_path):
+            # python files are cached by the system
+            # need to manually clear here so we can reload macros
+            linecache.clearcache()
+            self._path_mtimes.clear()
 
-        self._context = context
-        self._path_mtimes.clear()
-        self._dag = DAG()
+            self._load_materializations()
+            signals = self._load_signals()
 
-        self._load_materializations()
-        signals = self._load_signals()
+            config_mtimes: t.Dict[Path, t.List[float]] = defaultdict(list)
 
-        config_mtimes: t.Dict[Path, t.List[float]] = defaultdict(list)
-        for context_path, config in self._context.configs.items():
-            for config_file in context_path.glob("config.*"):
+            for config_file in self.config_path.glob("config.*"):
                 self._track_file(config_file)
-                config_mtimes[context_path].append(self._path_mtimes[config_file])
+                config_mtimes[self.config_path].append(self._path_mtimes[config_file])
 
-        for config_file in c.SQLMESH_PATH.glob("config.*"):
-            self._track_file(config_file)
-            config_mtimes[c.SQLMESH_PATH].append(self._path_mtimes[config_file])
+            for config_file in c.SQLMESH_PATH.glob("config.*"):
+                self._track_file(config_file)
+                config_mtimes[c.SQLMESH_PATH].append(self._path_mtimes[config_file])
 
-        self._config_mtimes = {path: max(mtimes) for path, mtimes in config_mtimes.items()}
+            self._config_mtimes = {path: max(mtimes) for path, mtimes in config_mtimes.items()}
 
-        macros, jinja_macros = self._load_scripts()
-        audits: UniqueKeyDict[str, ModelAudit] = UniqueKeyDict("audits")
-        standalone_audits: UniqueKeyDict[str, StandaloneAudit] = UniqueKeyDict("standalone_audits")
+            macros, jinja_macros = self._load_scripts()
+            audits: UniqueKeyDict[str, ModelAudit] = UniqueKeyDict("audits")
+            standalone_audits: UniqueKeyDict[str, StandaloneAudit] = UniqueKeyDict(
+                "standalone_audits"
+            )
 
-        for name, audit in self._load_audits(macros=macros, jinja_macros=jinja_macros).items():
-            if isinstance(audit, ModelAudit):
-                audits[name] = audit
-            else:
-                standalone_audits[name] = audit
+            for name, audit in self._load_audits(macros=macros, jinja_macros=jinja_macros).items():
+                if isinstance(audit, ModelAudit):
+                    audits[name] = audit
+                else:
+                    standalone_audits[name] = audit
 
-        models = self._load_models(
-            macros,
-            jinja_macros,
-            context.selected_gateway,
-            audits,
-            signals,
-        )
+            models = self._load_models(
+                macros,
+                jinja_macros,
+                self.context.selected_gateway,
+                audits,
+                signals,
+            )
 
-        for model in models.values():
-            self._add_model_to_dag(model)
+            metrics = self._load_metrics()
 
-        # This topologically sorts the DAG & caches the result in-memory for later;
-        # we do it here to detect any cycles as early as possible and fail if needed
-        self._dag.sorted
+            requirements, excluded_requirements = self._load_requirements()
 
-        if update_schemas:
-            update_model_schemas(self._dag, models=models, context_path=self._context.path)
-            for model in models.values():
-                # The model definition can be validated correctly only after the schema is set.
-                model.validate_definition()
-
-        metrics = self._load_metrics()
-
-        requirements, excluded_requirements = self._load_requirements()
-
-        project = LoadedProject(
-            macros=macros,
-            jinja_macros=jinja_macros,
-            models=models,
-            audits=audits,
-            standalone_audits=standalone_audits,
-            metrics=expand_metrics(metrics),
-            dag=self._dag,
-            requirements=requirements,
-            excluded_requirements=excluded_requirements,
-        )
-        return project
-
-    def load_signals(self, context: GenericContext) -> UniqueKeyDict[str, signal]:
-        """Loads signals for the built-in scheduler."""
-        self._context = context
-        return self._load_signals()
-
-    def load_materializations(self, context: GenericContext) -> None:
-        """Loads materializations for the built-in scheduler."""
-        self._context = context
-        self._load_materializations()
+            project = LoadedProject(
+                macros=macros,
+                jinja_macros=jinja_macros,
+                models=models,
+                audits=audits,
+                standalone_audits=standalone_audits,
+                metrics=expand_metrics(metrics),
+                requirements=requirements,
+                excluded_requirements=excluded_requirements,
+            )
+            return project
 
     def reload_needed(self) -> bool:
         """
@@ -189,8 +160,11 @@ class Loader(abc.ABC):
     ) -> UniqueKeyDict[str, Audit]:
         """Loads all audits."""
 
-    def _load_materializations(self) -> None:
+    def load_materializations(self) -> None:
         """Loads custom materializations."""
+
+    def _load_materializations(self) -> None:
+        pass
 
     def _load_signals(self) -> UniqueKeyDict[str, signal]:
         return UniqueKeyDict("signals")
@@ -204,47 +178,46 @@ class Loader(abc.ABC):
         gateway: t.Optional[str] = None,
     ) -> UniqueKeyDict[str, Model]:
         models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
-        for context_path, config in self._context.configs.items():
-            external_models_yaml = Path(context_path / c.EXTERNAL_MODELS_YAML)
-            deprecated_yaml = Path(context_path / c.EXTERNAL_MODELS_DEPRECATED_YAML)
-            external_models_path = context_path / c.EXTERNAL_MODELS
+        external_models_yaml = Path(self.config_path / c.EXTERNAL_MODELS_YAML)
+        deprecated_yaml = Path(self.config_path / c.EXTERNAL_MODELS_DEPRECATED_YAML)
+        external_models_path = self.config_path / c.EXTERNAL_MODELS
 
-            paths_to_load = []
-            if external_models_yaml.exists():
-                paths_to_load.append(external_models_yaml)
-            elif deprecated_yaml.exists():
-                paths_to_load.append(deprecated_yaml)
+        paths_to_load = []
+        if external_models_yaml.exists():
+            paths_to_load.append(external_models_yaml)
+        elif deprecated_yaml.exists():
+            paths_to_load.append(deprecated_yaml)
 
-            if external_models_path.exists() and external_models_path.is_dir():
-                paths_to_load.extend(self._glob_paths(external_models_path, extension=".yaml"))
+        if external_models_path.exists() and external_models_path.is_dir():
+            paths_to_load.extend(self._glob_paths(external_models_path, extension=".yaml"))
 
-            for path in paths_to_load:
-                self._track_file(path)
+        for path in paths_to_load:
+            self._track_file(path)
 
-                with open(path, "r", encoding="utf-8") as file:
-                    external_models: t.List[ExternalModel] = []
-                    for row in YAML().load(file.read()):
-                        model = create_external_model(
-                            defaults=config.model_defaults.dict(),
-                            path=path,
-                            project=config.project,
-                            audit_definitions=audits,
-                            **{
-                                "dialect": config.model_defaults.dialect,
-                                "default_catalog": self._context.default_catalog,
-                                **row,
-                            },
-                        )
-                        external_models.append(model)
+            with open(path, "r", encoding="utf-8") as file:
+                external_models: t.List[ExternalModel] = []
+                for row in YAML().load(file.read()):
+                    model = create_external_model(
+                        defaults=self.config.model_defaults.dict(),
+                        path=path,
+                        project=self.config.project,
+                        audit_definitions=audits,
+                        **{
+                            "dialect": self.config.model_defaults.dialect,
+                            "default_catalog": self.context.default_catalog,
+                            **row,
+                        },
+                    )
+                    external_models.append(model)
 
-                    # external models with no explicit gateway defined form the base set
-                    for model in (e for e in external_models if e.gateway is None):
-                        models[model.fqn] = model
+                # external models with no explicit gateway defined form the base set
+                for model in (e for e in external_models if e.gateway is None):
+                    models[model.fqn] = model
 
-                    # however, if there is a gateway defined, gateway-specific models take precedence
-                    if gateway:
-                        for model in (e for e in external_models if e.gateway == gateway):
-                            models.update({model.fqn: model})
+                # however, if there is a gateway defined, gateway-specific models take precedence
+                if gateway:
+                    for model in (e for e in external_models if e.gateway == gateway):
+                        models.update({model.fqn: model})
 
         return models
 
@@ -257,10 +230,8 @@ class Loader(abc.ABC):
         requirements: t.Dict[str, str] = {}
         excluded_requirements: t.Set[str] = set()
 
-        for context_path in self._context.configs:
-            requirements_path = context_path / c.REQUIREMENTS
-            if not requirements_path.is_file():
-                continue
+        requirements_path = self.config_path / c.REQUIREMENTS
+        if requirements_path.is_file():
             with open(requirements_path, "r", encoding="utf-8") as file:
                 for line in file:
                     line = line.strip()
@@ -309,7 +280,7 @@ class Loader(abc.ABC):
         ignored_filepaths = set(ignore_patterns) | {
             ignored_path
             for ignore_pattern in ignore_patterns
-            for ignored_path in glob.glob(str(self._context.path / ignore_pattern), recursive=True)
+            for ignored_path in glob.glob(str(self.config_path / ignore_pattern), recursive=True)
         }
         for filepath in path.glob(f"**/*{extension}"):
             if any(filepath.match(ignored_filepath) for ignored_filepath in ignored_filepaths):
@@ -317,12 +288,31 @@ class Loader(abc.ABC):
 
             yield filepath
 
-    def _add_model_to_dag(self, model: Model) -> None:
-        self._dag.add(model.fqn, model.depends_on)
-
     def _track_file(self, path: Path) -> None:
         """Project file to track for modifications"""
         self._path_mtimes[path] = path.stat().st_mtime
+
+    def _get_variables(self, gateway_name: t.Optional[str] = None) -> t.Dict[str, t.Any]:
+        gateway_name = gateway_name or self.context.selected_gateway
+
+        if gateway_name not in self._variables_by_gateway:
+            try:
+                gateway = self.config.get_gateway(gateway_name)
+            except ConfigError:
+                from sqlmesh.core.console import get_console
+
+                get_console().log_warning(
+                    f"Gateway '{gateway_name}' not found in project '{self.config.project}'."
+                )
+                gateway = None
+
+            self._variables_by_gateway[gateway_name] = {
+                **self.config.variables,
+                **(gateway.variables if gateway else {}),
+                c.GATEWAY: gateway_name,
+            }
+
+        return self._variables_by_gateway[gateway_name]
 
 
 class SqlMeshLoader(Loader):
@@ -337,22 +327,12 @@ class SqlMeshLoader(Loader):
 
         macros_max_mtime: t.Optional[float] = None
 
-        for context_path, config in self._context.configs.items():
-            for path in self._glob_paths(
-                context_path / c.MACROS, ignore_patterns=config.ignore_patterns, extension=".py"
-            ):
-                if import_python_file(path, context_path):
-                    self._track_file(path)
-                    macro_file_mtime = self._path_mtimes[path]
-                    macros_max_mtime = (
-                        max(macros_max_mtime, macro_file_mtime)
-                        if macros_max_mtime
-                        else macro_file_mtime
-                    )
-
-            for path in self._glob_paths(
-                context_path / c.MACROS, ignore_patterns=config.ignore_patterns, extension=".sql"
-            ):
+        for path in self._glob_paths(
+            self.config_path / c.MACROS,
+            ignore_patterns=self.config.ignore_patterns,
+            extension=".py",
+        ):
+            if import_python_file(path, self.config_path):
                 self._track_file(path)
                 macro_file_mtime = self._path_mtimes[path]
                 macros_max_mtime = (
@@ -360,10 +340,21 @@ class SqlMeshLoader(Loader):
                     if macros_max_mtime
                     else macro_file_mtime
                 )
-                with open(path, "r", encoding="utf-8") as file:
-                    jinja_macros.add_macros(
-                        extractor.extract(file.read(), dialect=config.model_defaults.dialect)
-                    )
+
+        for path in self._glob_paths(
+            self.config_path / c.MACROS,
+            ignore_patterns=self.config.ignore_patterns,
+            extension=".sql",
+        ):
+            self._track_file(path)
+            macro_file_mtime = self._path_mtimes[path]
+            macros_max_mtime = (
+                max(macros_max_mtime, macro_file_mtime) if macros_max_mtime else macro_file_mtime
+            )
+            with open(path, "r", encoding="utf-8") as file:
+                jinja_macros.add_macros(
+                    extractor.extract(file.read(), dialect=self.config.model_defaults.dialect)
+                )
 
         self._macros_max_mtime = macros_max_mtime
 
@@ -399,51 +390,47 @@ class SqlMeshLoader(Loader):
     ) -> UniqueKeyDict[str, Model]:
         """Loads the sql models into a Dict"""
         models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
-        for context_path, config in self._context._loaders[c.NATIVE].configs.items():
-            cache = SqlMeshLoader._Cache(self, context_path)
-            variables = self._variables(config)
+        cache = SqlMeshLoader._Cache(self, self.config_path)
 
-            for path in self._glob_paths(
-                context_path / c.MODELS,
-                ignore_patterns=config.ignore_patterns,
-                extension=".sql",
-            ):
-                if not os.path.getsize(path):
-                    continue
+        for path in self._glob_paths(
+            self.config_path / c.MODELS,
+            ignore_patterns=self.config.ignore_patterns,
+            extension=".sql",
+        ):
+            if not os.path.getsize(path):
+                continue
 
-                self._track_file(path)
+            self._track_file(path)
 
-                def _load() -> Model:
+            def _load() -> t.List[Model]:
+                try:
                     with open(path, "r", encoding="utf-8") as file:
-                        try:
-                            expressions = parse(
-                                file.read(), default_dialect=config.model_defaults.dialect
-                            )
-                        except SqlglotError as ex:
-                            raise ConfigError(
-                                f"Failed to parse a model definition at '{path}': {ex}."
-                            )
+                        expressions = parse(
+                            file.read(), default_dialect=self.config.model_defaults.dialect
+                        )
 
-                    return load_sql_based_model(
+                    return load_sql_based_models(
                         expressions,
-                        defaults=config.model_defaults.dict(),
+                        self._get_variables,
+                        defaults=self.config.model_defaults.dict(),
                         macros=macros,
                         jinja_macros=jinja_macros,
                         audit_definitions=audits,
-                        default_audits=config.model_defaults.audits,
+                        default_audits=self.config.model_defaults.audits,
                         path=Path(path).absolute(),
-                        module_path=context_path,
-                        dialect=config.model_defaults.dialect,
-                        time_column_format=config.time_column_format,
-                        physical_schema_mapping=config.physical_schema_mapping,
-                        project=config.project,
-                        default_catalog=self._context.default_catalog,
-                        variables=variables,
-                        infer_names=config.model_naming.infer_names,
+                        module_path=self.config_path,
+                        dialect=self.config.model_defaults.dialect,
+                        time_column_format=self.config.time_column_format,
+                        physical_schema_mapping=self.config.physical_schema_mapping,
+                        project=self.config.project,
+                        default_catalog=self.context.default_catalog,
+                        infer_names=self.config.model_naming.infer_names,
                         signal_definitions=signals,
                     )
+                except Exception as ex:
+                    raise ConfigError(f"Failed to load model definition at '{path}'.\n{ex}")
 
-                model = cache.get_or_load_model(path, _load)
+            for model in cache.get_or_load_models(path, _load):
                 if model.enabled:
                     models[model.fqn] = model
 
@@ -466,74 +453,79 @@ class SqlMeshLoader(Loader):
         registry.clear()
         registered: t.Set[str] = set()
 
-        for context_path, config in self._context.configs.items():
-            variables = self._variables(config)
-            model_registry._dialect = config.model_defaults.dialect
-            try:
-                for path in self._glob_paths(
-                    context_path / c.MODELS, ignore_patterns=config.ignore_patterns, extension=".py"
-                ):
-                    if not os.path.getsize(path):
-                        continue
+        model_registry._dialect = self.config.model_defaults.dialect
+        try:
+            for path in self._glob_paths(
+                self.config_path / c.MODELS,
+                ignore_patterns=self.config.ignore_patterns,
+                extension=".py",
+            ):
+                if not os.path.getsize(path):
+                    continue
 
-                    self._track_file(path)
-                    import_python_file(path, context_path)
+                self._track_file(path)
+                try:
+                    import_python_file(path, self.config_path)
                     new = registry.keys() - registered
                     registered |= new
                     for name in new:
-                        model = registry[name].model(
+                        for model in registry[name].models(
+                            self._get_variables,
                             path=path,
-                            module_path=context_path,
-                            defaults=config.model_defaults.dict(),
+                            module_path=self.config_path,
+                            defaults=self.config.model_defaults.dict(),
                             macros=macros,
                             jinja_macros=jinja_macros,
-                            dialect=config.model_defaults.dialect,
-                            time_column_format=config.time_column_format,
-                            physical_schema_mapping=config.physical_schema_mapping,
-                            project=config.project,
-                            default_catalog=self._context.default_catalog,
-                            variables=variables,
-                            infer_names=config.model_naming.infer_names,
+                            dialect=self.config.model_defaults.dialect,
+                            time_column_format=self.config.time_column_format,
+                            physical_schema_mapping=self.config.physical_schema_mapping,
+                            project=self.config.project,
+                            default_catalog=self.context.default_catalog,
+                            infer_names=self.config.model_naming.infer_names,
                             audit_definitions=audits,
-                        )
-                        if model.enabled:
-                            models[model.fqn] = model
-            finally:
-                model_registry._dialect = None
+                        ):
+                            if model.enabled:
+                                models[model.fqn] = model
+                except Exception as ex:
+                    raise ConfigError(f"Failed to load model definition at '{path}'.\n{ex}")
+
+        finally:
+            model_registry._dialect = None
 
         return models
 
+    def load_materializations(self) -> None:
+        with sys_path(self.config_path):
+            self._load_materializations()
+
     def _load_materializations(self) -> None:
-        """Loads custom materializations."""
-        for context_path, config in self._context.configs.items():
-            for path in self._glob_paths(
-                context_path / c.MATERIALIZATIONS,
-                ignore_patterns=config.ignore_patterns,
-                extension=".py",
-            ):
-                if os.path.getsize(path):
-                    import_python_file(path, context_path)
+        for path in self._glob_paths(
+            self.config_path / c.MATERIALIZATIONS,
+            ignore_patterns=self.config.ignore_patterns,
+            extension=".py",
+        ):
+            if os.path.getsize(path):
+                import_python_file(path, self.config_path)
 
     def _load_signals(self) -> UniqueKeyDict[str, signal]:
         """Loads signals for the built-in scheduler."""
 
         signals_max_mtime: t.Optional[float] = None
 
-        for context_path, config in self._context.configs.items():
-            for path in self._glob_paths(
-                context_path / c.SIGNALS,
-                ignore_patterns=config.ignore_patterns,
-                extension=".py",
-            ):
-                if os.path.getsize(path):
-                    self._track_file(path)
-                    signal_file_mtime = self._path_mtimes[path]
-                    signals_max_mtime = (
-                        max(signals_max_mtime, signal_file_mtime)
-                        if signals_max_mtime
-                        else signal_file_mtime
-                    )
-                    import_python_file(path, context_path)
+        for path in self._glob_paths(
+            self.config_path / c.SIGNALS,
+            ignore_patterns=self.config.ignore_patterns,
+            extension=".py",
+        ):
+            if os.path.getsize(path):
+                self._track_file(path)
+                signal_file_mtime = self._path_mtimes[path]
+                signals_max_mtime = (
+                    max(signals_max_mtime, signal_file_mtime)
+                    if signals_max_mtime
+                    else signal_file_mtime
+                )
+                import_python_file(path, self.config_path)
 
         self._signals_max_mtime = signals_max_mtime
 
@@ -545,33 +537,34 @@ class SqlMeshLoader(Loader):
         """Loads all the model audits."""
         audits_by_name: UniqueKeyDict[str, Audit] = UniqueKeyDict("audits")
         audits_max_mtime: t.Optional[float] = None
+        variables = self._get_variables()
 
-        for context_path, config in self._context.configs.items():
-            variables = self._variables(config)
-            for path in self._glob_paths(
-                context_path / c.AUDITS, ignore_patterns=config.ignore_patterns, extension=".sql"
-            ):
-                self._track_file(path)
-                with open(path, "r", encoding="utf-8") as file:
-                    audits_file_mtime = self._path_mtimes[path]
-                    audits_max_mtime = (
-                        max(audits_max_mtime, audits_file_mtime)
-                        if audits_max_mtime
-                        else audits_file_mtime
-                    )
-                    expressions = parse(file.read(), default_dialect=config.model_defaults.dialect)
-                    audits = load_multiple_audits(
-                        expressions=expressions,
-                        path=path,
-                        module_path=context_path,
-                        macros=macros,
-                        jinja_macros=jinja_macros,
-                        dialect=config.model_defaults.dialect,
-                        default_catalog=self._context.default_catalog,
-                        variables=variables,
-                    )
-                    for audit in audits:
-                        audits_by_name[audit.name] = audit
+        for path in self._glob_paths(
+            self.config_path / c.AUDITS,
+            ignore_patterns=self.config.ignore_patterns,
+            extension=".sql",
+        ):
+            self._track_file(path)
+            with open(path, "r", encoding="utf-8") as file:
+                audits_file_mtime = self._path_mtimes[path]
+                audits_max_mtime = (
+                    max(audits_max_mtime, audits_file_mtime)
+                    if audits_max_mtime
+                    else audits_file_mtime
+                )
+                expressions = parse(file.read(), default_dialect=self.config.model_defaults.dialect)
+                audits = load_multiple_audits(
+                    expressions=expressions,
+                    path=path,
+                    module_path=self.config_path,
+                    macros=macros,
+                    jinja_macros=jinja_macros,
+                    dialect=self.config.model_defaults.dialect,
+                    default_catalog=self.context.default_catalog,
+                    variables=variables,
+                )
+                for audit in audits:
+                    audits_by_name[audit.name] = audit
 
         self._audits_max_mtime = audits_max_mtime
 
@@ -581,55 +574,47 @@ class SqlMeshLoader(Loader):
         """Loads all metrics."""
         metrics: UniqueKeyDict[str, MetricMeta] = UniqueKeyDict("metrics")
 
-        for context_path, config in self._context.configs.items():
-            for path in self._glob_paths(
-                context_path / c.METRICS, ignore_patterns=config.ignore_patterns, extension=".sql"
-            ):
-                if not os.path.getsize(path):
-                    continue
-                self._track_file(path)
+        for path in self._glob_paths(
+            self.config_path / c.METRICS,
+            ignore_patterns=self.config.ignore_patterns,
+            extension=".sql",
+        ):
+            if not os.path.getsize(path):
+                continue
+            self._track_file(path)
 
-                with open(path, "r", encoding="utf-8") as file:
-                    dialect = config.model_defaults.dialect
-                    try:
-                        for expression in parse(file.read(), default_dialect=dialect):
-                            metric = load_metric_ddl(expression, path=path, dialect=dialect)
-                            metrics[metric.name] = metric
-                    except SqlglotError as ex:
-                        raise ConfigError(f"Failed to parse metric definitions at '{path}': {ex}.")
+            with open(path, "r", encoding="utf-8") as file:
+                dialect = self.config.model_defaults.dialect
+                try:
+                    for expression in parse(file.read(), default_dialect=dialect):
+                        metric = load_metric_ddl(expression, path=path, dialect=dialect)
+                        metrics[metric.name] = metric
+                except SqlglotError as ex:
+                    raise ConfigError(f"Failed to parse metric definitions at '{path}': {ex}.")
 
         return metrics
 
-    def _variables(self, config: Config) -> t.Dict[str, t.Any]:
-        gateway_name = self._context.selected_gateway
-        try:
-            gateway = config.get_gateway(gateway_name)
-        except ConfigError:
-            logger.warning("Gateway '%s' not found in project '%s'", gateway_name, config.project)
-            gateway = None
-        return {
-            **config.variables,
-            **(gateway.variables if gateway else {}),
-            c.GATEWAY: gateway_name,
-        }
-
     class _Cache:
-        def __init__(self, loader: SqlMeshLoader, context_path: Path):
+        def __init__(self, loader: SqlMeshLoader, config_path: Path):
             self._loader = loader
-            self._context_path = context_path
-            self._model_cache = ModelCache(self._context_path / c.CACHE)
+            self.config_path = config_path
+            self._model_cache = ModelCache(self.config_path / c.CACHE)
 
-        def get_or_load_model(self, target_path: Path, loader: t.Callable[[], Model]) -> Model:
-            model = self._model_cache.get_or_load(
+        def get_or_load_models(
+            self, target_path: Path, loader: t.Callable[[], t.List[Model]]
+        ) -> t.List[Model]:
+            models = self._model_cache.get_or_load(
                 self._cache_entry_name(target_path),
                 self._model_cache_entry_id(target_path),
                 loader=loader,
             )
-            model._path = target_path
-            return model
+            for model in models:
+                model._path = target_path
+
+            return models
 
         def _cache_entry_name(self, target_path: Path) -> str:
-            return "__".join(target_path.relative_to(self._context_path).parts).replace(
+            return "__".join(target_path.relative_to(self.config_path).parts).replace(
                 target_path.suffix, ""
             )
 
@@ -639,118 +624,20 @@ class SqlMeshLoader(Loader):
                 self._loader._macros_max_mtime,
                 self._loader._signals_max_mtime,
                 self._loader._audits_max_mtime,
-                self._loader._config_mtimes.get(self._context_path),
+                self._loader._config_mtimes.get(self.config_path),
                 self._loader._config_mtimes.get(c.SQLMESH_PATH),
             ]
             return "__".join(
                 [
                     str(max(m for m in mtimes if m is not None)),
-                    self._loader._context.config.fingerprint,
+                    self._loader.config.fingerprint,
                     # default catalog can change outside sqlmesh (e.g., DB user's
                     # default catalog), and it is retained in cached model's fully
                     # qualified name
-                    self._loader._context.default_catalog or "",
+                    self._loader.context.default_catalog or "",
                     # gateway is configurable, and it is retained in a cached
                     # model's python environment if the @gateway macro variable is
                     # used in the model
-                    self._loader._context.gateway
-                    or self._loader._context.config.default_gateway_name,
+                    self._loader.context.gateway or self._loader.config.default_gateway_name,
                 ]
             )
-
-
-# TODO: consider moving this to context
-def update_model_schemas(
-    dag: DAG[str],
-    models: UniqueKeyDict[str, Model],
-    context_path: Path,
-) -> None:
-    schema = MappingSchema(normalize=False)
-    optimized_query_cache: OptimizedQueryCache = OptimizedQueryCache(context_path / c.CACHE)
-
-    if c.MAX_FORK_WORKERS == 1:
-        _update_model_schemas_sequential(dag, models, schema, optimized_query_cache)
-    else:
-        _update_model_schemas_parallel(dag, models, schema, optimized_query_cache)
-
-
-def _update_schema_with_model(schema: MappingSchema, model: Model) -> None:
-    columns_to_types = model.columns_to_types
-    if columns_to_types:
-        try:
-            schema.add_table(model.fqn, columns_to_types, dialect=model.dialect)
-        except SchemaError as e:
-            if "nesting level:" in str(e):
-                logger.error(
-                    "SQLMesh requires all model names and references to have the same level of nesting."
-                )
-            raise
-
-
-def _update_model_schemas_sequential(
-    dag: DAG[str],
-    models: UniqueKeyDict[str, Model],
-    schema: MappingSchema,
-    optimized_query_cache: OptimizedQueryCache,
-) -> None:
-    for name in dag.sorted:
-        model = models.get(name)
-
-        # External models don't exist in the context, so we need to skip them
-        if not model:
-            continue
-
-        model.update_schema(schema)
-        optimized_query_cache.with_optimized_query(model)
-        _update_schema_with_model(schema, model)
-
-
-def _update_model_schemas_parallel(
-    dag: DAG[str],
-    models: UniqueKeyDict[str, Model],
-    schema: MappingSchema,
-    optimized_query_cache: OptimizedQueryCache,
-) -> None:
-    futures = set()
-    graph = {
-        model: {dep for dep in deps if dep in models}
-        for model, deps in dag._dag.items()
-        if model in models
-    }
-
-    def process_models(completed_model: t.Optional[Model] = None) -> None:
-        for name in list(graph):
-            deps = graph[name]
-
-            if completed_model:
-                deps.discard(completed_model.fqn)
-
-            if not deps:
-                del graph[name]
-                model = models[name]
-                futures.add(
-                    executor.submit(
-                        load_optimized_query_and_mapping,
-                        model,
-                        mapping={
-                            parent: models[parent].columns_to_types
-                            for parent in model.depends_on
-                            if parent in models
-                        },
-                    )
-                )
-
-    with optimized_query_cache_pool(optimized_query_cache) as executor:
-        process_models()
-
-        while futures:
-            for future in as_completed(futures):
-                futures.remove(future)
-                fqn, entry_name, data_hash, metadata_hash, mapping_schema = future.result()
-                model = models[fqn]
-                model._data_hash = data_hash
-                model._metadata_hash = metadata_hash
-                model.set_mapping_schema(mapping_schema)
-                optimized_query_cache.with_optimized_query(model, entry_name)
-                _update_schema_with_model(schema, model)
-                process_models(completed_model=model)

@@ -4,10 +4,8 @@ from functools import wraps
 
 import click
 from sqlglot.errors import SqlglotError
-
 from sqlmesh.core.context import Context
 from sqlmesh.utils import debug_mode_enabled
-from sqlmesh.utils.concurrency import NodeExecutionFailedError
 from sqlmesh.utils.errors import SQLMeshError
 
 DECORATOR_RETURN_TYPE = t.TypeVar("DECORATOR_RETURN_TYPE")
@@ -38,11 +36,9 @@ def _default_exception_handler(
 ) -> DECORATOR_RETURN_TYPE:
     try:
         return func()
-    except NodeExecutionFailedError as ex:
-        cause = ex.__cause__
-        raise click.ClickException(f"Failed processing {ex.node}. {cause}")
     except (SQLMeshError, SqlglotError, ValueError) as ex:
-        raise click.ClickException(str(ex))
+        click.echo(click.style("Error: " + str(ex), fg="red"))
+        exit(1)
     finally:
         if context:
             context.close()

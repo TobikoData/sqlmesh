@@ -127,6 +127,54 @@ ON_VIRTUAL_UPDATE_END;
 
 The model must contain a standalone query, which can be a single `SELECT` expression, or multiple `SELECT` expressions combined with the `UNION`, `INTERSECT`, or `EXCEPT` operators. The result of this query will be used to populate the model's table or view.
 
+### SQL model blueprinting
+
+A SQL model can also serve as a template for creating multiple models, or _blueprints_, by specifying a list of key-value mappings in the `blueprints` property. In order to achieve this, the model's name must be parameterized with a variable that exists in this mapping.
+
+For instance, the following model will result into two new models, each using the corresponding mapping in the `blueprints` property:
+
+```sql linenums="1"
+MODEL (
+  name @customer.some_table,
+  kind FULL,
+  blueprints (
+    (customer := customer1, field_a := x, field_b := y),
+    (customer := customer2, field_a := z, field_b := w)
+  )
+);
+
+SELECT
+  @field_a,
+  @field_b
+FROM @customer.some_source
+```
+
+The two models produced from this template are:
+
+```sql linenums="1"
+-- This uses the first variable mapping
+MODEL (
+  name customer1.some_table,
+  kind FULL
+);
+
+SELECT
+  x,
+  y
+FROM customer1.some_source
+
+-- This uses the second variable mapping
+MODEL (
+  name customer2.some_table,
+  kind FULL
+);
+
+SELECT
+  z,
+  w
+FROM customer2.some_source
+```
+
 ## Python-based definition
 
 The Python-based definition of SQL models consists of a single python function, decorated with SQLMesh's `@model` [decorator](https://wiki.python.org/moin/PythonDecorators). The decorator is required to have the `is_sql` keyword argument set to `True` to distinguish it from [Python models](./python_models.md) that return DataFrame instances.
@@ -178,6 +226,37 @@ In addition to model metadata and configuration information, one can also set th
 !!! note
 
     All of the [metadata property](./overview.md#model-properties) field names are the same as those in the `MODEL` DDL.
+
+### Python model blueprinting
+
+A Python-based SQL model can also serve as a template for creating multiple models, or _blueprints_, by specifying a list of key-value dicts in the `blueprints` property. In order to achieve this, the model's name must be parameterized with a variable that exists in this mapping.
+
+For instance, the following model will result into two new models, each using the corresponding mapping in the `blueprints` property:
+
+```python linenums="1"
+from sqlglot import exp
+
+from sqlmesh.core.model import model
+from sqlmesh.core.macros import MacroEvaluator
+
+@model(
+    "@{customer}.some_table",
+    is_sql=True,
+    kind="FULL",
+    blueprints=[
+        {"customer": "customer1", "field_a": "x", "field_b": "y"},
+        {"customer": "customer2", "field_a": "z", "field_b": "w"},
+    ],
+)
+def entrypoint(evaluator: MacroEvaluator) -> str | exp.Expression:
+    field_a = evaluator.var("field_a")
+    field_b = evaluator.var("field_b")
+    customer = evaluator.var("customer")
+
+    return exp.select(field_a, field_b).from_(f"{customer}.some_source")
+```
+
+The two models produced from this template are the same as in the [example](#SQL-model-blueprinting) for SQL-based blueprinting.
 
 ## Automatic dependencies
 

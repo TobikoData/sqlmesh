@@ -6,9 +6,11 @@ from pytest_mock.plugin import MockerFixture
 from sqlglot import exp, parse_one
 
 import sqlmesh.core.dialect as d
+from sqlmesh.core.config.connection import TrinoConnectionConfig
 from sqlmesh.core.engine_adapter import TrinoEngineAdapter
 from sqlmesh.core.model import load_sql_based_model
 from sqlmesh.core.model.definition import SqlModel
+from sqlmesh.core.dialect import schema_
 from tests.core.engine_adapter import to_sql_calls
 
 pytestmark = [pytest.mark.engine, pytest.mark.trino]
@@ -452,3 +454,149 @@ def test_table_format(trino_mocked_engine_adapter: TrinoEngineAdapter, mocker: M
         'CREATE TABLE IF NOT EXISTS "iceberg"."test_table" ("cola" TIMESTAMP, "colb" VARCHAR, "colc" VARCHAR) WITH (FORMAT=\'ORC\')',
         'CREATE TABLE IF NOT EXISTS "iceberg"."test_table" WITH (FORMAT=\'ORC\') AS SELECT CAST("cola" AS TIMESTAMP) AS "cola", CAST("colb" AS VARCHAR) AS "colb", CAST("colc" AS VARCHAR) AS "colc" FROM (SELECT CAST(1 AS TIMESTAMP) AS "cola", CAST(2 AS VARCHAR) AS "colb", \'foo\' AS "colc") AS "_subquery"',
     ]
+
+
+def test_table_location(trino_mocked_engine_adapter: TrinoEngineAdapter, mocker: MockerFixture):
+    adapter = trino_mocked_engine_adapter
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.trino.TrinoEngineAdapter.get_current_catalog",
+        return_value="iceberg",
+    )
+
+    expressions = d.parse(
+        """
+        MODEL (
+            name iceberg.test_table,
+            kind FULL,
+            physical_properties (
+                location = 'hdfs://some/table/location'
+            )
+        );
+
+        SELECT 1::timestamp AS cola, 2::varchar as colb, 'foo' as colc;
+    """
+    )
+    model: SqlModel = t.cast(SqlModel, load_sql_based_model(expressions))
+
+    adapter.create_table(
+        table_name=model.name,
+        columns_to_types=model.columns_to_types_or_raise,
+        table_properties=model.physical_properties,
+    )
+
+    adapter.ctas(
+        table_name=model.name,
+        query_or_df=t.cast(exp.Query, model.query),
+        columns_to_types=model.columns_to_types_or_raise,
+        table_properties=model.physical_properties,
+    )
+
+    assert to_sql_calls(adapter) == [
+        'CREATE TABLE IF NOT EXISTS "iceberg"."test_table" ("cola" TIMESTAMP, "colb" VARCHAR, "colc" VARCHAR) WITH (location=\'hdfs://some/table/location\')',
+        'CREATE TABLE IF NOT EXISTS "iceberg"."test_table" WITH (location=\'hdfs://some/table/location\') AS SELECT CAST("cola" AS TIMESTAMP) AS "cola", CAST("colb" AS VARCHAR) AS "colb", CAST("colc" AS VARCHAR) AS "colc" FROM (SELECT CAST(1 AS TIMESTAMP) AS "cola", CAST(2 AS VARCHAR) AS "colb", \'foo\' AS "colc") AS "_subquery"',
+    ]
+
+
+def test_schema_location_mapping():
+    config = TrinoConnectionConfig(
+        user="user",
+        host="host",
+        catalog="catalog",
+    )
+
+    adapter = config.create_engine_adapter()
+    assert adapter.schema_location_mapping is None
+    assert adapter._schema_location("foo") is None
+
+    config = TrinoConnectionConfig(
+        user="user",
+        host="host",
+        catalog="catalog",
+        schema_location_mapping={
+            "^utils$": "s3://utils-bucket/@{schema_name}",
+            "^landing\\..*$": "s3://raw-data/@{catalog_name}/@{schema_name}",
+            "^staging.*$": "s3://bucket/@{schema_name}_dev",
+            "^sqlmesh.*$": "s3://sqlmesh-internal/dev/@{schema_name}",
+        },
+    )
+    adapter = config.create_engine_adapter()
+    assert adapter.schema_location_mapping is not None
+    assert adapter._schema_location("foo") is None
+    assert adapter._schema_location("utils_dev") is None
+    assert adapter._schema_location("utils") == "s3://utils-bucket/utils"
+    assert adapter._schema_location("staging_customers") == "s3://bucket/staging_customers_dev"
+    assert adapter._schema_location("staging_accounts") == "s3://bucket/staging_accounts_dev"
+    assert (
+        adapter._schema_location("sqlmesh__staging_customers")
+        == "s3://sqlmesh-internal/dev/sqlmesh__staging_customers"
+    )
+    assert (
+        adapter._schema_location("sqlmesh__staging_utils")
+        == "s3://sqlmesh-internal/dev/sqlmesh__staging_utils"
+    )
+    assert adapter._schema_location("landing.transactions") == "s3://raw-data/landing/transactions"
+    assert (
+        adapter._schema_location(schema_("transactions", "landing"))
+        == "s3://raw-data/landing/transactions"
+    )
+    assert (
+        adapter._schema_location('"landing"."transactions"') == "s3://raw-data/landing/transactions"
+    )
+
+
+def test_create_schema_sets_location(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.trino.TrinoEngineAdapter.get_catalog_type",
+        return_value="iceberg",
+    )
+
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.trino.TrinoEngineAdapter._block_until_table_exists",
+        return_value=True,
+    )
+
+    config = TrinoConnectionConfig(
+        user="user",
+        host="host",
+        catalog="catalog",
+        schema_location_mapping={
+            "^utils$": "s3://utils-bucket/@{schema_name}",
+            "^landing\\..*$": "s3://raw-data/@{catalog_name}/@{schema_name}",
+            "^staging.*$": "s3://bucket/@{schema_name}_dev",
+            "^sqlmesh.*$": "s3://sqlmesh-internal/dev/@{schema_name}",
+            "^iceberg\\.staging.*$": "s3://iceberg-catalog/foo_@{schema_name}",
+        },
+    )
+
+    adapter: TrinoEngineAdapter = make_mocked_engine_adapter(
+        TrinoEngineAdapter, schema_location_mapping=config.schema_location_mapping
+    )
+
+    adapter.create_schema("foo")
+    adapter.create_schema(schema_("utils_dev", "db"))
+    adapter.create_schema(schema_("utils", "db"))
+    adapter.create_schema(schema_("utils"))
+    adapter.create_schema(schema_("sqlmesh"))
+    adapter.create_schema("sqlmesh__staging")
+    adapter.create_schema(schema_("snapshots", "sqlmesh"))
+    adapter.create_schema(schema_("staging_foo"))
+    adapter.create_schema(schema_("staging_bar", "iceberg"))
+    adapter.create_schema('"catalog"."staging_customers"')
+    adapter.create_schema(schema_("transactions", "landing"))
+
+    assert (
+        to_sql_calls(adapter)
+        == [
+            'CREATE SCHEMA IF NOT EXISTS "foo"',  # no match
+            'CREATE SCHEMA IF NOT EXISTS "db"."utils_dev"',  # no match
+            'CREATE SCHEMA IF NOT EXISTS "db"."utils"',  # no match on '^utils$' because of catalog
+            "CREATE SCHEMA IF NOT EXISTS \"utils\" WITH (LOCATION='s3://utils-bucket/utils')",  # match '^utils$'
+            "CREATE SCHEMA IF NOT EXISTS \"sqlmesh\" WITH (LOCATION='s3://sqlmesh-internal/dev/sqlmesh')",  # match '^sqlmesh.*$'
+            "CREATE SCHEMA IF NOT EXISTS \"sqlmesh__staging\" WITH (LOCATION='s3://sqlmesh-internal/dev/sqlmesh__staging')",  # match '^sqlmesh.*$'
+            'CREATE SCHEMA IF NOT EXISTS "sqlmesh"."snapshots" WITH (LOCATION=\'s3://sqlmesh-internal/dev/snapshots\')',  # match '^sqlmesh.*$' on the catalog
+            "CREATE SCHEMA IF NOT EXISTS \"staging_foo\" WITH (LOCATION='s3://bucket/staging_foo_dev')",  # match '^staging.*$'
+            'CREATE SCHEMA IF NOT EXISTS "iceberg"."staging_bar" WITH (LOCATION=\'s3://iceberg-catalog/foo_staging_bar\')',  # match '^iceberg\.staging.*$'
+            'CREATE SCHEMA IF NOT EXISTS "catalog"."staging_customers"',  # no match
+            'CREATE SCHEMA IF NOT EXISTS "landing"."transactions" WITH (LOCATION=\'s3://raw-data/landing/transactions\')',  # match '^landing\..*$'
+        ]
+    )

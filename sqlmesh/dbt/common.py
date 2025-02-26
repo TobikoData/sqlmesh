@@ -149,8 +149,10 @@ class GeneralConfig(DbtConfig):
         """
         kwargs = {}
         for field in self.sqlmesh_config_fields:
-            field_val = getattr(self, field, None) or self.meta.get(field, None)
-            if field_val:
+            field_val = getattr(self, field, None)
+            if field_val is None:
+                field_val = self.meta.get(field, None)
+            if field_val is not None:
                 kwargs[field] = field_val
         return kwargs
 

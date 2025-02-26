@@ -135,13 +135,15 @@ Install SQLMesh through [pypi](https://pypi.org/project/sqlmesh/) by running:
 ```bash
 mkdir sqlmesh-example
 cd sqlmesh-example
-
-python -m venv .env
-source .env/bin/activate
-
+python -m venv .venv
+source .venv/bin/activate
 pip install sqlmesh
+source .venv/bin/activate # reactivate the venv to ensure you're using the right installation
 sqlmesh init duckdb # get started right away with a local duckdb instance
+sqlmesh plan # see the plan for the changes you're making
 ```
+
+> Note: You may need to run `python3` or `pip3` instead of `python` or `pip`, depending on your python installation.
 
 Follow the [quickstart guide](https://sqlmesh.readthedocs.io/en/stable/quickstart/cli/#1-create-the-sqlmesh-project) to learn how to use SQLMesh. You already have a head start!
 

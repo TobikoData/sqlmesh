@@ -11,7 +11,7 @@ from pydantic import Field
 from sqlglot import exp
 
 from sqlmesh.core.dialect import to_schema
-from sqlmesh.utils.errors import UnsupportedCatalogOperationError
+from sqlmesh.utils.errors import UnsupportedCatalogOperationError, SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
 
 if t.TYPE_CHECKING:
@@ -317,6 +317,7 @@ def set_catalog(override_mapping: t.Optional[t.Dict[str, CatalogSupport]] = None
             catalog_name = expression.catalog
             if not catalog_name:
                 return func(*list_args, **kwargs)
+
             # If we have a catalog and this engine doesn't support catalogs then we need to error
             if catalog_support.is_unsupported:
                 raise UnsupportedCatalogOperationError(
@@ -327,8 +328,8 @@ def set_catalog(override_mapping: t.Optional[t.Dict[str, CatalogSupport]] = None
             container[key] = expression  # type: ignore
             if catalog_support.is_single_catalog_only:
                 if catalog_name != engine_adapter._default_catalog:
-                    logger.warning(
-                        f"{engine_adapter.dialect} requires that all catalog operations be against a single catalog: {engine_adapter._default_catalog}. Ignoring catalog: {catalog_name}"
+                    raise SQLMeshError(
+                        f"{engine_adapter.dialect} requires that all catalog operations be against a single catalog: {engine_adapter._default_catalog}. Provided catalog: {catalog_name}"
                     )
                 return func(*list_args, **kwargs)
             # Set the catalog name on the engine adapter if needed

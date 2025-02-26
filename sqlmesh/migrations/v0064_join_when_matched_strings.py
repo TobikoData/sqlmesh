@@ -45,24 +45,23 @@ def migrate(state_sync, **kwargs):  # type: ignore
         parsed_snapshot = json.loads(snapshot)
         node = parsed_snapshot["node"]
 
-        if "kind" in node:
-            kind = node["kind"]
-            if isinstance(when_matched := kind.get("when_matched"), list):
-                kind["when_matched"] = " ".join(when_matched)
+        kind = node.get("kind")
+        if kind and isinstance(when_matched := kind.get("when_matched"), list):
+            kind["when_matched"] = " ".join(when_matched)
 
-            new_snapshots.append(
-                {
-                    "name": name,
-                    "identifier": identifier,
-                    "version": version,
-                    "snapshot": json.dumps(parsed_snapshot),
-                    "kind_name": kind_name,
-                    "updated_ts": updated_ts,
-                    "unpaused_ts": unpaused_ts,
-                    "ttl_ms": ttl_ms,
-                    "unrestorable": unrestorable,
-                }
-            )
+        new_snapshots.append(
+            {
+                "name": name,
+                "identifier": identifier,
+                "version": version,
+                "snapshot": json.dumps(parsed_snapshot),
+                "kind_name": kind_name,
+                "updated_ts": updated_ts,
+                "unpaused_ts": unpaused_ts,
+                "ttl_ms": ttl_ms,
+                "unrestorable": unrestorable,
+            }
+        )
 
     if new_snapshots:
         engine_adapter.delete_from(snapshots_table, "TRUE")

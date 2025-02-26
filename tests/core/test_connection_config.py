@@ -1,4 +1,5 @@
 import base64
+import re
 import typing as t
 
 import pytest
@@ -12,6 +13,7 @@ from sqlmesh.core.config.connection import (
     DuckDBAttachOptions,
     DuckDBConnectionConfig,
     GCPPostgresConnectionConfig,
+    MotherDuckConnectionConfig,
     MySQLConnectionConfig,
     PostgresConnectionConfig,
     SnowflakeConnectionConfig,
@@ -388,6 +390,35 @@ def test_trino(make_config):
         make_config(method="ldap", http_scheme="http", **required_kwargs)
 
 
+def test_trino_schema_location_mapping(make_config):
+    required_kwargs = dict(
+        type="trino",
+        user="user",
+        host="host",
+        catalog="catalog",
+    )
+
+    with pytest.raises(
+        ConfigError, match=r".*needs to include the '@\{schema_name\}' placeholder.*"
+    ):
+        make_config(**required_kwargs, schema_location_mapping={".*": "s3://foo"})
+
+    config = make_config(
+        **required_kwargs,
+        schema_location_mapping={
+            "^utils$": "s3://utils-bucket/@{schema_name}",
+            "^staging.*$": "s3://bucket/@{schema_name}_dev",
+            "^sqlmesh.*$": "s3://sqlmesh-internal/dev/@{schema_name}",
+        },
+    )
+
+    assert config.schema_location_mapping is not None
+    assert len(config.schema_location_mapping) == 3
+
+    assert all((isinstance(k, re.Pattern) for k in config.schema_location_mapping))
+    assert all((isinstance(v, str) for v in config.schema_location_mapping.values()))
+
+
 def test_duckdb(make_config):
     config = make_config(
         type="duckdb",
@@ -615,6 +646,45 @@ def test_duckdb_multithreaded_connection_factory(make_config):
     assert adapter.fetchone("select 1") == (1,)
 
 
+def test_motherduck_token_mask(make_config):
+    config = make_config(
+        type="motherduck",
+        catalogs={
+            "test2": DuckDBAttachOptions(
+                type="motherduck",
+                path="md:whodunnit?motherduck_token=short",
+            ),
+            "test1": DuckDBAttachOptions(
+                type="motherduck", path="md:whodunnit", token="longtoken123456789"
+            ),
+        },
+    )
+    assert isinstance(config, MotherDuckConnectionConfig)
+
+    assert config._mask_motherduck_token(config.catalogs["test1"].path) == "md:whodunnit"
+    assert (
+        config._mask_motherduck_token(config.catalogs["test2"].path)
+        == "md:whodunnit?motherduck_token=*****"
+    )
+    assert (
+        config._mask_motherduck_token("?motherduck_token=secret1235")
+        == "?motherduck_token=**********"
+    )
+    assert (
+        config._mask_motherduck_token("md:whodunnit?motherduck_token=short")
+        == "md:whodunnit?motherduck_token=*****"
+    )
+    assert (
+        config._mask_motherduck_token("md:whodunnit?motherduck_token=longtoken123456789")
+        == "md:whodunnit?motherduck_token=******************"
+    )
+    assert (
+        config._mask_motherduck_token("md:whodunnit?motherduck_token=")
+        == "md:whodunnit?motherduck_token="
+    )
+    assert config._mask_motherduck_token(":memory:") == ":memory:"
+
+
 def test_bigquery(make_config):
     config = make_config(
         type="bigquery",
@@ -660,6 +730,16 @@ def test_gcp_postgres(make_config):
     )
     assert isinstance(config, GCPPostgresConnectionConfig)
     assert config.is_recommended_for_state_sync is True
+    assert config.ip_type == "public"
+    config = make_config(
+        type="gcp_postgres",
+        instance_connection_string="something",
+        user="user",
+        password="password",
+        db="database",
+        ip_type="private",
+    )
+    assert config.ip_type == "private"
 
 
 def test_mysql(make_config):

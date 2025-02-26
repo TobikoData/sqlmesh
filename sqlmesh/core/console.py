@@ -5,6 +5,8 @@ import datetime
 import typing as t
 import unittest
 import uuid
+import logging
+import textwrap
 
 from hyperscript import h
 from rich.console import Console as RichConsole
@@ -32,17 +34,27 @@ from sqlmesh.core.snapshot import (
 )
 from sqlmesh.core.test import ModelTest
 from sqlmesh.utils import rich as srich
+from sqlmesh.utils.concurrency import NodeExecutionFailedError
 from sqlmesh.utils.date import time_like_to_str, to_date, yesterday_ds
+from sqlmesh.utils.errors import (
+    PythonModelEvalError,
+    NodeAuditsErrors,
+    format_destructive_change_msg,
+)
 
 if t.TYPE_CHECKING:
     import ipywidgets as widgets
 
+    from sqlglot import exp
     from sqlglot.dialects.dialect import DialectType
     from sqlmesh.core.context_diff import ContextDiff
-    from sqlmesh.core.plan import Plan, EvaluatablePlan, PlanBuilder
+    from sqlmesh.core.plan import Plan, EvaluatablePlan, PlanBuilder, SnapshotIntervals
     from sqlmesh.core.table_diff import RowDiff, SchemaDiff
 
     LayoutWidget = t.TypeVar("LayoutWidget", bound=t.Union[widgets.VBox, widgets.HBox])
+
+
+logger = logging.getLogger(__name__)
 
 
 SNAPSHOT_CHANGE_CATEGORY_STR = {
@@ -54,6 +66,9 @@ SNAPSHOT_CHANGE_CATEGORY_STR = {
     SnapshotChangeCategory.INDIRECT_NON_BREAKING: "Indirect Non-breaking",
     SnapshotChangeCategory.METADATA: "Metadata",
 }
+
+PROGRESS_BAR_WIDTH = 40
+LINE_WRAP_WIDTH = 100
 
 
 class Console(abc.ABC):
@@ -232,8 +247,36 @@ class Console(abc.ABC):
         """Display general status update to the user."""
 
     @abc.abstractmethod
+    def log_skipped_models(self, snapshot_names: t.Set[str]) -> None:
+        """Display list of models skipped during evaluation to the user."""
+
+    @abc.abstractmethod
+    def log_failed_models(self, errors: t.List[NodeExecutionFailedError]) -> None:
+        """Display list of models that failed during evaluation to the user."""
+
+    @abc.abstractmethod
+    def log_destructive_change(
+        self,
+        snapshot_name: str,
+        dropped_column_names: t.List[str],
+        alter_expressions: t.List[exp.Alter],
+        dialect: str,
+        error: bool = True,
+    ) -> None:
+        """Display a destructive change error or warning to the user."""
+
+    @abc.abstractmethod
     def log_error(self, message: str) -> None:
         """Display error info to the user."""
+
+    @abc.abstractmethod
+    def log_warning(self, short_message: str, long_message: t.Optional[str] = None) -> None:
+        """Display warning info to the user.
+
+        Args:
+            short_message: The warning message to print to console.
+            long_message: The warning message to log to file. If not provided, `short_message` is used.
+        """
 
     @abc.abstractmethod
     def log_success(self, message: str) -> None:
@@ -257,6 +300,10 @@ class Console(abc.ABC):
     ) -> None:
         """Show table summary diff."""
 
+    @abc.abstractmethod
+    def print_environments(self, environments_summary: t.Dict[str, int]) -> None:
+        """Prints all environment names along with expiry datetime."""
+
     def _limit_model_names(self, tree: Tree, verbose: bool = False) -> Tree:
         """Trim long indirectly modified model lists below threshold."""
         modified_length = len(tree.children)
@@ -269,10 +316,169 @@ class Console(abc.ABC):
         return tree
 
 
+class NoopConsole(Console):
+    def start_plan_evaluation(self, plan: EvaluatablePlan) -> None:
+        pass
+
+    def stop_plan_evaluation(self) -> None:
+        pass
+
+    def start_evaluation_progress(
+        self,
+        batches: t.Dict[Snapshot, int],
+        environment_naming_info: EnvironmentNamingInfo,
+        default_catalog: t.Optional[str],
+    ) -> None:
+        pass
+
+    def start_snapshot_evaluation_progress(self, snapshot: Snapshot) -> None:
+        pass
+
+    def update_snapshot_evaluation_progress(
+        self, snapshot: Snapshot, batch_idx: int, duration_ms: t.Optional[int]
+    ) -> None:
+        pass
+
+    def stop_evaluation_progress(self, success: bool = True) -> None:
+        pass
+
+    def start_creation_progress(
+        self,
+        total_tasks: int,
+        environment_naming_info: EnvironmentNamingInfo,
+        default_catalog: t.Optional[str],
+    ) -> None:
+        pass
+
+    def update_creation_progress(self, snapshot: SnapshotInfoLike) -> None:
+        pass
+
+    def stop_creation_progress(self, success: bool = True) -> None:
+        pass
+
+    def start_cleanup(self, ignore_ttl: bool) -> bool:
+        return True
+
+    def update_cleanup_progress(self, object_name: str) -> None:
+        pass
+
+    def stop_cleanup(self, success: bool = True) -> None:
+        pass
+
+    def start_promotion_progress(
+        self,
+        total_tasks: int,
+        environment_naming_info: EnvironmentNamingInfo,
+        default_catalog: t.Optional[str],
+    ) -> None:
+        pass
+
+    def update_promotion_progress(self, snapshot: SnapshotInfoLike, promoted: bool) -> None:
+        pass
+
+    def stop_promotion_progress(self, success: bool = True) -> None:
+        pass
+
+    def start_snapshot_migration_progress(self, total_tasks: int) -> None:
+        pass
+
+    def update_snapshot_migration_progress(self, num_tasks: int) -> None:
+        pass
+
+    def log_migration_status(self, success: bool = True) -> None:
+        pass
+
+    def stop_snapshot_migration_progress(self, success: bool = True) -> None:
+        pass
+
+    def start_env_migration_progress(self, total_tasks: int) -> None:
+        pass
+
+    def update_env_migration_progress(self, num_tasks: int) -> None:
+        pass
+
+    def stop_env_migration_progress(self, success: bool = True) -> None:
+        pass
+
+    def show_model_difference_summary(
+        self,
+        context_diff: ContextDiff,
+        environment_naming_info: EnvironmentNamingInfo,
+        default_catalog: t.Optional[str],
+        no_diff: bool = True,
+        ignored_snapshot_ids: t.Optional[t.Set[SnapshotId]] = None,
+    ) -> None:
+        pass
+
+    def plan(
+        self,
+        plan_builder: PlanBuilder,
+        auto_apply: bool,
+        default_catalog: t.Optional[str],
+        no_diff: bool = False,
+        no_prompts: bool = False,
+    ) -> None:
+        if auto_apply:
+            plan_builder.apply()
+
+    def log_test_results(
+        self, result: unittest.result.TestResult, output: t.Optional[str], target_dialect: str
+    ) -> None:
+        pass
+
+    def show_sql(self, sql: str) -> None:
+        pass
+
+    def log_status_update(self, message: str) -> None:
+        pass
+
+    def log_skipped_models(self, snapshot_names: t.Set[str]) -> None:
+        pass
+
+    def log_failed_models(self, errors: t.List[NodeExecutionFailedError]) -> None:
+        pass
+
+    def log_destructive_change(
+        self,
+        snapshot_name: str,
+        dropped_column_names: t.List[str],
+        alter_expressions: t.List[exp.Alter],
+        dialect: str,
+        error: bool = True,
+    ) -> None:
+        pass
+
+    def log_error(self, message: str) -> None:
+        pass
+
+    def log_warning(self, short_message: str, long_message: t.Optional[str] = None) -> None:
+        logger.warning(long_message or short_message)
+
+    def log_success(self, message: str) -> None:
+        pass
+
+    def loading_start(self, message: t.Optional[str] = None) -> uuid.UUID:
+        return uuid.uuid4()
+
+    def loading_stop(self, id: uuid.UUID) -> None:
+        pass
+
+    def show_schema_diff(self, schema_diff: SchemaDiff) -> None:
+        pass
+
+    def show_row_diff(
+        self, row_diff: RowDiff, show_sample: bool = True, skip_grain_check: bool = False
+    ) -> None:
+        pass
+
+    def print_environments(self, environments_summary: t.Dict[str, int]) -> None:
+        pass
+
+
 def make_progress_bar(message: str, console: t.Optional[RichConsole] = None) -> Progress:
     return Progress(
         TextColumn(f"[bold blue]{message}", justify="right"),
-        BarColumn(bar_width=40),
+        BarColumn(bar_width=PROGRESS_BAR_WIDTH),
         "[progress.percentage]{task.percentage:>3.1f}%",
         "•",
         srich.BatchColumn(),
@@ -292,6 +498,7 @@ class TerminalConsole(Console):
         console: t.Optional[RichConsole] = None,
         verbose: bool = False,
         dialect: DialectType = None,
+        ignore_warnings: bool = False,
         **kwargs: t.Any,
     ) -> None:
         self.console: RichConsole = console or srich.console
@@ -323,6 +530,7 @@ class TerminalConsole(Console):
 
         self.verbose = verbose
         self.dialect = dialect
+        self.ignore_warnings = ignore_warnings
 
     def _print(self, value: t.Any, **kwargs: t.Any) -> None:
         self.console.print(value, **kwargs)
@@ -502,7 +710,7 @@ class TerminalConsole(Console):
                     f"[bold blue]Virtually Updating '{environment_naming_info.name}'",
                     justify="right",
                 ),
-                BarColumn(bar_width=40),
+                BarColumn(bar_width=PROGRESS_BAR_WIDTH),
                 "[progress.percentage]{task.percentage:>3.1f}%",
                 "•",
                 TimeElapsedColumn(),
@@ -614,9 +822,9 @@ class TerminalConsole(Console):
         """
         if context_diff.is_new_environment:
             msg = (
-                f"`{context_diff.environment}` environment will be initialized"
+                f"\n`{context_diff.environment}` environment will be initialized"
                 if not context_diff.create_from_env_exists
-                else f"New environment `{context_diff.environment}` will be created from `{context_diff.create_from}`"
+                else f"\nNew environment `{context_diff.environment}` will be created from `{context_diff.create_from}`"
             )
             self._print(Tree(f"[bold]{msg}\n"))
             if not context_diff.has_snapshot_changes:
@@ -628,7 +836,7 @@ class TerminalConsole(Console):
             #   the PlanBuilder.
             self._print(
                 Tree(
-                    f"[bold]No changes to plan: project files match the `{context_diff.environment}` environment\n"
+                    f"\n[bold]No changes to plan: project files match the `{context_diff.environment}` environment\n"
                 )
             )
             return
@@ -764,7 +972,8 @@ class TerminalConsole(Console):
                     )
                 elif context_diff.indirectly_modified(name):
                     indirect.add(f"[indirect]{display_name}")
-                elif context_diff.metadata_updated(name):
+
+                if context_diff.metadata_updated(name):
                     metadata.add(
                         f"[metadata]{display_name}"
                         if no_diff
@@ -858,7 +1067,7 @@ class TerminalConsole(Console):
             if context_diff.directly_modified(snapshot.name):
                 category_str = SNAPSHOT_CHANGE_CATEGORY_STR[snapshot.change_category]
                 tree = Tree(
-                    f"[bold][direct]Directly Modified: {snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)} ({category_str})"
+                    f"\n[bold][direct]Directly Modified: {snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)} ({category_str})"
                 )
                 indirect_tree = None
                 for child_sid in sorted(plan.indirectly_modified.get(snapshot.snapshot_id, set())):
@@ -876,20 +1085,23 @@ class TerminalConsole(Console):
                     indirect_tree = self._limit_model_names(indirect_tree, self.verbose)
             elif context_diff.metadata_updated(snapshot.name):
                 tree = Tree(
-                    f"[bold][metadata]Metadata Updated: {snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)}"
+                    f"\n[bold][metadata]Metadata Updated: {snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)}"
                 )
             else:
                 continue
 
-            self._print(Syntax(context_diff.text_diff(snapshot.name), "sql", word_wrap=True))
-            self._print(tree)
+            text_diff = context_diff.text_diff(snapshot.name)
+            if text_diff:
+                self._print("")
+                self._print(Syntax(text_diff, "sql", word_wrap=True))
+                self._print(tree)
 
     def _show_missing_dates(self, plan: Plan, default_catalog: t.Optional[str]) -> None:
         """Displays the models with missing dates."""
         missing_intervals = plan.missing_intervals
         if not missing_intervals:
             return
-        backfill = Tree("[bold]Models needing backfill (missing dates):")
+        backfill = Tree("[bold]Models needing backfill:[/bold]")
         for missing in missing_intervals:
             snapshot = plan.context_diff.snapshots[missing.snapshot_id]
             if not snapshot.is_model:
@@ -899,9 +1111,13 @@ class TerminalConsole(Console):
             if not plan.deployability_index.is_deployable(snapshot):
                 preview_modifier = " ([orange1]preview[/orange1])"
 
-            backfill.add(
-                f"{snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)}: {missing.format_intervals(snapshot.node.interval_unit)}{preview_modifier}"
+            display_name = snapshot.display_name(
+                plan.environment_naming_info, default_catalog, dialect=self.dialect
             )
+            backfill.add(
+                f"{display_name}: \\[{_format_missing_intervals(snapshot, missing)}]{preview_modifier}"
+            )
+
         if backfill:
             backfill = self._limit_model_names(backfill, self.verbose)
         self._print(backfill)
@@ -999,8 +1215,58 @@ class TerminalConsole(Console):
     def log_status_update(self, message: str) -> None:
         self._print(message)
 
+    def log_skipped_models(self, snapshot_names: t.Set[str]) -> None:
+        if snapshot_names:
+            msg = "  " + "\n  ".join(snapshot_names)
+            self._print(f"[dark_orange3]Skipped models[/dark_orange3]\n\n{msg}")
+
+    def log_failed_models(self, errors: t.List[NodeExecutionFailedError]) -> None:
+        if errors:
+            self._print("\n[red]Failed models[/red]\n")
+
+            error_messages = _format_node_errors(errors)
+
+            for node_name, msg in error_messages.items():
+                self._print(f"  [red]{node_name}[/red]\n\n{msg}")
+
+    def log_destructive_change(
+        self,
+        snapshot_name: str,
+        dropped_column_names: t.List[str],
+        alter_expressions: t.List[exp.Alter],
+        dialect: str,
+        error: bool = True,
+    ) -> None:
+        if error:
+            self._print(
+                format_destructive_change_msg(
+                    snapshot_name, dropped_column_names, alter_expressions, dialect
+                )
+            )
+        else:
+            self.log_warning(
+                format_destructive_change_msg(
+                    snapshot_name, dropped_column_names, alter_expressions, dialect, error
+                )
+            )
+
     def log_error(self, message: str) -> None:
         self._print(f"[red]{message}[/red]")
+
+    def log_warning(self, short_message: str, long_message: t.Optional[str] = None) -> None:
+        logger.warning(long_message or short_message)
+        if not self.ignore_warnings:
+            if long_message:
+                for handler in logger.root.handlers:
+                    if isinstance(handler, logging.FileHandler):
+                        file_path = handler.baseFilename
+                        break
+                file_path_msg = f" Learn more in logs: {file_path}\n" if file_path else ""
+                short_message = f"{short_message}{file_path_msg}"
+            message_lstrip = short_message.lstrip()
+            leading_ws = short_message[: -len(message_lstrip)]
+            message_formatted = f"{leading_ws}[yellow]\\[WARNING] {message_lstrip}[/yellow]"
+            self._print(message_formatted)
 
     def log_success(self, message: str) -> None:
         self._print(f"\n[green]{message}[/green]\n")
@@ -1108,12 +1374,12 @@ class TerminalConsole(Console):
                 columns: dict[str, list[str]] = {}
                 source_prefix, source_name = (
                     (f"{source_name}__", source_name)
-                    if source_name != row_diff.source
+                    if source_name.lower() != row_diff.source.lower()
                     else ("s__", "SOURCE")
                 )
                 target_prefix, target_name = (
                     (f"{target_name}__", target_name)
-                    if target_name != row_diff.target
+                    if target_name.lower() != row_diff.target.lower()
                     else ("t__", "TARGET")
                 )
 
@@ -1169,6 +1435,15 @@ class TerminalConsole(Console):
             if row_diff.t_sample.shape[0] > 0:
                 self.console.print(f"\n[b][green]{target_name} ONLY[/green] sample rows:[/b]")
                 self.console.print(row_diff.t_sample.to_string(index=False), end="\n\n")
+
+    def print_environments(self, environments_summary: t.Dict[str, int]) -> None:
+        """Prints all environment names along with expiry datetime."""
+        output = [
+            f"{name} - {time_like_to_str(ts)}" if ts else f"{name} - No Expiry"
+            for name, ts in environments_summary.items()
+        ]
+        output_str = "\n".join([str(len(output)), *output])
+        self.log_status_update(f"Number of SQLMesh environments are: {output_str}")
 
     def _get_snapshot_change_category(
         self,
@@ -1576,6 +1851,18 @@ class CaptureTerminalConsole(TerminalConsole):
         self._errors.append(message)
         super().log_error(message)
 
+    def log_skipped_models(self, snapshot_names: t.Set[str]) -> None:
+        if snapshot_names:
+            self._captured_outputs.append(
+                "\n".join([f"SKIPPED snapshot {skipped}\n" for skipped in snapshot_names])
+            )
+            super().log_skipped_models(snapshot_names)
+
+    def log_failed_models(self, errors: t.List[NodeExecutionFailedError]) -> None:
+        if errors:
+            self._errors.append("\n".join(str(ex) for ex in errors))
+            super().log_failed_models(errors)
+
     def _print(self, value: t.Any, **kwargs: t.Any) -> None:
         with self.console.capture() as capture:
             self.console.print(value, **kwargs)
@@ -1587,6 +1874,9 @@ class MarkdownConsole(CaptureTerminalConsole):
     A console that outputs markdown. Currently this is only configured for non-interactive use so for use cases
     where you want to display a plan or test results in markdown.
     """
+
+    def __init__(self, **kwargs: t.Any) -> None:
+        super().__init__(**{**kwargs, "console": RichConsole(no_color=True)})
 
     def show_model_difference_summary(
         self,
@@ -1719,7 +2009,7 @@ class MarkdownConsole(CaptureTerminalConsole):
         missing_intervals = plan.missing_intervals
         if not missing_intervals:
             return
-        self._print("\n**Models needing backfill (missing dates):**")
+        self._print("\n**Models needing backfill:**")
         snapshots = []
         for missing in missing_intervals:
             snapshot = plan.context_diff.snapshots[missing.snapshot_id]
@@ -1730,8 +2020,11 @@ class MarkdownConsole(CaptureTerminalConsole):
             if not plan.deployability_index.is_deployable(snapshot):
                 preview_modifier = " (**preview**)"
 
+            display_name = snapshot.display_name(
+                plan.environment_naming_info, default_catalog, dialect=self.dialect
+            )
             snapshots.append(
-                f"* `{snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)}`: {missing.format_intervals(snapshot.node.interval_unit)}{preview_modifier}"
+                f"* `{display_name}`: [{_format_missing_intervals(snapshot, missing)}]{preview_modifier}"
             )
 
         length = len(snapshots)
@@ -1794,8 +2087,28 @@ class MarkdownConsole(CaptureTerminalConsole):
                     self._print(f"* Failure Test: `{test.model.name}` - `{test.test_name}`\n\n")
             self._print(f"```{output}```\n\n")
 
+    def log_skipped_models(self, snapshot_names: t.Set[str]) -> None:
+        if snapshot_names:
+            msg = "  " + "\n  ".join(snapshot_names)
+            self._print(f"**Skipped models**\n\n{msg}")
+
+    def log_failed_models(self, errors: t.List[NodeExecutionFailedError]) -> None:
+        if errors:
+            self._print("\n```\nFailed models\n")
+
+            error_messages = _format_node_errors(errors)
+
+            for node_name, msg in error_messages.items():
+                self._print(f"  **{node_name}**\n\n{msg}")
+
+            self._print("```\n")
+
     def log_error(self, message: str) -> None:
-        super().log_error(f"```\n{message}```\n\n")
+        super().log_error(f"```\n\\[ERROR] {message}```\n\n")
+
+    def log_warning(self, short_message: str, long_message: t.Optional[str] = None) -> None:
+        logger.warning(long_message or short_message)
+        self._print(f"```\n\\[WARNING] {short_message}```\n\n")
 
 
 class DatabricksMagicConsole(CaptureTerminalConsole):
@@ -1968,11 +2281,13 @@ class DebuggerTerminalConsole(TerminalConsole):
         console: t.Optional[RichConsole],
         *args: t.Any,
         dialect: DialectType = None,
+        ignore_warnings: bool = False,
         **kwargs: t.Any,
     ) -> None:
         self.console: RichConsole = console or srich.console
         self.dialect = dialect
         self.verbose = False
+        self.ignore_warnings = ignore_warnings
 
     def _write(self, msg: t.Any, *args: t.Any, **kwargs: t.Any) -> None:
         self.console.log(msg, *args, **kwargs)
@@ -2087,6 +2402,11 @@ class DebuggerTerminalConsole(TerminalConsole):
     def log_error(self, message: str) -> None:
         self._write(message, style="bold red")
 
+    def log_warning(self, short_message: str, long_message: t.Optional[str] = None) -> None:
+        logger.warning(long_message or short_message)
+        if not self.ignore_warnings:
+            self._write(short_message, style="bold yellow")
+
     def log_success(self, message: str) -> None:
         self._write(message, style="bold green")
 
@@ -2106,9 +2426,31 @@ class DebuggerTerminalConsole(TerminalConsole):
         self._write(row_diff)
 
 
-def get_console(**kwargs: t.Any) -> TerminalConsole | DatabricksMagicConsole | NotebookMagicConsole:
+_CONSOLE: Console = NoopConsole()
+
+
+def set_console(console: Console) -> None:
+    """Sets the console instance."""
+    global _CONSOLE
+    _CONSOLE = console
+
+
+def configure_console(**kwargs: t.Any) -> None:
+    """Configures the console instance."""
+    global _CONSOLE
+    _CONSOLE = create_console(**kwargs)
+
+
+def get_console() -> Console:
+    """Returns the console instance or creates a new one if it hasn't been created yet."""
+    return _CONSOLE
+
+
+def create_console(
+    **kwargs: t.Any,
+) -> TerminalConsole | DatabricksMagicConsole | NotebookMagicConsole:
     """
-    Returns the console that is appropriate for the current runtime environment.
+    Creates a new console instance that is appropriate for the current runtime environment.
 
     Note: Google Colab environment is untested and currently assumes is compatible with the base
     NotebookMagicConsole.
@@ -2130,3 +2472,70 @@ def get_console(**kwargs: t.Any) -> TerminalConsole | DatabricksMagicConsole | N
     return runtime_env_mapping[runtime_env](
         **{**{"console": RichConsole(**rich_console_kwargs)}, **kwargs}
     )
+
+
+def _format_missing_intervals(snapshot: Snapshot, missing: SnapshotIntervals) -> str:
+    return (
+        missing.format_intervals(snapshot.node.interval_unit)
+        if snapshot.is_incremental
+        else "recreate view"
+        if snapshot.is_view
+        else "full refresh"
+    )
+
+
+def _format_node_errors(errors: t.List[NodeExecutionFailedError]) -> t.Dict[str, str]:
+    """Formats a list of node execution errors for display."""
+
+    def _format_node_error(ex: NodeExecutionFailedError) -> str:
+        cause = ex.__cause__ if ex.__cause__ else ex
+
+        error_msg = str(cause)
+
+        if isinstance(cause, NodeAuditsErrors):
+            error_msg = _format_audits_errors(cause)
+        elif not isinstance(cause, (NodeExecutionFailedError, PythonModelEvalError)):
+            error_msg = "  " + error_msg.replace("\n", "\n  ")
+            error_msg = (
+                f"  {cause.__class__.__name__}:\n{error_msg}"  # include error class name in msg
+            )
+        error_msg = error_msg.replace("\n", "\n  ")
+        error_msg = error_msg + "\n" if not error_msg.rstrip(" ").endswith("\n") else error_msg
+
+        return error_msg
+
+    error_messages = {}
+
+    num_fails = len(errors)
+    for i, error in enumerate(errors):
+        node_name = ""
+        if isinstance(error.node, SnapshotId):
+            node_name = error.node.name
+        elif isinstance(error.node, tuple):
+            node_name = error.node[0]
+
+        msg = _format_node_error(error)
+        msg = "  " + msg.replace("\n", "\n  ")
+        if i == (num_fails - 1):
+            msg = msg if msg.rstrip(" ").endswith("\n") else msg + "\n"
+
+        error_messages[node_name] = msg
+
+    return error_messages
+
+
+def _format_audits_errors(error: NodeAuditsErrors) -> str:
+    error_messages = []
+    for err in error.errors:
+        audit_args_sql = []
+        for arg_name, arg_value in err.audit_args.items():
+            audit_args_sql.append(f"{arg_name} := {arg_value.sql(dialect=err.adapter_dialect)}")
+        audit_args_sql_msg = ("\n".join(audit_args_sql) + "\n\n") if audit_args_sql else ""
+
+        err_msg = f"'{err.audit_name}' audit error: {err.count} {'row' if err.count == 1 else 'rows'} failed"
+
+        query = "\n  ".join(textwrap.wrap(err.sql(err.adapter_dialect), width=LINE_WRAP_WIDTH))
+        msg = f"{err_msg}\n\nAudit arguments\n  {audit_args_sql_msg}Audit query\n  {query}\n\n"
+        msg = msg.replace("\n", "\n  ")
+        error_messages.append(msg)
+    return "  " + "\n".join(error_messages)

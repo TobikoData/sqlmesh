@@ -1,4 +1,5 @@
 import typing as t
+from datetime import datetime, date
 
 import pytest
 from sqlglot import MappingSchema, ParseError, exp, parse_one
@@ -6,8 +7,10 @@ from sqlglot import MappingSchema, ParseError, exp, parse_one
 from sqlmesh.core import constants as c, dialect as d
 from sqlmesh.core.dialect import StagedFilePath
 from sqlmesh.core.macros import SQL, MacroEvalError, MacroEvaluator, macro
+from sqlmesh.utils.date import to_datetime, to_date
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.metaprogramming import Executable
+from sqlmesh.core.macros import RuntimeStage
 
 
 @pytest.fixture
@@ -587,6 +590,8 @@ def test_macro_coercion(macro_evaluator: MacroEvaluator, assert_exp_eq):
     assert coerce(exp.Literal.number(1.1), float) == 1.1
     assert coerce(exp.Literal.string("Hi mom"), str) == "Hi mom"
     assert coerce(exp.true(), bool) is True
+    assert coerce(exp.Literal.string("2020-01-01"), datetime) == to_datetime("2020-01-01")
+    assert coerce(exp.Literal.string("2020-01-01"), date) == to_date("2020-01-01")
 
     # Coercing a string literal to a column should return a column with the same name
     assert_exp_eq(coerce(exp.Literal.string("order"), exp.Column), exp.column("order"))
@@ -1020,3 +1025,60 @@ def test_macro_union(assert_exp_eq, macro_evaluator: MacroEvaluator):
     expected_sql = "SELECT 1 AS col UNION ALL SELECT 1 AS col"
 
     assert_exp_eq(macro_evaluator.transform(parse_one(sql)), expected_sql)
+
+
+def test_resolve_template_literal():
+    parsed_sql = parse_one(
+        "@resolve_template('s3://data-bucket/prod/@{catalog_name}/@{schema_name}/@{table_name}')"
+    )
+
+    # Loading
+    # During loading, this should passthrough / no-op
+    # This is because SQLMesh renders everything on load to figure out model dependencies and we dont want to throw an error
+    evaluator = MacroEvaluator(runtime_stage=RuntimeStage.LOADING)
+    assert evaluator.transform(parsed_sql) == exp.Literal.string(
+        "s3://data-bucket/prod/@{catalog_name}/@{schema_name}/@{table_name}"
+    )
+
+    # Creating
+    # This macro can work during creating / evaluating but only if @this_model is present in the context
+    evaluator = MacroEvaluator(runtime_stage=RuntimeStage.CREATING)
+    with pytest.raises(SQLMeshError) as e:
+        evaluator.transform(parsed_sql)
+
+    assert "this_model must be present" in str(e.value.__cause__)
+
+    evaluator.locals.update(
+        {"this_model": exp.to_table("test_catalog.sqlmesh__test.test__test_model__2517971505")}
+    )
+
+    assert (
+        evaluator.transform(parsed_sql).sql()
+        == "'s3://data-bucket/prod/test_catalog/sqlmesh__test/test__test_model__2517971505'"
+    )
+
+    # Evaluating
+    evaluator = MacroEvaluator(runtime_stage=RuntimeStage.EVALUATING)
+    evaluator.locals.update(
+        {"this_model": exp.to_table("test_catalog.sqlmesh__test.test__test_model__2517971505")}
+    )
+    assert (
+        evaluator.transform(parsed_sql).sql()
+        == "'s3://data-bucket/prod/test_catalog/sqlmesh__test/test__test_model__2517971505'"
+    )
+
+
+def test_resolve_template_table():
+    parsed_sql = parse_one(
+        "SELECT * FROM @resolve_template('@{catalog_name}.@{schema_name}.@{table_name}$partitions', mode := 'table')"
+    )
+
+    evaluator = MacroEvaluator(runtime_stage=RuntimeStage.CREATING)
+    evaluator.locals.update(
+        {"this_model": exp.to_table("test_catalog.sqlmesh__test.test__test_model__2517971505")}
+    )
+
+    assert (
+        evaluator.transform(parsed_sql).sql(identify=True)
+        == 'SELECT * FROM "test_catalog"."sqlmesh__test"."test__test_model__2517971505$partitions"'
+    )

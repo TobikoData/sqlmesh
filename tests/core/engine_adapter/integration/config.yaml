@@ -41,6 +41,17 @@ gateways:
       retries: 20
     state_connection:
       type: duckdb
+  inttest_trino_nessie:
+    connection:
+      type: trino
+      host: {{ env_var('DOCKER_HOSTNAME', 'localhost') }}
+      port: 8080
+      user: admin
+      catalog: datalake_nessie
+      http_scheme: http
+      retries: 20
+    state_connection:
+      type: duckdb
   inttest_spark:
     connection:
       type: spark
@@ -145,6 +156,9 @@ gateways:
       port: 8443
       username: {{ env_var("CLICKHOUSE_CLOUD_USERNAME") }}
       password: {{ env_var("CLICKHOUSE_CLOUD_PASSWORD") }}
+      connect_timeout: 30
+      connection_pool_options:
+        retries: 5
     state_connection:
       type: duckdb
 

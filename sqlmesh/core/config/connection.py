@@ -5,6 +5,7 @@ import base64
 import logging
 import os
 import pathlib
+import re
 import typing as t
 from enum import Enum
 from functools import partial, lru_cache
@@ -19,17 +20,16 @@ from sqlmesh.core.config.base import BaseConfig
 from sqlmesh.core.config.common import (
     concurrent_tasks_validator,
     http_headers_validator,
+    compile_regex_mapping,
 )
 from sqlmesh.core.engine_adapter.shared import CatalogSupport
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.utils.errors import ConfigError
-from sqlmesh.utils.pydantic import (
-    field_validator,
-    model_validator,
-    model_validator_v1_args,
-    field_validator_v1_args,
-)
+from sqlmesh.utils.pydantic import ValidationInfo, field_validator, model_validator
 from sqlmesh.utils.aws import validate_s3_uri
+
+if t.TYPE_CHECKING:
+    from sqlmesh.core._typing import Self
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +41,7 @@ FORBIDDEN_STATE_SYNC_ENGINES = {
     # Nullable types are problematic
     "clickhouse",
 }
+MOTHERDUCK_TOKEN_REGEX = re.compile(r"(\?motherduck_token=)(\S*)")
 
 
 class ConnectionConfig(abc.ABC, BaseConfig):
@@ -74,11 +75,6 @@ class ConnectionConfig(abc.ABC, BaseConfig):
     def _extra_engine_config(self) -> t.Dict[str, t.Any]:
         """kwargs that are for execution config only"""
         return {}
-
-    @property
-    def _cursor_kwargs(self) -> t.Optional[t.Dict[str, t.Any]]:
-        """Key-value arguments that will be passed during cursor construction."""
-        return None
 
     @property
     def _cursor_init(self) -> t.Optional[t.Callable[[t.Any], None]]:
@@ -115,7 +111,6 @@ class ConnectionConfig(abc.ABC, BaseConfig):
         return self._engine_adapter(
             self._connection_factory_with_kwargs,
             multithreaded=self.concurrent_tasks > 1,
-            cursor_kwargs=self._cursor_kwargs,
             default_catalog=self.get_catalog(),
             cursor_init=self._cursor_init,
             register_comments=register_comments_override or self.register_comments,
@@ -163,11 +158,11 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
     _data_file_to_adapter: t.ClassVar[t.Dict[str, EngineAdapter]] = {}
 
     @model_validator(mode="before")
-    @model_validator_v1_args
-    def _validate_database_catalogs(
-        cls, values: t.Dict[str, t.Optional[str]]
-    ) -> t.Dict[str, t.Optional[str]]:
-        if db_path := values.get("database") and values.get("catalogs"):
+    def _validate_database_catalogs(cls, data: t.Any) -> t.Any:
+        if not isinstance(data, dict):
+            return data
+
+        if db_path := data.get("database") and data.get("catalogs"):
             raise ConfigError(
                 "Cannot specify both `database` and `catalogs`. Define all your catalogs in `catalogs` and have the first entry be the default catalog"
             )
@@ -175,7 +170,8 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
             raise ConfigError(
                 "Please use connection type 'motherduck' without the `md:` prefix if you want to use a MotherDuck database as the single `database`."
             )
-        return values
+
+        return data
 
     @property
     def _engine_adapter(self) -> t.Type[EngineAdapter]:
@@ -307,11 +303,17 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
         for data_file in data_files:
             key = data_file if isinstance(data_file, str) else data_file.path
             if adapter := BaseDuckDBConnectionConfig._data_file_to_adapter.get(key):
-                logger.info(f"Using existing DuckDB adapter due to overlapping data file: {key}")
+                logger.info(
+                    f"Using existing DuckDB adapter due to overlapping data file: {self._mask_motherduck_token(key)}"
+                )
                 return adapter
 
         if data_files:
-            logger.info(f"Creating new DuckDB adapter for data files: {data_files}")
+            masked_files = {
+                self._mask_motherduck_token(file if isinstance(file, str) else file.path)
+                for file in data_files
+            }
+            logger.info(f"Creating new DuckDB adapter for data files: {masked_files}")
         else:
             logger.info("Creating new DuckDB adapter for in-memory database")
         adapter = super().create_engine_adapter(register_comments_override)
@@ -327,6 +329,9 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
         if self.catalogs:
             return list(self.catalogs)[0]
         return None
+
+    def _mask_motherduck_token(self, string: str) -> str:
+        return MOTHERDUCK_TOKEN_REGEX.sub(lambda m: f"{m.group(1)}{'*' * len(m.group(2))}", string)
 
 
 class MotherDuckConnectionConfig(BaseDuckDBConnectionConfig):
@@ -430,29 +435,29 @@ class SnowflakeConnectionConfig(ConnectionConfig):
     _concurrent_tasks_validator = concurrent_tasks_validator
 
     @model_validator(mode="before")
-    @model_validator_v1_args
-    def _validate_authenticator(
-        cls, values: t.Dict[str, t.Optional[str]]
-    ) -> t.Dict[str, t.Optional[str]]:
-        from snowflake.connector.network import (
-            DEFAULT_AUTHENTICATOR,
-            OAUTH_AUTHENTICATOR,
-        )
+    def _validate_authenticator(cls, data: t.Any) -> t.Any:
+        if not isinstance(data, dict):
+            return data
 
-        auth = values.get("authenticator")
+        from snowflake.connector.network import DEFAULT_AUTHENTICATOR, OAUTH_AUTHENTICATOR
+
+        auth = data.get("authenticator")
         auth = auth.upper() if auth else DEFAULT_AUTHENTICATOR
-        user = values.get("user")
-        password = values.get("password")
-        values["private_key"] = cls._get_private_key(values, auth)  # type: ignore
+        user = data.get("user")
+        password = data.get("password")
+        data["private_key"] = cls._get_private_key(data, auth)  # type: ignore
+
         if (
             auth == DEFAULT_AUTHENTICATOR
-            and not values.get("private_key")
+            and not data.get("private_key")
             and (not user or not password)
         ):
             raise ConfigError("User and password must be provided if using default authentication")
-        if auth == OAUTH_AUTHENTICATOR and not values.get("token"):
+
+        if auth == OAUTH_AUTHENTICATOR and not data.get("token"):
             raise ConfigError("Token must be provided if using oauth authentication")
-        return values
+
+        return data
 
     @classmethod
     def _get_private_key(cls, values: t.Dict[str, t.Optional[str]], auth: str) -> t.Optional[bytes]:
@@ -621,26 +626,30 @@ class DatabricksConnectionConfig(ConnectionConfig):
     _http_headers_validator = http_headers_validator
 
     @model_validator(mode="before")
-    @model_validator_v1_args
-    def _databricks_connect_validator(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
+    def _databricks_connect_validator(cls, data: t.Any) -> t.Any:
+        # SQLQueryContextLogger will output any error SQL queries even if they are in a try/except block.
+        # Disabling this allows SQLMesh to determine what should be shown to the user.
+        # Ex: We describe a table to see if it exists and therefore that execution can fail but we don't need to show
+        # the user since it is expected if the table doesn't exist. Without this change the user would see the error.
+        logging.getLogger("SQLQueryContextLogger").setLevel(logging.CRITICAL)
+
+        if not isinstance(data, dict):
+            return data
+
         from sqlmesh.core.engine_adapter.databricks import DatabricksEngineAdapter
 
         if DatabricksEngineAdapter.can_access_spark_session(
-            bool(values.get("disable_spark_session"))
+            bool(data.get("disable_spark_session"))
         ):
-            return values
+            return data
 
-        databricks_connect_use_serverless = values.get("databricks_connect_use_serverless")
+        databricks_connect_use_serverless = data.get("databricks_connect_use_serverless")
         server_hostname, http_path, access_token, auth_type = (
-            values.get("server_hostname"),
-            values.get("http_path"),
-            values.get("access_token"),
-            values.get("auth_type"),
+            data.get("server_hostname"),
+            data.get("http_path"),
+            data.get("access_token"),
+            data.get("auth_type"),
         )
-
-        if databricks_connect_use_serverless:
-            values["force_databricks_connect"] = True
-            values["disable_databricks_connect"] = False
 
         if (not server_hostname or not http_path or not access_token) and (
             not databricks_connect_use_serverless and not auth_type
@@ -651,35 +660,36 @@ class DatabricksConnectionConfig(ConnectionConfig):
         if (
             databricks_connect_use_serverless
             and not server_hostname
-            and not values.get("databricks_connect_server_hostname")
+            and not data.get("databricks_connect_server_hostname")
         ):
             raise ValueError(
                 "`server_hostname` or `databricks_connect_server_hostname` is required when `databricks_connect_use_serverless` is set"
             )
         if DatabricksEngineAdapter.can_access_databricks_connect(
-            bool(values.get("disable_databricks_connect"))
+            bool(data.get("disable_databricks_connect"))
         ):
-            if not values.get("databricks_connect_access_token"):
-                values["databricks_connect_access_token"] = access_token
-            if not values.get("databricks_connect_server_hostname"):
-                values["databricks_connect_server_hostname"] = f"https://{server_hostname}"
-            if not databricks_connect_use_serverless:
-                if not values.get("databricks_connect_cluster_id"):
-                    if t.TYPE_CHECKING:
-                        assert http_path is not None
-                    values["databricks_connect_cluster_id"] = http_path.split("/")[-1]
+            if not data.get("databricks_connect_access_token"):
+                data["databricks_connect_access_token"] = access_token
+            if not data.get("databricks_connect_server_hostname"):
+                data["databricks_connect_server_hostname"] = f"https://{server_hostname}"
+            if not databricks_connect_use_serverless and not data.get(
+                "databricks_connect_cluster_id"
+            ):
+                if t.TYPE_CHECKING:
+                    assert http_path is not None
+                data["databricks_connect_cluster_id"] = http_path.split("/")[-1]
 
         if auth_type:
             from databricks.sql.auth.auth import AuthType
 
-            all_values = [m.value for m in AuthType]
-            if auth_type not in all_values:
+            all_data = [m.value for m in AuthType]
+            if auth_type not in all_data:
                 raise ValueError(
-                    f"`auth_type` {auth_type} does not match a valid option: {all_values}"
+                    f"`auth_type` {auth_type} does not match a valid option: {all_data}"
                 )
 
-            client_id = values.get("oauth_client_id")
-            client_secret = values.get("oauth_client_secret")
+            client_id = data.get("oauth_client_id")
+            client_secret = data.get("oauth_client_secret")
 
             if client_secret and not client_id:
                 raise ValueError(
@@ -689,7 +699,7 @@ class DatabricksConnectionConfig(ConnectionConfig):
             if not http_path:
                 raise ValueError("`http_path` is still required when using `auth_type`")
 
-        return values
+        return data
 
     @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
@@ -866,26 +876,24 @@ class BigQueryConnectionConfig(ConnectionConfig):
     type_: t.Literal["bigquery"] = Field(alias="type", default="bigquery")
 
     @field_validator("execution_project")
-    @field_validator_v1_args
     def validate_execution_project(
         cls,
         v: t.Optional[str],
-        values: t.Dict[str, t.Any],
+        info: ValidationInfo,
     ) -> t.Optional[str]:
-        if v and not values.get("project"):
+        if v and not info.data.get("project"):
             raise ConfigError(
                 "If the `execution_project` field is specified, you must also specify the `project` field to provide a default object location."
             )
         return v
 
     @field_validator("quota_project")
-    @field_validator_v1_args
     def validate_quota_project(
         cls,
         v: t.Optional[str],
-        values: t.Dict[str, t.Any],
+        info: ValidationInfo,
     ) -> t.Optional[str]:
-        if v and not values.get("project"):
+        if v and not info.data.get("project"):
             raise ConfigError(
                 "If the `quota_project` field is specified, you must also specify the `project` field to provide a default object location."
             )
@@ -927,9 +935,12 @@ class BigQueryConnectionConfig(ConnectionConfig):
             )
         else:
             raise ConfigError("Invalid BigQuery Connection Method")
+
         options = client_options.ClientOptions(quota_project_id=self.quota_project)
+        project = self.execution_project or self.project or None
+
         client = google.cloud.bigquery.Client(
-            project=self.execution_project or self.project,
+            project=project and exp.parse_identifier(project, dialect="bigquery").name,
             credentials=creds,
             location=self.location,
             client_info=client_info.ClientInfo(user_agent="sqlmesh"),
@@ -986,6 +997,7 @@ class GCPPostgresConnectionConfig(ConnectionConfig):
     password: t.Optional[str] = None
     enable_iam_auth: t.Optional[bool] = None
     db: str
+    ip_type: t.Union[t.Literal["public"], t.Literal["private"], t.Literal["psc"]] = "public"
     # Keyfile Auth
     keyfile: t.Optional[str] = None
     keyfile_json: t.Optional[t.Dict[str, t.Any]] = None
@@ -998,12 +1010,13 @@ class GCPPostgresConnectionConfig(ConnectionConfig):
     pre_ping: bool = True
 
     @model_validator(mode="before")
-    @model_validator_v1_args
-    def _validate_auth_method(
-        cls, values: t.Dict[str, t.Optional[str]]
-    ) -> t.Dict[str, t.Optional[str]]:
-        password = values.get("password")
-        enable_iam_auth = values.get("enable_iam_auth")
+    def _validate_auth_method(cls, data: t.Any) -> t.Any:
+        if not isinstance(data, dict):
+            return data
+
+        password = data.get("password")
+        enable_iam_auth = data.get("enable_iam_auth")
+
         if password and enable_iam_auth:
             raise ConfigError(
                 "Invalid GCP Postgres connection configuration - both password and"
@@ -1016,7 +1029,8 @@ class GCPPostgresConnectionConfig(ConnectionConfig):
                 " for a postgres user account or enable_iam_auth set to 'True'"
                 " for an IAM user account."
             )
-        return values
+
+        return data
 
     @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
@@ -1049,7 +1063,15 @@ class GCPPostgresConnectionConfig(ConnectionConfig):
                 self.keyfile_json, scopes=self.scopes
             )
 
-        return Connector(credentials=creds).connect
+        kwargs = {
+            "credentials": creds,
+            "ip_type": self.ip_type,
+        }
+
+        if self.timeout:
+            kwargs["timeout"] = self.timeout
+
+        return Connector(**kwargs).connect  # type: ignore
 
 
 class RedshiftConnectionConfig(ConnectionConfig):
@@ -1082,6 +1104,7 @@ class RedshiftConnectionConfig(ConnectionConfig):
         serverless_acct_id: The account ID of the serverless. Default value None
         serverless_work_group: The name of work group for serverless end point. Default value None.
         pre_ping: Whether or not to pre-ping the connection before starting a new transaction to ensure it is still alive.
+        enable_merge: Whether to use the Redshift merge operation instead of the SQLMesh logical merge.
     """
 
     user: t.Optional[str] = None
@@ -1105,6 +1128,7 @@ class RedshiftConnectionConfig(ConnectionConfig):
     is_serverless: t.Optional[bool] = None
     serverless_acct_id: t.Optional[str] = None
     serverless_work_group: t.Optional[str] = None
+    enable_merge: t.Optional[bool] = None
 
     concurrent_tasks: int = 4
     register_comments: bool = True
@@ -1147,6 +1171,10 @@ class RedshiftConnectionConfig(ConnectionConfig):
         from redshift_connector import connect
 
         return connect
+
+    @property
+    def _extra_engine_config(self) -> t.Dict[str, t.Any]:
+        return {"enable_merge": self.enable_merge}
 
 
 class PostgresConnectionConfig(ConnectionConfig):
@@ -1205,7 +1233,9 @@ class MySQLConnectionConfig(ConnectionConfig):
     user: str
     password: str
     port: t.Optional[int] = None
+    database: t.Optional[str] = None
     charset: t.Optional[str] = None
+    collation: t.Optional[str] = None
     ssl_disabled: t.Optional[bool] = None
 
     concurrent_tasks: int = 4
@@ -1215,23 +1245,20 @@ class MySQLConnectionConfig(ConnectionConfig):
     type_: t.Literal["mysql"] = Field(alias="type", default="mysql")
 
     @property
-    def _cursor_kwargs(self) -> t.Optional[t.Dict[str, t.Any]]:
-        """Key-value arguments that will be passed during cursor construction."""
-        return {"buffered": True}
-
-    @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
         connection_keys = {
             "host",
             "user",
             "password",
-            "port",
-            "database",
         }
         if self.port is not None:
             connection_keys.add("port")
+        if self.database is not None:
+            connection_keys.add("database")
         if self.charset is not None:
             connection_keys.add("charset")
+        if self.collation is not None:
+            connection_keys.add("collation")
         if self.ssl_disabled is not None:
             connection_keys.add("ssl_disabled")
         return connection_keys
@@ -1242,7 +1269,7 @@ class MySQLConnectionConfig(ConnectionConfig):
 
     @property
     def _connection_factory(self) -> t.Callable:
-        from mysql.connector import connect
+        from pymysql import connect
 
         return connect
 
@@ -1430,47 +1457,59 @@ class TrinoConnectionConfig(ConnectionConfig):
     client_private_key: t.Optional[str] = None
     cert: t.Optional[str] = None
 
+    # SQLMesh options
+    schema_location_mapping: t.Optional[dict[re.Pattern, str]] = None
     concurrent_tasks: int = 4
     register_comments: bool = True
     pre_ping: t.Literal[False] = False
 
     type_: t.Literal["trino"] = Field(alias="type", default="trino")
 
+    @field_validator("schema_location_mapping", mode="before")
+    @classmethod
+    def _validate_regex_keys(
+        cls, value: t.Dict[str | re.Pattern, str]
+    ) -> t.Dict[re.Pattern, t.Any]:
+        compiled = compile_regex_mapping(value)
+        for replacement in compiled.values():
+            if "@{schema_name}" not in replacement:
+                raise ConfigError(
+                    "schema_location_mapping needs to include the '@{schema_name}' placeholder in the value so SQLMesh knows where to substitute the schema name"
+                )
+        return compiled
+
     @model_validator(mode="after")
-    @model_validator_v1_args
-    def _root_validator(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
-        port = values.get("port")
-        if (
-            values["http_scheme"] == "http"
-            and not values["method"].is_no_auth
-            and not values["method"].is_basic
-        ):
+    def _root_validator(self) -> Self:
+        port = self.port
+        if self.http_scheme == "http" and not self.method.is_no_auth and not self.method.is_basic:
             raise ConfigError("HTTP scheme can only be used with no-auth or basic method")
+
         if port is None:
-            values["port"] = 80 if values["http_scheme"] == "http" else 443
-        if (values["method"].is_ldap or values["method"].is_basic) and (
-            not values["password"] or not values["user"]
-        ):
+            self.port = 80 if self.http_scheme == "http" else 443
+
+        if (self.method.is_ldap or self.method.is_basic) and (not self.password or not self.user):
             raise ConfigError(
-                f"Username and Password must be provided if using {values['method'].value} authentication"
+                f"Username and Password must be provided if using {self.method.value} authentication"
             )
-        if values["method"].is_kerberos and (
-            not values["principal"] or not values["keytab"] or not values["krb5_config"]
+
+        if self.method.is_kerberos and (
+            not self.principal or not self.keytab or not self.krb5_config
         ):
             raise ConfigError(
                 "Kerberos requires the following fields: principal, keytab, and krb5_config"
             )
-        if values["method"].is_jwt and not values["jwt_token"]:
+
+        if self.method.is_jwt and not self.jwt_token:
             raise ConfigError("JWT requires `jwt_token` to be set")
-        if values["method"].is_certificate and (
-            not values["cert"]
-            or not values["client_certificate"]
-            or not values["client_private_key"]
+
+        if self.method.is_certificate and (
+            not self.cert or not self.client_certificate or not self.client_private_key
         ):
             raise ConfigError(
                 "Certificate requires the following fields: cert, client_certificate, and client_private_key"
             )
-        return values
+
+        return self
 
     @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
@@ -1538,6 +1577,10 @@ class TrinoConnectionConfig(ConnectionConfig):
             "verify": self.cert if self.cert is not None else self.verify,
             "source": "sqlmesh",
         }
+
+    @property
+    def _extra_engine_config(self) -> t.Dict[str, t.Any]:
+        return {"schema_location_mapping": self.schema_location_mapping}
 
 
 class ClickhouseConnectionConfig(ConnectionConfig):
@@ -1677,26 +1720,23 @@ class AthenaConnectionConfig(ConnectionConfig):
     type_: t.Literal["athena"] = Field(alias="type", default="athena")
 
     @model_validator(mode="after")
-    @model_validator_v1_args
-    def _root_validator(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
-        work_group = values.get("work_group")
-        s3_staging_dir = values.get("s3_staging_dir")
-        s3_warehouse_location = values.get("s3_warehouse_location")
+    def _root_validator(self) -> Self:
+        work_group = self.work_group
+        s3_staging_dir = self.s3_staging_dir
+        s3_warehouse_location = self.s3_warehouse_location
 
         if not work_group and not s3_staging_dir:
             raise ConfigError("At least one of work_group or s3_staging_dir must be set")
 
         if s3_staging_dir:
-            values["s3_staging_dir"] = validate_s3_uri(
-                s3_staging_dir, base=True, error_type=ConfigError
-            )
+            self.s3_staging_dir = validate_s3_uri(s3_staging_dir, base=True, error_type=ConfigError)
 
         if s3_warehouse_location:
-            values["s3_warehouse_location"] = validate_s3_uri(
+            self.s3_warehouse_location = validate_s3_uri(
                 s3_warehouse_location, base=True, error_type=ConfigError
             )
 
-        return values
+        return self
 
     @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
@@ -1806,7 +1846,7 @@ def _connection_config_validator(
     return parse_connection_config(v)
 
 
-connection_config_validator = field_validator(
+connection_config_validator: t.Callable = field_validator(
     "connection",
     "state_connection",
     "test_connection",

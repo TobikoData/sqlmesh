@@ -12,6 +12,7 @@ import textwrap
 import types
 import typing as t
 from enum import Enum
+from numbers import Number
 from pathlib import Path
 
 from astor import to_source
@@ -22,6 +23,8 @@ from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
 
 IGNORE_DECORATORS = {"macro", "model", "signal"}
+SERIALIZABLE_CALLABLES = (type, types.FunctionType)
+LITERALS = (Number, str, bytes, tuple, list, dict, set, bool)
 
 
 def _is_relative_to(path: t.Optional[Path | str], other: t.Optional[Path | str]) -> bool:
@@ -83,7 +86,9 @@ def func_globals(func: t.Callable) -> t.Dict[str, t.Any]:
         ]
 
         code = func.__code__
-        for var in arg_globals + list(_code_globals(code)) + decorators(func, root_node=root_node):
+        for var in (
+            arg_globals + list(_code_globals(code)) + decorator_vars(func, root_node=root_node)
+        ):
             ref = func.__globals__.get(var)
             if ref:
                 variables[var] = ref
@@ -127,6 +132,38 @@ class _ClassFinder(ast.NodeVisitor):
             raise ClassFoundException(line_number)
         self.generic_visit(node)
         self.stack.pop()
+
+
+class _DecoratorDependencyFinder(ast.NodeVisitor):
+    def __init__(self) -> None:
+        self.dependencies: t.List[str] = []
+
+    def _extract_dependencies(self, node: ast.ClassDef | ast.FunctionDef) -> None:
+        for decorator in node.decorator_list:
+            dependencies: t.List[str] = []
+            for n in ast.walk(decorator):
+                if isinstance(n, ast.Attribute):
+                    dep = n.attr
+                elif isinstance(n, ast.Name):
+                    dep = n.id
+                else:
+                    continue
+
+                if dep in IGNORE_DECORATORS:
+                    dependencies = []
+                    break
+
+                dependencies.append(dep)
+
+            self.dependencies.extend(dependencies)
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        self._extract_dependencies(node)
+
+    def visit_ClassDef(self, node: ast.ClassDef) -> None:
+        self._extract_dependencies(node)
+
+    visit_AsyncFunctionDef = visit_FunctionDef  # type: ignore
 
 
 def getsource(obj: t.Any) -> str:
@@ -179,25 +216,22 @@ def parse_source(func: t.Callable) -> ast.Module:
 
 
 def _decorator_name(decorator: ast.expr) -> str:
+    node = decorator
     if isinstance(decorator, ast.Call):
-        return decorator.func.id  # type: ignore
-    if isinstance(decorator, ast.Name):
-        return decorator.id
-    return ""
+        node = decorator.func
+    return node.id if isinstance(node, ast.Name) else ""
 
 
-def decorators(func: t.Callable, root_node: t.Optional[ast.Module] = None) -> t.List[str]:
-    """Finds a list of all the decorators of a callable."""
+def decorator_vars(func: t.Callable, root_node: t.Optional[ast.Module] = None) -> t.List[str]:
+    """
+    Returns a list of all the decorators of a callable, as well as names of objects that
+    are referenced in their argument list. These objects may be transitive dependencies
+    that we need to include in the serialized python environments.
+    """
     root_node = root_node or parse_source(func)
-    decorators = []
-
-    for node in ast.walk(root_node):
-        if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
-            for decorator in node.decorator_list:
-                name = _decorator_name(decorator)
-                if name not in IGNORE_DECORATORS:
-                    decorators.append(name)
-    return unique(decorators)
+    finder = _DecoratorDependencyFinder()
+    finder.visit(root_node)
+    return unique(finder.dependencies)
 
 
 def normalize_source(obj: t.Any) -> str:
@@ -246,58 +280,74 @@ def build_env(
         name: Name of the object in the env.
         path: The module path to serialize. Other modules will not be walked and treated as imports.
     """
+    # We don't rely on `env` to keep track of visited objects, because it's populated in post-order
+    visited: t.Set[str] = set()
 
-    obj_module = inspect.getmodule(obj)
+    def walk(obj: t.Any, name: str) -> None:
+        obj_module = inspect.getmodule(obj)
+        if name in visited or (obj_module and obj_module.__name__ == "builtins"):
+            return
 
-    if obj_module and obj_module.__name__ == "builtins":
-        return
+        visited.add(name)
+        if name not in env:
+            if hasattr(obj, c.SQLMESH_MACRO):
+                # We only need to add the undecorated code of @macro() functions in env, which
+                # is accessible through the `__wrapped__` attribute added by functools.wraps
+                obj = obj.__wrapped__
+            elif callable(obj) and not isinstance(obj, SERIALIZABLE_CALLABLES):
+                obj = getattr(obj, "__wrapped__", None)
+                name = getattr(obj, "__name__", "")
 
-    def walk(obj: t.Any) -> None:
+                # Callable class instances shouldn't be serialized (e.g. tenacity.Retrying).
+                # We still want to walk the callables they decorate, though
+                if not isinstance(obj, SERIALIZABLE_CALLABLES) or name in env:
+                    return
+
+            if (
+                not obj_module
+                or not hasattr(obj_module, "__file__")
+                or not _is_relative_to(obj_module.__file__, path)
+            ):
+                env[name] = obj
+                return
+        elif env[name] != obj:
+            raise SQLMeshError(
+                f"Cannot store {obj} in environment, duplicate definitions found for '{name}'"
+            )
+
         if inspect.isclass(obj):
-            for decorator in decorators(obj):
-                if obj_module and decorator in obj_module.__dict__:
-                    build_env(
-                        obj_module.__dict__[decorator],
-                        env=env,
-                        name=decorator,
-                        path=path,
-                    )
+            for var in decorator_vars(obj):
+                if obj_module and var in obj_module.__dict__:
+                    walk(obj_module.__dict__[var], var)
 
             for base in obj.__bases__:
-                build_env(base, env=env, name=base.__qualname__, path=path)
+                walk(base, base.__qualname__)
 
             for k, v in obj.__dict__.items():
                 if k.startswith("__"):
                     continue
-                # traverse methods in a class to find global references
+
+                # Traverse methods in a class to find global references
                 if isinstance(v, (classmethod, staticmethod)):
                     v = v.__func__
+
                 if callable(v):
-                    # if the method is a part of the object, walk it
-                    # else it is a global function and we just store it
+                    # Walk the method if it's part of the object, else it's a global function and we just store it
                     if v.__qualname__.startswith(obj.__qualname__):
-                        walk(v)
+                        for k, v in func_globals(v).items():
+                            walk(v, k)
                     else:
-                        build_env(v, env=env, name=v.__name__, path=path)
+                        walk(v, v.__name__)
         elif callable(obj):
             for k, v in func_globals(obj).items():
-                build_env(v, env=env, name=k, path=path)
+                walk(v, k)
 
-    if name not in env:
-        # We only need to add the undecorated code of @macro() functions in env, which
-        # is accessible through the `__wrapped__` attribute added by functools.wraps
-        env[name] = obj.__wrapped__ if hasattr(obj, c.SQLMESH_MACRO) else obj
+        # We store the object in the environment after its dependencies, because otherwise we
+        # could crash at environment hydration time, since dicts are ordered and the top-level
+        # objects would be loaded before their dependencies.
+        env[name] = obj
 
-        if (
-            obj_module
-            and hasattr(obj_module, "__file__")
-            and _is_relative_to(obj_module.__file__, path)
-        ):
-            walk(env[name])
-    elif env[name] != obj:
-        raise SQLMeshError(
-            f"Cannot store {obj} in environment, duplicate definitions found for '{name}'"
-        )
+    walk(obj, name)
 
 
 class ExecutableKind(str, Enum):
@@ -354,7 +404,20 @@ def serialize_env(env: t.Dict[str, t.Any], path: Path) -> t.Dict[str, Executable
     serialized = {}
 
     for k, v in env.items():
-        if callable(v):
+        if isinstance(v, LITERALS) or v is None:
+            serialized[k] = Executable.value(v)
+        elif inspect.ismodule(v):
+            name = v.__name__
+            if hasattr(v, "__file__") and _is_relative_to(v.__file__, path):
+                raise SQLMeshError(
+                    f"Cannot serialize 'import {name}'. Use 'from {name} import ...' instead."
+                )
+            postfix = "" if name == k else f" as {k}"
+            serialized[k] = Executable(
+                payload=f"import {name}{postfix}",
+                kind=ExecutableKind.IMPORT,
+            )
+        elif callable(v):
             name = v.__name__
             name = k if name == "<lambda>" else name
 
@@ -362,10 +425,26 @@ def serialize_env(env: t.Dict[str, t.Any], path: Path) -> t.Dict[str, Executable
             # https://docs.python.org/3/library/inspect.html#inspect.getfile
             try:
                 file_path = Path(inspect.getfile(v))
+                relative_obj_file_path = _is_relative_to(file_path, path)
+
+                # A callable can be a "wrapper" that is defined in a third-party library [1], in which case the file
+                # containing its definition won't be relative to the project's path. This can lead to serializing
+                # it as a "relative import", such as `from models.some_python_model import foo`, because the `wraps`
+                # decorator preserves the wrapped function's module [2]. Payloads like this are invalid, as they
+                # can result in `ModuleNotFoundError`s when hydrating python environments, e.g. if a project's files
+                # are not available during a scheduled cadence run.
+                #
+                # [1]: https://github.com/jd/tenacity/blob/0d40e76f7d06d631fb127e1ec58c8bd776e70d49/tenacity/__init__.py#L322-L346
+                # [2]: https://github.com/python/cpython/blob/f502c8f6a6db4be27c97a0e5466383d117859b7f/Lib/functools.py#L33-L57
+                if not relative_obj_file_path and (wrapped := getattr(v, "__wrapped__", None)):
+                    v = wrapped
+                    file_path = Path(inspect.getfile(wrapped))
+                    relative_obj_file_path = _is_relative_to(file_path, path)
             except TypeError:
                 file_path = None
+                relative_obj_file_path = False
 
-            if _is_relative_to(file_path, path):
+            if relative_obj_file_path:
                 serialized[k] = Executable(
                     name=name,
                     payload=normalize_source(v),
@@ -380,19 +459,12 @@ def serialize_env(env: t.Dict[str, t.Any], path: Path) -> t.Dict[str, Executable
                     payload=f"from {v.__module__} import {name}",
                     kind=ExecutableKind.IMPORT,
                 )
-        elif inspect.ismodule(v):
-            name = v.__name__
-            if hasattr(v, "__file__") and _is_relative_to(v.__file__, path):
-                raise SQLMeshError(
-                    f"Cannot serialize 'import {name}'. Use 'from {name} import ...' instead."
-                )
-            postfix = "" if name == k else f" as {k}"
-            serialized[k] = Executable(
-                payload=f"import {name}{postfix}",
-                kind=ExecutableKind.IMPORT,
-            )
         else:
-            serialized[k] = Executable.value(v)
+            raise SQLMeshError(
+                f"Object '{v}' cannot be serialized. If it's defined in a library, import the corresponding "
+                "module and reference the object using its fully-qualified name. For example, the datetime "
+                "module's 'UTC' object should be accessed as 'datetime.UTC'."
+            )
 
     return serialized
 
@@ -427,11 +499,10 @@ def prepare_env(
     return env
 
 
-def print_exception(
+def format_evaluated_code_exception(
     exception: Exception,
     python_env: t.Dict[str, Executable],
-    out: t.TextIO = sys.stderr,
-) -> None:
+) -> str:
     """Formats exceptions that occur from evaled code.
 
     Stack traces generated by evaled code lose code context and are difficult to debug.
@@ -440,26 +511,35 @@ def print_exception(
     Args:
         exception: The exception to print the stack trace for.
         python_env: The environment containing stringified python code.
-        out: The output stream to write to.
     """
     tb: t.List[str] = []
+    indent = ""
 
     for error_line in format_exception(exception):
-        match = re.search('File "<string>", line (.*), in (.*)', error_line)
-
-        if not match:
-            tb.append(error_line)
+        traceback_match = error_line.startswith("Traceback (most recent call last):")
+        model_def_match = re.search('File ".*?core/model/definition.py', error_line)
+        if traceback_match or model_def_match:
             continue
 
-        line_num = int(match.group(1))
-        func = match.group(2)
+        error_match = re.search("^.*?Error: ", error_line)
+        if error_match:
+            tb.append(f"{indent*2}  {error_line}")
+            continue
+
+        eval_code_match = re.search('File "<string>", line (.*), in (.*)', error_line)
+        if not eval_code_match:
+            tb.append(f"{indent}{error_line}")
+            continue
+
+        line_num = int(eval_code_match.group(1))
+        func = eval_code_match.group(2)
 
         if func not in python_env:
             tb.append(error_line)
             continue
 
         executable = python_env[func]
-        indent = error_line[: match.start()]
+        indent = error_line[: eval_code_match.start()]
 
         error_line = (
             f"{indent}File '{executable.path}' (or imported file), line {line_num}, in {func}"
@@ -483,11 +563,29 @@ def print_exception(
                     os.linesep.join(formatted),
                     indent + "  ",
                 ),
-                os.linesep,
             )
         )
 
-    out.write(os.linesep.join(tb))
+    return os.linesep.join(tb)
+
+
+def print_exception(
+    exception: Exception,
+    python_env: t.Dict[str, Executable],
+    out: t.TextIO = sys.stderr,
+) -> None:
+    """Prints exceptions that occur from evaled code.
+
+    Stack traces generated by evaled code lose code context and are difficult to debug.
+    This intercepts the default stack trace and tries to make it debuggable.
+
+    Args:
+        exception: The exception to print the stack trace for.
+        python_env: The environment containing stringified python code.
+        out: The output stream to write to.
+    """
+    tb = format_evaluated_code_exception(exception, python_env)
+    out.write(tb)
 
 
 def import_python_file(path: Path, relative_base: Path = Path()) -> types.ModuleType:

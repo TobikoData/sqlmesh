@@ -17,6 +17,9 @@ from sqlglot import exp
 
 from sqlmesh.utils import ttl_cache
 
+if t.TYPE_CHECKING:
+    from sqlglot.dialects.dialect import DialectType
+
 UTC = timezone.utc
 TimeLike = t.Union[date, datetime, str, int, float]
 DatetimeRange = t.Tuple[datetime, datetime]
@@ -216,8 +219,10 @@ def to_date(value: TimeLike, relative_base: t.Optional[datetime] = None) -> date
 
 
 def date_dict(
-    execution_time: TimeLike, start: t.Optional[TimeLike], end: t.Optional[TimeLike]
-) -> t.Dict[str, t.Union[str, datetime, date, float, int]]:
+    execution_time: TimeLike,
+    start: t.Optional[TimeLike],
+    end: t.Optional[TimeLike],
+) -> t.Dict[str, TimeLike]:
     """Creates a kwarg dictionary of datetime variables for use in SQL Contexts.
 
     Keys are like start_date, start_ds, end_date, end_ds...
@@ -284,7 +289,9 @@ def is_date(obj: TimeLike) -> bool:
         return False
 
 
-def make_inclusive(start: TimeLike, end: TimeLike) -> DatetimeRange:
+def make_inclusive(
+    start: TimeLike, end: TimeLike, dialect: t.Optional[DialectType] = ""
+) -> DatetimeRange:
     """Adjust start and end times to to become inclusive datetimes.
 
     SQLMesh treats start and end times as inclusive so that filters can be written as
@@ -295,7 +302,8 @@ def make_inclusive(start: TimeLike, end: TimeLike) -> DatetimeRange:
     In the ds ('2020-01-01') case, because start_ds and end_ds are categorical, between works even if
     start_ds and end_ds are equivalent. However, when we move to ts ('2022-01-01 12:00:00'), because timestamps
     are numeric, using simple equality doesn't make sense. When the end is not a categorical date, then it is
-    treated as an exclusive range and converted to inclusive by subtracting 1 microsecond.
+    treated as an exclusive range and converted to inclusive by subtracting 1 microsecond. If the dialect is
+    T-SQL then 1 nanoseconds is subtracted to account for the increased precision.
 
     Args:
         start: Start timelike object.
@@ -308,11 +316,14 @@ def make_inclusive(start: TimeLike, end: TimeLike) -> DatetimeRange:
     Returns:
         A tuple of inclusive datetime objects.
     """
-    return (to_datetime(start), make_inclusive_end(end))
+    return (to_datetime(start), make_inclusive_end(end, dialect=dialect))
 
 
-def make_inclusive_end(end: TimeLike) -> datetime:
-    return make_exclusive(end) - timedelta(microseconds=1)
+def make_inclusive_end(end: TimeLike, dialect: t.Optional[DialectType] = "") -> datetime:
+    exclusive_end = make_exclusive(end)
+    if dialect == "tsql":
+        return to_utc_timestamp(exclusive_end) - pd.Timedelta(1, unit="ns")
+    return exclusive_end - timedelta(microseconds=1)
 
 
 def make_exclusive(time: TimeLike) -> datetime:
@@ -320,6 +331,12 @@ def make_exclusive(time: TimeLike) -> datetime:
     if is_date(time):
         dt = dt + timedelta(days=1)
     return dt
+
+
+def to_utc_timestamp(time: datetime) -> pd.Timestamp:
+    if time.tzinfo is not None:
+        return pd.Timestamp(time).tz_convert("utc")
+    return pd.Timestamp(time, tz="utc")
 
 
 def validate_date_range(

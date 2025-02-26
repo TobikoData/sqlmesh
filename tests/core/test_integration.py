@@ -32,6 +32,7 @@ from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.macros import macro
 from sqlmesh.core.model import (
+    FullKind,
     IncrementalByTimeRangeKind,
     IncrementalByUniqueKeyKind,
     Model,
@@ -40,6 +41,7 @@ from sqlmesh.core.model import (
     SqlModel,
     PythonModel,
     ViewKind,
+    CustomKind,
     TimeColumn,
     load_sql_based_model,
 )
@@ -55,6 +57,7 @@ from sqlmesh.core.snapshot import (
 )
 from sqlmesh.utils.date import TimeLike, now, to_date, to_datetime, to_timestamp
 from sqlmesh.utils.errors import NoChangesPlanError
+from sqlmesh.utils.pydantic import validate_string
 from tests.conftest import DuckDBMetadata, SushiDataValidator
 
 
@@ -232,7 +235,7 @@ def test_forward_only_model_regular_plan(init_and_plan_context: t.Callable):
     snapshot = context.get_snapshot(model, raise_if_missing=True)
     top_waiters_snapshot = context.get_snapshot("sushi.top_waiters", raise_if_missing=True)
 
-    plan = context.plan_builder("dev", skip_tests=True).build()
+    plan = context.plan_builder("dev", skip_tests=True, enable_preview=False).build()
     assert len(plan.new_snapshots) == 2
     assert (
         plan.context_diff.snapshots[snapshot.snapshot_id].change_category
@@ -253,12 +256,19 @@ def test_forward_only_model_regular_plan(init_and_plan_context: t.Callable):
     assert not dev_df["event_date"].tolist()
 
     # Run a restatement plan to preview changes
-    plan_builder = context.plan_builder("dev", skip_tests=True, restate_models=[model_name])
+    plan_builder = context.plan_builder(
+        "dev", skip_tests=True, restate_models=[model_name], enable_preview=False
+    )
     plan_builder.set_start("2023-01-06")
     assert plan_builder.build().missing_intervals == [
         SnapshotIntervals(
             snapshot_id=top_waiters_snapshot.snapshot_id,
             intervals=[
+                (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+                (to_timestamp("2023-01-02"), to_timestamp("2023-01-03")),
+                (to_timestamp("2023-01-03"), to_timestamp("2023-01-04")),
+                (to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
+                (to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
                 (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
                 (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
             ],
@@ -278,6 +288,12 @@ def test_forward_only_model_regular_plan(init_and_plan_context: t.Callable):
         SnapshotIntervals(
             snapshot_id=top_waiters_snapshot.snapshot_id,
             intervals=[
+                (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+                (to_timestamp("2023-01-02"), to_timestamp("2023-01-03")),
+                (to_timestamp("2023-01-03"), to_timestamp("2023-01-04")),
+                (to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
+                (to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
+                (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
                 (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
             ],
         ),
@@ -386,7 +402,7 @@ def test_forward_only_model_restate_full_history_in_dev(init_and_plan_context: t
     assert model.kind.full_history_restatement_only
     context.upsert_model(model)
 
-    context.plan("prod", skip_tests=True, auto_apply=True)
+    context.plan("prod", skip_tests=True, auto_apply=True, enable_preview=False)
 
     model_kwargs = {
         **model.dict(),
@@ -396,7 +412,7 @@ def test_forward_only_model_restate_full_history_in_dev(init_and_plan_context: t
     context.upsert_model(SqlModel.parse_obj(model_kwargs))
 
     # Apply the model change in dev
-    plan = context.plan_builder("dev", skip_tests=True).build()
+    plan = context.plan_builder("dev", skip_tests=True, enable_preview=False).build()
     assert not plan.missing_intervals
     context.apply(plan)
 
@@ -414,7 +430,7 @@ def test_forward_only_model_restate_full_history_in_dev(init_and_plan_context: t
     assert df["cnt"][0] == 1
 
     # Apply a restatement plan in dev
-    plan = context.plan("dev", restate_models=[model.name], auto_apply=True)
+    plan = context.plan("dev", restate_models=[model.name], auto_apply=True, enable_preview=False)
     assert len(plan.missing_intervals) == 1
 
     # Check that the dummy value is not present
@@ -691,6 +707,139 @@ def test_cron_not_aligned_with_day_boundary(
 
 
 @time_machine.travel("2023-01-08 00:00:00 UTC")
+def test_cron_not_aligned_with_day_boundary_new_model(init_and_plan_context: t.Callable):
+    context, _ = init_and_plan_context("examples/sushi")
+
+    existing_model = context.get_model("sushi.waiter_revenue_by_day")
+    existing_model = SqlModel.parse_obj(
+        {
+            **existing_model.dict(),
+            "kind": existing_model.kind.copy(update={"forward_only": True}),
+        }
+    )
+    context.upsert_model(existing_model)
+
+    plan = context.plan_builder("prod", skip_tests=True).build()
+    context.apply(plan)
+
+    # Add a new model and make a change to a forward-only model.
+    # The cron of the new model is not aligned with the day boundary.
+    new_model = load_sql_based_model(
+        d.parse(
+            """
+        MODEL (
+            name memory.sushi.new_model,
+            kind FULL,
+            cron '0 8 * * *',
+            start '2023-01-01',
+        );
+
+        SELECT 1 AS one;
+        """
+        )
+    )
+    context.upsert_model(new_model)
+
+    existing_model = add_projection_to_model(t.cast(SqlModel, existing_model), literal=True)
+    context.upsert_model(existing_model)
+
+    plan = context.plan_builder("dev", skip_tests=True, enable_preview=True).build()
+    assert plan.missing_intervals == [
+        SnapshotIntervals(
+            snapshot_id=context.get_snapshot(
+                "memory.sushi.new_model", raise_if_missing=True
+            ).snapshot_id,
+            intervals=[(to_timestamp("2023-01-06"), to_timestamp("2023-01-07"))],
+        ),
+        SnapshotIntervals(
+            snapshot_id=context.get_snapshot(
+                "sushi.top_waiters", raise_if_missing=True
+            ).snapshot_id,
+            intervals=[
+                (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
+                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
+            ],
+        ),
+        SnapshotIntervals(
+            snapshot_id=context.get_snapshot(
+                "sushi.waiter_revenue_by_day", raise_if_missing=True
+            ).snapshot_id,
+            intervals=[
+                (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
+                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
+            ],
+        ),
+    ]
+
+
+@time_machine.travel("2023-01-08 00:00:00 UTC")
+def test_forward_only_preview_child_that_runs_before_parent(init_and_plan_context: t.Callable):
+    context, _ = init_and_plan_context("examples/sushi")
+
+    # This model runs at minute 30 of every hour
+    upstream_model = load_sql_based_model(
+        d.parse(
+            """
+        MODEL (
+            name memory.sushi.upstream_model,
+            kind FULL,
+            cron '30 * * * *',
+            start '2023-01-01',
+        );
+
+        SELECT 1 AS a;
+        """
+        )
+    )
+    context.upsert_model(upstream_model)
+
+    # This model runs at minute 0 of every hour, so it runs before the upstream model
+    downstream_model = load_sql_based_model(
+        d.parse(
+            """
+        MODEL (
+            name memory.sushi.downstream_model,
+            kind INCREMENTAL_BY_TIME_RANGE(
+               time_column event_date,
+               forward_only True,
+            ),
+            cron '0 * * * *',
+            start '2023-01-01',
+        );
+
+        SELECT a, '2023-01-06' AS event_date FROM memory.sushi.upstream_model;
+        """
+        )
+    )
+    context.upsert_model(downstream_model)
+
+    context.plan("prod", skip_tests=True, auto_apply=True)
+
+    with time_machine.travel("2023-01-08 00:05:00 UTC"):
+        # The downstream model runs but not the upstream model
+        context.run("prod")
+
+    # Now it's time for the upstream model to run but it hasn't run yet
+    with time_machine.travel("2023-01-08 00:35:00 UTC"):
+        # Make a change to the downstream model.
+        downstream_model = add_projection_to_model(t.cast(SqlModel, downstream_model), literal=True)
+        context.upsert_model(downstream_model)
+
+        # The plan should only backfill the downstream model despite upstream missing intervals
+        plan = context.plan_builder("dev", skip_tests=True, enable_preview=True).build()
+        assert plan.missing_intervals == [
+            SnapshotIntervals(
+                snapshot_id=context.get_snapshot(
+                    downstream_model.name, raise_if_missing=True
+                ).snapshot_id,
+                intervals=[
+                    (to_timestamp("2023-01-07 23:00:00"), to_timestamp("2023-01-08 00:00:00"))
+                ],
+            ),
+        ]
+
+
+@time_machine.travel("2023-01-08 00:00:00 UTC")
 def test_forward_only_monthly_model(init_and_plan_context: t.Callable):
     context, _ = init_and_plan_context("examples/sushi")
 
@@ -756,7 +905,7 @@ def test_forward_only_parent_created_in_dev_child_created_in_prod(
     )
     top_waiters_snapshot = context.get_snapshot("sushi.top_waiters", raise_if_missing=True)
 
-    plan = context.plan_builder("dev", skip_tests=True).build()
+    plan = context.plan_builder("dev", skip_tests=True, enable_preview=False).build()
     assert len(plan.new_snapshots) == 2
     assert (
         plan.context_diff.snapshots[waiter_revenue_by_day_snapshot.snapshot_id].change_category
@@ -778,7 +927,7 @@ def test_forward_only_parent_created_in_dev_child_created_in_prod(
 
     top_waiters_snapshot = context.get_snapshot("sushi.top_waiters", raise_if_missing=True)
 
-    plan = context.plan_builder("prod", skip_tests=True).build()
+    plan = context.plan_builder("prod", skip_tests=True, enable_preview=False).build()
     assert len(plan.new_snapshots) == 1
     assert (
         plan.context_diff.snapshots[top_waiters_snapshot.snapshot_id].change_category
@@ -792,7 +941,7 @@ def test_forward_only_parent_created_in_dev_child_created_in_prod(
 def test_new_forward_only_model(init_and_plan_context: t.Callable):
     context, _ = init_and_plan_context("examples/sushi")
 
-    context.plan("dev", skip_tests=True, no_prompts=True, auto_apply=True)
+    context.plan("dev", skip_tests=True, no_prompts=True, auto_apply=True, enable_preview=False)
 
     snapshot = context.get_snapshot("sushi.marketing")
 
@@ -1069,8 +1218,12 @@ def test_non_breaking_change_after_forward_only_in_dev(
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_indirect_non_breaking_change_after_forward_only_in_dev(init_and_plan_context: t.Callable):
-    context, plan = init_and_plan_context("examples/sushi")
-    context.apply(plan)
+    context, _ = init_and_plan_context("examples/sushi")
+    # Make sure that the most downstream model is a materialized model.
+    model = context.get_model("sushi.top_waiters")
+    model = model.copy(update={"kind": FullKind()})
+    context.upsert_model(model)
+    context.plan("prod", skip_tests=True, auto_apply=True, no_prompts=True)
 
     # Make sushi.orders a forward-only model.
     model = context.get_model("sushi.orders")
@@ -1079,7 +1232,7 @@ def test_indirect_non_breaking_change_after_forward_only_in_dev(init_and_plan_co
     context.upsert_model(model)
     snapshot = context.get_snapshot(model, raise_if_missing=True)
 
-    plan = context.plan_builder("dev", skip_tests=True).build()
+    plan = context.plan_builder("dev", skip_tests=True, enable_preview=False).build()
     assert (
         plan.context_diff.snapshots[snapshot.snapshot_id].change_category
         == SnapshotChangeCategory.FORWARD_ONLY
@@ -1092,7 +1245,7 @@ def test_indirect_non_breaking_change_after_forward_only_in_dev(init_and_plan_co
     context.upsert_model(add_projection_to_model(t.cast(SqlModel, model)))
     top_waiters_snapshot = context.get_snapshot("sushi.top_waiters", raise_if_missing=True)
 
-    plan = context.plan_builder("dev", skip_tests=True).build()
+    plan = context.plan_builder("dev", skip_tests=True, enable_preview=False).build()
     assert len(plan.new_snapshots) == 1
     assert (
         plan.context_diff.snapshots[top_waiters_snapshot.snapshot_id].change_category
@@ -1125,7 +1278,7 @@ def test_indirect_non_breaking_change_after_forward_only_in_dev(init_and_plan_co
     )
     top_waiters_snapshot = context.get_snapshot("sushi.top_waiters", raise_if_missing=True)
 
-    plan = context.plan_builder("dev", skip_tests=True).build()
+    plan = context.plan_builder("dev", skip_tests=True, enable_preview=False).build()
     assert len(plan.new_snapshots) == 2
     assert (
         plan.context_diff.snapshots[waiter_revenue_by_day_snapshot.snapshot_id].change_category
@@ -1156,7 +1309,7 @@ def test_indirect_non_breaking_change_after_forward_only_in_dev(init_and_plan_co
     assert not context.plan_builder("dev", skip_tests=True).build().requires_backfill
 
     # Deploy everything to prod.
-    plan = context.plan_builder("prod", skip_tests=True).build()
+    plan = context.plan_builder("prod", skip_tests=True, enable_preview=False).build()
     assert plan.start == to_timestamp("2023-01-01")
     assert plan.missing_intervals == [
         SnapshotIntervals(
@@ -1186,7 +1339,11 @@ def test_indirect_non_breaking_change_after_forward_only_in_dev(init_and_plan_co
     ]
 
     context.apply(plan)
-    assert not context.plan_builder("prod", skip_tests=True).build().requires_backfill
+    assert (
+        not context.plan_builder("prod", skip_tests=True, enable_preview=False)
+        .build()
+        .requires_backfill
+    )
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
@@ -1208,7 +1365,7 @@ def test_forward_only_precedence_over_indirect_non_breaking(init_and_plan_contex
     non_breaking_snapshot = context.get_snapshot(non_breaking_model, raise_if_missing=True)
     top_waiter_snapshot = context.get_snapshot("sushi.top_waiters", raise_if_missing=True)
 
-    plan = context.plan_builder("dev", skip_tests=True).build()
+    plan = context.plan_builder("dev", skip_tests=True, enable_preview=False).build()
     assert (
         plan.context_diff.snapshots[forward_only_snapshot.snapshot_id].change_category
         == SnapshotChangeCategory.FORWARD_ONLY
@@ -1238,7 +1395,11 @@ def test_forward_only_precedence_over_indirect_non_breaking(init_and_plan_contex
     ]
 
     context.apply(plan)
-    assert not context.plan_builder("dev", skip_tests=True).build().requires_backfill
+    assert (
+        not context.plan_builder("dev", skip_tests=True, enable_preview=False)
+        .build()
+        .requires_backfill
+    )
 
     # Deploy everything to prod.
     plan = context.plan_builder("prod", skip_tests=True).build()
@@ -1259,7 +1420,11 @@ def test_forward_only_precedence_over_indirect_non_breaking(init_and_plan_contex
     ]
 
     context.apply(plan)
-    assert not context.plan_builder("prod", skip_tests=True).build().requires_backfill
+    assert (
+        not context.plan_builder("prod", skip_tests=True, enable_preview=False)
+        .build()
+        .requires_backfill
+    )
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
@@ -1281,6 +1446,7 @@ def test_run_with_select_models(
             '"memory"."sushi"."items"': to_timestamp("2023-01-09"),
             '"memory"."sushi"."customer_revenue_lifetime"': to_timestamp("2023-01-08"),
             '"memory"."sushi"."customer_revenue_by_day"': to_timestamp("2023-01-08"),
+            '"memory"."sushi"."latest_order"': to_timestamp("2023-01-08"),
             '"memory"."sushi"."waiter_names"': to_timestamp("2023-01-08"),
             '"memory"."sushi"."raw_marketing"': to_timestamp("2023-01-08"),
             '"memory"."sushi"."marketing"': to_timestamp("2023-01-08"),
@@ -1317,6 +1483,7 @@ def test_run_with_select_models_no_auto_upstream(
             '"memory"."sushi"."items"': to_timestamp("2023-01-08"),
             '"memory"."sushi"."customer_revenue_lifetime"': to_timestamp("2023-01-08"),
             '"memory"."sushi"."customer_revenue_by_day"': to_timestamp("2023-01-08"),
+            '"memory"."sushi"."latest_order"': to_timestamp("2023-01-08"),
             '"memory"."sushi"."waiter_names"': to_timestamp("2023-01-08"),
             '"memory"."sushi"."raw_marketing"': to_timestamp("2023-01-08"),
             '"memory"."sushi"."marketing"': to_timestamp("2023-01-08"),
@@ -1502,12 +1669,6 @@ def test_select_models_for_backfill(init_and_plan_context: t.Callable):
     context, _ = init_and_plan_context("examples/sushi")
 
     expected_intervals = [
-        (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
-        (to_timestamp("2023-01-02"), to_timestamp("2023-01-03")),
-        (to_timestamp("2023-01-03"), to_timestamp("2023-01-04")),
-        (to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
-        (to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
-        (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
         (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
     ]
 
@@ -1543,7 +1704,7 @@ def test_select_models_for_backfill(init_and_plan_context: t.Callable):
     dev_df = context.engine_adapter.fetchdf(
         "SELECT DISTINCT event_date FROM sushi__dev.waiter_revenue_by_day ORDER BY event_date"
     )
-    assert len(dev_df) == 7
+    assert len(dev_df) == 1
 
     schema_objects = context.engine_adapter.get_data_objects("sushi__dev")
     assert {o.name for o in schema_objects} == {
@@ -1712,6 +1873,67 @@ def test_custom_materialization(init_and_plan_context: t.Callable):
     assert custom_insert_called
 
 
+# needs to be defined at the top level. If its defined within the test body,
+# adding to the snapshot cache fails with: AttributeError: Can't pickle local object
+class TestCustomKind(CustomKind):
+    @property
+    def custom_property(self) -> str:
+        return validate_string(self.materialization_properties.get("custom_property"))
+
+
+@time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_custom_materialization_with_custom_kind(init_and_plan_context: t.Callable):
+    context, _ = init_and_plan_context("examples/sushi")
+
+    custom_insert_calls = []
+
+    class CustomFullMaterialization(CustomMaterialization[TestCustomKind]):
+        NAME = "test_custom_full_with_custom_kind"
+
+        def insert(
+            self,
+            table_name: str,
+            query_or_df: QueryOrDF,
+            model: Model,
+            is_first_insert: bool,
+            **kwargs: t.Any,
+        ) -> None:
+            assert isinstance(model.kind, TestCustomKind)
+
+            nonlocal custom_insert_calls
+            custom_insert_calls.append(model.kind.custom_property)
+
+            self._replace_query_for_model(model, table_name, query_or_df)
+
+    model = context.get_model("sushi.top_waiters")
+    kwargs = {
+        **model.dict(),
+        # Make a breaking change.
+        "kind": dict(
+            name="CUSTOM",
+            materialization="test_custom_full_with_custom_kind",
+            materialization_properties={"custom_property": "pytest"},
+        ),
+    }
+    context.upsert_model(SqlModel.parse_obj(kwargs))
+
+    context.plan(auto_apply=True)
+
+    assert custom_insert_calls == ["pytest"]
+
+    # no changes
+    context.plan(auto_apply=True)
+
+    assert custom_insert_calls == ["pytest"]
+
+    # change a property on the custom kind, breaking change
+    kwargs["kind"]["materialization_properties"]["custom_property"] = "some value"
+    context.upsert_model(SqlModel.parse_obj(kwargs))
+    context.plan(auto_apply=True)
+
+    assert custom_insert_calls == ["pytest", "some value"]
+
+
 @time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_indirect_non_breaking_view_model_non_representative_snapshot(
     init_and_plan_context: t.Callable,
@@ -1777,7 +1999,7 @@ def test_indirect_non_breaking_view_model_non_representative_snapshot(
     full_downstream_model_2_snapshot_id = context.get_snapshot(
         view_downstream_model_name
     ).snapshot_id
-    dev_plan = context.plan("dev", auto_apply=True, no_prompts=True)
+    dev_plan = context.plan("dev", auto_apply=True, no_prompts=True, enable_preview=False)
     assert (
         dev_plan.snapshots[forward_only_model_snapshot_id].change_category
         == SnapshotChangeCategory.FORWARD_ONLY
@@ -1810,7 +2032,11 @@ def test_indirect_non_breaking_view_model_non_representative_snapshot(
         view_downstream_model_name
     ).snapshot_id
     dev_plan = context.plan(
-        "dev", categorizer_config=CategorizerConfig.all_full(), auto_apply=True, no_prompts=True
+        "dev",
+        categorizer_config=CategorizerConfig.all_full(),
+        auto_apply=True,
+        no_prompts=True,
+        enable_preview=False,
     )
     assert (
         dev_plan.snapshots[full_downstream_model_snapshot_id].change_category
@@ -1840,7 +2066,11 @@ def test_indirect_non_breaking_view_model_non_representative_snapshot(
         view_downstream_model_name
     ).snapshot_id
     dev_plan = context.plan(
-        "dev", categorizer_config=CategorizerConfig.all_full(), auto_apply=True, no_prompts=True
+        "dev",
+        categorizer_config=CategorizerConfig.all_full(),
+        auto_apply=True,
+        no_prompts=True,
+        enable_preview=False,
     )
     assert (
         dev_plan.snapshots[full_downstream_model_snapshot_id].change_category
@@ -1923,7 +2153,7 @@ def test_restatement_plan_ignores_changes(init_and_plan_context: t.Callable):
     model = context.get_model("sushi.waiter_revenue_by_day")
     context.upsert_model(add_projection_to_model(t.cast(SqlModel, model)))
 
-    plan = context.plan_builder(restate_models=["sushi.top_waiters"], start="2023-01-07").build()
+    plan = context.plan_builder(restate_models=["sushi.top_waiters"]).build()
     assert plan.snapshots != context.snapshots
 
     assert not plan.directly_modified
@@ -1931,12 +2161,20 @@ def test_restatement_plan_ignores_changes(init_and_plan_context: t.Callable):
     assert not plan.new_snapshots
     assert plan.requires_backfill
     assert plan.restatements == {
-        restated_snapshot.snapshot_id: (to_timestamp("2023-01-07"), to_timestamp("2023-01-08"))
+        restated_snapshot.snapshot_id: (to_timestamp("2023-01-01"), to_timestamp("2023-01-09"))
     }
     assert plan.missing_intervals == [
         SnapshotIntervals(
             snapshot_id=restated_snapshot.snapshot_id,
-            intervals=[(to_timestamp("2023-01-07"), to_timestamp("2023-01-08"))],
+            intervals=[
+                (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+                (to_timestamp("2023-01-02"), to_timestamp("2023-01-03")),
+                (to_timestamp("2023-01-03"), to_timestamp("2023-01-04")),
+                (to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
+                (to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
+                (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
+                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
+            ],
         )
     ]
 
@@ -2069,6 +2307,118 @@ def test_restatement_plan_hourly_with_downstream_daily_restates_correct_interval
             "2024-01-01 23:30:00",  # added in last restatement
             "2024-01-02 03:30:00",  # added in last restatement
         ], f"Table {tbl} wasnt cleared"
+
+
+def test_restatement_plan_respects_disable_restatements(tmp_path: Path):
+    model_a = """
+    MODEL (
+        name test.a,
+        kind INCREMENTAL_BY_TIME_RANGE (
+            time_column "ts"
+        ),
+        start '2024-01-01',
+        cron '@daily'
+    );
+
+    select account_id, ts from test.external_table;
+    """
+
+    model_b = """
+    MODEL (
+        name test.b,
+        kind INCREMENTAL_BY_TIME_RANGE (
+            time_column "ts",
+            disable_restatement true,
+        ),
+        start '2024-01-01',
+        cron '@daily'
+    );
+
+    select account_id, ts from test.a;
+    """
+
+    models_dir = tmp_path / "models"
+    models_dir.mkdir()
+
+    for path, defn in {"a.sql": model_a, "b.sql": model_b}.items():
+        with open(models_dir / path, "w") as f:
+            f.write(defn)
+
+    config = Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))
+    ctx = Context(paths=[tmp_path], config=config)
+
+    engine_adapter = ctx.engine_adapter
+    engine_adapter.create_schema("test")
+
+    # source data
+    df = pd.DataFrame(
+        {
+            "account_id": [1001, 1002, 1003, 1004],
+            "ts": [
+                "2024-01-01 00:30:00",
+                "2024-01-01 01:30:00",
+                "2024-01-01 02:30:00",
+                "2024-01-02 00:30:00",
+            ],
+        }
+    )
+    columns_to_types = {
+        "account_id": exp.DataType.build("int"),
+        "ts": exp.DataType.build("timestamp"),
+    }
+    external_table = exp.table_(table="external_table", db="test", quoted=True)
+    engine_adapter.create_table(table_name=external_table, columns_to_types=columns_to_types)
+    engine_adapter.insert_append(
+        table_name=external_table, query_or_df=df, columns_to_types=columns_to_types
+    )
+
+    # plan + apply
+    ctx.plan(auto_apply=True, no_prompts=True)
+
+    def _dates_in_table(table_name: str) -> t.List[str]:
+        return [
+            str(r[0]) for r in engine_adapter.fetchall(f"select ts from {table_name} order by ts")
+        ]
+
+    def get_snapshot_intervals(snapshot_id):
+        return list(ctx.state_sync.get_snapshots([snapshot_id]).values())[0].intervals
+
+    # verify initial state
+    for tbl in ["test.a", "test.b"]:
+        assert _dates_in_table(tbl) == [
+            "2024-01-01 00:30:00",
+            "2024-01-01 01:30:00",
+            "2024-01-01 02:30:00",
+            "2024-01-02 00:30:00",
+        ]
+
+    # restate A and expect b to be ignored
+    starting_b_intervals = get_snapshot_intervals(ctx.snapshots['"memory"."test"."b"'].snapshot_id)
+    engine_adapter.execute("delete from test.external_table where ts = '2024-01-01 01:30:00'")
+    ctx.plan(
+        restate_models=["test.a"],
+        start="2024-01-01",
+        end="2024-01-02",
+        auto_apply=True,
+        no_prompts=True,
+    )
+
+    # verify A was changed and not b
+    assert _dates_in_table("test.a") == [
+        "2024-01-01 00:30:00",
+        "2024-01-01 02:30:00",
+        "2024-01-02 00:30:00",
+    ]
+    assert _dates_in_table("test.b") == [
+        "2024-01-01 00:30:00",
+        "2024-01-01 01:30:00",
+        "2024-01-01 02:30:00",
+        "2024-01-02 00:30:00",
+    ]
+
+    # Verify B intervals were not touched
+    b_intervals = get_snapshot_intervals(ctx.snapshots['"memory"."test"."b"'].snapshot_id)
+    assert starting_b_intervals == b_intervals
 
 
 def test_restatement_plan_clears_correct_intervals_across_environments(tmp_path: Path):
@@ -2771,6 +3121,52 @@ def test_prod_restatement_plan_missing_model_in_dev(
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_dev_restatement_of_prod_model(init_and_plan_context: t.Callable):
+    context, plan = init_and_plan_context("examples/sushi")
+    context.apply(plan)
+
+    model = context.get_model("sushi.waiter_revenue_by_day")
+    context.upsert_model(add_projection_to_model(t.cast(SqlModel, model)))
+
+    context.plan("dev", auto_apply=True, no_prompts=True, skip_tests=True)
+
+    restatement_plan = context.plan_builder("dev", restate_models=["*"]).build()
+    assert set(restatement_plan.restatements) == {
+        context.get_snapshot("sushi.waiter_revenue_by_day").snapshot_id,
+        context.get_snapshot("sushi.top_waiters").snapshot_id,
+    }
+
+
+@time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_plan_snapshot_table_exists_for_promoted_snapshot(init_and_plan_context: t.Callable):
+    context, plan = init_and_plan_context("examples/sushi")
+    context.apply(plan)
+
+    model = context.get_model("sushi.waiter_revenue_by_day")
+    context.upsert_model(add_projection_to_model(t.cast(SqlModel, model)))
+
+    context.plan("dev", auto_apply=True, no_prompts=True, skip_tests=True)
+
+    # Drop the views and make sure SQLMesh recreates them later
+    top_waiters_snapshot = context.get_snapshot("sushi.top_waiters", raise_if_missing=True)
+    context.engine_adapter.drop_view(top_waiters_snapshot.table_name())
+    context.engine_adapter.drop_view(top_waiters_snapshot.table_name(False))
+
+    # Make the environment unfinalized to force recreation of all views in the virtual layer
+    context.state_sync.state_sync.engine_adapter.execute(
+        "UPDATE sqlmesh._environments SET finalized_ts = NULL WHERE name = 'dev'"
+    )
+
+    model = context.get_model("sushi.customers")
+    context.upsert_model(add_projection_to_model(t.cast(SqlModel, model)))
+
+    context.plan(
+        "dev", select_models=["sushi.customers"], auto_apply=True, no_prompts=True, skip_tests=True
+    )
+    assert context.engine_adapter.table_exists(top_waiters_snapshot.table_name())
+
+
+@time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_plan_against_expired_environment(init_and_plan_context: t.Callable):
     context, plan = init_and_plan_context("examples/sushi")
     context.apply(plan)
@@ -2850,7 +3246,7 @@ def test_new_forward_only_model_concurrent_versions(init_and_plan_context: t.Cal
     )
     new_model_alt = load_sql_based_model(new_model_alt_expr)
 
-    # Add the second version of the model and apply it to dev_b.
+    # Add the second version of the model but don't apply it yet
     context.upsert_model(new_model_alt)
     snapshot_b = context.get_snapshot(new_model_alt.name)
     plan_b = context.plan_builder("dev_b").build()
@@ -2862,8 +3258,6 @@ def test_new_forward_only_model_concurrent_versions(init_and_plan_context: t.Cal
 
     assert snapshot_b.fingerprint != snapshot_a.fingerprint
     assert snapshot_b.version == snapshot_a.version
-
-    context.apply(plan_b)
 
     # Apply the 1st version to prod
     context.upsert_model(new_model)
@@ -2878,10 +3272,20 @@ def test_new_forward_only_model_concurrent_versions(init_and_plan_context: t.Cal
     df = context.fetchdf("SELECT * FROM memory.sushi.new_model")
     assert df.to_dict() == {"ds": {0: "2023-01-07"}, "a": {0: 1}}
 
+    # Modify the 1st version in prod to trigger a forward-only change
+    new_model = add_projection_to_model(t.cast(SqlModel, new_model))
+    context.upsert_model(new_model)
+    context.plan("prod", auto_apply=True, no_prompts=True, skip_tests=True)
+
+    # Apply the 2nd version to dev_b.
+    # At this point the snapshot of the 2nd version has already been categorized but not
+    # persisted in the state. This means that when the snapshot of the 1st version was
+    # being unpaused during promotion to prod, the state of the 2nd version snapshot was not updated
+    context.apply(plan_b)
+
     # Apply the 2nd version to prod
     context.upsert_model(new_model_alt)
     plan_prod_b = context.plan_builder("prod").build()
-    assert snapshot_b.snapshot_id in plan_prod_b.snapshots
     assert (
         plan_prod_b.snapshots[snapshot_b.snapshot_id].change_category
         == SnapshotChangeCategory.BREAKING
@@ -3235,6 +3639,13 @@ def test_empty_bacfkill(init_and_plan_context: t.Callable):
     assert not plan.requires_backfill
     assert not plan.has_changes
     assert not plan.missing_intervals
+
+
+@time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_dbt_requirements(sushi_dbt_context: Context):
+    assert set(sushi_dbt_context.requirements) == {"dbt-core", "dbt-duckdb"}
+    assert sushi_dbt_context.requirements["dbt-core"].startswith("1.")
+    assert sushi_dbt_context.requirements["dbt-duckdb"].startswith("1.")
 
 
 @pytest.mark.parametrize(
@@ -3719,9 +4130,17 @@ def test_auto_categorization(sushi_context: Context):
 
 def test_multi(mocker):
     context = Context(paths=["examples/multi/repo_1", "examples/multi/repo_2"], gateway="memory")
+    assert (
+        context.render("bronze.a").sql()
+        == '''SELECT 1 AS "col_a", 'b' AS "col_b", 1 AS "one", 'repo_1' AS "dup"'''
+    )
+    assert (
+        context.render("silver.d").sql()
+        == '''SELECT "c"."col_a" AS "col_a", 2 AS "two", 'repo_2' AS "dup" FROM "memory"."silver"."c" AS "c"'''
+    )
     context._new_state_sync().reset(default_catalog=context.default_catalog)
     plan = context.plan_builder().build()
-    assert len(plan.new_snapshots) == 4
+    assert len(plan.new_snapshots) == 5
     context.apply(plan)
 
     adapter = context.engine_adapter
@@ -3740,12 +4159,13 @@ def test_multi(mocker):
     assert set(snapshot.name for snapshot in plan.directly_modified) == {
         '"memory"."bronze"."a"',
         '"memory"."bronze"."b"',
+        '"memory"."silver"."e"',
     }
     assert sorted([x.name for x in list(plan.indirectly_modified.values())[0]]) == [
         '"memory"."silver"."c"',
         '"memory"."silver"."d"',
     ]
-    assert len(plan.missing_intervals) == 2
+    assert len(plan.missing_intervals) == 3
     context.apply(plan)
     validate_apply_basics(context, c.PROD, plan.snapshots.values())
 
@@ -3782,8 +4202,10 @@ def test_multi_hybrid(mocker):
     dbt_model_c = context.get_model("dbt_repo.c")
     assert sqlmesh_model_a.project == "sqlmesh_repo"
 
-    sqlmesh_rendered = 'SELECT ROUND(CAST(("col_a" / NULLIF(100, 0)) AS DECIMAL(16, 2)), 2) AS "col_a", "col_b" AS "col_b" FROM "memory"."dbt_repo"."e" AS "e"'
-    dbt_rendered = 'SELECT DISTINCT ROUND(CAST(("col_a" / NULLIF(100, 0)) AS DECIMAL(16, 2)), 2) AS "rounded_col_a" FROM "memory"."sqlmesh_repo"."b" AS "b"'
+    sqlmesh_rendered = (
+        'SELECT "e"."col_a" AS "col_a", "e"."col_b" AS "col_b" FROM "memory"."dbt_repo"."e" AS "e"'
+    )
+    dbt_rendered = 'SELECT DISTINCT ROUND(CAST(("b"."col_a" / NULLIF(100, 0)) AS DECIMAL(16, 2)), 2) AS "rounded_col_a" FROM "memory"."sqlmesh_repo"."b" AS "b"'
     assert sqlmesh_model_a.render_query().sql() == sqlmesh_rendered
     assert dbt_model_c.render_query().sql() == dbt_rendered
 
@@ -3890,7 +4312,7 @@ def test_environment_suffix_target_table(init_and_plan_context: t.Callable):
     assert set(metadata.schemas) - starting_schemas == {"raw"}
     prod_views = {x for x in metadata.qualified_views if x.db in environments_schemas}
     # Make sure that all models are present
-    assert len(prod_views) == 13
+    assert len(prod_views) == 14
     apply_to_environment(context, "dev")
     # Make sure no new schemas are created
     assert set(metadata.schemas) - starting_schemas == {"raw"}
@@ -3948,9 +4370,9 @@ def test_environment_catalog_mapping(init_and_plan_context: t.Callable):
         user_default_tables,
         non_default_tables,
     ) = get_default_catalog_and_non_tables(metadata, context.default_catalog)
-    assert len(prod_views) == 13
+    assert len(prod_views) == 14
     assert len(dev_views) == 0
-    assert len(user_default_tables) == 16
+    assert len(user_default_tables) == 17
     assert state_metadata.schemas == ["sqlmesh"]
     assert {x.sql() for x in state_metadata.qualified_tables}.issuperset(
         {
@@ -3967,9 +4389,9 @@ def test_environment_catalog_mapping(init_and_plan_context: t.Callable):
         user_default_tables,
         non_default_tables,
     ) = get_default_catalog_and_non_tables(metadata, context.default_catalog)
-    assert len(prod_views) == 13
-    assert len(dev_views) == 13
-    assert len(user_default_tables) == 16
+    assert len(prod_views) == 14
+    assert len(dev_views) == 14
+    assert len(user_default_tables) == 17
     assert len(non_default_tables) == 0
     assert state_metadata.schemas == ["sqlmesh"]
     assert {x.sql() for x in state_metadata.qualified_tables}.issuperset(
@@ -3987,9 +4409,9 @@ def test_environment_catalog_mapping(init_and_plan_context: t.Callable):
         user_default_tables,
         non_default_tables,
     ) = get_default_catalog_and_non_tables(metadata, context.default_catalog)
-    assert len(prod_views) == 13
-    assert len(dev_views) == 26
-    assert len(user_default_tables) == 16
+    assert len(prod_views) == 14
+    assert len(dev_views) == 28
+    assert len(user_default_tables) == 17
     assert len(non_default_tables) == 0
     assert state_metadata.schemas == ["sqlmesh"]
     assert {x.sql() for x in state_metadata.qualified_tables}.issuperset(
@@ -4008,9 +4430,9 @@ def test_environment_catalog_mapping(init_and_plan_context: t.Callable):
         user_default_tables,
         non_default_tables,
     ) = get_default_catalog_and_non_tables(metadata, context.default_catalog)
-    assert len(prod_views) == 13
-    assert len(dev_views) == 13
-    assert len(user_default_tables) == 16
+    assert len(prod_views) == 14
+    assert len(dev_views) == 14
+    assert len(user_default_tables) == 17
     assert len(non_default_tables) == 0
     assert state_metadata.schemas == ["sqlmesh"]
     assert {x.sql() for x in state_metadata.qualified_tables}.issuperset(
@@ -4134,6 +4556,28 @@ def execute(
 
     df = context.engine_adapter.fetchdf("SELECT id FROM sushi.python_view_model")
     assert df["id"].to_list() == [1]
+
+
+@time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_restatement_of_full_model_with_start(init_and_plan_context: t.Callable):
+    context, plan = init_and_plan_context("examples/sushi")
+    context.apply(plan)
+
+    restatement_plan = context.plan(
+        restate_models=["sushi.customers"],
+        start="2023-01-07",
+        auto_apply=True,
+        no_prompts=True,
+    )
+
+    sushi_customer_interval = restatement_plan.restatements[
+        context.get_snapshot("sushi.customers").snapshot_id
+    ]
+    assert sushi_customer_interval == (to_timestamp("2023-01-01"), to_timestamp("2023-01-09"))
+    waiter_by_day_interval = restatement_plan.restatements[
+        context.get_snapshot("sushi.waiter_as_customer_by_day").snapshot_id
+    ]
+    assert waiter_by_day_interval == (to_timestamp("2023-01-07"), to_timestamp("2023-01-08"))
 
 
 def initial_add(context: Context, environment: str):

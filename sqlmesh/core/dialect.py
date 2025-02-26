@@ -329,9 +329,11 @@ def _parse_join(
 
 
 def _warn_unsupported(self: Parser) -> None:
+    from sqlmesh.core.console import get_console
+
     sql = self._find_sql(self._tokens[0], self._tokens[-1])[: self.error_message_context]
 
-    logger.warning(
+    get_console().log_warning(
         f"'{sql}' could not be semantically understood as it contains unsupported syntax, SQLMesh will treat the command as is. Note that any references to the model's "
         "underlying physical table can't be resolved in this case, consider using Jinja as explained here https://sqlmesh.readthedocs.io/en/stable/concepts/macros/macro_variables/#audit-only-variables"
     )
@@ -541,7 +543,7 @@ def _parse_if(self: Parser) -> t.Optional[exp.Expression]:
         return exp.Anonymous(this="IF", expressions=[cond, stmt])
 
 
-def _create_parser(parser_type: t.Type[exp.Expression], table_keys: t.List[str]) -> t.Callable:
+def _create_parser(expression_type: t.Type[exp.Expression], table_keys: t.List[str]) -> t.Callable:
     def parse(self: Parser) -> t.Optional[exp.Expression]:
         from sqlmesh.core.model.kind import ModelKindName
 
@@ -614,7 +616,7 @@ def _create_parser(parser_type: t.Type[exp.Expression], table_keys: t.List[str])
 
             expressions.append(self.expression(exp.Property, this=key, value=value))
 
-        return self.expression(parser_type, expressions=expressions)
+        return self.expression(expression_type, expressions=expressions)
 
     return parse
 
@@ -1359,10 +1361,10 @@ def replace_merge_table_aliases(expression: exp.Expression) -> exp.Expression:
     """
     from sqlmesh.core.engine_adapter.base import MERGE_SOURCE_ALIAS, MERGE_TARGET_ALIAS
 
-    if isinstance(expression, exp.Column):
-        if expression.table.lower() in ("target", "dbt_internal_dest", "__merge_target__"):
-            expression.set("table", exp.to_identifier(MERGE_TARGET_ALIAS))
-        elif expression.table.lower() in ("source", "dbt_internal_source", "__merge_source__"):
-            expression.set("table", exp.to_identifier(MERGE_SOURCE_ALIAS))
+    if isinstance(expression, exp.Column) and (first_part := expression.parts[0]):
+        if first_part.this.lower() in ("target", "dbt_internal_dest", "__merge_target__"):
+            first_part.replace(exp.to_identifier(MERGE_TARGET_ALIAS))
+        elif first_part.this.lower() in ("source", "dbt_internal_source", "__merge_source__"):
+            first_part.replace(exp.to_identifier(MERGE_SOURCE_ALIAS))
 
     return expression

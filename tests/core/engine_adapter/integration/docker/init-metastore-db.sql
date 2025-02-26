@@ -11,3 +11,4 @@ create database datalake_delta_metastore;
 create database testing_metastore;
 create database testing_iceberg_metastore;
 create database testing_delta_metastore;
+create database nessie;

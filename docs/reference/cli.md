@@ -24,6 +24,8 @@ Commands:
   create_test             Generate a unit test fixture for a given model.
   dag                     Render the DAG as an html file.
   diff                    Show the diff between the local state and the...
+  dlt_refresh             Attaches to a DLT pipeline with the option to...
+  environments            Prints the list of SQLMesh environments with...
   evaluate                Evaluate a model and return a dataframe with a...
   fetchdf                 Run a SQL query and display the results.
   format                  Format all SQL models and audits.
@@ -131,6 +133,7 @@ Usage: dlt_refresh PIPELINE [OPTIONS]
 Options:
   -t, --table TEXT  The DLT tables to generate SQLMesh models from. When none specified, all new missing tables will be generated.
   -f, --force       If set it will overwrite existing models with the new generated models from the DLT tables.
+  --help            Show this message and exit.
 ```
 
 ## diff
@@ -142,6 +145,16 @@ Usage: sqlmesh diff [OPTIONS] ENVIRONMENT
 
 Options:
   --help  Show this message and exit.
+```
+
+## environments
+```
+Usage: sqlmesh environments [OPTIONS]
+
+  Prints the list of SQLMesh environments with its expiry datetime.
+
+Options:
+  --help             Show this message and exit.
 ```
 
 ## evaluate
@@ -215,6 +228,7 @@ Usage: sqlmesh info [OPTIONS]
 
 Options:
   --skip-connection  Skip the connection test.
+  -v, --verbose      Verbose output.
   --help  Show this message and exit.
 ```
 
@@ -229,7 +243,7 @@ Options:
   -t, --template TEXT  Project template. Supported values: airflow, dbt,
                        dlt, default, empty.
   --dlt-pipeline TEXT  DLT pipeline for which to generate a SQLMesh project.
-                       This option is supported if the template is dlt.
+                       For use with dlt template.
   --help               Show this message and exit.
 ```
 
@@ -275,7 +289,9 @@ Options:
   --help  Show this message and exit.
 ```
 
-**Caution**: this command affects all SQLMesh users. Contact your SQLMesh administrator before running.
+!!! danger "Caution"
+
+    The `migrate` command affects all SQLMesh users. Contact your SQLMesh administrator before running.
 
 ## plan
 
@@ -335,6 +351,8 @@ Options:
                                   application (prod environment only).
   --enable-preview                Enable preview for forward-only models when
                                   targeting a development environment.
+  --diff-rendered                 Output text differences for rendered versions
+                                  of models and standalone audits
   -v, --verbose                   Verbose output.
   --help                          Show this message and exit.
 ```
@@ -405,7 +423,9 @@ Options:
   --help  Show this message and exit.
 ```
 
-**Caution**: this command affects all SQLMesh users. Contact your SQLMesh administrator before running.
+!!! danger "Caution"
+
+    The `rollback` command affects all SQLMesh users. Contact your SQLMesh administrator before running.
 
 ## run
 
@@ -427,6 +447,10 @@ Options:
   --exit-on-env-update INTEGER  If set, the command will exit with the
                                 specified code if the run is interrupted by an
                                 update to the target environment.
+  --no-auto-upstream            Do not automatically include upstream models.
+                                Only applicable when --select-model is used.
+                                Note: this may result in missing / invalid
+                                data for the selected models.
   --help                        Show this message and exit.
 ```
 
@@ -451,6 +475,9 @@ Options:
                            floating point columns. Default: 3
   --skip-grain-check       Disable the check for a primary key (grain) that is
                            missing or is not unique.
+  --temp-schema TEXT       Schema used for temporary tables. It can be
+                           `CATALOG.SCHEMA` or `SCHEMA`. Default:
+                           `sqlmesh_temp`
   --help                   Show this message and exit.
 ```
 
@@ -492,6 +519,6 @@ Usage: sqlmesh ui [OPTIONS]
 Options:
   --host TEXT                     Bind socket to this host. Default: 127.0.0.1
   --port INTEGER                  Bind socket to this port. Default: 8000
-  --mode [ide|default|docs|plan]  Mode to start the UI in. Default: default
+  --mode [ide|catalog|docs|plan]  Mode to start the UI in. Default: ide
   --help                          Show this message and exit.
 ```

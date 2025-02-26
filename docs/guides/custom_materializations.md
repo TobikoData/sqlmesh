@@ -157,6 +157,99 @@ class CustomFullMaterialization(CustomMaterialization):
         # Example existing materialization for look and feel: https://github.com/TobikoData/sqlmesh/blob/main/sqlmesh/core/snapshot/evaluator.py
 ```
 
+## Extending `CustomKind`
+
+!!! warning
+    This is even lower level usage that contains a bunch of extra complexity and relies on knowledge of the SQLMesh internals.
+    If you dont need this level of complexity, stick with the method described above.
+
+In many cases, the above usage of a custom materialization will suffice.
+
+However, you may still want tighter integration with SQLMesh's internals:
+
+- You may want to validate custom properties are correct before any database connections are made
+- You may want to leverage existing functionality of SQLMesh that relies on specific properties being present
+
+In this case, you can provide a subclass of `CustomKind` for SQLMesh to use instead of `CustomKind` itself.
+During project load, SQLMesh will instantiate your *subclass* instead of `CustomKind`.
+
+This allows you to run custom validators at load time rather than having to perform extra validation when `insert()` is invoked on your `CustomMaterialization`.
+
+You can also define standard Python `@property` methods to "hoist" properties declared inside `materialization_properties` to the top level on your `Kind` object. This can make using them from within your custom materialization easier.
+
+To extend `CustomKind`, first you define a subclass like so:
+
+```python linenums="1" hl_lines="7"
+from typing_extensions import Self
+from pydantic import field_validator, ValidationInfo
+from sqlmesh import CustomKind
+from sqlmesh.utils.pydantic import list_of_fields_validator
+from sqlmesh.utils.errors import ConfigError
+
+class MyCustomKind(CustomKind):
+
+    _primary_key: t.List[exp.Expression]
+
+    @model_validator(mode="after")
+    def _validate_model(self) -> Self:
+        self._primary_key = list_of_fields_validator(
+            self.materialization_properties.get("primary_key"),
+            { "dialect": self.dialect }
+        )
+        if not self.primary_key:
+            raise ConfigError("primary_key must be specified")
+        return self
+
+    @property
+    def primary_key(self) -> t.List[exp.Expression]:
+        return self._primary_key
+
+```
+
+To use it within a model, we can do something like:
+
+```sql linenums="1" hl_lines="4"
+MODEL (
+  name my_db.my_model,
+  kind CUSTOM (
+    materialization 'my_custom_full',
+    materialization_properties (
+        primary_key = (col1, col2)
+    )
+  )
+);
+```
+
+To indicate to SQLMesh that it should use the `MyCustomKind` subclass instead of `CustomKind`, specify it as a generic type parameter on your custom materialization class like so:
+
+```python linenums="1" hl_lines="1 16"
+class CustomFullMaterialization(CustomMaterialization[MyCustomKind]):
+    NAME = "my_custom_full"
+
+    def insert(
+        self,
+        table_name: str,
+        query_or_df: QueryOrDF,
+        model: Model,
+        is_first_insert: bool,
+        **kwargs: t.Any,
+    ) -> None:
+        assert isinstance(model.kind, MyCustomKind)
+
+        self.adapter.merge(
+            ...,
+            unique_key=model.kind.primary_key
+        )
+```
+
+When SQLMesh loads your custom materialization, it will inspect the Python type signature for generic parameters that are subclasses of `CustomKind`. If it finds one, it will instantiate your subclass when building `model.kind` instead of using the default `CustomKind` class.
+
+In this example, this means that:
+
+- Validation for `primary_key` happens at load time instead of evaluation time. So if there is an issue, you can abort early rather than halfway through applying a plan.
+- When your custom materialization is called to load data into tables, `model.kind` will resolve to your custom kind object so you can access the extra properties you defined without first needing to validate them / coerce them to a usable type.
+
+
 ## Sharing custom materializations
 
 ### Copying files

@@ -41,9 +41,13 @@ from sqlmesh.core.engine_adapter.shared import (
 from sqlmesh.core.model.kind import TimeColumn
 from sqlmesh.core.schema_diff import SchemaDiffer
 from sqlmesh.utils import columns_to_types_all_known, random_id
-from sqlmesh.utils.connection_pool import create_connection_pool
+from sqlmesh.utils.connection_pool import create_connection_pool, ConnectionPool
 from sqlmesh.utils.date import TimeLike, make_inclusive, to_time_column
-from sqlmesh.utils.errors import SQLMeshError, UnsupportedCatalogOperationError
+from sqlmesh.utils.errors import (
+    SQLMeshError,
+    UnsupportedCatalogOperationError,
+    MissingDefaultCatalogError,
+)
 from sqlmesh.utils.pandas import columns_to_types_from_df
 
 if t.TYPE_CHECKING:
@@ -75,7 +79,7 @@ class EngineAdapter:
     with the underlying engine and data store.
 
     Args:
-        connection_factory: a callable which produces a new Database API-compliant
+        connection_factory_or_pool: a callable which produces a new Database API-compliant
             connection on every call.
         dialect: The dialect with which this adapter is associated.
         multithreaded: Indicates whether this adapter will be used by more than one thread.
@@ -105,11 +109,10 @@ class EngineAdapter:
 
     def __init__(
         self,
-        connection_factory: t.Callable[[], t.Any],
+        connection_factory_or_pool: t.Union[t.Callable[[], t.Any], ConnectionPool],
         dialect: str = "",
         sql_gen_kwargs: t.Optional[t.Dict[str, Dialect | bool | str]] = None,
         multithreaded: bool = False,
-        cursor_kwargs: t.Optional[t.Dict[str, t.Any]] = None,
         cursor_init: t.Optional[t.Callable[[t.Any], None]] = None,
         default_catalog: t.Optional[str] = None,
         execute_log_level: int = logging.DEBUG,
@@ -119,8 +122,12 @@ class EngineAdapter:
         **kwargs: t.Any,
     ):
         self.dialect = dialect.lower() or self.DIALECT
-        self._connection_pool = create_connection_pool(
-            connection_factory, multithreaded, cursor_kwargs=cursor_kwargs, cursor_init=cursor_init
+        self._connection_pool = (
+            connection_factory_or_pool
+            if isinstance(connection_factory_or_pool, ConnectionPool)
+            else create_connection_pool(
+                connection_factory_or_pool, multithreaded, cursor_init=cursor_init
+            )
         )
         self._sql_gen_kwargs = sql_gen_kwargs or {}
         self._default_catalog = default_catalog
@@ -132,16 +139,15 @@ class EngineAdapter:
 
     def with_log_level(self, level: int) -> EngineAdapter:
         adapter = self.__class__(
-            lambda: None,
+            self._connection_pool,
             dialect=self.dialect,
             sql_gen_kwargs=self._sql_gen_kwargs,
             default_catalog=self._default_catalog,
             execute_log_level=level,
             register_comments=self._register_comments,
+            null_connection=True,
             **self._extra_config,
         )
-
-        adapter._connection_pool = self._connection_pool
 
         return adapter
 
@@ -186,7 +192,9 @@ class EngineAdapter:
             return None
         default_catalog = self._default_catalog or self.get_current_catalog()
         if not default_catalog:
-            raise SQLMeshError("Could not determine a default catalog despite it being supported.")
+            raise MissingDefaultCatalogError(
+                "Could not determine a default catalog despite it being supported."
+            )
         return default_catalog
 
     @property
@@ -1248,7 +1256,9 @@ class EngineAdapter:
         )
         if not columns_to_types or not columns_to_types_all_known(columns_to_types):
             columns_to_types = self.columns(table_name)
-        low, high = [time_formatter(dt, columns_to_types) for dt in make_inclusive(start, end)]
+        low, high = [
+            time_formatter(dt, columns_to_types) for dt in make_inclusive(start, end, self.dialect)
+        ]
         if isinstance(time_column, TimeColumn):
             time_column = time_column.column
         where = exp.Between(
@@ -2168,6 +2178,7 @@ class EngineAdapter:
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         table_description: t.Optional[str] = None,
         table_kind: t.Optional[str] = None,
+        **kwargs: t.Any,
     ) -> t.Optional[exp.Properties]:
         """Creates a SQLGlot table properties expression for ddl."""
         properties: t.List[exp.Expression] = []
@@ -2360,7 +2371,7 @@ class EngineAdapter:
             self.execute(self._build_create_comment_table_exp(table, table_comment, table_kind))
         except Exception:
             logger.warning(
-                f"Table comment for '{table.alias_or_name}' not registered - this may be due to limited permissions.",
+                f"Table comment for '{table.alias_or_name}' not registered - this may be due to limited permissions",
                 exc_info=True,
             )
 
@@ -2387,7 +2398,7 @@ class EngineAdapter:
                 self.execute(self._build_create_comment_column_exp(table, col, comment, table_kind))
             except Exception:
                 logger.warning(
-                    f"Column comments for column '{col}' in table '{table.alias_or_name}' not registered - this may be due to limited permissions.",
+                    f"Column comments for column '{col}' in table '{table.alias_or_name}' not registered - this may be due to limited permissions",
                     exc_info=True,
                 )
 

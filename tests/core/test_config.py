@@ -727,7 +727,7 @@ def test_multi_gateway_config(tmp_path, mocker: MockerFixture):
         fd.write(
             """
 gateways:
-    redshift:  
+    redshift:
         connection:
             type: redshift
             user: user
@@ -747,7 +747,7 @@ gateways:
             aws_secret_access_key: accesskey
             work_group: group
             s3_warehouse_location: s3://location
-            
+
 default_gateway: redshift
 
 model_defaults:
@@ -773,3 +773,151 @@ model_defaults:
     assert isinstance(ctx.engine_adapters["athena"], AthenaEngineAdapter)
     assert isinstance(ctx.engine_adapters["redshift"], RedshiftEngineAdapter)
     assert ctx.engine_adapter == ctx._get_engine_adapter("redshift")
+
+
+def test_trino_schema_location_mapping_syntax(tmp_path):
+    config_path = tmp_path / "config_trino.yaml"
+    with open(config_path, "w", encoding="utf-8") as fd:
+        fd.write(
+            """
+    gateways:
+      trino:
+        connection:
+          type: trino
+          user: trino
+          host: trino
+          catalog: trino
+          schema_location_mapping:
+            '^utils$': 's3://utils-bucket/@{schema_name}'
+            '^landing\\..*$': 's3://raw-data/@{catalog_name}/@{schema_name}'
+
+    default_gateway: trino
+
+    model_defaults:
+      dialect: trino
+    """
+        )
+
+    config = load_config_from_paths(
+        Config,
+        project_paths=[config_path],
+    )
+
+    from sqlmesh.core.config.connection import TrinoConnectionConfig
+
+    conn = config.gateways["trino"].connection
+    assert isinstance(conn, TrinoConnectionConfig)
+
+    assert len(conn.schema_location_mapping) == 2
+
+
+def test_gcp_postgres_ip_and_scopes(tmp_path):
+    config_path = tmp_path / "config_gcp_postgres.yaml"
+    with open(config_path, "w", encoding="utf-8") as fd:
+        fd.write(
+            """
+    gateways:
+      gcp_postgres:
+        connection:
+          type: gcp_postgres
+          instance_connection_string: something
+          user: user
+          password: password
+          db: db
+          ip_type: private
+          scopes:
+          - https://www.googleapis.com/auth/cloud-platform
+          - https://www.googleapis.com/auth/sqlservice.admin
+
+    default_gateway: gcp_postgres
+
+    model_defaults:
+      dialect: postgres
+    """
+        )
+
+    config = load_config_from_paths(
+        Config,
+        project_paths=[config_path],
+    )
+
+    from sqlmesh.core.config.connection import GCPPostgresConnectionConfig
+
+    conn = config.gateways["gcp_postgres"].connection
+    assert isinstance(conn, GCPPostgresConnectionConfig)
+
+    assert len(conn.scopes) == 2
+    assert conn.scopes[0] == "https://www.googleapis.com/auth/cloud-platform"
+    assert conn.scopes[1] == "https://www.googleapis.com/auth/sqlservice.admin"
+    assert conn.ip_type == "private"
+
+
+def test_gateway_model_defaults(tmp_path):
+    global_defaults = ModelDefaultsConfig(
+        dialect="snowflake", owner="foo", optimize_query=True, enabled=True, cron="@daily"
+    )
+    gateway_defaults = ModelDefaultsConfig(dialect="duckdb", owner="baz", optimize_query=False)
+
+    config = Config(
+        gateways={
+            "duckdb": GatewayConfig(
+                connection=DuckDBConnectionConfig(database="db.db"),
+                model_defaults=gateway_defaults,
+            )
+        },
+        model_defaults=global_defaults,
+        default_gateway="duckdb",
+    )
+
+    ctx = Context(paths=tmp_path, config=config, gateway="duckdb")
+
+    expected = ModelDefaultsConfig(
+        dialect="duckdb", owner="baz", optimize_query=False, enabled=True, cron="@daily"
+    )
+
+    assert ctx.config.model_defaults == expected
+
+
+def test_redshift_merge_flag(tmp_path, mocker: MockerFixture):
+    config_path = tmp_path / "config_redshift_merge.yaml"
+    with open(config_path, "w", encoding="utf-8") as fd:
+        fd.write(
+            """
+gateways:
+    redshift:
+        connection:
+            type: redshift
+            user: user
+            password: '1234'
+            host: host
+            database: db
+            enable_merge: true
+    default:
+        connection:
+            type: redshift
+            user: user
+            password: '1234'
+            host: host
+            database: db
+
+default_gateway: redshift
+
+model_defaults:
+    dialect: redshift
+        """
+        )
+
+    config = load_config_from_paths(
+        Config,
+        project_paths=[config_path],
+    )
+    redshift_connection = config.get_connection("redshift")
+    assert isinstance(redshift_connection, RedshiftConnectionConfig)
+    assert redshift_connection.enable_merge
+    adapter = redshift_connection.create_engine_adapter()
+    assert isinstance(adapter, RedshiftEngineAdapter)
+    assert adapter.enable_merge
+
+    adapter_2 = config.get_connection("default").create_engine_adapter()
+    assert isinstance(adapter_2, RedshiftEngineAdapter)
+    assert not adapter_2.enable_merge

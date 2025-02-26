@@ -3,7 +3,7 @@ from __future__ import annotations
 import datetime
 import typing as t
 from pathlib import Path
-from unittest.mock import call
+from unittest.mock import call, patch
 
 import pandas as pd
 import pytest
@@ -20,6 +20,7 @@ from sqlmesh.core.config import (
     ModelDefaultsConfig,
 )
 from sqlmesh.core.context import Context
+from sqlmesh.core.console import get_console
 from sqlmesh.core.dialect import parse
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.macros import MacroEvaluator, macro
@@ -1760,6 +1761,28 @@ test_recursive_ctes:
     )
 
 
+def test_unknown_model_warns(mocker: MockerFixture) -> None:
+    body = load_yaml(
+        """
+model: unknown
+outputs:
+  query:
+  - c: 1
+        """
+    )
+
+    with patch.object(get_console(), "log_warning") as mock_logger:
+        ModelTest.create_test(
+            body=body,
+            test_name="test_unknown_model",
+            models={},  # type: ignore
+            engine_adapter=mocker.Mock(),
+            dialect=None,
+            path=None,
+        )
+        assert mock_logger.mock_calls == [call("Model '\"unknown\"' was not found")]
+
+
 def test_test_generation(tmp_path: Path) -> None:
     init_example_project(tmp_path, dialect="duckdb")
 
@@ -2063,3 +2086,45 @@ def test_test_with_gateway_specific_model(tmp_path: Path, mocker: MockerFixture)
         '"memory"."sqlmesh_example"."input_model"': [{"c": 5}]
     }
     assert test["test_gw_model"]["outputs"] == {"query": [{"c": 5}]}
+
+
+def test_test_with_resolve_template_macro(tmp_path: Path):
+    config = Config(
+        default_connection=DuckDBConnectionConfig(),
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+    )
+
+    models_dir = tmp_path / "models"
+    models_dir.mkdir()
+    (models_dir / "foo.sql").write_text(
+        """
+      MODEL (
+        name test.foo,
+        kind full,
+        physical_properties (
+          location = @resolve_template('file:///tmp/@{table_name}')
+        )
+      );
+
+      SELECT t.a + 1 as a
+      FROM @resolve_template('@{schema_name}.dev_@{table_name}', mode := 'table') as t
+      """
+    )
+
+    tests_dir = tmp_path / "tests"
+    tests_dir.mkdir()
+    (tests_dir / "test_foo.yaml").write_text(
+        """
+test_resolve_template_macro:
+  model: test.foo
+  inputs:
+    test.dev_foo:
+      - a: 1
+  outputs:
+    query:
+      - a: 2
+    """
+    )
+
+    context = Context(paths=tmp_path, config=config)
+    _check_successful_or_raise(context.test())

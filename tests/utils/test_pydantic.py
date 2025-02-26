@@ -55,3 +55,10 @@ def test_pydantic_2_hash() -> None:
     model_2_b = TestModel2(name="a")
     assert hash(model_2_a) == hash(model_2_b)
     assert hash(model_a) != hash(model_2_a)
+
+
+def test_pydantic_dict_default_args_override() -> None:
+    class TestModel(PydanticModel):
+        name: str
+
+    assert TestModel(name="foo").dict(by_alias=True)

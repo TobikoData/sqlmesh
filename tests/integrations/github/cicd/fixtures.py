@@ -3,6 +3,7 @@ import typing as t
 import pytest
 from pytest_mock.plugin import MockerFixture
 
+from sqlmesh.core.console import set_console, get_console, MarkdownConsole
 from sqlmesh.integrations.github.cicd.config import GithubCICDBotConfig
 from sqlmesh.integrations.github.cicd.controller import (
     GithubController,
@@ -56,7 +57,7 @@ def make_pull_request_review() -> t.Callable:
 
 
 @pytest.fixture
-def make_controller(mocker: MockerFixture) -> t.Callable:
+def make_controller(mocker: MockerFixture, copy_to_temp_path: t.Callable) -> t.Callable:
     from github import Github
 
     def _make_function(
@@ -80,16 +81,25 @@ def make_controller(mocker: MockerFixture) -> t.Callable:
                 "sqlmesh.integrations.github.cicd.controller.GithubController.bot_config",
                 bot_config,
             )
-        return GithubController(
-            paths=["examples/sushi"],
-            token="abc",
-            event=(
-                GithubEvent.from_path(event_path)
-                if isinstance(event_path, str)
-                else GithubEvent.from_obj(event_path)
-            ),
-            client=client,
-        )
+
+        paths = copy_to_temp_path("examples/sushi")
+
+        orig_console = get_console()
+        try:
+            set_console(MarkdownConsole())
+
+            return GithubController(
+                paths=paths,
+                token="abc",
+                event=(
+                    GithubEvent.from_path(event_path)
+                    if isinstance(event_path, str)
+                    else GithubEvent.from_obj(event_path)
+                ),
+                client=client,
+            )
+        finally:
+            set_console(orig_console)
 
     return _make_function
 

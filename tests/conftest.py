@@ -235,6 +235,13 @@ def rescope_lineage_cache(request):
     yield
 
 
+@pytest.fixture(autouse=True)
+def reset_console():
+    from sqlmesh.core.console import set_console, NoopConsole
+
+    set_console(NoopConsole())
+
+
 @pytest.fixture
 def duck_conn() -> duckdb.DuckDBPyConnection:
     return duckdb.connect()
@@ -404,6 +411,7 @@ def make_snapshot_on_destructive_change(make_snapshot: t.Callable) -> t.Callable
                 ),
                 version="test_version",
                 change_category=SnapshotChangeCategory.FORWARD_ONLY,
+                dev_table_suffix="dev",
             ),
         )
 
@@ -430,7 +438,11 @@ def sushi_fixed_date_data_validator(sushi_context_fixed_date: Context) -> SushiD
 @pytest.fixture
 def make_mocked_engine_adapter(mocker: MockerFixture) -> t.Callable:
     def _make_function(
-        klass: t.Type[T], dialect: t.Optional[str] = None, register_comments: bool = True
+        klass: t.Type[T],
+        dialect: t.Optional[str] = None,
+        register_comments: bool = True,
+        default_catalog: t.Optional[str] = None,
+        **kwargs: t.Any,
     ) -> T:
         connection_mock = mocker.NonCallableMock()
         cursor_mock = mocker.Mock()
@@ -440,6 +452,8 @@ def make_mocked_engine_adapter(mocker: MockerFixture) -> t.Callable:
             lambda: connection_mock,
             dialect=dialect or klass.DIALECT,
             register_comments=register_comments,
+            default_catalog=default_catalog,
+            **kwargs,
         )
         if isinstance(adapter, SparkEngineAdapter):
             mocker.patch(

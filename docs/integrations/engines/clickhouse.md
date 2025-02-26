@@ -394,6 +394,26 @@ If a model has many records in each partition, you may see additional performanc
 ## Local/Built-in Scheduler
 **Engine Adapter Type**: `clickhouse`
 
+## Airflow Scheduler
+**Engine Name:** `clickhouse`
+
+In order to share a common implementation across local and Airflow, SQLMesh ClickHouse implements its own hook and operator.
+
+By default, the connection ID is set to `sqlmesh_clickhouse_default`, but can be overridden using the `engine_operator_args` parameter to the `SQLMeshAirflow` instance as in the example below:
+```python linenums="1"
+from sqlmesh.schedulers.airflow import NO_DEFAULT_CATALOG
+
+sqlmesh_airflow = SQLMeshAirflow(
+    "clickhouse",
+    default_catalog=NO_DEFAULT_CATALOG,
+    engine_operator_args={
+        "sqlmesh_clickhouse_conn_id": "<Connection ID>"
+    },
+)
+```
+
+Note: `NO_DEFAULT_CATALOG` is required for ClickHouse since ClickHouse doesn't support catalogs. 
+
 ### Connection options
 
 | Option               | Description                                                                                                                                                               |  Type  | Required |

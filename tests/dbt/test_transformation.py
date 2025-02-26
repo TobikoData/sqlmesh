@@ -15,6 +15,7 @@ from sqlglot import exp, parse_one
 from sqlmesh.core import dialect as d
 from sqlmesh.core.audit import StandaloneAudit
 from sqlmesh.core.context import Context
+from sqlmesh.core.console import get_console
 from sqlmesh.core.model import (
     EmbeddedKind,
     FullKind,
@@ -73,8 +74,7 @@ def test_materialization():
     context.project_name = "Test"
     context.target = DuckDbConfig(name="target", schema="foo")
 
-    logger = logging.getLogger("sqlmesh.dbt.model")
-    with patch.object(logger, "warning") as mock_logger:
+    with patch.object(get_console(), "log_warning") as mock_logger:
         model_config = ModelConfig(
             name="model", alias="model", schema="schema", materialized="materialized_view"
         )
@@ -1260,8 +1260,7 @@ def test_clickhouse_properties(mocker: MockerFixture):
         sql="""SELECT 1 AS one, ds FROM foo""",
     )
 
-    logger = logging.getLogger("sqlmesh.dbt.model")
-    with patch.object(logger, "warning") as mock_logger:
+    with patch.object(get_console(), "log_warning") as mock_logger:
         model_to_sqlmesh = model_config.to_sqlmesh(context)
 
     assert [call[0][0] for call in mock_logger.call_args_list] == [
@@ -1269,7 +1268,7 @@ def test_clickhouse_properties(mocker: MockerFixture):
         "SQLMesh does not support 'incremental_predicates' - they will not be applied.",
         "SQLMesh does not support the 'query_settings' model configuration parameter. Specify the query settings directly in the model query.",
         "SQLMesh does not support the 'sharding_key' model configuration parameter or distributed materializations.",
-        "Using unmanaged incremental materialization for model '%s'. Some features might not be available. Consider adding either a time_column (%s) or a unique_key (%s) configuration to mitigate this",
+        "Using unmanaged incremental materialization for model '`test`.`model`'. Some features might not be available. Consider adding either a time_column ('delete+insert', 'insert_overwrite') or a unique_key ('merge', 'none') configuration to mitigate this.",
     ]
 
     assert [e.sql("clickhouse") for e in model_to_sqlmesh.partitioned_by] == [
@@ -1450,3 +1449,62 @@ def test_refs_in_jinja_globals(sushi_test_project: Project, mocker: MockerFixtur
         "waiter_revenue_by_day",
         "sushi.waiter_revenue_by_day",
     }
+
+
+def test_dbt_incremental_allow_partials_by_default():
+    context = DbtContext()
+    context._target = SnowflakeConfig(
+        name="target",
+        schema="test",
+        database="test",
+        account="account",
+        user="user",
+        password="password",
+    )
+
+    model = ModelConfig(
+        name="model",
+        alias="model",
+        package_name="package",
+        target_schema="test",
+        sql="SELECT * FROM baz",
+        materialized=Materialization.TABLE.value,
+    )
+    assert model.allow_partials is None
+    assert not model.to_sqlmesh(context).allow_partials
+
+    model.materialized = Materialization.INCREMENTAL.value
+    assert model.allow_partials is None
+    assert model.to_sqlmesh(context).allow_partials
+
+    model.allow_partials = True
+    assert model.to_sqlmesh(context).allow_partials
+
+    model.allow_partials = False
+    assert not model.to_sqlmesh(context).allow_partials
+
+
+def test_grain():
+    context = DbtContext()
+    context._target = SnowflakeConfig(
+        name="target",
+        schema="test",
+        database="test",
+        account="account",
+        user="user",
+        password="password",
+    )
+
+    model = ModelConfig(
+        name="model",
+        alias="model",
+        package_name="package",
+        target_schema="test",
+        sql="SELECT * FROM baz",
+        materialized=Materialization.TABLE.value,
+        grain=["id_a", "id_b"],
+    )
+    assert model.to_sqlmesh(context).grains == [exp.to_column("id_a"), exp.to_column("id_b")]
+
+    model.grain = "id_a"
+    assert model.to_sqlmesh(context).grains == [exp.to_column("id_a")]

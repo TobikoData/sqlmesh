@@ -12,16 +12,15 @@ another remote environment and determine if nodes have been added, removed, or m
 
 from __future__ import annotations
 
-import logging
 import sys
 import typing as t
 from difflib import ndiff
 from functools import cached_property
 from sqlmesh.core import constants as c
+from sqlmesh.core.console import get_console
 from sqlmesh.core.snapshot import Snapshot, SnapshotId, SnapshotTableInfo
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
-
 
 if sys.version_info >= (3, 12):
     from importlib import metadata
@@ -33,8 +32,6 @@ if t.TYPE_CHECKING:
     from sqlmesh.core.state_sync import StateReader
 
 IGNORED_PACKAGES = {"sqlmesh", "sqlglot"}
-
-logger = logging.getLogger(__name__)
 
 
 class ContextDiff(PydanticModel):
@@ -76,6 +73,8 @@ class ContextDiff(PydanticModel):
     """Previous requirements."""
     requirements: t.Dict[str, str] = {}
     """Python dependencies."""
+    diff_rendered: bool = False
+    """Whether the diff should compare raw vs rendered models"""
 
     @classmethod
     def create(
@@ -87,6 +86,7 @@ class ContextDiff(PydanticModel):
         ensure_finalized_snapshots: bool = False,
         provided_requirements: t.Optional[t.Dict[str, str]] = None,
         excluded_requirements: t.Optional[t.Set[str]] = None,
+        diff_rendered: bool = False,
     ) -> ContextDiff:
         """Create a ContextDiff object.
 
@@ -113,7 +113,7 @@ class ContextDiff(PydanticModel):
             env = state_reader.get_environment(create_from.lower())
 
             if not env and create_from != c.PROD:
-                logger.warning(
+                get_console().log_warning(
                     f"The environment name '{create_from}' was passed to the `plan` command's `--create-from` argument, but '{create_from}' does not exist. Initializing new environment '{environment}' from scratch."
                 )
 
@@ -212,6 +212,7 @@ class ContextDiff(PydanticModel):
             previous_finalized_snapshots=env.previous_finalized_snapshots if env else None,
             previous_requirements=env.requirements if env else {},
             requirements=requirements,
+            diff_rendered=diff_rendered,
         )
 
     @classmethod
@@ -300,7 +301,7 @@ class ContextDiff(PydanticModel):
         return {x.name: x for x in self.snapshots.values()}
 
     def requirements_diff(self) -> str:
-        return "\n".join(
+        return "    " + "\n    ".join(
             ndiff(
                 [
                     f"{k}=={self.previous_requirements[k]}"
@@ -390,9 +391,9 @@ class ContextDiff(PydanticModel):
 
         new, old = self.modified_snapshots[name]
         try:
-            return old.node.text_diff(new.node)
+            return old.node.text_diff(new.node, rendered=self.diff_rendered)
         except SQLMeshError as e:
-            logger.warning("Failed to diff model '%s': %s", name, str(e))
+            get_console().log_warning(f"Failed to diff model '{name}': {str(e)}.")
             return ""
 
 
@@ -422,5 +423,7 @@ def _build_requirements(
                                 ):
                                     requirements[dist] = metadata.version(dist)
                     except metadata.PackageNotFoundError:
-                        logger.warning("Failed to find package for %s", lib)
+                        from sqlmesh.core.console import get_console
+
+                        get_console().log_warning(f"Failed to find package for {lib}.")
     return requirements

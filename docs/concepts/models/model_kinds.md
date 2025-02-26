@@ -121,9 +121,9 @@ WHERE
 ```
 
 ### Idempotency
-It is recommended that queries of models of this kind are [idempotent](../glossary.md#idempotency) to prevent unexpected results during data [restatement](../plans.md#restatement-plans).
+We recommend making sure incremental by time range model queries are [idempotent](../glossary.md#idempotency) to prevent unexpected results during data [restatement](../plans.md#restatement-plans).
 
-Note, however, that upstream models and tables can impact a model's idempotency. For example, referencing an upstream model of kind [FULL](#full) in the model query automatically causes the model to be non-idempotent.
+Note, however, that upstream models and tables can impact a model's idempotency. For example, referencing an upstream model of kind [FULL](#full) in the model query automatically causes the model to be non-idempotent because its data could change on every model execution.
 
 ### Materialization strategy
 Depending on the target engine, models of the `INCREMENTAL_BY_TIME_RANGE` kind are materialized using the following strategies:
@@ -137,113 +137,6 @@ Depending on the target engine, models of the `INCREMENTAL_BY_TIME_RANGE` kind a
 | Redshift   | DELETE by time range, then INSERT         |
 | Postgres   | DELETE by time range, then INSERT         |
 | DuckDB     | DELETE by time range, then INSERT         |
-
-## INCREMENTAL_BY_PARTITION
-
-Models of the `INCREMENTAL_BY_PARTITION` kind are computed incrementally based on partition. A set of columns defines the model's partitioning key, and a partition is the group of rows with the same partitioning key value.
-
-This model kind is designed for the scenario where data rows should be loaded and updated as a group based on their shared value for the partitioning key. This kind may be used with any SQL engine; SQLMesh will automatically create partitioned tables on engines that support explicit table partitioning (e.g., [BigQuery](https://cloud.google.com/bigquery/docs/creating-partitioned-tables), [Databricks](https://docs.databricks.com/en/sql/language-manual/sql-ref-partition.html)).
-
-If a partitioning key in newly loaded data is not present in the model table, the new partitioning key and its data rows are inserted. If a partitioning key in newly loaded data is already present in the model table, **all the partitioning key's existing data rows in the model table are replaced** with the partitioning key's data rows in the newly loaded data. If a partitioning key is present in the model table but not present in the newly loaded data, the partitioning key's existing data rows are not modified and remain in the model table.
-
-This kind is a good fit for datasets that have the following traits:
-
-* The dataset's records can be grouped by a partitioning key.
-* Each record has a partitioning key associated with it.
-* It is appropriate to upsert records, so existing records can be overwritten by new arrivals when their partitioning keys match.
-* All existing records associated with a given partitioning key can be removed or overwritten when any new record has the partitioning key value.
-
-The column defining the partitioning key is specified in the model's `MODEL` DDL `partitioned_by` key. This example shows the `MODEL` DDL for an `INCREMENTAL_BY_PARTITION` model whose partition key is the row's value for the `region` column:
-
-```sql linenums="1" hl_lines="4"
-MODEL (
-  name db.events,
-  kind INCREMENTAL_BY_PARTITION,
-  partitioned_by region,
-);
-```
-
-Compound partition keys are also supported, such as `region` and `department`:
-
-```sql linenums="1" hl_lines="4"
-MODEL (
-  name db.events,
-  kind INCREMENTAL_BY_PARTITION,
-  partitioned_by (region, department),
-);
-```
-
-Date and/or timestamp column expressions are also supported (varies by SQL engine). This BigQuery example's partition key is based on the month each row's `event_date` occurred:
-
-```sql linenums="1" hl_lines="4"
-MODEL (
-  name db.events,
-  kind INCREMENTAL_BY_PARTITION,
-  partitioned_by DATETIME_TRUNC(event_date, MONTH)
-);
-```
-
-This is a fuller example of how you would use this model kind in practice to avoid backfilling too many partitions and/or limiting the partitions to backfill based on time ranges. 
-
-```sql linenums="1"
-MODEL (
-  name demo.incremental_by_partition_demo,
-  kind INCREMENTAL_BY_PARTITION, 
-  partitioned_by user_segment,
-);
-
--- This is the source of truth for what partitions need to be updated and will join to the product usage data
--- This could be an INCREMENTAL_BY_TIME_RANGE model that reads in the user_segment values last updated in the past 30 days to reduce scope
--- Use this strategy to reduce full restatements
-WITH partitions_to_update AS (
-  SELECT DISTINCT
-    user_segment
-  FROM demo.incremental_by_time_range_demo  -- upstream table tracking which user segments to update
-  WHERE last_updated_at BETWEEN DATE_SUB(@start_dt, INTERVAL 30 DAY) AND @end_dt
-),
-
-product_usage AS (
-  SELECT
-    product_id,
-    customer_id,
-    last_usage_date,
-    usage_count,
-    feature_utilization_score,
-    user_segment
-  FROM sqlmesh-public-demo.tcloud_raw_data.product_usage
-  WHERE user_segment IN (SELECT user_segment FROM partitions_to_update) -- partition filter applied here
-)
-
-SELECT
-  product_id,
-  customer_id,
-  last_usage_date,
-  usage_count,
-  feature_utilization_score,
-  user_segment,
-  CASE 
-    WHEN usage_count > 100 AND feature_utilization_score > 0.7 THEN 'Power User'
-    WHEN usage_count > 50 THEN 'Regular User'
-    WHEN usage_count IS NULL THEN 'New User'
-    ELSE 'Light User'
-  END as user_type
-FROM product_usage
-```
-
-**Note**: Partial data [restatement](../plans.md#restatement-plans) is not supported for this model kind, which means that the entire table will be recreated from scratch if restated. This may lead to data loss, so data restatement is disabled for models of this kind by default.
-
-### Materialization strategy
-Depending on the target engine, models of the `INCREMENTAL_BY_PARTITION` kind are materialized using the following strategies:
-
-| Engine     | Strategy                                |
-|------------|-----------------------------------------|
-| Databricks | REPLACE WHERE by partitioning key       |
-| Spark      | INSERT OVERWRITE by partitioning key    |
-| Snowflake  | DELETE by partitioning key, then INSERT |
-| BigQuery   | DELETE by partitioning key, then INSERT |
-| Redshift   | DELETE by partitioning key, then INSERT |
-| Postgres   | DELETE by partitioning key, then INSERT |
-| DuckDB     | DELETE by partitioning key, then INSERT |
 
 ## INCREMENTAL_BY_UNIQUE_KEY
 
@@ -353,22 +246,32 @@ MODEL (
 * Snowflake
 * Spark
 
+In Redshift's case, to enable the use of the native `MERGE` statement, you need to pass the `enable_merge` flag in the connection and set it to `true`. It is disabled by default.
+
+```yaml linenums="1"
+gateways:
+  redshift:
+    connection:
+      type: redshift
+      enable_merge: true
+```
+
 Redshift supports only the `UPDATE` or `DELETE` actions for the `WHEN MATCHED` clause and does not allow multiple `WHEN MATCHED` expressions. For further information, refer to the [Redshift documentation](https://docs.aws.amazon.com/redshift/latest/dg/r_MERGE.html#r_MERGE-parameters).
 
 ### Merge Filter Expression
 
-The `MERGE` statement typically induces a full table scan of the existing table, which can be problematic with large data volumes. 
+The `MERGE` statement typically induces a full table scan of the existing table, which can be problematic with large data volumes.
 
 Prevent a full table scan by passing filtering conditions to the `merge_filter` parameter.
 
-The `merge_filter` accepts a single or a conjunction of predicates to be used in the `ON` clause of the `MERGE` operation: 
+The `merge_filter` accepts a single or a conjunction of predicates to be used in the `ON` clause of the `MERGE` operation:
 
 ```sql linenums="1" hl_lines="5"
 MODEL (
   name db.employee_contracts,
   kind INCREMENTAL_BY_UNIQUE_KEY (
     unique_key id,
-    merge_filter source._operation IS NULL AND target.contract_date > dateadd(day, -7, current_date) 
+    merge_filter source._operation IS NULL AND target.contract_date > dateadd(day, -7, current_date)
   )
 );
 ```
@@ -935,7 +838,7 @@ GROUP BY
 
 ### Reset SCD Type 2 Model (clearing history)
 
-SCD Type 2 models are designed by default to protect the data that has been captured because it is not possible to recreate the history once it has been lost. 
+SCD Type 2 models are designed by default to protect the data that has been captured because it is not possible to recreate the history once it has been lost.
 However, there are cases where you may want to clear the history and start fresh.
 For this use use case you will want to start by setting `disable_restatement` to `false` in the model definition.
 
@@ -949,9 +852,9 @@ MODEL (
 );
 ```
 
-Plan/apply this change to production. 
+Plan/apply this change to production.
 Then you will want to [restate the model](../plans.md#restatement-plans).
-    
+
 ```bash
 sqlmesh plan --restate-model db.menu_items
 ```
@@ -994,3 +897,136 @@ Due to there being no standard, each vendor has a different implementation with 
 We would recommend using standard SQLMesh model types in the first instance. However, if you do need to use Managed models, you still gain other SQLMesh benefits like the ability to use them in [virtual environments](../../concepts/overview#build-a-virtual-environment).
 
 See [Managed Models](./managed_models.md) for more information on which engines are supported and which properties are available.
+
+## INCREMENTAL_BY_PARTITION
+
+Models of the `INCREMENTAL_BY_PARTITION` kind are computed incrementally based on partition. A set of columns defines the model's partitioning key, and a partition is the group of rows with the same partitioning key value.
+
+!!! question "Should you use this model kind?"
+
+    Any model kind can use a partitioned **table** by specifying the [`partitioned_by` key](../models/overview.md#partitioned_by) in the `MODEL` DDL.
+
+    The "partition" in `INCREMENTAL_BY_PARTITION` is about how the data is **loaded** when the model runs.
+
+    `INCREMENTAL_BY_PARTITION` models are inherently [non-idempotent](../glossary.md#idempotency), so restatements and other actions can cause data loss. This makes them more complex to manage than other model kinds.
+
+    In most scenarios, an `INCREMENTAL_BY_TIME_RANGE` model can meet your needs and will be easier to manage. The `INCREMENTAL_BY_PARTITION` model kind should only be used when the data must be loaded by partition (usually for performance reasons).
+
+This model kind is designed for the scenario where data rows should be loaded and updated as a group based on their shared value for the partitioning key.
+
+It may be used with any SQL engine. SQLMesh will automatically create partitioned tables on engines that support explicit table partitioning (e.g., [BigQuery](https://cloud.google.com/bigquery/docs/creating-partitioned-tables), [Databricks](https://docs.databricks.com/en/sql/language-manual/sql-ref-partition.html)).
+
+New rows are loaded based on their partitioning key value:
+
+- If a partitioning key in newly loaded data is not present in the model table, the new partitioning key and its data rows are inserted.
+- If a partitioning key in newly loaded data is already present in the model table, **all the partitioning key's existing data rows in the model table are replaced** with the partitioning key's data rows in the newly loaded data.
+- If a partitioning key is present in the model table but not present in the newly loaded data, the partitioning key's existing data rows are not modified and remain in the model table.
+
+This kind should only be used for datasets that have the following traits:
+
+* The dataset's records can be grouped by a partitioning key.
+* Each record has a partitioning key associated with it.
+* It is appropriate to upsert records, so existing records can be overwritten by new arrivals when their partitioning keys match.
+* All existing records associated with a given partitioning key can be removed or overwritten when any new record has the partitioning key value.
+
+The column defining the partitioning key is specified in the model's `MODEL` DDL `partitioned_by` key. This example shows the `MODEL` DDL for an `INCREMENTAL_BY_PARTITION` model whose partition key is the row's value for the `region` column:
+
+```sql linenums="1" hl_lines="4"
+MODEL (
+  name db.events,
+  kind INCREMENTAL_BY_PARTITION,
+  partitioned_by region,
+);
+```
+
+Compound partition keys are also supported, such as `region` and `department`:
+
+```sql linenums="1" hl_lines="4"
+MODEL (
+  name db.events,
+  kind INCREMENTAL_BY_PARTITION,
+  partitioned_by (region, department),
+);
+```
+
+Date and/or timestamp column expressions are also supported (varies by SQL engine). This BigQuery example's partition key is based on the month each row's `event_date` occurred:
+
+```sql linenums="1" hl_lines="4"
+MODEL (
+  name db.events,
+  kind INCREMENTAL_BY_PARTITION,
+  partitioned_by DATETIME_TRUNC(event_date, MONTH)
+);
+```
+
+!!! warning "Only full restatements supported"
+
+    Partial data [restatements](../plans.md#restatement-plans) are used to reprocess part of a table's data (usually a limited time range).
+
+    Partial data restatement is not supported for `INCREMENTAL_BY_PARTITION` models. If you restate an `INCREMENTAL_BY_PARTITION` model, its entire table will be recreated from scratch.
+
+    Restating `INCREMENTAL_BY_PARTITION` models may lead to data loss and should be performed with care.
+
+### Example
+
+This is a fuller example of how you would use this model kind in practice. It limits the number of partitions to backfill based on time range in the `partitions_to_update` CTE.
+
+```sql linenums="1"
+MODEL (
+  name demo.incremental_by_partition_demo,
+  kind INCREMENTAL_BY_PARTITION,
+  partitioned_by user_segment,
+);
+
+-- This is the source of truth for what partitions need to be updated and will join to the product usage data
+-- This could be an INCREMENTAL_BY_TIME_RANGE model that reads in the user_segment values last updated in the past 30 days to reduce scope
+-- Use this strategy to reduce full restatements
+WITH partitions_to_update AS (
+  SELECT DISTINCT
+    user_segment
+  FROM demo.incremental_by_time_range_demo  -- upstream table tracking which user segments to update
+  WHERE last_updated_at BETWEEN DATE_SUB(@start_dt, INTERVAL 30 DAY) AND @end_dt
+),
+
+product_usage AS (
+  SELECT
+    product_id,
+    customer_id,
+    last_usage_date,
+    usage_count,
+    feature_utilization_score,
+    user_segment
+  FROM sqlmesh-public-demo.tcloud_raw_data.product_usage
+  WHERE user_segment IN (SELECT user_segment FROM partitions_to_update) -- partition filter applied here
+)
+
+SELECT
+  product_id,
+  customer_id,
+  last_usage_date,
+  usage_count,
+  feature_utilization_score,
+  user_segment,
+  CASE
+    WHEN usage_count > 100 AND feature_utilization_score > 0.7 THEN 'Power User'
+    WHEN usage_count > 50 THEN 'Regular User'
+    WHEN usage_count IS NULL THEN 'New User'
+    ELSE 'Light User'
+  END as user_type
+FROM product_usage
+```
+
+**Note**: Partial data [restatement](../plans.md#restatement-plans) is not supported for this model kind, which means that the entire table will be recreated from scratch if restated. This may lead to data loss.
+
+### Materialization strategy
+Depending on the target engine, models of the `INCREMENTAL_BY_PARTITION` kind are materialized using the following strategies:
+
+| Engine     | Strategy                                |
+|------------|-----------------------------------------|
+| Databricks | REPLACE WHERE by partitioning key       |
+| Spark      | INSERT OVERWRITE by partitioning key    |
+| Snowflake  | DELETE by partitioning key, then INSERT |
+| BigQuery   | DELETE by partitioning key, then INSERT |
+| Redshift   | DELETE by partitioning key, then INSERT |
+| Postgres   | DELETE by partitioning key, then INSERT |
+| DuckDB     | DELETE by partitioning key, then INSERT |

@@ -77,6 +77,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
         removed_snapshots=[],
         requires_backfill=True,
         models_to_backfill={'"test_model"'},
+        disabled_restatement_models=set(),
     )
 
     client = AirflowClient(airflow_url=common.AIRFLOW_LOCAL_URL, session=requests.Session())
@@ -98,6 +99,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
                     "fingerprint": snapshot.fingerprint.dict(),
                     "intervals": [],
                     "dev_intervals": [],
+                    "dev_table_suffix": "dev",
                     "pending_restatement_intervals": [],
                     "node": {
                         "audits": [],
@@ -142,6 +144,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
                     "previous_versions": [],
                     "updated_ts": 1665014400000,
                     "version": snapshot.version,
+                    "dev_version": snapshot.dev_version,
                     "change_category": snapshot.change_category,
                     "migrated": False,
                     "unrestorable": False,
@@ -156,10 +159,12 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
                         "node_type": NodeType.MODEL,
                         "previous_versions": [],
                         "version": snapshot.version,
+                        "dev_version": snapshot.dev_version,
                         "physical_schema": "sqlmesh__default",
                         "change_category": snapshot.change_category,
                         "parents": [],
                         "kind_name": "INCREMENTAL_BY_TIME_RANGE",
+                        "dev_table_suffix": "dev",
                     }
                 ],
                 "start_at": "2022-01-01",
@@ -194,6 +199,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
                 '"test_model"': [to_timestamp("2024-01-01"), to_timestamp("2024-01-02")]
             },
             "requires_backfill": True,
+            "disabled_restatement_models": [],
         },
         "notification_targets": [],
         "backfill_concurrent_tasks": 1,
@@ -291,7 +297,8 @@ def test_get_environment(mocker: MockerFixture, snapshot: Snapshot):
     client = AirflowClient(airflow_url=common.AIRFLOW_LOCAL_URL, session=requests.Session())
     result = client.get_environment("dev")
 
-    assert result == environment
+    assert result is not None
+    assert result.dict() == environment.dict()
 
     get_environment_mock.assert_called_once_with(
         "http://localhost:8080/sqlmesh/api/v1/environments/dev"
@@ -318,7 +325,8 @@ def test_get_environments(mocker: MockerFixture, snapshot: Snapshot):
     client = AirflowClient(airflow_url=common.AIRFLOW_LOCAL_URL, session=requests.Session())
     result = client.get_environments()
 
-    assert result == [environment]
+    assert len(result) == 1
+    assert result[0].dict() == environment.dict()
 
     get_environments_mock.assert_called_once_with(
         "http://localhost:8080/sqlmesh/api/v1/environments"

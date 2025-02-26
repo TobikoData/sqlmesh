@@ -28,6 +28,7 @@ from sqlmesh.core.plan import Plan
 from sqlmesh.core.snapshot import Snapshot, SnapshotChangeCategory
 from sqlmesh.utils.date import now, to_date, to_time_column
 from sqlmesh.core.table_diff import TableDiff
+from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
 from tests.conftest import SushiDataValidator
 from tests.core.engine_adapter.integration import (
@@ -144,6 +145,14 @@ def test_type(request):
                 pytest.mark.docker,
                 pytest.mark.engine,
                 pytest.mark.trino_delta,
+            ],
+        ),
+        pytest.param(
+            "trino_nessie",
+            marks=[
+                pytest.mark.docker,
+                pytest.mark.engine,
+                pytest.mark.trino_nessie,
             ],
         ),
         pytest.param(
@@ -335,8 +344,11 @@ def test_drop_schema_catalog(ctx: TestContext, caplog):
 
     schema = ctx.schema("drop_schema_catalog_test", catalog_name)
     if ctx.engine_adapter.catalog_support.is_single_catalog_only:
-        drop_schema_and_validate(schema)
-        assert "requires that all catalog operations be against a single catalog" in caplog.text
+        with pytest.raises(
+            SQLMeshError, match="requires that all catalog operations be against a single catalog"
+        ):
+            drop_schema_and_validate(schema)
+            create_objects_and_validate(schema)
         return
     drop_schema_and_validate(schema)
     create_objects_and_validate(schema)
@@ -1520,7 +1532,7 @@ def test_sushi(ctx: TestContext, tmp_path_factory: pytest.TempPathFactory):
                     "is_view": x.type == DataObjectType.VIEW,
                 }
                 for x in layer_objects
-                if not x.name.endswith("__temp")
+                if not x.name.endswith("__dev")
             }
 
             for model_name, comment in comments.items():
@@ -1602,7 +1614,7 @@ def test_sushi(ctx: TestContext, tmp_path_factory: pytest.TempPathFactory):
                 if x.name.endswith(table_name_suffix)
             }
             if not check_temp_tables:
-                layer_models = {k: v for k, v in layer_models.items() if not k.endswith("__temp")}
+                layer_models = {k: v for k, v in layer_models.items() if not k.endswith("__dev")}
 
             for model_name, comment in comments.items():
                 layer_table_name = layer_models[model_name]["table_name"]

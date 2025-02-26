@@ -107,8 +107,9 @@ nav:
       - "Alerts & Notifications": cloud/features/alerts_notifications.md
       - cloud/features/debugger_view.md
       - cloud/features/data_catalog.md
+      - cloud/features/single_sign_on.md
       - Scheduler:
-        - "Cloud": cloud/features/scheduler.md
+        - "Cloud": cloud/features/scheduler/scheduler.md
         - cloud/features/scheduler/airflow.md
         - cloud/features/scheduler/dagster.md
 #      - Observability:

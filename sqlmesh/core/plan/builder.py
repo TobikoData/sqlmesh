@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 import re
-import sys
 import typing as t
 from collections import defaultdict
 from functools import cached_property
@@ -27,7 +26,13 @@ from sqlmesh.core.snapshot.categorizer import categorize_change
 from sqlmesh.core.snapshot.definition import Interval, SnapshotId
 from sqlmesh.utils import columns_to_types_all_known, random_id
 from sqlmesh.utils.dag import DAG
-from sqlmesh.utils.date import TimeLike, now, to_datetime, yesterday_ds, to_timestamp
+from sqlmesh.utils.date import (
+    TimeLike,
+    now,
+    to_datetime,
+    yesterday_ds,
+    to_timestamp,
+)
 from sqlmesh.utils.errors import NoChangesPlanError, PlanError, SQLMeshError
 
 logger = logging.getLogger(__name__)
@@ -322,47 +327,58 @@ class PlanBuilder:
         if not restate_models:
             return {}
 
+        start = self._start or earliest_interval_start
+        end = self._end or now()
+
         # Add restate snapshots and their downstream snapshots
-        dummy_interval = (sys.maxsize, -sys.maxsize)
         for model_fqn in restate_models:
-            snapshot = self._model_fqn_to_snapshot.get(model_fqn)
-            if not snapshot:
+            if model_fqn not in self._model_fqn_to_snapshot:
                 raise PlanError(f"Cannot restate model '{model_fqn}'. Model does not exist.")
+
+        # Get restatement intervals for all restated snapshots and make sure that if an incremental snapshot expands it's
+        # restatement range that it's downstream dependencies all expand their restatement ranges as well.
+        for s_id in dag:
+            snapshot = self._context_diff.snapshots[s_id]
+
             if not forward_only_preview_needed:
-                if not self._is_dev and snapshot.disable_restatement:
-                    # This is a warning but we print this as error since the Console is lacking API for warnings.
-                    self._console.log_error(
-                        f"Cannot restate model '{model_fqn}'. Restatement is disabled for this model."
+                if self._is_dev and not snapshot.is_paused:
+                    self._console.log_warning(
+                        f"Cannot restate model '{snapshot.name}' because the current version is used in production. "
+                        "Run the restatement against the production environment instead to restate this model."
+                    )
+                    continue
+                elif (not self._is_dev or not snapshot.is_paused) and snapshot.disable_restatement:
+                    self._console.log_warning(
+                        f"Cannot restate model '{snapshot.name}'. "
+                        "Restatement is disabled for this model to prevent possible data loss."
+                        "If you want to restate this model, change the model's `disable_restatement` setting to `false`."
                     )
                     continue
                 elif snapshot.is_symbolic or snapshot.is_seed:
-                    logger.info("Skipping restatement for model '%s'", model_fqn)
+                    logger.info("Skipping restatement for model '%s'", snapshot.name)
                     continue
 
-            restatements[snapshot.snapshot_id] = dummy_interval
-            for downstream_s_id in dag.downstream(snapshot.snapshot_id):
-                if is_restateable_snapshot(self._context_diff.snapshots[downstream_s_id]):
-                    restatements[downstream_s_id] = dummy_interval
-
-        # Get restatement intervals for all restated snapshots and make sure that if a snapshot expands it's
-        # restatement range that it's downstream dependencies all expand their restatement ranges as well.
-        for s_id in dag:
-            if s_id not in restatements:
-                continue
-            snapshot = self._context_diff.snapshots[s_id]
-            interval = snapshot.get_removal_interval(
-                self._start or earliest_interval_start,
-                self._end or now(),
-                self._execution_time,
-                strict=False,
-                is_preview=is_preview,
-            )
             # Since we are traversing the graph in topological order and the largest interval range is pushed down
             # the graph we just have to check our immediate parents in the graph and not the whole upstream graph.
-            snapshot_dependencies = snapshot.parents
-            possible_intervals = [
-                restatements.get(s, dummy_interval) for s in snapshot_dependencies
-            ] + [interval]
+            restating_parents = [
+                self._context_diff.snapshots[s] for s in snapshot.parents if s in restatements
+            ]
+
+            if not restating_parents and snapshot.name not in restate_models:
+                continue
+
+            possible_intervals = {
+                restatements[p.snapshot_id] for p in restating_parents if p.is_incremental
+            }
+            possible_intervals.add(
+                snapshot.get_removal_interval(
+                    start,
+                    end,
+                    self._execution_time,
+                    strict=False,
+                    is_preview=is_preview,
+                )
+            )
             snapshot_start = min(i[0] for i in possible_intervals)
             snapshot_end = max(i[1] for i in possible_intervals)
 
@@ -480,21 +496,20 @@ class PlanBuilder:
                 )
 
                 if has_drop_alteration(schema_diff):
+                    snapshot_name = snapshot.name
                     dropped_column_names = get_dropped_column_names(schema_diff)
-                    dropped_column_str = (
-                        "', '".join(dropped_column_names) if dropped_column_names else None
+                    model_dialect = snapshot.model.dialect
+
+                    get_console().log_destructive_change(
+                        snapshot_name,
+                        dropped_column_names,
+                        schema_diff,
+                        model_dialect,
+                        error=not snapshot.model.on_destructive_change.is_warn,
                     )
-                    dropped_column_msg = (
-                        f" that drops column{'s' if dropped_column_names and len(dropped_column_names) > 1 else ''} '{dropped_column_str}'"
-                        if dropped_column_str
-                        else ""
-                    )
-                    warning_msg = f"Plan results in a destructive change to forward-only model '{snapshot.name}'s schema{dropped_column_msg}."
-                    if snapshot.model.on_destructive_change.is_warn:
-                        logger.warning(warning_msg)
-                    else:
+                    if snapshot.model.on_destructive_change.is_error:
                         raise PlanError(
-                            f"{warning_msg} To allow this, change the model's `on_destructive_change` setting to `warn` or `allow` or include it in the plan's `--allow-destructive-model` option."
+                            "Plan requires a destructive change to a forward-only model."
                         )
 
     def _categorize_snapshots(
@@ -601,7 +616,7 @@ class PlanBuilder:
             if (
                 snapshot.evaluatable
                 and not snapshot.disable_restatement
-                and not snapshot.full_history_restatement_only
+                and (not snapshot.full_history_restatement_only or not snapshot.is_incremental)
             ):
                 snapshot.effective_from = self._effective_from
 
@@ -639,6 +654,8 @@ class PlanBuilder:
         for name, (candidate, promoted) in self._context_diff.modified_snapshots.items():
             if (
                 candidate.snapshot_id not in self._context_diff.new_snapshots
+                and candidate.is_model
+                and not candidate.model.forward_only
                 and promoted.is_forward_only
                 and not promoted.is_paused
                 and not candidate.reuses_previous_version

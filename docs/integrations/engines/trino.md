@@ -47,7 +47,11 @@ iceberg.catalog.type=hive_metastore
 
 **Note**: The Trino Iceberg Connector must be configured with an `iceberg.catalog.type` that supports views. At the time of this writing, this is `hive_metastore`, `glue`, and `rest`.
 
-The `jdbc` and `nessie` catalogs do not support views and are thus incompatible with SQLMesh.
+The `jdbc` and `nessie` iceberg catalog types do not support views and are thus incompatible with SQLMesh.
+
+!!! info "Nessie"
+    Nessie is supported when used as an Iceberg REST Catalog (`iceberg.catalog.type=rest`).
+    For more information on how to configure the Trino Iceberg connector for this, see the [Nessie documentation](https://projectnessie.org/nessie-latest/trino/).
 
 #### Delta Lake Connector Configuration
 
@@ -90,6 +94,114 @@ hive.metastore.glue.default-warehouse-dir=s3://my-bucket/
 | `session_properties` | Trino session properties. Run `SHOW SESSION` to see all options.                                                                                                          |  dict  |    N     |
 | `retries`            | Number of retries to attempt when a request fails. Default: `3`                                                                                                           |  int   |    N     |
 | `timezone`           | Timezone to use for the connection. Default: client-side local timezone                                                                                                   | string |    N     |
+
+## Table and Schema locations
+
+When using connectors that are decoupled from their storage (such as the Iceberg, Hive or Delta connectors), when creating new tables Trino needs to know the location in the physical storage it should write the table data to.
+
+This location gets stored against the table in the metastore so that any engine trying to read the data knows where to look.
+
+### Default behaviour
+
+Trino allows you to optionally configure a `default-warehouse-dir` property at the [Metastore](https://trino.io/docs/current/object-storage/metastores.html) level. When creating objects, Trino will infer schema locations to be `<default warehouse dir>/<schema name>` and table locations to be `<default warehouse dir>/<schema name>/<table name>`.
+
+However, if you dont set this property, Trino can still infer table locations if a *schema* location is explicitly set.
+
+For example, if you specify the `LOCATION` property when creating a schema like so:
+
+```sql
+CREATE SCHEMA staging_data
+WITH (LOCATION = 's3://warehouse/production/staging_data')
+```
+
+Then any tables created under that schema will have their location inferred as `<schema location>/<table name>`.
+
+If you specify neither a `default-warehouse-dir` in the metastore config nor a schema location when creating the schema, you must specify an explicit table location when creating the table or Trino will produce an error.
+
+Creating a table in a specific location is very similar to creating a schema in a specific location:
+
+```sql
+CREATE TABLE staging_data.customers (customer_id INT)
+WITH (LOCATION = 's3://warehouse/production/staging_data/customers')
+```
+
+### Configuring in SQLMesh
+
+Within SQLMesh, you can configure the value to use for the `LOCATION` property when SQLMesh creates tables and schemas. This overrides what Trino would have inferred based on the cluster configuration.
+
+#### Schemas
+
+To configure the `LOCATION` property that SQLMesh will specify when issuing `CREATE SCHEMA` statements, you can use the `schema_location_mapping` connection property. This applies to all schemas that SQLMesh creates, including its internal ones.
+
+The simplest example is to emulate a `default-warehouse-dir`:
+
+```yaml title="config.yaml"
+gateways:
+  trino:
+    connection:
+      type: trino
+      ...
+      schema_location_mapping:
+        '.*': 's3://warehouse/production/@{schema_name}'
+```
+
+This will cause all schemas to get created with their location set to `s3://warehouse/production/<schema name>`. The table locations will be inferred by Trino as `s3://warehouse/production/<schema name>/<table name>` so all objects will effectively be created under `s3://warehouse/production/`.
+
+It's worth mentioning that if your models are using fully qualified three part names, eg `<catalog>.<schema>.<name>` then string being matched against the `schema_location_mapping` regex will be `<catalog>.<schema>` and not just the `<schema>` itself. This allows you to set different locations for the same schema name if that schema name is used across multiple catalogs.
+
+If your models are using two part names, eg `<schema>.<table>` then only the `<schema>` part will be matched against the regex.
+
+Here's an example:
+
+```yaml title="config.yaml"
+gateways:
+  trino:
+    connection:
+      type: trino
+      ...
+      schema_location_mapping:
+        '^utils$': 's3://utils-bucket/@{schema_name}'
+        '^landing\..*$': 's3://raw-data/@{catalog_name}/@{schema_name}'
+        '^staging.*$': 's3://bucket/@{schema_name}_dev'
+        '^sqlmesh.*$': 's3://sqlmesh-internal/dev/@{schema_name}'
+```
+
+This would perform the following mappings:
+
+- a schema called `sales` would not be mapped to a location at all because it doesnt match any of the patterns. It would be created without a `LOCATION` property
+- a schema called `utils` would be mapped to the location `s3://utils-bucket/utils` because it directly matches the `^utils$` pattern
+- a schema called `transactions` in a catalog called `landing` would be mapped to the location `s3://raw-data/landing/transactions` because the string `landing.transactions` matches the `^landing\..*$` pattern
+- schemas called `staging_customers` and `staging_accounts` would be mapped to the locations `s3://bucket/staging_customers_dev` and `s3://bucket/staging_accounts_dev` respectively because they match the `^staging.*$` pattern
+- a schema called `accounts` in a catalog called `staging` would be mapped to the location `s3://bucket/accounts_dev` because the string `staging.accounts` matches the `^staging.*$` pattern
+- schemas called `sqlmesh__staging_customers` and `sqlmesh__staging_utils` would be mapped to the locations `s3://sqlmesh-internal/dev/sqlmesh__staging_customers` and `s3://sqlmesh-internal/dev/sqlmesh__staging_utils` respectively because they match the `^sqlmesh.*$` pattern
+
+!!! info "Placeholders"
+    You may use the `@{catalog_name}` and `@{schema_name}` placeholders in the mapping value.
+
+    If there is a match on one of the patterns then the catalog / schema that SQLMesh is about to use in the `CREATE SCHEMA` statement will be subsitituted into these placeholders.
+
+
+#### Tables
+
+Often, you dont need to configure an explicit table location because if you have configured explicit schema locations, table locations are automatically inferred by Trino to be a subdirectory under the schema location.
+
+However, if you need to, you can configure an explicit table location by adding a `location` property to the model `physical_properties`.
+
+Note that you need to use the [@resolve_template](../../concepts/macros/sqlmesh_macros.md#resolve_template) macro to generate a unique table location for each model version. Otherwise, all model versions will be written to the same location and clobber each other.
+
+```sql hl_lines="5"
+MODEL (
+  name staging.customers,
+  kind FULL,
+  physical_properties (
+    location = @resolve_template('s3://warehouse/@{catalog_name}/@{schema_name}/@{table_name}')
+  )
+);
+
+SELECT ...
+```
+
+This will cause SQLMesh to set the specified `LOCATION` when issuing a `CREATE TABLE` statement.
 
 ## Airflow Scheduler
 **Engine Name:** `trino`

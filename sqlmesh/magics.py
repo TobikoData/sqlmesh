@@ -24,7 +24,7 @@ from sqlmesh.cli.example_project import ProjectTemplate, init_example_project
 from sqlmesh.core import analytics
 from sqlmesh.core import constants as c
 from sqlmesh.core.config import load_configs
-from sqlmesh.core.console import get_console
+from sqlmesh.core.console import create_console, set_console, configure_console
 from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import format_model_expressions, parse
 from sqlmesh.core.model import load_sql_based_model
@@ -53,7 +53,9 @@ def pass_sqlmesh_context(func: t.Callable) -> t.Callable:
                 f"Context must be defined and initialized with one of these names: {', '.join(CONTEXT_VARIABLE_NAMES)}"
             )
         old_console = context.console
-        context.console = get_console(display=self.display)
+        new_console = create_console(display=self.display)
+        context.console = new_console
+        set_console(new_console)
         context.refresh()
 
         magic_name = func.__name__
@@ -81,6 +83,7 @@ def pass_sqlmesh_context(func: t.Callable) -> t.Callable:
         func(self, context, *args, **kwargs)
 
         context.console = old_console
+        set_console(old_console)
 
     return wrapper
 
@@ -128,9 +131,8 @@ class SQLMeshMagics(Magics):
         args = parse_argstring(self.context, line)
         configs = load_configs(args.config, Context.CONFIG_TYPE, args.paths)
         log_limit = list(configs.values())[0].log_limit
-        configure_logging(
-            args.debug, args.ignore_warnings, log_limit=log_limit, log_file_dir=args.log_file_dir
-        )
+        configure_logging(args.debug, log_limit=log_limit, log_file_dir=args.log_file_dir)
+        configure_console(ignore_warnings=args.ignore_warnings)
         try:
             context = Context(paths=args.paths, config=configs, gateway=args.gateway)
             self._shell.user_ns["context"] = context
@@ -418,6 +420,11 @@ class SQLMeshMagics(Magics):
         help="Enable preview for forward-only models when targeting a development environment.",
         default=None,
     )
+    @argument(
+        "--diff-rendered",
+        action="store_true",
+        help="Output text differences for the rendered versions of the models and standalone audits",
+    )
     @line_magic
     @pass_sqlmesh_context
     def plan(self, context: Context, line: str) -> None:
@@ -446,6 +453,7 @@ class SQLMeshMagics(Magics):
             no_diff=args.no_diff,
             run=args.run,
             enable_preview=args.enable_preview,
+            diff_rendered=args.diff_rendered,
         )
 
     @magic_arguments()
@@ -485,7 +493,7 @@ class SQLMeshMagics(Magics):
         """Evaluate the DAG of models using the built-in scheduler."""
         args = parse_argstring(self.run_dag, line)
 
-        success = context.run(
+        completion_status = context.run(
             args.environment,
             start=args.start,
             end=args.end,
@@ -495,7 +503,7 @@ class SQLMeshMagics(Magics):
             exit_on_env_update=args.exit_on_env_update,
             no_auto_upstream=args.no_auto_upstream,
         )
-        if not success:
+        if completion_status.is_failure:
             raise SQLMeshError("Error Running DAG. Check logs for details.")
 
     @magic_arguments()
@@ -1000,6 +1008,13 @@ class SQLMeshMagics(Magics):
         """Clears the SQLMesh cache and any build artifacts."""
         context.clear_caches()
         context.console.log_success("SQLMesh cache and build artifacts cleared")
+
+    @magic_arguments()
+    @line_magic
+    @pass_sqlmesh_context
+    def environments(self, context: Context, line: str) -> None:
+        """Prints the list of SQLMesh environments with its expiry datetime."""
+        context.print_environment_names()
 
 
 def register_magics() -> None:

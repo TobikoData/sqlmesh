@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import sys
 import typing as t
 from pathlib import Path
 from sqlmesh.core import constants as c
@@ -24,11 +25,16 @@ from sqlmesh.utils import UniqueKeyDict
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.jinja import JinjaMacroRegistry
 
-logger = logging.getLogger(__name__)
+if sys.version_info >= (3, 12):
+    from importlib import metadata
+else:
+    import importlib_metadata as metadata  # type: ignore
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.audit import Audit, ModelAudit
     from sqlmesh.core.context import GenericContext
+
+logger = logging.getLogger(__name__)
 
 
 def sqlmesh_config(
@@ -68,17 +74,17 @@ def sqlmesh_config(
 
 
 class DbtLoader(Loader):
-    def __init__(self) -> None:
+    def __init__(self, context: GenericContext, path: Path) -> None:
         self._projects: t.List[Project] = []
         self._macros_max_mtime: t.Optional[float] = None
-        super().__init__()
+        super().__init__(context, path)
 
-    def load(self, context: GenericContext, update_schemas: bool = True) -> LoadedProject:
+    def load(self) -> LoadedProject:
         self._projects = []
-        return super().load(context, update_schemas)
+        return super().load()
 
     def _load_scripts(self) -> t.Tuple[MacroRegistry, JinjaMacroRegistry]:
-        macro_files = list(Path(self._context.path, "macros").glob("**/*.sql"))
+        macro_files = list(Path(self.config_path, "macros").glob("**/*.sql"))
 
         for file in macro_files:
             self._track_file(file)
@@ -128,9 +134,10 @@ class DbtLoader(Loader):
                             "Skipping loading Snapshot (SCD Type 2) models due to the feature flag disabling this feature"
                         )
                         continue
-                    sqlmesh_model = cache.get_or_load_model(
-                        model.path, loader=lambda: _to_sqlmesh(model, context)
-                    )
+
+                    sqlmesh_model = cache.get_or_load_models(
+                        model.path, loader=lambda: [_to_sqlmesh(model, context)]
+                    )[0]
 
                     models[sqlmesh_model.fqn] = sqlmesh_model
 
@@ -157,51 +164,67 @@ class DbtLoader(Loader):
 
     def _load_projects(self) -> t.List[Project]:
         if not self._projects:
-            target_name = self._context.selected_gateway
+            target_name = self.context.selected_gateway
 
             self._projects = []
 
-            for path, config in self._context._loaders[c.DBT].configs.items():
-                project = Project.load(
-                    DbtContext(
-                        project_root=path,
-                        target_name=target_name,
-                        sqlmesh_config=config,
-                    ),
-                    variables=self._context.config.variables,
+            project = Project.load(
+                DbtContext(
+                    project_root=self.config_path,
+                    target_name=target_name,
+                    sqlmesh_config=self.config,
+                ),
+                variables=self.config.variables,
+            )
+
+            self._projects.append(project)
+
+            if project.context.target.database != (self.context.default_catalog or ""):
+                raise ConfigError("Project default catalog does not match context default catalog")
+            for path in project.project_files:
+                self._track_file(path)
+
+            context = project.context
+
+            macros_mtimes: t.List[float] = []
+
+            for package_name, package in project.packages.items():
+                context.add_sources(package.sources)
+                context.add_seeds(package.seeds)
+                context.add_models(package.models)
+                macros_mtimes.extend(
+                    [
+                        self._path_mtimes[m.path]
+                        for m in package.macros.values()
+                        if m.path in self._path_mtimes
+                    ]
                 )
 
-                self._projects.append(project)
+            for package_name, macro_infos in context.manifest.all_macros.items():
+                context.add_macros(macro_infos, package=package_name)
 
-                if project.context.target.database != (self._context.default_catalog or ""):
-                    raise ConfigError(
-                        "Project default catalog does not match context default catalog"
-                    )
-                for path in project.project_files:
-                    self._track_file(path)
-
-                context = project.context
-
-                macros_mtimes: t.List[float] = []
-
-                for package_name, package in project.packages.items():
-                    context.add_sources(package.sources)
-                    context.add_seeds(package.seeds)
-                    context.add_models(package.models)
-                    macros_mtimes.extend(
-                        [
-                            self._path_mtimes[m.path]
-                            for m in package.macros.values()
-                            if m.path in self._path_mtimes
-                        ]
-                    )
-
-                for package_name, macro_infos in context.manifest.all_macros.items():
-                    context.add_macros(macro_infos, package=package_name)
-
-                self._macros_max_mtime = max(macros_mtimes) if macros_mtimes else None
+            self._macros_max_mtime = max(macros_mtimes) if macros_mtimes else None
 
         return self._projects
+
+    def _load_requirements(self) -> t.Tuple[t.Dict[str, str], t.Set[str]]:
+        requirements, excluded_requirements = super()._load_requirements()
+
+        target_packages = ["dbt-core"]
+        for project in self._load_projects():
+            target_packages.append(f"dbt-{project.context.target.type}")
+
+        for target_package in target_packages:
+            if target_package in requirements or target_package in excluded_requirements:
+                continue
+            try:
+                requirements[target_package] = metadata.version(target_package)
+            except metadata.PackageNotFoundError:
+                from sqlmesh.core.console import get_console
+
+                get_console().log_warning(f"dbt package {target_package} is not installed.")
+
+        return requirements, excluded_requirements
 
     def _compute_yaml_max_mtime_per_subfolder(self, root: Path) -> t.Dict[Path, float]:
         if not root.is_dir():
@@ -244,17 +267,21 @@ class DbtLoader(Loader):
             self._yaml_max_mtimes = yaml_max_mtimes
 
             target = t.cast(TargetConfig, project.context.target)
-            cache_path = loader._context.path / c.CACHE / target.name
+            cache_path = loader.config_path / c.CACHE / target.name
             self._model_cache = ModelCache(cache_path)
 
-        def get_or_load_model(self, target_path: Path, loader: t.Callable[[], Model]) -> Model:
-            model = self._model_cache.get_or_load(
+        def get_or_load_models(
+            self, target_path: Path, loader: t.Callable[[], t.List[Model]]
+        ) -> t.List[Model]:
+            models = self._model_cache.get_or_load(
                 self._cache_entry_name(target_path),
                 self._cache_entry_id(target_path),
                 loader=loader,
             )
-            model._path = target_path
-            return model
+            for model in models:
+                model._path = target_path
+
+            return models
 
         def _cache_entry_name(self, target_path: Path) -> str:
             try:
@@ -273,7 +300,7 @@ class DbtLoader(Loader):
             return "__".join(
                 [
                     str(int(max_mtime)) if max_mtime is not None else "na",
-                    self._loader._context.config.fingerprint,
+                    self._loader.config.fingerprint,
                 ]
             )
 

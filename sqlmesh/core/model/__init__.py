@@ -15,6 +15,7 @@ from sqlmesh.core.model.definition import (
     create_seed_model as create_seed_model,
     create_sql_model as create_sql_model,
     load_sql_based_model as load_sql_based_model,
+    load_sql_based_models as load_sql_based_models,
 )
 from sqlmesh.core.model.kind import (
     CustomKind as CustomKind,
@@ -37,4 +38,5 @@ from sqlmesh.core.model.kind import (
     model_kind_validator as model_kind_validator,
 )
 from sqlmesh.core.model.meta import ModelMeta as ModelMeta
+from sqlmesh.core.model.schema import update_model_schemas as update_model_schemas
 from sqlmesh.core.model.seed import Seed as Seed

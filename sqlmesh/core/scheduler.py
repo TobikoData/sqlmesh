@@ -3,7 +3,6 @@ from enum import Enum
 import logging
 import typing as t
 from sqlglot import exp
-
 from sqlmesh.core import constants as c
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.environment import EnvironmentNamingInfo
@@ -26,21 +25,18 @@ from sqlmesh.core.snapshot import (
 from sqlmesh.core.snapshot.definition import (
     Interval,
     expand_range,
-    get_next_model_interval_start,
     parent_snapshots_by_name,
 )
 from sqlmesh.core.state_sync import StateSync
-from sqlmesh.utils import format_exception
 from sqlmesh.utils.concurrency import concurrent_apply_to_dag, NodeExecutionFailedError
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import (
     TimeLike,
-    format_tz_datetime,
     now_timestamp,
     to_timestamp,
     validate_date_range,
 )
-from sqlmesh.utils.errors import AuditError, CircuitBreakerError, SQLMeshError
+from sqlmesh.utils.errors import AuditError, NodeAuditsErrors, CircuitBreakerError, SQLMeshError
 
 logger = logging.getLogger(__name__)
 SnapshotToIntervals = t.Dict[Snapshot, Intervals]
@@ -208,10 +204,11 @@ class Scheduler:
             **kwargs,
         )
 
-        audit_error_to_raise: t.Optional[AuditError] = None
+        audit_errors_to_raise: t.List[AuditError] = []
         for audit_result in (result for result in audit_results if result.count):
             error = AuditError(
                 audit_name=audit_result.audit.name,
+                audit_args=audit_result.audit_args,
                 model=snapshot.model_or_none,
                 count=t.cast(int, audit_result.count),
                 query=t.cast(exp.Query, audit_result.query),
@@ -223,12 +220,15 @@ class Scheduler:
                     NotificationEvent.AUDIT_FAILURE, snapshot.node.owner, error
                 )
             if audit_result.blocking:
-                audit_error_to_raise = error
+                audit_errors_to_raise.append(error)
             else:
-                logger.warning(f"{error}\nAudit is non-blocking so proceeding with execution.")
+                get_console().log_warning(
+                    f"\n{error}.",
+                    long_message=f"{error}. Audit query:\n{error.query.sql(error.adapter_dialect)}",
+                )
 
-        if audit_error_to_raise:
-            raise audit_error_to_raise
+        if audit_errors_to_raise:
+            raise NodeAuditsErrors(audit_errors_to_raise)
 
         self.state_sync.add_interval(snapshot, start, end, is_dev=not is_deployable)
 
@@ -313,18 +313,6 @@ class Scheduler:
         )
 
         if not merged_intervals:
-            next_run_ready_msg = ""
-
-            next_ready_interval_start = get_next_model_interval_start(self.snapshots.values())
-            if next_ready_interval_start:
-                utc_time = format_tz_datetime(next_ready_interval_start)
-                local_time = format_tz_datetime(next_ready_interval_start, use_local_timezone=True)
-                time_msg = local_time if local_time == utc_time else f"{local_time} ({utc_time})"
-                next_run_ready_msg = f"\n\nNext run will be ready at {time_msg}."
-
-            self.console.log_status_update(
-                f"No models are ready to run. Please wait until a model `cron` interval has elapsed.{next_run_ready_msg}"
-            )
             return CompletionStatus.NOTHING_TO_DO
 
         errors, skipped_intervals = self.run_merged_intervals(
@@ -340,20 +328,16 @@ class Scheduler:
         self.console.stop_evaluation_progress(success=not errors)
 
         skipped_snapshots = {i[0] for i in skipped_intervals}
+        self.console.log_skipped_models(skipped_snapshots)
         for skipped in skipped_snapshots:
-            log_message = f"SKIPPED snapshot {skipped}\n"
-            self.console.log_status_update(log_message)
-            logger.info(log_message)
+            logger.info(f"SKIPPED snapshot {skipped}\n")
 
         for error in errors:
             if isinstance(error.__cause__, CircuitBreakerError):
                 raise error.__cause__
-            sid = error.node[0]
-            formatted_exception = "".join(format_exception(error.__cause__ or error))
-            log_message = f"FAILED processing snapshot {sid}\n{formatted_exception}"
-            self.console.log_error(log_message)
-            # Log with INFO level to prevent duplicate messages in the console.
-            logger.info(log_message)
+            logger.info(str(error), exc_info=error)
+
+        self.console.log_failed_models(errors)
 
         return CompletionStatus.FAILURE if errors else CompletionStatus.SUCCESS
 

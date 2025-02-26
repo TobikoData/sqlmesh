@@ -29,7 +29,7 @@ from sqlmesh.core.snapshot import (
     DeployabilityIndex,
 )
 from sqlmesh.utils.date import to_datetime, to_timestamp, DatetimeRanges, TimeLike
-from sqlmesh.utils.errors import CircuitBreakerError, AuditError
+from sqlmesh.utils.errors import CircuitBreakerError, NodeAuditsErrors
 
 
 @pytest.fixture
@@ -531,14 +531,14 @@ def test_audit_failure_notifications(
         )
 
     evaluator_audit_mock.return_value = [
-        AuditResult(audit=audit, model=waiter_names.model, query=query, count=0, skipped=False)
-    ]
-    _evaluate()
-    assert notify_user_mock.call_count == 0
-    assert notify_mock.call_count == 0
-
-    evaluator_audit_mock.return_value = [
-        AuditResult(audit=audit, model=waiter_names.model, query=query, count=None, skipped=True)
+        AuditResult(
+            audit=audit,
+            audit_args={},
+            model=waiter_names.model,
+            query=query,
+            count=0,
+            skipped=False,
+        )
     ]
     _evaluate()
     assert notify_user_mock.call_count == 0
@@ -547,6 +547,21 @@ def test_audit_failure_notifications(
     evaluator_audit_mock.return_value = [
         AuditResult(
             audit=audit,
+            audit_args={},
+            model=waiter_names.model,
+            query=query,
+            count=None,
+            skipped=True,
+        )
+    ]
+    _evaluate()
+    assert notify_user_mock.call_count == 0
+    assert notify_mock.call_count == 0
+
+    evaluator_audit_mock.return_value = [
+        AuditResult(
+            audit=audit,
+            audit_args={},
             model=waiter_names.model,
             query=query,
             count=1,
@@ -561,9 +576,16 @@ def test_audit_failure_notifications(
     notify_mock.reset_mock()
 
     evaluator_audit_mock.return_value = [
-        AuditResult(audit=audit, model=waiter_names.model, query=query, count=1, skipped=False)
+        AuditResult(
+            audit=audit,
+            audit_args={},
+            model=waiter_names.model,
+            query=query,
+            count=1,
+            skipped=False,
+        )
     ]
-    with pytest.raises(AuditError):
+    with pytest.raises(NodeAuditsErrors):
         _evaluate()
     assert notify_user_mock.call_count == 1
     assert notify_mock.call_count == 1
@@ -696,6 +718,7 @@ def test_signal_intervals(mocker: MockerFixture, make_snapshot, get_batched_miss
     assert batches == {
         a: [(to_timestamp("2023-01-01"), to_timestamp("2023-01-03"))],
         b: [(to_timestamp("2023-01-01 23:00:00"), to_timestamp("2023-01-04"))],
-        c: [(to_timestamp("2023-01-02"), to_timestamp("2023-01-03"))],
+        # Full models and models that depend on past can't run for a discontinuous range
+        c: [],
         d: [],
     }

@@ -21,3 +21,8 @@ def assert_has_columns(evaluator, model, columns_to_types):
         assert expected_schema.items() <= evaluator.columns_to_types(model).items()
 
     return None
+
+
+@macro()
+def waiter_names_threshold(evaluator):
+    return 200

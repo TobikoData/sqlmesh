@@ -11,7 +11,7 @@ import pytest
 import pandas as pd
 from pathlib import Path
 from pytest_mock.plugin import MockerFixture
-from sqlglot import exp, parse_one
+from sqlglot import exp, parse_one, Dialect
 from sqlglot.errors import SchemaError
 
 from sqlmesh.core.config.gateway import GatewayConfig
@@ -26,6 +26,7 @@ from sqlmesh.core.config import (
     load_configs,
 )
 from sqlmesh.core.context import Context
+from sqlmesh.core.console import create_console
 from sqlmesh.core.dialect import parse, schema_
 from sqlmesh.core.engine_adapter.duckdb import DuckDBEngineAdapter
 from sqlmesh.core.environment import Environment
@@ -459,20 +460,11 @@ def test_override_builtin_audit_blocking_mode():
         )
     )
 
-    logger = logging.getLogger("sqlmesh.core.scheduler")
-    with patch.object(logger, "warning") as mock_logger:
+    with patch.object(context.console, "log_warning") as mock_logger:
         plan = context.plan(auto_apply=True, no_prompts=True)
         new_snapshot = next(iter(plan.context_diff.new_snapshots.values()))
 
-        version = new_snapshot.fingerprint.to_version()
-        assert mock_logger.mock_calls == [
-            call(
-                "Audit 'not_null' for model 'db.x' failed.\n"
-                "Got 1 results, expected 0.\n"
-                f'SELECT * FROM (SELECT * FROM "sqlmesh__db"."db__x__{version}" AS "db__x__{version}") AS "_q_0" WHERE "c" IS NULL AND TRUE\n'
-                "Audit is non-blocking so proceeding with execution."
-            )
-        ]
+        assert mock_logger.call_args_list[0][0][0] == "\n'not_null' audit error: 1 row failed."
 
     # Even though there are two builtin audits referenced in the above definition, we only
     # store the one that overrides `blocking` in the snapshot; the other one isn't needed
@@ -506,6 +498,8 @@ def test_override_builtin_audit_blocking_mode():
 
 
 def test_python_model_empty_df_raises(sushi_context, capsys):
+    sushi_context.console = create_console()
+
     @model(
         "memory.sushi.test_model",
         columns={"col": "int"},
@@ -524,11 +518,8 @@ def test_python_model_empty_df_raises(sushi_context, capsys):
         sushi_context.plan(no_prompts=True, auto_apply=True)
 
     assert (
-        "Cannot construct source query from an empty \nDataFrame. This error "
-        "is commonly related to Python models that produce no data.\nFor such "
-        "models, consider yielding from an empty generator if the resulting set "
-        "\nis empty, i.e. use `yield from ()`"
-    ) in capsys.readouterr().out
+        "Cannot construct source query from an empty DataFrame. This error is commonly related to Python models that produce no data. For such models, consider yielding from an empty generator if the resulting set is empty, i.e. use"
+    ) in capsys.readouterr().out.replace("\n", "")
 
 
 def test_env_and_default_schema_normalization(mocker: MockerFixture):
@@ -822,7 +813,7 @@ def test_janitor(sushi_context, mocker: MockerFixture) -> None:
     )
     # Assert that the views are dropped for each snapshot just once and make sure that the name used is the
     # view name with the environment as a suffix
-    assert adapter_mock.drop_view.call_count == 13
+    assert adapter_mock.drop_view.call_count == 14
     adapter_mock.drop_view.assert_has_calls(
         [
             call(
@@ -1011,8 +1002,7 @@ def test_load_external_models(copy_to_temp_path):
     assert context.resolve_table("raw.demographics") == '"memory"."raw"."demographics"'
     assert context.resolve_table("raw.model2") == '"memory"."raw"."model2"'
 
-    logger = logging.getLogger("sqlmesh.core.context")
-    with patch.object(logger, "warning") as mock_logger:
+    with patch.object(context.console, "log_warning") as mock_logger:
         context.table("raw.model1") == '"memory"."raw"."model1"'
 
         assert mock_logger.mock_calls == [
@@ -1056,6 +1046,27 @@ def test_disabled_model(copy_to_temp_path):
     assert not context.get_model("sushi.disabled_py")
 
 
+def test_disabled_model_python_macro(sushi_context):
+    @model(
+        "memory.sushi.disabled_model_2",
+        columns={"col": "int"},
+        enabled="@IF(@gateway = 'dev', True, False)",
+    )
+    def entrypoint(context, **kwargs):
+        yield pd.DataFrame({"col": []})
+
+    test_model = model.get_registry()["memory.sushi.disabled_model_2"].model(
+        module_path=Path("."), path=Path("."), variables={"gateway": "prod"}
+    )
+    assert not test_model.enabled
+
+    with pytest.raises(
+        SQLMeshError,
+        match="The disabled model 'memory.sushi.disabled_model_2' cannot be upserted",
+    ):
+        sushi_context.upsert_model(test_model)
+
+
 def test_get_model_mixed_dialects(copy_to_temp_path):
     path = copy_to_temp_path("examples/sushi")
 
@@ -1072,7 +1083,7 @@ def test_get_model_mixed_dialects(copy_to_temp_path):
     model = load_sql_based_model(expression, default_catalog=context.default_catalog)
     context.upsert_model(model)
 
-    assert context.get_model("sushi.snowflake_dialect") == model
+    assert context.get_model("sushi.snowflake_dialect").dict() == model.dict()
 
 
 def test_override_dialect_normalization_strategy():
@@ -1090,6 +1101,35 @@ def test_override_dialect_normalization_strategy():
 
     # The above change is applied globally so we revert it to avoid breaking other tests
     DuckDB.NORMALIZATION_STRATEGY = NormalizationStrategy.CASE_INSENSITIVE
+
+
+def test_different_gateway_normalization_strategy(tmp_path: pathlib.Path):
+    config = Config(
+        gateways={
+            "duckdb": GatewayConfig(
+                connection=DuckDBConnectionConfig(database="db.db"),
+                model_defaults=ModelDefaultsConfig(
+                    dialect="snowflake, normalization_strategy=case_insensitive"
+                ),
+            )
+        },
+        model_defaults=ModelDefaultsConfig(dialect="snowflake"),
+        default_gateway="duckdb",
+    )
+
+    from sqlglot.dialects import Snowflake
+    from sqlglot.dialects.dialect import NormalizationStrategy
+
+    assert Snowflake.NORMALIZATION_STRATEGY == NormalizationStrategy.UPPERCASE
+
+    ctx = Context(paths=tmp_path, config=config, gateway="duckdb")
+
+    dialect = Dialect.get_or_raise(ctx.config.dialect)
+
+    assert dialect == "snowflake"
+    assert Snowflake.NORMALIZATION_STRATEGY == NormalizationStrategy.CASE_INSENSITIVE
+
+    Snowflake.NORMALIZATION_STRATEGY = NormalizationStrategy.UPPERCASE
 
 
 def test_access_self_columns_to_types_in_macro(tmp_path: pathlib.Path):
@@ -1120,8 +1160,8 @@ def post_statement(evaluator):
 def test_wildcard(copy_to_temp_path: t.Callable):
     parent_path = copy_to_temp_path("examples/multi")[0]
 
-    context = Context(paths=f"{parent_path}/*")
-    assert len(context.models) == 4
+    context = Context(paths=f"{parent_path}/*", gateway="memory")
+    assert len(context.models) == 5
 
 
 def test_duckdb_state_connection_automatic_multithreaded_mode(tmp_path):
@@ -1193,3 +1233,166 @@ def test_requirements(copy_to_temp_path: t.Callable):
     diff = context.plan_builder("dev", skip_tests=True, skip_backfill=True).build().context_diff
     assert set(diff.previous_requirements) == requirements
     assert set(diff.requirements) == {"numpy", "pandas"}
+
+
+@pytest.mark.slow
+def test_rendered_diff():
+    ctx = Context(config=Config())
+
+    ctx.upsert_model(
+        load_sql_based_model(
+            parse(
+                """
+                MODEL (
+                    name test,
+                );
+
+                CREATE TABLE IF NOT EXISTS foo AS (SELECT @OR(FALSE, TRUE));
+
+                SELECT 4 + 2;
+
+                CREATE TABLE IF NOT EXISTS foo2 AS (SELECT @AND(TRUE, FALSE));
+
+                ON_VIRTUAL_UPDATE_BEGIN;
+                DROP VIEW @this_model
+                ON_VIRTUAL_UPDATE_END;
+
+                """
+            )
+        )
+    )
+
+    ctx.plan("dev", auto_apply=True, no_prompts=True)
+
+    # Alter the model's query and pre/post/virtual statements to cause the diff
+    ctx.upsert_model(
+        load_sql_based_model(
+            parse(
+                """
+                MODEL (
+                    name test,
+                );
+
+                CREATE TABLE IF NOT EXISTS foo AS (SELECT @AND(TRUE, NULL));
+
+                SELECT 5 + 2;
+
+                CREATE TABLE IF NOT EXISTS foo2 AS (SELECT @OR(TRUE, NULL));
+
+                ON_VIRTUAL_UPDATE_BEGIN;
+                DROP VIEW IF EXISTS @this_model
+                ON_VIRTUAL_UPDATE_END;
+                """
+            )
+        )
+    )
+
+    plan = ctx.plan("dev", auto_apply=True, no_prompts=True, diff_rendered=True)
+
+    assert '''@@ -4,13 +4,13 @@
+
+ CREATE TABLE IF NOT EXISTS "foo" AS
+ (
+   SELECT
+-    FALSE OR TRUE
++    TRUE
+ )
+ SELECT
+-  6 AS "_col_0"
++  7 AS "_col_0"
+ CREATE TABLE IF NOT EXISTS "foo2" AS
+ (
+   SELECT
+-    TRUE AND FALSE
++    TRUE
+ )
+-DROP VIEW "test"
++DROP VIEW IF EXISTS "test"''' in plan.context_diff.text_diff('"test"')
+
+
+def test_plan_enable_preview_default(sushi_context: Context, sushi_dbt_context: Context):
+    assert sushi_context._plan_preview_enabled
+    assert not sushi_dbt_context._plan_preview_enabled
+
+    sushi_dbt_context.engine_adapter.SUPPORTS_CLONING = True
+    assert sushi_dbt_context._plan_preview_enabled
+
+
+def test_catalog_name_needs_to_be_quoted():
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        default_connection=DuckDBConnectionConfig(catalogs={'"foo--bar"': ":memory:"}),
+    )
+    context = Context(config=config)
+    parsed_model = parse("MODEL(name db.x, kind FULL); SELECT 1 AS c")
+    context.upsert_model(load_sql_based_model(parsed_model, default_catalog='"foo--bar"'))
+    context.plan(auto_apply=True, no_prompts=True)
+    assert context.fetchdf('select * from "foo--bar".db.x').to_dict() == {"c": {0: 1}}
+
+
+def test_plan_runs_audits_on_dev_previews(sushi_context: Context, capsys, caplog):
+    sushi_context.console = create_console()
+
+    test_model = """
+    MODEL (
+        name sushi.test_audit_model,
+        kind INCREMENTAL_BY_TIME_RANGE (
+            time_column event_date,
+            forward_only true
+        ),
+        audits (
+            number_of_rows(threshold := 10),
+            not_null(columns := id),
+            at_least_one_non_blocking(column := waiter_id)
+        )
+    );
+
+    SELECT * FROM sushi.orders WHERE event_date BETWEEN @start_ts AND @end_ts
+    """
+
+    sushi_context.upsert_model(
+        load_sql_based_model(parse(test_model), default_catalog=sushi_context.default_catalog)
+    )
+    plan = sushi_context.plan(auto_apply=True)
+
+    assert plan.new_snapshots[0].name == '"memory"."sushi"."test_audit_model"'
+    assert plan.deployability_index.is_deployable(plan.new_snapshots[0])
+
+    # now, we mutate the model and run a plan in dev to create a dev preview
+    test_model = """
+    MODEL (
+        name sushi.test_audit_model,
+        kind INCREMENTAL_BY_TIME_RANGE (
+            time_column event_date,
+            forward_only true
+        ),
+        audits (
+            not_null(columns := new_col),
+            at_least_one_non_blocking(column := new_col)
+        )
+    );
+
+    SELECT *, null as new_col FROM sushi.orders WHERE event_date BETWEEN @start_ts AND @end_ts
+    """
+
+    sushi_context.upsert_model(
+        load_sql_based_model(parse(test_model), default_catalog=sushi_context.default_catalog)
+    )
+
+    capsys.readouterr()  # clear output buffer
+    plan = sushi_context.plan(environment="dev", auto_apply=True)
+
+    assert len(plan.new_snapshots) == 1
+    dev_preview = plan.new_snapshots[0]
+    assert dev_preview.name == '"memory"."sushi"."test_audit_model"'
+    assert dev_preview.is_forward_only
+    assert not plan.deployability_index.is_deployable(
+        dev_preview
+    )  # if something is not deployable to prod, then its by definiton a dev preview
+
+    # we only see audit results if they fail
+    stdout = capsys.readouterr().out
+    log = caplog.text
+    assert "'not_null' audit error:" in log
+    assert "'at_least_one_non_blocking' audit error:" in log
+    assert "Target environment updated successfully" in stdout

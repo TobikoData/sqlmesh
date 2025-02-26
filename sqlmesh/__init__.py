@@ -29,6 +29,7 @@ from sqlmesh.core.snapshot import Snapshot as Snapshot
 from sqlmesh.core.snapshot.evaluator import (
     CustomMaterialization as CustomMaterialization,
 )
+from sqlmesh.core.model.kind import CustomKind as CustomKind
 from sqlmesh.utils import (
     debug_mode_enabled as debug_mode_enabled,
     enable_debug_mode as enable_debug_mode,
@@ -136,12 +137,14 @@ class CustomFormatter(logging.Formatter):
 
 def configure_logging(
     force_debug: bool = False,
-    ignore_warnings: bool = False,
     write_to_stdout: bool = False,
     write_to_file: bool = True,
     log_limit: int = c.DEFAULT_LOG_LIMIT,
     log_file_dir: t.Optional[t.Union[str, Path]] = None,
 ) -> None:
+    # Remove noisy grpc logs that are not useful for users
+    os.environ["GRPC_VERBOSITY"] = os.environ.get("GRPC_VERBOSITY", "NONE")
+
     logger = logging.getLogger()
     debug = force_debug or debug_mode_enabled()
 
@@ -149,12 +152,11 @@ def configure_logging(
     level = logging.DEBUG if debug else logging.INFO
     logger.setLevel(level)
 
-    stdout_handler = logging.StreamHandler(sys.stdout)
-    stdout_handler.setFormatter(CustomFormatter())
-    stdout_handler.setLevel(
-        level if write_to_stdout else (logging.ERROR if ignore_warnings else logging.WARNING)
-    )
-    logger.addHandler(stdout_handler)
+    if write_to_stdout:
+        stdout_handler = logging.StreamHandler(sys.stdout)
+        stdout_handler.setFormatter(CustomFormatter())
+        stdout_handler.setLevel(level)
+        logger.addHandler(stdout_handler)
 
     log_file_dir = log_file_dir or c.DEFAULT_LOG_FILE_DIR
     log_path_prefix = Path(log_file_dir) / LOG_FILENAME_PREFIX

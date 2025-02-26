@@ -134,7 +134,7 @@ Multiple companies offer managed Airflow instances that integrate with their pro
 
 ### Google Cloud Composer
 
-SQLMesh fully supports Airflow hosted on [Google Cloud Composer](https://cloud.google.com/composer/docs/composer-2/composer-overview) - see the [configuration reference page](../reference/configuration.md#cloud-composer) for more information.
+SQLMesh fully supports Airflow hosted on [Google Cloud Composer](https://cloud.google.com/composer/docs/composer-3/composer-overview) - see the [configuration reference page](../reference/configuration.md#cloud-composer) for more information.
 
 ### Astronomer
 

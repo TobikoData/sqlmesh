@@ -67,8 +67,8 @@ jobs:
           name: Install ODBC
           command: sudo apt-get install unixodbc-dev
       - run:
-          name: Install SQLMesh and dbt adapter dependencies
-          command: make install-cicd-test
+          name: Install SQLMesh dev dependencies
+          command: make install-dev
       - run:
           name: Fix Git URL override
           command: git config --global --unset url."ssh://git@github.com".insteadOf
