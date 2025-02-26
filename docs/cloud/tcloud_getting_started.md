@@ -1,7 +1,5 @@
 # Tobiko Cloud: Getting Started
 
-<div style="position: relative; padding-bottom: 56.25%; height: 0;"><iframe src="https://www.loom.com/embed/bfd7da9166324b0e987c3824f824d929?sid=5d14308f-1e2c-4883-8ac0-29173a698f71" frameborder="0" webkitallowfullscreen mozallowfullscreen allowfullscreen style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"></iframe></div>
-
 Tobiko Cloud is a data platform that extends SQLMesh to make it easy to manage data at scale without the waste.
 
 We're here to make it easy to get started and feel confident that everything is working as expected. After you've completed the steps below, you'll have achieved the following:
@@ -64,11 +62,12 @@ Technical Requirements:
 
 The first step to setting up Tobiko Cloud is logging in to the web interface:
 
-1. We will authenticate into your Tobiko Cloud instance. If it is your first time going through this flow, your Solutions Architect will    guide you on how to get SSO configured. Open the url below.
+1. We will authenticate into your Tobiko Cloud instance. If it is your first time going through this flow, your Solutions Architect will    guide you on [how to get SSO configured](https://sqlmesh.readthedocs.io/en/stable/cloud/features/single_sign_on/). Open the url below.
     ```bash
     https://cloud.tobikodata.com/auth/login
     ```
-2. Once logged in, you should see the home page. If you are not redirected then input your Tobiko Cloud URL in the browser (ex: https://cloud.tobikodata.com/sqlmesh/tobiko/public-demo/observer/)  
+2. Once logged in, you should see the home page. If you are not redirected, then input your Tobiko Cloud URL in the browser (ex: 
+https://cloud.tobikodata.com/sqlmesh/tobiko/public-demo/observer/)  
 
     Your view should be empty, but the figure below shows a populated example with Tobiko Cloud running in production:
 
