@@ -1701,7 +1701,7 @@ class PythonModel(_Model):
 
         if self.kind and not self.kind.supports_python_models:
             raise SQLMeshError(
-                f"Cannot create Python model '{self.name}' as the '{self.kind.name}' kind doesnt support Python models"
+                f"Cannot create Python model '{self.name}' as the '{self.kind.name}' kind doesn't support Python models"
             )
 
     def render(

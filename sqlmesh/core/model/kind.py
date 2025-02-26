@@ -649,6 +649,10 @@ class SeedKind(_ModelKind):
     def metadata_hash_values(self) -> t.List[t.Optional[str]]:
         return [*super().metadata_hash_values, str(self.batch_size)]
 
+    @property
+    def supports_python_models(self) -> bool:
+        return False
+
 
 class FullKind(_ModelKind):
     name: t.Literal[ModelKindName.FULL] = ModelKindName.FULL

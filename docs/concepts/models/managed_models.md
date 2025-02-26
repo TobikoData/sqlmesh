@@ -7,6 +7,10 @@ For supported engines, we expose this functionality through Managed models. This
 
 Due to this, managed models would typically be built off an [External Model](./external_models.md) rather than another SQLMesh model. Since SQLMesh already ensures that models it's tracking are kept up to date, the main benefit of managed models comes when they read from external tables that arent tracked by SQLMesh.
 
+!!! warning "Not supported in Python models"
+
+    Python models do not support the `MANAGED` [model kind](./model_kinds.md) - use a SQL model isntead.
+
 ## Difference from materialized views
 The difference between an Managed model and a materialized view is down to semantics and in some engines there is no difference.
 
@@ -36,7 +40,7 @@ Therefore, we try to not create managed tables unnecessarily. For example, in [f
 
 !!! warning
     Due to the use of normal tables for dev previews, it is possible to write a query that uses features that are available to normal tables in the target engine but not managed tables. This could result in a scenario where a plan works in a dev environment but fails when deployed to production.
-    
+
     We believe the cost savings are worth it, however please [reach out](https://tobikodata.com/slack) if this causes problems for you.
 
 ## Supported Engines

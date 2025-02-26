@@ -14,6 +14,10 @@ Seed models are a good fit for static datasets that change infrequently or not a
 * Names of national holidays and their dates
 * A static list of identifiers that should be excluded
 
+!!! warning "Not supported in Python models"
+
+    Python models do not support the `SEED` [model kind](./model_kinds.md) - use a SQL model instead.
+
 ## Creating a seed model
 
 Similar to [SQL models](./sql_models.md), `SEED` models are defined in files with the `.sql` extension in the `models/` directory of the SQLMesh project.
@@ -209,11 +213,11 @@ MODEL (
   )
 );
 
-ON_VIRTUAL_UPDATE_BEGIN; 
+ON_VIRTUAL_UPDATE_BEGIN;
 GRANT SELECT ON VIEW @this_model TO ROLE dev_role;
-JINJA_STATEMENT_BEGIN;     
+JINJA_STATEMENT_BEGIN;
 GRANT SELECT ON VIEW {{ this_model }} TO ROLE admin_role;
-JINJA_END;  
+JINJA_END;
 ON_VIRTUAL_UPDATE_END;
 ```
 
