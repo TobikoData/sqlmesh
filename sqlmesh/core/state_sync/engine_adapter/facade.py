@@ -17,26 +17,18 @@ adapter to read and write state to the underlying data store.
 from __future__ import annotations
 
 import contextlib
-import json
 import logging
-import time
 import typing as t
-from copy import deepcopy
 from pathlib import Path
 from datetime import datetime
 
-from sqlglot import __version__ as SQLGLOT_VERSION
 from sqlglot import exp
 
-from sqlmesh.core import analytics
-from sqlmesh.core import constants as c
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.snapshot import (
-    Node,
     Snapshot,
-    SnapshotFingerprint,
     SnapshotId,
     SnapshotIdLike,
     SnapshotInfoLike,
@@ -44,15 +36,12 @@ from sqlmesh.core.snapshot import (
     SnapshotNameVersion,
     SnapshotTableCleanupTask,
     SnapshotTableInfo,
-    fingerprint_from_node,
     start_date,
 )
 from sqlmesh.core.snapshot.definition import (
     Interval,
-    _parents_from_node,
 )
 from sqlmesh.core.state_sync.base import (
-    MIGRATIONS,
     PromotionResult,
     StateSync,
     Versions,
@@ -62,10 +51,8 @@ from sqlmesh.core.state_sync.engine_adapter.interval import IntervalState
 from sqlmesh.core.state_sync.engine_adapter.environment import EnvironmentState
 from sqlmesh.core.state_sync.engine_adapter.snapshot import SnapshotState
 from sqlmesh.core.state_sync.engine_adapter.version import VersionState
-from sqlmesh.core.state_sync.engine_adapter.utils import snapshot_id_filter, SQLMESH_VERSION
-from sqlmesh.utils import major_minor
-from sqlmesh.utils.dag import DAG
-from sqlmesh.utils.date import TimeLike, now_timestamp, to_timestamp
+from sqlmesh.core.state_sync.engine_adapter.migrator import StateMigrator
+from sqlmesh.utils.date import TimeLike, to_timestamp
 from sqlmesh.utils.errors import ConflictingPlanError, SQLMeshError
 
 logger = logging.getLogger(__name__)
@@ -91,9 +78,6 @@ class EngineAdapterStateSync(StateSync):
         context_path: The context path, used for caching snapshot models.
     """
 
-    SNAPSHOT_BATCH_SIZE = 1000
-    SNAPSHOT_MIGRATION_BATCH_SIZE = 500
-
     def __init__(
         self,
         engine_adapter: EngineAdapter,
@@ -101,27 +85,26 @@ class EngineAdapterStateSync(StateSync):
         console: t.Optional[Console] = None,
         context_path: Path = Path(),
     ):
+        self.plan_dags_table = exp.table_("_plan_dags", db=schema)
         self.interval_state = IntervalState(engine_adapter, schema=schema)
         self.environment_state = EnvironmentState(engine_adapter, schema=schema)
         self.snapshot_state = SnapshotState(
             engine_adapter, schema=schema, context_path=context_path
         )
         self.version_state = VersionState(engine_adapter, schema=schema)
+        self.migrator = StateMigrator(
+            engine_adapter,
+            version_state=self.version_state,
+            snapshot_state=self.snapshot_state,
+            environment_state=self.environment_state,
+            interval_state=self.interval_state,
+            plan_dags_table=self.plan_dags_table,
+            console=console,
+        )
         # Make sure that if an empty string is provided that we treat it as None
         self.schema = schema or None
         self.engine_adapter = engine_adapter
         self.console = console or get_console()
-        self.plan_dags_table = exp.table_("_plan_dags", db=self.schema)
-
-    def _fetchone(self, query: t.Union[exp.Expression, str]) -> t.Optional[t.Tuple]:
-        return self.engine_adapter.fetchone(
-            query, ignore_unsupported_errors=True, quote_identifiers=True
-        )
-
-    def _fetchall(self, query: t.Union[exp.Expression, str]) -> t.List[t.Tuple]:
-        return self.engine_adapter.fetchall(
-            query, ignore_unsupported_errors=True, quote_identifiers=True
-        )
 
     @transactional()
     def push_snapshots(self, snapshots: t.Iterable[Snapshot]) -> None:
@@ -407,20 +390,6 @@ class EngineAdapterStateSync(StateSync):
     def close(self) -> None:
         self.engine_adapter.close()
 
-    def _get_versions(self) -> Versions:
-        return self.version_state.get_versions()
-
-    def _restore_table(
-        self,
-        table_name: TableName,
-        backup_table_name: TableName,
-    ) -> None:
-        self.engine_adapter.drop_table(table_name)
-        self.engine_adapter.rename_table(
-            old_table_name=backup_table_name,
-            new_table_name=table_name,
-        )
-
     @transactional()
     def migrate(
         self,
@@ -429,351 +398,26 @@ class EngineAdapterStateSync(StateSync):
         promoted_snapshots_only: bool = True,
     ) -> None:
         """Migrate the state sync to the latest SQLMesh / SQLGlot version."""
-        versions = self.get_versions(validate=False)
-
-        migration_start_ts = time.perf_counter()
-
-        try:
-            migrate_rows = self._apply_migrations(default_catalog, skip_backup)
-
-            if not migrate_rows and major_minor(SQLMESH_VERSION) == versions.minor_sqlmesh_version:
-                return
-
-            if migrate_rows:
-                self._migrate_rows(promoted_snapshots_only)
-                # Cleanup plan DAGs since we currently don't migrate snapshot records that are in there.
-                self.engine_adapter.delete_from(self.plan_dags_table, "TRUE")
-            self.version_state.update_versions()
-
-            analytics.collector.on_migration_end(
-                from_sqlmesh_version=versions.sqlmesh_version,
-                state_sync_type=self.state_type(),
-                migration_time_sec=time.perf_counter() - migration_start_ts,
-            )
-        except Exception as e:
-            if skip_backup:
-                logger.error("Backup was skipped so no rollback was attempted.")
-            else:
-                self.rollback()
-
-            analytics.collector.on_migration_end(
-                from_sqlmesh_version=versions.sqlmesh_version,
-                state_sync_type=self.state_type(),
-                migration_time_sec=time.perf_counter() - migration_start_ts,
-                error=e,
-            )
-
-            self.console.log_migration_status(success=False)
-            raise SQLMeshError("SQLMesh migration failed.") from e
-
-        self.console.log_migration_status()
+        self.migrator.migrate(
+            self,
+            default_catalog,
+            skip_backup=skip_backup,
+            promoted_snapshots_only=promoted_snapshots_only,
+        )
 
     @transactional()
     def rollback(self) -> None:
         """Rollback to the previous migration."""
-        logger.info("Starting migration rollback.")
-        tables = (
-            self.snapshot_state.snapshots_table,
-            self.environment_state.environments_table,
-            self.version_state.versions_table,
-        )
-        optional_tables = (
-            self.interval_state.intervals_table,
-            self.plan_dags_table,
-            self.snapshot_state.auto_restatements_table,
-        )
-        versions = self.get_versions(validate=False)
-        if versions.schema_version == 0:
-            # Clean up state tables
-            for table in tables + optional_tables:
-                self.engine_adapter.drop_table(table)
-        else:
-            if not all(
-                self.engine_adapter.table_exists(_backup_table_name(table)) for table in tables
-            ):
-                raise SQLMeshError("There are no prior migrations to roll back to.")
-            for table in tables:
-                self._restore_table(table, _backup_table_name(table))
-
-            for optional_table in optional_tables:
-                if self.engine_adapter.table_exists(_backup_table_name(optional_table)):
-                    self._restore_table(optional_table, _backup_table_name(optional_table))
-
-        logger.info("Migration rollback successful.")
+        self.migrator.rollback()
 
     def state_type(self) -> str:
         return self.engine_adapter.dialect
 
-    @transactional()
-    def _backup_state(self) -> None:
-        for table in (
-            self.snapshot_state.snapshots_table,
-            self.environment_state.environments_table,
-            self.version_state.versions_table,
-            self.interval_state.intervals_table,
-            self.plan_dags_table,
-            self.snapshot_state.auto_restatements_table,
-        ):
-            if self.engine_adapter.table_exists(table):
-                backup_name = _backup_table_name(table)
-                self.engine_adapter.drop_table(backup_name)
-                self.engine_adapter.create_table_like(backup_name, table)
-                self.engine_adapter.insert_append(backup_name, exp.select("*").from_(table))
-
-    def _apply_migrations(
-        self,
-        default_catalog: t.Optional[str],
-        skip_backup: bool,
-    ) -> bool:
-        versions = self.get_versions(validate=False)
-        migrations = MIGRATIONS[versions.schema_version :]
-        should_backup = any(
-            [
-                migrations,
-                major_minor(SQLGLOT_VERSION) != versions.minor_sqlglot_version,
-                major_minor(SQLMESH_VERSION) != versions.minor_sqlmesh_version,
-            ]
-        )
-        if not skip_backup and should_backup:
-            self._backup_state()
-
-        snapshot_count_before = self.snapshot_state.count() if versions.schema_version else None
-
-        for migration in migrations:
-            logger.info(f"Applying migration {migration}")
-            migration.migrate(self, default_catalog=default_catalog)
-
-        snapshot_count_after = self.snapshot_state.count()
-
-        if snapshot_count_before is not None and snapshot_count_before != snapshot_count_after:
-            scripts = f"{versions.schema_version} - {versions.schema_version + len(migrations)}"
-            raise SQLMeshError(
-                f"Number of snapshots before ({snapshot_count_before}) and after "
-                f"({snapshot_count_after}) applying migration scripts {scripts} does not match. "
-                "Please file an issue issue at https://github.com/TobikoData/sqlmesh/issues/new."
-            )
-
-        migrate_snapshots_and_environments = (
-            bool(migrations) or major_minor(SQLGLOT_VERSION) != versions.minor_sqlglot_version
-        )
-        return migrate_snapshots_and_environments
-
-    def _migrate_rows(self, promoted_snapshots_only: bool) -> None:
-        logger.info("Fetching environments")
-        environments = self.get_environments()
-        # Only migrate snapshots that are part of at least one environment.
-        snapshots_to_migrate = (
-            {s.snapshot_id for e in environments for s in e.snapshots}
-            if promoted_snapshots_only
-            else None
-        )
-        snapshot_mapping = self._migrate_snapshot_rows(snapshots_to_migrate)
-        if not snapshot_mapping:
-            logger.info("No changes to snapshots detected")
-            return
-        self._migrate_environment_rows(environments, snapshot_mapping)
-
-    def _migrate_snapshot_rows(
-        self, snapshots: t.Optional[t.Set[SnapshotId]]
-    ) -> t.Dict[SnapshotId, SnapshotTableInfo]:
-        logger.info("Migrating snapshot rows...")
-        raw_snapshots = {
-            SnapshotId(name=name, identifier=identifier): {
-                **json.loads(raw_snapshot),
-                "updated_ts": updated_ts,
-                "unpaused_ts": unpaused_ts,
-                "unrestorable": unrestorable,
-            }
-            for where in (self._snapshot_id_filter(snapshots) if snapshots is not None else [None])
-            for name, identifier, raw_snapshot, updated_ts, unpaused_ts, unrestorable in self._fetchall(
-                exp.select(
-                    "name", "identifier", "snapshot", "updated_ts", "unpaused_ts", "unrestorable"
-                )
-                .from_(self.snapshot_state.snapshots_table)
-                .where(where)
-                .lock()
-            )
-        }
-        if not raw_snapshots:
-            return {}
-
-        dag: DAG[SnapshotId] = DAG()
-        for snapshot_id, raw_snapshot in raw_snapshots.items():
-            parent_ids = [SnapshotId.parse_obj(p_id) for p_id in raw_snapshot.get("parents", [])]
-            dag.add(snapshot_id, [p_id for p_id in parent_ids if p_id in raw_snapshots])
-
-        reversed_dag_raw = dag.reversed.graph
-
-        self.console.start_snapshot_migration_progress(len(raw_snapshots))
-
-        parsed_snapshots = LazilyParsedSnapshots(raw_snapshots)
-        all_snapshot_mapping: t.Dict[SnapshotId, SnapshotTableInfo] = {}
-        snapshot_id_mapping: t.Dict[SnapshotId, SnapshotId] = {}
-        new_snapshots: t.Dict[SnapshotId, Snapshot] = {}
-        visited: t.Set[SnapshotId] = set()
-
-        def _push_new_snapshots() -> None:
-            all_snapshot_mapping.update(
-                {
-                    from_id: new_snapshots[to_id].table_info
-                    for from_id, to_id in snapshot_id_mapping.items()
-                }
-            )
-
-            existing_new_snapshots = self.snapshots_exist(new_snapshots)
-            new_snapshots_to_push = [
-                s for s in new_snapshots.values() if s.snapshot_id not in existing_new_snapshots
-            ]
-            if new_snapshots_to_push:
-                logger.info("Pushing %s migrated snapshots", len(new_snapshots_to_push))
-                self._push_snapshots(new_snapshots_to_push)
-            new_snapshots.clear()
-            snapshot_id_mapping.clear()
-
-        def _visit(
-            snapshot_id: SnapshotId, fingerprint_cache: t.Dict[str, SnapshotFingerprint]
-        ) -> None:
-            if snapshot_id in visited or snapshot_id not in raw_snapshots:
-                return
-            visited.add(snapshot_id)
-
-            snapshot = parsed_snapshots[snapshot_id]
-            node = snapshot.node
-
-            node_seen = set()
-            node_queue = {snapshot_id}
-            nodes: t.Dict[str, Node] = {}
-            while node_queue:
-                next_snapshot_id = node_queue.pop()
-                next_snapshot = parsed_snapshots.get(next_snapshot_id)
-
-                if next_snapshot_id in node_seen or not next_snapshot:
-                    continue
-
-                node_seen.add(next_snapshot_id)
-                node_queue.update(next_snapshot.parents)
-                nodes[next_snapshot.name] = next_snapshot.node
-
-            new_snapshot = deepcopy(snapshot)
-            try:
-                new_snapshot.fingerprint = fingerprint_from_node(
-                    node,
-                    nodes=nodes,
-                    cache=fingerprint_cache,
-                )
-                new_snapshot.parents = tuple(
-                    SnapshotId(
-                        name=parent_node.fqn,
-                        identifier=fingerprint_from_node(
-                            parent_node,
-                            nodes=nodes,
-                            cache=fingerprint_cache,
-                        ).to_identifier(),
-                    )
-                    for parent_node in _parents_from_node(node, nodes).values()
-                )
-            except Exception:
-                logger.exception("Could not compute fingerprint for %s", snapshot.snapshot_id)
-                return
-
-            # Reset the effective_from date for the new snapshot to avoid unexpected backfills.
-            new_snapshot.effective_from = None
-            new_snapshot.previous_versions = snapshot.all_versions
-            new_snapshot.migrated = True
-            if not new_snapshot.dev_version_:
-                new_snapshot.dev_version_ = snapshot.dev_version
-
-            self.console.update_snapshot_migration_progress(1)
-
-            # Visit children and evict them from the parsed_snapshots cache after.
-            for child in reversed_dag_raw.get(snapshot_id, []):
-                # Make sure to copy the fingerprint cache to avoid sharing it between different child snapshots with the same name.
-                _visit(child, fingerprint_cache.copy())
-                parsed_snapshots.evict(child)
-
-            if new_snapshot.fingerprint == snapshot.fingerprint:
-                logger.debug(f"{new_snapshot.snapshot_id} is unchanged.")
-                return
-
-            new_snapshot_id = new_snapshot.snapshot_id
-
-            if new_snapshot_id in raw_snapshots:
-                # Mapped to an existing snapshot.
-                new_snapshots[new_snapshot_id] = parsed_snapshots[new_snapshot_id]
-                logger.debug("Migrated snapshot %s already exists", new_snapshot_id)
-            elif (
-                new_snapshot_id not in new_snapshots
-                or new_snapshot.updated_ts > new_snapshots[new_snapshot_id].updated_ts
-            ):
-                new_snapshots[new_snapshot_id] = new_snapshot
-
-            snapshot_id_mapping[snapshot.snapshot_id] = new_snapshot_id
-            logger.debug("%s mapped to %s", snapshot.snapshot_id, new_snapshot_id)
-
-            if len(new_snapshots) >= self.SNAPSHOT_MIGRATION_BATCH_SIZE:
-                _push_new_snapshots()
-
-        for root_snapshot_id in dag.roots:
-            _visit(root_snapshot_id, {})
-
-        if new_snapshots:
-            _push_new_snapshots()
-
-        self.console.stop_snapshot_migration_progress()
-        return all_snapshot_mapping
-
-    def _migrate_environment_rows(
-        self,
-        environments: t.List[Environment],
-        snapshot_mapping: t.Dict[SnapshotId, SnapshotTableInfo],
-    ) -> None:
-        logger.info("Migrating environment rows...")
-
-        updated_prod_environment: t.Optional[Environment] = None
-        updated_environments = []
-        for environment in environments:
-            snapshots = [
-                (
-                    snapshot_mapping[info.snapshot_id]
-                    if info.snapshot_id in snapshot_mapping
-                    else info
-                )
-                for info in environment.snapshots
-            ]
-
-            if snapshots != environment.snapshots:
-                environment.snapshots_ = snapshots
-                updated_environments.append(environment)
-                if environment.name == c.PROD:
-                    updated_prod_environment = environment
-        self.console.start_env_migration_progress(len(updated_environments))
-
-        for environment in updated_environments:
-            self.environment_state.update_environment(environment)
-            self.console.update_env_migration_progress(1)
-
-        if updated_prod_environment:
-            try:
-                self.unpause_snapshots(updated_prod_environment.snapshots, now_timestamp())
-            except Exception:
-                logger.warning("Failed to unpause migrated snapshots", exc_info=True)
-
-        self.console.stop_env_migration_progress()
-
-    def _snapshot_id_filter(
-        self,
-        snapshot_ids: t.Iterable[SnapshotIdLike],
-        alias: t.Optional[str] = None,
-    ) -> t.Iterator[exp.Condition]:
-        yield from snapshot_id_filter(
-            self.engine_adapter,
-            snapshot_ids,
-            alias=alias,
-            batch_size=self.SNAPSHOT_BATCH_SIZE,
-        )
-
     def _push_snapshots(self, snapshots: t.Iterable[Snapshot], overwrite: bool = False) -> None:
         self.snapshot_state.push_snapshots(snapshots, overwrite=overwrite)
+
+    def _get_versions(self) -> Versions:
+        return self.version_state.get_versions()
 
     def _ensure_no_gaps(
         self,
@@ -822,33 +466,3 @@ class EngineAdapterStateSync(StateSync):
     def _transaction(self) -> t.Iterator[None]:
         with self.engine_adapter.transaction():
             yield
-
-
-def _backup_table_name(table_name: TableName) -> exp.Table:
-    table = exp.to_table(table_name).copy()
-    table.set("this", exp.to_identifier(table.name + "_backup"))
-    return table
-
-
-class LazilyParsedSnapshots:
-    def __init__(self, raw_snapshots: t.Dict[SnapshotId, t.Dict[str, t.Any]]):
-        self._raw_snapshots = raw_snapshots
-        self._parsed_snapshots: t.Dict[SnapshotId, t.Optional[Snapshot]] = {}
-
-    def get(self, snapshot_id: SnapshotId) -> t.Optional[Snapshot]:
-        if snapshot_id not in self._parsed_snapshots:
-            raw_snapshot = self._raw_snapshots.get(snapshot_id)
-            if raw_snapshot:
-                self._parsed_snapshots[snapshot_id] = Snapshot.parse_obj(raw_snapshot)
-            else:
-                self._parsed_snapshots[snapshot_id] = None
-        return self._parsed_snapshots[snapshot_id]
-
-    def evict(self, snapshot_id: SnapshotId) -> None:
-        self._parsed_snapshots.pop(snapshot_id, None)
-
-    def __getitem__(self, snapshot_id: SnapshotId) -> Snapshot:
-        snapshot = self.get(snapshot_id)
-        if snapshot is None:
-            raise KeyError(snapshot_id)
-        return snapshot

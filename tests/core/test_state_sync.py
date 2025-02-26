@@ -403,7 +403,7 @@ def test_refresh_snapshot_intervals(
 def test_get_snapshot_intervals(
     state_sync: EngineAdapterStateSync, make_snapshot: t.Callable, get_snapshot_intervals
 ) -> None:
-    state_sync.SNAPSHOT_BATCH_SIZE = 1
+    state_sync.interval_state.SNAPSHOT_BATCH_SIZE = 1
 
     snapshot_a = make_snapshot(
         SqlModel(
@@ -1164,7 +1164,7 @@ def test_delete_expired_snapshots_seed(
 def test_delete_expired_snapshots_batching(
     state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
 ):
-    state_sync.SNAPSHOT_BATCH_SIZE = 1
+    state_sync.snapshot_state.SNAPSHOT_BATCH_SIZE = 1
     now_ts = now_timestamp()
 
     snapshot_a = make_snapshot(
@@ -2150,8 +2150,12 @@ def test_empty_versions() -> None:
 def test_migrate(state_sync: EngineAdapterStateSync, mocker: MockerFixture, tmp_path) -> None:
     from sqlmesh import __version__ as SQLMESH_VERSION
 
-    migrate_rows_mock = mocker.patch("sqlmesh.core.state_sync.EngineAdapterStateSync._migrate_rows")
-    backup_state_mock = mocker.patch("sqlmesh.core.state_sync.EngineAdapterStateSync._backup_state")
+    migrate_rows_mock = mocker.patch(
+        "sqlmesh.core.state_sync.engine_adapter.migrator.StateMigrator._migrate_rows"
+    )
+    backup_state_mock = mocker.patch(
+        "sqlmesh.core.state_sync.engine_adapter.migrator.StateMigrator._backup_state"
+    )
     state_sync.migrate(default_catalog=None)
     migrate_rows_mock.assert_not_called()
     backup_state_mock.assert_not_called()
@@ -2185,8 +2189,8 @@ def test_rollback(state_sync: EngineAdapterStateSync, mocker: MockerFixture) -> 
     ):
         state_sync.rollback()
 
-    restore_table_spy = mocker.spy(state_sync, "_restore_table")
-    state_sync._backup_state()
+    restore_table_spy = mocker.spy(state_sync.migrator, "_restore_table")
+    state_sync.migrator._backup_state()
 
     state_sync.rollback()
     calls = {(a.sql(), b.sql()) for (a, b), _ in restore_table_spy.call_args_list}
@@ -2211,7 +2215,7 @@ def test_first_migration_failure(duck_conn, mocker: MockerFixture, tmp_path) -> 
     state_sync = EngineAdapterStateSync(
         create_engine_adapter(lambda: duck_conn, "duckdb"), schema=c.SQLMESH, context_path=tmp_path
     )
-    mocker.patch.object(state_sync, "_migrate_rows", side_effect=Exception("mocked error"))
+    mocker.patch.object(state_sync.migrator, "_migrate_rows", side_effect=Exception("mocked error"))
     with pytest.raises(
         SQLMeshError,
         match="SQLMesh migration failed.",
@@ -2319,7 +2323,7 @@ def test_backup_state(state_sync: EngineAdapterStateSync, mocker: MockerFixture)
         },
     )
 
-    state_sync._backup_state()
+    state_sync.migrator._backup_state()
     pd.testing.assert_frame_equal(
         state_sync.engine_adapter.fetchdf("select * from sqlmesh._snapshots"),
         state_sync.engine_adapter.fetchdf("select * from sqlmesh._snapshots_backup"),
@@ -2344,7 +2348,7 @@ def test_restore_snapshots_table(state_sync: EngineAdapterStateSync) -> None:
         "select count(*) from sqlmesh._snapshots"
     )
     assert old_snapshots_count == (12,)
-    state_sync._backup_state()
+    state_sync.migrator._backup_state()
 
     state_sync.engine_adapter.delete_from("sqlmesh._snapshots", "TRUE")
     snapshots_count = state_sync.engine_adapter.fetchone("select count(*) from sqlmesh._snapshots")
