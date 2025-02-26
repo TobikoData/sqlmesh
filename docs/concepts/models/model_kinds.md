@@ -835,6 +835,7 @@ FROM db.employees;
 The `SEED` model kind is used to specify [seed models](./seed_models.md) for using static CSV datasets in your SQLMesh project.
 
 **Notes:**  
+
 - Seed models are loaded only once unless the SQL model and/or seed file is updated.
 - Python models do not support the `SEED` model kind - use a SQL model instead.
 
