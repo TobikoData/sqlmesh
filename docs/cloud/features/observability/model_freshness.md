@@ -1,4 +1,16 @@
 # Model Freshness
+Model freshness indicators on the homepage give at a glance understanding if production environment is correct and up to date with the latest data. These features help track whether models are being backfilled and created on time. 
+
+When investigating freshness issues, you can view a detailed list of models and their current status (complete, pending, or behind) in production, identify problematic models, and check if CI/CD processes have stopped running. Keep in mind that if a model shows red (behind) in the past, it doesn't necessarily reflect its current status. 
+
+## When you might use this
+
+The model freshness chart serves several key purposes in understanding production correctness.
+
+It provides visibility into the history of production models that need to be backfilled on time, and helps monitor the current state of production. When all indicators are green, this signals that everything is running smoothly. While red indicators in historical data don't require immediate action, they provide valuable lessons to prevent similar issues in the future. For data engineers, this acts as a comprehensive report card on system health and performance.
+
+## Finding model freshness indicators
+
 From the homescreen of Tobiko Cloud we have the graph on historical freshness.
 
 ![tcloud model freshness](./model_freshness/find_model_freshness.png)
