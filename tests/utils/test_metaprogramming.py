@@ -1,4 +1,3 @@
-import sys
 import typing as t
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -24,6 +23,7 @@ from sqlmesh.utils.metaprogramming import (
     ExecutableKind,
     build_env,
     func_globals,
+    normalize_source,
     prepare_env,
     print_exception,
     serialize_env,
@@ -144,14 +144,7 @@ def main_func(y: int, foo=exp.true(), *, bar=expressions.Literal.number(1) + 2) 
     with test_context_manager():
         pass
 
-    if sys.version_info >= (3, 10):
-        from tests.core.metaprogramming_test_helper import match_expression
-
-        match_expression_value = match_expression()
-    else:
-        match_expression_value = 0
-
-    return closure(y) + other_func(Y) + match_expression_value
+    return closure(y) + other_func(Y)
 
 
 def test_func_globals() -> None:
@@ -169,7 +162,6 @@ def test_func_globals() -> None:
         "fetch_data": fetch_data,
         "test_context_manager": test_context_manager,
         "function_with_custom_decorator": function_with_custom_decorator,
-        "sys": sys,
     }
     assert func_globals(other_func) == {
         "X": 1,
@@ -192,6 +184,38 @@ def test_func_globals() -> None:
     }
 
 
+def test_normalize_source() -> None:
+    assert (
+        normalize_source(main_func)
+        == """def main_func(y: int, foo=exp.true(), *, bar=expressions.Literal.number(1) + 2
+    ):
+    sqlglot.parse_one('1')
+    MyClass()
+    DataClass(x=y)
+    noop_metadata()
+    normalize_model_name('test')
+    fetch_data()
+    function_with_custom_decorator()
+
+    def closure(z: int):
+        return z + Z
+    with test_context_manager():
+        pass
+    return closure(y) + other_func(Y)"""
+    )
+
+    assert (
+        normalize_source(other_func)
+        == """def other_func(a: int):
+    import sqlglot
+    sqlglot.parse_one('1')
+    pd.DataFrame([{'x': 1}])
+    to_table('y')
+    my_lambda()
+    return X + a"""
+    )
+
+
 def test_serialize_env_error() -> None:
     with pytest.raises(SQLMeshError):
         # pretend to be the module pandas
@@ -208,36 +232,26 @@ def test_serialize_env() -> None:
     env = serialize_env(env, path=path)  # type: ignore
 
     assert prepare_env(env)
-
-    expected_env = {
+    assert env == {
         "MAIN": Executable(
             name="main_func",
             alias="MAIN",
             path="test_metaprogramming.py",
-            payload='''def main_func(y: int, foo=exp.true(), *, bar=expressions.Literal.number(1) + 2) -> int:
-    """DOC STRING"""
-    sqlglot.parse_one("1")
+            payload="""def main_func(y: int, foo=exp.true(), *, bar=expressions.Literal.number(1) + 2
+    ):
+    sqlglot.parse_one('1')
     MyClass()
     DataClass(x=y)
     noop_metadata()
-    normalize_model_name("test")
+    normalize_model_name('test')
     fetch_data()
     function_with_custom_decorator()
 
-    def closure(z: int) -> int:
+    def closure(z: int):
         return z + Z
-
     with test_context_manager():
         pass
-
-    if sys.version_info >= (3, 10):
-        from tests.core.metaprogramming_test_helper import match_expression
-
-        match_expression_value = match_expression()
-    else:
-        match_expression_value = 0
-
-    return closure(y) + other_func(Y) + match_expression_value''',
+    return closure(y) + other_func(Y)""",
         ),
         "X": Executable(payload="1", kind=ExecutableKind.VALUE),
         "Y": Executable(payload="2", kind=ExecutableKind.VALUE),
@@ -268,6 +282,7 @@ class DataClass:
             name="MyClass",
             path="test_metaprogramming.py",
             payload="""class MyClass:
+
     @staticmethod
     def foo():
         return KLASS_X
@@ -299,12 +314,12 @@ def test_context_manager():
         "my_lambda": Executable(
             name="my_lambda",
             path="test_metaprogramming.py",
-            payload='my_lambda = lambda: print("z")  # noqa: E731',
+            payload="my_lambda = lambda : print('z')",
         ),
         "noop_metadata": Executable(
             name="noop_metadata",
             path="test_metaprogramming.py",
-            payload="""def noop_metadata() -> None:
+            payload="""def noop_metadata():
     return None""",
             is_metadata=True,
         ),
@@ -315,13 +330,12 @@ def test_context_manager():
         "other_func": Executable(
             name="other_func",
             path="test_metaprogramming.py",
-            payload="""def other_func(a: int) -> int:
+            payload="""def other_func(a: int):
     import sqlglot
-
-    sqlglot.parse_one("1")
-    pd.DataFrame([{"x": 1}])
-    to_table("y")
-    my_lambda()  # type: ignore
+    sqlglot.parse_one('1')
+    pd.DataFrame([{'x': 1}])
+    to_table('y')
+    my_lambda()
     return X + a""",
         ),
         "test_context_manager": Executable(
@@ -331,11 +345,12 @@ def test_context_manager():
             name="test_context_manager",
             path="test_metaprogramming.py",
         ),
+        "wraps": Executable(payload="from functools import wraps", kind=ExecutableKind.IMPORT),
+        "functools": Executable(payload="import functools", kind=ExecutableKind.IMPORT),
         "retry": Executable(payload="from tenacity import retry", kind=ExecutableKind.IMPORT),
         "stop_after_attempt": Executable(
             payload="from tenacity.stop import stop_after_attempt", kind=ExecutableKind.IMPORT
         ),
-        "sys": Executable(payload="import sys", kind=ExecutableKind.IMPORT),
         "wrapped_f": Executable(
             payload='''@retry(stop=stop_after_attempt(3))
 def fetch_data():
@@ -363,16 +378,16 @@ def fetch_data():
             name="wrapper",
             path="test_metaprogramming.py",
             payload="""def wrapper(*args, **kwargs):
-        return _func(*args, **kwargs)""",
+    return _func(*args, **kwargs)""",
             alias="function_with_custom_decorator",
         ),
         "custom_decorator": Executable(
             name="custom_decorator",
             path="test_metaprogramming.py",
             payload="""def custom_decorator(_func):
+
     def wrapper(*args, **kwargs):
         return _func(*args, **kwargs)
-
     return wrapper""",
         ),
         "_func": Executable(
@@ -384,5 +399,3 @@ def function_with_custom_decorator():
             alias="_func",
         ),
     }
-
-    assert env == expected_env
