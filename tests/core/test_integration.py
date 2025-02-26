@@ -32,6 +32,7 @@ from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.macros import macro
 from sqlmesh.core.model import (
+    FullKind,
     IncrementalByTimeRangeKind,
     IncrementalByUniqueKeyKind,
     Model,
@@ -56,6 +57,7 @@ from sqlmesh.core.snapshot import (
 )
 from sqlmesh.utils.date import TimeLike, now, to_date, to_datetime, to_timestamp
 from sqlmesh.utils.errors import NoChangesPlanError
+from sqlmesh.utils.pydantic import validate_string
 from tests.conftest import DuckDBMetadata, SushiDataValidator
 
 
@@ -1216,8 +1218,12 @@ def test_non_breaking_change_after_forward_only_in_dev(
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_indirect_non_breaking_change_after_forward_only_in_dev(init_and_plan_context: t.Callable):
-    context, plan = init_and_plan_context("examples/sushi")
-    context.apply(plan)
+    context, _ = init_and_plan_context("examples/sushi")
+    # Make sure that the most downstream model is a materialized model.
+    model = context.get_model("sushi.top_waiters")
+    model = model.copy(update={"kind": FullKind()})
+    context.upsert_model(model)
+    context.plan("prod", skip_tests=True, auto_apply=True, no_prompts=True)
 
     # Make sushi.orders a forward-only model.
     model = context.get_model("sushi.orders")
@@ -1870,18 +1876,16 @@ def test_custom_materialization(init_and_plan_context: t.Callable):
 # needs to be defined at the top level. If its defined within the test body,
 # adding to the snapshot cache fails with: AttributeError: Can't pickle local object
 class TestCustomKind(CustomKind):
-    custom_property: t.Optional[str] = None
-
     @property
-    def data_hash_values(self) -> t.List[t.Optional[str]]:
-        return [*super().data_hash_values, self.custom_property]
+    def custom_property(self) -> str:
+        return validate_string(self.materialization_properties.get("custom_property"))
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_custom_materialization_with_custom_kind(init_and_plan_context: t.Callable):
     context, _ = init_and_plan_context("examples/sushi")
 
-    custom_insert_call_count = 0
+    custom_insert_calls = []
 
     class CustomFullMaterialization(CustomMaterialization[TestCustomKind]):
         NAME = "test_custom_full_with_custom_kind"
@@ -1894,10 +1898,10 @@ def test_custom_materialization_with_custom_kind(init_and_plan_context: t.Callab
             is_first_insert: bool,
             **kwargs: t.Any,
         ) -> None:
-            nonlocal custom_insert_call_count
-            custom_insert_call_count += 1
-
             assert isinstance(model.kind, TestCustomKind)
+
+            nonlocal custom_insert_calls
+            custom_insert_calls.append(model.kind.custom_property)
 
             self._replace_query_for_model(model, table_name, query_or_df)
 
@@ -1905,25 +1909,29 @@ def test_custom_materialization_with_custom_kind(init_and_plan_context: t.Callab
     kwargs = {
         **model.dict(),
         # Make a breaking change.
-        "kind": dict(name="CUSTOM", materialization="test_custom_full_with_custom_kind"),
+        "kind": dict(
+            name="CUSTOM",
+            materialization="test_custom_full_with_custom_kind",
+            materialization_properties={"custom_property": "pytest"},
+        ),
     }
     context.upsert_model(SqlModel.parse_obj(kwargs))
 
     context.plan(auto_apply=True)
 
-    assert custom_insert_call_count == 1
+    assert custom_insert_calls == ["pytest"]
 
     # no changes
     context.plan(auto_apply=True)
 
-    assert custom_insert_call_count == 1
+    assert custom_insert_calls == ["pytest"]
 
     # change a property on the custom kind, breaking change
-    kwargs["kind"]["custom_property"] = "some value"
+    kwargs["kind"]["materialization_properties"]["custom_property"] = "some value"
     context.upsert_model(SqlModel.parse_obj(kwargs))
     context.plan(auto_apply=True)
 
-    assert custom_insert_call_count == 2
+    assert custom_insert_calls == ["pytest", "some value"]
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
@@ -2153,7 +2161,7 @@ def test_restatement_plan_ignores_changes(init_and_plan_context: t.Callable):
     assert not plan.new_snapshots
     assert plan.requires_backfill
     assert plan.restatements == {
-        restated_snapshot.snapshot_id: (to_timestamp("2023-01-01"), to_timestamp("2023-01-08"))
+        restated_snapshot.snapshot_id: (to_timestamp("2023-01-01"), to_timestamp("2023-01-09"))
     }
     assert plan.missing_intervals == [
         SnapshotIntervals(
@@ -4562,16 +4570,14 @@ def test_restatement_of_full_model_with_start(init_and_plan_context: t.Callable)
         no_prompts=True,
     )
 
-    restatement_end = to_timestamp("2023-01-08")
-
     sushi_customer_interval = restatement_plan.restatements[
         context.get_snapshot("sushi.customers").snapshot_id
     ]
-    assert sushi_customer_interval == (to_timestamp("2023-01-01"), restatement_end)
+    assert sushi_customer_interval == (to_timestamp("2023-01-01"), to_timestamp("2023-01-09"))
     waiter_by_day_interval = restatement_plan.restatements[
         context.get_snapshot("sushi.waiter_as_customer_by_day").snapshot_id
     ]
-    assert waiter_by_day_interval == (to_timestamp("2023-01-07"), restatement_end)
+    assert waiter_by_day_interval == (to_timestamp("2023-01-07"), to_timestamp("2023-01-08"))
 
 
 def initial_add(context: Context, environment: str):

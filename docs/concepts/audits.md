@@ -92,7 +92,7 @@ Alternatively, you can apply specific audits globally by including them in the m
 
 ```sql linenums="1"
 model_defaults:
-  audits: 
+  audits:
     - assert_positive_order_ids
     - does_not_exceed_threshold(column := id, threshold := 1000)
 ```
@@ -277,7 +277,7 @@ This example asserts that column `name` has a value of 'Hamachi', 'Unagi', or 'S
 MODEL (
   name sushi.items,
   audits (
-    accepted_values(column := name, is_in=('Hamachi', 'Unagi', 'Sake'))
+    accepted_values(column := name, is_in := ('Hamachi', 'Unagi', 'Sake'))
   )
 );
 ```

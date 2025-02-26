@@ -594,6 +594,16 @@ MODEL (
 * Snowflake
 * Spark
 
+In Redshift's case, to enable the use of the native `MERGE` statement, you need to pass the `enable_merge` flag in the connection and set it to `true`. It is disabled by default.
+
+```yaml linenums="1"
+gateways:
+  redshift:
+    connection:
+      type: redshift
+      enable_merge: true
+```
+
 Redshift supports only the `UPDATE` or `DELETE` actions for the `WHEN MATCHED` clause and does not allow multiple `WHEN MATCHED` expressions. For further information, refer to the [Redshift documentation](https://docs.aws.amazon.com/redshift/latest/dg/r_MERGE.html#r_MERGE-parameters).
 
 ### Merge Filter Expression
@@ -730,7 +740,10 @@ The `VIEW` kind is different, because no data is actually written during model e
 
 **Note:** `VIEW` is the default model kind if kind is not specified.
 
+**Note:** Python models do not support the `VIEW` model kind - use a SQL model instead.
+
 **Note:** With this kind, the model's query is evaluated every time the model is referenced in a downstream query. This may incur undesirable compute cost and time in cases where the model's query is compute-intensive, or when the model is referenced in many downstream queries.
+
 
 This example specifies a `VIEW` model kind:
 ```sql linenums="1" hl_lines="3"
@@ -804,6 +817,8 @@ Embedded models are a way to share common logic between different models of othe
 
 There are no data assets (tables or views) associated with `EMBEDDED` models in the data warehouse. Instead, an `EMBEDDED` model's query is injected directly into the query of each downstream model that references it, as a subquery.
 
+**Note:** Python models do not support the `EMBEDDED` model kind - use a SQL model instead.
+
 This example specifies a `EMBEDDED` model kind:
 ```sql linenums="1" hl_lines="3"
 MODEL (
@@ -819,7 +834,9 @@ FROM db.employees;
 ## SEED
 The `SEED` model kind is used to specify [seed models](./seed_models.md) for using static CSV datasets in your SQLMesh project.
 
-Note: seed models are loaded only once unless the model and/or seed file is updated.
+**Notes:**  
+- Seed models are loaded only once unless the SQL model and/or seed file is updated.
+- Python models do not support the `SEED` model kind - use a SQL model instead.
 
 ??? "Example SQL sequence when applying this model kind (ex: BigQuery)"
 
@@ -1378,6 +1395,8 @@ The EXTERNAL model kind is used to specify [external models](./external_models.m
 !!! warning
 
     Managed models are still under development and the API / semantics may change as support for more engines is added
+
+**Note:** Python models do not support the `MANAGED` model kind - use a SQL model instead.
 
 The `MANAGED` model kind is used to create models where the underlying database engine manages the data lifecycle.
 

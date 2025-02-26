@@ -252,11 +252,8 @@ class StateReader(abc.ABC):
         return versions
 
     @abc.abstractmethod
-    def _get_versions(self, lock_for_update: bool = False) -> Versions:
+    def _get_versions(self) -> Versions:
         """Queries the store to get the current versions of SQLMesh and deps.
-
-        Args:
-            lock_for_update: Whether or not the usage of this method plans to update the row.
 
         Returns:
             The versions object.
@@ -439,7 +436,7 @@ class StateSync(StateReader, abc.ABC):
             end: The end of the interval to add.
             is_dev: Indicates whether the given interval is being added while in development mode
         """
-        start_ts, end_ts = snapshot.inclusive_exclusive(start, end, strict=False)
+        start_ts, end_ts = snapshot.inclusive_exclusive(start, end, strict=False, expand=False)
         if not snapshot.version:
             raise SQLMeshError("Snapshot version must be set to add an interval.")
         intervals = [(start_ts, end_ts)]
@@ -447,6 +444,7 @@ class StateSync(StateReader, abc.ABC):
             name=snapshot.name,
             identifier=snapshot.identifier,
             version=snapshot.version,
+            dev_version=snapshot.dev_version,
             intervals=intervals if not is_dev else [],
             dev_intervals=intervals if is_dev else [],
         )

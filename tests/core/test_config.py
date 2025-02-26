@@ -850,3 +850,74 @@ def test_gcp_postgres_ip_and_scopes(tmp_path):
     assert conn.scopes[0] == "https://www.googleapis.com/auth/cloud-platform"
     assert conn.scopes[1] == "https://www.googleapis.com/auth/sqlservice.admin"
     assert conn.ip_type == "private"
+
+
+def test_gateway_model_defaults(tmp_path):
+    global_defaults = ModelDefaultsConfig(
+        dialect="snowflake", owner="foo", optimize_query=True, enabled=True, cron="@daily"
+    )
+    gateway_defaults = ModelDefaultsConfig(dialect="duckdb", owner="baz", optimize_query=False)
+
+    config = Config(
+        gateways={
+            "duckdb": GatewayConfig(
+                connection=DuckDBConnectionConfig(database="db.db"),
+                model_defaults=gateway_defaults,
+            )
+        },
+        model_defaults=global_defaults,
+        default_gateway="duckdb",
+    )
+
+    ctx = Context(paths=tmp_path, config=config, gateway="duckdb")
+
+    expected = ModelDefaultsConfig(
+        dialect="duckdb", owner="baz", optimize_query=False, enabled=True, cron="@daily"
+    )
+
+    assert ctx.config.model_defaults == expected
+
+
+def test_redshift_merge_flag(tmp_path, mocker: MockerFixture):
+    config_path = tmp_path / "config_redshift_merge.yaml"
+    with open(config_path, "w", encoding="utf-8") as fd:
+        fd.write(
+            """
+gateways:
+    redshift:
+        connection:
+            type: redshift
+            user: user
+            password: '1234'
+            host: host
+            database: db
+            enable_merge: true
+    default:
+        connection:
+            type: redshift
+            user: user
+            password: '1234'
+            host: host
+            database: db
+
+default_gateway: redshift
+
+model_defaults:
+    dialect: redshift
+        """
+        )
+
+    config = load_config_from_paths(
+        Config,
+        project_paths=[config_path],
+    )
+    redshift_connection = config.get_connection("redshift")
+    assert isinstance(redshift_connection, RedshiftConnectionConfig)
+    assert redshift_connection.enable_merge
+    adapter = redshift_connection.create_engine_adapter()
+    assert isinstance(adapter, RedshiftEngineAdapter)
+    assert adapter.enable_merge
+
+    adapter_2 = config.get_connection("default").create_engine_adapter()
+    assert isinstance(adapter_2, RedshiftEngineAdapter)
+    assert not adapter_2.enable_merge

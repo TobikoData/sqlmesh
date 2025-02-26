@@ -32,7 +32,14 @@ from sqlmesh.core.model.common import (
     single_value_or_tuple,
 )
 from sqlmesh.core.model.meta import ModelMeta, FunctionCall
-from sqlmesh.core.model.kind import ModelKindName, SeedKind, ModelKind, FullKind, create_model_kind
+from sqlmesh.core.model.kind import (
+    ModelKindName,
+    SeedKind,
+    ModelKind,
+    FullKind,
+    create_model_kind,
+    CustomKind,
+)
 from sqlmesh.core.model.seed import CsvSeedReader, Seed, create_seed
 from sqlmesh.core.renderer import ExpressionRenderer, QueryRenderer
 from sqlmesh.core.signal import SignalRegistry
@@ -979,6 +986,12 @@ class _Model(ModelMeta, frozen=True):
                     self._path,
                 )
 
+        if isinstance(self.kind, CustomKind):
+            from sqlmesh.core.snapshot.evaluator import get_custom_materialization_type_or_raise
+
+            # Will raise if the custom materialization points to an invalid class
+            get_custom_materialization_type_or_raise(self.kind.materialization)
+
     def is_breaking_change(self, previous: Model) -> t.Optional[bool]:
         """Determines whether this model is a breaking change in relation to the `previous` model.
 
@@ -1688,7 +1701,7 @@ class PythonModel(_Model):
 
         if self.kind and not self.kind.supports_python_models:
             raise SQLMeshError(
-                f"Cannot create Python model '{self.name}' as the '{self.kind.name}' kind doesnt support Python models"
+                f"Cannot create Python model '{self.name}' as the '{self.kind.name}' kind doesn't support Python models"
             )
 
     def render(
@@ -2368,6 +2381,8 @@ def _create_model(
     model.audit_definitions.update(audit_definitions)
 
     statements.extend(audit.query for audit in audit_definitions.values())
+    for _, audit_args in model.audits:
+        statements.extend(audit_args.values())
 
     for _, kwargs in model.signals:
         statements.extend(kwargs.values())

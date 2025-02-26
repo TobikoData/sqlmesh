@@ -11,7 +11,7 @@ import pytest
 import pandas as pd
 from pathlib import Path
 from pytest_mock.plugin import MockerFixture
-from sqlglot import exp, parse_one
+from sqlglot import exp, parse_one, Dialect
 from sqlglot.errors import SchemaError
 
 from sqlmesh.core.config.gateway import GatewayConfig
@@ -34,7 +34,7 @@ from sqlmesh.core.model import load_sql_based_model, model
 from sqlmesh.core.model.kind import ModelKindName
 from sqlmesh.core.plan import BuiltInPlanEvaluator, PlanBuilder
 from sqlmesh.core.state_sync.cache import CachingStateSync
-from sqlmesh.core.state_sync.engine_adapter import EngineAdapterStateSync
+from sqlmesh.core.state_sync.db import EngineAdapterStateSync
 from sqlmesh.utils.connection_pool import SingletonConnectionPool, ThreadLocalConnectionPool
 from sqlmesh.utils.date import (
     make_inclusive_end,
@@ -1103,6 +1103,35 @@ def test_override_dialect_normalization_strategy():
     DuckDB.NORMALIZATION_STRATEGY = NormalizationStrategy.CASE_INSENSITIVE
 
 
+def test_different_gateway_normalization_strategy(tmp_path: pathlib.Path):
+    config = Config(
+        gateways={
+            "duckdb": GatewayConfig(
+                connection=DuckDBConnectionConfig(database="db.db"),
+                model_defaults=ModelDefaultsConfig(
+                    dialect="snowflake, normalization_strategy=case_insensitive"
+                ),
+            )
+        },
+        model_defaults=ModelDefaultsConfig(dialect="snowflake"),
+        default_gateway="duckdb",
+    )
+
+    from sqlglot.dialects import Snowflake
+    from sqlglot.dialects.dialect import NormalizationStrategy
+
+    assert Snowflake.NORMALIZATION_STRATEGY == NormalizationStrategy.UPPERCASE
+
+    ctx = Context(paths=tmp_path, config=config, gateway="duckdb")
+
+    dialect = Dialect.get_or_raise(ctx.config.dialect)
+
+    assert dialect == "snowflake"
+    assert Snowflake.NORMALIZATION_STRATEGY == NormalizationStrategy.CASE_INSENSITIVE
+
+    Snowflake.NORMALIZATION_STRATEGY = NormalizationStrategy.UPPERCASE
+
+
 def test_access_self_columns_to_types_in_macro(tmp_path: pathlib.Path):
     create_temp_file(
         tmp_path,
@@ -1131,7 +1160,7 @@ def post_statement(evaluator):
 def test_wildcard(copy_to_temp_path: t.Callable):
     parent_path = copy_to_temp_path("examples/multi")[0]
 
-    context = Context(paths=f"{parent_path}/*")
+    context = Context(paths=f"{parent_path}/*", gateway="memory")
     assert len(context.models) == 5
 
 

@@ -4,6 +4,16 @@ Although SQL is a powerful tool, some use cases are better handled by Python. Fo
 
 SQLMesh has first-class support for models defined in Python; there are no restrictions on what can be done in the Python model as long as it returns a Pandas or Spark DataFrame instance.
 
+
+!!! info "Unsupported model kinds"
+
+    Python models do not support these [model kinds](./model_kinds.md) - use a SQL model instead.
+
+    * `VIEW`
+    * `SEED`
+    * `MANAGED`
+    * `EMBEDDED`
+
 ## Definition
 
 To create a Python model, add a new file with the `*.py` extension to the `models/` directory. Inside the file, define a function named `execute`. For example:

@@ -176,6 +176,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                         name=snapshot.name,
                         identifier=snapshot.identifier,
                         version=snapshot.version,
+                        dev_version=snapshot.dev_version,
                         intervals=intervals if is_deployable else [],
                         dev_intervals=intervals if not is_deployable else [],
                     )
@@ -649,9 +650,15 @@ def update_intervals_for_new_snapshots(
     for snapshot in state_sync.refresh_snapshot_intervals(snapshots):
         if snapshot.is_forward_only:
             snapshot.dev_intervals = snapshot.intervals.copy()
-            snapshot_intervals = snapshot.snapshot_intervals
-            snapshot_intervals.intervals.clear()
-            snapshots_intervals.append(snapshot_intervals)
+            snapshots_intervals.append(
+                SnapshotIntervals(
+                    name=snapshot.name,
+                    identifier=snapshot.identifier,
+                    version=snapshot.version,
+                    dev_version=snapshot.dev_version,
+                    dev_intervals=snapshot.dev_intervals,
+                )
+            )
 
     if snapshots_intervals:
         state_sync.add_snapshots_intervals(snapshots_intervals)
