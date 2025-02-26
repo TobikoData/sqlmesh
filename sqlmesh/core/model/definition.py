@@ -1204,7 +1204,7 @@ class _Model(ModelMeta, frozen=True):
 
         audits_by_name = {**BUILT_IN_AUDITS, **self.audit_definitions}
         audits_with_args = []
-        added_audits = {}
+        added_audits = set()
 
         for audit_name, audit_args in self.audits:
             audits_with_args.append((audits_by_name[audit_name], audit_args.copy()))
