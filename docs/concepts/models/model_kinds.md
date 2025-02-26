@@ -306,7 +306,7 @@ GROUP BY title;
 
 ??? "Example SQL sequence when applying this model kind (ex: BigQuery)"
 
-    Create a model with the following definition:
+    Create a model with the following definition and run `sqlmesh plan dev`:
     ```sql
     MODEL (
       name demo.full_model_example,
@@ -323,17 +323,12 @@ GROUP BY title;
       item_id
     ```
 
-    Apply a plan like the following:
-    ```shell
-    sqlmesh plan dev
-    ```
-
     SQLMesh will create a versioned table in the physical layer. Note the fingerprint of the table is `2345651858`.
     ```sql
     CREATE TABLE IF NOT EXISTS `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__full_model_example__2345651858` (`item_id` INT64, `num_orders` INT64)
     ```
 
-    SQLMesh will validate model's query.
+    SQLMesh will validate the model's query.
     ```sql
     SELECT `incremental_model`.`item_id` AS `item_id`, COUNT(DISTINCT `incremental_model`.`id`) AS `num_orders` 
     FROM `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__incremental_model__89556012` AS `incremental_model` 
@@ -388,7 +383,7 @@ FROM db.employees;
 
 ??? "Example SQL sequence when applying this model kind (ex: BigQuery)"
 
-    Create a model with the following definition:
+    Create a model with the following definition and run `sqlmesh plan dev`:
     ```sql
     MODEL (
       name demo.example_view,
@@ -398,12 +393,6 @@ FROM db.employees;
 
     SELECT
       'hello there' as a_column
-
-    ```
-
-    Apply a plan like the following:
-    ```shell
-    sqlmesh plan dev
     ```
 
     SQLMesh will create a versioned view in the physical layer. Note the fingerprint of the view is `1024042926`.
