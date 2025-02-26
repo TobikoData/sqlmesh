@@ -819,6 +819,65 @@ FROM db.employees;
 ## SEED
 The `SEED` model kind is used to specify [seed models](./seed_models.md) for using static CSV datasets in your SQLMesh project.
 
+??? "Example SQL sequence when applying this model kind (ex: BigQuery)"
+
+    Create a model with the following definition and run `sqlmesh plan dev`:
+
+    ```sql
+    MODEL (
+      name demo.seed_example,
+      kind SEED (
+        path '../../seeds/seed_example.csv'
+      ),
+      columns (
+        id INT64,
+        item_id INT64,
+        event_date DATE
+      ),
+      grain (id, event_date)
+    )
+    ```
+
+    SQLMesh will create a versioned table in the physical layer. Note the fingerprint of the table is `3038173937`.
+
+    ```sql
+    CREATE TABLE IF NOT EXISTS `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__seed_example__3038173937` (`id` INT64, `item_id` INT64, `event_date` DATE)
+    ```
+
+    SQLMesh will upload the seed as a temp table in the physical layer.
+
+    ```sql
+    sqlmesh-public-demo.sqlmesh__demo.__temp_demo__seed_example__3038173937_9kzbpld7
+    ```
+
+    SQLMesh will create a versioned table in the physical layer from the temp table.
+
+    ```sql
+    CREATE OR REPLACE TABLE `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__seed_example__3038173937` AS 
+    SELECT CAST(`id` AS INT64) AS `id`, CAST(`item_id` AS INT64) AS `item_id`, CAST(`event_date` AS DATE) AS `event_date` 
+    FROM (SELECT `id`, `item_id`, `event_date` 
+    FROM `sqlmesh-public-demo`.`sqlmesh__demo`.`__temp_demo__seed_example__3038173937_9kzbpld7`) AS `_subquery`
+    ```
+
+    SQLMesh will drop the temp table in the physical layer.
+
+    ```sql
+    DROP TABLE IF EXISTS `sqlmesh-public-demo`.`sqlmesh__demo`.`__temp_demo__seed_example__3038173937_9kzbpld7`
+    ```
+
+    SQLMesh will create a suffixed `__dev` schema based on the name of the plan environment.
+
+    ```sql
+    CREATE SCHEMA IF NOT EXISTS `sqlmesh-public-demo`.`demo__dev`
+    ```
+
+    SQLMesh will create a view in the virtual layer pointing to the versioned table in the physical layer.
+
+    ```sql
+    CREATE OR REPLACE VIEW `sqlmesh-public-demo`.`demo__dev`.`seed_example` AS 
+    SELECT * FROM `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__seed_example__3038173937`
+    ```
+
 ## SCD Type 2
 
 SCD Type 2 is a model kind that supports [slowly changing dimensions](https://en.wikipedia.org/wiki/Slowly_changing_dimension#Type_2:_add_new_row) (SCDs) in your SQLMesh project. SCDs are a common pattern in data warehousing that allow you to track changes to records over time.
