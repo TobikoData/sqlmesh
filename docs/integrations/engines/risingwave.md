@@ -12,8 +12,8 @@ This page provides information about how to use SQLMesh with the RisingWave stre
 | `password`     | The password to use for authentication with the RisingWave engine | string | N        |
 | `port`         | The port number of the RisingWave engine server                          | int    | Y        |
 | `database`        | The name of the database instance to connect to                                 | string | Y        |
-| `role`            | The role to use for authentication with the Postgres server                     | string | N        |
-| `sslmode`         | The security of the connection to the Postgres server                           | string | N        |
+| `role`            | The role to use for authentication with the RisingWave server                     | string | N        |
+| `sslmode`         | The security of the connection to the RisingWave server                           | string | N        |
 
 ## Usage
 RisingWave engine has some different features as streaming database. You can create a resource that RisingWave can read data from with `CREATE SOURCE`. You can also create an external target where you can send data processed in RisingWave with `CREATE SINK`.
