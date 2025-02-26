@@ -4,6 +4,7 @@ import ast
 import typing as t
 from pathlib import Path
 
+from astor import to_source
 from sqlglot import exp
 from sqlglot.helper import ensure_list
 
@@ -140,7 +141,7 @@ def parse_dependencies(
 
                 def get_first_arg(keyword_arg_name: str) -> t.Any:
                     if node.args:
-                        first_arg: t.Optional[ast.AST] = node.args[0]
+                        first_arg: t.Optional[ast.expr] = node.args[0]
                     else:
                         first_arg = next(
                             (
@@ -151,20 +152,14 @@ def parse_dependencies(
                             None,
                         )
 
-                    if first_arg is None:
-                        raise_config_error(
-                            f"Missing {keyword_arg_name} argument in '{func.attr}' call.",
-                            executable.path,
-                        )
-
                     try:
-                        expression = ast.unparse(t.cast(ast.AST, first_arg))
+                        expression = to_source(first_arg)
                         return eval(expression, env)
                     except Exception:
                         if strict_resolution:
-                            raise_config_error(
-                                f"Argument '{expression.strip()}' must be resolvable at parse time",
-                                executable.path,
+                            raise ConfigError(
+                                f"Error resolving dependencies for '{executable.path}'. "
+                                f"Argument '{expression.strip()}' must be resolvable at parse time."
                             )
 
                 if func.value.id == "context" and func.attr in ("table", "resolve_table"):
