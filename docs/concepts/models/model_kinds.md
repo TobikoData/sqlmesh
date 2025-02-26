@@ -819,6 +819,8 @@ FROM db.employees;
 ## SEED
 The `SEED` model kind is used to specify [seed models](./seed_models.md) for using static CSV datasets in your SQLMesh project.
 
+Note: seed models are loaded only once unless the model and/or seed file is updated.
+
 ??? "Example SQL sequence when applying this model kind (ex: BigQuery)"
 
     Create a model with the following definition and run `sqlmesh plan dev`:
