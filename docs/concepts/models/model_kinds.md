@@ -152,7 +152,7 @@ In addition to specifying a time column in the `MODEL` DDL, the model's query mu
       PARTITION BY `transaction_date`
     ```
 
-    SQLmesh will validate the SQL before processing data (note the `WHERE FALSE LIMIT 0` and the placeholder timestamps).
+    SQLMesh will validate the SQL before processing data (note the `WHERE FALSE LIMIT 0` and the placeholder timestamps).
 
     ```sql
     WITH `sales_data` AS (
@@ -214,7 +214,7 @@ In addition to specifying a time column in the `MODEL` DDL, the model's query mu
     LIMIT 0
     ```
 
-    SQLmesh will merge data into the empty table.
+    SQLMesh will merge data into the empty table.
 
     ```sql
     MERGE INTO `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__incrementals_demo__50975949` AS `__MERGE_TARGET__` USING (
@@ -300,13 +300,13 @@ In addition to specifying a time column in the `MODEL` DDL, the model's query mu
       )
     ```
 
-    SQLmesh will create a suffixed `__dev` schema based on the name of the plan environment.
+    SQLMesh will create a suffixed `__dev` schema based on the name of the plan environment.
   
     ```sql
     CREATE SCHEMA IF NOT EXISTS `sqlmesh-public-demo`.`demo__dev`
     ```
 
-    SQLmesh will create a view in the virtual layer to pointing to the versioned table in the physical layer.
+    SQLMesh will create a view in the virtual layer to pointing to the versioned table in the physical layer.
 
     ```sql
     CREATE OR REPLACE VIEW `sqlmesh-public-demo`.`demo__dev`.`incrementals_demo` AS
@@ -627,7 +627,17 @@ GROUP BY title;
     GROUP BY `incremental_model`.`item_id` LIMIT 0
     ```
 
-    SQLmesh will create a suffixed `__dev` schema based on the name of the plan environment.
+    SQLMesh will create a versioned table in the physical layer.
+
+    ```sql
+    CREATE OR REPLACE TABLE `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__full_model_example__2345651858` AS 
+    SELECT CAST(`item_id` AS INT64) AS `item_id`, CAST(`num_orders` AS INT64) AS `num_orders` 
+    FROM (SELECT `incremental_model`.`item_id` AS `item_id`, COUNT(DISTINCT `incremental_model`.`id`) AS `num_orders` 
+    FROM `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__incremental_model__89556012` AS `incremental_model` 
+    GROUP BY `incremental_model`.`item_id`) AS `_subquery`
+    ```
+
+    SQLMesh will create a suffixed `__dev` schema based on the name of the plan environment.
 
     ```sql
     CREATE SCHEMA IF NOT EXISTS `sqlmesh-public-demo`.`demo__dev`
@@ -696,7 +706,7 @@ FROM db.employees;
     (`a_column`) AS SELECT 'hello there' AS `a_column`
     ```
 
-    SQLmesh will create a suffixed `__dev` schema based on the name of the plan environment.
+    SQLMesh will create a suffixed `__dev` schema based on the name of the plan environment.
 
     ```sql
     CREATE SCHEMA IF NOT EXISTS `sqlmesh-public-demo`.`demo__dev`
