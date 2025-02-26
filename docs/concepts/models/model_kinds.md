@@ -477,6 +477,66 @@ WHERE
   event_date BETWEEN @start_date AND @end_date;
 ```
 
+??? "Example SQL sequence when applying this model kind (ex: BigQuery)"
+
+    Create a model with the following definition and run `sqlmesh plan dev`:
+
+    ```sql
+    MODEL (
+      name demo.incremental_by_unique_key_example,
+      kind INCREMENTAL_BY_UNIQUE_KEY (
+        unique_key id
+      ),
+      start '2020-01-01',
+      cron '@daily',
+    );
+
+    SELECT
+      id,
+      item_id,
+      event_date
+    FROM demo.seed_model
+    WHERE
+      event_date BETWEEN @start_date AND @end_date
+    ```
+
+    SQLMesh will create a versioned table in the physical layer. Note the fingerprint of the table is `1161945221`.
+
+    ```sql
+    CREATE TABLE IF NOT EXISTS `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__incremental_by_unique_key_example__1161945221` (`id` INT64, `item_id` INT64, `event_date` DATE)
+    ```
+
+    SQLMesh will validate the model's query.
+
+    ```sql
+    SELECT `seed_model`.`id` AS `id`, `seed_model`.`item_id` AS `item_id`, `seed_model`.`event_date` AS `event_date` 
+    FROM `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__seed_model__2834544882` AS `seed_model` 
+    WHERE (`seed_model`.`event_date` <= CAST('1970-01-01' AS DATE) AND `seed_model`.`event_date` >= CAST('1970-01-01' AS DATE)) AND FALSE LIMIT 0
+    ```
+
+    SQLMesh will create a versioned table in the physical layer.
+
+    ```sql
+    CREATE OR REPLACE TABLE `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__incremental_by_unique_key_example__1161945221` AS 
+    SELECT CAST(`id` AS INT64) AS `id`, CAST(`item_id` AS INT64) AS `item_id`, CAST(`event_date` AS DATE) AS `event_date` 
+    FROM (SELECT `seed_model`.`id` AS `id`, `seed_model`.`item_id` AS `item_id`, `seed_model`.`event_date` AS `event_date` 
+    FROM `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__seed_model__2834544882` AS `seed_model` 
+    WHERE `seed_model`.`event_date` <= CAST('2024-10-30' AS DATE) AND `seed_model`.`event_date` >= CAST('2020-01-01' AS DATE)) AS `_subquery`
+    ```
+
+    SQLMesh will create a suffixed `__dev` schema based on the name of the plan environment.
+
+    ```sql
+    CREATE SCHEMA IF NOT EXISTS `sqlmesh-public-demo`.`demo__dev`
+    ```
+
+    SQLMesh will create a view in the virtual layer pointing to the versioned table in the physical layer.
+
+    ```sql
+    CREATE OR REPLACE VIEW `sqlmesh-public-demo`.`demo__dev`.`incremental_by_unique_key_example` AS 
+    SELECT * FROM `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__incremental_by_unique_key_example__1161945221`
+    ```
+
 **Note:** Models of the `INCREMENTAL_BY_UNIQUE_KEY` kind are inherently [non-idempotent](../glossary.md#idempotency), which should be taken into consideration during data [restatement](../plans.md#restatement-plans). As a result, partial data restatement is not supported for this model kind, which means that the entire table will be recreated from scratch if restated.
 
 ### Unique Key Expressions
