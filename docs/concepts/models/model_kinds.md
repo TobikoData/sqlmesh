@@ -500,13 +500,13 @@ WHERE
       event_date BETWEEN @start_date AND @end_date
     ```
 
-    SQLMesh will create a versioned table in the physical layer. Note the fingerprint of the table is `1161945221`.
+    SQLMesh will execute this SQL to create a versioned table in the physical layer. Note that the table's version fingerprint, `1161945221`, is part of the table name.
 
     ```sql
     CREATE TABLE IF NOT EXISTS `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__incremental_by_unique_key_example__1161945221` (`id` INT64, `item_id` INT64, `event_date` DATE)
     ```
 
-    SQLMesh will validate the model's query.
+  SQLMesh will validate the model's query before processing data (note the `FALSE LIMIT 0` in the `WHERE` statement and the placeholder dates).
 
     ```sql
     SELECT `seed_model`.`id` AS `id`, `seed_model`.`item_id` AS `item_id`, `seed_model`.`event_date` AS `event_date` 
@@ -682,13 +682,13 @@ GROUP BY title;
       item_id
     ```
 
-    SQLMesh will create a versioned table in the physical layer. Note the fingerprint of the table is `2345651858`.
+  SQLMesh will execute this SQL to create a versioned table in the physical layer. Note that the table's version fingerprint, `2345651858`, is part of the table name.
 
     ```sql
     CREATE TABLE IF NOT EXISTS `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__full_model_example__2345651858` (`item_id` INT64, `num_orders` INT64)
     ```
 
-    SQLMesh will validate the model's query.
+  SQLMesh will validate the model's query before processing data (note the `WHERE FALSE` and `LIMIT 0`).
 
     ```sql
     SELECT `incremental_model`.`item_id` AS `item_id`, COUNT(DISTINCT `incremental_model`.`id`) AS `num_orders` 
@@ -772,7 +772,7 @@ FROM db.employees;
       'hello there' as a_column
     ```
 
-    SQLMesh will create a versioned view in the physical layer. Note the fingerprint of the view is `1024042926`.
+  SQLMesh will execute this SQL to create a versioned view in the physical layer. Note that the view's version fingerprint, `1024042926`, is part of the view name.
 
     ```sql
     CREATE OR REPLACE VIEW `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__example_view__1024042926`
@@ -858,7 +858,7 @@ The `SEED` model kind is used to specify [seed models](./seed_models.md) for usi
     )
     ```
 
-    SQLMesh will create a versioned table in the physical layer. Note the fingerprint of the table is `3038173937`.
+  SQLMesh will execute this SQL to create a versioned table in the physical layer. Note that the table's version fingerprint, `3038173937`, is part of the table name.
 
     ```sql
     CREATE TABLE IF NOT EXISTS `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__seed_example__3038173937` (`id` INT64, `item_id` INT64, `event_date` DATE)
