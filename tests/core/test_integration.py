@@ -4572,6 +4572,33 @@ def test_restatement_of_full_model_with_start(init_and_plan_context: t.Callable)
     assert waiter_by_day_interval == (to_timestamp("2023-01-07"), to_timestamp("2023-01-08"))
 
 
+@time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_restatement_shouldnt_backfill_beyond_prod_intervals(init_and_plan_context: t.Callable):
+    context, _ = init_and_plan_context("examples/sushi")
+
+    model = context.get_model("sushi.top_waiters")
+    context.upsert_model(SqlModel.parse_obj({**model.dict(), "cron": "@hourly"}))
+
+    context.plan("prod", auto_apply=True, no_prompts=True, skip_tests=True)
+    context.run()
+
+    with time_machine.travel("2023-01-09 02:00:00 UTC"):
+        # It's time to backfill the waiter_revenue_by_day model but it hasn't run yet
+        restatement_plan = context.plan(
+            restate_models=["sushi.waiter_revenue_by_day"],
+            no_prompts=True,
+            skip_tests=True,
+        )
+        intervals_by_id = {i.snapshot_id: i for i in restatement_plan.missing_intervals}
+        # Make sure the intervals don't go beyond the prod intervals
+        assert intervals_by_id[context.get_snapshot("sushi.top_waiters").snapshot_id].intervals[-1][
+            1
+        ] == to_timestamp("2023-01-08 15:00:00 UTC")
+        assert intervals_by_id[
+            context.get_snapshot("sushi.waiter_revenue_by_day").snapshot_id
+        ].intervals[-1][1] == to_timestamp("2023-01-08 00:00:00 UTC")
+
+
 def initial_add(context: Context, environment: str):
     assert not context.state_reader.get_environment(environment)
 

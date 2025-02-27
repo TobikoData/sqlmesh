@@ -1745,14 +1745,14 @@ def missing_intervals(
             snapshot = snapshot.copy()
             snapshot.intervals = snapshot.intervals.copy()
             snapshot.remove_interval(restated_interval)
-        else:
-            existing_interval_end = interval_end_per_model.get(snapshot.name)
-            if existing_interval_end:
-                if to_timestamp(snapshot_start_date) >= existing_interval_end:
-                    # The start exceeds the provided interval end, so we can skip this snapshot
-                    # since it doesn't have missing intervals by definition
-                    continue
-                snapshot_end_date = existing_interval_end
+
+        existing_interval_end = interval_end_per_model.get(snapshot.name)
+        if existing_interval_end:
+            if to_timestamp(snapshot_start_date) >= existing_interval_end:
+                # The start exceeds the provided interval end, so we can skip this snapshot
+                # since it doesn't have missing intervals by definition
+                continue
+            snapshot_end_date = existing_interval_end
 
         missing_interval_end_date = snapshot_end_date
         node_end_date = snapshot.node.end
