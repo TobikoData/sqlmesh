@@ -4071,6 +4071,9 @@ def test_model_dialect_name():
     )
     assert "name `project-1`.`db`.`tbl1`" in model.render_definition()[0].sql(dialect="bigquery")
 
+    # This used to fail due to the dialect regex picking up `DIALECT_TEST` as the model's dialect
+    expressions = d.parse("MODEL(name DIALECT_TEST.foo); SELECT 1")
+
 
 def test_model_allow_partials():
     expressions = d.parse(
