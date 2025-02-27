@@ -130,7 +130,7 @@ In addition to specifying a time column in the `MODEL` DDL, the model's query mu
       AND s.customer_id = p.customer_id
     ```
 
-    SQLMesh will create a versioned table in the physical layer. Note the fingerprint of the table is `50975949`.
+    SQLMesh will execute this SQL to create a versioned table in the physical layer. Note that the table's version fingerprint, `50975949`, is part of the table name.
 
     ```sql
     CREATE TABLE IF NOT EXISTS `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__incrementals_demo__50975949` (
