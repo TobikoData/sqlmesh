@@ -921,3 +921,41 @@ def test_rendered_diff():
  WHERE
 -  TRUE > 2
 +  FALSE > 2""" in audit1.text_diff(audit2, rendered=True)
+
+
+def test_multiple_audits_with_same_name():
+    expressions = parse(
+        """
+        MODEL (
+            name db.table,
+            dialect spark,
+            audits(
+                does_not_exceed_threshold(column := id, threshold := 1000),
+                does_not_exceed_threshold(column := price, threshold := 100),
+                does_not_exceed_threshold(column := price, threshold := 100)
+            )
+        );
+
+        SELECT id, price FROM tbl;
+
+        AUDIT (
+            name does_not_exceed_threshold,
+        );
+        SELECT * FROM @this_model
+        WHERE @column >= @threshold;
+        """
+    )
+    model = load_sql_based_model(expressions)
+    assert len(model.audits) == 3
+    assert len(model.audits_with_args) == 3
+    assert len(model.audit_definitions) == 1
+
+    # Testing that audit names are identical
+    assert model.audits[0][0] == model.audits[1][0] == model.audits[2][0]
+
+    # Testing that audit arguments are different for first and second audit
+    assert model.audits[0][1] != model.audits[1][1]
+
+    # Testing that audit arguments are identical for second and third audit
+    # This establishes that identical audits are preserved
+    assert model.audits[1][1] == model.audits[2][1]
