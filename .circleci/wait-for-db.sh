@@ -55,6 +55,10 @@ trino_ready() {
     docker compose -f tests/core/engine_adapter/integration/docker/compose.trino.yaml exec trino /bin/bash -c '/usr/lib/trino/bin/health-check'
 }
 
+risingwave_ready() {
+    probe_port 4566
+}
+
 echo "Waiting for $ENGINE to be ready..."
 
 READINESS_FUNC="${ENGINE}_ready"

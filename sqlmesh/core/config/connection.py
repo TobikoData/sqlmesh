@@ -1770,6 +1770,52 @@ class AthenaConnectionConfig(ConnectionConfig):
         return self.catalog_name
 
 
+class RisingwaveConnectionConfig(ConnectionConfig):
+    host: str
+    user: str
+    password: t.Optional[str] = None
+    port: int
+    database: str
+    role: t.Optional[str] = None
+    sslmode: t.Optional[str] = None
+
+    concurrent_tasks: int = 4
+    register_comments: bool = True
+    pre_ping: bool = True
+
+    type_: t.Literal["risingwave"] = Field(alias="type", default="risingwave")
+
+    @property
+    def _connection_kwargs_keys(self) -> t.Set[str]:
+        return {
+            "host",
+            "user",
+            "password",
+            "port",
+            "database",
+            "role",
+            "sslmode",
+        }
+
+    @property
+    def _engine_adapter(self) -> t.Type[EngineAdapter]:
+        return engine_adapter.RisingwaveEngineAdapter
+
+    @property
+    def _connection_factory(self) -> t.Callable:
+        from psycopg2 import connect
+
+        return connect
+
+    @property
+    def _cursor_init(self) -> t.Optional[t.Callable[[t.Any], None]]:
+        def init(cursor: t.Any) -> None:
+            sql = "SET RW_IMPLICIT_FLUSH TO true;"
+            cursor.execute(sql)
+
+        return init
+
+
 CONNECTION_CONFIG_TO_TYPE = {
     # Map all subclasses of ConnectionConfig to the value of their `type_` field.
     tpe.all_field_infos()["type_"].default: tpe
