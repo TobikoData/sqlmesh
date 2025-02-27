@@ -9,7 +9,7 @@ MODEL (
   description 'List of waiter names',
   audits (
     assert_positive_id,
-    does_not_exceed_threshold(column := id, threshold := 200),
+    does_not_exceed_threshold(column := id, threshold := @waiter_names_threshold()),
     assert_valid_name,
   )
 );

@@ -26,6 +26,294 @@ MODEL (
 <a id="timezones"></a>
 In addition to specifying a time column in the `MODEL` DDL, the model's query must contain a `WHERE` clause that filters the upstream records by time range. SQLMesh provides special macros that represent the start and end of the time range being processed: `@start_date` / `@end_date` and `@start_ds` / `@end_ds`. Refer to [Macros](../macros/macro_variables.md) for more information.
 
+??? "Example SQL sequence when applying this model kind (ex: BigQuery)"
+    This is borrowed from the full walkthrough: [Incremental by Time Range](../../examples/incremental_time_full_walkthrough.md)
+
+    Create a model with the following definition and run `sqlmesh plan dev`:
+
+    ```sql
+    MODEL (
+      name demo.incrementals_demo,
+      kind INCREMENTAL_BY_TIME_RANGE (
+        -- How does this model kind behave?
+        --   DELETE by time range, then INSERT
+        time_column transaction_date,
+
+        -- How do I handle late-arriving data?
+        --   Handle late-arriving events for the past 2 (2*1) days based on cron
+        --   interval. Each time it runs, it will process today, yesterday, and
+        --   the day before yesterday.
+        lookback 2,
+      ),
+
+      -- Don't backfill data before this date
+      start '2024-10-25',
+
+      -- What schedule should I run these at?
+      --   Daily at Midnight UTC
+      cron '@daily',
+
+      -- Good documentation for the primary key
+      grain transaction_id,
+
+      -- How do I test this data?
+      --   Validate that the `transaction_id` primary key values are both unique
+      --   and non-null. Data audit tests only run for the processed intervals,
+      --   not for the entire table.
+      -- audits (
+      --   UNIQUE_VALUES(columns = (transaction_id)),
+      --   NOT_NULL(columns = (transaction_id))
+      -- )
+    );
+
+    WITH sales_data AS (
+      SELECT
+        transaction_id,
+        product_id,
+        customer_id,
+        transaction_amount,
+        -- How do I account for UTC vs. PST (California baby) timestamps?
+        --   Make sure all time columns are in UTC and convert them to PST in the
+        --   presentation layer downstream.
+        transaction_timestamp,
+        payment_method,
+        currency
+      FROM sqlmesh-public-demo.tcloud_raw_data.sales  -- Source A: sales data
+      -- How do I make this run fast and only process the necessary intervals?
+      --   Use our date macros that will automatically run the necessary intervals.
+      --   Because SQLMesh manages state, it will know what needs to run each time
+      --   you invoke `sqlmesh run`.
+      WHERE transaction_timestamp BETWEEN @start_dt AND @end_dt
+    ),
+
+    product_usage AS (
+      SELECT
+        product_id,
+        customer_id,
+        last_usage_date,
+        usage_count,
+        feature_utilization_score,
+        user_segment
+      FROM sqlmesh-public-demo.tcloud_raw_data.product_usage  -- Source B
+      -- Include usage data from the 30 days before the interval
+      WHERE last_usage_date BETWEEN DATE_SUB(@start_dt, INTERVAL 30 DAY) AND @end_dt
+    )
+
+    SELECT
+      s.transaction_id,
+      s.product_id,
+      s.customer_id,
+      s.transaction_amount,
+      -- Extract the date from the timestamp to partition by day
+      DATE(s.transaction_timestamp) as transaction_date,
+      -- Convert timestamp to PST using a SQL function in the presentation layer for end users
+      DATETIME(s.transaction_timestamp, 'America/Los_Angeles') as transaction_timestamp_pst,
+      s.payment_method,
+      s.currency,
+      -- Product usage metrics
+      p.last_usage_date,
+      p.usage_count,
+      p.feature_utilization_score,
+      p.user_segment,
+      -- Derived metrics
+      CASE
+        WHEN p.usage_count > 100 AND p.feature_utilization_score > 0.8 THEN 'Power User'
+        WHEN p.usage_count > 50 THEN 'Regular User'
+        WHEN p.usage_count IS NULL THEN 'New User'
+        ELSE 'Light User'
+      END as user_type,
+      -- Time since last usage
+      DATE_DIFF(s.transaction_timestamp, p.last_usage_date, DAY) as days_since_last_usage
+    FROM sales_data s
+    LEFT JOIN product_usage p
+      ON s.product_id = p.product_id
+      AND s.customer_id = p.customer_id
+    ```
+
+    SQLMesh will execute this SQL to create a versioned table in the physical layer. Note that the table's version fingerprint, `50975949`, is part of the table name.
+
+    ```sql
+    CREATE TABLE IF NOT EXISTS `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__incrementals_demo__50975949` (
+      `transaction_id` STRING,
+      `product_id` STRING,
+      `customer_id` STRING,
+      `transaction_amount` NUMERIC,
+      `transaction_date` DATE OPTIONS (description='We extract the date from the timestamp to partition by day'),
+      `transaction_timestamp_pst` DATETIME OPTIONS (description='Convert this to PST using a SQL function'),
+      `payment_method` STRING,
+      `currency` STRING,
+      `last_usage_date` TIMESTAMP,
+      `usage_count` INT64,
+      `feature_utilization_score` FLOAT64,
+      `user_segment` STRING,
+      `user_type` STRING OPTIONS (description='Derived metrics'),
+      `days_since_last_usage` INT64 OPTIONS (description='Time since last usage')
+      )
+      PARTITION BY `transaction_date`
+    ```
+
+    SQLMesh will validate the SQL before processing data (note the `WHERE FALSE LIMIT 0` and the placeholder timestamps).
+
+    ```sql
+    WITH `sales_data` AS (
+      SELECT
+        `sales`.`transaction_id` AS `transaction_id`,
+        `sales`.`product_id` AS `product_id`,
+        `sales`.`customer_id` AS `customer_id`,
+        `sales`.`transaction_amount` AS `transaction_amount`,
+        `sales`.`transaction_timestamp` AS `transaction_timestamp`,
+        `sales`.`payment_method` AS `payment_method`,
+        `sales`.`currency` AS `currency`
+      FROM `sqlmesh-public-demo`.`tcloud_raw_data`.`sales` AS `sales`
+      WHERE (
+        `sales`.`transaction_timestamp` <= CAST('1970-01-01 23:59:59.999999+00:00' AS TIMESTAMP) AND
+        `sales`.`transaction_timestamp` >= CAST('1970-01-01 00:00:00+00:00' AS TIMESTAMP)) AND
+        FALSE
+    ),
+    `product_usage` AS (
+      SELECT
+        `product_usage`.`product_id` AS `product_id`,
+        `product_usage`.`customer_id` AS `customer_id`,
+        `product_usage`.`last_usage_date` AS `last_usage_date`,
+        `product_usage`.`usage_count` AS `usage_count`,
+        `product_usage`.`feature_utilization_score` AS `feature_utilization_score`,
+        `product_usage`.`user_segment` AS `user_segment`
+      FROM `sqlmesh-public-demo`.`tcloud_raw_data`.`product_usage` AS `product_usage`
+      WHERE (
+        `product_usage`.`last_usage_date` <= CAST('1970-01-01 23:59:59.999999+00:00' AS TIMESTAMP) AND
+        `product_usage`.`last_usage_date` >= CAST('1969-12-02 00:00:00+00:00' AS TIMESTAMP)
+        ) AND
+        FALSE
+    )
+
+    SELECT
+      `s`.`transaction_id` AS `transaction_id`,
+      `s`.`product_id` AS `product_id`,
+      `s`.`customer_id` AS `customer_id`,
+      CAST(`s`.`transaction_amount` AS NUMERIC) AS `transaction_amount`,
+      DATE(`s`.`transaction_timestamp`) AS `transaction_date`,
+      DATETIME(`s`.`transaction_timestamp`, 'America/Los_Angeles') AS `transaction_timestamp_pst`,
+      `s`.`payment_method` AS `payment_method`,
+      `s`.`currency` AS `currency`,
+      `p`.`last_usage_date` AS `last_usage_date`,
+      `p`.`usage_count` AS `usage_count`,
+      `p`.`feature_utilization_score` AS `feature_utilization_score`,
+      `p`.`user_segment` AS `user_segment`,
+      CASE
+        WHEN `p`.`feature_utilization_score` > 0.8 AND `p`.`usage_count` > 100 THEN 'Power User'
+        WHEN `p`.`usage_count` > 50 THEN 'Regular User'
+        WHEN `p`.`usage_count` IS NULL THEN 'New User'
+        ELSE 'Light User'
+      END AS `user_type`,
+      DATE_DIFF(`s`.`transaction_timestamp`, `p`.`last_usage_date`, DAY) AS `days_since_last_usage`
+    FROM `sales_data` AS `s`
+    LEFT JOIN `product_usage` AS `p`
+      ON `p`.`customer_id` = `s`.`customer_id` AND
+      `p`.`product_id` = `s`.`product_id`
+    WHERE FALSE
+    LIMIT 0
+    ```
+
+    SQLMesh will merge data into the empty table.
+
+    ```sql
+    MERGE INTO `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__incrementals_demo__50975949` AS `__MERGE_TARGET__` USING (
+      WITH `sales_data` AS (
+        SELECT
+          `transaction_id`,
+          `product_id`,
+          `customer_id`,
+          `transaction_amount`,
+          `transaction_timestamp`,
+          `payment_method`,
+          `currency`
+        FROM `sqlmesh-public-demo`.`tcloud_raw_data`.`sales` AS `sales`
+        WHERE `transaction_timestamp` BETWEEN CAST('2024-10-25 00:00:00+00:00' AS TIMESTAMP) AND CAST('2024-11-04 23:59:59.999999+00:00' AS TIMESTAMP)
+      ),
+      `product_usage` AS (
+        SELECT
+          `product_id`,
+          `customer_id`,
+          `last_usage_date`,
+          `usage_count`,
+          `feature_utilization_score`,
+          `user_segment`
+        FROM `sqlmesh-public-demo`.`tcloud_raw_data`.`product_usage` AS `product_usage`
+        WHERE `last_usage_date` BETWEEN DATE_SUB(CAST('2024-10-25 00:00:00+00:00' AS TIMESTAMP), INTERVAL '30' DAY) AND CAST('2024-11-04 23:59:59.999999+00:00' AS TIMESTAMP)
+      )
+
+      SELECT
+        `transaction_id`,
+        `product_id`,
+        `customer_id`,
+        `transaction_amount`,
+        `transaction_date`,
+        `transaction_timestamp_pst`,
+        `payment_method`,
+        `currency`,
+        `last_usage_date`,
+        `usage_count`,
+        `feature_utilization_score`,
+        `user_segment`,
+        `user_type`,
+        `days_since_last_usage`
+      FROM (
+        SELECT
+          `s`.`transaction_id` AS `transaction_id`,
+          `s`.`product_id` AS `product_id`,
+          `s`.`customer_id` AS `customer_id`,
+          `s`.`transaction_amount` AS `transaction_amount`,
+          DATE(`s`.`transaction_timestamp`) AS `transaction_date`,
+          DATETIME(`s`.`transaction_timestamp`, 'America/Los_Angeles') AS `transaction_timestamp_pst`,
+          `s`.`payment_method` AS `payment_method`,
+          `s`.`currency` AS `currency`,
+          `p`.`last_usage_date` AS `last_usage_date`,
+          `p`.`usage_count` AS `usage_count`,
+          `p`.`feature_utilization_score` AS `feature_utilization_score`,
+          `p`.`user_segment` AS `user_segment`,
+          CASE
+            WHEN `p`.`usage_count` > 100 AND `p`.`feature_utilization_score` > 0.8 THEN 'Power User'
+            WHEN `p`.`usage_count` > 50 THEN 'Regular User'
+            WHEN `p`.`usage_count` IS NULL THEN 'New User'
+            ELSE 'Light User'
+          END AS `user_type`,
+          DATE_DIFF(`s`.`transaction_timestamp`, `p`.`last_usage_date`, DAY) AS `days_since_last_usage`
+        FROM `sales_data` AS `s`
+        LEFT JOIN `product_usage` AS `p`
+          ON `s`.`product_id` = `p`.`product_id`
+          AND `s`.`customer_id` = `p`.`customer_id`
+      ) AS `_subquery`
+      WHERE `transaction_date` BETWEEN CAST('2024-10-25' AS DATE) AND CAST('2024-11-04' AS DATE)
+    ) AS `__MERGE_SOURCE__`
+    ON FALSE
+    WHEN NOT MATCHED BY SOURCE AND `transaction_date` BETWEEN CAST('2024-10-25' AS DATE) AND CAST('2024-11-04' AS DATE) THEN DELETE
+    WHEN NOT MATCHED THEN
+      INSERT (
+        `transaction_id`, `product_id`, `customer_id`, `transaction_amount`, `transaction_date`, `transaction_timestamp_pst`,
+        `payment_method`, `currency`, `last_usage_date`, `usage_count`, `feature_utilization_score`, `user_segment`, `user_type`,
+        `days_since_last_usage`
+      )
+      VALUES (
+        `transaction_id`, `product_id`, `customer_id`, `transaction_amount`, `transaction_date`, `transaction_timestamp_pst`,
+        `payment_method`, `currency`, `last_usage_date`, `usage_count`, `feature_utilization_score`, `user_segment`, `user_type`,
+        `days_since_last_usage`
+      )
+    ```
+
+    SQLMesh will create a suffixed `__dev` schema based on the name of the plan environment.
+  
+    ```sql
+    CREATE SCHEMA IF NOT EXISTS `sqlmesh-public-demo`.`demo__dev`
+    ```
+
+    SQLMesh will create a view in the virtual layer to pointing to the versioned table in the physical layer.
+
+    ```sql
+    CREATE OR REPLACE VIEW `sqlmesh-public-demo`.`demo__dev`.`incrementals_demo` AS
+    SELECT *
+    FROM `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__incrementals_demo__50975949`
+    ```
+
 !!! tip "Important"
 
     A model's `time_column` should be in the [UTC time zone](https://en.wikipedia.org/wiki/Coordinated_Universal_Time) to ensure correct interaction with SQLMesh's scheduler and predefined macro variables.
@@ -189,6 +477,66 @@ WHERE
   event_date BETWEEN @start_date AND @end_date;
 ```
 
+??? "Example SQL sequence when applying this model kind (ex: BigQuery)"
+
+    Create a model with the following definition and run `sqlmesh plan dev`:
+
+    ```sql
+    MODEL (
+      name demo.incremental_by_unique_key_example,
+      kind INCREMENTAL_BY_UNIQUE_KEY (
+        unique_key id
+      ),
+      start '2020-01-01',
+      cron '@daily',
+    );
+
+    SELECT
+      id,
+      item_id,
+      event_date
+    FROM demo.seed_model
+    WHERE
+      event_date BETWEEN @start_date AND @end_date
+    ```
+
+    SQLMesh will execute this SQL to create a versioned table in the physical layer. Note that the table's version fingerprint, `1161945221`, is part of the table name.
+
+    ```sql
+    CREATE TABLE IF NOT EXISTS `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__incremental_by_unique_key_example__1161945221` (`id` INT64, `item_id` INT64, `event_date` DATE)
+    ```
+
+    SQLMesh will validate the model's query before processing data (note the `FALSE LIMIT 0` in the `WHERE` statement and the placeholder dates).
+
+    ```sql
+    SELECT `seed_model`.`id` AS `id`, `seed_model`.`item_id` AS `item_id`, `seed_model`.`event_date` AS `event_date` 
+    FROM `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__seed_model__2834544882` AS `seed_model` 
+    WHERE (`seed_model`.`event_date` <= CAST('1970-01-01' AS DATE) AND `seed_model`.`event_date` >= CAST('1970-01-01' AS DATE)) AND FALSE LIMIT 0
+    ```
+
+    SQLMesh will create a versioned table in the physical layer.
+
+    ```sql
+    CREATE OR REPLACE TABLE `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__incremental_by_unique_key_example__1161945221` AS 
+    SELECT CAST(`id` AS INT64) AS `id`, CAST(`item_id` AS INT64) AS `item_id`, CAST(`event_date` AS DATE) AS `event_date` 
+    FROM (SELECT `seed_model`.`id` AS `id`, `seed_model`.`item_id` AS `item_id`, `seed_model`.`event_date` AS `event_date` 
+    FROM `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__seed_model__2834544882` AS `seed_model` 
+    WHERE `seed_model`.`event_date` <= CAST('2024-10-30' AS DATE) AND `seed_model`.`event_date` >= CAST('2020-01-01' AS DATE)) AS `_subquery`
+    ```
+
+    SQLMesh will create a suffixed `__dev` schema based on the name of the plan environment.
+
+    ```sql
+    CREATE SCHEMA IF NOT EXISTS `sqlmesh-public-demo`.`demo__dev`
+    ```
+
+    SQLMesh will create a view in the virtual layer pointing to the versioned table in the physical layer.
+
+    ```sql
+    CREATE OR REPLACE VIEW `sqlmesh-public-demo`.`demo__dev`.`incremental_by_unique_key_example` AS 
+    SELECT * FROM `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__incremental_by_unique_key_example__1161945221`
+    ```
+
 **Note:** Models of the `INCREMENTAL_BY_UNIQUE_KEY` kind are inherently [non-idempotent](../glossary.md#idempotency), which should be taken into consideration during data [restatement](../plans.md#restatement-plans). As a result, partial data restatement is not supported for this model kind, which means that the entire table will be recreated from scratch if restated.
 
 ### Unique Key Expressions
@@ -245,6 +593,16 @@ MODEL (
 * Redshift
 * Snowflake
 * Spark
+
+In Redshift's case, to enable the use of the native `MERGE` statement, you need to pass the `enable_merge` flag in the connection and set it to `true`. It is disabled by default.
+
+```yaml linenums="1"
+gateways:
+  redshift:
+    connection:
+      type: redshift
+      enable_merge: true
+```
 
 Redshift supports only the `UPDATE` or `DELETE` actions for the `WHEN MATCHED` clause and does not allow multiple `WHEN MATCHED` expressions. For further information, refer to the [Redshift documentation](https://docs.aws.amazon.com/redshift/latest/dg/r_MERGE.html#r_MERGE-parameters).
 
@@ -304,6 +662,64 @@ FROM db.employees
 GROUP BY title;
 ```
 
+??? "Example SQL sequence when applying this model kind (ex: BigQuery)"
+
+    Create a model with the following definition and run `sqlmesh plan dev`:
+
+    ```sql
+    MODEL (
+      name demo.full_model_example,
+      kind FULL,
+      cron '@daily',
+      grain item_id,
+    );
+
+    SELECT
+      item_id,
+      COUNT(DISTINCT id) AS num_orders
+    FROM demo.incremental_model
+    GROUP BY
+      item_id
+    ```
+
+    SQLMesh will execute this SQL to create a versioned table in the physical layer. Note that the table's version fingerprint, `2345651858`, is part of the table name.
+
+    ```sql
+    CREATE TABLE IF NOT EXISTS `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__full_model_example__2345651858` (`item_id` INT64, `num_orders` INT64)
+    ```
+
+    SQLMesh will validate the model's query before processing data (note the `WHERE FALSE` and `LIMIT 0`).
+
+    ```sql
+    SELECT `incremental_model`.`item_id` AS `item_id`, COUNT(DISTINCT `incremental_model`.`id`) AS `num_orders` 
+    FROM `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__incremental_model__89556012` AS `incremental_model` 
+    WHERE FALSE 
+    GROUP BY `incremental_model`.`item_id` LIMIT 0
+    ```
+
+    SQLMesh will create a versioned table in the physical layer.
+
+    ```sql
+    CREATE OR REPLACE TABLE `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__full_model_example__2345651858` AS 
+    SELECT CAST(`item_id` AS INT64) AS `item_id`, CAST(`num_orders` AS INT64) AS `num_orders` 
+    FROM (SELECT `incremental_model`.`item_id` AS `item_id`, COUNT(DISTINCT `incremental_model`.`id`) AS `num_orders` 
+    FROM `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__incremental_model__89556012` AS `incremental_model` 
+    GROUP BY `incremental_model`.`item_id`) AS `_subquery`
+    ```
+
+    SQLMesh will create a suffixed `__dev` schema based on the name of the plan environment.
+
+    ```sql
+    CREATE SCHEMA IF NOT EXISTS `sqlmesh-public-demo`.`demo__dev`
+    ```
+
+    SQLMesh will create a view in the virtual layer pointing to the versioned table in the physical layer.
+
+    ```sql
+    CREATE OR REPLACE VIEW `sqlmesh-public-demo`.`demo__dev`.`full_model_example` AS 
+    SELECT * FROM `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__full_model_example__2345651858`
+    ```
+
 ### Materialization strategy
 Depending on the target engine, models of the `FULL` kind are materialized using the following strategies:
 
@@ -324,7 +740,10 @@ The `VIEW` kind is different, because no data is actually written during model e
 
 **Note:** `VIEW` is the default model kind if kind is not specified.
 
+**Note:** Python models do not support the `VIEW` model kind - use a SQL model instead.
+
 **Note:** With this kind, the model's query is evaluated every time the model is referenced in a downstream query. This may incur undesirable compute cost and time in cases where the model's query is compute-intensive, or when the model is referenced in many downstream queries.
+
 
 This example specifies a `VIEW` model kind:
 ```sql linenums="1" hl_lines="3"
@@ -337,6 +756,42 @@ SELECT
   MAX(salary)
 FROM db.employees;
 ```
+
+??? "Example SQL sequence when applying this model kind (ex: BigQuery)"
+
+    Create a model with the following definition and run `sqlmesh plan dev`:
+
+    ```sql
+    MODEL (
+      name demo.example_view,
+      kind VIEW,
+      cron '@daily',
+    );
+
+    SELECT
+      'hello there' as a_column
+    ```
+
+    SQLMesh will execute this SQL to create a versioned view in the physical layer. Note that the view's version fingerprint, `1024042926`, is part of the view name.
+
+    ```sql
+    CREATE OR REPLACE VIEW `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__example_view__1024042926`
+    (`a_column`) AS SELECT 'hello there' AS `a_column`
+    ```
+
+    SQLMesh will create a suffixed `__dev` schema based on the name of the plan environment.
+
+    ```sql
+    CREATE SCHEMA IF NOT EXISTS `sqlmesh-public-demo`.`demo__dev`
+    ```
+
+    SQLMesh will create a view in the virtual layer pointing to the versioned view in the physical layer.
+
+    ```sql
+    CREATE OR REPLACE VIEW `sqlmesh-public-demo`.`demo__dev`.`example_view` AS 
+    SELECT * FROM `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__example_view__1024042926`
+    ```
+
 
 ### Materialized Views
 The `VIEW` model kind can be configured to represent a materialized view by setting the `materialized` flag to `true`:
@@ -362,6 +817,8 @@ Embedded models are a way to share common logic between different models of othe
 
 There are no data assets (tables or views) associated with `EMBEDDED` models in the data warehouse. Instead, an `EMBEDDED` model's query is injected directly into the query of each downstream model that references it, as a subquery.
 
+**Note:** Python models do not support the `EMBEDDED` model kind - use a SQL model instead.
+
 This example specifies a `EMBEDDED` model kind:
 ```sql linenums="1" hl_lines="3"
 MODEL (
@@ -376,6 +833,70 @@ FROM db.employees;
 
 ## SEED
 The `SEED` model kind is used to specify [seed models](./seed_models.md) for using static CSV datasets in your SQLMesh project.
+
+**Notes:**  
+
+- Seed models are loaded only once unless the SQL model and/or seed file is updated.
+- Python models do not support the `SEED` model kind - use a SQL model instead.
+
+??? "Example SQL sequence when applying this model kind (ex: BigQuery)"
+
+    Create a model with the following definition and run `sqlmesh plan dev`:
+
+    ```sql
+    MODEL (
+      name demo.seed_example,
+      kind SEED (
+        path '../../seeds/seed_example.csv'
+      ),
+      columns (
+        id INT64,
+        item_id INT64,
+        event_date DATE
+      ),
+      grain (id, event_date)
+    )
+    ```
+
+    SQLMesh will execute this SQL to create a versioned table in the physical layer. Note that the table's version fingerprint, `3038173937`, is part of the table name.
+
+    ```sql
+    CREATE TABLE IF NOT EXISTS `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__seed_example__3038173937` (`id` INT64, `item_id` INT64, `event_date` DATE)
+    ```
+
+    SQLMesh will upload the seed as a temp table in the physical layer.
+
+    ```sql
+    sqlmesh-public-demo.sqlmesh__demo.__temp_demo__seed_example__3038173937_9kzbpld7
+    ```
+
+    SQLMesh will create a versioned table in the physical layer from the temp table.
+
+    ```sql
+    CREATE OR REPLACE TABLE `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__seed_example__3038173937` AS 
+    SELECT CAST(`id` AS INT64) AS `id`, CAST(`item_id` AS INT64) AS `item_id`, CAST(`event_date` AS DATE) AS `event_date` 
+    FROM (SELECT `id`, `item_id`, `event_date` 
+    FROM `sqlmesh-public-demo`.`sqlmesh__demo`.`__temp_demo__seed_example__3038173937_9kzbpld7`) AS `_subquery`
+    ```
+
+    SQLMesh will drop the temp table in the physical layer.
+
+    ```sql
+    DROP TABLE IF EXISTS `sqlmesh-public-demo`.`sqlmesh__demo`.`__temp_demo__seed_example__3038173937_9kzbpld7`
+    ```
+
+    SQLMesh will create a suffixed `__dev` schema based on the name of the plan environment.
+
+    ```sql
+    CREATE SCHEMA IF NOT EXISTS `sqlmesh-public-demo`.`demo__dev`
+    ```
+
+    SQLMesh will create a view in the virtual layer pointing to the versioned table in the physical layer.
+
+    ```sql
+    CREATE OR REPLACE VIEW `sqlmesh-public-demo`.`demo__dev`.`seed_example` AS 
+    SELECT * FROM `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__seed_example__3038173937`
+    ```
 
 ## SCD Type 2
 
@@ -875,6 +1396,8 @@ The EXTERNAL model kind is used to specify [external models](./external_models.m
 !!! warning
 
     Managed models are still under development and the API / semantics may change as support for more engines is added
+
+**Note:** Python models do not support the `MANAGED` model kind - use a SQL model instead.
 
 The `MANAGED` model kind is used to create models where the underlying database engine manages the data lifecycle.
 

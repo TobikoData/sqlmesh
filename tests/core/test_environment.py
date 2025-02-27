@@ -2,7 +2,7 @@ import pytest
 
 from sqlmesh.core.environment import Environment, EnvironmentNamingInfo
 from sqlmesh.core.snapshot import SnapshotId, SnapshotTableInfo
-from sqlmesh.core.state_sync.engine_adapter import _environment_to_df
+from sqlmesh.core.state_sync.db.environment import _environment_to_df
 
 
 def test_sanitize_name():

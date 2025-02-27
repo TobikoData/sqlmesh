@@ -23,6 +23,6 @@ ALL_DEPENDENCIES="$COMMON_DEPENDENCIES $ENGINE_DEPENDENCIES"
 
 echo "Installing OS-level dependencies: $ALL_DEPENDENCIES"
 
-sudo apt-get -y update && sudo apt-get -y install $ALL_DEPENDENCIES
+sudo apt-get clean && sudo apt-get -y update && sudo apt-get -y install $ALL_DEPENDENCIES
 
 echo "All done"
