@@ -20,14 +20,14 @@ import typing as t
 from sqlmesh.core import analytics
 from sqlmesh.core import constants as c
 from sqlmesh.core.console import Console, get_console
-from sqlmesh.core.environment import EnvironmentNamingInfo
+from sqlmesh.core.environment import EnvironmentNamingInfo, execute_environment_statements
 from sqlmesh.core.macros import RuntimeStage
 from sqlmesh.core.notification_target import (
     NotificationTarget,
 )
 from sqlmesh.core.snapshot.definition import Interval, to_view_mapping
 from sqlmesh.core.plan.definition import EvaluatablePlan
-from sqlmesh.core.scheduler import Scheduler, execute_environment_statements
+from sqlmesh.core.scheduler import Scheduler
 from sqlmesh.core.snapshot import (
     DeployabilityIndex,
     Snapshot,

@@ -18,6 +18,7 @@ from difflib import ndiff
 from functools import cached_property
 from sqlmesh.core import constants as c
 from sqlmesh.core.console import get_console
+from sqlmesh.core.macros import RuntimeStage
 from sqlmesh.core.snapshot import Snapshot, SnapshotId, SnapshotTableInfo
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
@@ -280,13 +281,6 @@ class ContextDiff(PydanticModel):
 
     @property
     def has_environment_statements_changes(self) -> bool:
-        if (
-            not self.previous_environment_statements
-            and self.environment_statements
-            and not any([stmt.before_all for stmt in self.environment_statements])
-            and not any([stmt.after_all for stmt in self.environment_statements])
-        ):
-            return False
         return self.environment_statements != self.previous_environment_statements
 
     @property
@@ -337,36 +331,20 @@ class ContextDiff(PydanticModel):
         )
 
     def environment_statements_diff(self) -> str:
-        before_all_diff = ndiff(
-            [
-                str(stmt)
-                for statements in self.previous_environment_statements
-                for stmt in statements.before_all
-            ],
-            [
-                str(stmt)
-                for statements in self.environment_statements
-                for stmt in statements.before_all
-            ],
-        )
-        after_all_diff = ndiff(
-            [
-                str(stmt)
-                for statements in self.previous_environment_statements
-                for stmt in statements.after_all
-            ],
-            [
-                str(stmt)
-                for statements in self.environment_statements
-                for stmt in statements.after_all
-            ],
-        )
-        return (
-            "  before_all:\n    "
-            + "\n    ".join(before_all_diff)
-            + "\n\n"
-            + "  after_all:\n    "
-            + "\n    ".join(after_all_diff)
+        def extract_statements(statements: t.List[EnvironmentStatements], attr: str) -> t.List[str]:
+            return [str(stmt) for statement in statements for stmt in getattr(statement, attr)]
+
+        def format_diff(runtime_stage: str) -> str:
+            previous = extract_statements(self.previous_environment_statements, runtime_stage)
+            current = extract_statements(self.environment_statements, runtime_stage)
+            return (
+                f"  {runtime_stage}:\n    " + "\n    ".join(ndiff(previous, current)) + "\n"
+                if previous or current
+                else ""
+            )
+
+        return format_diff(RuntimeStage.BEFORE_ALL.value) + format_diff(
+            RuntimeStage.AFTER_ALL.value
         )
 
     @property

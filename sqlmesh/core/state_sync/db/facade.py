@@ -225,7 +225,7 @@ class EngineAdapterStateSync(StateSync):
             added_table_infos -= set(existing_environment.promoted_snapshots)
 
         self.environment_state.update_environment(environment)
-        if environment_statements:
+        if environment_statements is not None:
             self.environment_state.update_environment_statements(
                 environment.name, environment.plan_id, environment_statements
             )

@@ -5,15 +5,13 @@ import typing as t
 from sqlglot import exp
 from sqlmesh.core import constants as c
 from sqlmesh.core.console import Console, get_console
-from sqlmesh.core.engine_adapter.base import EngineAdapter
-from sqlmesh.core.environment import EnvironmentNamingInfo, EnvironmentStatements
+from sqlmesh.core.environment import EnvironmentNamingInfo, execute_environment_statements
 from sqlmesh.core.macros import RuntimeStage
 from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.notification_target import (
     NotificationEvent,
     NotificationTargetManager,
 )
-from sqlmesh.core.renderer import render_statements
 from sqlmesh.core.snapshot import (
     DeployabilityIndex,
     Snapshot,
@@ -570,37 +568,6 @@ class Scheduler:
                         ],
                     )
         return dag
-
-
-def execute_environment_statements(
-    adapter: EngineAdapter,
-    environment_statements: t.List[EnvironmentStatements],
-    runtime_stage: RuntimeStage,
-    environment_naming_info: EnvironmentNamingInfo,
-    default_catalog: t.Optional[str] = None,
-    snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
-    start: t.Optional[TimeLike] = None,
-    end: t.Optional[TimeLike] = None,
-    execution_time: t.Optional[TimeLike] = None,
-) -> None:
-    if rendered_expressions := [
-        expr
-        for statements in environment_statements
-        for expr in render_statements(
-            statements=getattr(statements, runtime_stage.value),
-            dialect=adapter.dialect,
-            default_catalog=default_catalog,
-            python_env=statements.python_env,
-            snapshots=snapshots,
-            start=start,
-            end=end,
-            execution_time=execution_time,
-            environment_naming_info=environment_naming_info,
-        )
-    ]:
-        with adapter.transaction():
-            for expr in rendered_expressions:
-                adapter.execute(expr)
 
 
 def compute_interval_params(

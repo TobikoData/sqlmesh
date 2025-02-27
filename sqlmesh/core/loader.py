@@ -53,7 +53,7 @@ class LoadedProject:
     metrics: UniqueKeyDict[str, Metric]
     requirements: t.Dict[str, str]
     excluded_requirements: t.Set[str]
-    environment_statements: EnvironmentStatements
+    environment_statements: t.Optional[EnvironmentStatements]
 
 
 class Loader(abc.ABC):
@@ -167,13 +167,9 @@ class Loader(abc.ABC):
     ) -> UniqueKeyDict[str, Audit]:
         """Loads all audits."""
 
-    def _load_environment_statements(self, macros: MacroRegistry) -> EnvironmentStatements:
+    def _load_environment_statements(self, macros: MacroRegistry) -> EnvironmentStatements | None:
         """Loads environment statements."""
-        return EnvironmentStatements(
-            before_all=[],
-            after_all=[],
-            python_env={},
-        )
+        return None
 
     def load_materializations(self) -> None:
         """Loads custom materializations."""
@@ -609,24 +605,26 @@ class SqlMeshLoader(Loader):
 
         return metrics
 
-    def _load_environment_statements(self, macros: MacroRegistry) -> EnvironmentStatements:
+    def _load_environment_statements(self, macros: MacroRegistry) -> EnvironmentStatements | None:
         """Loads environment statements."""
 
-        statements = {
-            "before_all": self.config.before_all or [],
-            "after_all": self.config.after_all or [],
-        }
+        if self.config.before_all or self.config.after_all:
+            statements = {
+                "before_all": self.config.before_all or [],
+                "after_all": self.config.after_all or [],
+            }
 
-        python_env = make_python_env(
-            [exp.maybe_parse(stmt) for stmts in statements.values() for stmt in stmts],
-            module_path=self.config_path,
-            jinja_macro_references=None,
-            macros=macros,
-            variables=self._get_variables(),
-            path=self.config_path,
-        )
+            python_env = make_python_env(
+                [exp.maybe_parse(stmt) for stmts in statements.values() for stmt in stmts],
+                module_path=self.config_path,
+                jinja_macro_references=None,
+                macros=macros,
+                variables=self._get_variables(),
+                path=self.config_path,
+            )
 
-        return EnvironmentStatements(**statements, python_env=python_env)
+            return EnvironmentStatements(**statements, python_env=python_env)
+        return None
 
     class _Cache:
         def __init__(self, loader: SqlMeshLoader, config_path: Path):

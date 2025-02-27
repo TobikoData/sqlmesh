@@ -2900,7 +2900,7 @@ def test_plan_environment_statements_diff(make_snapshot):
         context_diff.environment_statements_diff()
         == """  before_all:
     + CREATE OR REPLACE TABLE table_1 AS SELECT 1
-
   after_all:
-    + CREATE OR REPLACE TABLE table_2 AS SELECT 2"""
+    + CREATE OR REPLACE TABLE table_2 AS SELECT 2
+"""
     )

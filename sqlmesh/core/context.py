@@ -587,7 +587,8 @@ class GenericContext(BaseContext, t.Generic[C]):
             self._standalone_audits.update(project.standalone_audits)
             self._requirements.update(project.requirements)
             self._excluded_requirements.update(project.excluded_requirements)
-            self._environment_statements.append(project.environment_statements)
+            if project.environment_statements:
+                self._environment_statements.append(project.environment_statements)
 
         uncached = set()
 
