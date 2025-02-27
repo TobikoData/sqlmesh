@@ -106,12 +106,8 @@ class BaseExpressionRenderer:
         if should_cache and self._cache:
             return self._cache
 
-        environment_naming_info = kwargs.get("environment_naming_info", None)
-        kwargs["this_env"] = (
-            getattr(environment_naming_info, "name", "this_env")
-            if environment_naming_info
-            else "@this_env"
-        )
+        if environment_naming_info := kwargs.get("environment_naming_info", None):
+            kwargs["this_env"] = getattr(environment_naming_info, "name")
 
         this_model = kwargs.pop("this_model", None)
 
