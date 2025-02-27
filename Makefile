@@ -33,9 +33,6 @@ package-tests:
 publish-tests: package-tests
 	pip3 install twine && python3 -m twine upload -r tobiko-private tests/dist/*
 
-develop:
-	python3 setup.py develop
-
 airflow-init:
 	export AIRFLOW_ENGINE_OPERATOR=spark && make -C ./examples/airflow init
 
@@ -112,9 +109,9 @@ airflow-local-test:
 airflow-docker-test:
 	make -C ./examples/airflow docker-test
 
-airflow-local-test-with-env: develop airflow-clean airflow-init airflow-run airflow-local-test airflow-stop
+airflow-local-test-with-env: install-dev airflow-clean airflow-init airflow-run airflow-local-test airflow-stop
 
-airflow-docker-test-with-env: develop airflow-clean airflow-init airflow-run airflow-docker-test airflow-stop
+airflow-docker-test-with-env: install-dev airflow-clean airflow-init airflow-run airflow-docker-test airflow-stop
 
 engine-slow-test:
 	pytest -n auto -m "(fast or slow) and engine"
