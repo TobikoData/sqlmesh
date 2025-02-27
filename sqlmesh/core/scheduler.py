@@ -247,7 +247,7 @@ class Scheduler:
         circuit_breaker: t.Optional[t.Callable[[], bool]] = None,
         deployability_index: t.Optional[DeployabilityIndex] = None,
         auto_restatement_enabled: bool = False,
-        is_run_command: bool = False,
+        run_environment_statements: bool = False,
     ) -> CompletionStatus:
         """Concurrently runs all snapshots in topological order.
 
@@ -325,7 +325,7 @@ class Scheduler:
             circuit_breaker=circuit_breaker,
             start=start,
             end=end,
-            is_run_command=is_run_command,
+            run_environment_statements=run_environment_statements,
         )
 
         self.console.stop_evaluation_progress(success=not errors)
@@ -411,7 +411,7 @@ class Scheduler:
         circuit_breaker: t.Optional[t.Callable[[], bool]] = None,
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
-        is_run_command: bool = False,
+        run_environment_statements: bool = False,
     ) -> t.Tuple[t.List[NodeExecutionFailedError[SchedulingUnit]], t.List[SchedulingUnit]]:
         """Runs precomputed batches of missing intervals.
 
@@ -441,7 +441,7 @@ class Scheduler:
 
         snapshots_by_name = {snapshot.name: snapshot for snapshot in self.snapshots.values()}
 
-        if is_run_command:
+        if run_environment_statements:
             environment_statements = self.state_sync.get_environment_statements(
                 environment_naming_info.name
             )
@@ -497,7 +497,7 @@ class Scheduler:
                     raise_on_error=False,
                 )
         finally:
-            if is_run_command:
+            if run_environment_statements:
                 execute_environment_statements(
                     adapter=self.snapshot_evaluator.adapter,
                     environment_statements=environment_statements,

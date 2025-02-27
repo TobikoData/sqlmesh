@@ -750,7 +750,6 @@ class GenericContext(BaseContext, t.Generic[C]):
                     select_models=select_models,
                     circuit_breaker=_has_environment_changed,
                     no_auto_upstream=no_auto_upstream,
-                    is_run_command=True,
                 )
                 done = True
             except CircuitBreakerError:
@@ -1979,7 +1978,6 @@ class GenericContext(BaseContext, t.Generic[C]):
         select_models: t.Optional[t.Collection[str]],
         circuit_breaker: t.Optional[t.Callable[[], bool]],
         no_auto_upstream: bool,
-        is_run_command: bool = False,
     ) -> CompletionStatus:
         scheduler = self.scheduler(environment=environment)
         snapshots = scheduler.snapshots
@@ -1998,7 +1996,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             circuit_breaker=circuit_breaker,
             selected_snapshots=select_models,
             auto_restatement_enabled=environment.lower() == c.PROD,
-            is_run_command=is_run_command,
+            run_environment_statements=True,
         )
 
         if completion_status.is_nothing_to_do:
