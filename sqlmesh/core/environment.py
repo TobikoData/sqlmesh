@@ -219,13 +219,6 @@ class EnvironmentStatements(PydanticModel):
     after_all: t.List[str]
     python_env: t.Dict[str, Executable]
 
-    def to_dict(self) -> t.Dict[str, t.Any]:
-        return {
-            RuntimeStage.BEFORE_ALL.value: self.before_all,
-            RuntimeStage.AFTER_ALL.value: self.after_all,
-            "python_env": {key: value.dict() for key, value in self.python_env.items()},
-        }
-
 
 def execute_environment_statements(
     adapter: EngineAdapter,

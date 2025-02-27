@@ -225,6 +225,9 @@ class EngineAdapterStateSync(StateSync):
             added_table_infos -= set(existing_environment.promoted_snapshots)
 
         self.environment_state.update_environment(environment)
+
+        # If it is an empty list, we want to update the environment statements
+        # To reflect there are no statements anymore in this environment
         if environment_statements is not None:
             self.environment_state.update_environment_statements(
                 environment.name, environment.plan_id, environment_statements

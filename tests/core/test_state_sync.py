@@ -2472,6 +2472,51 @@ def test_invalidate_environment(state_sync: EngineAdapterStateSync, make_snapsho
         state_sync.invalidate_environment("prod")
 
 
+def test_promote_environment_without_statements(
+    state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
+):
+    snapshot = make_snapshot(
+        SqlModel(
+            name="a",
+            query=parse_one("select a, ds"),
+        ),
+    )
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    state_sync.push_snapshots([snapshot])
+
+    original_expiration_ts = now_timestamp() + 100000
+
+    env = Environment(
+        name="test_environment",
+        snapshots=[snapshot.table_info],
+        start_at="2022-01-01",
+        end_at="2022-01-01",
+        plan_id="test_plan_id",
+        previous_plan_id="test_plan_id",
+        expiration_ts=original_expiration_ts,
+    )
+    environment_statements = [
+        EnvironmentStatements(
+            before_all=["CREATE OR REPLACE TABLE table_1 AS SELECT 'a'"],
+            after_all=["CREATE OR REPLACE TABLE table_2 AS SELECT 'b'"],
+            python_env={},
+        )
+    ]
+
+    state_sync.promote(env, environment_statements=environment_statements)
+
+    # Verify the environment statements table is populated with the statements
+    assert state_sync.get_environment_statements(env.name) == environment_statements
+
+    # Scenario where the statements have been removed from the project and then
+    # If we promote the environment it doesn't contain before_all, after_all statements
+    state_sync.promote(env, environment_statements=[])
+
+    # This should trigger an internal update to the environment statements' table to be removed
+    assert state_sync.get_environment_statements(env.name) == []
+
+
 def test_cache(state_sync, make_snapshot, mocker):
     cache = CachingStateSync(state_sync, ttl=10)
 

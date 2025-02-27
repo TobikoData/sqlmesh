@@ -100,11 +100,12 @@ class EnvironmentState:
             ),
         )
 
-        self.engine_adapter.insert_append(
-            self.environment_statements_table,
-            _environment_statements_to_df(environment_name, plan_id, environment_statements),
-            columns_to_types=self._environment_statements_columns_to_types,
-        )
+        if environment_statements:
+            self.engine_adapter.insert_append(
+                self.environment_statements_table,
+                _environment_statements_to_df(environment_name, plan_id, environment_statements),
+                columns_to_types=self._environment_statements_columns_to_types,
+            )
 
     def invalidate_environment(self, name: str) -> None:
         """Invalidates the environment.
@@ -273,11 +274,7 @@ class EnvironmentState:
             )
         )
         result = fetchone(engine_adapter=self.engine_adapter, query=query)
-        if (
-            result
-            and (deserialized := json.loads(result[0]))
-            and (statements := deserialized.get("environment_statements", None))
-        ):
+        if result and (statements := json.loads(result[0])):
             return [
                 EnvironmentStatements.parse_obj(environment_statements)
                 for environment_statements in statements
@@ -344,9 +341,7 @@ def _environment_statements_to_df(
             {
                 "environment_name": environment_name,
                 "plan_id": plan_id,
-                "environment_statements": json.dumps(
-                    {"environment_statements": [e.to_dict() for e in environment_statements]}
-                ),
+                "environment_statements": json.dumps([e.dict() for e in environment_statements]),
             }
         ]
     )
