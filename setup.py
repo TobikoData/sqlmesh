@@ -32,6 +32,7 @@ setup(
     },
     setup_requires=["setuptools_scm"],
     install_requires=[
+        "astor",
         "click",
         "croniter",
         "duckdb!=0.10.3",
