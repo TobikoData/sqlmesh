@@ -40,6 +40,7 @@ setup(
         "hyperscript>=0.1.0",
         "importlib-metadata; python_version<'3.12'",
         "ipywidgets",
+        "ipython<9.0.0",
         "jinja2",
         "pandas",
         "pydantic>=2.0.0",
