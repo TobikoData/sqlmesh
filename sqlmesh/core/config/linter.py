@@ -19,6 +19,6 @@ class LinterConfig(BaseConfig):
 
     enabled: bool = False
 
-    rules: t.Union[t.List[str], str] = []
-    warn_rules: t.Union[t.List[str], str] = []
-    exclude_rules: t.Union[t.List[str], str] = []
+    rules: t.List[str] = []
+    warn_rules: t.List[str] = []
+    exclude_rules: t.List[str] = []
