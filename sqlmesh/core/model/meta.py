@@ -76,7 +76,7 @@ class ModelMeta(_Node):
     physical_version: t.Optional[str] = None
     gateway: t.Optional[str] = None
     optimize_query: t.Optional[bool] = None
-    validate_query: t.Optional[bool] = None
+    ignore_lints_: t.Optional[t.List[str]] = Field(default=None, exclude=True, alias="ignore_lints")
 
     _bool_validator = bool_validator
     _model_kind_validator = model_kind_validator
@@ -282,6 +282,10 @@ class ModelMeta(_Node):
 
         return refs
 
+    @field_validator("ignore_lints_", mode="before")
+    def ignore_lints_validator(cls, vs: t.Any, info: ValidationInfo) -> t.Any:
+        return cls._validate_value_or_tuple(vs, info.data)
+
     @model_validator(mode="before")
     def _pre_root_validator(cls, data: t.Any) -> t.Any:
         if not isinstance(data, dict):
@@ -456,3 +460,7 @@ class ModelMeta(_Node):
     @property
     def on_destructive_change(self) -> OnDestructiveChange:
         return getattr(self.kind, "on_destructive_change", OnDestructiveChange.ALLOW)
+
+    @property
+    def ignore_lints(self) -> t.List[str]:
+        return self.ignore_lints_ or []
