@@ -301,7 +301,7 @@ In addition to specifying a time column in the `MODEL` DDL, the model's query mu
     ```
 
     SQLMesh will create a suffixed `__dev` schema based on the name of the plan environment.
-  
+
     ```sql
     CREATE SCHEMA IF NOT EXISTS `sqlmesh-public-demo`.`demo__dev`
     ```
@@ -428,9 +428,19 @@ Depending on the target engine, models of the `INCREMENTAL_BY_TIME_RANGE` kind a
 
 ## INCREMENTAL_BY_UNIQUE_KEY
 
-Models of the `INCREMENTAL_BY_UNIQUE_KEY` kind are computed incrementally based on a key that is unique for each data row.
+Models of the `INCREMENTAL_BY_UNIQUE_KEY` kind are computed incrementally based on a key.
 
-If a key in newly loaded data is not present in the model table, the new data row is inserted. If a key in newly loaded data is already present in the model table, the existing row is updated with the new data. If a key is present in the model table but not present in the newly loaded data, its row is not modified and remains in the model table.
+They insert or update rows based on these rules:
+
+- If a key in newly loaded data is not present in the model table, the new data row is inserted.
+- If a key in newly loaded data is already present in the model table, the existing row is updated with the new data.
+- If a key is present in the model table but not present in the newly loaded data, its row is not modified and remains in the model table.
+
+!!! important "Prevent duplicated keys"
+
+    If you do not want duplicated keys in the model table, you must ensure the model query does not return rows with duplicate keys.
+
+    SQLMesh does not automatically detect or prevent duplicates.
 
 This kind is a good fit for datasets that have the following traits:
 
@@ -509,18 +519,18 @@ WHERE
     SQLMesh will validate the model's query before processing data (note the `FALSE LIMIT 0` in the `WHERE` statement and the placeholder dates).
 
     ```sql
-    SELECT `seed_model`.`id` AS `id`, `seed_model`.`item_id` AS `item_id`, `seed_model`.`event_date` AS `event_date` 
-    FROM `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__seed_model__2834544882` AS `seed_model` 
+    SELECT `seed_model`.`id` AS `id`, `seed_model`.`item_id` AS `item_id`, `seed_model`.`event_date` AS `event_date`
+    FROM `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__seed_model__2834544882` AS `seed_model`
     WHERE (`seed_model`.`event_date` <= CAST('1970-01-01' AS DATE) AND `seed_model`.`event_date` >= CAST('1970-01-01' AS DATE)) AND FALSE LIMIT 0
     ```
 
     SQLMesh will create a versioned table in the physical layer.
 
     ```sql
-    CREATE OR REPLACE TABLE `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__incremental_by_unique_key_example__1161945221` AS 
-    SELECT CAST(`id` AS INT64) AS `id`, CAST(`item_id` AS INT64) AS `item_id`, CAST(`event_date` AS DATE) AS `event_date` 
-    FROM (SELECT `seed_model`.`id` AS `id`, `seed_model`.`item_id` AS `item_id`, `seed_model`.`event_date` AS `event_date` 
-    FROM `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__seed_model__2834544882` AS `seed_model` 
+    CREATE OR REPLACE TABLE `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__incremental_by_unique_key_example__1161945221` AS
+    SELECT CAST(`id` AS INT64) AS `id`, CAST(`item_id` AS INT64) AS `item_id`, CAST(`event_date` AS DATE) AS `event_date`
+    FROM (SELECT `seed_model`.`id` AS `id`, `seed_model`.`item_id` AS `item_id`, `seed_model`.`event_date` AS `event_date`
+    FROM `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__seed_model__2834544882` AS `seed_model`
     WHERE `seed_model`.`event_date` <= CAST('2024-10-30' AS DATE) AND `seed_model`.`event_date` >= CAST('2020-01-01' AS DATE)) AS `_subquery`
     ```
 
@@ -533,7 +543,7 @@ WHERE
     SQLMesh will create a view in the virtual layer pointing to the versioned table in the physical layer.
 
     ```sql
-    CREATE OR REPLACE VIEW `sqlmesh-public-demo`.`demo__dev`.`incremental_by_unique_key_example` AS 
+    CREATE OR REPLACE VIEW `sqlmesh-public-demo`.`demo__dev`.`incremental_by_unique_key_example` AS
     SELECT * FROM `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__incremental_by_unique_key_example__1161945221`
     ```
 
@@ -691,19 +701,19 @@ GROUP BY title;
     SQLMesh will validate the model's query before processing data (note the `WHERE FALSE` and `LIMIT 0`).
 
     ```sql
-    SELECT `incremental_model`.`item_id` AS `item_id`, COUNT(DISTINCT `incremental_model`.`id`) AS `num_orders` 
-    FROM `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__incremental_model__89556012` AS `incremental_model` 
-    WHERE FALSE 
+    SELECT `incremental_model`.`item_id` AS `item_id`, COUNT(DISTINCT `incremental_model`.`id`) AS `num_orders`
+    FROM `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__incremental_model__89556012` AS `incremental_model`
+    WHERE FALSE
     GROUP BY `incremental_model`.`item_id` LIMIT 0
     ```
 
     SQLMesh will create a versioned table in the physical layer.
 
     ```sql
-    CREATE OR REPLACE TABLE `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__full_model_example__2345651858` AS 
-    SELECT CAST(`item_id` AS INT64) AS `item_id`, CAST(`num_orders` AS INT64) AS `num_orders` 
-    FROM (SELECT `incremental_model`.`item_id` AS `item_id`, COUNT(DISTINCT `incremental_model`.`id`) AS `num_orders` 
-    FROM `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__incremental_model__89556012` AS `incremental_model` 
+    CREATE OR REPLACE TABLE `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__full_model_example__2345651858` AS
+    SELECT CAST(`item_id` AS INT64) AS `item_id`, CAST(`num_orders` AS INT64) AS `num_orders`
+    FROM (SELECT `incremental_model`.`item_id` AS `item_id`, COUNT(DISTINCT `incremental_model`.`id`) AS `num_orders`
+    FROM `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__incremental_model__89556012` AS `incremental_model`
     GROUP BY `incremental_model`.`item_id`) AS `_subquery`
     ```
 
@@ -716,7 +726,7 @@ GROUP BY title;
     SQLMesh will create a view in the virtual layer pointing to the versioned table in the physical layer.
 
     ```sql
-    CREATE OR REPLACE VIEW `sqlmesh-public-demo`.`demo__dev`.`full_model_example` AS 
+    CREATE OR REPLACE VIEW `sqlmesh-public-demo`.`demo__dev`.`full_model_example` AS
     SELECT * FROM `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__full_model_example__2345651858`
     ```
 
@@ -788,7 +798,7 @@ FROM db.employees;
     SQLMesh will create a view in the virtual layer pointing to the versioned view in the physical layer.
 
     ```sql
-    CREATE OR REPLACE VIEW `sqlmesh-public-demo`.`demo__dev`.`example_view` AS 
+    CREATE OR REPLACE VIEW `sqlmesh-public-demo`.`demo__dev`.`example_view` AS
     SELECT * FROM `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__example_view__1024042926`
     ```
 
@@ -834,7 +844,7 @@ FROM db.employees;
 ## SEED
 The `SEED` model kind is used to specify [seed models](./seed_models.md) for using static CSV datasets in your SQLMesh project.
 
-**Notes:**  
+**Notes:**
 
 - Seed models are loaded only once unless the SQL model and/or seed file is updated.
 - Python models do not support the `SEED` model kind - use a SQL model instead.
@@ -873,9 +883,9 @@ The `SEED` model kind is used to specify [seed models](./seed_models.md) for usi
     SQLMesh will create a versioned table in the physical layer from the temp table.
 
     ```sql
-    CREATE OR REPLACE TABLE `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__seed_example__3038173937` AS 
-    SELECT CAST(`id` AS INT64) AS `id`, CAST(`item_id` AS INT64) AS `item_id`, CAST(`event_date` AS DATE) AS `event_date` 
-    FROM (SELECT `id`, `item_id`, `event_date` 
+    CREATE OR REPLACE TABLE `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__seed_example__3038173937` AS
+    SELECT CAST(`id` AS INT64) AS `id`, CAST(`item_id` AS INT64) AS `item_id`, CAST(`event_date` AS DATE) AS `event_date`
+    FROM (SELECT `id`, `item_id`, `event_date`
     FROM `sqlmesh-public-demo`.`sqlmesh__demo`.`__temp_demo__seed_example__3038173937_9kzbpld7`) AS `_subquery`
     ```
 
@@ -894,7 +904,7 @@ The `SEED` model kind is used to specify [seed models](./seed_models.md) for usi
     SQLMesh will create a view in the virtual layer pointing to the versioned table in the physical layer.
 
     ```sql
-    CREATE OR REPLACE VIEW `sqlmesh-public-demo`.`demo__dev`.`seed_example` AS 
+    CREATE OR REPLACE VIEW `sqlmesh-public-demo`.`demo__dev`.`seed_example` AS
     SELECT * FROM `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__seed_example__3038173937`
     ```
 
