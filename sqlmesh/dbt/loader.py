@@ -56,8 +56,12 @@ def sqlmesh_config(
     if register_comments is not None:
         target_to_sqlmesh_args["register_comments"] = register_comments
 
+    loader = kwargs.pop("loader", DbtLoader)
+    if not issubclass(loader, DbtLoader):
+        raise ConfigError("The loader must be a DbtLoader.")
+
     return Config(
-        loader=DbtLoader,
+        loader=loader,
         model_defaults=model_defaults,
         variables=variables or {},
         **{
