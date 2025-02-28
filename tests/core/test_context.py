@@ -1642,7 +1642,7 @@ def test_environment_statements_dialect(tmp_path: Path):
 
 @pytest.mark.slow
 def test_model_linting(tmp_path: pathlib.Path, sushi_context) -> None:
-    cfg = LinterConfig(enabled=True, rules="ALL")
+    cfg = LinterConfig(enabled=True, rules=["ALL"])
     ctx = Context(
         config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"), linter=cfg),
         paths=tmp_path,
@@ -1706,7 +1706,7 @@ def test_model_linting(tmp_path: pathlib.Path, sushi_context) -> None:
     create_temp_file(
         tmp_path,
         pathlib.Path(pathlib.Path("models"), "test.sql"),
-        "MODEL(name test, ignore_lints ALL); SELECT * FROM (SELECT 1 AS col);",
+        "MODEL(name test, ignore_lints ['ALL']); SELECT * FROM (SELECT 1 AS col);",
     )
 
     create_temp_file(
@@ -1718,7 +1718,7 @@ def test_model_linting(tmp_path: pathlib.Path, sushi_context) -> None:
     ctx.load()
 
     # Case: Ensure we can load & use the user-defined rules
-    sushi_context.config.linter = LinterConfig(enabled=True, rules="ALL")
+    sushi_context.config.linter = LinterConfig(enabled=True, rules=["ALL"])
     sushi_context.upsert_model(
         load_sql_based_model(
             d.parse("MODEL (name sushi.test); SELECT col FROM (SELECT * FROM tbl)"),
