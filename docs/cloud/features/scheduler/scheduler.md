@@ -215,3 +215,42 @@ We recommend setting up monitoring for the executors to ensure they run smoothly
 ### Ingress
 
 No ingress is required from executor containers to user environments. All network requests are outbound from user environments to Tobiko Cloud.
+
+### Required specs
+
+While the exact requirements for executors vary depending on the customer's specific needs and primarily depend on the Python models being run (whose requirements can vary greatly), we recommend a minimum of 2GB of RAM and 1 vCPU for each executor.
+
+### Health checks
+
+In production settings, we recommend setting up health checks as well, as these can be helpful in understanding the health of executors. When calling via the entrypoint, the health checks are as follows:
+
+```shell
+docker run -d --env-file local.env tobikodata/tcloud:latest -- executor run --check
+docker run -d --env-file local.env tobikodata/tcloud:latest -- executor plan --check
+```
+
+For environments that ignore the container's entrypoint, for example in the case of Kubernetes healthchecks, the health check is invoked as follows:
+
+```yaml
+# For the run executor
+readinessProbe:
+  exec:
+    command:
+    - "/app/pex"
+    - "executor"
+    - "run"
+    - "--check"
+```
+
+```yaml
+# For the plan executor
+readinessProbe:
+  exec:
+    command:
+    - "/app/pex"
+    - "executor"
+    - "plan"
+    - "--check"
+```
+
+Each executor type (run or plan) should have its own health check implemented to ensure proper monitoring of both components.
