@@ -901,6 +901,20 @@ def test_connection_args(tmp_path):
     assert not config.gateways["in_memory"].connection.register_comments
 
 
+def test_custom_dbt_loader():
+    from sqlmesh.core.loader import SqlMeshLoader
+    from sqlmesh.dbt.loader import DbtLoader
+
+    dbt_project_dir = "tests/fixtures/dbt/sushi_test"
+    with pytest.raises(ConfigError, match="The loader must be a DbtLoader."):
+        sqlmesh_config(dbt_project_dir, loader=SqlMeshLoader)
+
+    class CustomDbtLoader(DbtLoader):
+        pass
+
+    sqlmesh_config(dbt_project_dir, loader=CustomDbtLoader)
+
+
 @pytest.mark.cicdonly
 def test_db_type_to_relation_class():
     from dbt.adapters.bigquery.relation import BigQueryRelation
