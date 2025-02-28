@@ -963,7 +963,6 @@ def test_fingerprint_jinja_macros(model: Model):
     )
 
     fingerprint = fingerprint_from_node(model, nodes={})
-
     assert fingerprint == original_fingerprint
     model = model.copy()
 
