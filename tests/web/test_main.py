@@ -471,7 +471,11 @@ def test_get_environments(client: TestClient, project_context: Context) -> None:
 
     environment = Environment.parse_obj(response_json["environments"]["prod"])
     assert environment == Environment(
-        name="prod", snapshots=[], start_at="1970-01-01", plan_id="", suffix_target="schema"
+        name="prod",
+        snapshots=[],
+        start_at="1970-01-01",
+        plan_id="",
+        suffix_target="schema",
     )
     assert response_json["pinned_environments"] == list(project_context.config.pinned_environments)
     assert (

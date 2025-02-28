@@ -1027,6 +1027,87 @@ Example enabling name inference:
     )
     ```
 
+### Before_all and after_all Statements
+
+The `before_all` and `after_all` statements are executed at the start and end, respectively, of the `sqlmesh plan` and `sqlmesh run` commands.
+
+These statements can be defined in the configuration file under the `before_all` and `after_all` keys, either as a list of SQL statements or by using SQLMesh macros:
+
+=== "YAML"
+
+    ```yaml linenums="1"
+    before_all:
+      - CREATE TABLE IF NOT EXISTS analytics (table VARCHAR, eval_time VARCHAR)
+    after_all:
+      - "@grant_select_privileges()"
+      - "@IF(@this_env = 'prod', @grant_schema_usage())"
+    ```
+
+=== "Python"
+
+    ```python linenums="1"
+    from sqlmesh.core.config import Config
+
+    config = Config(
+        before_all = [
+            "CREATE TABLE IF NOT EXISTS analytics (table VARCHAR, eval_time VARCHAR)"
+        ],
+        after_all = [
+            "@grant_select_privileges()",
+            "@IF(@this_env = 'prod', @grant_schema_usage())"
+        ],
+    )
+    ```
+
+#### Examples
+
+These statements allow for actions to be executed before all individual model statements or after all have run, respectively. They can also simplify tasks such as granting privileges.
+
+##### Example: Granting Select Privileges
+
+For example, rather than using an `on_virtual_update` statement in each model to grant privileges on the views of the virtual layer, a single macro can be defined and used at the end of the plan:
+
+```python linenums="1"
+from sqlmesh.core.macros import macro
+from sqlmesh.core.snapshot.definition import to_view_mapping
+
+@macro()
+def grant_select_privileges(evaluator):
+    if evaluator._environment_naming_info:
+        mapping = to_view_mapping(
+            evaluator._snapshots.values(), evaluator._environment_naming_info
+        )
+        return [
+            f"GRANT SELECT ON VIEW {view_name} TO ROLE admin_role;"
+            for view_name in mapping.values()
+        ]
+```
+
+##### Example: Granting Schema Privileges
+
+Similarly, you can define a macro to grant schema usage privileges and, as demonstrated in the configuration above, using `this_env` macro conditionally execute it only in the production environment.
+
+```python linenums="1"
+from sqlmesh import macro
+
+@macro()
+def grant_schema_usage(evaluator):
+    if evaluator._environment_naming_info:
+        schemas = {
+            snapshot.qualified_view_name.schema_for_environment(
+                evaluator._environment_naming_info
+            )
+            for snapshot in evaluator._snapshots.values()
+            if snapshot.is_model
+        }
+        return [
+            f"GRANT USAGE ON SCHEMA {schema} TO admin_role;"
+            for schema in schemas
+        ]
+```
+
+As demonstrated in these examples, the `environment_naming_info` is available within the macro evaluator for macros invoked within the `before_all` and `after_all` statements. Additionally, the macro `this_env` provides access to the current environment name, which can be helpful for more advanced use cases that require fine-grained control over their behaviour.
+
 
 ### Debug mode
 

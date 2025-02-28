@@ -29,8 +29,9 @@ from sqlmesh.core.context import Context
 from sqlmesh.core.console import create_console
 from sqlmesh.core.dialect import parse, schema_
 from sqlmesh.core.engine_adapter.duckdb import DuckDBEngineAdapter
-from sqlmesh.core.environment import Environment
+from sqlmesh.core.environment import Environment, EnvironmentNamingInfo
 from sqlmesh.core.model import load_sql_based_model, model
+from sqlmesh.core.renderer import render_statements
 from sqlmesh.core.model.kind import ModelKindName
 from sqlmesh.core.plan import BuiltInPlanEvaluator, PlanBuilder
 from sqlmesh.core.state_sync.cache import CachingStateSync
@@ -44,6 +45,7 @@ from sqlmesh.utils.date import (
     yesterday_ds,
 )
 from sqlmesh.utils.errors import ConfigError, SQLMeshError
+from sqlmesh.utils.metaprogramming import Executable
 from tests.utils.test_filesystem import create_temp_file
 
 
@@ -1396,3 +1398,219 @@ def test_plan_runs_audits_on_dev_previews(sushi_context: Context, capsys, caplog
     assert "'not_null' audit error:" in log
     assert "'at_least_one_non_blocking' audit error:" in log
     assert "Target environment updated successfully" in stdout
+
+
+def test_environment_statements(tmp_path: pathlib.Path):
+    models_dir = pathlib.Path("models")
+    macros_dir = pathlib.Path("macros")
+    dialect = "postgres"
+
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect=dialect),
+        before_all=[
+            "CREATE TABLE IF NOT EXISTS analytic_stats (physical_table VARCHAR, evaluation_time VARCHAR)"
+        ],
+        after_all=[
+            "@grant_schema_usage()",
+            "@grant_select_privileges()",
+        ],
+    )
+
+    expression = """
+MODEL(
+  name db.test_after_model,
+  kind full
+);
+
+SELECT 1 AS col_a;
+    """
+
+    create_temp_file(
+        tmp_path,
+        pathlib.Path(models_dir, "db", "test_after_model.sql"),
+        expression,
+    )
+
+    create_temp_file(
+        tmp_path,
+        pathlib.Path(macros_dir, "grant_select_file.py"),
+        """
+from sqlmesh.core.macros import macro
+from sqlmesh.core.snapshot.definition import to_view_mapping
+
+@macro()
+def grant_select_privileges(evaluator):
+    if evaluator._environment_naming_info:
+        mapping = to_view_mapping(
+            evaluator._snapshots.values(), evaluator._environment_naming_info
+        )
+        return [
+            stmt
+            for stmt in [
+                f"GRANT SELECT ON VIEW {view_name} TO ROLE admin_role;"
+                for view_name in mapping.values()
+            ]
+        ]
+""",
+    )
+
+    create_temp_file(
+        tmp_path,
+        pathlib.Path(macros_dir, "grant_schema_file.py"),
+        """
+from sqlmesh import macro
+
+@macro()
+def grant_schema_usage(evaluator):
+    if evaluator._environment_naming_info:
+        schemas = {
+            snapshot.qualified_view_name.schema_for_environment(
+                evaluator._environment_naming_info
+            )
+            for snapshot in evaluator._snapshots.values()
+            if snapshot.is_model
+        }
+        return [
+            f"GRANT USAGE ON SCHEMA {schema} TO user_role;"
+            for schema in schemas
+        ]
+""",
+    )
+
+    context = Context(paths=tmp_path, config=config)
+    snapshots = {s.name: s for s in context.snapshots.values()}
+
+    environment_statements = context._environment_statements[0]
+    before_all = environment_statements.before_all
+    after_all = environment_statements.after_all
+    python_env = environment_statements.python_env
+
+    assert isinstance(python_env["to_view_mapping"], Executable)
+    assert isinstance(python_env["grant_select_privileges"], Executable)
+
+    before_all_rendered = render_statements(
+        statements=before_all, dialect=dialect, python_env=python_env
+    )
+
+    assert before_all_rendered == [
+        "CREATE TABLE IF NOT EXISTS analytic_stats (physical_table VARCHAR, evaluation_time VARCHAR)"
+    ]
+
+    after_all_rendered = render_statements(
+        statements=after_all,
+        dialect=dialect,
+        python_env=python_env,
+        snapshots=snapshots,
+        environment_naming_info=EnvironmentNamingInfo(name="prod"),
+    )
+
+    assert after_all_rendered == [
+        "GRANT USAGE ON SCHEMA db TO user_role",
+        "GRANT SELECT ON VIEW memory.db.test_after_model TO ROLE admin_role",
+    ]
+
+    after_all_rendered_dev = render_statements(
+        statements=after_all,
+        dialect=dialect,
+        python_env=python_env,
+        snapshots=snapshots,
+        environment_naming_info=EnvironmentNamingInfo(name="dev"),
+    )
+
+    assert after_all_rendered_dev == [
+        "GRANT USAGE ON SCHEMA db__dev TO user_role",
+        "GRANT SELECT ON VIEW memory.db__dev.test_after_model TO ROLE admin_role",
+    ]
+
+
+def test_plan_environment_statements(tmp_path: pathlib.Path):
+    models_dir = pathlib.Path("models")
+    macros_dir = pathlib.Path("macros")
+    dialect = "duckdb"
+
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect=dialect),
+        before_all=["@create_stats_table()"],
+        after_all=["CREATE TABLE IF NOT EXISTS after_table AS SELECT @some_var"],
+        variables={"some_var": 5},
+    )
+
+    model_file = """
+MODEL(
+  name db.test_stats_model,
+  kind full,
+);
+
+@IF(
+  @runtime_stage = 'evaluating',
+  SET VARIABLE stats_model_start = now()
+);
+
+SELECT 1 AS cola;
+
+@IF(
+  @runtime_stage = 'evaluating',
+  INSERT INTO analytic_stats (physical_table, evaluation_start, evaluation_end, evaluation_time)
+  VALUES (@resolve_template('@{schema_name}.@{table_name}'), getvariable('stats_model_start'), now(), now() - getvariable('stats_model_start'))
+);
+
+    """
+
+    create_temp_file(
+        tmp_path,
+        pathlib.Path(models_dir, "db", "test_stats_model.sql"),
+        model_file,
+    )
+
+    create_temp_file(
+        tmp_path,
+        pathlib.Path(macros_dir, "create_stats_table.py"),
+        """
+from sqlmesh.core.macros import macro
+
+@macro()
+def create_stats_table(evaluator):
+    return "CREATE TABLE IF NOT EXISTS analytic_stats (physical_table VARCHAR, evaluation_start VARCHAR,  evaluation_end VARCHAR, evaluation_time VARCHAR)"
+""",
+    )
+
+    context = Context(paths=tmp_path, config=config)
+
+    assert context._environment_statements[0].before_all == ["@create_stats_table()"]
+    assert context._environment_statements[0].after_all == [
+        "CREATE TABLE IF NOT EXISTS after_table AS SELECT @some_var"
+    ]
+    assert context._environment_statements[0].python_env["create_stats_table"]
+
+    context.plan(auto_apply=True, no_prompts=True)
+
+    model = context.get_model("db.test_stats_model")
+    snapshot = context.get_snapshot("db.test_stats_model")
+    assert snapshot and snapshot.version
+
+    assert (
+        model.pre_statements[0].sql()
+        == "@IF(@runtime_stage = 'evaluating', SET VARIABLE stats_model_start = now())"
+    )
+    assert (
+        model.post_statements[0].sql()
+        == "@IF(@runtime_stage = 'evaluating', INSERT INTO analytic_stats (physical_table, evaluation_start, evaluation_end, evaluation_time) VALUES (@resolve_template('@{schema_name}.@{table_name}'), GETVARIABLE('stats_model_start'), NOW(), NOW() - GETVARIABLE('stats_model_start')))"
+    )
+
+    stats_table = context.fetchdf("select * from memory.analytic_stats").to_dict()
+    assert stats_table.keys() == {
+        "physical_table",
+        "evaluation_start",
+        "evaluation_end",
+        "evaluation_time",
+    }
+    assert (
+        stats_table["physical_table"][0] == f"sqlmesh__db.db__test_stats_model__{snapshot.version}"
+    )
+
+    assert context.fetchdf("select * from memory.after_table").to_dict()["5"][0] == 5
+
+    state_table = context.state_reader.get_environment_statements(c.PROD)
+    assert state_table[0].before_all == context._environment_statements[0].before_all
+    assert state_table[0].after_all == context._environment_statements[0].after_all
+    assert state_table[0].python_env == context._environment_statements[0].python_env

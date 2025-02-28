@@ -81,6 +81,8 @@ class Config(BaseConfig):
         migration: The migration configuration.
         variables: A dictionary of variables that can be used in models / macros.
         disable_anonymized_analytics: Whether to disable the anonymized analytics collection.
+        before_all: SQL statements or macros to be executed at the start of the `sqlmesh plan` and `sqlmesh run` commands.
+        after_all: SQL statements or macros to be executed at the end of the `sqlmesh plan` and `sqlmesh run` commands.
     """
 
     gateways: t.Dict[str, GatewayConfig] = {"": GatewayConfig()}
@@ -120,6 +122,8 @@ class Config(BaseConfig):
     model_naming: NameInferenceConfig = NameInferenceConfig()
     variables: t.Dict[str, t.Any] = {}
     disable_anonymized_analytics: bool = False
+    before_all: t.Optional[t.List[str]] = None
+    after_all: t.Optional[t.List[str]] = None
 
     _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {
         "gateways": UpdateStrategy.NESTED_UPDATE,
@@ -135,6 +139,8 @@ class Config(BaseConfig):
         "ui": UpdateStrategy.NESTED_UPDATE,
         "loader_kwargs": UpdateStrategy.KEY_UPDATE,
         "plan": UpdateStrategy.NESTED_UPDATE,
+        "before_all": UpdateStrategy.EXTEND,
+        "after_all": UpdateStrategy.EXTEND,
     }
 
     _connection_config_validator = connection_config_validator

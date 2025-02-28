@@ -73,7 +73,7 @@ from sqlmesh.core.dialect import (
     parse_one,
 )
 from sqlmesh.core.engine_adapter import EngineAdapter
-from sqlmesh.core.environment import Environment, EnvironmentNamingInfo
+from sqlmesh.core.environment import Environment, EnvironmentNamingInfo, EnvironmentStatements
 from sqlmesh.core.loader import Loader
 from sqlmesh.core.macros import ExecutableOrMacro, macro
 from sqlmesh.core.metric import Metric, rewrite
@@ -346,6 +346,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         self._metrics: UniqueKeyDict[str, Metric] = UniqueKeyDict("metrics")
         self._jinja_macros = JinjaMacroRegistry()
         self._requirements: t.Dict[str, str] = {}
+        self._environment_statements: t.List[EnvironmentStatements] = []
         self._excluded_requirements: t.Set[str] = set()
         self._default_catalog: t.Optional[str] = None
         self._loaded: bool = False
@@ -575,6 +576,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         self._metrics.clear()
         self._requirements.clear()
         self._excluded_requirements.clear()
+        self._environment_statements = []
 
         for project in loaded_projects:
             self._jinja_macros = self._jinja_macros.merge(project.jinja_macros)
@@ -585,6 +587,8 @@ class GenericContext(BaseContext, t.Generic[C]):
             self._standalone_audits.update(project.standalone_audits)
             self._requirements.update(project.requirements)
             self._excluded_requirements.update(project.excluded_requirements)
+            if project.environment_statements:
+                self._environment_statements.append(project.environment_statements)
 
         uncached = set()
 
@@ -1992,6 +1996,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             circuit_breaker=circuit_breaker,
             selected_snapshots=select_models,
             auto_restatement_enabled=environment.lower() == c.PROD,
+            run_environment_statements=True,
         )
 
         if completion_status.is_nothing_to_do:
@@ -2163,6 +2168,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             excluded_requirements=self._excluded_requirements,
             ensure_finalized_snapshots=ensure_finalized_snapshots,
             diff_rendered=diff_rendered,
+            environment_statements=self._environment_statements,
         )
 
     def _run_janitor(self, ignore_ttl: bool = False) -> None:

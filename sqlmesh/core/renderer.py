@@ -106,6 +106,9 @@ class BaseExpressionRenderer:
         if should_cache and self._cache:
             return self._cache
 
+        if environment_naming_info := kwargs.get("environment_naming_info", None):
+            kwargs["this_env"] = getattr(environment_naming_info, "name")
+
         this_model = kwargs.pop("this_model", None)
 
         if not this_model and self._model_fqn:
@@ -193,6 +196,7 @@ class BaseExpressionRenderer:
             snapshots=snapshots,
             default_catalog=self._default_catalog,
             path=self._path,
+            environment_naming_info=environment_naming_info,
         )
 
         for definition in self._macro_definitions:
@@ -401,6 +405,38 @@ class ExpressionRenderer(BaseExpressionRenderer):
             for e in expressions
             if e and not isinstance(e, exp.Semicolon)
         ]
+
+
+def render_statements(
+    statements: t.List[str],
+    dialect: DialectType = None,
+    default_catalog: t.Optional[str] = None,
+    python_env: t.Optional[t.Dict[str, Executable]] = None,
+    **render_kwargs: t.Any,
+) -> t.List[str]:
+    rendered_statements: t.List[str] = []
+    for statement in statements:
+        for expression in parse(statement, dialect=dialect):
+            if expression:
+                rendered = ExpressionRenderer(
+                    expression,
+                    dialect,
+                    [],
+                    python_env=python_env,
+                    default_catalog=default_catalog,
+                    quote_identifiers=False,
+                    normalize_identifiers=False,
+                ).render(**render_kwargs)
+
+                if not rendered:
+                    # Warning instead of raising for cases where a statement is conditionally executed
+                    logger.warning(
+                        f"Rendering `{expression.sql(dialect=dialect)}` did not return an expression"
+                    )
+                else:
+                    rendered_statements.extend(expr.sql(dialect=dialect) for expr in rendered)
+
+    return rendered_statements
 
 
 class QueryRenderer(BaseExpressionRenderer):

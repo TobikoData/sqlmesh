@@ -18,6 +18,7 @@ from difflib import ndiff
 from functools import cached_property
 from sqlmesh.core import constants as c
 from sqlmesh.core.console import get_console
+from sqlmesh.core.macros import RuntimeStage
 from sqlmesh.core.snapshot import Snapshot, SnapshotId, SnapshotTableInfo
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
@@ -30,6 +31,9 @@ else:
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.state_sync import StateReader
+
+from sqlmesh.utils.metaprogramming import Executable  # noqa
+from sqlmesh.core.environment import EnvironmentStatements
 
 IGNORED_PACKAGES = {"sqlmesh", "sqlglot"}
 
@@ -73,6 +77,10 @@ class ContextDiff(PydanticModel):
     """Previous requirements."""
     requirements: t.Dict[str, str] = {}
     """Python dependencies."""
+    previous_environment_statements: t.List[EnvironmentStatements] = []
+    """Previous environment statements."""
+    environment_statements: t.List[EnvironmentStatements] = []
+    """Environment statements."""
     diff_rendered: bool = False
     """Whether the diff should compare raw vs rendered models"""
 
@@ -87,6 +95,7 @@ class ContextDiff(PydanticModel):
         provided_requirements: t.Optional[t.Dict[str, str]] = None,
         excluded_requirements: t.Optional[t.Set[str]] = None,
         diff_rendered: bool = False,
+        environment_statements: t.Optional[t.List[EnvironmentStatements]] = [],
     ) -> ContextDiff:
         """Create a ContextDiff object.
 
@@ -195,6 +204,8 @@ class ContextDiff(PydanticModel):
             snapshots.values(),
         )
 
+        previous_environment_statements = state_reader.get_environment_statements(environment)
+
         return ContextDiff(
             environment=environment,
             is_new_environment=is_new_environment,
@@ -213,6 +224,8 @@ class ContextDiff(PydanticModel):
             previous_requirements=env.requirements if env else {},
             requirements=requirements,
             diff_rendered=diff_rendered,
+            previous_environment_statements=previous_environment_statements,
+            environment_statements=environment_statements,
         )
 
     @classmethod
@@ -249,6 +262,7 @@ class ContextDiff(PydanticModel):
             previous_finalized_snapshots=env.previous_finalized_snapshots,
             previous_requirements=env.requirements,
             requirements=env.requirements,
+            previous_environment_statements=[],
         )
 
     @property
@@ -258,11 +272,16 @@ class ContextDiff(PydanticModel):
             or self.is_new_environment
             or self.is_unfinalized_environment
             or self.has_requirement_changes
+            or self.has_environment_statements_changes
         )
 
     @property
     def has_requirement_changes(self) -> bool:
         return self.previous_requirements != self.requirements
+
+    @property
+    def has_environment_statements_changes(self) -> bool:
+        return self.environment_statements != self.previous_environment_statements
 
     @property
     def has_snapshot_changes(self) -> bool:
@@ -309,6 +328,23 @@ class ContextDiff(PydanticModel):
                 ],
                 [f"{k}=={self.requirements[k]}" for k in sorted(self.requirements)],
             )
+        )
+
+    def environment_statements_diff(self) -> str:
+        def extract_statements(statements: t.List[EnvironmentStatements], attr: str) -> t.List[str]:
+            return [str(stmt) for statement in statements for stmt in getattr(statement, attr)]
+
+        def format_diff(runtime_stage: str) -> str:
+            previous = extract_statements(self.previous_environment_statements, runtime_stage)
+            current = extract_statements(self.environment_statements, runtime_stage)
+            return (
+                f"  {runtime_stage}:\n    " + "\n    ".join(ndiff(previous, current)) + "\n"
+                if previous or current
+                else ""
+            )
+
+        return format_diff(RuntimeStage.BEFORE_ALL.value) + format_diff(
+            RuntimeStage.AFTER_ALL.value
         )
 
     @property

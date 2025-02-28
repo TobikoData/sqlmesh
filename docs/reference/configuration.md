@@ -56,6 +56,14 @@ Global variable values may be any of the data types in the table below or lists 
 |-------------|-------------------------------------|:------------------------------------------------------------:|:--------:|
 | `variables` | Mapping of variable names to values | dict[string, int \| float \| bool \| string \| list \| dict] | N        |
 
+### Before_all / after_all
+
+The `before_all` and `after_all` keys can be used to specify lists of SQL statements and/or SQLMesh macros that are executed at the start and end, respectively, of the `sqlmesh plan` and `sqlmesh run` commands. For more information and examples, see [the configuration guide](../guides/configuration.md#before_all-and-after_all-statements).
+
+| Option       | Description                                                                          | Type         | Required |
+|--------------|--------------------------------------------------------------------------------------|:------------:|:--------:|
+| `before_all` | List of SQL statements to be executed at the start of the `plan` and `run` commands. | list[string] |    N     |
+| `after_all`  | List of SQL statements to be executed at the end of the `plan` and `run` commands.   | list[string] |    N     |
 
 ## Plan
 

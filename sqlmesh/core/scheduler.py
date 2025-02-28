@@ -5,7 +5,8 @@ import typing as t
 from sqlglot import exp
 from sqlmesh.core import constants as c
 from sqlmesh.core.console import Console, get_console
-from sqlmesh.core.environment import EnvironmentNamingInfo
+from sqlmesh.core.environment import EnvironmentNamingInfo, execute_environment_statements
+from sqlmesh.core.macros import RuntimeStage
 from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.notification_target import (
     NotificationEvent,
@@ -246,6 +247,7 @@ class Scheduler:
         circuit_breaker: t.Optional[t.Callable[[], bool]] = None,
         deployability_index: t.Optional[DeployabilityIndex] = None,
         auto_restatement_enabled: bool = False,
+        run_environment_statements: bool = False,
     ) -> CompletionStatus:
         """Concurrently runs all snapshots in topological order.
 
@@ -323,6 +325,7 @@ class Scheduler:
             circuit_breaker=circuit_breaker,
             start=start,
             end=end,
+            run_environment_statements=run_environment_statements,
         )
 
         self.console.stop_evaluation_progress(success=not errors)
@@ -408,6 +411,7 @@ class Scheduler:
         circuit_breaker: t.Optional[t.Callable[[], bool]] = None,
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
+        run_environment_statements: bool = False,
     ) -> t.Tuple[t.List[NodeExecutionFailedError[SchedulingUnit]], t.List[SchedulingUnit]]:
         """Runs precomputed batches of missing intervals.
 
@@ -437,6 +441,22 @@ class Scheduler:
 
         snapshots_by_name = {snapshot.name: snapshot for snapshot in self.snapshots.values()}
 
+        if run_environment_statements:
+            environment_statements = self.state_sync.get_environment_statements(
+                environment_naming_info.name
+            )
+            execute_environment_statements(
+                adapter=self.snapshot_evaluator.adapter,
+                environment_statements=environment_statements,
+                runtime_stage=RuntimeStage.BEFORE_ALL,
+                environment_naming_info=environment_naming_info,
+                default_catalog=self.default_catalog,
+                snapshots=snapshots_by_name,
+                start=start,
+                end=end,
+                execution_time=execution_time,
+            )
+
         def evaluate_node(node: SchedulingUnit) -> None:
             if circuit_breaker and circuit_breaker():
                 raise CircuitBreakerError()
@@ -454,7 +474,14 @@ class Scheduler:
             try:
                 assert execution_time  # mypy
                 assert deployability_index  # mypy
-                self.evaluate(snapshot, start, end, execution_time, deployability_index, batch_idx)
+                self.evaluate(
+                    snapshot=snapshot,
+                    start=start,
+                    end=end,
+                    execution_time=execution_time,
+                    deployability_index=deployability_index,
+                    batch_index=batch_idx,
+                )
                 evaluation_duration_ms = now_timestamp() - execution_start_ts
             finally:
                 self.console.update_snapshot_evaluation_progress(
@@ -470,6 +497,19 @@ class Scheduler:
                     raise_on_error=False,
                 )
         finally:
+            if run_environment_statements:
+                execute_environment_statements(
+                    adapter=self.snapshot_evaluator.adapter,
+                    environment_statements=environment_statements,
+                    runtime_stage=RuntimeStage.AFTER_ALL,
+                    environment_naming_info=environment_naming_info,
+                    default_catalog=self.default_catalog,
+                    snapshots=snapshots_by_name,
+                    start=start,
+                    end=end,
+                    execution_time=execution_time,
+                )
+
             self.state_sync.recycle()
 
     def _dag(self, batches: SnapshotToIntervals) -> DAG[SchedulingUnit]:

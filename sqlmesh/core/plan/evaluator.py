@@ -20,7 +20,8 @@ import typing as t
 from sqlmesh.core import analytics
 from sqlmesh.core import constants as c
 from sqlmesh.core.console import Console, get_console
-from sqlmesh.core.environment import EnvironmentNamingInfo
+from sqlmesh.core.environment import EnvironmentNamingInfo, execute_environment_statements
+from sqlmesh.core.macros import RuntimeStage
 from sqlmesh.core.notification_target import (
     NotificationTarget,
 )
@@ -120,6 +121,18 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                 after_promote_snapshots = all_names - before_promote_snapshots
                 deployability_index_for_evaluation = DeployabilityIndex.all_deployable()
 
+            execute_environment_statements(
+                adapter=self.snapshot_evaluator.adapter,
+                environment_statements=plan.environment_statements or [],
+                runtime_stage=RuntimeStage.BEFORE_ALL,
+                environment_naming_info=plan.environment.naming_info,
+                default_catalog=self.default_catalog,
+                snapshots=snapshots_by_name,
+                start=plan.start,
+                end=plan.end,
+                execution_time=plan.execution_time,
+            )
+
             self._push(plan, snapshots, deployability_index_for_creation)
             update_intervals_for_new_snapshots(plan.new_snapshots, self.state_sync)
             self._restate(plan, snapshots_by_name)
@@ -144,6 +157,19 @@ class BuiltInPlanEvaluator(PlanEvaluator):
 
             if not plan.requires_backfill:
                 self.console.log_success("Virtual Update executed successfully")
+
+            execute_environment_statements(
+                adapter=self.snapshot_evaluator.adapter,
+                environment_statements=plan.environment_statements or [],
+                runtime_stage=RuntimeStage.AFTER_ALL,
+                environment_naming_info=plan.environment.naming_info,
+                default_catalog=self.default_catalog,
+                snapshots=snapshots_by_name,
+                start=plan.start,
+                end=plan.end,
+                execution_time=plan.execution_time,
+            )
+
         except Exception as e:
             analytics.collector.on_plan_apply_end(plan_id=plan.plan_id, error=e)
             raise
@@ -286,6 +312,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         promotion_result = self.state_sync.promote(
             plan.environment,
             no_gaps_snapshot_names=no_gaps_snapshot_names if plan.no_gaps else set(),
+            environment_statements=plan.environment_statements,
         )
 
         if not plan.is_dev:
