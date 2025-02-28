@@ -26,7 +26,10 @@ def select_rules(all_rules: RuleSet, rule_names: t.Union[t.List[str], str]) -> R
 
 
 class Linter:
-    def __init__(self, all_rules: RuleSet, rules: RuleSet, warn_rules: RuleSet) -> None:
+    def __init__(
+        self, enabled: bool, all_rules: RuleSet, rules: RuleSet, warn_rules: RuleSet
+    ) -> None:
+        self.enabled = enabled
         self.all_rules = all_rules
         self.rules = rules
         self.warn_rules = warn_rules
@@ -45,9 +48,12 @@ class Linter:
                 f"Rules cannot simultaneously warn and raise an error: [{overlapping_rules}]"
             )
 
-        return Linter(all_rules, rules, warn_rules)
+        return Linter(config.enabled, all_rules, rules, warn_rules)
 
     def lint_model(self, model: Model) -> None:
+        if not self.enabled:
+            return
+
         ignored_rules = select_rules(self.all_rules, model.ignore_lints)
 
         rules = self.rules.difference(ignored_rules)

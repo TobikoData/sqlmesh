@@ -353,6 +353,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         self._excluded_requirements: t.Set[str] = set()
         self._default_catalog: t.Optional[str] = None
         self._all_rules: RuleSet = BUILTIN_RULES
+        self._linter: t.Optional[Linter] = None
         self._loaded: bool = False
 
         self.path, self.config = t.cast(t.Tuple[Path, C], next(iter(self.configs.items())))
@@ -506,7 +507,8 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         model.validate_definition()
 
-        if self.config.linter.enabled:
+        # Linter may be `None` if the context is not loaded yet
+        if self._linter:
             self._linter.lint_model(model)
 
         return model
@@ -647,8 +649,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                 # The model definition can be validated correctly only after the schema is set.
                 model.validate_definition()
 
-                if self.config.linter.enabled:
-                    self._linter.lint_model(model)
+                self._linter.lint_model(model)
 
         duplicates = set(self._models) & set(self._standalone_audits)
         if duplicates:
