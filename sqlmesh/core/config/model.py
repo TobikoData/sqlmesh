@@ -38,7 +38,6 @@ class ModelDefaultsConfig(BaseConfig):
         session_properties: A key-value mapping of properties specific to the target engine that are applied to the engine session.
         audits: The audits to be applied globally to all models in the project.
         optimize_query: Whether the SQL models should be optimized.
-        validate_query: Whether the SQL models should be validated at compile time.
         allow_partials: Whether the models can process partial (incomplete) data intervals.
         enabled: Whether the models are enabled.
         interval_unit: The temporal granularity of the models data intervals. By default computed from cron.

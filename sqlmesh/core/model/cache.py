@@ -133,7 +133,7 @@ class OptimizedQueryCache:
     def _put(self, name: str, model: SqlModel) -> None:
         optimized_query = model.render_query()
 
-        if self.linter:
+        if self.linter and self.linter.enabled:
             if any(rule in self.linter.rules for rule in model._render_violations):
                 # Do not cache the optimized query if the renderer came across lint errors
                 return None
