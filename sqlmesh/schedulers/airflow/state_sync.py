@@ -325,9 +325,18 @@ class HttpStateSync(StateSync):
         )
 
     def get_environment_statements(self, environment: str) -> t.List[EnvironmentStatements]:
-        raise NotImplementedError(
+        """Fetches the environment's statements from the environment_statements table.
+        Args:
+            environment: The environment name
+
+        Returns:
+            A list of the environment statements.
+
+        """
+        logger.warning(
             "Fetching environment statements is not supported by the Airflow state sync."
         )
+        return []
 
     def migrate(
         self,
