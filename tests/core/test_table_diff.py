@@ -10,7 +10,7 @@ from sqlmesh.core.table_diff import TableDiff
 
 
 @pytest.mark.slow
-def test_data_diff(sushi_context_fixed_date):
+def test_data_diff(sushi_context_fixed_date, capsys, caplog):
     model = sushi_context_fixed_date.models['"memory"."sushi"."customer_revenue_by_day"']
 
     model.query.select(exp.cast("'1'", "VARCHAR").as_("modified_col"), "1 AS y", copy=False)
@@ -73,6 +73,11 @@ def test_data_diff(sushi_context_fixed_date):
         on=exp.condition("s.customer_id = t.customer_id AND s.event_date = t.event_date"),
         model_or_snapshot="sushi.customer_revenue_by_day",
     )
+
+    # verify queries were actually logged to the log file, this helps immensely with debugging
+    console_output = capsys.readouterr()
+    assert "__sqlmesh_join_key" not in console_output  # they should not go to the console
+    assert "__sqlmesh_join_key" in caplog.text
 
     schema_diff = diff.schema_diff()
     assert schema_diff.added == [("z", exp.DataType.build("int"))]
@@ -272,6 +277,12 @@ def test_generated_sql(sushi_context_fixed_date: Context, mocker: MockerFixture)
     sample_query_sql = 'SELECT "s_exists", "t_exists", "row_joined", "row_full_match", "s__key", "s__value", "s____sqlmesh_join_key", "t__key", "t__value", "t____sqlmesh_join_key" FROM "memory"."sqlmesh_temp_test"."__temp_diff_abcdefgh" WHERE "key_matches" = 0 OR "value_matches" = 0 ORDER BY "s__key" NULLS FIRST, "t__key" NULLS FIRST LIMIT 20'
     drop_sql = 'DROP TABLE IF EXISTS "memory"."sqlmesh_temp_test"."__temp_diff_abcdefgh"'
 
+    # make with_log_level() return the current instance of engine_adapter so we can still spy on _execute
+    mocker.patch.object(
+        engine_adapter, "with_log_level", new_callable=lambda: lambda _: engine_adapter
+    )
+    assert engine_adapter.with_log_level(1) == engine_adapter
+
     spy_execute = mocker.spy(engine_adapter, "_execute")
     mocker.patch("sqlmesh.core.engine_adapter.base.random_id", return_value="abcdefgh")
 
@@ -302,3 +313,53 @@ def test_generated_sql(sushi_context_fixed_date: Context, mocker: MockerFixture)
 
     query_sql_where = 'CREATE TABLE IF NOT EXISTS "memory"."sqlmesh_temp"."__temp_diff_abcdefgh" AS WITH "__source" AS (SELECT "key", "value", "key" AS "__sqlmesh_join_key" FROM "table_diff_source" WHERE "key" = 2), "__target" AS (SELECT "key", "value", "key" AS "__sqlmesh_join_key" FROM "table_diff_target" WHERE "key" = 2), "__stats" AS (SELECT "s"."key" AS "s__key", "s"."value" AS "s__value", "s"."__sqlmesh_join_key" AS "s____sqlmesh_join_key", "t"."key" AS "t__key", "t"."value" AS "t__value", "t"."__sqlmesh_join_key" AS "t____sqlmesh_join_key", CASE WHEN NOT "s"."key" IS NULL THEN 1 ELSE 0 END AS "s_exists", CASE WHEN NOT "t"."key" IS NULL THEN 1 ELSE 0 END AS "t_exists", CASE WHEN "s"."__sqlmesh_join_key" = "t"."__sqlmesh_join_key" AND (NOT "s"."key" IS NULL AND NOT "t"."key" IS NULL) THEN 1 ELSE 0 END AS "row_joined", CASE WHEN "s"."key" IS NULL AND "t"."key" IS NULL THEN 1 ELSE 0 END AS "null_grain", CASE WHEN "s"."key" = "t"."key" THEN 1 WHEN ("s"."key" IS NULL) AND ("t"."key" IS NULL) THEN 1 WHEN ("s"."key" IS NULL) OR ("t"."key" IS NULL) THEN 0 ELSE 0 END AS "key_matches", CASE WHEN ROUND("s"."value", 3) = ROUND("t"."value", 3) THEN 1 WHEN ("s"."value" IS NULL) AND ("t"."value" IS NULL) THEN 1 WHEN ("s"."value" IS NULL) OR ("t"."value" IS NULL) THEN 0 ELSE 0 END AS "value_matches" FROM "__source" AS "s" FULL JOIN "__target" AS "t" ON "s"."__sqlmesh_join_key" = "t"."__sqlmesh_join_key") SELECT *, CASE WHEN "key_matches" = 1 AND "value_matches" = 1 THEN 1 ELSE 0 END AS "row_full_match" FROM "__stats"'
     spy_execute.assert_any_call(query_sql_where)
+
+
+@pytest.mark.slow
+def test_tables_and_grain_inferred_from_model(sushi_context_fixed_date: Context):
+    (sushi_context_fixed_date.path / "models" / "waiter_revenue_by_day.sql").write_text("""
+    MODEL (
+        name sushi.waiter_revenue_by_day,
+        kind incremental_by_time_range (
+            time_column event_date,
+            batch_size 10,
+        ),
+        owner jen,
+        cron '@daily',
+        audits (
+            NUMBER_OF_ROWS(threshold := 0)
+        ),
+        grain (waiter_id, event_date)
+    );
+
+    SELECT
+        o.waiter_id::INT + 1 AS waiter_id, /* Waiter id */
+        SUM(oi.quantity * i.price)::DOUBLE AS revenue, /* Revenue from orders taken by this waiter */
+        o.event_date::DATE AS event_date /* Date */
+    FROM sushi.orders AS o
+    LEFT JOIN sushi.order_items AS oi
+        ON o.id = oi.order_id AND o.event_date = oi.event_date
+    LEFT JOIN sushi.items AS i
+        ON oi.item_id = i.id AND oi.event_date = i.event_date
+    WHERE
+        o.event_date BETWEEN @start_date AND @end_date
+    GROUP BY
+        o.waiter_id,
+        o.event_date
+""")
+    # this creates a dev preview of "sushi.waiter_revenue_by_day"
+    sushi_context_fixed_date.refresh()
+    sushi_context_fixed_date.auto_categorize_changes = CategorizerConfig(
+        sql=AutoCategorizationMode.FULL
+    )
+    sushi_context_fixed_date.plan(environment="unit_test", auto_apply=True, include_unmodified=True)
+
+    table_diff = sushi_context_fixed_date.table_diff(
+        source="unit_test", target="prod", model_or_snapshot="sushi.waiter_revenue_by_day"
+    )
+
+    assert table_diff.source == "memory.sushi__unit_test.waiter_revenue_by_day"
+    assert table_diff.target == "memory.sushi.waiter_revenue_by_day"
+
+    _, _, col_names = table_diff.key_columns
+    assert col_names == ["waiter_id", "event_date"]
