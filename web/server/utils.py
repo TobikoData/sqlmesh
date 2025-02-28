@@ -51,8 +51,8 @@ async def run_in_executor(func: t.Callable[..., R], *args: t.Any) -> R:
     return await loop.run_in_executor(None, func_wrapper)
 
 
-async def validate_path(path: str, settings: Settings = Depends(get_settings)) -> str:
-    context = await get_context(settings)
+def validate_path(path: str, settings: Settings = Depends(get_settings)) -> str:
+    context = get_context(settings)
     resolved_path = settings.project_path.resolve()
     full_path = (resolved_path / path).resolve()
     try:

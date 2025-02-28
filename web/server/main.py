@@ -35,7 +35,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator:
 
     app.state.dispatch_task.cancel()
     app.state.watch_task.cancel()
-    context = await get_context_or_raise(settings=get_settings())
+    context = get_context_or_raise(settings=get_settings())
     context.close()
 
 

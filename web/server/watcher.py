@@ -21,7 +21,7 @@ from sqlglot.helper import ensure_list
 
 async def watch_project() -> None:
     settings = get_settings()
-    context = await get_context(settings)
+    context = get_context(settings)
     paths = [
         (settings.project_path / c.AUDITS).resolve(),
         (settings.project_path / c.MACROS).resolve(),
@@ -57,10 +57,10 @@ async def watch_project() -> None:
                         )
                     )
                 elif change == Change.added:
-                    directory = await _get_directory(path.parent, settings)
+                    directory = _get_directory(path.parent, settings)
                     directories[directory.path] = directory
                 elif path.is_dir() and change == Change.modified:
-                    directory = await _get_directory(path, settings)
+                    directory = _get_directory(path, settings)
                     directories[directory.path] = directory
                 elif path.is_file() and change == Change.modified:
                     changes.append(

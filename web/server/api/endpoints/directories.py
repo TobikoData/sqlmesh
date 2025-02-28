@@ -21,7 +21,7 @@ async def write_directory(
 ) -> models.Directory:
     """Create or rename a directory."""
     if new_path:
-        new_path = await validate_path(new_path, settings)
+        new_path = validate_path(new_path, settings)
         replace_file(settings.project_path / path, settings.project_path / new_path)
         return models.Directory(name=os.path.basename(new_path), path=new_path)
 
