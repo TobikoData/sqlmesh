@@ -295,7 +295,7 @@ def test_model_qualification(tmp_path: Path):
         )
 
         ctx = Context(
-            config=Config(linter=LinterConfig(enabled=True, warn_rules="ALL")), paths=tmp_path
+            config=Config(linter=LinterConfig(enabled=True, warn_rules=["ALL"])), paths=tmp_path
         )
         ctx.upsert_model(load_sql_based_model(expressions))
 
@@ -2726,7 +2726,7 @@ def test_update_schema(tmp_path: Path):
     assert model.mapping_schema == {'"table_a"': {"a": "INT"}}
 
     ctx = Context(
-        config=Config(linter=LinterConfig(enabled=True, warn_rules="ALL")), paths=tmp_path
+        config=Config(linter=LinterConfig(enabled=True, warn_rules=["ALL"])), paths=tmp_path
     )
     with patch.object(get_console(), "log_warning") as mock_logger:
         ctx.upsert_model(model)
@@ -2762,7 +2762,7 @@ def test_missing_schema_warnings(tmp_path: Path):
     console = get_console()
 
     ctx = Context(
-        config=Config(linter=LinterConfig(enabled=True, warn_rules="ALL")), paths=tmp_path
+        config=Config(linter=LinterConfig(enabled=True, warn_rules=["ALL"])), paths=tmp_path
     )
 
     # star, no schema, no deps

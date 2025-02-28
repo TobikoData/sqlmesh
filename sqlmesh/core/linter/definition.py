@@ -11,8 +11,8 @@ from sqlmesh.core.console import get_console
 from sqlmesh.core.linter.rule import RuleSet
 
 
-def select_rules(all_rules: RuleSet, rule_names: t.Union[t.List[str], str]) -> RuleSet:
-    if rule_names == "ALL":
+def select_rules(all_rules: RuleSet, rule_names: t.List[str]) -> RuleSet:
+    if "all" in {name.lower() for name in rule_names}:
         rule_names = list(all_rules)
 
     rules = set()
