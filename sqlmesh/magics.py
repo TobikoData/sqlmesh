@@ -8,7 +8,6 @@ from collections import defaultdict
 from copy import deepcopy
 
 from hyperscript import h
-from IPython.core.display import display
 from IPython.core.magic import (
     Magics,
     cell_magic,
@@ -17,6 +16,7 @@ from IPython.core.magic import (
     magics_class,
 )
 from IPython.core.magic_arguments import argument, magic_arguments, parse_argstring
+from IPython.display import display
 from IPython.utils.process import arg_split
 from rich.jupyter import JupyterRenderable
 

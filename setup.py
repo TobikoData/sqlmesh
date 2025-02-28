@@ -39,6 +39,7 @@ setup(
         "dateparser",
         "hyperscript>=0.1.0",
         "importlib-metadata; python_version<'3.12'",
+        "ipython>=7.14",
         "ipywidgets",
         "jinja2",
         "pandas",
