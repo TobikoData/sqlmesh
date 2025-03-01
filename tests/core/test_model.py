@@ -7943,3 +7943,21 @@ def test_seed_dont_coerce_na_into_null(tmp_path):
     assert model.seed is not None
     assert len(model.seed.content) > 0
     assert next(model.render(context=None)).to_dict() == {"code": {0: "NA"}}
+
+
+def test_missing_column_data_in_columns_key():
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.seed,
+            kind SEED (
+              path '../seeds/waiter_names.csv',
+            ),
+            columns (
+              culprit, other_column double,
+            )
+        );
+    """
+    )
+    with pytest.raises(ConfigError, match="Missing data type for column 'culprit'."):
+        load_sql_based_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))

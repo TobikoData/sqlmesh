@@ -205,7 +205,10 @@ class ModelMeta(_Node):
 
         if isinstance(v, exp.Schema):
             for column in v.expressions:
-                expr = column.args["kind"]
+                expr = column.args.get("kind")
+                if not isinstance(expr, exp.DataType):
+                    raise ConfigError(f"Missing data type for column '{column.name}'.")
+
                 expr.meta["dialect"] = dialect
                 columns_to_types[normalize_identifiers(column, dialect=dialect).name] = expr
 
