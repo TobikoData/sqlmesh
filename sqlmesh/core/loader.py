@@ -641,8 +641,7 @@ class SqlMeshLoader(Loader):
         return None
 
     def _load_linting_rules(self) -> RuleSet:
-        user_rules: t.List[type[Rule]] = []
-        rule_names: t.Dict[str, Path] = {}
+        user_rules: UniqueKeyDict[str, type[Rule]] = UniqueKeyDict("rules")
 
         for path in self._glob_paths(
             self.config_path / c.LINTER,
@@ -654,16 +653,9 @@ class SqlMeshLoader(Loader):
                 module = import_python_file(path, self.config_path)
                 module_rules = subclasses(module.__name__, Rule, (Rule,))
                 for user_rule in module_rules:
-                    rule_name = user_rule.__name__.lower()
-                    if rule_name in rule_names:
-                        raise ConfigError(
-                            f"Rule {rule_name} is redefined in '{path}', previous definition is in {rule_names[rule_name]}."
-                        )
-                    rule_names[rule_name] = path
+                    user_rules[user_rule.name] = user_rule
 
-                user_rules.extend(module_rules)
-
-        return RuleSet(user_rules)
+        return RuleSet(user_rules.values())
 
     class _Cache:
         def __init__(self, loader: SqlMeshLoader, config_path: Path):

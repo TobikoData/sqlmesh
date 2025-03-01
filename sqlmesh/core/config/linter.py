@@ -2,7 +2,15 @@ from __future__ import annotations
 
 import typing as t
 
+from sqlglot import exp
+from sqlglot.helper import ensure_collection
+
 from sqlmesh.core.config.base import BaseConfig
+
+from sqlmesh.utils.pydantic import (
+    ValidationInfo,
+    field_validator,
+)
 
 
 class LinterConfig(BaseConfig):
@@ -19,6 +27,21 @@ class LinterConfig(BaseConfig):
 
     enabled: bool = False
 
-    rules: t.List[str] = []
-    warn_rules: t.List[str] = []
-    exclude_rules: t.List[str] = []
+    rules: t.Set[str] = set()
+    warn_rules: t.Set[str] = set()
+    exclude_rules: t.Set[str] = set()
+
+    @classmethod
+    def _validate_rules(cls, v: t.Any, data: t.Dict[str, t.Any]) -> t.Set[str]:
+        if isinstance(v, exp.Paren):
+            v = v.unnest().name
+        elif isinstance(v, (exp.Tuple, exp.Array)):
+            v = [e.name for e in v.expressions]
+        elif isinstance(v, exp.Expression):
+            v = v.name
+
+        return {name.lower() for name in ensure_collection(v)}
+
+    @field_validator("rules", "warn_rules", "exclude_rules", mode="before")
+    def rules_validator(cls, vs: t.Any, info: ValidationInfo) -> t.Set[str]:
+        return cls._validate_rules(vs, info.data)

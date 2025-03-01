@@ -81,6 +81,10 @@ def snapshots(make_snapshot: t.Callable) -> t.List[Snapshot]:
     ]
 
 
+def compare_snapshot_intervals(x: SnapshotIntervals) -> str:
+    return x.identifier or ""
+
+
 def promote_snapshots(
     state_sync: EngineAdapterStateSync,
     snapshots: t.List[Snapshot],
@@ -1509,9 +1513,6 @@ def test_delete_expired_snapshots_cleanup_intervals_shared_version(
         (to_timestamp("2023-01-01"), to_timestamp("2023-01-04")),
     ]
 
-    def compare_snapshot_intervals(x: SnapshotIntervals):
-        return x.identifier or ""
-
     # Check all intervals
     assert sorted(
         state_sync.interval_state.get_snapshot_intervals([snapshot, new_snapshot]),
@@ -1630,9 +1631,6 @@ def test_delete_expired_snapshots_cleanup_intervals_shared_dev_version(
     assert stored_snapshot.dev_intervals == [
         (to_timestamp("2023-01-04"), to_timestamp("2023-01-10")),
     ]
-
-    def compare_snapshot_intervals(x: SnapshotIntervals):
-        return x.identifier or ""
 
     # Check all intervals
     assert sorted(
