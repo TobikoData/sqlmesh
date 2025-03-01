@@ -10,6 +10,7 @@ from sqlglot.helper import ensure_collection, ensure_list
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
 from sqlmesh.core import dialect as d
+from sqlmesh.core.config.linter import LinterConfig
 from sqlmesh.core.dialect import normalize_model_name, extract_func_call
 from sqlmesh.core.model.common import (
     bool_validator,
@@ -76,7 +77,7 @@ class ModelMeta(_Node):
     physical_version: t.Optional[str] = None
     gateway: t.Optional[str] = None
     optimize_query: t.Optional[bool] = None
-    ignore_lints_: t.Optional[t.List[str]] = Field(default=None, exclude=True, alias="ignore_lints")
+    ignore_lints_: t.Optional[t.Set[str]] = Field(default=None, exclude=True, alias="ignore_lints")
 
     _bool_validator = bool_validator
     _model_kind_validator = model_kind_validator
@@ -287,7 +288,7 @@ class ModelMeta(_Node):
 
     @field_validator("ignore_lints_", mode="before")
     def ignore_lints_validator(cls, vs: t.Any, info: ValidationInfo) -> t.Any:
-        return cls._validate_value_or_tuple(vs, info.data)
+        return LinterConfig._validate_rules(vs, info.data)
 
     @model_validator(mode="before")
     def _pre_root_validator(cls, data: t.Any) -> t.Any:
@@ -465,5 +466,5 @@ class ModelMeta(_Node):
         return getattr(self.kind, "on_destructive_change", OnDestructiveChange.ALLOW)
 
     @property
-    def ignore_lints(self) -> t.List[str]:
-        return self.ignore_lints_ or []
+    def ignore_lints(self) -> t.Set[str]:
+        return self.ignore_lints_ or set()

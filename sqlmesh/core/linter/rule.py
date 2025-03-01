@@ -8,14 +8,26 @@ from functools import reduce
 
 from sqlmesh.core.model import Model
 
+from typing import Type
+
 import typing as t
 
 
-class Rule(abc.ABC):
+class _Rule(type):
+    def __new__(cls: Type[_Rule], clsname: str, bases: t.Tuple, attrs: t.Dict) -> _Rule:
+        attrs["name"] = clsname.lower()
+        return super().__new__(cls, clsname, bases, attrs)
+
+
+class _RuleMeta(_Rule, abc.ABCMeta):
+    # This is required due to metaclass conflict with ABC
+    pass
+
+
+class Rule(abc.ABC, metaclass=_RuleMeta):
     """The base class for a rule."""
 
-    def __init__(self) -> None:
-        self._name = self.__class__.__name__.lower()
+    name = "rule"
 
     @abc.abstractmethod
     def check_model(self, model: Model) -> t.Optional[RuleViolation]:
@@ -29,11 +41,6 @@ class Rule(abc.ABC):
     def violation(self, violation_msg: t.Optional[str] = None) -> RuleViolation:
         """Create a RuleViolation instance for this rule"""
         return RuleViolation(rule=self, violation_msg=violation_msg or self.summary)
-
-    @property
-    def name(self) -> str:
-        """The name of this rule."""
-        return self._name
 
     def __repr__(self) -> str:
         return self.name
@@ -50,7 +57,7 @@ class RuleViolation:
 
 class RuleSet(Mapping[str, type[Rule]]):
     def __init__(self, rules: Iterable[type[Rule]] = ()) -> None:
-        self._underlying = {rule.__name__.lower(): rule for rule in rules}
+        self._underlying = {rule.name: rule for rule in rules}
 
     def check_model(self, model: Model) -> t.List[RuleViolation]:
         violations = []
@@ -70,7 +77,7 @@ class RuleSet(Mapping[str, type[Rule]]):
         return len(self._underlying)
 
     def __getitem__(self, rule: str | type[Rule]) -> type[Rule]:
-        key = rule if isinstance(rule, str) else rule.__name__.lower()
+        key = rule if isinstance(rule, str) else rule.name
         return self._underlying[key]
 
     def __op(
