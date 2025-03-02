@@ -1518,25 +1518,29 @@ class GenericContext(BaseContext, t.Generic[C]):
             if not target_env:
                 raise SQLMeshError(f"Could not find environment '{target}')")
 
+            # Compare the virtual layer instead of the physical layer because the virtual layer is guaranteed to point
+            # to the correct/active snapshot for the model in the specified environment, taking into account things like dev previews
             source = next(
                 snapshot for snapshot in source_env.snapshots if snapshot.name == model.fqn
-            ).table_name()
+            ).qualified_view_name.for_environment(source_env.naming_info, adapter.dialect)
+
             target = next(
                 snapshot for snapshot in target_env.snapshots if snapshot.name == model.fqn
-            ).table_name()
+            ).qualified_view_name.for_environment(target_env.naming_info, adapter.dialect)
+
             source_alias = source_env.name
             target_alias = target_env.name
 
             if not on:
-                for ref in model.all_references:
-                    if ref.unique:
-                        expr = ref.expression
-
-                        if isinstance(expr, exp.Tuple):
-                            on = [key.this.sql() for key in expr.expressions]
-                        else:
-                            # Handle a single Column or Paren expression
-                            on = [expr.this.sql()]
+                on = []
+                for expr in [ref.expression for ref in model.all_references if ref.unique]:
+                    if isinstance(expr, exp.Tuple):
+                        on.extend(
+                            [key.this.sql(dialect=adapter.dialect) for key in expr.expressions]
+                        )
+                    else:
+                        # Handle a single Column or Paren expression
+                        on.append(expr.this.sql(dialect=adapter.dialect))
 
         if not on:
             raise SQLMeshError(
@@ -1544,7 +1548,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             )
 
         table_diff = TableDiff(
-            adapter=adapter,
+            adapter=adapter.with_log_level(logger.getEffectiveLevel()),
             source=source,
             target=target,
             on=on,
@@ -1558,6 +1562,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             decimals=decimals,
         )
         if show:
+            self.console.show_table_diff_summary(table_diff)
             self.console.show_schema_diff(table_diff.schema_diff())
             self.console.show_row_diff(
                 table_diff.row_diff(temp_schema=temp_schema, skip_grain_check=skip_grain_check),

@@ -49,7 +49,7 @@ if t.TYPE_CHECKING:
     from sqlglot.dialects.dialect import DialectType
     from sqlmesh.core.context_diff import ContextDiff
     from sqlmesh.core.plan import Plan, EvaluatablePlan, PlanBuilder, SnapshotIntervals
-    from sqlmesh.core.table_diff import RowDiff, SchemaDiff
+    from sqlmesh.core.table_diff import TableDiff, RowDiff, SchemaDiff
 
     LayoutWidget = t.TypeVar("LayoutWidget", bound=t.Union[widgets.VBox, widgets.HBox])
 
@@ -291,6 +291,10 @@ class Console(abc.ABC):
         """Stop loading for the given id."""
 
     @abc.abstractmethod
+    def show_table_diff_summary(self, table_diff: TableDiff) -> None:
+        """Display information about the tables being diffed and how they are being joined"""
+
+    @abc.abstractmethod
     def show_schema_diff(self, schema_diff: SchemaDiff) -> None:
         """Show table schema diff."""
 
@@ -457,6 +461,9 @@ class NoopConsole(Console):
         return uuid.uuid4()
 
     def loading_stop(self, id: uuid.UUID) -> None:
+        pass
+
+    def show_table_diff_summary(self, table_diff: TableDiff) -> None:
         pass
 
     def show_schema_diff(self, schema_diff: SchemaDiff) -> None:
@@ -1273,6 +1280,44 @@ class TerminalConsole(Console):
     def loading_stop(self, id: uuid.UUID) -> None:
         self.loading_status[id].stop()
         del self.loading_status[id]
+
+    def show_table_diff_summary(self, table_diff: TableDiff) -> None:
+        tree = Tree("\n[b]Table Diff")
+
+        if table_diff.model_name:
+            model = Tree("Model:")
+            model.add(f"[blue]{table_diff.model_name}[/blue]")
+
+            tree.add(model)
+
+            envs = Tree("Environment:")
+            source = Tree(
+                f"Source: [{self.TABLE_DIFF_SOURCE_BLUE}]{table_diff.source_alias}[/{self.TABLE_DIFF_SOURCE_BLUE}]"
+            )
+            envs.add(source)
+
+            target = Tree(f"Target: [green]{table_diff.target_alias}[/green]")
+            envs.add(target)
+
+            tree.add(envs)
+
+        tables = Tree("Tables:")
+
+        tables.add(
+            f"Source: [{self.TABLE_DIFF_SOURCE_BLUE}]{table_diff.source}[/{self.TABLE_DIFF_SOURCE_BLUE}]"
+        )
+        tables.add(f"Target: [green]{table_diff.target}[/green]")
+
+        tree.add(tables)
+
+        join = Tree("Join On:")
+        _, _, key_column_names = table_diff.key_columns
+        for col_name in key_column_names:
+            join.add(f"[yellow]{col_name}[/yellow]")
+
+        tree.add(join)
+
+        self._print(tree)
 
     def show_schema_diff(self, schema_diff: SchemaDiff) -> None:
         source_name = schema_diff.source
