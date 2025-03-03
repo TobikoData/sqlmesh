@@ -13,18 +13,13 @@ from typing import Type
 import typing as t
 
 
-class _Rule(type):
+class _Rule(abc.ABCMeta):
     def __new__(cls: Type[_Rule], clsname: str, bases: t.Tuple, attrs: t.Dict) -> _Rule:
         attrs["name"] = clsname.lower()
         return super().__new__(cls, clsname, bases, attrs)
 
 
-class _RuleMeta(_Rule, abc.ABCMeta):
-    # This is required due to metaclass conflict with ABC
-    pass
-
-
-class Rule(abc.ABC, metaclass=_RuleMeta):
+class Rule(abc.ABC, metaclass=_Rule):
     """The base class for a rule."""
 
     name = "rule"
