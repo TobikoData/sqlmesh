@@ -3027,6 +3027,143 @@ def test_prod_restatement_plan_causes_dev_intervals_to_be_processed_in_next_dev_
         ]
 
 
+def test_prod_restatement_plan_causes_dev_intervals_to_be_widened_on_full_restatement_only_model(
+    tmp_path,
+):
+    """
+    Scenario:
+        I have am INCREMENTAL_BY_TIME_RANGE model A[daily] in prod
+        I create dev and add a INCREMENTAL_BY_UNIQUE_KEY model B (which supports full restatement only)
+        I prod, I restate one day of A which should cause intervals in dev to be cleared (but not processed)
+        In dev, I run a plan
+
+    Outcome:
+        In the dev plan, the entire model for B should be rebuilt because it does not support partial restatement
+    """
+
+    model_a = """
+    MODEL (
+        name test.a,
+        kind INCREMENTAL_BY_TIME_RANGE (
+            time_column "ts"
+        ),
+        start '2024-01-01 00:00:00',
+        cron '@daily'
+    );
+
+    select account_id, ts from test.external_table where ts between @start_ts and @end_ts;
+    """
+
+    model_b = """
+        MODEL (
+            name test.b,
+            kind INCREMENTAL_BY_UNIQUE_KEY (
+                unique_key (account_id, ts)
+            ),
+            cron '@daily'
+        );
+
+        select account_id, ts from test.a where ts between @start_ts and @end_ts;
+        """
+
+    models_dir = tmp_path / "models"
+    models_dir.mkdir()
+
+    with open(models_dir / "a.sql", "w") as f:
+        f.write(model_a)
+
+    config = Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))
+    ctx = Context(paths=[tmp_path], config=config)
+
+    engine_adapter = ctx.engine_adapter
+    engine_adapter.create_schema("test")
+
+    # source data
+    df = pd.DataFrame(
+        {
+            "account_id": [1001, 1002, 1003, 1004],
+            "ts": [
+                "2024-01-01 00:30:00",
+                "2024-01-02 01:30:00",
+                "2024-01-03 02:30:00",
+                "2024-01-04 00:30:00",
+            ],
+        }
+    )
+    columns_to_types = {
+        "account_id": exp.DataType.build("int"),
+        "ts": exp.DataType.build("timestamp"),
+    }
+    external_table = exp.table_(table="external_table", db="test", quoted=True)
+    engine_adapter.create_table(table_name=external_table, columns_to_types=columns_to_types)
+    engine_adapter.insert_append(
+        table_name=external_table, query_or_df=df, columns_to_types=columns_to_types
+    )
+
+    # plan + apply A[daily] in prod
+    ctx.plan(auto_apply=True)
+
+    # add B[daily] in dev
+    with open(models_dir / "b.sql", "w") as f:
+        f.write(model_b)
+
+    # plan + apply dev
+    ctx.load()
+    ctx.plan(environment="dev", auto_apply=True)
+
+    def _dates_in_table(table_name: str) -> t.List[str]:
+        return [
+            str(r[0]) for r in engine_adapter.fetchall(f"select ts from {table_name} order by ts")
+        ]
+
+    # verify initial state
+    for tbl in ["test.a", "test__dev.b"]:
+        assert _dates_in_table(tbl) == [
+            "2024-01-01 00:30:00",
+            "2024-01-02 01:30:00",
+            "2024-01-03 02:30:00",
+            "2024-01-04 00:30:00",
+        ]
+
+    # restate A in prod
+    engine_adapter.execute("delete from test.external_table where ts = '2024-01-02 01:30:00'")
+    ctx.plan(
+        restate_models=["test.a"],
+        start="2024-01-02 00:00:00",
+        end="2024-01-03 00:00:00",
+        auto_apply=True,
+        no_prompts=True,
+    )
+
+    # verify result
+    assert _dates_in_table("test.a") == [
+        "2024-01-01 00:30:00",
+        "2024-01-03 02:30:00",
+        "2024-01-04 00:30:00",
+    ]
+
+    # dev shouldnt have been affected yet
+    assert _dates_in_table("test__dev.b") == [
+        "2024-01-01 00:30:00",
+        "2024-01-02 01:30:00",
+        "2024-01-03 02:30:00",
+        "2024-01-04 00:30:00",
+    ]
+
+    # plan dev which should trigger the missing intervals to get repopulated
+    ctx.plan(environment="dev", auto_apply=True)
+
+    # dev should have fully refreshed
+    # this is proven by the fact that INCREMENTAL_BY_UNIQUE_KEY cant propagate deletes, so if the
+    # model was not fully rebuilt, the deleted record would still be present
+    for tbl in ["test.a", "test__dev.b"]:
+        assert _dates_in_table(tbl) == [
+            "2024-01-01 00:30:00",
+            "2024-01-03 02:30:00",
+            "2024-01-04 00:30:00",
+        ]
+
+
 def test_prod_restatement_plan_missing_model_in_dev(
     tmp_path: Path,
 ):

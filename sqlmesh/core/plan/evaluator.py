@@ -438,7 +438,9 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         # Without this rule, its possible that promoting a dev table to prod will introduce old data to prod
         snapshot_intervals_to_restate.update(
             self._restatement_intervals_across_all_environments(
-                plan.restatements, plan.disabled_restatement_models
+                prod_restatements=plan.restatements,
+                disable_restatement_models=plan.disabled_restatement_models,
+                loaded_snapshots={s.snapshot_id: s for s in snapshots_by_name.values()},
             )
         )
 
@@ -448,7 +450,10 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         )
 
     def _restatement_intervals_across_all_environments(
-        self, prod_restatements: t.Dict[str, Interval], disable_restatement_models: t.Set[str]
+        self,
+        prod_restatements: t.Dict[str, Interval],
+        disable_restatement_models: t.Set[str],
+        loaded_snapshots: t.Dict[SnapshotId, Snapshot],
     ) -> t.Set[t.Tuple[SnapshotTableInfo, Interval]]:
         """
         Given a map of snapshot names + intervals to restate in prod:
@@ -462,7 +467,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         if not prod_restatements:
             return set()
 
-        snapshots_to_restate: t.Set[t.Tuple[SnapshotTableInfo, Interval]] = set()
+        snapshots_to_restate: t.Dict[SnapshotId, t.Tuple[SnapshotTableInfo, Interval]] = {}
 
         for env in self.state_sync.get_environments():
             keyed_snapshots = {s.name: s.table_info for s in env.snapshots}
@@ -480,10 +485,47 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                     if x not in disable_restatement_models
                 ]
                 snapshots_to_restate.update(
-                    {(keyed_snapshots[a], intervals) for a in affected_snapshot_names}
+                    {
+                        keyed_snapshots[a].snapshot_id: (keyed_snapshots[a], intervals)
+                        for a in affected_snapshot_names
+                    }
                 )
 
-        return snapshots_to_restate
+        # for any affected full_history_restatement_only snapshots, we need to widen the intervals being restated to
+        # include the whole time range for that snapshot. This requires a call to state to load the full snapshot record,
+        # so we only do it if necessary
+        if full_history_restatement_snapshot_ids := [
+            # FIXME: full_history_restatement_only is just one indicator that the snapshot can only be fully refreshed, the other one is Model.depends_on_self
+            # however, to figure out depends_on_self, we have to render all the model queries which, alongside having to fetch full snapshots from state,
+            # is problematic in secure environments that are deliberately isolated from arbitrary user code (since rendering a query may require user macros to be present)
+            # So for now, these are not considered
+            s_id
+            for s_id, s in snapshots_to_restate.items()
+            if s[0].full_history_restatement_only
+        ]:
+            # only load full snapshot records that we havent already loaded
+            additional_snapshots = self.state_sync.get_snapshots(
+                [
+                    s.snapshot_id
+                    for s in full_history_restatement_snapshot_ids
+                    if s.snapshot_id not in loaded_snapshots
+                ]
+            )
+
+            all_snapshots = loaded_snapshots | additional_snapshots
+
+            for full_snapshot_id in full_history_restatement_snapshot_ids:
+                full_snapshot = all_snapshots[full_snapshot_id]
+                _, original_intervals = snapshots_to_restate[full_snapshot_id]
+                original_start, original_end = original_intervals
+
+                # get_removal_interval() widens intervals if necessary
+                new_intervals = full_snapshot.get_removal_interval(
+                    start=original_start, end=original_end
+                )
+                snapshots_to_restate[full_snapshot_id] = (full_snapshot.table_info, new_intervals)
+
+        return set(snapshots_to_restate.values())
 
 
 class BaseAirflowPlanEvaluator(PlanEvaluator):
