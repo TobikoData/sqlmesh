@@ -7899,12 +7899,12 @@ def test_missing_column_data_in_columns_key():
         load_sql_based_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
 
 
-def test_ignore_lints_serialization():
+def test_ignored_rules_serialization():
     expressions = d.parse(
         """
         MODEL(
             name test_model,
-            ignore_lints ['foo', 'bar']
+            ignored_rules ['foo', 'bar']
         );
 
         SELECT * FROM tbl;
@@ -7917,8 +7917,8 @@ def test_ignore_lints_serialization():
     model_json = model.json()
     model_json_parsed = json.loads(model_json)
 
-    assert "ignore_lints" not in model_json_parsed
-    assert "ignore_lints_" not in model_json_parsed
+    assert "ignored_rules" not in model_json_parsed
+    assert "ignored_rules_" not in model_json_parsed
 
     deserialized_model = SqlModel.parse_raw(model_json)
     assert deserialized_model.dict() == model.dict()

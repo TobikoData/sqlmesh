@@ -77,7 +77,9 @@ class ModelMeta(_Node):
     physical_version: t.Optional[str] = None
     gateway: t.Optional[str] = None
     optimize_query: t.Optional[bool] = None
-    ignore_lints_: t.Optional[t.Set[str]] = Field(default=None, exclude=True, alias="ignore_lints")
+    ignored_rules_: t.Optional[t.Set[str]] = Field(
+        default=None, exclude=True, alias="ignored_rules"
+    )
 
     _bool_validator = bool_validator
     _model_kind_validator = model_kind_validator
@@ -286,8 +288,8 @@ class ModelMeta(_Node):
 
         return refs
 
-    @field_validator("ignore_lints_", mode="before")
-    def ignore_lints_validator(cls, vs: t.Any) -> t.Any:
+    @field_validator("ignored_rules_", mode="before")
+    def ignored_rules_validator(cls, vs: t.Any) -> t.Any:
         return LinterConfig._validate_rules(vs)
 
     @model_validator(mode="before")
@@ -466,5 +468,5 @@ class ModelMeta(_Node):
         return getattr(self.kind, "on_destructive_change", OnDestructiveChange.ALLOW)
 
     @property
-    def ignore_lints(self) -> t.Set[str]:
-        return self.ignore_lints_ or set()
+    def ignored_rules(self) -> t.Set[str]:
+        return self.ignored_rules_ or set()
