@@ -984,13 +984,13 @@ class TerminalConsole(Console):
                     )
                 elif context_diff.indirectly_modified(name):
                     indirect.add(f"[indirect]{display_name}")
-
-                if context_diff.metadata_updated(name):
+                elif context_diff.metadata_updated(name):
                     metadata.add(
                         f"[metadata]{display_name}"
                         if no_diff
                         else Syntax(f"{display_name}\n{context_diff.text_diff(name)}", "sql")
                     )
+
             if direct.children:
                 tree.add(direct)
             if indirect.children:
