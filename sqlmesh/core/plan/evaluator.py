@@ -438,7 +438,9 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         # Without this rule, its possible that promoting a dev table to prod will introduce old data to prod
         snapshot_intervals_to_restate.update(
             self._restatement_intervals_across_all_environments(
-                plan.restatements, plan.disabled_restatement_models
+                prod_restatements=plan.restatements,
+                disable_restatement_models=plan.disabled_restatement_models,
+                loaded_snapshots={s.snapshot_id: s for s in snapshots_by_name.values()},
             )
         )
 
@@ -448,7 +450,10 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         )
 
     def _restatement_intervals_across_all_environments(
-        self, prod_restatements: t.Dict[str, Interval], disable_restatement_models: t.Set[str]
+        self,
+        prod_restatements: t.Dict[str, Interval],
+        disable_restatement_models: t.Set[str],
+        loaded_snapshots: t.Dict[SnapshotId, Snapshot],
     ) -> t.Set[t.Tuple[SnapshotTableInfo, Interval]]:
         """
         Given a map of snapshot names + intervals to restate in prod:
@@ -490,11 +495,27 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         # include the whole time range for that snapshot. This requires a call to state to load the full snapshot record,
         # so we only do it if necessary
         if full_history_restatement_snapshot_ids := [
-            s_id for s_id, s in snapshots_to_restate.items() if s[0].full_history_restatement_only
+            # FIXME: full_history_restatement_only is just one indicator that the snapshot can only be fully refreshed, the other one is Model.depends_on_self
+            # however, to figure out depends_on_self, we have to render all the model queries which, alongside having to fetch full snapshots from state,
+            # is problematic in secure environments that are deliberately isolated from arbitrary user code (since rendering a query may require user macros to be present)
+            # So for now, these are not considered
+            s_id
+            for s_id, s in snapshots_to_restate.items()
+            if s[0].full_history_restatement_only
         ]:
-            full_snapshots = self.state_sync.get_snapshots(full_history_restatement_snapshot_ids)
+            # only load full snapshot records that we havent already loaded
+            additional_snapshots = self.state_sync.get_snapshots(
+                [
+                    s.snapshot_id
+                    for s in full_history_restatement_snapshot_ids
+                    if s.snapshot_id not in loaded_snapshots
+                ]
+            )
 
-            for full_snapshot_id, full_snapshot in full_snapshots.items():
+            all_snapshots = loaded_snapshots | additional_snapshots
+
+            for full_snapshot_id in full_history_restatement_snapshot_ids:
+                full_snapshot = all_snapshots[full_snapshot_id]
                 _, original_intervals = snapshots_to_restate[full_snapshot_id]
                 original_start, original_end = original_intervals
 
