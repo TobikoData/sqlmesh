@@ -239,7 +239,7 @@ class _Model(ModelMeta, frozen=True):
                     "enabled",
                     "inline_audits",
                     "optimize_query",
-                    "ignore_lints_",
+                    "ignored_rules_",
                 ):
                     expressions.append(
                         exp.Property(

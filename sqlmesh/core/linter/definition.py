@@ -36,8 +36,8 @@ class Linter:
 
     @classmethod
     def from_rules(cls, all_rules: RuleSet, config: LinterConfig) -> Linter:
-        exclude_rules = select_rules(all_rules, config.exclude_rules)
-        included_rules = all_rules.difference(exclude_rules)
+        ignored_rules = select_rules(all_rules, config.ignored_rules)
+        included_rules = all_rules.difference(ignored_rules)
 
         rules = select_rules(included_rules, config.rules)
         warn_rules = select_rules(included_rules, config.warn_rules)
@@ -54,7 +54,7 @@ class Linter:
         if not self.enabled:
             return
 
-        ignored_rules = select_rules(self.all_rules, model.ignore_lints)
+        ignored_rules = select_rules(self.all_rules, model.ignored_rules)
 
         rules = self.rules.difference(ignored_rules)
         warn_rules = self.warn_rules.difference(ignored_rules)

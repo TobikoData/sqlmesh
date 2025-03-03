@@ -1684,7 +1684,7 @@ def test_model_linting(tmp_path: pathlib.Path, sushi_context) -> None:
 
     ignore_or_warn_cfgs = [
         LinterConfig(enabled=True, warn_rules=["noselectstar"]),
-        LinterConfig(enabled=True, exclude_rules=["noselectstar"]),
+        LinterConfig(enabled=True, ignored_rules=["noselectstar"]),
     ]
     for cfg in ignore_or_warn_cfgs:
         ctx.config.linter = cfg
@@ -1706,13 +1706,13 @@ def test_model_linting(tmp_path: pathlib.Path, sushi_context) -> None:
     create_temp_file(
         tmp_path,
         pathlib.Path(pathlib.Path("models"), "test.sql"),
-        "MODEL(name test, ignore_lints ['ALL']); SELECT * FROM (SELECT 1 AS col);",
+        "MODEL(name test, ignored_rules ['ALL']); SELECT * FROM (SELECT 1 AS col);",
     )
 
     create_temp_file(
         tmp_path,
         pathlib.Path(pathlib.Path("models"), "test2.sql"),
-        "MODEL(name test2, ignore_lints ['noselectstar']); SELECT * FROM (SELECT 1 AS col);",
+        "MODEL(name test2, ignored_rules ['noselectstar']); SELECT * FROM (SELECT 1 AS col);",
     )
 
     ctx.load()

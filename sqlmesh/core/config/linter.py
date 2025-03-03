@@ -18,7 +18,7 @@ class LinterConfig(BaseConfig):
 
         rules: A list of error rules to be applied on model
         warn_rules: A list of rules to be applied on models but produce warnings instead of raising errors.
-        exclude_rules: A list of rules to be excluded/ignored
+        ignored_rules: A list of rules to be excluded/ignored
 
     """
 
@@ -26,7 +26,7 @@ class LinterConfig(BaseConfig):
 
     rules: t.Set[str] = set()
     warn_rules: t.Set[str] = set()
-    exclude_rules: t.Set[str] = set()
+    ignored_rules: t.Set[str] = set()
 
     @classmethod
     def _validate_rules(cls, v: t.Any) -> t.Set[str]:
@@ -39,6 +39,6 @@ class LinterConfig(BaseConfig):
 
         return {name.lower() for name in ensure_collection(v)}
 
-    @field_validator("rules", "warn_rules", "exclude_rules", mode="before")
+    @field_validator("rules", "warn_rules", "ignored_rules", mode="before")
     def rules_validator(cls, vs: t.Any) -> t.Set[str]:
         return cls._validate_rules(vs)
