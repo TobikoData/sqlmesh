@@ -21,12 +21,11 @@ from sqlmesh.core.snapshot import (
     SnapshotNameVersion,
     SnapshotInfoLike,
     Snapshot,
-    SnapshotId,
 )
 from sqlmesh.core.snapshot.definition import Interval
 from sqlmesh.utils.migration import index_text_type
 from sqlmesh.utils import random_id
-from sqlmesh.utils.date import now_timestamp, time_like_to_str
+from sqlmesh.utils.date import now_timestamp
 
 
 logger = logging.getLogger(__name__)
@@ -62,52 +61,8 @@ class IntervalState:
         }
 
     def add_snapshots_intervals(self, snapshots_intervals: t.Sequence[SnapshotIntervals]) -> None:
-        def remove_partial_intervals(
-            intervals: t.List[Interval], snapshot_id: t.Optional[SnapshotId], *, is_dev: bool
-        ) -> t.List[Interval]:
-            results = []
-            for start_ts, end_ts in intervals:
-                if start_ts < end_ts:
-                    logger.info(
-                        "Adding %s (%s, %s) for snapshot %s",
-                        "dev interval" if is_dev else "interval",
-                        time_like_to_str(start_ts),
-                        time_like_to_str(end_ts),
-                        snapshot_id,
-                    )
-                    results.append((start_ts, end_ts))
-                else:
-                    logger.info(
-                        "Skipping partial interval (%s, %s) for snapshot %s",
-                        start_ts,
-                        end_ts,
-                        snapshot_id,
-                    )
-            return results
-
-        intervals_to_insert = []
-        for snapshot_intervals in snapshots_intervals:
-            snapshot_intervals = snapshot_intervals.copy(
-                update={
-                    "intervals": remove_partial_intervals(
-                        snapshot_intervals.intervals, snapshot_intervals.snapshot_id, is_dev=False
-                    ),
-                    "dev_intervals": remove_partial_intervals(
-                        snapshot_intervals.dev_intervals,
-                        snapshot_intervals.snapshot_id,
-                        is_dev=True,
-                    ),
-                }
-            )
-            if (
-                snapshot_intervals.intervals
-                or snapshot_intervals.dev_intervals
-                or snapshot_intervals.pending_restatement_intervals
-            ):
-                intervals_to_insert.append(snapshot_intervals)
-
-        if intervals_to_insert:
-            self._push_snapshot_intervals(intervals_to_insert)
+        if snapshots_intervals:
+            self._push_snapshot_intervals(snapshots_intervals)
 
     def remove_intervals(
         self,
