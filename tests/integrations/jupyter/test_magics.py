@@ -238,7 +238,7 @@ def test_diff(sushi_context, notebook, convert_all_html_output_to_text, get_all_
     assert len(output.outputs) == 2
     assert convert_all_html_output_to_text(output) == [
         "Differences from the `prod` environment:",
-        "Models:\n├── Directly Modified:\n│   └── sqlmesh_example.test\n└── Metadata Updated:\n    └── sqlmesh_example.test",
+        "Models:\n└── Directly Modified:\n    └── sqlmesh_example.test",
     ]
     assert get_all_html_output(output) == [
         str(
@@ -266,21 +266,12 @@ def test_diff(sushi_context, notebook, convert_all_html_output_to_text, get_all_
                         autoescape=False,
                     )
                 )
-                + "├── "
+                + "└── "
                 + str(
                     h(
                         "span",
                         {"style": "font-weight: bold"},
                         "Directly Modified:",
-                        autoescape=False,
-                    )
-                )
-                + "│   └── sqlmesh_example.test└── "
-                + str(
-                    h(
-                        "span",
-                        {"style": "font-weight: bold"},
-                        "Metadata Updated:",
                         autoescape=False,
                     )
                 )
