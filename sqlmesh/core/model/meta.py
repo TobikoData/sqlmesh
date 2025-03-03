@@ -287,8 +287,8 @@ class ModelMeta(_Node):
         return refs
 
     @field_validator("ignore_lints_", mode="before")
-    def ignore_lints_validator(cls, vs: t.Any, info: ValidationInfo) -> t.Any:
-        return LinterConfig._validate_rules(vs, info.data)
+    def ignore_lints_validator(cls, vs: t.Any) -> t.Any:
+        return LinterConfig._validate_rules(vs)
 
     @model_validator(mode="before")
     def _pre_root_validator(cls, data: t.Any) -> t.Any:
