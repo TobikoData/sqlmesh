@@ -71,15 +71,15 @@ This creates a gateway named `bigquery` and makes it your project's default gate
 
 It uses the [`oauth` authentication method](#authentication-methods), which does not specify a username or other information directly in the connection configuration. Other authentication methods are [described below](#authentication-methods).
 
-In BigQuery, navigate to the dashboard and select the BigQuery project your SQLMesh project will use. From the Google Cloud dashboard, use the arrow to open the pop-up menu:  
+In BigQuery, navigate to the dashboard and select the BigQuery project your SQLMesh project will use. From the Google Cloud dashboard, use the arrow to open the pop-up menu:
 
 ![BigQuery Dashboard](./bigquery/bigquery-1.png)
 
-Now we can identify the project ID needed in the `config.yaml` gateway specification above. Select the project that you want to work with, the project ID that you need to add to your yaml file is the ID label from the pop-up menu. 
+Now we can identify the project ID needed in the `config.yaml` gateway specification above. Select the project that you want to work with, the project ID that you need to add to your yaml file is the ID label from the pop-up menu.
 
 ![BigQuery Dashboard: selecting your project](./bigquery/bigquery-2.png)
 
-For this guide, the Docs-Demo is the one we will use, thus the project ID for this example is `healthy-life-440919-s0`. 
+For this guide, the Docs-Demo is the one we will use, thus the project ID for this example is `healthy-life-440919-s0`.
 
 ## Usage
 
@@ -158,6 +158,7 @@ pip install "sqlmesh[bigquery]"
 | `client_secret`                 | OAuth 2.0 client secret                                                                                                                                           | string |    N     |
 | `token_uri`                     | OAuth 2.0 authorization server's toke endpoint URI                                                                                                                | string |    N     |
 | `scopes`                        | The scopes used to obtain authorization                                                                                                                           |  list  |    N     |
+| `impersonated_service_account`  | The service account to impersonate                                                                                                                                | string |    N     |
 | `job_creation_timeout_seconds`  | The maximum amount of time, in seconds, to wait for the underlying job to be created.                                                                             |  int   |    N     |
 | `job_execution_timeout_seconds` | The maximum amount of time, in seconds, to wait for the underlying job to complete.                                                                               |  int   |    N     |
 | `job_retries`                   | The number of times to retry the underlying job if it fails. (Default: `1`)                                                                                       |  int   |    N     |
@@ -226,6 +227,10 @@ sqlmesh_airflow = SQLMeshAirflow(
 - [service-account-json](https://google-auth.readthedocs.io/en/master/reference/google.oauth2.service_account.html#google.oauth2.service_account.IDTokenCredentials.from_service_account_info)
     - Related Credential Configuration:
         - `keyfile_json` (Required)
+        - `scopes` (Optional)
+- [service-account-impersonation](https://google-auth.readthedocs.io/en/latest/reference/google.auth.impersonated_credentials.html)
+    - Related Credential Configuration:
+        - `impersonated_service_account` (Required)
         - `scopes` (Optional)
 
 ## Permissions Required
