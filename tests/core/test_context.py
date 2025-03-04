@@ -1656,24 +1656,27 @@ def test_model_linting(tmp_path: pathlib.Path, sushi_context) -> None:
         ):
             ctx.upsert_model(load_sql_based_model(d.parse(f"MODEL (name test); {query}")))
 
-    model2 = load_sql_based_model(d.parse("MODEL (name test2); SELECT col"))
+    error_model = load_sql_based_model(d.parse("MODEL (name test2); SELECT col"))
     with pytest.raises(
         ConfigError,
         match=r""".*Column '"col"' could not be resolved for model.*""",
     ):
-        ctx.upsert_model(model2)
+        ctx.upsert_model(error_model)
 
     # Case: Ensure optimized query is not cached if the model did not pass linting
     cache = OptimizedQueryCache(tmp_path / c.CACHE, linters=ctx._linters)
 
-    model2 = t.cast(SqlModel, model2)
-    assert model2._query_renderer._optimized_cache is None
-    assert not cache._file_cache.exists(cache._entry_name(model2))
+    error_model = t.cast(SqlModel, error_model)
+    assert error_model._query_renderer._optimized_cache is None
+    assert not cache._file_cache.exists(cache._entry_name(error_model))
 
-    # Case: Ensure NoSelectStar only raises for top-level SELECTs
-    ctx.upsert_model(
-        load_sql_based_model(d.parse("MODEL (name test); SELECT col FROM (SELECT * FROM tbl)"))
-    )
+    # Case: Ensure NoSelectStar only raises for top-level SELECTs, new model shouldn't raise
+    # and thus should also be cached
+    model2 = load_sql_based_model(d.parse("MODEL (name test); SELECT col FROM (SELECT * FROM tbl)"))
+    ctx.upsert_model(model2)
+
+    model2 = t.cast(SqlModel, model2)
+    assert cache._file_cache.exists(cache._entry_name(model2))
 
     # Case: Ensure load WORKS if linter is enabled but the rules are not
     create_temp_file(

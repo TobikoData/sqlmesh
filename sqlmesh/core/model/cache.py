@@ -135,8 +135,9 @@ class OptimizedQueryCache:
 
         if self.linters:
             linter = self.linters.get(model.project)
-            if linter and set(linter.rules.values()).intersection(model._render_violations):
+            if linter and linter.rules.keys() & model._render_violations.keys():
                 # Do not cache the optimized query if the renderer came across lint errors
+                # Note: The ordering of the intersection check matters here
                 return None
 
         new_entry = OptimizedQueryCacheEntry(optimized_rendered_query=optimized_query)
