@@ -1664,7 +1664,7 @@ def test_model_linting(tmp_path: pathlib.Path, sushi_context) -> None:
         ctx.upsert_model(model2)
 
     # Case: Ensure optimized query is not cached if the model did not pass linting
-    cache = OptimizedQueryCache(tmp_path / c.CACHE, linter=ctx._linter)
+    cache = OptimizedQueryCache(tmp_path / c.CACHE, linters=ctx._linters)
 
     model2 = t.cast(SqlModel, model2)
     assert model2._query_renderer._optimized_cache is None

@@ -114,7 +114,6 @@ from sqlmesh.core.test import (
     run_tests,
 )
 from sqlmesh.core.user import User
-from sqlmesh.core.linter.rule import RuleSet
 from sqlmesh.utils import UniqueKeyDict
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import TimeLike, now_ds, to_timestamp, format_tz_datetime
@@ -352,8 +351,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         self._environment_statements: t.List[EnvironmentStatements] = []
         self._excluded_requirements: t.Set[str] = set()
         self._default_catalog: t.Optional[str] = None
-        self._all_rules: RuleSet = BUILTIN_RULES
-        self._linter: t.Optional[Linter] = None
+        self._linters: t.Dict[str, Linter] = {}
         self._loaded: bool = False
 
         self.path, self.config = t.cast(t.Tuple[Path, C], next(iter(self.configs.items())))
@@ -499,7 +497,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             self.dag,
             models=self._models,
             context_path=self.path,
-            linter=self._linter,
+            linters=self._linters,
         )
 
         if model.dialect:
@@ -508,8 +506,8 @@ class GenericContext(BaseContext, t.Generic[C]):
         model.validate_definition()
 
         # Linter may be `None` if the context is not loaded yet
-        if self._linter:
-            self._linter.lint_model(model)
+        if linter := self._linters.get(model.project):
+            linter.lint_model(model)
 
         return model
 
@@ -590,9 +588,10 @@ class GenericContext(BaseContext, t.Generic[C]):
         self._metrics.clear()
         self._requirements.clear()
         self._excluded_requirements.clear()
+        self._linters.clear()
         self._environment_statements = []
 
-        for project in loaded_projects:
+        for i, project in enumerate(loaded_projects):
             self._jinja_macros = self._jinja_macros.merge(project.jinja_macros)
             self._macros.update(project.macros)
             self._models.update(project.models)
@@ -603,11 +602,13 @@ class GenericContext(BaseContext, t.Generic[C]):
             self._excluded_requirements.update(project.excluded_requirements)
             if project.environment_statements:
                 self._environment_statements.append(project.environment_statements)
-            self._all_rules = self._all_rules.union(project.user_rules)
+
+            config = self._loaders[i].config
+            self._linters[config.project] = Linter.from_rules(
+                BUILTIN_RULES.union(project.user_rules), config.linter
+            )
 
         uncached = set()
-
-        self._linter = Linter.from_rules(self._all_rules, self.config.linter)
 
         if any(self._projects):
             prod = self.state_reader.get_environment(c.PROD)
@@ -642,14 +643,15 @@ class GenericContext(BaseContext, t.Generic[C]):
                 self.dag,
                 models=self._models,
                 context_path=self.path,
-                linter=self._linter,
+                linters=self._linters,
             )
 
             for model in self.models.values():
                 # The model definition can be validated correctly only after the schema is set.
                 model.validate_definition()
 
-                self._linter.lint_model(model)
+                if linter := self._linters.get(model.project):
+                    linter.lint_model(model)
 
         duplicates = set(self._models) & set(self._standalone_audits)
         if duplicates:
