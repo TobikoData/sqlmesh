@@ -148,7 +148,7 @@ Now we're ready to connect your data warehouse to Tobiko Cloud:
 
 2. If you are going through the SSO flow then, run the following command:
     ``` bash
-    tcloud sqlmesh auth
+    tcloud auth login
     ``` 
     This will fire off the SSO flow and open a link in your browser to authenticate. 
 
