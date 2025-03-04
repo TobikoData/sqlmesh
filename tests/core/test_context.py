@@ -1625,7 +1625,6 @@ def test_environment_statements_dialect(tmp_path: Path):
         model_defaults=ModelDefaultsConfig(dialect="bigquery"),
         before_all=before_all,
         after_all=after_all,
-        variables={"var_5": 5},
     )
     ctx = Context(paths=[tmp_path], config=config)
     assert ctx._environment_statements == [
