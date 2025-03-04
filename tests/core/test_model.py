@@ -2010,7 +2010,7 @@ def test_python_model_variable_dependencies() -> None:
     assert m.depends_on == {'"foo"."table_name"'}
 
 
-def test_python_model_with_properties():
+def test_python_model_with_properties(make_snapshot):
     @model(
         name="python_model_prop",
         kind="full",
@@ -2058,8 +2058,11 @@ def test_python_model_with_properties():
         ),
     }
 
+    snapshot: Snapshot = make_snapshot(m)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
     # Rendering the properties will result to a TRANSIENT creatable_type and the removal of the conditional prop
-    assert m.render_physical_properties(python_env=m.python_env) == {
+    assert m.render_physical_properties(snapshots={m.fqn: snapshot}, python_env=m.python_env) == {
         "partition_expiration_days": exp.convert(7),
         "creatable_type": exp.convert("TRANSIENT"),
     }
@@ -3524,7 +3527,7 @@ def test_project_level_properties(sushi_context):
     assert model_2.cron == "@daily"
 
 
-def test_conditional_physical_properties(sushi_context):
+def test_conditional_physical_properties(make_snapshot):
     model_defaults = ModelDefaultsConfig(
         physical_properties={
             "creatable_type": "@IF(@model_kind_name != 'VIEW', 'TRANSIENT', NULL)"
@@ -3535,7 +3538,7 @@ def test_conditional_physical_properties(sushi_context):
         d.parse(
             """
         MODEL (
-            name test_schema.test_full_model_kind,
+            name test_schema.test_full_model,
             kind FULL,
         );
         SELECT a FROM tbl;
@@ -3559,6 +3562,7 @@ def test_conditional_physical_properties(sushi_context):
         defaults=model_defaults.dict(),
     )
 
+    # load time is a no-op
     assert (
         view_model.physical_properties
         == full_model.physical_properties
@@ -3569,13 +3573,23 @@ def test_conditional_physical_properties(sushi_context):
         }
     )
 
+    # substitution occurs at runtime
+    snapshot: Snapshot = make_snapshot(full_model)
+    snapshot_view: Snapshot = make_snapshot(view_model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
     # Validate use of TRANSIENT type for FULL model
-    assert full_model.render_physical_properties() == {
-        "creatable_type": exp.Literal(this="TRANSIENT", is_string=True)
-    }
+    assert full_model.render_physical_properties(
+        snapshots={full_model.fqn: snapshot, view_model.fqn: snapshot_view}
+    ) == {"creatable_type": exp.Literal(this="TRANSIENT", is_string=True)}
 
     # Validate disabling the creatable_type property for VIEW model
-    assert view_model.render_physical_properties() == {}
+    assert (
+        view_model.render_physical_properties(
+            snapshots={full_model.fqn: snapshot, view_model.fqn: snapshot_view}
+        )
+        == {}
+    )
 
 
 def test_project_level_properties_python_model():
