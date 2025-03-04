@@ -408,6 +408,25 @@ WHERE
   AND event_date BETWEEN @start_ds AND @end_ds; -- `event_date` time column filter automatically added by SQLMesh
 ```
 
+### Partitioning
+
+By default, we ensure that the `time_column` is part of the [partitioned_by](./overview.md#partitioned_by) property of the model so that it forms part of the partition key and allows the database engine to do partition pruning. If it is not explicitly listed in the Model definition, we will automatically add it.
+
+However, this may be undesirable if you want to exclusively partition on another column or you want to partition on something like `month(time_column)` but the engine you're using doesnt support partitioning based on expressions.
+
+To opt out of this behaviour, you can set `partition_by_time_column false` like so:
+
+```sql linenums="1" hl_lines="5"
+MODEL (
+  name db.events,
+  kind INCREMENTAL_BY_TIME_RANGE (
+    time_column event_date,
+    partition_by_time_column false
+  ),
+  partitioned_by (other_col) -- event_date will no longer be automatically added here and the partition key will just be 'other_col'
+);
+```
+
 ### Idempotency
 We recommend making sure incremental by time range model queries are [idempotent](../glossary.md#idempotency) to prevent unexpected results during data [restatement](../plans.md#restatement-plans).
 
