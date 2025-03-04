@@ -613,9 +613,13 @@ class SqlMeshLoader(Loader):
                 "before_all": self.config.before_all or [],
                 "after_all": self.config.after_all or [],
             }
-
+            dialect = self.config.model_defaults.dialect
             python_env = make_python_env(
-                [exp.maybe_parse(stmt) for stmts in statements.values() for stmt in stmts],
+                [
+                    exp.maybe_parse(stmt, dialect=dialect)
+                    for stmts in statements.values()
+                    for stmt in stmts
+                ],
                 module_path=self.config_path,
                 jinja_macro_references=None,
                 macros=macros,

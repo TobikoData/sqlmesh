@@ -11,7 +11,7 @@ import pytest
 import pandas as pd
 from pathlib import Path
 from pytest_mock.plugin import MockerFixture
-from sqlglot import exp, parse_one, Dialect
+from sqlglot import ParseError, exp, parse_one, Dialect
 from sqlglot.errors import SchemaError
 
 from sqlmesh.core.config.gateway import GatewayConfig
@@ -29,7 +29,7 @@ from sqlmesh.core.context import Context
 from sqlmesh.core.console import create_console
 from sqlmesh.core.dialect import parse, schema_
 from sqlmesh.core.engine_adapter.duckdb import DuckDBEngineAdapter
-from sqlmesh.core.environment import Environment, EnvironmentNamingInfo
+from sqlmesh.core.environment import Environment, EnvironmentNamingInfo, EnvironmentStatements
 from sqlmesh.core.model import load_sql_based_model, model
 from sqlmesh.core.renderer import render_statements
 from sqlmesh.core.model.kind import ModelKindName
@@ -1614,3 +1614,24 @@ def create_stats_table(evaluator):
     assert state_table[0].before_all == context._environment_statements[0].before_all
     assert state_table[0].after_all == context._environment_statements[0].after_all
     assert state_table[0].python_env == context._environment_statements[0].python_env
+
+
+def test_environment_statements_dialect(tmp_path: Path):
+    before_all = [
+        "EXPORT DATA OPTIONS (URI='gs://path*.csv.gz', FORMAT='CSV') AS SELECT * FROM all_rows"
+    ]
+    after_all = ["@IF(@this_env = 'prod', CREATE TABLE IF NOT EXISTS after_t AS SELECT 1)"]
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="bigquery"),
+        before_all=before_all,
+        after_all=after_all,
+    )
+    ctx = Context(paths=[tmp_path], config=config)
+    assert ctx._environment_statements == [
+        EnvironmentStatements(before_all=before_all, after_all=after_all, python_env={})
+    ]
+
+    # Without the correct dialect this statement should error out instead
+    with pytest.raises(ParseError, match=r"Invalid expression / Unexpected token*"):
+        config.model_defaults.dialect = "duckdb"
+        ctx = Context(paths=[tmp_path], config=config)
