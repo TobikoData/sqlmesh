@@ -508,6 +508,8 @@ class BigQueryConfig(TargetConfig):
         client_secret: The BigQuery client secret
         token_uri: The BigQuery token URI
         scopes: The BigQuery scopes
+        impersonated_service_account: The service account to impersonate
+        job_creation_timeout_seconds: The maximum amount of time, in seconds, to wait for the underlying job to be created
         job_execution_timeout_seconds: The maximum amount of time, in seconds, to wait for the underlying job to complete
         timeout_seconds: Alias for job_execution_timeout_seconds
         job_retries: The number of times to retry the underlying job if it fails
@@ -536,6 +538,8 @@ class BigQueryConfig(TargetConfig):
         "https://www.googleapis.com/auth/cloud-platform",
         "https://www.googleapis.com/auth/drive",
     )
+    impersonated_service_account: t.Optional[str] = None
+    job_creation_timeout_seconds: t.Optional[int] = None
     job_execution_timeout_seconds: t.Optional[int] = None
     timeout_seconds: t.Optional[int] = None  # To support legacy config
     job_retries: t.Optional[int] = None
@@ -596,6 +600,8 @@ class BigQueryConfig(TargetConfig):
             client_secret=self.client_secret,
             token_uri=self.token_uri,
             scopes=self.scopes,
+            impersonated_service_account=self.impersonated_service_account,
+            job_creation_timeout_seconds=self.job_creation_timeout_seconds,
             job_execution_timeout_seconds=job_execution_timeout_seconds,
             job_retries=job_retries,
             job_retry_deadline_seconds=self.job_retry_deadline_seconds,
