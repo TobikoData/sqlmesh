@@ -658,15 +658,23 @@ class _Model(ModelMeta, frozen=True):
         return rendered_exprs[0].transform(d.replace_merge_table_aliases)
 
     def render_physical_properties(self, **render_kwargs: t.Any) -> t.Dict[str, exp.Expression]:
-        def _render(expression: exp.Expression) -> exp.Expression:
+        def _render(expression: exp.Expression) -> exp.Expression | None:
             # note: we use the _statement_renderer instead of _create_renderer because it sets model_fqn which
             # in turn makes @this_model available in the evaluation context
-            rendered_exprs = self._statement_renderer(expression).render(**render_kwargs)
+            render_kwargs["model_kind_name"] = self.kind.name
+            rendered_exprs = self._statement_renderer(
+                exp.maybe_parse(expression.this)
+                if isinstance(expression, exp.Literal)
+                and (d.SQLMESH_MACRO_PREFIX in expression.this)
+                else expression
+            ).render(**render_kwargs)
 
-            if not rendered_exprs:
-                raise SQLMeshError(
+            # Warn instead of raising for cases where a property is conditionally assigned
+            if not rendered_exprs or rendered_exprs[0].sql().lower() in {"none", "null"}:
+                logger.warning(
                     f"Expected rendering '{expression.sql(dialect=self.dialect)}' to return an expression"
                 )
+                return None
 
             if len(rendered_exprs) != 1:
                 raise SQLMeshError(
@@ -675,7 +683,9 @@ class _Model(ModelMeta, frozen=True):
 
             return rendered_exprs[0]
 
-        return {k: _render(v) for k, v in self.physical_properties.items()}
+        return {
+            k: rendered for k, v in self.physical_properties.items() if (rendered := _render(v))
+        }
 
     def _create_renderer(self, expression: exp.Expression) -> ExpressionRenderer:
         return ExpressionRenderer(

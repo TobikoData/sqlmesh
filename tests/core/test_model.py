@@ -2087,7 +2087,8 @@ def test_python_model_with_properties():
             },
             "physical_properties": {
                 "partition_expiration_days": 13,
-                "creatable_type": "TRANSIENT",
+                "creatable_type": "@IF(@model_kind_name != 'view', 'TRANSIENT', NULL)",
+                "conditional_prop": "@IF(@model_kind_name == 'view', 'view_prop', NULL)",
             },
             "virtual_properties": {
                 "creatable_type": "SECURE",
@@ -2102,6 +2103,17 @@ def test_python_model_with_properties():
     }
 
     assert m.physical_properties == {
+        "partition_expiration_days": exp.convert(7),
+        "creatable_type": exp.Literal(
+            this="@IF(@model_kind_name != 'view', 'TRANSIENT', NULL)", is_string=True
+        ),
+        "conditional_prop": exp.Literal(
+            this="@IF(@model_kind_name == 'view', 'view_prop', NULL)", is_string=True
+        ),
+    }
+
+    # Rendering the properties will result to a TRANSIENT creatable_type and the removal of the conditional prop
+    assert m.render_physical_properties(python_env=m.python_env) == {
         "partition_expiration_days": exp.convert(7),
         "creatable_type": exp.convert("TRANSIENT"),
     }
@@ -3609,6 +3621,60 @@ def test_project_level_properties(sushi_context):
     assert not model_2.allow_partials
     assert model_2.interval_unit == IntervalUnit.HOUR
     assert model_2.cron == "@daily"
+
+
+def test_conditional_physical_properties(sushi_context):
+    model_defaults = ModelDefaultsConfig(
+        physical_properties={
+            "creatable_type": "@IF(@model_kind_name != 'VIEW', 'TRANSIENT', NULL)"
+        },
+    )
+
+    full_model = load_sql_based_model(
+        d.parse(
+            """
+        MODEL (
+            name test_schema.test_full_model_kind,
+            kind FULL,
+        );
+        SELECT a FROM tbl;
+        """,
+            default_dialect="snowflake",
+        ),
+        defaults=model_defaults.dict(),
+    )
+
+    view_model = load_sql_based_model(
+        d.parse(
+            """
+        MODEL (
+            name test_schema.test_view_model_kind,
+            kind VIEW,
+        );
+        SELECT a FROM tbl;
+        """,
+            default_dialect="snowflake",
+        ),
+        defaults=model_defaults.dict(),
+    )
+
+    assert (
+        view_model.physical_properties
+        == full_model.physical_properties
+        == {
+            "creatable_type": exp.Literal(
+                this="@IF(@model_kind_name != 'VIEW', 'TRANSIENT', NULL)", is_string=True
+            )
+        }
+    )
+
+    # Validate use of TRANSIENT type for FULL model
+    assert full_model.render_physical_properties() == {
+        "creatable_type": exp.Literal(this="TRANSIENT", is_string=True)
+    }
+
+    # Validate disabling the creatable_type property for VIEW model
+    assert view_model.render_physical_properties() == {}
 
 
 def test_project_level_properties_python_model():
@@ -5727,7 +5793,8 @@ def test_macros_in_physical_properties(make_snapshot):
                     @resolve_template('hdfs://@{catalog_name}/@{schema_name}/dev/@{table_name}'),
                     @resolve_template('s3://prod/@{table_name}')
                 ),
-                sort_order = @IF(@gateway = 'prod', 'desc', 'asc')
+                sort_order = @IF(@gateway = 'prod', 'desc', 'asc'),
+                conditional_prop = @IF(@gateway == 'prod', 'PROD_PROP', NULL)
             )
         );
 
@@ -5743,11 +5810,13 @@ def test_macros_in_physical_properties(make_snapshot):
     assert "location1" in model.physical_properties
     assert "location2" in model.physical_properties
     assert "sort_order" in model.physical_properties
+    assert "conditional_prop" in model.physical_properties
 
     # load time is a no-op
     assert isinstance(model.physical_properties["location1"], d.MacroFunc)
     assert isinstance(model.physical_properties["location2"], d.MacroFunc)
     assert isinstance(model.physical_properties["sort_order"], d.MacroFunc)
+    assert isinstance(model.physical_properties["conditional_prop"], d.MacroFunc)
 
     # substitution occurs at runtime
     snapshot = make_snapshot(model)
@@ -5768,6 +5837,9 @@ def test_macros_in_physical_properties(make_snapshot):
         == f"hdfs://unit_test/sqlmesh__test/dev/test__test_model__{snapshot.version}"
     )
     assert rendered_physical_properties["sort_order"].text("this") == "asc"
+
+    # the conditional_prop will be disabled for "dev" gateway
+    assert "conditional_prop" not in rendered_physical_properties
 
 
 def test_macros_in_model_statement(sushi_context, assert_exp_eq):
