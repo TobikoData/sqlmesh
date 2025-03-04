@@ -591,7 +591,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         self._linters.clear()
         self._environment_statements = []
 
-        for i, project in enumerate(loaded_projects):
+        for loader, project in zip(self._loaders, loaded_projects):
             self._jinja_macros = self._jinja_macros.merge(project.jinja_macros)
             self._macros.update(project.macros)
             self._models.update(project.models)
@@ -603,7 +603,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             if project.environment_statements:
                 self._environment_statements.append(project.environment_statements)
 
-            config = self._loaders[i].config
+            config = loader.config
             self._linters[config.project] = Linter.from_rules(
                 BUILTIN_RULES.union(project.user_rules), config.linter
             )
