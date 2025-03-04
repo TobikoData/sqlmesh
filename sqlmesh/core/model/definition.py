@@ -661,7 +661,6 @@ class _Model(ModelMeta, frozen=True):
         def _render(expression: exp.Expression) -> exp.Expression | None:
             # note: we use the _statement_renderer instead of _create_renderer because it sets model_fqn which
             # in turn makes @this_model available in the evaluation context
-            render_kwargs["model_kind_name"] = self.kind.name
             rendered_exprs = self._statement_renderer(
                 exp.maybe_parse(expression.this)
                 if isinstance(expression, exp.Literal)
