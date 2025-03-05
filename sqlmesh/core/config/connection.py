@@ -912,6 +912,7 @@ class BigQueryConnectionConfig(ConnectionConfig):
     def _static_connection_kwargs(self) -> t.Dict[str, t.Any]:
         """The static connection kwargs for this connection"""
         import google.auth
+        from google.auth import impersonated_credentials
         from google.api_core import client_info, client_options
         from google.oauth2 import credentials, service_account
 
@@ -938,8 +939,6 @@ class BigQueryConnectionConfig(ConnectionConfig):
             raise ConfigError("Invalid BigQuery Connection Method")
 
         if self.impersonated_service_account:
-            from google.auth import impersonated_credentials
-
             creds = impersonated_credentials.Credentials(
                 source_credentials=creds,
                 target_principal=self.impersonated_service_account,
