@@ -2104,11 +2104,11 @@ def test_python_model_with_properties(make_snapshot):
 
     assert m.physical_properties == {
         "partition_expiration_days": exp.convert(7),
-        "creatable_type": exp.Literal(
-            this="@IF(@model_kind_name != 'view', 'TRANSIENT', NULL)", is_string=True
+        "creatable_type": exp.maybe_parse(
+            "@IF(@model_kind_name != 'view', 'TRANSIENT', NULL)", dialect="duckdb"
         ),
-        "conditional_prop": exp.Literal(
-            this="@IF(@model_kind_name == 'view', 'view_prop', NULL)", is_string=True
+        "conditional_prop": exp.maybe_parse(
+            "@IF(@model_kind_name == 'view', 'view_prop', NULL)", dialect="duckdb"
         ),
     }
 
@@ -3666,8 +3666,8 @@ def test_conditional_physical_properties(make_snapshot):
         view_model.physical_properties
         == full_model.physical_properties
         == {
-            "creatable_type": exp.Literal(
-                this="@IF(@model_kind_name != 'VIEW', 'TRANSIENT', NULL)", is_string=True
+            "creatable_type": exp.maybe_parse(
+                "@IF(@model_kind_name != 'VIEW', 'TRANSIENT', NULL)", dialect="snowflake"
             )
         }
     )
@@ -3731,6 +3731,111 @@ def test_project_level_properties_python_model():
     assert not m.enabled
     assert m.allow_partials
     assert m.interval_unit == IntervalUnit.QUARTER_HOUR
+
+
+def test_model_defaults_macros(make_snapshot):
+    model_defaults = ModelDefaultsConfig(
+        table_format="@IF(@gateway = 'dev', 'iceberg', NULL)",
+        storage_format="@IF(@gateway = 'local', 'parquet', NULL)",
+        validate_query="@IF(@gateway = 'dev', True, False)",
+        optimize_query="@IF(@gateway = 'dev', True, False)",
+        enabled="@IF(@gateway = 'dev', True, False)",
+        allow_partials="@IF(@gateway = 'local', True, False)",
+        interval_unit="@IF(@gateway = 'local', 'quarter_hour', 'day')",
+        start="@IF(@gateway = 'dev', '1 month ago', '2024-01-01')",
+        session_properties={
+            "spark.executor.cores": "@IF(@gateway = 'dpev', 1, 2)",
+            "spark.executor.memory": "1G",
+            "unset_property": "@IF(@model_kind_name = 'FULL', 'NOTSET', NULL)",
+        },
+        physical_properties={
+            "partition_expiration_days": 13,
+            "creatable_type": "@IF(@model_kind_name = 'FULL', 'TRANSIENT', NULL)",
+        },
+        virtual_properties={
+            "creatable_type": "@create_type",
+            "unset_property": "@IF(@model_kind_name = 'FULL', 'NOTSET', NULL)",
+        },
+    )
+
+    model = load_sql_based_model(
+        d.parse(
+            """
+        MODEL (
+            name test_schema.test_model,
+            physical_properties (
+                target_lag = '1 hour'
+            ),
+        );
+        SELECT a FROM tbl;
+        """,
+            default_dialect="snowflake",
+        ),
+        defaults=model_defaults.dict(),
+        variables={"gateway": "dev", "create_type": "SECURE"},
+    )
+
+    snapshot: Snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    # Validate rendering of model defaults
+    assert model.optimize_query
+    assert model.validate_query
+    assert model.enabled
+    assert model.start == "1 month ago"
+    assert not model.allow_partials
+    assert model.interval_unit == IntervalUnit.DAY
+    assert model.table_format == "iceberg"
+
+    # Validate disabling of conditional model default
+    assert not model.storage_format
+
+    # The model defaults properties won't be rendered at load time
+    assert model.session_properties == {
+        "spark.executor.cores": exp.maybe_parse(
+            "@IF(@gateway = 'dpev', 1, 2)", dialect="snowflake"
+        ),
+        "spark.executor.memory": "1G",
+        "unset_property": exp.maybe_parse(
+            "@IF(@model_kind_name = 'FULL', 'NOTSET', NULL)", dialect="snowflake"
+        ),
+    }
+
+    assert model.physical_properties == {
+        "partition_expiration_days": exp.convert(13),
+        "creatable_type": exp.maybe_parse(
+            "@IF(@model_kind_name = 'FULL', 'TRANSIENT', NULL)", dialect="snowflake"
+        ),
+        "target_lag": exp.convert("1 hour"),
+    }
+
+    assert model.virtual_properties == {
+        "creatable_type": d.MacroVar(this="create_type"),
+        "unset_property": exp.maybe_parse(
+            "@IF(@model_kind_name = 'FULL', 'NOTSET', NULL)", dialect="snowflake"
+        ),
+    }
+
+    # Validate the correct rendering and removal of conditional properties
+    assert model.render_session_properties(
+        snapshots={model.fqn: snapshot}, python_env=model.python_env
+    ) == {
+        "spark.executor.cores": exp.convert(2),
+        "spark.executor.memory": "1G",
+    }
+
+    assert model.render_physical_properties(
+        snapshots={model.fqn: snapshot}, python_env=model.python_env
+    ) == {
+        "partition_expiration_days": exp.convert(13),
+        "target_lag": exp.convert("1 hour"),
+    }
+
+    assert model.render_virtual_properties(
+        snapshots={model.fqn: snapshot}, python_env=model.python_env
+    ) == {
+        "creatable_type": exp.convert("SECURE"),
+    }
 
 
 def test_model_session_properties(sushi_context):
@@ -5455,13 +5560,13 @@ def test_unrendered_macros_python_model(mocker: MockerFixture) -> None:
     assert "location1" in python_sql_model.physical_properties
     assert "location2" in python_sql_model.physical_properties
 
+    # The properties will stay unrendered at load time
     assert python_sql_model.session_properties == {
-        "spark.executor.cores": 1,
+        "spark.executor.cores": "@IF(@gateway = 'dev', 1, 2)",
         "spark.executor.memory": "1G",
     }
-    assert python_sql_model.virtual_properties["creatable_type"].this == "SECURE"
+    assert python_sql_model.virtual_properties["creatable_type"] == exp.convert("@{create_type}")
 
-    # The physical_properties will stay unrendered at load time
     assert (
         python_sql_model.physical_properties["location1"].text("this")
         == "@'s3://bucket/prefix/@{schema_name}/@{table_name}'"
