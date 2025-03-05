@@ -165,7 +165,7 @@ def test_merge_pr_has_non_breaking_change(
 
 +++ 
 
-@@ -15,7 +15,8 @@
+@@ -16,7 +16,8 @@
 
  SELECT
    CAST(o.waiter_id AS INT) AS waiter_id,
@@ -362,7 +362,7 @@ def test_merge_pr_has_non_breaking_change_diff_start(
 
 +++ 
 
-@@ -15,7 +15,8 @@
+@@ -16,7 +16,8 @@
 
  SELECT
    CAST(o.waiter_id AS INT) AS waiter_id,
@@ -868,7 +868,7 @@ def test_no_merge_since_no_deploy_signal(
 
 +++ 
 
-@@ -15,7 +15,8 @@
+@@ -16,7 +16,8 @@
 
  SELECT
    CAST(o.waiter_id AS INT) AS waiter_id,
@@ -1049,7 +1049,7 @@ def test_no_merge_since_no_deploy_signal_no_approvers_defined(
 
 +++ 
 
-@@ -15,7 +15,8 @@
+@@ -16,7 +16,8 @@
 
  SELECT
    CAST(o.waiter_id AS INT) AS waiter_id,
@@ -1219,7 +1219,7 @@ def test_deploy_comment_pre_categorized(
 
 +++ 
 
-@@ -15,7 +15,8 @@
+@@ -16,7 +16,8 @@
 
  SELECT
    CAST(o.waiter_id AS INT) AS waiter_id,

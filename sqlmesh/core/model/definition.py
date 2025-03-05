@@ -1180,12 +1180,18 @@ class _Model(ModelMeta, frozen=True):
     def partitioned_by(self) -> t.List[exp.Expression]:
         """Columns to partition the model by, including the time column if it is not already included."""
         if self.time_column and not self._is_time_column_in_partitioned_by:
-            return [
-                TIME_COL_PARTITION_FUNC.get(self.dialect, lambda x, y: x)(
-                    self.time_column.column, self.columns_to_types
-                ),
-                *self.partitioned_by_,
-            ]
+            # This allows the user to opt out of automatic time_column injection
+            # by setting `partition_by_time_column false` on the model kind
+            if (
+                hasattr(self.kind, "partition_by_time_column")
+                and self.kind.partition_by_time_column
+            ):
+                return [
+                    TIME_COL_PARTITION_FUNC.get(self.dialect, lambda x, y: x)(
+                        self.time_column.column, self.columns_to_types
+                    ),
+                    *self.partitioned_by_,
+                ]
         return self.partitioned_by_
 
     @property

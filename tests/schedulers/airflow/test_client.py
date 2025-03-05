@@ -113,6 +113,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
                             "time_column": {"column": "`ds`"},
                             "forward_only": False,
                             "on_destructive_change": "ERROR",
+                            "partition_by_time_column": True,
                             "disable_restatement": False,
                             "dialect": "spark",
                         },
