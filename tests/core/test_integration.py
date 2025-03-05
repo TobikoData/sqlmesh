@@ -26,7 +26,7 @@ from sqlmesh.core.config import (
     ModelDefaultsConfig,
     DuckDBConnectionConfig,
 )
-from sqlmesh.core.console import Console, get_console
+from sqlmesh.core.console import Console, set_console, get_console, TerminalConsole
 from sqlmesh.core.context import Context
 from sqlmesh.core.config.categorizer import CategorizerConfig
 from sqlmesh.core.engine_adapter import EngineAdapter
@@ -4267,6 +4267,9 @@ def test_auto_categorization(sushi_context: Context):
 
 
 def test_multi(mocker):
+    orig_console = get_console()
+    set_console(TerminalConsole())
+
     context = Context(
         paths=["examples/multi/repo_1", "examples/multi/repo_2"], gateway="memory", load=False
     )
@@ -4334,6 +4337,8 @@ def test_multi(mocker):
     assert environment_statements[0].after_all == [
         "CREATE TABLE IF NOT EXISTS after_1 AS select @dup()"
     ]
+
+    set_console(orig_console)
 
 
 def test_multi_dbt(mocker):

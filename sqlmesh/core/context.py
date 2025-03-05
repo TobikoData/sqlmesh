@@ -505,9 +505,7 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         model.validate_definition()
 
-        # Linter may be `None` if the context is not loaded yet
-        if linter := self._linters.get(model.project):
-            linter.lint_model(model)
+        self.lint_models(model)
 
         return model
 
@@ -646,12 +644,12 @@ class GenericContext(BaseContext, t.Generic[C]):
                 linters=self._linters,
             )
 
-            for model in self.models.values():
+            models = self.models.values()
+            for model in models:
                 # The model definition can be validated correctly only after the schema is set.
                 model.validate_definition()
 
-                if linter := self._linters.get(model.project):
-                    linter.lint_model(model)
+            self.lint_models(*models)
 
         duplicates = set(self._models) & set(self._standalone_audits)
         if duplicates:
@@ -2378,6 +2376,19 @@ class GenericContext(BaseContext, t.Generic[C]):
                 if s.name not in models_for_interval_end
             )
         return models_for_interval_end
+
+    def lint_models(self, *models: Model) -> None:
+        found_error = False
+
+        for model in models:
+            # Linter may be `None` if the context is not loaded yet
+            if linter := self._linters.get(model.project):
+                found_error = linter.lint_model(model) or found_error
+
+        if found_error:
+            raise ConfigError(
+                "Linter detected errors in the code. Please fix them before proceeding."
+            )
 
 
 class Context(GenericContext[Config]):

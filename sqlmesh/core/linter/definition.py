@@ -50,9 +50,9 @@ class Linter:
 
         return Linter(config.enabled, all_rules, rules, warn_rules)
 
-    def lint_model(self, model: Model) -> None:
+    def lint_model(self, model: Model) -> bool:
         if not self.enabled:
-            return
+            return False
 
         ignored_rules = select_rules(self.all_rules, model.ignored_rules)
 
@@ -63,10 +63,10 @@ class Linter:
         warn_violations = warn_rules.check_model(model)
 
         if warn_violations:
-            warn_msg = "\n".join(f" - {warn_violation}" for warn_violation in warn_violations)
-            get_console().log_warning(f"Linter warnings for {model._path}:\n{warn_msg}")
+            get_console().show_linter_violations(warn_violations, model)
 
         if error_violations:
-            error_msg = "\n".join(f" - {error_violations}" for error_violations in error_violations)
+            get_console().show_linter_violations(error_violations, model, is_error=True)
+            return True
 
-            raise_config_error(f"Linter error for {model._path}:\n{error_msg}")
+        return False
