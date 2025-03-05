@@ -126,7 +126,7 @@ Next, name your app "Tobiko Cloud". You can add the app logo by downloading the 
 
     ![okta_setup_3](./single_sign_on/okta_setup_3.png)
 
-2. Fill in the Attribute Statements section with email, first_name, and last_name: These are required to properly map to your users. 
+2. Fill in the Attribute Statements section with email, firstName, and lastName: These are required to properly map to your users. 
 
     ![okta_setup_4](./single_sign_on/okta_setup_4.png)
 
