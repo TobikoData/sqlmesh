@@ -156,9 +156,9 @@ pip install "sqlmesh[bigquery]"
 | `refresh_token`                 | OAuth 2.0 refresh token                                                                                                                                           | string |    N     |
 | `client_id`                     | OAuth 2.0 client ID                                                                                                                                               | string |    N     |
 | `client_secret`                 | OAuth 2.0 client secret                                                                                                                                           | string |    N     |
-| `token_uri`                     | OAuth 2.0 authorization server's toke endpoint URI                                                                                                                | string |    N     |
+| `token_uri`                     | OAuth 2.0 authorization server's token endpoint URI                                                                                                                | string |    N     |
 | `scopes`                        | The scopes used to obtain authorization                                                                                                                           |  list  |    N     |
-| `impersonated_service_account`  | The service account to impersonate                                                                                                                                | string |    N     |
+| `impersonated_service_account`  | If set, SQLMesh will attempt to impersonate this service account                                                                                                                                | string |    N     |
 | `job_creation_timeout_seconds`  | The maximum amount of time, in seconds, to wait for the underlying job to be created.                                                                             |  int   |    N     |
 | `job_execution_timeout_seconds` | The maximum amount of time, in seconds, to wait for the underlying job to complete.                                                                               |  int   |    N     |
 | `job_retries`                   | The number of times to retry the underlying job if it fails. (Default: `1`)                                                                                       |  int   |    N     |
@@ -228,10 +228,13 @@ sqlmesh_airflow = SQLMeshAirflow(
     - Related Credential Configuration:
         - `keyfile_json` (Required)
         - `scopes` (Optional)
-- [service-account-impersonation](https://google-auth.readthedocs.io/en/latest/reference/google.auth.impersonated_credentials.html)
-    - Related Credential Configuration:
-        - `impersonated_service_account` (Required)
-        - `scopes` (Optional)
+
+If the `impersonated_service_account` argument is set, SQLMesh will:
+
+1. Authenticate user account credentials with one of the methods above
+2. Attempt to impersonate the service account with those credentials
+
+The user account must have [sufficient permissions to impersonate the service account](https://cloud.google.com/docs/authentication/use-service-account-impersonation).
 
 ## Permissions Required
 With any of the above connection methods, ensure these BigQuery permissions are enabled to allow SQLMesh to work correctly.

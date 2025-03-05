@@ -817,7 +817,6 @@ class BigQueryConnectionMethod(str, Enum):
     OAUTH_SECRETS = "oauth-secrets"
     SERVICE_ACCOUNT = "service-account"
     SERVICE_ACCOUNT_JSON = "service-account-json"
-    SERVICE_ACCOUNT_IMPERSONATION = "service-account-impersonation"
 
 
 class BigQueryPriority(str, Enum):
@@ -913,6 +912,7 @@ class BigQueryConnectionConfig(ConnectionConfig):
     def _static_connection_kwargs(self) -> t.Dict[str, t.Any]:
         """The static connection kwargs for this connection"""
         import google.auth
+        from google.auth import impersonated_credentials
         from google.api_core import client_info, client_options
         from google.oauth2 import credentials, service_account
 
@@ -926,16 +926,6 @@ class BigQueryConnectionConfig(ConnectionConfig):
             creds = service_account.Credentials.from_service_account_info(
                 self.keyfile_json, scopes=self.scopes
             )
-        elif self.method == BigQueryConnectionMethod.SERVICE_ACCOUNT_IMPERSONATION:
-            from google.auth import impersonated_credentials
-
-            default_creds, _ = google.auth.default()
-
-            creds = impersonated_credentials.Credentials(
-                source_credentials=default_creds,
-                target_principal=self.impersonated_service_account,
-                target_scopes=self.scopes,
-            )
         elif self.method == BigQueryConnectionMethod.OAUTH_SECRETS:
             creds = credentials.Credentials(
                 token=self.token,
@@ -947,6 +937,13 @@ class BigQueryConnectionConfig(ConnectionConfig):
             )
         else:
             raise ConfigError("Invalid BigQuery Connection Method")
+
+        if self.impersonated_service_account:
+            creds = impersonated_credentials.Credentials(
+                source_credentials=creds,
+                target_principal=self.impersonated_service_account,
+                target_scopes=self.scopes,
+            )
 
         options = client_options.ClientOptions(quota_project_id=self.quota_project)
         project = self.execution_project or self.project or None
