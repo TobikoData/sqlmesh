@@ -594,6 +594,7 @@ def _create_parser(expression_type: t.Type[exp.Expression], table_keys: t.List[s
                         ModelKindName.INCREMENTAL_BY_TIME_RANGE,
                         ModelKindName.INCREMENTAL_BY_UNIQUE_KEY,
                         ModelKindName.INCREMENTAL_BY_PARTITION,
+                        ModelKindName.INCREMENTAL_UNMANAGED,
                         ModelKindName.SEED,
                         ModelKindName.VIEW,
                         ModelKindName.SCD_TYPE_2,

@@ -124,7 +124,7 @@ def serialize_model(context: Context, model: Model, render_query: bool = False) 
     return models.Model(
         name=model.name,
         fqn=model.fqn,
-        path=str(model._path.relative_to(context.path)),
+        path=str(model._path.absolute().relative_to(context.path)),
         dialect=dialect,
         columns=columns,
         details=details,
