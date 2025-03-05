@@ -386,11 +386,18 @@ class SqlMeshLoader(Loader):
         Loads all of the models within the model directory with their associated
         audits into a Dict and creates the dag
         """
-        models = self._load_sql_models(macros, jinja_macros, audits, signals)
-        models.update(self._load_external_models(audits, gateway))
-        models.update(self._load_python_models(macros, jinja_macros, audits, signals))
+        sql_models = self._load_sql_models(macros, jinja_macros, audits, signals)
+        external_models = self._load_external_models(audits, gateway)
+        python_models = self._load_python_models(macros, jinja_macros, audits, signals)
 
-        return models
+        all_model_names = (
+            list(sql_models.keys()) + list(external_models.keys()) + list(python_models.keys())
+        )
+        duplicates = [name for name, count in t.Counter(all_model_names).items() if count > 1]
+        if duplicates:
+            raise ValueError(f"Duplicate model name(s) found: {', '.join(duplicates)}.")
+
+        return UniqueKeyDict("models", **sql_models, **external_models, **python_models)
 
     def _load_sql_models(
         self,
