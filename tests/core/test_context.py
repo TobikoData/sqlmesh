@@ -1641,26 +1641,22 @@ def test_environment_statements_dialect(tmp_path: Path):
 
 
 @pytest.mark.slow
-def test_model_linting(tmp_path: pathlib.Path, sushi_context) -> None:
+def test_model_linting(tmp_path: pathlib.Path, sushi_context, capsys) -> None:
     cfg = LinterConfig(enabled=True, rules="ALL")
     ctx = Context(
         config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"), linter=cfg),
         paths=tmp_path,
     )
 
+    config_err = "Linter detected errors in the code. Please fix them before proceeding."
+
     # Case: Ensure load DOES NOT work if linter is enabled
     for query in ("SELECT * FROM tbl", "SELECT t.* FROM tbl"):
-        with pytest.raises(
-            ConfigError,
-            match=r".*Query should not contain SELECT.*",
-        ):
+        with pytest.raises(ConfigError, match=config_err):
             ctx.upsert_model(load_sql_based_model(d.parse(f"MODEL (name test); {query}")))
 
     error_model = load_sql_based_model(d.parse("MODEL (name test2); SELECT col"))
-    with pytest.raises(
-        ConfigError,
-        match=r""".*Column '"col"' could not be resolved for model.*""",
-    ):
+    with pytest.raises(ConfigError, match=config_err):
         ctx.upsert_model(error_model)
 
     # Case: Ensure optimized query is not cached if the model did not pass linting
@@ -1728,10 +1724,8 @@ def test_model_linting(tmp_path: pathlib.Path, sushi_context) -> None:
             default_catalog="memory",
         )
     )
-    with pytest.raises(
-        ConfigError,
-        match=r".*All models should have an owner.*",
-    ):
+
+    with pytest.raises(ConfigError, match=config_err):
         sushi_context.load()
 
     # Case: Ensure the Linter also picks up Python model violations
@@ -1752,10 +1746,7 @@ def test_model_linting(tmp_path: pathlib.Path, sushi_context) -> None:
     )
 
     for python_model in (model3, model4):
-        with pytest.raises(
-            ConfigError,
-            match=r".*All models should have an owner.*",
-        ):
+        with pytest.raises(ConfigError, match=config_err):
             sushi_context.upsert_model(python_model)
 
     @model(name="memory.sushi.model5", columns={"col": "int"}, owner="test")

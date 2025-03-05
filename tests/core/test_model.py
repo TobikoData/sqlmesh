@@ -14,6 +14,7 @@ from sqlglot.errors import ParseError
 from sqlglot.schema import MappingSchema
 from sqlmesh.cli.example_project import init_example_project, ProjectTemplate
 from sqlmesh.core.model.kind import TimeColumn, ModelKindName
+from sqlmesh.core.console import set_console, get_console, TerminalConsole
 
 from sqlmesh import CustomMaterialization, CustomKind
 from pydantic import model_validator
@@ -282,6 +283,9 @@ def test_model_validation_union_query():
 
 
 def test_model_qualification(tmp_path: Path):
+    orig_console = get_console()
+    set_console(TerminalConsole())
+
     with patch.object(get_console(), "log_warning") as mock_logger:
         expressions = d.parse(
             """
@@ -303,6 +307,8 @@ def test_model_qualification(tmp_path: Path):
             """Column '"a"' could not be resolved for model '"db"."table"', the column may not exist or is ambiguous."""
             in mock_logger.call_args[0][0]
         )
+
+    set_console(orig_console)
 
 
 @pytest.mark.parametrize(
@@ -2731,6 +2737,9 @@ def test_no_depends_on_runtime_jinja_query():
 
 
 def test_update_schema(tmp_path: Path):
+    orig_console = get_console()
+    set_console(TerminalConsole())
+
     expressions = d.parse(
         """
         MODEL (name db.table);
@@ -2765,8 +2774,13 @@ def test_update_schema(tmp_path: Path):
     }
     model.render_query(needs_optimization=True)
 
+    set_console(orig_console)
+
 
 def test_missing_schema_warnings(tmp_path: Path):
+    orig_console = get_console()
+    set_console(TerminalConsole())
+
     full_schema = MappingSchema(
         {
             "a": {"x": exp.DataType.build("int")},
@@ -2839,6 +2853,8 @@ def test_missing_schema_warnings(tmp_path: Path):
         )
         model.render_query(needs_optimization=True)
         mock_logger.assert_not_called()
+
+    set_console(orig_console)
 
 
 def test_user_provided_depends_on():
@@ -7660,6 +7676,8 @@ def test_compile_time_checks(tmp_path: Path, assert_exp_eq):
         config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb")), paths=tmp_path
     )
 
+    cfg_err = "Linter detected errors in the code. Please fix them before proceeding."
+
     # Strict SELECT * expansion
     linter_cfg = LinterConfig(
         enabled=True, rules=["ambiguousorinvalidcolumn", "invalidselectstarexpansion"]
@@ -7677,10 +7695,7 @@ def test_compile_time_checks(tmp_path: Path, assert_exp_eq):
 
     ctx.load()
 
-    with pytest.raises(
-        ConfigError,
-        match=r".*cannot be expanded due to missing schema.*",
-    ):
+    with pytest.raises(ConfigError, match=cfg_err):
         ctx.upsert_model(load_sql_based_model(strict_query))
 
     # Strict column resolution
@@ -7694,10 +7709,7 @@ def test_compile_time_checks(tmp_path: Path, assert_exp_eq):
     """
     )
 
-    with pytest.raises(
-        ConfigError,
-        match=r"""Column '"foo"' could not be resolved for model.*""",
-    ):
+    with pytest.raises(ConfigError, match=cfg_err):
         ctx.upsert_model(load_sql_based_model(strict_query))
 
 
