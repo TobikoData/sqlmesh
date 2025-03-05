@@ -10,6 +10,7 @@ from sqlglot.helper import ensure_collection, ensure_list
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
 from sqlmesh.core import dialect as d
+from sqlmesh.core.config.linter import LinterConfig
 from sqlmesh.core.dialect import normalize_model_name, extract_func_call
 from sqlmesh.core.model.common import (
     bool_validator,
@@ -76,7 +77,9 @@ class ModelMeta(_Node):
     physical_version: t.Optional[str] = None
     gateway: t.Optional[str] = None
     optimize_query: t.Optional[bool] = None
-    validate_query: t.Optional[bool] = None
+    ignored_rules_: t.Optional[t.Set[str]] = Field(
+        default=None, exclude=True, alias="ignored_rules"
+    )
 
     _bool_validator = bool_validator
     _model_kind_validator = model_kind_validator
@@ -285,6 +288,10 @@ class ModelMeta(_Node):
 
         return refs
 
+    @field_validator("ignored_rules_", mode="before")
+    def ignored_rules_validator(cls, vs: t.Any) -> t.Any:
+        return LinterConfig._validate_rules(vs)
+
     @model_validator(mode="before")
     def _pre_root_validator(cls, data: t.Any) -> t.Any:
         if not isinstance(data, dict):
@@ -459,3 +466,7 @@ class ModelMeta(_Node):
     @property
     def on_destructive_change(self) -> OnDestructiveChange:
         return getattr(self.kind, "on_destructive_change", OnDestructiveChange.ALLOW)
+
+    @property
+    def ignored_rules(self) -> t.Set[str]:
+        return self.ignored_rules_ or set()

@@ -75,6 +75,8 @@ from sqlmesh.core.dialect import (
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.environment import Environment, EnvironmentNamingInfo, EnvironmentStatements
 from sqlmesh.core.loader import Loader
+from sqlmesh.core.linter.definition import Linter
+from sqlmesh.core.linter.rules import BUILTIN_RULES
 from sqlmesh.core.macros import ExecutableOrMacro, macro
 from sqlmesh.core.metric import Metric, rewrite
 from sqlmesh.core.model import Model, update_model_schemas
@@ -349,6 +351,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         self._environment_statements: t.List[EnvironmentStatements] = []
         self._excluded_requirements: t.Set[str] = set()
         self._default_catalog: t.Optional[str] = None
+        self._linters: t.Dict[str, Linter] = {}
         self._loaded: bool = False
 
         self.path, self.config = t.cast(t.Tuple[Path, C], next(iter(self.configs.items())))
@@ -490,12 +493,19 @@ class GenericContext(BaseContext, t.Generic[C]):
             }
         )
 
-        update_model_schemas(self.dag, models=self._models, context_path=self.path)
+        update_model_schemas(
+            self.dag,
+            models=self._models,
+            context_path=self.path,
+            linters=self._linters,
+        )
 
         if model.dialect:
             self._all_dialects.add(model.dialect)
 
         model.validate_definition()
+
+        self.lint_models(model)
 
         return model
 
@@ -576,9 +586,10 @@ class GenericContext(BaseContext, t.Generic[C]):
         self._metrics.clear()
         self._requirements.clear()
         self._excluded_requirements.clear()
+        self._linters.clear()
         self._environment_statements = []
 
-        for project in loaded_projects:
+        for loader, project in zip(self._loaders, loaded_projects):
             self._jinja_macros = self._jinja_macros.merge(project.jinja_macros)
             self._macros.update(project.macros)
             self._models.update(project.models)
@@ -589,6 +600,11 @@ class GenericContext(BaseContext, t.Generic[C]):
             self._excluded_requirements.update(project.excluded_requirements)
             if project.environment_statements:
                 self._environment_statements.append(project.environment_statements)
+
+            config = loader.config
+            self._linters[config.project] = Linter.from_rules(
+                BUILTIN_RULES.union(project.user_rules), config.linter
+            )
 
         uncached = set()
 
@@ -621,11 +637,19 @@ class GenericContext(BaseContext, t.Generic[C]):
                     self._models.update({fqn: model.copy(update={"mapping_schema": {}})})
                     continue
 
-            update_model_schemas(self.dag, models=self._models, context_path=self.path)
+            update_model_schemas(
+                self.dag,
+                models=self._models,
+                context_path=self.path,
+                linters=self._linters,
+            )
 
-            for model in self.models.values():
+            models = self.models.values()
+            for model in models:
                 # The model definition can be validated correctly only after the schema is set.
                 model.validate_definition()
+
+            self.lint_models(*models)
 
         duplicates = set(self._models) & set(self._standalone_audits)
         if duplicates:
@@ -2352,6 +2376,19 @@ class GenericContext(BaseContext, t.Generic[C]):
                 if s.name not in models_for_interval_end
             )
         return models_for_interval_end
+
+    def lint_models(self, *models: Model) -> None:
+        found_error = False
+
+        for model in models:
+            # Linter may be `None` if the context is not loaded yet
+            if linter := self._linters.get(model.project):
+                found_error = linter.lint_model(model) or found_error
+
+        if found_error:
+            raise ConfigError(
+                "Linter detected errors in the code. Please fix them before proceeding."
+            )
 
 
 class Context(GenericContext[Config]):
