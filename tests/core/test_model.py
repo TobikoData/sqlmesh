@@ -3003,6 +3003,42 @@ def test_incremental_unmanaged_validation():
     model.validate_definition()
 
 
+def test_incremental_unmanaged():
+    expr = d.parse(
+        """
+        MODEL (
+            name foo,
+            kind INCREMENTAL_UNMANAGED
+        );
+
+        SELECT x.a AS a FROM test.x AS x
+        """
+    )
+
+    model = load_sql_based_model(expressions=expr)
+
+    assert isinstance(model.kind, IncrementalUnmanagedKind)
+    assert not model.kind.insert_overwrite
+
+    expr = d.parse(
+        """
+        MODEL (
+            name foo,
+            kind INCREMENTAL_UNMANAGED (
+                insert_overwrite true
+            ),
+            partitioned_by a
+        );
+
+        SELECT x.a AS a FROM test.x AS x
+        """
+    )
+
+    model = load_sql_based_model(expressions=expr)
+    assert isinstance(model.kind, IncrementalUnmanagedKind)
+    assert model.kind.insert_overwrite
+
+
 def test_custom_interval_unit():
     assert (
         load_sql_based_model(
