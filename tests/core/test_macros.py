@@ -921,7 +921,7 @@ def test_date_spine(assert_exp_eq, dialect, date_part):
                     CAST('2022-01-01' AS DATE),
                     CAST('2024-12-31' AS DATE),
                     INTERVAL '{interval}'
-                ) AS value
+                ) AS _t(value)
         ) AS _exploded(date_{date_part})
         """
     elif dialect == "spark":
