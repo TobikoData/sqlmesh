@@ -135,7 +135,7 @@ class OptimizedQueryCache:
 
         if self.linters:
             linter = self.linters.get(model.project)
-            if linter and linter.rules.keys() & model._render_violations.keys():
+            if linter and linter.rules.keys() & model.violated_rules_for_query.keys():
                 # Do not cache the optimized query if the renderer came across lint errors
                 # Note: The ordering of the intersection check matters here
                 return None
@@ -185,7 +185,7 @@ def load_optimized_query(
 
 def load_optimized_query_and_mapping(
     model: Model, mapping: t.Dict
-) -> t.Tuple[str, t.Optional[str], str, str, t.Dict, t.Optional[t.Dict]]:
+) -> t.Tuple[str, t.Optional[str], str, str, t.Dict]:
     assert _optimized_query_cache
 
     schema = MappingSchema(normalize=False)
@@ -196,9 +196,7 @@ def load_optimized_query_and_mapping(
     if isinstance(model, SqlModel):
         entry_name = _optimized_query_cache._entry_name(model)
         _optimized_query_cache.with_optimized_query(model, entry_name)
-        violated_rules = model._query_renderer._violated_rules
     else:
-        violated_rules = None
         entry_name = None
 
     return (
@@ -207,7 +205,6 @@ def load_optimized_query_and_mapping(
         model.data_hash,
         model.metadata_hash,
         model.mapping_schema,
-        violated_rules,
     )
 
 

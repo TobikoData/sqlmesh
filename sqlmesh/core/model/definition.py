@@ -141,7 +141,6 @@ class _Model(ModelMeta, frozen=True):
 
     _full_depends_on: t.Optional[t.Set[str]] = None
     _statement_renderer_cache: t.Dict[int, ExpressionRenderer] = {}
-    _render_violations: t.Dict[type[Rule], t.Any] = {}
 
     pre_statements_: t.Optional[t.List[exp.Expression]] = Field(
         default=None, alias="pre_statements"
@@ -1217,6 +1216,10 @@ class _Model(ModelMeta, frozen=True):
             col for expr in self.partitioned_by_ for col in expr.find_all(exp.Column)
         }
 
+    @property
+    def violated_rules_for_query(self) -> t.Dict[type[Rule], t.Any]:
+        return {}
+
 
 class SqlModel(_Model):
     """The model definition which relies on a SQL query to fetch the data.
@@ -1277,7 +1280,6 @@ class SqlModel(_Model):
             **kwargs,
         )
 
-        self._render_violations.update(self._query_renderer._violated_rules)
         return query
 
     def render_definition(
@@ -1480,6 +1482,10 @@ class SqlModel(_Model):
     @property
     def _additional_metadata(self) -> t.List[str]:
         return [*super()._additional_metadata, gen(self.query)]
+
+    @property
+    def violated_rules_for_query(self) -> t.Dict[type[Rule], t.Any]:
+        return self._query_renderer._violated_rules
 
 
 class SeedModel(_Model):

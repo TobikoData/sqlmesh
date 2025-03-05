@@ -22,10 +22,7 @@ class NoSelectStar(Rule):
 
 class InvalidSelectStarExpansion(Rule):
     def check_model(self, model: Model) -> t.Optional[RuleViolation]:
-        if not model._render_violations:
-            return None
-
-        deps = model._render_violations.get(InvalidSelectStarExpansion)
+        deps = model.violated_rules_for_query.get(InvalidSelectStarExpansion)
         if not deps:
             return None
 
@@ -40,10 +37,7 @@ class InvalidSelectStarExpansion(Rule):
 
 class AmbiguousOrInvalidColumn(Rule):
     def check_model(self, model: Model) -> t.Optional[RuleViolation]:
-        if not model._render_violations:
-            return None
-
-        sqlglot_err = model._render_violations.get(AmbiguousOrInvalidColumn)
+        sqlglot_err = model.violated_rules_for_query.get(AmbiguousOrInvalidColumn)
         if not sqlglot_err:
             return None
 
