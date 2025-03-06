@@ -32,7 +32,7 @@ from sqlmesh.core.dialect import parse, schema_
 from sqlmesh.core.engine_adapter.duckdb import DuckDBEngineAdapter
 from sqlmesh.core.environment import Environment, EnvironmentNamingInfo, EnvironmentStatements
 from sqlmesh.core.macros import MacroEvaluator
-from sqlmesh.core.model import load_sql_based_model, model, SqlModel
+from sqlmesh.core.model import load_sql_based_model, model, SqlModel, Model
 from sqlmesh.core.model.cache import OptimizedQueryCache
 from sqlmesh.core.renderer import render_statements
 from sqlmesh.core.model.kind import ModelKindName
@@ -1645,6 +1645,13 @@ def test_model_linting(tmp_path: pathlib.Path, sushi_context) -> None:
     orig_console = get_console()
     set_console(TerminalConsole())
 
+    def assert_cached_violations_exist(cache: OptimizedQueryCache, model: Model):
+        model = t.cast(SqlModel, model)
+        cache_entry = cache._file_cache.get(cache._entry_name(model))
+        assert cache_entry is not None
+        assert cache_entry.optimized_rendered_query is not None
+        assert cache_entry.renderer_violations is not None
+
     cfg = LinterConfig(enabled=True, rules="ALL")
     ctx = Context(
         config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"), linter=cfg),
@@ -1662,12 +1669,10 @@ def test_model_linting(tmp_path: pathlib.Path, sushi_context) -> None:
     with pytest.raises(ConfigError, match=config_err):
         ctx.upsert_model(error_model)
 
-    # Case: Ensure optimized query is not cached if the model did not pass linting
-    cache = OptimizedQueryCache(tmp_path / c.CACHE, linters=ctx._linters)
+    # Case: Ensure error violations are cached if the model did not pass linting
+    cache = OptimizedQueryCache(tmp_path / c.CACHE)
 
-    error_model = t.cast(SqlModel, error_model)
-    assert error_model._query_renderer._optimized_cache is None
-    assert not cache._file_cache.exists(cache._entry_name(error_model))
+    assert_cached_violations_exist(cache, error_model)
 
     # Case: Ensure NoSelectStar only raises for top-level SELECTs, new model shouldn't raise
     # and thus should also be cached
@@ -1679,21 +1684,15 @@ def test_model_linting(tmp_path: pathlib.Path, sushi_context) -> None:
     model2 = t.cast(SqlModel, model2)
     assert cache._file_cache.exists(cache._entry_name(model2))
 
-    # Case: Ensure renderer violations are found again even if the optimized query is cached
+    # Case: Ensure warning violations are found again even if the optimized query is cached
     ctx.config.linter = LinterConfig(enabled=True, warn_rules="ALL")
     ctx.load()
-
-    def assert_cached_violations_exist():
-        cache_entry = cache._file_cache.get(cache._entry_name(error_model))
-        assert cache_entry is not None
-        assert cache_entry.optimized_rendered_query is not None
-        assert cache_entry.renderer_violations is not None
 
     for i in range(3):
         with patch.object(get_console(), "log_warning") as mock_logger:
             if i > 1:
                 # Model's violations have been cached from the previous upserts
-                assert_cached_violations_exist()
+                assert_cached_violations_exist(cache, model2)
 
             ctx.upsert_model(error_model)
             assert (
@@ -1702,7 +1701,7 @@ def test_model_linting(tmp_path: pathlib.Path, sushi_context) -> None:
             )
 
             # Model's violations have been cached after the former upsert
-            assert_cached_violations_exist()
+            assert_cached_violations_exist(cache, model2)
 
     # Case: Ensure load WORKS if linter is enabled but the rules are not
     create_temp_file(

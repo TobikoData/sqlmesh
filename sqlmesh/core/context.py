@@ -497,7 +497,6 @@ class GenericContext(BaseContext, t.Generic[C]):
             self.dag,
             models=self._models,
             context_path=self.path,
-            linters=self._linters,
         )
 
         if model.dialect:
@@ -641,7 +640,6 @@ class GenericContext(BaseContext, t.Generic[C]):
                 self.dag,
                 models=self._models,
                 context_path=self.path,
-                linters=self._linters,
             )
 
             models = self.models.values()

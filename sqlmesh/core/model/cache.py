@@ -22,7 +22,6 @@ logger = logging.getLogger(__name__)
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.snapshot import SnapshotId
-    from sqlmesh.core.linter.definition import Linter
     from sqlmesh.core.linter.rule import Rule
 
     T = t.TypeVar("T")
@@ -83,9 +82,8 @@ class OptimizedQueryCache:
         path: The path to the cache folder.
     """
 
-    def __init__(self, path: Path, linters: t.Optional[t.Dict[str, Linter]] = None):
+    def __init__(self, path: Path):
         self.path = path
-        self.linters = linters
         self._file_cache: FileCache[OptimizedQueryCacheEntry] = FileCache(
             path, prefix="optimized_query"
         )
@@ -130,14 +128,6 @@ class OptimizedQueryCache:
 
     def _put(self, name: str, model: SqlModel) -> None:
         optimized_query = model.render_query()
-
-        if self.linters:
-            linter = self.linters.get(model.project)
-            if linter and linter.rules.keys() & model.violated_rules_for_query.keys():
-                # Do not cache the optimized query if the renderer came across lint errors
-                # Note: The ordering of the intersection check matters here
-                return None
-
         new_entry = OptimizedQueryCacheEntry(
             optimized_rendered_query=optimized_query,
             renderer_violations=model.violated_rules_for_query,

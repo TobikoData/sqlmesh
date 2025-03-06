@@ -532,7 +532,7 @@ class QueryRenderer(BaseExpressionRenderer):
 
                 query = self._optimize_query(query, deps)
 
-                if should_cache and not self._violated_rules:
+                if should_cache:
                     self._optimized_cache = query
 
         if needs_optimization:
