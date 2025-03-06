@@ -1,27 +1,12 @@
-import os
-
 import setuptools
+from pathlib import Path
+import toml  # type: ignore
 
-os.chdir(os.path.join(os.path.dirname(__file__), ".."))
-sqlmesh_dist = setuptools.distutils.core.run_setup("setup.py", stop_after="init")  # type: ignore
-requirements = sqlmesh_dist.install_requires + sqlmesh_dist.extras_require["dev"]  # type: ignore
-os.chdir(os.path.dirname(__file__))
+# This relies on `make package-tests` copying the sqlmesh pyproject.toml into tests/ so we can reference it
+# Otherwise, it's not available in the build environment
+sqlmesh_pyproject = Path(__file__).parent / "sqlmesh_pyproject.toml"
+parsed = toml.load(sqlmesh_pyproject)["project"]
+install_requires = parsed["dependencies"] + parsed["optional-dependencies"]["dev"]
 
-setuptools.setup(
-    name="sqlmesh-tests",
-    description="Tests for SQLMesh",
-    url="https://github.com/TobikoData/sqlmesh",
-    author="TobikoData Inc.",
-    author_email="engineering@tobikodata.com",
-    license="Apache License 2.0",
-    package_dir={"sqlmesh_tests": ""},
-    package_data={"": ["fixtures/**"]},
-    use_scm_version={
-        "root": "..",
-        "write_to": "_version.py",
-        "fallback_version": "0.0.0",
-        "local_scheme": "no-local-version",
-    },
-    setup_requires=["setuptools_scm"],
-    install_requires=requirements,
-)
+# this is just so we can have a dynamic install_requires, everything else is defined in pyproject.toml
+setuptools.setup(install_requires=install_requires)
