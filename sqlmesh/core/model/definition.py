@@ -664,12 +664,7 @@ class _Model(ModelMeta, frozen=True):
         def _render(expression: exp.Expression) -> exp.Expression | None:
             # note: we use the _statement_renderer instead of _create_renderer because it sets model_fqn which
             # in turn makes @this_model available in the evaluation context
-            rendered_exprs = self._statement_renderer(
-                exp.maybe_parse(expression.this, dialect=self.dialect)
-                if isinstance(expression, exp.Literal)
-                and (d.SQLMESH_MACRO_PREFIX in expression.this)
-                else expression
-            ).render(**render_kwargs)
+            rendered_exprs = self._statement_renderer(expression).render(**render_kwargs)
 
             # Warn instead of raising for cases where a property is conditionally assigned
             if not rendered_exprs or rendered_exprs[0].sql().lower() in {"none", "null"}:
