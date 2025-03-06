@@ -405,6 +405,7 @@ class IncrementalByTimeRangeKind(_IncrementalBy):
     )
     time_column: TimeColumn
     auto_restatement_intervals: t.Optional[SQLGlotPositiveInt] = None
+    partition_by_time_column: SQLGlotBool = True
 
     _time_column_validator = TimeColumn.validator()
 
@@ -415,6 +416,11 @@ class IncrementalByTimeRangeKind(_IncrementalBy):
             expressions=[
                 *(expressions or []),
                 self.time_column.to_property(kwargs.get("dialect") or ""),
+                *_properties(
+                    {
+                        "partition_by_time_column": self.partition_by_time_column,
+                    }
+                ),
                 *(
                     [_property("auto_restatement_intervals", self.auto_restatement_intervals)]
                     if self.auto_restatement_intervals is not None
@@ -431,6 +437,7 @@ class IncrementalByTimeRangeKind(_IncrementalBy):
     def metadata_hash_values(self) -> t.List[t.Optional[str]]:
         return [
             *super().metadata_hash_values,
+            str(self.partition_by_time_column),
             str(self.auto_restatement_intervals)
             if self.auto_restatement_intervals is not None
             else None,
@@ -649,6 +656,10 @@ class SeedKind(_ModelKind):
     def metadata_hash_values(self) -> t.List[t.Optional[str]]:
         return [*super().metadata_hash_values, str(self.batch_size)]
 
+    @property
+    def supports_python_models(self) -> bool:
+        return False
+
 
 class FullKind(_ModelKind):
     name: t.Literal[ModelKindName.FULL] = ModelKindName.FULL
@@ -809,7 +820,6 @@ class ManagedKind(_ModelKind):
 
 class EmbeddedKind(_ModelKind):
     name: t.Literal[ModelKindName.EMBEDDED] = ModelKindName.EMBEDDED
-    disable_restatement: t.Literal[True] = True
 
     @property
     def supports_python_models(self) -> bool:
@@ -818,7 +828,6 @@ class EmbeddedKind(_ModelKind):
 
 class ExternalKind(_ModelKind):
     name: t.Literal[ModelKindName.EXTERNAL] = ModelKindName.EXTERNAL
-    disable_restatement: t.Literal[True] = True
 
 
 class CustomKind(_ModelKind):

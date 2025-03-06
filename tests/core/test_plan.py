@@ -11,7 +11,7 @@ from sqlglot import parse_one
 from sqlmesh.core.context import Context
 from sqlmesh.core.context_diff import ContextDiff
 from sqlmesh.core.engine_adapter import DuckDBEngineAdapter
-from sqlmesh.core.environment import EnvironmentNamingInfo
+from sqlmesh.core.environment import EnvironmentNamingInfo, EnvironmentStatements
 from sqlmesh.core.model import (
     ExternalModel,
     FullKind,
@@ -789,6 +789,21 @@ def test_restate_models(sushi_context_pre_scheduling: Context):
     assert not plan.restatements
     assert plan.models_to_backfill is None
 
+    plan = sushi_context_pre_scheduling.plan(restate_models=["raw.demographics"], no_prompts=True)
+    assert not plan.has_changes
+    assert plan.restatements
+    assert plan.models_to_backfill == {
+        '"memory"."raw"."demographics"',
+        '"memory"."sushi"."active_customers"',
+        '"memory"."sushi"."customers"',
+        '"memory"."sushi"."marketing"',
+        '"memory"."sushi"."orders"',
+        '"memory"."sushi"."raw_marketing"',
+        '"memory"."sushi"."waiter_as_customer_by_day"',
+        '"memory"."sushi"."waiter_names"',
+        '"memory"."sushi"."waiters"',
+    }
+
 
 @pytest.mark.slow
 @time_machine.travel(now(minute_floor=False), tick=False)
@@ -884,7 +899,7 @@ def test_restate_symbolic_model(make_snapshot, mocker: MockerFixture):
     plan = PlanBuilder(
         context_diff, DuckDBEngineAdapter.SCHEMA_DIFFER, restate_models=[snapshot_a.name]
     ).build()
-    assert not plan.restatements
+    assert plan.restatements
 
 
 def test_restate_seed_model(make_snapshot, mocker: MockerFixture):
@@ -2858,3 +2873,49 @@ def test_restate_daily_to_monthly(make_snapshot, mocker: MockerFixture):
         snapshot_d.snapshot_id: (1739577600000, 1740355200000),
         snapshot_e.snapshot_id: (1739577600000, 1740355200000),
     }
+
+
+def test_plan_environment_statements_diff(make_snapshot):
+    snapshot = make_snapshot(
+        SqlModel(
+            name="test_model_a",
+            dialect="duckdb",
+            query=parse_one("select 1, ds"),
+            kind=dict(name=ModelKindName.INCREMENTAL_BY_TIME_RANGE, time_column="ds"),
+        )
+    )
+
+    context_diff = ContextDiff(
+        environment="test_environment",
+        is_new_environment=False,
+        is_unfinalized_environment=True,
+        normalize_environment_name=True,
+        create_from="prod",
+        create_from_env_exists=True,
+        added=set(),
+        removed_snapshots={},
+        modified_snapshots={},
+        snapshots={snapshot.snapshot_id: snapshot},
+        new_snapshots={},
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
+        environment_statements=[
+            EnvironmentStatements(
+                before_all=["CREATE OR REPLACE TABLE table_1 AS SELECT 1"],
+                after_all=["CREATE OR REPLACE TABLE table_2 AS SELECT 2"],
+                python_env={},
+            )
+        ],
+    )
+
+    assert context_diff.has_changes
+    assert context_diff.has_environment_statements_changes
+    assert (
+        context_diff.environment_statements_diff()
+        == """  before_all:
+    + CREATE OR REPLACE TABLE table_1 AS SELECT 1
+  after_all:
+    + CREATE OR REPLACE TABLE table_2 AS SELECT 2
+"""
+    )

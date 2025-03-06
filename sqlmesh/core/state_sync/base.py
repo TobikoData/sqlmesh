@@ -9,7 +9,7 @@ import typing as t
 from sqlglot import __version__ as SQLGLOT_VERSION
 
 from sqlmesh import migrations
-from sqlmesh.core.environment import Environment, EnvironmentNamingInfo
+from sqlmesh.core.environment import Environment, EnvironmentNamingInfo, EnvironmentStatements
 from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotId,
@@ -185,6 +185,14 @@ class StateReader(abc.ABC):
             next_auto_restatement_ts: A dictionary of snapshot name / version pairs to the next auto restatement timestamp.
         """
 
+    @abc.abstractmethod
+    def get_environment_statements(self, environment: str) -> t.List[EnvironmentStatements]:
+        """Fetches environment statements from the environment_statements table.
+
+        Returns:
+            A list of the Environment Statements.
+        """
+
     def get_versions(self, validate: bool = True) -> Versions:
         """Get the current versions of the SQLMesh schema and libraries.
 
@@ -252,11 +260,8 @@ class StateReader(abc.ABC):
         return versions
 
     @abc.abstractmethod
-    def _get_versions(self, lock_for_update: bool = False) -> Versions:
+    def _get_versions(self) -> Versions:
         """Queries the store to get the current versions of SQLMesh and deps.
-
-        Args:
-            lock_for_update: Whether or not the usage of this method plans to update the row.
 
         Returns:
             The versions object.
@@ -345,6 +350,7 @@ class StateSync(StateReader, abc.ABC):
         self,
         environment: Environment,
         no_gaps_snapshot_names: t.Optional[t.Set[str]] = None,
+        environment_statements: t.Optional[t.List[EnvironmentStatements]] = None,
     ) -> PromotionResult:
         """Update the environment to reflect the current state.
 

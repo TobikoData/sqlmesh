@@ -4,6 +4,16 @@ Although SQL is a powerful tool, some use cases are better handled by Python. Fo
 
 SQLMesh has first-class support for models defined in Python; there are no restrictions on what can be done in the Python model as long as it returns a Pandas or Spark DataFrame instance.
 
+
+!!! info "Unsupported model kinds"
+
+    Python models do not support these [model kinds](./model_kinds.md) - use a SQL model instead.
+
+    * `VIEW`
+    * `SEED`
+    * `MANAGED`
+    * `EMBEDDED`
+
 ## Definition
 
 To create a Python model, add a new file with the `*.py` extension to the `models/` directory. Inside the file, define a function named `execute`. For example:
@@ -317,7 +327,45 @@ Note that arguments must be specified explicitly - variables cannot be accessed 
 
 ## Python model blueprinting
 
-A Python model can also serve as a template for creating multiple models, or _blueprints_, by specifying a list of key-value dicts in the `blueprints` property. Please refer to the Python-based SQL model [documentation page](./sql_models.md#Python-model-blueprinting)) for more details.
+A Python model can also serve as a template for creating multiple models, or _blueprints_, by specifying a list of key-value dicts in the `blueprints` property. In order to achieve this, the model's name must be parameterized with a variable that exists in this mapping.
+
+For instance, the following model will result into two new models, each using the corresponding mapping in the `blueprints` property:
+
+```python linenums="1"
+import typing as t
+from datetime import datetime
+
+import pandas as pd
+from sqlmesh import ExecutionContext, model
+
+@model(
+    "@{customer}.some_table",
+    kind="FULL",
+    blueprints=[
+        {"customer": "customer1", "field_a": "x", "field_b": "y"},
+        {"customer": "customer2", "field_a": "z", "field_b": "w"},
+    ],
+    columns={
+        "field_a": "text",
+        "field_b": "text",
+        "customer": "text",
+    },
+)
+def entrypoint(
+    context: ExecutionContext,
+    start: datetime,
+    end: datetime,
+    execution_time: datetime,
+    **kwargs: t.Any,
+) -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "field_a": [context.var("field_a")],
+            "field_b": [context.var("field_b")],
+            "customer": [context.var("customer")],
+        }
+    )
+```
 
 ## Examples
 ### Basic

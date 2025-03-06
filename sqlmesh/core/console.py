@@ -49,7 +49,7 @@ if t.TYPE_CHECKING:
     from sqlglot.dialects.dialect import DialectType
     from sqlmesh.core.context_diff import ContextDiff
     from sqlmesh.core.plan import Plan, EvaluatablePlan, PlanBuilder, SnapshotIntervals
-    from sqlmesh.core.table_diff import RowDiff, SchemaDiff
+    from sqlmesh.core.table_diff import TableDiff, RowDiff, SchemaDiff
 
     LayoutWidget = t.TypeVar("LayoutWidget", bound=t.Union[widgets.VBox, widgets.HBox])
 
@@ -291,6 +291,10 @@ class Console(abc.ABC):
         """Stop loading for the given id."""
 
     @abc.abstractmethod
+    def show_table_diff_summary(self, table_diff: TableDiff) -> None:
+        """Display information about the tables being diffed and how they are being joined"""
+
+    @abc.abstractmethod
     def show_schema_diff(self, schema_diff: SchemaDiff) -> None:
         """Show table schema diff."""
 
@@ -461,6 +465,9 @@ class NoopConsole(Console):
         return uuid.uuid4()
 
     def loading_stop(self, id: uuid.UUID) -> None:
+        pass
+
+    def show_table_diff_summary(self, table_diff: TableDiff) -> None:
         pass
 
     def show_schema_diff(self, schema_diff: SchemaDiff) -> None:
@@ -853,6 +860,11 @@ class TerminalConsole(Console):
         if context_diff.has_requirement_changes:
             self._print(f"[bold]Requirements:\n{context_diff.requirements_diff()}")
 
+        if context_diff.has_environment_statements_changes:
+            self._print(
+                f"[bold]Environment statements:\n{context_diff.environment_statements_diff()}"
+            )
+
         self._show_summary_tree_for(
             context_diff,
             "Models",
@@ -972,13 +984,13 @@ class TerminalConsole(Console):
                     )
                 elif context_diff.indirectly_modified(name):
                     indirect.add(f"[indirect]{display_name}")
-
-                if context_diff.metadata_updated(name):
+                elif context_diff.metadata_updated(name):
                     metadata.add(
                         f"[metadata]{display_name}"
                         if no_diff
                         else Syntax(f"{display_name}\n{context_diff.text_diff(name)}", "sql")
                     )
+
             if direct.children:
                 tree.add(direct)
             if indirect.children:
@@ -1280,6 +1292,44 @@ class TerminalConsole(Console):
     def loading_stop(self, id: uuid.UUID) -> None:
         self.loading_status[id].stop()
         del self.loading_status[id]
+
+    def show_table_diff_summary(self, table_diff: TableDiff) -> None:
+        tree = Tree("\n[b]Table Diff")
+
+        if table_diff.model_name:
+            model = Tree("Model:")
+            model.add(f"[blue]{table_diff.model_name}[/blue]")
+
+            tree.add(model)
+
+            envs = Tree("Environment:")
+            source = Tree(
+                f"Source: [{self.TABLE_DIFF_SOURCE_BLUE}]{table_diff.source_alias}[/{self.TABLE_DIFF_SOURCE_BLUE}]"
+            )
+            envs.add(source)
+
+            target = Tree(f"Target: [green]{table_diff.target_alias}[/green]")
+            envs.add(target)
+
+            tree.add(envs)
+
+        tables = Tree("Tables:")
+
+        tables.add(
+            f"Source: [{self.TABLE_DIFF_SOURCE_BLUE}]{table_diff.source}[/{self.TABLE_DIFF_SOURCE_BLUE}]"
+        )
+        tables.add(f"Target: [green]{table_diff.target}[/green]")
+
+        tree.add(tables)
+
+        join = Tree("Join On:")
+        _, _, key_column_names = table_diff.key_columns
+        for col_name in key_column_names:
+            join.add(f"[yellow]{col_name}[/yellow]")
+
+        tree.add(join)
+
+        self._print(tree)
 
     def show_schema_diff(self, schema_diff: SchemaDiff) -> None:
         source_name = schema_diff.source
@@ -1909,6 +1959,9 @@ class MarkdownConsole(CaptureTerminalConsole):
         if context_diff.has_requirement_changes:
             self._print(f"Requirements:\n{context_diff.requirements_diff()}")
 
+        if context_diff.has_environment_statements_changes:
+            self._print(f"Environment statements:\n{context_diff.environment_statements_diff()}")
+
         added_snapshots = {context_diff.snapshots[s_id] for s_id in context_diff.added}
         added_snapshot_models = {s for s in added_snapshots if s.is_model}
         if added_snapshot_models:
@@ -2380,6 +2433,9 @@ class DebuggerTerminalConsole(TerminalConsole):
 
         if context_diff.has_requirement_changes:
             self._write(f"Requirements:\n{context_diff.requirements_diff()}")
+
+        if context_diff.has_environment_statements_changes:
+            self._write(f"Environment statements:\n{context_diff.environment_statements_diff()}")
 
         for added in context_diff.new_snapshots:
             self._write(f"  Added: {added}")

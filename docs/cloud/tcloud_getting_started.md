@@ -1,7 +1,5 @@
 # Tobiko Cloud: Getting Started
 
-<div style="position: relative; padding-bottom: 56.25%; height: 0;"><iframe src="https://www.loom.com/embed/bfd7da9166324b0e987c3824f824d929?sid=5d14308f-1e2c-4883-8ac0-29173a698f71" frameborder="0" webkitallowfullscreen mozallowfullscreen allowfullscreen style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"></iframe></div>
-
 Tobiko Cloud is a data platform that extends SQLMesh to make it easy to manage data at scale without the waste.
 
 We're here to make it easy to get started and feel confident that everything is working as expected. After you've completed the steps below, you'll have achieved the following:
@@ -64,9 +62,14 @@ Technical Requirements:
 
 The first step to setting up Tobiko Cloud is logging in to the web interface:
 
-1. Open a browser and navigate to the Tobiko Cloud URL (ex: https://cloud.tobikodata.com/sqlmesh/tobiko/public-demo/observer/)
-2. Leave the username blank and use the temporary password you received from the Solutions Architect in the temporary password link
-3. Once logged in, you should see the home page. Your view should be empty, but the figure below shows a populated example with Tobiko Cloud running in production:
+1. We will authenticate into your Tobiko Cloud instance. If it is your first time going through this flow, your Solutions Architect will    guide you on [how to get SSO configured](https://sqlmesh.readthedocs.io/en/stable/cloud/features/single_sign_on/). Open the url below.
+    ```bash
+    https://cloud.tobikodata.com/auth/login
+    ```
+2. Once logged in, you should see the home page. If you are not redirected, then input your Tobiko Cloud URL in the browser (ex: 
+https://cloud.tobikodata.com/sqlmesh/tobiko/public-demo/observer/)  
+
+    Your view should be empty, but the figure below shows a populated example with Tobiko Cloud running in production:
 
 <br></br>
 ![tcloud home page](./tcloud_getting_started/tcloud_home_page.png)
@@ -143,53 +146,15 @@ Now we're ready to connect your data warehouse to Tobiko Cloud:
     default_project: public-demo # TODO: update this for the project name in the URL
     ```
 
-2. Export the token from the Solutions Architect:
+2. If you are going through the SSO flow then, run the following command:
+    ``` bash
+    tcloud auth login
+    ``` 
+    This will fire off the SSO flow and open a link in your browser to authenticate. 
 
-    `tcloud` provides your security token to Tobiko Cloud via the `TCLOUD_TOKEN` environment variable, so we must create and export it.
+    Once authenticated, you will see the following screen. 
 
-    Obtain the token from your Solutions Architect, then pass it to the environment variable with this command (substituting your token value in single quotes):
-
-    ```bash
-    export TCLOUD_TOKEN=<your token> # ex: export TCLOUD_TOKEN='jiaowjifeoawj$22fe'
-    ```
-
-    > Note: always include the single quotes ' ' around your token
-
-    ??? "Storing your token"
-
-        Always follow your organization's procedures for storing secrets and credentials.
-
-        The command above will create the `TCLOUD_TOKEN` environment variable, but the variable will only exist for the duration of the terminal session. We need a mechanism to create and export the variable every time we use Tobiko Cloud.
-
-        If your organization doesn't have specific procedures for storing secrets, we recommend defining the environment variable in either an `.env` file in your root project directory or in your terminal's profile file.
-
-        If using the former, make sure the `.env` file is listed in your `.gitignore` file to prevent it from being tracked by Git and exposed in plain text.
-
-        Example `.env` file:
-
-        ```text
-        # TODO: add any other environment variables such as username, ports, etc. based on your data warehouse
-        DATA_WAREHOUSE_CREDENTIALS=<your data warehouse credentials>
-        TCLOUD_TOKEN=<your tcloud token>
-        ```
-
-        Run these commands to load the environment variables from `.env`:
-
-        ```bash
-        set -a        # Turn on auto-export
-        source .env   # Read the file, all variables are automatically exported
-        set +a        # Turn off auto-export
-        ```
-
-        Or add these lines to your `~/.bashrc` or `~/.zshrc` file to automatically export the environment variables when you open the terminal (instead of running the `set -a` and `source .env` commands every time):
-
-        ```bash
-        # .bashrc or .zshrc
-        export DATA_WAREHOUSE_CREDENTIALS=<your data warehouse credentials>
-        export TCLOUD_TOKEN=<your tcloud token>
-        ```
-
-        Note that the automatically exported environment variables will be accessible to other programs on your computer.
+    ![tcloud_auth_success](./tcloud_getting_started/tcloud_auth_success.png)
 
 3. Initialize a new SQLMesh project:
 

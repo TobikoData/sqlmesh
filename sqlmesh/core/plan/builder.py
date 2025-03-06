@@ -292,11 +292,6 @@ class PlanBuilder:
     def _build_restatements(
         self, dag: DAG[SnapshotId], earliest_interval_start: TimeLike
     ) -> t.Dict[SnapshotId, Interval]:
-        def is_restateable_snapshot(snapshot: Snapshot) -> bool:
-            if not self._is_dev and snapshot.disable_restatement:
-                return False
-            return not snapshot.is_symbolic and not snapshot.is_seed
-
         restate_models = self._restate_models
         if restate_models == set():
             # This is a warning but we print this as error since the Console is lacking API for warnings.
@@ -354,7 +349,7 @@ class PlanBuilder:
                         "If you want to restate this model, change the model's `disable_restatement` setting to `false`."
                     )
                     continue
-                elif snapshot.is_symbolic or snapshot.is_seed:
+                elif snapshot.is_seed:
                     logger.info("Skipping restatement for model '%s'", snapshot.name)
                     continue
 

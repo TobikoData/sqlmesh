@@ -876,3 +876,90 @@ def test_gateway_model_defaults(tmp_path):
     )
 
     assert ctx.config.model_defaults == expected
+
+
+def test_redshift_merge_flag(tmp_path, mocker: MockerFixture):
+    config_path = tmp_path / "config_redshift_merge.yaml"
+    with open(config_path, "w", encoding="utf-8") as fd:
+        fd.write(
+            """
+gateways:
+    redshift:
+        connection:
+            type: redshift
+            user: user
+            password: '1234'
+            host: host
+            database: db
+            enable_merge: true
+    default:
+        connection:
+            type: redshift
+            user: user
+            password: '1234'
+            host: host
+            database: db
+
+default_gateway: redshift
+
+model_defaults:
+    dialect: redshift
+        """
+        )
+
+    config = load_config_from_paths(
+        Config,
+        project_paths=[config_path],
+    )
+    redshift_connection = config.get_connection("redshift")
+    assert isinstance(redshift_connection, RedshiftConnectionConfig)
+    assert redshift_connection.enable_merge
+    adapter = redshift_connection.create_engine_adapter()
+    assert isinstance(adapter, RedshiftEngineAdapter)
+    assert adapter.enable_merge
+
+    adapter_2 = config.get_connection("default").create_engine_adapter()
+    assert isinstance(adapter_2, RedshiftEngineAdapter)
+    assert not adapter_2.enable_merge
+
+
+def test_environment_statements_config(tmp_path):
+    config_path = tmp_path / "config_before_after_all.yaml"
+    with open(config_path, "w", encoding="utf-8") as fd:
+        fd.write(
+            """
+    gateways:
+      postgres:
+        connection:
+          type: postgres
+          database: db
+          user: postgres
+          password: postgres
+          host: localhost
+          port: 5432
+
+    default_gateway: postgres
+
+    before_all:
+    - CREATE TABLE IF NOT EXISTS custom_analytics (physical_table VARCHAR, evaluation_time VARCHAR);
+    after_all:
+    - "@grant_schema_privileges()"
+    - "GRANT REFERENCES ON FUTURE VIEWS IN DATABASE db TO ROLE admin_role;"
+
+    model_defaults:
+      dialect: postgres
+    """
+        )
+
+    config = load_config_from_paths(
+        Config,
+        project_paths=[config_path],
+    )
+
+    assert config.before_all == [
+        "CREATE TABLE IF NOT EXISTS custom_analytics (physical_table VARCHAR, evaluation_time VARCHAR);"
+    ]
+    assert config.after_all == [
+        "@grant_schema_privileges()",
+        "GRANT REFERENCES ON FUTURE VIEWS IN DATABASE db TO ROLE admin_role;",
+    ]

@@ -265,7 +265,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
         table = exp.to_table(table_name)
         if len(table.parts) == 3 and "." in table.name:
             # The client's `get_table` method can't handle paths with >3 identifiers
-            self.execute(exp.select("*").from_(table).limit(1))
+            self.execute(exp.select("*").from_(table).limit(0))
             query_results = self._query_job._query_results
             columns = create_mapping_schema(query_results.schema)
         else:
@@ -665,13 +665,21 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
             # convert Table object to dict
             table_def = table.to_api_repr()
 
-            # set the column descriptions
-            for i in range(len(table_def["schema"]["fields"])):
-                comment = column_comments.get(table_def["schema"]["fields"][i]["name"], None)
-                if comment:
-                    table_def["schema"]["fields"][i]["description"] = self._truncate_comment(
-                        comment, self.MAX_COLUMN_COMMENT_LENGTH
-                    )
+            # Set column descriptions, supporting nested fields (e.g. record.field.nested_field)
+            for column, comment in column_comments.items():
+                fields = table_def["schema"]["fields"]
+                field_names = column.split(".")
+                last_index = len(field_names) - 1
+
+                # Traverse the fields with nested fields down to leaf level
+                for idx, name in enumerate(field_names):
+                    if field := next((field for field in fields if field["name"] == name), None):
+                        if idx == last_index:
+                            field["description"] = self._truncate_comment(
+                                comment, self.MAX_COLUMN_COMMENT_LENGTH
+                            )
+                        else:
+                            fields = field.get("fields") or []
 
             # An "etag" is BQ versioning metadata that changes when an object is updated/modified. `update_table`
             # compares the etags of the table object passed to it and the remote table, erroring if the etags
@@ -778,6 +786,65 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
         if properties:
             return exp.Properties(expressions=properties)
         return None
+
+    def _build_column_def(
+        self,
+        col_name: str,
+        column_descriptions: t.Optional[t.Dict[str, str]] = None,
+        engine_supports_schema_comments: bool = False,
+        col_type: t.Optional[exp.DATA_TYPE] = None,
+        nested_names: t.List[str] = [],
+    ) -> exp.ColumnDef:
+        # Helper function to build column definitions with column descriptions
+        def _build_struct_with_descriptions(
+            col_type: exp.DataType,
+            nested_names: t.List[str],
+        ) -> exp.DataType:
+            column_expressions = []
+            for column_def in col_type.expressions:
+                # This is expected to  be true, but this check is included as a
+                # precautionary measure in case of an unexpected edge case
+                if isinstance(column_def, exp.ColumnDef):
+                    column = self._build_column_def(
+                        col_name=column_def.name,
+                        column_descriptions=column_descriptions,
+                        engine_supports_schema_comments=engine_supports_schema_comments,
+                        col_type=column_def.kind,
+                        nested_names=nested_names,
+                    )
+                else:
+                    column = column_def
+                column_expressions.append(column)
+            return exp.DataType(this=col_type.this, expressions=column_expressions, nested=True)
+
+        # Recursively build column definitions for BigQuery's RECORDs (struct) and REPEATED RECORDs (array of struct)
+        if isinstance(col_type, exp.DataType) and (expressions := col_type.expressions):
+            if col_type.is_type(exp.DataType.Type.STRUCT):
+                col_type = _build_struct_with_descriptions(col_type, nested_names + [col_name])
+            elif col_type.is_type(exp.DataType.Type.ARRAY) and expressions[0].is_type(
+                exp.DataType.Type.STRUCT
+            ):
+                col_type = exp.DataType(
+                    this=exp.DataType.Type.ARRAY,
+                    expressions=[
+                        _build_struct_with_descriptions(
+                            col_type.expressions[0], nested_names + [col_name]
+                        )
+                    ],
+                    nested=True,
+                )
+
+        return exp.ColumnDef(
+            this=exp.to_identifier(col_name),
+            kind=col_type,
+            constraints=(
+                self._build_col_comment_exp(
+                    ".".join(nested_names + [col_name]), column_descriptions
+                )
+                if engine_supports_schema_comments and self.comments_enabled and column_descriptions
+                else None
+            ),
+        )
 
     def _build_col_comment_exp(
         self, col_name: str, column_descriptions: t.Dict[str, str]

@@ -238,7 +238,7 @@ def test_diff(sushi_context, notebook, convert_all_html_output_to_text, get_all_
     assert len(output.outputs) == 2
     assert convert_all_html_output_to_text(output) == [
         "Differences from the `prod` environment:",
-        "Models:\n├── Directly Modified:\n│   └── sqlmesh_example.test\n└── Metadata Updated:\n    └── sqlmesh_example.test",
+        "Models:\n└── Directly Modified:\n    └── sqlmesh_example.test",
     ]
     assert get_all_html_output(output) == [
         str(
@@ -266,21 +266,12 @@ def test_diff(sushi_context, notebook, convert_all_html_output_to_text, get_all_
                         autoescape=False,
                     )
                 )
-                + "├── "
+                + "└── "
                 + str(
                     h(
                         "span",
                         {"style": "font-weight: bold"},
                         "Directly Modified:",
-                        autoescape=False,
-                    )
-                )
-                + "│   └── sqlmesh_example.test└── "
-                + str(
-                    h(
-                        "span",
-                        {"style": "font-weight: bold"},
-                        "Metadata Updated:",
                         autoescape=False,
                     )
                 )
@@ -559,7 +550,7 @@ def test_info(notebook, sushi_context, convert_all_html_output_to_text, get_all_
     assert len(output.outputs) == 6
     assert convert_all_html_output_to_text(output) == [
         "Models: 18",
-        "Macros: 7",
+        "Macros: 8",
         "",
         "Connection:\n  type: duckdb\n  concurrent_tasks: 1\n  register_comments: true\n  pre_ping: false\n  pretty_sql: false\n  extensions: []\n  connector_config: {}",
         "Test Connection:\n  type: duckdb\n  concurrent_tasks: 1\n  register_comments: true\n  pre_ping: false\n  pretty_sql: false\n  extensions: []\n  connector_config: {}",
@@ -567,7 +558,7 @@ def test_info(notebook, sushi_context, convert_all_html_output_to_text, get_all_
     ]
     assert get_all_html_output(output) == [
         "<pre style=\"white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace\">Models: <span style=\"color: #008080; text-decoration-color: #008080; font-weight: bold\">18</span></pre>",
-        "<pre style=\"white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace\">Macros: <span style=\"color: #008080; text-decoration-color: #008080; font-weight: bold\">7</span></pre>",
+        "<pre style=\"white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace\">Macros: <span style=\"color: #008080; text-decoration-color: #008080; font-weight: bold\">8</span></pre>",
         "<pre style=\"white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace\"></pre>",
         '<pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,\'DejaVu Sans Mono\',consolas,\'Courier New\',monospace">Connection:  type: duckdb  concurrent_tasks: <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">1</span>  register_comments: true  pre_ping: false  pretty_sql: false  extensions: <span style="font-weight: bold">[]</span>  connector_config: <span style="font-weight: bold">{}</span></pre>',
         '<pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,\'DejaVu Sans Mono\',consolas,\'Courier New\',monospace">Test Connection:  type: duckdb  concurrent_tasks: <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">1</span>  register_comments: true  pre_ping: false  pretty_sql: false  extensions: <span style="font-weight: bold">[]</span>  connector_config: <span style="font-weight: bold">{}</span></pre>',
@@ -650,8 +641,19 @@ def test_table_diff(notebook, loaded_sushi_context, convert_all_html_output_to_t
 
     assert not output.stdout
     assert not output.stderr
-    assert len(output.outputs) == 4
+    assert len(output.outputs) == 5
     assert convert_all_html_output_to_text(output) == [
+        """Table Diff
+├── Model:
+│   └── sushi.top_waiters
+├── Environment:
+│   ├── Source: dev
+│   └── Target: prod
+├── Tables:
+│   ├── Source: memory.sushi__dev.top_waiters
+│   └── Target: memory.sushi.top_waiters
+└── Join On:
+    └── waiter_id""",
         """Schema Diff Between 'DEV' and 'PROD' environments for model 'sushi.top_waiters':
 └── Schemas match""",
         """Row Counts:

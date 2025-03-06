@@ -145,7 +145,7 @@ MODEL (
 
 SELECT
   @field_a,
-  @field_b
+  @{field_b} AS field_b
 FROM @customer.some_source
 ```
 
@@ -159,8 +159,8 @@ MODEL (
 );
 
 SELECT
-  x,
-  y
+  'x',
+  y AS field_b
 FROM customer1.some_source
 
 -- This uses the second variable mapping
@@ -170,8 +170,8 @@ MODEL (
 );
 
 SELECT
-  z,
-  w
+  'z',
+  w AS field_b
 FROM customer2.some_source
 ```
 

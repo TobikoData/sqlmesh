@@ -15,7 +15,7 @@ from sqlmesh.core import constants as c
 from sqlmesh.core.config import EnvironmentSuffixTarget
 from sqlmesh.core.dialect import parse_one, schema_
 from sqlmesh.core.engine_adapter import create_engine_adapter
-from sqlmesh.core.environment import Environment
+from sqlmesh.core.environment import Environment, EnvironmentStatements
 from sqlmesh.core.model import (
     FullKind,
     IncrementalByTimeRangeKind,
@@ -106,7 +106,7 @@ def promote_snapshots(
 
 
 def delete_versions(state_sync: EngineAdapterStateSync) -> None:
-    state_sync.engine_adapter.drop_table(state_sync.versions_table)
+    state_sync.engine_adapter.drop_table(state_sync.version_state.versions_table)
 
 
 def test_push_snapshots(
@@ -143,7 +143,7 @@ def test_push_snapshots(
         snapshot_b.snapshot_id: snapshot_b,
     }
 
-    logger = logging.getLogger("sqlmesh.core.state_sync.engine_adapter")
+    logger = logging.getLogger("sqlmesh.core.state_sync.db.facade")
     with patch.object(logger, "error") as mock_logger:
         state_sync.push_snapshots([snapshot_a])
         assert str({snapshot_a.snapshot_id}) == mock_logger.call_args[0][1]
@@ -195,10 +195,10 @@ def test_duplicates(state_sync: EngineAdapterStateSync, make_snapshot: t.Callabl
     snapshot_b.updated_ts = snapshot_a.updated_ts + 1
     snapshot_c.updated_ts = 0
     state_sync.push_snapshots([snapshot_a])
-    state_sync._push_snapshots([snapshot_a])
-    state_sync._push_snapshots([snapshot_b])
-    state_sync._push_snapshots([snapshot_c])
-    state_sync._snapshot_cache.clear()
+    state_sync.snapshot_state.push_snapshots([snapshot_a])
+    state_sync.snapshot_state.push_snapshots([snapshot_b])
+    state_sync.snapshot_state.push_snapshots([snapshot_c])
+    state_sync.snapshot_state.clear_cache()
     assert (
         state_sync.get_snapshots([snapshot_a])[snapshot_a.snapshot_id].updated_ts
         == snapshot_b.updated_ts
@@ -214,7 +214,7 @@ def test_snapshots_exists(state_sync: EngineAdapterStateSync, snapshots: t.List[
 @pytest.fixture
 def get_snapshot_intervals(state_sync) -> t.Callable[[Snapshot], t.Optional[SnapshotIntervals]]:
     def _get_snapshot_intervals(snapshot: Snapshot) -> t.Optional[SnapshotIntervals]:
-        intervals = state_sync._get_snapshot_intervals([snapshot])[-1]
+        intervals = state_sync.interval_state.get_snapshot_intervals([snapshot])
         return intervals[0] if intervals else None
 
     return _get_snapshot_intervals
@@ -403,7 +403,7 @@ def test_refresh_snapshot_intervals(
 def test_get_snapshot_intervals(
     state_sync: EngineAdapterStateSync, make_snapshot: t.Callable, get_snapshot_intervals
 ) -> None:
-    state_sync.SNAPSHOT_BATCH_SIZE = 1
+    state_sync.interval_state.SNAPSHOT_BATCH_SIZE = 1
 
     snapshot_a = make_snapshot(
         SqlModel(
@@ -500,7 +500,7 @@ def test_compact_intervals_delete_batches(
     )
 
     delete_from_mock = mocker.patch.object(state_sync.engine_adapter, "delete_from")
-    state_sync.INTERVAL_BATCH_SIZE = 2
+    state_sync.interval_state.INTERVAL_BATCH_SIZE = 2
 
     state_sync.push_snapshots([snapshot])
 
@@ -512,7 +512,9 @@ def test_compact_intervals_delete_batches(
 
     state_sync.compact_intervals()
 
-    delete_from_mock.assert_has_calls([call(state_sync.intervals_table, mocker.ANY)] * 3)
+    delete_from_mock.assert_has_calls(
+        [call(state_sync.interval_state.intervals_table, mocker.ANY)] * 3
+    )
 
 
 def test_promote_snapshots(state_sync: EngineAdapterStateSync, make_snapshot: t.Callable):
@@ -1073,7 +1075,16 @@ def test_delete_expired_environments(state_sync: EngineAdapterStateSync, make_sn
         previous_plan_id="test_plan_id",
         expiration_ts=now_ts - 1000,
     )
-    state_sync.promote(env_a)
+
+    environment_statements = [
+        EnvironmentStatements(
+            before_all=["CREATE OR REPLACE TABLE table_1 AS SELECT 'a'"],
+            after_all=["CREATE OR REPLACE TABLE table_2 AS SELECT 'b'"],
+            python_env={},
+        )
+    ]
+
+    state_sync.promote(env_a, environment_statements=environment_statements)
 
     env_b = env_a.copy(update={"name": "test_environment_b", "expiration_ts": now_ts + 1000})
     state_sync.promote(env_b)
@@ -1084,11 +1095,17 @@ def test_delete_expired_environments(state_sync: EngineAdapterStateSync, make_sn
     assert state_sync.get_environment(env_a.name) == env_a
     assert state_sync.get_environment(env_b.name) == env_b
 
+    assert not state_sync.get_environment_statements(env_b.name)
+    assert state_sync.get_environment_statements(env_a.name) == environment_statements
+
     deleted_environments = state_sync.delete_expired_environments()
     assert deleted_environments == [env_a]
 
     assert state_sync.get_environment(env_a.name) is None
     assert state_sync.get_environment(env_b.name) == env_b
+
+    # Deleting the environments should remove the corresponding environment's statements
+    assert state_sync.get_environment_statements(env_a.name) == []
 
 
 def test_delete_expired_snapshots(state_sync: EngineAdapterStateSync, make_snapshot: t.Callable):
@@ -1162,7 +1179,7 @@ def test_delete_expired_snapshots_seed(
 def test_delete_expired_snapshots_batching(
     state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
 ):
-    state_sync.SNAPSHOT_BATCH_SIZE = 1
+    state_sync.snapshot_state.SNAPSHOT_BATCH_SIZE = 1
     now_ts = now_timestamp()
 
     snapshot_a = make_snapshot(
@@ -1234,7 +1251,7 @@ def test_delete_expired_snapshots_promoted(
     env.snapshots_ = []
     state_sync.promote(env)
 
-    now_timestamp_mock = mocker.patch("sqlmesh.core.state_sync.engine_adapter.now_timestamp")
+    now_timestamp_mock = mocker.patch("sqlmesh.core.state_sync.db.snapshot.now_timestamp")
     now_timestamp_mock.return_value = now_timestamp() + 11000
 
     assert state_sync.delete_expired_snapshots() == [
@@ -1494,7 +1511,7 @@ def test_delete_expired_snapshots_cleanup_intervals_shared_version(
 
     # Check all intervals
     assert sorted(
-        state_sync._get_snapshot_intervals([snapshot, new_snapshot])[1],
+        state_sync.interval_state.get_snapshot_intervals([snapshot, new_snapshot]),
         key=lambda x: x.identifier or "",
     ) == [
         SnapshotIntervals(
@@ -1529,7 +1546,7 @@ def test_delete_expired_snapshots_cleanup_intervals_shared_version(
 
     # Check all intervals
     assert sorted(
-        state_sync._get_snapshot_intervals([snapshot, new_snapshot])[1],
+        state_sync.interval_state.get_snapshot_intervals([snapshot, new_snapshot]),
         key=lambda x: x.identifier or "",
     ) == [
         # The intervals of the old snapshot is preserved with the null identifier
@@ -1607,7 +1624,7 @@ def test_delete_expired_snapshots_cleanup_intervals_shared_dev_version(
 
     # Check all intervals
     assert sorted(
-        state_sync._get_snapshot_intervals([snapshot, new_snapshot])[1],
+        state_sync.interval_state.get_snapshot_intervals([snapshot, new_snapshot]),
         key=lambda x: x.identifier or "",
     ) == [
         SnapshotIntervals(
@@ -1642,7 +1659,7 @@ def test_delete_expired_snapshots_cleanup_intervals_shared_dev_version(
 
     # Check all intervals
     assert sorted(
-        state_sync._get_snapshot_intervals([snapshot, new_snapshot])[1],
+        state_sync.interval_state.get_snapshot_intervals([snapshot, new_snapshot]),
         key=lambda x: x.identifier or "",
     ) == [
         SnapshotIntervals(
@@ -1754,7 +1771,7 @@ def test_compact_intervals_after_cleanup(
 
     assert (
         sorted(
-            state_sync._get_snapshot_intervals([snapshot_a, snapshot_b, snapshot_c])[1],
+            state_sync.interval_state.get_snapshot_intervals([snapshot_a, snapshot_b, snapshot_c]),
             key=lambda x: (x.identifier or "", x.dev_version or ""),
         )
         == expected_intervals
@@ -1765,7 +1782,7 @@ def test_compact_intervals_after_cleanup(
     assert state_sync.engine_adapter.fetchone("SELECT COUNT(*) FROM sqlmesh._intervals")[0] == 4  # type: ignore
     assert (
         sorted(
-            state_sync._get_snapshot_intervals([snapshot_a, snapshot_b, snapshot_c])[1],
+            state_sync.interval_state.get_snapshot_intervals([snapshot_a, snapshot_b, snapshot_c]),
             key=lambda x: (x.identifier or "", x.dev_version or ""),
         )
         == expected_intervals
@@ -2049,7 +2066,7 @@ def test_version_schema(state_sync: EngineAdapterStateSync, tmp_path) -> None:
     state_sync.migrate(default_catalog=None)
 
     # migration version is behind, always raise
-    state_sync._update_versions(schema_version=SCHEMA_VERSION + 1)
+    state_sync.version_state.update_versions(schema_version=SCHEMA_VERSION + 1)
     error = (
         rf"SQLMesh \(local\) is using version '{SCHEMA_VERSION}' which is behind '{SCHEMA_VERSION + 1}' \(remote\). "
         rf"""Please upgrade SQLMesh \('pip install --upgrade "sqlmesh=={SQLMESH_VERSION}"' command\)."""
@@ -2062,7 +2079,7 @@ def test_version_schema(state_sync: EngineAdapterStateSync, tmp_path) -> None:
     state_sync.get_versions(validate=False)
 
     # migration version is ahead, only raise when validate is true
-    state_sync._update_versions(schema_version=SCHEMA_VERSION - 1)
+    state_sync.version_state.update_versions(schema_version=SCHEMA_VERSION - 1)
     with pytest.raises(
         SQLMeshError,
         match=rf"SQLMesh \(local\) is using version '{SCHEMA_VERSION}' which is ahead of '{SCHEMA_VERSION - 1}'",
@@ -2083,7 +2100,7 @@ def test_version_sqlmesh(state_sync: EngineAdapterStateSync) -> None:
         else f"{int(patch) + 1}"
     )
     sqlmesh_version_patch_bump = f"{major}.{minor}.{new_patch}"
-    state_sync._update_versions(sqlmesh_version=sqlmesh_version_patch_bump)
+    state_sync.version_state.update_versions(sqlmesh_version=sqlmesh_version_patch_bump)
     state_sync.get_versions(validate=False)
 
     # sqlmesh version is behind
@@ -2092,7 +2109,7 @@ def test_version_sqlmesh(state_sync: EngineAdapterStateSync) -> None:
         rf"SQLMesh \(local\) is using version '{SQLMESH_VERSION}' which is behind '{sqlmesh_version_minor_bump}' \(remote\). "
         rf"""Please upgrade SQLMesh \('pip install --upgrade "sqlmesh=={sqlmesh_version_minor_bump}"' command\)."""
     )
-    state_sync._update_versions(sqlmesh_version=sqlmesh_version_minor_bump)
+    state_sync.version_state.update_versions(sqlmesh_version=sqlmesh_version_minor_bump)
     with pytest.raises(SQLMeshError, match=error):
         state_sync.get_versions()
     state_sync.get_versions(validate=False)
@@ -2100,7 +2117,7 @@ def test_version_sqlmesh(state_sync: EngineAdapterStateSync) -> None:
     # sqlmesh version is ahead
     sqlmesh_version_minor_decrease = f"{major}.{int(minor) - 1}.{patch}"
     error = rf"SQLMesh \(local\) is using version '{SQLMESH_VERSION}' which is ahead of '{sqlmesh_version_minor_decrease}'"
-    state_sync._update_versions(sqlmesh_version=sqlmesh_version_minor_decrease)
+    state_sync.version_state.update_versions(sqlmesh_version=sqlmesh_version_minor_decrease)
     with pytest.raises(SQLMeshError, match=error):
         state_sync.get_versions()
     state_sync.get_versions(validate=False)
@@ -2110,7 +2127,7 @@ def test_version_sqlglot(state_sync: EngineAdapterStateSync) -> None:
     # patch version sqlglot doesn't matter
     major, minor, patch, *_ = SQLGLOT_VERSION.split(".")
     sqlglot_version = f"{major}.{minor}.{int(patch) + 1}"
-    state_sync._update_versions(sqlglot_version=sqlglot_version)
+    state_sync.version_state.update_versions(sqlglot_version=sqlglot_version)
     state_sync.get_versions(validate=False)
 
     # sqlglot version is behind
@@ -2119,7 +2136,7 @@ def test_version_sqlglot(state_sync: EngineAdapterStateSync) -> None:
         rf"SQLGlot \(local\) is using version '{SQLGLOT_VERSION}' which is behind '{sqlglot_version}' \(remote\). "
         rf"""Please upgrade SQLGlot \('pip install --upgrade "sqlglot=={sqlglot_version}"' command\)."""
     )
-    state_sync._update_versions(sqlglot_version=sqlglot_version)
+    state_sync.version_state.update_versions(sqlglot_version=sqlglot_version)
     with pytest.raises(SQLMeshError, match=error):
         state_sync.get_versions()
     state_sync.get_versions(validate=False)
@@ -2127,7 +2144,7 @@ def test_version_sqlglot(state_sync: EngineAdapterStateSync) -> None:
     # sqlglot version is ahead
     sqlglot_version = f"{major}.{int(minor) - 1}.{patch}"
     error = rf"SQLGlot \(local\) is using version '{SQLGLOT_VERSION}' which is ahead of '{sqlglot_version}'"
-    state_sync._update_versions(sqlglot_version=sqlglot_version)
+    state_sync.version_state.update_versions(sqlglot_version=sqlglot_version)
     with pytest.raises(SQLMeshError, match=error):
         state_sync.get_versions()
     state_sync.get_versions(validate=False)
@@ -2146,8 +2163,12 @@ def test_empty_versions() -> None:
 def test_migrate(state_sync: EngineAdapterStateSync, mocker: MockerFixture, tmp_path) -> None:
     from sqlmesh import __version__ as SQLMESH_VERSION
 
-    migrate_rows_mock = mocker.patch("sqlmesh.core.state_sync.EngineAdapterStateSync._migrate_rows")
-    backup_state_mock = mocker.patch("sqlmesh.core.state_sync.EngineAdapterStateSync._backup_state")
+    migrate_rows_mock = mocker.patch(
+        "sqlmesh.core.state_sync.db.migrator.StateMigrator._migrate_rows"
+    )
+    backup_state_mock = mocker.patch(
+        "sqlmesh.core.state_sync.db.migrator.StateMigrator._backup_state"
+    )
     state_sync.migrate(default_catalog=None)
     migrate_rows_mock.assert_not_called()
     backup_state_mock.assert_not_called()
@@ -2181,8 +2202,8 @@ def test_rollback(state_sync: EngineAdapterStateSync, mocker: MockerFixture) -> 
     ):
         state_sync.rollback()
 
-    restore_table_spy = mocker.spy(state_sync, "_restore_table")
-    state_sync._backup_state()
+    restore_table_spy = mocker.spy(state_sync.migrator, "_restore_table")
+    state_sync.migrator._backup_state()
 
     state_sync.rollback()
     calls = {(a.sql(), b.sql()) for (a, b), _ in restore_table_spy.call_args_list}
@@ -2207,16 +2228,18 @@ def test_first_migration_failure(duck_conn, mocker: MockerFixture, tmp_path) -> 
     state_sync = EngineAdapterStateSync(
         create_engine_adapter(lambda: duck_conn, "duckdb"), schema=c.SQLMESH, context_path=tmp_path
     )
-    mocker.patch.object(state_sync, "_migrate_rows", side_effect=Exception("mocked error"))
+    mocker.patch.object(state_sync.migrator, "_migrate_rows", side_effect=Exception("mocked error"))
     with pytest.raises(
         SQLMeshError,
         match="SQLMesh migration failed.",
     ):
         state_sync.migrate(default_catalog=None)
-    assert not state_sync.engine_adapter.table_exists(state_sync.snapshots_table)
-    assert not state_sync.engine_adapter.table_exists(state_sync.environments_table)
-    assert not state_sync.engine_adapter.table_exists(state_sync.versions_table)
-    assert not state_sync.engine_adapter.table_exists(state_sync.intervals_table)
+    assert not state_sync.engine_adapter.table_exists(state_sync.snapshot_state.snapshots_table)
+    assert not state_sync.engine_adapter.table_exists(
+        state_sync.environment_state.environments_table
+    )
+    assert not state_sync.engine_adapter.table_exists(state_sync.version_state.versions_table)
+    assert not state_sync.engine_adapter.table_exists(state_sync.interval_state.intervals_table)
 
 
 def test_migrate_rows(state_sync: EngineAdapterStateSync, mocker: MockerFixture) -> None:
@@ -2313,7 +2336,7 @@ def test_backup_state(state_sync: EngineAdapterStateSync, mocker: MockerFixture)
         },
     )
 
-    state_sync._backup_state()
+    state_sync.migrator._backup_state()
     pd.testing.assert_frame_equal(
         state_sync.engine_adapter.fetchdf("select * from sqlmesh._snapshots"),
         state_sync.engine_adapter.fetchdf("select * from sqlmesh._snapshots_backup"),
@@ -2338,12 +2361,12 @@ def test_restore_snapshots_table(state_sync: EngineAdapterStateSync) -> None:
         "select count(*) from sqlmesh._snapshots"
     )
     assert old_snapshots_count == (12,)
-    state_sync._backup_state()
+    state_sync.migrator._backup_state()
 
     state_sync.engine_adapter.delete_from("sqlmesh._snapshots", "TRUE")
     snapshots_count = state_sync.engine_adapter.fetchone("select count(*) from sqlmesh._snapshots")
     assert snapshots_count == (0,)
-    state_sync._restore_table(
+    state_sync.migrator._restore_table(
         table_name="sqlmesh._snapshots",
         backup_table_name="sqlmesh._snapshots_backup",
     )
@@ -2375,7 +2398,7 @@ def test_seed_hydration(
     assert snapshot.model.is_hydrated
     assert snapshot.model.seed.content == "header\n1\n2"
 
-    state_sync._snapshot_cache.clear()
+    state_sync.snapshot_state.clear_cache()
     stored_snapshot = state_sync.get_snapshots([snapshot.snapshot_id])[snapshot.snapshot_id]
     assert isinstance(stored_snapshot.model, SeedModel)
     assert not stored_snapshot.model.is_hydrated
@@ -2421,7 +2444,17 @@ def test_invalidate_environment(state_sync: EngineAdapterStateSync, make_snapsho
         previous_plan_id="test_plan_id",
         expiration_ts=original_expiration_ts,
     )
-    state_sync.promote(env)
+    environment_statements = [
+        EnvironmentStatements(
+            before_all=["CREATE OR REPLACE TABLE table_1 AS SELECT 'a'"],
+            after_all=["CREATE OR REPLACE TABLE table_2 AS SELECT 'b'"],
+            python_env={},
+        )
+    ]
+
+    state_sync.promote(env, environment_statements=environment_statements)
+
+    assert state_sync.get_environment_statements(env.name) == environment_statements
 
     assert not state_sync.delete_expired_environments()
     state_sync.invalidate_environment("test_environment")
@@ -2433,9 +2466,55 @@ def test_invalidate_environment(state_sync: EngineAdapterStateSync, make_snapsho
     deleted_environments = state_sync.delete_expired_environments()
     assert len(deleted_environments) == 1
     assert deleted_environments[0].name == "test_environment"
+    assert state_sync.get_environment_statements(env.name) == []
 
     with pytest.raises(SQLMeshError, match="Cannot invalidate the production environment."):
         state_sync.invalidate_environment("prod")
+
+
+def test_promote_environment_without_statements(
+    state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
+):
+    snapshot = make_snapshot(
+        SqlModel(
+            name="a",
+            query=parse_one("select a, ds"),
+        ),
+    )
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    state_sync.push_snapshots([snapshot])
+
+    original_expiration_ts = now_timestamp() + 100000
+
+    env = Environment(
+        name="test_environment",
+        snapshots=[snapshot.table_info],
+        start_at="2022-01-01",
+        end_at="2022-01-01",
+        plan_id="test_plan_id",
+        previous_plan_id="test_plan_id",
+        expiration_ts=original_expiration_ts,
+    )
+    environment_statements = [
+        EnvironmentStatements(
+            before_all=["CREATE OR REPLACE TABLE table_1 AS SELECT 'a'"],
+            after_all=["CREATE OR REPLACE TABLE table_2 AS SELECT 'b'"],
+            python_env={},
+        )
+    ]
+
+    state_sync.promote(env, environment_statements=environment_statements)
+
+    # Verify the environment statements table is populated with the statements
+    assert state_sync.get_environment_statements(env.name) == environment_statements
+
+    # Scenario where the statements have been removed from the project and then
+    # If we promote the environment it doesn't contain before_all, after_all statements
+    state_sync.promote(env, environment_statements=[])
+
+    # This should trigger an internal update to the environment statements' table to be removed
+    assert state_sync.get_environment_statements(env.name) == []
 
 
 def test_cache(state_sync, make_snapshot, mocker):
@@ -2766,8 +2845,8 @@ def test_get_snapshots(mocker):
 def test_snapshot_batching(state_sync, mocker, make_snapshot):
     mock = mocker.Mock()
 
-    state_sync.SNAPSHOT_BATCH_SIZE = 2
-    state_sync.engine_adapter = mock
+    state_sync.snapshot_state.SNAPSHOT_BATCH_SIZE = 2
+    state_sync.snapshot_state.engine_adapter = mock
 
     snapshot_a = make_snapshot(SqlModel(name="a", query=parse_one("select 1")), "1")
     snapshot_b = make_snapshot(SqlModel(name="a", query=parse_one("select 2")), "2")
@@ -2838,13 +2917,12 @@ def test_snapshot_batching(state_sync, mocker, make_snapshot):
         ],
     ]
 
-    snapshots = state_sync._get_snapshots(
+    snapshots = state_sync.snapshot_state.get_snapshots(
         (
             SnapshotId(name="a", identifier="1"),
             SnapshotId(name="a", identifier="2"),
             SnapshotId(name="a", identifier="3"),
         ),
-        hydrate_intervals=False,
     )
     assert len(snapshots) == 3
     calls = mock.fetchall.call_args_list
@@ -2883,13 +2961,12 @@ def test_snapshot_cache(
     state_sync: EngineAdapterStateSync, make_snapshot: t.Callable, mocker: MockerFixture
 ):
     cache_mock = mocker.Mock()
-    state_sync._snapshot_cache = cache_mock
+    state_sync.snapshot_state._snapshot_cache = cache_mock
 
     snapshot = make_snapshot(SqlModel(name="a", query=parse_one("select 1")))
     cache_mock.get_or_load.return_value = ({snapshot.snapshot_id: snapshot}, {snapshot.snapshot_id})
 
-    # Use _push_snapshots to bypass cache.
-    state_sync._push_snapshots([snapshot])
+    state_sync.snapshot_state.push_snapshots([snapshot])
 
     assert state_sync.get_snapshots([snapshot.snapshot_id]) == {snapshot.snapshot_id: snapshot}
     cache_mock.get_or_load.assert_called_once_with({snapshot.snapshot_id}, mocker.ANY)
@@ -2897,7 +2974,9 @@ def test_snapshot_cache(
     # Update the snapshot in the state and make sure this update is reflected on the cached instance.
     assert snapshot.unpaused_ts is None
     assert not snapshot.unrestorable
-    state_sync._update_snapshots([snapshot.snapshot_id], unpaused_ts=1, unrestorable=True)
+    state_sync.snapshot_state._update_snapshots(
+        [snapshot.snapshot_id], unpaused_ts=1, unrestorable=True
+    )
     new_snapshot = state_sync.get_snapshots([snapshot.snapshot_id])[snapshot.snapshot_id]
     assert new_snapshot.unpaused_ts == 1
     assert new_snapshot.unrestorable
@@ -2912,7 +2991,7 @@ def test_update_auto_restatements(state_sync: EngineAdapterStateSync, make_snaps
     snapshot_b = make_snapshot(SqlModel(name="b", query=parse_one("select 2")), version="2")
     snapshot_c = make_snapshot(SqlModel(name="c", query=parse_one("select 3")), version="3")
 
-    state_sync._push_snapshots([snapshot_a, snapshot_b, snapshot_c])
+    state_sync.snapshot_state.push_snapshots([snapshot_a, snapshot_b, snapshot_c])
 
     next_auto_restatement_ts: t.Dict[SnapshotNameVersion, t.Optional[int]] = {
         snapshot_a.name_version: 1,
@@ -3125,7 +3204,7 @@ def test_compact_intervals_pending_restatement_shared_version(
         state_sync.add_interval(snapshot_b, "2020-01-03", "2020-01-03")
         assert (
             sorted(
-                state_sync._get_snapshot_intervals([snapshot_a, snapshot_b])[1],
+                state_sync.interval_state.get_snapshot_intervals([snapshot_a, snapshot_b]),
                 key=lambda x: (x.name, x.identifier or ""),
             )
             == expected_intervals
@@ -3210,7 +3289,7 @@ def test_compact_intervals_pending_restatement_shared_version(
         state_sync.add_interval(snapshot_a, "2020-01-04", "2020-01-04")
         assert (
             sorted(
-                state_sync._get_snapshot_intervals([snapshot_a, snapshot_b])[1],
+                state_sync.interval_state.get_snapshot_intervals([snapshot_a, snapshot_b]),
                 key=lambda x: (x.name, x.identifier or ""),
             )
             == expected_intervals
@@ -3269,7 +3348,7 @@ def test_compact_intervals_pending_restatement_shared_version(
         state_sync.add_interval(snapshot_b, "2020-01-05", "2020-01-05")
         assert (
             sorted(
-                state_sync._get_snapshot_intervals([snapshot_a, snapshot_b])[1],
+                state_sync.interval_state.get_snapshot_intervals([snapshot_a, snapshot_b]),
                 key=lambda x: (x.name, x.identifier or ""),
             )
             == expected_intervals
@@ -3420,4 +3499,61 @@ def test_compact_intervals_pending_restatement_many_snapshots_same_version(
         snapshots[0].snapshot_id
     ].pending_restatement_intervals == [
         (to_timestamp("2020-01-03"), to_timestamp("2020-01-05")),
+    ]
+
+
+def test_update_environment_statements(state_sync: EngineAdapterStateSync):
+    assert state_sync.get_environment_statements(environment="dev") == []
+
+    environment = Environment(
+        name="dev",
+        snapshots=[],
+        start_at="2022-01-01",
+        end_at="2022-01-01",
+        plan_id="test_plan_id",
+    )
+    environment_statements = [
+        EnvironmentStatements(
+            before_all=["CREATE OR REPLACE TABLE table_1 AS SELECT 'a'"],
+            after_all=["CREATE OR REPLACE TABLE table_2 AS SELECT 'b'"],
+            python_env={},
+        )
+    ]
+
+    state_sync.environment_state.update_environment(environment=environment)
+    state_sync.environment_state.update_environment_statements(
+        environment.name, environment.plan_id, environment_statements
+    )
+
+    environment_statements_dev = state_sync.get_environment_statements(environment="dev")
+    assert environment_statements_dev[0].before_all == [
+        "CREATE OR REPLACE TABLE table_1 AS SELECT 'a'"
+    ]
+    assert environment_statements_dev[0].after_all == [
+        "CREATE OR REPLACE TABLE table_2 AS SELECT 'b'"
+    ]
+
+    environment_statements = [
+        EnvironmentStatements(
+            before_all=["CREATE OR REPLACE TABLE table_1 AS SELECT 'a'"],
+            after_all=[
+                "@grant_schema_usage()",
+                "@grant_select_privileges()",
+            ],
+            python_env={},
+        )
+    ]
+
+    state_sync.environment_state.update_environment(environment=environment)
+    state_sync.environment_state.update_environment_statements(
+        environment.name, environment.plan_id, environment_statements
+    )
+
+    environment_statements_dev = state_sync.get_environment_statements(environment="dev")
+    assert environment_statements_dev[0].before_all == [
+        "CREATE OR REPLACE TABLE table_1 AS SELECT 'a'"
+    ]
+    assert environment_statements_dev[0].after_all == [
+        "@grant_schema_usage()",
+        "@grant_select_privileges()",
     ]

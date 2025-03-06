@@ -1180,12 +1180,18 @@ class _Model(ModelMeta, frozen=True):
     def partitioned_by(self) -> t.List[exp.Expression]:
         """Columns to partition the model by, including the time column if it is not already included."""
         if self.time_column and not self._is_time_column_in_partitioned_by:
-            return [
-                TIME_COL_PARTITION_FUNC.get(self.dialect, lambda x, y: x)(
-                    self.time_column.column, self.columns_to_types
-                ),
-                *self.partitioned_by_,
-            ]
+            # This allows the user to opt out of automatic time_column injection
+            # by setting `partition_by_time_column false` on the model kind
+            if (
+                hasattr(self.kind, "partition_by_time_column")
+                and self.kind.partition_by_time_column
+            ):
+                return [
+                    TIME_COL_PARTITION_FUNC.get(self.dialect, lambda x, y: x)(
+                        self.time_column.column, self.columns_to_types
+                    ),
+                    *self.partitioned_by_,
+                ]
         return self.partitioned_by_
 
     @property
@@ -1203,16 +1209,18 @@ class _Model(ModelMeta, frozen=True):
         from sqlmesh.core.audit.builtin import BUILT_IN_AUDITS
 
         audits_by_name = {**BUILT_IN_AUDITS, **self.audit_definitions}
-        audits_with_args = {}
+        audits_with_args = []
+        added_audits = set()
 
         for audit_name, audit_args in self.audits:
-            audits_with_args[audit_name] = (audits_by_name[audit_name], audit_args.copy())
+            audits_with_args.append((audits_by_name[audit_name], audit_args.copy()))
+            added_audits.add(audit_name)
 
         for audit_name in self.audit_definitions:
-            if audit_name not in audits_with_args:
-                audits_with_args[audit_name] = (audits_by_name[audit_name], {})
+            if audit_name not in added_audits:
+                audits_with_args.append((audits_by_name[audit_name], {}))
 
-        return list(audits_with_args.values())
+        return audits_with_args
 
     @property
     def _is_time_column_in_partitioned_by(self) -> bool:
@@ -1701,7 +1709,7 @@ class PythonModel(_Model):
 
         if self.kind and not self.kind.supports_python_models:
             raise SQLMeshError(
-                f"Cannot create Python model '{self.name}' as the '{self.kind.name}' kind doesnt support Python models"
+                f"Cannot create Python model '{self.name}' as the '{self.kind.name}' kind doesn't support Python models"
             )
 
     def render(
@@ -2381,6 +2389,8 @@ def _create_model(
     model.audit_definitions.update(audit_definitions)
 
     statements.extend(audit.query for audit in audit_definitions.values())
+    for _, audit_args in model.audits:
+        statements.extend(audit_args.values())
 
     for _, kwargs in model.signals:
         statements.extend(kwargs.values())

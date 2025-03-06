@@ -13,7 +13,7 @@ from sqlglot import exp, parse_one
 from sqlglot.errors import ParseError
 from sqlglot.schema import MappingSchema
 from sqlmesh.cli.example_project import init_example_project, ProjectTemplate
-from sqlmesh.core.model.kind import TimeColumn
+from sqlmesh.core.model.kind import TimeColumn, ModelKindName
 
 from sqlmesh import CustomMaterialization, CustomKind
 from pydantic import model_validator
@@ -343,6 +343,27 @@ def test_partitioned_by(
         assert [
             col.sql(dialect=output_dialect) for col in model.partitioned_by
         ] == partition_by_output
+
+
+def test_opt_out_of_time_column_in_partitioned_by():
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.table,
+            dialect bigquery,
+            partitioned_by b,
+            kind INCREMENTAL_BY_TIME_RANGE(
+                time_column a,
+                partition_by_time_column false
+            ),
+        );
+
+        SELECT 1::int AS a, 2::int AS b;
+    """
+    )
+
+    model = load_sql_based_model(expressions)
+    assert model.partitioned_by == [exp.to_column('"b"')]
 
 
 def test_no_model_statement(tmp_path: Path):
@@ -1298,6 +1319,7 @@ def test_render_definition():
             dialect spark,
             kind INCREMENTAL_BY_TIME_RANGE (
                 time_column (`a`, 'yyyymmdd'),
+                partition_by_time_column TRUE,
                 forward_only FALSE,
                 disable_restatement FALSE,
                 on_destructive_change 'ERROR'
@@ -2156,23 +2178,6 @@ def test_python_model_decorator_kind() -> None:
             path=Path("."),
         )
 
-    @model("kind_view", kind="view", columns={'"COL"': "int"})
-    def kind_view(context):
-        pass
-
-    # error if kind = view
-    with pytest.raises(
-        SQLMeshError, match=r".*Cannot create Python model.*doesnt support Python models"
-    ):
-        python_model = (
-            model.get_registry()["kind_view"]
-            .model(
-                module_path=Path("."),
-                path=Path("."),
-            )
-            .validate_definition()
-        )
-
     @model("kind_dict_badname", kind=dict(name="test"), columns={'"COL"': "int"})
     def my_model_1(context):
         pass
@@ -2244,6 +2249,29 @@ def test_python_model_decorator_col_descriptions() -> None:
             module_path=Path("."),
             path=Path("."),
         )
+
+
+def test_python_model_unsupported_kind() -> None:
+    kinds = {
+        "seed": {"name": ModelKindName.SEED, "path": "."},
+        "view": {"name": ModelKindName.VIEW},
+        "managed": {"name": ModelKindName.MANAGED},
+        "embedded": {"name": ModelKindName.EMBEDDED},
+    }
+
+    for kindname in kinds:
+
+        @model(f"kind_{kindname}", kind=kinds[kindname], columns={'"COL"': "int"})
+        def the_kind(context):
+            pass
+
+        with pytest.raises(
+            SQLMeshError, match=r".*Cannot create Python model.*doesn't support Python models"
+        ):
+            model.get_registry()[f"kind_{kindname}"].model(
+                module_path=Path("."),
+                path=Path("."),
+            ).validate_definition()
 
 
 def test_star_expansion(assert_exp_eq) -> None:
@@ -2995,6 +3023,42 @@ def test_incremental_unmanaged_validation():
 
     model = model.copy(update={"partitioned_by_": [exp.to_column("ds")]})
     model.validate_definition()
+
+
+def test_incremental_unmanaged():
+    expr = d.parse(
+        """
+        MODEL (
+            name foo,
+            kind INCREMENTAL_UNMANAGED
+        );
+
+        SELECT x.a AS a FROM test.x AS x
+        """
+    )
+
+    model = load_sql_based_model(expressions=expr)
+
+    assert isinstance(model.kind, IncrementalUnmanagedKind)
+    assert not model.kind.insert_overwrite
+
+    expr = d.parse(
+        """
+        MODEL (
+            name foo,
+            kind INCREMENTAL_UNMANAGED (
+                insert_overwrite true
+            ),
+            partitioned_by a
+        );
+
+        SELECT x.a AS a FROM test.x AS x
+        """
+    )
+
+    model = load_sql_based_model(expressions=expr)
+    assert isinstance(model.kind, IncrementalUnmanagedKind)
+    assert model.kind.insert_overwrite
 
 
 def test_custom_interval_unit():
@@ -4064,6 +4128,9 @@ def test_model_dialect_name():
         "`project-1`.`db`.`tbl1`", columns={"x": "STRING"}, dialect="bigquery"
     )
     assert "name `project-1`.`db`.`tbl1`" in model.render_definition()[0].sql(dialect="bigquery")
+
+    # This used to fail due to the dialect regex picking up `DIALECT_TEST` as the model's dialect
+    expressions = d.parse("MODEL(name DIALECT_TEST.foo); SELECT 1")
 
 
 def test_model_allow_partials():
@@ -6285,6 +6352,7 @@ def test_model_kind_to_expression():
         .sql()
         == """INCREMENTAL_BY_TIME_RANGE (
 time_column ("a", '%Y-%m-%d'),
+partition_by_time_column TRUE,
 forward_only FALSE,
 disable_restatement FALSE,
 on_destructive_change 'ERROR'
@@ -6315,6 +6383,7 @@ on_destructive_change 'ERROR'
         .sql()
         == """INCREMENTAL_BY_TIME_RANGE (
 time_column ("a", '%Y-%m-%d'),
+partition_by_time_column TRUE,
 batch_size 1,
 batch_concurrency 2,
 lookback 3,
@@ -6853,7 +6922,7 @@ def test_managed_kind_python():
 
     with pytest.raises(
         SQLMeshError,
-        match=r".*Cannot create Python model.*the 'MANAGED' kind doesnt support Python models",
+        match=r".*Cannot create Python model.*the 'MANAGED' kind doesn't support Python models",
     ):
         model.get_registry()["test_managed_python_model"].model(
             module_path=Path("."),
@@ -7320,6 +7389,7 @@ def test_auto_restatement():
         model.kind.to_expression().sql(pretty=True)
         == """INCREMENTAL_BY_TIME_RANGE (
   time_column ("a", '%Y-%m-%d'),
+  partition_by_time_column TRUE,
   forward_only FALSE,
   disable_restatement FALSE,
   on_destructive_change 'ERROR',
@@ -7347,6 +7417,7 @@ def test_auto_restatement():
         model.kind.to_expression().sql(pretty=True)
         == """INCREMENTAL_BY_TIME_RANGE (
   time_column ("a", '%Y-%m-%d'),
+  partition_by_time_column TRUE,
   auto_restatement_intervals 1,
   forward_only FALSE,
   disable_restatement FALSE,
@@ -7934,3 +8005,21 @@ def test_seed_dont_coerce_na_into_null(tmp_path):
     assert model.seed is not None
     assert len(model.seed.content) > 0
     assert next(model.render(context=None)).to_dict() == {"code": {0: "NA"}}
+
+
+def test_missing_column_data_in_columns_key():
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.seed,
+            kind SEED (
+              path '../seeds/waiter_names.csv',
+            ),
+            columns (
+              culprit, other_column double,
+            )
+        );
+    """
+    )
+    with pytest.raises(ConfigError, match="Missing data type for column 'culprit'."):
+        load_sql_based_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))

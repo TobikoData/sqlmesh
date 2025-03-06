@@ -21,4 +21,4 @@ from sqlmesh.core.state_sync.base import (
 )
 from sqlmesh.core.state_sync.cache import CachingStateSync as CachingStateSync
 from sqlmesh.core.state_sync.common import cleanup_expired_views as cleanup_expired_views
-from sqlmesh.core.state_sync.engine_adapter import EngineAdapterStateSync as EngineAdapterStateSync
+from sqlmesh.core.state_sync.db import EngineAdapterStateSync as EngineAdapterStateSync

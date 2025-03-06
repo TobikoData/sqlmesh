@@ -861,8 +861,9 @@ class BigQueryConnectionConfig(ConnectionConfig):
     client_secret: t.Optional[str] = None
     token_uri: t.Optional[str] = None
     scopes: t.Tuple[str, ...] = ("https://www.googleapis.com/auth/bigquery",)
-    job_creation_timeout_seconds: t.Optional[int] = None
+    impersonated_service_account: t.Optional[str] = None
     # Extra Engine Config
+    job_creation_timeout_seconds: t.Optional[int] = None
     job_execution_timeout_seconds: t.Optional[int] = None
     job_retries: t.Optional[int] = 1
     job_retry_deadline_seconds: t.Optional[int] = None
@@ -911,6 +912,7 @@ class BigQueryConnectionConfig(ConnectionConfig):
     def _static_connection_kwargs(self) -> t.Dict[str, t.Any]:
         """The static connection kwargs for this connection"""
         import google.auth
+        from google.auth import impersonated_credentials
         from google.api_core import client_info, client_options
         from google.oauth2 import credentials, service_account
 
@@ -935,6 +937,13 @@ class BigQueryConnectionConfig(ConnectionConfig):
             )
         else:
             raise ConfigError("Invalid BigQuery Connection Method")
+
+        if self.impersonated_service_account:
+            creds = impersonated_credentials.Credentials(
+                source_credentials=creds,
+                target_principal=self.impersonated_service_account,
+                target_scopes=self.scopes,
+            )
 
         options = client_options.ClientOptions(quota_project_id=self.quota_project)
         project = self.execution_project or self.project or None
@@ -1104,6 +1113,7 @@ class RedshiftConnectionConfig(ConnectionConfig):
         serverless_acct_id: The account ID of the serverless. Default value None
         serverless_work_group: The name of work group for serverless end point. Default value None.
         pre_ping: Whether or not to pre-ping the connection before starting a new transaction to ensure it is still alive.
+        enable_merge: Whether to use the Redshift merge operation instead of the SQLMesh logical merge.
     """
 
     user: t.Optional[str] = None
@@ -1127,6 +1137,7 @@ class RedshiftConnectionConfig(ConnectionConfig):
     is_serverless: t.Optional[bool] = None
     serverless_acct_id: t.Optional[str] = None
     serverless_work_group: t.Optional[str] = None
+    enable_merge: t.Optional[bool] = None
 
     concurrent_tasks: int = 4
     register_comments: bool = True
@@ -1169,6 +1180,10 @@ class RedshiftConnectionConfig(ConnectionConfig):
         from redshift_connector import connect
 
         return connect
+
+    @property
+    def _extra_engine_config(self) -> t.Dict[str, t.Any]:
+        return {"enable_merge": self.enable_merge}
 
 
 class PostgresConnectionConfig(ConnectionConfig):
@@ -1762,6 +1777,52 @@ class AthenaConnectionConfig(ConnectionConfig):
 
     def get_catalog(self) -> t.Optional[str]:
         return self.catalog_name
+
+
+class RisingwaveConnectionConfig(ConnectionConfig):
+    host: str
+    user: str
+    password: t.Optional[str] = None
+    port: int
+    database: str
+    role: t.Optional[str] = None
+    sslmode: t.Optional[str] = None
+
+    concurrent_tasks: int = 4
+    register_comments: bool = True
+    pre_ping: bool = True
+
+    type_: t.Literal["risingwave"] = Field(alias="type", default="risingwave")
+
+    @property
+    def _connection_kwargs_keys(self) -> t.Set[str]:
+        return {
+            "host",
+            "user",
+            "password",
+            "port",
+            "database",
+            "role",
+            "sslmode",
+        }
+
+    @property
+    def _engine_adapter(self) -> t.Type[EngineAdapter]:
+        return engine_adapter.RisingwaveEngineAdapter
+
+    @property
+    def _connection_factory(self) -> t.Callable:
+        from psycopg2 import connect
+
+        return connect
+
+    @property
+    def _cursor_init(self) -> t.Optional[t.Callable[[t.Any], None]]:
+        def init(cursor: t.Any) -> None:
+            sql = "SET RW_IMPLICIT_FLUSH TO true;"
+            cursor.execute(sql)
+
+        return init
 
 
 CONNECTION_CONFIG_TO_TYPE = {
