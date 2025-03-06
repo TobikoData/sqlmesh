@@ -27,7 +27,7 @@ from sqlmesh.core.config import (
     load_configs,
 )
 from sqlmesh.core.context import Context
-from sqlmesh.core.console import create_console
+from sqlmesh.core.console import create_console, get_console, set_console, TerminalConsole
 from sqlmesh.core.dialect import parse, schema_
 from sqlmesh.core.engine_adapter.duckdb import DuckDBEngineAdapter
 from sqlmesh.core.environment import Environment, EnvironmentNamingInfo, EnvironmentStatements
@@ -1641,7 +1641,10 @@ def test_environment_statements_dialect(tmp_path: Path):
 
 
 @pytest.mark.slow
-def test_model_linting(tmp_path: pathlib.Path, sushi_context, capsys) -> None:
+def test_model_linting(tmp_path: pathlib.Path, sushi_context) -> None:
+    orig_console = get_console()
+    set_console(TerminalConsole())
+
     cfg = LinterConfig(enabled=True, rules="ALL")
     ctx = Context(
         config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"), linter=cfg),
@@ -1655,7 +1658,7 @@ def test_model_linting(tmp_path: pathlib.Path, sushi_context, capsys) -> None:
         with pytest.raises(ConfigError, match=config_err):
             ctx.upsert_model(load_sql_based_model(d.parse(f"MODEL (name test); {query}")))
 
-    error_model = load_sql_based_model(d.parse("MODEL (name test2); SELECT col"))
+    error_model = load_sql_based_model(d.parse("MODEL (name test); SELECT col"))
     with pytest.raises(ConfigError, match=config_err):
         ctx.upsert_model(error_model)
 
@@ -1668,11 +1671,38 @@ def test_model_linting(tmp_path: pathlib.Path, sushi_context, capsys) -> None:
 
     # Case: Ensure NoSelectStar only raises for top-level SELECTs, new model shouldn't raise
     # and thus should also be cached
-    model2 = load_sql_based_model(d.parse("MODEL (name test); SELECT col FROM (SELECT * FROM tbl)"))
+    model2 = load_sql_based_model(
+        d.parse("MODEL (name test2); SELECT col FROM (SELECT * FROM tbl)")
+    )
     ctx.upsert_model(model2)
 
     model2 = t.cast(SqlModel, model2)
     assert cache._file_cache.exists(cache._entry_name(model2))
+
+    # Case: Ensure renderer violations are found again even if the optimized query is cached
+    ctx.config.linter = LinterConfig(enabled=True, warn_rules="ALL")
+    ctx.load()
+
+    def assert_cached_violations_exist():
+        cache_entry = cache._file_cache.get(cache._entry_name(error_model))
+        assert cache_entry is not None
+        assert cache_entry.optimized_rendered_query is not None
+        assert cache_entry.renderer_violations is not None
+
+    for i in range(3):
+        with patch.object(get_console(), "log_warning") as mock_logger:
+            if i > 1:
+                # Model's violations have been cached from the previous upserts
+                assert_cached_violations_exist()
+
+            ctx.upsert_model(error_model)
+            assert (
+                """Column '"col"' could not be resolved for model '"test"'"""
+                in mock_logger.call_args[0][0]
+            )
+
+            # Model's violations have been cached after the former upsert
+            assert_cached_violations_exist()
 
     # Case: Ensure load WORKS if linter is enabled but the rules are not
     create_temp_file(
@@ -1758,3 +1788,5 @@ def test_model_linting(tmp_path: pathlib.Path, sushi_context, capsys) -> None:
     )
 
     sushi_context.upsert_model(model5)
+
+    set_console(orig_console)

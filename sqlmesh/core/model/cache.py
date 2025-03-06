@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 if t.TYPE_CHECKING:
     from sqlmesh.core.snapshot import SnapshotId
     from sqlmesh.core.linter.definition import Linter
+    from sqlmesh.core.linter.rule import Rule
 
     T = t.TypeVar("T")
 
@@ -72,6 +73,7 @@ class ModelCache:
 @dataclass
 class OptimizedQueryCacheEntry:
     optimized_rendered_query: t.Optional[exp.Expression]
+    renderer_violations: t.Optional[t.Dict[type[Rule], t.Any]]
 
 
 class OptimizedQueryCache:
@@ -102,15 +104,11 @@ class OptimizedQueryCache:
         cache_entry = self._file_cache.get(name)
         if cache_entry:
             try:
-                if cache_entry.optimized_rendered_query:
-                    model._query_renderer.update_cache(
-                        cache_entry.optimized_rendered_query, optimized=True
-                    )
-                else:
-                    # If the optimized rendered query is None, then there are likely adapter calls in the query
-                    # that prevent us from rendering it at load time. This means that we can safely set the
-                    # unoptimized cache to None as well to prevent attempts to render it downstream.
-                    model._query_renderer.update_cache(None, optimized=False)
+                # If the optimized rendered query is None, then there are likely adapter calls in the query
+                # that prevent us from rendering it at load time. This means that we can safely set the
+                # unoptimized cache to None as well to prevent attempts to render it downstream.
+                optimized = cache_entry.optimized_rendered_query is not None
+                model._query_renderer.update_cache(cache_entry, optimized=optimized)
                 return True
             except Exception as ex:
                 logger.warning("Failed to load a cache entry '%s': %s", name, ex)
@@ -140,7 +138,10 @@ class OptimizedQueryCache:
                 # Note: The ordering of the intersection check matters here
                 return None
 
-        new_entry = OptimizedQueryCacheEntry(optimized_rendered_query=optimized_query)
+        new_entry = OptimizedQueryCacheEntry(
+            optimized_rendered_query=optimized_query,
+            renderer_violations=model.violated_rules_for_query,
+        )
         self._file_cache.put(name, value=new_entry)
 
     @staticmethod

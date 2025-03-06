@@ -29,8 +29,9 @@ if t.TYPE_CHECKING:
     from sqlglot._typing import E
     from sqlglot.dialects.dialect import DialectType
 
-    from sqlmesh.core.snapshot import DeployabilityIndex, Snapshot
     from sqlmesh.core.linter.rule import Rule
+    from sqlmesh.core.model.cache import OptimizedQueryCacheEntry
+    from sqlmesh.core.snapshot import DeployabilityIndex, Snapshot
 
 
 logger = logging.getLogger(__name__)
@@ -247,8 +248,8 @@ class BaseExpressionRenderer:
             self._cache = resolved_expressions
         return resolved_expressions
 
-    def update_cache(self, expression: t.Optional[exp.Expression]) -> None:
-        self._cache = [expression]
+    def update_cache(self, cache_entry: OptimizedQueryCacheEntry) -> None:
+        self._cache = [cache_entry.optimized_rendered_query]
 
     def _resolve_table(
         self,
@@ -550,13 +551,16 @@ class QueryRenderer(BaseExpressionRenderer):
 
         return query
 
-    def update_cache(self, expression: t.Optional[exp.Expression], optimized: bool = False) -> None:
+    def update_cache(self, cache_entry: OptimizedQueryCacheEntry, optimized: bool = False) -> None:
+        expression = cache_entry.optimized_rendered_query
         if optimized:
             if not isinstance(expression, exp.Query):
                 raise SQLMeshError(f"Expected a Query but got: {expression}")
             self._optimized_cache = expression
         else:
-            super().update_cache(expression)
+            super().update_cache(cache_entry)
+
+        self._violated_rules = cache_entry.renderer_violations or {}
 
     def _optimize_query(self, query: exp.Query, all_deps: t.Set[str]) -> exp.Query:
         from sqlmesh.core.linter.rules.builtin import (
