@@ -123,6 +123,7 @@ from sqlmesh.utils.errors import (
     PlanError,
     SQLMeshError,
     UncategorizedPlanError,
+    LinterError,
 )
 from sqlmesh.utils.config import print_config
 from sqlmesh.utils.jinja import JinjaMacroRegistry
@@ -2384,7 +2385,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                 found_error = linter.lint_model(model) or found_error
 
         if found_error:
-            raise ConfigError(
+            raise LinterError(
                 "Linter detected errors in the code. Please fix them before proceeding."
             )
 

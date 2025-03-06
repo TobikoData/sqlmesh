@@ -1491,6 +1491,7 @@ class SqlModel(_Model):
 
     @property
     def violated_rules_for_query(self) -> t.Dict[type[Rule], t.Any]:
+        self.render_query()
         return self._query_renderer._violated_rules
 
 

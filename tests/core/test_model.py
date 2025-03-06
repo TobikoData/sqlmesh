@@ -61,7 +61,7 @@ from sqlmesh.core.node import IntervalUnit, _Node
 from sqlmesh.core.signal import signal
 from sqlmesh.core.snapshot import Snapshot, SnapshotChangeCategory
 from sqlmesh.utils.date import TimeLike, to_datetime, to_ds, to_timestamp
-from sqlmesh.utils.errors import ConfigError, SQLMeshError
+from sqlmesh.utils.errors import ConfigError, SQLMeshError, LinterError
 from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroInfo, MacroExtractor
 from sqlmesh.utils.metaprogramming import Executable
 from sqlmesh.core.macros import RuntimeStage
@@ -7659,7 +7659,7 @@ def test_python_model_on_virtual_update():
     )
 
 
-def test_compile_time_checks(tmp_path: Path, assert_exp_eq):
+def test_compile_time_checks(tmp_path: Path):
     ctx = Context(
         config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb")), paths=tmp_path
     )
@@ -7683,7 +7683,7 @@ def test_compile_time_checks(tmp_path: Path, assert_exp_eq):
 
     ctx.load()
 
-    with pytest.raises(ConfigError, match=cfg_err):
+    with pytest.raises(LinterError, match=cfg_err):
         ctx.upsert_model(load_sql_based_model(strict_query))
 
     # Strict column resolution
@@ -7697,7 +7697,7 @@ def test_compile_time_checks(tmp_path: Path, assert_exp_eq):
     """
     )
 
-    with pytest.raises(ConfigError, match=cfg_err):
+    with pytest.raises(LinterError, match=cfg_err):
         ctx.upsert_model(load_sql_based_model(strict_query))
 
 

@@ -47,7 +47,7 @@ from sqlmesh.utils.date import (
     to_timestamp,
     yesterday_ds,
 )
-from sqlmesh.utils.errors import ConfigError, SQLMeshError
+from sqlmesh.utils.errors import ConfigError, SQLMeshError, LinterError
 from sqlmesh.utils.metaprogramming import Executable
 from tests.utils.test_helpers import use_terminal_console
 from tests.utils.test_filesystem import create_temp_file
@@ -1661,11 +1661,11 @@ def test_model_linting(tmp_path: pathlib.Path, sushi_context) -> None:
 
     # Case: Ensure load DOES NOT work if linter is enabled
     for query in ("SELECT * FROM tbl", "SELECT t.* FROM tbl"):
-        with pytest.raises(ConfigError, match=config_err):
+        with pytest.raises(LinterError, match=config_err):
             ctx.upsert_model(load_sql_based_model(d.parse(f"MODEL (name test); {query}")))
 
     error_model = load_sql_based_model(d.parse("MODEL (name test); SELECT col"))
-    with pytest.raises(ConfigError, match=config_err):
+    with pytest.raises(LinterError, match=config_err):
         ctx.upsert_model(error_model)
 
     # Case: Ensure error violations are cached if the model did not pass linting
@@ -1753,7 +1753,7 @@ def test_model_linting(tmp_path: pathlib.Path, sushi_context) -> None:
         )
     )
 
-    with pytest.raises(ConfigError, match=config_err):
+    with pytest.raises(LinterError, match=config_err):
         sushi_context.load()
 
     # Case: Ensure the Linter also picks up Python model violations
@@ -1774,7 +1774,7 @@ def test_model_linting(tmp_path: pathlib.Path, sushi_context) -> None:
     )
 
     for python_model in (model3, model4):
-        with pytest.raises(ConfigError, match=config_err):
+        with pytest.raises(LinterError, match=config_err):
             sushi_context.upsert_model(python_model)
 
     @model(name="memory.sushi.model5", columns={"col": "int"}, owner="test")
