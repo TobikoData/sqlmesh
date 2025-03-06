@@ -23,14 +23,17 @@ from sqlmesh.core.config import (
     EnvironmentSuffixTarget,
     ModelDefaultsConfig,
     SnowflakeConnectionConfig,
+    LinterConfig,
     load_configs,
 )
 from sqlmesh.core.context import Context
-from sqlmesh.core.console import create_console
+from sqlmesh.core.console import create_console, get_console
 from sqlmesh.core.dialect import parse, schema_
 from sqlmesh.core.engine_adapter.duckdb import DuckDBEngineAdapter
 from sqlmesh.core.environment import Environment, EnvironmentNamingInfo, EnvironmentStatements
-from sqlmesh.core.model import load_sql_based_model, model
+from sqlmesh.core.macros import MacroEvaluator
+from sqlmesh.core.model import load_sql_based_model, model, SqlModel, Model
+from sqlmesh.core.model.cache import OptimizedQueryCache
 from sqlmesh.core.renderer import render_statements
 from sqlmesh.core.model.kind import ModelKindName
 from sqlmesh.core.plan import BuiltInPlanEvaluator, PlanBuilder
@@ -44,8 +47,9 @@ from sqlmesh.utils.date import (
     to_timestamp,
     yesterday_ds,
 )
-from sqlmesh.utils.errors import ConfigError, SQLMeshError
+from sqlmesh.utils.errors import ConfigError, SQLMeshError, LinterError
 from sqlmesh.utils.metaprogramming import Executable
+from tests.utils.test_helpers import use_terminal_console
 from tests.utils.test_filesystem import create_temp_file
 
 
@@ -1635,3 +1639,150 @@ def test_environment_statements_dialect(tmp_path: Path):
     with pytest.raises(ParseError, match=r"Invalid expression / Unexpected token*"):
         config.model_defaults.dialect = "duckdb"
         ctx = Context(paths=[tmp_path], config=config)
+
+
+@pytest.mark.slow
+@use_terminal_console
+def test_model_linting(tmp_path: pathlib.Path, sushi_context) -> None:
+    def assert_cached_violations_exist(cache: OptimizedQueryCache, model: Model):
+        model = t.cast(SqlModel, model)
+        cache_entry = cache._file_cache.get(cache._entry_name(model))
+        assert cache_entry is not None
+        assert cache_entry.optimized_rendered_query is not None
+        assert cache_entry.renderer_violations is not None
+
+    cfg = LinterConfig(enabled=True, rules="ALL")
+    ctx = Context(
+        config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"), linter=cfg),
+        paths=tmp_path,
+    )
+
+    config_err = "Linter detected errors in the code. Please fix them before proceeding."
+
+    # Case: Ensure load DOES NOT work if linter is enabled
+    for query in ("SELECT * FROM tbl", "SELECT t.* FROM tbl"):
+        with pytest.raises(LinterError, match=config_err):
+            ctx.upsert_model(load_sql_based_model(d.parse(f"MODEL (name test); {query}")))
+
+    error_model = load_sql_based_model(d.parse("MODEL (name test); SELECT col"))
+    with pytest.raises(LinterError, match=config_err):
+        ctx.upsert_model(error_model)
+
+    # Case: Ensure error violations are cached if the model did not pass linting
+    cache = OptimizedQueryCache(tmp_path / c.CACHE)
+
+    assert_cached_violations_exist(cache, error_model)
+
+    # Case: Ensure NoSelectStar only raises for top-level SELECTs, new model shouldn't raise
+    # and thus should also be cached
+    model2 = load_sql_based_model(
+        d.parse("MODEL (name test2); SELECT col FROM (SELECT * FROM tbl)")
+    )
+    ctx.upsert_model(model2)
+
+    model2 = t.cast(SqlModel, model2)
+    assert cache._file_cache.exists(cache._entry_name(model2))
+
+    # Case: Ensure warning violations are found again even if the optimized query is cached
+    ctx.config.linter = LinterConfig(enabled=True, warn_rules="ALL")
+    ctx.load()
+
+    for i in range(3):
+        with patch.object(get_console(), "log_warning") as mock_logger:
+            if i > 1:
+                # Model's violations have been cached from the previous upserts
+                assert_cached_violations_exist(cache, model2)
+
+            ctx.upsert_model(error_model)
+            assert (
+                """Column '"col"' could not be resolved for model '"test"'"""
+                in mock_logger.call_args[0][0]
+            )
+
+            # Model's violations have been cached after the former upsert
+            assert_cached_violations_exist(cache, model2)
+
+    # Case: Ensure load WORKS if linter is enabled but the rules are not
+    create_temp_file(
+        tmp_path,
+        pathlib.Path(pathlib.Path("models"), "test.sql"),
+        "MODEL(name test); SELECT * FROM (SELECT 1 AS col);",
+    )
+
+    ignore_or_warn_cfgs = [
+        LinterConfig(enabled=True, warn_rules=["noselectstar"]),
+        LinterConfig(enabled=True, ignored_rules=["noselectstar"]),
+    ]
+    for cfg in ignore_or_warn_cfgs:
+        ctx.config.linter = cfg
+        ctx.load()
+
+    # Case: Ensure load DOES NOT work if LinterConfig has overlapping rules
+    with pytest.raises(
+        ConfigError,
+        match=r"Rules cannot simultaneously warn and raise an error: \[noselectstar\]",
+    ):
+        ctx.config.linter = LinterConfig(
+            enabled=True, rules=["noselectstar"], warn_rules=["noselectstar"]
+        )
+        ctx.load()
+
+    # Case: Ensure model attribute overrides global config
+    ctx.config.linter = LinterConfig(enabled=True, rules=["noselectstar"])
+
+    create_temp_file(
+        tmp_path,
+        pathlib.Path(pathlib.Path("models"), "test.sql"),
+        "MODEL(name test, ignored_rules ['ALL']); SELECT * FROM (SELECT 1 AS col);",
+    )
+
+    create_temp_file(
+        tmp_path,
+        pathlib.Path(pathlib.Path("models"), "test2.sql"),
+        "MODEL(name test2, ignored_rules ['noselectstar']); SELECT * FROM (SELECT 1 AS col);",
+    )
+
+    ctx.load()
+
+    # Case: Ensure we can load & use the user-defined rules
+    sushi_context.config.linter = LinterConfig(enabled=True, rules=["aLl"])
+    sushi_context.upsert_model(
+        load_sql_based_model(
+            d.parse("MODEL (name sushi.test); SELECT col FROM (SELECT * FROM tbl)"),
+            default_catalog="memory",
+        )
+    )
+
+    with pytest.raises(LinterError, match=config_err):
+        sushi_context.load()
+
+    # Case: Ensure the Linter also picks up Python model violations
+    @model(name="memory.sushi.model3", is_sql=True, kind="full", dialect="snowflake")
+    def model3_entrypoint(evaluator: MacroEvaluator) -> str:
+        return "select * from model1"
+
+    model3 = model.get_registry()["memory.sushi.model3"].model(
+        module_path=Path("."), path=Path(".")
+    )
+
+    @model(name="memory.sushi.model4", columns={"col": "int"})
+    def model4_entrypoint(context, **kwargs):
+        yield pd.DataFrame({"col": []})
+
+    model4 = model.get_registry()["memory.sushi.model4"].model(
+        module_path=Path("."), path=Path(".")
+    )
+
+    for python_model in (model3, model4):
+        with pytest.raises(LinterError, match=config_err):
+            sushi_context.upsert_model(python_model)
+
+    @model(name="memory.sushi.model5", columns={"col": "int"}, owner="test")
+    def model5_entrypoint(context, **kwargs):
+        yield pd.DataFrame({"col": []})
+
+    model5 = model.get_registry()["memory.sushi.model5"].model(
+        module_path=Path("."), path=Path(".")
+    )
+
+    sushi_context.upsert_model(model5)

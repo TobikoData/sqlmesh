@@ -4,6 +4,7 @@ import typing as t
 from collections import Counter
 from datetime import timedelta
 from unittest import mock
+from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
@@ -25,7 +26,7 @@ from sqlmesh.core.config import (
     ModelDefaultsConfig,
     DuckDBConnectionConfig,
 )
-from sqlmesh.core.console import Console
+from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.context import Context
 from sqlmesh.core.config.categorizer import CategorizerConfig
 from sqlmesh.core.engine_adapter import EngineAdapter
@@ -59,7 +60,7 @@ from sqlmesh.utils.date import TimeLike, now, to_date, to_datetime, to_timestamp
 from sqlmesh.utils.errors import NoChangesPlanError
 from sqlmesh.utils.pydantic import validate_string
 from tests.conftest import DuckDBMetadata, SushiDataValidator
-
+from tests.utils.test_helpers import use_terminal_console
 
 if t.TYPE_CHECKING:
     from sqlmesh import QueryOrDF
@@ -4265,8 +4266,19 @@ def test_auto_categorization(sushi_context: Context):
     )
 
 
+@use_terminal_console
 def test_multi(mocker):
-    context = Context(paths=["examples/multi/repo_1", "examples/multi/repo_2"], gateway="memory")
+    context = Context(
+        paths=["examples/multi/repo_1", "examples/multi/repo_2"], gateway="memory", load=False
+    )
+
+    with patch.object(get_console(), "log_warning") as mock_logger:
+        context.load()
+        warnings = mock_logger.call_args[0][0]
+        repo1_path, repo2_path = context.configs.keys()
+        assert f"Linter warnings for {repo1_path}" in warnings
+        assert f"Linter warnings for {repo2_path}" not in warnings
+
     assert (
         context.render("bronze.a").sql()
         == '''SELECT 1 AS "col_a", 'b' AS "col_b", 1 AS "one", 'repo_1' AS "dup"'''

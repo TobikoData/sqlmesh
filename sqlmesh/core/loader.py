@@ -12,11 +12,13 @@ from pathlib import Path
 
 from sqlglot.errors import SqlglotError
 from sqlglot import exp
+from sqlglot.helper import subclasses
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.audit import Audit, ModelAudit, StandaloneAudit, load_multiple_audits
 from sqlmesh.core.dialect import parse
 from sqlmesh.core.environment import EnvironmentStatements
+from sqlmesh.core.linter.rule import RuleSet, Rule
 from sqlmesh.core.macros import MacroRegistry, macro
 from sqlmesh.core.metric import Metric, MetricMeta, expand_metrics, load_metric_ddl
 from sqlmesh.core.model import (
@@ -54,6 +56,7 @@ class LoadedProject:
     requirements: t.Dict[str, str]
     excluded_requirements: t.Set[str]
     environment_statements: t.Optional[EnvironmentStatements]
+    user_rules: RuleSet
 
 
 class Loader(abc.ABC):
@@ -120,6 +123,8 @@ class Loader(abc.ABC):
 
             environment_statements = self._load_environment_statements(macros=macros)
 
+            user_rules = self._load_linting_rules()
+
             project = LoadedProject(
                 macros=macros,
                 jinja_macros=jinja_macros,
@@ -130,6 +135,7 @@ class Loader(abc.ABC):
                 requirements=requirements,
                 excluded_requirements=excluded_requirements,
                 environment_statements=environment_statements,
+                user_rules=user_rules,
             )
             return project
 
@@ -264,6 +270,10 @@ class Loader(abc.ABC):
                     requirements[dep] = ver
 
         return requirements, excluded_requirements
+
+    def _load_linting_rules(self) -> RuleSet:
+        """Loads user linting rules"""
+        return RuleSet()
 
     def _glob_paths(
         self,
@@ -629,6 +639,23 @@ class SqlMeshLoader(Loader):
 
             return EnvironmentStatements(**statements, python_env=python_env)
         return None
+
+    def _load_linting_rules(self) -> RuleSet:
+        user_rules: UniqueKeyDict[str, type[Rule]] = UniqueKeyDict("rules")
+
+        for path in self._glob_paths(
+            self.config_path / c.LINTER,
+            ignore_patterns=self.config.ignore_patterns,
+            extension=".py",
+        ):
+            if os.path.getsize(path):
+                self._track_file(path)
+                module = import_python_file(path, self.config_path)
+                module_rules = subclasses(module.__name__, Rule, (Rule,))
+                for user_rule in module_rules:
+                    user_rules[user_rule.name] = user_rule
+
+        return RuleSet(user_rules.values())
 
     class _Cache:
         def __init__(self, loader: SqlMeshLoader, config_path: Path):

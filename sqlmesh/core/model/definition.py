@@ -64,6 +64,7 @@ if t.TYPE_CHECKING:
     from sqlmesh.core.context import ExecutionContext
     from sqlmesh.core.engine_adapter import EngineAdapter
     from sqlmesh.core.engine_adapter._typing import QueryOrDF
+    from sqlmesh.core.linter.rule import Rule
     from sqlmesh.core.snapshot import DeployabilityIndex, Node, Snapshot
     from sqlmesh.utils.jinja import MacroReference
 
@@ -237,7 +238,7 @@ class _Model(ModelMeta, frozen=True):
                     "enabled",
                     "inline_audits",
                     "optimize_query",
-                    "validate_query",
+                    "ignored_rules_",
                 ):
                     expressions.append(
                         exp.Property(
@@ -980,12 +981,6 @@ class _Model(ModelMeta, frozen=True):
                     self._path,
                 )
 
-            if self.validate_query:
-                raise_config_error(
-                    "Query validation can only be enabled for SQL models",
-                    self._path,
-                )
-
         if isinstance(self.kind, CustomKind):
             from sqlmesh.core.snapshot.evaluator import get_custom_materialization_type_or_raise
 
@@ -1087,7 +1082,6 @@ class _Model(ModelMeta, frozen=True):
                 self.project,
                 str(self.allow_partials),
                 gen(self.session_properties_) if self.session_properties_ else None,
-                str(self.validate_query) if self.validate_query is not None else None,
                 *[gen(g) for g in self.grains],
             ]
 
@@ -1228,6 +1222,10 @@ class _Model(ModelMeta, frozen=True):
             col for expr in self.partitioned_by_ for col in expr.find_all(exp.Column)
         }
 
+    @property
+    def violated_rules_for_query(self) -> t.Dict[type[Rule], t.Any]:
+        return {}
+
 
 class SqlModel(_Model):
     """The model definition which relies on a SQL query to fetch the data.
@@ -1287,6 +1285,7 @@ class SqlModel(_Model):
             engine_adapter=engine_adapter,
             **kwargs,
         )
+
         return query
 
     def render_definition(
@@ -1474,7 +1473,6 @@ class SqlModel(_Model):
             default_catalog=self.default_catalog,
             quote_identifiers=not no_quote_identifiers,
             optimize_query=self.optimize_query,
-            validate_query=self.validate_query,
         )
 
     @property
@@ -1489,6 +1487,11 @@ class SqlModel(_Model):
     @property
     def _additional_metadata(self) -> t.List[str]:
         return [*super()._additional_metadata, gen(self.query)]
+
+    @property
+    def violated_rules_for_query(self) -> t.Dict[type[Rule], t.Any]:
+        self.render_query()
+        return self._query_renderer._violated_rules
 
 
 class SeedModel(_Model):
@@ -2324,7 +2327,6 @@ def _create_model(
     defaults = {k: v for k, v in (defaults or {}).items() if k in klass.all_fields()}
     if not issubclass(klass, SqlModel):
         defaults.pop("optimize_query", None)
-        defaults.pop("validate_query", None)
 
     statements = []
 
