@@ -1109,6 +1109,63 @@ def grant_schema_usage(evaluator):
 As demonstrated in these examples, the `environment_naming_info` is available within the macro evaluator for macros invoked within the `before_all` and `after_all` statements. Additionally, the macro `this_env` provides access to the current environment name, which can be helpful for more advanced use cases that require fine-grained control over their behaviour.
 
 
+### Linter
+
+The [linter](../concepts/linter.md) utilizes rules to analyze `Model` definitions (e.g its query) in order to flag errors, enforce stylistic opinions or find suspicious constructs.
+
+It can be configured under the `linter` key, with the rules being defined as lists of rule names or `"ALL"`. An example:
+
+=== "YAML"
+
+    ```yaml linenums="1"
+    linter:
+        enabled: True
+
+        rules: ["rule1", "rule2"]
+        warn_rules: ["rule3"]
+        ignored_rules: ["rule4"]
+    ```
+
+=== "Python"
+
+    ```python linenums="1"
+    from sqlmesh.core.config import Config, LinterConfig
+
+    config = Config(
+         linter=LinterConfig(
+            enabled=True,
+            rules=["rule1", "rule2"],
+            warn_rules=["rule3"],
+            ignored_rules=["rule4"]
+        )
+    )
+    ```
+
+To enable different levels of escalation, SQLMesh defines the following keys:
+- `rules`: Any violation will raise an error, essentially halting execution until it's fixed
+- `warning_rules`: Violations will only log warnings for the user
+- `ignored_rules`: Violations will not have any visual or actual effect
+
+
+By default, the linter configuration is disabled and all of the rules are excluded.
+
+
+The usage of `ignored_rules` can prove useful when `rules` or `warning_rules` are defined as `'ALL'`, thus avoiding listing out individual rules. However, SQLMesh will detect if there's overlap in `rules` and `warning_rules`, since these should be mutually exclusive. An example of this:
+
+
+=== "YAML"
+
+    ```yaml linenums="1"
+    linter:
+        enabled: True
+
+        rules: "ALL"
+        ignored_rules: ["rule4"]
+    ```
+
+Users can also use `ignored_rules` as a model attribute to exclude certain rules on a per-model basis.
+
+
 ### Debug mode
 
 To enable debug mode set the `SQLMESH_DEBUG` environment variable to one of the following values: "1", "true", "t", "yes" or "y".
