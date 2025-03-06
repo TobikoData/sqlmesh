@@ -494,11 +494,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             }
         )
 
-        update_model_schemas(
-            self.dag,
-            models=self._models,
-            context_path=self.path,
-        )
+        update_model_schemas(self.dag, models=self._models, context_path=self.path)
 
         if model.dialect:
             self._all_dialects.add(model.dialect)
@@ -637,11 +633,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                     self._models.update({fqn: model.copy(update={"mapping_schema": {}})})
                     continue
 
-            update_model_schemas(
-                self.dag,
-                models=self._models,
-                context_path=self.path,
-            )
+            update_model_schemas(self.dag, models=self._models, context_path=self.path)
 
             models = self.models.values()
             for model in models:

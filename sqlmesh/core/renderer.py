@@ -67,7 +67,6 @@ class BaseExpressionRenderer:
         self._cache: t.List[t.Optional[exp.Expression]] = []
         self._model_fqn = model_fqn
         self._optimize_query_flag = optimize_query is not False
-        self._violated_rules: t.Dict[type[Rule], t.Any] = {}
 
     def update_schema(self, schema: t.Dict[str, t.Any]) -> None:
         self.schema = d.normalize_mapping_schema(schema, dialect=self._dialect)
@@ -443,6 +442,7 @@ class QueryRenderer(BaseExpressionRenderer):
     def __init__(self, *args: t.Any, **kwargs: t.Any):
         super().__init__(*args, **kwargs)
         self._optimized_cache: t.Optional[exp.Query] = None
+        self._violated_rules: t.Dict[type[Rule], t.Any] = {}
 
     def update_schema(self, schema: t.Dict[str, t.Any]) -> None:
         super().update_schema(schema)
