@@ -27,7 +27,7 @@ from sqlmesh.core.config import (
     load_configs,
 )
 from sqlmesh.core.context import Context
-from sqlmesh.core.console import create_console, get_console, set_console, TerminalConsole
+from sqlmesh.core.console import create_console, get_console
 from sqlmesh.core.dialect import parse, schema_
 from sqlmesh.core.engine_adapter.duckdb import DuckDBEngineAdapter
 from sqlmesh.core.environment import Environment, EnvironmentNamingInfo, EnvironmentStatements
@@ -49,6 +49,7 @@ from sqlmesh.utils.date import (
 )
 from sqlmesh.utils.errors import ConfigError, SQLMeshError
 from sqlmesh.utils.metaprogramming import Executable
+from tests.utils.test_helpers import use_terminal_console
 from tests.utils.test_filesystem import create_temp_file
 
 
@@ -1641,10 +1642,8 @@ def test_environment_statements_dialect(tmp_path: Path):
 
 
 @pytest.mark.slow
+@use_terminal_console
 def test_model_linting(tmp_path: pathlib.Path, sushi_context) -> None:
-    orig_console = get_console()
-    set_console(TerminalConsole())
-
     def assert_cached_violations_exist(cache: OptimizedQueryCache, model: Model):
         model = t.cast(SqlModel, model)
         cache_entry = cache._file_cache.get(cache._entry_name(model))
@@ -1787,5 +1786,3 @@ def test_model_linting(tmp_path: pathlib.Path, sushi_context) -> None:
     )
 
     sushi_context.upsert_model(model5)
-
-    set_console(orig_console)

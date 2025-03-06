@@ -26,7 +26,7 @@ from sqlmesh.core.config import (
     ModelDefaultsConfig,
     DuckDBConnectionConfig,
 )
-from sqlmesh.core.console import Console, set_console, get_console, TerminalConsole
+from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.context import Context
 from sqlmesh.core.config.categorizer import CategorizerConfig
 from sqlmesh.core.engine_adapter import EngineAdapter
@@ -60,7 +60,7 @@ from sqlmesh.utils.date import TimeLike, now, to_date, to_datetime, to_timestamp
 from sqlmesh.utils.errors import NoChangesPlanError
 from sqlmesh.utils.pydantic import validate_string
 from tests.conftest import DuckDBMetadata, SushiDataValidator
-
+from tests.utils.test_helpers import use_terminal_console
 
 if t.TYPE_CHECKING:
     from sqlmesh import QueryOrDF
@@ -4266,10 +4266,8 @@ def test_auto_categorization(sushi_context: Context):
     )
 
 
+@use_terminal_console
 def test_multi(mocker):
-    orig_console = get_console()
-    set_console(TerminalConsole())
-
     context = Context(
         paths=["examples/multi/repo_1", "examples/multi/repo_2"], gateway="memory", load=False
     )
@@ -4337,8 +4335,6 @@ def test_multi(mocker):
     assert environment_statements[0].after_all == [
         "CREATE TABLE IF NOT EXISTS after_1 AS select @dup()"
     ]
-
-    set_console(orig_console)
 
 
 def test_multi_dbt(mocker):
