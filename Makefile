@@ -19,16 +19,16 @@ ui-style:
 	SKIP=ruff,ruff-format,mypy pre-commit run --all-files
 
 doc-test:
-	PYTEST_PLUGINS=tests.common_fixtures pytest --doctest-modules sqlmesh/core sqlmesh/utils
+	PYTEST_PLUGINS=tests.common_fixtures python -m pytest --doctest-modules sqlmesh/core sqlmesh/utils
 
 package:
-	pip3 install wheel && python3 setup.py sdist bdist_wheel
+	pip3 install build && python3 -m build
 
 publish: package
 	pip3 install twine && python3 -m twine upload dist/*
 
 package-tests:
-	pip3 install wheel && python3 tests/setup.py sdist bdist_wheel
+	pip3 install build && cp pyproject.toml tests/sqlmesh_pyproject.toml && python3 -m build tests/
 
 publish-tests: package-tests
 	pip3 install twine && python3 -m twine upload -r tobiko-private tests/dist/*
