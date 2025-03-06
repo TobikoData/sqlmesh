@@ -6,7 +6,7 @@ import linecache
 import logging
 import os
 import typing as t
-from collections import defaultdict
+from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -393,7 +393,7 @@ class SqlMeshLoader(Loader):
         all_model_names = (
             list(sql_models.keys()) + list(external_models.keys()) + list(python_models.keys())
         )
-        duplicates = [name for name, count in t.Counter(all_model_names).items() if count > 1]
+        duplicates = [name for name, count in Counter(all_model_names).items() if count > 1]
         if duplicates:
             raise ValueError(f"Duplicate model name(s) found: {', '.join(duplicates)}.")
 
