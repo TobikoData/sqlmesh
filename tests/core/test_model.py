@@ -3817,24 +3817,120 @@ def test_model_defaults_macros(make_snapshot):
     }
 
     # Validate the correct rendering and removal of conditional properties
-    assert model.render_session_properties(
-        snapshots={model.fqn: snapshot}, python_env=model.python_env
+    assert model.render_session_properties(snapshots={model.fqn: snapshot}) == {
+        "spark.executor.cores": exp.convert(2),
+        "spark.executor.memory": "1G",
+    }
+
+    assert model.render_physical_properties(snapshots={model.fqn: snapshot}) == {
+        "partition_expiration_days": exp.convert(13),
+        "target_lag": exp.convert("1 hour"),
+    }
+
+    assert model.render_virtual_properties(snapshots={model.fqn: snapshot}) == {
+        "creatable_type": exp.convert("SECURE"),
+    }
+
+
+def test_model_defaults_macros_python_model(make_snapshot):
+    model_defaults = {
+        "physical_properties": {
+            "partition_expiration_days": 13,
+            "creatable_type": "@IF(@model_kind_name = 'FULL', 'TRANSIENT', NULL)",
+        },
+        "table_format": "@IF(@gateway = 'local', 'iceberg', NULL)",
+        "storage_format": "@IF(@gateway = 'dev', 'parquet', NULL)",
+        "validate_query": "@IF(@gateway = 'local', True, False)",
+        "optimize_query": "@IF(@gateway = 'local', True, False)",
+        "enabled": "@IF(@gateway = 'local', True, False)",
+        "allow_partials": "@IF(@gateway = 'local', True, False)",
+        "interval_unit": "@IF(@gateway = 'local', 'quarter_hour', 'day')",
+        "start": "@IF(@gateway = 'dev', '1 month ago', '2024-01-01')",
+        "virtual_properties": {"creatable_type": "@create_type"},
+        "session_properties": {
+            "spark.executor.cores": "@IF(@gateway = 'dev', 1, 2)",
+            "spark.executor.memory": "1G",
+        },
+    }
+
+    @model(
+        name="python_model_defaults_macro",
+        kind="full",
+        columns={"some_col": "int"},
+        physical_properties={"partition_expiration_days": 7},
+    )
+    def python_model_prop_macro(context, **kwargs):
+        context.resolve_table("foo")
+
+    m = model.get_registry()["python_model_defaults_macro"].model(
+        module_path=Path("."),
+        path=Path("."),
+        dialect="duckdb",
+        defaults=model_defaults,
+        variables={"gateway": "local", "create_type": "SECURE"},
+    )
+
+    # Even if in the project wide defaults these are ignored for python models
+    assert not m.optimize_query
+    assert not m.validate_query
+
+    # Validate rendering of model defaults
+    assert m.enabled
+    assert m.start == "2024-01-01"
+    assert m.allow_partials
+    assert m.interval_unit == IntervalUnit.QUARTER_HOUR
+    assert m.table_format == "iceberg"
+
+    # Validate disabling attribute dynamically
+    assert not m.storage_format
+
+    snapshot: Snapshot = make_snapshot(m)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    # Ensure properties are not rendered at load time
+    assert m.physical_properties == {
+        "partition_expiration_days": exp.convert(7),
+        "creatable_type": exp.maybe_parse(
+            "@IF(@model_kind_name = 'FULL', 'TRANSIENT', NULL)", dialect="duckdb"
+        ),
+    }
+
+    # Substitution occurs at runtime for properties so here these will be unrendered
+    assert m.render_physical_properties(
+        snapshots={
+            m.fqn: snapshot,
+        }
+    ) == {
+        "partition_expiration_days": exp.convert(7),
+        "creatable_type": exp.convert("TRANSIENT"),
+    }
+
+    assert m.session_properties == {
+        "spark.executor.cores": exp.maybe_parse("@IF(@gateway = 'dev', 1, 2)", dialect="duckdb"),
+        "spark.executor.memory": "1G",
+    }
+
+    assert m.virtual_properties["creatable_type"] == d.MacroVar(this="create_type")
+
+    # Validate rendering of properties
+    assert m.render_session_properties(
+        snapshots={
+            m.fqn: snapshot,
+        },
     ) == {
         "spark.executor.cores": exp.convert(2),
         "spark.executor.memory": "1G",
     }
 
-    assert model.render_physical_properties(
-        snapshots={model.fqn: snapshot}, python_env=model.python_env
-    ) == {
-        "partition_expiration_days": exp.convert(13),
-        "target_lag": exp.convert("1 hour"),
-    }
+    assert m.render_virtual_properties(
+        snapshots={
+            m.fqn: snapshot,
+        }
+    ) == {"creatable_type": exp.convert("SECURE")}
 
-    assert model.render_virtual_properties(
-        snapshots={model.fqn: snapshot}, python_env=model.python_env
-    ) == {
-        "creatable_type": exp.convert("SECURE"),
+    assert m.render_physical_properties(snapshots={m.fqn: snapshot}) == {
+        "partition_expiration_days": exp.convert(7),
+        "creatable_type": exp.convert("TRANSIENT"),
     }
 
 

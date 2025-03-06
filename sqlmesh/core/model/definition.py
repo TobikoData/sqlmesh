@@ -2276,9 +2276,9 @@ def create_python_model(
             for dep in t.cast(t.List[exp.Expression], depends_on_rendered)[0].expressions
         }
 
-    variables = {k: v for k, v in (variables or {}).items() if k in referenced_variables}
+    used_variables = {k: v for k, v in (variables or {}).items() if k in referenced_variables}
     if variables:
-        python_env[c.SQLMESH_VARS] = Executable.value(variables)
+        python_env[c.SQLMESH_VARS] = Executable.value(used_variables)
 
     return _create_model(
         PythonModel,
