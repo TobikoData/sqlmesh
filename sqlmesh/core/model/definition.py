@@ -1434,7 +1434,6 @@ class SqlModel(_Model):
                 this_query,
                 matchings=[(previous_query, this_query)],
                 delta_only=True,
-                copy=False,
                 dialect=self.dialect if self.dialect == previous.dialect else None,
             )
         inserted_expressions = {e.expression for e in edits if isinstance(e, Insert)}
