@@ -2012,9 +2012,10 @@ def load_sql_based_model(
     unrendered_merge_filter = None
 
     for prop in meta.expressions:
+        # Macro functions that programmaticaly generate the key-value pair properties should be rendered
+        # This is needed in the odd case where a macro shares the name of one of the properties
+        # eg `@session_properties()` Test: `test_macros_in_model_statement` Reference PR: #2574
         if isinstance(prop, d.MacroFunc):
-            # Macro functions that programmaticaly generate the property key-value pair should be rendered
-            # See: https://github.com/TobikoData/sqlmesh/pull/2574 Test: test_macros_in_model_statement
             continue
 
         prop_name = prop.name.lower()
