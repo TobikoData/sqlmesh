@@ -27,6 +27,7 @@ from sqlmesh.core.config import (
     GatewayConfig,
     NameInferenceConfig,
     ModelDefaultsConfig,
+    LinterConfig,
 )
 from sqlmesh.core.context import Context, ExecutionContext
 from sqlmesh.core.dialect import parse
@@ -60,10 +61,11 @@ from sqlmesh.core.node import IntervalUnit, _Node
 from sqlmesh.core.signal import signal
 from sqlmesh.core.snapshot import Snapshot, SnapshotChangeCategory
 from sqlmesh.utils.date import TimeLike, to_datetime, to_ds, to_timestamp
-from sqlmesh.utils.errors import ConfigError, SQLMeshError
+from sqlmesh.utils.errors import ConfigError, SQLMeshError, LinterError
 from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroInfo, MacroExtractor
 from sqlmesh.utils.metaprogramming import Executable
 from sqlmesh.core.macros import RuntimeStage
+from tests.utils.test_helpers import use_terminal_console
 
 
 def missing_schema_warning_msg(model, deps):
@@ -280,7 +282,8 @@ def test_model_validation_union_query():
         model.validate_definition()
 
 
-def test_model_qualification():
+@use_terminal_console
+def test_model_qualification(tmp_path: Path):
     with patch.object(get_console(), "log_warning") as mock_logger:
         expressions = d.parse(
             """
@@ -293,11 +296,14 @@ def test_model_qualification():
             """
         )
 
-        model = load_sql_based_model(expressions)
-        model.render_query(needs_optimization=True)
+        ctx = Context(
+            config=Config(linter=LinterConfig(enabled=True, warn_rules=["ALL"])), paths=tmp_path
+        )
+        ctx.upsert_model(load_sql_based_model(expressions))
+
         assert (
-            mock_logger.call_args[0][0]
-            == """Column '"a"' could not be resolved for model '"db"."table"', the column may not exist or is ambiguous."""
+            """Column '"a"' could not be resolved for model '"db"."table"', the column may not exist or is ambiguous."""
+            in mock_logger.call_args[0][0]
         )
 
 
@@ -2726,7 +2732,8 @@ def test_no_depends_on_runtime_jinja_query():
         model.validate_definition()
 
 
-def test_update_schema():
+@use_terminal_console
+def test_update_schema(tmp_path: Path):
     expressions = d.parse(
         """
         MODEL (name db.table);
@@ -2743,10 +2750,14 @@ def test_update_schema():
     model.update_schema(schema)
     assert model.mapping_schema == {'"table_a"': {"a": "INT"}}
 
+    ctx = Context(
+        config=Config(linter=LinterConfig(enabled=True, warn_rules=["ALL"])), paths=tmp_path
+    )
     with patch.object(get_console(), "log_warning") as mock_logger:
-        model.render_query(needs_optimization=True)
-        assert mock_logger.call_args[0][0] == missing_schema_warning_msg(
-            '"db"."table"', ('"table_b"',)
+        ctx.upsert_model(model)
+        assert (
+            missing_schema_warning_msg('"db"."table"', ('"table_b"',))
+            in mock_logger.call_args[0][0]
         )
 
     schema.add_table('"table_b"', {"b": exp.DataType.build("int")})
@@ -2758,7 +2769,8 @@ def test_update_schema():
     model.render_query(needs_optimization=True)
 
 
-def test_missing_schema_warnings():
+@use_terminal_console
+def test_missing_schema_warnings(tmp_path: Path):
     full_schema = MappingSchema(
         {
             "a": {"x": exp.DataType.build("int")},
@@ -2774,6 +2786,10 @@ def test_missing_schema_warnings():
     )
 
     console = get_console()
+
+    ctx = Context(
+        config=Config(linter=LinterConfig(enabled=True, warn_rules=["ALL"])), paths=tmp_path
+    )
 
     # star, no schema, no deps
     with patch.object(console, "log_warning") as mock_logger:
@@ -2792,14 +2808,15 @@ def test_missing_schema_warnings():
     with patch.object(console, "log_warning") as mock_logger:
         model = load_sql_based_model(d.parse("MODEL (name test); SELECT * FROM a CROSS JOIN b"))
         model.update_schema(partial_schema)
-        model.render_query(needs_optimization=True)
-        assert mock_logger.call_args[0][0] == missing_schema_warning_msg('"test"', ('"b"',))
+        ctx.upsert_model(model)
+
+        assert missing_schema_warning_msg('"test"', ('"b"',)) in mock_logger.call_args[0][0]
 
     # star, no schema
     with patch.object(console, "log_warning") as mock_logger:
         model = load_sql_based_model(d.parse("MODEL (name test); SELECT * FROM b JOIN a"))
-        model.render_query(needs_optimization=True)
-        assert mock_logger.call_args[0][0] == missing_schema_warning_msg('"test"', ('"a"', '"b"'))
+        ctx.upsert_model(model)
+        assert missing_schema_warning_msg('"test"', ('"a"', '"b"')) in mock_logger.call_args[0][0]
 
     # no star, full schema
     with patch.object(console, "log_warning") as mock_logger:
@@ -3502,7 +3519,6 @@ def test_project_level_properties(sushi_context):
         enabled=False,
         allow_partials=True,
         interval_unit="quarter_hour",
-        validate_query=True,
         optimize_query=True,
         cron="@hourly",
     )
@@ -3529,7 +3545,6 @@ def test_project_level_properties(sushi_context):
     assert model.allow_partials
     assert model.interval_unit == IntervalUnit.QUARTER_HOUR
     assert model.optimize_query
-    assert model.validate_query
     assert model.cron == "@hourly"
 
     assert model.session_properties == {
@@ -3580,7 +3595,6 @@ def test_project_level_properties_python_model():
         "enabled": False,
         "allow_partials": True,
         "interval_unit": "quarter_hour",
-        "validate_query": True,
         "optimize_query": True,
     }
 
@@ -3607,7 +3621,6 @@ def test_project_level_properties_python_model():
 
     # Even if in the project wide defaults these are ignored for python models
     assert not m.optimize_query
-    assert not m.validate_query
 
     assert not m.enabled
     assert m.allow_partials
@@ -7646,123 +7659,46 @@ def test_python_model_on_virtual_update():
     )
 
 
-def test_compile_time_checks(tmp_path: Path, assert_exp_eq):
+def test_compile_time_checks(tmp_path: Path):
+    ctx = Context(
+        config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb")), paths=tmp_path
+    )
+
+    cfg_err = "Linter detected errors in the code. Please fix them before proceeding."
+
     # Strict SELECT * expansion
+    linter_cfg = LinterConfig(
+        enabled=True, rules=["ambiguousorinvalidcolumn", "invalidselectstarexpansion"]
+    )
+    ctx.config.linter = linter_cfg
     strict_query = d.parse(
         """
     MODEL (
         name test,
-        validate_query True,
     );
 
     SELECT * FROM tbl
     """
     )
 
-    with pytest.raises(
-        ConfigError,
-        match=r".*cannot be expanded due to missing schema.*",
-    ):
-        load_sql_based_model(strict_query).render_query()
+    ctx.load()
+
+    with pytest.raises(LinterError, match=cfg_err):
+        ctx.upsert_model(load_sql_based_model(strict_query))
 
     # Strict column resolution
     strict_query = d.parse(
         """
     MODEL (
         name test,
-        validate_query True,
     );
 
     SELECT foo
     """
     )
 
-    with pytest.raises(
-        ConfigError,
-        match=r"""Column '"foo"' could not be resolved for model.*""",
-    ):
-        load_sql_based_model(strict_query).render_query()
-
-    # Non-strict model with strict defaults raises error, otherwise can still render
-    strict_default = ModelDefaultsConfig(validate_query=True).dict()
-    query = d.parse(
-        """
-    MODEL (
-        name test,
-    );
-
-    SELECT * FROM tbl
-    """
-    )
-
-    with pytest.raises(
-        ConfigError,
-        match=r".*cannot be expanded due to missing schema.*",
-    ):
-        load_sql_based_model(query, defaults=strict_default).render_query()
-
-    assert_exp_eq(load_sql_based_model(query).render_query(), 'SELECT * FROM "tbl" AS "tbl"')
-
-    # Ensure plan works for valid queries & cache is invalidated if strict changes
-    context = Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb")))
-
-    query = d.parse(
-        """
-    MODEL (
-        name db.test,
-        validate_query True,
-    );
-
-    SELECT 1 AS col
-    """
-    )
-
-    context.upsert_model(load_sql_based_model(query, default_catalog=context.default_catalog))
-    context.plan(auto_apply=True, no_prompts=True)
-
-    context.upsert_model("db.test", validate_query=False)
-    plan = context.plan(no_prompts=True, auto_apply=True)
-
-    snapshots = list(plan.snapshots.values())
-    assert len(snapshots) == 1
-
-    snapshot = snapshots[0]
-    assert len(snapshot.previous_versions) == 1
-    assert snapshot.change_category == SnapshotChangeCategory.METADATA
-
-    # Ensure non-SQLModels raise if strict mode is set to True
-    seed_path = tmp_path / "seed.csv"
-    model_kind = SeedKind(path=str(seed_path.absolute()))
-    with open(seed_path, "w", encoding="utf-8") as fd:
-        fd.write(
-            """
-col_a,col_b,col_c
-1,text_a,1.0"""
-        )
-    model = create_seed_model("test_db.test_seed_model", model_kind, validate_query=True)
-    context = Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb")))
-
-    with pytest.raises(
-        ConfigError,
-        match=r"Query validation can only be enabled for SQL models at",
-    ):
-        context.upsert_model(model)
-        context.plan(auto_apply=True, no_prompts=True)
-
-    model = create_seed_model("test_db.test_seed_model", model_kind, validate_query=False)
-    context.upsert_model(model)
-    context.plan(auto_apply=True, no_prompts=True)
-
-    # Ensure strict defaults don't break all non SQL models to which they weren't applicable in the first place
-    seed_strict_defaults = create_seed_model(
-        "test_db.test_seed_model", model_kind, defaults=strict_default
-    )
-    external_strict_defaults = create_external_model(
-        "test_db.test_external_model", columns={"a": "int", "limit": "int"}, defaults=strict_default
-    )
-    context.upsert_model(seed_strict_defaults)
-    context.upsert_model(external_strict_defaults)
-    context.plan(auto_apply=True, no_prompts=True)
+    with pytest.raises(LinterError, match=cfg_err):
+        ctx.upsert_model(load_sql_based_model(strict_query))
 
 
 def test_partition_interval_unit():
@@ -8023,3 +7959,28 @@ def test_missing_column_data_in_columns_key():
     )
     with pytest.raises(ConfigError, match="Missing data type for column 'culprit'."):
         load_sql_based_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
+
+
+def test_ignored_rules_serialization():
+    expressions = d.parse(
+        """
+        MODEL(
+            name test_model,
+            ignored_rules ['foo', 'bar']
+        );
+
+        SELECT * FROM tbl;
+    """,
+        default_dialect="bigquery",
+    )
+
+    model = load_sql_based_model(expressions)
+
+    model_json = model.json()
+    model_json_parsed = json.loads(model_json)
+
+    assert "ignored_rules" not in model_json_parsed
+    assert "ignored_rules_" not in model_json_parsed
+
+    deserialized_model = SqlModel.parse_raw(model_json)
+    assert deserialized_model.dict() == model.dict()
