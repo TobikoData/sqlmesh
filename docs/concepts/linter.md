@@ -1,73 +1,85 @@
-# Linter
+# Linter guide
 
-Linting enables you to validate the model definition, ensuring it adheres to best practices. When a project is loaded in SQLMesh, each model is checked against a set of rules to verify that its definitions complies with the project's standards. This improves code quality, consistency, and helps to detect issues early in the development cycle.
+Linting is a powerful tool for improving code quality and consistency. It enables you to automatically validate model definition, ensuring they adhere to your team's best practices.
 
-For more information regarding linter configuration visit the relevant [guide here](../guides/configuration.md).
+When a SQLMesh command is executed and the project is loaded, each model's code is checked for compliance with a set of rules you choose.
 
-# Rules
+SQLMesh provides built-in rules, and you can define custom rules. This improves code quality and helps detect issues early in the development cycle when they are simpler to debug.
 
-Each rule is responsible for detecting a specific issue or pattern in a model. Rules are defined as classes that implement the logic for validation by subclassing `Rule`:
+## Rules
 
-??? "Rule class implementation"
-  This is an outline of the `Rule` class and it's critical parts, the actual implementation can be found [here](https://github.com/TobikoData/sqlmesh/blob/main/sqlmesh/core/linter/rule.py):
+Each linting rule is responsible for identifying a pattern in a model's code.
+
+Some rules validate that a pattern is *not* present, such as not allowing `SELECT *` in a model's outermost query. Other rules validate that a pattern *is* present, like ensuring that every model's `owner` field is specified. We refer to both of these below as "validating a pattern."
+
+Rules are defined in Python. Each rule is an individual Python class that inherits from SQLMesh's `Rule` base class and defines the logic for validating a pattern.
+
+We display a portion of the `Rule` base class's code below. Its methods and properties illustrate the most important components of the subclassed rules you define.
+
+Each rule class you create has four vital components:
+
+1. Name: the class's name is used as the rule's name.
+2. Description: the class should define a docstring or a `summary()` method that provides a short explanation of the rule's purpose.
+3. Pattern validation logic: the class should define the core logic that validates the rule's pattern in the `check_model()` method, which can access any `Model` attribute.
+4. Rule violation logic: if a rule's pattern is not validated, the rule is "violated" and the class should return a `RuleViolation` object with the contextual information a user needs to understand and fix the problem. The `RuleViolation` object can be created manually or through the `violation()` method.
 
   ```Python3
   class Rule:
       """The base class for a rule."""
 
-      @abc.abstractmethod
-      def check_model(self, model: Model) -> t.Optional[RuleViolation]:
-          """The evaluation function that'll check for a violation of this rule."""
+    @abc.abstractmethod
+    def check_model(self, model: Model) -> t.Optional[RuleViolation]:
+        """The evaluation function that checks for a violation of this rule."""
 
       @property
       def summary(self) -> str:
           """A summary of what this rule checks for."""
           return self.__doc__ or ""
 
-      def violation(self, violation_msg: t.Optional[str] = None) -> RuleViolation:
-          """Create a RuleViolation instance for this rule"""
-          return RuleViolation(rule=self, violation_msg=violation_msg or self.summary)
+    def violation(self, violation_msg: t.Optional[str] = None) -> RuleViolation:
+        """Return a RuleViolation instance if this rule is violated"""
+        return RuleViolation(rule=self, violation_msg=violation_msg or self.summary)
+```
 
-  ```
+### Built-in rules
 
-Thus, each `Rule` can be broken down to its vital components:
-- The name (or code) of the rule is defined as its class name in lowercase.
-- The core logic is implemented in `Rule::check_model(...)` which can analyze any `Model` attribute.
-- If an issue is detected, a `RuleViolation` object should be returned with the proper context. This can be created manually or through the `Rule::violation()` helper.
-- A short explanation of the rule's purpose should be added in the form of a class docstring or by subclassing `Rule::summary`.
+SQLMesh includes a set of predefined rules that check for potential SQL errors or enforce code style.
 
+An example of the latter is the `NoSelectStar` rule, which prohibits a model from using `SELECT *` in its query's outer-most select statement.
 
-
-## Built-in
-SQLMesh comes with a set of predefined rules which check for potential SQL errors or enforce stylistic opinions. An example of the latter is the `NoSelectStar` rule, prohibiting users from writing `SELECT *` in the outer-most select:
-
+Here is code for the built-in `NoSelectStar` rule class, with the different components annotated:
 
 ```Python
+# Rule's name is the class name `NoSelectStar`
 class NoSelectStar(Rule):
+    # docstring explaining rule
     """Query should not contain SELECT * on its outer most projections, even if it can be expanded."""
 
     def check_model(self, model: Model) -> t.Optional[RuleViolation]:
+        # If this model does not contain a SQL query, there is nothing to validate
         if not isinstance(model, SqlModel):
             return None
 
+        # Use the SQLMesh query property `is_star` to detect the `SELECT *` pattern.
+        #
+        # If present, call the `violation()` method to return a `RuleViolation` object.
         return self.violation() if model.query.is_star else None
 ```
 
+Here are all of SQLMesh's built-in linting rules:
 
-The list of all built-in rules is the following:
-
-
-| Name                                 | Check       | Explanation
-|--------------------------------------|----------------------------------------------------------------------------------------------------------------------|
-| ambiguousorinvalidcolumns            | Correctness | The optimizer was unable to trace or found duplicate columns                                           |
-| invalidselectstarexpansion           | Correctness | The optimizer was unable to expand the top-level `SELECT *`                                            |
-| noselectstar                         | Stylistic   | The query's top-level selection should not be `SELECT *`, even if it can be expanded by the optimizer |
+| Name                       | Check type  | Explanation                                                                                                              |
+| -------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------ |
+| ambiguousorinvalidcolumns  | Correctness | SQLMesh found duplicate columns or was unable to determine whether a column is duplicated or not                         |
+| invalidselectstarexpansion | Correctness | The query's top-level selection may be `SELECT *`, but only if SQLMesh can expand the `SELECT *` into individual columns |
+| noselectstar               | Stylistic   | The query's top-level selection may not be `SELECT *`, even if SQLMesh can expand the `SELECT *` into individual columns |
 
 
-## User defined rules
-Users can implement their own custom rules in a similar fashion. SQLMesh will load any subclass of `Rule` under the `linter/` directory.
+### User-defined rules
 
-For instance, if an organization wanted to ensure all models have an owner, one solution would be to implement the following check:
+You may define custom rules to implement your team's best practices.
+
+For instance, you could ensure all models have an `owner` with the following linting rule:
 
 ```Python
 # linter/user.py
@@ -78,44 +90,162 @@ from sqlmesh.core.linter.rule import Rule, RuleViolation
 from sqlmesh.core.model import Model
 
 class NoMissingOwner(Rule):
-    """Model owner always should be specified."""
+    """Model owner should always be specified."""
 
     def check_model(self, model: Model) -> t.Optional[RuleViolation]:
+        # Rule violated if the model's owner field (`model.owner`) is not specified
         return self.violation() if not model.owner else None
 
 ```
 
-This can then be configured to raise an error (or log a warning):
+Place a rule's code in the project's `linter/` directory. SQLMesh will load all subclasses of `Rule` from that directory.
+
+If the rule is specified in the project's [configuration file](#applying-linting-rules), SQLMesh will run it when a SQLMesh command is run.
+
+SQLMesh will error if a model violates the rule, informing you which model(s) violated the rule. In this example, `full_model.sql` violated the `NoMissingOwner` rule:
+
+```
+$ sqlmesh plan
+
+Linter errors for .../models/full_model.sql:
+ - nomissingowner: Model owner should always be specified.
+
+Error: Linter detected errors in the code. Please fix them before proceeding.
+```
+
+## Applying linting rules
+
+Specify which linting rules a project should apply in the project's [configuration file](../guides/configuration.md).
+
+Rules are specified as lists of rule names under the `linter` key. Globally enable or disable linting with the `enabled` key, which is `false` by default.
+
+NOTE: you **must** set the `enabled` key to `true` key to apply the project's linting rules.
+
+### Specific linting rules
+
+This example specifies that the `"ambiguousorinvalidcolumns"` and `"invalidselectstarexpansion"` linting rules should be enforced:
+
+=== "YAML"
+
+    ```yaml linenums="1"
+    linter:
+      enabled: true
+      rules: ["ambiguousorinvalidcolumns", "invalidselectstarexpansion"]
+    ```
+
+=== "Python"
+
+    ```python linenums="1"
+    from sqlmesh.core.config import Config, LinterConfig
+
+    config = Config(
+         linter=LinterConfig(
+            enabled=True,
+            rules=["ambiguousorinvalidcolumns", "invalidselectstarexpansion"]
+        )
+    )
+    ```
+
+### All linting rules
+
+Instead of listing individual rules, you may apply every built-in and user-defined rule by specifying `"ALL"` instead of a list of rules:
 
 === "YAML"
 
     ```yaml linenums="1"
     linter:
         enabled: True
-
-        rules: [..., "nomissingowner"]
+        rules: "ALL"
     ```
 
-When models are loaded again (e.g through a `sqlmesh plan`) the linter will run, yielding an error if a violation occurs:
+=== "Python"
 
-```
-$ sqlmesh plan
+    ```python linenums="1"
+    from sqlmesh.core.config import Config, LinterConfig
 
-Linter errors for .../models/full_model.sql:
- - nomissingowner: Model owner always should be specified.
+    config = Config(
+         linter=LinterConfig(
+            enabled=True,
+            rules="all",
+        )
+    )
+    ```
 
-Error: Linter detected errors in the code. Please fix them before proceeding.
-```
+If you want to apply all rules except for a few, you can specify `"ALL"` and list the rules to ignore in the `ignored_rules` key:
 
-This helps users trace the offending model(s) during compilation time i.e models that are not owned:
+=== "YAML"
+
+    ```yaml linenums="1"
+    linter:
+        enabled: True
+        rules: "ALL" # apply all built-in and user-defined rules and error if violated
+        ignored_rules: ["noselectstar"] # but don't run the `noselectstar` rule
+    ```
+
+=== "Python"
+
+    ```python linenums="1"
+    from sqlmesh.core.config import Config, LinterConfig
+
+    config = Config(
+         linter=LinterConfig(
+            enabled=True,
+            rules="all", # apply all built-in and user-defined linting rules and error if violated
+            ignored_rules=["noselectstar"] # but don't run the `noselectstar` rule
+        )
+    )
+    ```
+
+### Exclude a model from linting
+
+You can specify that a specific *model* ignore a linting rule(s) by specifying `ignored_rules` in its `MODEL` block.
+
+This example specifies that the model `docs_example.full_model` should not run the `invalidselectstarexpansion` rule:
 
 === "YAML"
 
     ```sql linenums="1"
     MODEL(
       name docs_example.full_model,
-      kind FULL,
-      cron '@daily',
-      grain item_id,
+      ignored_rules: ["invalidselectstarexpansion"] # or "ALL" to turn off linting completely
     );
     ```
+
+### Rule severity
+
+Linting rule violations raise an error by default, preventing the project from running until the violation is addressed.
+
+You may specify that a rule's violation should not error and only log a warning by specifying it in the `warning_rules` key instead of the `rules` key.
+
+=== "YAML"
+
+    ```yaml linenums="1"
+    linter:
+        enabled: True
+        # apply all rules and error if violated
+        rules: "ALL"
+        # but only warn if "invalidselectstarexpansion" is violated
+        warning_rules: ["invalidselectstarexpansion"]
+        # and don't run the "noselectstar" rule at all
+        ignored_rules: ["noselectstar"]
+    ```
+
+=== "Python"
+
+    ```python linenums="1"
+    from sqlmesh.core.config import Config, LinterConfig
+
+    config = Config(
+         linter=LinterConfig(
+            enabled=True,
+            # apply all rules and error if violated
+            rules="all",
+            # but only warn if "invalidselectstarexpansion" is violated
+            warning_rules=["invalidselectstarexpansion"],
+            # and don't run the "noselectstar" rule at all
+            ignored_rules=["noselectstar"]
+        )
+    )
+    ```
+
+SQLMesh will raise an error if the same rule is included in more than one of the `rules`, `warning_rules`, and `ignored_rules` keys since they should be mutually exclusive.
