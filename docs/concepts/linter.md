@@ -27,8 +27,8 @@ class Rule:
 
 ```
 
-Thus, each `Rule` can be broken down to it's vital components:
-- The name (or code) of the rule is it's class name in lowercase.
+Thus, each `Rule` can be broken down to its vital components:
+- The name (or code) of the rule is defined as its class name in lowercase.
 - The core logic is implemented in `Rule::check_model(...)` which can examine any `Model` attribute.
 - If an issue is detected, a `RuleViolation` object should be returned with the proper context. This can be created manually or through the `Rule::violation()` helper.
 - A short explanation of the Rule's workings should be added in the form of a class docstring or by subclassing `Rule::summary`.
@@ -54,24 +54,24 @@ class NoSelectStar(Rule):
 The list of all built-in rules is the following:
 
 
-| Name                                 | Explanation
-|--------------------------------------|--------------------------------------------------------------------------------------------------------|
-| ambiguousorinvalidcolumns            | The optimizer was unable to trace or found duplicate columns                                           |
-| invalidselectstarexpansion           | The optimizer was unable to expand the top-level `SELECT *`                                            |
-| noselectstar                         | The query's top-level projection should not be `SELECT *`, even if it can be expanded by the optimizer |
+| Name                                 | Check       | Explanation
+|--------------------------------------|----------------------------------------------------------------------------------------------------------------------|
+| ambiguousorinvalidcolumns            | Correctness | The optimizer was unable to trace or found duplicate columns                                           |
+| invalidselectstarexpansion           | Correctness | The optimizer was unable to expand the top-level `SELECT *`                                            |
+| noselectstar                         | Stylistic   | The query's top-level projection should not be `SELECT *`, even if it can be expanded by the optimizer |
 
 
 ## User defined rules
-Users can implement their own custom rules in a similar fashion. For that matter, SQLMesh will attempt to load any subclass of `Rule` under the `linter/` directory.
+Users can implement their own custom rules in a similar fashion. For that matter, SQLMesh will load any subclass of `Rule` under the `linter/` directory.
 
-For instance, if an organization wanted to ensure all models are owned by an engineer, one solution would be to implement the following rule:
+For instance, if an organization wanted to ensure all models are owned by an engineer, one solution would be to implement the following check:
 
 ```Python
 # linter/user.py
 
 import typing as t
 
-from sqlmesh.core.linter.rule import Rule, RuleViolation, RuleSet
+from sqlmesh.core.linter.rule import Rule, RuleViolation
 from sqlmesh.core.model import Model
 
 class NoMissingOwner(Rule):
@@ -81,3 +81,38 @@ class NoMissingOwner(Rule):
         return self.violation() if not model.owner else None
 
 ```
+
+This can then be configured to raise an error (or log a warning):
+
+=== "YAML"
+
+    ```yaml linenums="1"
+    linter:
+        enabled: True
+
+        rules: [..., "nomissingowner"]
+    ```
+
+When models are loaded again (e.g through a `sqlmesh plan`) the linter will run, yielding an error if a violation occurs:
+
+```
+$ sqlmesh plan
+
+Linter errors for .../models/full_model.sql:
+ - nomissingowner: Model owner always should be specified.
+
+Error: Linter detected errors in the code. Please fix them before proceeding.
+```
+
+This helps users trace the offending model(s) during compilation time i.e models that are not owned for this case:
+
+=== "YAML"
+
+    ```sql linenums="1"
+    MODEL(
+      name docs_example.full_model,
+      kind FULL,
+      cron '@daily',
+      grain item_id,
+    );
+    ```
