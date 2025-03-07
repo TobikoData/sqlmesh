@@ -1108,99 +1108,11 @@ def grant_schema_usage(evaluator):
 
 As demonstrated in these examples, the `environment_naming_info` is available within the macro evaluator for macros invoked within the `before_all` and `after_all` statements. Additionally, the macro `this_env` provides access to the current environment name, which can be helpful for more advanced use cases that require fine-grained control over their behaviour.
 
+### Linting
 
-### Linter
+SQLMesh provides a linter that checks for potential issues in your models' code. Enable it and specify which linting rules to apply in the configuration file's `linter` key.
 
-The [linter](../concepts/linter.md) utilizes rules to analyze `Model` definitions (e.g its query) in order to flag errors, enforce stylistic opinions or find suspicious constructs.
-
-It can be configured under the `linter` key, with the rules being defined as lists of rule names:
-
-=== "YAML"
-
-    ```yaml linenums="1"
-    linter:
-        enabled: True
-
-        rules: ["ambiguousorinvalidcolumns"]
-        warn_rules: ["invalidselectstarexpansion"]
-        ignored_rules: ["noselectstar"]
-    ```
-
-=== "Python"
-
-    ```python linenums="1"
-    from sqlmesh.core.config import Config, LinterConfig
-
-    config = Config(
-         linter=LinterConfig(
-            enabled=True,
-            rules=["ambiguousorinvalidcolumns"]
-            warn_rules=["invalidselectstarexpansion"]
-            ignored_rules=["noselectstar"]
-        )
-    )
-    ```
-
-Or through the `"ALL"` specifier:
-
-=== "YAML"
-
-    ```yaml linenums="1"
-    linter:
-        enabled: True
-
-        rules: "ALL"
-    ```
-
-=== "Python"
-
-    ```python linenums="1"
-    from sqlmesh.core.config import Config, LinterConfig
-
-    config = Config(
-         linter=LinterConfig(
-            enabled=True,
-            rules="all",
-        )
-    )
-    ```
-
-#### Rule severity
-To enable different levels of severity, SQLMesh defines the following keys:
-- `rules`: Violations will raise an error, essentially halting execution until they're fixed
-- `warning_rules`: Violations will only log warnings for the user
-- `ignored_rules`: The linter will exclude these rules from running completely
-
-
-By default, the linter configuration is disabled and all of the rules are excluded.
-
-SQLMesh will detect if there's overlap in `rules` and `warning_rules`, since these should be mutually exclusive.
-
-The usage of `ignored_rules` can prove useful when `rules` or `warning_rules` are defined as `'ALL'`, thus avoiding listing out individual rules. An example of this:
-
-
-=== "YAML"
-
-    ```yaml linenums="1"
-    linter:
-        enabled: True
-
-        rules: "ALL"
-        ignored_rules: ["noselectstar"]
-    ```
-
-Users can also override the global configuration on a per-model basis by using `ignored_rules` as a model attribute:
-
-=== "YAML"
-
-    ```sql linenums="1"
-    MODEL(
-      name docs_example.full_model,
-      ignored_rules: ["invalidselectstarexpansion"] # or "ALL"
-    );
-    ```
-
-
+Learn more about linting configuration on the [linting concepts page](../concepts/linter.md).
 
 ### Debug mode
 
