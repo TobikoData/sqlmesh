@@ -3930,6 +3930,39 @@ def test_model_defaults_macros_python_model(make_snapshot):
     }
 
 
+@pytest.mark.parametrize(
+    "optimize_query, enabled, allow_partials, interval_unit, expected_error",
+    [
+        ("string", "string", "string", "string", r"^Expected boolean for*"),
+        (True, "string", "string", "string", r"^Expected boolean for*"),
+        (True, True, "string", "string", r"^Expected boolean for*"),
+        (True, True, True, "string", r"^Invalid interval unitr*"),
+    ],
+)
+def test_model_defaults_validations(
+    optimize_query, enabled, allow_partials, interval_unit, expected_error
+):
+    model_defaults = ModelDefaultsConfig(
+        optimize_query=optimize_query,
+        enabled=enabled,
+        allow_partials=allow_partials,
+        interval_unit=interval_unit,
+    )
+
+    with pytest.raises(ConfigError, match=expected_error):
+        load_sql_based_model(
+            d.parse(
+                """
+            MODEL (
+                name test_schema.test_model,
+            );
+            SELECT a FROM tbl;
+            """,
+            ),
+            defaults=model_defaults.dict(),
+        )
+
+
 def test_model_session_properties(sushi_context):
     assert sushi_context.models['"memory"."sushi"."items"'].session_properties == {
         "string_prop": "some_value",

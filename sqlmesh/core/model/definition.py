@@ -2696,6 +2696,19 @@ def render_model_defaults(
         default_catalog=default_catalog,
     )
 
+    # Validate defaults that have macros are rendered to boolean
+    for boolean in {"optimize_query", "allow_partials", "enabled"}:
+        if var := rendered_defaults.get(boolean):
+            if not isinstance(var, (exp.Boolean, bool)):
+                raise ConfigError(f"Expected boolean for '{var}', got '{type(var)}' instead")
+
+    # Validate the 'interval_unit' if present is an Interval Unit
+    if (var := rendered_defaults.get("interval_unit")) and isinstance(var, str):
+        try:
+            rendered_defaults["interval_unit"] = IntervalUnit(var)
+        except ValueError as e:
+            raise ConfigError(f"Invalid interval unit: {var}") from e
+
     return rendered_defaults
 
 
