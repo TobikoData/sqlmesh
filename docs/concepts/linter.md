@@ -1,31 +1,34 @@
 # Linter
 
-Linting enables you to validate the model definition, ensuring it adheres to best practices. When a project is loaded in SQLMesh, each model is checked against a set of rules to verify that its definitions complies with the project's standards; This improves code quality, consistency, and helps to detect issues early in the development cycle.
+Linting enables you to validate the model definition, ensuring it adheres to best practices. When a project is loaded in SQLMesh, each model is checked against a set of rules to verify that its definitions complies with the project's standards. This improves code quality, consistency, and helps to detect issues early in the development cycle.
 
 For more information regarding linter configuration visit the relevant [guide here](../guides/configuration.md).
 
 # Rules
 
-Each rule is responsible for detecting a specific issue or pattern in a model. Rules are defined as classes that implement the logic for validation by subclassing `Rule` (redacted form):
+Each rule is responsible for detecting a specific issue or pattern in a model. Rules are defined as classes that implement the logic for validation by subclassing `Rule`:
 
-```Python3
-class Rule:
-    """The base class for a rule."""
+??? "Rule class implementation"
+  This is an outline of the `Rule` class and it's critical parts, the actual implementation can be found [here](https://github.com/TobikoData/sqlmesh/blob/main/sqlmesh/core/linter/rule.py):
 
-    @abc.abstractmethod
-    def check_model(self, model: Model) -> t.Optional[RuleViolation]:
-        """The evaluation function that'll check for a violation of this rule."""
+  ```Python3
+  class Rule:
+      """The base class for a rule."""
 
-    @property
-    def summary(self) -> str:
-        """A summary of what this rule checks for."""
-        return self.__doc__ or ""
+      @abc.abstractmethod
+      def check_model(self, model: Model) -> t.Optional[RuleViolation]:
+          """The evaluation function that'll check for a violation of this rule."""
 
-    def violation(self, violation_msg: t.Optional[str] = None) -> RuleViolation:
-        """Create a RuleViolation instance for this rule"""
-        return RuleViolation(rule=self, violation_msg=violation_msg or self.summary)
+      @property
+      def summary(self) -> str:
+          """A summary of what this rule checks for."""
+          return self.__doc__ or ""
 
-```
+      def violation(self, violation_msg: t.Optional[str] = None) -> RuleViolation:
+          """Create a RuleViolation instance for this rule"""
+          return RuleViolation(rule=self, violation_msg=violation_msg or self.summary)
+
+  ```
 
 Thus, each `Rule` can be broken down to its vital components:
 - The name (or code) of the rule is defined as its class name in lowercase.
