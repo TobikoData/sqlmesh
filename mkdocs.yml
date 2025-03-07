@@ -32,6 +32,7 @@ nav:
     - SQLMesh tools:
       - guides/ui.md
       - guides/tablediff.md
+      - concepts/linter.md
       - guides/observer.md
   - Concepts:
     - concepts/overview.md
