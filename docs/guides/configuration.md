@@ -1108,6 +1108,11 @@ def grant_schema_usage(evaluator):
 
 As demonstrated in these examples, the `environment_naming_info` is available within the macro evaluator for macros invoked within the `before_all` and `after_all` statements. Additionally, the macro `this_env` provides access to the current environment name, which can be helpful for more advanced use cases that require fine-grained control over their behaviour.
 
+### Linting
+
+SQLMesh provides a linter that checks for potential issues in your models' code. Enable it and specify which linting rules to apply in the configuration file's `linter` key.
+
+Learn more about linting configuration on the [linting concepts page](../concepts/linter.md).
 
 ### Debug mode
 
