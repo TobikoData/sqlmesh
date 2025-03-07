@@ -18,6 +18,7 @@ from sqlmesh.core.model.definition import (
     create_sql_model,
     create_models_from_blueprints,
     get_model_name,
+    parse_defaults_properties,
     render_meta_fields,
     render_model_defaults,
 )
@@ -174,6 +175,8 @@ class model(registry_decorator):
             if defaults
             else {}
         )
+
+        rendered_defaults = parse_defaults_properties(rendered_defaults, dialect=dialect)
 
         common_kwargs = {
             "defaults": rendered_defaults,

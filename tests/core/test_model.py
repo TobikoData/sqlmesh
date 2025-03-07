@@ -3737,7 +3737,6 @@ def test_model_defaults_macros(make_snapshot):
     model_defaults = ModelDefaultsConfig(
         table_format="@IF(@gateway = 'dev', 'iceberg', NULL)",
         storage_format="@IF(@gateway = 'local', 'parquet', NULL)",
-        validate_query="@IF(@gateway = 'dev', True, False)",
         optimize_query="@IF(@gateway = 'dev', True, False)",
         enabled="@IF(@gateway = 'dev', True, False)",
         allow_partials="@IF(@gateway = 'local', True, False)",
@@ -3780,7 +3779,6 @@ def test_model_defaults_macros(make_snapshot):
 
     # Validate rendering of model defaults
     assert model.optimize_query
-    assert model.validate_query
     assert model.enabled
     assert model.start == "1 month ago"
     assert not model.allow_partials
@@ -3840,7 +3838,6 @@ def test_model_defaults_macros_python_model(make_snapshot):
         },
         "table_format": "@IF(@gateway = 'local', 'iceberg', NULL)",
         "storage_format": "@IF(@gateway = 'dev', 'parquet', NULL)",
-        "validate_query": "@IF(@gateway = 'local', True, False)",
         "optimize_query": "@IF(@gateway = 'local', True, False)",
         "enabled": "@IF(@gateway = 'local', True, False)",
         "allow_partials": "@IF(@gateway = 'local', True, False)",
@@ -3870,9 +3867,8 @@ def test_model_defaults_macros_python_model(make_snapshot):
         variables={"gateway": "local", "create_type": "SECURE"},
     )
 
-    # Even if in the project wide defaults these are ignored for python models
+    # Even if in the project wide defaults this is ignored for python models
     assert not m.optimize_query
-    assert not m.validate_query
 
     # Validate rendering of model defaults
     assert m.enabled
