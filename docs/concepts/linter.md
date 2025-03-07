@@ -29,9 +29,9 @@ class Rule:
 
 Thus, each `Rule` can be broken down to its vital components:
 - The name (or code) of the rule is defined as its class name in lowercase.
-- The core logic is implemented in `Rule::check_model(...)` which can examine any `Model` attribute.
+- The core logic is implemented in `Rule::check_model(...)` which can analyze any `Model` attribute.
 - If an issue is detected, a `RuleViolation` object should be returned with the proper context. This can be created manually or through the `Rule::violation()` helper.
-- A short explanation of the Rule's workings should be added in the form of a class docstring or by subclassing `Rule::summary`.
+- A short explanation of the rule's purpose should be added in the form of a class docstring or by subclassing `Rule::summary`.
 
 
 
@@ -58,7 +58,7 @@ The list of all built-in rules is the following:
 |--------------------------------------|----------------------------------------------------------------------------------------------------------------------|
 | ambiguousorinvalidcolumns            | Correctness | The optimizer was unable to trace or found duplicate columns                                           |
 | invalidselectstarexpansion           | Correctness | The optimizer was unable to expand the top-level `SELECT *`                                            |
-| noselectstar                         | Stylistic   | The query's top-level projection should not be `SELECT *`, even if it can be expanded by the optimizer |
+| noselectstar                         | Stylistic   | The query's top-level selection should not be `SELECT *`, even if it can be expanded by the optimizer |
 
 
 ## User defined rules
@@ -104,7 +104,7 @@ Linter errors for .../models/full_model.sql:
 Error: Linter detected errors in the code. Please fix them before proceeding.
 ```
 
-This helps users trace the offending model(s) during compilation time i.e models that are not owned for this case:
+This helps users trace the offending model(s) during compilation time i.e models that are not owned:
 
 === "YAML"
 
