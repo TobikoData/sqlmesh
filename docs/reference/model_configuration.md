@@ -123,7 +123,6 @@ The SQLMesh project-level `model_defaults` key supports the following options, d
 - on_destructive_change (described [below](#incremental-models))
 - audits (described [here](../concepts/audits.md#generic-audits))
 - optimize_query
-- validate_query
 - allow_partials
 - enabled
 - interval_unit
