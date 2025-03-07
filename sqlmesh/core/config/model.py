@@ -11,6 +11,7 @@ from sqlmesh.core.model.kind import (
     on_destructive_change_validator,
 )
 from sqlmesh.core.model.meta import FunctionCall
+from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.pydantic import field_validator
 
 
@@ -46,7 +47,7 @@ class ModelDefaultsConfig(BaseConfig):
     dialect: t.Optional[str] = None
     cron: t.Optional[str] = None
     owner: t.Optional[str] = None
-    start: t.Optional[t.Any] = None
+    start: t.Optional[TimeLike] = None
     table_format: t.Optional[str] = None
     storage_format: t.Optional[str] = None
     on_destructive_change: t.Optional[OnDestructiveChange] = None

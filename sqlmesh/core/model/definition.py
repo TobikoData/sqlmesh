@@ -2067,6 +2067,8 @@ def load_sql_based_model(
         else {}
     )
 
+    rendered_defaults = parse_defaults_properties(rendered_defaults, dialect=dialect)
+
     # Extract the query and any pre/post statements
     query_or_seed_insert, pre_statements, post_statements, on_virtual_update, inline_audits = (
         _split_sql_model_statements(expressions[1:], path, dialect=dialect)
@@ -2694,13 +2696,19 @@ def render_model_defaults(
         default_catalog=default_catalog,
     )
 
+    return rendered_defaults
+
+
+def parse_defaults_properties(
+    defaults: t.Dict[str, t.Any], dialect: DialectType
+) -> t.Dict[str, t.Any]:
     for prop in PROPERTIES:
-        if default_properties := rendered_defaults.get(prop):
+        if default_properties := defaults.get(prop):
             for key, value in default_properties.items():
                 if isinstance(key, str) and d.SQLMESH_MACRO_PREFIX in str(value):
-                    rendered_defaults[prop][key] = exp.maybe_parse(value, dialect=dialect)
+                    defaults[prop][key] = exp.maybe_parse(value, dialect=dialect)
 
-    return rendered_defaults
+    return defaults
 
 
 def render_expression(
