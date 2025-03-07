@@ -1,12 +1,12 @@
 # Linter
 
-Linting enables you to validate the model definition, ensuring it adheres to best practices. When a new [plan](plans.md) is created, each model is checked against a set of built-in and user-defined rules to verify that its attributes comply with the defined standards; This improves code quality, consistency, and helps to detect issues early in the development cycle.
+Linting enables you to validate the model definition, ensuring it adheres to best practices. When a project is loaded in SQLMesh, each model is checked against a set of rules to verify that its definitions complies with the project's standards; This improves code quality, consistency, and helps to detect issues early in the development cycle.
 
 For more information regarding linter configuration visit the relevant [guide here](../guides/configuration.md).
 
 # Rules
 
-Each rule is responsible for detecting a specific issue or pattern within a model. Rules are defined as classes that implement the logic for validation by subclassing `Rule` (redacted form):
+Each rule is responsible for detecting a specific issue or pattern in a model. Rules are defined as classes that implement the logic for validation by subclassing `Rule` (redacted form):
 
 ```Python3
 class Rule:
@@ -36,7 +36,7 @@ Thus, each `Rule` can be broken down to its vital components:
 
 
 ## Built-in
-SQLMesh comes with a set of predefined rules which check for potential SQL errors or enforce stylistic opinions. An example of the latter the `NoSelectStar` rule which prohibits users from writing `SELECT *` in the outer-most select:
+SQLMesh comes with a set of predefined rules which check for potential SQL errors or enforce stylistic opinions. An example of the latter is the `NoSelectStar` rule, prohibiting users from writing `SELECT *` in the outer-most select:
 
 
 ```Python
@@ -62,9 +62,9 @@ The list of all built-in rules is the following:
 
 
 ## User defined rules
-Users can implement their own custom rules in a similar fashion. For that matter, SQLMesh will load any subclass of `Rule` under the `linter/` directory.
+Users can implement their own custom rules in a similar fashion. SQLMesh will load any subclass of `Rule` under the `linter/` directory.
 
-For instance, if an organization wanted to ensure all models are owned by an engineer, one solution would be to implement the following check:
+For instance, if an organization wanted to ensure all models have an owner, one solution would be to implement the following check:
 
 ```Python
 # linter/user.py
