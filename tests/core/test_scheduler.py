@@ -76,7 +76,7 @@ def get_batched_missing_intervals() -> (
         execution_time: t.Optional[TimeLike] = None,
     ) -> SnapshotToIntervals:
         merged_intervals = scheduler.merged_missing_intervals(start, end, execution_time)
-        return scheduler.batch_intervals(merged_intervals, start, end, execution_time)
+        return scheduler.batch_intervals(merged_intervals)
 
     return _get_batched_missing_intervals
 
@@ -721,4 +721,90 @@ def test_signal_intervals(mocker: MockerFixture, make_snapshot, get_batched_miss
         # Full models and models that depend on past can't run for a discontinuous range
         c: [],
         d: [],
+    }
+
+
+def test_signals_snapshots_out_of_order(
+    mocker: MockerFixture, make_snapshot, get_batched_missing_intervals
+):
+    @signal()
+    def signal_base(batch: DatetimeRanges):
+        return [batch[0]]
+
+    signals = signal.get_registry()
+
+    snapshot_a = make_snapshot(
+        load_sql_based_model(
+            parse(  # type: ignore
+                """
+                MODEL (
+                    name a,
+                    kind INCREMENTAL_BY_TIME_RANGE(
+                      lookback 1,
+                      time_column dt,
+                    ),
+                    start '2023-01-01',
+                    signals SIGNAL_BASE(),
+                );
+                SELECT @start_date AS dt;
+                """
+            ),
+            signal_definitions=signals,
+        ),
+    )
+
+    snapshot_b = make_snapshot(
+        load_sql_based_model(
+            parse(  # type: ignore
+                """
+                MODEL (
+                    name b,
+                    kind INCREMENTAL_BY_TIME_RANGE(
+                      lookback 1,
+                      time_column dt,
+                    ),
+                    start '2023-01-01'
+                );
+                SELECT @start_date AS dt;
+                """
+            ),
+            signal_definitions=signals,
+        )
+    )
+
+    snapshot_c = make_snapshot(
+        load_sql_based_model(
+            parse(  # type: ignore
+                """
+                MODEL (
+                    name c,
+                    kind INCREMENTAL_BY_TIME_RANGE(
+                      lookback 1,
+                      time_column dt,
+                    ),
+                    start '2023-01-01',
+                );
+                SELECT * FROM a UNION SELECT * FROM b
+                """
+            ),
+            signal_definitions=signals,
+        ),
+        nodes={snapshot_a.name: snapshot_a.model, snapshot_b.name: snapshot_b.model},
+    )
+
+    snapshot_evaluator = SnapshotEvaluator(adapters=mocker.MagicMock(), ddl_concurrent_tasks=1)
+    scheduler = Scheduler(
+        snapshots=[snapshot_c, snapshot_b, snapshot_a],  # reverse order
+        snapshot_evaluator=snapshot_evaluator,
+        state_sync=mocker.MagicMock(),
+        max_workers=2,
+        default_catalog=None,
+    )
+
+    batches = get_batched_missing_intervals(scheduler, "2023-01-01", "2023-01-03", None)
+
+    assert batches == {
+        snapshot_a: [(to_timestamp("2023-01-01"), to_timestamp("2023-01-02"))],
+        snapshot_b: [(to_timestamp("2023-01-01"), to_timestamp("2023-01-04"))],
+        snapshot_c: [(to_timestamp("2023-01-01"), to_timestamp("2023-01-02"))],
     }

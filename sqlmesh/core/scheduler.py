@@ -21,6 +21,7 @@ from sqlmesh.core.snapshot import (
     earliest_start_date,
     missing_intervals,
     merge_intervals,
+    snapshots_to_dag,
     Intervals,
 )
 from sqlmesh.core.snapshot.definition import (
@@ -344,35 +345,26 @@ class Scheduler:
 
         return CompletionStatus.FAILURE if errors else CompletionStatus.SUCCESS
 
-    def batch_intervals(
-        self,
-        merged_intervals: SnapshotToIntervals,
-        start: t.Optional[TimeLike] = None,
-        end: t.Optional[TimeLike] = None,
-        execution_time: t.Optional[TimeLike] = None,
-    ) -> t.Dict[Snapshot, Intervals]:
-        def expand_range_as_interval(
-            start_ts: int, end_ts: int, interval_unit: IntervalUnit
-        ) -> t.List[Interval]:
-            values = expand_range(start_ts, end_ts, interval_unit)
-            return [(values[i], values[i + 1]) for i in range(len(values) - 1)]
+    def batch_intervals(self, merged_intervals: SnapshotToIntervals) -> t.Dict[Snapshot, Intervals]:
+        dag = snapshots_to_dag(merged_intervals)
 
-        dag = DAG[str]()
-
-        for snapshot in merged_intervals:
-            dag.add(snapshot.name, [p.name for p in snapshot.parents])
-
-        snapshot_intervals = {
-            snapshot: [
-                i
-                for interval in intervals
-                for i in expand_range_as_interval(*interval, snapshot.node.interval_unit)
-            ]
+        snapshot_intervals: t.Dict[SnapshotId, t.Tuple[Snapshot, t.List[Interval]]] = {
+            snapshot.snapshot_id: (
+                snapshot,
+                [
+                    i
+                    for interval in intervals
+                    for i in _expand_range_as_interval(*interval, snapshot.node.interval_unit)
+                ],
+            )
             for snapshot, intervals in merged_intervals.items()
         }
         snapshot_batches = {}
         all_unready_intervals: t.Dict[str, set[Interval]] = {}
-        for snapshot, intervals in snapshot_intervals.items():
+        for snapshot_id in dag:
+            if snapshot_id not in snapshot_intervals:
+                continue
+            snapshot, intervals = snapshot_intervals[snapshot_id]
             unready = set(intervals)
             intervals = snapshot.check_ready_intervals(intervals)
             unready -= set(intervals)
@@ -429,7 +421,7 @@ class Scheduler:
         """
         execution_time = execution_time or now_timestamp()
 
-        batched_intervals = self.batch_intervals(merged_intervals, start, end, execution_time)
+        batched_intervals = self.batch_intervals(merged_intervals)
 
         self.console.start_evaluation_progress(
             {snapshot: len(intervals) for snapshot, intervals in batched_intervals.items()},
@@ -686,3 +678,10 @@ def _resolve_one_snapshot_per_version(
                 snapshot_per_version[key] = snapshot
 
     return snapshot_per_version
+
+
+def _expand_range_as_interval(
+    start_ts: int, end_ts: int, interval_unit: IntervalUnit
+) -> t.List[Interval]:
+    values = expand_range(start_ts, end_ts, interval_unit)
+    return [(values[i], values[i + 1]) for i in range(len(values) - 1)]
