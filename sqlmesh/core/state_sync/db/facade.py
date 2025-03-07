@@ -139,7 +139,7 @@ class EngineAdapterStateSync(StateSync):
 
         snapshots = snapshots_by_id.values()
         if snapshots:
-            self._push_snapshots(snapshots)
+            self.snapshot_state.push_snapshots(snapshots)
 
     @transactional()
     def promote(
@@ -441,9 +441,6 @@ class EngineAdapterStateSync(StateSync):
 
     def state_type(self) -> str:
         return self.engine_adapter.dialect
-
-    def _push_snapshots(self, snapshots: t.Iterable[Snapshot]) -> None:
-        self.snapshot_state.push_snapshots(snapshots)
 
     def _get_versions(self) -> Versions:
         return self.version_state.get_versions()
