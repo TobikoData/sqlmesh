@@ -14,6 +14,7 @@ from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.state_sync.db.utils import (
     snapshot_name_version_filter,
     snapshot_id_filter,
+    fetchone,
     fetchall,
     create_batches,
 )
@@ -385,7 +386,7 @@ class SnapshotState:
 
     def count(self) -> int:
         """Counts the number of snapshots in the state."""
-        result = self.engine_adapter.fetchone(exp.select("COUNT(*)").from_(self.snapshots_table))
+        result = fetchone(self.engine_adapter, exp.select("COUNT(*)").from_(self.snapshots_table))
         return result[0] if result else 0
 
     def clear_cache(self) -> None:

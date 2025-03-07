@@ -18,6 +18,7 @@ from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 from sqlmesh import Config, Context
 from sqlmesh.cli.example_project import init_example_project
 from sqlmesh.core.config import load_config_from_paths
+from sqlmesh.core.config.connection import ConnectionConfig
 import sqlmesh.core.dialect as d
 from sqlmesh.core.dialect import select_from_values
 from sqlmesh.core.model import Model, load_sql_based_model
@@ -25,6 +26,7 @@ from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType
 from sqlmesh.core.engine_adapter.mixins import RowDiffMixin
 from sqlmesh.core.model.definition import create_sql_model
 from sqlmesh.core.plan import Plan
+from sqlmesh.core.state_sync.db import EngineAdapterStateSync
 from sqlmesh.core.snapshot import Snapshot, SnapshotChangeCategory
 from sqlmesh.utils.date import now, to_date, to_time_column
 from sqlmesh.core.table_diff import TableDiff
@@ -2667,3 +2669,37 @@ def test_table_diff_identical_dataset(ctx: TestContext):
     assert row_diff.stats["t_only_count"] == 0
     assert row_diff.s_sample.shape == (0, 3)
     assert row_diff.t_sample.shape == (0, 3)
+
+
+def test_state_migrate_from_scratch(ctx: TestContext):
+    if ctx.test_type != "query":
+        pytest.skip("state migration tests are only relevant for query")
+
+    test_schema = ctx.add_test_suffix("state")
+    ctx._schemas.append(test_schema)  # so it gets cleaned up when the test finishes
+
+    def _use_warehouse_as_state_connection(gateway_name: str, config: Config):
+        warehouse_connection = config.gateways[gateway_name].connection
+        assert isinstance(warehouse_connection, ConnectionConfig)
+        if warehouse_connection.is_forbidden_for_state_sync:
+            pytest.skip(
+                f"{warehouse_connection.type_} doesnt support being used as a state connection"
+            )
+
+        # this triggers the fallback to using the warehouse as a state connection
+        config.gateways[gateway_name].state_connection = None
+        assert config.get_state_connection(gateway_name) is None
+
+        config.gateways[gateway_name].state_schema = test_schema
+
+    sqlmesh_context = ctx.create_context(config_mutator=_use_warehouse_as_state_connection)
+    assert sqlmesh_context.config.get_state_schema(ctx.gateway) == test_schema
+
+    state_sync = (
+        sqlmesh_context._new_state_sync()
+    )  # this prevents migrate() being called which it does if you access the state_sync property
+    assert isinstance(state_sync, EngineAdapterStateSync)
+    assert state_sync.engine_adapter.dialect == ctx.dialect
+
+    # will throw if one of the migrations produces an error, which can happen if we forget to take quoting or normalization into account
+    sqlmesh_context.migrate()

@@ -81,6 +81,10 @@ def snapshots(make_snapshot: t.Callable) -> t.List[Snapshot]:
     ]
 
 
+def compare_snapshot_intervals(x: SnapshotIntervals) -> str:
+    return x.identifier or ""
+
+
 def promote_snapshots(
     state_sync: EngineAdapterStateSync,
     snapshots: t.List[Snapshot],
@@ -1512,24 +1516,27 @@ def test_delete_expired_snapshots_cleanup_intervals_shared_version(
     # Check all intervals
     assert sorted(
         state_sync.interval_state.get_snapshot_intervals([snapshot, new_snapshot]),
-        key=lambda x: x.identifier or "",
-    ) == [
-        SnapshotIntervals(
-            name='"a"',
-            identifier=snapshot.identifier,
-            version=snapshot.version,
-            dev_version=snapshot.dev_version,
-            intervals=[(to_timestamp("2023-01-01"), to_timestamp("2023-01-04"))],
-            dev_intervals=[(to_timestamp("2023-01-01"), to_timestamp("2023-01-04"))],
-        ),
-        SnapshotIntervals(
-            name='"a"',
-            identifier=new_snapshot.identifier,
-            version=snapshot.version,
-            dev_version=new_snapshot.dev_version,
-            intervals=[(to_timestamp("2023-01-04"), to_timestamp("2023-01-06"))],
-        ),
-    ]
+        key=compare_snapshot_intervals,
+    ) == sorted(
+        [
+            SnapshotIntervals(
+                name='"a"',
+                identifier=snapshot.identifier,
+                version=snapshot.version,
+                dev_version=snapshot.dev_version,
+                intervals=[(to_timestamp("2023-01-01"), to_timestamp("2023-01-04"))],
+                dev_intervals=[(to_timestamp("2023-01-01"), to_timestamp("2023-01-04"))],
+            ),
+            SnapshotIntervals(
+                name='"a"',
+                identifier=new_snapshot.identifier,
+                version=snapshot.version,
+                dev_version=new_snapshot.dev_version,
+                intervals=[(to_timestamp("2023-01-04"), to_timestamp("2023-01-06"))],
+            ),
+        ],
+        key=compare_snapshot_intervals,
+    )
 
     # Delete the expired snapshot
     assert state_sync.delete_expired_snapshots() == [
@@ -1547,25 +1554,28 @@ def test_delete_expired_snapshots_cleanup_intervals_shared_version(
     # Check all intervals
     assert sorted(
         state_sync.interval_state.get_snapshot_intervals([snapshot, new_snapshot]),
-        key=lambda x: x.identifier or "",
-    ) == [
-        # The intervals of the old snapshot is preserved with the null identifier
-        SnapshotIntervals(
-            name='"a"',
-            identifier=None,
-            version=snapshot.version,
-            dev_version=None,
-            intervals=[(to_timestamp("2023-01-01"), to_timestamp("2023-01-04"))],
-        ),
-        # The intervals of the new snapshot has identifier
-        SnapshotIntervals(
-            name='"a"',
-            identifier=new_snapshot.identifier,
-            version=snapshot.version,
-            dev_version=new_snapshot.dev_version,
-            intervals=[(to_timestamp("2023-01-04"), to_timestamp("2023-01-06"))],
-        ),
-    ]
+        key=compare_snapshot_intervals,
+    ) == sorted(
+        [
+            # The intervals of the old snapshot is preserved with the null identifier
+            SnapshotIntervals(
+                name='"a"',
+                identifier=None,
+                version=snapshot.version,
+                dev_version=None,
+                intervals=[(to_timestamp("2023-01-01"), to_timestamp("2023-01-04"))],
+            ),
+            # The intervals of the new snapshot has identifier
+            SnapshotIntervals(
+                name='"a"',
+                identifier=new_snapshot.identifier,
+                version=snapshot.version,
+                dev_version=new_snapshot.dev_version,
+                intervals=[(to_timestamp("2023-01-04"), to_timestamp("2023-01-06"))],
+            ),
+        ],
+        key=compare_snapshot_intervals,
+    )
 
 
 def test_delete_expired_snapshots_cleanup_intervals_shared_dev_version(
@@ -1625,24 +1635,27 @@ def test_delete_expired_snapshots_cleanup_intervals_shared_dev_version(
     # Check all intervals
     assert sorted(
         state_sync.interval_state.get_snapshot_intervals([snapshot, new_snapshot]),
-        key=lambda x: x.identifier or "",
-    ) == [
-        SnapshotIntervals(
-            name='"a"',
-            identifier=snapshot.identifier,
-            version=snapshot.version,
-            dev_version=snapshot.dev_version,
-            intervals=[(to_timestamp("2023-01-01"), to_timestamp("2023-01-04"))],
-            dev_intervals=[(to_timestamp("2023-01-04"), to_timestamp("2023-01-08"))],
-        ),
-        SnapshotIntervals(
-            name='"a"',
-            identifier=new_snapshot.identifier,
-            version=snapshot.version,
-            dev_version=new_snapshot.dev_version,
-            dev_intervals=[(to_timestamp("2023-01-08"), to_timestamp("2023-01-10"))],
-        ),
-    ]
+        key=compare_snapshot_intervals,
+    ) == sorted(
+        [
+            SnapshotIntervals(
+                name='"a"',
+                identifier=snapshot.identifier,
+                version=snapshot.version,
+                dev_version=snapshot.dev_version,
+                intervals=[(to_timestamp("2023-01-01"), to_timestamp("2023-01-04"))],
+                dev_intervals=[(to_timestamp("2023-01-04"), to_timestamp("2023-01-08"))],
+            ),
+            SnapshotIntervals(
+                name='"a"',
+                identifier=new_snapshot.identifier,
+                version=snapshot.version,
+                dev_version=new_snapshot.dev_version,
+                dev_intervals=[(to_timestamp("2023-01-08"), to_timestamp("2023-01-10"))],
+            ),
+        ],
+        key=compare_snapshot_intervals,
+    )
 
     # Delete the expired snapshot
     assert state_sync.delete_expired_snapshots() == []
@@ -1660,30 +1673,33 @@ def test_delete_expired_snapshots_cleanup_intervals_shared_dev_version(
     # Check all intervals
     assert sorted(
         state_sync.interval_state.get_snapshot_intervals([snapshot, new_snapshot]),
-        key=lambda x: x.identifier or "",
-    ) == [
-        SnapshotIntervals(
-            name='"a"',
-            identifier=None,
-            version=snapshot.version,
-            dev_version=None,
-            intervals=[(to_timestamp("2023-01-01"), to_timestamp("2023-01-04"))],
-        ),
-        SnapshotIntervals(
-            name='"a"',
-            identifier=None,
-            version=snapshot.version,
-            dev_version=snapshot.dev_version,
-            dev_intervals=[(to_timestamp("2023-01-04"), to_timestamp("2023-01-08"))],
-        ),
-        SnapshotIntervals(
-            name='"a"',
-            identifier=new_snapshot.identifier,
-            version=snapshot.version,
-            dev_version=new_snapshot.dev_version,
-            dev_intervals=[(to_timestamp("2023-01-08"), to_timestamp("2023-01-10"))],
-        ),
-    ]
+        key=compare_snapshot_intervals,
+    ) == sorted(
+        [
+            SnapshotIntervals(
+                name='"a"',
+                identifier=None,
+                version=snapshot.version,
+                dev_version=None,
+                intervals=[(to_timestamp("2023-01-01"), to_timestamp("2023-01-04"))],
+            ),
+            SnapshotIntervals(
+                name='"a"',
+                identifier=None,
+                version=snapshot.version,
+                dev_version=snapshot.dev_version,
+                dev_intervals=[(to_timestamp("2023-01-04"), to_timestamp("2023-01-08"))],
+            ),
+            SnapshotIntervals(
+                name='"a"',
+                identifier=new_snapshot.identifier,
+                version=snapshot.version,
+                dev_version=new_snapshot.dev_version,
+                dev_intervals=[(to_timestamp("2023-01-08"), to_timestamp("2023-01-10"))],
+            ),
+        ],
+        key=compare_snapshot_intervals,
+    )
 
 
 def test_compact_intervals_after_cleanup(
