@@ -26,7 +26,7 @@ from sqlglot import exp
 
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.engine_adapter import EngineAdapter
-from sqlmesh.core.environment import Environment
+from sqlmesh.core.environment import Environment, EnvironmentStatements
 from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotId,
@@ -52,7 +52,7 @@ from sqlmesh.core.state_sync.db.environment import EnvironmentState
 from sqlmesh.core.state_sync.db.snapshot import SnapshotState
 from sqlmesh.core.state_sync.db.version import VersionState
 from sqlmesh.core.state_sync.db.migrator import StateMigrator
-from sqlmesh.utils.date import TimeLike, to_timestamp
+from sqlmesh.utils.date import TimeLike, to_timestamp, time_like_to_str
 from sqlmesh.utils.errors import ConflictingPlanError, SQLMeshError
 
 logger = logging.getLogger(__name__)
@@ -146,6 +146,7 @@ class EngineAdapterStateSync(StateSync):
         self,
         environment: Environment,
         no_gaps_snapshot_names: t.Optional[t.Set[str]] = None,
+        environment_statements: t.Optional[t.List[EnvironmentStatements]] = None,
     ) -> PromotionResult:
         """Update the environment to reflect the current state.
 
@@ -225,6 +226,13 @@ class EngineAdapterStateSync(StateSync):
 
         self.environment_state.update_environment(environment)
 
+        # If it is an empty list, we want to update the environment statements
+        # To reflect there are no statements anymore in this environment
+        if environment_statements is not None:
+            self.environment_state.update_environment_statements(
+                environment.name, environment.plan_id, environment_statements
+            )
+
         removed = {existing_table_infos[name] for name in missing_models}.union(
             views_that_changed_location
         )
@@ -302,6 +310,9 @@ class EngineAdapterStateSync(StateSync):
     def get_environment(self, environment: str) -> t.Optional[Environment]:
         return self.environment_state.get_environment(environment)
 
+    def get_environment_statements(self, environment: str) -> t.List[EnvironmentStatements]:
+        return self.environment_state.get_environment_statements(environment)
+
     def get_environments(self) -> t.List[Environment]:
         """Fetches all environments.
 
@@ -347,7 +358,24 @@ class EngineAdapterStateSync(StateSync):
 
     @transactional()
     def add_snapshots_intervals(self, snapshots_intervals: t.Sequence[SnapshotIntervals]) -> None:
-        self.interval_state.add_snapshots_intervals(snapshots_intervals)
+        intervals_to_insert = []
+        for snapshot_intervals in snapshots_intervals:
+            snapshot_intervals = snapshot_intervals.copy(
+                update={
+                    "intervals": _remove_partial_intervals(
+                        snapshot_intervals.intervals, snapshot_intervals.snapshot_id, is_dev=False
+                    ),
+                    "dev_intervals": _remove_partial_intervals(
+                        snapshot_intervals.dev_intervals,
+                        snapshot_intervals.snapshot_id,
+                        is_dev=True,
+                    ),
+                }
+            )
+            if not snapshot_intervals.is_empty():
+                intervals_to_insert.append(snapshot_intervals)
+        if intervals_to_insert:
+            self.interval_state.add_snapshots_intervals(intervals_to_insert)
 
     @transactional()
     def remove_intervals(
@@ -467,3 +495,27 @@ class EngineAdapterStateSync(StateSync):
     def _transaction(self) -> t.Iterator[None]:
         with self.engine_adapter.transaction():
             yield
+
+
+def _remove_partial_intervals(
+    intervals: t.List[Interval], snapshot_id: t.Optional[SnapshotId], *, is_dev: bool
+) -> t.List[Interval]:
+    results = []
+    for start_ts, end_ts in intervals:
+        if start_ts < end_ts:
+            logger.info(
+                "Adding %s (%s, %s) for snapshot %s",
+                "dev interval" if is_dev else "interval",
+                time_like_to_str(start_ts),
+                time_like_to_str(end_ts),
+                snapshot_id,
+            )
+            results.append((start_ts, end_ts))
+        else:
+            logger.info(
+                "Skipping partial interval (%s, %s) for snapshot %s",
+                start_ts,
+                end_ts,
+                snapshot_id,
+            )
+    return results

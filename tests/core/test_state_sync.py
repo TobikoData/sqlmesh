@@ -15,7 +15,7 @@ from sqlmesh.core import constants as c
 from sqlmesh.core.config import EnvironmentSuffixTarget
 from sqlmesh.core.dialect import parse_one, schema_
 from sqlmesh.core.engine_adapter import create_engine_adapter
-from sqlmesh.core.environment import Environment
+from sqlmesh.core.environment import Environment, EnvironmentStatements
 from sqlmesh.core.model import (
     FullKind,
     IncrementalByTimeRangeKind,
@@ -79,6 +79,10 @@ def snapshots(make_snapshot: t.Callable) -> t.List[Snapshot]:
             version="b",
         ),
     ]
+
+
+def compare_snapshot_intervals(x: SnapshotIntervals) -> str:
+    return x.identifier or ""
 
 
 def promote_snapshots(
@@ -1075,7 +1079,16 @@ def test_delete_expired_environments(state_sync: EngineAdapterStateSync, make_sn
         previous_plan_id="test_plan_id",
         expiration_ts=now_ts - 1000,
     )
-    state_sync.promote(env_a)
+
+    environment_statements = [
+        EnvironmentStatements(
+            before_all=["CREATE OR REPLACE TABLE table_1 AS SELECT 'a'"],
+            after_all=["CREATE OR REPLACE TABLE table_2 AS SELECT 'b'"],
+            python_env={},
+        )
+    ]
+
+    state_sync.promote(env_a, environment_statements=environment_statements)
 
     env_b = env_a.copy(update={"name": "test_environment_b", "expiration_ts": now_ts + 1000})
     state_sync.promote(env_b)
@@ -1086,11 +1099,17 @@ def test_delete_expired_environments(state_sync: EngineAdapterStateSync, make_sn
     assert state_sync.get_environment(env_a.name) == env_a
     assert state_sync.get_environment(env_b.name) == env_b
 
+    assert not state_sync.get_environment_statements(env_b.name)
+    assert state_sync.get_environment_statements(env_a.name) == environment_statements
+
     deleted_environments = state_sync.delete_expired_environments()
     assert deleted_environments == [env_a]
 
     assert state_sync.get_environment(env_a.name) is None
     assert state_sync.get_environment(env_b.name) == env_b
+
+    # Deleting the environments should remove the corresponding environment's statements
+    assert state_sync.get_environment_statements(env_a.name) == []
 
 
 def test_delete_expired_snapshots(state_sync: EngineAdapterStateSync, make_snapshot: t.Callable):
@@ -1497,24 +1516,27 @@ def test_delete_expired_snapshots_cleanup_intervals_shared_version(
     # Check all intervals
     assert sorted(
         state_sync.interval_state.get_snapshot_intervals([snapshot, new_snapshot]),
-        key=lambda x: x.identifier or "",
-    ) == [
-        SnapshotIntervals(
-            name='"a"',
-            identifier=snapshot.identifier,
-            version=snapshot.version,
-            dev_version=snapshot.dev_version,
-            intervals=[(to_timestamp("2023-01-01"), to_timestamp("2023-01-04"))],
-            dev_intervals=[(to_timestamp("2023-01-01"), to_timestamp("2023-01-04"))],
-        ),
-        SnapshotIntervals(
-            name='"a"',
-            identifier=new_snapshot.identifier,
-            version=snapshot.version,
-            dev_version=new_snapshot.dev_version,
-            intervals=[(to_timestamp("2023-01-04"), to_timestamp("2023-01-06"))],
-        ),
-    ]
+        key=compare_snapshot_intervals,
+    ) == sorted(
+        [
+            SnapshotIntervals(
+                name='"a"',
+                identifier=snapshot.identifier,
+                version=snapshot.version,
+                dev_version=snapshot.dev_version,
+                intervals=[(to_timestamp("2023-01-01"), to_timestamp("2023-01-04"))],
+                dev_intervals=[(to_timestamp("2023-01-01"), to_timestamp("2023-01-04"))],
+            ),
+            SnapshotIntervals(
+                name='"a"',
+                identifier=new_snapshot.identifier,
+                version=snapshot.version,
+                dev_version=new_snapshot.dev_version,
+                intervals=[(to_timestamp("2023-01-04"), to_timestamp("2023-01-06"))],
+            ),
+        ],
+        key=compare_snapshot_intervals,
+    )
 
     # Delete the expired snapshot
     assert state_sync.delete_expired_snapshots() == [
@@ -1532,25 +1554,28 @@ def test_delete_expired_snapshots_cleanup_intervals_shared_version(
     # Check all intervals
     assert sorted(
         state_sync.interval_state.get_snapshot_intervals([snapshot, new_snapshot]),
-        key=lambda x: x.identifier or "",
-    ) == [
-        # The intervals of the old snapshot is preserved with the null identifier
-        SnapshotIntervals(
-            name='"a"',
-            identifier=None,
-            version=snapshot.version,
-            dev_version=None,
-            intervals=[(to_timestamp("2023-01-01"), to_timestamp("2023-01-04"))],
-        ),
-        # The intervals of the new snapshot has identifier
-        SnapshotIntervals(
-            name='"a"',
-            identifier=new_snapshot.identifier,
-            version=snapshot.version,
-            dev_version=new_snapshot.dev_version,
-            intervals=[(to_timestamp("2023-01-04"), to_timestamp("2023-01-06"))],
-        ),
-    ]
+        key=compare_snapshot_intervals,
+    ) == sorted(
+        [
+            # The intervals of the old snapshot is preserved with the null identifier
+            SnapshotIntervals(
+                name='"a"',
+                identifier=None,
+                version=snapshot.version,
+                dev_version=None,
+                intervals=[(to_timestamp("2023-01-01"), to_timestamp("2023-01-04"))],
+            ),
+            # The intervals of the new snapshot has identifier
+            SnapshotIntervals(
+                name='"a"',
+                identifier=new_snapshot.identifier,
+                version=snapshot.version,
+                dev_version=new_snapshot.dev_version,
+                intervals=[(to_timestamp("2023-01-04"), to_timestamp("2023-01-06"))],
+            ),
+        ],
+        key=compare_snapshot_intervals,
+    )
 
 
 def test_delete_expired_snapshots_cleanup_intervals_shared_dev_version(
@@ -1610,24 +1635,27 @@ def test_delete_expired_snapshots_cleanup_intervals_shared_dev_version(
     # Check all intervals
     assert sorted(
         state_sync.interval_state.get_snapshot_intervals([snapshot, new_snapshot]),
-        key=lambda x: x.identifier or "",
-    ) == [
-        SnapshotIntervals(
-            name='"a"',
-            identifier=snapshot.identifier,
-            version=snapshot.version,
-            dev_version=snapshot.dev_version,
-            intervals=[(to_timestamp("2023-01-01"), to_timestamp("2023-01-04"))],
-            dev_intervals=[(to_timestamp("2023-01-04"), to_timestamp("2023-01-08"))],
-        ),
-        SnapshotIntervals(
-            name='"a"',
-            identifier=new_snapshot.identifier,
-            version=snapshot.version,
-            dev_version=new_snapshot.dev_version,
-            dev_intervals=[(to_timestamp("2023-01-08"), to_timestamp("2023-01-10"))],
-        ),
-    ]
+        key=compare_snapshot_intervals,
+    ) == sorted(
+        [
+            SnapshotIntervals(
+                name='"a"',
+                identifier=snapshot.identifier,
+                version=snapshot.version,
+                dev_version=snapshot.dev_version,
+                intervals=[(to_timestamp("2023-01-01"), to_timestamp("2023-01-04"))],
+                dev_intervals=[(to_timestamp("2023-01-04"), to_timestamp("2023-01-08"))],
+            ),
+            SnapshotIntervals(
+                name='"a"',
+                identifier=new_snapshot.identifier,
+                version=snapshot.version,
+                dev_version=new_snapshot.dev_version,
+                dev_intervals=[(to_timestamp("2023-01-08"), to_timestamp("2023-01-10"))],
+            ),
+        ],
+        key=compare_snapshot_intervals,
+    )
 
     # Delete the expired snapshot
     assert state_sync.delete_expired_snapshots() == []
@@ -1645,30 +1673,33 @@ def test_delete_expired_snapshots_cleanup_intervals_shared_dev_version(
     # Check all intervals
     assert sorted(
         state_sync.interval_state.get_snapshot_intervals([snapshot, new_snapshot]),
-        key=lambda x: x.identifier or "",
-    ) == [
-        SnapshotIntervals(
-            name='"a"',
-            identifier=None,
-            version=snapshot.version,
-            dev_version=None,
-            intervals=[(to_timestamp("2023-01-01"), to_timestamp("2023-01-04"))],
-        ),
-        SnapshotIntervals(
-            name='"a"',
-            identifier=None,
-            version=snapshot.version,
-            dev_version=snapshot.dev_version,
-            dev_intervals=[(to_timestamp("2023-01-04"), to_timestamp("2023-01-08"))],
-        ),
-        SnapshotIntervals(
-            name='"a"',
-            identifier=new_snapshot.identifier,
-            version=snapshot.version,
-            dev_version=new_snapshot.dev_version,
-            dev_intervals=[(to_timestamp("2023-01-08"), to_timestamp("2023-01-10"))],
-        ),
-    ]
+        key=compare_snapshot_intervals,
+    ) == sorted(
+        [
+            SnapshotIntervals(
+                name='"a"',
+                identifier=None,
+                version=snapshot.version,
+                dev_version=None,
+                intervals=[(to_timestamp("2023-01-01"), to_timestamp("2023-01-04"))],
+            ),
+            SnapshotIntervals(
+                name='"a"',
+                identifier=None,
+                version=snapshot.version,
+                dev_version=snapshot.dev_version,
+                dev_intervals=[(to_timestamp("2023-01-04"), to_timestamp("2023-01-08"))],
+            ),
+            SnapshotIntervals(
+                name='"a"',
+                identifier=new_snapshot.identifier,
+                version=snapshot.version,
+                dev_version=new_snapshot.dev_version,
+                dev_intervals=[(to_timestamp("2023-01-08"), to_timestamp("2023-01-10"))],
+            ),
+        ],
+        key=compare_snapshot_intervals,
+    )
 
 
 def test_compact_intervals_after_cleanup(
@@ -2429,7 +2460,17 @@ def test_invalidate_environment(state_sync: EngineAdapterStateSync, make_snapsho
         previous_plan_id="test_plan_id",
         expiration_ts=original_expiration_ts,
     )
-    state_sync.promote(env)
+    environment_statements = [
+        EnvironmentStatements(
+            before_all=["CREATE OR REPLACE TABLE table_1 AS SELECT 'a'"],
+            after_all=["CREATE OR REPLACE TABLE table_2 AS SELECT 'b'"],
+            python_env={},
+        )
+    ]
+
+    state_sync.promote(env, environment_statements=environment_statements)
+
+    assert state_sync.get_environment_statements(env.name) == environment_statements
 
     assert not state_sync.delete_expired_environments()
     state_sync.invalidate_environment("test_environment")
@@ -2441,9 +2482,55 @@ def test_invalidate_environment(state_sync: EngineAdapterStateSync, make_snapsho
     deleted_environments = state_sync.delete_expired_environments()
     assert len(deleted_environments) == 1
     assert deleted_environments[0].name == "test_environment"
+    assert state_sync.get_environment_statements(env.name) == []
 
     with pytest.raises(SQLMeshError, match="Cannot invalidate the production environment."):
         state_sync.invalidate_environment("prod")
+
+
+def test_promote_environment_without_statements(
+    state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
+):
+    snapshot = make_snapshot(
+        SqlModel(
+            name="a",
+            query=parse_one("select a, ds"),
+        ),
+    )
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    state_sync.push_snapshots([snapshot])
+
+    original_expiration_ts = now_timestamp() + 100000
+
+    env = Environment(
+        name="test_environment",
+        snapshots=[snapshot.table_info],
+        start_at="2022-01-01",
+        end_at="2022-01-01",
+        plan_id="test_plan_id",
+        previous_plan_id="test_plan_id",
+        expiration_ts=original_expiration_ts,
+    )
+    environment_statements = [
+        EnvironmentStatements(
+            before_all=["CREATE OR REPLACE TABLE table_1 AS SELECT 'a'"],
+            after_all=["CREATE OR REPLACE TABLE table_2 AS SELECT 'b'"],
+            python_env={},
+        )
+    ]
+
+    state_sync.promote(env, environment_statements=environment_statements)
+
+    # Verify the environment statements table is populated with the statements
+    assert state_sync.get_environment_statements(env.name) == environment_statements
+
+    # Scenario where the statements have been removed from the project and then
+    # If we promote the environment it doesn't contain before_all, after_all statements
+    state_sync.promote(env, environment_statements=[])
+
+    # This should trigger an internal update to the environment statements' table to be removed
+    assert state_sync.get_environment_statements(env.name) == []
 
 
 def test_cache(state_sync, make_snapshot, mocker):
@@ -3428,4 +3515,61 @@ def test_compact_intervals_pending_restatement_many_snapshots_same_version(
         snapshots[0].snapshot_id
     ].pending_restatement_intervals == [
         (to_timestamp("2020-01-03"), to_timestamp("2020-01-05")),
+    ]
+
+
+def test_update_environment_statements(state_sync: EngineAdapterStateSync):
+    assert state_sync.get_environment_statements(environment="dev") == []
+
+    environment = Environment(
+        name="dev",
+        snapshots=[],
+        start_at="2022-01-01",
+        end_at="2022-01-01",
+        plan_id="test_plan_id",
+    )
+    environment_statements = [
+        EnvironmentStatements(
+            before_all=["CREATE OR REPLACE TABLE table_1 AS SELECT 'a'"],
+            after_all=["CREATE OR REPLACE TABLE table_2 AS SELECT 'b'"],
+            python_env={},
+        )
+    ]
+
+    state_sync.environment_state.update_environment(environment=environment)
+    state_sync.environment_state.update_environment_statements(
+        environment.name, environment.plan_id, environment_statements
+    )
+
+    environment_statements_dev = state_sync.get_environment_statements(environment="dev")
+    assert environment_statements_dev[0].before_all == [
+        "CREATE OR REPLACE TABLE table_1 AS SELECT 'a'"
+    ]
+    assert environment_statements_dev[0].after_all == [
+        "CREATE OR REPLACE TABLE table_2 AS SELECT 'b'"
+    ]
+
+    environment_statements = [
+        EnvironmentStatements(
+            before_all=["CREATE OR REPLACE TABLE table_1 AS SELECT 'a'"],
+            after_all=[
+                "@grant_schema_usage()",
+                "@grant_select_privileges()",
+            ],
+            python_env={},
+        )
+    ]
+
+    state_sync.environment_state.update_environment(environment=environment)
+    state_sync.environment_state.update_environment_statements(
+        environment.name, environment.plan_id, environment_statements
+    )
+
+    environment_statements_dev = state_sync.get_environment_statements(environment="dev")
+    assert environment_statements_dev[0].before_all == [
+        "CREATE OR REPLACE TABLE table_1 AS SELECT 'a'"
+    ]
+    assert environment_statements_dev[0].after_all == [
+        "@grant_schema_usage()",
+        "@grant_select_privileges()",
     ]

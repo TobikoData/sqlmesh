@@ -73,8 +73,10 @@ from sqlmesh.core.dialect import (
     parse_one,
 )
 from sqlmesh.core.engine_adapter import EngineAdapter
-from sqlmesh.core.environment import Environment, EnvironmentNamingInfo
+from sqlmesh.core.environment import Environment, EnvironmentNamingInfo, EnvironmentStatements
 from sqlmesh.core.loader import Loader
+from sqlmesh.core.linter.definition import Linter
+from sqlmesh.core.linter.rules import BUILTIN_RULES
 from sqlmesh.core.macros import ExecutableOrMacro, macro
 from sqlmesh.core.metric import Metric, rewrite
 from sqlmesh.core.model import Model, update_model_schemas
@@ -121,6 +123,7 @@ from sqlmesh.utils.errors import (
     PlanError,
     SQLMeshError,
     UncategorizedPlanError,
+    LinterError,
 )
 from sqlmesh.utils.config import print_config
 from sqlmesh.utils.jinja import JinjaMacroRegistry
@@ -346,8 +349,10 @@ class GenericContext(BaseContext, t.Generic[C]):
         self._metrics: UniqueKeyDict[str, Metric] = UniqueKeyDict("metrics")
         self._jinja_macros = JinjaMacroRegistry()
         self._requirements: t.Dict[str, str] = {}
+        self._environment_statements: t.List[EnvironmentStatements] = []
         self._excluded_requirements: t.Set[str] = set()
         self._default_catalog: t.Optional[str] = None
+        self._linters: t.Dict[str, Linter] = {}
         self._loaded: bool = False
 
         self.path, self.config = t.cast(t.Tuple[Path, C], next(iter(self.configs.items())))
@@ -496,6 +501,8 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         model.validate_definition()
 
+        self.lint_models(model)
+
         return model
 
     def scheduler(self, environment: t.Optional[str] = None) -> Scheduler:
@@ -575,8 +582,10 @@ class GenericContext(BaseContext, t.Generic[C]):
         self._metrics.clear()
         self._requirements.clear()
         self._excluded_requirements.clear()
+        self._linters.clear()
+        self._environment_statements = []
 
-        for project in loaded_projects:
+        for loader, project in zip(self._loaders, loaded_projects):
             self._jinja_macros = self._jinja_macros.merge(project.jinja_macros)
             self._macros.update(project.macros)
             self._models.update(project.models)
@@ -585,6 +594,13 @@ class GenericContext(BaseContext, t.Generic[C]):
             self._standalone_audits.update(project.standalone_audits)
             self._requirements.update(project.requirements)
             self._excluded_requirements.update(project.excluded_requirements)
+            if project.environment_statements:
+                self._environment_statements.append(project.environment_statements)
+
+            config = loader.config
+            self._linters[config.project] = Linter.from_rules(
+                BUILTIN_RULES.union(project.user_rules), config.linter
+            )
 
         uncached = set()
 
@@ -619,9 +635,12 @@ class GenericContext(BaseContext, t.Generic[C]):
 
             update_model_schemas(self.dag, models=self._models, context_path=self.path)
 
-            for model in self.models.values():
+            models = self.models.values()
+            for model in models:
                 # The model definition can be validated correctly only after the schema is set.
                 model.validate_definition()
+
+            self.lint_models(*models)
 
         duplicates = set(self._models) & set(self._standalone_audits)
         if duplicates:
@@ -1533,25 +1552,29 @@ class GenericContext(BaseContext, t.Generic[C]):
             if not target_env:
                 raise SQLMeshError(f"Could not find environment '{target}')")
 
+            # Compare the virtual layer instead of the physical layer because the virtual layer is guaranteed to point
+            # to the correct/active snapshot for the model in the specified environment, taking into account things like dev previews
             source = next(
                 snapshot for snapshot in source_env.snapshots if snapshot.name == model.fqn
-            ).table_name()
+            ).qualified_view_name.for_environment(source_env.naming_info, adapter.dialect)
+
             target = next(
                 snapshot for snapshot in target_env.snapshots if snapshot.name == model.fqn
-            ).table_name()
+            ).qualified_view_name.for_environment(target_env.naming_info, adapter.dialect)
+
             source_alias = source_env.name
             target_alias = target_env.name
 
             if not on:
-                for ref in model.all_references:
-                    if ref.unique:
-                        expr = ref.expression
-
-                        if isinstance(expr, exp.Tuple):
-                            on = [key.this.sql() for key in expr.expressions]
-                        else:
-                            # Handle a single Column or Paren expression
-                            on = [expr.this.sql()]
+                on = []
+                for expr in [ref.expression for ref in model.all_references if ref.unique]:
+                    if isinstance(expr, exp.Tuple):
+                        on.extend(
+                            [key.this.sql(dialect=adapter.dialect) for key in expr.expressions]
+                        )
+                    else:
+                        # Handle a single Column or Paren expression
+                        on.append(expr.this.sql(dialect=adapter.dialect))
 
         if not on:
             raise SQLMeshError(
@@ -1559,7 +1582,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             )
 
         table_diff = TableDiff(
-            adapter=adapter,
+            adapter=adapter.with_log_level(logger.getEffectiveLevel()),
             source=source,
             target=target,
             on=on,
@@ -1573,6 +1596,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             decimals=decimals,
         )
         if show:
+            self.console.show_table_diff_summary(table_diff)
             self.console.show_schema_diff(table_diff.schema_diff())
             self.console.show_row_diff(
                 table_diff.row_diff(temp_schema=temp_schema, skip_grain_check=skip_grain_check),
@@ -1992,6 +2016,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             circuit_breaker=circuit_breaker,
             selected_snapshots=select_models,
             auto_restatement_enabled=environment.lower() == c.PROD,
+            run_environment_statements=True,
         )
 
         if completion_status.is_nothing_to_do:
@@ -2163,6 +2188,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             excluded_requirements=self._excluded_requirements,
             ensure_finalized_snapshots=ensure_finalized_snapshots,
             diff_rendered=diff_rendered,
+            environment_statements=self._environment_statements,
         )
 
     def _run_janitor(self, ignore_ttl: bool = False) -> None:
@@ -2341,6 +2367,19 @@ class GenericContext(BaseContext, t.Generic[C]):
                 if s.name not in models_for_interval_end
             )
         return models_for_interval_end
+
+    def lint_models(self, *models: Model) -> None:
+        found_error = False
+
+        for model in models:
+            # Linter may be `None` if the context is not loaded yet
+            if linter := self._linters.get(model.project):
+                found_error = linter.lint_model(model) or found_error
+
+        if found_error:
+            raise LinterError(
+                "Linter detected errors in the code. Please fix them before proceeding."
+            )
 
 
 class Context(GenericContext[Config]):

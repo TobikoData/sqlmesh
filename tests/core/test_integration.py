@@ -4,6 +4,7 @@ import typing as t
 from collections import Counter
 from datetime import timedelta
 from unittest import mock
+from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
@@ -25,7 +26,7 @@ from sqlmesh.core.config import (
     ModelDefaultsConfig,
     DuckDBConnectionConfig,
 )
-from sqlmesh.core.console import Console
+from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.context import Context
 from sqlmesh.core.config.categorizer import CategorizerConfig
 from sqlmesh.core.engine_adapter import EngineAdapter
@@ -59,7 +60,7 @@ from sqlmesh.utils.date import TimeLike, now, to_date, to_datetime, to_timestamp
 from sqlmesh.utils.errors import NoChangesPlanError
 from sqlmesh.utils.pydantic import validate_string
 from tests.conftest import DuckDBMetadata, SushiDataValidator
-
+from tests.utils.test_helpers import use_terminal_console
 
 if t.TYPE_CHECKING:
     from sqlmesh import QueryOrDF
@@ -3027,6 +3028,143 @@ def test_prod_restatement_plan_causes_dev_intervals_to_be_processed_in_next_dev_
         ]
 
 
+def test_prod_restatement_plan_causes_dev_intervals_to_be_widened_on_full_restatement_only_model(
+    tmp_path,
+):
+    """
+    Scenario:
+        I have am INCREMENTAL_BY_TIME_RANGE model A[daily] in prod
+        I create dev and add a INCREMENTAL_BY_UNIQUE_KEY model B (which supports full restatement only)
+        I prod, I restate one day of A which should cause intervals in dev to be cleared (but not processed)
+        In dev, I run a plan
+
+    Outcome:
+        In the dev plan, the entire model for B should be rebuilt because it does not support partial restatement
+    """
+
+    model_a = """
+    MODEL (
+        name test.a,
+        kind INCREMENTAL_BY_TIME_RANGE (
+            time_column "ts"
+        ),
+        start '2024-01-01 00:00:00',
+        cron '@daily'
+    );
+
+    select account_id, ts from test.external_table where ts between @start_ts and @end_ts;
+    """
+
+    model_b = """
+        MODEL (
+            name test.b,
+            kind INCREMENTAL_BY_UNIQUE_KEY (
+                unique_key (account_id, ts)
+            ),
+            cron '@daily'
+        );
+
+        select account_id, ts from test.a where ts between @start_ts and @end_ts;
+        """
+
+    models_dir = tmp_path / "models"
+    models_dir.mkdir()
+
+    with open(models_dir / "a.sql", "w") as f:
+        f.write(model_a)
+
+    config = Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))
+    ctx = Context(paths=[tmp_path], config=config)
+
+    engine_adapter = ctx.engine_adapter
+    engine_adapter.create_schema("test")
+
+    # source data
+    df = pd.DataFrame(
+        {
+            "account_id": [1001, 1002, 1003, 1004],
+            "ts": [
+                "2024-01-01 00:30:00",
+                "2024-01-02 01:30:00",
+                "2024-01-03 02:30:00",
+                "2024-01-04 00:30:00",
+            ],
+        }
+    )
+    columns_to_types = {
+        "account_id": exp.DataType.build("int"),
+        "ts": exp.DataType.build("timestamp"),
+    }
+    external_table = exp.table_(table="external_table", db="test", quoted=True)
+    engine_adapter.create_table(table_name=external_table, columns_to_types=columns_to_types)
+    engine_adapter.insert_append(
+        table_name=external_table, query_or_df=df, columns_to_types=columns_to_types
+    )
+
+    # plan + apply A[daily] in prod
+    ctx.plan(auto_apply=True)
+
+    # add B[daily] in dev
+    with open(models_dir / "b.sql", "w") as f:
+        f.write(model_b)
+
+    # plan + apply dev
+    ctx.load()
+    ctx.plan(environment="dev", auto_apply=True)
+
+    def _dates_in_table(table_name: str) -> t.List[str]:
+        return [
+            str(r[0]) for r in engine_adapter.fetchall(f"select ts from {table_name} order by ts")
+        ]
+
+    # verify initial state
+    for tbl in ["test.a", "test__dev.b"]:
+        assert _dates_in_table(tbl) == [
+            "2024-01-01 00:30:00",
+            "2024-01-02 01:30:00",
+            "2024-01-03 02:30:00",
+            "2024-01-04 00:30:00",
+        ]
+
+    # restate A in prod
+    engine_adapter.execute("delete from test.external_table where ts = '2024-01-02 01:30:00'")
+    ctx.plan(
+        restate_models=["test.a"],
+        start="2024-01-02 00:00:00",
+        end="2024-01-03 00:00:00",
+        auto_apply=True,
+        no_prompts=True,
+    )
+
+    # verify result
+    assert _dates_in_table("test.a") == [
+        "2024-01-01 00:30:00",
+        "2024-01-03 02:30:00",
+        "2024-01-04 00:30:00",
+    ]
+
+    # dev shouldnt have been affected yet
+    assert _dates_in_table("test__dev.b") == [
+        "2024-01-01 00:30:00",
+        "2024-01-02 01:30:00",
+        "2024-01-03 02:30:00",
+        "2024-01-04 00:30:00",
+    ]
+
+    # plan dev which should trigger the missing intervals to get repopulated
+    ctx.plan(environment="dev", auto_apply=True)
+
+    # dev should have fully refreshed
+    # this is proven by the fact that INCREMENTAL_BY_UNIQUE_KEY cant propagate deletes, so if the
+    # model was not fully rebuilt, the deleted record would still be present
+    for tbl in ["test.a", "test__dev.b"]:
+        assert _dates_in_table(tbl) == [
+            "2024-01-01 00:30:00",
+            "2024-01-03 02:30:00",
+            "2024-01-04 00:30:00",
+        ]
+
+
 def test_prod_restatement_plan_missing_model_in_dev(
     tmp_path: Path,
 ):
@@ -4128,8 +4266,19 @@ def test_auto_categorization(sushi_context: Context):
     )
 
 
+@use_terminal_console
 def test_multi(mocker):
-    context = Context(paths=["examples/multi/repo_1", "examples/multi/repo_2"], gateway="memory")
+    context = Context(
+        paths=["examples/multi/repo_1", "examples/multi/repo_2"], gateway="memory", load=False
+    )
+
+    with patch.object(get_console(), "log_warning") as mock_logger:
+        context.load()
+        warnings = mock_logger.call_args[0][0]
+        repo1_path, repo2_path = context.configs.keys()
+        assert f"Linter warnings for {repo1_path}" in warnings
+        assert f"Linter warnings for {repo2_path}" not in warnings
+
     assert (
         context.render("bronze.a").sql()
         == '''SELECT 1 AS "col_a", 'b' AS "col_b", 1 AS "one", 'repo_1' AS "dup"'''
@@ -4142,6 +4291,14 @@ def test_multi(mocker):
     plan = context.plan_builder().build()
     assert len(plan.new_snapshots) == 5
     context.apply(plan)
+
+    # Ensure before_all, after_all statements for multiple repos have executed
+    environment_statements = context.state_reader.get_environment_statements(c.PROD)
+    assert len(environment_statements) == 2
+    assert context.fetchdf("select * from before_1").to_dict()["1"][0] == 1
+    assert context.fetchdf("select * from before_2").to_dict()["2"][0] == 2
+    assert context.fetchdf("select * from after_1").to_dict()["repo_1"][0] == "repo_1"
+    assert context.fetchdf("select * from after_2").to_dict()["repo_2"][0] == "repo_2"
 
     adapter = context.engine_adapter
     context = Context(
@@ -4168,6 +4325,16 @@ def test_multi(mocker):
     assert len(plan.missing_intervals) == 3
     context.apply(plan)
     validate_apply_basics(context, c.PROD, plan.snapshots.values())
+
+    # Ensure only repo_1's environment statements have executed in this context
+    environment_statements = context.state_reader.get_environment_statements(c.PROD)
+    assert len(environment_statements) == 1
+    assert environment_statements[0].before_all == [
+        "CREATE TABLE IF NOT EXISTS before_1 AS select @one()"
+    ]
+    assert environment_statements[0].after_all == [
+        "CREATE TABLE IF NOT EXISTS after_1 AS select @dup()"
+    ]
 
 
 def test_multi_dbt(mocker):
@@ -4615,6 +4782,54 @@ def initial_add(context: Context, environment: str):
 
     context.apply(plan)
     validate_apply_basics(context, environment, plan.snapshots.values())
+
+
+def test_plan_production_environment_statements(tmp_path: Path):
+    model_a = """
+    MODEL (
+        name test_schema.a,
+        kind FULL,
+    );
+
+    @IF(
+        @runtime_stage = 'creating',
+        INSERT INTO schema_names_for_prod (physical_schema_name) VALUES (@resolve_template('@{schema_name}'))
+    );
+
+    SELECT 1 AS account_id
+    """
+
+    models_dir = tmp_path / "models"
+    models_dir.mkdir()
+
+    for path, defn in {"a.sql": model_a}.items():
+        with open(models_dir / path, "w") as f:
+            f.write(defn)
+
+    before_all = [
+        "CREATE TABLE IF NOT EXISTS schema_names_for_@this_env (physical_schema_name VARCHAR)"
+    ]
+    after_all = ["@IF(@this_env = 'prod', CREATE TABLE IF NOT EXISTS after_t AS SELECT @var_5)"]
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        before_all=before_all,
+        after_all=after_all,
+        variables={"var_5": 5},
+    )
+    ctx = Context(paths=[tmp_path], config=config)
+    ctx.plan(auto_apply=True, no_prompts=True)
+
+    before_t = ctx.fetchdf("select * from schema_names_for_prod").to_dict()
+    assert before_t["physical_schema_name"][0] == "sqlmesh__test_schema"
+
+    after_t = ctx.fetchdf("select * from after_t").to_dict()
+    assert after_t["5"][0] == 5
+
+    environment_statements = ctx.state_reader.get_environment_statements(c.PROD)
+    assert environment_statements[0].before_all == before_all
+    assert environment_statements[0].after_all == after_all
+    assert environment_statements[0].python_env.keys() == {"__sqlmesh__vars__"}
+    assert environment_statements[0].python_env["__sqlmesh__vars__"].payload == "{'var_5': 5}"
 
 
 def apply_to_environment(

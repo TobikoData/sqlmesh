@@ -130,6 +130,7 @@ def test_json(snapshot: Snapshot):
                 "batch_size": 30,
                 "forward_only": False,
                 "on_destructive_change": "ERROR",
+                "partition_by_time_column": True,
                 "disable_restatement": False,
                 "dialect": "spark",
             },
@@ -859,7 +860,7 @@ def test_fingerprint(model: Model, parent_model: Model):
 
     original_fingerprint = SnapshotFingerprint(
         data_hash="1312415267",
-        metadata_hash="2967945306",
+        metadata_hash="221611364",
     )
 
     assert fingerprint == original_fingerprint
@@ -920,7 +921,7 @@ def test_fingerprint_seed_model():
 
     expected_fingerprint = SnapshotFingerprint(
         data_hash="1909791099",
-        metadata_hash="1153541408",
+        metadata_hash="3403817841",
     )
 
     model = load_sql_based_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
@@ -959,7 +960,7 @@ def test_fingerprint_jinja_macros(model: Model):
     )
     original_fingerprint = SnapshotFingerprint(
         data_hash="923305614",
-        metadata_hash="2967945306",
+        metadata_hash="221611364",
     )
 
     fingerprint = fingerprint_from_node(model, nodes={})

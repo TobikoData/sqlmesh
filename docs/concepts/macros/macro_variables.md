@@ -133,3 +133,4 @@ SQLMesh provides two other predefined variables used to modify model behavior ba
 * @this_model - A string value containing the name of the physical table the model view selects from. Typically used to create [generic audits](../audits.md#generic-audits). In the case of [on_virtual_update statements](../models/sql_models.md#optional-on-virtual-update-statements) it contains the qualified view name instead.
     * Can be used in model definitions when SQLGlot cannot fully parse a statement and you need to reference the model's underlying physical table directly.
     * Can be passed as an argument to macros that access or interact with the underlying physical table.
+* @this_env - A string value containing the name of the current [environment](../environments.md). Only available in [`before_all` and `after_all` statements](../../guides/configuration.md#before_all-and-after_all-statements), as well as in macros invoked within them.

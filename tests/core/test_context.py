@@ -11,7 +11,7 @@ import pytest
 import pandas as pd
 from pathlib import Path
 from pytest_mock.plugin import MockerFixture
-from sqlglot import exp, parse_one, Dialect
+from sqlglot import ParseError, exp, parse_one, Dialect
 from sqlglot.errors import SchemaError
 
 from sqlmesh.core.config.gateway import GatewayConfig
@@ -23,14 +23,18 @@ from sqlmesh.core.config import (
     EnvironmentSuffixTarget,
     ModelDefaultsConfig,
     SnowflakeConnectionConfig,
+    LinterConfig,
     load_configs,
 )
 from sqlmesh.core.context import Context
-from sqlmesh.core.console import create_console
+from sqlmesh.core.console import create_console, get_console
 from sqlmesh.core.dialect import parse, schema_
 from sqlmesh.core.engine_adapter.duckdb import DuckDBEngineAdapter
-from sqlmesh.core.environment import Environment
-from sqlmesh.core.model import load_sql_based_model, model
+from sqlmesh.core.environment import Environment, EnvironmentNamingInfo, EnvironmentStatements
+from sqlmesh.core.macros import MacroEvaluator
+from sqlmesh.core.model import load_sql_based_model, model, SqlModel, Model
+from sqlmesh.core.model.cache import OptimizedQueryCache
+from sqlmesh.core.renderer import render_statements
 from sqlmesh.core.model.kind import ModelKindName
 from sqlmesh.core.plan import BuiltInPlanEvaluator, PlanBuilder
 from sqlmesh.core.state_sync.cache import CachingStateSync
@@ -43,7 +47,9 @@ from sqlmesh.utils.date import (
     to_timestamp,
     yesterday_ds,
 )
-from sqlmesh.utils.errors import ConfigError, SQLMeshError
+from sqlmesh.utils.errors import ConfigError, SQLMeshError, LinterError
+from sqlmesh.utils.metaprogramming import Executable
+from tests.utils.test_helpers import use_terminal_console
 from tests.utils.test_filesystem import create_temp_file
 
 
@@ -1396,3 +1402,387 @@ def test_plan_runs_audits_on_dev_previews(sushi_context: Context, capsys, caplog
     assert "'not_null' audit error:" in log
     assert "'at_least_one_non_blocking' audit error:" in log
     assert "Target environment updated successfully" in stdout
+
+
+def test_environment_statements(tmp_path: pathlib.Path):
+    models_dir = pathlib.Path("models")
+    macros_dir = pathlib.Path("macros")
+    dialect = "postgres"
+
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect=dialect),
+        before_all=[
+            "CREATE TABLE IF NOT EXISTS analytic_stats (physical_table VARCHAR, evaluation_time VARCHAR)"
+        ],
+        after_all=[
+            "@grant_schema_usage()",
+            "@grant_select_privileges()",
+        ],
+    )
+
+    expression = """
+MODEL(
+  name db.test_after_model,
+  kind full
+);
+
+SELECT 1 AS col_a;
+    """
+
+    create_temp_file(
+        tmp_path,
+        pathlib.Path(models_dir, "db", "test_after_model.sql"),
+        expression,
+    )
+
+    create_temp_file(
+        tmp_path,
+        pathlib.Path(macros_dir, "grant_select_file.py"),
+        """
+from sqlmesh.core.macros import macro
+from sqlmesh.core.snapshot.definition import to_view_mapping
+
+@macro()
+def grant_select_privileges(evaluator):
+    if evaluator._environment_naming_info:
+        mapping = to_view_mapping(
+            evaluator._snapshots.values(), evaluator._environment_naming_info
+        )
+        return [
+            stmt
+            for stmt in [
+                f"GRANT SELECT ON VIEW {view_name} TO ROLE admin_role;"
+                for view_name in mapping.values()
+            ]
+        ]
+""",
+    )
+
+    create_temp_file(
+        tmp_path,
+        pathlib.Path(macros_dir, "grant_schema_file.py"),
+        """
+from sqlmesh import macro
+
+@macro()
+def grant_schema_usage(evaluator):
+    if evaluator._environment_naming_info:
+        schemas = {
+            snapshot.qualified_view_name.schema_for_environment(
+                evaluator._environment_naming_info
+            )
+            for snapshot in evaluator._snapshots.values()
+            if snapshot.is_model
+        }
+        return [
+            f"GRANT USAGE ON SCHEMA {schema} TO user_role;"
+            for schema in schemas
+        ]
+""",
+    )
+
+    context = Context(paths=tmp_path, config=config)
+    snapshots = {s.name: s for s in context.snapshots.values()}
+
+    environment_statements = context._environment_statements[0]
+    before_all = environment_statements.before_all
+    after_all = environment_statements.after_all
+    python_env = environment_statements.python_env
+
+    assert isinstance(python_env["to_view_mapping"], Executable)
+    assert isinstance(python_env["grant_select_privileges"], Executable)
+
+    before_all_rendered = render_statements(
+        statements=before_all, dialect=dialect, python_env=python_env
+    )
+
+    assert before_all_rendered == [
+        "CREATE TABLE IF NOT EXISTS analytic_stats (physical_table VARCHAR, evaluation_time VARCHAR)"
+    ]
+
+    after_all_rendered = render_statements(
+        statements=after_all,
+        dialect=dialect,
+        python_env=python_env,
+        snapshots=snapshots,
+        environment_naming_info=EnvironmentNamingInfo(name="prod"),
+    )
+
+    assert after_all_rendered == [
+        "GRANT USAGE ON SCHEMA db TO user_role",
+        "GRANT SELECT ON VIEW memory.db.test_after_model TO ROLE admin_role",
+    ]
+
+    after_all_rendered_dev = render_statements(
+        statements=after_all,
+        dialect=dialect,
+        python_env=python_env,
+        snapshots=snapshots,
+        environment_naming_info=EnvironmentNamingInfo(name="dev"),
+    )
+
+    assert after_all_rendered_dev == [
+        "GRANT USAGE ON SCHEMA db__dev TO user_role",
+        "GRANT SELECT ON VIEW memory.db__dev.test_after_model TO ROLE admin_role",
+    ]
+
+
+def test_plan_environment_statements(tmp_path: pathlib.Path):
+    models_dir = pathlib.Path("models")
+    macros_dir = pathlib.Path("macros")
+    dialect = "duckdb"
+
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect=dialect),
+        before_all=["@create_stats_table()"],
+        after_all=["CREATE TABLE IF NOT EXISTS after_table AS SELECT @some_var"],
+        variables={"some_var": 5},
+    )
+
+    model_file = """
+MODEL(
+  name db.test_stats_model,
+  kind full,
+);
+
+@IF(
+  @runtime_stage = 'evaluating',
+  SET VARIABLE stats_model_start = now()
+);
+
+SELECT 1 AS cola;
+
+@IF(
+  @runtime_stage = 'evaluating',
+  INSERT INTO analytic_stats (physical_table, evaluation_start, evaluation_end, evaluation_time)
+  VALUES (@resolve_template('@{schema_name}.@{table_name}'), getvariable('stats_model_start'), now(), now() - getvariable('stats_model_start'))
+);
+
+    """
+
+    create_temp_file(
+        tmp_path,
+        pathlib.Path(models_dir, "db", "test_stats_model.sql"),
+        model_file,
+    )
+
+    create_temp_file(
+        tmp_path,
+        pathlib.Path(macros_dir, "create_stats_table.py"),
+        """
+from sqlmesh.core.macros import macro
+
+@macro()
+def create_stats_table(evaluator):
+    return "CREATE TABLE IF NOT EXISTS analytic_stats (physical_table VARCHAR, evaluation_start VARCHAR,  evaluation_end VARCHAR, evaluation_time VARCHAR)"
+""",
+    )
+
+    context = Context(paths=tmp_path, config=config)
+
+    assert context._environment_statements[0].before_all == ["@create_stats_table()"]
+    assert context._environment_statements[0].after_all == [
+        "CREATE TABLE IF NOT EXISTS after_table AS SELECT @some_var"
+    ]
+    assert context._environment_statements[0].python_env["create_stats_table"]
+
+    context.plan(auto_apply=True, no_prompts=True)
+
+    model = context.get_model("db.test_stats_model")
+    snapshot = context.get_snapshot("db.test_stats_model")
+    assert snapshot and snapshot.version
+
+    assert (
+        model.pre_statements[0].sql()
+        == "@IF(@runtime_stage = 'evaluating', SET VARIABLE stats_model_start = now())"
+    )
+    assert (
+        model.post_statements[0].sql()
+        == "@IF(@runtime_stage = 'evaluating', INSERT INTO analytic_stats (physical_table, evaluation_start, evaluation_end, evaluation_time) VALUES (@resolve_template('@{schema_name}.@{table_name}'), GETVARIABLE('stats_model_start'), NOW(), NOW() - GETVARIABLE('stats_model_start')))"
+    )
+
+    stats_table = context.fetchdf("select * from memory.analytic_stats").to_dict()
+    assert stats_table.keys() == {
+        "physical_table",
+        "evaluation_start",
+        "evaluation_end",
+        "evaluation_time",
+    }
+    assert (
+        stats_table["physical_table"][0] == f"sqlmesh__db.db__test_stats_model__{snapshot.version}"
+    )
+
+    assert context.fetchdf("select * from memory.after_table").to_dict()["5"][0] == 5
+
+    state_table = context.state_reader.get_environment_statements(c.PROD)
+    assert state_table[0].before_all == context._environment_statements[0].before_all
+    assert state_table[0].after_all == context._environment_statements[0].after_all
+    assert state_table[0].python_env == context._environment_statements[0].python_env
+
+
+def test_environment_statements_dialect(tmp_path: Path):
+    before_all = [
+        "EXPORT DATA OPTIONS (URI='gs://path*.csv.gz', FORMAT='CSV') AS SELECT * FROM all_rows"
+    ]
+    after_all = ["@IF(@this_env = 'prod', CREATE TABLE IF NOT EXISTS after_t AS SELECT 1)"]
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="bigquery"),
+        before_all=before_all,
+        after_all=after_all,
+    )
+    ctx = Context(paths=[tmp_path], config=config)
+    assert ctx._environment_statements == [
+        EnvironmentStatements(before_all=before_all, after_all=after_all, python_env={})
+    ]
+
+    # Without the correct dialect this statement should error out instead
+    with pytest.raises(ParseError, match=r"Invalid expression / Unexpected token*"):
+        config.model_defaults.dialect = "duckdb"
+        ctx = Context(paths=[tmp_path], config=config)
+
+
+@pytest.mark.slow
+@use_terminal_console
+def test_model_linting(tmp_path: pathlib.Path, sushi_context) -> None:
+    def assert_cached_violations_exist(cache: OptimizedQueryCache, model: Model):
+        model = t.cast(SqlModel, model)
+        cache_entry = cache._file_cache.get(cache._entry_name(model))
+        assert cache_entry is not None
+        assert cache_entry.optimized_rendered_query is not None
+        assert cache_entry.renderer_violations is not None
+
+    cfg = LinterConfig(enabled=True, rules="ALL")
+    ctx = Context(
+        config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"), linter=cfg),
+        paths=tmp_path,
+    )
+
+    config_err = "Linter detected errors in the code. Please fix them before proceeding."
+
+    # Case: Ensure load DOES NOT work if linter is enabled
+    for query in ("SELECT * FROM tbl", "SELECT t.* FROM tbl"):
+        with pytest.raises(LinterError, match=config_err):
+            ctx.upsert_model(load_sql_based_model(d.parse(f"MODEL (name test); {query}")))
+
+    error_model = load_sql_based_model(d.parse("MODEL (name test); SELECT col"))
+    with pytest.raises(LinterError, match=config_err):
+        ctx.upsert_model(error_model)
+
+    # Case: Ensure error violations are cached if the model did not pass linting
+    cache = OptimizedQueryCache(tmp_path / c.CACHE)
+
+    assert_cached_violations_exist(cache, error_model)
+
+    # Case: Ensure NoSelectStar only raises for top-level SELECTs, new model shouldn't raise
+    # and thus should also be cached
+    model2 = load_sql_based_model(
+        d.parse("MODEL (name test2); SELECT col FROM (SELECT * FROM tbl)")
+    )
+    ctx.upsert_model(model2)
+
+    model2 = t.cast(SqlModel, model2)
+    assert cache._file_cache.exists(cache._entry_name(model2))
+
+    # Case: Ensure warning violations are found again even if the optimized query is cached
+    ctx.config.linter = LinterConfig(enabled=True, warn_rules="ALL")
+    ctx.load()
+
+    for i in range(3):
+        with patch.object(get_console(), "log_warning") as mock_logger:
+            if i > 1:
+                # Model's violations have been cached from the previous upserts
+                assert_cached_violations_exist(cache, model2)
+
+            ctx.upsert_model(error_model)
+            assert (
+                """Column '"col"' could not be resolved for model '"test"'"""
+                in mock_logger.call_args[0][0]
+            )
+
+            # Model's violations have been cached after the former upsert
+            assert_cached_violations_exist(cache, model2)
+
+    # Case: Ensure load WORKS if linter is enabled but the rules are not
+    create_temp_file(
+        tmp_path,
+        pathlib.Path(pathlib.Path("models"), "test.sql"),
+        "MODEL(name test); SELECT * FROM (SELECT 1 AS col);",
+    )
+
+    ignore_or_warn_cfgs = [
+        LinterConfig(enabled=True, warn_rules=["noselectstar"]),
+        LinterConfig(enabled=True, ignored_rules=["noselectstar"]),
+    ]
+    for cfg in ignore_or_warn_cfgs:
+        ctx.config.linter = cfg
+        ctx.load()
+
+    # Case: Ensure load DOES NOT work if LinterConfig has overlapping rules
+    with pytest.raises(
+        ConfigError,
+        match=r"Rules cannot simultaneously warn and raise an error: \[noselectstar\]",
+    ):
+        ctx.config.linter = LinterConfig(
+            enabled=True, rules=["noselectstar"], warn_rules=["noselectstar"]
+        )
+        ctx.load()
+
+    # Case: Ensure model attribute overrides global config
+    ctx.config.linter = LinterConfig(enabled=True, rules=["noselectstar"])
+
+    create_temp_file(
+        tmp_path,
+        pathlib.Path(pathlib.Path("models"), "test.sql"),
+        "MODEL(name test, ignored_rules ['ALL']); SELECT * FROM (SELECT 1 AS col);",
+    )
+
+    create_temp_file(
+        tmp_path,
+        pathlib.Path(pathlib.Path("models"), "test2.sql"),
+        "MODEL(name test2, ignored_rules ['noselectstar']); SELECT * FROM (SELECT 1 AS col);",
+    )
+
+    ctx.load()
+
+    # Case: Ensure we can load & use the user-defined rules
+    sushi_context.config.linter = LinterConfig(enabled=True, rules=["aLl"])
+    sushi_context.upsert_model(
+        load_sql_based_model(
+            d.parse("MODEL (name sushi.test); SELECT col FROM (SELECT * FROM tbl)"),
+            default_catalog="memory",
+        )
+    )
+
+    with pytest.raises(LinterError, match=config_err):
+        sushi_context.load()
+
+    # Case: Ensure the Linter also picks up Python model violations
+    @model(name="memory.sushi.model3", is_sql=True, kind="full", dialect="snowflake")
+    def model3_entrypoint(evaluator: MacroEvaluator) -> str:
+        return "select * from model1"
+
+    model3 = model.get_registry()["memory.sushi.model3"].model(
+        module_path=Path("."), path=Path(".")
+    )
+
+    @model(name="memory.sushi.model4", columns={"col": "int"})
+    def model4_entrypoint(context, **kwargs):
+        yield pd.DataFrame({"col": []})
+
+    model4 = model.get_registry()["memory.sushi.model4"].model(
+        module_path=Path("."), path=Path(".")
+    )
+
+    for python_model in (model3, model4):
+        with pytest.raises(LinterError, match=config_err):
+            sushi_context.upsert_model(python_model)
+
+    @model(name="memory.sushi.model5", columns={"col": "int"}, owner="test")
+    def model5_entrypoint(context, **kwargs):
+        yield pd.DataFrame({"col": []})
+
+    model5 = model.get_registry()["memory.sushi.model5"].model(
+        module_path=Path("."), path=Path(".")
+    )
+
+    sushi_context.upsert_model(model5)

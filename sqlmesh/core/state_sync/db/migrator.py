@@ -81,6 +81,7 @@ class StateMigrator:
             self.interval_state.intervals_table,
             self.plan_dags_table,
             self.snapshot_state.auto_restatements_table,
+            self.environment_state.environment_statements_table,
         ]
 
     def migrate(

@@ -46,6 +46,30 @@ def migrate(state_sync, **kwargs):  # type: ignore
     ]
     engine_adapter.execute(add_column_exps)
 
+    if engine_adapter.dialect == "databricks":
+        # Databricks will throw an error like:
+        # > databricks.sql.exc.ServerOperationError: [DELTA_UNSUPPORTED_DROP_COLUMN] DROP COLUMN is not supported for your Delta table.
+        # when we try to drop `expiration_ts` below unless we set delta.columnMapping.mode to 'name'
+        alter_table_exp = exp.Alter(
+            this=exp.to_table(snapshots_table),
+            kind="TABLE",
+            actions=[
+                exp.AlterSet(
+                    expressions=[
+                        exp.Properties(
+                            expressions=[
+                                exp.Property(
+                                    this=exp.Literal.string("delta.columnMapping.mode"),
+                                    value=exp.Literal.string("name"),
+                                )
+                            ]
+                        )
+                    ]
+                )
+            ],
+        )
+        engine_adapter.execute(alter_table_exp)
+
     drop_column_exp = exp.Alter(
         this=exp.to_table(snapshots_table),
         kind="TABLE",

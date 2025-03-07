@@ -8,7 +8,12 @@ from collections import defaultdict
 from copy import deepcopy
 
 from hyperscript import h
-from IPython.core.display import display
+
+try:
+    from IPython.core.display import display  # type: ignore
+except ImportError:
+    from IPython.display import display
+
 from IPython.core.magic import (
     Magics,
     cell_magic,

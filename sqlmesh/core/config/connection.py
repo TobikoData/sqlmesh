@@ -861,8 +861,9 @@ class BigQueryConnectionConfig(ConnectionConfig):
     client_secret: t.Optional[str] = None
     token_uri: t.Optional[str] = None
     scopes: t.Tuple[str, ...] = ("https://www.googleapis.com/auth/bigquery",)
-    job_creation_timeout_seconds: t.Optional[int] = None
+    impersonated_service_account: t.Optional[str] = None
     # Extra Engine Config
+    job_creation_timeout_seconds: t.Optional[int] = None
     job_execution_timeout_seconds: t.Optional[int] = None
     job_retries: t.Optional[int] = 1
     job_retry_deadline_seconds: t.Optional[int] = None
@@ -911,6 +912,7 @@ class BigQueryConnectionConfig(ConnectionConfig):
     def _static_connection_kwargs(self) -> t.Dict[str, t.Any]:
         """The static connection kwargs for this connection"""
         import google.auth
+        from google.auth import impersonated_credentials
         from google.api_core import client_info, client_options
         from google.oauth2 import credentials, service_account
 
@@ -935,6 +937,13 @@ class BigQueryConnectionConfig(ConnectionConfig):
             )
         else:
             raise ConfigError("Invalid BigQuery Connection Method")
+
+        if self.impersonated_service_account:
+            creds = impersonated_credentials.Credentials(
+                source_credentials=creds,
+                target_principal=self.impersonated_service_account,
+                target_scopes=self.scopes,
+            )
 
         options = client_options.ClientOptions(quota_project_id=self.quota_project)
         project = self.execution_project or self.project or None

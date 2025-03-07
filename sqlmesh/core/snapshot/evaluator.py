@@ -51,6 +51,7 @@ from sqlmesh.core.model import (
     ViewKind,
     CustomKind,
 )
+
 from sqlmesh.core.schema_diff import has_drop_alteration, get_dropped_column_names
 from sqlmesh.core.snapshot import (
     DeployabilityIndex,
@@ -352,12 +353,12 @@ class SnapshotEvaluator:
             on_start(len(snapshots_to_create))
         self._create_schemas(tables_by_schema, gateway_by_schema)
         self._create_snapshots(
-            snapshots_to_create,
-            snapshots,
-            target_deployability_flags,
-            deployability_index,
-            on_complete,
-            allow_destructive_snapshots,
+            snapshots_to_create=snapshots_to_create,
+            snapshots=snapshots,
+            target_deployability_flags=target_deployability_flags,
+            deployability_index=deployability_index,
+            on_complete=on_complete,
+            allow_destructive_snapshots=allow_destructive_snapshots,
         )
 
     def _create_snapshots(
@@ -375,11 +376,11 @@ class SnapshotEvaluator:
                 snapshots_to_create,
                 lambda s: self._create_snapshot(
                     s,
-                    snapshots,
-                    target_deployability_flags[s.name],
-                    deployability_index,
-                    on_complete,
-                    allow_destructive_snapshots,
+                    snapshots=snapshots,
+                    deployability_flags=target_deployability_flags[s.name],
+                    deployability_index=deployability_index,
+                    on_complete=on_complete,
+                    allow_destructive_snapshots=allow_destructive_snapshots,
                 ),
                 self.ddl_concurrent_tasks,
             )

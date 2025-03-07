@@ -301,7 +301,7 @@ In addition to specifying a time column in the `MODEL` DDL, the model's query mu
     ```
 
     SQLMesh will create a suffixed `__dev` schema based on the name of the plan environment.
-  
+
     ```sql
     CREATE SCHEMA IF NOT EXISTS `sqlmesh-public-demo`.`demo__dev`
     ```
@@ -408,6 +408,25 @@ WHERE
   AND event_date BETWEEN @start_ds AND @end_ds; -- `event_date` time column filter automatically added by SQLMesh
 ```
 
+### Partitioning
+
+By default, we ensure that the `time_column` is part of the [partitioned_by](./overview.md#partitioned_by) property of the model so that it forms part of the partition key and allows the database engine to do partition pruning. If it is not explicitly listed in the Model definition, we will automatically add it.
+
+However, this may be undesirable if you want to exclusively partition on another column or you want to partition on something like `month(time_column)` but the engine you're using doesnt support partitioning based on expressions.
+
+To opt out of this behaviour, you can set `partition_by_time_column false` like so:
+
+```sql linenums="1" hl_lines="5"
+MODEL (
+  name db.events,
+  kind INCREMENTAL_BY_TIME_RANGE (
+    time_column event_date,
+    partition_by_time_column false
+  ),
+  partitioned_by (other_col) -- event_date will no longer be automatically added here and the partition key will just be 'other_col'
+);
+```
+
 ### Idempotency
 We recommend making sure incremental by time range model queries are [idempotent](../glossary.md#idempotency) to prevent unexpected results during data [restatement](../plans.md#restatement-plans).
 
@@ -428,9 +447,19 @@ Depending on the target engine, models of the `INCREMENTAL_BY_TIME_RANGE` kind a
 
 ## INCREMENTAL_BY_UNIQUE_KEY
 
-Models of the `INCREMENTAL_BY_UNIQUE_KEY` kind are computed incrementally based on a key that is unique for each data row.
+Models of the `INCREMENTAL_BY_UNIQUE_KEY` kind are computed incrementally based on a key.
 
-If a key in newly loaded data is not present in the model table, the new data row is inserted. If a key in newly loaded data is already present in the model table, the existing row is updated with the new data. If a key is present in the model table but not present in the newly loaded data, its row is not modified and remains in the model table.
+They insert or update rows based on these rules:
+
+- If a key in newly loaded data is not present in the model table, the new data row is inserted.
+- If a key in newly loaded data is already present in the model table, the existing row is updated with the new data.
+- If a key is present in the model table but not present in the newly loaded data, its row is not modified and remains in the model table.
+
+!!! important "Prevent duplicated keys"
+
+    If you do not want duplicated keys in the model table, you must ensure the model query does not return rows with duplicate keys.
+
+    SQLMesh does not automatically detect or prevent duplicates.
 
 This kind is a good fit for datasets that have the following traits:
 
@@ -509,18 +538,18 @@ WHERE
     SQLMesh will validate the model's query before processing data (note the `FALSE LIMIT 0` in the `WHERE` statement and the placeholder dates).
 
     ```sql
-    SELECT `seed_model`.`id` AS `id`, `seed_model`.`item_id` AS `item_id`, `seed_model`.`event_date` AS `event_date` 
-    FROM `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__seed_model__2834544882` AS `seed_model` 
+    SELECT `seed_model`.`id` AS `id`, `seed_model`.`item_id` AS `item_id`, `seed_model`.`event_date` AS `event_date`
+    FROM `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__seed_model__2834544882` AS `seed_model`
     WHERE (`seed_model`.`event_date` <= CAST('1970-01-01' AS DATE) AND `seed_model`.`event_date` >= CAST('1970-01-01' AS DATE)) AND FALSE LIMIT 0
     ```
 
     SQLMesh will create a versioned table in the physical layer.
 
     ```sql
-    CREATE OR REPLACE TABLE `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__incremental_by_unique_key_example__1161945221` AS 
-    SELECT CAST(`id` AS INT64) AS `id`, CAST(`item_id` AS INT64) AS `item_id`, CAST(`event_date` AS DATE) AS `event_date` 
-    FROM (SELECT `seed_model`.`id` AS `id`, `seed_model`.`item_id` AS `item_id`, `seed_model`.`event_date` AS `event_date` 
-    FROM `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__seed_model__2834544882` AS `seed_model` 
+    CREATE OR REPLACE TABLE `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__incremental_by_unique_key_example__1161945221` AS
+    SELECT CAST(`id` AS INT64) AS `id`, CAST(`item_id` AS INT64) AS `item_id`, CAST(`event_date` AS DATE) AS `event_date`
+    FROM (SELECT `seed_model`.`id` AS `id`, `seed_model`.`item_id` AS `item_id`, `seed_model`.`event_date` AS `event_date`
+    FROM `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__seed_model__2834544882` AS `seed_model`
     WHERE `seed_model`.`event_date` <= CAST('2024-10-30' AS DATE) AND `seed_model`.`event_date` >= CAST('2020-01-01' AS DATE)) AS `_subquery`
     ```
 
@@ -533,7 +562,7 @@ WHERE
     SQLMesh will create a view in the virtual layer pointing to the versioned table in the physical layer.
 
     ```sql
-    CREATE OR REPLACE VIEW `sqlmesh-public-demo`.`demo__dev`.`incremental_by_unique_key_example` AS 
+    CREATE OR REPLACE VIEW `sqlmesh-public-demo`.`demo__dev`.`incremental_by_unique_key_example` AS
     SELECT * FROM `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__incremental_by_unique_key_example__1161945221`
     ```
 
@@ -691,19 +720,19 @@ GROUP BY title;
     SQLMesh will validate the model's query before processing data (note the `WHERE FALSE` and `LIMIT 0`).
 
     ```sql
-    SELECT `incremental_model`.`item_id` AS `item_id`, COUNT(DISTINCT `incremental_model`.`id`) AS `num_orders` 
-    FROM `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__incremental_model__89556012` AS `incremental_model` 
-    WHERE FALSE 
+    SELECT `incremental_model`.`item_id` AS `item_id`, COUNT(DISTINCT `incremental_model`.`id`) AS `num_orders`
+    FROM `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__incremental_model__89556012` AS `incremental_model`
+    WHERE FALSE
     GROUP BY `incremental_model`.`item_id` LIMIT 0
     ```
 
     SQLMesh will create a versioned table in the physical layer.
 
     ```sql
-    CREATE OR REPLACE TABLE `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__full_model_example__2345651858` AS 
-    SELECT CAST(`item_id` AS INT64) AS `item_id`, CAST(`num_orders` AS INT64) AS `num_orders` 
-    FROM (SELECT `incremental_model`.`item_id` AS `item_id`, COUNT(DISTINCT `incremental_model`.`id`) AS `num_orders` 
-    FROM `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__incremental_model__89556012` AS `incremental_model` 
+    CREATE OR REPLACE TABLE `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__full_model_example__2345651858` AS
+    SELECT CAST(`item_id` AS INT64) AS `item_id`, CAST(`num_orders` AS INT64) AS `num_orders`
+    FROM (SELECT `incremental_model`.`item_id` AS `item_id`, COUNT(DISTINCT `incremental_model`.`id`) AS `num_orders`
+    FROM `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__incremental_model__89556012` AS `incremental_model`
     GROUP BY `incremental_model`.`item_id`) AS `_subquery`
     ```
 
@@ -716,7 +745,7 @@ GROUP BY title;
     SQLMesh will create a view in the virtual layer pointing to the versioned table in the physical layer.
 
     ```sql
-    CREATE OR REPLACE VIEW `sqlmesh-public-demo`.`demo__dev`.`full_model_example` AS 
+    CREATE OR REPLACE VIEW `sqlmesh-public-demo`.`demo__dev`.`full_model_example` AS
     SELECT * FROM `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__full_model_example__2345651858`
     ```
 
@@ -788,7 +817,7 @@ FROM db.employees;
     SQLMesh will create a view in the virtual layer pointing to the versioned view in the physical layer.
 
     ```sql
-    CREATE OR REPLACE VIEW `sqlmesh-public-demo`.`demo__dev`.`example_view` AS 
+    CREATE OR REPLACE VIEW `sqlmesh-public-demo`.`demo__dev`.`example_view` AS
     SELECT * FROM `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__example_view__1024042926`
     ```
 
@@ -834,7 +863,7 @@ FROM db.employees;
 ## SEED
 The `SEED` model kind is used to specify [seed models](./seed_models.md) for using static CSV datasets in your SQLMesh project.
 
-**Notes:**  
+**Notes:**
 
 - Seed models are loaded only once unless the SQL model and/or seed file is updated.
 - Python models do not support the `SEED` model kind - use a SQL model instead.
@@ -873,9 +902,9 @@ The `SEED` model kind is used to specify [seed models](./seed_models.md) for usi
     SQLMesh will create a versioned table in the physical layer from the temp table.
 
     ```sql
-    CREATE OR REPLACE TABLE `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__seed_example__3038173937` AS 
-    SELECT CAST(`id` AS INT64) AS `id`, CAST(`item_id` AS INT64) AS `item_id`, CAST(`event_date` AS DATE) AS `event_date` 
-    FROM (SELECT `id`, `item_id`, `event_date` 
+    CREATE OR REPLACE TABLE `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__seed_example__3038173937` AS
+    SELECT CAST(`id` AS INT64) AS `id`, CAST(`item_id` AS INT64) AS `item_id`, CAST(`event_date` AS DATE) AS `event_date`
+    FROM (SELECT `id`, `item_id`, `event_date`
     FROM `sqlmesh-public-demo`.`sqlmesh__demo`.`__temp_demo__seed_example__3038173937_9kzbpld7`) AS `_subquery`
     ```
 
@@ -894,7 +923,7 @@ The `SEED` model kind is used to specify [seed models](./seed_models.md) for usi
     SQLMesh will create a view in the virtual layer pointing to the versioned table in the physical layer.
 
     ```sql
-    CREATE OR REPLACE VIEW `sqlmesh-public-demo`.`demo__dev`.`seed_example` AS 
+    CREATE OR REPLACE VIEW `sqlmesh-public-demo`.`demo__dev`.`seed_example` AS
     SELECT * FROM `sqlmesh-public-demo`.`sqlmesh__demo`.`demo__seed_example__3038173937`
     ```
 
@@ -1543,3 +1572,30 @@ Depending on the target engine, models of the `INCREMENTAL_BY_PARTITION` kind ar
 | Redshift   | DELETE by partitioning key, then INSERT |
 | Postgres   | DELETE by partitioning key, then INSERT |
 | DuckDB     | DELETE by partitioning key, then INSERT |
+
+## INCREMENTAL_UNMANAGED
+
+The `INCREMENTAL_UNMANAGED` model kind exists to support append-only tables. It's "unmanaged" in the sense that SQLMesh doesnt try to manage how the data is loaded. SQLMesh will just run your query on the configured cadence and append whatever it gets into the table.
+
+!!! question "Should you use this model kind?"
+
+    Some patterns for data management, such as Data Vault, may rely on append-only tables. In this situation, `INCREMENTAL_UNMANAGED` is the correct type to use.
+
+    In most other situations, you probably want `INCREMENTAL_BY_TIME_RANGE` or `INCREMENTAL_BY_UNIQUE_KEY` because they give you much more control over how the data is loaded.
+
+Usage of the `INCREMENTAL_UNMANAGED` model kind is straightforward:
+
+```sql linenums="1" hl_lines="3"
+MODEL (
+  name db.events,
+  kind INCREMENTAL_UNMANAGED,
+);
+```
+
+Since it's unmanaged, it doesnt support the `batch_size` and `batch_concurrency` properties to control how data is loaded like the other incremental model types do.
+
+!!! warning "Only full restatements supported"
+
+    Similar to `INCREMENTAL_BY_PARTITION`, attempting to [restate](../plans.md#restatement-plans) an `INCREMENTAL_UNMANAGED` model will trigger a full restatement. That is, the model will be rebuilt from scratch rather than from a time slice you specify.
+
+    This is because an append-only table is inherently non-idempotent. Restating `INCREMENTAL_UNMANAGED` models may lead to data loss and should be performed with care.
