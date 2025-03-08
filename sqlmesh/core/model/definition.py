@@ -452,8 +452,6 @@ class _Model(ModelMeta, frozen=True):
         engine_adapter: t.Optional[EngineAdapter] = None,
         **kwargs: t.Any,
     ) -> t.List[exp.Expression]:
-        if "this_model" not in kwargs:
-            kwargs["this_model"] = self.fully_qualified_table
         return self._render_statements(
             self.on_virtual_update,
             start=start,

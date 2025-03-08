@@ -932,6 +932,9 @@ class SnapshotEvaluator:
                 deployability_index=deployability_index,
                 table_mapping=table_mapping,
                 runtime_stage=RuntimeStage.PROMOTING,
+                this_model=snapshot.qualified_view_name.table_for_environment(
+                    environment_naming_info, dialect=adapter.dialect
+                ),
             )
             _evaluation_strategy(snapshot, adapter).promote(
                 table_name=table_name,
