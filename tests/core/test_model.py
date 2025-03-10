@@ -322,7 +322,8 @@ def test_model_missing_audits(tmp_path: Path):
         )
 
         ctx = Context(
-            config=Config(linter=LinterConfig(enabled=True, warn_rules=["nomissingaudits"])), paths=tmp_path
+            config=Config(linter=LinterConfig(enabled=True, warn_rules=["nomissingaudits"])),
+            paths=tmp_path,
         )
         ctx.upsert_model(load_sql_based_model(expressions))
 
