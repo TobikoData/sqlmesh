@@ -932,6 +932,9 @@ class SnapshotEvaluator:
                 deployability_index=deployability_index,
                 table_mapping=table_mapping,
                 runtime_stage=RuntimeStage.PROMOTING,
+                this_model=snapshot.qualified_view_name.table_for_environment(
+                    environment_naming_info, dialect=adapter.dialect
+                ),
             )
             adapter.execute(snapshot.model.render_on_virtual_update(**render_kwargs))
 
