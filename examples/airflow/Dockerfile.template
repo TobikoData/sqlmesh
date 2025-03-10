@@ -64,7 +64,7 @@ RUN pip install apache-airflow-providers-databricks==6.4.0 \
 
 # Install Deps
 USER root
-ADD setup.py /opt/sqlmesh/setup.py
+ADD pyproject.toml /opt/sqlmesh/pyproject.toml
 RUN mkdir /opt/sqlmesh/sqlmesh && touch /opt/sqlmesh/sqlmesh/__init__.py && chown -R airflow /opt/sqlmesh
 
 ADD examples/custom_materializations /opt/custom_materializations
