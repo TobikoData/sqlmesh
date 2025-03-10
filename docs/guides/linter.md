@@ -70,10 +70,10 @@ Here are all of SQLMesh's built-in linting rules:
 
 | Name                       | Check type  | Explanation                                                                                                              |
 | -------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------ |
-| ambiguousorinvalidcolumn  | Correctness | SQLMesh found duplicate columns or was unable to determine whether a column is duplicated or not                         |
-| invalidselectstarexpansion | Correctness | The query's top-level selection may be `SELECT *`, but only if SQLMesh can expand the `SELECT *` into individual columns |
-| noselectstar               | Stylistic   | The query's top-level selection may not be `SELECT *`, even if SQLMesh can expand the `SELECT *` into individual columns |
-| nomissingaudits             | Governance  | SQLMesh did not find any `audits` in the model's configuration to test data quality.                                                 |
+| `ambiguousorinvalidcolumn`  | Correctness | SQLMesh found duplicate columns or was unable to determine whether a column is duplicated or not                         |
+| `invalidselectstarexpansion` | Correctness | The query's top-level selection may be `SELECT *`, but only if SQLMesh can expand the `SELECT *` into individual columns |
+| `noselectstar`               | Stylistic   | The query's top-level selection may not be `SELECT *`, even if SQLMesh can expand the `SELECT *` into individual columns |
+| `nomissingaudits`             | Governance  | SQLMesh did not find any `audits` in the model's configuration to test data quality.                                                 |
 
 ### User-defined rules
 
