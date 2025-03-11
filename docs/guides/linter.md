@@ -1,5 +1,7 @@
 # Linter guide
 
+![Linter](linter_example.png)
+
 Linting is a powerful tool for improving code quality and consistency. It enables you to automatically validate model definition, ensuring they adhere to your team's best practices.
 
 When a SQLMesh command is executed and the project is loaded, each model's code is checked for compliance with a set of rules you choose.
@@ -68,10 +70,10 @@ Here are all of SQLMesh's built-in linting rules:
 
 | Name                       | Check type  | Explanation                                                                                                              |
 | -------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------ |
-| ambiguousorinvalidcolumn  | Correctness | SQLMesh found duplicate columns or was unable to determine whether a column is duplicated or not                         |
-| invalidselectstarexpansion | Correctness | The query's top-level selection may be `SELECT *`, but only if SQLMesh can expand the `SELECT *` into individual columns |
-| noselectstar               | Stylistic   | The query's top-level selection may not be `SELECT *`, even if SQLMesh can expand the `SELECT *` into individual columns |
-
+| `ambiguousorinvalidcolumn`  | Correctness | SQLMesh found duplicate columns or was unable to determine whether a column is duplicated or not                         |
+| `invalidselectstarexpansion` | Correctness | The query's top-level selection may be `SELECT *`, but only if SQLMesh can expand the `SELECT *` into individual columns |
+| `noselectstar`               | Stylistic   | The query's top-level selection may not be `SELECT *`, even if SQLMesh can expand the `SELECT *` into individual columns |
+| `nomissingaudits`             | Governance  | SQLMesh did not find any `audits` in the model's configuration to test data quality.                                                 |
 
 ### User-defined rules
 
@@ -211,7 +213,7 @@ MODEL(
 
 Linting rule violations raise an error by default, preventing the project from running until the violation is addressed.
 
-You may specify that a rule's violation should not error and only log a warning by specifying it in the `warning_rules` key instead of the `rules` key.
+You may specify that a rule's violation should not error and only log a warning by specifying it in the `warn_rules` key instead of the `rules` key.
 
 === "YAML"
 
@@ -221,7 +223,7 @@ You may specify that a rule's violation should not error and only log a warning 
       # error if `ambiguousorinvalidcolumn` rule violated
       rules: ["ambiguousorinvalidcolumn"]
       # but only warn if "invalidselectstarexpansion" is violated
-      warning_rules: ["invalidselectstarexpansion"]
+      warn_rules: ["invalidselectstarexpansion"]
     ```
 
 === "Python"
@@ -235,9 +237,9 @@ You may specify that a rule's violation should not error and only log a warning 
             # error if `ambiguousorinvalidcolumn` rule violated
             rules=["ambiguousorinvalidcolumn"],
             # but only warn if "invalidselectstarexpansion" is violated
-            warning_rules=["invalidselectstarexpansion"],
+            warn_rules=["invalidselectstarexpansion"],
         )
     )
     ```
 
-SQLMesh will raise an error if the same rule is included in more than one of the `rules`, `warning_rules`, and `ignored_rules` keys since they should be mutually exclusive.
+SQLMesh will raise an error if the same rule is included in more than one of the `rules`, `warn_rules`, and `ignored_rules` keys since they should be mutually exclusive.
