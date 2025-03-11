@@ -1112,7 +1112,7 @@ As demonstrated in these examples, the `environment_naming_info` is available wi
 
 SQLMesh provides a linter that checks for potential issues in your models' code. Enable it and specify which linting rules to apply in the configuration file's `linter` key.
 
-Learn more about linting configuration on the [linting concepts page](../concepts/linter.md).
+Learn more about linting configuration in the [linting guide](./linter.md).
 
 ### Debug mode
 
