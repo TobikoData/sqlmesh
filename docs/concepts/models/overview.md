@@ -447,7 +447,7 @@ to `false` causes SQLMesh to disable query canonicalization & simplification. Th
 :   Whether the model's query will be validated at compile time. This attribute is `false` by default. Setting it to `true` causes SQLMesh to raise an error instead of emitting warnings. This will display invalid columns in your SQL statements along with models containing `SELECT *` that cannot be automatically expanded to list out all columns. This ensures SQL is verified locally before time and money are spent running the SQL in your data warehouse.
 
 !!! warning
-    This flag is deprecated as of v.0.159.7+ in favor of the [linter](../linter.md). To preserve validation during compilation, the [built-in rules](../linter.md#built-in) that check for correctness should be [configured](../../guides/configuration.md#linter) to error severity.
+    This flag is deprecated as of v.0.159.7+ in favor of the [linter](../../guides/linter.md). To preserve validation during compilation, the [built-in rules](../../guides/linter.md#built-in-rules) that check for correctness should be [configured](../../guides/linter.md#rule-violation-behavior) to error severity.
 
 ### ignored_rules
 : Specifies which linter rules should be ignored/excluded for this model.
