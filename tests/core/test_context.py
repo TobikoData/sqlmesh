@@ -1763,7 +1763,6 @@ def test_model_linting(tmp_path: pathlib.Path, sushi_context) -> None:
     def model3_entrypoint(evaluator: MacroEvaluator) -> str:
         return "select * from model1"
 
-    # breakpoint()
     model3 = model.get_registry()["memory.sushi.model3"].model(
         module_path=Path("."), path=Path(".")
     )
