@@ -47,7 +47,7 @@ from sqlmesh.utils.date import (
     to_timestamp,
     yesterday_ds,
 )
-from sqlmesh.utils.errors import ConfigError, SQLMeshError, LinterError
+from sqlmesh.utils.errors import ConfigError, SQLMeshError, LinterError, PlanError
 from sqlmesh.utils.metaprogramming import Executable
 from tests.utils.test_helpers import use_terminal_console
 from tests.utils.test_filesystem import create_temp_file
@@ -1793,3 +1793,23 @@ def test_model_linting(tmp_path: pathlib.Path, sushi_context) -> None:
     )
 
     sushi_context.upsert_model(model5)
+
+
+def test_plan_selector_expression_no_match(sushi_context: Context) -> None:
+    with pytest.raises(
+        PlanError,
+        match="Selector did not return any models. Please check your model selection and try again.",
+    ):
+        sushi_context.plan("dev", select_models=["*missing*"])
+
+    with pytest.raises(
+        PlanError,
+        match="Selector did not return any models. Please check your model selection and try again.",
+    ):
+        sushi_context.plan("dev", backfill_models=["*missing*"])
+
+    with pytest.raises(
+        PlanError,
+        match="Selector did not return any models. Please check your model selection and try again.",
+    ):
+        sushi_context.plan("prod", restate_models=["*missing*"])
