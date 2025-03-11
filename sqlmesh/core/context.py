@@ -1341,6 +1341,13 @@ class GenericContext(BaseContext, t.Generic[C]):
         if restate_models is not None:
             expanded_restate_models = model_selector.expand_model_selections(restate_models)
 
+        if (restate_models is not None and not expanded_restate_models) or (
+            backfill_models is not None and not backfill_models
+        ):
+            raise PlanError(
+                "Selector did not return any models. Please check your model selection and try again."
+            )
+
         snapshots = self._snapshots(models_override)
         context_diff = self._context_diff(
             environment or c.PROD,
