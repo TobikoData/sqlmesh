@@ -1676,7 +1676,9 @@ def test_model_linting(tmp_path: pathlib.Path, sushi_context) -> None:
     # Case: Ensure NoSelectStar only raises for top-level SELECTs, new model shouldn't raise
     # and thus should also be cached
     model2 = load_sql_based_model(
-        d.parse("MODEL (name test2); SELECT col FROM (SELECT * FROM tbl)")
+        d.parse(
+            "MODEL (name test2, audits (at_least_one(column := col))); SELECT col FROM (SELECT * FROM tbl)"
+        )
     )
     ctx.upsert_model(model2)
 
@@ -1739,7 +1741,7 @@ def test_model_linting(tmp_path: pathlib.Path, sushi_context) -> None:
     create_temp_file(
         tmp_path,
         pathlib.Path(pathlib.Path("models"), "test2.sql"),
-        "MODEL(name test2, ignored_rules ['noselectstar']); SELECT * FROM (SELECT 1 AS col);",
+        "MODEL(name test2, audits (at_least_one(column := col)), ignored_rules ['noselectstar']); SELECT * FROM (SELECT 1 AS col);",
     )
 
     ctx.load()
@@ -1777,7 +1779,12 @@ def test_model_linting(tmp_path: pathlib.Path, sushi_context) -> None:
         with pytest.raises(LinterError, match=config_err):
             sushi_context.upsert_model(python_model)
 
-    @model(name="memory.sushi.model5", columns={"col": "int"}, owner="test")
+    @model(
+        name="memory.sushi.model5",
+        columns={"col": "int"},
+        owner="test",
+        audits=[("at_least_one", {"column": "col"})],
+    )
     def model5_entrypoint(context, **kwargs):
         yield pd.DataFrame({"col": []})
 

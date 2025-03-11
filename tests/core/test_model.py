@@ -307,6 +307,32 @@ def test_model_qualification(tmp_path: Path):
         )
 
 
+@use_terminal_console
+def test_model_missing_audits(tmp_path: Path):
+    with patch.object(get_console(), "log_warning") as mock_logger:
+        expressions = d.parse(
+            """
+            MODEL (
+                name db.table,
+                kind FULL,
+            );
+
+            SELECT a
+            """
+        )
+
+        ctx = Context(
+            config=Config(linter=LinterConfig(enabled=True, warn_rules=["nomissingaudits"])),
+            paths=tmp_path,
+        )
+        ctx.upsert_model(load_sql_based_model(expressions))
+
+        assert (
+            """Model `audits` must be configured to test data quality."""
+            in mock_logger.call_args[0][0]
+        )
+
+
 @pytest.mark.parametrize(
     "partition_by_input, partition_by_output, output_dialect, expected_exception",
     [
