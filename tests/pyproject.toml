@@ -19,6 +19,7 @@ build-backend = "setuptools.build_meta"
 sqlmesh_tests = ""
 
 [tool.setuptools_scm]
+root = "../"
 version_file = "_version.py"
 fallback_version = "0.0.0"
 local_scheme = "no-local-version"
