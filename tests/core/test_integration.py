@@ -1429,6 +1429,58 @@ def test_forward_only_precedence_over_indirect_non_breaking(init_and_plan_contex
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_breaking_only_impacts_immediate_children(init_and_plan_context: t.Callable):
+    context, plan = init_and_plan_context("examples/sushi")
+    context.apply(plan)
+
+    breaking_model = context.get_model("sushi.orders")
+    breaking_model = breaking_model.copy(update={"stamp": "force new version"})
+    context.upsert_model(breaking_model)
+    breaking_snapshot = context.get_snapshot(breaking_model, raise_if_missing=True)
+
+    non_breaking_model = context.get_model("sushi.waiter_revenue_by_day")
+    context.upsert_model(add_projection_to_model(t.cast(SqlModel, non_breaking_model)))
+    non_breaking_snapshot = context.get_snapshot(non_breaking_model, raise_if_missing=True)
+    top_waiter_snapshot = context.get_snapshot("sushi.top_waiters", raise_if_missing=True)
+
+    plan_builder = context.plan_builder("dev", skip_tests=True, enable_preview=False)
+    plan_builder.set_choice(breaking_snapshot, SnapshotChangeCategory.BREAKING)
+    plan = plan_builder.build()
+    assert (
+        plan.context_diff.snapshots[breaking_snapshot.snapshot_id].change_category
+        == SnapshotChangeCategory.BREAKING
+    )
+    assert (
+        plan.context_diff.snapshots[non_breaking_snapshot.snapshot_id].change_category
+        == SnapshotChangeCategory.NON_BREAKING
+    )
+    assert (
+        plan.context_diff.snapshots[top_waiter_snapshot.snapshot_id].change_category
+        == SnapshotChangeCategory.INDIRECT_NON_BREAKING
+    )
+    assert plan.start == to_timestamp("2023-01-01")
+    assert not any(i.snapshot_id == top_waiter_snapshot.snapshot_id for i in plan.missing_intervals)
+
+    context.apply(plan)
+    assert (
+        not context.plan_builder("dev", skip_tests=True, enable_preview=False)
+        .build()
+        .requires_backfill
+    )
+
+    # Deploy everything to prod.
+    plan = context.plan_builder("prod", skip_tests=True).build()
+    assert not plan.missing_intervals
+
+    context.apply(plan)
+    assert (
+        not context.plan_builder("prod", skip_tests=True, enable_preview=False)
+        .build()
+        .requires_backfill
+    )
+
+
+@time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_run_with_select_models(
     init_and_plan_context: t.Callable,
 ):
