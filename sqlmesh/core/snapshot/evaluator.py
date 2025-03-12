@@ -667,7 +667,9 @@ class SnapshotEvaluator:
                     physical_properties=rendered_physical_properties,
                 )
 
-        with adapter.transaction(), adapter.session(snapshot.model.session_properties):
+        with adapter.transaction(), adapter.session(
+            snapshot.model.render_session_properties(**render_statements_kwargs)
+        ):
             wap_id: t.Optional[str] = None
             if (
                 table_name
@@ -766,7 +768,9 @@ class SnapshotEvaluator:
             deployability_index=deployability_index,
         )
 
-        with adapter.transaction(), adapter.session(snapshot.model.session_properties):
+        with adapter.transaction(), adapter.session(
+            snapshot.model.render_session_properties(**create_render_kwargs)
+        ):
             rendered_physical_properties = snapshot.model.render_physical_properties(
                 **create_render_kwargs
             )
@@ -886,7 +890,9 @@ class SnapshotEvaluator:
                 runtime_stage=RuntimeStage.CREATING,
                 deployability_index=deployability_index,
             )
-            with adapter.transaction(), adapter.session(snapshot.model.session_properties):
+            with adapter.transaction(), adapter.session(
+                snapshot.model.render_session_properties(**render_kwargs)
+            ):
                 self._execute_create(
                     snapshot=snapshot,
                     table_name=target_table_name,
@@ -917,12 +923,6 @@ class SnapshotEvaluator:
             view_name = snapshot.qualified_view_name.for_environment(
                 environment_naming_info, dialect=adapter.dialect
             )
-            _evaluation_strategy(snapshot, adapter).promote(
-                table_name=table_name,
-                view_name=view_name,
-                model=snapshot.model,
-                environment=environment_naming_info.name,
-            )
             render_kwargs: t.Dict[str, t.Any] = dict(
                 start=start,
                 end=end,
@@ -932,6 +932,13 @@ class SnapshotEvaluator:
                 deployability_index=deployability_index,
                 table_mapping=table_mapping,
                 runtime_stage=RuntimeStage.PROMOTING,
+            )
+            _evaluation_strategy(snapshot, adapter).promote(
+                table_name=table_name,
+                view_name=view_name,
+                model=snapshot.model,
+                environment=environment_naming_info.name,
+                **render_kwargs,
             )
             adapter.execute(snapshot.model.render_on_virtual_update(**render_kwargs))
 
@@ -1366,12 +1373,22 @@ class PromotableStrategy(EvaluationStrategy):
     ) -> None:
         is_prod = environment == c.PROD
         logger.info("Updating view '%s' to point at table '%s'", view_name, table_name)
+        render_kwargs: t.Dict[str, t.Any] = dict(
+            start=kwargs.get("start"),
+            end=kwargs.get("end"),
+            execution_time=kwargs.get("execution_time"),
+            engine_adapter=kwargs.get("engine_adapter"),
+            snapshots=kwargs.get("snapshots"),
+            deployability_index=kwargs.get("deployability_index"),
+            table_mapping=kwargs.get("table_mapping"),
+            runtime_stage=kwargs.get("runtime_stage"),
+        )
         self.adapter.create_view(
             view_name,
             exp.select("*").from_(table_name, dialect=self.adapter.dialect),
             table_description=model.description if is_prod else None,
             column_descriptions=model.column_descriptions if is_prod else None,
-            view_properties=model.virtual_properties,
+            view_properties=model.render_virtual_properties(**render_kwargs),
         )
 
     def demote(self, view_name: str, **kwargs: t.Any) -> None:
