@@ -1,4 +1,9 @@
 import pytest
+from pathlib import Path
+from sqlmesh.cli.example_project import init_example_project
+from sqlmesh.core.config import Config, ModelDefaultsConfig
+from sqlmesh.core.context import Context
+from sqlmesh.utils.errors import ConfigError
 
 
 @pytest.fixture
@@ -7,7 +12,7 @@ def sample_models(request):
         "sql": {
             "contents": """
 MODEL (
-    name sushi.test_model,
+    name test_schema.test_model,
     kind FULL,
 );
 
@@ -21,7 +26,7 @@ import pandas as pd
 from sqlmesh import ExecutionContext, model
 
 @model(
-    "sushi.test_model",
+    "test_schema.test_model",
     kind="FULL",
     columns={
         "id": "int",
@@ -39,7 +44,7 @@ def execute(
         },
         "external": {
             "contents": """
-- name: sushi.test_model
+- name: test_schema.test_model
   columns:
     id: INT
 """,
@@ -50,52 +55,154 @@ def execute(
     return [v for k, v in models.items() if k in requested_models]
 
 
-def write_model(contents, path):
-    with open(path, mode="w", encoding="utf8") as f:
-        f.write(contents)
-
-
-@pytest.mark.parametrize("sample_models", ["sql", "python", "external"], indirect=True)
-def test_duplicate_model_names_same_kind(sample_models, init_and_plan_context):
-    def duplicate_model_path(fpath):
-        from pathlib import Path
-
-        return Path(fpath).parent / ("duplicate" + Path(fpath).suffix)
-
-    model = sample_models[0]
-    print(model)
-    context, _ = init_and_plan_context("examples/sushi")
-
-    write_model(model["contents"], context.path / model["path"])
-    write_model(model["contents"], context.path / duplicate_model_path(model["path"]))
-
-    with pytest.raises(
-        ValueError,
-        match=r'Duplicate key \'"memory"."sushi"."test_model"\' found in UniqueKeyDict<models>. Call dict.update\(\.\.\.\) if this is intentional.',
-    ):
-        context.load()
-
-
 @pytest.mark.parametrize(
     "sample_models",
     ["sql_python", "python_external", "sql_external", "sql_python_external"],
     indirect=True,
 )
-def test_duplicate_model_names_different_kind(sample_models, init_and_plan_context):
+def test_duplicate_model_names_different_kind(tmp_path: Path, sample_models):
+    """Test different (SQL, Python and external) models with duplicate model names raises ValueError."""
     model_1, *models = sample_models
     if len(models) == 2:
         model_2, model_3 = models
     else:
         model_2, model_3 = models[0], None
-    context, _ = init_and_plan_context("examples/sushi")
 
-    write_model(model_1["contents"], context.path / model_1["path"])
-    write_model(model_2["contents"], context.path / model_2["path"])
+    init_example_project(tmp_path, dialect="duckdb")
+    config = Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))
+
+    path_1: Path = tmp_path / model_1["path"]
+    path_2: Path = tmp_path / model_2["path"]
+
+    path_1.parent.mkdir(parents=True, exist_ok=True)
+    path_1.write_text(model_1["contents"])
+    path_2.parent.mkdir(parents=True, exist_ok=True)
+    path_2.write_text(model_2["contents"])
 
     if model_3:
-        write_model(model_3["contents"], context.path / model_3["path"])
+        path_3: Path = tmp_path / model_3["path"]
+        path_3.parent.mkdir(parents=True, exist_ok=True)
+        path_3.write_text(model_3["contents"])
 
     with pytest.raises(
-        ValueError, match=r'Duplicate model name\(s\) found: "memory"."sushi"."test_model".'
+        ValueError, match=r'Duplicate model name\(s\) found: "memory"."test_schema"."test_model".'
     ):
-        context.load()
+        Context(paths=tmp_path, config=config)
+
+
+@pytest.mark.parametrize("sample_models", ["sql", "external"], indirect=True)
+def test_duplicate_model_names_same_kind(tmp_path: Path, sample_models):
+    """Test same (SQL and external) models with duplicate model names raises ValueError."""
+
+    def duplicate_model_path(fpath):
+        return Path(fpath).parent / ("duplicate" + Path(fpath).suffix)
+
+    model = sample_models[0]
+    init_example_project(tmp_path, dialect="duckdb")
+    config = Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))
+
+    path_1: Path = tmp_path / model["path"]
+    path_1.parent.mkdir(parents=True, exist_ok=True)
+    path_1.write_text(model["contents"])
+
+    duplicate_fpath = tmp_path / duplicate_model_path(model["path"])
+    duplicate_fpath.write_text(model["contents"])
+
+    with pytest.raises(
+        ValueError,
+        match=r'Duplicate key \'"memory"."test_schema"."test_model"\' found in UniqueKeyDict<models>. Call dict.update\(\.\.\.\) if this is intentional.',
+    ):
+        Context(paths=tmp_path, config=config)
+
+
+@pytest.mark.isolated
+def test_duplicate_python_model_names_raise_error(tmp_path: Path) -> None:
+    """Test python models with duplicate model names raises ConfigError if the functions are not identical."""
+    init_example_project(tmp_path, dialect="duckdb")
+    config = Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))
+    model_name = "test_schema.test_model"
+
+    path_a = tmp_path / "models/test_schema/test_model_a.py"
+    path_b = tmp_path / "models/test_schema/test_model_b.py"
+
+    model_payload_a = f"""from sqlmesh import model
+@model(
+    name="{model_name}",
+    columns={{'"COL"': "int"}},
+)
+def my_model(context, **kwargs):
+    pass"""
+
+    model_payload_b = f"""import typing as t
+import pandas as pd
+from sqlmesh import ExecutionContext, model
+
+@model(
+    name="{model_name}",
+    kind="FULL",
+    columns={{
+        "id": "int",
+    }}
+)
+def execute(
+    context: ExecutionContext,
+    **kwargs: t.Any,
+) -> pd.DataFrame:
+    return pd.DataFrame([
+        {{"id": 1}}
+    ])
+"""
+
+    path_a.parent.mkdir(parents=True, exist_ok=True)
+    path_a.write_text(model_payload_a)
+    path_b.write_text(model_payload_b)
+
+    with pytest.raises(
+        ConfigError,
+        match=r"Failed to load model definition at '.*'.\nDuplicate key 'test_schema.test_model' found in UniqueKeyDict<python_models>.",
+    ):
+        Context(paths=tmp_path, config=config)
+
+
+@pytest.mark.slow
+def test_duplicate_python_model_names_no_error(tmp_path: Path) -> None:
+    """Test python models with duplicate model names raises no error if the functions are identical."""
+    init_example_project(tmp_path, dialect="duckdb")
+    config = Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))
+    model_name = "test_schema.test_model"
+
+    path_a = tmp_path / "models/test_schema1/test_model_a.py"
+    path_b = tmp_path / "models/test_schema2/test_model_b.py"
+
+    model_payload_a = f"""from sqlmesh import model
+@model(
+    name="{model_name}",
+    columns={{'"COL"': "int"}},
+    description="model_payload_a",
+)
+def my_model(context, **kwargs):
+    pass"""
+
+    model_payload_b = f"""from sqlmesh import model
+@model(
+    name="{model_name}",
+    columns={{'"COL"': "int"}},
+    description="model_payload_b",
+)
+def my_model(context, **kwargs):
+    pass"""
+
+    path_a.parent.mkdir(parents=True, exist_ok=True)
+    path_b.parent.mkdir(parents=True, exist_ok=True)
+    path_a.write_text(model_payload_a)
+    context = Context(paths=tmp_path, config=config)
+    context.load()
+    model = context.get_model(f"{model_name}")
+    assert model.description == "model_payload_a"
+    path_b.write_text(model_payload_b)
+    context.load()  # raise no error to duplicate key if the functions are identical (by registry class_method)
+    model = context.get_model(f"{model_name}")
+    assert (
+        model.description != "model_payload_b"
+    )  # model will not be overwritten by model_payload_b
+    assert model.description == "model_payload_a"

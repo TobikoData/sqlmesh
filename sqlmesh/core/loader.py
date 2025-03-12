@@ -400,9 +400,7 @@ class SqlMeshLoader(Loader):
         external_models = self._load_external_models(audits, gateway)
         python_models = self._load_python_models(macros, jinja_macros, audits, signals)
 
-        all_model_names = (
-            list(sql_models.keys()) + list(external_models.keys()) + list(python_models.keys())
-        )
+        all_model_names = list(sql_models) + list(external_models) + list(python_models)
         duplicates = [name for name, count in Counter(all_model_names).items() if count > 1]
         if duplicates:
             raise ValueError(f"Duplicate model name(s) found: {', '.join(duplicates)}.")
