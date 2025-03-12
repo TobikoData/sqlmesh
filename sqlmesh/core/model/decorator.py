@@ -18,7 +18,9 @@ from sqlmesh.core.model.definition import (
     create_sql_model,
     create_models_from_blueprints,
     get_model_name,
+    parse_defaults_properties,
     render_meta_fields,
+    render_model_defaults,
 )
 from sqlmesh.core.model.kind import ModelKindName, _ModelKind
 from sqlmesh.utils import registry_decorator, DECORATOR_RETURN_TYPE
@@ -159,8 +161,25 @@ class model(registry_decorator):
         if isinstance(rendered_name, exp.Expression):
             rendered_fields["name"] = rendered_name.sql(dialect=dialect)
 
+        rendered_defaults = (
+            render_model_defaults(
+                defaults=defaults,
+                module_path=module_path,
+                macros=macros,
+                jinja_macros=jinja_macros,
+                variables=variables,
+                path=path,
+                dialect=dialect,
+                default_catalog=default_catalog,
+            )
+            if defaults
+            else {}
+        )
+
+        rendered_defaults = parse_defaults_properties(rendered_defaults, dialect=dialect)
+
         common_kwargs = {
-            "defaults": defaults,
+            "defaults": rendered_defaults,
             "path": path,
             "time_column_format": time_column_format,
             "python_env": serialize_env(env, path=module_path),

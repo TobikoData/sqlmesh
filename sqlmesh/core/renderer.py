@@ -110,14 +110,16 @@ class BaseExpressionRenderer:
 
         this_model = kwargs.pop("this_model", None)
 
+        this_snapshot = (snapshots or {}).get(self._model_fqn) if self._model_fqn else None
         if not this_model and self._model_fqn:
-            this_snapshot = (snapshots or {}).get(self._model_fqn)
             this_model = self._resolve_table(
                 self._model_fqn,
                 snapshots={self._model_fqn: this_snapshot} if this_snapshot else None,
                 deployability_index=deployability_index,
                 table_mapping=table_mapping,
             )
+        if this_snapshot and (kind := this_snapshot.model_kind_name):
+            kwargs["model_kind_name"] = kind.name
 
         expressions = [self._expression]
 
