@@ -369,3 +369,37 @@ def test_compare_nested_values_in_table_diff(ctx: TestContext):
 
     ctx.engine_adapter.drop_table(src_table)
     ctx.engine_adapter.drop_table(target_table)
+
+
+def test_column_types(ctx: TestContext):
+    model_name = ctx.table("test")
+    sqlmesh = ctx.create_context()
+
+    sqlmesh.upsert_model(
+        load_sql_based_model(
+            d.parse(
+                f"""
+                MODEL (
+                    name {model_name},
+                );
+
+                SELECT
+                    RANGE('01-01-1900'::DATE, '01-01-1902'::DATE) AS col1,
+                    JSON '{{"id": 10}}' AS col2,
+                    STRUCT([PARSE_JSON('{{"id": 10}}')] AS arr) AS col3;
+                """
+            )
+        )
+    )
+
+    sqlmesh.plan(auto_apply=True, no_prompts=True)
+
+    columns = sqlmesh.engine_adapter.columns(model_name)
+
+    assert columns["col1"].is_type("RANGE<DATE>")
+    assert columns["col2"].is_type("JSON")
+
+    col3 = columns["col3"]
+    coldef = col3.find(exp.ColumnDef)
+    assert col3.is_type("STRUCT")
+    assert coldef and coldef.kind and coldef.kind.is_type("ARRAY<JSON>")
