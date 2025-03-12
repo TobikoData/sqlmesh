@@ -26,6 +26,8 @@ from rich.table import Table
 from rich.tree import Tree
 
 from sqlmesh.core.environment import EnvironmentNamingInfo
+from sqlmesh.core.linter.rule import RuleViolation
+from sqlmesh.core.model import Model
 from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotChangeCategory,
@@ -319,6 +321,12 @@ class Console(abc.ABC):
             ]
         return tree
 
+    @abc.abstractmethod
+    def show_linter_violations(
+        self, violations: t.List[RuleViolation], model: Model, is_error: bool = False
+    ) -> None:
+        """Prints all linter violations depending on their severity"""
+
 
 class NoopConsole(Console):
     def start_plan_evaluation(self, plan: EvaluatablePlan) -> None:
@@ -479,6 +487,11 @@ class NoopConsole(Console):
         pass
 
     def print_environments(self, environments_summary: t.Dict[str, int]) -> None:
+        pass
+
+    def show_linter_violations(
+        self, violations: t.List[RuleViolation], model: Model, is_error: bool = False
+    ) -> None:
         pass
 
 
@@ -1547,6 +1560,18 @@ class TerminalConsole(Console):
             k: f"[{SNAPSHOT_CHANGE_CATEGORY_STR[k]}] {v}" for k, v in choices.items()
         }
         return labeled_choices
+
+    def show_linter_violations(
+        self, violations: t.List[RuleViolation], model: Model, is_error: bool = False
+    ) -> None:
+        severity = "errors" if is_error else "warnings"
+        violations_msg = "\n".join(f" - {violation}" for violation in violations)
+        msg = f"Linter {severity} for {model._path}:\n{violations_msg}"
+
+        if is_error:
+            self.log_error(msg)
+        else:
+            self.log_warning(msg)
 
 
 def add_to_layout_widget(target_widget: LayoutWidget, *widgets: widgets.Widget) -> LayoutWidget:
