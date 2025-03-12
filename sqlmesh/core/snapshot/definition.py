@@ -481,6 +481,12 @@ class SnapshotTableInfo(PydanticModel, SnapshotInfoMixin, frozen=True):
     def __lt__(self, other: SnapshotTableInfo) -> bool:
         return self.name < other.name
 
+    def __eq__(self, other: t.Any) -> bool:
+        return isinstance(other, SnapshotTableInfo) and self.fingerprint == other.fingerprint
+
+    def __hash__(self) -> int:
+        return hash((self.__class__, self.name, self.fingerprint))
+
     def table_name(self, is_deployable: bool = True) -> str:
         """Full table name pointing to the materialized location of the snapshot.
 
