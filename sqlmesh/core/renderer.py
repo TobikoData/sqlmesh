@@ -386,6 +386,7 @@ class ExpressionRenderer(BaseExpressionRenderer):
                 execution_time=execution_time,
                 snapshots=snapshots,
                 deployability_index=deployability_index,
+                table_mapping=table_mapping,
                 **kwargs,
             )
         except ParsetimeAdapterCallError:

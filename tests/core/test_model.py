@@ -13,6 +13,7 @@ from sqlglot import exp, parse_one
 from sqlglot.errors import ParseError
 from sqlglot.schema import MappingSchema
 from sqlmesh.cli.example_project import init_example_project, ProjectTemplate
+from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.model.kind import TimeColumn, ModelKindName
 
 from sqlmesh import CustomMaterialization, CustomKind
@@ -7843,6 +7844,7 @@ def test_model_on_virtual_update(make_snapshot: t.Callable):
     def resolve_parent_name(evaluator, name):
         return evaluator.resolve_table(name.name)
 
+    dialect = "postgres"
     virtual_update_statements = """
         CREATE OR REPLACE VIEW test_view FROM demo_db.table;
         GRANT SELECT ON VIEW @this_model TO ROLE owner_name;
@@ -7869,7 +7871,8 @@ def test_model_on_virtual_update(make_snapshot: t.Callable):
 
         on_virtual_update_end;
 
-    """
+    """,
+        default_dialect=dialect,
     )
 
     parent_expressions = d.parse(
@@ -7886,25 +7889,27 @@ def test_model_on_virtual_update(make_snapshot: t.Callable):
         JINJA_END;
         ON_VIRTUAL_UPDATE_END;
 
-    """
+    """,
+        default_dialect=dialect,
     )
 
-    model = load_sql_based_model(expressions)
-    parent = load_sql_based_model(parent_expressions)
+    model = load_sql_based_model(expressions, dialect=dialect)
+    parent = load_sql_based_model(parent_expressions, dialect=dialect)
 
     parent_snapshot = make_snapshot(parent)
     parent_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
-    version = parent_snapshot.version
 
     model_snapshot = make_snapshot(model)
     model_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
-    assert model.on_virtual_update == d.parse(virtual_update_statements)
+    assert model.on_virtual_update == d.parse(virtual_update_statements, default_dialect=dialect)
 
     assert parent.on_virtual_update == d.parse(
-        "JINJA_STATEMENT_BEGIN; GRANT SELECT ON VIEW {{this_model}} TO ROLE admin; JINJA_END;"
+        "JINJA_STATEMENT_BEGIN; GRANT SELECT ON VIEW {{this_model}} TO ROLE admin; JINJA_END;",
+        default_dialect=dialect,
     )
 
+    environment_naming_info = EnvironmentNamingInfo(name="dev")
     table_mapping = {model.fqn: "demo_db__dev.table", parent.fqn: "default__dev.parent"}
     snapshots = {
         parent_snapshot.name: parent_snapshot,
@@ -7912,7 +7917,11 @@ def test_model_on_virtual_update(make_snapshot: t.Callable):
     }
 
     rendered_on_virtual_update = model.render_on_virtual_update(
-        snapshots=snapshots, table_mapping=table_mapping
+        snapshots=snapshots,
+        table_mapping=table_mapping,
+        this_model=model_snapshot.qualified_view_name.table_for_environment(
+            environment_naming_info, dialect=dialect
+        ),
     )
 
     assert len(rendered_on_virtual_update) == 6
@@ -7920,15 +7929,17 @@ def test_model_on_virtual_update(make_snapshot: t.Callable):
         rendered_on_virtual_update[0].sql()
         == 'CREATE OR REPLACE VIEW "test_view" AS SELECT * FROM "demo_db__dev"."table" AS "table" /* demo_db.table */'
     )
+
     assert (
         rendered_on_virtual_update[1].sql()
-        == 'GRANT SELECT ON VIEW "demo_db__dev"."table" /* demo_db.table */ TO ROLE "owner_name"'
+        == 'GRANT SELECT ON VIEW "demo_db__dev"."table" TO ROLE "owner_name"'
     )
     assert (
         rendered_on_virtual_update[3].sql()
         == "GRANT REFERENCES, SELECT ON FUTURE VIEWS IN DATABASE demo_db TO ROLE owner_name"
     )
-    assert rendered_on_virtual_update[4].sql() == f'"sqlmesh__default"."parent__{version}"'
+
+    assert rendered_on_virtual_update[4].sql() == '"default__dev"."parent"'
 
     # When replace=false the table should remain as is
     assert (
@@ -7937,12 +7948,16 @@ def test_model_on_virtual_update(make_snapshot: t.Callable):
     )
 
     rendered_parent_on_virtual_update = parent.render_on_virtual_update(
-        snapshots=snapshots, table_mapping=table_mapping
+        snapshots=snapshots,
+        table_mapping=table_mapping,
+        this_model=parent_snapshot.qualified_view_name.table_for_environment(
+            environment_naming_info, dialect=dialect
+        ),
     )
     assert len(rendered_parent_on_virtual_update) == 1
     assert (
         rendered_parent_on_virtual_update[0].sql()
-        == 'GRANT SELECT ON VIEW "default__dev"."parent" /* parent */ TO ROLE "admin"'
+        == 'GRANT SELECT ON VIEW "default__dev"."parent" TO ROLE "admin"'
     )
 
 

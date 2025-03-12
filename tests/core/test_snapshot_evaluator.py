@@ -2919,6 +2919,10 @@ def test_create_pre_post_statements_python_model(
 def test_on_virtual_update_statements(mocker: MockerFixture, adapter_mock, make_snapshot):
     evaluator = SnapshotEvaluator(adapter_mock)
 
+    @macro()
+    def create_log_table(evaluator, view_name):
+        return f"CREATE OR REPLACE TABLE log_table AS SELECT '{view_name}' as fqn_this_model, '{evaluator.this_model}' as eval_this_model"
+
     model = load_sql_based_model(
         d.parse(
             """
@@ -2937,6 +2941,7 @@ def test_on_virtual_update_statements(mocker: MockerFixture, adapter_mock, make_
             GRANT SELECT ON VIEW test_schema.test_model TO ROLE admin;
             JINJA_END;
             GRANT REFERENCES, SELECT ON FUTURE VIEWS IN DATABASE demo_db TO ROLE owner_name;
+            @create_log_table(@this_model);
             ON_VIRTUAL_UPDATE_END;
 
             """
@@ -2986,6 +2991,12 @@ def test_on_virtual_update_statements(mocker: MockerFixture, adapter_mock, make_
     assert (
         on_virtual_update_calls[1].sql(dialect="postgres")
         == "GRANT REFERENCES, SELECT ON FUTURE VIEWS IN DATABASE demo_db TO ROLE owner_name"
+    )
+
+    # Validation that within the macro the environment specific view is used
+    assert (
+        on_virtual_update_calls[2].sql(dialect="postgres")
+        == 'CREATE OR REPLACE TABLE "log_table" AS SELECT \'"test_schema__test_env"."test_model" /* test_schema.test_model */\' AS "fqn_this_model", \'"test_schema__test_env"."test_model"\' AS "eval_this_model"'
     )
 
 
