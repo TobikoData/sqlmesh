@@ -51,7 +51,7 @@ import pandas as pd
 from sqlglot import Dialect, exp
 from sqlglot.helper import first
 from sqlglot.lineage import GraphHTML
-from sqlmesh.core.constants import Verbosity
+
 from sqlmesh.core import analytics
 from sqlmesh.core import constants as c
 from sqlmesh.core.analytics import python_api_analytics
@@ -114,7 +114,7 @@ from sqlmesh.core.test import (
     run_tests,
 )
 from sqlmesh.core.user import User
-from sqlmesh.utils import UniqueKeyDict
+from sqlmesh.utils import UniqueKeyDict, Verbosity
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import TimeLike, now_ds, to_timestamp, format_tz_datetime
 from sqlmesh.utils.errors import (

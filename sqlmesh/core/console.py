@@ -24,7 +24,7 @@ from rich.status import Status
 from rich.syntax import Syntax
 from rich.table import Table
 from rich.tree import Tree
-from sqlmesh.core.constants import Verbosity
+
 from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.linter.rule import RuleViolation
 from sqlmesh.core.model import Model
@@ -36,6 +36,7 @@ from sqlmesh.core.snapshot import (
 )
 from sqlmesh.core.test import ModelTest
 from sqlmesh.utils import rich as srich
+from sqlmesh.utils import Verbosity
 from sqlmesh.utils.concurrency import NodeExecutionFailedError
 from sqlmesh.utils.date import time_like_to_str, to_date, yesterday_ds
 from sqlmesh.utils.errors import (

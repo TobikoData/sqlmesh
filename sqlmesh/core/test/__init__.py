@@ -3,7 +3,7 @@ from __future__ import annotations
 import pathlib
 import typing as t
 import unittest
-from sqlmesh.core.constants import Verbosity
+
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.model import Model
 from sqlmesh.core.test.definition import ModelTest as ModelTest, generate_test as generate_test
@@ -14,7 +14,7 @@ from sqlmesh.core.test.discovery import (
     load_model_test_file as load_model_test_file,
 )
 from sqlmesh.core.test.result import ModelTextTestResult as ModelTextTestResult
-from sqlmesh.utils import UniqueKeyDict
+from sqlmesh.utils import UniqueKeyDict, Verbosity
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.config.loader import C
