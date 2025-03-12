@@ -1746,7 +1746,7 @@ def test_indirectly_modified_forward_only_model(make_snapshot, mocker: MockerFix
 
     assert updated_snapshot_a.change_category == SnapshotChangeCategory.BREAKING
     assert updated_snapshot_b.change_category == SnapshotChangeCategory.FORWARD_ONLY
-    assert updated_snapshot_c.change_category == SnapshotChangeCategory.INDIRECT_BREAKING
+    assert updated_snapshot_c.change_category == SnapshotChangeCategory.FORWARD_ONLY
     assert updated_snapshot_d.change_category == SnapshotChangeCategory.INDIRECT_BREAKING
 
     deployability_index = DeployabilityIndex.create(
