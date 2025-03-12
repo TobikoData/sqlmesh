@@ -231,7 +231,9 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
     ) -> t.Dict[str, exp.DataType]:
         """Fetches column names and types for the target table."""
 
-        def dtype_to_sql(dtype: t.Optional[StandardSqlDataType]) -> str:
+        def dtype_to_sql(
+            dtype: t.Optional[StandardSqlDataType], field: t.Optional[bigquery.SchemaField] = None
+        ) -> str:
             assert dtype
 
             kind = dtype.type_kind
@@ -249,7 +251,16 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
                 )
                 return f"STRUCT<{fields}>"
             if kind.name == "TYPE_KIND_UNSPECIFIED":
-                return "JSON"
+                if not field:
+                    return "UNKNOWN"
+
+                field_type = field.field_type
+
+                if field_type == "RANGE":
+                    return f"RANGE<{field.range_element_type.element_type}>"
+
+                return field_type
+
             return kind.name
 
         def create_mapping_schema(
@@ -257,7 +268,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
         ) -> t.Dict[str, exp.DataType]:
             return {
                 field.name: exp.DataType.build(
-                    dtype_to_sql(field.to_standard_sql().type), dialect=self.dialect
+                    dtype_to_sql(field.to_standard_sql().type, field), dialect=self.dialect
                 )
                 for field in schema
             }
