@@ -5,7 +5,7 @@ import typing as t
 from langchain import LLMChain, PromptTemplate
 from langchain.chat_models import ChatOpenAI
 
-from sqlmesh.core.constants import Verbosity
+from sqlmesh.utils import Verbosity
 from sqlmesh.core.model import Model
 
 _QUERY_PROMPT_TEMPLATE = """Given an input request, create a syntactically correct {dialect} SQL query.

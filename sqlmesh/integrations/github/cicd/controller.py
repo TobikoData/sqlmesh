@@ -15,10 +15,9 @@ from typing import List
 import requests
 from hyperscript import Element, h
 from sqlglot.helper import seq_get
-from sqlmesh.core.constants import Verbosity
+
 from sqlmesh.core import constants as c
 from sqlmesh.core.console import SNAPSHOT_CHANGE_CATEGORY_STR, get_console, MarkdownConsole
-
 from sqlmesh.core.context import Context
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.plan import Plan, PlanBuilder
@@ -31,7 +30,7 @@ from sqlmesh.core.snapshot.definition import (
 )
 from sqlmesh.core.user import User
 from sqlmesh.integrations.github.cicd.config import GithubCICDBotConfig
-from sqlmesh.utils import word_characters_only
+from sqlmesh.utils import word_characters_only, Verbosity
 from sqlmesh.utils.concurrency import NodeExecutionFailedError
 from sqlmesh.utils.date import now
 from sqlmesh.utils.errors import (

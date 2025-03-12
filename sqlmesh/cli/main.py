@@ -13,7 +13,7 @@ from sqlmesh.cli import options as opt
 from sqlmesh.cli.example_project import ProjectTemplate, init_example_project
 from sqlmesh.core.analytics import cli_analytics
 from sqlmesh.core.console import configure_console, get_console
-from sqlmesh.core.constants import Verbosity
+from sqlmesh.utils import Verbosity
 from sqlmesh.core.config import load_configs
 from sqlmesh.core.context import Context
 from sqlmesh.utils.date import TimeLike
@@ -439,14 +439,12 @@ def diff(ctx: click.Context, environment: t.Optional[str] = None) -> None:
     help="Output text differences for the rendered versions of the models and standalone audits",
 )
 @opt.verbose
-@opt.very_verbose
 @click.pass_context
 @error_handler
 @cli_analytics
 def plan(
     ctx: click.Context,
-    verbose: bool,
-    very_verbose: bool,
+    verbose: int,
     environment: t.Optional[str] = None,
     **kwargs: t.Any,
 ) -> None:
@@ -456,10 +454,8 @@ def plan(
     select_models = kwargs.pop("select_model") or None
     allow_destructive_models = kwargs.pop("allow_destructive_model") or None
     backfill_models = kwargs.pop("backfill_model") or None
+    setattr(get_console(), "verbosity", Verbosity(verbose))
 
-    verbosity = Verbosity.VERBOSE if verbose else Verbosity.DEFAULT
-    verbosity = Verbosity.VERY_VERBOSE if very_verbose else verbosity
-    setattr(get_console(), "verbosity", verbosity)
     context.plan(
         environment,
         restate_models=restate_models,
@@ -639,7 +635,6 @@ def create_test(
 @cli.command("test")
 @opt.match_pattern
 @opt.verbose
-@opt.very_verbose
 @click.option(
     "--preserve-fixtures",
     is_flag=True,
@@ -653,19 +648,15 @@ def create_test(
 def test(
     obj: Context,
     k: t.List[str],
-    verbose: bool,
-    very_verbose: bool,
+    verbose: int,
     preserve_fixtures: bool,
     tests: t.List[str],
 ) -> None:
     """Run model unit tests."""
-    verbosity = Verbosity.VERBOSE if verbose else Verbosity.DEFAULT
-    verbosity = Verbosity.VERY_VERBOSE if very_verbose else verbosity
-
     result = obj.test(
         match_patterns=k,
         tests=tests,
-        verbosity=verbosity,
+        verbosity=Verbosity(verbose),
         preserve_fixtures=preserve_fixtures,
     )
     if not result.wasSuccessful():
@@ -714,20 +705,16 @@ def fetchdf(ctx: click.Context, sql: str) -> None:
     help="Skip the connection test.",
 )
 @opt.verbose
-@opt.very_verbose
 @click.pass_obj
 @error_handler
 @cli_analytics
-def info(obj: Context, skip_connection: bool, verbose: bool, very_verbose: bool) -> None:
+def info(obj: Context, skip_connection: bool, verbose: int) -> None:
     """
     Print information about a SQLMesh project.
 
     Includes counts of project models and macros and connection tests for the data warehouse.
     """
-    verbosity = Verbosity.VERBOSE if verbose else Verbosity.DEFAULT
-    verbosity = Verbosity.VERY_VERBOSE if very_verbose else verbosity
-
-    obj.print_info(skip_connection=skip_connection, verbosity=verbosity)
+    obj.print_info(skip_connection=skip_connection, verbosity=Verbosity(verbose))
 
 
 @cli.command("ui")
@@ -918,7 +905,6 @@ def rewrite(obj: Context, sql: str, read: str = "", write: str = "") -> None:
     default=0.7,
 )
 @opt.verbose
-@opt.very_verbose
 @click.pass_context
 @error_handler
 @cli_analytics
@@ -927,14 +913,10 @@ def prompt(
     prompt: str,
     evaluate: bool,
     temperature: float,
-    verbose: bool,
-    very_verbose: bool,
+    verbose: int,
 ) -> None:
     """Uses LLM to generate a SQL query from a prompt."""
     from sqlmesh.integrations.llm import LLMIntegration
-
-    verbosity = Verbosity.VERBOSE if verbose else Verbosity.DEFAULT
-    verbosity = Verbosity.VERY_VERBOSE if very_verbose else verbosity
 
     context = ctx.obj
 
@@ -942,7 +924,7 @@ def prompt(
         context.models.values(),
         context.engine_adapter.dialect,
         temperature=temperature,
-        verbosity=verbosity,
+        verbosity=Verbosity(verbose),
     )
     query = llm_integration.query(prompt)
 
