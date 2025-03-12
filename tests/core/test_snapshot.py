@@ -1035,6 +1035,48 @@ def test_fingerprint_virtual_properties(model: Model, parent_model: Model):
     assert updated_fingerprint.data_hash == fingerprint.data_hash
 
 
+def test_tableinfo_equality():
+    snapshot_a = SnapshotTableInfo(
+        name="test_schema.a",
+        fingerprint=SnapshotFingerprint(data_hash="1", metadata_hash="1"),
+        version="test_version",
+        physical_schema="test_physical_schema",
+        parents=[],
+        dev_table_suffix="dev",
+    )
+
+    snapshot_b = SnapshotTableInfo(
+        name="test_schema.b",
+        fingerprint=SnapshotFingerprint(data_hash="1", metadata_hash="1"),
+        version="test_version",
+        physical_schema="test_physical_schema",
+        parents=[],
+        dev_table_suffix="dev",
+    )
+
+    snapshot_c = SnapshotTableInfo(
+        name="test_schema.c",
+        fingerprint=SnapshotFingerprint(data_hash="1", metadata_hash="1"),
+        version="test_version",
+        physical_schema="test_physical_schema",
+        parents=[snapshot_a.snapshot_id, snapshot_b.snapshot_id],
+        dev_table_suffix="dev",
+    )
+
+    # parents in different order than snapshot_c
+    snapshot_c2 = SnapshotTableInfo(
+        name="test_schema.c",
+        fingerprint=SnapshotFingerprint(data_hash="1", metadata_hash="1"),
+        version="test_version",
+        physical_schema="test_physical_schema",
+        parents=[snapshot_b.snapshot_id, snapshot_a.snapshot_id],
+        dev_table_suffix="dev",
+    )
+
+    assert snapshot_c is not snapshot_c2
+    assert snapshot_c == snapshot_c2
+
+
 def test_stamp(model: Model):
     original_fingerprint = fingerprint_from_node(model, nodes={})
 
