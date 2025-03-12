@@ -7898,7 +7898,6 @@ def test_model_on_virtual_update(make_snapshot: t.Callable):
 
     parent_snapshot = make_snapshot(parent)
     parent_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
-    version = parent_snapshot.version
 
     model_snapshot = make_snapshot(model)
     model_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
@@ -7939,7 +7938,8 @@ def test_model_on_virtual_update(make_snapshot: t.Callable):
         rendered_on_virtual_update[3].sql()
         == "GRANT REFERENCES, SELECT ON FUTURE VIEWS IN DATABASE demo_db TO ROLE owner_name"
     )
-    assert rendered_on_virtual_update[4].sql() == f'"sqlmesh__default"."parent__{version}"'
+
+    assert rendered_on_virtual_update[4].sql() == '"default__dev"."parent"'
 
     # When replace=false the table should remain as is
     assert (

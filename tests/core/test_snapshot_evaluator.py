@@ -2996,7 +2996,7 @@ def test_on_virtual_update_statements(mocker: MockerFixture, adapter_mock, make_
     # Validation that within the macro the environment specific view is used
     assert (
         on_virtual_update_calls[2].sql(dialect="postgres")
-        == 'CREATE OR REPLACE TABLE "log_table" AS SELECT \'test_schema__test_env.test_model\' AS "fqn_this_model", \'"test_schema__test_env"."test_model"\' AS "eval_this_model"'
+        == 'CREATE OR REPLACE TABLE "log_table" AS SELECT \'"test_schema__test_env"."test_model" /* test_schema.test_model */\' AS "fqn_this_model", \'"test_schema__test_env"."test_model"\' AS "eval_this_model"'
     )
 
 

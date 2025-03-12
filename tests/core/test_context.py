@@ -1875,10 +1875,13 @@ def create_log_view(evaluator, view_name):
     log_schema = context.fetchdf("select * from log_schema").to_dict()
 
     # Validate that within macro for this_model we resolve to the environment-specific view
-    assert log_view["fqn_this_model"][0] == "memory.db__dev.test_view_macro_this_model"
+    assert (
+        log_view["fqn_this_model"][0]
+        == '"db__dev"."test_view_macro_this_model" /* memory.db.test_view_macro_this_model */'
+    )
 
     # Validate that from the macro evaluator this_model we get the environment-specific fqn
-    assert log_view["evaluator_this_model"][0] == '"memory"."db__dev"."test_view_macro_this_model"'
+    assert log_view["evaluator_this_model"][0] == '"db__dev"."test_view_macro_this_model"'
 
     # Validate the schema is retrieved using resolve_template for the environment-specific schema
     assert log_schema["my_schema"][0] == "db__dev"
