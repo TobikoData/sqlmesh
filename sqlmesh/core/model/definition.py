@@ -658,7 +658,7 @@ class _Model(ModelMeta, frozen=True):
             raise SQLMeshError(f"Expected one expression but got {len(rendered_exprs)}")
         return rendered_exprs[0].transform(d.replace_merge_table_aliases)
 
-    def render_properties(
+    def _render_properties(
         self, properties: t.Dict[str, exp.Expression] | SessionProperties, **render_kwargs: t.Any
     ) -> t.Dict[str, t.Any]:
         def _render(expression: exp.Expression) -> exp.Expression | None:
@@ -687,13 +687,13 @@ class _Model(ModelMeta, frozen=True):
         }
 
     def render_physical_properties(self, **render_kwargs: t.Any) -> t.Dict[str, t.Any]:
-        return self.render_properties(properties=self.physical_properties, **render_kwargs)
+        return self._render_properties(properties=self.physical_properties, **render_kwargs)
 
     def render_virtual_properties(self, **render_kwargs: t.Any) -> t.Dict[str, t.Any]:
-        return self.render_properties(properties=self.virtual_properties, **render_kwargs)
+        return self._render_properties(properties=self.virtual_properties, **render_kwargs)
 
     def render_session_properties(self, **render_kwargs: t.Any) -> t.Dict[str, t.Any]:
-        return self.render_properties(properties=self.session_properties, **render_kwargs)
+        return self._render_properties(properties=self.session_properties, **render_kwargs)
 
     def _create_renderer(self, expression: exp.Expression) -> ExpressionRenderer:
         return ExpressionRenderer(
@@ -2631,16 +2631,20 @@ def render_meta_fields(
                 dialect=dialect,
                 default_catalog=default_catalog,
             )
-            # Warn instead of raising for cases where an attribute is conditionally assigned
-            if not rendered_expr or rendered_expr[0].sql().lower() in {"none", "null"}:
-                logger.warning(
-                    f"Rendering '{expression.sql(dialect=dialect)}' did not return an expression"
+            if not rendered_expr:
+                raise SQLMeshError(
+                    f"Rendering `{expression.sql(dialect=dialect)}` did not return an expression"
                 )
-                return None
+
             if len(rendered_expr) != 1:
                 raise SQLMeshError(
                     f"Rendering `{expression.sql(dialect=dialect)}` must return one result, but got {len(rendered_expr)}"
                 )
+
+            # For cases where a property is conditionally assigned
+            if rendered_expr[0].sql().lower() in {"none", "null"}:
+                return None
+
             return rendered_expr[0]
 
         return value
