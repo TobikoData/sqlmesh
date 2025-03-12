@@ -5,6 +5,7 @@ import multiprocessing as mp
 import os
 import typing as t
 from pathlib import Path
+from enum import IntEnum
 
 SQLMESH = "sqlmesh"
 SQLMESH_PATH = Path.home() / ".sqlmesh"
@@ -91,3 +92,9 @@ NATIVE = "native"
 HYBRID = "hybrid"
 
 DISABLE_SQLMESH_STATE_MIGRATION = "SQLMESH__AIRFLOW__DISABLE_STATE_MIGRATION"
+
+
+class Verbosity(IntEnum):
+    DEFAULT = 1
+    VERBOSE = 2
+    VERY_VERBOSE = 3

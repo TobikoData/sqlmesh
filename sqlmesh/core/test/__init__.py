@@ -3,7 +3,7 @@ from __future__ import annotations
 import pathlib
 import typing as t
 import unittest
-
+from sqlmesh.core.constants import Verbosity
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.model import Model
 from sqlmesh.core.test.definition import ModelTest as ModelTest, generate_test as generate_test
@@ -26,7 +26,7 @@ def run_tests(
     config: C,
     gateway: t.Optional[str] = None,
     dialect: str | None = None,
-    verbosity: int = 1,
+    verbosity: Verbosity = Verbosity.DEFAULT,
     preserve_fixtures: bool = False,
     stream: t.TextIO | None = None,
     default_catalog: str | None = None,
@@ -73,7 +73,9 @@ def run_tests(
         result = t.cast(
             ModelTextTestResult,
             unittest.TextTestRunner(
-                stream=stream, verbosity=verbosity, resultclass=ModelTextTestResult
+                stream=stream,
+                verbosity=2 if verbosity >= Verbosity.VERBOSE else 1,
+                resultclass=ModelTextTestResult,
             ).run(unittest.TestSuite(tests)),
         )
     finally:
@@ -89,7 +91,7 @@ def run_model_tests(
     config: C,
     gateway: t.Optional[str] = None,
     dialect: str | None = None,
-    verbosity: int = 1,
+    verbosity: Verbosity = Verbosity.DEFAULT,
     patterns: list[str] | None = None,
     preserve_fixtures: bool = False,
     stream: t.TextIO | None = None,

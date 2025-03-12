@@ -54,3 +54,10 @@ verbose = click.option(
     is_flag=True,
     help="Verbose output.",
 )
+
+very_verbose = click.option(
+    "-vv",
+    "--very-verbose",
+    is_flag=True,
+    help="Very verbose output.",
+)
