@@ -1813,3 +1813,75 @@ def test_plan_selector_expression_no_match(sushi_context: Context) -> None:
         match="Selector did not return any models. Please check your model selection and try again.",
     ):
         sushi_context.plan("prod", restate_models=["*missing*"])
+
+
+def test_plan_on_virtual_update_this_model_in_macro(tmp_path: pathlib.Path):
+    models_dir = pathlib.Path("models")
+    macros_dir = pathlib.Path("macros")
+    dialect = "duckdb"
+
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect=dialect),
+    )
+
+    model_file = """
+MODEL(
+  name db.test_view_macro_this_model,
+  kind full,
+);
+
+
+SELECT 1 AS cola;
+
+ON_VIRTUAL_UPDATE_BEGIN;
+CREATE OR REPLACE TABLE log_schema AS SELECT @resolve_template('@{schema_name}') as my_schema;
+@create_log_view(@this_model);
+ON_VIRTUAL_UPDATE_END;
+
+    """
+
+    create_temp_file(
+        tmp_path,
+        pathlib.Path(models_dir, "db", "test_view_macro_this_model.sql"),
+        model_file,
+    )
+
+    create_temp_file(
+        tmp_path,
+        pathlib.Path(macros_dir, "create_log_view.py"),
+        """
+from sqlmesh.core.macros import macro
+
+@macro()
+def create_log_view(evaluator, view_name):
+    return f"CREATE OR REPLACE TABLE log_view AS SELECT '{view_name}' as fqn_this_model,  '{evaluator.this_model}' as evaluator_this_model;"
+""",
+    )
+
+    context = Context(paths=tmp_path, config=config)
+    context.plan(environment="dev", auto_apply=True, no_prompts=True)
+
+    model = context.get_model("db.test_view_macro_this_model")
+    assert (
+        model.on_virtual_update[0].sql(dialect=dialect)
+        == "CREATE OR REPLACE TABLE log_schema AS SELECT @resolve_template('@{schema_name}') AS my_schema"
+    )
+    assert model.on_virtual_update[1].sql(dialect=dialect) == "@create_log_view(@this_model)"
+
+    snapshot = context.get_snapshot("db.test_view_macro_this_model")
+    assert snapshot and snapshot.version
+
+    log_view = context.fetchdf("select * from log_view").to_dict()
+    log_schema = context.fetchdf("select * from log_schema").to_dict()
+
+    # Validate that within macro for this_model we resolve to the environment-specific view
+    assert (
+        log_view["fqn_this_model"][0]
+        == '"db__dev"."test_view_macro_this_model" /* memory.db.test_view_macro_this_model */'
+    )
+
+    # Validate that from the macro evaluator this_model we get the environment-specific fqn
+    assert log_view["evaluator_this_model"][0] == '"db__dev"."test_view_macro_this_model"'
+
+    # Validate the schema is retrieved using resolve_template for the environment-specific schema
+    assert log_schema["my_schema"][0] == "db__dev"
