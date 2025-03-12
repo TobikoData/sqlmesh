@@ -60,7 +60,7 @@ from sqlmesh.utils.metaprogramming import (
 
 if t.TYPE_CHECKING:
     from sqlglot.dialects.dialect import DialectType
-    from sqlmesh.core._typing import Self, TableName
+    from sqlmesh.core._typing import Self, TableName, SessionProperties
     from sqlmesh.core.context import ExecutionContext
     from sqlmesh.core.engine_adapter import EngineAdapter
     from sqlmesh.core.engine_adapter._typing import QueryOrDF
@@ -71,14 +71,15 @@ if t.TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+PROPERTIES = {"physical_properties", "session_properties", "virtual_properties"}
+
 RUNTIME_RENDERED_MODEL_FIELDS = {
     "audits",
     "signals",
     "description",
     "cron",
-    "physical_properties",
     "merge_filter",
-}
+} | PROPERTIES
 
 
 class _Model(ModelMeta, frozen=True):
@@ -657,16 +658,20 @@ class _Model(ModelMeta, frozen=True):
             raise SQLMeshError(f"Expected one expression but got {len(rendered_exprs)}")
         return rendered_exprs[0].transform(d.replace_merge_table_aliases)
 
-    def render_physical_properties(self, **render_kwargs: t.Any) -> t.Dict[str, exp.Expression]:
-        def _render(expression: exp.Expression) -> exp.Expression:
+    def _render_properties(
+        self, properties: t.Dict[str, exp.Expression] | SessionProperties, **render_kwargs: t.Any
+    ) -> t.Dict[str, t.Any]:
+        def _render(expression: exp.Expression) -> exp.Expression | None:
             # note: we use the _statement_renderer instead of _create_renderer because it sets model_fqn which
             # in turn makes @this_model available in the evaluation context
             rendered_exprs = self._statement_renderer(expression).render(**render_kwargs)
 
-            if not rendered_exprs:
-                raise SQLMeshError(
+            # Warn instead of raising for cases where a property is conditionally assigned
+            if not rendered_exprs or rendered_exprs[0].sql().lower() in {"none", "null"}:
+                logger.warning(
                     f"Expected rendering '{expression.sql(dialect=self.dialect)}' to return an expression"
                 )
+                return None
 
             if len(rendered_exprs) != 1:
                 raise SQLMeshError(
@@ -675,7 +680,20 @@ class _Model(ModelMeta, frozen=True):
 
             return rendered_exprs[0]
 
-        return {k: _render(v) for k, v in self.physical_properties.items()}
+        return {
+            k: rendered
+            for k, v in properties.items()
+            if (rendered := (_render(v) if isinstance(v, exp.Expression) else v))
+        }
+
+    def render_physical_properties(self, **render_kwargs: t.Any) -> t.Dict[str, t.Any]:
+        return self._render_properties(properties=self.physical_properties, **render_kwargs)
+
+    def render_virtual_properties(self, **render_kwargs: t.Any) -> t.Dict[str, t.Any]:
+        return self._render_properties(properties=self.virtual_properties, **render_kwargs)
+
+    def render_session_properties(self, **render_kwargs: t.Any) -> t.Dict[str, t.Any]:
+        return self._render_properties(properties=self.session_properties, **render_kwargs)
 
     def _create_renderer(self, expression: exp.Expression) -> ExpressionRenderer:
         return ExpressionRenderer(
@@ -1989,8 +2007,21 @@ def load_sql_based_model(
     unrendered_merge_filter = None
 
     for prop in meta.expressions:
+        # Macro functions that programmaticaly generate the key-value pair properties should be rendered
+        # This is needed in the odd case where a macro shares the name of one of the properties
+        # eg `@session_properties()` Test: `test_macros_in_model_statement` Reference PR: #2574
+        if isinstance(prop, d.MacroFunc):
+            continue
+
         prop_name = prop.name.lower()
-        if prop_name in ("signals", "audits", "physical_properties"):
+        if (
+            prop_name
+            in {
+                "signals",
+                "audits",
+            }
+            | PROPERTIES
+        ):
             unrendered_properties[prop_name] = prop.args.get("value")
         elif (
             prop.name.lower() == "kind"
@@ -2020,6 +2051,23 @@ def load_sql_based_model(
         raise
 
     rendered_meta = rendered_meta_exprs[0]
+
+    rendered_defaults = (
+        render_model_defaults(
+            defaults=defaults,
+            module_path=module_path,
+            macros=macros,
+            jinja_macros=jinja_macros,
+            variables=variables,
+            path=path,
+            dialect=dialect,
+            default_catalog=default_catalog,
+        )
+        if defaults
+        else {}
+    )
+
+    rendered_defaults = parse_defaults_properties(rendered_defaults, dialect=dialect)
 
     # Extract the query and any pre/post statements
     query_or_seed_insert, pre_statements, post_statements, on_virtual_update, inline_audits = (
@@ -2066,7 +2114,7 @@ def load_sql_based_model(
         pre_statements=pre_statements,
         post_statements=post_statements,
         on_virtual_update=on_virtual_update,
-        defaults=defaults,
+        defaults=rendered_defaults,
         path=path,
         module_path=module_path,
         macros=macros,
@@ -2226,9 +2274,9 @@ def create_python_model(
             for dep in t.cast(t.List[exp.Expression], depends_on_rendered)[0].expressions
         }
 
-    variables = {k: v for k, v in (variables or {}).items() if k in referenced_variables}
-    if variables:
-        python_env[c.SQLMESH_VARS] = Executable.value(variables)
+    used_variables = {k: v for k, v in (variables or {}).items() if k in referenced_variables}
+    if used_variables:
+        python_env[c.SQLMESH_VARS] = Executable.value(used_variables)
 
     return _create_model(
         PythonModel,
@@ -2302,11 +2350,7 @@ def _create_model(
 
     _validate_model_fields(klass, {"name", *kwargs} - {"grain", "table_properties"}, path)
 
-    for prop in [
-        "session_properties",
-        "physical_properties",
-        "virtual_properties",
-    ]:
+    for prop in PROPERTIES:
         kwargs[prop] = _resolve_properties((defaults or {}).get(prop), kwargs.get(prop))
 
     dialect = dialect or ""
@@ -2338,10 +2382,12 @@ def _create_model(
         statements.extend(kwargs["post_statements"])
     if "on_virtual_update" in kwargs:
         statements.extend(kwargs["on_virtual_update"])
-    if physical_properties := kwargs.get("physical_properties"):
-        # to allow variables like @gateway to be used in physical_properties
-        # since rendering shifted from load time to run time
-        statements.extend(physical_properties)
+
+    # to allow variables like @gateway to be used in these properties
+    # since rendering shifted from load time to run time
+    for property_name in PROPERTIES:
+        if property_values := kwargs.get(property_name):
+            statements.extend(property_values)
 
     jinja_macro_references, used_variables = extract_macro_references_and_variables(
         *(gen(e) for e in statements)
@@ -2573,9 +2619,7 @@ def render_meta_fields(
     default_catalog: t.Optional[str],
 ) -> t.Dict[str, t.Any]:
     def render_field_value(value: t.Any) -> t.Any:
-        if isinstance(value, exp.Expression) or (
-            isinstance(value, str) and d.SQLMESH_MACRO_PREFIX in value
-        ):
+        if isinstance(value, exp.Expression) or (isinstance(value, str) and "@" in value):
             expression = exp.maybe_parse(value, dialect=dialect)
             rendered_expr = render_expression(
                 expression=expression,
@@ -2587,16 +2631,20 @@ def render_meta_fields(
                 dialect=dialect,
                 default_catalog=default_catalog,
             )
-            if rendered_expr is None:
+            if not rendered_expr:
                 raise SQLMeshError(
-                    f"Failed to render model attribute `{fields['name']}` at `{path}`\n"
-                    f"'{expression.sql(dialect=dialect)}' must return an expression"
+                    f"Rendering `{expression.sql(dialect=dialect)}` did not return an expression"
                 )
+
             if len(rendered_expr) != 1:
                 raise SQLMeshError(
-                    f"Failed to render model attribute `{fields['name']}` at `{path}`.\n"
-                    f"`{expression.sql(dialect=dialect)}` must return one result, but got {len(rendered_expr)}"
+                    f"Rendering `{expression.sql(dialect=dialect)}` must return one result, but got {len(rendered_expr)}"
                 )
+
+            # For cases where a property is conditionally assigned
+            if rendered_expr[0].sql().lower() in {"none", "null"}:
+                return None
+
             return rendered_expr[0]
 
         return value
@@ -2605,15 +2653,79 @@ def render_meta_fields(
         field = field_info.alias or field_name
         if field not in RUNTIME_RENDERED_MODEL_FIELDS and (field_value := fields.get(field)):
             if isinstance(field_value, dict):
-                for key in list(field_value.keys()):
-                    if key not in RUNTIME_RENDERED_MODEL_FIELDS:
-                        fields[field][key] = render_field_value(field_value[key])
+                rendered_dict = {}
+                for key, value in field_value.items():
+                    if key in RUNTIME_RENDERED_MODEL_FIELDS:
+                        rendered_dict[key] = value
+                    elif rendered := render_field_value(value):
+                        rendered_dict[key] = rendered
+                if rendered_dict:
+                    fields[field] = rendered_dict
+                else:
+                    fields.pop(field)
             elif isinstance(field_value, list):
-                fields[field] = [render_field_value(value) for value in field_value]
+                if rendered_list := [
+                    rendered for value in field_value if (rendered := render_field_value(value))
+                ]:
+                    fields[field] = rendered_list
+                else:
+                    fields.pop(field)
             else:
-                fields[field] = render_field_value(field_value)
+                if rendered_field := render_field_value(field_value):
+                    fields[field] = rendered_field
+                else:
+                    fields.pop(field)
 
     return fields
+
+
+def render_model_defaults(
+    defaults: t.Dict[str, t.Any],
+    module_path: Path,
+    path: Path,
+    jinja_macros: t.Optional[JinjaMacroRegistry],
+    macros: t.Optional[MacroRegistry],
+    dialect: DialectType,
+    variables: t.Optional[t.Dict[str, t.Any]],
+    default_catalog: t.Optional[str],
+) -> t.Dict[str, t.Any]:
+    rendered_defaults = render_meta_fields(
+        fields=defaults,
+        module_path=module_path,
+        macros=macros,
+        jinja_macros=jinja_macros,
+        variables=variables,
+        path=path,
+        dialect=dialect,
+        default_catalog=default_catalog,
+    )
+
+    # Validate defaults that have macros are rendered to boolean
+    for boolean in {"optimize_query", "allow_partials", "enabled"}:
+        if var := rendered_defaults.get(boolean):
+            if not isinstance(var, (exp.Boolean, bool)):
+                raise ConfigError(f"Expected boolean for '{var}', got '{type(var)}' instead")
+
+    # Validate the 'interval_unit' if present is an Interval Unit
+    if (var := rendered_defaults.get("interval_unit")) and isinstance(var, str):
+        try:
+            rendered_defaults["interval_unit"] = IntervalUnit(var)
+        except ValueError as e:
+            raise ConfigError(f"Invalid interval unit: {var}") from e
+
+    return rendered_defaults
+
+
+def parse_defaults_properties(
+    defaults: t.Dict[str, t.Any], dialect: DialectType
+) -> t.Dict[str, t.Any]:
+    for prop in PROPERTIES:
+        if default_properties := defaults.get(prop):
+            for key, value in default_properties.items():
+                if isinstance(key, str) and d.SQLMESH_MACRO_PREFIX in str(value):
+                    defaults[prop][key] = exp.maybe_parse(value, dialect=dialect)
+
+    return defaults
 
 
 def render_expression(

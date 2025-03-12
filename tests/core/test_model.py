@@ -2064,7 +2064,7 @@ def test_python_model_variable_dependencies() -> None:
     assert m.depends_on == {'"foo"."table_name"'}
 
 
-def test_python_model_with_properties():
+def test_python_model_with_properties(make_snapshot):
     @model(
         name="python_model_prop",
         kind="full",
@@ -2087,7 +2087,8 @@ def test_python_model_with_properties():
             },
             "physical_properties": {
                 "partition_expiration_days": 13,
-                "creatable_type": "TRANSIENT",
+                "creatable_type": "@IF(@model_kind_name != 'view', 'TRANSIENT', NULL)",
+                "conditional_prop": "@IF(@model_kind_name == 'view', 'view_prop', NULL)",
             },
             "virtual_properties": {
                 "creatable_type": "SECURE",
@@ -2102,6 +2103,20 @@ def test_python_model_with_properties():
     }
 
     assert m.physical_properties == {
+        "partition_expiration_days": exp.convert(7),
+        "creatable_type": exp.maybe_parse(
+            "@IF(@model_kind_name != 'view', 'TRANSIENT', NULL)", dialect="duckdb"
+        ),
+        "conditional_prop": exp.maybe_parse(
+            "@IF(@model_kind_name == 'view', 'view_prop', NULL)", dialect="duckdb"
+        ),
+    }
+
+    snapshot: Snapshot = make_snapshot(m)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    # Rendering the properties will result to a TRANSIENT creatable_type and the removal of the conditional prop
+    assert m.render_physical_properties(snapshots={m.fqn: snapshot}, python_env=m.python_env) == {
         "partition_expiration_days": exp.convert(7),
         "creatable_type": exp.convert("TRANSIENT"),
     }
@@ -3611,6 +3626,71 @@ def test_project_level_properties(sushi_context):
     assert model_2.cron == "@daily"
 
 
+def test_conditional_physical_properties(make_snapshot):
+    model_defaults = ModelDefaultsConfig(
+        physical_properties={
+            "creatable_type": "@IF(@model_kind_name != 'VIEW', 'TRANSIENT', NULL)"
+        },
+    )
+
+    full_model = load_sql_based_model(
+        d.parse(
+            """
+        MODEL (
+            name test_schema.test_full_model,
+            kind FULL,
+        );
+        SELECT a FROM tbl;
+        """,
+            default_dialect="snowflake",
+        ),
+        defaults=model_defaults.dict(),
+    )
+
+    view_model = load_sql_based_model(
+        d.parse(
+            """
+        MODEL (
+            name test_schema.test_view_model_kind,
+            kind VIEW,
+        );
+        SELECT a FROM tbl;
+        """,
+            default_dialect="snowflake",
+        ),
+        defaults=model_defaults.dict(),
+    )
+
+    # load time is a no-op
+    assert (
+        view_model.physical_properties
+        == full_model.physical_properties
+        == {
+            "creatable_type": exp.maybe_parse(
+                "@IF(@model_kind_name != 'VIEW', 'TRANSIENT', NULL)", dialect="snowflake"
+            )
+        }
+    )
+
+    # substitution occurs at runtime
+    snapshot: Snapshot = make_snapshot(full_model)
+    snapshot_view: Snapshot = make_snapshot(view_model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    # Validate use of TRANSIENT type for FULL model
+    assert full_model.render_physical_properties(
+        snapshots={full_model.fqn: snapshot, view_model.fqn: snapshot_view}
+    ) == {"creatable_type": exp.Literal(this="TRANSIENT", is_string=True)}
+
+    # Validate disabling the creatable_type property for VIEW model
+    assert (
+        view_model.render_physical_properties(
+            snapshots={full_model.fqn: snapshot, view_model.fqn: snapshot_view}
+        )
+        == {}
+    )
+
+
 def test_project_level_properties_python_model():
     model_defaults = {
         "physical_properties": {
@@ -3651,6 +3731,236 @@ def test_project_level_properties_python_model():
     assert not m.enabled
     assert m.allow_partials
     assert m.interval_unit == IntervalUnit.QUARTER_HOUR
+
+
+def test_model_defaults_macros(make_snapshot):
+    model_defaults = ModelDefaultsConfig(
+        table_format="@IF(@gateway = 'dev', 'iceberg', NULL)",
+        storage_format="@IF(@gateway = 'local', 'parquet', NULL)",
+        optimize_query="@IF(@gateway = 'dev', True, False)",
+        enabled="@IF(@gateway = 'dev', True, False)",
+        allow_partials="@IF(@gateway = 'local', True, False)",
+        interval_unit="@IF(@gateway = 'local', 'quarter_hour', 'day')",
+        start="@IF(@gateway = 'dev', '1 month ago', '2024-01-01')",
+        session_properties={
+            "spark.executor.cores": "@IF(@gateway = 'dpev', 1, 2)",
+            "spark.executor.memory": "1G",
+            "unset_property": "@IF(@model_kind_name = 'FULL', 'NOTSET', NULL)",
+        },
+        physical_properties={
+            "partition_expiration_days": 13,
+            "creatable_type": "@IF(@model_kind_name = 'FULL', 'TRANSIENT', NULL)",
+        },
+        virtual_properties={
+            "creatable_type": "@create_type",
+            "unset_property": "@IF(@model_kind_name = 'FULL', 'NOTSET', NULL)",
+        },
+    )
+
+    model = load_sql_based_model(
+        d.parse(
+            """
+        MODEL (
+            name test_schema.test_model,
+            physical_properties (
+                target_lag = '1 hour'
+            ),
+        );
+        SELECT a FROM tbl;
+        """,
+            default_dialect="snowflake",
+        ),
+        defaults=model_defaults.dict(),
+        variables={"gateway": "dev", "create_type": "SECURE"},
+    )
+
+    snapshot: Snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    # Validate rendering of model defaults
+    assert model.optimize_query
+    assert model.enabled
+    assert model.start == "1 month ago"
+    assert not model.allow_partials
+    assert model.interval_unit == IntervalUnit.DAY
+    assert model.table_format == "iceberg"
+
+    # Validate disabling of conditional model default
+    assert not model.storage_format
+
+    # The model defaults properties won't be rendered at load time
+    assert model.session_properties == {
+        "spark.executor.cores": exp.maybe_parse(
+            "@IF(@gateway = 'dpev', 1, 2)", dialect="snowflake"
+        ),
+        "spark.executor.memory": "1G",
+        "unset_property": exp.maybe_parse(
+            "@IF(@model_kind_name = 'FULL', 'NOTSET', NULL)", dialect="snowflake"
+        ),
+    }
+
+    assert model.physical_properties == {
+        "partition_expiration_days": exp.convert(13),
+        "creatable_type": exp.maybe_parse(
+            "@IF(@model_kind_name = 'FULL', 'TRANSIENT', NULL)", dialect="snowflake"
+        ),
+        "target_lag": exp.convert("1 hour"),
+    }
+
+    assert model.virtual_properties == {
+        "creatable_type": d.MacroVar(this="create_type"),
+        "unset_property": exp.maybe_parse(
+            "@IF(@model_kind_name = 'FULL', 'NOTSET', NULL)", dialect="snowflake"
+        ),
+    }
+
+    # Validate the correct rendering and removal of conditional properties
+    assert model.render_session_properties(snapshots={model.fqn: snapshot}) == {
+        "spark.executor.cores": exp.convert(2),
+        "spark.executor.memory": "1G",
+    }
+
+    assert model.render_physical_properties(snapshots={model.fqn: snapshot}) == {
+        "partition_expiration_days": exp.convert(13),
+        "target_lag": exp.convert("1 hour"),
+    }
+
+    assert model.render_virtual_properties(snapshots={model.fqn: snapshot}) == {
+        "creatable_type": exp.convert("SECURE"),
+    }
+
+
+def test_model_defaults_macros_python_model(make_snapshot):
+    model_defaults = {
+        "physical_properties": {
+            "partition_expiration_days": 13,
+            "creatable_type": "@IF(@model_kind_name = 'FULL', 'TRANSIENT', NULL)",
+        },
+        "table_format": "@IF(@gateway = 'local', 'iceberg', NULL)",
+        "storage_format": "@IF(@gateway = 'dev', 'parquet', NULL)",
+        "optimize_query": "@IF(@gateway = 'local', True, False)",
+        "enabled": "@IF(@gateway = 'local', True, False)",
+        "allow_partials": "@IF(@gateway = 'local', True, False)",
+        "interval_unit": "@IF(@gateway = 'local', 'quarter_hour', 'day')",
+        "start": "@IF(@gateway = 'dev', '1 month ago', '2024-01-01')",
+        "virtual_properties": {"creatable_type": "@create_type"},
+        "session_properties": {
+            "spark.executor.cores": "@IF(@gateway = 'dev', 1, 2)",
+            "spark.executor.memory": "1G",
+        },
+    }
+
+    @model(
+        name="python_model_defaults_macro",
+        kind="full",
+        columns={"some_col": "int"},
+        physical_properties={"partition_expiration_days": 7},
+    )
+    def python_model_prop_macro(context, **kwargs):
+        context.resolve_table("foo")
+
+    m = model.get_registry()["python_model_defaults_macro"].model(
+        module_path=Path("."),
+        path=Path("."),
+        dialect="duckdb",
+        defaults=model_defaults,
+        variables={"gateway": "local", "create_type": "SECURE"},
+    )
+
+    # Even if in the project wide defaults this is ignored for python models
+    assert not m.optimize_query
+
+    # Validate rendering of model defaults
+    assert m.enabled
+    assert m.start == "2024-01-01"
+    assert m.allow_partials
+    assert m.interval_unit == IntervalUnit.QUARTER_HOUR
+    assert m.table_format == "iceberg"
+
+    # Validate disabling attribute dynamically
+    assert not m.storage_format
+
+    snapshot: Snapshot = make_snapshot(m)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    # Ensure properties are not rendered at load time
+    assert m.physical_properties == {
+        "partition_expiration_days": exp.convert(7),
+        "creatable_type": exp.maybe_parse(
+            "@IF(@model_kind_name = 'FULL', 'TRANSIENT', NULL)", dialect="duckdb"
+        ),
+    }
+
+    # Substitution occurs at runtime for properties so here these will be unrendered
+    assert m.render_physical_properties(
+        snapshots={
+            m.fqn: snapshot,
+        }
+    ) == {
+        "partition_expiration_days": exp.convert(7),
+        "creatable_type": exp.convert("TRANSIENT"),
+    }
+
+    assert m.session_properties == {
+        "spark.executor.cores": exp.maybe_parse("@IF(@gateway = 'dev', 1, 2)", dialect="duckdb"),
+        "spark.executor.memory": "1G",
+    }
+
+    assert m.virtual_properties["creatable_type"] == d.MacroVar(this="create_type")
+
+    # Validate rendering of properties
+    assert m.render_session_properties(
+        snapshots={
+            m.fqn: snapshot,
+        },
+    ) == {
+        "spark.executor.cores": exp.convert(2),
+        "spark.executor.memory": "1G",
+    }
+
+    assert m.render_virtual_properties(
+        snapshots={
+            m.fqn: snapshot,
+        }
+    ) == {"creatable_type": exp.convert("SECURE")}
+
+    assert m.render_physical_properties(snapshots={m.fqn: snapshot}) == {
+        "partition_expiration_days": exp.convert(7),
+        "creatable_type": exp.convert("TRANSIENT"),
+    }
+
+
+@pytest.mark.parametrize(
+    "optimize_query, enabled, allow_partials, interval_unit, expected_error",
+    [
+        ("string", "string", "string", "string", r"^Expected boolean for*"),
+        (True, "string", "string", "string", r"^Expected boolean for*"),
+        (True, True, "string", "string", r"^Expected boolean for*"),
+        (True, True, True, "string", r"^Invalid interval unitr*"),
+    ],
+)
+def test_model_defaults_validations(
+    optimize_query, enabled, allow_partials, interval_unit, expected_error
+):
+    model_defaults = ModelDefaultsConfig(
+        optimize_query=optimize_query,
+        enabled=enabled,
+        allow_partials=allow_partials,
+        interval_unit=interval_unit,
+    )
+
+    with pytest.raises(ConfigError, match=expected_error):
+        load_sql_based_model(
+            d.parse(
+                """
+            MODEL (
+                name test_schema.test_model,
+            );
+            SELECT a FROM tbl;
+            """,
+            ),
+            defaults=model_defaults.dict(),
+        )
 
 
 def test_model_session_properties(sushi_context):
@@ -5375,13 +5685,13 @@ def test_unrendered_macros_python_model(mocker: MockerFixture) -> None:
     assert "location1" in python_sql_model.physical_properties
     assert "location2" in python_sql_model.physical_properties
 
+    # The properties will stay unrendered at load time
     assert python_sql_model.session_properties == {
-        "spark.executor.cores": 1,
+        "spark.executor.cores": "@IF(@gateway = 'dev', 1, 2)",
         "spark.executor.memory": "1G",
     }
-    assert python_sql_model.virtual_properties["creatable_type"].this == "SECURE"
+    assert python_sql_model.virtual_properties["creatable_type"] == exp.convert("@{create_type}")
 
-    # The physical_properties will stay unrendered at load time
     assert (
         python_sql_model.physical_properties["location1"].text("this")
         == "@'s3://bucket/prefix/@{schema_name}/@{table_name}'"
@@ -5727,7 +6037,8 @@ def test_macros_in_physical_properties(make_snapshot):
                     @resolve_template('hdfs://@{catalog_name}/@{schema_name}/dev/@{table_name}'),
                     @resolve_template('s3://prod/@{table_name}')
                 ),
-                sort_order = @IF(@gateway = 'prod', 'desc', 'asc')
+                sort_order = @IF(@gateway = 'prod', 'desc', 'asc'),
+                conditional_prop = @IF(@gateway == 'prod', 'PROD_PROP', NULL)
             )
         );
 
@@ -5743,11 +6054,13 @@ def test_macros_in_physical_properties(make_snapshot):
     assert "location1" in model.physical_properties
     assert "location2" in model.physical_properties
     assert "sort_order" in model.physical_properties
+    assert "conditional_prop" in model.physical_properties
 
     # load time is a no-op
     assert isinstance(model.physical_properties["location1"], d.MacroFunc)
     assert isinstance(model.physical_properties["location2"], d.MacroFunc)
     assert isinstance(model.physical_properties["sort_order"], d.MacroFunc)
+    assert isinstance(model.physical_properties["conditional_prop"], d.MacroFunc)
 
     # substitution occurs at runtime
     snapshot = make_snapshot(model)
@@ -5768,6 +6081,9 @@ def test_macros_in_physical_properties(make_snapshot):
         == f"hdfs://unit_test/sqlmesh__test/dev/test__test_model__{snapshot.version}"
     )
     assert rendered_physical_properties["sort_order"].text("this") == "asc"
+
+    # the conditional_prop will be disabled for "dev" gateway
+    assert "conditional_prop" not in rendered_physical_properties
 
 
 def test_macros_in_model_statement(sushi_context, assert_exp_eq):

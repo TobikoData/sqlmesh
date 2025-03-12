@@ -10,9 +10,9 @@ from sqlmesh.core.model.kind import (
     model_kind_validator,
     on_destructive_change_validator,
 )
+from sqlmesh.core.model.meta import FunctionCall
 from sqlmesh.core.node import IntervalUnit
 from sqlmesh.utils.date import TimeLike
-from sqlmesh.core.model.meta import FunctionCall
 from sqlmesh.utils.pydantic import field_validator
 
 
@@ -56,10 +56,10 @@ class ModelDefaultsConfig(BaseConfig):
     virtual_properties: t.Optional[t.Dict[str, t.Any]] = None
     session_properties: t.Optional[t.Dict[str, t.Any]] = None
     audits: t.Optional[t.List[FunctionCall]] = None
-    optimize_query: t.Optional[bool] = None
-    allow_partials: t.Optional[bool] = None
-    interval_unit: t.Optional[IntervalUnit] = None
-    enabled: t.Optional[bool] = None
+    optimize_query: t.Optional[t.Union[str, bool]] = None
+    allow_partials: t.Optional[t.Union[str, bool]] = None
+    interval_unit: t.Optional[t.Union[str, IntervalUnit]] = None
+    enabled: t.Optional[t.Union[str, bool]] = None
 
     _model_kind_validator = model_kind_validator
     _on_destructive_change_validator = on_destructive_change_validator

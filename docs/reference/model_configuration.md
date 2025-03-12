@@ -107,6 +107,34 @@ To override `partition_expiration_days`, add a new `creatable_type` property and
     )
     ```
 
+You can also use the `@model_kind_name` variable to fine-tune control over `physical_properties` in `model_defaults`. This holds the current model's kind name and is useful for conditionally assigning a property. For example, to disable `creatable_type` for your project's `VIEW` kind models:
+
+=== "YAML"
+
+    ```yaml linenums="1"
+    model_defaults:
+      dialect: snowflake
+      start: 2022-01-01
+      physical_properties:
+        creatable_type: "@IF(@model_kind_name != 'VIEW', 'TRANSIENT', NULL)"
+    ```
+
+=== "Python"
+
+    ```python linenums="1"
+    from sqlmesh.core.config import Config, ModelDefaultsConfig
+
+    config = Config(
+      model_defaults=ModelDefaultsConfig(
+        dialect="snowflake",
+        start="2022-01-01",
+        physical_properties={
+          "creatable_type": "@IF(@model_kind_name != 'VIEW', 'TRANSIENT', NULL)",
+        },
+      ),
+    )
+    ```
+
 
 The SQLMesh project-level `model_defaults` key supports the following options, described in the [general model properties](#general-model-properties) table above:
 
