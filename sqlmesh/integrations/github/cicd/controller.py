@@ -15,9 +15,10 @@ from typing import List
 import requests
 from hyperscript import Element, h
 from sqlglot.helper import seq_get
-
+from sqlmesh.core.constants import Verbosity
 from sqlmesh.core import constants as c
 from sqlmesh.core.console import SNAPSHOT_CHANGE_CATEGORY_STR, get_console, MarkdownConsole
+
 from sqlmesh.core.context import Context
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.plan import Plan, PlanBuilder
@@ -476,7 +477,7 @@ class GithubController:
         """
         Run tests for the PR
         """
-        return self._context._run_tests(verbose=True)
+        return self._context._run_tests(verbosity=Verbosity.VERBOSE)
 
     def _get_or_create_comment(self, header: str = BOT_HEADER_MSG) -> IssueComment:
         comment = seq_get(
