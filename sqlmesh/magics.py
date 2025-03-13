@@ -751,7 +751,7 @@ class SQLMeshMagics(Magics):
     @argument(
         "--dlt-path",
         type=str,
-        help="The directory where the DLT pipeline resides. Use alongside template: dlt",
+        help="The directory where the DLT pipeline resides.",
     )
     @line_magic
     @pass_sqlmesh_context

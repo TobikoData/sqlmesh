@@ -968,7 +968,7 @@ def table_name(obj: Context, model_name: str, dev: bool) -> None:
 @click.option(
     "--dlt-path",
     type=str,
-    help="The directory where the DLT pipeline resides. Use alongside template: dlt",
+    help="The directory where the DLT pipeline resides.",
 )
 @click.pass_context
 @error_handler
