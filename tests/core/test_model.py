@@ -250,7 +250,7 @@ def test_model_union_query(sushi_context, assert_exp_eq):
         """SELECT
   CAST("marketing"."customer_id" AS INT) AS "customer_id",
   CAST("marketing"."status" AS TEXT) AS "status",
-  CAST("marketing"."updated_at" AS TIMESTAMP) AS "updated_at",
+  CAST("marketing"."updated_at" AS TIMESTAMPNTZ) AS "updated_at",
   CAST("marketing"."valid_from" AS TIMESTAMP) AS "valid_from",
   CAST("marketing"."valid_to" AS TIMESTAMP) AS "valid_to"
 FROM "memory"."sushi"."marketing" AS "marketing"
@@ -258,7 +258,7 @@ UNION ALL
 SELECT
   CAST("marketing"."customer_id" AS INT) AS "customer_id",
   CAST("marketing"."status" AS TEXT) AS "status",
-  CAST("marketing"."updated_at" AS TIMESTAMP) AS "updated_at",
+  CAST("marketing"."updated_at" AS TIMESTAMPNTZ) AS "updated_at",
   CAST("marketing"."valid_from" AS TIMESTAMP) AS "valid_from",
   CAST("marketing"."valid_to" AS TIMESTAMP) AS "valid_to"
 FROM "memory"."sushi"."marketing" AS "marketing"
