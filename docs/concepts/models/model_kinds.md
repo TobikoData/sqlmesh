@@ -318,7 +318,7 @@ In addition to specifying a time column in the `MODEL` DDL, the model's query mu
 
     A model's `time_column` should be in the [UTC time zone](https://en.wikipedia.org/wiki/Coordinated_Universal_Time) to ensure correct interaction with SQLMesh's scheduler and predefined macro variables.
 
-    This requirement aligns with the data engineering best practice of converting datetime/timestamp columns to UTC as soon as they are ingested into the data system and only converting them to local timezones when they exit the system for downstream uses.
+    This requirement aligns with the data engineering best practice of converting datetime/timestamp columns to UTC as soon as they are ingested into the data system and only converting them to local timezones when they exit the system for downstream uses. The `cron_tz` flag **does not** change this requirement.
 
     Placing all timezone conversion code in the system's first/last transformation models prevents inadvertent timezone-related errors as data flows between models.
 
