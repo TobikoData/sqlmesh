@@ -280,7 +280,7 @@ def test_plan_very_verbose(runner, tmp_path, copy_to_temp_path):
     # Input: `y` to apply and backfill
     result = runner.invoke(
         cli,
-        ["--log-file-dir", temp_path[0], "--paths", temp_path[0], "plan", "--verbose"],
+        ["--log-file-dir", temp_path[0], "--paths", temp_path[0], "plan", "-v"],
         input="y\n",
     )
     assert result.exit_code == 0
@@ -290,7 +290,7 @@ def test_plan_very_verbose(runner, tmp_path, copy_to_temp_path):
     # Input: `y` to apply and backfill
     result = runner.invoke(
         cli,
-        ["--log-file-dir", temp_path[0], "--paths", temp_path[0], "plan", "--very-verbose"],
+        ["--log-file-dir", temp_path[0], "--paths", temp_path[0], "plan", "-vv"],
         input="y\n",
     )
     assert result.exit_code == 0
