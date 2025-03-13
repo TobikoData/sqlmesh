@@ -2,6 +2,7 @@ import logging
 from contextlib import contextmanager
 from os import getcwd, path, remove
 from pathlib import Path
+from click import ClickException
 import pytest
 from click.testing import CliRunner
 import time_machine
@@ -778,6 +779,8 @@ def test_dlt_pipeline_errors(runner, tmp_path):
 
 @time_machine.travel(FREEZE_TIME)
 def test_plan_dlt(runner, tmp_path):
+    from dlt.common.pipeline import get_dlt_pipelines_dir
+
     root_dir = path.abspath(getcwd())
     pipeline_path = root_dir + "/examples/sushi_dlt/sushi_pipeline.py"
     dataset_path = root_dir + "/sushi.duckdb"
@@ -788,7 +791,15 @@ def test_plan_dlt(runner, tmp_path):
     with open(pipeline_path) as file:
         exec(file.read())
 
-    init_example_project(tmp_path, "duckdb", ProjectTemplate.DLT, "sushi")
+    # This should fail since it won't be able to locate the pipeline in this path
+    with pytest.raises(ClickException, match=r".*Could not attach to pipeline*"):
+        init_example_project(
+            tmp_path, "duckdb", ProjectTemplate.DLT, "sushi", dlt_path="./dlt2/pipelines"
+        )
+
+    # By setting the pipelines path where the pipeline directory is located, it should work
+    dlt_path = get_dlt_pipelines_dir()
+    init_example_project(tmp_path, "duckdb", ProjectTemplate.DLT, "sushi", dlt_path=dlt_path)
 
     expected_config = f"""gateways:
   duckdb:
@@ -925,8 +936,9 @@ WHERE
         remove(dlt_sushi_fillings_model_path)
         remove(dlt_sushi_twice_nested_model_path)
 
-        # Update to generate a specific model: sushi_types
-        assert generate_dlt_models(context, "sushi", ["sushi_types"], False) == [
+        # Update to generate a specific model: sushi_types.
+        # Also validate using the dlt_path that the pipelines are located.
+        assert generate_dlt_models(context, "sushi", ["sushi_types"], False, dlt_path) == [
             "sushi_dataset_sqlmesh.incremental_sushi_types"
         ]
 
@@ -972,6 +984,7 @@ def test_init_project_dialects(tmp_path):
             remove(tmp_path / "config.yaml")
 
 
+@time_machine.travel(FREEZE_TIME)
 def test_environments(runner, tmp_path):
     create_example_project(tmp_path)
     ttl = time_like_to_str(to_datetime(now_ds()) + timedelta(days=7))
