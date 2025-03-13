@@ -901,7 +901,7 @@ def test_audit_query_normalization():
     )
     assert (
         rendered_audit_query.sql("snowflake")
-        == """SELECT * FROM (SELECT * FROM "DB"."TEST_MODEL" AS "TEST_MODEL") AS "_Q_0" WHERE "A" IS NULL AND TRUE"""
+        == """SELECT * FROM "DB"."TEST_MODEL" AS "TEST_MODEL" WHERE "A" IS NULL AND TRUE"""
     )
 
 
