@@ -231,8 +231,11 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
     ) -> t.Dict[str, exp.DataType]:
         """Fetches column names and types for the target table."""
 
-        def dtype_to_sql(dtype: t.Optional[StandardSqlDataType]) -> str:
+        def dtype_to_sql(
+            dtype: t.Optional[StandardSqlDataType], field: bigquery.SchemaField
+        ) -> str:
             assert dtype
+            assert field
 
             kind = dtype.type_kind
             assert kind
@@ -240,16 +243,25 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
             # Not using the enum value to preserve compatibility with older versions
             # of the BigQuery library.
             if kind.name == "ARRAY":
-                return f"ARRAY<{dtype_to_sql(dtype.array_element_type)}>"
+                return f"ARRAY<{dtype_to_sql(dtype.array_element_type, field)}>"
             if kind.name == "STRUCT":
                 struct_type = dtype.struct_type
                 assert struct_type
                 fields = ", ".join(
-                    f"{field.name} {dtype_to_sql(field.type)}" for field in struct_type.fields
+                    f"{struct_field.name} {dtype_to_sql(struct_field.type, nested_field)}"
+                    for struct_field, nested_field in zip(struct_type.fields, field.fields)
                 )
                 return f"STRUCT<{fields}>"
             if kind.name == "TYPE_KIND_UNSPECIFIED":
-                return "JSON"
+                field_type = field.field_type
+
+                if field_type == "RANGE":
+                    # If the field is a RANGE then `range_element_type` should be set to
+                    # one of `"DATE"`, `"DATETIME"` or `"TIMESTAMP"`.
+                    return f"RANGE<{field.range_element_type.element_type}>"
+
+                return field_type
+
             return kind.name
 
         def create_mapping_schema(
@@ -257,7 +269,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
         ) -> t.Dict[str, exp.DataType]:
             return {
                 field.name: exp.DataType.build(
-                    dtype_to_sql(field.to_standard_sql().type), dialect=self.dialect
+                    dtype_to_sql(field.to_standard_sql().type, field), dialect=self.dialect
                 )
                 for field in schema
             }
