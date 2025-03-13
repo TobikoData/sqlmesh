@@ -165,6 +165,11 @@ class SQLMeshMagics(Magics):
         type=str,
         help="DLT pipeline for which to generate a SQLMesh project. Use alongside template: dlt",
     )
+    @argument(
+        "--dlt-path",
+        type=str,
+        help="The directory where the DLT pipeline resides. Use alongside template: dlt",
+    )
     @line_magic
     def init(self, line: str) -> None:
         """Creates a SQLMesh project scaffold with a default SQL dialect."""
@@ -175,7 +180,9 @@ class SQLMeshMagics(Magics):
             )
         except ValueError:
             raise MagicError(f"Invalid project template '{args.template}'")
-        init_example_project(args.path, args.sql_dialect, project_template, args.dlt_pipeline)
+        init_example_project(
+            args.path, args.sql_dialect, project_template, args.dlt_pipeline, args.dlt_path
+        )
         html = str(
             h(
                 "div",
@@ -741,6 +748,11 @@ class SQLMeshMagics(Magics):
         action="store_true",
         help="If set, existing models are overwritten with the new DLT tables.",
     )
+    @argument(
+        "--dlt-path",
+        type=str,
+        help="The directory where the DLT pipeline resides.",
+    )
     @line_magic
     @pass_sqlmesh_context
     def dlt_refresh(self, context: Context, line: str) -> None:
@@ -749,7 +761,7 @@ class SQLMeshMagics(Magics):
 
         args = parse_argstring(self.dlt_refresh, line)
         sqlmesh_models = generate_dlt_models(
-            context, args.pipeline, list(args.table or []), args.force
+            context, args.pipeline, list(args.table or []), args.force, args.dlt_path
         )
         if sqlmesh_models:
             model_names = "\n".join([f"- {model_name}" for model_name in sqlmesh_models])

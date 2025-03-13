@@ -135,6 +135,11 @@ def cli(
     type=str,
     help="DLT pipeline for which to generate a SQLMesh project. Use alongside template: dlt",
 )
+@click.option(
+    "--dlt-path",
+    type=str,
+    help="The directory where the DLT pipeline resides. Use alongside template: dlt",
+)
 @click.pass_context
 @error_handler
 @cli_analytics
@@ -143,6 +148,7 @@ def init(
     sql_dialect: t.Optional[str] = None,
     template: t.Optional[str] = None,
     dlt_pipeline: t.Optional[str] = None,
+    dlt_path: t.Optional[str] = None,
 ) -> None:
     """Create a new SQLMesh repository."""
     try:
@@ -150,7 +156,11 @@ def init(
     except ValueError:
         raise click.ClickException(f"Invalid project template '{template}'")
     init_example_project(
-        ctx.obj, dialect=sql_dialect, template=project_template, pipeline=dlt_pipeline
+        ctx.obj,
+        dialect=sql_dialect,
+        template=project_template,
+        pipeline=dlt_pipeline,
+        dlt_path=dlt_path,
     )
 
 
@@ -955,6 +965,11 @@ def table_name(obj: Context, model_name: str, dev: bool) -> None:
     default=False,
     help="If set, existing models are overwritten with the new DLT tables.",
 )
+@click.option(
+    "--dlt-path",
+    type=str,
+    help="The directory where the DLT pipeline resides.",
+)
 @click.pass_context
 @error_handler
 @cli_analytics
@@ -963,11 +978,12 @@ def dlt_refresh(
     pipeline: str,
     force: bool,
     table: t.List[str] = [],
+    dlt_path: t.Optional[str] = None,
 ) -> None:
     """Attaches to a DLT pipeline with the option to update specific or all missing tables in the SQLMesh project."""
     from sqlmesh.integrations.dlt import generate_dlt_models
 
-    sqlmesh_models = generate_dlt_models(ctx.obj, pipeline, list(table or []), force)
+    sqlmesh_models = generate_dlt_models(ctx.obj, pipeline, list(table or []), force, dlt_path)
     if sqlmesh_models:
         model_names = "\n".join([f"- {model_name}" for model_name in sqlmesh_models])
         ctx.obj.console.log_success(f"Updated SQLMesh project with models:\n{model_names}")

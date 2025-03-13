@@ -252,6 +252,7 @@ def init_example_project(
     dialect: t.Optional[str],
     template: ProjectTemplate = ProjectTemplate.DEFAULT,
     pipeline: t.Optional[str] = None,
+    dlt_path: t.Optional[str] = None,
     schema_name: str = "sqlmesh_example",
 ) -> None:
     root_path = Path(path)
@@ -276,7 +277,9 @@ def init_example_project(
     start = None
     if template == ProjectTemplate.DLT:
         if pipeline and dialect:
-            models, settings, start = generate_dlt_models_and_settings(pipeline, dialect)
+            models, settings, start = generate_dlt_models_and_settings(
+                pipeline_name=pipeline, dialect=dialect, dlt_path=dlt_path
+            )
         else:
             raise click.ClickException(
                 "DLT pipeline is a required argument to generate a SQLMesh project from DLT"
