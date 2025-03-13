@@ -984,6 +984,7 @@ def test_init_project_dialects(tmp_path):
             remove(tmp_path / "config.yaml")
 
 
+@time_machine.travel(FREEZE_TIME)
 def test_environments(runner, tmp_path):
     create_example_project(tmp_path)
     ttl = time_like_to_str(to_datetime(now_ds()) + timedelta(days=7))
