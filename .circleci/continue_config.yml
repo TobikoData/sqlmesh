@@ -48,7 +48,7 @@ jobs:
           name: Run doc tests
           command: make doc-test
 
-  style_and_slow_tests:
+  style_and_cicd_tests:
     parameters:
       python_version:
         type: string
@@ -76,7 +76,7 @@ jobs:
           name: Run linters and code style checks
           command: make py-style
       - run:
-          name: Run slow tests
+          name: Run cicd tests
           command: make cicd-test
       - store_test_results:
           path: test-results
@@ -270,7 +270,7 @@ workflows:
   main_pr:
     jobs:
       - doc_tests
-      - style_and_slow_tests:
+      - style_and_cicd_tests:
           matrix:
             parameters:
               python_version:
@@ -280,7 +280,7 @@ workflows:
                 - "3.12"
       - airflow_docker_tests:
           requires:
-            - style_and_slow_tests
+            - style_and_cicd_tests
           filters:
             branches:
               only:
@@ -320,7 +320,7 @@ workflows:
                - main
       - trigger_private_tests:
           requires:
-            - style_and_slow_tests
+            - style_and_cicd_tests
           filters:
             branches:
               only:
