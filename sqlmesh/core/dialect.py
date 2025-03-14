@@ -646,7 +646,9 @@ def _props_sql(self: Generator, expressions: t.List[exp.Expression]) -> str:
 
 def _on_virtual_update_sql(self: Generator, expressions: t.List[exp.Expression]) -> str:
     statements = "".join(
-        f"{self.sql(expression)}{';' if not isinstance(expression, JinjaStatement) else ''}{'\n'}"
+        f"{self.sql(expression)}\n"
+        if isinstance(expression, JinjaStatement)
+        else f"{self.sql(expression)};\n"
         for expression in expressions
     )
     return f"{ON_VIRTUAL_UPDATE_BEGIN};\n{statements}{ON_VIRTUAL_UPDATE_END};"
