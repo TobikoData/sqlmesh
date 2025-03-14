@@ -94,6 +94,7 @@ class ConnectionConfig(abc.ABC, BaseConfig):
     @property
     def _connection_factory_with_kwargs(self) -> t.Callable[[], t.Any]:
         """A function that is called to return a connection object for the given Engine Adapter"""
+        print('running connection factory with kwargs', self._static_connection_kwargs, self._connection_kwargs_keys)
         return partial(
             self._connection_factory,
             **{
@@ -217,7 +218,8 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
                         # threads to /share the same connection/ and just use thread-local cursors. In order to support ":memory:" databases
                         # and remove lock contention, the connection needs to live for the life of the application and not be closed
                         pass
-
+                print(args)
+                print(kwargs)
                 return ConnWrapper(duckdb.connect(*args, **kwargs))
 
             return _factory
@@ -262,15 +264,31 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
                 alias = exp.parse_identifier(alias, dialect="duckdb").sql(
                     identify=True, dialect="duckdb"
                 )
+                print(alias)
                 try:
+                    print(alias, type(path_options))
                     if isinstance(path_options, DuckDBAttachOptions):
+                        # path_options.token = self.token
+                        if path_options.type == "motherduck":
+                            continue
                         query = path_options.to_sql(alias)
                     else:
+    #                     path_options = DuckDBAttachOptions(
+    #                         **path_options
+    # #                          type: str
+    # # path: str
+    # # read_only: bool = False
+    # # token: t.Optional[str] = None
+    #                     )
                         query = f"ATTACH '{path_options}'"
                         if not path_options.startswith("md:"):
                             query += f" AS {alias}"
-                        elif self.token:
-                            query += f"?motherduck_token={self.token}"
+                        else:
+                            continue
+                        # elif self.token:
+                        #     query += f"?motherduck_token={self.token}"
+                    # print(cursor.sql("Show ALL DATABASES"))
+                    print(f"executing: {query}")
                     cursor.execute(query)
                 except BinderException as e:
                     # If a user tries to create a catalog pointing at `:memory:` and with the name `memory`
@@ -279,7 +297,7 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
                     if not (
                         'database with name "memory" already exists' in str(e)
                         and path_options == ":memory:"
-                    ):
+                    ) and not (f'database with name "{alias}" already exists' in str(e)):
                         raise e
                 if i == 0 and not getattr(self, "database", None):
                     cursor.execute(f"USE {alias}")
@@ -320,6 +338,7 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
         for data_file in data_files:
             key = data_file if isinstance(data_file, str) else data_file.path
             BaseDuckDBConnectionConfig._data_file_to_adapter[key] = adapter
+        print(BaseDuckDBConnectionConfig._data_file_to_adapter)
         return adapter
 
     def get_catalog(self) -> t.Optional[str]:
@@ -349,11 +368,15 @@ class MotherDuckConnectionConfig(BaseDuckDBConnectionConfig):
         from sqlmesh import __version__
 
         custom_user_agent_config = {"custom_user_agent": f"SQLMesh/{__version__}"}
-        if not self.database:
-            return {"config": custom_user_agent_config}
+        # if not self.database:
+        #     return {"config": custom_user_agent_config}
         connection_str = f"md:{self.database or ''}"
-        if self.token:
-            connection_str += f"?motherduck_token={self.token}"
+        connection_str += f"?motherduck_token={self.token}" if self.token else ""
+        import logging
+        logging.info(f"connection_str: {connection_str}")
+        # connection_str = f"md:{self.database or ''}"
+        # if self.token:
+        #     connection_str += f"?motherduck_token={self.token}"
         return {"database": connection_str, "config": custom_user_agent_config}
 
 
@@ -378,6 +401,7 @@ class DuckDBAttachOptions(BaseConfig):
         )
         options_sql = f" ({', '.join(options)})" if options else ""
         token_sql = "?motherduck_token=" + self.token if self.token else ""
+        print(f"to_sql outcome: ATTACH '{self.path}{token_sql}'{alias_sql}{options_sql}")
         return f"ATTACH '{self.path}{token_sql}'{alias_sql}{options_sql}"
 
 
