@@ -52,9 +52,9 @@ $ pip install tobiko-cloud-scheduler-facade[airflow]
 
 ### Connect Airflow to Tobiko Cloud
 
-First, provision an OAuth Client for Dagster to use by following the guide on how to [provision client credentials](../single_sign_on.md#provisioning-client-credentials).
+First, provision an OAuth Client for Airflow to use by following the guide on how to [provision client credentials](../single_sign_on.md#provisioning-client-credentials).
 
-This will give you OAuth `Client ID` and `Client Secret` values.
+After provisioning the credentials, you can obtain the `Client ID` and `Client Secret` values for Airflow to use to connect to Tobiko Cloud.
 
 Next, add an Airflow [connection](https://airflow.apache.org/docs/apache-airflow/stable/howto/connection.html#creating-a-connection-with-the-ui) containing your Tobiko Cloud credentials.
 
@@ -64,8 +64,8 @@ Specify these fields when adding the connection:
     - May not contain spaces, single quotes `'`, or double quotes `"`
 - **Connection Type**: always HTTP
 - **Host**: URL for your Tobiko Cloud project
-- **Login**: OAuth Client ID for Airflow
-- **Password**: OAuth Client Secret for Airflow
+- **Login**: OAuth `Client ID` for Airflow
+- **Password**: OAuth `Client Secret` for Airflow
 
 It is convenient to specify the connection in the Airflow UI, as in this example with the name `tobiko_cloud`:
 

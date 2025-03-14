@@ -59,9 +59,9 @@ On this page, we demonstrate the secrets method Dagster recommends for **local d
 
 First, provision an OAuth Client for Dagster to use by following the guide on how to [provision client credentials](../single_sign_on.md#provisioning-client-credentials).
 
-This will give you OAuth `Client ID` and `Client Secret` values.
+After provisioning the credentials, you can obtain the `Client ID` and `Client Secret` values for Dagster to use to connect to Tobiko Cloud.
 
-Then, in your Dagster project, create an `.env` file if it does not already exist. Next, specify environment variables containing the Tobiko Cloud URL and OAuth secrets:
+In your Dagster project, create an `.env` file if it does not already exist. Next, specify environment variables containing the Tobiko Cloud URL and OAuth secrets:
 
 ```sh title=".env"
 TCLOUD_BASE_URL=<URL for your Tobiko Cloud project> # ex: https://cloud.tobikodata.com/sqlmesh/tobiko/public-demo/
