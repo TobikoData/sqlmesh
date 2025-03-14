@@ -5,14 +5,13 @@ import time
 import typing as t
 import warnings
 
-from pandas.api.types import is_datetime64_any_dtype  # type: ignore
-
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone, tzinfo
 
 import dateparser
 import pandas as pd
 from dateparser import freshness_date_parser as freshness_date_parser_module
 from dateparser.freshness_date_parser import freshness_date_parser
+from pandas.api.types import is_datetime64_any_dtype  # type: ignore
 from sqlglot import exp
 
 from sqlmesh.utils import ttl_cache
@@ -149,6 +148,7 @@ def to_datetime(
     value: TimeLike,
     relative_base: t.Optional[datetime] = None,
     check_categorical_relative_expression: bool = True,
+    tz: t.Optional[tzinfo] = None,
 ) -> datetime:
     """Converts a value into a UTC datetime object.
 
@@ -156,12 +156,13 @@ def to_datetime(
         value: A variety of date formats. If the value is number-like, it is assumed to be millisecond epochs.
         relative_base: The datetime to reference for time expressions that are using relative terms.
         check_categorical_relative_expression: If True, takes into account the relative expressions that are categorical.
+        tz: Timezone to convert datetime to, defaults to utc
 
     Raises:
         ValueError if value cannot be converted to a datetime.
 
     Returns:
-        A datetime object with tz utc.
+        A datetime object with tz (default UTC).
     """
     if isinstance(value, datetime):
         dt: t.Optional[datetime] = value
@@ -198,9 +199,11 @@ def to_datetime(
     if dt is None:
         raise ValueError(f"Could not convert `{value}` to datetime.")
 
+    tz = tz or UTC
+
     if dt.tzinfo:
-        return dt if dt.tzinfo == UTC else dt.astimezone(UTC)
-    return dt.replace(tzinfo=UTC)
+        return dt if dt.tzinfo == tz else dt.astimezone(tz)
+    return dt.replace(tzinfo=tz)
 
 
 def to_date(value: TimeLike, relative_base: t.Optional[datetime] = None) -> date:

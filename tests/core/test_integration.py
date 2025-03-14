@@ -4884,6 +4884,67 @@ def test_plan_production_environment_statements(tmp_path: Path):
     assert environment_statements[0].python_env["__sqlmesh__vars__"].payload == "{'var_5': 5}"
 
 
+@time_machine.travel("2025-03-08 00:00:00 UTC")
+def test_tz(init_and_plan_context):
+    context, _ = init_and_plan_context("examples/sushi")
+
+    model = context.get_model("sushi.waiter_revenue_by_day")
+    context.upsert_model(
+        SqlModel.parse_obj(
+            {**model.dict(), "cron_tz": "America/Los_Angeles", "start": "2025-03-07"}
+        )
+    )
+
+    def assert_intervals(plan, intervals):
+        assert (
+            next(
+                intervals.intervals
+                for intervals in plan.missing_intervals
+                if intervals.snapshot_id.name == model.fqn
+            )
+            == intervals
+        )
+
+    plan = context.plan_builder("prod", skip_tests=True).build()
+
+    # we have missing intervals but not waiter_revenue_by_day because it's not midnight pacific yet
+    assert plan.missing_intervals
+
+    with pytest.raises(StopIteration):
+        assert_intervals(plan, [])
+
+    # now we're ready 8AM UTC == midnight PST
+    with time_machine.travel("2025-03-08 08:00:00 UTC"):
+        plan = context.plan_builder("prod", skip_tests=True).build()
+        assert_intervals(plan, [(to_timestamp("2025-03-07"), to_timestamp("2025-03-08"))])
+
+    with time_machine.travel("2025-03-09 07:00:00 UTC"):
+        plan = context.plan_builder("prod", skip_tests=True).build()
+
+        assert_intervals(
+            plan,
+            [
+                (to_timestamp("2025-03-07"), to_timestamp("2025-03-08")),
+            ],
+        )
+
+    with time_machine.travel("2025-03-09 08:00:00 UTC"):
+        plan = context.plan_builder("prod", skip_tests=True).build()
+
+        assert_intervals(
+            plan,
+            [
+                (to_timestamp("2025-03-07"), to_timestamp("2025-03-08")),
+                (to_timestamp("2025-03-08"), to_timestamp("2025-03-09")),
+            ],
+        )
+
+        context.apply(plan)
+
+        plan = context.plan_builder("prod", skip_tests=True).build()
+        assert not plan.missing_intervals
+
+
 def apply_to_environment(
     context: Context,
     environment: str,

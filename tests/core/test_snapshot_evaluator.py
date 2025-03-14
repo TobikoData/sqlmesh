@@ -3192,8 +3192,8 @@ def test_custom_materialization_strategy(adapter_mock, make_snapshot):
 def test_custom_materialization_strategy_with_custom_properties(adapter_mock, make_snapshot):
     custom_insert_kind = None
 
-    class TestCustomKind(CustomKind):  # type: ignore[no-untyped-def]
-        _primary_key: t.List[exp.Expression]
+    class TestCustomKind(CustomKind):
+        _primary_key: t.List[exp.Expression]  # type: ignore[no-untyped-def]
 
         @model_validator(mode="after")
         def _validate_model(self) -> Self:

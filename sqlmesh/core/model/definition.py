@@ -1086,6 +1086,7 @@ class _Model(ModelMeta, frozen=True):
                 self.description,
                 json.dumps(self.column_descriptions, sort_keys=True),
                 self.cron,
+                self.cron_tz.key if self.cron_tz else None,
                 str(self.start) if self.start else None,
                 str(self.end) if self.end else None,
                 str(self.retention) if self.retention else None,
