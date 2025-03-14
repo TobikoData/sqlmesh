@@ -1928,7 +1928,7 @@ def load_sql_based_models(
     **loader_kwargs: t.Any,
 ) -> t.List[Model]:
     gateway: t.Optional[exp.Expression] = None
-    blueprints: t.Optional[t.List[t.Optional[exp.Expression]]] = None
+    blueprints: t.Optional[exp.Expression] = None
 
     model_meta = seq_get(expressions, 0)
     for prop in (isinstance(model_meta, d.Model) and model_meta.expressions) or []:
@@ -1936,6 +1936,22 @@ def load_sql_based_models(
             gateway = prop.args["value"]
         elif prop.name == "blueprints":
             blueprints = prop.args["value"]
+
+    if isinstance(blueprints, d.MacroFunc):
+        rendered_blueprints = render_expression(
+            expression=blueprints,
+            module_path=module_path,
+            macros=loader_kwargs.get("macros"),
+            jinja_macros=loader_kwargs.get("jinja_macros"),
+            variables=get_variables(None),
+            path=path,
+            dialect=dialect,
+            default_catalog=loader_kwargs.get("default_catalog"),
+        )
+        if not rendered_blueprints:
+            raise_config_error("Failed to render blueprints property", path)
+
+        blueprints = t.cast(t.List, rendered_blueprints)[0]
 
     return create_models_from_blueprints(
         gateway=gateway,
