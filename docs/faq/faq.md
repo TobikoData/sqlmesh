@@ -153,6 +153,11 @@
 
     You can retroactively apply the forward-only plan's changes to existing data in the production environment with [`plan`'s `--effective-from` option](../reference/cli.md#plan).
 
+??? question "How can I force a model to run now?"
+    Ensure that the model's `allow_partials` attribute is set to `true` and execute the `run` command with the `--ignore-cron` option: `sqlmesh run --ignore-cron`.
+
+    See the documentation for [allow_partials](../concepts/models/overview.md#allow_partials) to understand the rationale behind this.
+
 
 ## Databases/Engines
 
