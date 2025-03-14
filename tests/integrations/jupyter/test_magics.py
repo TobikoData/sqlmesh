@@ -291,7 +291,7 @@ def test_plan(
 
     # TODO: Should this be going to stdout? This is printing the status updates for when each batch finishes for
     # the models and how long it took
-    assert len(output.stdout.strip().split("\n")) == 24
+    assert len(output.stdout.strip().split("\n")) == 46
     assert not output.stderr
     assert len(output.outputs) == 4
     text_output = convert_all_html_output_to_text(output)
@@ -326,7 +326,7 @@ def test_run_dag(
     assert not output.stderr
     assert len(output.outputs) == 2
     assert convert_all_html_output_to_text(output) == [
-        "Model batches executed successfully",
+        "Model batches evaluated successfully",
         "Run finished for environment 'prod'",
     ]
     assert get_all_html_output(output) == [
@@ -337,7 +337,7 @@ def test_run_dag(
                 h(
                     "span",
                     {"style": SUCCESS_STYLE},
-                    "Model batches executed successfully",
+                    "Model batches evaluated successfully",
                     autoescape=False,
                 ),
                 autoescape=False,

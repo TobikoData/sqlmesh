@@ -528,6 +528,8 @@ def test_audit_failure_notifications(
             to_datetime("2022-01-03"),
             DeployabilityIndex.all_deployable(),
             0,
+            EnvironmentNamingInfo(),
+            None,
         )
 
     evaluator_audit_mock.return_value = [
