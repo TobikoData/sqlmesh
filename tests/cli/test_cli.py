@@ -719,7 +719,7 @@ def test_run_dev(runner, tmp_path, flag):
     # Confirm backfill occurs when we run non-backfilled dev env
     result = runner.invoke(cli, ["--log-file-dir", tmp_path, "--paths", tmp_path, "run", "dev"])
     assert result.exit_code == 0
-    assert_model_batches_executed(result)
+    assert_model_batches_evaluated(result)
 
 
 @time_machine.travel(FREEZE_TIME)
@@ -751,7 +751,7 @@ def test_run_cron_elapsed(runner, tmp_path):
         result = runner.invoke(cli, ["--log-file-dir", tmp_path, "--paths", tmp_path, "run"])
 
     assert result.exit_code == 0
-    assert_model_batches_executed(result)
+    assert_model_batches_evaluated(result)
 
 
 def test_clean(runner, tmp_path):
