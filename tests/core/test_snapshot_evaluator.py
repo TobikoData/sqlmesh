@@ -2710,7 +2710,7 @@ def test_audit_wap(adapter_mock, make_snapshot):
     not_null_query = call_args[0][0][0]
     assert (
         not_null_query.sql(dialect="spark")
-        == "SELECT COUNT(*) FROM (SELECT * FROM (SELECT * FROM `spark_catalog`.`test_schema`.`test_table`.`branch_wap_test_wap_id` AS `branch_wap_test_wap_id`) AS `_q_0` WHERE `a` IS NULL AND TRUE) AS audit"
+        == "SELECT COUNT(*) FROM (SELECT * FROM `spark_catalog`.`test_schema`.`test_table`.`branch_wap_test_wap_id` AS `branch_wap_test_wap_id` WHERE `a` IS NULL AND TRUE) AS audit"
     )
 
     custom_audit_query = call_args[1][0][0]
@@ -2752,7 +2752,7 @@ def test_audit_with_datetime_macros(adapter_mock, make_snapshot):
     unique_combination_of_columns_query = call_args[0][0][0]
     assert (
         unique_combination_of_columns_query.sql(dialect="duckdb")
-        == """SELECT COUNT(*) FROM (SELECT "a" AS "a" FROM (SELECT * FROM "test_schema"."test_table" AS "test_table") AS "_q_0" WHERE '2020-01-01' <> '2020-01-01' GROUP BY "a" HAVING COUNT(*) > 1) AS audit"""
+        == """SELECT COUNT(*) FROM (SELECT "a" AS "a" FROM "test_schema"."test_table" AS "test_table" WHERE '2020-01-01' <> '2020-01-01' GROUP BY "a" HAVING COUNT(*) > 1) AS audit"""
     )
 
 

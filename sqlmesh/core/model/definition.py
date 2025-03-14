@@ -527,7 +527,9 @@ class _Model(ModelMeta, frozen=True):
             deployability_index=deployability_index,
             **{
                 **audit.defaults,
-                "this_model": exp.select("*").from_(quoted_model_name).where(where).subquery(),
+                "this_model": exp.select("*").from_(quoted_model_name).where(where).subquery()
+                if where is not None
+                else quoted_model_name,
                 **kwargs,
             },  # type: ignore
         )
