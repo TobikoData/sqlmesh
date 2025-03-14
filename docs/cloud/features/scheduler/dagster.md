@@ -57,14 +57,17 @@ Dagster recommends [injecting secret values using Environment Variables](https:/
 
 On this page, we demonstrate the secrets method Dagster recommends for **local development**.
 
-In your Dagster project, create an `.env` file if it does not already exist. Next, specify environment variables containing the Tobiko Cloud URL and token secrets:
+First, provision an OAuth Client for Dagster to use by following the guide on how to [provision client credentials](../single_sign_on.md#provisioning-client-credentials).
+
+After provisioning the credentials, you can obtain the `Client ID` and `Client Secret` values for Dagster to use to connect to Tobiko Cloud.
+
+In your Dagster project, create an `.env` file if it does not already exist. Next, specify environment variables containing the Tobiko Cloud URL and OAuth secrets:
 
 ```sh title=".env"
-TOBIKO_CLOUD_BASE_URL=<URL for your Tobiko Cloud project> # ex: https://cloud.tobikodata.com/sqlmesh/tobiko/public-demo/
-TOBIKO_CLOUD_TOKEN=<your Tobiko Cloud API token> # ex: 'ioawjioefja1'
+TCLOUD_BASE_URL=<URL for your Tobiko Cloud project> # ex: https://cloud.tobikodata.com/sqlmesh/tobiko/public-demo/
+TCLOUD_CLIENT_ID=<your OAuth Client ID for Dagster> # ex: '5ad2938d-e607-489a-8bec-bdfb5924b79b'
+TCLOUD_CLIENT_SECRET=<your OAuth Client Secret for Dagster> # ex: 'psohFoOcgweYnbx-bmYn3XXRDSNIP'
 ```
-
-Your Solutions Architect will provide the base URL and token values during your Tobiko Cloud onboarding.
 
 ### Create Dagster objects
 
@@ -84,8 +87,9 @@ from dagster import EnvVar # for accessing variables in .env file
 
 # create and configure SQLMeshEnterpriseDagster instance named `sqlmesh`
 sqlmesh = SQLMeshEnterpriseDagster(
-    url=EnvVar("TOBIKO_CLOUD_BASE_URL").get_value(), # environment variable from .env file
-    token=EnvVar("TOBIKO_CLOUD_TOKEN").get_value(), # environment variable from .env file
+    url=EnvVar("TCLOUD_BASE_URL").get_value(), # environment variable from .env file
+    oauth_client_id=EnvVar("TCLOUD_CLIENT_ID").get_value(), # environment variable from .env file
+    oauth_client_secret=EnvVar("TCLOUD_CLIENT_SECRET").get_value(), # environment variable from .env file
 )
 
 # create Definitions object with `sqlmesh` object's `create_definitions()` method
@@ -186,8 +190,8 @@ Specifically, we must use Dagster's GraphQL API, which is not enabled by default
 
 ```python title="definitions.py" linenums="1" hl_lines="4 5"
 sqlmesh = SQLMeshEnterpriseDagster(
-    url=EnvVar("TOBIKO_CLOUD_BASE_URL").get_value(),
-    token=EnvVar("TOBIKO_CLOUD_TOKEN").get_value(),
+    url=EnvVar("TCLOUD_BASE_URL").get_value(),
+    #...SNIP...,
     dagster_graphql_host="localhost", # Example GraphQL host (could be passed in an environment variable instead)
     dagster_graphql_port=3000 # Example GraphQL port (could be passed in an environment variable instead)
 )
@@ -370,7 +374,8 @@ customer_revenue_by_day = AssetKey(["postgres", "sushi", "customer_revenue_by_da
 | Option                     | Description                                                                                                                                                                            | Type | Required |
 |----------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|:----:|:--------:|
 | `url`                      | The Base URL to your Tobiko Cloud instance                                                                                                                                             | str  | Y        |
-| `token`                    | Your Tobiko Cloud API Token                                                                                                                                                            | str  | N        |
+| `oauth_client_id`          | OAuth Client ID of the credentials you [provisioned](../single_sign_on.md#provisioning-client-credentials) for Dagster                                                                 | str  | N        |
+| `oauth_client_secret`      | OAuth Client Secret of the credentials you [provisioned](../single_sign_on.md#provisioning-client-credentials) for Dagster                                                             | str  | N        |
 | `dagster_graphql_host`     | Hostname of the Dagster Webserver GraphQL endpoint                                                                                                                                     | str  | N        |
 | `dagster_graphql_port`     | Port of the Dagster Webserver GraphQL endpoint                                                                                                                                         | int  | N        |
 | `dagster_graphql_kwargs`   | Extra args to pass to the [DagsterGraphQLClient](https://docs.dagster.io/api/python-api/libraries/dagster-graphql#dagster_graphql.DagsterGraphQLClient) class when it is instantiated  | dict | N        |
