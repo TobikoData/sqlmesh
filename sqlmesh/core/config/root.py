@@ -147,7 +147,7 @@ class Config(BaseConfig):
     }
 
     _connection_config_validator = connection_config_validator
-    _scheduler_config_validator = scheduler_config_validator
+    _scheduler_config_validator = scheduler_config_validator  # type: ignore
     _variables_validator = variables_validator
 
     @field_validator("gateways", mode="before")

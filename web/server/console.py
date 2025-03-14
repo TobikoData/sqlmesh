@@ -12,6 +12,7 @@ from sqlmesh.core.console import TerminalConsole
 from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.plan.definition import EvaluatablePlan
 from sqlmesh.core.snapshot import Snapshot, SnapshotInfoLike
+from sqlmesh.core.snapshot.definition import Intervals
 from sqlmesh.core.test import ModelTest
 from sqlmesh.utils.date import now_timestamp
 from web.server import models
@@ -91,7 +92,7 @@ class ApiConsole(TerminalConsole):
 
     def start_evaluation_progress(
         self,
-        batches: t.Dict[Snapshot, int],
+        batched_intervals: t.Dict[Snapshot, Intervals],
         environment_naming_info: EnvironmentNamingInfo,
         default_catalog: t.Optional[str],
     ) -> None:
@@ -104,7 +105,7 @@ class ApiConsole(TerminalConsole):
                     name=snapshot.name,
                     view_name=snapshot.display_name(environment_naming_info, default_catalog),
                 )
-                for snapshot, total_tasks in batches.items()
+                for snapshot, total_tasks in batched_intervals.items()
             }
             self.plan_apply_stage_tracker.add_stage(
                 models.PlanStage.backfill,
