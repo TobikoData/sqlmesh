@@ -425,7 +425,7 @@ Learn more about these properties and their default values in the [model configu
 
     NOTE: To force the model to run every time, set `allow_partials` to `true` and use the `--ignore-cron` argument: `sqlmesh run --ignore-cron`. Simply setting `allow_partials` to `true` does not guarantee that the model will run on every `sqlmesh run` command invocation. The model’s configured `cron` schedule is still respected, even when partial intervals are allowed. 
 
-    At the same time, running with `--ignore-cron` without setting `allow_partials` to `true` may not produce the desired results. Depending on the time of day, the interval might be incomplete and not ready for execution, even when ignoring the `cron` schedule. Therefore, both are required to ensure that the model runs on every `sqlmesh run` invocation.
+    Similarly, using `--ignore-cron` without setting `allow_partials` to `true` does not guarantee the model will run every time. Depending on the time of day, the interval might not be complete and ready for execution, even when ignoring the `cron` schedule. Therefore, both are required to ensure that the model runs on every `sqlmesh run` invocation.
 
 ### enabled
 :   Whether the model is enabled. This attribute is `true` by default. Setting it to `false` causes SQLMesh to ignore this model when loading the project.
