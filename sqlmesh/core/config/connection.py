@@ -352,7 +352,8 @@ class MotherDuckConnectionConfig(BaseDuckDBConnectionConfig):
 
         custom_user_agent_config = {"custom_user_agent": f"SQLMesh/{__version__}"}
         connection_str = f"md:{self.database or ''}"
-        connection_str += f"?motherduck_token={self.token}" if self.token else ""
+        if self.token:
+            connection_str += f"?motherduck_token={self.token}"
         return {"database": connection_str, "config": custom_user_agent_config}
 
 
