@@ -153,7 +153,7 @@ $ tcloud auth status
 
 ### Login
 
-To initiliaze the login process you can run the `login` command:
+To initialize the login process you can run the `login` command:
 
 ``` bash
 $ tcloud auth login
@@ -193,3 +193,28 @@ Not currently authenticated
 ![tcloud_logout](./single_sign_on/tcloud_logout.png)
 
 Otherwise, you will be logged out automatically when the SSO session expires (every 24 hours). 
+
+## OAuth Clients
+
+Sometimes, you want to grant an external service access to your Tobiko Cloud project. This could be for example the [CICD bot](../../integrations/github.md) or a [scheduler integration](./scheduler/airflow.md).
+
+These services take Client ID and Client Secret credentials.
+
+!!! Info "One set of credentials per service"
+    It's best practice to provision a separate set of credentials for each service that you wish to connect to Tobiko Cloud. This gives you the flexibility to revoke credentials for a certain service without affecting other services.
+
+### Provisioning client credentials
+
+To provision OAuth credentials for a new service, browse to `Settings -> OAuth Clients`.
+
+Enter a client name and human readable description like so:
+
+![Add new OAuth Client](./single_sign_on/oauth_client_1.png)
+
+Once you click `Save`, the client will be added to the list:
+
+![OAuth Client List](./single_sign_on/oauth_client_2.png)
+
+To fetch the Client ID or Client Secret, click `Copy ID` or `Copy Secret`. The values will be copied to the system clipboard.
+
+You can then paste these values into the relevant location for the external service to pick them up and use them to connect to your Tobiko Cloud project.
