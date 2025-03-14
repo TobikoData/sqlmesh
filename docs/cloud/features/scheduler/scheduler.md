@@ -169,7 +169,7 @@ Self-hosted executors as the name indicates are self-hosted workers that take on
 
 Exact configuration is left to the user and will vary based on the infrastructure and setup of the user, for example the executors could be run on a Kubernetes cluster or as a standalone pair of Docker containers depending on the user's infrastructure. The following details are an example of how this is done for a Postgres data warehouse and a pair of local containers running in docker.
 
-Tobiko Cloud requires 2 docker instances to be running, one to pick up runs and one for plans. The entrypoint for both is `executor run` and `executor plan` respectively. The executor container can be found on [Docker Hub](https://hub.docker.com/r/tobikodata/tcloud). In addition to running the container, the user will need to configure the executor with environment variables that point to Tobiko Cloud as well as the data warehouse.
+Tobiko Cloud requires 2 docker instances to be running, one to pick up runs and one for plan applications. The entrypoint for both is `executor run` and `executor apply` respectively. The executor container can be found on [Docker Hub](https://hub.docker.com/r/tobikodata/tcloud). In addition to running the container, the user will need to configure the executor with environment variables that point to Tobiko Cloud as well as the data warehouse.
 
 To connect to the Tobiko Cloud, the user will need to provide the following environment variables, replaced with the user's own values.
 
@@ -203,10 +203,10 @@ Once you have set up both sets of environment variables in a file named `local.e
 
 ```shell
 docker run -d --env-file local.env tobikodata/tcloud:latest -- executor run
-docker run -d --env-file local.env tobikodata/tcloud:latest -- executor plan
+docker run -d --env-file local.env tobikodata/tcloud:latest -- executor apply
 ```
 
-After the executors are properly configured, they will appear in the cloud UI where they can be used to execute plans and scheduled tasks.
+After the executors are properly configured, they will appear in the cloud UI where they can be used to apply plans and execute scheduled runs.
 
 ![executors](../scheduler/executors.png)
 
@@ -226,7 +226,7 @@ In production settings, we recommend setting up health checks as well, as these 
 
 ```shell
 docker run -d --env-file local.env tobikodata/tcloud:latest -- executor run --check
-docker run -d --env-file local.env tobikodata/tcloud:latest -- executor plan --check
+docker run -d --env-file local.env tobikodata/tcloud:latest -- executor apply --check
 ```
 
 For environments that ignore the container's entrypoint, for example in the case of Kubernetes healthchecks, the health check is invoked as follows:
@@ -243,14 +243,14 @@ readinessProbe:
 ```
 
 ```yaml
-# For the plan executor
+# For the apply executor
 readinessProbe:
   exec:
     command:
     - "/app/pex"
     - "executor"
-    - "plan"
+    - "apply"
     - "--check"
 ```
 
-Each executor type (run or plan) should have its own health check implemented to ensure proper monitoring of both components.
+Each executor type (run or apply) should have its own health check implemented to ensure proper monitoring of both components.
