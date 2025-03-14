@@ -30,6 +30,7 @@ from sqlglot import exp
 from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.linter.rule import RuleViolation
 from sqlmesh.core.model import Model
+from sqlmesh.core.model.definition import AuditResult
 from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotChangeCategory,
@@ -95,6 +96,12 @@ class Console(abc.ABC):
     @abc.abstractmethod
     def stop_plan_evaluation(self) -> None:
         """Indicates that the evaluation has ended."""
+
+    @abc.abstractmethod
+    def store_evaluation_audit_results(
+        self, snapshot: Snapshot, audit_results: t.List[AuditResult]
+    ) -> None:
+        """Stores the audit results for the snapshot evaluation."""
 
     @abc.abstractmethod
     def start_evaluation_progress(
@@ -413,6 +420,11 @@ class NoopConsole(Console):
     def stop_plan_evaluation(self) -> None:
         pass
 
+    def store_evaluation_audit_results(
+        self, snapshot: Snapshot, audit_results: t.List[AuditResult]
+    ) -> None:
+        pass
+
     def start_evaluation_progress(
         self,
         batch_sizes: t.Dict[Snapshot, int],
@@ -678,6 +690,7 @@ class TerminalConsole(Console):
         self.evaluation_total_task: t.Optional[TaskID] = None
         self.evaluation_model_progress: t.Optional[Progress] = None
         self.evaluation_model_tasks: t.Dict[str, TaskID] = {}
+        self.evaluation_model_batch_sizes: t.Dict[Snapshot, int] = {}
 
         # Put in temporary values that are replaced when evaluating
         self.environment_naming_info = EnvironmentNamingInfo()
@@ -725,6 +738,11 @@ class TerminalConsole(Console):
 
     def stop_plan_evaluation(self) -> None:
         pass
+
+    def store_evaluation_audit_results(
+        self, snapshot: Snapshot, audit_results: t.List[AuditResult]
+    ) -> None:
+        self.evaluation_audit_results[snapshot] = audit_results
 
     def start_evaluation_progress(
         self,

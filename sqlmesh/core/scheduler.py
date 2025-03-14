@@ -166,6 +166,8 @@ class Scheduler:
         execution_time: TimeLike,
         deployability_index: DeployabilityIndex,
         batch_index: int,
+        environment_naming_info: EnvironmentNamingInfo,
+        default_catalog: t.Optional[str],
         **kwargs: t.Any,
     ) -> t.Tuple[t.List[AuditResult], t.List[AuditError]]:
         """Evaluate a snapshot and add the processed interval to the state sync.
@@ -209,6 +211,7 @@ class Scheduler:
             wap_id=wap_id,
             **kwargs,
         )
+        get_console().store_evaluation_audit_results(snapshot, audit_results)
 
         audit_errors_to_raise: t.List[AuditError] = []
         audit_errors_to_warn: t.List[AuditError] = []
@@ -427,7 +430,7 @@ class Scheduler:
         batched_intervals = self.batch_intervals(merged_intervals)
 
         self.console.start_evaluation_progress(
-            {snapshot: len(intervals) for snapshot, intervals in batched_intervals.items()},
+            batched_intervals,
             environment_naming_info,
             self.default_catalog,
         )

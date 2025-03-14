@@ -12,6 +12,7 @@ from sqlmesh.core.console import TerminalConsole
 from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.plan.definition import EvaluatablePlan
 from sqlmesh.core.snapshot import Snapshot, SnapshotInfoLike
+from sqlmesh.core.snapshot.definition import Intervals
 from sqlmesh.core.test import ModelTest
 from sqlmesh.utils.date import now_timestamp
 from web.server import models
