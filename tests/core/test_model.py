@@ -8233,6 +8233,49 @@ def entrypoint(evaluator):
     )
 
 
+def test_dynamic_blueprinting(tmp_path: Path) -> None:
+    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+
+    dynamic_template = tmp_path / "models/dynamic_template.sql"
+    dynamic_template.parent.mkdir(parents=True, exist_ok=True)
+    dynamic_template.write_text(
+        """
+        MODEL (
+          name @customer.some_table,
+          kind FULL,
+          blueprints @gen_blueprints(),
+        );
+
+        SELECT
+          @field_a,
+          @{field_b} AS field_b
+        FROM @customer.some_source
+
+        """
+    )
+
+    gen_blueprints = tmp_path / "macros/gen_blueprints.py"
+    gen_blueprints.parent.mkdir(parents=True, exist_ok=True)
+    gen_blueprints.write_text(
+        """from sqlmesh import macro
+
+@macro()
+def gen_blueprints(evaluator):
+    return (
+        "((customer := customer1, field_a := x, field_b := y),"
+        " (customer := customer2, field_a := z, field_b := w))"
+    )"""
+    )
+
+    ctx = Context(
+        config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb")), paths=tmp_path
+    )
+
+    assert len(ctx.models) == 2
+    assert '"memory"."customer1"."some_table"' in ctx.models
+    assert '"memory"."customer2"."some_table"' in ctx.models
+
+
 @time_machine.travel("2020-01-01 00:00:00 UTC")
 def test_dynamic_date_spine_model(assert_exp_eq):
     @macro()
