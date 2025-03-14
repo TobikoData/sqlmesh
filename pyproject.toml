@@ -25,7 +25,7 @@ dependencies = [
     "tenacity",
     "time-machine",
 ]
-classifiers=[
+classifiers = [
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: Apache Software License",
@@ -146,10 +146,62 @@ fallback_version = "0.0.0"
 local_scheme = "no-local-version"
 
 [tool.setuptools.packages.find]
-include=["sqlmesh", "sqlmesh.*", "web*"]
+include = ["sqlmesh", "sqlmesh.*", "web*"]
 
 [tool.setuptools.package-data]
 web = ["client/dist/**"]
 "*" = ["py.typed"]
 
+# MyPy Rules
+[tool.mypy]
+plugins = "pydantic.mypy"
+no_implicit_optional = true
+disallow_untyped_defs = true
 
+[[tool.mypy.overrides]]
+module = [
+    "examples.*.macros.*",
+    "tests.*",
+    "sqlmesh.migrations.*"
+]
+disallow_untyped_defs = false
+# Sometimes it's helpful to use types within an "untyped" function because it allows IDE assistance
+# Unfortunately this causes MyPy to print an annoying 'By default the bodies of untyped functions are not checked'
+# warning so we disable that warning here
+disable_error_code = "annotation-unchecked"
+
+[[tool.mypy.overrides]]
+module = [
+    "api.*",
+    "airflow.*",
+    "astor.*",
+    "IPython.*",
+    "hyperscript.*",
+    "py.*",
+    "ruamel.*",
+    "setuptools.*",
+    "graphviz.*",
+    "ipywidgets.*",
+    "google.*",
+    "snowflake.*",
+    "redshift_connector",
+    "databricks.*",
+    "faker.*",
+    "agate.*",
+    "databricks_cli.*",
+    "mysql.*",
+    "pymssql.*",
+    "psycopg2.*",
+    "langchain.*",
+    "pytest_lazyfixture.*",
+    "dbt.adapters.*",
+    "slack_sdk.*",
+    "py4j.*",
+    "boto3.*",
+    "trino.*",
+    "bs4.*",
+    "pydantic_core.*",
+    "dlt.*",
+    "bigframes.*",
+]
+ignore_missing_imports = true
