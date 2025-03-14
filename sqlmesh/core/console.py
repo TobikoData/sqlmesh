@@ -1353,6 +1353,7 @@ class TerminalConsole(Console):
         logger.warning(long_message or short_message)
         if not self.ignore_warnings:
             if long_message:
+                file_path = None
                 for handler in logger.root.handlers:
                     if isinstance(handler, logging.FileHandler):
                         file_path = handler.baseFilename

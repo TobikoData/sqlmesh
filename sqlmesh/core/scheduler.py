@@ -7,6 +7,7 @@ from sqlmesh.core import constants as c
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.environment import EnvironmentNamingInfo, execute_environment_statements
 from sqlmesh.core.macros import RuntimeStage
+from sqlmesh.core.model.definition import AuditResult
 from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.notification_target import (
     NotificationEvent,
@@ -167,6 +168,8 @@ class Scheduler:
         batch_index: int,
         environment_naming_info: EnvironmentNamingInfo,
         default_catalog: t.Optional[str],
+        on_audits_complete: t.Optional[t.Callable[[Snapshot, t.List[AuditResult]], None]] = None,
+        on_audit_warning: t.Optional[t.Callable[[str, t.Optional[str]], None]] = None,
         **kwargs: t.Any,
     ) -> None:
         """Evaluate a snapshot and add the processed interval to the state sync.
@@ -207,7 +210,8 @@ class Scheduler:
             wap_id=wap_id,
             **kwargs,
         )
-        get_console().store_evaluation_audit_results(snapshot, audit_results)
+        if on_audits_complete:
+            on_audits_complete(snapshot, audit_results)
 
         audit_errors_to_raise: t.List[AuditError] = []
         for audit_result in (result for result in audit_results if result.count):
@@ -232,10 +236,11 @@ class Scheduler:
                     default_catalog,
                     self.snapshot_evaluator.adapter.dialect,
                 )
-                get_console().log_warning(
-                    f"\n{display_name}: {error}.",
-                    long_message=f"{error}. Audit query:\n{error.query.sql(error.adapter_dialect)}",
-                )
+                if on_audit_warning:
+                    on_audit_warning(
+                        f"\n{display_name}: {error}.",
+                        f"{error}. Audit query:\n{error.query.sql(error.adapter_dialect)}",
+                    )
 
         if audit_errors_to_raise:
             raise NodeAuditsErrors(audit_errors_to_raise)
@@ -483,6 +488,8 @@ class Scheduler:
                     batch_index=batch_idx,
                     environment_naming_info=environment_naming_info,
                     default_catalog=self.default_catalog,
+                    on_audits_complete=self.console.store_evaluation_audit_results,
+                    on_audit_warning=self.console.log_warning,
                 )
                 evaluation_duration_ms = now_timestamp() - execution_start_ts
             finally:
