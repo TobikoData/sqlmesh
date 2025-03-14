@@ -217,6 +217,7 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
                         # threads to /share the same connection/ and just use thread-local cursors. In order to support ":memory:" databases
                         # and remove lock contention, the connection needs to live for the life of the application and not be closed
                         pass
+
                 return ConnWrapper(duckdb.connect(*args, **kwargs))
 
             return _factory
