@@ -644,6 +644,16 @@ def _props_sql(self: Generator, expressions: t.List[exp.Expression]) -> str:
     return "\n".join(props)
 
 
+def _on_virtual_update_sql(self: Generator, expressions: t.List[exp.Expression]) -> str:
+    statements = "\n".join(
+        self.sql(expression)
+        if isinstance(expression, JinjaStatement)
+        else f"{self.sql(expression)};"
+        for expression in expressions
+    )
+    return f"{ON_VIRTUAL_UPDATE_BEGIN};\n{statements}\n{ON_VIRTUAL_UPDATE_END};"
+
+
 def _sqlmesh_ddl_sql(self: Generator, expression: Model | Audit | Metric, name: str) -> str:
     return "\n".join([f"{name} (", _props_sql(self, expression.expressions), ")"])
 
@@ -1004,6 +1014,7 @@ def extend_sqlglot() -> None:
                     JinjaQuery: lambda self, e: f"{JINJA_QUERY_BEGIN};\n{e.name}\n{JINJA_END};",
                     JinjaStatement: lambda self,
                     e: f"{JINJA_STATEMENT_BEGIN};\n{e.name}\n{JINJA_END};",
+                    VirtualUpdateStatement: lambda self, e: _on_virtual_update_sql(self, e),
                     MacroDef: lambda self, e: f"@DEF({self.sql(e.this)}, {self.sql(e.expression)})",
                     MacroFunc: _macro_func_sql,
                     MacroStrReplace: lambda self, e: f"@{self.sql(e.this)}",
