@@ -41,7 +41,7 @@ FORBIDDEN_STATE_SYNC_ENGINES = {
     # Nullable types are problematic
     "clickhouse",
 }
-MOTHERDUCK_TOKEN_REGEX = re.compile(r"(\?motherduck_token=)(\S*)")
+MOTHERDUCK_TOKEN_REGEX = re.compile(r"(\?|\&)(motherduck_token=)(\S*)")
 
 
 class ConnectionConfig(abc.ABC, BaseConfig):
@@ -294,7 +294,7 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
         if self.database:
             if isinstance(self, MotherDuckConnectionConfig):
                 data_files.add(
-                    f"md:{self.database}"
+                    f"md:{self.database.replace('md:', '')}"
                     + (f"?motherduck_token={self.token}" if self.token else "")
                 )
             else:
@@ -331,7 +331,9 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
         return None
 
     def _mask_motherduck_token(self, string: str) -> str:
-        return MOTHERDUCK_TOKEN_REGEX.sub(lambda m: f"{m.group(1)}{'*' * len(m.group(2))}", string)
+        return MOTHERDUCK_TOKEN_REGEX.sub(
+            lambda m: f"{m.group(1)}{m.group(2)}{'*' * len(m.group(3))}", string
+        )
 
 
 class MotherDuckConnectionConfig(BaseDuckDBConnectionConfig):
