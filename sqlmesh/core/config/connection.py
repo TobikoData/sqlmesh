@@ -361,7 +361,6 @@ class DuckDBAttachOptions(BaseConfig):
     type: str
     path: str
     read_only: bool = False
-    token: t.Optional[str] = None
 
     def to_sql(self, alias: str) -> str:
         options = []
@@ -377,8 +376,7 @@ class DuckDBAttachOptions(BaseConfig):
             f" AS {alias}" if not (self.type == "motherduck" or self.path.startswith("md:")) else ""
         )
         options_sql = f" ({', '.join(options)})" if options else ""
-        token_sql = "?motherduck_token=" + self.token if self.token else ""
-        return f"ATTACH '{self.path}{token_sql}'{alias_sql}{options_sql}"
+        return f"ATTACH '{self.path}'{alias_sql}{options_sql}"
 
 
 class DuckDBConnectionConfig(BaseDuckDBConnectionConfig):
