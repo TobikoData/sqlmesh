@@ -264,24 +264,24 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
                 )
                 try:
                     if isinstance(path_options, DuckDBAttachOptions):
-                        if path_options.type == "motherduck":
-                            continue
                         query = path_options.to_sql(alias)
                     else:
                         query = f"ATTACH '{path_options}'"
                         if not path_options.startswith("md:"):
                             query += f" AS {alias}"
-                        else:
-                            continue
                     cursor.execute(query)
                 except BinderException as e:
                     # If a user tries to create a catalog pointing at `:memory:` and with the name `memory`
                     # then we don't want to raise since this happens by default. They are just doing this to
                     # set it as the default catalog.
+                    # If a user tried to attach a MotherDuck database/share which has already by attached via
+                    # `ATTACH 'md:'`, then we don't want to raise since this is expected.
                     if not (
                         'database with name "memory" already exists' in str(e)
                         and path_options == ":memory:"
-                    ) and not (f'database with name "{alias}" already exists' in str(e)):
+                    ) and not (
+                        f'database with name "{alias}" already exists' in str(e)
+                    ):
                         raise e
                 if i == 0 and not getattr(self, "database", None):
                     cursor.execute(f"USE {alias}")
