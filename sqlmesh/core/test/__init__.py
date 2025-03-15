@@ -14,7 +14,7 @@ from sqlmesh.core.test.discovery import (
     load_model_test_file as load_model_test_file,
 )
 from sqlmesh.core.test.result import ModelTextTestResult as ModelTextTestResult
-from sqlmesh.utils import UniqueKeyDict
+from sqlmesh.utils import UniqueKeyDict, Verbosity
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.config.loader import C
@@ -26,7 +26,7 @@ def run_tests(
     config: C,
     gateway: t.Optional[str] = None,
     dialect: str | None = None,
-    verbosity: int = 1,
+    verbosity: Verbosity = Verbosity.DEFAULT,
     preserve_fixtures: bool = False,
     stream: t.TextIO | None = None,
     default_catalog: str | None = None,
@@ -73,7 +73,9 @@ def run_tests(
         result = t.cast(
             ModelTextTestResult,
             unittest.TextTestRunner(
-                stream=stream, verbosity=verbosity, resultclass=ModelTextTestResult
+                stream=stream,
+                verbosity=2 if verbosity >= Verbosity.VERBOSE else 1,
+                resultclass=ModelTextTestResult,
             ).run(unittest.TestSuite(tests)),
         )
     finally:
@@ -89,7 +91,7 @@ def run_model_tests(
     config: C,
     gateway: t.Optional[str] = None,
     dialect: str | None = None,
-    verbosity: int = 1,
+    verbosity: Verbosity = Verbosity.DEFAULT,
     patterns: list[str] | None = None,
     preserve_fixtures: bool = False,
     stream: t.TextIO | None = None,
