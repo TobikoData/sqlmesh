@@ -351,9 +351,12 @@ class MotherDuckConnectionConfig(BaseDuckDBConnectionConfig):
         from sqlmesh import __version__
 
         custom_user_agent_config = {"custom_user_agent": f"SQLMesh/{__version__}"}
-        connection_str = f"md:{self.database or ''}"
+        connection_str = "md:"
+        if self.database:
+            # Attach MD database in single mode to block accessing other databases
+            connection_str += f"{self.database}?attach_mode=single"
         if self.token:
-            connection_str += f"?motherduck_token={self.token}"
+            connection_str += f"{'&' if self.database else '?'}motherduck_token={self.token}"
         return {"database": connection_str, "config": custom_user_agent_config}
 
 
