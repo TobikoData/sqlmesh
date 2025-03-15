@@ -41,7 +41,7 @@ FORBIDDEN_STATE_SYNC_ENGINES = {
     # Nullable types are problematic
     "clickhouse",
 }
-MOTHERDUCK_TOKEN_REGEX = re.compile(r"(\?motherduck_token=)(\S*)")
+MOTHERDUCK_TOKEN_REGEX = re.compile(r"(\?|\&)(motherduck_token=)(\S*)")
 
 
 class ConnectionConfig(abc.ABC, BaseConfig):
@@ -269,17 +269,17 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
                         query = f"ATTACH '{path_options}'"
                         if not path_options.startswith("md:"):
                             query += f" AS {alias}"
-                        elif self.token:
-                            query += f"?motherduck_token={self.token}"
                     cursor.execute(query)
                 except BinderException as e:
                     # If a user tries to create a catalog pointing at `:memory:` and with the name `memory`
                     # then we don't want to raise since this happens by default. They are just doing this to
                     # set it as the default catalog.
+                    # If a user tried to attach a MotherDuck database/share which has already by attached via
+                    # `ATTACH 'md:'`, then we don't want to raise since this is expected.
                     if not (
                         'database with name "memory" already exists' in str(e)
                         and path_options == ":memory:"
-                    ):
+                    ) and f'database with name "{alias}" already exists' not in str(e):
                         raise e
                 if i == 0 and not getattr(self, "database", None):
                     cursor.execute(f"USE {alias}")
@@ -294,7 +294,7 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
         if self.database:
             if isinstance(self, MotherDuckConnectionConfig):
                 data_files.add(
-                    f"md:{self.database}"
+                    f"md:{self.database.replace('md:', '')}"
                     + (f"?motherduck_token={self.token}" if self.token else "")
                 )
             else:
@@ -331,7 +331,9 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
         return None
 
     def _mask_motherduck_token(self, string: str) -> str:
-        return MOTHERDUCK_TOKEN_REGEX.sub(lambda m: f"{m.group(1)}{'*' * len(m.group(2))}", string)
+        return MOTHERDUCK_TOKEN_REGEX.sub(
+            lambda m: f"{m.group(1)}{m.group(2)}{'*' * len(m.group(3))}", string
+        )
 
 
 class MotherDuckConnectionConfig(BaseDuckDBConnectionConfig):
@@ -349,11 +351,12 @@ class MotherDuckConnectionConfig(BaseDuckDBConnectionConfig):
         from sqlmesh import __version__
 
         custom_user_agent_config = {"custom_user_agent": f"SQLMesh/{__version__}"}
-        if not self.database:
-            return {"config": custom_user_agent_config}
-        connection_str = f"md:{self.database or ''}"
+        connection_str = "md:"
+        if self.database:
+            # Attach MD database in single mode to block accessing other databases
+            connection_str += f"{self.database.replace('md:', '')}?attach_mode=single"
         if self.token:
-            connection_str += f"?motherduck_token={self.token}"
+            connection_str += f"{'&' if self.database else '?'}motherduck_token={self.token}"
         return {"database": connection_str, "config": custom_user_agent_config}
 
 
@@ -361,7 +364,6 @@ class DuckDBAttachOptions(BaseConfig):
     type: str
     path: str
     read_only: bool = False
-    token: t.Optional[str] = None
 
     def to_sql(self, alias: str) -> str:
         options = []
@@ -377,8 +379,7 @@ class DuckDBAttachOptions(BaseConfig):
             f" AS {alias}" if not (self.type == "motherduck" or self.path.startswith("md:")) else ""
         )
         options_sql = f" ({', '.join(options)})" if options else ""
-        token_sql = "?motherduck_token=" + self.token if self.token else ""
-        return f"ATTACH '{self.path}{token_sql}'{alias_sql}{options_sql}"
+        return f"ATTACH '{self.path}'{alias_sql}{options_sql}"
 
 
 class DuckDBConnectionConfig(BaseDuckDBConnectionConfig):
