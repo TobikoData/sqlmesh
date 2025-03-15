@@ -651,7 +651,7 @@ def _on_virtual_update_sql(self: Generator, expressions: t.List[exp.Expression])
         else f"{self.sql(expression)};"
         for expression in expressions
     )
-    return f"{ON_VIRTUAL_UPDATE_BEGIN};\n{statements}{ON_VIRTUAL_UPDATE_END};"
+    return f"{ON_VIRTUAL_UPDATE_BEGIN};\n{statements}\n{ON_VIRTUAL_UPDATE_END};"
 
 
 def _sqlmesh_ddl_sql(self: Generator, expression: Model | Audit | Metric, name: str) -> str:
