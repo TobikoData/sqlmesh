@@ -279,9 +279,7 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
                     if not (
                         'database with name "memory" already exists' in str(e)
                         and path_options == ":memory:"
-                    ) and not (
-                        f'database with name "{alias}" already exists' in str(e)
-                    ):
+                    ) and f'database with name "{alias}" already exists' not in str(e):
                         raise e
                 if i == 0 and not getattr(self, "database", None):
                     cursor.execute(f"USE {alias}")
