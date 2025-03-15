@@ -354,7 +354,7 @@ class MotherDuckConnectionConfig(BaseDuckDBConnectionConfig):
         connection_str = "md:"
         if self.database:
             # Attach MD database in single mode to block accessing other databases
-            connection_str += f"{self.database}?attach_mode=single"
+            connection_str += f"{self.database.replace('md:', '')}?attach_mode=single"
         if self.token:
             connection_str += f"{'&' if self.database else '?'}motherduck_token={self.token}"
         return {"database": connection_str, "config": custom_user_agent_config}
