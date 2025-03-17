@@ -217,11 +217,13 @@ class RedshiftEngineAdapter(
         underlying table without dropping the view first. This is a problem for us since we want to be able to
         swap tables out from under views. Therefore, we create the view as non-binding.
         """
-
-        if create_kwargs.pop("no_schema_binding", None) is False:
-            logger.warning(
-                "The 'no_schema_binding' attribute is deprecated. Views in Redshift are created as non-binding."
+        no_schema_binding = True
+        if isinstance(query_or_df, exp.Expression):
+            # We can't include NO SCHEMA BINDING if the query has a recursive CTE
+            has_recursive_cte = any(
+                w.args.get("recursive", False) for w in query_or_df.find_all(exp.With)
             )
+            no_schema_binding = not has_recursive_cte
 
         return super().create_view(
             view_name,
@@ -232,7 +234,7 @@ class RedshiftEngineAdapter(
             materialized_properties,
             table_description=table_description,
             column_descriptions=column_descriptions,
-            no_schema_binding=True,
+            no_schema_binding=no_schema_binding,
             view_properties=view_properties,
             **create_kwargs,
         )
