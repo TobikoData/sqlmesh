@@ -60,6 +60,7 @@ class RedshiftEngineAdapter(
             exp.DataType.build("CHAR", dialect=DIALECT).this: 4096,
             exp.DataType.build("VARCHAR", dialect=DIALECT).this: 65535,
         },
+        precision_increase_allowed_types={exp.DataType.build("VARCHAR", dialect=DIALECT).this},
         drop_cascade=True,
     )
     VARIABLE_LENGTH_DATA_TYPES = {
