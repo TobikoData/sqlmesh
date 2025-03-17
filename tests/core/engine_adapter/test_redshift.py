@@ -366,6 +366,55 @@ def test_alter_table_drop_column_cascade(adapter: t.Callable):
     ]
 
 
+def test_alter_table_precision_increase_varchar(adapter: t.Callable):
+    current_table_name = "test_table"
+    target_table_name = "target_table"
+
+    def table_columns(table_name: str) -> t.Dict[str, exp.DataType]:
+        if table_name == current_table_name:
+            return {
+                "id": exp.DataType.build("int"),
+                "test_column": exp.DataType.build("VARCHAR(10)"),
+            }
+        else:
+            return {
+                "id": exp.DataType.build("int"),
+                "test_column": exp.DataType.build("VARCHAR(20)"),
+            }
+
+    adapter.columns = table_columns
+
+    adapter.alter_table(adapter.get_alter_expressions(current_table_name, target_table_name))
+    assert to_sql_calls(adapter) == [
+        'ALTER TABLE "test_table" ALTER COLUMN "test_column" TYPE VARCHAR(20)',
+    ]
+
+
+def test_alter_table_precision_increase_decimal(adapter: t.Callable):
+    current_table_name = "test_table"
+    target_table_name = "target_table"
+
+    def table_columns(table_name: str) -> t.Dict[str, exp.DataType]:
+        if table_name == current_table_name:
+            return {
+                "id": exp.DataType.build("int"),
+                "test_column": exp.DataType.build("DECIMAL(10, 10)"),
+            }
+        else:
+            return {
+                "id": exp.DataType.build("int"),
+                "test_column": exp.DataType.build("DECIMAL(25, 10)"),
+            }
+
+    adapter.columns = table_columns
+
+    adapter.alter_table(adapter.get_alter_expressions(current_table_name, target_table_name))
+    assert to_sql_calls(adapter) == [
+        'ALTER TABLE "test_table" DROP COLUMN "test_column" CASCADE',
+        'ALTER TABLE "test_table" ADD COLUMN "test_column" DECIMAL(25, 10)',
+    ]
+
+
 def test_merge(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
     adapter = make_mocked_engine_adapter(RedshiftEngineAdapter)
     mocker.patch(
