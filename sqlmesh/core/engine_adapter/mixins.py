@@ -306,15 +306,7 @@ class VarcharSizeWorkaroundMixin(EngineAdapter):
 
             temp_view_name = self._get_temp_table("ctas")
 
-            is_recursive_cte = any(
-                w.args.get("recursive", False) for w in select_statement.find_all(exp.With)
-            )
-            self.create_view(
-                temp_view_name,
-                select_statement,
-                replace=False,
-                no_schema_binding=not is_recursive_cte,
-            )
+            self.create_view(temp_view_name, select_statement, replace=False)
             try:
                 columns_to_types_from_view = self._default_precision_to_max(
                     self.columns(temp_view_name)
