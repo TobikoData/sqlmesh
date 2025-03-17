@@ -123,6 +123,46 @@ def test_create_table_from_query_exists_no_if_not_exists(
     columns_mock.assert_called_once_with(exp.table_("__temp_ctas_test_random_id", quoted=True))
 
 
+def test_create_table_recursive_cte(adapter: t.Callable, mocker: MockerFixture):
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.base.random_id",
+        return_value="test_random_id",
+    )
+
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.redshift.RedshiftEngineAdapter.table_exists",
+        return_value=True,
+    )
+
+    columns_mock = mocker.patch(
+        "sqlmesh.core.engine_adapter.redshift.RedshiftEngineAdapter.columns",
+        return_value={
+            "a": exp.DataType.build("VARCHAR(MAX)", dialect="redshift"),
+            "b": exp.DataType.build("VARCHAR(60)", dialect="redshift"),
+            "c": exp.DataType.build("VARCHAR(MAX)", dialect="redshift"),
+            "d": exp.DataType.build("VARCHAR(MAX)", dialect="redshift"),
+            "e": exp.DataType.build("TIMESTAMP", dialect="redshift"),
+        },
+    )
+
+    adapter.ctas(
+        table_name="test_schema.test_table",
+        query_or_df=parse_one(
+            "WITH RECURSIVE cte AS (SELECT * FROM table WHERE FALSE LIMIT 0) SELECT a, b, x + 1 AS c, d AS d, e FROM cte WHERE d > 0 AND FALSE LIMIT 0",
+            dialect="redshift",
+        ),
+        exists=False,
+    )
+
+    assert to_sql_calls(adapter) == [
+        'CREATE VIEW "__temp_ctas_test_random_id" AS WITH RECURSIVE "cte" AS (SELECT * FROM "table") SELECT "a", "b", "x" + 1 AS "c", "d" AS "d", "e" FROM "cte"',
+        'DROP VIEW IF EXISTS "__temp_ctas_test_random_id" CASCADE',
+        'CREATE TABLE "test_schema"."test_table" ("a" VARCHAR(MAX), "b" VARCHAR(60), "c" VARCHAR(MAX), "d" VARCHAR(MAX), "e" TIMESTAMP)',
+    ]
+
+    columns_mock.assert_called_once_with(exp.table_("__temp_ctas_test_random_id", quoted=True))
+
+
 def test_create_table_from_query_exists_and_if_not_exists(
     adapter: t.Callable, mocker: MockerFixture
 ):
