@@ -276,10 +276,14 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
                     # set it as the default catalog.
                     # If a user tried to attach a MotherDuck database/share which has already by attached via
                     # `ATTACH 'md:'`, then we don't want to raise since this is expected.
-                    if not (
-                        'database with name "memory" already exists' in str(e)
-                        and path_options == ":memory:"
-                    ) and f'database with name "{alias}" already exists' not in str(e):
+                    if (
+                        not (
+                            'database with name "memory" already exists' in str(e)
+                            and path_options == ":memory:"
+                        )
+                        and f"""database with name "{path_options.path.replace('md:', '')}" already exists"""
+                        not in str(e)
+                    ):
                         raise e
                 if i == 0 and not getattr(self, "database", None):
                     cursor.execute(f"USE {alias}")
@@ -373,12 +377,17 @@ class DuckDBAttachOptions(BaseConfig):
             options.append(f"TYPE {self.type.upper()}")
         if self.read_only:
             options.append("READ_ONLY")
-        # TODO: Add support for Postgres schema. Currently adding it blocks access to the information_schema
-        alias_sql = (
-            # MotherDuck does not support aliasing
-            f" AS {alias}" if not (self.type == "motherduck" or self.path.startswith("md:")) else ""
-        )
         options_sql = f" ({', '.join(options)})" if options else ""
+        alias_sql = ""
+        # TODO: Add support for Postgres schema. Currently adding it blocks access to the information_schema
+        if self.type == "motherduck":
+            # MotherDuck does not support aliasing
+            if (md_db := self.path.replace("md:", "")) != alias.replace('"', ""):
+                raise ConfigError(
+                    f"MotherDuck does not support assigning an alias different from the database name {md_db}."
+                )
+        else:
+            alias_sql += f" AS {alias}"
         return f"ATTACH '{self.path}'{alias_sql}{options_sql}"
 
 
