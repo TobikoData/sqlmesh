@@ -40,7 +40,6 @@ class Selector:
         self._default_catalog = default_catalog
         self._dialect = dialect
         self._git_client = GitClient(context_path)
-        self.__models_by_tag: t.Optional[t.Dict[str, t.Set[str]]] = None
 
         if dag is None:
             self._dag: DAG[str] = DAG()
