@@ -294,7 +294,7 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
         if self.database:
             if isinstance(self, MotherDuckConnectionConfig):
                 data_files.add(
-                    f"md:{self.database.replace('md:', '')}"
+                    f"md:{self.database}"
                     + (f"?motherduck_token={self.token}" if self.token else "")
                 )
             else:
@@ -353,8 +353,8 @@ class MotherDuckConnectionConfig(BaseDuckDBConnectionConfig):
         custom_user_agent_config = {"custom_user_agent": f"SQLMesh/{__version__}"}
         connection_str = "md:"
         if self.database:
-            # Attach MD database in single mode to block accessing other databases
-            connection_str += f"{self.database.replace('md:', '')}?attach_mode=single"
+            # Attach single MD database instead of all databases on the account
+            connection_str += f"{self.database}?attach_mode=single"
         if self.token:
             connection_str += f"{'&' if self.database else '?'}motherduck_token={self.token}"
         return {"database": connection_str, "config": custom_user_agent_config}
