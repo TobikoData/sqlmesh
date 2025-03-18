@@ -650,19 +650,14 @@ def test_motherduck_token_mask(make_config):
     config_1 = make_config(
         type="motherduck",
         token="short",
-        database="md:whodunnit",
+        database="whodunnit",
     )
     config_2 = make_config(
         type="motherduck",
-        token="short",
+        token="longtoken123456789",
         database="whodunnit",
     )
     config_3 = make_config(
-        type="motherduck",
-        database="md:whodunnit?motherduck_token=longtoken123456789",
-    )
-
-    config_4 = make_config(
         type="motherduck",
         token="secret1235",
         catalogs={
@@ -676,27 +671,23 @@ def test_motherduck_token_mask(make_config):
     assert isinstance(config_1, MotherDuckConnectionConfig)
     assert isinstance(config_2, MotherDuckConnectionConfig)
     assert isinstance(config_3, MotherDuckConnectionConfig)
-    assert isinstance(config_4, MotherDuckConnectionConfig)
-    assert config_1._mask_motherduck_token(config_1.database) == "md:whodunnit"
+    assert config_1._mask_motherduck_token(config_1.database) == "whodunnit"
     assert (
-        config_1._mask_motherduck_token(f"{config_1.database}?motherduck_token={config_1.token}")
+        config_1._mask_motherduck_token(f"md:{config_1.database}?motherduck_token={config_1.token}")
         == "md:whodunnit?motherduck_token=*****"
     )
-    assert config_1._mask_motherduck_token(config_1.database) == "md:whodunnit"
     assert (
-        config_2._mask_motherduck_token(
-            f"md:{config_2.database}?attach_mode=single&motherduck_token={config_2.token}"
+        config_1._mask_motherduck_token(
+            f"md:{config_1.database}?attach_mode=single&motherduck_token={config_1.token}"
         )
         == "md:whodunnit?attach_mode=single&motherduck_token=*****"
     )
     assert (
-        config_3._mask_motherduck_token(config_3.database)
+        config_2._mask_motherduck_token(f"md:{config_2.database}?motherduck_token={config_2.token}")
         == "md:whodunnit?motherduck_token=******************"
     )
     assert (
-        config_4._mask_motherduck_token(
-            f"{config_4.database or 'md:'}?motherduck_token={config_4.token}"
-        )
+        config_3._mask_motherduck_token(f"md:?motherduck_token={config_3.token}")
         == "md:?motherduck_token=**********"
     )
     assert (
