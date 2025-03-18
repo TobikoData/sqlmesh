@@ -329,11 +329,11 @@ class SnapshotInfoMixin(ModelKindMixin):
     base_table_name_override: t.Optional[str]
     dev_table_suffix: str
 
-    @property
+    @cached_property
     def identifier(self) -> str:
         return self.fingerprint.to_identifier()
 
-    @property
+    @cached_property
     def snapshot_id(self) -> SnapshotId:
         return SnapshotId(name=self.name, identifier=self.identifier)
 
@@ -1748,7 +1748,7 @@ def has_paused_forward_only(
 
 
 def missing_intervals(
-    snapshots: t.Collection[Snapshot],
+    snapshots: t.Union[t.Collection[Snapshot], t.Dict[SnapshotId, Snapshot]],
     start: t.Optional[TimeLike] = None,
     end: t.Optional[TimeLike] = None,
     execution_time: t.Optional[TimeLike] = None,
@@ -1759,6 +1759,9 @@ def missing_intervals(
     end_bounded: bool = False,
 ) -> t.Dict[Snapshot, Intervals]:
     """Returns all missing intervals given a collection of snapshots."""
+    if not isinstance(snapshots, dict):
+        # Make sure that the mapping is only constructed once
+        snapshots = {snapshot.snapshot_id: snapshot for snapshot in snapshots}
     missing = {}
     cache: t.Dict[str, datetime] = {}
     end_date = end or now_timestamp()
@@ -1771,7 +1774,7 @@ def missing_intervals(
     interval_end_per_model = interval_end_per_model or {}
     deployability_index = deployability_index or DeployabilityIndex.all_deployable()
 
-    for snapshot in snapshots:
+    for snapshot in snapshots.values():
         if not snapshot.evaluatable:
             continue
         snapshot_start_date = start_dt
@@ -1944,7 +1947,7 @@ def inclusive_exclusive(
 
 
 def earliest_start_date(
-    snapshots: t.Collection[Snapshot],
+    snapshots: t.Union[t.Collection[Snapshot], t.Dict[SnapshotId, Snapshot]],
     cache: t.Optional[t.Dict[str, datetime]] = None,
     relative_to: t.Optional[TimeLike] = None,
 ) -> datetime:
@@ -1959,9 +1962,12 @@ def earliest_start_date(
     """
     cache = {} if cache is None else cache
     if snapshots:
+        if not isinstance(snapshots, dict):
+            # Make sure that the mapping is only constructed once
+            snapshots = {snapshot.snapshot_id: snapshot for snapshot in snapshots}
         return min(
             start_date(snapshot, snapshots, cache=cache, relative_to=relative_to)
-            for snapshot in snapshots
+            for snapshot in snapshots.values()
         )
     return yesterday()
 
