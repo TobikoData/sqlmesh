@@ -114,7 +114,7 @@ from sqlmesh.core.test import (
     run_tests,
 )
 from sqlmesh.core.user import User
-from sqlmesh.utils import UniqueKeyDict
+from sqlmesh.utils import UniqueKeyDict, Verbosity
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import TimeLike, now_ds, to_timestamp, format_tz_datetime
 from sqlmesh.utils.errors import (
@@ -1741,16 +1741,13 @@ class GenericContext(BaseContext, t.Generic[C]):
         self,
         match_patterns: t.Optional[t.List[str]] = None,
         tests: t.Optional[t.List[str]] = None,
-        verbose: bool = False,
+        verbosity: Verbosity = Verbosity.DEFAULT,
         preserve_fixtures: bool = False,
         stream: t.Optional[t.TextIO] = None,
     ) -> ModelTextTestResult:
         """Discover and run model tests"""
-        if verbose:
+        if verbosity >= Verbosity.VERBOSE:
             pd.set_option("display.max_columns", None)
-            verbosity = 2
-        else:
-            verbosity = 1
 
         if tests:
             result = run_model_tests(
@@ -1954,7 +1951,9 @@ class GenericContext(BaseContext, t.Generic[C]):
             )
 
     @python_api_analytics
-    def print_info(self, skip_connection: bool = False, verbose: bool = False) -> None:
+    def print_info(
+        self, skip_connection: bool = False, verbosity: Verbosity = Verbosity.DEFAULT
+    ) -> None:
         """Prints information about connections, models, macros, etc. to the console."""
         self.console.log_status_update(f"Models: {len(self.models)}")
         self.console.log_status_update(f"Macros: {len(self._macros) - len(macro.get_registry())}")
@@ -1962,7 +1961,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         if skip_connection:
             return
 
-        if verbose:
+        if verbosity >= Verbosity.VERBOSE:
             self.console.log_status_update("")
             print_config(self.config.get_connection(self.gateway), self.console, "Connection")
             print_config(
@@ -2072,9 +2071,11 @@ class GenericContext(BaseContext, t.Generic[C]):
         for path in self.configs:
             rmtree(path / c.CACHE)
 
-    def _run_tests(self, verbose: bool = False) -> t.Tuple[unittest.result.TestResult, str]:
+    def _run_tests(
+        self, verbosity: Verbosity = Verbosity.DEFAULT
+    ) -> t.Tuple[unittest.result.TestResult, str]:
         test_output_io = StringIO()
-        result = self.test(stream=test_output_io, verbose=verbose)
+        result = self.test(stream=test_output_io, verbosity=verbosity)
         return result, test_output_io.getvalue()
 
     def _run_plan_tests(

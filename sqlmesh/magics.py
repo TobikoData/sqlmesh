@@ -24,7 +24,6 @@ from IPython.core.magic import (
 from IPython.core.magic_arguments import argument, magic_arguments, parse_argstring
 from IPython.utils.process import arg_split
 from rich.jupyter import JupyterRenderable
-
 from sqlmesh.cli.example_project import ProjectTemplate, init_example_project
 from sqlmesh.core import analytics
 from sqlmesh.core import constants as c
@@ -34,7 +33,7 @@ from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import format_model_expressions, parse
 from sqlmesh.core.model import load_sql_based_model
 from sqlmesh.core.test import ModelTestMetadata, get_all_model_tests
-from sqlmesh.utils import sqlglot_dialects, yaml
+from sqlmesh.utils import sqlglot_dialects, yaml, Verbosity
 from sqlmesh.utils.errors import MagicError, MissingContextException, SQLMeshError
 
 logger = logging.getLogger(__name__)
@@ -437,11 +436,20 @@ class SQLMeshMagics(Magics):
         action="store_true",
         help="Output text differences for the rendered versions of the models and standalone audits",
     )
+    @argument(
+        "--verbose",
+        "-v",
+        action="count",
+        default=0,
+        help="Verbose output. Use -vv for very verbose.",
+    )
     @line_magic
     @pass_sqlmesh_context
     def plan(self, context: Context, line: str) -> None:
         """Goes through a set of prompts to both establish a plan and apply it"""
         args = parse_argstring(self.plan, line)
+
+        setattr(context.console, "verbosity", Verbosity(args.verbose))
 
         context.plan(
             args.environment,
@@ -962,7 +970,13 @@ class SQLMeshMagics(Magics):
         type=str,
         help="Only run tests that match the pattern of substring.",
     )
-    @argument("--verbose", "-v", action="store_true", help="Verbose output.")
+    @argument(
+        "--verbose",
+        "-v",
+        action="count",
+        default=0,
+        help="Verbose output. Use -vv for very verbose.",
+    )
     @argument(
         "--preserve-fixtures",
         action="store_true",
@@ -973,10 +987,11 @@ class SQLMeshMagics(Magics):
     def run_test(self, context: Context, line: str) -> None:
         """Run unit test(s)."""
         args = parse_argstring(self.run_test, line)
+
         context.test(
             match_patterns=args.pattern,
             tests=args.tests,
-            verbose=args.verbose,
+            verbosity=Verbosity(args.verbose),
             preserve_fixtures=args.preserve_fixtures,
         )
 
@@ -1003,13 +1018,19 @@ class SQLMeshMagics(Magics):
         help="Skip the connection test.",
         default=False,
     )
-    @argument("--verbose", "-v", action="store_true", help="Verbose output.")
+    @argument(
+        "--verbose",
+        "-v",
+        action="count",
+        default=0,
+        help="Verbose output. Use -vv for very verbose.",
+    )
     @line_magic
     @pass_sqlmesh_context
     def info(self, context: Context, line: str) -> None:
         """Display SQLMesh project information."""
         args = parse_argstring(self.info, line)
-        context.print_info(skip_connection=args.skip_connection, verbose=args.verbose)
+        context.print_info(skip_connection=args.skip_connection, verbosity=Verbosity(args.verbose))
 
     @magic_arguments()
     @line_magic
