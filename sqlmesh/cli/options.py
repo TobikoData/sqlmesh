@@ -51,6 +51,6 @@ match_pattern = click.option(
 verbose = click.option(
     "-v",
     "--verbose",
-    is_flag=True,
-    help="Verbose output.",
+    count=True,
+    help="Verbose output. Use -vv for very verbose output.",
 )

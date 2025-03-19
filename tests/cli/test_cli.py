@@ -274,6 +274,30 @@ def test_plan_verbose(runner, tmp_path):
     assert "sqlmesh_example.seed_model promoted" in result.output
 
 
+def test_plan_very_verbose(runner, tmp_path, copy_to_temp_path):
+    temp_path = copy_to_temp_path("examples/sushi")
+
+    # Input: `y` to apply and backfill
+    result = runner.invoke(
+        cli,
+        ["--log-file-dir", temp_path[0], "--paths", temp_path[0], "plan", "-v"],
+        input="y\n",
+    )
+    assert result.exit_code == 0
+    # models needing backfill list is still abbreviated with regular VERBOSE, so this should not be present
+    assert "sushi.customers: [full refresh]" not in result.output
+
+    # Input: `y` to apply and backfill
+    result = runner.invoke(
+        cli,
+        ["--log-file-dir", temp_path[0], "--paths", temp_path[0], "plan", "-vv"],
+        input="y\n",
+    )
+    assert result.exit_code == 0
+    # models needing backfill list is complete with VERY_VERBOSE, so this should be present
+    assert "sushi.customers: [full refresh]" in result.output
+
+
 def test_plan_dev(runner, tmp_path):
     create_example_project(tmp_path)
 

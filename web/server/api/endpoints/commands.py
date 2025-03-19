@@ -7,7 +7,7 @@ import typing as t
 import pandas as pd
 from fastapi import APIRouter, Body, Depends, Request, Response
 from starlette.status import HTTP_204_NO_CONTENT
-
+from sqlmesh.core.console import Verbosity
 from sqlmesh.core.context import Context
 from sqlmesh.core.snapshot.definition import SnapshotChangeCategory
 from sqlmesh.core.test import ModelTest
@@ -136,14 +136,16 @@ async def render(
 @router.get("/test")
 async def test(
     test: t.Optional[str] = None,
-    verbose: bool = False,
+    verbosity: Verbosity = Verbosity.DEFAULT,
     context: Context = Depends(get_loaded_context),
 ) -> models.TestResult:
     """Run one or all model tests"""
     test_output = io.StringIO()
     try:
         result = context.test(
-            tests=[str(context.path / test)] if test else None, verbose=verbose, stream=test_output
+            tests=[str(context.path / test)] if test else None,
+            verbosity=verbosity,
+            stream=test_output,
         )
     except Exception:
         import traceback

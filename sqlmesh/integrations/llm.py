@@ -5,6 +5,7 @@ import typing as t
 from langchain import LLMChain, PromptTemplate
 from langchain.chat_models import ChatOpenAI
 
+from sqlmesh.utils import Verbosity
 from sqlmesh.core.model import Model
 
 _QUERY_PROMPT_TEMPLATE = """Given an input request, create a syntactically correct {dialect} SQL query.
@@ -25,13 +26,15 @@ class LLMIntegration:
         models: t.Iterable[Model],
         dialect: str,
         temperature: float = 0.7,
-        verbose: bool = False,
+        verbosity: Verbosity = Verbosity.DEFAULT,
     ):
         query_prompt_template = PromptTemplate.from_template(_QUERY_PROMPT_TEMPLATE).partial(
             dialect=dialect, table_info=_to_table_info(models)
         )
         llm = ChatOpenAI(temperature=temperature)  # type: ignore
-        self._query_chain = LLMChain(llm=llm, prompt=query_prompt_template, verbose=verbose)
+        self._query_chain = LLMChain(
+            llm=llm, prompt=query_prompt_template, verbose=verbosity >= Verbosity.VERBOSE
+        )
 
     def query(self, prompt: str) -> str:
         result = self._query_chain.predict(input=prompt).strip()

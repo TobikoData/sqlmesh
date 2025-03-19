@@ -13,6 +13,7 @@ from sqlmesh.cli import options as opt
 from sqlmesh.cli.example_project import ProjectTemplate, init_example_project
 from sqlmesh.core.analytics import cli_analytics
 from sqlmesh.core.console import configure_console, get_console
+from sqlmesh.utils import Verbosity
 from sqlmesh.core.config import load_configs
 from sqlmesh.core.context import Context
 from sqlmesh.utils.date import TimeLike
@@ -442,7 +443,10 @@ def diff(ctx: click.Context, environment: t.Optional[str] = None) -> None:
 @error_handler
 @cli_analytics
 def plan(
-    ctx: click.Context, verbose: bool, environment: t.Optional[str] = None, **kwargs: t.Any
+    ctx: click.Context,
+    verbose: int,
+    environment: t.Optional[str] = None,
+    **kwargs: t.Any,
 ) -> None:
     """Apply local changes to the target environment."""
     context = ctx.obj
@@ -450,7 +454,8 @@ def plan(
     select_models = kwargs.pop("select_model") or None
     allow_destructive_models = kwargs.pop("allow_destructive_model") or None
     backfill_models = kwargs.pop("backfill_model") or None
-    setattr(get_console(), "verbose", verbose)
+    setattr(get_console(), "verbosity", Verbosity(verbose))
+
     context.plan(
         environment,
         restate_models=restate_models,
@@ -643,7 +648,7 @@ def create_test(
 def test(
     obj: Context,
     k: t.List[str],
-    verbose: bool,
+    verbose: int,
     preserve_fixtures: bool,
     tests: t.List[str],
 ) -> None:
@@ -651,7 +656,7 @@ def test(
     result = obj.test(
         match_patterns=k,
         tests=tests,
-        verbose=verbose,
+        verbosity=Verbosity(verbose),
         preserve_fixtures=preserve_fixtures,
     )
     if not result.wasSuccessful():
@@ -703,13 +708,13 @@ def fetchdf(ctx: click.Context, sql: str) -> None:
 @click.pass_obj
 @error_handler
 @cli_analytics
-def info(obj: Context, skip_connection: bool, verbose: bool) -> None:
+def info(obj: Context, skip_connection: bool, verbose: int) -> None:
     """
     Print information about a SQLMesh project.
 
     Includes counts of project models and macros and connection tests for the data warehouse.
     """
-    obj.print_info(skip_connection=skip_connection, verbose=verbose)
+    obj.print_info(skip_connection=skip_connection, verbosity=Verbosity(verbose))
 
 
 @cli.command("ui")
@@ -904,7 +909,11 @@ def rewrite(obj: Context, sql: str, read: str = "", write: str = "") -> None:
 @error_handler
 @cli_analytics
 def prompt(
-    ctx: click.Context, prompt: str, evaluate: bool, temperature: float, verbose: bool
+    ctx: click.Context,
+    prompt: str,
+    evaluate: bool,
+    temperature: float,
+    verbose: int,
 ) -> None:
     """Uses LLM to generate a SQL query from a prompt."""
     from sqlmesh.integrations.llm import LLMIntegration
@@ -915,7 +924,7 @@ def prompt(
         context.models.values(),
         context.engine_adapter.dialect,
         temperature=temperature,
-        verbose=verbose,
+        verbosity=Verbosity(verbose),
     )
     query = llm_integration.query(prompt)
 

@@ -36,6 +36,7 @@ from sqlmesh.core.snapshot import (
 )
 from sqlmesh.core.test import ModelTest
 from sqlmesh.utils import rich as srich
+from sqlmesh.utils import Verbosity
 from sqlmesh.utils.concurrency import NodeExecutionFailedError
 from sqlmesh.utils.date import time_like_to_str, to_date, yesterday_ds
 from sqlmesh.utils.errors import (
@@ -310,10 +311,13 @@ class Console(abc.ABC):
     def print_environments(self, environments_summary: t.Dict[str, int]) -> None:
         """Prints all environment names along with expiry datetime."""
 
-    def _limit_model_names(self, tree: Tree, verbose: bool = False) -> Tree:
+    def _limit_model_names(self, tree: Tree, verbosity: Verbosity = Verbosity.DEFAULT) -> Tree:
         """Trim long indirectly modified model lists below threshold."""
         modified_length = len(tree.children)
-        if not verbose and modified_length > self.INDIRECTLY_MODIFIED_DISPLAY_THRESHOLD:
+        if (
+            verbosity < Verbosity.VERY_VERBOSE
+            and modified_length > self.INDIRECTLY_MODIFIED_DISPLAY_THRESHOLD
+        ):
             tree.children = [
                 tree.children[0],
                 Tree(f".... {modified_length-2} more ...."),
@@ -516,7 +520,7 @@ class TerminalConsole(Console):
     def __init__(
         self,
         console: t.Optional[RichConsole] = None,
-        verbose: bool = False,
+        verbosity: Verbosity = Verbosity.DEFAULT,
         dialect: DialectType = None,
         ignore_warnings: bool = False,
         **kwargs: t.Any,
@@ -548,7 +552,7 @@ class TerminalConsole(Console):
 
         self.loading_status: t.Dict[uuid.UUID, Status] = {}
 
-        self.verbose = verbose
+        self.verbosity = verbosity
         self.dialect = dialect
         self.ignore_warnings = ignore_warnings
 
@@ -673,7 +677,7 @@ class TerminalConsole(Console):
     def update_creation_progress(self, snapshot: SnapshotInfoLike) -> None:
         """Update the snapshot creation progress."""
         if self.creation_progress is not None and self.creation_task is not None:
-            if self.verbose:
+            if self.verbosity >= Verbosity.VERBOSE:
                 self.creation_progress.live.console.print(
                     f"{snapshot.display_name(self.environment_naming_info, self.default_catalog, dialect=self.dialect)} [green]created[/green]"
                 )
@@ -749,7 +753,7 @@ class TerminalConsole(Console):
     def update_promotion_progress(self, snapshot: SnapshotInfoLike, promoted: bool) -> None:
         """Update the snapshot promotion progress."""
         if self.promotion_progress is not None and self.promotion_task is not None:
-            if self.verbose:
+            if self.verbosity >= Verbosity.VERBOSE:
                 action_str = "[green]promoted[/green]" if promoted else "[yellow]demoted[/yellow]"
                 self.promotion_progress.live.console.print(
                     f"{snapshot.display_name(self.environment_naming_info, self.default_catalog, dialect=self.dialect)} {action_str}"
@@ -971,7 +975,7 @@ class TerminalConsole(Console):
                 added_tree.add(
                     f"[added]{snapshot.display_name(environment_naming_info, default_catalog, dialect=self.dialect)}"
                 )
-            tree.add(self._limit_model_names(added_tree, self.verbose))
+            tree.add(self._limit_model_names(added_tree, self.verbosity))
         if removed_snapshot_ids:
             removed_tree = Tree("[bold][removed]Removed:")
             for s_id in sorted(removed_snapshot_ids):
@@ -979,7 +983,7 @@ class TerminalConsole(Console):
                 removed_tree.add(
                     f"[removed]{snapshot_table_info.display_name(environment_naming_info, default_catalog, dialect=self.dialect)}"
                 )
-            tree.add(self._limit_model_names(removed_tree, self.verbose))
+            tree.add(self._limit_model_names(removed_tree, self.verbosity))
         if modified_snapshot_ids:
             direct = Tree("[bold][direct]Directly Modified:")
             indirect = Tree("[bold][indirect]Indirectly Modified:")
@@ -1007,7 +1011,7 @@ class TerminalConsole(Console):
             if direct.children:
                 tree.add(direct)
             if indirect.children:
-                tree.add(self._limit_model_names(indirect, self.verbose))
+                tree.add(self._limit_model_names(indirect, self.verbosity))
             if metadata.children:
                 tree.add(metadata)
         self._print(tree)
@@ -1077,7 +1081,7 @@ class TerminalConsole(Console):
                     f"[indirect]{child_snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)}"
                 )
             if indirect_tree:
-                indirect_tree = self._limit_model_names(indirect_tree, self.verbose)
+                indirect_tree = self._limit_model_names(indirect_tree, self.verbosity)
 
             self._print(tree)
             if not no_prompts:
@@ -1107,7 +1111,7 @@ class TerminalConsole(Console):
                         f"[indirect]{child_snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)} ({child_category_str})"
                     )
                 if indirect_tree:
-                    indirect_tree = self._limit_model_names(indirect_tree, self.verbose)
+                    indirect_tree = self._limit_model_names(indirect_tree, self.verbosity)
             elif context_diff.metadata_updated(snapshot.name):
                 tree = Tree(
                     f"\n[bold][metadata]Metadata Updated: {snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)}"
@@ -1144,7 +1148,7 @@ class TerminalConsole(Console):
             )
 
         if backfill:
-            backfill = self._limit_model_names(backfill, self.verbose)
+            backfill = self._limit_model_names(backfill, self.verbosity)
         self._print(backfill)
 
     def _prompt_effective_from(
@@ -1993,7 +1997,10 @@ class MarkdownConsole(CaptureTerminalConsole):
             self._print("\n**Added Models:**")
             added_models = sorted(added_snapshot_models)
             list_length = len(added_models)
-            if not self.verbose and list_length > self.INDIRECTLY_MODIFIED_DISPLAY_THRESHOLD:
+            if (
+                self.verbosity < Verbosity.VERY_VERBOSE
+                and list_length > self.INDIRECTLY_MODIFIED_DISPLAY_THRESHOLD
+            ):
                 self._print(added_models[0])
                 self._print(f"- `.... {list_length-2} more ....`\n")
                 self._print(added_models[-1])
@@ -2017,7 +2024,10 @@ class MarkdownConsole(CaptureTerminalConsole):
             self._print("\n**Removed Models:**")
             removed_models = sorted(removed_model_snapshot_table_infos)
             list_length = len(removed_models)
-            if not self.verbose and list_length > self.INDIRECTLY_MODIFIED_DISPLAY_THRESHOLD:
+            if (
+                self.verbosity < Verbosity.VERY_VERBOSE
+                and list_length > self.INDIRECTLY_MODIFIED_DISPLAY_THRESHOLD
+            ):
                 self._print(removed_models[0])
                 self._print(f"- `.... {list_length-2} more ....`\n")
                 self._print(removed_models[-1])
@@ -2062,7 +2072,7 @@ class MarkdownConsole(CaptureTerminalConsole):
                 indirectly_modified = sorted(indirectly_modified)
                 modified_length = len(indirectly_modified)
                 if (
-                    not self.verbose
+                    self.verbosity < Verbosity.VERY_VERBOSE
                     and modified_length > self.INDIRECTLY_MODIFIED_DISPLAY_THRESHOLD
                 ):
                     self._print(
@@ -2106,7 +2116,10 @@ class MarkdownConsole(CaptureTerminalConsole):
             )
 
         length = len(snapshots)
-        if not self.verbose and length > self.INDIRECTLY_MODIFIED_DISPLAY_THRESHOLD:
+        if (
+            self.verbosity < Verbosity.VERY_VERBOSE
+            and length > self.INDIRECTLY_MODIFIED_DISPLAY_THRESHOLD
+        ):
             self._print(snapshots[0])
             self._print(f"- `.... {length-2} more ....`\n")
             self._print(snapshots[-1])
@@ -2135,7 +2148,7 @@ class MarkdownConsole(CaptureTerminalConsole):
                         f"[indirect]{child_snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)} ({child_category_str})"
                     )
                 if indirect_tree:
-                    indirect_tree = self._limit_model_names(indirect_tree, self.verbose)
+                    indirect_tree = self._limit_model_names(indirect_tree, self.verbosity)
             elif context_diff.metadata_updated(snapshot.name):
                 tree = Tree(
                     f"[bold][metadata]Metadata Updated: {snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)}"
@@ -2364,7 +2377,7 @@ class DebuggerTerminalConsole(TerminalConsole):
     ) -> None:
         self.console: RichConsole = console or srich.console
         self.dialect = dialect
-        self.verbose = False
+        self.verbosity = Verbosity.DEFAULT
         self.ignore_warnings = ignore_warnings
 
     def _write(self, msg: t.Any, *args: t.Any, **kwargs: t.Any) -> None:

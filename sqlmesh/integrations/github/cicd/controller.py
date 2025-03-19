@@ -30,7 +30,7 @@ from sqlmesh.core.snapshot.definition import (
 )
 from sqlmesh.core.user import User
 from sqlmesh.integrations.github.cicd.config import GithubCICDBotConfig
-from sqlmesh.utils import word_characters_only
+from sqlmesh.utils import word_characters_only, Verbosity
 from sqlmesh.utils.concurrency import NodeExecutionFailedError
 from sqlmesh.utils.date import now
 from sqlmesh.utils.errors import (
@@ -476,7 +476,7 @@ class GithubController:
         """
         Run tests for the PR
         """
-        return self._context._run_tests(verbose=True)
+        return self._context._run_tests(verbosity=Verbosity.VERBOSE)
 
     def _get_or_create_comment(self, header: str = BOT_HEADER_MSG) -> IssueComment:
         comment = seq_get(
