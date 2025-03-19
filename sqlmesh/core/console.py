@@ -824,7 +824,8 @@ class TerminalConsole(Console):
         """Update the snapshot promotion progress."""
         if self.promotion_progress is not None and self.promotion_task is not None:
             if self.verbosity >= Verbosity.VERBOSE:
-                action_str = "[green]promoted[/green]" if promoted else "[yellow]demoted[/yellow]"
+                check_mark = f"{GREEN_CHECK_MARK} " if promoted else "  "
+                action_str = "[green]updated[/green]" if promoted else "[yellow]demoted[/yellow]"
                 self.promotion_progress.live.console.print(
                     f"{check_mark}{snapshot.display_name(self.environment_naming_info, self.default_catalog, dialect=self.dialect)} {action_str}"
                 )
