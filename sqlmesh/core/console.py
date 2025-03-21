@@ -2164,7 +2164,6 @@ class MarkdownConsole(CaptureTerminalConsole):
     def log_test_results(
         self, result: unittest.result.TestResult, output: t.Optional[str], target_dialect: str
     ) -> None:
-        # import ipywidgets as widgets
         if result.wasSuccessful():
             self._print(
                 f"**Successfully Ran `{str(result.testsRun)}` Tests Against `{target_dialect}`**\n\n"

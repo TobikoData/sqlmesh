@@ -2394,7 +2394,10 @@ class GenericContext(BaseContext, t.Generic[C]):
             )
         return models_for_interval_end
 
-    def lint_models(self, models: t.Optional[t.Iterable[t.Union[str, Model]]] = None) -> None:
+    def lint_models(
+        self,
+        models: t.Optional[t.Iterable[t.Union[str, Model]]] = None,
+    ) -> None:
         found_error = False
 
         model_list = (
@@ -2403,7 +2406,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         for model in model_list:
             # Linter may be `None` if the context is not loaded yet
             if linter := self._linters.get(model.project):
-                found_error = linter.lint_model(model) or found_error
+                found_error = linter.lint_model(model, console=self.console) or found_error
 
         if found_error:
             raise LinterError(
