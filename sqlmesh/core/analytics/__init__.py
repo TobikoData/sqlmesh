@@ -74,7 +74,7 @@ def cli_analytics(func: t.Callable[_P, _T]) -> t.Callable[_P, _T]:
             cicd_bot_config = None
             github_controller = cli_context.obj.get("github")
             if github_controller:
-                cicd_bot_config = github_controller._context.config.cicd_bot
+                cicd_bot_config = github_controller.context.config.cicd_bot
             collector.on_cicd_command(**common_context, cicd_bot_config=cicd_bot_config)
         else:
             collector.on_cli_command(**common_context)

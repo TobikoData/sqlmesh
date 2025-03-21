@@ -13,7 +13,7 @@ import time_machine
 from pytest_mock.plugin import MockerFixture
 from sqlglot import exp
 
-from sqlmesh.core.config import CategorizerConfig
+from sqlmesh.core.config import CategorizerConfig, Config, ModelDefaultsConfig, LinterConfig
 from sqlmesh.core.engine_adapter.shared import DataObject
 from sqlmesh.core.user import User, UserRole
 from sqlmesh.integrations.github.cicd import command
@@ -23,7 +23,7 @@ from sqlmesh.integrations.github.cicd.controller import (
     GithubCheckStatus,
     GithubController,
 )
-from sqlmesh.utils.errors import CICDBotError
+from sqlmesh.utils.errors import CICDBotError, LinterError
 from tests.integrations.github.cicd.fixtures import MockIssueComment
 
 pytest_plugins = ["tests.integrations.github.cicd.fixtures"]
@@ -50,6 +50,70 @@ def get_columns(
 ) -> t.Dict[str, exp.DataType]:
     table = f"sushi__{environment}.{model}" if environment else f"sushi.{model}"
     return controller._context.engine_adapter.columns(table)
+
+
+@time_machine.travel("2023-01-01 15:00:00 UTC")
+def test_linter(
+    github_client,
+    make_controller,
+    make_mock_check_run,
+    make_mock_issue_comment,
+    make_pull_request_review,
+    tmp_path: pathlib.Path,
+    mocker: MockerFixture,
+):
+    """
+    PR with a non-breaking change and auto-categorization will be backfilled, merged, and deployed to prod
+
+    Scenario:
+    - PR is not merged
+    - PR has been approved by a required reviewer
+    - Tests passed
+    - PR Merge Method defined
+    - Delete environment is disabled
+    - Changes made in PR with auto-categorization
+    """
+    mock_repo = github_client.get_repo()
+    mock_repo.create_check_run = mocker.MagicMock(
+        side_effect=lambda **kwargs: make_mock_check_run(**kwargs)
+    )
+
+    created_comments: t.List[MockIssueComment] = []
+    mock_issue = mock_repo.get_issue()
+    mock_issue.create_comment = mocker.MagicMock(
+        side_effect=lambda comment: make_mock_issue_comment(
+            comment=comment, created_comments=created_comments
+        )
+    )
+    mock_issue.get_comments = mocker.MagicMock(side_effect=lambda: created_comments)
+
+    mock_pull_request = mock_repo.get_pull()
+    mock_pull_request.get_reviews = mocker.MagicMock(
+        side_effect=lambda: [make_pull_request_review(username="test_github", state="APPROVED")]
+    )
+    mock_pull_request.merged = False
+    mock_pull_request.merge = mocker.MagicMock()
+
+    with pytest.raises(
+        LinterError,
+        match=r"Linter detected errors in the code. Please fix them before proceeding.",
+    ):
+        make_controller(
+            "tests/fixtures/github/pull_request_synchronized.json",
+            github_client,
+            bot_config=GithubCICDBotConfig(
+                merge_method=MergeMethod.MERGE,
+                invalidate_environment_after_deploy=False,
+                auto_categorize_changes=CategorizerConfig.all_full(),
+                default_pr_start=None,
+                skip_pr_backfill=False,
+            ),
+            mock_out_context=False,
+            config=Config(
+                model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+                linter=LinterConfig(enabled=True, rules="ALL"),
+            ),
+        )
 
 
 @time_machine.travel("2023-01-01 15:00:00 UTC")
@@ -161,9 +225,9 @@ def test_merge_pr_has_non_breaking_change(
 **Directly Modified:**
 - `sushi.waiter_revenue_by_day`
 ```diff
---- 
+---
 
-+++ 
++++
 
 @@ -16,7 +16,8 @@
 
@@ -358,9 +422,9 @@ def test_merge_pr_has_non_breaking_change_diff_start(
 **Directly Modified:**
 - `sushi.waiter_revenue_by_day`
 ```diff
---- 
+---
 
-+++ 
++++
 
 @@ -16,7 +16,8 @@
 
@@ -864,9 +928,9 @@ def test_no_merge_since_no_deploy_signal(
 **Directly Modified:**
 - `sushi.waiter_revenue_by_day`
 ```diff
---- 
+---
 
-+++ 
++++
 
 @@ -16,7 +16,8 @@
 
@@ -1045,9 +1109,9 @@ def test_no_merge_since_no_deploy_signal_no_approvers_defined(
 **Directly Modified:**
 - `sushi.waiter_revenue_by_day`
 ```diff
---- 
+---
 
-+++ 
++++
 
 @@ -16,7 +16,8 @@
 
@@ -1215,9 +1279,9 @@ def test_deploy_comment_pre_categorized(
 **Directly Modified:**
 - `sushi.waiter_revenue_by_day`
 ```diff
---- 
+---
 
-+++ 
++++
 
 @@ -16,7 +16,8 @@
 
@@ -1554,9 +1618,9 @@ def test_overlapping_changes_models(
 **Directly Modified:**
 - `sushi.customers`
 ```diff
---- 
+---
 
-+++ 
++++
 
 @@ -25,7 +25,8 @@
 

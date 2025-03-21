@@ -326,10 +326,18 @@ class GithubController:
             if review.state.lower() == "approved"
         }
         logger.debug(f"Approvers: {', '.join(self._approvers)}")
-        self._context: Context = Context(
-            paths=self._paths,
-            config=self.config,
-        )
+        from sqlmesh.utils.errors import LinterError
+
+        try:
+            self._context: Context = Context(
+                paths=self._paths,
+                config=self.config,
+            )
+        except LinterError:
+            errors = self._console.consume_captured_errors()
+            print(errors)
+            self.update_sqlmesh_comment_info(value=errors, dedup_regex=None)
+            raise
 
     @property
     def deploy_command_enabled(self) -> bool:
@@ -653,6 +661,37 @@ class GithubController:
             conclusion=conclusion,
             full_summary=summary,
         )
+
+    # def update_linter_check(
+    #     self,
+    #     status: t.Optional[GithubCheckStatus] = None,
+    #     conclusion: t.Optional[GithubCheckConclusion] = None,
+    #     result: t.Optional[unittest.result.TestResult] = None,
+    #     output: t.Optional[str] = None,
+    # ):
+    #     def conclusion_handler(
+    #         conclusion: GithubCheckConclusion,
+    #     ) -> t.Tuple[GithubCheckConclusion, str, t.Optional[str]]:
+    #         test_summary = "**Linter summary:**\n"
+    #         test_summary += self._console.captured_errors
+
+    #         title = "Title"
+
+    #         return conclusion, title, test_summary
+
+    #     self._update_check_handler(
+    #         check_name="SQLMesh - Linter",
+    #         status=status,
+    #         conclusion=conclusion,
+    #         status_handler=lambda status: (
+    #             {
+    #                 GithubCheckStatus.IN_PROGRESS: "Running linter",
+    #                 GithubCheckStatus.QUEUED: "Waiting to Run linter",
+    #             }[status],
+    #             None,
+    #         ),
+    #         conclusion_handler=functools.partial(conclusion_handler, result=result, output=output),
+    #     )
 
     def update_test_check(
         self,
