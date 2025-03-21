@@ -302,6 +302,8 @@ class GithubController:
         self._prod_plan_builder: t.Optional[PlanBuilder] = None
         self._prod_plan_with_gaps_builder: t.Optional[PlanBuilder] = None
         self._check_run_mapping: t.Dict[str, CheckRun] = {}
+        self._context = None
+        self._linter_errors = None
 
         if not isinstance(get_console(), MarkdownConsole):
             raise CICDBotError("Console must be a markdown console.")
@@ -328,16 +330,16 @@ class GithubController:
         logger.debug(f"Approvers: {', '.join(self._approvers)}")
         from sqlmesh.utils.errors import LinterError
 
-        try:
-            self._context: Context = Context(
-                paths=self._paths,
-                config=self.config,
-            )
-        except LinterError:
-            errors = self._console.consume_captured_errors()
-            print(errors)
-            self.update_sqlmesh_comment_info(value=errors, dedup_regex=None)
-            raise
+        # try:
+        #     self._context: Context = Context(
+        #         paths=self._paths,
+        #         config=self.config,
+        #     )
+        # except LinterError:
+        #     errors = self._console.consume_captured_errors()
+        #     print(errors)
+        #     self.update_sqlmesh_comment_info(value=errors, dedup_regex=None)
+        #     raise
 
     @property
     def deploy_command_enabled(self) -> bool:
@@ -351,7 +353,7 @@ class GithubController:
     def _required_approvers(self) -> t.List[User]:
         required_approvers = [
             user
-            for user in self._context.users
+            for user in self.context.users
             if user.is_required_approver and user.github_username
         ]
         logger.debug(
@@ -399,7 +401,7 @@ class GithubController:
     @property
     def pr_plan(self) -> Plan:
         if not self._pr_plan_builder:
-            self._pr_plan_builder = self._context.plan_builder(
+            self._pr_plan_builder = self.context.plan_builder(
                 environment=self.pr_environment_name,
                 skip_tests=True,
                 categorizer_config=self.bot_config.auto_categorize_changes,
@@ -413,7 +415,7 @@ class GithubController:
     @property
     def prod_plan(self) -> Plan:
         if not self._prod_plan_builder:
-            self._prod_plan_builder = self._context.plan_builder(
+            self._prod_plan_builder = self.context.plan_builder(
                 c.PROD,
                 no_gaps=True,
                 skip_tests=True,
@@ -426,7 +428,7 @@ class GithubController:
     @property
     def prod_plan_with_gaps(self) -> Plan:
         if not self._prod_plan_with_gaps_builder:
-            self._prod_plan_with_gaps_builder = self._context.plan_builder(
+            self._prod_plan_with_gaps_builder = self.context.plan_builder(
                 c.PROD,
                 no_gaps=False,
                 no_auto_categorization=True,
@@ -438,8 +440,8 @@ class GithubController:
 
     @property
     def bot_config(self) -> GithubCICDBotConfig:
-        bot_config = self._context.config.cicd_bot or GithubCICDBotConfig(
-            auto_categorize_changes=self._context.auto_categorize_changes
+        bot_config = self.context.config.cicd_bot or GithubCICDBotConfig(
+            auto_categorize_changes=self.context.auto_categorize_changes
         )
         logger.debug(f"Bot config: {bot_config.json(indent=2)}")
         return bot_config
@@ -451,6 +453,24 @@ class GithubController:
     @property
     def removed_snapshots(self) -> t.Set[SnapshotId]:
         return set(self.prod_plan_with_gaps.context_diff.removed_snapshots)
+
+    @property
+    def context(self) -> t.Optional[Context]:
+        if self._linter_errors:
+            return None
+
+        from sqlmesh.utils.errors import LinterError
+
+        try:
+            self.context: Context = Context(
+                paths=self._paths,
+                config=self.config,
+            )
+        except LinterError:
+            self._linter_errors = self._console.consume_captured_errors()
+            # print(errors)
+            # self.update_sqlmesh_comment_info(value=errors, dedup_regex=None)
+            # raise
 
     @classmethod
     def _append_output(cls, key: str, value: str) -> None:
@@ -468,11 +488,11 @@ class GithubController:
             self._console.show_model_difference_summary(
                 context_diff=plan.context_diff,
                 environment_naming_info=plan.environment_naming_info,
-                default_catalog=self._context.default_catalog,
+                default_catalog=self.context.default_catalog,
                 no_diff=False,
             )
             difference_summary = self._console.consume_captured_output()
-            self._console._show_missing_dates(plan, self._context.default_catalog)
+            self._console._show_missing_dates(plan, self.context.default_catalog)
             missing_dates = self._console.consume_captured_output()
             if not difference_summary and not missing_dates:
                 return "No changes to apply."
@@ -484,7 +504,7 @@ class GithubController:
         """
         Run tests for the PR
         """
-        return self._context._run_tests(verbose=True)
+        return self.context._run_tests(verbose=True)
 
     def _get_or_create_comment(self, header: str = BOT_HEADER_MSG) -> IssueComment:
         comment = seq_get(
@@ -555,7 +575,7 @@ class GithubController:
         Creates a PR environment from the logic present in the PR. If the PR contains changes that are
         uncategorized, then an error will be raised.
         """
-        self._context.apply(self.pr_plan)
+        self.context.apply(self.pr_plan)
 
     def deploy_to_prod(self) -> None:
         """
@@ -584,14 +604,14 @@ class GithubController:
             value=plan_summary,
             dedup_regex=None,
         )
-        self._context.apply(self.prod_plan)
+        self.context.apply(self.prod_plan)
 
     def try_invalidate_pr_environment(self) -> None:
         """
         Marks the PR environment for garbage collection.
         """
         if self.bot_config.invalidate_environment_after_deploy:
-            self._context.invalidate_environment(self.pr_environment_name)
+            self.context.invalidate_environment(self.pr_environment_name)
 
     def _update_check(
         self,
@@ -662,36 +682,37 @@ class GithubController:
             full_summary=summary,
         )
 
-    # def update_linter_check(
-    #     self,
-    #     status: t.Optional[GithubCheckStatus] = None,
-    #     conclusion: t.Optional[GithubCheckConclusion] = None,
-    #     result: t.Optional[unittest.result.TestResult] = None,
-    #     output: t.Optional[str] = None,
-    # ):
-    #     def conclusion_handler(
-    #         conclusion: GithubCheckConclusion,
-    #     ) -> t.Tuple[GithubCheckConclusion, str, t.Optional[str]]:
-    #         test_summary = "**Linter summary:**\n"
-    #         test_summary += self._console.captured_errors
+    def update_linter_check(
+        self,
+        status: t.Optional[GithubCheckStatus] = None,
+        conclusion: t.Optional[GithubCheckConclusion] = None,
+        result: t.Optional[unittest.result.TestResult] = None,
+        output: t.Optional[str] = None,
+    ):
+        def conclusion_handler(
+            conclusion: GithubCheckConclusion,
+        ) -> t.Tuple[GithubCheckConclusion, str, t.Optional[str]]:
+            test_summary = "**Linter summary:**\n"
+            ctx = self.context
+            test_summary += self._linter_errors
 
-    #         title = "Title"
+            title = "Title"
 
-    #         return conclusion, title, test_summary
+            return conclusion, title, test_summary
 
-    #     self._update_check_handler(
-    #         check_name="SQLMesh - Linter",
-    #         status=status,
-    #         conclusion=conclusion,
-    #         status_handler=lambda status: (
-    #             {
-    #                 GithubCheckStatus.IN_PROGRESS: "Running linter",
-    #                 GithubCheckStatus.QUEUED: "Waiting to Run linter",
-    #             }[status],
-    #             None,
-    #         ),
-    #         conclusion_handler=functools.partial(conclusion_handler, result=result, output=output),
-    #     )
+        self._update_check_handler(
+            check_name="SQLMesh - Linter",
+            status=status,
+            conclusion=conclusion,
+            status_handler=lambda status: (
+                {
+                    GithubCheckStatus.IN_PROGRESS: "Running linter",
+                    GithubCheckStatus.QUEUED: "Waiting to Run linter",
+                }[status],
+                None,
+            ),
+            conclusion_handler=functools.partial(conclusion_handler, result=result, output=output),
+        )
 
     def update_test_check(
         self,
@@ -715,7 +736,7 @@ class GithubController:
                 self._console.log_test_results(
                     result,
                     output,
-                    self._context._test_connection_config._engine_adapter.DIALECT,
+                    self.context._test_connection_config._engine_adapter.DIALECT,
                 )
                 test_summary = self._console.consume_captured_output()
                 test_title = "Tests Passed" if result.wasSuccessful() else "Tests Failed"

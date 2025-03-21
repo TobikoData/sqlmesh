@@ -189,8 +189,9 @@ def deploy_production(ctx: click.Context) -> None:
 
 def _run_all(controller: GithubController) -> None:
     has_required_approval = False
+    controller.update_linter_check()
     is_auto_deploying_prod = (
-        controller.deploy_command_enabled or controller.do_required_approval_check
+        controller.context and (controller.deploy_command_enabled or controller.do_required_approval_check)
     )
     if controller.is_comment_added:
         if not controller.deploy_command_enabled:
@@ -204,11 +205,13 @@ def _run_all(controller: GithubController) -> None:
             has_required_approval = True
         else:
             raise CICDBotError(f"Unsupported command: {command}")
-    controller.update_pr_environment_check(status=GithubCheckStatus.QUEUED)
-    controller.update_prod_plan_preview_check(status=GithubCheckStatus.QUEUED)
-    controller.update_test_check(status=GithubCheckStatus.QUEUED)
+
+    status = GithubCheckStatus.QUEUED if not controller._linter_errors else GithubCheckStatus.COMPLETED
+    controller.update_pr_environment_check(status=status)
+    controller.update_prod_plan_preview_check(status=status)
+    controller.update_test_check(status=status)
     if is_auto_deploying_prod:
-        controller.update_prod_environment_check(status=GithubCheckStatus.QUEUED)
+        controller.update_prod_environment_check(status=status)
     tests_passed = _run_tests(controller)
     if controller.do_required_approval_check:
         if has_required_approval:

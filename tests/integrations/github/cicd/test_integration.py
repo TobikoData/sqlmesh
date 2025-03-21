@@ -34,12 +34,12 @@ pytestmark = [
 
 
 def get_environment_objects(controller: GithubController, environment: str) -> t.List[DataObject]:
-    return controller._context.engine_adapter.get_data_objects(f"sushi__{environment}")
+    return controller.context.engine_adapter.get_data_objects(f"sushi__{environment}")
 
 
 def get_num_days_loaded(controller: GithubController, environment: str, model: str) -> int:
     return int(
-        controller._context.engine_adapter.fetchdf(
+        controller.context.engine_adapter.fetchdf(
             f"SELECT distinct event_date FROM sushi__{environment}.{model}"
         ).count()
     )
@@ -49,7 +49,7 @@ def get_columns(
     controller: GithubController, environment: t.Optional[str], model: str
 ) -> t.Dict[str, exp.DataType]:
     table = f"sushi__{environment}.{model}" if environment else f"sushi.{model}"
-    return controller._context.engine_adapter.columns(table)
+    return controller.context.engine_adapter.columns(table)
 
 
 @time_machine.travel("2023-01-01 15:00:00 UTC")
