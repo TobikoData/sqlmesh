@@ -4924,9 +4924,13 @@ def test_plan_production_environment_statements(tmp_path: Path):
             f.write(defn)
 
     before_all = [
-        "CREATE TABLE IF NOT EXISTS schema_names_for_@this_env (physical_schema_name VARCHAR)"
+        "CREATE TABLE IF NOT EXISTS schema_names_for_@this_env (physical_schema_name VARCHAR)",
+        "@IF(@runtime_stage = 'before_all', CREATE TABLE IF NOT EXISTS should_create AS SELECT @runtime_stage)",
     ]
-    after_all = ["@IF(@this_env = 'prod', CREATE TABLE IF NOT EXISTS after_t AS SELECT @var_5)"]
+    after_all = [
+        "@IF(@this_env = 'prod', CREATE TABLE IF NOT EXISTS after_t AS SELECT @var_5)",
+        "@IF(@runtime_stage = 'before_all', CREATE TABLE IF NOT EXISTS not_create AS SELECT @runtime_stage)",
+    ]
     config = Config(
         model_defaults=ModelDefaultsConfig(dialect="duckdb"),
         before_all=before_all,
@@ -4947,6 +4951,14 @@ def test_plan_production_environment_statements(tmp_path: Path):
     assert environment_statements[0].after_all == after_all
     assert environment_statements[0].python_env.keys() == {"__sqlmesh__vars__"}
     assert environment_statements[0].python_env["__sqlmesh__vars__"].payload == "{'var_5': 5}"
+
+    should_create = ctx.fetchdf("select * from should_create").to_dict()
+    assert should_create["before_all"][0] == "before_all"
+
+    with pytest.raises(
+        Exception, match=r"Catalog Error: Table with name not_create does not exist!"
+    ):
+        ctx.fetchdf("select * from not_create")
 
 
 @time_machine.travel("2025-03-08 00:00:00 UTC")
