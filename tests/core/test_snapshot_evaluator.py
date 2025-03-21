@@ -1191,7 +1191,7 @@ def test_migrate(mocker: MockerFixture, make_snapshot):
     snapshot = make_snapshot(model, version="1")
     snapshot.change_category = SnapshotChangeCategory.FORWARD_ONLY
 
-    evaluator.migrate([snapshot], {})
+    evaluator.migrate([snapshot], {}, deployability_index=DeployabilityIndex.none_deployable())
 
     cursor_mock.execute.assert_has_calls(
         [
@@ -1226,7 +1226,7 @@ def test_migrate_missing_table(mocker: MockerFixture, make_snapshot):
     snapshot = make_snapshot(model, version="1")
     snapshot.change_category = SnapshotChangeCategory.FORWARD_ONLY
 
-    evaluator.migrate([snapshot], {})
+    evaluator.migrate([snapshot], {}, deployability_index=DeployabilityIndex.none_deployable())
 
     cursor_mock.execute.assert_has_calls(
         [
@@ -1262,7 +1262,7 @@ def test_migrate_view(
     snapshot = make_snapshot(model, version="1")
     snapshot.change_category = change_category
 
-    evaluator.migrate([snapshot], {})
+    evaluator.migrate([snapshot], {}, deployability_index=DeployabilityIndex.none_deployable())
 
     cursor_mock.execute.assert_has_calls(
         [
@@ -1722,7 +1722,7 @@ def test_on_destructive_change_runtime_check(
     snapshot.change_category = SnapshotChangeCategory.FORWARD_ONLY
 
     with pytest.raises(NodeExecutionFailedError) as ex:
-        evaluator.migrate([snapshot], {})
+        evaluator.migrate([snapshot], {}, deployability_index=DeployabilityIndex.none_deployable())
 
     destructive_change_err = ex.value.__cause__
     assert isinstance(destructive_change_err, DestructiveChangeError)
@@ -1744,7 +1744,7 @@ def test_on_destructive_change_runtime_check(
 
     logger = logging.getLogger("sqlmesh.core.snapshot.evaluator")
     with patch.object(logger, "warning") as mock_logger:
-        evaluator.migrate([snapshot], {})
+        evaluator.migrate([snapshot], {}, deployability_index=DeployabilityIndex.none_deployable())
         assert (
             mock_logger.call_args[0][0]
             == "\nPlan requires a destructive change to forward-only model '\"test_schema\".\"test_model\"'s schema that drops column 'b'.\n\nSchema changes:\n  ALTER TABLE sqlmesh__test_schema.test_schema__test_model__1 DROP COLUMN b\n  ALTER TABLE sqlmesh__test_schema.test_schema__test_model__1 ADD COLUMN a INT"
@@ -1752,7 +1752,12 @@ def test_on_destructive_change_runtime_check(
 
     # allow destructive
     with patch.object(logger, "warning") as mock_logger:
-        evaluator.migrate([snapshot], {}, {'"test_schema"."test_model"'})
+        evaluator.migrate(
+            [snapshot],
+            {},
+            {'"test_schema"."test_model"'},
+            deployability_index=DeployabilityIndex.none_deployable(),
+        )
         assert mock_logger.call_count == 0
 
 
@@ -3638,7 +3643,7 @@ def test_migrate_snapshot(snapshot: Snapshot, mocker: MockerFixture, adapter_moc
     assert new_snapshot.table_name() == snapshot.table_name()
 
     evaluator.create([new_snapshot], {})
-    evaluator.migrate([new_snapshot], {})
+    evaluator.migrate([new_snapshot], {}, deployability_index=DeployabilityIndex.none_deployable())
 
     common_kwargs: t.Dict[str, t.Any] = dict(
         table_format=None,
@@ -3706,7 +3711,11 @@ def test_migrate_managed(adapter_mock, make_snapshot, mocker: MockerFixture):
 
     # no schema changes - no-op
     adapter_mock.get_alter_expressions.return_value = []
-    evaluator.migrate(target_snapshots=[snapshot], snapshots={})
+    evaluator.migrate(
+        target_snapshots=[snapshot],
+        snapshots={},
+        deployability_index=DeployabilityIndex.none_deployable(),
+    )
 
     adapter_mock.create_table.assert_not_called()
     adapter_mock.create_managed_table.assert_not_called()
@@ -3716,7 +3725,11 @@ def test_migrate_managed(adapter_mock, make_snapshot, mocker: MockerFixture):
     adapter_mock.get_alter_expressions.return_value = [exp.Alter()]
 
     with pytest.raises(NodeExecutionFailedError) as ex:
-        evaluator.migrate(target_snapshots=[snapshot], snapshots={})
+        evaluator.migrate(
+            target_snapshots=[snapshot],
+            snapshots={},
+            deployability_index=DeployabilityIndex.none_deployable(),
+        )
 
     sqlmesh_err = ex.value.__cause__
     assert isinstance(sqlmesh_err, SQLMeshError)
@@ -3907,7 +3920,9 @@ def test_multiple_engine_migration(mocker: MockerFixture, adapter_mock, make_sna
     )
     snapshot_2 = make_snapshot(model_2, version="1")
     snapshot_2.change_category = SnapshotChangeCategory.FORWARD_ONLY
-    evaluator.migrate([snapshot_1, snapshot_2], {})
+    evaluator.migrate(
+        [snapshot_1, snapshot_2], {}, deployability_index=DeployabilityIndex.none_deployable()
+    )
 
     cursor_mock.execute.assert_has_calls(
         [

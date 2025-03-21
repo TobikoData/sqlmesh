@@ -57,7 +57,6 @@ from sqlmesh.core.snapshot import (
     DeployabilityIndex,
     Intervals,
     Snapshot,
-    SnapshotChangeCategory,
     SnapshotId,
     SnapshotInfoLike,
     SnapshotTableCleanupTask,
@@ -390,6 +389,7 @@ class SnapshotEvaluator:
         target_snapshots: t.Iterable[Snapshot],
         snapshots: t.Dict[SnapshotId, Snapshot],
         allow_destructive_snapshots: t.Set[str] = set(),
+        deployability_index: t.Optional[DeployabilityIndex] = None,
     ) -> None:
         """Alters a physical snapshot table to match its snapshot's schema for the given collection of snapshots.
 
@@ -397,8 +397,9 @@ class SnapshotEvaluator:
             target_snapshots: Target snapshots.
             snapshots: Mapping of snapshot ID to snapshot.
             allow_destructive_snapshots: Set of snapshots that are allowed to have destructive schema changes.
+            deployability_index: Determines snapshots that are deployable in the context of this evaluation.
         """
-
+        deployability_index = deployability_index or DeployabilityIndex.all_deployable()
         with self.concurrent_context():
             concurrent_apply_to_snapshots(
                 target_snapshots,
@@ -407,6 +408,7 @@ class SnapshotEvaluator:
                     snapshots,
                     allow_destructive_snapshots,
                     self._get_adapter(s.model_gateway),
+                    deployability_index,
                 ),
                 self.ddl_concurrent_tasks,
             )
@@ -850,15 +852,13 @@ class SnapshotEvaluator:
         snapshots: t.Dict[SnapshotId, Snapshot],
         allow_destructive_snapshots: t.Set[str],
         adapter: EngineAdapter,
+        deployability_index: DeployabilityIndex,
     ) -> None:
-        if not snapshot.is_paused or not snapshot.is_model:
-            return
-
-        needs_migration = snapshot.model.forward_only or snapshot.change_category in (
-            SnapshotChangeCategory.FORWARD_ONLY,
-            SnapshotChangeCategory.INDIRECT_NON_BREAKING,
-        )
-        if not needs_migration:
+        if (
+            not snapshot.is_paused
+            or not snapshot.is_model
+            or deployability_index.is_representative(snapshot)
+        ):
             return
 
         target_table_name = snapshot.table_name()
