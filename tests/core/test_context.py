@@ -31,7 +31,7 @@ from sqlmesh.core.console import create_console, get_console
 from sqlmesh.core.dialect import parse, schema_
 from sqlmesh.core.engine_adapter.duckdb import DuckDBEngineAdapter
 from sqlmesh.core.environment import Environment, EnvironmentNamingInfo, EnvironmentStatements
-from sqlmesh.core.macros import MacroEvaluator
+from sqlmesh.core.macros import MacroEvaluator, RuntimeStage
 from sqlmesh.core.model import load_sql_based_model, model, SqlModel, Model
 from sqlmesh.core.model.cache import OptimizedQueryCache
 from sqlmesh.core.renderer import render_statements
@@ -1444,7 +1444,7 @@ from sqlmesh.core.snapshot.definition import to_view_mapping
 
 @macro()
 def grant_select_privileges(evaluator):
-    if evaluator._environment_naming_info:
+    if evaluator._environment_naming_info and evaluator.runtime_stage == 'before_all':
         mapping = to_view_mapping(
             evaluator._snapshots.values(), evaluator._environment_naming_info
         )
@@ -1493,7 +1493,10 @@ def grant_schema_usage(evaluator):
     assert isinstance(python_env["grant_select_privileges"], Executable)
 
     before_all_rendered = render_statements(
-        statements=before_all, dialect=dialect, python_env=python_env
+        statements=before_all,
+        dialect=dialect,
+        python_env=python_env,
+        runtime_stage=RuntimeStage.BEFORE_ALL,
     )
 
     assert before_all_rendered == [
@@ -1506,6 +1509,7 @@ def grant_schema_usage(evaluator):
         python_env=python_env,
         snapshots=snapshots,
         environment_naming_info=EnvironmentNamingInfo(name="prod"),
+        runtime_stage=RuntimeStage.BEFORE_ALL,
     )
 
     assert after_all_rendered == [
@@ -1519,6 +1523,7 @@ def grant_schema_usage(evaluator):
         python_env=python_env,
         snapshots=snapshots,
         environment_naming_info=EnvironmentNamingInfo(name="dev"),
+        runtime_stage=RuntimeStage.BEFORE_ALL,
     )
 
     assert after_all_rendered_dev == [
@@ -1534,7 +1539,7 @@ def test_plan_environment_statements(tmp_path: pathlib.Path):
 
     config = Config(
         model_defaults=ModelDefaultsConfig(dialect=dialect),
-        before_all=["@create_stats_table()"],
+        before_all=["@create_stats_table()", "@access_adapter()"],
         after_all=["CREATE TABLE IF NOT EXISTS after_table AS SELECT @some_var"],
         variables={"some_var": 5},
     )
@@ -1578,9 +1583,34 @@ def create_stats_table(evaluator):
 """,
     )
 
+    create_temp_file(
+        tmp_path,
+        pathlib.Path(macros_dir, "access_adapter.py"),
+        """
+from sqlmesh.core.macros import macro
+
+@macro()
+def access_adapter(evaluator):
+    if evaluator.runtime_stage == 'before_all':
+        engine_adapter = evaluator.engine_adapter
+        for i in range(10):
+            try:
+                sql_inside_macro = f"CREATE TABLE IF NOT EXISTS db_connect AS SELECT {i} as 'access_attempt'"
+                engine_adapter.execute(sql_inside_macro)
+                return None
+            except Exception as e:
+                sleep(10)
+        raise Exception(f"Failed to connect to the database")
+    """,
+    )
+
     context = Context(paths=tmp_path, config=config)
 
-    assert context._environment_statements[0].before_all == ["@create_stats_table()"]
+    assert context._environment_statements[0].before_all == [
+        "@create_stats_table()",
+        "@access_adapter()",
+    ]
+
     assert context._environment_statements[0].after_all == [
         "CREATE TABLE IF NOT EXISTS after_table AS SELECT @some_var"
     ]
@@ -1618,6 +1648,11 @@ def create_stats_table(evaluator):
     assert state_table[0].before_all == context._environment_statements[0].before_all
     assert state_table[0].after_all == context._environment_statements[0].after_all
     assert state_table[0].python_env == context._environment_statements[0].python_env
+
+    # This table will be created inside the macro by accessing the engine_adapter directly
+    inside_macro_execute = context.fetchdf("select * from memory.db_connect").to_dict()
+    assert (attempt_column := inside_macro_execute.get("access_attempt"))
+    assert isinstance(attempt_column, dict) and attempt_column[0] < 10
 
 
 def test_environment_statements_dialect(tmp_path: Path):
