@@ -854,13 +854,11 @@ class SnapshotEvaluator:
         adapter: EngineAdapter,
         deployability_index: DeployabilityIndex,
     ) -> None:
-        if not snapshot.is_paused or not snapshot.is_model:
-            return
-
-        needs_migration = snapshot.model.forward_only or not deployability_index.is_representative(
-            snapshot
-        )
-        if not needs_migration:
+        if (
+            not snapshot.is_paused
+            or not snapshot.is_model
+            or deployability_index.is_representative(snapshot)
+        ):
             return
 
         target_table_name = snapshot.table_name()
