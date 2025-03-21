@@ -244,6 +244,8 @@ def execute_environment_statements(
             end=end,
             execution_time=execution_time,
             environment_naming_info=environment_naming_info,
+            runtime_stage=runtime_stage,
+            engine_adapter=adapter,
         )
     ]:
         with adapter.transaction():
