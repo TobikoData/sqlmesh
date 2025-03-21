@@ -2141,6 +2141,71 @@ def test_indirect_non_breaking_view_model_non_representative_snapshot(
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_indirect_non_breaking_view_model_non_representative_snapshot_migration(
+    init_and_plan_context: t.Callable,
+):
+    context, _ = init_and_plan_context("examples/sushi")
+
+    forward_only_model_expr = d.parse(
+        """
+        MODEL (
+            name memory.sushi.forward_only_model,
+            kind INCREMENTAL_BY_TIME_RANGE (
+                time_column ds,
+                forward_only TRUE,
+                on_destructive_change 'allow',
+            ),
+        );
+
+        SELECT '2023-01-07' AS ds, 1 AS a;
+        """
+    )
+    forward_only_model = load_sql_based_model(forward_only_model_expr)
+    context.upsert_model(forward_only_model)
+
+    downstream_view_a_expr = d.parse(
+        """
+        MODEL (
+            name memory.sushi.downstream_view_a,
+            kind VIEW,
+        );
+
+        SELECT a from memory.sushi.forward_only_model;
+        """
+    )
+    downstream_view_a = load_sql_based_model(downstream_view_a_expr)
+    context.upsert_model(downstream_view_a)
+
+    downstream_view_b_expr = d.parse(
+        """
+        MODEL (
+            name memory.sushi.downstream_view_b,
+            kind VIEW,
+        );
+
+        SELECT a from memory.sushi.downstream_view_a;
+        """
+    )
+    downstream_view_b = load_sql_based_model(downstream_view_b_expr)
+    context.upsert_model(downstream_view_b)
+
+    context.plan(auto_apply=True, no_prompts=True, skip_tests=True)
+
+    # Make a forward-only change
+    context.upsert_model(add_projection_to_model(t.cast(SqlModel, forward_only_model)))
+    # Make a non-breaking change downstream
+    context.upsert_model(add_projection_to_model(t.cast(SqlModel, downstream_view_a)))
+
+    context.plan(auto_apply=True, no_prompts=True, skip_tests=True)
+
+    # Make sure the downstrean indirect non-breaking view is available in prod
+    count = context.engine_adapter.fetchone("SELECT COUNT(*) FROM memory.sushi.downstream_view_b")[
+        0
+    ]
+    assert count > 0
+
+
+@time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_unaligned_start_snapshot_with_non_deployable_downstream(init_and_plan_context: t.Callable):
     context, _ = init_and_plan_context("examples/sushi")
 
