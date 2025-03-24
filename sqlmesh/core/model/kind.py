@@ -124,11 +124,6 @@ class ModelKindMixin:
         return self.model_kind_name is not None and not (self.is_symbolic or self.is_view)
 
     @property
-    def only_execution_time(self) -> bool:
-        """Whether or not this model only cares about execution time to render."""
-        return self.is_view or self.is_full
-
-    @property
     def full_history_restatement_only(self) -> bool:
         """Whether or not this model only supports restatement of full history."""
         return self.model_kind_name in (

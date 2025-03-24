@@ -45,7 +45,6 @@ class BaseExpressionRenderer:
         path: Path = Path(),
         jinja_macro_registry: t.Optional[JinjaMacroRegistry] = None,
         python_env: t.Optional[t.Dict[str, Executable]] = None,
-        only_execution_time: bool = False,
         schema: t.Optional[t.Dict[str, t.Any]] = None,
         default_catalog: t.Optional[str] = None,
         quote_identifiers: bool = True,
@@ -59,7 +58,6 @@ class BaseExpressionRenderer:
         self._path = path
         self._jinja_macro_registry = jinja_macro_registry or JinjaMacroRegistry()
         self._python_env = python_env or {}
-        self._only_execution_time = only_execution_time
         self._default_catalog = default_catalog
         self._normalize_identifiers = normalize_identifiers
         self._quote_identifiers = quote_identifiers
@@ -123,11 +121,7 @@ class BaseExpressionRenderer:
 
         expressions = [self._expression]
 
-        start_time, end_time = (
-            make_inclusive(start or c.EPOCH, end or c.EPOCH, self._dialect)
-            if not self._only_execution_time
-            else (None, None)
-        )
+        start_time, end_time = make_inclusive(start or c.EPOCH, end or c.EPOCH, self._dialect)
 
         render_kwargs = {
             **date_dict(

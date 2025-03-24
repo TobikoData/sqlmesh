@@ -515,7 +515,6 @@ class _Model(ModelMeta, frozen=True):
             path=audit._path or Path(),
             jinja_macro_registry=audit.jinja_macros,
             python_env=self.python_env,
-            only_execution_time=self.kind.only_execution_time,
             default_catalog=self.default_catalog,
         )
 
@@ -584,7 +583,6 @@ class _Model(ModelMeta, frozen=True):
                 path=self._path,
                 jinja_macro_registry=self.jinja_macros,
                 python_env=self.python_env,
-                only_execution_time=self.kind.only_execution_time,
                 default_catalog=self.default_catalog,
                 model_fqn=self.fqn,
             )
@@ -703,7 +701,6 @@ class _Model(ModelMeta, frozen=True):
             path=self._path,
             jinja_macro_registry=self.jinja_macros,
             python_env=self.python_env,
-            only_execution_time=False,
             quote_identifiers=False,
         )
 
@@ -1488,7 +1485,6 @@ class SqlModel(_Model):
             path=self._path,
             jinja_macro_registry=self.jinja_macros,
             python_env=self.python_env,
-            only_execution_time=self.kind.only_execution_time,
             default_catalog=self.default_catalog,
             quote_identifiers=not no_quote_identifiers,
             optimize_query=self.optimize_query,
