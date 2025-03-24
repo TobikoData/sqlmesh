@@ -584,7 +584,7 @@ class _Model(ModelMeta, frozen=True):
                 path=self._path,
                 jinja_macro_registry=self.jinja_macros,
                 python_env=self.python_env,
-                only_execution_time=self.kind.only_execution_time,
+                only_execution_time=False,
                 default_catalog=self.default_catalog,
                 model_fqn=self.fqn,
             )
