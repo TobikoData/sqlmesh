@@ -43,7 +43,7 @@ jobs:
       - checkout
       - run:
           name: Install dependencies
-          command: make install-dev install-doc
+          command: make install-dev-uv install-doc-uv
       - run:
           name: Run doc tests
           command: make doc-test
@@ -68,7 +68,7 @@ jobs:
           command: sudo apt-get install unixodbc-dev
       - run:
           name: Install SQLMesh dev dependencies
-          command: make install-dev
+          command: make install-dev-uv
       - run:
           name: Fix Git URL override
           command: git config --global --unset url."ssh://git@github.com".insteadOf
