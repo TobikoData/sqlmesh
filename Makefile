@@ -6,6 +6,12 @@ install-dev:
 install-doc:
 	pip3 install -r ./docs/requirements.txt
 
+install-dev-uv:
+	pip3 install uv && uv pip install -e ".[dev,web,slack,dlt]" ./examples/custom_materializations
+
+install-doc-uv:
+	pip3 install uv && uv pip install -r ./docs/requirements.txt
+
 install-pre-commit:
 	pre-commit install
 
