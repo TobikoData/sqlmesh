@@ -23,7 +23,6 @@ from sqlmesh.core.macros import MacroRegistry, macro
 from sqlmesh.core.metric import Metric, MetricMeta, expand_metrics, load_metric_ddl
 from sqlmesh.core.model import (
     Model,
-    ExternalModel,
     ModelCache,
     SeedModel,
     create_external_model,
@@ -57,6 +56,14 @@ class LoadedProject:
     excluded_requirements: t.Set[str]
     environment_statements: t.Optional[EnvironmentStatements]
     user_rules: RuleSet
+
+
+class CacheBase(abc.ABC):
+    @abc.abstractmethod
+    def get_or_load_models(
+        self, target_path: Path, loader: t.Callable[[], t.List[Model]]
+    ) -> t.List[Model]:
+        """Get or load all models from cache."""
 
 
 class Loader(abc.ABC):
@@ -192,6 +199,7 @@ class Loader(abc.ABC):
     def _load_external_models(
         self,
         audits: UniqueKeyDict[str, ModelAudit],
+        cache: CacheBase,
         gateway: t.Optional[str] = None,
     ) -> UniqueKeyDict[str, Model]:
         models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
@@ -208,32 +216,39 @@ class Loader(abc.ABC):
         if external_models_path.exists() and external_models_path.is_dir():
             paths_to_load.extend(self._glob_paths(external_models_path, extension=".yaml"))
 
+        def _load() -> t.List[Model]:
+            try:
+                with open(path, "r", encoding="utf-8") as file:
+                    return [
+                        create_external_model(
+                            defaults=self.config.model_defaults.dict(),
+                            path=path,
+                            project=self.config.project,
+                            audit_definitions=audits,
+                            **{
+                                "dialect": self.config.model_defaults.dialect,
+                                "default_catalog": self.context.default_catalog,
+                                **row,
+                            },
+                        )
+                        for row in YAML().load(file.read())
+                    ]
+            except Exception as ex:
+                raise ConfigError(f"Failed to load model definition at '{path}'.\n{ex}")
+
         for path in paths_to_load:
             self._track_file(path)
 
-            with open(path, "r", encoding="utf-8") as file:
-                external_models: t.List[ExternalModel] = []
-                for row in YAML().load(file.read()):
-                    model = create_external_model(
-                        defaults=self.config.model_defaults.dict(),
-                        path=path,
-                        project=self.config.project,
-                        audit_definitions=audits,
-                        **{
-                            "dialect": self.config.model_defaults.dialect,
-                            "default_catalog": self.context.default_catalog,
-                            **row,
-                        },
-                    )
-                    external_models.append(model)
-
-                # external models with no explicit gateway defined form the base set
-                for model in (e for e in external_models if e.gateway is None):
+            external_models = cache.get_or_load_models(path, _load)
+            # external models with no explicit gateway defined form the base set
+            for model in external_models:
+                if model.gateway is None:
                     models[model.fqn] = model
 
-                # however, if there is a gateway defined, gateway-specific models take precedence
-                if gateway:
-                    for model in (e for e in external_models if e.gateway == gateway):
+            # however, if there is a gateway defined, gateway-specific models take precedence
+            if gateway:
+                for model in external_models:
+                    if model.gateway == gateway:
                         models.update({model.fqn: model})
 
         return models
@@ -396,8 +411,9 @@ class SqlMeshLoader(Loader):
         Loads all of the models within the model directory with their associated
         audits into a Dict and creates the dag
         """
-        sql_models = self._load_sql_models(macros, jinja_macros, audits, signals)
-        external_models = self._load_external_models(audits, gateway)
+        cache = SqlMeshLoader._Cache(self, self.config_path)
+        sql_models = self._load_sql_models(macros, jinja_macros, audits, signals, cache)
+        external_models = self._load_external_models(audits, cache, gateway)
         python_models = self._load_python_models(macros, jinja_macros, audits, signals)
 
         all_model_names = list(sql_models) + list(external_models) + list(python_models)
@@ -413,10 +429,10 @@ class SqlMeshLoader(Loader):
         jinja_macros: JinjaMacroRegistry,
         audits: UniqueKeyDict[str, ModelAudit],
         signals: UniqueKeyDict[str, signal],
+        cache: CacheBase,
     ) -> UniqueKeyDict[str, Model]:
         """Loads the sql models into a Dict"""
         models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
-        cache = SqlMeshLoader._Cache(self, self.config_path)
 
         for path in self._glob_paths(
             self.config_path / c.MODELS,
@@ -662,7 +678,7 @@ class SqlMeshLoader(Loader):
 
         return RuleSet(user_rules.values())
 
-    class _Cache:
+    class _Cache(CacheBase):
         def __init__(self, loader: SqlMeshLoader, config_path: Path):
             self._loader = loader
             self.config_path = config_path

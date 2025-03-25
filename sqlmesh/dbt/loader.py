@@ -11,7 +11,7 @@ from sqlmesh.core.config import (
     GatewayConfig,
     ModelDefaultsConfig,
 )
-from sqlmesh.core.loader import LoadedProject, Loader
+from sqlmesh.core.loader import CacheBase, LoadedProject, Loader
 from sqlmesh.core.macros import MacroRegistry, macro
 from sqlmesh.core.model import Model, ModelCache
 from sqlmesh.core.signal import signal
@@ -145,7 +145,7 @@ class DbtLoader(Loader):
 
                     models[sqlmesh_model.fqn] = sqlmesh_model
 
-            models.update(self._load_external_models(audits))
+            models.update(self._load_external_models(audits, cache))
 
         return models
 
@@ -255,7 +255,7 @@ class DbtLoader(Loader):
 
         return result
 
-    class _Cache:
+    class _Cache(CacheBase):
         MAX_ENTRY_NAME_LENGTH = 200
 
         def __init__(

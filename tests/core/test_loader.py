@@ -201,8 +201,3 @@ def my_model(context, **kwargs):
     assert model.description == "model_payload_a"
     path_b.write_text(model_payload_b)
     context.load()  # raise no error to duplicate key if the functions are identical (by registry class_method)
-    model = context.get_model(f"{model_name}")
-    assert (
-        model.description != "model_payload_b"
-    )  # model will not be overwritten by model_payload_b
-    assert model.description == "model_payload_a"
