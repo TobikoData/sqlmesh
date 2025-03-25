@@ -1935,7 +1935,8 @@ def load_sql_based_models(
         if prop.name == "gateway":
             gateway = prop.args["value"]
         elif prop.name == "blueprints":
-            blueprints = prop.args["value"]
+            # We pop the `blueprints` here to avoid walking large lists when rendering the meta
+            blueprints = prop.pop().args["value"]
 
     if isinstance(blueprints, d.MacroFunc):
         rendered_blueprints = render_expression(
@@ -2362,9 +2363,6 @@ def _create_model(
     variables: t.Optional[t.Dict[str, t.Any]] = None,
     **kwargs: t.Any,
 ) -> Model:
-    # blueprints are not really part of the model meta, so we pop it off here before validation kicks in
-    kwargs.pop("blueprints", None)
-
     _validate_model_fields(klass, {"name", *kwargs} - {"grain", "table_properties"}, path)
 
     for prop in PROPERTIES:
