@@ -13,7 +13,7 @@ def generate_dlt_models_and_settings(
     dialect: str,
     tables: t.Optional[t.List[str]] = None,
     dlt_path: t.Optional[str] = None,
-) -> t.Tuple[t.Set[t.Tuple[str, str]], str, str]:
+) -> t.Tuple[t.Set[t.Tuple[str, str]], t.Optional[str], str]:
     """
     This function attaches to a DLT pipeline and retrieves the connection configs and
     SQLMesh models based on the tables present in the pipeline's default schema.
@@ -40,18 +40,26 @@ def generate_dlt_models_and_settings(
     schema = pipeline.default_schema
     dataset = pipeline.dataset_name
 
-    client = pipeline._sql_job_client(schema)
-    config = client.config
-    credentials = config.credentials
-    db_type = pipeline.destination.to_name(pipeline.destination)
+    # Get the start date from the load_ids
     storage_ids = list(pipeline._get_load_storage().list_loaded_packages())
-    configs = {
-        key: value
-        for key in dir(credentials)
-        if not key.startswith("_")
-        and not callable(value := getattr(credentials, key))
-        and value is not None
-    }
+    start_date = get_start_date(storage_ids)
+
+    # Get the connection credentials
+    db_type = pipeline.destination.to_name(pipeline.destination)
+    if db_type == "filesystem":
+        connection_config = None
+    else:
+        client = pipeline._sql_job_client(schema)
+        config = client.config
+        credentials = config.credentials
+        configs = {
+            key: value
+            for key in dir(credentials)
+            if not key.startswith("_")
+            and not callable(value := getattr(credentials, key))
+            and value is not None
+        }
+        connection_config = format_config(configs, db_type)
 
     dlt_tables = {
         name: table
@@ -117,7 +125,7 @@ def generate_dlt_models_and_settings(
         )
         sqlmesh_models.add((incremental_model_name, incremental_model_sql))
 
-    return sqlmesh_models, format_config(configs, db_type), get_start_date(storage_ids)
+    return sqlmesh_models, connection_config, start_date
 
 
 def generate_dlt_models(

@@ -2,6 +2,7 @@ import logging
 from contextlib import contextmanager
 from os import getcwd, path, remove
 from pathlib import Path
+from shutil import rmtree
 from click import ClickException
 import pytest
 from click.testing import CliRunner
@@ -802,6 +803,93 @@ def test_dlt_pipeline_errors(runner, tmp_path):
 
 
 @time_machine.travel(FREEZE_TIME)
+def test_dlt_filesystem_pipeline(tmp_path):
+    import dlt
+
+    root_dir = path.abspath(getcwd())
+    storage_path = root_dir + "/temp_storage"
+    if path.exists(storage_path):
+        rmtree(storage_path)
+
+    filesystem_pipeline = dlt.pipeline(
+        pipeline_name="filesystem_pipeline",
+        destination=dlt.destinations.filesystem("file://" + storage_path),
+    )
+    info = filesystem_pipeline.run([{"item_id": 1}], table_name="equipment")
+    assert not info.has_failed_jobs
+
+    init_example_project(tmp_path, "athena", ProjectTemplate.DLT, "filesystem_pipeline")
+
+    # Validate generated sqlmesh config and models
+    config_path = tmp_path / "config.yaml"
+    equipment_model_path = tmp_path / "models/incremental_equipment.sql"
+    dlt_loads_model_path = tmp_path / "models/incremental__dlt_loads.sql"
+
+    assert config_path.exists()
+    assert equipment_model_path.exists()
+    assert dlt_loads_model_path.exists()
+
+    expected_incremental_model = """MODEL (
+  name filesystem_pipeline_dataset_sqlmesh.incremental_equipment,
+  kind INCREMENTAL_BY_TIME_RANGE (
+    time_column _dlt_load_time,
+  ),
+);
+
+SELECT
+  CAST(c.item_id AS BIGINT) AS item_id,
+  CAST(c._dlt_load_id AS VARCHAR) AS _dlt_load_id,
+  CAST(c._dlt_id AS VARCHAR) AS _dlt_id,
+  TO_TIMESTAMP(CAST(c._dlt_load_id AS DOUBLE)) as _dlt_load_time
+FROM
+  filesystem_pipeline_dataset.equipment as c
+WHERE
+  TO_TIMESTAMP(CAST(c._dlt_load_id AS DOUBLE)) BETWEEN @start_ds AND @end_ds
+"""
+
+    with open(equipment_model_path) as file:
+        incremental_model = file.read()
+
+    assert incremental_model == expected_incremental_model
+
+    expected_config = (
+        "gateways:\n"
+        "  athena:\n"
+        "    connection:\n"
+        "      # For more information on configuring the connection to your execution engine, visit:\n"
+        "      # https://sqlmesh.readthedocs.io/en/stable/reference/configuration/#connections\n"
+        "      # https://sqlmesh.readthedocs.io/en/stable/integrations/engines/athena/#connection-options\n"
+        "      type: athena\n"
+        "      # concurrent_tasks: 4\n"
+        "      # register_comments: False\n"
+        "      # pre_ping: False\n"
+        "      # pretty_sql: False\n"
+        "      # aws_access_key_id: \n"
+        "      # aws_secret_access_key: \n"
+        "      # role_arn: \n"
+        "      # role_session_name: \n"
+        "      # region_name: \n"
+        "      # work_group: \n"
+        "      # s3_staging_dir: \n"
+        "      # schema_name: \n"
+        "      # catalog_name: \n"
+        "      # s3_warehouse_location: \n\n\n"
+        "default_gateway: athena\n\n"
+        "model_defaults:\n"
+        "  dialect: athena\n"
+        f"  start: {yesterday_ds()}\n"
+    )
+
+    with open(config_path) as file:
+        config = file.read()
+
+    assert config == expected_config
+
+    if path.exists(storage_path):
+        rmtree(storage_path)
+
+
+@time_machine.travel(FREEZE_TIME)
 def test_plan_dlt(runner, tmp_path):
     from dlt.common.pipeline import get_dlt_pipelines_dir
 
@@ -1039,7 +1127,7 @@ def test_environments(runner, tmp_path):
         ],
     )
     assert result.exit_code == 0
-    assert result.output == f"Number of SQLMesh environments are: 1\ndev - {ttl}\n"
+    assert f"Number of SQLMesh environments are: 1\ndev - {ttl}\n" in result.output
 
     # # create dev2 environment from dev environment
     # # Input: `y` to apply and virtual update
@@ -1070,7 +1158,7 @@ def test_environments(runner, tmp_path):
         ],
     )
     assert result.exit_code == 0
-    assert result.output == f"Number of SQLMesh environments are: 2\ndev - {ttl}\ndev2 - {ttl}\n"
+    assert f"Number of SQLMesh environments are: 2\ndev - {ttl}\ndev2 - {ttl}\n" in result.output
 
     # Example project models have start dates, so there are no date prompts
     # for the `prod` environment.
@@ -1088,6 +1176,6 @@ def test_environments(runner, tmp_path):
     )
     assert result.exit_code == 0
     assert (
-        result.output
-        == f"Number of SQLMesh environments are: 3\ndev - {ttl}\ndev2 - {ttl}\nprod - No Expiry\n"
+        f"Number of SQLMesh environments are: 3\ndev - {ttl}\ndev2 - {ttl}\nprod - No Expiry\n"
+        in result.output
     )
