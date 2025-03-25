@@ -280,7 +280,7 @@ class SnapshotEvaluator:
         deployability_index: t.Optional[DeployabilityIndex] = None,
         on_start: t.Optional[t.Callable] = None,
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]] = None,
-        allow_destructive_snapshots: t.Set[str] = set(),
+        allow_destructive_snapshots: t.Optional[t.Set[str]] = None,
     ) -> None:
         """Creates a physical snapshot schema and table for the given collection of snapshots.
 
@@ -296,6 +296,7 @@ class SnapshotEvaluator:
         tables_by_schema = defaultdict(set)
         gateway_by_schema: t.Dict[exp.Table, str] = {}
         table_deployability: t.Dict[str, bool] = {}
+        allow_destructive_snapshots = allow_destructive_snapshots or set()
 
         for snapshot in target_snapshots:
             if not snapshot.is_model or snapshot.is_symbolic:
@@ -388,7 +389,7 @@ class SnapshotEvaluator:
         self,
         target_snapshots: t.Iterable[Snapshot],
         snapshots: t.Dict[SnapshotId, Snapshot],
-        allow_destructive_snapshots: t.Set[str] = set(),
+        allow_destructive_snapshots: t.Optional[t.Set[str]] = None,
         deployability_index: t.Optional[DeployabilityIndex] = None,
     ) -> None:
         """Alters a physical snapshot table to match its snapshot's schema for the given collection of snapshots.
@@ -399,6 +400,7 @@ class SnapshotEvaluator:
             allow_destructive_snapshots: Set of snapshots that are allowed to have destructive schema changes.
             deployability_index: Determines snapshots that are deployable in the context of this evaluation.
         """
+        allow_destructive_snapshots = allow_destructive_snapshots or set()
         deployability_index = deployability_index or DeployabilityIndex.all_deployable()
         with self.concurrent_context():
             concurrent_apply_to_snapshots(
