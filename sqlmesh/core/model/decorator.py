@@ -97,7 +97,7 @@ class model(registry_decorator):
     ) -> t.List[Model]:
         return create_models_from_blueprints(
             gateway=self.kwargs.get("gateway"),
-            blueprints=self.kwargs.get("blueprints"),
+            blueprints=self.kwargs.pop("blueprints", None),
             get_variables=get_variables,
             loader=self.model,
             path=path,
