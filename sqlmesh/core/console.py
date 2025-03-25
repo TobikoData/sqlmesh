@@ -29,7 +29,6 @@ from sqlglot import exp
 from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.linter.rule import RuleViolation
 from sqlmesh.core.model import Model
-from sqlmesh.core.model.definition import AuditResult
 from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotChangeCategory,
@@ -94,12 +93,6 @@ class Console(abc.ABC):
         """Indicates that the evaluation has ended."""
 
     @abc.abstractmethod
-    def store_evaluation_audit_results(
-        self, snapshot: Snapshot, audit_results: t.List[AuditResult]
-    ) -> None:
-        """Stores the audit results for the snapshot evaluation."""
-
-    @abc.abstractmethod
     def start_evaluation_progress(
         self,
         batches: t.Dict[Snapshot, Intervals],
@@ -114,7 +107,12 @@ class Console(abc.ABC):
 
     @abc.abstractmethod
     def update_snapshot_evaluation_progress(
-        self, snapshot: Snapshot, batch_idx: int, duration_ms: t.Optional[int]
+        self,
+        snapshot: Snapshot,
+        batch_idx: int,
+        duration_ms: t.Optional[int],
+        num_audits_passed: int,
+        num_audits_failed: int,
     ) -> None:
         """Updates the snapshot evaluation progress."""
 
@@ -350,11 +348,6 @@ class NoopConsole(Console):
     def stop_plan_evaluation(self) -> None:
         pass
 
-    def store_evaluation_audit_results(
-        self, snapshot: Snapshot, audit_results: t.List[AuditResult]
-    ) -> None:
-        pass
-
     def start_evaluation_progress(
         self,
         batches: t.Dict[Snapshot, Intervals],
@@ -367,7 +360,12 @@ class NoopConsole(Console):
         pass
 
     def update_snapshot_evaluation_progress(
-        self, snapshot: Snapshot, batch_idx: int, duration_ms: t.Optional[int]
+        self,
+        snapshot: Snapshot,
+        batch_idx: int,
+        duration_ms: t.Optional[int],
+        num_audits_passed: int,
+        num_audits_failed: int,
     ) -> None:
         pass
 
@@ -551,7 +549,6 @@ class TerminalConsole(Console):
         self.evaluation_model_batch_sizes: t.Dict[Snapshot, int] = {}
         self.evaluation_model_info: t.Dict[Snapshot, t.Dict[str, t.Any]] = {}
         self.evaluation_model_column_widths: t.Dict[str, int] = {}
-        self.evaluation_audit_results: t.Dict[Snapshot, t.List[AuditResult]] = {}
 
         # Put in temporary values that are replaced when evaluating
         self.environment_naming_info = EnvironmentNamingInfo()
@@ -589,11 +586,6 @@ class TerminalConsole(Console):
 
     def stop_plan_evaluation(self) -> None:
         pass
-
-    def store_evaluation_audit_results(
-        self, snapshot: Snapshot, audit_results: t.List[AuditResult]
-    ) -> None:
-        self.evaluation_audit_results[snapshot] = audit_results
 
     def start_evaluation_progress(
         self,
@@ -654,7 +646,12 @@ class TerminalConsole(Console):
             )
 
     def update_snapshot_evaluation_progress(
-        self, snapshot: Snapshot, batch_idx: int, duration_ms: t.Optional[int]
+        self,
+        snapshot: Snapshot,
+        batch_idx: int,
+        duration_ms: t.Optional[int],
+        num_audits_passed: int,
+        num_audits_failed: int,
     ) -> None:
         """Update the snapshot evaluation progress."""
         if (
@@ -672,14 +669,6 @@ class TerminalConsole(Console):
                 )
 
                 annotation = self.evaluation_model_info[snapshot]["annotation"][batch_idx]
-                num_audits = 0
-                num_audits_passed = 0
-                if snapshot in self.evaluation_audit_results:
-                    num_audits = len(self.evaluation_audit_results[snapshot])
-                    num_audits_passed = sum(
-                        result.count == 0 for result in self.evaluation_audit_results[snapshot]
-                    )
-                num_audits_failed = num_audits - num_audits_passed
                 if num_audits_passed:
                     annotation += f", {num_audits_passed} audits pass"
                 if num_audits_failed:
@@ -721,7 +710,6 @@ class TerminalConsole(Console):
         self.evaluation_model_batch_sizes = {}
         self.evaluation_model_info = {}
         self.evaluation_model_column_widths = {}
-        self.evaluation_audit_results = {}
         self.environment_naming_info = EnvironmentNamingInfo()
         self.default_catalog = None
 
@@ -2348,7 +2336,12 @@ class DatabricksMagicConsole(CaptureTerminalConsole):
             )
 
     def update_snapshot_evaluation_progress(
-        self, snapshot: Snapshot, batch_idx: int, duration_ms: t.Optional[int]
+        self,
+        snapshot: Snapshot,
+        batch_idx: int,
+        duration_ms: t.Optional[int],
+        num_audits_passed: int,
+        num_audits_failed: int,
     ) -> None:
         view_name, loaded_batches = self.evaluation_batch_progress[snapshot.snapshot_id]
         total_batches = self.evaluation_model_batch_sizes[snapshot]
@@ -2499,9 +2492,16 @@ class DebuggerTerminalConsole(TerminalConsole):
         self._write(f"Evaluating {snapshot.name}")
 
     def update_snapshot_evaluation_progress(
-        self, snapshot: Snapshot, batch_idx: int, duration_ms: t.Optional[int]
+        self,
+        snapshot: Snapshot,
+        batch_idx: int,
+        duration_ms: t.Optional[int],
+        num_audits_passed: int,
+        num_audits_failed: int,
     ) -> None:
-        self._write(f"Evaluating {snapshot.name} | batch={batch_idx} | duration={duration_ms}ms")
+        self._write(
+            f"Evaluating {snapshot.name} | batch={batch_idx} | duration={duration_ms}ms | num_audits_passed={num_audits_passed} | num_audits_failed={num_audits_failed}"
+        )
 
     def stop_evaluation_progress(self, success: bool = True) -> None:
         self._write(f"Stopping evaluation with success={success}")

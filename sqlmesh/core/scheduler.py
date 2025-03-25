@@ -7,6 +7,7 @@ from sqlmesh.core import constants as c
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.environment import EnvironmentNamingInfo, execute_environment_statements
 from sqlmesh.core.macros import RuntimeStage
+from sqlmesh.core.model.definition import AuditResult
 from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.notification_target import (
     NotificationEvent,
@@ -168,7 +169,7 @@ class Scheduler:
         environment_naming_info: EnvironmentNamingInfo,
         default_catalog: t.Optional[str],
         **kwargs: t.Any,
-    ) -> None:
+    ) -> t.List[AuditResult]:
         """Evaluate a snapshot and add the processed interval to the state sync.
 
         Args:
@@ -180,6 +181,9 @@ class Scheduler:
             batch_index: If the snapshot is part of a batch of related snapshots; which index in the batch is it
             auto_restatement_enabled: Whether to enable auto restatements.
             kwargs: Additional kwargs to pass to the renderer.
+
+        Returns:
+            List of audit results from the evaluation.
         """
         validate_date_range(start, end)
 
@@ -207,7 +211,6 @@ class Scheduler:
             wap_id=wap_id,
             **kwargs,
         )
-        self.console.store_evaluation_audit_results(snapshot, audit_results)
 
         audit_errors_to_raise: t.List[AuditError] = []
         for audit_result in (result for result in audit_results if result.count):
@@ -241,6 +244,7 @@ class Scheduler:
             raise NodeAuditsErrors(audit_errors_to_raise)
 
         self.state_sync.add_interval(snapshot, start, end, is_dev=not is_deployable)
+        return audit_results
 
     def run(
         self,
@@ -474,7 +478,8 @@ class Scheduler:
             try:
                 assert execution_time  # mypy
                 assert deployability_index  # mypy
-                self.evaluate(
+                audit_results = []
+                audit_results = self.evaluate(
                     snapshot=snapshot,
                     start=start,
                     end=end,
@@ -486,8 +491,14 @@ class Scheduler:
                 )
                 evaluation_duration_ms = now_timestamp() - execution_start_ts
             finally:
+                num_audits = len(audit_results)
+                num_audits_failed = sum(1 for result in audit_results if result.count)
                 self.console.update_snapshot_evaluation_progress(
-                    snapshot, batch_idx, evaluation_duration_ms
+                    snapshot,
+                    batch_idx,
+                    evaluation_duration_ms,
+                    num_audits - num_audits_failed,
+                    num_audits_failed,
                 )
 
         try:
