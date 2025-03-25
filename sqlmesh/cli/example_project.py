@@ -29,9 +29,6 @@ def _gen_config(
     template: ProjectTemplate,
 ) -> str:
     if not settings:
-        connection_settings = """      type: duckdb
-      database: db.db"""
-
         doc_link = "https://sqlmesh.readthedocs.io/en/stable/integrations/engines{engine_link}"
         engine_link = ""
 
