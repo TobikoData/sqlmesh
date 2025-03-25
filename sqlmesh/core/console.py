@@ -643,7 +643,9 @@ class TerminalConsole(Console):
     def start_snapshot_evaluation_progress(self, snapshot: Snapshot) -> None:
         if self.evaluation_model_progress and snapshot.name not in self.evaluation_model_tasks:
             display_name = snapshot.display_name(
-                self.environment_naming_info, self.default_catalog, dialect=self.dialect
+                self.environment_naming_info,
+                self.default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None,
+                dialect=self.dialect,
             )
             self.evaluation_model_tasks[snapshot.name] = self.evaluation_model_progress.add_task(
                 f"Evaluating {display_name}...",
@@ -749,7 +751,7 @@ class TerminalConsole(Console):
         if self.creation_progress is not None and self.creation_task is not None:
             if self.verbosity >= Verbosity.VERBOSE:
                 self.creation_progress.live.console.print(
-                    f"{GREEN_CHECK_MARK} {snapshot.display_name(self.environment_naming_info, self.default_catalog, dialect=self.dialect)} [green]created[/green]"
+                    f"{GREEN_CHECK_MARK} {snapshot.display_name(self.environment_naming_info, self.default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect)} [green]created[/green]"
                 )
             self.creation_progress.update(self.creation_task, refresh=True, advance=1)
 
@@ -827,7 +829,7 @@ class TerminalConsole(Console):
                 check_mark = f"{GREEN_CHECK_MARK} " if promoted else "  "
                 action_str = "[green]updated[/green]" if promoted else "[yellow]demoted[/yellow]"
                 self.promotion_progress.live.console.print(
-                    f"{check_mark}{snapshot.display_name(self.environment_naming_info, self.default_catalog, dialect=self.dialect)} {action_str}"
+                    f"{check_mark}{snapshot.display_name(self.environment_naming_info, self.default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect)} {action_str}"
                 )
             self.promotion_progress.update(self.promotion_task, refresh=True, advance=1)
 
@@ -1044,7 +1046,7 @@ class TerminalConsole(Console):
             for s_id in sorted(added_snapshot_ids):
                 snapshot = context_diff.snapshots[s_id]
                 added_tree.add(
-                    f"[added]{snapshot.display_name(environment_naming_info, default_catalog, dialect=self.dialect)}"
+                    f"[added]{snapshot.display_name(environment_naming_info, default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect)}"
                 )
             tree.add(self._limit_model_names(added_tree, self.verbosity))
         if removed_snapshot_ids:
@@ -1052,7 +1054,7 @@ class TerminalConsole(Console):
             for s_id in sorted(removed_snapshot_ids):
                 snapshot_table_info = context_diff.removed_snapshots[s_id]
                 removed_tree.add(
-                    f"[removed]{snapshot_table_info.display_name(environment_naming_info, default_catalog, dialect=self.dialect)}"
+                    f"[removed]{snapshot_table_info.display_name(environment_naming_info, default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect)}"
                 )
             tree.add(self._limit_model_names(removed_tree, self.verbosity))
         if modified_snapshot_ids:
@@ -1062,7 +1064,9 @@ class TerminalConsole(Console):
             for s_id in modified_snapshot_ids:
                 name = s_id.name
                 display_name = context_diff.snapshots[s_id].display_name(
-                    environment_naming_info, default_catalog, dialect=self.dialect
+                    environment_naming_info,
+                    default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None,
+                    dialect=self.dialect,
                 )
                 if context_diff.directly_modified(name):
                     direct.add(
@@ -1139,7 +1143,7 @@ class TerminalConsole(Console):
             if not no_diff:
                 self.show_sql(plan.context_diff.text_diff(snapshot.name))
             tree = Tree(
-                f"[bold][direct]Directly Modified: {snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)}"
+                f"[bold][direct]Directly Modified: {snapshot.display_name(plan.environment_naming_info, default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect)}"
             )
             indirect_tree = None
 
@@ -1149,7 +1153,7 @@ class TerminalConsole(Console):
                     indirect_tree = Tree("[indirect]Indirectly Modified Children:")
                     tree.add(indirect_tree)
                 indirect_tree.add(
-                    f"[indirect]{child_snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)}"
+                    f"[indirect]{child_snapshot.display_name(plan.environment_naming_info, default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect)}"
                 )
             if indirect_tree:
                 indirect_tree = self._limit_model_names(indirect_tree, self.verbosity)
@@ -1167,7 +1171,7 @@ class TerminalConsole(Console):
             if context_diff.directly_modified(snapshot.name):
                 category_str = SNAPSHOT_CHANGE_CATEGORY_STR[snapshot.change_category]
                 tree = Tree(
-                    f"\n[bold][direct]Directly Modified: {snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)} ({category_str})"
+                    f"\n[bold][direct]Directly Modified: {snapshot.display_name(plan.environment_naming_info, default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect)} ({category_str})"
                 )
                 indirect_tree = None
                 for child_sid in sorted(plan.indirectly_modified.get(snapshot.snapshot_id, set())):
@@ -1179,13 +1183,13 @@ class TerminalConsole(Console):
                         child_snapshot.change_category
                     ]
                     indirect_tree.add(
-                        f"[indirect]{child_snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)} ({child_category_str})"
+                        f"[indirect]{child_snapshot.display_name(plan.environment_naming_info, default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect)} ({child_category_str})"
                     )
                 if indirect_tree:
                     indirect_tree = self._limit_model_names(indirect_tree, self.verbosity)
             elif context_diff.metadata_updated(snapshot.name):
                 tree = Tree(
-                    f"\n[bold][metadata]Metadata Updated: {snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)}"
+                    f"\n[bold][metadata]Metadata Updated: {snapshot.display_name(plan.environment_naming_info, default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect)}"
                 )
             else:
                 continue
@@ -1212,7 +1216,9 @@ class TerminalConsole(Console):
                 preview_modifier = " ([orange1]preview[/orange1])"
 
             display_name = snapshot.display_name(
-                plan.environment_naming_info, default_catalog, dialect=self.dialect
+                plan.environment_naming_info,
+                default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None,
+                dialect=self.dialect,
             )
             backfill.add(
                 f"{display_name}: \\[{_format_missing_intervals(snapshot, missing)}]{preview_modifier}"
@@ -1610,7 +1616,9 @@ class TerminalConsole(Console):
         use_rich_formatting: bool = True,
     ) -> t.Dict[SnapshotChangeCategory, str]:
         direct = snapshot.display_name(
-            environment_naming_info, default_catalog, dialect=self.dialect
+            environment_naming_info,
+            default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None,
+            dialect=self.dialect,
         )
         if use_rich_formatting:
             direct = f"[direct]{direct}[/direct]"
@@ -2079,7 +2087,7 @@ class MarkdownConsole(CaptureTerminalConsole):
             else:
                 for snapshot in added_models:
                     self._print(
-                        f"- `{snapshot.display_name(environment_naming_info, default_catalog, dialect=self.dialect)}`"
+                        f"- `{snapshot.display_name(environment_naming_info, default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect)}`"
                     )
 
         added_snapshot_audits = {s for s in added_snapshots if s.is_audit}
@@ -2087,7 +2095,7 @@ class MarkdownConsole(CaptureTerminalConsole):
             self._print("\n**Added Standalone Audits:**")
             for snapshot in sorted(added_snapshot_audits):
                 self._print(
-                    f"- `{snapshot.display_name(environment_naming_info, default_catalog, dialect=self.dialect)}`"
+                    f"- `{snapshot.display_name(environment_naming_info, default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect)}`"
                 )
 
         removed_snapshot_table_infos = set(context_diff.removed_snapshots.values())
@@ -2106,7 +2114,7 @@ class MarkdownConsole(CaptureTerminalConsole):
             else:
                 for snapshot_table_info in removed_models:
                     self._print(
-                        f"- `{snapshot_table_info.display_name(environment_naming_info, default_catalog, dialect=self.dialect)}`"
+                        f"- `{snapshot_table_info.display_name(environment_naming_info, default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect)}`"
                     )
 
         removed_audit_snapshot_table_infos = {s for s in removed_snapshot_table_infos if s.is_audit}
@@ -2114,7 +2122,7 @@ class MarkdownConsole(CaptureTerminalConsole):
             self._print("\n**Removed Standalone Audits:**")
             for snapshot_table_info in sorted(removed_audit_snapshot_table_infos):
                 self._print(
-                    f"- `{snapshot_table_info.display_name(environment_naming_info, default_catalog, dialect=self.dialect)}`"
+                    f"- `{snapshot_table_info.display_name(environment_naming_info, default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect)}`"
                 )
 
         modified_snapshots = {
@@ -2135,7 +2143,7 @@ class MarkdownConsole(CaptureTerminalConsole):
                 self._print("\n**Directly Modified:**")
                 for snapshot in sorted(directly_modified):
                     self._print(
-                        f"- `{snapshot.display_name(environment_naming_info, default_catalog, dialect=self.dialect)}`"
+                        f"- `{snapshot.display_name(environment_naming_info, default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect)}`"
                     )
                     if not no_diff:
                         self._print(f"```diff\n{context_diff.text_diff(snapshot.name)}\n```")
@@ -2148,20 +2156,20 @@ class MarkdownConsole(CaptureTerminalConsole):
                     and modified_length > self.INDIRECTLY_MODIFIED_DISPLAY_THRESHOLD
                 ):
                     self._print(
-                        f"- `{indirectly_modified[0].display_name(environment_naming_info, default_catalog, dialect=self.dialect)}`\n"
+                        f"- `{indirectly_modified[0].display_name(environment_naming_info, default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect)}`\n"
                         f"- `.... {modified_length-2} more ....`\n"
-                        f"- `{indirectly_modified[-1].display_name(environment_naming_info, default_catalog, dialect=self.dialect)}`"
+                        f"- `{indirectly_modified[-1].display_name(environment_naming_info, default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect)}`"
                     )
                 else:
                     for snapshot in indirectly_modified:
                         self._print(
-                            f"- `{snapshot.display_name(environment_naming_info, default_catalog, dialect=self.dialect)}`"
+                            f"- `{snapshot.display_name(environment_naming_info, default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect)}`"
                         )
             if metadata_modified:
                 self._print("\n**Metadata Updated:**")
                 for snapshot in sorted(metadata_modified):
                     self._print(
-                        f"- `{snapshot.display_name(environment_naming_info, default_catalog, dialect=self.dialect)}`"
+                        f"- `{snapshot.display_name(environment_naming_info, default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect)}`"
                     )
 
     def _show_missing_dates(self, plan: Plan, default_catalog: t.Optional[str]) -> None:
@@ -2181,7 +2189,9 @@ class MarkdownConsole(CaptureTerminalConsole):
                 preview_modifier = " (**preview**)"
 
             display_name = snapshot.display_name(
-                plan.environment_naming_info, default_catalog, dialect=self.dialect
+                plan.environment_naming_info,
+                default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None,
+                dialect=self.dialect,
             )
             snapshots.append(
                 f"* `{display_name}`: [{_format_missing_intervals(snapshot, missing)}]{preview_modifier}"
@@ -2205,7 +2215,7 @@ class MarkdownConsole(CaptureTerminalConsole):
             if context_diff.directly_modified(snapshot.name):
                 category_str = SNAPSHOT_CHANGE_CATEGORY_STR[snapshot.change_category]
                 tree = Tree(
-                    f"[bold][direct]Directly Modified: {snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)} ({category_str})"
+                    f"[bold][direct]Directly Modified: {snapshot.display_name(plan.environment_naming_info, default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect)} ({category_str})"
                 )
                 indirect_tree = None
                 for child_sid in sorted(plan.indirectly_modified.get(snapshot.snapshot_id, set())):
@@ -2217,13 +2227,13 @@ class MarkdownConsole(CaptureTerminalConsole):
                         child_snapshot.change_category
                     ]
                     indirect_tree.add(
-                        f"[indirect]{child_snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)} ({child_category_str})"
+                        f"[indirect]{child_snapshot.display_name(plan.environment_naming_info, default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect)} ({child_category_str})"
                     )
                 if indirect_tree:
                     indirect_tree = self._limit_model_names(indirect_tree, self.verbosity)
             elif context_diff.metadata_updated(snapshot.name):
                 tree = Tree(
-                    f"[bold][metadata]Metadata Updated: {snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)}"
+                    f"[bold][metadata]Metadata Updated: {snapshot.display_name(plan.environment_naming_info, default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect)}"
                 )
             else:
                 continue
@@ -2328,7 +2338,9 @@ class DatabricksMagicConsole(CaptureTerminalConsole):
     def start_snapshot_evaluation_progress(self, snapshot: Snapshot) -> None:
         if not self.evaluation_batch_progress.get(snapshot.snapshot_id):
             display_name = snapshot.display_name(
-                self.evaluation_environment_naming_info, self.default_catalog, dialect=self.dialect
+                self.evaluation_environment_naming_info,
+                self.default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None,
+                dialect=self.dialect,
             )
             self.evaluation_batch_progress[snapshot.snapshot_id] = (display_name, 0)
             print(
