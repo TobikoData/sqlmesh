@@ -716,6 +716,8 @@ def test_model_jinja_macro_reference_extraction():
 
 
 def test_model_pre_post_statements():
+    macro.registry().pop("foo", None)
+
     @macro()
     def foo(**kwargs) -> None:
         pass
@@ -774,6 +776,46 @@ def test_model_pre_post_statements():
     )
     assert model.render_post_statements() == expected_post
     assert "exp" in model.python_env
+
+
+@pytest.mark.parametrize("model_kind", ["FULL", "VIEW"])
+def test_model_pre_post_statements_start_end_are_always_available(model_kind: str):
+    macro.registry().pop("foo", None)
+    macro.registry().pop("bar", None)
+
+    @macro()
+    def foo(evaluator: MacroEvaluator, start: str, end: str) -> str:
+        return f"'{start}, {end}'"
+
+    @macro()
+    def bar(evaluator: MacroEvaluator, start: int, end: int) -> str:
+        return f"'{start}, {end}'"
+
+    expressions = d.parse(
+        f"""
+        MODEL (
+            name db.table,
+            kind {model_kind},
+        );
+
+        @foo(@start_ds, @end_ds);
+
+        SELECT 1 AS x;
+
+        @bar(@start_millis, @end_millis);
+    """
+    )
+    model = load_sql_based_model(expressions)
+
+    start = "2025-01-01"
+    end = "2025-01-02"
+
+    assert model.render_pre_statements(start=start, end=end) == [
+        exp.Literal.string(f"{start}, {end}")
+    ]
+    assert model.render_post_statements(start=start, end=end) == [
+        exp.Literal.string(f"{to_timestamp(start)}, {to_timestamp('2025-01-03') - 1}")
+    ]
 
 
 def test_seed_hydration():
@@ -1030,6 +1072,8 @@ def test_seed_marker_substitution():
 
 
 def test_seed_pre_post_statements():
+    macro.registry().pop("bar", None)
+
     @macro()
     def bar(**kwargs) -> None:
         pass
