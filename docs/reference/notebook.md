@@ -495,3 +495,14 @@ options:
   --check               Whether or not to check formatting (but not actually
                         format anything).
 ```
+
+
+#### lint
+```
+%lint [--models ...] 
+
+Run the linter on the target models(s)
+
+positional arguments:
+  --models                A model to lint. Multiple models can be linted. If no models are specified, every model will be linted.
+```

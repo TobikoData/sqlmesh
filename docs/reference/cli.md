@@ -44,6 +44,7 @@ Commands:
   table_name              Prints the name of the physical table for the...
   test                    Run model unit tests.
   ui                      Start a browser-based SQLMesh UI.
+  lint                    Run the linter for the target model(s).
 ```
 
 ## audit
@@ -521,4 +522,15 @@ Options:
   --port INTEGER                  Bind socket to this port. Default: 8000
   --mode [ide|catalog|docs|plan]  Mode to start the UI in. Default: ide
   --help                          Show this message and exit.
+```
+
+## lint
+```
+Usage: sqlmesh lint [OPTIONS]
+  Run linter for the target model(s).
+
+Options:
+  --model TEXT           A model to lint. Multiple models can be linted.  If no models are specified, every model will be linted.
+  --help                 Show this message and exit.
+
 ```

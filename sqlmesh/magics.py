@@ -1059,6 +1059,21 @@ class SQLMeshMagics(Magics):
         """Prints the list of SQLMesh environments with its expiry datetime."""
         context.print_environment_names()
 
+    @magic_arguments()
+    @argument(
+        "--models",
+        "--model",
+        type=str,
+        nargs="*",
+        help="A model to lint. Multiple models can be linted. If no models are specified, every model will be linted.",
+    )
+    @line_magic
+    @pass_sqlmesh_context
+    def lint(self, context: Context, line: str) -> None:
+        """Run linter for target model(s)"""
+        args = parse_argstring(self.lint, line)
+        context.lint_models(args.models)
+
 
 def register_magics() -> None:
     try:
