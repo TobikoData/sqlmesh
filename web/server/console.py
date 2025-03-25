@@ -124,7 +124,12 @@ class ApiConsole(TerminalConsole):
         self.log_event_plan_apply()
 
     def update_snapshot_evaluation_progress(
-        self, snapshot: Snapshot, batch_idx: int, duration_ms: t.Optional[int]
+        self,
+        snapshot: Snapshot,
+        batch_idx: int,
+        duration_ms: t.Optional[int],
+        audits_passed: int,
+        audits_failed: int,
     ) -> None:
         if self.plan_apply_stage_tracker and self.plan_apply_stage_tracker.backfill:
             task = self.plan_apply_stage_tracker.backfill.tasks[snapshot.name]
