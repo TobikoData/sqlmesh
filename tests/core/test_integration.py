@@ -3874,7 +3874,7 @@ def test_create_environment_no_changes_with_selector(init_and_plan_context: t.Ca
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
-def test_empty_bacfkill(init_and_plan_context: t.Callable):
+def test_empty_backfill(init_and_plan_context: t.Callable):
     context, _ = init_and_plan_context("examples/sushi")
 
     plan = context.plan_builder("prod", skip_tests=True, empty_backfill=True).build()
@@ -3894,6 +3894,10 @@ def test_empty_bacfkill(init_and_plan_context: t.Callable):
     assert not plan.requires_backfill
     assert not plan.has_changes
     assert not plan.missing_intervals
+
+    snapshots = plan.snapshots
+    for snapshot in snapshots.values():
+        assert snapshot.intervals[-1][1] <= to_timestamp("2023-01-08")
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")

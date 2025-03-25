@@ -197,7 +197,9 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         if plan.empty_backfill:
             intervals_to_add = []
             for snapshot in snapshots_by_name.values():
-                intervals = [snapshot.inclusive_exclusive(plan.start, plan.end, strict=False)]
+                intervals = [
+                    snapshot.inclusive_exclusive(plan.start, plan.end, strict=False, expand=False)
+                ]
                 is_deployable = deployability_index.is_deployable(snapshot)
                 intervals_to_add.append(
                     SnapshotIntervals(
