@@ -1306,7 +1306,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             raise ConfigError("The '--run' flag is only supported for the production environment.")
 
         if not skip_linter:
-            self.lint_models(*self.models.values())
+            self.lint_models()
 
         self._run_plan_tests(skip_tests=skip_tests)
 
