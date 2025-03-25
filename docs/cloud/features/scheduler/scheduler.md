@@ -220,6 +220,12 @@ No ingress is required from executor containers to user environments. All networ
 
 While the exact requirements for executors vary depending on the customer's specific needs and primarily depend on the Python models being run (whose requirements can vary greatly), we recommend a minimum of 2GB of RAM and 1 vCPU for each executor.
 
+### '.env' file
+
+Environment variables may also be passed to SQLMesh by mounting a `.env` file into the docker image and specifying it's full path with the environment variable `TCLOUD_ENV_FILE`. 
+
+**Note** These variables are only read at SQLMesh run time so variables that are used by `tcloud` such as `TCLOUD_URL`, `TCLOUD_TOKEN`, etc. must be passed as variables. 
+
 ### Health checks
 
 In production settings, we recommend setting up health checks as well, as these can be helpful in understanding the health of executors. When calling via the entrypoint, the health checks are as follows:
