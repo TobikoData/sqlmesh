@@ -6,6 +6,7 @@ from sqlmesh.core import constants as c
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.environment import EnvironmentNamingInfo, execute_environment_statements
 from sqlmesh.core.macros import RuntimeStage
+from sqlmesh.core.model.definition import AuditResult
 from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.notification_target import (
     NotificationEvent,
@@ -193,7 +194,6 @@ class Scheduler:
             wap_id=wap_id,
             **kwargs,
         )
-        self.console.store_evaluation_audit_results(snapshot, audit_results)
 
         audit_errors_to_raise: t.List[AuditError] = []
         audit_errors_to_warn: t.List[AuditError] = []

@@ -31,7 +31,6 @@ from sqlglot import exp
 from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.linter.rule import RuleViolation
 from sqlmesh.core.model import Model
-from sqlmesh.core.model.definition import AuditResult
 from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotChangeCategory,
@@ -190,12 +189,6 @@ class Console(LinterConsole, StateExporterConsole, StateImporterConsole, Janitor
     @abc.abstractmethod
     def stop_plan_evaluation(self) -> None:
         """Indicates that the evaluation has ended."""
-
-    @abc.abstractmethod
-    def store_evaluation_audit_results(
-        self, snapshot: Snapshot, audit_results: t.List[AuditResult]
-    ) -> None:
-        """Stores the audit results for the snapshot evaluation."""
 
     @abc.abstractmethod
     def start_evaluation_progress(
@@ -423,11 +416,6 @@ class NoopConsole(Console):
         pass
 
     def stop_plan_evaluation(self) -> None:
-        pass
-
-    def store_evaluation_audit_results(
-        self, snapshot: Snapshot, audit_results: t.List[AuditResult]
-    ) -> None:
         pass
 
     def start_evaluation_progress(
@@ -739,11 +727,6 @@ class TerminalConsole(Console):
 
     def stop_plan_evaluation(self) -> None:
         pass
-
-    def store_evaluation_audit_results(
-        self, snapshot: Snapshot, audit_results: t.List[AuditResult]
-    ) -> None:
-        self.evaluation_audit_results[snapshot] = audit_results
 
     def start_evaluation_progress(
         self,
