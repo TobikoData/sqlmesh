@@ -13,7 +13,7 @@ def generate_dlt_models_and_settings(
     dialect: str,
     tables: t.Optional[t.List[str]] = None,
     dlt_path: t.Optional[str] = None,
-) -> t.Tuple[t.Set[t.Tuple[str, str]], str | None, str]:
+) -> t.Tuple[t.Set[t.Tuple[str, str]], t.Optional[str], str]:
     """
     This function attaches to a DLT pipeline and retrieves the connection configs and
     SQLMesh models based on the tables present in the pipeline's default schema.
