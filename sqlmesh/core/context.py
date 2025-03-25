@@ -501,8 +501,6 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         model.validate_definition()
 
-        self.lint_models(model)
-
         return model
 
     def scheduler(self, environment: t.Optional[str] = None) -> Scheduler:
@@ -639,8 +637,6 @@ class GenericContext(BaseContext, t.Generic[C]):
             for model in models:
                 # The model definition can be validated correctly only after the schema is set.
                 model.validate_definition()
-
-            self.lint_models(*models)
 
         duplicates = set(self._models) & set(self._standalone_audits)
         if duplicates:
@@ -1304,6 +1300,8 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         if run and is_dev:
             raise ConfigError("The '--run' flag is only supported for the production environment.")
+
+        self.lint_models(*self.models.values())
 
         self._run_plan_tests(skip_tests=skip_tests)
 

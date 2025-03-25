@@ -4,7 +4,7 @@
 
 Linting is a powerful tool for improving code quality and consistency. It enables you to automatically validate model definition, ensuring they adhere to your team's best practices.
 
-When a SQLMesh command is executed and the project is loaded, each model's code is checked for compliance with a set of rules you choose.
+When a SQLMesh plan is created, each model's code is checked for compliance with a set of rules you choose.
 
 SQLMesh provides built-in rules, and you can define custom rules. This improves code quality and helps detect issues early in the development cycle when they are simpler to debug.
 
