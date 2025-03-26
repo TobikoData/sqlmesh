@@ -12,7 +12,7 @@ from sqlglot.optimizer.simplify import gen
 from sqlglot.schema import MappingSchema
 
 from sqlmesh.core import constants as c
-from sqlmesh.core.model.definition import Model, SqlModel, _Model
+from sqlmesh.core.model.definition import ExternalModel, Model, SqlModel, _Model
 from sqlmesh.utils.cache import FileCache
 from sqlmesh.utils.hashing import crc32
 
@@ -59,7 +59,7 @@ class ModelCache:
             return cache_entry
 
         models = loader()
-        if isinstance(models, list) and isinstance(seq_get(models, 0), SqlModel):
+        if isinstance(models, list) and isinstance(seq_get(models, 0), (SqlModel, ExternalModel)):
             # make sure we preload full_depends_on
             for model in models:
                 model.full_depends_on
