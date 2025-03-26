@@ -1240,3 +1240,97 @@ def test_lint(runner, tmp_path):
     )
     assert result.output.count("Linter errors for") == 2
     assert result.exit_code == 1
+
+
+def test_state_dump(runner: CliRunner, tmp_path: Path) -> None:
+    create_example_project(tmp_path)
+
+    state_dump_file = tmp_path / "state_dump.json"
+
+    # create some state
+    result = runner.invoke(
+        cli,
+        [
+            "--paths",
+            str(tmp_path),
+            "plan",
+            "--no-prompts",
+            "--auto-apply",
+        ],
+    )
+    assert result.exit_code == 0
+
+    # dump it
+    result = runner.invoke(
+        cli,
+        ["--paths", str(tmp_path), "state", "dump", "-o", str(state_dump_file), "--no-confirm"],
+        catch_exceptions=False,
+    )
+    assert result.exit_code == 0
+
+    # verify output
+    assert "Gateway: local" in result.output
+    assert "Type: duckdb" in result.output
+    assert "Dumping versions" in result.output
+    assert "Dumping snapshots" in result.output
+    assert "Dumping environments" in result.output
+    assert "Dumping auto restatements" in result.output
+    assert "State dumped successfully" in result.output
+
+    assert state_dump_file.exists()
+    assert len(state_dump_file.read_text()) > 0
+
+
+def test_state_load(runner: CliRunner, tmp_path: Path) -> None:
+    create_example_project(tmp_path)
+
+    state_dump_file = tmp_path / "state_dump.json"
+
+    # create some state
+    result = runner.invoke(
+        cli,
+        [
+            "--paths",
+            str(tmp_path),
+            "plan",
+            "--no-prompts",
+            "--auto-apply",
+        ],
+    )
+    assert result.exit_code == 0
+
+    # dump it
+    result = runner.invoke(
+        cli,
+        ["--paths", str(tmp_path), "state", "dump", "-o", str(state_dump_file), "--no-confirm"],
+        catch_exceptions=False,
+    )
+    assert result.exit_code == 0
+
+    # load it back
+    result = runner.invoke(
+        cli,
+        ["--paths", str(tmp_path), "state", "load", "-i", str(state_dump_file), "--no-confirm"],
+        catch_exceptions=False,
+    )
+    assert result.exit_code == 0
+
+    assert "Gateway: local" in result.output
+    assert "Type: duckdb" in result.output
+    assert "Loading versions" in result.output
+    assert "Loading snapshots" in result.output
+    assert "Loading environments" in result.output
+    assert "Loading auto restatements" in result.output
+    assert "State loaded successfully" in result.output
+
+    # plan should have no changes
+    result = runner.invoke(
+        cli,
+        [
+            "--paths",
+            str(tmp_path),
+            "plan",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "No changes to plan" in result.output

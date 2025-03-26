@@ -19,6 +19,7 @@ from __future__ import annotations
 import contextlib
 import logging
 import typing as t
+import itertools
 from pathlib import Path
 from datetime import datetime
 
@@ -46,7 +47,12 @@ from sqlmesh.core.state_sync.base import (
     StateSync,
     Versions,
 )
-from sqlmesh.core.state_sync.common import transactional
+from sqlmesh.core.state_sync.common import (
+    transactional,
+    StateStream,
+    AutoRestatement,
+    chunk_iterable,
+)
 from sqlmesh.core.state_sync.db.interval import IntervalState
 from sqlmesh.core.state_sync.db.environment import EnvironmentState
 from sqlmesh.core.state_sync.db.snapshot import SnapshotState
@@ -438,6 +444,79 @@ class EngineAdapterStateSync(StateSync):
     def rollback(self) -> None:
         """Rollback to the previous migration."""
         self.migrator.rollback()
+
+    @transactional()
+    def clear(self) -> None:
+        """Wipe out all state. Make sure the user has consented before calling this"""
+
+        if self.schema:
+            logger.info(f"Dropping state schema: {self.schema}")
+            self.engine_adapter.drop_schema(self.schema, cascade=True)
+
+            # note: default_catalog is only used in the v0034 migration and only to mess with the JSON payloads
+            # since we dropped all the snapshots, there are no JSON payloads to update
+            logger.info("Running migrations to recreate state schema")
+            self.migrate(default_catalog=None, skip_backup=True)
+        else:
+            # todo: do we even support state not in its own schema anymore?
+            raise SQLMeshError("State must be in its own schema")
+
+    @transactional()
+    def dump(self) -> StateStream:
+        state_sync = self
+
+        from sqlmesh.core.state_sync.common import chunk_iterable
+
+        class _DumpStateStream(StateStream):
+            @property
+            def versions(self) -> Versions:
+                return state_sync.get_versions()
+
+            @property
+            def snapshots(self) -> t.Iterable[Snapshot]:
+                all_snapshot_ids = {
+                    s.snapshot_id for e in state_sync.get_environments() for s in e.snapshots
+                }
+                for chunk in chunk_iterable(all_snapshot_ids, SnapshotState.SNAPSHOT_BATCH_SIZE):
+                    yield from state_sync.get_snapshots(chunk).values()
+
+            @property
+            def environments(self) -> t.Iterable[Environment]:
+                yield from state_sync.get_environments()
+
+            @property
+            def auto_restatements(self) -> t.Iterable[AutoRestatement]:
+                yield from state_sync.snapshot_state.get_auto_restatements()
+
+        return _DumpStateStream()
+
+    @transactional()
+    def load(self, stream: StateStream, clear: bool = True) -> None:
+        existing_versions = self.get_versions()
+
+        # SQLMesh major/minor version must match so that we can be sure the JSON contained in the state file
+        # is compatible with our Pydantic model definitions. Patch versions dont need to match because the assumption
+        # is that they dont contain any breaking changes
+        incoming_versions = stream.versions
+        if incoming_versions.minor_sqlmesh_version != existing_versions.minor_sqlmesh_version:
+            raise SQLMeshError(
+                f"SQLMesh version mismatch. You are running '{existing_versions.sqlmesh_version}' but the state file was created with '{incoming_versions.sqlmesh_version}'.\n"
+                "Please upgrade/downgrade your SQLMesh version to match the state file before performing the import."
+            )
+
+        if clear:
+            self.clear()
+
+        for snapshot_chunk in chunk_iterable(stream.snapshots, SnapshotState.SNAPSHOT_BATCH_SIZE):
+            snapshot_iterator, intervals_iterator = itertools.tee(snapshot_chunk, 2)
+            self.push_snapshots(snapshot_iterator)
+            self.add_snapshots_intervals((s.snapshot_intervals for s in intervals_iterator))
+
+        for environment in stream.environments:
+            self.promote(environment)
+
+        auto_restatement_index = {ar[0]: ar[1] for ar in stream.auto_restatements}
+        self.update_auto_restatements(auto_restatement_index)
 
     def state_type(self) -> str:
         return self.engine_adapter.dialect

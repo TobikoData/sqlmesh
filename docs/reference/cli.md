@@ -40,6 +40,7 @@ Commands:
   rewrite                 Rewrite a SQL expression with semantic...
   rollback                Rollback SQLMesh to the previous migration.
   run                     Evaluate missing intervals for the target...
+  state                   Commands for interacting with state
   table_diff              Show the diff between two tables.
   table_name              Prints the name of the physical table for the...
   test                    Run model unit tests.
@@ -453,6 +454,49 @@ Options:
                                 Note: this may result in missing / invalid
                                 data for the selected models.
   --help                        Show this message and exit.
+```
+
+## state
+
+```
+Usage: sqlmesh state [OPTIONS] COMMAND [ARGS]...
+
+  Commands for interacting with state
+
+Options:
+  --help  Show this message and exit.
+
+Commands:
+  dump  Dump the state database to a file
+  load  Load a state dump back into a database
+```
+
+### dump
+
+```
+Usage: sqlmesh state dump [OPTIONS]
+
+  Dump the state database to a file
+
+Options:
+  -o, --output-file FILE  Path to write the state dump to  [required]
+  --no-confirm            Do not prompt for confirmation before dumping
+                          existing state
+  --help                  Show this message and exit.
+```
+
+### load
+
+```
+Usage: sqlmesh state load [OPTIONS]
+
+  Load a state dump file back into the state database
+
+Options:
+  -i, --input-file FILE  Path to the state dump file  [required]
+  --no-confirm           Do not prompt for confirmation before overwriting
+                         existing state
+  --help                 Show this message and exit.
 ```
 
 ## table_diff

@@ -24,6 +24,7 @@ from sqlmesh.utils import major_minor
 from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel, ValidationInfo, field_validator
+from sqlmesh.core.state_sync.common import StateStream
 
 logger = logging.getLogger(__name__)
 
@@ -267,6 +268,10 @@ class StateReader(abc.ABC):
             The versions object.
         """
 
+    @abc.abstractmethod
+    def dump(self) -> StateStream:
+        """Return the contents of this StateSync as a StateStream"""
+
 
 class StateSync(StateReader, abc.ABC):
     """Abstract base class for snapshot and environment state management."""
@@ -458,6 +463,16 @@ class StateSync(StateReader, abc.ABC):
             dev_intervals=intervals if is_dev else [],
         )
         self.add_snapshots_intervals([snapshot_intervals])
+
+    @abc.abstractmethod
+    def load(self, stream: StateStream, clear: bool = True) -> None:
+        """
+        Replace the existing state with the state contained in the StateStream
+
+        Args:
+            stream: The stream of new state
+            clear: Whether or not to clear existing state before inserting state from the stream
+        """
 
 
 class DelegatingStateSync(StateSync):

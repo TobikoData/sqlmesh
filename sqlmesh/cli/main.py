@@ -18,6 +18,7 @@ from sqlmesh.core.config import load_configs
 from sqlmesh.core.context import Context
 from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.errors import MissingDependencyError
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -1030,3 +1031,53 @@ def lint(
 ) -> None:
     """Run the linter for the target model(s)."""
     obj.lint_models(models)
+
+
+@cli.group(no_args_is_help=True)
+def state() -> None:
+    """Commands for interacting with state"""
+    pass
+
+
+@state.command("dump")
+@click.option(
+    "-o",
+    "--output-file",
+    required=True,
+    help="Path to write the state dump to",
+    type=click.Path(dir_okay=False, writable=True, path_type=Path),
+)
+@click.option(
+    "--no-confirm",
+    is_flag=True,
+    help="Do not prompt for confirmation before dumping existing state",
+)
+@click.pass_obj
+@error_handler
+@cli_analytics
+def state_dump(obj: Context, output_file: Path, no_confirm: bool) -> None:
+    """Dump the state database to a file"""
+    confirm = not no_confirm
+    obj.dump_state(output_file=output_file, confirm=confirm)
+
+
+@state.command("load")
+@click.option(
+    "-i",
+    "--input-file",
+    help="Path to the state dump file",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False, readable=True, path_type=Path),
+)
+@click.option(
+    "--no-confirm",
+    is_flag=True,
+    help="Do not prompt for confirmation before overwriting existing state",
+)
+@click.pass_obj
+@error_handler
+@cli_analytics
+def state_load(obj: Context, input_file: Path, no_confirm: bool) -> None:
+    """Load a state dump file back into the state database"""
+    confirm = not no_confirm
+    obj.load_state(input_file=input_file, confirm=confirm)

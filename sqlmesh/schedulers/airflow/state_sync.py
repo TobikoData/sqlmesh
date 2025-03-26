@@ -17,6 +17,7 @@ from sqlmesh.core.snapshot.definition import Interval, SnapshotIntervals
 from sqlmesh.core.state_sync import StateSync, Versions
 from sqlmesh.core.state_sync.base import PromotionResult
 from sqlmesh.schedulers.airflow.client import AirflowClient
+from sqlmesh.core.state_sync.common import StateStream
 
 if t.TYPE_CHECKING:
     from sqlmesh.utils.date import TimeLike
@@ -361,3 +362,9 @@ class HttpStateSync(StateSync):
     def state_type(self) -> str:
         """Returns the type of state sync."""
         return "airflow_http"
+
+    def dump(self) -> StateStream:
+        raise NotImplementedError("State dump is not supported by the Airflow state sync")
+
+    def load(self, stream: StateStream, clear: bool = True) -> None:
+        raise NotImplementedError("State load is not supported by the Airflow state sync")
