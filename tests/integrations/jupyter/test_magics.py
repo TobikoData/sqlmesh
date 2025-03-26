@@ -293,13 +293,13 @@ def test_plan(
     # the models and how long it took
     assert len(output.stdout.strip().split("\n")) == 46
     assert not output.stderr
-    assert len(output.outputs) == 4
+    assert len(output.outputs) == 5
     text_output = convert_all_html_output_to_text(output)
     # TODO: Is this what we expect?
     # This has minor differences between CI/CD and local.
     assert "[2K" in text_output[0]
     assert text_output[1].startswith(
-        "Virtually updating 'prod' environment views ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0%"
+        "Updating virtual layer ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0%"
     )
     # TODO: Is this what we expect?
     assert text_output[2] == ""
