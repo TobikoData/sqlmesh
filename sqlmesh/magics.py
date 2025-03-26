@@ -344,7 +344,7 @@ class SQLMeshMagics(Magics):
         help="Skip the unit tests defined for the model.",
     )
     @argument(
-        "--skip-lints",
+        "--skip-linter",
         action="store_true",
         help="Skip the linter for the model.",
     )

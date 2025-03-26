@@ -340,7 +340,7 @@ def diff(ctx: click.Context, environment: t.Optional[str] = None) -> None:
     help="Skip tests prior to generating the plan if they are defined.",
 )
 @click.option(
-    "--skip-lints",
+    "--skip-linter",
     is_flag=True,
     help="Skip linting prior to generating the plan if the linter is enabled.",
 )

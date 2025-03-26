@@ -198,7 +198,7 @@ def test_plan_skip_tests(runner, tmp_path):
     assert_backfill_success(result)
 
 
-def test_plan_skip_lints(runner, tmp_path):
+def test_plan_skip_linter(runner, tmp_path):
     create_example_project(tmp_path)
 
     with open(tmp_path / "config.yaml", "a", encoding="utf-8") as f:
@@ -212,7 +212,7 @@ def test_plan_skip_lints(runner, tmp_path):
     # Successful test run message should not appear with `--skip-tests`
     # Input: `y` to apply and backfill
     result = runner.invoke(
-        cli, ["--log-file-dir", tmp_path, "--paths", tmp_path, "plan", "--skip-lints"], input="y\n"
+        cli, ["--log-file-dir", tmp_path, "--paths", tmp_path, "plan", "--skip-linter"], input="y\n"
     )
 
     assert result.exit_code == 0
