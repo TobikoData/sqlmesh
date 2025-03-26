@@ -436,7 +436,7 @@ class Scheduler:
         batched_intervals = self.batch_intervals(merged_intervals)
 
         self.console.start_evaluation_progress(
-            batched_intervals,
+            {snapshot: len(intervals) for snapshot, intervals in batched_intervals.items()},
             environment_naming_info,
             self.default_catalog,
         )
@@ -495,6 +495,7 @@ class Scheduler:
                 num_audits_failed = sum(1 for result in audit_results if result.count)
                 self.console.update_snapshot_evaluation_progress(
                     snapshot,
+                    batched_intervals[snapshot][batch_idx],
                     batch_idx,
                     evaluation_duration_ms,
                     num_audits - num_audits_failed,
