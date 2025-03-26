@@ -1135,6 +1135,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         no_diff: t.Optional[bool] = None,
         run: bool = False,
         diff_rendered: bool = False,
+        skip_lints: bool = False,
     ) -> Plan:
         """Interactively creates a plan.
 
@@ -1179,6 +1180,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             no_diff: Hide text differences for changed models.
             run: Whether to run latest intervals as part of the plan application.
             diff_rendered: Whether the diff should compare raw vs rendered models
+            skip_lints: Linter runs by default so this will skip it if enabled
 
         Returns:
             The populated Plan object.
@@ -1205,6 +1207,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             enable_preview=enable_preview,
             run=run,
             diff_rendered=diff_rendered,
+            skip_lints=skip_lints,
         )
 
         if no_auto_categorization:
@@ -1246,6 +1249,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         enable_preview: t.Optional[bool] = None,
         run: bool = False,
         diff_rendered: bool = False,
+        skip_lints: bool = False,
     ) -> PlanBuilder:
         """Creates a plan builder.
 
@@ -1301,7 +1305,8 @@ class GenericContext(BaseContext, t.Generic[C]):
         if run and is_dev:
             raise ConfigError("The '--run' flag is only supported for the production environment.")
 
-        self.lint_models(*self.models.values())
+        if not skip_lints:
+            self.lint_models(*self.models.values())
 
         self._run_plan_tests(skip_tests=skip_tests)
 
