@@ -1698,10 +1698,12 @@ def test_model_linting(tmp_path: pathlib.Path, sushi_context) -> None:
     for query in ("SELECT * FROM tbl", "SELECT t.* FROM tbl"):
         with pytest.raises(LinterError, match=config_err):
             ctx.upsert_model(load_sql_based_model(d.parse(f"MODEL (name test); {query}")))
+            ctx.plan(environment="dev", auto_apply=True, no_prompts=True)
 
-    error_model = load_sql_based_model(d.parse("MODEL (name test); SELECT col"))
+    error_model = load_sql_based_model(d.parse("MODEL (name test); SELECT * FROM (SELECT 1)"))
     with pytest.raises(LinterError, match=config_err):
         ctx.upsert_model(error_model)
+        ctx.plan_builder("dev")
 
     # Case: Ensure error violations are cached if the model did not pass linting
     cache = OptimizedQueryCache(tmp_path / c.CACHE)
@@ -1731,8 +1733,10 @@ def test_model_linting(tmp_path: pathlib.Path, sushi_context) -> None:
                 assert_cached_violations_exist(cache, model2)
 
             ctx.upsert_model(error_model)
+            ctx.plan(environment="dev", auto_apply=True, no_prompts=True)
+
             assert (
-                """Column '"col"' could not be resolved for model '"test"'"""
+                """noselectstar: Query should not contain SELECT * on its outer most projections"""
                 in mock_logger.call_args[0][0]
             )
 
@@ -1779,10 +1783,11 @@ def test_model_linting(tmp_path: pathlib.Path, sushi_context) -> None:
         "MODEL(name test2, audits (at_least_one(column := col)), ignored_rules ['noselectstar']); SELECT * FROM (SELECT 1 AS col);",
     )
 
-    ctx.load()
+    ctx.plan(environment="dev", auto_apply=True, no_prompts=True)
 
     # Case: Ensure we can load & use the user-defined rules
     sushi_context.config.linter = LinterConfig(enabled=True, rules=["aLl"])
+    sushi_context.load()
     sushi_context.upsert_model(
         load_sql_based_model(
             d.parse("MODEL (name sushi.test); SELECT col FROM (SELECT * FROM tbl)"),
@@ -1791,7 +1796,7 @@ def test_model_linting(tmp_path: pathlib.Path, sushi_context) -> None:
     )
 
     with pytest.raises(LinterError, match=config_err):
-        sushi_context.load()
+        sushi_context.plan_builder(environment="dev")
 
     # Case: Ensure the Linter also picks up Python model violations
     @model(name="memory.sushi.model3", is_sql=True, kind="full", dialect="snowflake")
@@ -1813,21 +1818,7 @@ def test_model_linting(tmp_path: pathlib.Path, sushi_context) -> None:
     for python_model in (model3, model4):
         with pytest.raises(LinterError, match=config_err):
             sushi_context.upsert_model(python_model)
-
-    @model(
-        name="memory.sushi.model5",
-        columns={"col": "int"},
-        owner="test",
-        audits=[("at_least_one", {"column": "col"})],
-    )
-    def model5_entrypoint(context, **kwargs):
-        yield pd.DataFrame({"col": []})
-
-    model5 = model.get_registry()["memory.sushi.model5"].model(
-        module_path=Path("."), path=Path(".")
-    )
-
-    sushi_context.upsert_model(model5)
+            sushi_context.plan(environment="dev", auto_apply=True, no_prompts=True)
 
 
 def test_plan_selector_expression_no_match(sushi_context: Context) -> None:

@@ -4389,12 +4389,10 @@ def test_auto_categorization(sushi_context: Context):
 
 @use_terminal_console
 def test_multi(mocker):
-    context = Context(
-        paths=["examples/multi/repo_1", "examples/multi/repo_2"], gateway="memory", load=False
-    )
+    context = Context(paths=["examples/multi/repo_1", "examples/multi/repo_2"], gateway="memory")
 
     with patch.object(get_console(), "log_warning") as mock_logger:
-        context.load()
+        context.plan_builder(environment="dev")
         warnings = mock_logger.call_args[0][0]
         repo1_path, repo2_path = context.configs.keys()
         assert f"Linter warnings for {repo1_path}" in warnings

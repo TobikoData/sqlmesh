@@ -198,6 +198,29 @@ def test_plan_skip_tests(runner, tmp_path):
     assert_backfill_success(result)
 
 
+def test_plan_skip_linter(runner, tmp_path):
+    create_example_project(tmp_path)
+
+    with open(tmp_path / "config.yaml", "a", encoding="utf-8") as f:
+        f.write(
+            """linter:
+        enabled: True
+        rules: "ALL"
+    """
+        )
+
+    # Successful test run message should not appear with `--skip-tests`
+    # Input: `y` to apply and backfill
+    result = runner.invoke(
+        cli, ["--log-file-dir", tmp_path, "--paths", tmp_path, "plan", "--skip-linter"], input="y\n"
+    )
+
+    assert result.exit_code == 0
+    assert "Linter warnings" not in result.output
+    assert_new_env(result)
+    assert_backfill_success(result)
+
+
 def test_plan_restate_model(runner, tmp_path):
     create_example_project(tmp_path)
     init_prod_and_backfill(runner, tmp_path)

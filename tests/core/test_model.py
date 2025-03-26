@@ -301,6 +301,7 @@ def test_model_qualification(tmp_path: Path):
             config=Config(linter=LinterConfig(enabled=True, warn_rules=["ALL"])), paths=tmp_path
         )
         ctx.upsert_model(load_sql_based_model(expressions))
+        ctx.plan_builder("dev")
 
         assert (
             """Column '"a"' could not be resolved for model '"db"."table"', the column may not exist or is ambiguous."""
@@ -327,6 +328,7 @@ def test_model_missing_audits(tmp_path: Path):
             paths=tmp_path,
         )
         ctx.upsert_model(load_sql_based_model(expressions))
+        ctx.plan_builder("plan")
 
         assert (
             """Model `audits` must be configured to test data quality."""
@@ -2841,6 +2843,7 @@ def test_update_schema(tmp_path: Path):
     )
     with patch.object(get_console(), "log_warning") as mock_logger:
         ctx.upsert_model(model)
+        ctx.plan_builder("dev")
         assert (
             missing_schema_warning_msg('"db"."table"', ('"table_b"',))
             in mock_logger.call_args[0][0]
@@ -2895,13 +2898,14 @@ def test_missing_schema_warnings(tmp_path: Path):
         model = load_sql_based_model(d.parse("MODEL (name test); SELECT * FROM a CROSS JOIN b"))
         model.update_schema(partial_schema)
         ctx.upsert_model(model)
-
+        ctx.plan_builder("dev")
         assert missing_schema_warning_msg('"test"', ('"b"',)) in mock_logger.call_args[0][0]
 
     # star, no schema
     with patch.object(console, "log_warning") as mock_logger:
         model = load_sql_based_model(d.parse("MODEL (name test); SELECT * FROM b JOIN a"))
         ctx.upsert_model(model)
+        ctx.plan_builder("dev")
         assert missing_schema_warning_msg('"test"', ('"a"', '"b"')) in mock_logger.call_args[0][0]
 
     # no star, full schema
@@ -8062,16 +8066,18 @@ def test_python_model_on_virtual_update():
 
 def test_compile_time_checks(tmp_path: Path):
     ctx = Context(
-        config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb")), paths=tmp_path
+        config=Config(
+            model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+            linter=LinterConfig(
+                enabled=True, rules=["ambiguousorinvalidcolumn", "invalidselectstarexpansion"]
+            ),
+        ),
+        paths=tmp_path,
     )
 
     cfg_err = "Linter detected errors in the code. Please fix them before proceeding."
 
     # Strict SELECT * expansion
-    linter_cfg = LinterConfig(
-        enabled=True, rules=["ambiguousorinvalidcolumn", "invalidselectstarexpansion"]
-    )
-    ctx.config.linter = linter_cfg
     strict_query = d.parse(
         """
     MODEL (
@@ -8082,10 +8088,9 @@ def test_compile_time_checks(tmp_path: Path):
     """
     )
 
-    ctx.load()
-
     with pytest.raises(LinterError, match=cfg_err):
         ctx.upsert_model(load_sql_based_model(strict_query))
+        ctx.plan_builder("dev")
 
     # Strict column resolution
     strict_query = d.parse(
@@ -8100,6 +8105,7 @@ def test_compile_time_checks(tmp_path: Path):
 
     with pytest.raises(LinterError, match=cfg_err):
         ctx.upsert_model(load_sql_based_model(strict_query))
+        ctx.plan_builder("dev")
 
 
 def test_partition_interval_unit():

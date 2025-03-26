@@ -2194,6 +2194,16 @@ class MarkdownConsole(CaptureTerminalConsole):
 
             self._print("```\n")
 
+    def show_linter_violations(
+        self, violations: t.List[RuleViolation], model: Model, is_error: bool = False
+    ) -> None:
+        severity = "**errors**" if is_error else "warnings"
+        violations_msg = "\n".join(f" - {violation}" for violation in violations)
+        msg = f"\nLinter {severity} for `{model._path}`:\n{violations_msg}\n"
+
+        self._print(msg)
+        self._errors.append(msg)
+
     def log_error(self, message: str) -> None:
         super().log_error(f"```\n\\[ERROR] {message}```\n\n")
 
