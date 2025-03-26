@@ -49,7 +49,20 @@ class ModelTextTestResult(unittest.TextTestResult):
             err: A tuple of the form returned by sys.exc_info(), i.e., (type, value, traceback).
         """
         exctype, value, tb = err
+        self.err = (test, err)
         return super().addFailure(test, (exctype, value, None))  # type: ignore
+
+    def addError(self, test: unittest.TestCase, err: ErrorType) -> None:
+        """Called when the test case test signals an error.
+
+        The traceback is suppressed because it is redundant and not useful.
+
+        Args:
+            test: The test case.
+            err: A tuple of the form returned by sys.exc_info(), i.e., (type, value, traceback).
+        """
+        self.err = (test, err)
+        return super().addError(test, err)  # type: ignore
 
     def addSuccess(self, test: unittest.TestCase) -> None:
         """Called when the test case test succeeds.
