@@ -309,6 +309,7 @@ def test_plan(
         ["pre"] + ["span"] * 5,
         ["pre"],
         ["pre", "span"],
+        ["pre"] + ["span"] * 9,
     ]
 
 
