@@ -212,7 +212,11 @@ def test_plan_skip_linter(runner, tmp_path):
     # Successful test run message should not appear with `--skip-tests`
     # Input: `y` to apply and backfill
     result = runner.invoke(
+<<<<<<< HEAD
         cli, ["--log-file-dir", tmp_path, "--paths", tmp_path, "plan", "--skip-linter"], input="y\n"
+=======
+        cli, ["--log-file-dir", tmp_path, "--paths", tmp_path, "plan", "--skip-lints"], input="y\n"
+>>>>>>> 00a18e19 (Add skip_lints)
     )
 
     assert result.exit_code == 0
