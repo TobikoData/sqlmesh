@@ -129,15 +129,15 @@ def assert_new_env(result, new_env="prod", from_env="prod", initialize=True) -> 
 
 
 def assert_model_versions_created(result) -> None:
-    assert "Model versions created successfully" in result.output
+    assert "Physical layer updated successfully" in result.output
 
 
 def assert_model_batches_evaluated(result) -> None:
-    assert "Model batches evaluated successfully" in result.output
+    assert "Model batches executed successfully" in result.output
 
 
 def assert_env_views_updated(result) -> None:
-    assert "Environment views updated successfully" in result.output
+    assert "Virtual layer updated successfully" in result.output
 
 
 def assert_backfill_success(result) -> None:
@@ -293,8 +293,8 @@ def test_plan_verbose(runner, tmp_path):
         cli, ["--log-file-dir", tmp_path, "--paths", tmp_path, "plan", "--verbose"], input="y\n"
     )
     assert_plan_success(result)
-    assert "sqlmesh_example.seed_model created" in result.output
-    assert "sqlmesh_example.seed_model updated" in result.output
+    assert "sqlmesh_example.seed_model                         created" in result.output
+    assert "sqlmesh_example.seed_model                         updated" in result.output
 
 
 def test_plan_very_verbose(runner, tmp_path, copy_to_temp_path):
@@ -495,7 +495,7 @@ def test_plan_dev_no_prompts(runner, tmp_path):
         cli, ["--log-file-dir", tmp_path, "--paths", tmp_path, "plan", "dev", "--no-prompts"]
     )
     assert "Apply - Backfill Tables [y/n]: " in result.output
-    assert "Model versions created successfully" not in result.output
+    assert "Physical layer updated successfully" not in result.output
     assert "Model batches executed successfully" not in result.output
     assert "The target environment has been updated successfully" not in result.output
 
