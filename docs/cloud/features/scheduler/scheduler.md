@@ -246,6 +246,7 @@ readinessProbe:
     - "executor"
     - "run"
     - "--check"
+  timeoutSeconds: 5
 ```
 
 ```yaml
@@ -257,6 +258,9 @@ readinessProbe:
     - "executor"
     - "apply"
     - "--check"
+  timeoutSeconds: 5
 ```
 
 Each executor type (run or apply) should have its own health check implemented to ensure proper monitoring of both components.
+
+**Note** Please note the specified timeout. Depending on the allocated resources, sometimes the default timeout is too aggressive.
