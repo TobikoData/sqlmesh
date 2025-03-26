@@ -160,6 +160,41 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             if not plan.requires_backfill:
                 self.console.log_success("Virtual Update executed successfully")
 
+            model_kind_counts: t.Dict[str, int] = {}
+            audit_counts: t.Dict[str, int] = {}
+            for snapshot in snapshots.values():
+                if snapshot.name in all_names:
+                    if snapshot.is_audit:
+                        audit_counts["standalone"] = audit_counts.get("standalone", 0) + 1
+                    if (
+                        snapshot.is_model
+                        and snapshot.model_kind_name
+                        and snapshot.model.kind
+                        and not snapshot.model.kind.is_external
+                        and not snapshot.model.kind.is_embedded
+                    ):
+                        kind_name = snapshot.model_kind_name
+                        model_kind_counts[kind_name] = model_kind_counts.get(kind_name, 0) + 1
+                    if snapshot.is_model and snapshot.model.audits:
+                        if snapshot.model.kind.is_external:
+                            audit_counts["EXTERNAL model"] = audit_counts.get(
+                                "EXTERNAL model", 0
+                            ) + len(snapshot.model.audits)
+                        else:
+                            audit_counts["model"] = audit_counts.get("model", 0) + len(
+                                snapshot.model.audits
+                            )
+
+            summary_str = ", ".join(
+                [f"{v} {k} model{'s' if v > 1 else ''}" for k, v in model_kind_counts.items()]
+            )
+            for audit_type in ["EXTERNAL model", "model", "standalone"]:
+                if audit_type in audit_counts:
+                    count = audit_counts[audit_type]
+                    summary_str += f", {count} {audit_type} audit{'s' if count > 1 else ''}"
+            if summary_str:
+                self.console.log_status_update(f"Plan applied for {summary_str}")
+
             execute_environment_statements(
                 adapter=self.snapshot_evaluator.adapter,
                 environment_statements=plan.environment_statements or [],

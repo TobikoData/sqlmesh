@@ -303,7 +303,7 @@ def test_plan(
     )
     # TODO: Is this what we expect?
     assert text_output[2] == ""
-    assert text_output[3] == "Environment views updated successfully"
+    assert text_output[3] == "Virtual layer updated successfully"
     assert convert_all_html_output_to_tags(output) == [
         ["pre", "span"],
         ["pre"] + ["span"] * 4,
@@ -326,7 +326,7 @@ def test_run_dag(
     assert not output.stderr
     assert len(output.outputs) == 2
     assert convert_all_html_output_to_text(output) == [
-        "Model batches evaluated successfully",
+        "✔ Model batches executed successfully",
         "Run finished for environment 'prod'",
     ]
     assert get_all_html_output(output) == [
@@ -337,7 +337,7 @@ def test_run_dag(
                 h(
                     "span",
                     {"style": SUCCESS_STYLE},
-                    "Model batches evaluated successfully",
+                    "✔ Model batches executed successfully",
                     autoescape=False,
                 ),
                 autoescape=False,
