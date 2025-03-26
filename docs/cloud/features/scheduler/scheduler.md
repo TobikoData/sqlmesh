@@ -263,4 +263,4 @@ readinessProbe:
 
 Each executor type (run or apply) should have its own health check implemented to ensure proper monitoring of both components.
 
-**Note** Please not the specified timeout. Depending on the allocated resources, sometimes the default timeout is too aggressive. 
+**Note** Please note the specified timeout. Depending on the allocated resources, sometimes the default timeout is too aggressive.
