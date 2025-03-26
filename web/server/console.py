@@ -7,12 +7,11 @@ import unittest
 
 from fastapi.encoders import jsonable_encoder
 from sse_starlette.sse import ServerSentEvent
-
+from sqlmesh.core.snapshot.definition import Interval
 from sqlmesh.core.console import TerminalConsole
 from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.plan.definition import EvaluatablePlan
 from sqlmesh.core.snapshot import Snapshot, SnapshotInfoLike
-from sqlmesh.core.snapshot.definition import Intervals
 from sqlmesh.core.test import ModelTest
 from sqlmesh.utils.date import now_timestamp
 from web.server import models
@@ -92,7 +91,7 @@ class ApiConsole(TerminalConsole):
 
     def start_evaluation_progress(
         self,
-        batched_intervals: t.Dict[Snapshot, Intervals],
+        batched_intervals: t.Dict[Snapshot, int],
         environment_naming_info: EnvironmentNamingInfo,
         default_catalog: t.Optional[str],
     ) -> None:
@@ -126,6 +125,7 @@ class ApiConsole(TerminalConsole):
     def update_snapshot_evaluation_progress(
         self,
         snapshot: Snapshot,
+        interval: Interval,
         batch_idx: int,
         duration_ms: t.Optional[int],
         audits_passed: int,
