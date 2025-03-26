@@ -1012,3 +1012,21 @@ def dlt_refresh(
 def environments(obj: Context) -> None:
     """Prints the list of SQLMesh environments with its expiry datetime."""
     obj.print_environment_names()
+
+
+@cli.command("lint")
+@click.option(
+    "--models",
+    "--model",
+    multiple=True,
+    help="A model to lint. Multiple models can be linted. If no models are specified, every model will be linted.",
+)
+@click.pass_obj
+@error_handler
+@cli_analytics
+def lint(
+    obj: Context,
+    models: t.Iterator[str],
+) -> None:
+    """Run the linter for the target model(s)."""
+    obj.lint_models(models)

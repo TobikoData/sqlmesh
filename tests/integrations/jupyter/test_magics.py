@@ -676,3 +676,28 @@ def test_table_name(notebook, loaded_sushi_context, convert_all_html_output_to_t
     assert convert_all_html_output_to_text(output)[0].startswith(
         "memory.sqlmesh__sushi.sushi__orders__"
     )
+
+
+def test_lint(notebook, sushi_context):
+    from sqlmesh.core.config import LinterConfig
+
+    sushi_context.config.linter = LinterConfig(enabled=True, warn_rules="ALL")
+    sushi_context.load()
+
+    with capture_output() as output:
+        notebook.run_line_magic(magic_name="lint", line="")
+
+    assert len(output.outputs) > 1
+    assert "Linter warnings for" in output.outputs[0].data["text/plain"]
+
+    with capture_output() as output:
+        notebook.run_line_magic(magic_name="lint", line="--models sushi.items")
+
+    assert len(output.outputs) == 1
+    assert "Linter warnings for" in output.outputs[0].data["text/plain"]
+
+    with capture_output() as output:
+        notebook.run_line_magic(magic_name="lint", line="--models sushi.items sushi.raw_marketing")
+
+    assert len(output.outputs) == 2
+    assert "Linter warnings for" in output.outputs[0].data["text/plain"]

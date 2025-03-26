@@ -209,7 +209,6 @@ def test_plan_skip_linter(runner, tmp_path):
     """
         )
 
-    # Successful test run message should not appear with `--skip-tests`
     # Input: `y` to apply and backfill
     result = runner.invoke(
         cli, ["--log-file-dir", tmp_path, "--paths", tmp_path, "plan", "--skip-linter"], input="y\n"
@@ -1202,3 +1201,42 @@ def test_environments(runner, tmp_path):
         f"Number of SQLMesh environments are: 3\ndev - {ttl}\ndev2 - {ttl}\nprod - No Expiry\n"
         in result.output
     )
+
+
+def test_lint(runner, tmp_path):
+    create_example_project(tmp_path)
+
+    with open(tmp_path / "config.yaml", "a", encoding="utf-8") as f:
+        f.write(
+            """linter:
+    enabled: True
+    rules: "ALL"
+"""
+        )
+
+    result = runner.invoke(cli, ["--paths", tmp_path, "lint"])
+    assert result.output.count("Linter errors for") == 2
+    assert result.exit_code == 1
+
+    # Test with specific model
+    result = runner.invoke(
+        cli, ["--paths", tmp_path, "lint", "--model", "sqlmesh_example.seed_model"]
+    )
+    assert result.output.count("Linter errors for") == 1
+    assert result.exit_code == 1
+
+    # Test with multiple models
+    result = runner.invoke(
+        cli,
+        [
+            "--paths",
+            tmp_path,
+            "lint",
+            "--model",
+            "sqlmesh_example.seed_model",
+            "--model",
+            "sqlmesh_example.incremental_model",
+        ],
+    )
+    assert result.output.count("Linter errors for") == 2
+    assert result.exit_code == 1
