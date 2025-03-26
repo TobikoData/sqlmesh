@@ -603,7 +603,9 @@ class QueryRenderer(BaseExpressionRenderer):
                             quote_identifiers=self._quote_identifiers,
                         ),
                         schema=self.schema,
-                    )
+                        dialect=self._dialect,
+                    ),
+                    dialect=self._dialect,
                 )
         except SqlglotError as ex:
             self._violated_rules[AmbiguousOrInvalidColumn] = ex
