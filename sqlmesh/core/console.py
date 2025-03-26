@@ -2999,7 +2999,8 @@ class DebuggerTerminalConsole(TerminalConsole):
         self._write(row_diff)
 
 
-_CONSOLE: Console = NoopConsole()
+# _CONSOLE: Console = NoopConsole()
+_CONSOLE: Console = TerminalConsole()
 
 
 def set_console(console: Console) -> None:
