@@ -713,7 +713,7 @@ class TerminalConsole(Console):
         if self.evaluation_progress_live:
             self.evaluation_progress_live.stop()
             if success:
-                self.log_success(f"{GREEN_CHECK_MARK} Model batches executed successfully")
+                self.log_success(f"{GREEN_CHECK_MARK} Model batches executed")
 
         self.evaluation_progress_live = None
         self.evaluation_total_progress = None
@@ -760,7 +760,7 @@ class TerminalConsole(Console):
             self.creation_progress.stop()
             self.creation_progress = None
             if success:
-                self.log_success(f"\n{GREEN_CHECK_MARK} Physical layer updated successfully")
+                self.log_success(f"\n{GREEN_CHECK_MARK} Physical layer updated")
 
         self.environment_naming_info = EnvironmentNamingInfo()
         self.default_catalog = None
@@ -801,7 +801,7 @@ class TerminalConsole(Console):
         if self.promotion_progress is None:
             self.promotion_progress = Progress(
                 TextColumn(
-                    "[bold blue]Updating virtual layer",
+                    "[bold blue]Updating virtual layer ",  # space to align with other progress bars
                     justify="right",
                 ),
                 BarColumn(bar_width=PROGRESS_BAR_WIDTH),
@@ -838,7 +838,7 @@ class TerminalConsole(Console):
             self.promotion_progress.stop()
             self.promotion_progress = None
             if success:
-                self.log_success(f"\n{GREEN_CHECK_MARK} Virtual layer updated successfully")
+                self.log_success(f"\n{GREEN_CHECK_MARK} Virtual layer updated")
 
         self.environment_naming_info = EnvironmentNamingInfo()
         self.default_catalog = None

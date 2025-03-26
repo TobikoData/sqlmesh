@@ -1403,7 +1403,7 @@ def test_plan_runs_audits_on_dev_previews(sushi_context: Context, capsys, caplog
     log = caplog.text
     assert "'not_null' audit error:" in log
     assert "'at_least_one_non_blocking' audit error:" in log
-    assert "Virtual layer updated successfully" in stdout
+    assert "Virtual layer updated" in stdout
 
 
 def test_environment_statements(tmp_path: pathlib.Path):

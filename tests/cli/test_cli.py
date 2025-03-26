@@ -129,15 +129,15 @@ def assert_new_env(result, new_env="prod", from_env="prod", initialize=True) -> 
 
 
 def assert_model_versions_created(result) -> None:
-    assert "Physical layer updated successfully" in result.output
+    assert "Physical layer updated" in result.output
 
 
 def assert_model_batches_evaluated(result) -> None:
-    assert "Model batches executed successfully" in result.output
+    assert "Model batches executed" in result.output
 
 
 def assert_env_views_updated(result) -> None:
-    assert "Virtual layer updated successfully" in result.output
+    assert "Virtual layer updated" in result.output
 
 
 def assert_backfill_success(result) -> None:
@@ -154,7 +154,7 @@ def assert_plan_success(result, new_env="prod", from_env="prod") -> None:
 
 
 def assert_virtual_update(result) -> None:
-    assert "Virtual Update executed successfully" in result.output
+    assert "Virtual Update executed" in result.output
 
 
 def test_version(runner, tmp_path):
@@ -268,7 +268,7 @@ def test_plan_skip_backfill(runner, tmp_path, flag):
     )
     assert result.exit_code == 0
     assert_virtual_update(result)
-    assert "Model batches executed successfully" not in result.output
+    assert "Model batches executed" not in result.output
 
 
 def test_plan_auto_apply(runner, tmp_path):
@@ -495,9 +495,9 @@ def test_plan_dev_no_prompts(runner, tmp_path):
         cli, ["--log-file-dir", tmp_path, "--paths", tmp_path, "plan", "dev", "--no-prompts"]
     )
     assert "Apply - Backfill Tables [y/n]: " in result.output
-    assert "Physical layer updated successfully" not in result.output
-    assert "Model batches executed successfully" not in result.output
-    assert "The target environment has been updated successfully" not in result.output
+    assert "Physical layer updated" not in result.output
+    assert "Model batches executed" not in result.output
+    assert "The target environment has been updated" not in result.output
 
 
 def test_plan_dev_auto_apply(runner, tmp_path):
