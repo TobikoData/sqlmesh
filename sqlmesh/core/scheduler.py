@@ -429,7 +429,7 @@ class Scheduler:
         batched_intervals = self.batch_intervals(merged_intervals, deployability_index)
 
         self.console.start_evaluation_progress(
-            batched_intervals,
+            {snapshot: len(intervals) for snapshot, intervals in batched_intervals.items()},
             environment_naming_info,
             self.default_catalog,
         )
