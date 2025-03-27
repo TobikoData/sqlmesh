@@ -91,7 +91,7 @@ class ApiConsole(TerminalConsole):
 
     def start_evaluation_progress(
         self,
-        batched_intervals: t.Dict[Snapshot, int],
+        batch_sizes: t.Dict[Snapshot, int],
         environment_naming_info: EnvironmentNamingInfo,
         default_catalog: t.Optional[str],
     ) -> None:
@@ -104,7 +104,7 @@ class ApiConsole(TerminalConsole):
                     name=snapshot.name,
                     view_name=snapshot.display_name(environment_naming_info, default_catalog),
                 )
-                for snapshot, total_tasks in batched_intervals.items()
+                for snapshot, total_tasks in batch_sizes.items()
             }
             self.plan_apply_stage_tracker.add_stage(
                 models.PlanStage.backfill,
@@ -128,8 +128,8 @@ class ApiConsole(TerminalConsole):
         interval: Interval,
         batch_idx: int,
         duration_ms: t.Optional[int],
-        audits_passed: int,
-        audits_failed: int,
+        num_audits_passed: int,
+        num_audits_failed: int,
     ) -> None:
         if self.plan_apply_stage_tracker and self.plan_apply_stage_tracker.backfill:
             task = self.plan_apply_stage_tracker.backfill.tasks[snapshot.name]
