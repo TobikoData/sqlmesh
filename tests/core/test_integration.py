@@ -1513,6 +1513,44 @@ def test_run_with_select_models(
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_plan_with_run(
+    init_and_plan_context: t.Callable,
+):
+    context, plan = init_and_plan_context("examples/sushi")
+    context.apply(plan)
+
+    model = context.get_model("sushi.waiter_revenue_by_day")
+    context.upsert_model(add_projection_to_model(t.cast(SqlModel, model)))
+
+    with time_machine.travel("2023-01-09 00:00:00 UTC"):
+        plan = context.plan(run=True)
+        assert plan.has_changes
+        assert plan.missing_intervals
+
+        context.apply(plan)
+
+        snapshots = context.state_sync.state_sync.get_snapshots(context.snapshots.values())
+        assert {s.name: s.intervals[0][1] for s in snapshots.values() if s.intervals} == {
+            '"memory"."sushi"."waiter_revenue_by_day"': to_timestamp("2023-01-09"),
+            '"memory"."sushi"."order_items"': to_timestamp("2023-01-09"),
+            '"memory"."sushi"."orders"': to_timestamp("2023-01-09"),
+            '"memory"."sushi"."items"': to_timestamp("2023-01-09"),
+            '"memory"."sushi"."customer_revenue_lifetime"': to_timestamp("2023-01-09"),
+            '"memory"."sushi"."customer_revenue_by_day"': to_timestamp("2023-01-09"),
+            '"memory"."sushi"."latest_order"': to_timestamp("2023-01-09"),
+            '"memory"."sushi"."waiter_names"': to_timestamp("2023-01-08"),
+            '"memory"."sushi"."raw_marketing"': to_timestamp("2023-01-09"),
+            '"memory"."sushi"."marketing"': to_timestamp("2023-01-09"),
+            '"memory"."sushi"."waiter_as_customer_by_day"': to_timestamp("2023-01-09"),
+            '"memory"."sushi"."top_waiters"': to_timestamp("2023-01-09"),
+            '"memory"."raw"."demographics"': to_timestamp("2023-01-09"),
+            "assert_item_price_above_zero": to_timestamp("2023-01-09"),
+            '"memory"."sushi"."active_customers"': to_timestamp("2023-01-09"),
+            '"memory"."sushi"."customers"': to_timestamp("2023-01-09"),
+        }
+
+
+@time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_run_with_select_models_no_auto_upstream(
     init_and_plan_context: t.Callable,
 ):
