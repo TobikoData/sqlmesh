@@ -1417,6 +1417,7 @@ def test_environment_statements(tmp_path: pathlib.Path):
         after_all=[
             "@grant_schema_usage()",
             "@grant_select_privileges()",
+            "@grant_usage_role(@schemas, 'admin')",
         ],
     )
 
@@ -1481,6 +1482,22 @@ def grant_schema_usage(evaluator):
 """,
     )
 
+    create_temp_file(
+        tmp_path,
+        pathlib.Path(macros_dir, "grant_usage_file.py"),
+        """
+from sqlmesh import macro
+
+@macro()
+def grant_usage_role(evaluator, schemas, role):
+    if evaluator._environment_naming_info:
+        return [
+            f"GRANT USAGE ON SCHEMA {schema} TO {role};"
+            for schema in schemas
+        ]
+""",
+    )
+
     context = Context(paths=tmp_path, config=config)
     snapshots = {s.name: s for s in context.snapshots.values()}
 
@@ -1515,6 +1532,7 @@ def grant_schema_usage(evaluator):
     assert after_all_rendered == [
         "GRANT USAGE ON SCHEMA db TO user_role",
         "GRANT SELECT ON VIEW memory.db.test_after_model TO ROLE admin_role",
+        'GRANT USAGE ON SCHEMA "db" TO "admin"',
     ]
 
     after_all_rendered_dev = render_statements(
@@ -1529,6 +1547,7 @@ def grant_schema_usage(evaluator):
     assert after_all_rendered_dev == [
         "GRANT USAGE ON SCHEMA db__dev TO user_role",
         "GRANT SELECT ON VIEW memory.db__dev.test_after_model TO ROLE admin_role",
+        'GRANT USAGE ON SCHEMA "db__dev" TO "admin"',
     ]
 
 

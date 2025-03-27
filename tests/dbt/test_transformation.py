@@ -998,6 +998,16 @@ def test_dbt_version(sushi_test_project: Project):
 
 
 @pytest.mark.xdist_group("dbt_manifest")
+def test_dbt_on_run_start_end(sushi_test_project: Project):
+    context = sushi_test_project.context
+    assert context._manifest
+    assert context._manifest._on_run_start == [
+        "CREATE TABLE IF NOT EXISTS analytic_stats (physical_table VARCHAR, evaluation_time VARCHAR);"
+    ]
+    assert context._manifest._on_run_end == ["{{ create_tables(schemas) }}"]
+
+
+@pytest.mark.xdist_group("dbt_manifest")
 def test_parsetime_adapter_call(
     assert_exp_eq, sushi_test_project: Project, sushi_test_dbt_context: Context
 ):
