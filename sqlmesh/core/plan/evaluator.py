@@ -375,8 +375,14 @@ class BuiltInPlanEvaluator(PlanEvaluator):
 
         environment = plan.environment
 
+        # progress bar should only show snapshots that have a virtual layer view
+        snapshots_with_virtual_views = [
+            s.snapshot_id
+            for s in [*promotion_result.added, *promotion_result.removed]
+            if s.is_model and s.model_kind_name and not s.model_kind_name.is_symbolic
+        ]
         self.console.start_promotion_progress(
-            promotion_result.added + promotion_result.removed,
+            len(snapshots_with_virtual_views),
             environment.naming_info,
             self.default_catalog,
         )
@@ -388,7 +394,9 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                 [snapshots[s.snapshot_id] for s in promotion_result.added],
                 environment.naming_info,
                 deployability_index=deployability_index,
-                on_complete=lambda s: self.console.update_promotion_progress(s, True),
+                on_complete=lambda s: self.console.update_promotion_progress(
+                    s, True, snapshots_with_virtual_views
+                ),
                 snapshots=snapshots,
             )
             if promotion_result.removed_environment_naming_info:
@@ -396,7 +404,9 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                     plan,
                     promotion_result.removed,
                     promotion_result.removed_environment_naming_info,
-                    on_complete=lambda s: self.console.update_promotion_progress(s, False),
+                    on_complete=lambda s: self.console.update_promotion_progress(
+                        s, False, snapshots_with_virtual_views
+                    ),
                 )
 
             self.state_sync.finalize(environment)
