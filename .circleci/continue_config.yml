@@ -269,7 +269,7 @@ jobs:
 workflows:
   main_pr:
     jobs:
-      # - doc_tests
+      - doc_tests
       - style_and_cicd_tests:
           matrix:
             parameters:
@@ -278,53 +278,53 @@ workflows:
                 - "3.10"
                 - "3.11"
                 - "3.12"
-      # - airflow_docker_tests:
-      #     requires:
-      #       - style_and_cicd_tests
-      #     filters:
-      #       branches:
-      #         only:
-      #           - main
-      # - engine_tests_docker:
-      #     name: engine_<< matrix.engine >>
-      #     matrix:
-      #       parameters:
-      #         engine:
-      #           - duckdb
-      #           - postgres
-      #           - mysql
-      #           - mssql
-      #           - trino
-      #           - spark
-      #           - clickhouse
-      #           - clickhouse-cluster
-      #           - risingwave
-      # - engine_tests_cloud:
-      #     name: cloud_engine_<< matrix.engine >>
-      #     context:
-      #       - sqlmesh_cloud_database_integration
-      #     requires:
-      #       - engine_tests_docker
-      #     matrix:
-      #       parameters:
-      #         engine:
-      #           - snowflake
-      #           - databricks
-      #           - redshift
-      #           - bigquery
-      #           - clickhouse-cloud
-      #           - athena
-      #     filters:
-      #      branches:
-      #        only:
-      #          - main
-      # - trigger_private_tests:
-      #     requires:
-      #       - style_and_cicd_tests
-      #     filters:
-      #       branches:
-      #         only:
-      #           - main
-      # - ui_style
-      # - ui_test
-      # - migration_test
+      - airflow_docker_tests:
+          requires:
+            - style_and_cicd_tests
+          filters:
+            branches:
+              only:
+                - main
+      - engine_tests_docker:
+          name: engine_<< matrix.engine >>
+          matrix:
+            parameters:
+              engine:
+                - duckdb
+                - postgres
+                - mysql
+                - mssql
+                - trino
+                - spark
+                - clickhouse
+                - clickhouse-cluster
+                - risingwave
+      - engine_tests_cloud:
+          name: cloud_engine_<< matrix.engine >>
+          context:
+            - sqlmesh_cloud_database_integration
+          requires:
+            - engine_tests_docker
+          matrix:
+            parameters:
+              engine:
+                - snowflake
+                - databricks
+                - redshift
+                - bigquery
+                - clickhouse-cloud
+                - athena
+          filters:
+           branches:
+             only:
+               - main
+      - trigger_private_tests:
+          requires:
+            - style_and_cicd_tests
+          filters:
+            branches:
+              only:
+                - main
+      - ui_style
+      - ui_test
+      - migration_test
