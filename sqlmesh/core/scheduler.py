@@ -478,7 +478,7 @@ class Scheduler:
             try:
                 assert execution_time  # mypy
                 assert deployability_index  # mypy
-                audit_results = []
+                audit_results = []  # so it exists for finally if `evaluate` raises
                 audit_results = self.evaluate(
                     snapshot=snapshot,
                     start=start,

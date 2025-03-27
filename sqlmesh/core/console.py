@@ -620,7 +620,7 @@ class TerminalConsole(Console):
             self.evaluation_progress_live.start()
 
             self.evaluation_total_task = self.evaluation_total_progress.add_task(
-                "Evaluating models...", total=sum(batch_sizes.values())
+                "Executing models...", total=sum(batch_sizes.values())
             )
 
             self.evaluation_model_batch_sizes = batch_sizes
@@ -825,7 +825,7 @@ class TerminalConsole(Console):
         if self.promotion_progress is not None and self.promotion_task is not None:
             if self.verbosity >= Verbosity.VERBOSE:
                 check_mark = f"{GREEN_CHECK_MARK} " if promoted else "  "
-                action_str = "[green]updated[/green]" if promoted else "[yellow]demoted[/yellow]"
+                action_str = "[green]promoted[/green]" if promoted else "[yellow]demoted[/yellow]"
                 self.promotion_progress.live.console.print(
                     f"{check_mark}{snapshot.display_name(self.environment_naming_info, self.default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect).ljust(self.PROGRESS_BAR_COLUMN_WIDTHS['name'])} {action_str}"
                 )
@@ -2628,8 +2628,7 @@ class DebuggerTerminalConsole(TerminalConsole):
         self._write(row_diff)
 
 
-# _CONSOLE: Console = NoopConsole()
-_CONSOLE: Console = TerminalConsole()
+_CONSOLE: Console = NoopConsole()
 
 
 def set_console(console: Console) -> None:

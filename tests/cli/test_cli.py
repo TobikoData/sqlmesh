@@ -128,22 +128,22 @@ def assert_new_env(result, new_env="prod", from_env="prod", initialize=True) -> 
     ) in result.output
 
 
-def assert_model_versions_created(result) -> None:
+def assert_physical_layer_updated(result) -> None:
     assert "Physical layer updated" in result.output
 
 
-def assert_model_batches_evaluated(result) -> None:
+def assert_model_batches_executed(result) -> None:
     assert "Model batches executed" in result.output
 
 
-def assert_env_views_updated(result) -> None:
+def assert_virtual_layer_updated(result) -> None:
     assert "Virtual layer updated" in result.output
 
 
 def assert_backfill_success(result) -> None:
-    assert_model_versions_created(result)
-    assert_model_batches_evaluated(result)
-    assert_env_views_updated(result)
+    assert_physical_layer_updated(result)
+    assert_model_batches_executed(result)
+    assert_virtual_layer_updated(result)
 
 
 def assert_plan_success(result, new_env="prod", from_env="prod") -> None:
@@ -243,8 +243,8 @@ def test_plan_restate_model(runner, tmp_path):
     assert_duckdb_test(result)
     assert "No changes to plan: project files match the `prod` environment" in result.output
     assert "sqlmesh_example.full_model                         [full refresh" in result.output
-    assert_model_batches_evaluated(result)
-    assert_env_views_updated(result)
+    assert_model_batches_executed(result)
+    assert_virtual_layer_updated(result)
 
 
 @pytest.mark.parametrize("flag", ["--skip-backfill", "--dry-run"])
@@ -396,7 +396,7 @@ def test_plan_dev_create_from_virtual(runner, tmp_path):
     )
     assert result.exit_code == 0
     assert_new_env(result, "dev2", "dev", initialize=False)
-    assert_env_views_updated(result)
+    assert_virtual_layer_updated(result)
     assert_virtual_update(result)
 
 
@@ -533,7 +533,7 @@ def test_plan_dev_no_changes(runner, tmp_path):
     )
     assert result.exit_code == 0
     assert_new_env(result, "dev", initialize=False)
-    assert_env_views_updated(result)
+    assert_virtual_layer_updated(result)
     assert_virtual_update(result)
 
 
@@ -718,7 +718,7 @@ def test_run_dev(runner, tmp_path, flag):
     # Confirm backfill occurs when we run non-backfilled dev env
     result = runner.invoke(cli, ["--log-file-dir", tmp_path, "--paths", tmp_path, "run", "dev"])
     assert result.exit_code == 0
-    assert_model_batches_evaluated(result)
+    assert_model_batches_executed(result)
 
 
 @time_machine.travel(FREEZE_TIME)
@@ -750,7 +750,7 @@ def test_run_cron_elapsed(runner, tmp_path):
         result = runner.invoke(cli, ["--log-file-dir", tmp_path, "--paths", tmp_path, "run"])
 
     assert result.exit_code == 0
-    assert_model_batches_evaluated(result)
+    assert_model_batches_executed(result)
 
 
 def test_clean(runner, tmp_path):
