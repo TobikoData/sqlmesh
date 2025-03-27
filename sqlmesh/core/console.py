@@ -172,7 +172,12 @@ class Console(abc.ABC):
         """Indicates that a new snapshot promotion progress has begun."""
 
     @abc.abstractmethod
-    def update_promotion_progress(self, snapshot: SnapshotInfoLike, promoted: bool) -> None:
+    def update_promotion_progress(
+        self,
+        snapshot: SnapshotInfoLike,
+        promoted: bool,
+        snapshots_with_virtual_views: t.List[SnapshotId],
+    ) -> None:
         """Update the snapshot promotion progress."""
 
     @abc.abstractmethod
@@ -406,7 +411,12 @@ class NoopConsole(Console):
     ) -> None:
         pass
 
-    def update_promotion_progress(self, snapshot: SnapshotInfoLike, promoted: bool) -> None:
+    def update_promotion_progress(
+        self,
+        snapshot: SnapshotInfoLike,
+        promoted: bool,
+        snapshots_with_virtual_views: t.List[SnapshotId],
+    ) -> None:
         pass
 
     def stop_promotion_progress(self, success: bool = True) -> None:
@@ -799,17 +809,7 @@ class TerminalConsole(Console):
     ) -> None:
         """Indicates that a new snapshot promotion progress has begun."""
         if self.promotion_progress is None:
-            self.promotion_progress = Progress(
-                TextColumn(
-                    "[bold blue]Updating virtual layer ",  # space to align with other progress bars
-                    justify="right",
-                ),
-                BarColumn(bar_width=PROGRESS_BAR_WIDTH),
-                "[progress.percentage]{task.percentage:>3.1f}%",
-                "•",
-                TimeElapsedColumn(),
-                console=self.console,
-            )
+            self.promotion_progress = make_progress_bar("Updating virtual layer ", self.console)
 
             self.promotion_progress.start()
             self.promotion_task = self.promotion_progress.add_task(
@@ -820,11 +820,27 @@ class TerminalConsole(Console):
             self.environment_naming_info = environment_naming_info
             self.default_catalog = default_catalog
 
-    def update_promotion_progress(self, snapshot: SnapshotInfoLike, promoted: bool) -> None:
+    def update_promotion_progress(
+        self,
+        snapshot: SnapshotInfoLike,
+        promoted: bool,
+        snapshots_with_virtual_views: t.List[SnapshotId],
+    ) -> None:
         """Update the snapshot promotion progress."""
-        if self.promotion_progress is not None and self.promotion_task is not None:
+        if (
+            self.promotion_progress is not None
+            and self.promotion_task is not None
+            and snapshot.snapshot_id in snapshots_with_virtual_views
+        ):
             if self.verbosity >= Verbosity.VERBOSE:
-                action_str = "[green]promoted[/green]" if promoted else "[yellow]demoted[/yellow]"
+                action_str = ""
+                if promoted:
+                    action_str = (
+                        "[yellow]updated[/yellow]"
+                        if snapshot.previous_version
+                        else "[green]created[/green]"
+                    )
+                action_str = action_str or "[red]dropped[/red]"
                 self.promotion_progress.live.console.print(
                     f"{snapshot.display_name(self.environment_naming_info, self.default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect).ljust(self.PROGRESS_BAR_COLUMN_WIDTHS['name'])} {action_str}"
                 )
@@ -2409,7 +2425,12 @@ class DatabricksMagicConsole(CaptureTerminalConsole):
         self.promotion_status = (0, total_tasks)
         print(f"Virtually Updating '{environment_naming_info.name}'")
 
-    def update_promotion_progress(self, snapshot: SnapshotInfoLike, promoted: bool) -> None:
+    def update_promotion_progress(
+        self,
+        snapshot: SnapshotInfoLike,
+        promoted: bool,
+        snapshots_with_virtual_views: t.List[SnapshotId],
+    ) -> None:
         """Update the snapshot promotion progress."""
         num_promotions, total_promotions = self.promotion_status
         num_promotions += 1
@@ -2540,7 +2561,12 @@ class DebuggerTerminalConsole(TerminalConsole):
     ) -> None:
         self._write(f"Starting promotion for {total_tasks} snapshots")
 
-    def update_promotion_progress(self, snapshot: SnapshotInfoLike, promoted: bool) -> None:
+    def update_promotion_progress(
+        self,
+        snapshot: SnapshotInfoLike,
+        promoted: bool,
+        snapshots_with_virtual_views: t.List[SnapshotId],
+    ) -> None:
         self._write(f"Promoting {snapshot.name}")
 
     def stop_promotion_progress(self, success: bool = True) -> None:
