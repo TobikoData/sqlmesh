@@ -466,3 +466,65 @@ def test_insert_overwrite_by_time_partition_datetime_type(
     result = engine_adapter.fetchdf(exp.select("*").from_(table))
     assert len(result) == 4
     assert sorted(result["id"].tolist()) == [1, 2, 4, 5]
+
+
+def test_scd_type_2_iceberg_timestamps(
+    ctx: TestContext, engine_adapter: AthenaEngineAdapter
+) -> None:
+    src_table = ctx.table("src_table")
+    scd_model_table = ctx.table("scd_model")
+
+    base_data = pd.DataFrame(
+        [
+            {"id": 1, "ts": datetime.datetime(2023, 1, 1, 12, 13, 14)},
+            {"id": 2, "ts": datetime.datetime(2023, 1, 1, 8, 13, 14)},
+            {"id": 3, "ts": datetime.datetime(2023, 1, 2, 11, 10, 0)},
+            {"id": 4, "ts": datetime.datetime(2023, 1, 2, 8, 10, 0)},
+            {"id": 5, "ts": datetime.datetime(2023, 1, 3, 16, 5, 14)},
+            {"id": 6, "ts": datetime.datetime(2023, 1, 3, 16, 5, 14)},
+        ]
+    )
+
+    engine_adapter.ctas(
+        table_name=src_table,
+        query_or_df=base_data,
+    )
+
+    sqlmesh_context, model = ctx.upsert_sql_model(
+        f"""
+        MODEL (
+            name {scd_model_table},
+            kind SCD_TYPE_2_BY_TIME (
+                unique_key id,
+                updated_at_name ts,
+                time_data_type timestamp(6)
+            ),
+            start '2020-01-01',
+            cron '@daily',
+            table_format iceberg
+        );
+
+        SELECT
+            id, ts::timestamp(6) as ts
+        FROM {src_table};
+        """
+    )
+
+    assert model.table_format == "iceberg"
+
+    # throws if the temp tables created by the SCD Type 2 strategy are Hive tables instead of Iceberg
+    # because the Iceberg timestamp(6) type isnt supported in Hive
+    plan = sqlmesh_context.plan(auto_apply=True)
+
+    assert len(plan.snapshots) == 1
+    test_table_snapshot = list(plan.snapshots.values())[0]
+    test_table_physical_name = exp.to_table(test_table_snapshot.table_name())
+
+    assert engine_adapter._query_table_type(test_table_physical_name) == "iceberg"
+    timestamp_columns = [
+        v
+        for k, v in engine_adapter.columns(test_table_physical_name).items()
+        if k in {"ts", "valid_from", "valid_to"}
+    ]
+    assert len(timestamp_columns) == 3
+    assert all([v.sql(dialect="athena").lower() == "timestamp(6)" for v in timestamp_columns])
