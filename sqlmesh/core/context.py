@@ -1062,7 +1062,9 @@ class GenericContext(BaseContext, t.Generic[C]):
         **kwargs: t.Any,
     ) -> bool:
         """Format all SQL models and audits."""
+        unformatted_file_paths = []
         format_targets = {**self._models, **self._audits}
+
         for target in format_targets.values():
             if target._path is None or target._path.suffix != ".sql":
                 continue
@@ -1104,7 +1106,17 @@ class GenericContext(BaseContext, t.Generic[C]):
                     file.write(after)
                     file.truncate()
                 elif before != after:
-                    return False
+                    unformatted_file_paths.append(target._path)
+
+        if unformatted_file_paths:
+            for path in unformatted_file_paths:
+                self.console.log_status_update(f"{path} needs reformatting.")
+
+            self.console.log_status_update(
+                f"\n{len(unformatted_file_paths)} file(s) need reformatting."
+            )
+            return False
+
         return True
 
     @python_api_analytics

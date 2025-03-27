@@ -1,14 +1,16 @@
 import pathlib
 
+from pytest_mock.plugin import MockerFixture
 from sqlmesh.core.config import Config
 from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import parse
 from sqlmesh.core.audit import ModelAudit
 from sqlmesh.core.model import SqlModel, load_sql_based_model
 from tests.utils.test_filesystem import create_temp_file
+from unittest.mock import call
 
 
-def test_format_files(tmp_path: pathlib.Path):
+def test_format_files(tmp_path: pathlib.Path, mocker: MockerFixture):
     models_dir = pathlib.Path("models")
     audits_dir = pathlib.Path("audits")
 
@@ -35,6 +37,7 @@ def test_format_files(tmp_path: pathlib.Path):
 
     config = Config()
     context = Context(paths=tmp_path, config=config)
+    context.console = mocker.Mock()
     context.load()
 
     assert isinstance(context.get_model("this.model"), SqlModel)
@@ -54,6 +57,16 @@ def test_format_files(tmp_path: pathlib.Path):
     )
 
     assert not context.format(check=True)
+    assert all(
+        c in context.console.log_status_update.mock_calls  # type: ignore
+        for c in [
+            call(f"{tmp_path}/models/model_3.sql needs reformatting."),
+            call(f"{tmp_path}/models/model_2.sql needs reformatting."),
+            call(f"{tmp_path}/models/model_1.sql needs reformatting."),
+            call(f"{tmp_path}/audits/audit_1.sql needs reformatting."),
+            call("\n4 file(s) need reformatting."),
+        ]
+    )
 
     # Transpile project to BigQuery
     context.format(transpile="bigquery")
