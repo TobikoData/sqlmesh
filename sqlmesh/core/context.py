@@ -1388,17 +1388,20 @@ class GenericContext(BaseContext, t.Generic[C]):
             # This ensures that no models outside the impacted sub-DAG(s) will be backfilled unexpectedly.
             backfill_models = modified_model_names or None
 
-        max_interval_end_per_model = self._get_max_interval_end_per_model(
-            snapshots, backfill_models
-        )
-        # If no end date is specified, use the max interval end from prod
-        # to prevent unintended evaluation of the entire DAG.
-        default_start, default_end = self._get_plan_default_start_end(
-            snapshots, max_interval_end_per_model, backfill_models, modified_model_names
-        )
+        max_interval_end_per_model = None
+        default_start, default_end = None, None
+        if not run:
+            max_interval_end_per_model = self._get_max_interval_end_per_model(
+                snapshots, backfill_models
+            )
+            # If no end date is specified, use the max interval end from prod
+            # to prevent unintended evaluation of the entire DAG.
+            default_start, default_end = self._get_plan_default_start_end(
+                snapshots, max_interval_end_per_model, backfill_models, modified_model_names
+            )
 
-        # Refresh snapshot intervals to ensure that they are up to date with values reflected in the max_interval_end_per_model.
-        self.state_sync.refresh_snapshot_intervals(context_diff.snapshots.values())
+            # Refresh snapshot intervals to ensure that they are up to date with values reflected in the max_interval_end_per_model.
+            self.state_sync.refresh_snapshot_intervals(context_diff.snapshots.values())
 
         return self.PLAN_BUILDER_TYPE(
             context_diff=context_diff,
