@@ -175,7 +175,12 @@ class Console(abc.ABC):
         """Indicates that a new snapshot promotion progress has begun."""
 
     @abc.abstractmethod
-    def update_promotion_progress(self, snapshot: SnapshotInfoLike, promoted: bool) -> None:
+    def update_promotion_progress(
+        self,
+        snapshot: SnapshotInfoLike,
+        promoted: bool,
+        snapshots_with_virtual_views: t.List[SnapshotId],
+    ) -> None:
         """Update the snapshot promotion progress."""
 
     @abc.abstractmethod
@@ -469,7 +474,12 @@ class NoopConsole(Console):
     ) -> None:
         pass
 
-    def update_promotion_progress(self, snapshot: SnapshotInfoLike, promoted: bool) -> None:
+    def update_promotion_progress(
+        self,
+        snapshot: SnapshotInfoLike,
+        promoted: bool,
+        snapshots_with_virtual_views: t.List[SnapshotId],
+    ) -> None:
         pass
 
     def stop_promotion_progress(self, success: bool = True) -> None:
@@ -945,12 +955,28 @@ class TerminalConsole(Console):
             self.environment_naming_info = environment_naming_info
             self.default_catalog = default_catalog
 
-    def update_promotion_progress(self, snapshot: SnapshotInfoLike, promoted: bool) -> None:
+    def update_promotion_progress(
+        self,
+        snapshot: SnapshotInfoLike,
+        promoted: bool,
+        snapshots_with_virtual_views: t.List[SnapshotId],
+    ) -> None:
         """Update the snapshot promotion progress."""
-        if self.promotion_progress is not None and self.promotion_task is not None:
+        if (
+            self.promotion_progress is not None
+            and self.promotion_task is not None
+            and snapshot.snapshot_id in snapshots_with_virtual_views
+        ):
             if self.verbosity >= Verbosity.VERBOSE:
                 action_str = (
-                    "[green]promoted[/green]" if promoted else "[yellow]demoted[/yellow]"
+                    ""
+                if promoted:
+                    action_str = (
+                        "[yellow]updated[/yellow]"
+                        if snapshot.previous_version
+                        else "[green]created[/green]"
+                    )
+                action_str = action_str or "[red]dropped[/red]"
                 ).ljust(len("promoted"))
                 self.promotion_progress.live.console.print(
                     f"{snapshot.display_name(self.environment_naming_info, self.default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect).ljust(self.PROGRESS_BAR_COLUMN_WIDTHS['name'])} {action_str}"
@@ -2781,7 +2807,12 @@ class DatabricksMagicConsole(CaptureTerminalConsole):
         self.promotion_status = (0, total_tasks)
         print(f"Virtually Updating '{environment_naming_info.name}'")
 
-    def update_promotion_progress(self, snapshot: SnapshotInfoLike, promoted: bool) -> None:
+    def update_promotion_progress(
+        self,
+        snapshot: SnapshotInfoLike,
+        promoted: bool,
+        snapshots_with_virtual_views: t.List[SnapshotId],
+    ) -> None:
         """Update the snapshot promotion progress."""
         num_promotions, total_promotions = self.promotion_status
         num_promotions += 1
@@ -2912,7 +2943,12 @@ class DebuggerTerminalConsole(TerminalConsole):
     ) -> None:
         self._write(f"Starting promotion for {total_tasks} snapshots")
 
-    def update_promotion_progress(self, snapshot: SnapshotInfoLike, promoted: bool) -> None:
+    def update_promotion_progress(
+        self,
+        snapshot: SnapshotInfoLike,
+        promoted: bool,
+        snapshots_with_virtual_views: t.List[SnapshotId],
+    ) -> None:
         self._write(f"Promoting {snapshot.name}")
 
     def stop_promotion_progress(self, success: bool = True) -> None:
