@@ -1051,7 +1051,7 @@ def extend_sqlglot() -> None:
     _override(Parser, _warn_unsupported)
     _override(Snowflake.Parser, _parse_table_parts)
 
-    # DuckDB's infix absolute power operator `@` clashes with the macro syntax
+    # DuckDB's prefix absolute power operator `@` clashes with the macro syntax
     DuckDB.Parser.NO_PAREN_FUNCTION_PARSERS.pop("@", None)
 
 
