@@ -1749,6 +1749,8 @@ class PythonModel(_Model):
         variables = env.get(c.SQLMESH_VARS, {})
         variables.update(kwargs.pop("variables", {}))
 
+        blueprint_variables = env.get(c.SQLMESH_BLUEPRINT_VARS, {})
+
         try:
             kwargs = {
                 **variables,
@@ -1759,7 +1761,7 @@ class PythonModel(_Model):
                 "latest": execution_time,  # TODO: Preserved for backward compatibility. Remove in 1.0.0.
             }
             df_or_iter = env[self.entrypoint](
-                context=context.with_variables(variables),
+                context=context.with_variables(variables, blueprint_variables=blueprint_variables),
                 **kwargs,
             )
 
@@ -1855,18 +1857,14 @@ def _extract_blueprints(blueprints: t.Any, path: Path) -> t.List[t.Any]:
     return []  # This is unreachable, but is done to satisfy mypy
 
 
-def _extract_blueprint_variables(
-    blueprint: t.Any,
-    dialect: DialectType,
-    path: Path,
-) -> t.Dict[str, str]:
+def _extract_blueprint_variables(blueprint: t.Any, path: Path) -> t.Dict[str, t.Any]:
     if not blueprint:
         return {}
     if isinstance(blueprint, (exp.Paren, exp.PropertyEQ)):
         blueprint = blueprint.unnest()
-        return {blueprint.left.name: blueprint.right.sql(dialect=dialect)}
+        return {blueprint.left.name: blueprint.right}
     if isinstance(blueprint, (exp.Tuple, exp.Array)):
-        return {e.left.name: e.right.sql(dialect=dialect) for e in blueprint.expressions}
+        return {e.left.name: e.right for e in blueprint.expressions}
     if isinstance(blueprint, dict):
         return blueprint
 
@@ -1889,7 +1887,7 @@ def create_models_from_blueprints(
 ) -> t.List[Model]:
     model_blueprints: t.List[Model] = []
     for blueprint in _extract_blueprints(blueprints, path):
-        variables = _extract_blueprint_variables(blueprint, dialect, path)
+        blueprint_variables = _extract_blueprint_variables(blueprint, path)
 
         if gateway:
             rendered_gateway = render_expression(
@@ -1897,10 +1895,10 @@ def create_models_from_blueprints(
                 module_path=module_path,
                 macros=loader_kwargs.get("macros"),
                 jinja_macros=loader_kwargs.get("jinja_macros"),
-                variables=variables,
                 path=path,
                 dialect=dialect,
                 default_catalog=loader_kwargs.get("default_catalog"),
+                blueprint_variables=blueprint_variables,
             )
             gateway_name = rendered_gateway[0].name if rendered_gateway else None
         else:
@@ -1911,7 +1909,8 @@ def create_models_from_blueprints(
                 path=path,
                 module_path=module_path,
                 dialect=dialect,
-                variables={**get_variables(gateway_name), **variables},
+                variables=get_variables(gateway_name),
+                blueprint_variables=blueprint_variables,
                 **loader_kwargs,
             )
         )
@@ -1983,6 +1982,7 @@ def load_sql_based_model(
     default_catalog: t.Optional[str] = None,
     variables: t.Optional[t.Dict[str, t.Any]] = None,
     infer_names: t.Optional[bool] = False,
+    blueprint_variables: t.Optional[t.Dict[str, t.Any]] = None,
     **kwargs: t.Any,
 ) -> Model:
     """Load a model from a parsed SQLMesh model SQL file.
@@ -2059,6 +2059,7 @@ def load_sql_based_model(
         path=path,
         dialect=dialect,
         default_catalog=default_catalog,
+        blueprint_variables=blueprint_variables,
     )
 
     if rendered_meta_exprs is None or len(rendered_meta_exprs) != 1:
@@ -2143,6 +2144,7 @@ def load_sql_based_model(
         variables=variables,
         default_audits=default_audits,
         inline_audits=inline_audits,
+        blueprint_variables=blueprint_variables,
         **meta_fields,
     )
 
@@ -2247,6 +2249,7 @@ def create_python_model(
     module_path: Path = Path(),
     depends_on: t.Optional[t.Set[str]] = None,
     variables: t.Optional[t.Dict[str, t.Any]] = None,
+    blueprint_variables: t.Optional[t.Dict[str, t.Any]] = None,
     **kwargs: t.Any,
 ) -> Model:
     """Creates a Python model.
@@ -2259,6 +2262,7 @@ def create_python_model(
         path: An optional path to the model definition file.
         depends_on: The custom set of model's upstream dependencies.
         variables: The variables to pass to the model.
+        blueprint_variables: The blueprint's variables to pass to the model.
     """
     # Find dependencies for python models by parsing code if they are not explicitly defined
     # Also remove self-references that are found
@@ -2307,6 +2311,7 @@ def create_python_model(
         jinja_macros=jinja_macros,
         module_path=module_path,
         variables=variables,
+        blueprint_variables=blueprint_variables,
         **kwargs,
     )
 
@@ -2361,6 +2366,7 @@ def _create_model(
     macros: t.Optional[MacroRegistry] = None,
     signal_definitions: t.Optional[SignalRegistry] = None,
     variables: t.Optional[t.Dict[str, t.Any]] = None,
+    blueprint_variables: t.Optional[t.Dict[str, t.Any]] = None,
     **kwargs: t.Any,
 ) -> Model:
     _validate_model_fields(klass, {"name", *kwargs} - {"grain", "table_properties"}, path)
@@ -2469,6 +2475,8 @@ def _create_model(
         path=path,
         python_env=python_env,
         strict_resolution=depends_on is None,
+        blueprint_variables=blueprint_variables,
+        dialect=dialect,
     )
 
     env: t.Dict[str, t.Any] = {}
@@ -2632,6 +2640,7 @@ def render_meta_fields(
     dialect: DialectType,
     variables: t.Optional[t.Dict[str, t.Any]],
     default_catalog: t.Optional[str],
+    blueprint_variables: t.Optional[t.Dict[str, t.Any]] = None,
 ) -> t.Dict[str, t.Any]:
     def render_field_value(value: t.Any) -> t.Any:
         if isinstance(value, exp.Expression) or (isinstance(value, str) and "@" in value):
@@ -2645,6 +2654,7 @@ def render_meta_fields(
                 path=path,
                 dialect=dialect,
                 default_catalog=default_catalog,
+                blueprint_variables=blueprint_variables,
             )
             if not rendered_expr:
                 raise SQLMeshError(
@@ -2752,6 +2762,7 @@ def render_expression(
     dialect: DialectType = None,
     variables: t.Optional[t.Dict[str, t.Any]] = None,
     default_catalog: t.Optional[str] = None,
+    blueprint_variables: t.Optional[t.Dict[str, t.Any]] = None,
 ) -> t.Optional[t.List[exp.Expression]]:
     meta_python_env = make_python_env(
         expressions=expression,
@@ -2760,6 +2771,7 @@ def render_expression(
         macros=macros or macro.get_registry(),
         variables=variables,
         path=path,
+        blueprint_variables=blueprint_variables,
     )
     return ExpressionRenderer(
         expression,

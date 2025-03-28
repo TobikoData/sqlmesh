@@ -253,6 +253,7 @@ class ExecutionContext(BaseContext):
         default_dialect: t.Optional[str] = None,
         default_catalog: t.Optional[str] = None,
         variables: t.Optional[t.Dict[str, t.Any]] = None,
+        blueprint_variables: t.Optional[t.Dict[str, t.Any]] = None,
     ):
         self.snapshots = snapshots
         self.deployability_index = deployability_index
@@ -260,6 +261,7 @@ class ExecutionContext(BaseContext):
         self._default_catalog = default_catalog
         self._default_dialect = default_dialect
         self._variables = variables or {}
+        self._blueprint_variables = blueprint_variables or {}
 
     @property
     def default_dialect(self) -> t.Optional[str]:
@@ -288,7 +290,15 @@ class ExecutionContext(BaseContext):
         """Returns a variable value."""
         return self._variables.get(var_name.lower(), default)
 
-    def with_variables(self, variables: t.Dict[str, t.Any]) -> ExecutionContext:
+    def blueprint_var(self, var_name: str, default: t.Optional[t.Any] = None) -> t.Optional[t.Any]:
+        """Returns a blueprint variable value."""
+        return self._blueprint_variables.get(var_name.lower(), default)
+
+    def with_variables(
+        self,
+        variables: t.Dict[str, t.Any],
+        blueprint_variables: t.Optional[t.Dict[str, t.Any]] = None,
+    ) -> ExecutionContext:
         """Returns a new ExecutionContext with additional variables."""
         return ExecutionContext(
             self._engine_adapter,
@@ -297,6 +307,7 @@ class ExecutionContext(BaseContext):
             self._default_dialect,
             self._default_catalog,
             variables=variables,
+            blueprint_variables=blueprint_variables,
         )
 
 
