@@ -11,6 +11,7 @@ import unittest
 import concurrent
 from concurrent.futures import ThreadPoolExecutor
 
+from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.model import Model
 from sqlmesh.core.test.definition import ModelTest as ModelTest, generate_test as generate_test
 from sqlmesh.core.test.discovery import (
@@ -20,26 +21,11 @@ from sqlmesh.core.test.discovery import (
     load_model_test_file as load_model_test_file,
 )
 from sqlmesh.core.test.result import ModelTextTestResult as ModelTextTestResult
+from sqlmesh.core.test.runner import ModelTextTestRunner as ModelTextTestRunner
 from sqlmesh.utils import UniqueKeyDict, Verbosity
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.config.loader import C
-
-
-class ModelTextTestRunner(unittest.TextTestRunner):
-    def __init__(
-        self,
-        **kwargs: t.Any,
-    ) -> None:
-        # StringIO is used to capture the output of the tests since we'll
-        # run them in parallel and we don't want to mix the output streams
-        from io import StringIO
-
-        super().__init__(
-            stream=StringIO(),
-            resultclass=ModelTextTestResult,
-            **kwargs,
-        )
 
 
 def log_test_report(results: ModelTextTestResult, test_duration: float) -> None:
@@ -65,23 +51,23 @@ def log_test_report(results: ModelTextTestResult, test_duration: float) -> None:
 
     stream.write("\n")
 
-    if errors or failures:
+    for test_case, err in failures:
         stream.writeln(unittest.TextTestResult.separator1)
-        for failure in failures:
-            stream.writeln(f"FAIL: {failure[0]}")
-
+        stream.writeln(f"FAIL: {test_case}")
         stream.writeln(unittest.TextTestResult.separator2)
-        for error in errors:
-            stream.writeln(error[1])
-        for failure in failures:
-            stream.writeln(failure[1])
+        stream.writeln(err)
+
+    for error in errors:
+        stream.writeln(unittest.TextTestResult.separator1)
+        stream.writeln(f"ERROR: {error[1]}")
+        stream.writeln(unittest.TextTestResult.separator2)
 
     # Test report
     stream.writeln(unittest.TextTestResult.separator2)
     stream.writeln(
         f'Ran {tests_run} {"tests" if tests_run > 1 else "test"} in {test_duration:.3f}s \n'
     )
-    stream.write(
+    stream.writeln(
         f'{"OK" if is_success else "FAILED"}{" (" + ", ".join(infos) + ")" if infos else ""}'
     )
 
@@ -106,6 +92,7 @@ def run_tests(
         verbosity: The verbosity level.
         preserve_fixtures: Preserve the fixture tables in the testing database, useful for debugging.
     """
+    testing_adapter_by_gateway: t.Dict[str, EngineAdapter] = {}
     default_gateway = gateway or config.default_gateway_name
 
     default_test_connection = config.get_test_connection(
@@ -122,51 +109,65 @@ def run_tests(
         descriptions=None,
     )
 
-    def _run_single_test(metadata: ModelTestMetadata) -> ModelTextTestResult:
-        testing_engine_adapter = None
+    worker_payload = []
 
-        try:
-            body = metadata.body
-            gateway = body.get("gateway") or default_gateway
+    for metadata in model_test_metadata:
+        gateway = metadata.body.get("gateway") or default_gateway
+        test_connection = config.get_test_connection(
+            gateway, default_catalog, default_catalog_dialect
+        )
 
-            # Create new connection for each test to avoid concurrency issues
-            testing_engine_adapter = config.get_test_connection(
-                gateway,
-                default_catalog,
-                default_catalog_dialect,
-            ).create_engine_adapter(register_comments_override=False)
+        concurrent_tasks = test_connection.concurrent_tasks
 
-            test = ModelTest.create_test(
-                body=body,
-                test_name=metadata.test_name,
-                models=models,
-                engine_adapter=testing_engine_adapter,
-                dialect=dialect,
-                path=metadata.path,
-                default_catalog=default_catalog,
-                preserve_fixtures=preserve_fixtures,
+        from sqlmesh.core.config.connection import BaseDuckDBConnectionConfig
+
+        is_duckdb_connection = isinstance(test_connection, BaseDuckDBConnectionConfig)
+
+        engine_adapter = None
+        if is_duckdb_connection:
+            # Ensure DuckDB connections are fully isolated from each other
+            # by forcing the creation of a new adapter with SingletonConnectionPool
+            test_connection.concurrent_tasks = 1
+            engine_adapter = test_connection.create_engine_adapter(register_comments_override=False)
+            test_connection.concurrent_tasks = concurrent_tasks
+        elif gateway not in testing_adapter_by_gateway:
+            # All other engines can share connections between threads
+            testing_adapter_by_gateway[gateway] = test_connection.create_engine_adapter(
+                register_comments_override=False
             )
 
-            result = t.cast(
-                ModelTextTestResult,
-                ModelTextTestRunner().run(t.cast(unittest.TestCase, test)),
-            )
+        engine_adapter = engine_adapter or testing_adapter_by_gateway[gateway]
+        worker_payload.append((metadata, engine_adapter))
 
-            with lock:
-                if result.successes:
-                    combined_results.addSuccess(result.successes[0])
-                elif result.errors:
-                    combined_results.addError(result.err[0], result.err[1])
-                elif result.failures:
-                    combined_results.addFailure(result.err[0], result.err[1])
-                elif result.skipped:
-                    skipped_args = result.skipped[0]
-                    combined_results.addSkip(skipped_args[0], skipped_args[1])
+    def _run_single_test(
+        metadata: ModelTestMetadata, engine_adapter: EngineAdapter
+    ) -> ModelTextTestResult:
+        test = ModelTest.create_test(
+            body=metadata.body,
+            test_name=metadata.test_name,
+            models=models,
+            engine_adapter=engine_adapter,
+            dialect=dialect,
+            path=metadata.path,
+            default_catalog=default_catalog,
+            preserve_fixtures=preserve_fixtures,
+        )
 
-        finally:
-            if testing_engine_adapter:
-                testing_engine_adapter.close()
+        result = t.cast(
+            ModelTextTestResult,
+            ModelTextTestRunner().run(t.cast(unittest.TestCase, test)),
+        )
 
+        with lock:
+            if result.successes:
+                combined_results.addSuccess(result.successes[0])
+            elif result.errors:
+                combined_results.addError(result.err[0], result.err[1])
+            elif result.failures:
+                combined_results.addFailure(result.err[0], result.err[1])
+            elif result.skipped:
+                skipped_args = result.skipped[0]
+                combined_results.addSkip(skipped_args[0], skipped_args[1])
         return result
 
     test_results = []
@@ -174,13 +175,19 @@ def run_tests(
     workers = min(len(model_test_metadata) or 1, default_test_connection.concurrent_tasks)
 
     start_time = time.perf_counter()
-    with ThreadPoolExecutor(max_workers=workers) as pool:
-        futures = [
-            pool.submit(_run_single_test, metadata=metadata) for metadata in model_test_metadata
-        ]
+    try:
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futures = [
+                pool.submit(_run_single_test, metadata=metadata, engine_adapter=engine_adapter)
+                for metadata, engine_adapter in worker_payload
+            ]
 
-        for future in concurrent.futures.as_completed(futures):
-            test_results.append(future.result())
+            for future in concurrent.futures.as_completed(futures):
+                test_results.append(future.result())
+    finally:
+        for _, engine_adapter in worker_payload:
+            if engine_adapter:
+                engine_adapter.close()
 
     end_time = time.perf_counter()
 
