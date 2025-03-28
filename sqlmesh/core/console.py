@@ -516,9 +516,13 @@ class NoopConsole(Console):
         pass
 
 
-def make_progress_bar(message: str, console: t.Optional[RichConsole] = None) -> Progress:
+def make_progress_bar(
+    message: str,
+    console: t.Optional[RichConsole] = None,
+    justify: t.Literal["default", "left", "center", "right", "full"] = "right",
+) -> Progress:
     return Progress(
-        TextColumn(f"[bold blue]{message}", justify="right"),
+        TextColumn(f"[bold blue]{message}", justify=justify),
         BarColumn(bar_width=PROGRESS_BAR_WIDTH),
         "[progress.percentage]{task.percentage:>3.1f}%",
         "•",
@@ -696,7 +700,7 @@ class TerminalConsole(Console):
                 )
 
                 self.evaluation_progress_live.console.print(
-                    f"{GREEN_CHECK_MARK} {batch}{display_name}{annotation} {duration}"
+                    f"{batch}{display_name}{annotation} {duration}"
                 )
 
             self.evaluation_total_progress.update(
@@ -749,7 +753,7 @@ class TerminalConsole(Console):
         if self.creation_progress is not None and self.creation_task is not None:
             if self.verbosity >= Verbosity.VERBOSE:
                 self.creation_progress.live.console.print(
-                    f"{GREEN_CHECK_MARK} {snapshot.display_name(self.environment_naming_info, self.default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect).ljust(self.PROGRESS_BAR_COLUMN_WIDTHS['name'])} [green]created[/green]"
+                    f"{snapshot.display_name(self.environment_naming_info, self.default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect).ljust(self.PROGRESS_BAR_COLUMN_WIDTHS['name'])} [green]created[/green]"
                 )
             self.creation_progress.update(self.creation_task, refresh=True, advance=1)
 
@@ -799,16 +803,8 @@ class TerminalConsole(Console):
     ) -> None:
         """Indicates that a new snapshot promotion progress has begun."""
         if self.promotion_progress is None:
-            self.promotion_progress = Progress(
-                TextColumn(
-                    "[bold blue]Updating virtual layer ",  # space to align with other progress bars
-                    justify="right",
-                ),
-                BarColumn(bar_width=PROGRESS_BAR_WIDTH),
-                "[progress.percentage]{task.percentage:>3.1f}%",
-                "•",
-                TimeElapsedColumn(),
-                console=self.console,
+            self.promotion_progress = make_progress_bar(
+                "Updating virtual layer ", self.console, justify="left"
             )
 
             self.promotion_progress.start()
@@ -824,10 +820,9 @@ class TerminalConsole(Console):
         """Update the snapshot promotion progress."""
         if self.promotion_progress is not None and self.promotion_task is not None:
             if self.verbosity >= Verbosity.VERBOSE:
-                check_mark = f"{GREEN_CHECK_MARK} " if promoted else "  "
                 action_str = "[green]promoted[/green]" if promoted else "[yellow]demoted[/yellow]"
                 self.promotion_progress.live.console.print(
-                    f"{check_mark}{snapshot.display_name(self.environment_naming_info, self.default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect).ljust(self.PROGRESS_BAR_COLUMN_WIDTHS['name'])} {action_str}"
+                    f"{snapshot.display_name(self.environment_naming_info, self.default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect).ljust(self.PROGRESS_BAR_COLUMN_WIDTHS['name'])} {action_str}"
                 )
             self.promotion_progress.update(self.promotion_task, refresh=True, advance=1)
 
@@ -2759,8 +2754,8 @@ def _format_evaluation_model_interval(snapshot: Snapshot, interval: Interval) ->
 def _justify_evaluation_model_info(
     text: str,
     length: int,
-    justify_direction: str = "left",
-    dots_side: str = "left",
+    justify_direction: t.Literal["left", "right"] = "left",
+    dots_side: t.Literal["left", "right"] = "left",
     prefix: str = "",
     suffix: str = "",
 ) -> str:

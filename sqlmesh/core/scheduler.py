@@ -478,8 +478,6 @@ class Scheduler:
                     execution_time=execution_time,
                     deployability_index=deployability_index,
                     batch_index=batch_idx,
-                    environment_naming_info=environment_naming_info,
-                    default_catalog=self.default_catalog,
                 )
 
                 for audit_error in audit_errors_to_warn:
