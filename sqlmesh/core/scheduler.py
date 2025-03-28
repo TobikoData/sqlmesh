@@ -7,6 +7,7 @@ from sqlmesh.core import constants as c
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.environment import EnvironmentNamingInfo, execute_environment_statements
 from sqlmesh.core.macros import RuntimeStage
+from sqlmesh.core.model.definition import AuditResult
 from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.notification_target import (
     NotificationEvent,
@@ -166,7 +167,7 @@ class Scheduler:
         deployability_index: DeployabilityIndex,
         batch_index: int,
         **kwargs: t.Any,
-    ) -> None:
+    ) -> t.Tuple[t.List[AuditResult], t.List[AuditError]]:
         """Evaluate a snapshot and add the processed interval to the state sync.
 
         Args:
@@ -178,6 +179,9 @@ class Scheduler:
             batch_index: If the snapshot is part of a batch of related snapshots; which index in the batch is it
             auto_restatement_enabled: Whether to enable auto restatements.
             kwargs: Additional kwargs to pass to the renderer.
+
+        Returns:
+            Tuple of list of all audit results from the evaluation and list of non-blocking audit errors to warn.
         """
         validate_date_range(start, end)
 
@@ -207,6 +211,7 @@ class Scheduler:
         )
 
         audit_errors_to_raise: t.List[AuditError] = []
+        audit_errors_to_warn: t.List[AuditError] = []
         for audit_result in (result for result in audit_results if result.count):
             error = AuditError(
                 audit_name=audit_result.audit.name,
@@ -224,15 +229,13 @@ class Scheduler:
             if audit_result.blocking:
                 audit_errors_to_raise.append(error)
             else:
-                get_console().log_warning(
-                    f"\n{error}.",
-                    long_message=f"{error}. Audit query:\n{error.query.sql(error.adapter_dialect)}",
-                )
+                audit_errors_to_warn.append(error)
 
         if audit_errors_to_raise:
             raise NodeAuditsErrors(audit_errors_to_raise)
 
         self.state_sync.add_interval(snapshot, start, end, is_dev=not is_deployable)
+        return audit_results, audit_errors_to_warn
 
     def run(
         self,
@@ -463,10 +466,12 @@ class Scheduler:
             execution_start_ts = now_timestamp()
             evaluation_duration_ms: t.Optional[int] = None
 
+            audit_results: t.List[AuditResult] = []
+            audit_errors_to_warn: t.List[AuditError] = []
             try:
                 assert execution_time  # mypy
                 assert deployability_index  # mypy
-                self.evaluate(
+                audit_results, audit_errors_to_warn = self.evaluate(
                     snapshot=snapshot,
                     start=start,
                     end=end,
@@ -474,10 +479,29 @@ class Scheduler:
                     deployability_index=deployability_index,
                     batch_index=batch_idx,
                 )
+
+                for audit_error in audit_errors_to_warn:
+                    display_name = snapshot.display_name(
+                        environment_naming_info,
+                        self.default_catalog,
+                        self.snapshot_evaluator.adapter.dialect,
+                    )
+                    self.console.log_warning(
+                        f"\n{display_name}: {audit_error}.",
+                        f"{audit_error}. Audit query:\n{audit_error.query.sql(audit_error.adapter_dialect)}",
+                    )
+
                 evaluation_duration_ms = now_timestamp() - execution_start_ts
             finally:
+                num_audits = len(audit_results)
+                num_audits_failed = sum(1 for result in audit_results if result.count)
                 self.console.update_snapshot_evaluation_progress(
-                    snapshot, batch_idx, evaluation_duration_ms
+                    snapshot,
+                    batched_intervals[snapshot][batch_idx],
+                    batch_idx,
+                    evaluation_duration_ms,
+                    num_audits - num_audits_failed,
+                    num_audits_failed,
                 )
 
         try:
