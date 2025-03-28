@@ -299,14 +299,14 @@ def test_plan(
     # This has minor differences between CI/CD and local.
     assert "[2K" in text_output[0]
     assert text_output[1].startswith(
-        "Updating virtual layer ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0%"
+        "Updating virtual layer  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0%"
     )
     # TODO: Is this what we expect?
     assert text_output[2] == ""
     assert text_output[3] == "✔ Virtual layer updated"
     assert convert_all_html_output_to_tags(output) == [
         ["pre", "span"],
-        ["pre"] + ["span"] * 4,
+        ["pre"] + ["span"] * 5,
         ["pre"],
         ["pre", "span"],
     ]
