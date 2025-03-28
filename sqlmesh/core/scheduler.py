@@ -149,8 +149,6 @@ class Scheduler:
         execution_time: TimeLike,
         deployability_index: DeployabilityIndex,
         batch_index: int,
-        environment_naming_info: EnvironmentNamingInfo,
-        default_catalog: t.Optional[str],
         **kwargs: t.Any,
     ) -> t.Tuple[t.List[AuditResult], t.List[AuditError]]:
         """Evaluate a snapshot and add the processed interval to the state sync.
