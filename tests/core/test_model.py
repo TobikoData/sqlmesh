@@ -1395,6 +1395,7 @@ def test_render_definition():
         MODEL (
             name db.table,
             owner owner_name,
+            cron_tz 'America/Los_Angeles',
             dialect spark,
             kind INCREMENTAL_BY_TIME_RANGE (
                 time_column (`a`, 'yyyymmdd'),
