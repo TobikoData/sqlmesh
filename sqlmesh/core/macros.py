@@ -191,7 +191,12 @@ class MacroEvaluator:
             elif v.is_import and getattr(self.env.get(k), c.SQLMESH_MACRO, None):
                 self.macros[normalize_macro_name(k)] = self.env[k]
             elif v.is_value:
-                self.locals[k] = self.env[k]
+                if k == c.SQLMESH_BLUEPRINT_VARS:
+                    self.locals.update(
+                        {var: self.parse_one(value) for var, value in self.env[k].items()}
+                    )
+                else:
+                    self.locals[k] = self.env[k]
 
     def send(
         self, name: str, *args: t.Any, **kwargs: t.Any
@@ -466,7 +471,10 @@ class MacroEvaluator:
 
     def var(self, var_name: str, default: t.Optional[t.Any] = None) -> t.Optional[t.Any]:
         """Returns the value of the specified variable, or the default value if it doesn't exist."""
-        return (self.locals.get(c.SQLMESH_VARS) or {}).get(var_name.lower(), default)
+        sqlmesh_vars = self.locals.get(c.SQLMESH_VARS) or {}
+        sqlmesh_blueprint_vars = self.locals.get(c.SQLMESH_BLUEPRINT_VARS) or {}
+
+        return {**sqlmesh_vars, **sqlmesh_blueprint_vars}.get(var_name.lower(), default)
 
     def _coerce(self, expr: exp.Expression, typ: t.Any, strict: bool = False) -> t.Any:
         """Coerces the given expression to the specified type on a best-effort basis."""

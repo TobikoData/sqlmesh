@@ -8251,8 +8251,9 @@ def entrypoint(evaluator):
         );
 
         SELECT
-          @VAR('foo') AS foo,
-        FROM @VAR('customer').my_source
+          @foo AS foo,
+          @{foo} AS foo2,
+        FROM @{customer}.my_source
         """
     )
 
@@ -8265,21 +8266,25 @@ def entrypoint(evaluator):
     customer1_model = models.get('"db"."customer1"."my_table"')
 
     assert customer1_model is not None
-    assert customer1_model.python_env.get(c.SQLMESH_VARS) == Executable.value(
+
+    assert customer1_model.python_env.get(c.SQLMESH_VARS) is None
+    assert customer1_model.python_env.get(c.SQLMESH_BLUEPRINT_VARS) == Executable.value(
         {"customer": "customer1", "foo": "'bar'"}
     )
     assert t.cast(exp.Expression, customer1_model.render_query()).sql() == (
-        """SELECT '''bar''' AS "foo" FROM "db"."customer1"."my_source" AS "my_source\""""
+        """SELECT 'bar' AS "foo", 'bar' AS "foo2" FROM "db"."customer1"."my_source" AS "my_source\""""
     )
 
     customer2_model = models.get('"db"."customer2"."my_table"')
 
     assert customer2_model is not None
-    assert customer2_model.python_env.get(c.SQLMESH_VARS) == Executable.value(
+
+    assert customer2_model.python_env.get(c.SQLMESH_VARS) is None
+    assert customer2_model.python_env.get(c.SQLMESH_BLUEPRINT_VARS) == Executable.value(
         {"customer": "customer2", "foo": "qux"}
     )
     assert t.cast(exp.Expression, customer2_model.render_query()).sql() == (
-        '''SELECT 'qux' AS "foo" FROM "db"."customer2"."my_source" AS "my_source"'''
+        '''SELECT "qux" AS "foo", "qux" AS "foo2" FROM "db"."customer2"."my_source" AS "my_source"'''
     )
 
 

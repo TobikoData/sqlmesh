@@ -122,6 +122,7 @@ class model(registry_decorator):
         default_catalog: t.Optional[str] = None,
         variables: t.Optional[t.Dict[str, t.Any]] = None,
         infer_names: t.Optional[bool] = False,
+        blueprint_variables: t.Optional[t.Dict[str, t.Any]] = None,
     ) -> Model:
         """Get the model registered by this function."""
         env: t.Dict[str, t.Any] = {}
@@ -155,6 +156,7 @@ class model(registry_decorator):
             path=path,
             dialect=dialect,
             default_catalog=default_catalog,
+            blueprint_variables=blueprint_variables,
         )
 
         rendered_name = rendered_fields["name"]
@@ -193,6 +195,7 @@ class model(registry_decorator):
             "macros": macros,
             "jinja_macros": jinja_macros,
             "audit_definitions": audit_definitions,
+            "blueprint_variables": blueprint_variables,
             **rendered_fields,
         }
 

@@ -17,6 +17,7 @@ from sqlmesh.utils.metaprogramming import Executable, build_env, prepare_env, se
 from sqlmesh.utils.pydantic import ValidationInfo, field_validator
 
 if t.TYPE_CHECKING:
+    from sqlglot.dialects.dialect import DialectType
     from sqlmesh.utils.jinja import MacroReference
 
 
@@ -30,6 +31,8 @@ def make_python_env(
     path: t.Optional[str | Path] = None,
     python_env: t.Optional[t.Dict[str, Executable]] = None,
     strict_resolution: bool = True,
+    blueprint_variables: t.Optional[t.Dict[str, t.Any]] = None,
+    dialect: DialectType = None,
 ) -> t.Dict[str, Executable]:
     python_env = {} if python_env is None else python_env
     variables = variables or {}
@@ -86,6 +89,8 @@ def make_python_env(
         python_env,
         used_variables,
         variables,
+        blueprint_variables=blueprint_variables,
+        dialect=dialect,
         strict_resolution=strict_resolution,
     )
 
@@ -95,6 +100,8 @@ def _add_variables_to_python_env(
     used_variables: t.Optional[t.Set[str]],
     variables: t.Optional[t.Dict[str, t.Any]],
     strict_resolution: bool = True,
+    blueprint_variables: t.Optional[t.Dict[str, t.Any]] = None,
+    dialect: DialectType = None,
 ) -> t.Dict[str, Executable]:
     _, python_used_variables = parse_dependencies(
         python_env,
@@ -106,6 +113,13 @@ def _add_variables_to_python_env(
     variables = {k: v for k, v in (variables or {}).items() if k in used_variables}
     if variables:
         python_env[c.SQLMESH_VARS] = Executable.value(variables)
+
+    if blueprint_variables:
+        blueprint_variables = {
+            k: v.sql(dialect=dialect) if isinstance(v, exp.Expression) else v
+            for k, v in blueprint_variables.items()
+        }
+        python_env[c.SQLMESH_BLUEPRINT_VARS] = Executable.value(blueprint_variables)
 
     return python_env
 
