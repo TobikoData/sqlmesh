@@ -19,3 +19,6 @@ require-dbt-version: [">=1.0.0", "<2.0.0"]
 models:
   start: "2024-01-01"
   +materialized: table
+
+on-run-start:
+  - 'CREATE TABLE IF NOT EXISTS analytic_stats (physical_table VARCHAR, evaluation_time VARCHAR);'

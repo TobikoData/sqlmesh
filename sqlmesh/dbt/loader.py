@@ -27,7 +27,11 @@ from sqlmesh.dbt.project import Project
 from sqlmesh.dbt.target import TargetConfig
 from sqlmesh.utils import UniqueKeyDict
 from sqlmesh.utils.errors import ConfigError
-from sqlmesh.utils.jinja import JinjaMacroRegistry, extract_macro_references_and_variables
+from sqlmesh.utils.jinja import (
+    JinjaMacroRegistry,
+    MacroInfo,
+    extract_macro_references_and_variables,
+)
 
 if sys.version_info >= (3, 12):
     from importlib import metadata
@@ -237,39 +241,41 @@ class DbtLoader(Loader):
     def _load_environment_statements(self, macros: MacroRegistry) -> EnvironmentStatements | None:
         """Loads dbt's on_run_start, on_run_end hooks into sqlmesh's before_all, after_all statements respectively."""
 
-        on_run_start = []
-        on_run_end = []
-
+        on_run_start: t.List[str] = []
+        on_run_end: t.List[str] = []
+        jinja_root_macros: t.Dict[str, MacroInfo] = {}
+        variables: t.Dict[str, t.Any] = self._get_variables()
         dialect = self.config.dialect
         for project in self._load_projects():
-            if manifest := project.context._manifest:
-                if stmts := manifest._on_run_start:
-                    on_run_start.extend(stmts)
-                if stmts := manifest._on_run_end:
-                    on_run_end.extend(stmts)
+            context = project.context.copy()
+            if manifest := context._manifest:
+                on_run_start.extend(manifest._on_run_start or [])
+                on_run_end.extend(manifest._on_run_end or [])
+
+            if root_package := context.jinja_macros.root_package_name:
+                if root_macros := context.jinja_macros.packages.get(root_package):
+                    jinja_root_macros |= root_macros
+                context.set_and_render_variables(context.variables, root_package)
+                variables |= context.variables
 
         if statements := on_run_start + on_run_end:
             jinja_macro_references, used_variables = extract_macro_references_and_variables(
-                *(gen(e) for e in statements)
+                *(gen(stmt) for stmt in statements)
             )
-
-            if jinja_macros := project.context.jinja_macros:
-                if root_package := jinja_macros.root_package_name:
-                    jinja_macros.root_macros = jinja_macros.packages[root_package]
-                jinja_macros = (
-                    jinja_macros
-                    if jinja_macros.trimmed
-                    else jinja_macros.trim(jinja_macro_references)
-                )
-            else:
-                jinja_macros = JinjaMacroRegistry()
+            jinja_macros = context.jinja_macros
+            jinja_macros.root_macros = jinja_root_macros
+            jinja_macros = (
+                jinja_macros.trim(jinja_macro_references)
+                if not jinja_macros.trimmed
+                else jinja_macros
+            )
 
             python_env = make_python_env(
                 [s for stmt in statements for s in d.parse(stmt, default_dialect=dialect)],
                 jinja_macro_references=jinja_macro_references,
                 module_path=self.config_path,
-                macros=macros or macro.get_registry(),
-                variables=self._get_variables(),
+                macros=macros,
+                variables=variables,
                 used_variables=used_variables,
                 path=self.config_path,
             )
