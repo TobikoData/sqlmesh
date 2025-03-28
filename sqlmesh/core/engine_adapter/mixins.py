@@ -297,11 +297,15 @@ class VarcharSizeWorkaroundMixin(EngineAdapter):
             and statement.expression.args["limit"].expression.this == "0"
         ):
             assert not isinstance(table_name_or_schema, exp.Schema)
+
             # redshift and mssql have a bug where CTAS statements have non determistic types. if a limit
             # is applied to a ctas statement, VARCHAR types default to 1 in some instances.
             select_statement = statement.expression.copy()
             for select_or_union in select_statement.find_all(exp.Select, exp.SetOperation):
-                select_or_union.set("limit", None)
+                limit = select_or_union.args.get("limit")
+                if limit is not None and limit.expression.this == "0":
+                    limit.pop()
+
                 select_or_union.set("where", None)
 
             temp_view_name = self._get_temp_table("ctas")
