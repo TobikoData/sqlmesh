@@ -13,7 +13,7 @@ import time_machine
 from pytest_mock.plugin import MockerFixture
 from sqlglot import exp
 
-from sqlmesh.core.config import CategorizerConfig
+from sqlmesh.core.config import CategorizerConfig, Config, ModelDefaultsConfig, LinterConfig
 from sqlmesh.core.engine_adapter.shared import DataObject
 from sqlmesh.core.user import User, UserRole
 from sqlmesh.integrations.github.cicd import command
@@ -50,6 +50,143 @@ def get_columns(
 ) -> t.Dict[str, exp.DataType]:
     table = f"sushi__{environment}.{model}" if environment else f"sushi.{model}"
     return controller._context.engine_adapter.columns(table)
+
+
+@time_machine.travel("2023-01-01 15:00:00 UTC")
+def test_linter(
+    github_client,
+    make_controller,
+    make_mock_check_run,
+    make_mock_issue_comment,
+    make_pull_request_review,
+    tmp_path: pathlib.Path,
+    mocker: MockerFixture,
+):
+    """
+    PR with a non-breaking change and auto-categorization will be backfilled, merged, and deployed to prod
+
+    Scenario:
+    - PR is not merged
+    - PR has been approved by a required reviewer
+    - Tests passed
+    - PR Merge Method defined
+    - Delete environment is disabled
+    - Changes made in PR with auto-categorization
+    """
+
+    mock_repo = github_client.get_repo()
+    mock_repo.create_check_run = mocker.MagicMock(
+        side_effect=lambda **kwargs: make_mock_check_run(**kwargs)
+    )
+
+    created_comments: t.List[MockIssueComment] = []
+    mock_issue = mock_repo.get_issue()
+    mock_issue.create_comment = mocker.MagicMock(
+        side_effect=lambda comment: make_mock_issue_comment(
+            comment=comment, created_comments=created_comments
+        )
+    )
+    mock_issue.get_comments = mocker.MagicMock(side_effect=lambda: created_comments)
+
+    mock_pull_request = mock_repo.get_pull()
+    mock_pull_request.get_reviews = mocker.MagicMock(
+        side_effect=lambda: [make_pull_request_review(username="test_github", state="APPROVED")]
+    )
+    mock_pull_request.merged = False
+    mock_pull_request.merge = mocker.MagicMock()
+
+    # Case 1: Test for linter errors
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        linter=LinterConfig(enabled=True, rules="ALL"),
+    )
+
+    controller = make_controller(
+        "tests/fixtures/github/pull_request_synchronized.json",
+        github_client,
+        bot_config=GithubCICDBotConfig(
+            merge_method=MergeMethod.MERGE,
+            invalidate_environment_after_deploy=False,
+            auto_categorize_changes=CategorizerConfig.all_full(),
+            default_pr_start=None,
+            skip_pr_backfill=False,
+        ),
+        mock_out_context=False,
+        config=config,
+    )
+
+    github_output_file = tmp_path / "github_output.txt"
+
+    with mock.patch.dict(os.environ, {"GITHUB_OUTPUT": str(github_output_file)}):
+        with pytest.raises(CICDBotError):
+            command._run_all(controller)
+
+    assert "SQLMesh - Linter" in controller._check_run_mapping
+    linter_checks_runs = controller._check_run_mapping["SQLMesh - Linter"].all_kwargs
+    assert "Linter **errors** for" in linter_checks_runs[2]["output"]["summary"]
+    assert GithubCheckConclusion(linter_checks_runs[2]["conclusion"]).is_failure
+
+    for check in (
+        "SQLMesh - PR Environment Synced",
+        "SQLMesh - Prod Plan Preview",
+    ):
+        assert check in controller._check_run_mapping
+        check_runs = controller._check_run_mapping[check].all_kwargs
+        assert GithubCheckConclusion(check_runs[-1]["conclusion"]).is_skipped
+
+    with open(github_output_file, "r", encoding="utf-8") as f:
+        output = f.read()
+        assert (
+            output
+            == "linter=failure\nrun_unit_tests=success\npr_environment_name=hello_world_2\npr_environment_synced=skipped\nprod_plan_preview=skipped\n"
+        )
+
+    # empty github file for next case
+    open(github_output_file, "w").close()
+
+    # Case 2: Test for linter warnings
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        linter=LinterConfig(enabled=True, warn_rules="ALL"),
+    )
+
+    controller = make_controller(
+        "tests/fixtures/github/pull_request_synchronized.json",
+        github_client,
+        bot_config=GithubCICDBotConfig(
+            merge_method=MergeMethod.MERGE,
+            invalidate_environment_after_deploy=False,
+            auto_categorize_changes=CategorizerConfig.all_full(),
+            default_pr_start=None,
+            skip_pr_backfill=False,
+        ),
+        mock_out_context=False,
+        config=config,
+    )
+
+    with mock.patch.dict(os.environ, {"GITHUB_OUTPUT": str(github_output_file)}):
+        command._run_all(controller)
+
+    assert "SQLMesh - Linter" in controller._check_run_mapping
+    linter_checks_runs = controller._check_run_mapping["SQLMesh - Linter"].all_kwargs
+    assert "Linter warnings for" in linter_checks_runs[-1]["output"]["summary"]
+    assert GithubCheckConclusion(linter_checks_runs[-1]["conclusion"]).is_success
+
+    for check in (
+        "SQLMesh - Run Unit Tests",
+        "SQLMesh - PR Environment Synced",
+        "SQLMesh - Prod Plan Preview",
+    ):
+        assert check in controller._check_run_mapping
+        check_runs = controller._check_run_mapping[check].all_kwargs
+        assert GithubCheckConclusion(check_runs[-1]["conclusion"]).is_success
+
+    with open(github_output_file, "r", encoding="utf-8") as f:
+        output = f.read()
+        assert (
+            output
+            == "linter=success\nrun_unit_tests=success\ncreated_pr_environment=true\npr_environment_name=hello_world_2\npr_environment_synced=success\nprod_plan_preview=success\n"
+        )
 
 
 @time_machine.travel("2023-01-01 15:00:00 UTC")
