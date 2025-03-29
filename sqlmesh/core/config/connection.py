@@ -1196,6 +1196,7 @@ class PostgresConnectionConfig(ConnectionConfig):
     connect_timeout: int = 10
     role: t.Optional[str] = None
     sslmode: t.Optional[str] = None
+    application_name: t.Optional[str] = None
 
     concurrent_tasks: int = 4
     register_comments: bool = True
@@ -1214,6 +1215,7 @@ class PostgresConnectionConfig(ConnectionConfig):
             "keepalives_idle",
             "connect_timeout",
             "sslmode",
+            "application_name",
         }
 
     @property
