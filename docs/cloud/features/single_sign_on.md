@@ -123,6 +123,7 @@ Next, name your app "Tobiko Cloud". You can add the app logo by downloading the 
 
     - **Single sign-on URL**: `https://cloud.tobikodata.com/auth/saml/callback/acme`   
     - **Audience URI (SP Entity ID)**: `https://cloud.tobikodata.com/auth/saml/metadata/acme`
+    - Please note you should replace `acme` with your organization name.
 
     ![okta_setup_3](./single_sign_on/okta_setup_3.png)
 
