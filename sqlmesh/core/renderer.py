@@ -107,6 +107,15 @@ class BaseExpressionRenderer:
 
         if environment_naming_info := kwargs.get("environment_naming_info", None):
             kwargs["this_env"] = getattr(environment_naming_info, "name")
+            if snapshots and (
+                schemas := set(
+                    [
+                        s.qualified_view_name.schema_for_environment(environment_naming_info)
+                        for s in snapshots.values()
+                    ]
+                )
+            ):
+                kwargs["schemas"] = list(schemas)
 
         this_model = kwargs.pop("this_model", None)
 
@@ -411,19 +420,21 @@ class ExpressionRenderer(BaseExpressionRenderer):
 
 def render_statements(
     statements: t.List[str],
-    dialect: DialectType = None,
+    dialect: str,
     default_catalog: t.Optional[str] = None,
     python_env: t.Optional[t.Dict[str, Executable]] = None,
+    jinja_macros: t.Optional[JinjaMacroRegistry] = None,
     **render_kwargs: t.Any,
 ) -> t.List[str]:
     rendered_statements: t.List[str] = []
     for statement in statements:
-        for expression in parse(statement, dialect=dialect):
+        for expression in d.parse(statement, default_dialect=dialect):
             if expression:
                 rendered = ExpressionRenderer(
                     expression,
                     dialect,
                     [],
+                    jinja_macro_registry=jinja_macros or JinjaMacroRegistry(),
                     python_env=python_env,
                     default_catalog=default_catalog,
                     quote_identifiers=False,

@@ -13,6 +13,9 @@ from sqlglot import exp, parse_one
 
 from sqlmesh import Context
 from sqlmesh.core.dialect import schema_
+from sqlmesh.core.environment import EnvironmentNamingInfo
+from sqlmesh.core.macros import RuntimeStage
+from sqlmesh.core.renderer import render_statements
 from sqlmesh.core.snapshot import SnapshotId
 from sqlmesh.dbt.adapter import ParsetimeAdapter
 from sqlmesh.dbt.project import Project
@@ -270,3 +273,49 @@ def test_quote_as_configured():
     adapter.quote_as_configured("foo", "identifier") == '"foo"'
     adapter.quote_as_configured("foo", "schema") == "foo"
     adapter.quote_as_configured("foo", "database") == "foo"
+
+
+def test_on_run_start_end(copy_to_temp_path):
+    project_root = "tests/fixtures/dbt/sushi_test"
+    sushi_context = Context(paths=copy_to_temp_path(project_root))
+    assert len(sushi_context._environment_statements) == 1
+    environment_statements = sushi_context._environment_statements[0]
+
+    assert environment_statements.before_all == [
+        "JINJA_STATEMENT_BEGIN;\nCREATE TABLE IF NOT EXISTS analytic_stats (physical_table VARCHAR, evaluation_time VARCHAR);\nJINJA_END;"
+    ]
+    assert environment_statements.after_all == [
+        "JINJA_STATEMENT_BEGIN;\n{{ create_tables(schemas) }}\nJINJA_END;"
+    ]
+    assert "create_tables" in environment_statements.jinja_macros.root_macros
+
+    rendered_before_all = render_statements(
+        environment_statements.before_all,
+        dialect=sushi_context.default_dialect,
+        python_env=environment_statements.python_env,
+        jinja_macros=environment_statements.jinja_macros,
+        runtime_stage=RuntimeStage.BEFORE_ALL,
+    )
+
+    rendered_after_all = render_statements(
+        environment_statements.after_all,
+        dialect=sushi_context.default_dialect,
+        python_env=environment_statements.python_env,
+        jinja_macros=environment_statements.jinja_macros,
+        snapshots=sushi_context.snapshots,
+        runtime_stage=RuntimeStage.AFTER_ALL,
+        environment_naming_info=EnvironmentNamingInfo(name="dev"),
+    )
+
+    assert rendered_before_all == [
+        "CREATE TABLE IF NOT EXISTS analytic_stats (physical_table TEXT, evaluation_time TEXT)"
+    ]
+
+    # The jinja macro should have resolved the schemas for this environment and generated corresponding statements
+    assert sorted(rendered_after_all) == sorted(
+        [
+            "CREATE OR REPLACE TABLE schema_table_raw__dev AS SELECT 'raw__dev' AS schema",
+            "CREATE OR REPLACE TABLE schema_table_snapshots__dev AS SELECT 'snapshots__dev' AS schema",
+            "CREATE OR REPLACE TABLE schema_table_sushi__dev AS SELECT 'sushi__dev' AS schema",
+        ]
+    )

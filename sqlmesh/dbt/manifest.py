@@ -94,6 +94,9 @@ class ManifestHelper:
             self.project_path / c.CACHE, "jinja_calls"
         )
 
+        self._on_run_start: t.Optional[t.List[str]] = None
+        self._on_run_end: t.Optional[t.List[str]] = None
+
     def tests(self, package_name: t.Optional[str] = None) -> TestConfigs:
         self._load_all()
         return self._tests_per_package[package_name or self._project_name]
@@ -311,6 +314,11 @@ class ManifestHelper:
             )
 
         runtime_config = RuntimeConfig.from_parts(project, profile, args)
+
+        if runtime_config.on_run_start:
+            self._on_run_start = runtime_config.on_run_start
+        if runtime_config.on_run_end:
+            self._on_run_end = runtime_config.on_run_end
 
         self._project_name = project.project_name
 
