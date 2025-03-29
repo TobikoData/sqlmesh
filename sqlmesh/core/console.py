@@ -7,6 +7,7 @@ import unittest
 import uuid
 import logging
 import textwrap
+from pathlib import Path
 
 from hyperscript import h
 from rich.console import Console as RichConsole
@@ -53,6 +54,10 @@ if t.TYPE_CHECKING:
     from sqlmesh.core.context_diff import ContextDiff
     from sqlmesh.core.plan import Plan, EvaluatablePlan, PlanBuilder, SnapshotIntervals
     from sqlmesh.core.table_diff import TableDiff, RowDiff, SchemaDiff
+    from sqlmesh.core.config.connection import ConnectionConfig
+    from sqlmesh.core.environment import Environment
+    from sqlmesh.core.state_sync.common import AutoRestatement
+    from sqlmesh.core.state_sync import Versions
 
     LayoutWidget = t.TypeVar("LayoutWidget", bound=t.Union[widgets.VBox, widgets.HBox])
 
@@ -197,6 +202,89 @@ class Console(abc.ABC):
         """Stop the environment migration progress."""
 
     @abc.abstractmethod
+    def start_state_dump_progress(self) -> None:
+        """Start a state dump"""
+
+    @abc.abstractmethod
+    def update_state_dump_versions(self, versions: t.Dict[str, t.Any]) -> None:
+        """Update the state dump progress when the Versions have been dumped"""
+
+    @abc.abstractmethod
+    def update_state_dump_snapshots(
+        self,
+        snapshot: t.Optional[Snapshot] = None,
+        total_snapshots: t.Optional[int] = None,
+        complete: bool = False,
+    ) -> None:
+        """Update the state dump progress when a Snapshot has been dumped"""
+
+    @abc.abstractmethod
+    def update_state_dump_environments(
+        self,
+        environment: t.Optional[Environment] = None,
+        total_environments: t.Optional[int] = None,
+        complete: bool = False,
+    ) -> None:
+        """Update the state dump progress when an Environment has been dumped"""
+
+    @abc.abstractmethod
+    def update_state_dump_auto_restatements(
+        self,
+        auto_restatement: t.Optional[AutoRestatement] = None,
+        total_auto_restatements: t.Optional[int] = None,
+        complete: bool = False,
+    ) -> None:
+        """Update the state dump progress when the Auto Restatements have been dumped"""
+
+    @abc.abstractmethod
+    def stop_state_dump_progress(self, success: bool, output_file: Path) -> None:
+        """Finish a state dump"""
+
+    @abc.abstractmethod
+    def start_state_load_progress(self) -> None:
+        """Start a state load"""
+
+    @abc.abstractmethod
+    def update_state_load_info(
+        self,
+        timestamp: t.Optional[str] = None,
+        state_file_version: t.Optional[int] = None,
+        versions: t.Optional[Versions] = None,
+    ) -> None:
+        """Update the state load process with information about the state file"""
+
+    @abc.abstractmethod
+    def update_state_load_snapshots(
+        self,
+        snapshot: t.Optional[Snapshot] = None,
+        total_snapshots: t.Optional[int] = None,
+        complete: bool = False,
+    ) -> None:
+        """Update the state load progress when a Snapshot has been loaded"""
+
+    @abc.abstractmethod
+    def update_state_load_environments(
+        self,
+        environment: t.Optional[Environment] = None,
+        total_environments: t.Optional[int] = None,
+        complete: bool = False,
+    ) -> None:
+        """Update the state load progress when an Environment has been loaded"""
+
+    @abc.abstractmethod
+    def update_state_load_auto_restatements(
+        self,
+        auto_restatement: t.Optional[AutoRestatement] = None,
+        total_auto_restatements: t.Optional[int] = None,
+        complete: bool = False,
+    ) -> None:
+        """Update the state load progress when the Auto Restatements have been loaded"""
+
+    @abc.abstractmethod
+    def stop_state_load_progress(self, success: bool, input_file: Path) -> None:
+        """Finish a state load"""
+
+    @abc.abstractmethod
     def show_model_difference_summary(
         self,
         context_diff: ContextDiff,
@@ -311,6 +399,10 @@ class Console(abc.ABC):
     def print_environments(self, environments_summary: t.Dict[str, int]) -> None:
         """Prints all environment names along with expiry datetime."""
 
+    @abc.abstractmethod
+    def print_connection_config(self, config: ConnectionConfig, title: str = "Connection") -> None:
+        """Print connection config information"""
+
     def _limit_model_names(self, tree: Tree, verbosity: Verbosity = Verbosity.DEFAULT) -> Tree:
         """Trim long indirectly modified model lists below threshold."""
         modified_length = len(tree.children)
@@ -416,6 +508,77 @@ class NoopConsole(Console):
     def stop_env_migration_progress(self, success: bool = True) -> None:
         pass
 
+    def start_state_dump_progress(self) -> None:
+        pass
+
+    def update_state_dump_versions(self, versions: t.Dict[str, t.Any]) -> None:
+        pass
+
+    def update_state_dump_snapshots(
+        self,
+        snapshot: t.Optional[Snapshot] = None,
+        total_snapshots: t.Optional[int] = None,
+        complete: bool = False,
+    ) -> None:
+        pass
+
+    def update_state_dump_environments(
+        self,
+        environment: t.Optional[Environment] = None,
+        total_environments: t.Optional[int] = None,
+        complete: bool = False,
+    ) -> None:
+        pass
+
+    def update_state_dump_auto_restatements(
+        self,
+        auto_restatement: t.Optional[AutoRestatement] = None,
+        total_auto_restatements: t.Optional[int] = None,
+        complete: bool = False,
+    ) -> None:
+        pass
+
+    def stop_state_dump_progress(self, success: bool, output_file: Path) -> None:
+        pass
+
+    def start_state_load_progress(self) -> None:
+        pass
+
+    def update_state_load_info(
+        self,
+        timestamp: t.Optional[str] = None,
+        state_file_version: t.Optional[int] = None,
+        versions: t.Optional[Versions] = None,
+    ) -> None:
+        pass
+
+    def update_state_load_snapshots(
+        self,
+        snapshot: t.Optional[Snapshot] = None,
+        total_snapshots: t.Optional[int] = None,
+        complete: bool = False,
+    ) -> None:
+        pass
+
+    def update_state_load_environments(
+        self,
+        environment: t.Optional[Environment] = None,
+        total_environments: t.Optional[int] = None,
+        complete: bool = False,
+    ) -> None:
+        pass
+
+    def update_state_load_auto_restatements(
+        self,
+        auto_restatement: t.Optional[AutoRestatement] = None,
+        total_auto_restatements: t.Optional[int] = None,
+        complete: bool = False,
+    ) -> None:
+        pass
+
+    def stop_state_load_progress(self, success: bool, input_file: Path) -> None:
+        pass
+
     def show_model_difference_summary(
         self,
         context_diff: ContextDiff,
@@ -498,6 +661,11 @@ class NoopConsole(Console):
     ) -> None:
         pass
 
+    def print_connection_config(
+        self, config: ConnectionConfig, title: t.Optional[str] = "Connection"
+    ) -> None:
+        pass
+
 
 def make_progress_bar(message: str, console: t.Optional[RichConsole] = None) -> Progress:
     return Progress(
@@ -551,6 +719,18 @@ class TerminalConsole(Console):
         self.env_migration_task: t.Optional[TaskID] = None
 
         self.loading_status: t.Dict[uuid.UUID, Status] = {}
+
+        self.state_dump_progress: t.Optional[Progress] = None
+        self.state_dump_version_task: t.Optional[TaskID] = None
+        self.state_dump_snapshot_task: t.Optional[TaskID] = None
+        self.state_dump_environment_task: t.Optional[TaskID] = None
+        self.state_dump_auto_restatement_task: t.Optional[TaskID] = None
+
+        self.state_load_progress: t.Optional[Progress] = None
+        self.state_load_version_task: t.Optional[TaskID] = None
+        self.state_load_snapshot_task: t.Optional[TaskID] = None
+        self.state_load_environment_task: t.Optional[TaskID] = None
+        self.state_load_auto_restatement_task: t.Optional[TaskID] = None
 
         self.verbosity = verbosity
         self.dialect = dialect
@@ -828,6 +1008,226 @@ class TerminalConsole(Console):
             self.env_migration_progress = None
             if success:
                 self.log_success("Environments migrated successfully")
+
+    def start_state_dump_progress(self) -> None:
+        if self.state_dump_progress is None:
+            self.state_dump_progress = make_progress_bar("{task.description}", self.console)
+
+            assert isinstance(self.state_dump_progress, Progress)
+
+            self.state_dump_version_task = self.state_dump_progress.add_task(
+                "Dumping versions", start=False
+            )
+            self.state_dump_snapshot_task = self.state_dump_progress.add_task(
+                "Dumping snapshots", start=False
+            )
+            self.state_dump_environment_task = self.state_dump_progress.add_task(
+                "Dumping environments", start=False
+            )
+            self.state_dump_auto_restatement_task = self.state_dump_progress.add_task(
+                "Dumping auto restatements", start=False
+            )
+
+            self.state_dump_progress.start()
+
+    def update_state_dump_versions(self, versions: t.Dict[str, t.Any]) -> None:
+        if self.state_dump_progress and self.state_dump_version_task is not None:
+            version_count = len(versions)
+
+            self.state_dump_progress.start_task(self.state_dump_version_task)
+            self.state_dump_progress.update(
+                self.state_dump_version_task,
+                total=version_count,
+                completed=version_count,
+                refresh=True,
+            )
+            self.state_dump_progress.stop_task(self.state_dump_version_task)
+
+    def update_state_dump_snapshots(
+        self,
+        snapshot: t.Optional[Snapshot] = None,
+        total_snapshots: t.Optional[int] = None,
+        complete: bool = False,
+    ) -> None:
+        if self.state_dump_progress and self.state_dump_snapshot_task is not None:
+            if total_snapshots is not None:
+                self.state_dump_progress.start_task(self.state_dump_snapshot_task)
+                self.state_dump_progress.update(
+                    self.state_dump_snapshot_task, total=total_snapshots, visible=True
+                )
+
+            if snapshot is not None:
+                self.state_dump_progress.update(self.state_dump_snapshot_task, advance=1)
+
+            if complete:
+                self.state_dump_progress.stop_task(self.state_dump_snapshot_task)
+
+    def update_state_dump_environments(
+        self,
+        environment: t.Optional[Environment] = None,
+        total_environments: t.Optional[int] = None,
+        complete: bool = False,
+    ) -> None:
+        if self.state_dump_progress and self.state_dump_environment_task is not None:
+            if total_environments is not None:
+                self.state_dump_progress.start_task(self.state_dump_environment_task)
+                self.state_dump_progress.update(
+                    self.state_dump_environment_task, total=total_environments, visible=True
+                )
+
+            if environment is not None:
+                self.state_dump_progress.update(self.state_dump_environment_task, advance=1)
+
+            if complete:
+                self.state_dump_progress.stop_task(self.state_dump_environment_task)
+
+    def update_state_dump_auto_restatements(
+        self,
+        auto_restatement: t.Optional[AutoRestatement] = None,
+        total_auto_restatements: t.Optional[int] = None,
+        complete: bool = False,
+    ) -> None:
+        if self.state_dump_progress and self.state_dump_auto_restatement_task is not None:
+            if total_auto_restatements is not None:
+                self.state_dump_progress.start_task(self.state_dump_auto_restatement_task)
+                self.state_dump_progress.update(
+                    self.state_dump_auto_restatement_task,
+                    total=total_auto_restatements,
+                    visible=True,
+                )
+
+            if auto_restatement:
+                self.state_dump_progress.update(self.state_dump_auto_restatement_task, advance=1)
+
+            if complete:
+                self.state_dump_progress.stop_task(self.state_dump_auto_restatement_task)
+
+    def stop_state_dump_progress(self, success: bool, output_file: Path) -> None:
+        if self.state_dump_progress:
+            self.state_dump_progress.stop()
+            self.state_dump_progress = None
+
+            if success:
+                self.log_success(f"State dumped successfully to '{output_file.as_posix()}'")
+            else:
+                self.log_error("State dump failed!")
+
+    def start_state_load_progress(self) -> None:
+        if self.state_load_progress is None:
+            self.state_load_progress = make_progress_bar("{task.description}", self.console)
+
+            self.state_load_info = Tree("[bold]State File Information:")
+
+            self.state_load_version_task = self.state_load_progress.add_task(
+                "Loading versions", start=False
+            )
+            self.state_load_snapshot_task = self.state_load_progress.add_task(
+                "Loading snapshots", start=False
+            )
+            self.state_load_environment_task = self.state_load_progress.add_task(
+                "Loading environments", start=False
+            )
+            self.state_load_auto_restatement_task = self.state_load_progress.add_task(
+                "Loading auto restatements", start=False
+            )
+
+            self.state_load_progress.start()
+
+    def update_state_load_info(
+        self,
+        timestamp: t.Optional[str] = None,
+        state_file_version: t.Optional[int] = None,
+        versions: t.Optional[Versions] = None,
+    ) -> None:
+        if self.state_load_progress and self.state_load_info:
+            if timestamp:
+                self.state_load_info.add(f"Creation Timestamp: {timestamp}")
+            if state_file_version:
+                self.state_load_info.add(f"File Version: {state_file_version}")
+            if versions:
+                self.state_load_info.add(f"SQLMesh version: {versions.sqlmesh_version}")
+                self.state_load_info.add(f"SQLMesh migration version: {versions.schema_version}")
+                self.state_load_info.add(f"SQLGlot version: {versions.sqlglot_version}\n")
+
+                self._print(self.state_load_info)
+
+                version_count = len(versions.model_dump())
+
+                if self.state_load_version_task is not None:
+                    self.state_load_progress.start_task(self.state_load_version_task)
+                    self.state_load_progress.update(
+                        self.state_load_version_task, total=version_count, completed=version_count
+                    )
+                    self.state_load_progress.stop_task(self.state_load_version_task)
+
+    def update_state_load_snapshots(
+        self,
+        snapshot: t.Optional[Snapshot] = None,
+        total_snapshots: t.Optional[int] = None,
+        complete: bool = False,
+    ) -> None:
+        if self.state_load_progress and self.state_load_snapshot_task is not None:
+            if total_snapshots is not None:
+                self.state_load_progress.start_task(self.state_load_snapshot_task)
+                self.state_load_progress.update(
+                    self.state_load_snapshot_task, total=total_snapshots, visible=True
+                )
+
+            if snapshot is not None:
+                self.state_load_progress.update(self.state_load_snapshot_task, advance=1)
+
+            if complete:
+                self.state_load_progress.stop_task(self.state_load_snapshot_task)
+
+    def update_state_load_environments(
+        self,
+        environment: t.Optional[Environment] = None,
+        total_environments: t.Optional[int] = None,
+        complete: bool = False,
+    ) -> None:
+        if self.state_load_progress and self.state_load_environment_task is not None:
+            if total_environments is not None:
+                self.state_load_progress.start_task(self.state_load_environment_task)
+                self.state_load_progress.update(
+                    self.state_load_environment_task, total=total_environments, visible=True
+                )
+
+            if environment is not None:
+                self.state_load_progress.update(self.state_load_environment_task, advance=1)
+
+            if complete:
+                self.state_load_progress.stop_task(self.state_load_environment_task)
+
+    def update_state_load_auto_restatements(
+        self,
+        auto_restatement: t.Optional[AutoRestatement] = None,
+        total_auto_restatements: t.Optional[int] = None,
+        complete: bool = False,
+    ) -> None:
+        if self.state_load_progress and self.state_load_auto_restatement_task is not None:
+            if total_auto_restatements is not None:
+                self.state_load_progress.start_task(self.state_load_auto_restatement_task)
+                self.state_load_progress.update(
+                    self.state_load_auto_restatement_task,
+                    total=total_auto_restatements,
+                    visible=True,
+                )
+
+            if auto_restatement:
+                self.state_load_progress.update(self.state_load_auto_restatement_task, advance=1)
+
+            if complete:
+                self.state_load_progress.stop_task(self.state_load_auto_restatement_task)
+
+    def stop_state_load_progress(self, success: bool, input_file: Path) -> None:
+        if self.state_load_progress:
+            self.state_load_progress.stop()
+            self.state_load_progress = None
+
+            if success:
+                self.log_success(f"State loaded successfully from '{input_file.as_posix()}'")
+            else:
+                self.log_error("State load failed!")
 
     def show_model_difference_summary(
         self,
@@ -1511,6 +1911,16 @@ class TerminalConsole(Console):
         ]
         output_str = "\n".join([str(len(output)), *output])
         self.log_status_update(f"Number of SQLMesh environments are: {output_str}")
+
+    def print_connection_config(self, config: ConnectionConfig, title: str = "Connection") -> None:
+        engine_adapter_type = config._engine_adapter
+
+        tree = Tree(f"[b]{title}:[/b]")
+        tree.add(f"Type: [bold cyan]{config.type_}[/bold cyan]")
+        tree.add(f"Catalog: [bold cyan]{config.get_catalog()}[/bold cyan]")
+        tree.add(f"Dialect: [bold cyan]{engine_adapter_type.DIALECT}[/bold cyan]")
+
+        self._print(tree)
 
     def _get_snapshot_change_category(
         self,

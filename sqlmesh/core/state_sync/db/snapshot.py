@@ -38,6 +38,7 @@ from sqlmesh.utils.date import now_timestamp, TimeLike, now, to_timestamp
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
 from sqlmesh.utils import unique
+from sqlmesh.core.state_sync.common import AutoRestatement
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.state_sync.db.interval import IntervalState
@@ -354,6 +355,15 @@ class SnapshotState:
         if exclude_external:
             query = query.where(exp.column("kind_name").neq(ModelKindName.EXTERNAL.value))
         return {name for (name,) in fetchall(self.engine_adapter, query)}
+
+    def get_auto_restatements(self) -> t.Iterable[AutoRestatement]:
+        query = exp.select("snapshot_name", "snapshot_version", "next_auto_restatement_ts").from_(
+            self.auto_restatements_table
+        )
+        return [
+            AutoRestatement((SnapshotNameVersion(name=name, version=version), ts))
+            for name, version, ts in fetchall(self.engine_adapter, query)
+        ]
 
     def update_auto_restatements(
         self, next_auto_restatement_ts: t.Dict[SnapshotNameVersion, t.Optional[int]]
