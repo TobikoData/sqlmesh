@@ -17,7 +17,7 @@ fi
 git checkout $LAST_TAG
 
 # Install dependencies from the previous release.
-make install-dev
+make install-dev-uv
 
 cp -r ./examples/sushi $TMP_DIR
 
@@ -32,7 +32,7 @@ popd
 git checkout -
 
 # Install updated dependencies.
-make install-dev
+make install-dev-uv
 
 # Migrate and make sure the diff is empty
 pushd $SUSHI_DIR
