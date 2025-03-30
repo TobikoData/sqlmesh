@@ -13,7 +13,7 @@ from functools import lru_cache
 import pandas as pd
 from sqlglot import Dialect, Generator, ParseError, Parser, Tokenizer, TokenType, exp
 from sqlglot.dialects.dialect import DialectType
-from sqlglot.dialects.snowflake import Snowflake
+from sqlglot.dialects import DuckDB, Snowflake
 from sqlglot.helper import seq_get
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 from sqlglot.optimizer.qualify_columns import quote_identifiers
@@ -1050,6 +1050,9 @@ def extend_sqlglot() -> None:
     _override(Parser, _parse_id_var)
     _override(Parser, _warn_unsupported)
     _override(Snowflake.Parser, _parse_table_parts)
+
+    # DuckDB's prefix absolute power operator `@` clashes with the macro syntax
+    DuckDB.Parser.NO_PAREN_FUNCTION_PARSERS.pop("@", None)
 
 
 def select_from_values(

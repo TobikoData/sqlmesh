@@ -130,6 +130,33 @@ class ConnectionConfig(abc.ABC, BaseConfig):
         return None
 
 
+class DuckDBAttachOptions(BaseConfig):
+    type: str
+    path: str
+    read_only: bool = False
+
+    def to_sql(self, alias: str) -> str:
+        options = []
+        # 'duckdb' is actually not a supported type, but we'd like to allow it for
+        # fully qualified attach options or integration testing, similar to duckdb-dbt
+        if self.type not in ("duckdb", "motherduck"):
+            options.append(f"TYPE {self.type.upper()}")
+        if self.read_only:
+            options.append("READ_ONLY")
+        options_sql = f" ({', '.join(options)})" if options else ""
+        alias_sql = ""
+        # TODO: Add support for Postgres schema. Currently adding it blocks access to the information_schema
+        if self.type == "motherduck":
+            # MotherDuck does not support aliasing
+            if (md_db := self.path.replace("md:", "")) != alias.replace('"', ""):
+                raise ConfigError(
+                    f"MotherDuck does not support assigning an alias different from the database name {md_db}."
+                )
+        else:
+            alias_sql += f" AS {alias}"
+        return f"ATTACH '{self.path}'{alias_sql}{options_sql}"
+
+
 class BaseDuckDBConnectionConfig(ConnectionConfig):
     """Common configuration for the DuckDB-based connections.
 
@@ -362,33 +389,6 @@ class MotherDuckConnectionConfig(BaseDuckDBConnectionConfig):
         if self.token:
             connection_str += f"{'&' if self.database else '?'}motherduck_token={self.token}"
         return {"database": connection_str, "config": custom_user_agent_config}
-
-
-class DuckDBAttachOptions(BaseConfig):
-    type: str
-    path: str
-    read_only: bool = False
-
-    def to_sql(self, alias: str) -> str:
-        options = []
-        # 'duckdb' is actually not a supported type, but we'd like to allow it for
-        # fully qualified attach options or integration testing, similar to duckdb-dbt
-        if self.type not in ("duckdb", "motherduck"):
-            options.append(f"TYPE {self.type.upper()}")
-        if self.read_only:
-            options.append("READ_ONLY")
-        options_sql = f" ({', '.join(options)})" if options else ""
-        alias_sql = ""
-        # TODO: Add support for Postgres schema. Currently adding it blocks access to the information_schema
-        if self.type == "motherduck":
-            # MotherDuck does not support aliasing
-            if (md_db := self.path.replace("md:", "")) != alias.replace('"', ""):
-                raise ConfigError(
-                    f"MotherDuck does not support assigning an alias different from the database name {md_db}."
-                )
-        else:
-            alias_sql += f" AS {alias}"
-        return f"ATTACH '{self.path}'{alias_sql}{options_sql}"
 
 
 class DuckDBConnectionConfig(BaseDuckDBConnectionConfig):
@@ -1206,6 +1206,7 @@ class PostgresConnectionConfig(ConnectionConfig):
     connect_timeout: int = 10
     role: t.Optional[str] = None
     sslmode: t.Optional[str] = None
+    application_name: t.Optional[str] = None
 
     concurrent_tasks: int = 4
     register_comments: bool = True
@@ -1224,6 +1225,7 @@ class PostgresConnectionConfig(ConnectionConfig):
             "keepalives_idle",
             "connect_timeout",
             "sslmode",
+            "application_name",
         }
 
     @property

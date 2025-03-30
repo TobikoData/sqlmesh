@@ -2777,6 +2777,7 @@ def render_expression(
 META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
     "start": lambda value: exp.Literal.string(value),
     "cron": lambda value: exp.Literal.string(value),
+    "cron_tz": lambda value: exp.Literal.string(value),
     "partitioned_by_": _single_expr_or_tuple,
     "clustered_by": _single_expr_or_tuple,
     "depends_on_": lambda value: exp.Tuple(expressions=sorted(value)),
