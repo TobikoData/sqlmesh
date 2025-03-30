@@ -7,6 +7,7 @@ from functools import wraps
 from sqlmesh.core.console import Console
 from sqlmesh.core.dialect import schema_
 from sqlmesh.core.environment import Environment
+from sqlmesh.utils.errors import SQLMeshError
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.engine_adapter.base import EngineAdapter
@@ -46,7 +47,9 @@ def cleanup_expired_views(
             if console:
                 console.update_cleanup_progress(schema.sql(dialect=adapter.dialect))
         except Exception as e:
-            logger.warning("Failed to drop the expired environment schema '%s': %s", schema, e)
+            raise SQLMeshError(
+                f"Failed to drop the expired environment schema '{schema}': {e}"
+            ) from e
     for expired_view in {
         snapshot.qualified_view_name.for_environment(
             environment.naming_info, dialect=adapter.dialect
@@ -60,7 +63,9 @@ def cleanup_expired_views(
             if console:
                 console.update_cleanup_progress(expired_view)
         except Exception as e:
-            logger.warning("Failed to drop the expired environment view '%s': %s", expired_view, e)
+            raise SQLMeshError(
+                f"Failed to drop the expired environment view '{expired_view}': {e}"
+            ) from e
 
 
 def transactional() -> t.Callable[[t.Callable], t.Callable]:
