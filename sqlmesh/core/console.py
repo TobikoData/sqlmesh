@@ -690,7 +690,7 @@ class TerminalConsole(Console):
                     if not num_audits_failed
                     else annotation_width - 1,  # -1 for RED_X_MARK's extra space
                     dots_side="right",
-                    prefix=" \[",
+                    prefix=" \\[",
                     suffix="]",
                 )
                 annotation = annotation.replace(CHECK_MARK, GREEN_CHECK_MARK)
