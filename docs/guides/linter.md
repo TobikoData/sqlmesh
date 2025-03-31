@@ -98,9 +98,11 @@ class NoMissingOwner(Rule):
 
 Place a rule's code in the project's `linter/` directory. SQLMesh will load all subclasses of `Rule` from that directory.
 
-If the rule is specified in the project's [configuration file](#applying-linting-rules), SQLMesh will run it when the project is loaded. All SQLMesh commands will load the project, except for `create_external_models`, `migrate`, `rollback`, `run`, `environments`, and `invalidate`.
+If the rule is specified in the project's [configuration file](#applying-linting-rules), SQLMesh will run it when:
+- A plan is created during `sqlmesh plan`
+- The command `sqlmesh lint` is ran
 
-SQLMesh will error if a model violates the rule, informing you which model(s) violated the rule. In this example, `full_model.sql` violated the `NoMissingOwner` rule:
+SQLMesh will error if a model violates the rule, informing you which model(s) violated the rule. In this example, `full_model.sql` violated the `NoMissingOwner` rule, essentially halting execution:
 
 ``` bash
 $ sqlmesh plan
@@ -110,6 +112,20 @@ Linter errors for .../models/full_model.sql:
 
 Error: Linter detected errors in the code. Please fix them before proceeding.
 ```
+
+Or through the standalone command, for faster iterations:
+
+``` bash
+$ sqlmesh lint
+
+Linter errors for .../models/full_model.sql:
+ - nomissingowner: Model owner should always be specified.
+
+Error: Linter detected errors in the code. Please fix them before proceeding.
+```
+
+Use `sqlmesh lint --help` for more information.
+
 
 ## Applying linting rules
 
