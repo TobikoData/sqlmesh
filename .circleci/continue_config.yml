@@ -281,10 +281,10 @@ workflows:
       - airflow_docker_tests:
           requires:
             - style_and_cicd_tests
-          filters:
-            branches:
-              only:
-                - main
+          # filters:
+          #   branches:
+          #     only:
+          #       - main
       - engine_tests_docker:
           name: engine_<< matrix.engine >>
           matrix:
