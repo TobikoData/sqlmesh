@@ -242,7 +242,7 @@ def test_plan_restate_model(runner, tmp_path):
     assert result.exit_code == 0
     assert_duckdb_test(result)
     assert "No changes to plan: project files match the `prod` environment" in result.output
-    assert "sqlmesh_example.full_model                         [full refresh" in result.output
+    assert "sqlmesh_example.full_model                           [full refresh" in result.output
     assert_model_batches_executed(result)
     assert_virtual_layer_updated(result)
 
@@ -610,8 +610,8 @@ def test_plan_breaking(runner, tmp_path):
     assert result.exit_code == 0
     assert "+  item_id + 1 AS item_id," in result.output
     assert "Directly Modified: sqlmesh_example.full_model (Breaking)" in result.output
-    assert "sqlmesh_example.full_model                         [full refresh" in result.output
-    assert "sqlmesh_example.incremental_model                   [insert" not in result.output
+    assert "sqlmesh_example.full_model                           [full refresh" in result.output
+    assert "sqlmesh_example.incremental_model                     [insert" not in result.output
     assert_backfill_success(result)
 
 

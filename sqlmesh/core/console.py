@@ -540,7 +540,7 @@ class TerminalConsole(Console):
 
     PROGRESS_BAR_COLUMN_WIDTHS: t.Dict[str, int] = {
         "batch": 7,
-        "name": 50,
+        "name": 52,
         "annotation": 50,
         "duration": 8,
     }
