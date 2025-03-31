@@ -63,17 +63,12 @@ def test_linter(
     mocker: MockerFixture,
 ):
     """
-    PR with a non-breaking change and auto-categorization will be backfilled, merged, and deployed to prod
+    PR with the Linter enabled will contain a new check with the linter specific output.
 
-    Scenario:
-    - PR is not merged
-    - PR has been approved by a required reviewer
-    - Tests passed
-    - PR Merge Method defined
-    - Delete environment is disabled
-    - Changes made in PR with auto-categorization
+    Scenarios:
+    - PR with linter errors leads to job failures & skips
+    - PR with linter warnings leads to job successes
     """
-
     mock_repo = github_client.get_repo()
     mock_repo.create_check_run = mocker.MagicMock(
         side_effect=lambda **kwargs: make_mock_check_run(**kwargs)
