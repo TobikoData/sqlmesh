@@ -147,9 +147,13 @@ class DbtLoader(Loader):
                         )
                         continue
 
-                    sqlmesh_model = cache.get_or_load_models(
-                        model.path, loader=lambda: [_to_sqlmesh(model, context)]
-                    )[0]
+                    cached_models = cache.get(model.path)
+
+                    if cached_models:
+                        sqlmesh_model = cached_models[0]
+                    else:
+                        sqlmesh_model = _to_sqlmesh(model, context)
+                        cache.put([sqlmesh_model], model.path)
 
                     models[sqlmesh_model.fqn] = sqlmesh_model
 
@@ -342,18 +346,18 @@ class DbtLoader(Loader):
             cache_path = loader.config_path / c.CACHE / target.name
             self._model_cache = ModelCache(cache_path)
 
-        def get_or_load_models(
-            self, target_path: Path, loader: t.Callable[[], t.List[Model]]
-        ) -> t.List[Model]:
-            models = self._model_cache.get_or_load(
-                self._cache_entry_name(target_path),
-                self._cache_entry_id(target_path),
-                loader=loader,
+        def put(self, models: t.List[Model], path: Path) -> bool:
+            return self._model_cache.put(
+                models,
+                self._cache_entry_name(path),
+                self._cache_entry_id(path),
             )
-            for model in models:
-                model._path = target_path
 
-            return models
+        def get(self, path: Path) -> t.List[Model]:
+            return self._model_cache.get(
+                self._cache_entry_name(path),
+                self._cache_entry_id(path),
+            )
 
         def _cache_entry_name(self, target_path: Path) -> str:
             try:
