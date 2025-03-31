@@ -1,7 +1,7 @@
 {
-  "name": "vscode",
-  "displayName": "vscode",
-  "description": "",
+  "name": "sqlmesh",
+  "displayName": "SQLMesh",
+  "description": "Official SQLMesh extension for VSCode",
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.98.0"
@@ -14,8 +14,8 @@
   "contributes": {
     "commands": [
       {
-        "command": "vscode.helloWorld",
-        "title": "Hello World"
+        "command": "sqlmesh.format",
+        "title": "SQLMesh: Format SQL"
       }
     ]
   },
