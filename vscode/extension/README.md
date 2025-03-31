@@ -1,0 +1,1 @@
+# SQLMesh VSCode Extension

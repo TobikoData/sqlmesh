@@ -1,0 +1,72 @@
+{
+  "name": "sqlmesh",
+  "displayName": "SQLMesh",
+  "description": "Official SQLMesh extension for VSCode",
+  "publisher": "tobikodata",
+  "version": "0.0.1",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tobikodata/sqlmesh"
+  },
+  "engines": {
+    "vscode": "^1.98.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onLanguage:sql"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "sqlmesh.format",
+        "title": "Format SQLMesh Project",
+        "description": "SQLMesh"
+      },
+      {
+        "command": "sqlmesh.restart",
+        "title": "Restart SQLMesh Servers",
+        "description": "SQLMesh"
+      }
+    ]
+  },
+  "scripts": {
+    "ci": "npm run lint && npm run compile && npm run test",
+    "compile-tests": "tsc -p . --outDir out",
+    "watch-tests": "tsc -p . -w --outDir out",
+    "pretest": "npm run compile-tests && npm run compile && npm run lint",
+    "lint": "eslint src",
+    "lint:fix": "eslint src --fix",
+    "test": "vscode-test",
+    "compile": "npm run check-types && node esbuild.js",
+    "check-types": "tsc --noEmit",
+    "watch": "npm-run-all -p watch:*",
+    "watch:esbuild": "node esbuild.js --watch",
+    "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
+    "vscode:package": "vsce package",
+    "vscode:prepublish": "cp ../../LICENSE . && npm run package",
+    "package": "npm run check-types && node esbuild.js --production"
+  },
+  "dependencies": {
+    "@types/fs-extra": "^11.0.4",
+    "@vscode/python-extension": "^1.0.5",
+    "fs-extra": "^11.3.0",
+    "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.10",
+    "@types/node": "20.x",
+    "@types/vscode": "^1.98.0",
+    "@typescript-eslint/eslint-plugin": "^8.28.0",
+    "@typescript-eslint/parser": "^8.28.0",
+    "@vscode/test-cli": "^0.0.10",
+    "@vscode/test-electron": "^2.4.1",
+    "@vscode/vsce": "^3.3.2",
+    "esbuild": "^0.25.2",
+    "eslint": "^9.23.0",
+    "ts-loader": "^9.5.2",
+    "typescript": "^5.8.2"
+  }
+}
