@@ -2803,6 +2803,6 @@ def _create_evaluation_model_annotation(snapshot: Snapshot, interval_info: t.Opt
     if snapshot.model.kind.is_incremental_by_unique_key:
         return "insert or update rows"
     if snapshot.model.kind.is_incremental_by_partition:
-        return "insert partition"
+        return "insert partitions"
 
     return interval_info if interval_info else ""
