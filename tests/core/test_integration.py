@@ -4502,6 +4502,24 @@ def test_multi_dbt(mocker):
     context.apply(plan)
     validate_apply_basics(context, c.PROD, plan.snapshots.values())
 
+    environment_statements = context.state_sync.get_environment_statements(c.PROD)
+    assert len(environment_statements) == 2
+    bronze_statements = environment_statements[0]
+    assert bronze_statements.before_all == [
+        "JINJA_STATEMENT_BEGIN;\nCREATE TABLE IF NOT EXISTS analytic_stats (physical_table VARCHAR, evaluation_time VARCHAR);\nJINJA_END;"
+    ]
+    assert not bronze_statements.after_all
+    silver_statements = environment_statements[1]
+    assert not silver_statements.before_all
+    assert silver_statements.after_all == [
+        "JINJA_STATEMENT_BEGIN;\n{{ store_schemas(schemas) }}\nJINJA_END;"
+    ]
+    assert "store_schemas" in silver_statements.jinja_macros.root_macros
+    analytics_table = context.fetchdf("select * from analytic_stats;")
+    assert sorted(analytics_table.columns) == sorted(["physical_table", "evaluation_time"])
+    schema_table = context.fetchdf("select * from schema_table;")
+    assert sorted(schema_table.all_schemas[0]) == sorted(["bronze", "silver"])
+
 
 def test_multi_hybrid(mocker):
     context = Context(

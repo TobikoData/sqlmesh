@@ -25,14 +25,14 @@ models:
     +materialized: table
     +pre-hook:
       - '{{ log("pre-hook") }}'
-    +post-hook: 
+    +post-hook:
       - '{{ log("post-hook") }}'
 
 seeds:
   sushi:
     +pre-hook:
       - '{{ log("pre-hook") }}'
-    +post-hook: 
+    +post-hook:
       - '{{ log("post-hook") }}'
 
 vars:
@@ -57,3 +57,9 @@ vars:
       value: 1
     - name: 'item2'
       value: 2
+
+
+on-run-start:
+  - 'CREATE TABLE IF NOT EXISTS analytic_stats (physical_table VARCHAR, evaluation_time VARCHAR);'
+on-run-end:
+  - '{{ create_tables(schemas) }}'

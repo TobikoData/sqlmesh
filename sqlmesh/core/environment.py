@@ -14,6 +14,7 @@ from sqlmesh.core.renderer import render_statements
 from sqlmesh.core.snapshot import SnapshotId, SnapshotTableInfo, Snapshot
 from sqlmesh.utils import word_characters_only
 from sqlmesh.utils.date import TimeLike, now_timestamp
+from sqlmesh.utils.jinja import JinjaMacroRegistry
 from sqlmesh.utils.metaprogramming import Executable
 from sqlmesh.utils.pydantic import PydanticModel, field_validator
 
@@ -218,6 +219,7 @@ class EnvironmentStatements(PydanticModel):
     before_all: t.List[str]
     after_all: t.List[str]
     python_env: t.Dict[str, Executable]
+    jinja_macros: JinjaMacroRegistry = JinjaMacroRegistry()
 
 
 def execute_environment_statements(
@@ -239,6 +241,7 @@ def execute_environment_statements(
             dialect=adapter.dialect,
             default_catalog=default_catalog,
             python_env=statements.python_env,
+            jinja_macros=statements.jinja_macros,
             snapshots=snapshots,
             start=start,
             end=end,
