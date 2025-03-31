@@ -294,8 +294,8 @@ def test_plan_verbose(runner, tmp_path):
         cli, ["--log-file-dir", tmp_path, "--paths", tmp_path, "plan", "--verbose"], input="y\n"
     )
     assert_plan_success(result)
-    assert "sqlmesh_example.seed_model         created" in result.output
-    assert "sqlmesh_example.seed_model         promoted" in result.output
+    assert "sqlmesh_example.seed_model                           created" in result.output
+    assert "sqlmesh_example.full_model                           created" in result.output
 
 
 def test_plan_very_verbose(runner, tmp_path, copy_to_temp_path):
