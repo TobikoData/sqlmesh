@@ -128,22 +128,22 @@ def assert_new_env(result, new_env="prod", from_env="prod", initialize=True) -> 
     ) in result.output
 
 
-def assert_model_versions_created(result) -> None:
-    assert "Model versions created successfully" in result.output
+def assert_physical_layer_updated(result) -> None:
+    assert "Physical layer updated" in result.output
 
 
 def assert_model_batches_executed(result) -> None:
-    assert "Model batches executed successfully" in result.output
+    assert "Model batches executed" in result.output
 
 
-def assert_target_env_updated(result) -> None:
-    assert "Target environment updated successfully" in result.output
+def assert_virtual_layer_updated(result) -> None:
+    assert "Virtual layer updated" in result.output
 
 
 def assert_backfill_success(result) -> None:
-    assert_model_versions_created(result)
+    assert_physical_layer_updated(result)
     assert_model_batches_executed(result)
-    assert_target_env_updated(result)
+    assert_virtual_layer_updated(result)
 
 
 def assert_plan_success(result, new_env="prod", from_env="prod") -> None:
@@ -154,7 +154,7 @@ def assert_plan_success(result, new_env="prod", from_env="prod") -> None:
 
 
 def assert_virtual_update(result) -> None:
-    assert "Virtual Update executed successfully" in result.output
+    assert "Virtual Update executed" in result.output
 
 
 def test_version(runner, tmp_path):
@@ -242,9 +242,9 @@ def test_plan_restate_model(runner, tmp_path):
     assert result.exit_code == 0
     assert_duckdb_test(result)
     assert "No changes to plan: project files match the `prod` environment" in result.output
-    assert "sqlmesh_example.full_model evaluated in" in result.output
+    assert "sqlmesh_example.full_model                           [full refresh" in result.output
     assert_model_batches_executed(result)
-    assert_target_env_updated(result)
+    assert_virtual_layer_updated(result)
 
 
 @pytest.mark.parametrize("flag", ["--skip-backfill", "--dry-run"])
@@ -268,7 +268,7 @@ def test_plan_skip_backfill(runner, tmp_path, flag):
     )
     assert result.exit_code == 0
     assert_virtual_update(result)
-    assert "Model batches executed successfully" not in result.output
+    assert "Model batches executed" not in result.output
 
 
 def test_plan_auto_apply(runner, tmp_path):
@@ -282,7 +282,7 @@ def test_plan_auto_apply(runner, tmp_path):
 
     # confirm verbose output not present
     assert "sqlmesh_example.seed_model created" not in result.output
-    assert "sqlmesh_example.seed_model promoted" not in result.output
+    assert "sqlmesh_example.seed_model updated" not in result.output
 
 
 def test_plan_verbose(runner, tmp_path):
@@ -293,8 +293,8 @@ def test_plan_verbose(runner, tmp_path):
         cli, ["--log-file-dir", tmp_path, "--paths", tmp_path, "plan", "--verbose"], input="y\n"
     )
     assert_plan_success(result)
-    assert "sqlmesh_example.seed_model created" in result.output
-    assert "sqlmesh_example.seed_model promoted" in result.output
+    assert "sqlmesh_example.seed_model                           created" in result.output
+    assert "sqlmesh_example.seed_model                           promoted" in result.output
 
 
 def test_plan_very_verbose(runner, tmp_path, copy_to_temp_path):
@@ -396,7 +396,7 @@ def test_plan_dev_create_from_virtual(runner, tmp_path):
     )
     assert result.exit_code == 0
     assert_new_env(result, "dev2", "dev", initialize=False)
-    assert_target_env_updated(result)
+    assert_virtual_layer_updated(result)
     assert_virtual_update(result)
 
 
@@ -495,9 +495,9 @@ def test_plan_dev_no_prompts(runner, tmp_path):
         cli, ["--log-file-dir", tmp_path, "--paths", tmp_path, "plan", "dev", "--no-prompts"]
     )
     assert "Apply - Backfill Tables [y/n]: " in result.output
-    assert "Model versions created successfully" not in result.output
-    assert "Model batches executed successfully" not in result.output
-    assert "The target environment has been updated successfully" not in result.output
+    assert "Physical layer updated" not in result.output
+    assert "Model batches executed" not in result.output
+    assert "The target environment has been updated" not in result.output
 
 
 def test_plan_dev_auto_apply(runner, tmp_path):
@@ -533,7 +533,7 @@ def test_plan_dev_no_changes(runner, tmp_path):
     )
     assert result.exit_code == 0
     assert_new_env(result, "dev", initialize=False)
-    assert_target_env_updated(result)
+    assert_virtual_layer_updated(result)
     assert_virtual_update(result)
 
 
@@ -552,8 +552,8 @@ def test_plan_nonbreaking(runner, tmp_path):
     assert "+  'a' AS new_col" in result.output
     assert "Directly Modified: sqlmesh_example.incremental_model (Non-breaking)" in result.output
     assert "sqlmesh_example.full_model (Indirect Non-breaking)" in result.output
-    assert "sqlmesh_example.incremental_model evaluated in" in result.output
-    assert "sqlmesh_example.full_model evaluated in" not in result.output
+    assert "sqlmesh_example.incremental_model                    [insert" in result.output
+    assert "sqlmesh_example.full_model evaluated [full refresh" not in result.output
     assert_backfill_success(result)
 
 
@@ -610,8 +610,8 @@ def test_plan_breaking(runner, tmp_path):
     assert result.exit_code == 0
     assert "+  item_id + 1 AS item_id," in result.output
     assert "Directly Modified: sqlmesh_example.full_model (Breaking)" in result.output
-    assert "sqlmesh_example.full_model evaluated in" in result.output
-    assert "sqlmesh_example.incremental_model evaluated in" not in result.output
+    assert "sqlmesh_example.full_model                           [full refresh" in result.output
+    assert "sqlmesh_example.incremental_model                     [insert" not in result.output
     assert_backfill_success(result)
 
 
@@ -649,8 +649,8 @@ def test_plan_dev_select(runner, tmp_path):
     assert "+  item_id + 1 AS item_id," not in result.output
     assert "Directly Modified: sqlmesh_example__dev.full_model (Breaking)" not in result.output
     # only incremental_model backfilled
-    assert "sqlmesh_example__dev.incremental_model evaluated in" in result.output
-    assert "sqlmesh_example__dev.full_model evaluated in" not in result.output
+    assert "sqlmesh_example__dev.incremental_model               [insert" in result.output
+    assert "sqlmesh_example__dev.full_model                    [full refresh" not in result.output
     assert_backfill_success(result)
 
 
@@ -688,8 +688,8 @@ def test_plan_dev_backfill(runner, tmp_path):
         "Directly Modified: sqlmesh_example__dev.incremental_model (Non-breaking)" in result.output
     )
     # only incremental_model backfilled
-    assert "sqlmesh_example__dev.incremental_model evaluated in" in result.output
-    assert "sqlmesh_example__dev.full_model evaluated in" not in result.output
+    assert "sqlmesh_example__dev.incremental_model               [insert" in result.output
+    assert "sqlmesh_example__dev.full_model                      [full refresh" not in result.output
     assert_backfill_success(result)
 
 

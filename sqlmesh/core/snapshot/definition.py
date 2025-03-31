@@ -1559,6 +1559,15 @@ def display_name(
     Returns the model name as a qualified view name.
     This is just used for presenting information back to the user and `qualified_view_name` should be used
     when wanting a view name in all other cases.
+
+    Args:
+        snapshot_info_like: The snapshot info object to get the display name for
+        environment_naming_info: Environment naming info to use for display name formatting
+        default_catalog: Optional default catalog name to use. If None, the default catalog will always be included in the display name.
+        dialect: Optional dialect type to use for name formatting
+
+    Returns:
+        The formatted display name as a string
     """
     if snapshot_info_like.is_audit:
         return snapshot_info_like.name

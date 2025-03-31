@@ -470,7 +470,9 @@ def test_override_builtin_audit_blocking_mode():
         plan = context.plan(auto_apply=True, no_prompts=True)
         new_snapshot = next(iter(plan.context_diff.new_snapshots.values()))
 
-        assert mock_logger.call_args_list[0][0][0] == "\n'not_null' audit error: 1 row failed."
+        assert (
+            mock_logger.call_args_list[0][0][0] == "\ndb.x: 'not_null' audit error: 1 row failed."
+        )
 
     # Even though there are two builtin audits referenced in the above definition, we only
     # store the one that overrides `blocking` in the snapshot; the other one isn't needed
@@ -1401,7 +1403,7 @@ def test_plan_runs_audits_on_dev_previews(sushi_context: Context, capsys, caplog
     log = caplog.text
     assert "'not_null' audit error:" in log
     assert "'at_least_one_non_blocking' audit error:" in log
-    assert "Target environment updated successfully" in stdout
+    assert "Virtual layer updated" in stdout
 
 
 def test_environment_statements(tmp_path: pathlib.Path):
