@@ -820,7 +820,9 @@ class TerminalConsole(Console):
         """Update the snapshot promotion progress."""
         if self.promotion_progress is not None and self.promotion_task is not None:
             if self.verbosity >= Verbosity.VERBOSE:
-                action_str = "[green]promoted[/green]" if promoted else "[yellow]demoted[/yellow]"
+                action_str = (
+                    "[green]promoted[/green]" if promoted else "[yellow]demoted[/yellow]"
+                ).ljust(len("promoted"))
                 self.promotion_progress.live.console.print(
                     f"{snapshot.display_name(self.environment_naming_info, self.default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect).ljust(self.PROGRESS_BAR_COLUMN_WIDTHS['name'])} {action_str}"
                 )
@@ -2795,7 +2797,7 @@ def _create_evaluation_model_annotation(snapshot: Snapshot, interval_info: t.Opt
     if snapshot.is_model and snapshot.model.kind.is_external:
         return "run external audits"
     if snapshot.model.kind.is_seed:
-        return "insert from seed file"
+        return "insert seed file"
     if snapshot.model.kind.is_full:
         return "full refresh"
     if snapshot.model.kind.is_view:
