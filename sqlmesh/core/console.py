@@ -2793,7 +2793,7 @@ def _create_evaluation_model_annotation(snapshot: Snapshot, interval_info: t.Opt
     if snapshot.is_audit:
         return "run standalone audit"
     if snapshot.is_model and snapshot.model.kind.is_external:
-        return "run external model audits"
+        return "run external audits"
     if snapshot.model.kind.is_seed:
         return "insert from seed file"
     if snapshot.model.kind.is_full:
