@@ -240,8 +240,7 @@ class MacroEvaluator:
                 text = self.template(node.this, {})
                 if node.this != text:
                     changed = True
-                    node.args["this"] = text
-                    return node
+                    return exp.to_identifier(text, quoted=node.quoted or None)
             if node.is_string:
                 text = node.this
                 if has_jinja(text):
@@ -1389,6 +1388,10 @@ def _convert_sql(v: t.Any, dialect: DialectType) -> t.Any:
             pass
 
     if isinstance(v, exp.Expression):
+        if (isinstance(v, exp.Column) and not v.table) or (
+            isinstance(v, exp.Identifier) or v.is_string
+        ):
+            return v.name
         v = v.sql(dialect=dialect)
     return v
 
