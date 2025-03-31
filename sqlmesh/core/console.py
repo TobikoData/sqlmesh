@@ -968,8 +968,7 @@ class TerminalConsole(Console):
             and snapshot.snapshot_id in snapshots_with_virtual_views
         ):
             if self.verbosity >= Verbosity.VERBOSE:
-                action_str = (
-                    ""
+                action_str = ""
                 if promoted:
                     action_str = (
                         "[yellow]updated[/yellow]"
@@ -977,9 +976,8 @@ class TerminalConsole(Console):
                         else "[green]created[/green]"
                     )
                 action_str = action_str or "[red]dropped[/red]"
-                ).ljust(len("promoted"))
                 self.promotion_progress.live.console.print(
-                    f"{snapshot.display_name(self.environment_naming_info, self.default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect).ljust(self.PROGRESS_BAR_COLUMN_WIDTHS['name'])} {action_str}"
+                    f"{snapshot.display_name(self.environment_naming_info, self.default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect).ljust(self.PROGRESS_BAR_COLUMN_WIDTHS['name'])} {action_str.ljust(7)}"
                 )
             self.promotion_progress.update(self.promotion_task, refresh=True, advance=1)
 

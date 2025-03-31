@@ -303,11 +303,10 @@ def test_plan(
     )
     # TODO: Is this what we expect?
     assert text_output[2] == ""
-    assert text_output[4] == "✔ Virtual layer updated"
+    assert text_output[3] == "✔ Virtual layer updated"
     assert convert_all_html_output_to_tags(output) == [
         ["pre", "span"],
         ["pre"] + ["span"] * 5,
-        ["pre"],
         ["pre"],
         ["pre", "span"],
     ]
