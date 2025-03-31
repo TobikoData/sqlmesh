@@ -1461,7 +1461,7 @@ def test_refs_in_jinja_globals(sushi_test_project: Project, mocker: MockerFixtur
     }
 
 
-def test_dbt_incremental_allow_partials_by_default():
+def test_allow_partials_by_default():
     context = DbtContext()
     context._target = SnowflakeConfig(
         name="target",
@@ -1481,7 +1481,7 @@ def test_dbt_incremental_allow_partials_by_default():
         materialized=Materialization.TABLE.value,
     )
     assert model.allow_partials is None
-    assert not model.to_sqlmesh(context).allow_partials
+    assert model.to_sqlmesh(context).allow_partials
 
     model.materialized = Materialization.INCREMENTAL.value
     assert model.allow_partials is None
