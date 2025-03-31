@@ -110,8 +110,11 @@ class BaseExpressionRenderer:
             if snapshots and (
                 schemas := set(
                     [
-                        s.qualified_view_name.schema_for_environment(environment_naming_info)
+                        s.qualified_view_name.schema_for_environment(
+                            environment_naming_info, dialect=self._dialect
+                        )
                         for s in snapshots.values()
+                        if s.is_model and not s.is_symbolic
                     ]
                 )
             ):
