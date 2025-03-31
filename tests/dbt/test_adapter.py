@@ -314,7 +314,6 @@ def test_on_run_start_end(copy_to_temp_path):
     # The jinja macro should have resolved the schemas for this environment and generated corresponding statements
     assert sorted(rendered_after_all) == sorted(
         [
-            "CREATE OR REPLACE TABLE schema_table_raw__dev AS SELECT 'raw__dev' AS schema",
             "CREATE OR REPLACE TABLE schema_table_snapshots__dev AS SELECT 'snapshots__dev' AS schema",
             "CREATE OR REPLACE TABLE schema_table_sushi__dev AS SELECT 'sushi__dev' AS schema",
         ]
