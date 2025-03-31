@@ -4,11 +4,13 @@ import abc
 import glob
 import linecache
 import logging
+import multiprocessing as mp
 import os
 import typing as t
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import Path
+from concurrent.futures import ProcessPoolExecutor
 
 from sqlglot.errors import SqlglotError
 from sqlglot import exp
@@ -65,6 +67,20 @@ class CacheBase(abc.ABC):
     ) -> t.List[Model]:
         """Get or load all models from cache."""
 
+
+_external_model_defaults = None
+_external_model_cache = None
+
+
+def _init_external_model_defaults(defaults, cache) -> None:
+    global _external_model_defaults
+    global _external_model_cache
+    _external_model_defaults = defaults
+    _external_model_cache = cache
+
+def load_external_model(kwargs):
+    model = create_external_model(**{**_external_model_defaults, **kwargs})
+    print(model.full_depends_on)
 
 class Loader(abc.ABC):
     """Abstract base class to load macros and models for a context"""
@@ -236,10 +252,72 @@ class Loader(abc.ABC):
             except Exception as ex:
                 raise ConfigError(f"Failed to load model definition at '{path}'.\n{ex}")
 
+        import time
+        now = time.time()
         for path in paths_to_load:
             self._track_file(path)
 
-            external_models = cache.get_or_load_models(path, _load)
+            defaults = {
+                "defaults": self.config.model_defaults.dict(),
+                "path": path,
+                "project": self.config.project,
+                "audit_definitions": audits,
+                "dialect": self.config.model_defaults.dialect,
+                "default_catalog": self.context.default_catalog,
+            }
+
+            with ProcessPoolExecutor(
+                mp_context=mp.get_context("fork"),
+                initializer=_init_external_model_defaults,
+                initargs=(defaults, cache),
+                max_workers=c.MAX_FORK_WORKERS,
+            ) as pool:
+                with open(path, "r", encoding="utf-8") as file:
+                    rows = YAML().load(file.read())
+                    for model in pool.map(load_external_model, rows):
+                        pass
+
+                    #return [
+                    #    create_external_model(
+                    #        defaults=self.config.model_defaults.dict(),
+                    #        path=path,
+                    #        project=self.config.project,
+                    #        audit_definitions=audits,
+                    #        **{
+                    #            "dialect": self.config.model_defaults.dialect,
+                    #            "default_catalog": self.context.default_catalog,
+                    #            **row,
+                    #        },
+                    #    )
+                    #    for row in YAML().load(file.read())
+                    #]
+
+        print(time.time() - now)
+        now = time.time()
+
+        for path in paths_to_load:
+            self._track_file(path)
+
+            try:
+                with open(path, "r", encoding="utf-8") as file:
+                    external_models = [
+                        create_external_model(
+                            defaults=self.config.model_defaults.dict(),
+                            path=path,
+                            project=self.config.project,
+                            audit_definitions=audits,
+                            **{
+                                "dialect": self.config.model_defaults.dialect,
+                                "default_catalog": self.context.default_catalog,
+                                **row,
+                            },
+                        )
+                        for row in YAML().load(file.read())
+                    ]
+            except Exception as ex:
+                raise ConfigError(f"Failed to load model definition at '{path}'.\n{ex}")
+
+            #external_models = cache.get_or_load_models(path, _load)
             # external models with no explicit gateway defined form the base set
             for model in external_models:
                 if model.gateway is None:
@@ -250,6 +328,8 @@ class Loader(abc.ABC):
                 for model in external_models:
                     if model.gateway == gateway:
                         models.update({model.fqn: model})
+        print(time.time() - now)
+        raise
 
         return models
 
