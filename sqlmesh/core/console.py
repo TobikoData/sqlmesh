@@ -7,6 +7,7 @@ import unittest
 import uuid
 import logging
 import textwrap
+from pathlib import Path
 
 from hyperscript import h
 from rich.console import Console as RichConsole
@@ -55,6 +56,8 @@ if t.TYPE_CHECKING:
     from sqlmesh.core.context_diff import ContextDiff
     from sqlmesh.core.plan import Plan, EvaluatablePlan, PlanBuilder, SnapshotIntervals
     from sqlmesh.core.table_diff import TableDiff, RowDiff, SchemaDiff
+    from sqlmesh.core.config.connection import ConnectionConfig
+    from sqlmesh.core.state_sync import Versions
 
     LayoutWidget = t.TypeVar("LayoutWidget", bound=t.Union[widgets.VBox, widgets.HBox])
 
@@ -208,6 +211,62 @@ class Console(abc.ABC):
         """Stop the environment migration progress."""
 
     @abc.abstractmethod
+    def start_state_export(
+        self,
+        output_file: Path,
+        gateway: t.Optional[str] = None,
+        state_connection_config: t.Optional[ConnectionConfig] = None,
+        environment_names: t.Optional[t.List[str]] = None,
+        local_only: bool = False,
+        confirm: bool = True,
+    ) -> bool:
+        """State a state export"""
+
+    @abc.abstractmethod
+    def update_state_export_progress(
+        self,
+        version_count: t.Optional[int] = None,
+        versions_complete: bool = False,
+        snapshot_count: t.Optional[int] = None,
+        snapshots_complete: bool = False,
+        environment_count: t.Optional[int] = None,
+        environments_complete: bool = False,
+    ) -> None:
+        """Update the state export progress"""
+
+    @abc.abstractmethod
+    def stop_state_export(self, success: bool, output_file: Path) -> None:
+        """Finish a state export"""
+
+    @abc.abstractmethod
+    def start_state_import(
+        self,
+        input_file: Path,
+        gateway: str,
+        state_connection_config: ConnectionConfig,
+        clear: bool = False,
+        confirm: bool = True,
+    ) -> bool:
+        """Start a state import"""
+
+    @abc.abstractmethod
+    def update_state_import_progress(
+        self,
+        timestamp: t.Optional[str] = None,
+        state_file_version: t.Optional[int] = None,
+        versions: t.Optional[Versions] = None,
+        snapshot_count: t.Optional[int] = None,
+        snapshots_complete: bool = False,
+        environment_count: t.Optional[int] = None,
+        environments_complete: bool = False,
+    ) -> None:
+        """Update the state import process"""
+
+    @abc.abstractmethod
+    def stop_state_import(self, success: bool, input_file: Path) -> None:
+        """Finish a state import"""
+
+    @abc.abstractmethod
     def show_model_difference_summary(
         self,
         context_diff: ContextDiff,
@@ -322,6 +381,10 @@ class Console(abc.ABC):
     def print_environments(self, environments_summary: t.Dict[str, int]) -> None:
         """Prints all environment names along with expiry datetime."""
 
+    @abc.abstractmethod
+    def print_connection_config(self, config: ConnectionConfig, title: str = "Connection") -> None:
+        """Print connection config information"""
+
     def _limit_model_names(self, tree: Tree, verbosity: Verbosity = Verbosity.DEFAULT) -> Tree:
         """Trim long indirectly modified model lists below threshold."""
         modified_length = len(tree.children)
@@ -433,6 +496,56 @@ class NoopConsole(Console):
     def stop_env_migration_progress(self, success: bool = True) -> None:
         pass
 
+    def start_state_export(
+        self,
+        output_file: Path,
+        gateway: t.Optional[str] = None,
+        state_connection_config: t.Optional[ConnectionConfig] = None,
+        environment_names: t.Optional[t.List[str]] = None,
+        local_only: bool = False,
+        confirm: bool = True,
+    ) -> bool:
+        return confirm
+
+    def update_state_export_progress(
+        self,
+        version_count: t.Optional[int] = None,
+        versions_complete: bool = False,
+        snapshot_count: t.Optional[int] = None,
+        snapshots_complete: bool = False,
+        environment_count: t.Optional[int] = None,
+        environments_complete: bool = False,
+    ) -> None:
+        pass
+
+    def stop_state_export(self, success: bool, output_file: Path) -> None:
+        pass
+
+    def start_state_import(
+        self,
+        input_file: Path,
+        gateway: str,
+        state_connection_config: ConnectionConfig,
+        clear: bool = False,
+        confirm: bool = True,
+    ) -> bool:
+        return confirm
+
+    def update_state_import_progress(
+        self,
+        timestamp: t.Optional[str] = None,
+        state_file_version: t.Optional[int] = None,
+        versions: t.Optional[Versions] = None,
+        snapshot_count: t.Optional[int] = None,
+        snapshots_complete: bool = False,
+        environment_count: t.Optional[int] = None,
+        environments_complete: bool = False,
+    ) -> None:
+        pass
+
+    def stop_state_import(self, success: bool, input_file: Path) -> None:
+        pass
+
     def show_model_difference_summary(
         self,
         context_diff: ContextDiff,
@@ -515,6 +628,11 @@ class NoopConsole(Console):
     ) -> None:
         pass
 
+    def print_connection_config(
+        self, config: ConnectionConfig, title: t.Optional[str] = "Connection"
+    ) -> None:
+        pass
+
 
 def make_progress_bar(
     message: str,
@@ -578,6 +696,16 @@ class TerminalConsole(Console):
         self.env_migration_task: t.Optional[TaskID] = None
 
         self.loading_status: t.Dict[uuid.UUID, Status] = {}
+
+        self.state_export_progress: t.Optional[Progress] = None
+        self.state_export_version_task: t.Optional[TaskID] = None
+        self.state_export_snapshot_task: t.Optional[TaskID] = None
+        self.state_export_environment_task: t.Optional[TaskID] = None
+
+        self.state_import_progress: t.Optional[Progress] = None
+        self.state_import_version_task: t.Optional[TaskID] = None
+        self.state_import_snapshot_task: t.Optional[TaskID] = None
+        self.state_import_environment_task: t.Optional[TaskID] = None
 
         self.verbosity = verbosity
         self.dialect = dialect
@@ -896,6 +1024,238 @@ class TerminalConsole(Console):
             self.env_migration_progress = None
             if success:
                 self.log_success("Environments migrated successfully")
+
+    def start_state_export(
+        self,
+        output_file: Path,
+        gateway: t.Optional[str] = None,
+        state_connection_config: t.Optional[ConnectionConfig] = None,
+        environment_names: t.Optional[t.List[str]] = None,
+        local_only: bool = False,
+        confirm: bool = True,
+    ) -> bool:
+        self.state_export_progress = None
+
+        if local_only:
+            self.log_status_update(f"Exporting [b]local[/b] state to '{output_file.as_posix()}'\n")
+            self.log_warning(
+                "Local state exports just contain the model versions in your local context. Therefore, the resulting file cannot be imported."
+            )
+        else:
+            self.log_status_update(
+                f"Exporting state to '{output_file.as_posix()}' from the following connection:\n"
+            )
+            if gateway:
+                self.log_status_update(f"[b]Gateway[/b]: [green]{gateway}[/green]")
+            if state_connection_config:
+                self.print_connection_config(state_connection_config, title="State Connection")
+            if environment_names:
+                heading = "Environments" if len(environment_names) > 1 else "Environment"
+                self.log_status_update(
+                    f"[b]{heading}[/b]: [yellow]{', '.join(environment_names)}[/yellow]"
+                )
+
+        should_continue = True
+        if confirm:
+            should_continue = self._confirm("\nContinue?")
+            self.log_status_update("")
+
+        if should_continue:
+            self.state_export_progress = make_progress_bar("{task.description}", self.console)
+            assert isinstance(self.state_export_progress, Progress)
+
+            self.state_export_version_task = self.state_export_progress.add_task(
+                "Exporting versions", start=False
+            )
+            self.state_export_snapshot_task = self.state_export_progress.add_task(
+                "Exporting snapshots", start=False
+            )
+            self.state_export_environment_task = self.state_export_progress.add_task(
+                "Exporting environments", start=False
+            )
+
+            self.state_export_progress.start()
+
+        return should_continue
+
+    def update_state_export_progress(
+        self,
+        version_count: t.Optional[int] = None,
+        versions_complete: bool = False,
+        snapshot_count: t.Optional[int] = None,
+        snapshots_complete: bool = False,
+        environment_count: t.Optional[int] = None,
+        environments_complete: bool = False,
+    ) -> None:
+        if self.state_export_progress:
+            if self.state_export_version_task is not None:
+                if version_count is not None:
+                    self.state_export_progress.start_task(self.state_export_version_task)
+                    self.state_export_progress.update(
+                        self.state_export_version_task,
+                        total=version_count,
+                        completed=version_count,
+                        refresh=True,
+                    )
+                if versions_complete:
+                    self.state_export_progress.stop_task(self.state_export_version_task)
+
+            if self.state_export_snapshot_task is not None:
+                if snapshot_count is not None:
+                    self.state_export_progress.start_task(self.state_export_snapshot_task)
+                    self.state_export_progress.update(
+                        self.state_export_snapshot_task,
+                        total=snapshot_count,
+                        completed=snapshot_count,
+                        refresh=True,
+                    )
+                if snapshots_complete:
+                    self.state_export_progress.stop_task(self.state_export_snapshot_task)
+
+            if self.state_export_environment_task is not None:
+                if environment_count is not None:
+                    self.state_export_progress.start_task(self.state_export_environment_task)
+                    self.state_export_progress.update(
+                        self.state_export_environment_task,
+                        total=environment_count,
+                        completed=environment_count,
+                        refresh=True,
+                    )
+                if environments_complete:
+                    self.state_export_progress.stop_task(self.state_export_environment_task)
+
+    def stop_state_export(self, success: bool, output_file: Path) -> None:
+        if self.state_export_progress:
+            self.state_export_progress.stop()
+            self.state_export_progress = None
+
+            if success:
+                self.log_success(f"State exported successfully to '{output_file.as_posix()}'")
+            else:
+                self.log_error("State export failed!")
+
+    def start_state_import(
+        self,
+        input_file: Path,
+        gateway: str,
+        state_connection_config: ConnectionConfig,
+        clear: bool = False,
+        confirm: bool = True,
+    ) -> bool:
+        self.log_status_update(
+            f"Loading state from '{input_file.as_posix()}' into the following connection:\n"
+        )
+        self.log_status_update(f"[b]Gateway[/b]: [green]{gateway}[/green]")
+        self.print_connection_config(state_connection_config, title="State Connection")
+        self.log_status_update("")
+
+        if clear:
+            self.log_warning(
+                f"This [b]destructive[/b] operation will delete all existing state against the '{gateway}' gateway \n"
+                f"and replace it with what's in the '{input_file.as_posix()}' file.\n"
+            )
+        else:
+            self.log_warning(
+                f"This operation will [b]merge[/b] the contents of the state file to the state located at the '{gateway}' gateway.\n"
+                "Matching snapshots or environments will be replaced.\n"
+                "Non-matching snapshots or environments will be ignored.\n"
+            )
+
+        should_continue = True
+        if confirm:
+            should_continue = self._confirm("[red]Are you sure?[/red]")
+            self.log_status_update("")
+
+        if should_continue:
+            self.state_import_progress = make_progress_bar("{task.description}", self.console)
+
+            self.state_import_info = Tree("[bold]State File Information:")
+
+            self.state_import_version_task = self.state_import_progress.add_task(
+                "Importing versions", start=False
+            )
+            self.state_import_snapshot_task = self.state_import_progress.add_task(
+                "Importing snapshots", start=False
+            )
+            self.state_import_environment_task = self.state_import_progress.add_task(
+                "Importing environments", start=False
+            )
+
+            self.state_import_progress.start()
+
+        return should_continue
+
+    def update_state_import_progress(
+        self,
+        timestamp: t.Optional[str] = None,
+        state_file_version: t.Optional[int] = None,
+        versions: t.Optional[Versions] = None,
+        snapshot_count: t.Optional[int] = None,
+        snapshots_complete: bool = False,
+        environment_count: t.Optional[int] = None,
+        environments_complete: bool = False,
+    ) -> None:
+        if self.state_import_progress:
+            if self.state_import_info:
+                if timestamp:
+                    self.state_import_info.add(f"Creation Timestamp: {timestamp}")
+                if state_file_version:
+                    self.state_import_info.add(f"File Version: {state_file_version}")
+                if versions:
+                    self.state_import_info.add(f"SQLMesh version: {versions.sqlmesh_version}")
+                    self.state_import_info.add(
+                        f"SQLMesh migration version: {versions.schema_version}"
+                    )
+                    self.state_import_info.add(f"SQLGlot version: {versions.sqlglot_version}\n")
+
+                    self._print(self.state_import_info)
+
+                    version_count = len(versions.model_dump())
+
+                    if self.state_import_version_task is not None:
+                        self.state_import_progress.start_task(self.state_import_version_task)
+                        self.state_import_progress.update(
+                            self.state_import_version_task,
+                            total=version_count,
+                            completed=version_count,
+                        )
+                        self.state_import_progress.stop_task(self.state_import_version_task)
+
+            if self.state_import_snapshot_task is not None:
+                if snapshot_count is not None:
+                    self.state_import_progress.start_task(self.state_import_snapshot_task)
+                    self.state_import_progress.update(
+                        self.state_import_snapshot_task,
+                        completed=snapshot_count,
+                        total=snapshot_count,
+                        refresh=True,
+                    )
+
+                if snapshots_complete:
+                    self.state_import_progress.stop_task(self.state_import_snapshot_task)
+
+            if self.state_import_environment_task is not None:
+                if environment_count is not None:
+                    self.state_import_progress.start_task(self.state_import_environment_task)
+                    self.state_import_progress.update(
+                        self.state_import_environment_task,
+                        completed=environment_count,
+                        total=environment_count,
+                        refresh=True,
+                    )
+
+                if environments_complete:
+                    self.state_import_progress.stop_task(self.state_import_environment_task)
+
+    def stop_state_import(self, success: bool, input_file: Path) -> None:
+        if self.state_import_progress:
+            self.state_import_progress.stop()
+            self.state_import_progress = None
+
+            if success:
+                self.log_success(f"State imported successfully from '{input_file.as_posix()}'")
+            else:
+                self.log_error("State import failed!")
 
     def show_model_difference_summary(
         self,
@@ -1584,6 +1944,16 @@ class TerminalConsole(Console):
         ]
         output_str = "\n".join([str(len(output)), *output])
         self.log_status_update(f"Number of SQLMesh environments are: {output_str}")
+
+    def print_connection_config(self, config: ConnectionConfig, title: str = "Connection") -> None:
+        engine_adapter_type = config._engine_adapter
+
+        tree = Tree(f"[b]{title}:[/b]")
+        tree.add(f"Type: [bold cyan]{config.type_}[/bold cyan]")
+        tree.add(f"Catalog: [bold cyan]{config.get_catalog()}[/bold cyan]")
+        tree.add(f"Dialect: [bold cyan]{engine_adapter_type.DIALECT}[/bold cyan]")
+
+        self._print(tree)
 
     def _get_snapshot_change_category(
         self,
