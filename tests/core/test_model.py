@@ -8435,3 +8435,20 @@ def test_ignored_rules_serialization():
 
     deserialized_model = SqlModel.parse_raw(model_json)
     assert deserialized_model.dict() == model.dict()
+
+
+def test_data_hash_unchanged_when_column_type_uses_default_dialect():
+    model = create_sql_model(
+        "foo",
+        parse_one("SELECT * FROM bla"),
+        columns={"a": exp.DataType.build("int")},
+        dialect="bigquery",
+    )
+
+    deserialized_model = SqlModel.parse_raw(model.json())
+
+    assert model.columns_to_types_ == {"a": exp.DataType.build("int")}
+    assert deserialized_model.columns_to_types_ == {"a": exp.DataType.build("bigint")}
+
+    # int == int64 in bigquery
+    assert model.data_hash == deserialized_model.data_hash

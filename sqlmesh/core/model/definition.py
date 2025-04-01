@@ -1051,7 +1051,7 @@ class _Model(ModelMeta, frozen=True):
 
         for column_name, column_type in (self.columns_to_types_ or {}).items():
             data.append(column_name)
-            data.append(column_type.sql())
+            data.append(column_type.sql(dialect=self.dialect))
 
         for key, value in (self.physical_properties or {}).items():
             data.append(key)
