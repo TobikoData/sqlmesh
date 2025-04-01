@@ -41,7 +41,7 @@ Learn more about [SQLMesh installation and extras here](../installation.md#insta
 Prepare an existing dbt project to be run by SQLMesh by executing the `sqlmesh init` command *within the dbt project root directory* and with the `dbt` template option:
 
 ```bash
-$ sqlmesh init -t dbt
+$ sqlmesh init -t dbt <dialect> # e.g. sqlmesh init -t dbt snowflake
 ```
 
 SQLMesh will use the data warehouse connection target in your dbt project `profiles.yml` file. The target can be changed at any time.
