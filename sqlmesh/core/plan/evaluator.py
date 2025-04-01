@@ -394,19 +394,17 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                 [snapshots[s.snapshot_id] for s in promotion_result.added],
                 environment.naming_info,
                 deployability_index=deployability_index,
-                on_complete=lambda s: self.console.update_promotion_progress(
-                    s, True, snapshots_with_virtual_views
-                ),
+                on_complete=lambda s: self.console.update_promotion_progress(s, True),
                 snapshots=snapshots,
+                snapshots_with_virtual_views=snapshots_with_virtual_views,
             )
             if promotion_result.removed_environment_naming_info:
                 self._demote_snapshots(
                     plan,
                     promotion_result.removed,
                     promotion_result.removed_environment_naming_info,
-                    on_complete=lambda s: self.console.update_promotion_progress(
-                        s, False, snapshots_with_virtual_views
-                    ),
+                    on_complete=lambda s: self.console.update_promotion_progress(s, False),
+                    snapshots_with_virtual_views=snapshots_with_virtual_views,
                 )
 
             self.state_sync.finalize(environment)
@@ -422,6 +420,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         snapshots: t.Dict[SnapshotId, Snapshot],
         deployability_index: t.Optional[DeployabilityIndex] = None,
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]] = None,
+        snapshots_with_virtual_views: t.Optional[t.List[SnapshotId]] = None,
     ) -> None:
         self.snapshot_evaluator.promote(
             target_snapshots,
@@ -438,6 +437,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             environment_naming_info=environment_naming_info,
             deployability_index=deployability_index,
             on_complete=on_complete,
+            snapshots_with_virtual_views=snapshots_with_virtual_views,
         )
 
     def _demote_snapshots(
@@ -446,9 +446,13 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         target_snapshots: t.Iterable[SnapshotTableInfo],
         environment_naming_info: EnvironmentNamingInfo,
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]] = None,
+        snapshots_with_virtual_views: t.Optional[t.List[SnapshotId]] = None,
     ) -> None:
         self.snapshot_evaluator.demote(
-            target_snapshots, environment_naming_info, on_complete=on_complete
+            target_snapshots,
+            environment_naming_info,
+            on_complete=on_complete,
+            snapshots_with_virtual_views=snapshots_with_virtual_views,
         )
 
     def _restate(self, plan: EvaluatablePlan, snapshots_by_name: t.Dict[str, Snapshot]) -> None:

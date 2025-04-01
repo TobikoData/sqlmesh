@@ -10,7 +10,7 @@ from sqlmesh.core.snapshot.definition import Interval, Intervals
 from sqlmesh.core.console import TerminalConsole
 from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.plan.definition import EvaluatablePlan
-from sqlmesh.core.snapshot import Snapshot, SnapshotInfoLike, SnapshotId, SnapshotTableInfo
+from sqlmesh.core.snapshot import Snapshot, SnapshotInfoLike, SnapshotTableInfo
 from sqlmesh.core.test import ModelTest
 from sqlmesh.utils.date import now_timestamp
 from web.server import models
@@ -176,7 +176,6 @@ class ApiConsole(TerminalConsole):
         self,
         snapshot: SnapshotInfoLike,
         promoted: bool,
-        snapshots_with_virtual_views: t.List[SnapshotId],
     ) -> None:
         if self.plan_apply_stage_tracker and self.plan_apply_stage_tracker.promote:
             self.plan_apply_stage_tracker.promote.update(

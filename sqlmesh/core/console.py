@@ -250,7 +250,6 @@ class Console(LinterConsole, StateExporterConsole, StateImporterConsole, Janitor
         self,
         snapshot: SnapshotInfoLike,
         promoted: bool,
-        snapshots_with_virtual_views: t.List[SnapshotId],
     ) -> None:
         """Update the snapshot promotion progress."""
 
@@ -483,7 +482,6 @@ class NoopConsole(Console):
         self,
         snapshot: SnapshotInfoLike,
         promoted: bool,
-        snapshots_with_virtual_views: t.List[SnapshotId],
     ) -> None:
         pass
 
@@ -1004,14 +1002,9 @@ class TerminalConsole(Console):
         self,
         snapshot: SnapshotInfoLike,
         promoted: bool,
-        snapshots_with_virtual_views: t.List[SnapshotId],
     ) -> None:
         """Update the snapshot promotion progress."""
-        if (
-            self.promotion_progress is not None
-            and self.promotion_task is not None
-            and snapshot.snapshot_id in snapshots_with_virtual_views
-        ):
+        if self.promotion_progress is not None and self.promotion_task is not None:
             if self.verbosity >= Verbosity.VERBOSE:
                 display_name = snapshot.display_name(
                     self.environment_naming_info,
@@ -2892,7 +2885,6 @@ class DatabricksMagicConsole(CaptureTerminalConsole):
         self,
         snapshot: SnapshotInfoLike,
         promoted: bool,
-        snapshots_with_virtual_views: t.List[SnapshotId],
     ) -> None:
         """Update the snapshot promotion progress."""
         num_promotions, total_promotions = self.promotion_status
@@ -3030,7 +3022,6 @@ class DebuggerTerminalConsole(TerminalConsole):
         self,
         snapshot: SnapshotInfoLike,
         promoted: bool,
-        snapshots_with_virtual_views: t.List[SnapshotId],
     ) -> None:
         self._write(f"Promoting {snapshot.name}")
 
