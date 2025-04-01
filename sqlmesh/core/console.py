@@ -45,7 +45,6 @@ from sqlmesh.utils.date import (
     to_date,
     yesterday_ds,
     to_ds,
-    to_datetime,
     make_inclusive,
 )
 from sqlmesh.utils.errors import (
@@ -2755,7 +2754,10 @@ def _format_evaluation_model_interval(snapshot: Snapshot, interval: Interval) ->
         inclusive_interval = make_inclusive(interval[0], interval[1])
         # include time if interval < 1 day
         if (inclusive_interval[1] - inclusive_interval[0]) < datetime.timedelta(days=1):
-            return f"insert {to_ds(inclusive_interval[0])} {to_datetime(inclusive_interval[0]).strftime('%H:%M:%S')}-{to_datetime(inclusive_interval[1]).strftime('%H:%M:%S')}"
+            # if start/end on the same date
+            if inclusive_interval[0].date() == inclusive_interval[1].date():
+                return f"insert {to_ds(inclusive_interval[0])} {inclusive_interval[0].strftime('%H:%M:%S')}-{inclusive_interval[1].strftime('%H:%M:%S')}"
+            return f"insert {inclusive_interval[0].strftime('%Y-%m-%d %H:%M:%S')} - {inclusive_interval[1].strftime('%Y-%m-%d %H:%M:%S')}"
         return f"insert {to_ds(inclusive_interval[0])} - {to_ds(inclusive_interval[1])}"
     return ""
 
