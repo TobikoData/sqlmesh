@@ -5,7 +5,7 @@
 */
 MODEL (
   name sushi.customer_revenue_lifetime,
-  kind incremental_by_time_range (
+  kind INCREMENTAL_BY_TIME_RANGE (
     time_column event_date,
     batch_size 1
   ),
@@ -18,7 +18,7 @@ MODEL (
     revenue DOUBLE,
     event_date DATE
   ),
-  grain (customer_id, event_date),
+  grain (customer_id, event_date)
 );
 
 WITH order_total AS (
@@ -35,7 +35,7 @@ WITH order_total AS (
 ), incremental_total AS (
   SELECT
     o.customer_id::INT AS customer_id,
-    SUM(ot.total)::DOUBLE AS revenue,
+    SUM(ot.total)::DOUBLE AS revenue
   FROM sushi.orders AS o
   LEFT JOIN order_total AS ot
     ON o.id = ot.order_id
@@ -49,7 +49,7 @@ WITH order_total AS (
     crl.revenue
   FROM sushi.customer_revenue_lifetime AS crl
   WHERE
-    crl.event_date = @end_date - INTERVAL 1 DAY
+    crl.event_date = @end_date - INTERVAL '1' DAY
 )
 SELECT
   COALESCE(it.customer_id, prev_total.customer_id) AS customer_id, /* Customer id */
