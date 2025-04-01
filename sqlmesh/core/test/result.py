@@ -72,3 +72,50 @@ class ModelTextTestResult(unittest.TextTestResult):
         """
         super().addSuccess(test)
         self.successes.append(test)
+
+    def log_test_report(self, test_duration: float) -> None:
+        """
+        Log the test report following unittest's conventions.
+
+        Args:
+            test_duration: The duration of the tests.
+        """
+        tests_run = self.testsRun
+        errors = self.errors
+        failures = self.failures
+        skipped = self.skipped
+
+        is_success = not (errors or failures)
+
+        infos = []
+        if failures:
+            infos.append(f"failures={len(failures)}")
+        if errors:
+            infos.append(f"errors={len(errors)}")
+        if skipped:
+            infos.append(f"skipped={skipped}")
+
+        stream = self.stream
+
+        stream.write("\n")
+
+        for test_case, failure in failures:
+            stream.writeln(unittest.TextTestResult.separator1)
+            stream.writeln(f"FAIL: {test_case}")
+            stream.writeln(f"{test_case.shortDescription()}")
+            stream.writeln(unittest.TextTestResult.separator2)
+            stream.writeln(failure)
+
+        for _, error in errors:
+            stream.writeln(unittest.TextTestResult.separator1)
+            stream.writeln(f"ERROR: {error}")
+            stream.writeln(unittest.TextTestResult.separator2)
+
+        # Output final report
+        stream.writeln(unittest.TextTestResult.separator2)
+        stream.writeln(
+            f'Ran {tests_run} {"tests" if tests_run > 1 else "test"} in {test_duration:.3f}s \n'
+        )
+        stream.writeln(
+            f'{"OK" if is_success else "FAILED"}{" (" + ", ".join(infos) + ")" if infos else ""}'
+        )
