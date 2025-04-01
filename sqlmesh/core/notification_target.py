@@ -87,7 +87,9 @@ class BaseNotificationTarget(PydanticModel, frozen=True):
             msg: The message to send.
         """
 
-    def notify_apply_start(self, environment: str, plan_id: str) -> None:
+    def notify_apply_start(
+        self, environment: str, plan_id: str, *args: t.Any, **kwargs: t.Any
+    ) -> None:
         """Notify when an apply starts.
 
         Args:
@@ -99,7 +101,9 @@ class BaseNotificationTarget(PydanticModel, frozen=True):
             f"Plan `{plan_id}` apply started for environment `{environment}`.",
         )
 
-    def notify_apply_end(self, environment: str, plan_id: str) -> None:
+    def notify_apply_end(
+        self, environment: str, plan_id: str, *args: t.Any, **kwargs: t.Any
+    ) -> None:
         """Notify when an apply ends.
 
         Args:
@@ -111,7 +115,7 @@ class BaseNotificationTarget(PydanticModel, frozen=True):
             f"Plan `{plan_id}` apply finished for environment `{environment}`.",
         )
 
-    def notify_run_start(self, environment: str) -> None:
+    def notify_run_start(self, environment: str, *args: t.Any, **kwargs: t.Any) -> None:
         """Notify when a SQLMesh run starts.
 
         Args:
@@ -119,7 +123,7 @@ class BaseNotificationTarget(PydanticModel, frozen=True):
         """
         self.send(NotificationStatus.INFO, f"SQLMesh run started for environment `{environment}`.")
 
-    def notify_run_end(self, environment: str) -> None:
+    def notify_run_end(self, environment: str, *args: t.Any, **kwargs: t.Any) -> None:
         """Notify when a SQLMesh run ends.
 
         Args:
@@ -129,15 +133,17 @@ class BaseNotificationTarget(PydanticModel, frozen=True):
             NotificationStatus.SUCCESS, f"SQLMesh run finished for environment `{environment}`."
         )
 
-    def notify_migration_start(self) -> None:
+    def notify_migration_start(self, *args: t.Any, **kwargs: t.Any) -> None:
         """Notify when a SQLMesh migration starts."""
         self.send(NotificationStatus.INFO, "SQLMesh migration started.")
 
-    def notify_migration_end(self) -> None:
+    def notify_migration_end(self, *args: t.Any, **kwargs: t.Any) -> None:
         """Notify when a SQLMesh migration ends."""
         self.send(NotificationStatus.SUCCESS, "SQLMesh migration finished.")
 
-    def notify_apply_failure(self, environment: str, plan_id: str, exc: str) -> None:
+    def notify_apply_failure(
+        self, environment: str, plan_id: str, exc: str, *args: t.Any, **kwargs: t.Any
+    ) -> None:
         """Notify in the case of an apply failure.
 
         Args:
@@ -151,7 +157,7 @@ class BaseNotificationTarget(PydanticModel, frozen=True):
             exc=exc,
         )
 
-    def notify_run_failure(self, exc: str) -> None:
+    def notify_run_failure(self, exc: str, *args: t.Any, **kwargs: t.Any) -> None:
         """Notify in the case of a run failure.
 
         Args:
@@ -159,7 +165,7 @@ class BaseNotificationTarget(PydanticModel, frozen=True):
         """
         self.send(NotificationStatus.FAILURE, "SQLMesh run failed.", exc=exc)
 
-    def notify_audit_failure(self, audit_error: AuditError) -> None:
+    def notify_audit_failure(self, audit_error: AuditError, *args: t.Any, **kwargs: t.Any) -> None:
         """Notify in the case of an audit failure.
 
         Args:
@@ -167,7 +173,7 @@ class BaseNotificationTarget(PydanticModel, frozen=True):
         """
         self.send(NotificationStatus.FAILURE, "Audit failure.", audit_error=audit_error)
 
-    def notify_migration_failure(self, exc: str) -> None:
+    def notify_migration_failure(self, exc: str, *args: t.Any, **kwargs: t.Any) -> None:
         """Notify in the case of a migration failure.
 
         Args:
