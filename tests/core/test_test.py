@@ -4,11 +4,13 @@ import datetime
 import typing as t
 from pathlib import Path
 from unittest.mock import call, patch
+from shutil import copyfile
 
 import pandas as pd
 import pytest
 from pytest_mock.plugin import MockerFixture
 from sqlglot import exp
+from IPython.utils.capture import capture_output
 
 from sqlmesh.cli.example_project import init_example_project
 from sqlmesh.core import constants as c
@@ -2128,3 +2130,76 @@ test_resolve_template_macro:
 
     context = Context(paths=tmp_path, config=config)
     _check_successful_or_raise(context.test())
+
+
+def test_test_generation_report(tmp_path: Path) -> None:
+    init_example_project(tmp_path, dialect="duckdb")
+
+    original_test_file = tmp_path / "tests" / "test_full_model.yaml"
+
+    new_test_file = tmp_path / "tests" / "test_full_model_error.yaml"
+    new_test_file.write_text(
+        """
+test_example_full_model:
+  model: sqlmesh_example.full_model
+  description: This is a test
+  inputs:
+    sqlmesh_example.incremental_model:
+      rows:
+      - id: 1
+        item_id: 1
+      - id: 2
+        item_id: 1
+      - id: 3
+        item_id: 2
+  outputs:
+    query:
+      rows:
+      - item_id: 1
+        num_orders: 2
+      - item_id: 2
+        num_orders: 2 
+        """
+    )
+
+    config = Config(
+        default_connection=DuckDBConnectionConfig(),
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        default_test_connection=DuckDBConnectionConfig(concurrent_tasks=8),
+    )
+    context = Context(paths=tmp_path, config=config)
+
+    # Case 1: Assert the log report is structured correctly
+    with capture_output() as output:
+        context.test()
+
+    # Order may change due to concurrent execution
+    assert "F." in output.stderr or ".F" in output.stderr
+    assert (
+        f"""======================================================================
+FAIL: test_example_full_model ({new_test_file})
+This is a test
+----------------------------------------------------------------------
+AssertionError: Data mismatch (exp: expected, act: actual)
+
+  num_orders     
+         exp  act
+1        2.0  1.0
+
+----------------------------------------------------------------------"""
+        in output.stderr
+    )
+
+    assert "Ran 2 tests" in output.stderr
+    assert "FAILED (failures=1)" in output.stderr
+
+    # Case 2: Assert that concurrent execution is working properly
+    for i in range(50):
+        copyfile(original_test_file, tmp_path / "tests" / f"test_success_{i}.yaml")
+        copyfile(new_test_file, tmp_path / "tests" / f"test_failure_{i}.yaml")
+
+    with capture_output() as output:
+        context.test()
+
+    assert "Ran 102 tests" in output.stderr
+    assert "FAILED (failures=51)" in output.stderr
