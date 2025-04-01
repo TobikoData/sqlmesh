@@ -8327,6 +8327,31 @@ def gen_blueprints(evaluator):
     assert '"memory"."customer2"."some_table"' in ctx.models
 
 
+def test_single_blueprint(tmp_path: Path) -> None:
+    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+
+    single_blueprint = tmp_path / "models/single_blueprint.sql"
+    single_blueprint.parent.mkdir(parents=True, exist_ok=True)
+    single_blueprint.write_text(
+        """
+        MODEL (
+          name @single_blueprint.some_table,
+          kind FULL,
+          blueprints ((single_blueprint := bar))
+        );
+
+        SELECT 1 AS c
+        """
+    )
+
+    ctx = Context(
+        config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb")), paths=tmp_path
+    )
+
+    assert len(ctx.models) == 1
+    assert '"memory"."bar"."some_table"' in ctx.models
+
+
 @time_machine.travel("2020-01-01 00:00:00 UTC")
 def test_dynamic_date_spine_model(assert_exp_eq):
     @macro()
