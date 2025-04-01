@@ -1862,7 +1862,7 @@ def _extract_blueprint_variables(
 ) -> t.Dict[str, str]:
     if not blueprint:
         return {}
-    if isinstance(blueprint, exp.Paren):
+    if isinstance(blueprint, (exp.Paren, exp.PropertyEQ)):
         blueprint = blueprint.unnest()
         return {blueprint.left.name: blueprint.right.sql(dialect=dialect)}
     if isinstance(blueprint, (exp.Tuple, exp.Array)):
