@@ -216,6 +216,7 @@ class SnapshotEvaluator:
         snapshots: t.Optional[t.Dict[SnapshotId, Snapshot]] = None,
         table_mapping: t.Optional[t.Dict[str, str]] = None,
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]] = None,
+        snapshots_with_virtual_views: t.Optional[t.List[SnapshotId]] = None,
     ) -> None:
         """Promotes the given collection of snapshots in the target environment by replacing a corresponding
         view with a physical table associated with the given snapshot.
@@ -249,6 +250,7 @@ class SnapshotEvaluator:
                     environment_naming_info=environment_naming_info,
                     deployability_index=deployability_index,  # type: ignore
                     on_complete=on_complete,
+                    snapshots_with_virtual_views=snapshots_with_virtual_views,
                 ),
                 self.ddl_concurrent_tasks,
             )
@@ -258,6 +260,7 @@ class SnapshotEvaluator:
         target_snapshots: t.Iterable[SnapshotInfoLike],
         environment_naming_info: EnvironmentNamingInfo,
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]] = None,
+        snapshots_with_virtual_views: t.Optional[t.List[SnapshotId]] = None,
     ) -> None:
         """Demotes the given collection of snapshots in the target environment by removing its view.
 
@@ -269,7 +272,9 @@ class SnapshotEvaluator:
         with self.concurrent_context():
             concurrent_apply_to_snapshots(
                 target_snapshots,
-                lambda s: self._demote_snapshot(s, environment_naming_info, on_complete),
+                lambda s: self._demote_snapshot(
+                    s, environment_naming_info, on_complete, snapshots_with_virtual_views
+                ),
                 self.ddl_concurrent_tasks,
             )
 
@@ -918,6 +923,7 @@ class SnapshotEvaluator:
         execution_time: t.Optional[TimeLike] = None,
         snapshots: t.Optional[t.Dict[SnapshotId, Snapshot]] = None,
         table_mapping: t.Optional[t.Dict[str, str]] = None,
+        snapshots_with_virtual_views: t.Optional[t.List[SnapshotId]] = None,
     ) -> None:
         if snapshot.is_model:
             adapter = self.adapter
@@ -944,7 +950,11 @@ class SnapshotEvaluator:
             )
             adapter.execute(snapshot.model.render_on_virtual_update(**render_kwargs))
 
-            if on_complete is not None:
+            if (
+                on_complete is not None
+                and snapshots_with_virtual_views
+                and snapshot.snapshot_id in snapshots_with_virtual_views
+            ):
                 on_complete(snapshot)
 
     def _demote_snapshot(
@@ -952,6 +962,7 @@ class SnapshotEvaluator:
         snapshot: SnapshotInfoLike,
         environment_naming_info: EnvironmentNamingInfo,
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]],
+        snapshots_with_virtual_views: t.Optional[t.List[SnapshotId]] = None,
     ) -> None:
         adapter = self.adapter
         view_name = snapshot.qualified_view_name.for_environment(
@@ -959,7 +970,11 @@ class SnapshotEvaluator:
         )
         _evaluation_strategy(snapshot, adapter).demote(view_name)
 
-        if on_complete is not None:
+        if (
+            on_complete is not None
+            and snapshots_with_virtual_views
+            and snapshot.snapshot_id in snapshots_with_virtual_views
+        ):
             on_complete(snapshot)
 
     def _cleanup_snapshot(
