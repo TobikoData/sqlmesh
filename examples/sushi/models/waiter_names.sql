@@ -9,22 +9,37 @@ MODEL (
   description 'List of waiter names',
   audits (
     assert_positive_id,
-    does_not_exceed_threshold(column := id, threshold := @waiter_names_threshold()),
-    assert_valid_name,
+    DOES_NOT_EXCEED_THRESHOLD("column" := id, threshold := @waiter_names_threshold()),
+    assert_valid_name
   )
 );
 
 AUDIT (
-  name does_not_exceed_threshold,
+  name does_not_exceed_threshold
 );
-SELECT * FROM @this_model WHERE @column >= @threshold;
+
+SELECT
+  *
+FROM @this_model
+WHERE
+  @column >= @threshold;
 
 AUDIT (
-  name assert_positive_id,
+  name assert_positive_id
 );
-SELECT * FROM @this_model WHERE id < 0;
+
+SELECT
+  *
+FROM @this_model
+WHERE
+  id < 0;
 
 AUDIT (
-  name assert_valid_name,
+  name assert_valid_name
 );
-SELECT * FROM @this_model WHERE LENGTH(name) < 1;
+
+SELECT
+  *
+FROM @this_model
+WHERE
+  LENGTH(name) < 1

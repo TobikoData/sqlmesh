@@ -13,7 +13,9 @@ MODEL (
   )
 );
 
-
-SELECT customer_id, zip
+SELECT
+  customer_id,
+  zip
 FROM sushi.customers
-WHERE status = 'active'
+WHERE
+  status = 'active'

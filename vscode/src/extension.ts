@@ -3,18 +3,16 @@
 import * as vscode from 'vscode';
 import { actual_callout } from './services';
 import { createOutputChannel } from './common/vscodeapi';
-import { registerLogger, traceInfo } from './common/log';
+import { registerLogger, traceInfo, traceLog, traceVerbose } from './common/log';
+import { getInterpreterDetails } from './common/python';
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
-	traceInfo("Activating extension");
-
-	// Setup logging
 	const outputChannel = createOutputChannel("sqlmesh");
 	context.subscriptions.push(outputChannel, registerLogger(outputChannel));
 
-	context.subscriptions.push(outputChannel, registerLogger(outputChannel));
+	traceInfo("Activating extension");
 
 	const changeLogLevel = async (c: vscode.LogLevel, g: vscode.LogLevel) => {
 		// TODO: Implement this
@@ -32,17 +30,11 @@ export function activate(context: vscode.ExtensionContext) {
     );
 
 
-	// Use the console to output diagnostic information (console.log) and errors (console.error)
-	// This line of code will only be executed once when your extension is activated
-	traceInfo('Congratulations, your extension "vscode" is now active!');
-
 	// The command has been defined in the package.json file
 	// Now provide the implementation of the command with registerCommand
 	// The commandId parameter must match the command field in package.json
-	const disposable = vscode.commands.registerCommand('sqlmesh.format', () => {
-		// The code you place here will be executed every time your command is executed
-		// Display a message box to the user
-		const out = actual_callout.format()
+	const disposable = vscode.commands.registerCommand('sqlmesh.format', async () => {
+		const out = await actual_callout.format();
 		if (out === 0) {
 			vscode.window.showInformationMessage('SQLMesh format completed successfully');
 		} else {
@@ -52,6 +44,12 @@ export function activate(context: vscode.ExtensionContext) {
 
 	context.subscriptions.push(disposable);
 
+	setImmediate(async () => {
+		const interpreterDetails = await getInterpreterDetails();
+		if (interpreterDetails.path) {
+			traceLog(`Using interpreter from Python extension: ${interpreterDetails.path.join(' ')}`);
+		}
+	});
 	traceInfo("Extension activated");
 }
 

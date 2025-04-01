@@ -1,22 +1,24 @@
 MODEL (
   name sushi.waiter_as_customer_by_day,
-  kind incremental_by_time_range (
+  kind INCREMENTAL_BY_TIME_RANGE (
     time_column event_date
   ),
   owner jen,
   cron '@daily',
   audits (
-    not_null(columns := (waiter_id)),
-    forall(criteria := (LENGTH(waiter_name) > 0))
+    NOT_NULL(columns := (
+      waiter_id
+    )),
+    FORALL(criteria := (
+      LENGTH(waiter_name) > 0
+    ))
   ),
   signals (
-    test_signal(arg := 1)
-  ),
-
+    TEST_SIGNAL(arg := 1)
+  )
 );
 
 JINJA_QUERY_BEGIN;
-
 {% set x = 1 %}
 
 SELECT
@@ -28,5 +30,4 @@ FROM sushi.waiters AS w
 JOIN sushi.customers as c ON w.waiter_id = c.customer_id
 JOIN sushi.waiter_names as wn ON w.waiter_id = wn.id
 WHERE w.event_date BETWEEN @start_date AND @end_date;
-
 JINJA_END;
