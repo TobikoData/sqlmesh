@@ -219,7 +219,7 @@ class EnvironmentStatements(PydanticModel):
     before_all: t.List[str]
     after_all: t.List[str]
     python_env: t.Dict[str, Executable]
-    jinja_macros: JinjaMacroRegistry = JinjaMacroRegistry()
+    jinja_macros: t.Optional[JinjaMacroRegistry] = None
 
 
 def execute_environment_statements(
