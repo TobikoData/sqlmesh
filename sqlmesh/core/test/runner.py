@@ -45,15 +45,16 @@ class ModelTextTestRunner(unittest.TextTestRunner):
         )
 
 
-def create_test_engine_adapters(
+def create_test_engine_adapters_for_tests(
     model_test_metadata: list[ModelTestMetadata],
     config: C,
     default_gateway: str,
-    testing_adapter_by_gateway: t.Dict[str, EngineAdapter],
     default_catalog: str | None = None,
     default_catalog_dialect: str = "",
-) -> list[EngineAdapter]:
-    engine_adapters = []
+) -> t.Dict[ModelTestMetadata, EngineAdapter]:
+    testing_adapter_by_gateway: t.Dict[str, EngineAdapter] = {}
+    metadata_to_adapter = {}
+
     for metadata in model_test_metadata:
         gateway = metadata.body.get("gateway") or default_gateway
         test_connection = config.get_test_connection(
@@ -76,9 +77,9 @@ def create_test_engine_adapters(
                 register_comments_override=False
             )
 
-        engine_adapters.append(adapter or testing_adapter_by_gateway[gateway])
+        metadata_to_adapter[metadata] = adapter or testing_adapter_by_gateway[gateway]
 
-    return engine_adapters
+    return metadata_to_adapter
 
 
 def run_tests(
@@ -101,7 +102,6 @@ def run_tests(
         verbosity: The verbosity level.
         preserve_fixtures: Preserve the fixture tables in the testing database, useful for debugging.
     """
-    testing_adapter_by_gateway: t.Dict[str, EngineAdapter] = {}
     default_gateway = gateway or config.default_gateway_name
 
     default_test_connection = config.get_test_connection(
@@ -118,13 +118,12 @@ def run_tests(
         descriptions=True,
     )
 
-    engine_adapters = create_test_engine_adapters(
-        model_test_metadata,
-        config,
-        default_gateway,
-        testing_adapter_by_gateway,
-        default_catalog,
-        default_catalog_dialect,
+    metadata_to_adapter = create_test_engine_adapters_for_tests(
+        model_test_metadata=model_test_metadata,
+        config=config,
+        default_gateway=default_gateway,
+        default_catalog=default_catalog,
+        default_catalog_dialect=default_catalog_dialect,
     )
 
     def _run_single_test(
@@ -168,20 +167,16 @@ def run_tests(
         with ThreadPoolExecutor(max_workers=num_workers) as pool:
             futures = [
                 pool.submit(_run_single_test, metadata=metadata, engine_adapter=engine_adapter)
-                for metadata, engine_adapter in zip(model_test_metadata, engine_adapters)
+                for metadata, engine_adapter in metadata_to_adapter.items()
             ]
 
             for future in concurrent.futures.as_completed(futures):
                 test_results.append(future.result())
     finally:
-        closed_adapters: t.Set[int] = set()
-
-        for engine_adapter in engine_adapters:
+        for engine_adapter in set(metadata_to_adapter.values()):
             # The engine adapters list might have duplicates, so we ensure that we close each adapter once
-            hashed_adapter = hash(engine_adapter)
-            if engine_adapter and hashed_adapter not in closed_adapters:
+            if engine_adapter:
                 engine_adapter.close()
-                closed_adapters.add(hashed_adapter)
 
     end_time = time.perf_counter()
 

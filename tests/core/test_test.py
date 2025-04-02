@@ -2132,7 +2132,7 @@ test_resolve_template_macro:
     _check_successful_or_raise(context.test())
 
 
-def test_test_generation_report(tmp_path: Path) -> None:
+def test_test_output(tmp_path: Path) -> None:
     init_example_project(tmp_path, dialect="duckdb")
 
     original_test_file = tmp_path / "tests" / "test_full_model.yaml"

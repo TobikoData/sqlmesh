@@ -55,8 +55,6 @@ class ModelTextTestResult(unittest.TextTestResult):
     def addError(self, test: unittest.TestCase, err: ErrorType) -> None:
         """Called when the test case test signals an error.
 
-        The traceback is suppressed because it is redundant and not useful.
-
         Args:
             test: The test case.
             err: A tuple of the form returned by sys.exc_info(), i.e., (type, value, traceback).
