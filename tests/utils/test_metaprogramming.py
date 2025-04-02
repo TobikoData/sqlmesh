@@ -63,6 +63,7 @@ def test_print_exception(mocker: MockerFixture):
 X = 1
 Y = 2
 Z = 3
+W = 0
 
 my_lambda = lambda: print("z")  # noqa: E731
 
@@ -96,7 +97,7 @@ def other_func(a: int) -> int:
     pd.DataFrame([{"x": 1}])
     to_table("y")
     my_lambda()  # type: ignore
-    return X + a
+    return X + a + W
 
 
 def noop_metadata() -> None:
@@ -165,6 +166,7 @@ def test_func_globals() -> None:
     }
     assert func_globals(other_func) == {
         "X": 1,
+        "W": 0,
         "my_lambda": my_lambda,
         "pd": pd,
         "to_table": to_table,
@@ -212,7 +214,7 @@ def test_normalize_source() -> None:
     pd.DataFrame([{'x': 1}])
     to_table('y')
     my_lambda()
-    return X + a"""
+    return X + a + W"""
     )
 
 
@@ -256,6 +258,7 @@ def test_serialize_env() -> None:
         "X": Executable(payload="1", kind=ExecutableKind.VALUE),
         "Y": Executable(payload="2", kind=ExecutableKind.VALUE),
         "Z": Executable(payload="3", kind=ExecutableKind.VALUE),
+        "W": Executable(payload="0", kind=ExecutableKind.VALUE),
         "_GeneratorContextManager": Executable(
             payload="from contextlib import _GeneratorContextManager", kind=ExecutableKind.IMPORT
         ),
@@ -336,7 +339,7 @@ def test_context_manager():
     pd.DataFrame([{'x': 1}])
     to_table('y')
     my_lambda()
-    return X + a""",
+    return X + a + W""",
         ),
         "test_context_manager": Executable(
             payload="""@contextmanager
