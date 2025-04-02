@@ -437,7 +437,7 @@ def render_statements(
                     expression,
                     dialect,
                     [],
-                    jinja_macro_registry=jinja_macros or JinjaMacroRegistry(),
+                    jinja_macro_registry=jinja_macros or None,
                     python_env=python_env,
                     default_catalog=default_catalog,
                     quote_identifiers=False,
