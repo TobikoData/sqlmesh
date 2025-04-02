@@ -74,7 +74,14 @@ The state file is a simple `json` file that looks like:
     /* object for every Virtual Data Environment in the project. key = environment name, value = environment details */
     "environments": {
         "prod": {
-            "..."
+            /* information about the environment itself */
+            "environment": {
+                "..."
+            },
+            /* information about any before_all / after_all statements for this environment */
+            "statements": [
+                "..."
+            ]
         }
     }
 }

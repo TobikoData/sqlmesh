@@ -3,10 +3,9 @@ import typing as t
 from sqlmesh.core.state_sync import StateSync
 from sqlmesh.core.snapshot import Snapshot
 from sqlmesh.utils.date import now, to_tstz
-from sqlmesh.core.environment import Environment
 from sqlmesh.utils.pydantic import _expression_encoder
 from sqlmesh.core.state_sync import Versions
-from sqlmesh.core.state_sync.common import StateStream
+from sqlmesh.core.state_sync.common import StateStream, EnvironmentWithStatements
 from sqlmesh.core.console import Console
 from pathlib import Path
 from sqlmesh.core.console import NoopConsole
@@ -45,7 +44,7 @@ def _create_local_state_stream(versions: Versions, snapshots: t.Dict[str, Snapsh
             return iter(snapshots.values())
 
         @property
-        def environments(self) -> t.Iterable[Environment]:
+        def environments(self) -> t.Iterable[EnvironmentWithStatements]:
             return []
 
     return _LocalStateStream()
@@ -71,11 +70,11 @@ def _export(state_stream: StateStream, importable: bool, console: Console) -> St
 
     @streamable_dict
     def _dump_environments(
-        environment_stream: t.Iterable[Environment],
+        environment_stream: t.Iterable[EnvironmentWithStatements],
     ) -> t.Iterator[t.Tuple[str, t.Any]]:
         console.update_state_export_progress(environment_count=0)
         for idx, env in enumerate(environment_stream):
-            yield env.name, _dump_pydantic_model(env)
+            yield env.environment.name, _dump_pydantic_model(env)
             console.update_state_export_progress(environment_count=idx + 1)
 
     @streamable_dict
@@ -129,12 +128,14 @@ def _import(
             console.update_state_import_progress(snapshots_complete=True)
 
         @property
-        def environments(self) -> t.Iterable[Environment]:
+        def environments(self) -> t.Iterable[EnvironmentWithStatements]:
             stream = data()["environments"]
 
             console.update_state_import_progress(environment_count=0)
             for idx, (_, raw_environment) in enumerate(stream.items()):
-                environment = Environment.model_validate(to_standard_types(raw_environment))
+                environment = EnvironmentWithStatements.model_validate(
+                    to_standard_types(raw_environment)
+                )
                 yield environment
                 console.update_state_import_progress(environment_count=idx + 1)
 

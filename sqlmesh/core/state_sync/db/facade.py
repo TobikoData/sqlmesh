@@ -51,6 +51,7 @@ from sqlmesh.core.state_sync.common import (
     transactional,
     StateStream,
     chunk_iterable,
+    EnvironmentWithStatements,
 )
 from sqlmesh.core.state_sync.db.interval import IntervalState
 from sqlmesh.core.state_sync.db.environment import EnvironmentState
@@ -482,11 +483,13 @@ class EngineAdapterStateSync(StateSync):
                     yield from state_sync.get_snapshots(chunk).values()
 
             @property
-            def environments(self) -> t.Iterable[Environment]:
-                if environment_names:
-                    yield from selected_environments
-                else:
-                    yield from state_sync.get_environments()
+            def environments(self) -> t.Iterable[EnvironmentWithStatements]:
+                envs = selected_environments if environment_names else state_sync.get_environments()
+
+                for env in envs:
+                    yield EnvironmentWithStatements(
+                        environment=env, statements=state_sync.get_environment_statements(env.name)
+                    )
 
         return _DumpStateStream()
 
@@ -515,7 +518,7 @@ class EngineAdapterStateSync(StateSync):
             )
             overwrite_existing_snapshots = (
                 not clear
-            )  # if clear=True, all existing snapshjots were dropped anyway
+            )  # if clear=True, all existing snapshots were dropped anyway
             self.snapshot_state.push_snapshots(
                 snapshot_iterator, overwrite=overwrite_existing_snapshots
             )
@@ -529,12 +532,12 @@ class EngineAdapterStateSync(StateSync):
                 }
             )
 
-        existing_environments = set(self.get_environments_summary().keys()) if not clear else set()
-        for environment in stream.environments:
-            if not clear and environment.name in existing_environments:
-                self.environment_state.update_environment(environment)
-            else:
-                self.promote(environment)
+        for environment_with_statements in stream.environments:
+            environment = environment_with_statements.environment
+            self.environment_state.update_environment(environment)
+            self.environment_state.update_environment_statements(
+                environment.name, environment.plan_id, environment_with_statements.statements
+            )
 
         self.update_auto_restatements(auto_restatements)
 

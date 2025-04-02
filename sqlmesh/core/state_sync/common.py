@@ -8,7 +8,8 @@ import abc
 
 from sqlmesh.core.console import Console
 from sqlmesh.core.dialect import schema_
-from sqlmesh.core.environment import Environment
+from sqlmesh.utils.pydantic import PydanticModel
+from sqlmesh.core.environment import Environment, EnvironmentStatements
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.core.snapshot import Snapshot
 
@@ -96,6 +97,11 @@ def chunk_iterable(iterable: t.Iterable[T], size: int = 10) -> t.Iterable[t.Iter
         yield itertools.chain([first], itertools.islice(iterator, size - 1))
 
 
+class EnvironmentWithStatements(PydanticModel):
+    environment: Environment
+    statements: t.List[EnvironmentStatements] = []
+
+
 class StateStream(abc.ABC):
     """
     Represents a stream of state either going into the StateSync (perhaps loaded from a file)
@@ -114,5 +120,5 @@ class StateStream(abc.ABC):
 
     @property
     @abc.abstractmethod
-    def environments(self) -> t.Iterable[Environment]:
-        """A stream of Environment objects"""
+    def environments(self) -> t.Iterable[EnvironmentWithStatements]:
+        """A stream of Environments with any EnvironmentStatements attached"""

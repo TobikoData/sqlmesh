@@ -1129,6 +1129,8 @@ class TerminalConsole(Console):
             self.state_export_progress.stop()
             self.state_export_progress = None
 
+            self.log_status_update("")
+
             if success:
                 self.log_success(f"State exported successfully to '{output_file.as_posix()}'")
             else:
@@ -1251,6 +1253,8 @@ class TerminalConsole(Console):
         if self.state_import_progress:
             self.state_import_progress.stop()
             self.state_import_progress = None
+
+            self.log_status_update("")
 
             if success:
                 self.log_success(f"State imported successfully from '{input_file.as_posix()}'")

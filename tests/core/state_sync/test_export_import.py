@@ -1,6 +1,6 @@
 import pytest
 from pathlib import Path
-from sqlmesh.core.state_sync import StateSync, EngineAdapterStateSync
+from sqlmesh.core.state_sync import StateSync, EngineAdapterStateSync, CachingStateSync
 from sqlmesh.core.state_sync.export_import import export_state, import_state
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.core import constants as c
@@ -136,11 +136,11 @@ def test_export_entire_project(
     assert "prod" in state["environments"]
     assert "dev" in state["environments"]
 
-    prod = state["environments"]["prod"]
+    prod = state["environments"]["prod"]["environment"]
     assert len(prod["snapshots"]) == 3
     prod_snapshot_ids = [s.snapshot_id for s in Environment.model_validate(prod).snapshots]
 
-    dev = state["environments"]["dev"]
+    dev = state["environments"]["dev"]["environment"]
     assert len(dev["snapshots"]) == 4
     dev_snapshot_ids = [s.snapshot_id for s in Environment.model_validate(dev).snapshots]
 
@@ -427,7 +427,7 @@ def test_import_partial(
     state = json.loads(output_file.read_text(encoding="utf8"))
     # mess with the file to rename "dev" to "dev2"
     dev = state["environments"].pop("dev")
-    dev["name"] = "dev2"
+    dev["environment"]["name"] = "dev2"
     state["environments"]["dev2"] = dev
 
     assert list(state["environments"].keys()) == ["dev2"]
@@ -566,3 +566,52 @@ def test_roundtrip_includes_auto_restatements(
 
     plan = context.plan(skip_tests=True)
     assert not plan.has_changes
+
+
+def test_roundtrip_includes_environment_statements(tmp_path: Path) -> None:
+    config = Config(
+        gateways={
+            "main": GatewayConfig(
+                connection=DuckDBConnectionConfig(database=str(tmp_path / "warehouse.db")),
+                state_connection=DuckDBConnectionConfig(database=str(tmp_path / "state.db")),
+            )
+        },
+        default_gateway="main",
+        model_defaults=ModelDefaultsConfig(
+            dialect="duckdb",
+        ),
+        before_all=["select 1 as before_all"],
+        after_all=["select 2 as after_all"],
+    )
+
+    context = Context(paths=tmp_path, config=config)
+    context.plan(auto_apply=True)
+
+    state_file = tmp_path / "state_dump.json"
+    context.export_state(state_file)
+
+    environments = json.loads(state_file.read_text(encoding="utf8"))["environments"]
+
+    assert environments["prod"]["statements"][0]["before_all"][0] == "select 1 as before_all"
+    assert environments["prod"]["statements"][0]["after_all"][0] == "select 2 as after_all"
+
+    assert not context.plan().has_changes
+
+    state_sync = context.state_sync
+    assert isinstance(state_sync, CachingStateSync)
+    assert isinstance(state_sync.state_sync, EngineAdapterStateSync)
+
+    # show state destroyed
+    state_sync.state_sync.engine_adapter.drop_schema("sqlmesh", cascade=True)  # type: ignore
+    with pytest.raises(SQLMeshError, match=r"Please run a migration"):
+        state_sync.get_versions(validate=True)
+
+    state_sync.migrate(default_catalog=None)
+    import_state(state_sync, state_file)
+
+    assert not context.plan().has_changes
+
+    environment_statements = state_sync.get_environment_statements("prod")
+    assert len(environment_statements) == 1
+    assert environment_statements[0].before_all[0] == "select 1 as before_all"
+    assert environment_statements[0].after_all[0] == "select 2 as after_all"
