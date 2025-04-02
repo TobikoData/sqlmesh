@@ -42,7 +42,7 @@ from sqlmesh.core.test import ModelTest
 from sqlmesh.utils import rich as srich
 from sqlmesh.utils import Verbosity
 from sqlmesh.utils.concurrency import NodeExecutionFailedError
-from sqlmesh.utils.date import time_like_to_str, to_date, yesterday_ds, to_ds, to_datetime
+from sqlmesh.utils.date import time_like_to_str, to_date, yesterday_ds, to_ds, make_inclusive
 from sqlmesh.utils.errors import (
     PythonModelEvalError,
     NodeAuditsErrors,
@@ -3144,10 +3144,13 @@ def _format_evaluation_model_interval(snapshot: Snapshot, interval: Interval) ->
         or snapshot.model.kind.is_managed
         or snapshot.model.kind.is_custom
     ):
-        # include time if interval < 1 day
-        if (interval[1] - interval[0]) < datetime.timedelta(days=1).total_seconds() * 1000:
-            return f"insert {to_ds(interval[0])} {to_datetime(interval[0]).strftime('%H:%M:%S')}-{to_datetime(interval[1]).strftime('%H:%M:%S')}"
-        return f"insert {to_ds(interval[0])} - {to_ds(interval[1])}"
+        inclusive_interval = make_inclusive(interval[0], interval[1])
+        if snapshot.model.interval_unit.is_date_granularity:
+            return f"insert {to_ds(inclusive_interval[0])} - {to_ds(inclusive_interval[1])}"
+        # omit end date if interval start/end on same day
+        if inclusive_interval[0].date() == inclusive_interval[1].date():
+            return f"insert {to_ds(inclusive_interval[0])} {inclusive_interval[0].strftime('%H:%M:%S')}-{inclusive_interval[1].strftime('%H:%M:%S')}"
+        return f"insert {inclusive_interval[0].strftime('%Y-%m-%d %H:%M:%S')} - {inclusive_interval[1].strftime('%Y-%m-%d %H:%M:%S')}"
     return ""
 
 
