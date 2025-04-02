@@ -45,7 +45,7 @@ class ModelTextTestRunner(unittest.TextTestRunner):
         )
 
 
-def create_test_engine_adapters_for_tests(
+def create_testing_engine_adapters(
     model_test_metadata: list[ModelTestMetadata],
     config: C,
     default_gateway: str,
@@ -118,7 +118,7 @@ def run_tests(
         descriptions=True,
     )
 
-    metadata_to_adapter = create_test_engine_adapters_for_tests(
+    metadata_to_adapter = create_testing_engine_adapters(
         model_test_metadata=model_test_metadata,
         config=config,
         default_gateway=default_gateway,
