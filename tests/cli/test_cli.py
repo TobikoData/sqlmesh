@@ -7,6 +7,7 @@ from click import ClickException
 import pytest
 from click.testing import CliRunner
 import time_machine
+import json
 
 from sqlmesh.cli.example_project import ProjectTemplate, init_example_project
 from sqlmesh.cli.main import cli
@@ -1240,3 +1241,376 @@ def test_lint(runner, tmp_path):
     )
     assert result.output.count("Linter errors for") == 2
     assert result.exit_code == 1
+
+
+def test_state_export(runner: CliRunner, tmp_path: Path) -> None:
+    create_example_project(tmp_path)
+
+    state_export_file = tmp_path / "state_export.json"
+
+    # create some state
+    result = runner.invoke(
+        cli,
+        [
+            "--paths",
+            str(tmp_path),
+            "plan",
+            "--no-prompts",
+            "--auto-apply",
+        ],
+    )
+    assert result.exit_code == 0
+
+    # export it
+    result = runner.invoke(
+        cli,
+        ["--paths", str(tmp_path), "state", "export", "-o", str(state_export_file), "--no-confirm"],
+        catch_exceptions=False,
+    )
+    assert result.exit_code == 0
+
+    # verify output
+    assert "Gateway: local" in result.output
+    assert "Type: duckdb" in result.output
+    assert "Exporting versions" in result.output
+    assert "Exporting snapshots" in result.output
+    assert "Exporting environments" in result.output
+    assert "State exported successfully" in result.output
+
+    assert state_export_file.exists()
+    assert len(state_export_file.read_text()) > 0
+
+
+def test_state_export_specific_environments(runner: CliRunner, tmp_path: Path) -> None:
+    create_example_project(tmp_path)
+
+    state_export_file = tmp_path / "state_export.json"
+
+    # create prod
+    result = runner.invoke(
+        cli,
+        [
+            "--paths",
+            str(tmp_path),
+            "plan",
+            "--no-prompts",
+            "--auto-apply",
+        ],
+    )
+    assert result.exit_code == 0
+
+    (tmp_path / "models" / "new_model.sql").write_text(
+        """
+    MODEL (
+        name sqlmesh_example.new_model,
+        kind FULL
+    );
+
+    SELECT 1;
+    """
+    )
+
+    # create dev env with new model
+    result = runner.invoke(
+        cli,
+        [
+            "--paths",
+            str(tmp_path),
+            "plan",
+            "dev",
+            "--no-prompts",
+            "--auto-apply",
+        ],
+    )
+    assert result.exit_code == 0
+
+    # export non existent env - should fail
+    result = runner.invoke(
+        cli,
+        [
+            "--paths",
+            str(tmp_path),
+            "state",
+            "export",
+            "--environment",
+            "nonexist",
+            "-o",
+            str(state_export_file),
+            "--no-confirm",
+        ],
+        catch_exceptions=False,
+    )
+    assert result.exit_code == 1
+    assert "No such environment: nonexist" in result.output
+
+    # export dev, should contain original snapshots + new one
+    result = runner.invoke(
+        cli,
+        [
+            "--paths",
+            str(tmp_path),
+            "state",
+            "export",
+            "--environment",
+            "dev",
+            "-o",
+            str(state_export_file),
+            "--no-confirm",
+        ],
+        catch_exceptions=False,
+    )
+    assert result.exit_code == 0
+    assert "Environment: dev" in result.output
+    assert "State exported successfully" in result.output
+
+    state = json.loads(state_export_file.read_text(encoding="utf8"))
+    assert len(state["snapshots"]) == 4
+    assert any("new_model" in s["name"] for s in state["snapshots"])
+    assert len(state["environments"]) == 1
+    assert "dev" in state["environments"]
+    assert "prod" not in state["environments"]
+
+
+def test_state_export_local(runner: CliRunner, tmp_path: Path) -> None:
+    create_example_project(tmp_path)
+
+    state_export_file = tmp_path / "state_export.json"
+
+    # note: we have not plan+applied at all, we are just exporting local state
+    result = runner.invoke(
+        cli,
+        [
+            "--paths",
+            str(tmp_path),
+            "state",
+            "export",
+            "--local",
+            "-o",
+            str(state_export_file),
+            "--no-confirm",
+        ],
+        catch_exceptions=False,
+    )
+    assert result.exit_code == 0
+    assert "Exporting local state" in result.output
+    assert "the resulting file cannot be imported" in result.output
+    assert "State exported successfully" in result.output
+
+    state = json.loads(state_export_file.read_text(encoding="utf8"))
+    assert len(state["snapshots"]) == 3
+    assert not state["metadata"]["importable"]
+    assert len(state["environments"]) == 0
+
+    # test mutually exclusive with --environment
+    result = runner.invoke(
+        cli,
+        [
+            "--paths",
+            str(tmp_path),
+            "state",
+            "export",
+            "--environment",
+            "foo",
+            "--local",
+            "-o",
+            str(state_export_file),
+            "--no-confirm",
+        ],
+        catch_exceptions=False,
+    )
+    assert result.exit_code == 1
+
+    assert "Cannot specify both --environment and --local" in result.output
+
+
+def test_state_import(runner: CliRunner, tmp_path: Path) -> None:
+    create_example_project(tmp_path)
+
+    state_export_file = tmp_path / "state_export.json"
+
+    # create some state
+    result = runner.invoke(
+        cli,
+        [
+            "--paths",
+            str(tmp_path),
+            "plan",
+            "--no-prompts",
+            "--auto-apply",
+        ],
+    )
+    assert result.exit_code == 0
+
+    # export it
+    result = runner.invoke(
+        cli,
+        ["--paths", str(tmp_path), "state", "export", "-o", str(state_export_file), "--no-confirm"],
+        catch_exceptions=False,
+    )
+    assert result.exit_code == 0
+
+    # import it back
+    result = runner.invoke(
+        cli,
+        ["--paths", str(tmp_path), "state", "import", "-i", str(state_export_file), "--no-confirm"],
+        catch_exceptions=False,
+    )
+    assert result.exit_code == 0
+
+    assert "Gateway: local" in result.output
+    assert "Type: duckdb" in result.output
+    assert "Importing versions" in result.output
+    assert "Importing snapshots" in result.output
+    assert "Importing environments" in result.output
+    assert "State imported successfully" in result.output
+
+    # plan should have no changes
+    result = runner.invoke(
+        cli,
+        [
+            "--paths",
+            str(tmp_path),
+            "plan",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "No changes to plan" in result.output
+
+
+def test_state_import_replace(runner: CliRunner, tmp_path: Path) -> None:
+    create_example_project(tmp_path)
+
+    state_export_file = tmp_path / "state_export.json"
+
+    # prod
+    result = runner.invoke(
+        cli,
+        [
+            "--paths",
+            str(tmp_path),
+            "plan",
+            "--no-prompts",
+            "--auto-apply",
+        ],
+    )
+    assert result.exit_code == 0
+
+    (tmp_path / "models" / "new_model.sql").write_text(
+        """
+    MODEL (
+        name sqlmesh_example.new_model,
+        kind FULL
+    );
+
+    SELECT 1;
+    """
+    )
+
+    # create dev with new model
+    result = runner.invoke(
+        cli,
+        [
+            "--paths",
+            str(tmp_path),
+            "plan",
+            "dev",
+            "--no-prompts",
+            "--auto-apply",
+        ],
+    )
+    assert result.exit_code == 0
+
+    # prove both dev and prod exist
+    result = runner.invoke(
+        cli,
+        [
+            "--paths",
+            str(tmp_path),
+            "environments",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "dev -" in result.output
+    assert "prod -" in result.output
+
+    # export just prod
+    result = runner.invoke(
+        cli,
+        [
+            "--paths",
+            str(tmp_path),
+            "state",
+            "export",
+            "--environment",
+            "prod",
+            "-o",
+            str(state_export_file),
+            "--no-confirm",
+        ],
+        catch_exceptions=False,
+    )
+    assert result.exit_code == 0
+
+    # import it back with --replace
+    result = runner.invoke(
+        cli,
+        [
+            "--paths",
+            str(tmp_path),
+            "state",
+            "import",
+            "-i",
+            str(state_export_file),
+            "--replace",
+            "--no-confirm",
+        ],
+        catch_exceptions=False,
+    )
+    assert result.exit_code == 0
+    assert "State imported successfully" in result.output
+
+    # prove only prod exists now
+    result = runner.invoke(
+        cli,
+        [
+            "--paths",
+            str(tmp_path),
+            "environments",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "dev -" not in result.output
+    assert "prod -" in result.output
+
+
+def test_state_import_local(runner: CliRunner, tmp_path: Path) -> None:
+    create_example_project(tmp_path)
+
+    state_export_file = tmp_path / "state_export.json"
+
+    # local state export
+    result = runner.invoke(
+        cli,
+        [
+            "--paths",
+            str(tmp_path),
+            "state",
+            "export",
+            "--local",
+            "-o",
+            str(state_export_file),
+            "--no-confirm",
+        ],
+        catch_exceptions=False,
+    )
+    assert result.exit_code == 0
+
+    # import should fail - local state is not importable
+    result = runner.invoke(
+        cli,
+        ["--paths", str(tmp_path), "state", "import", "-i", str(state_export_file), "--no-confirm"],
+        catch_exceptions=False,
+    )
+    assert result.exit_code == 1
+    assert "State file is marked as not importable" in result.output
+    assert "Aborting" in result.output

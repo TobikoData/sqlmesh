@@ -392,6 +392,9 @@ class GenericContext(BaseContext, t.Generic[C]):
         ]
 
         self._connection_config = self.config.get_connection(self.gateway)
+        self._state_connection_config = (
+            self.config.get_state_connection(self.gateway) or self._connection_config
+        )
         self.concurrent_tasks = concurrent_tasks or self._connection_config.concurrent_tasks
 
         self._engine_adapters: t.Dict[str, EngineAdapter] = {
@@ -2088,6 +2091,64 @@ class GenericContext(BaseContext, t.Generic[C]):
     def clear_caches(self) -> None:
         for path in self.configs:
             rmtree(path / c.CACHE)
+
+    def export_state(
+        self,
+        output_file: Path,
+        environment_names: t.Optional[t.List[str]] = None,
+        local_only: bool = False,
+        confirm: bool = True,
+    ) -> None:
+        from sqlmesh.core.state_sync.export_import import export_state
+
+        # trigger a connection to the StateSync so we can fail early if there is a problem
+        # note we still need to do this even if we are doing a local export so we know what 'versions' to write
+        self.state_sync.get_versions(validate=True)
+
+        local_snapshots = self.snapshots if local_only else None
+
+        if self.console.start_state_export(
+            output_file=output_file,
+            gateway=self.selected_gateway,
+            state_connection_config=self._state_connection_config,
+            environment_names=environment_names,
+            local_only=local_only,
+            confirm=confirm,
+        ):
+            try:
+                export_state(
+                    state_sync=self.state_sync,
+                    output_file=output_file,
+                    local_snapshots=local_snapshots,
+                    environment_names=environment_names,
+                    console=self.console,
+                )
+                self.console.stop_state_export(success=True, output_file=output_file)
+            except:
+                self.console.stop_state_export(success=False, output_file=output_file)
+                raise
+
+    def import_state(self, input_file: Path, clear: bool = False, confirm: bool = True) -> None:
+        from sqlmesh.core.state_sync.export_import import import_state
+
+        if self.console.start_state_import(
+            input_file=input_file,
+            gateway=self.selected_gateway,
+            state_connection_config=self._state_connection_config,
+            clear=clear,
+            confirm=confirm,
+        ):
+            try:
+                import_state(
+                    state_sync=self.state_sync,
+                    input_file=input_file,
+                    clear=clear,
+                    console=self.console,
+                )
+                self.console.stop_state_import(success=True, input_file=input_file)
+            except:
+                self.console.stop_state_import(success=False, input_file=input_file)
+                raise
 
     def _run_tests(
         self, verbosity: Verbosity = Verbosity.DEFAULT
