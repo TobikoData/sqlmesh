@@ -173,6 +173,7 @@ def test_plan_no_config(runner, tmp_path):
     assert "Error: SQLMesh project config could not be found" in result.output
 
 
+@time_machine.travel(FREEZE_TIME)
 def test_plan(runner, tmp_path):
     create_example_project(tmp_path)
 
@@ -183,6 +184,12 @@ def test_plan(runner, tmp_path):
         cli, ["--log-file-dir", tmp_path, "--paths", tmp_path, "plan"], input="y\n"
     )
     assert_plan_success(result)
+    # 'Models needing backfill' section and eval progress bar should display the same inclusive intervals
+    assert "sqlmesh_example.incremental_model: [2020-01-01 - 2022-12-31]" in result.output
+    assert (
+        "sqlmesh_example.incremental_model                    [insert 2020-01-01 -\n2022-12-31]"
+        in result.output
+    )
 
 
 def test_plan_skip_tests(runner, tmp_path):
