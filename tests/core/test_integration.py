@@ -5268,3 +5268,32 @@ def add_projection_to_model(model: SqlModel, literal: bool = True) -> SqlModel:
         "query": model.query.select(one_expr),  # type: ignore
     }
     return SqlModel.parse_obj(kwargs)
+
+
+def test_plan_environment_statements_doesnt_cause_extra_diff(tmp_path: Path):
+    model_a = """
+    MODEL (
+        name test_schema.a,
+        kind FULL,
+    );
+
+    SELECT 1;
+    """
+
+    models_dir = tmp_path / "models"
+    models_dir.mkdir()
+
+    (models_dir / "a.sql").write_text(model_a)
+
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        before_all=["select 1 as before_all"],
+        after_all=["select 2 as after_all"],
+    )
+    ctx = Context(paths=[tmp_path], config=config)
+
+    # first plan - should apply changes
+    assert ctx.plan(auto_apply=True, no_prompts=True).has_changes
+
+    # second plan - nothing has changed so should report no changes
+    assert not ctx.plan(auto_apply=True, no_prompts=True).has_changes
