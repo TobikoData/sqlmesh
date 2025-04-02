@@ -89,9 +89,8 @@ def func_globals(func: t.Callable) -> t.Dict[str, t.Any]:
         for var in (
             arg_globals + list(_code_globals(code)) + decorator_vars(func, root_node=root_node)
         ):
-            ref = func.__globals__.get(var)
-            if ref:
-                variables[var] = ref
+            if var in func.__globals__:
+                variables[var] = func.__globals__[var]
 
         if func.__closure__:
             for var, value in zip(code.co_freevars, func.__closure__):
