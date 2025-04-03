@@ -118,6 +118,8 @@ web = [
     "uvicorn[standard]==0.22.0",
     "sse-starlette>=0.2.2",
     "pyarrow",
+    "lsprotocol",
+    "pygls",
 ]
 risingwave = ["psycopg2"]
 
