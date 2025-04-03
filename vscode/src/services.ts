@@ -1,8 +1,7 @@
-import path from "path";
-import { traceError, traceLog, traceVerbose } from "./common/log";
-import { getInterpreterDetails } from "./common/python";
-import { getWorkspaceFolders } from "./common/vscodeapi";
+import { traceError, traceLog } from "./common/log";
 import { execSync } from 'child_process';
+import { sqlmesh_exec } from "./sqlmesh/sqlmesh";
+import { isErr } from "./functional/result";
 
 interface CLICallout {
     format: () => Promise<number>
@@ -12,33 +11,13 @@ export const actual_callout: CLICallout = {
     format: async () => {
         traceLog("Calling format")
         try {
-            const workspaceFolders = getWorkspaceFolders();
-            if (workspaceFolders.length !== 1) {
-                traceError("Invalid number of workspace folders");
+            const exec = await sqlmesh_exec();
+            if (isErr(exec)) {
+                traceError(exec.error);
                 return 1;
             }
-            const workspacePath = workspaceFolders[0].uri.fsPath;
-            const interpreterDetails = await getInterpreterDetails();
-            traceLog(`Interpreter details: ${JSON.stringify(interpreterDetails)}`);
-            if (interpreterDetails.path) {
-                traceVerbose(`Using interpreter from Python extension: ${interpreterDetails.path.join(' ')}`);
-            }
-            if (interpreterDetails.isVirtualEnvironment) {
-                traceLog('Using virtual environment');
-                const binPath = path.join(interpreterDetails.binPath!, 'sqlmesh');
-                traceLog(`Bin path: ${binPath}`);
-                execSync(`${binPath} format`, { encoding: 'utf-8', cwd: workspacePath, 
-                    env: {
-                        PYTHONPATH: interpreterDetails.path?.[0],
-                        VIRTUAL_ENV: path.dirname(interpreterDetails.binPath!),
-                        PATH: path.join(path.dirname(interpreterDetails.binPath!), 'bin')
-                    }
-                 });
-                return 0;
-            } else {
-                return execSync(`sqlmesh format`, { encoding: 'utf-8', cwd: workspacePath });
-            }
-
+            execSync(`${exec.value.bin} format`, { encoding: 'utf-8', cwd: exec.value.workspacePath, env: exec.value.env });
+            return 0;
         } catch (error: any) {
             traceError('Error executing sqlmesh format:', error.message);
             traceError(error.stdout);
