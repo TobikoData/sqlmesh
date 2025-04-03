@@ -2044,8 +2044,6 @@ class TerminalConsole(Console):
 
 def _cells_match(x: t.Any, y: t.Any) -> bool:
     """Helper function to compare two cells and returns true if they're equal, handling array objects."""
-    if x is None or y is None:
-        return x == y
 
     # Convert array-like objects to list for consistent comparison
     def _normalize(val: t.Any) -> t.Any:
