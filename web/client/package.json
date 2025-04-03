@@ -6,14 +6,15 @@
     "build": "npm run generate:api && tsc && vite build",
     "preview": "vite preview --no-open",
     "prettier": "prettier --write .",
-    "lint:fix": "eslint --fix .",
+    "lint:fix": "eslint --fix src",
     "format": "npm run prettier && npm run lint:fix",
     "test": "npm run generate:api npm run test:unit && npm run test:e2e",
     "test:unit:watch": "NODE_ENV=development vitest --watch=true",
     "test:unit": "NODE_ENV=testing vitest --watch=false",
     "test:e2e": "NODE_ENV=testing playwright test",
     "playwright:install": "playwright install --with-deps",
-    "generate:api": "orval --config ./orval.config.ts"
+    "generate:api": "orval --config ./orval.config.ts",
+    "ci": "npm run format && npm run build && npm run test"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.16.2",

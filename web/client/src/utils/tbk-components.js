@@ -404,10 +404,10 @@ class vr extends HTMLElement {
     return a === !1
       ? void 0
       : typeof a == 'string'
-      ? a
-      : typeof r == 'string'
-      ? r.toLowerCase()
-      : void 0
+        ? a
+        : typeof r == 'string'
+          ? r.toLowerCase()
+          : void 0
   }
   constructor() {
     super(),
@@ -495,8 +495,8 @@ class vr extends HTMLElement {
           typeof f.converter == 'function'
             ? { fromAttribute: f.converter }
             : ((d = f.converter) == null ? void 0 : d.fromAttribute) !== void 0
-            ? f.converter
-            : po
+              ? f.converter
+              : po
       ;(this._$Em = l),
         (this[l] = v.fromAttribute(i, f.type)),
         (this._$Em = null)
@@ -669,30 +669,30 @@ const iy = (n, r) => {
           ? k[1] === '!--'
             ? (f = pu)
             : k[1] !== void 0
-            ? (f = gu)
-            : k[2] !== void 0
-            ? (_h.test(k[2]) && (l = RegExp('</' + k[2], 'g')), (f = Gn))
-            : k[3] !== void 0 && (f = Gn)
+              ? (f = gu)
+              : k[2] !== void 0
+                ? (_h.test(k[2]) && (l = RegExp('</' + k[2], 'g')), (f = Gn))
+                : k[3] !== void 0 && (f = Gn)
           : f === Gn
-          ? k[0] === '>'
-            ? ((f = l ?? Zr), (C = -1))
-            : k[1] === void 0
-            ? (C = -2)
-            : ((C = f.lastIndex - k[2].length),
-              (_ = k[1]),
-              (f = k[3] === void 0 ? Gn : k[3] === '"' ? mu : vu))
-          : f === mu || f === vu
-          ? (f = Gn)
-          : f === pu || f === gu
-          ? (f = Zr)
-          : ((f = Gn), (l = void 0))
+            ? k[0] === '>'
+              ? ((f = l ?? Zr), (C = -1))
+              : k[1] === void 0
+                ? (C = -2)
+                : ((C = f.lastIndex - k[2].length),
+                  (_ = k[1]),
+                  (f = k[3] === void 0 ? Gn : k[3] === '"' ? mu : vu))
+            : f === mu || f === vu
+              ? (f = Gn)
+              : f === pu || f === gu
+                ? (f = Zr)
+                : ((f = Gn), (l = void 0))
     const T = f === Gn && n[v + 1].startsWith('/>') ? ' ' : ''
     d +=
       f === Zr
         ? m + ey
         : C >= 0
-        ? (a.push(_), m.slice(0, C) + bh + m.slice(C) + Tn + T)
-        : m + Tn + (C === -2 ? v : T)
+          ? (a.push(_), m.slice(0, C) + bh + m.slice(C) + Tn + T)
+          : m + Tn + (C === -2 ? v : T)
   }
   return [
     wh(
@@ -736,10 +736,10 @@ class ii {
                   z[1] === '.'
                     ? sy
                     : z[1] === '?'
-                    ? ay
-                    : z[1] === '@'
-                    ? ly
-                    : wo,
+                      ? ay
+                      : z[1] === '@'
+                        ? ly
+                        : wo,
               }),
                 l.removeAttribute(C)
             } else
@@ -813,8 +813,8 @@ class oy {
         m.type === 2
           ? (_ = new si(d, d.nextSibling, this, r))
           : m.type === 1
-          ? (_ = new m.ctor(d, m.name, m.strings, this, r))
-          : m.type === 6 && (_ = new cy(d, this, r)),
+            ? (_ = new m.ctor(d, m.name, m.strings, this, r))
+            : m.type === 6 && (_ = new cy(d, this, r)),
           this._$AV.push(_),
           (m = a[++v])
       }
@@ -870,12 +870,12 @@ class si {
           ? (this._$AH !== Ft && this._$AR(), (this._$AH = Ft))
           : r !== this._$AH && r !== Jn && this._(r)
         : r._$litType$ !== void 0
-        ? this.$(r)
-        : r.nodeType !== void 0
-        ? this.T(r)
-        : ny(r)
-        ? this.k(r)
-        : this._(r)
+          ? this.$(r)
+          : r.nodeType !== void 0
+            ? this.T(r)
+            : ny(r)
+              ? this.k(r)
+              : this._(r)
   }
   O(r) {
     return this._$AA.parentNode.insertBefore(r, this._$AB)
@@ -1501,12 +1501,12 @@ var ae =
   typeof globalThis < 'u'
     ? globalThis
     : typeof window < 'u'
-    ? window
-    : typeof global < 'u'
-    ? global
-    : typeof self < 'u'
-    ? self
-    : {}
+      ? window
+      : typeof global < 'u'
+        ? global
+        : typeof self < 'u'
+          ? self
+          : {}
 function $o(n) {
   return n && n.__esModule && Object.prototype.hasOwnProperty.call(n, 'default')
     ? n.default
@@ -2509,12 +2509,12 @@ var Ry = { exports: {} }
       return w === x
         ? x
         : w === w.toLowerCase()
-        ? x.toLowerCase()
-        : w === w.toUpperCase()
-        ? x.toUpperCase()
-        : w[0] === w[0].toUpperCase()
-        ? x.charAt(0).toUpperCase() + x.substr(1).toLowerCase()
-        : x.toLowerCase()
+          ? x.toLowerCase()
+          : w === w.toUpperCase()
+            ? x.toUpperCase()
+            : w[0] === w[0].toUpperCase()
+              ? x.charAt(0).toUpperCase() + x.substr(1).toLowerCase()
+              : x.toLowerCase()
     }
     function _(w, x) {
       return w.replace(/\$(\d{1,2})/g, function (P, G) {
@@ -2541,8 +2541,8 @@ var Ry = { exports: {} }
         return x.hasOwnProperty(U)
           ? m(G, U)
           : w.hasOwnProperty(U)
-          ? m(G, w[U])
-          : C(U, G, P)
+            ? m(G, w[U])
+            : C(U, G, P)
       }
     }
     function T(w, x, P, G) {
@@ -2551,8 +2551,8 @@ var Ry = { exports: {} }
         return x.hasOwnProperty(it)
           ? !0
           : w.hasOwnProperty(it)
-          ? !1
-          : C(it, it, P) === it
+            ? !1
+            : C(it, it, P) === it
       }
     }
     function z(w, x, P) {
@@ -3249,8 +3249,8 @@ function d1(n) {
       ? h1
       : u1
     : ku && ku in Object(n)
-    ? l1(n)
-    : c1(n)
+      ? l1(n)
+      : c1(n)
 }
 var f1 = d1
 function p1(n) {
@@ -4479,8 +4479,8 @@ var Fh = {
     n === 0
       ? 'No options selected'
       : n === 1
-      ? '1 option selected'
-      : `${n} options selected`,
+        ? '1 option selected'
+        : `${n} options selected`,
   previousSlide: 'Previous slide',
   progress: 'Progress',
   remove: 'Remove',
@@ -4549,8 +4549,8 @@ function r$(n, r, i) {
         ? 'right'
         : 'left'
       : a === 'start'
-      ? 'bottom'
-      : 'top'
+        ? 'bottom'
+        : 'top'
   return r.reference[d] > r.floating[d] && (f = bo(f)), [f, bo(f)]
 }
 function i$(n) {
@@ -5248,8 +5248,8 @@ function Yh(n) {
       ? n.ownerDocument.body
       : n.body
     : tn(r) && fi(r)
-    ? r
-    : Yh(r)
+      ? r
+      : Yh(r)
 }
 function oi(n, r, i) {
   var a
@@ -5792,8 +5792,8 @@ function oa(n) {
   return n.assignedSlot
     ? n.assignedSlot
     : n.parentNode instanceof ShadowRoot
-    ? n.parentNode.host
-    : n.parentNode
+      ? n.parentNode.host
+      : n.parentNode
 }
 function I$(n) {
   for (let r = n; r; r = oa(r))
@@ -5872,22 +5872,22 @@ var Ct = class extends Se {
                 (_ = n.right),
                 (k = n.top))
             : n.left < r.left
-            ? ((a = n.right),
-              (l = n.top),
-              (d = r.left),
-              (f = r.top),
-              (v = n.right),
-              (m = n.bottom),
-              (_ = r.left),
-              (k = r.bottom))
-            : ((a = r.right),
-              (l = r.top),
-              (d = n.left),
-              (f = n.top),
-              (v = r.right),
-              (m = r.bottom),
-              (_ = n.left),
-              (k = n.bottom)),
+              ? ((a = n.right),
+                (l = n.top),
+                (d = r.left),
+                (f = r.top),
+                (v = n.right),
+                (m = n.bottom),
+                (_ = r.left),
+                (k = r.bottom))
+              : ((a = r.right),
+                (l = r.top),
+                (d = n.left),
+                (f = n.top),
+                (v = r.right),
+                (m = r.bottom),
+                (_ = n.left),
+                (k = n.bottom)),
             this.style.setProperty('--hover-bridge-top-left-x', `${a}px`),
             this.style.setProperty('--hover-bridge-top-left-y', `${l}px`),
             this.style.setProperty('--hover-bridge-top-right-x', `${d}px`),
@@ -6244,8 +6244,8 @@ function Gu(n) {
     n.indexOf('ms') > -1
       ? parseFloat(n)
       : n.indexOf('s') > -1
-      ? parseFloat(n) * 1e3
-      : parseFloat(n)
+        ? parseFloat(n) * 1e3
+        : parseFloat(n)
   )
 }
 function N$() {
@@ -8220,8 +8220,8 @@ _o.exports
               ? ed
               : Qh
             : Bn && Bn in xt(t)
-            ? cg(t)
-            : $g(t)
+              ? cg(t)
+              : $g(t)
         }
         function ds(t, e) {
           return t > e
@@ -8295,8 +8295,8 @@ _o.exports
           return t === e
             ? !0
             : t == null || e == null || (!Rt(t) && !Rt(e))
-            ? t !== t && e !== e
-            : Lp(t, e, o, s, qr, c)
+              ? t !== t && e !== e
+              : Lp(t, e, o, s, qr, c)
         }
         function Lp(t, e, o, s, c, h) {
           var p = lt(t),
@@ -8372,12 +8372,12 @@ _o.exports
           return typeof t == 'function'
             ? t
             : t == null
-            ? se
-            : typeof t == 'object'
-            ? lt(t)
-              ? Ul(t[0], t[1])
-              : Bl(t)
-            : iu(t)
+              ? se
+              : typeof t == 'object'
+                ? lt(t)
+                  ? Ul(t[0], t[1])
+                  : Bl(t)
+                : iu(t)
         }
         function gs(t) {
           if (!Kr(t)) return Ff(t)
@@ -8455,16 +8455,16 @@ _o.exports
                 ? lt(g)
                   ? (E = g)
                   : Lt(g)
-                  ? (E = re(g))
-                  : Z
-                  ? ((O = !1), (E = jl(y, !0)))
-                  : tt
-                  ? ((O = !1), (E = Jl(y, !0)))
-                  : (E = [])
+                    ? (E = re(g))
+                    : Z
+                      ? ((O = !1), (E = jl(y, !0)))
+                      : tt
+                        ? ((O = !1), (E = Jl(y, !0)))
+                        : (E = [])
                 : Xr(y) || Yn(y)
-                ? ((E = g),
-                  Yn(g) ? (E = Vc(g)) : (!Ot(g) || hn(g)) && (E = vc(y)))
-                : (O = !1)
+                  ? ((E = g),
+                    Yn(g) ? (E = Vc(g)) : (!Ot(g) || hn(g)) && (E = vc(y)))
+                  : (O = !1)
           }
           O && (p.set(y, E), c(E, y, s, h, p), p.delete(y)), ls(t, o, E)
         }
@@ -8656,12 +8656,12 @@ _o.exports
               A
                 ? (et = tt && (s || N))
                 : g
-                ? (et = tt && N && (s || !Z))
-                : y
-                ? (et = tt && N && !Z && (s || !ut))
-                : Z || ut
-                ? (et = !1)
-                : (et = s ? O <= e : O < e)
+                  ? (et = tt && N && (s || !Z))
+                  : y
+                    ? (et = tt && N && !Z && (s || !ut))
+                    : Z || ut
+                      ? (et = !1)
+                      : (et = s ? O <= e : O < e)
             et ? (c = E + 1) : (h = E)
           }
           return jt(h, zt)
@@ -9244,8 +9244,8 @@ _o.exports
             e == U || e == it
               ? (tt = rg(t, e, g))
               : (e == J || e == (x | J)) && !c.length
-              ? (tt = ig(t, e, o, s))
-              : (tt = Hi.apply(i, Z))
+                ? (tt = ig(t, e, o, s))
+                : (tt = Hi.apply(i, Z))
           var ut = N ? ql : wc
           return $c(ut(tt, Z), t, e)
         }
@@ -10757,8 +10757,8 @@ _o.exports
           return o || Cd.test(t)
             ? rf(t.slice(2), o ? 2 : 8)
             : $d.test(t)
-            ? rt
-            : +t
+              ? rt
+              : +t
         }
         function Vc(t) {
           return Ze(t, oe(t))
@@ -10939,8 +10939,8 @@ _o.exports
             c
               ? (o = s ? new h() : [])
               : Ot(t)
-              ? (o = hn(h) ? cr(Ei(t)) : {})
-              : (o = {})
+                ? (o = hn(h) ? cr(Ei(t)) : {})
+                : (o = {})
           }
           return (
             (c ? Ae : Xe)(t, function (p, g, y) {
@@ -11998,8 +11998,8 @@ class ju extends ue {
           (this._hideCatalog
             ? 0
             : this._collapseCatalog
-            ? this._widthIconEllipsis
-            : this._widthCatalog) +
+              ? this._widthIconEllipsis
+              : this._widthCatalog) +
           this._widthSchema +
           this._widthModel +
           this._widthAdditional
@@ -12013,12 +12013,12 @@ class ju extends ue {
                   ? (this._hideSchema = !0)
                   : (this._collapseSchema = !0)
                 : this.mode === Je.None
-                ? (this._hideSchema = !1)
-                : (this._collapseSchema = this.collapseSchema))
+                  ? (this._hideSchema = !1)
+                  : (this._collapseSchema = this.collapseSchema))
             : this.mode === Je.None
-            ? ((this._hideCatalog = !1), (this._hideSchema = !1))
-            : ((this._collapseCatalog = this.collapseCatalog),
-              (this._collapseSchema = this.collapseSchema))
+              ? ((this._hideCatalog = !1), (this._hideSchema = !1))
+              : ((this._collapseCatalog = this.collapseCatalog),
+                (this._collapseSchema = this.collapseSchema))
       }, 300),
     )
     ;(this._hasCollapsedParts = !1),
@@ -12068,16 +12068,18 @@ class ju extends ue {
     i.has('text')
       ? this._setNameParts()
       : i.has('collapse-catalog')
-      ? (this._collapseCatalog = this.collapseCatalog)
-      : i.has('collapse-schema')
-      ? (this._collapseSchema = this.collapseSchema)
-      : i.has('mode')
-      ? this.mode === Je.None &&
-        ((this._hideCatalog = !0), (this._hideSchema = !0))
-      : i.has('hide-catalog')
-      ? (this._hideCatalog = this.mode === Je.None ? !0 : this.hideCatalog)
-      : i.has('hide-schema') &&
-        (this._hideSchema = this.mode === Je.None ? !0 : this.hideSchema)
+        ? (this._collapseCatalog = this.collapseCatalog)
+        : i.has('collapse-schema')
+          ? (this._collapseSchema = this.collapseSchema)
+          : i.has('mode')
+            ? this.mode === Je.None &&
+              ((this._hideCatalog = !0), (this._hideSchema = !0))
+            : i.has('hide-catalog')
+              ? (this._hideCatalog =
+                  this.mode === Je.None ? !0 : this.hideCatalog)
+              : i.has('hide-schema') &&
+                (this._hideSchema =
+                  this.mode === Je.None ? !0 : this.hideSchema)
   }
   async resize() {
     this.hideCatalog && this.hideSchema
@@ -12167,7 +12169,7 @@ class ju extends ue {
     return this.hideTooltip
       ? X`<span title="${this.text}">${i}</span>`
       : this._hasCollapsedParts
-      ? X`
+        ? X`
           <tbk-tooltip
             content="${this.text}"
             placement="right"
@@ -12176,7 +12178,7 @@ class ju extends ue {
             ${i}
           </tbk-tooltip>
         `
-      : i
+        : i
   }
   render() {
     return X`
@@ -12742,8 +12744,8 @@ class Qu extends ue {
             a !== i.target
               ? a.setActive(!1)
               : this.allowUnselect
-              ? a.setActive()
-              : a.setActive(!0)
+                ? a.setActive()
+                : a.setActive(!0)
           }),
           this.emit('change', { detail: i.detail })
       })
@@ -13916,8 +13918,8 @@ var he = class extends Se {
           ? (this.style[n] = `${a} var(--divider-width) ${l}`)
           : (this.style[n] = `${l} var(--divider-width) ${a}`)
         : i && !this.vertical
-        ? (this.style[n] = `${l} var(--divider-width) ${a}`)
-        : (this.style[n] = `${a} var(--divider-width) ${l}`),
+          ? (this.style[n] = `${l} var(--divider-width) ${a}`)
+          : (this.style[n] = `${a} var(--divider-width) ${l}`),
       (this.style[r] = ''),
       X`
       <slot name="start" part="panel start" class="start"></slot>
@@ -15391,16 +15393,17 @@ class dh extends mn(Wt) {
         r.key === 'Home'
           ? (v = 0)
           : r.key === 'End'
-          ? (v = this.tabs.length - 1)
-          : (['top', 'bottom'].includes(this.placement) &&
-              r.key === (f ? 'ArrowRight' : 'ArrowLeft')) ||
-            (['start', 'end'].includes(this.placement) && r.key === 'ArrowUp')
-          ? v--
-          : ((['top', 'bottom'].includes(this.placement) &&
-              r.key === (f ? 'ArrowLeft' : 'ArrowRight')) ||
-              (['start', 'end'].includes(this.placement) &&
-                r.key === 'ArrowDown')) &&
-            v++,
+            ? (v = this.tabs.length - 1)
+            : (['top', 'bottom'].includes(this.placement) &&
+                  r.key === (f ? 'ArrowRight' : 'ArrowLeft')) ||
+                (['start', 'end'].includes(this.placement) &&
+                  r.key === 'ArrowUp')
+              ? v--
+              : ((['top', 'bottom'].includes(this.placement) &&
+                  r.key === (f ? 'ArrowLeft' : 'ArrowRight')) ||
+                  (['start', 'end'].includes(this.placement) &&
+                    r.key === 'ArrowDown')) &&
+                v++,
           v < 0 && (v = this.tabs.length - 1),
           v > this.tabs.length - 1 && (v = 0),
           this.tabs[v].focus({ preventScroll: !0 }),

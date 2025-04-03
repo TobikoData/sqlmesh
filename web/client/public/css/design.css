@@ -439,7 +439,8 @@
   --shadow-l: 0 var(--step) calc(var(--half) * 4) var(--color-shadow-10);
   --shadow-xl: 0 var(--step) calc(var(--half) * 5) var(--color-shadow-10);
 
-  --tooltip-shadow: 0 var(--step-2) calc(var(--step) * 4) -1px var(--color-shadow-30),
+  --tooltip-shadow:
+    0 var(--step-2) calc(var(--step) * 4) -1px var(--color-shadow-30),
     inset 0 0 0 1px var(--color-gray-300);
   --tooltip-background: var(--color-light);
   --tooltip-text: var(--color-gray-600);
