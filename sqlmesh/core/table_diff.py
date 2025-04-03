@@ -70,6 +70,7 @@ class RowDiff(PydanticModel, frozen=True):
     source_alias: t.Optional[str] = None
     target_alias: t.Optional[str] = None
     model_name: t.Optional[str] = None
+    decimals: int = 3
 
     @property
     def source_count(self) -> int:
@@ -576,5 +577,6 @@ class TableDiff:
                     source_alias=self.source_alias,
                     target_alias=self.target_alias,
                     model_name=self.model_name,
+                    decimals=self.decimals,
                 )
         return self._row_diff
