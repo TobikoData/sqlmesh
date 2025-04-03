@@ -1,0 +1,10 @@
+{
+    "name": "sqlmesh",
+    "workspaces" : [
+        "vscode",
+        "web/client"
+    ],
+    "scripts": {
+        "ci": "npm run ci --workspaces"
+    }
+}

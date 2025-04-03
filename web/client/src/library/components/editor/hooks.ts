@@ -99,8 +99,8 @@ function useSQLMeshModelExtensions(
             m.columns.map(c => c.name),
           )
         : (Object.keys(lineage)
-            .flatMap(
-              modelName => models.get(modelName)?.columns.map(c => c.name),
+            .flatMap(modelName =>
+              models.get(modelName)?.columns.map(c => c.name),
             )
             .filter(Boolean) as string[]),
     )

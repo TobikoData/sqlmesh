@@ -1,9 +1,9 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
-import * as path from 'path';
-import * as fs from 'fs-extra';
-import { EXTENSION_ROOT_DIR } from './constants';
+import * as path from 'path'
+import * as fs from 'fs-extra'
+import { EXTENSION_ROOT_DIR } from './constants'
 
 export interface IServerInfo {
     name: string;
@@ -11,11 +11,11 @@ export interface IServerInfo {
 }
 
 export function loadServerDefaults(): IServerInfo {
-    const packageJson = path.join(EXTENSION_ROOT_DIR, 'package.json');
-    const content = fs.readFileSync(packageJson).toString();
-    const config = JSON.parse(content);
+    const packageJson = path.join(EXTENSION_ROOT_DIR, 'package.json')
+    const content = fs.readFileSync(packageJson).toString()
+    const config = JSON.parse(content)
     return {
         name: "sqlmesh",
         module: "sqlmesh"
-    };
+    }
 }
