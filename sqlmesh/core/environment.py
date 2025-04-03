@@ -169,11 +169,20 @@ class Environment(EnvironmentNamingInfo):
 
     @property
     def promoted_snapshots(self) -> t.List[SnapshotTableInfo]:
+        def has_virtual_view(s: SnapshotTableInfo) -> bool:
+            return (
+                s.is_model and s.model_kind_name is not None and not s.model_kind_name.is_symbolic
+            )
+
         if self.promoted_snapshot_ids is None:
-            return self.snapshots
+            return [s for s in self.snapshots if has_virtual_view(s)]
 
         promoted_snapshot_ids = set(self.promoted_snapshot_ids)
-        return [s for s in self.snapshots if s.snapshot_id in promoted_snapshot_ids]
+        return [
+            s
+            for s in self.snapshots
+            if s.snapshot_id in promoted_snapshot_ids and has_virtual_view(s)
+        ]
 
     @property
     def previous_finalized_snapshots(self) -> t.Optional[t.List[SnapshotTableInfo]]:

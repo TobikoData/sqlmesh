@@ -246,11 +246,7 @@ class Console(LinterConsole, StateExporterConsole, StateImporterConsole, Janitor
         """Indicates that a new snapshot promotion progress has begun."""
 
     @abc.abstractmethod
-    def update_promotion_progress(
-        self,
-        snapshot: SnapshotInfoLike,
-        promoted: bool,
-    ) -> None:
+    def update_promotion_progress(self, snapshot: SnapshotInfoLike, promoted: bool) -> None:
         """Update the snapshot promotion progress."""
 
     @abc.abstractmethod
@@ -478,11 +474,7 @@ class NoopConsole(Console):
     ) -> None:
         pass
 
-    def update_promotion_progress(
-        self,
-        snapshot: SnapshotInfoLike,
-        promoted: bool,
-    ) -> None:
+    def update_promotion_progress(self, snapshot: SnapshotInfoLike, promoted: bool) -> None:
         pass
 
     def stop_promotion_progress(self, success: bool = True) -> None:
@@ -998,11 +990,7 @@ class TerminalConsole(Console):
             self.environment_naming_info = environment_naming_info
             self.default_catalog = default_catalog
 
-    def update_promotion_progress(
-        self,
-        snapshot: SnapshotInfoLike,
-        promoted: bool,
-    ) -> None:
+    def update_promotion_progress(self, snapshot: SnapshotInfoLike, promoted: bool) -> None:
         """Update the snapshot promotion progress."""
         if self.promotion_progress is not None and self.promotion_task is not None:
             if self.verbosity >= Verbosity.VERBOSE:
@@ -2881,11 +2869,7 @@ class DatabricksMagicConsole(CaptureTerminalConsole):
         self.promotion_status = (0, len(snapshots))
         print(f"Virtually Updating '{environment_naming_info.name}'")
 
-    def update_promotion_progress(
-        self,
-        snapshot: SnapshotInfoLike,
-        promoted: bool,
-    ) -> None:
+    def update_promotion_progress(self, snapshot: SnapshotInfoLike, promoted: bool) -> None:
         """Update the snapshot promotion progress."""
         num_promotions, total_promotions = self.promotion_status
         num_promotions += 1
@@ -3018,11 +3002,7 @@ class DebuggerTerminalConsole(TerminalConsole):
     ) -> None:
         self._write(f"Starting promotion for {len(snapshots)} snapshots")
 
-    def update_promotion_progress(
-        self,
-        snapshot: SnapshotInfoLike,
-        promoted: bool,
-    ) -> None:
+    def update_promotion_progress(self, snapshot: SnapshotInfoLike, promoted: bool) -> None:
         self._write(f"Promoting {snapshot.name}")
 
     def stop_promotion_progress(self, success: bool = True) -> None:
