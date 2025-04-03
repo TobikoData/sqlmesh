@@ -3,10 +3,49 @@ from pytest_mock.plugin import MockerFixture
 import pandas as pd
 from sqlglot import exp
 from sqlmesh.core import dialect as d
+import re
+import typing as t
+from io import StringIO
+from rich.console import Console
+from sqlmesh.core.console import TerminalConsole
 from sqlmesh.core.context import Context
 from sqlmesh.core.config import AutoCategorizationMode, CategorizerConfig
 from sqlmesh.core.model import SqlModel, load_sql_based_model
 from sqlmesh.core.table_diff import TableDiff
+import numpy as np
+
+
+def create_test_console() -> t.Tuple[StringIO, TerminalConsole]:
+    """Creates a console and buffer for validating console output."""
+    console_output = StringIO()
+    console = Console(file=console_output, force_terminal=True)
+    terminal_console = TerminalConsole(console=console)
+    return console_output, terminal_console
+
+
+def capture_console_output(method_name: str, **kwargs) -> str:
+    """Factory function to invoke and capture output a TerminalConsole method.
+
+    Args:
+        method_name: Name of the TerminalConsole method to call
+        **kwargs: Arguments to pass to the method
+
+    Returns:
+        The captured output as a string
+    """
+    console_output, terminal_console = create_test_console()
+    try:
+        method = getattr(terminal_console, method_name)
+        method(**kwargs)
+        return console_output.getvalue()
+    finally:
+        console_output.close()
+
+
+def strip_ansi_codes(text: str) -> str:
+    """Strip ANSI color codes and styling from text."""
+    ansi_escape = re.compile(r"\x1b\[[0-9;]*[a-zA-Z]")
+    return ansi_escape.sub("", text).strip()
 
 
 @pytest.mark.slow
@@ -121,7 +160,7 @@ def test_data_diff_decimals(sushi_context_fixed_date):
         pd.DataFrame(
             {
                 "key": [1, 2, 3],
-                "value": [1.0, 2.0, 3.1234],
+                "value": [1.0, 2.0, 3.1234321],
             }
         ),
     )
@@ -161,6 +200,32 @@ def test_data_diff_decimals(sushi_context_fixed_date):
     aliased_joined_sample = table_diff.row_diff().joined_sample.columns
     assert "DEV__value" in aliased_joined_sample
     assert "PROD__value" in aliased_joined_sample
+
+    output = capture_console_output("show_row_diff", row_diff=table_diff.row_diff())
+
+    # Expected output with box-drawings
+    expected_output = r"""
+Row Counts:
+├──  FULL MATCH: 2 rows (66.67%)
+└──  PARTIAL MATCH: 1 rows (33.33%)
+
+COMMON ROWS column comparison stats:
+       pct_match
+value  66.666667
+
+
+COMMON ROWS sample data differences:
+Column: value
+┏━━━━━┳━━━━━━━━┳━━━━━━━━┓
+┃ key ┃ DEV    ┃ PROD   ┃
+┡━━━━━╇━━━━━━━━╇━━━━━━━━┩
+│ 3.0 │ 3.1233 │ 3.1234 │
+└─────┴────────┴────────┘
+"""
+
+    stripped_output = strip_ansi_codes(output)
+    stripped_expected = expected_output.strip()
+    assert stripped_output == stripped_expected
 
 
 @pytest.mark.slow
@@ -363,3 +428,77 @@ def test_tables_and_grain_inferred_from_model(sushi_context_fixed_date: Context)
 
     _, _, col_names = table_diff.key_columns
     assert col_names == ["waiter_id", "event_date"]
+
+
+@pytest.mark.slow
+def test_data_diff_array(sushi_context_fixed_date):
+    engine_adapter = sushi_context_fixed_date.engine_adapter
+
+    engine_adapter.ctas(
+        "table_diff_source",
+        pd.DataFrame(
+            {
+                "key": [1, 2, 3],
+                "value": [np.array([51.2, 4.5678]), np.array([2.31, 12.2]), np.array([5.0])],
+            }
+        ),
+    )
+
+    engine_adapter.ctas(
+        "table_diff_target",
+        pd.DataFrame(
+            {
+                "key": [1, 2, 3],
+                "value": [
+                    np.array([51.2, 4.5679]),
+                    np.array([2.31, 12.2, 3.6, 1.9]),
+                    np.array([5.0]),
+                ],
+            }
+        ),
+    )
+
+    table_diff = TableDiff(
+        adapter=engine_adapter,
+        source="table_diff_source",
+        target="table_diff_target",
+        source_alias="dev",
+        target_alias="prod",
+        on=["key"],
+        decimals=4,
+    )
+
+    diff = table_diff.row_diff()
+    aliased_joined_sample = diff.joined_sample.columns
+
+    assert "DEV__value" in aliased_joined_sample
+    assert "PROD__value" in aliased_joined_sample
+    assert diff.full_match_count == 1
+    assert diff.partial_match_count == 2
+
+    output = capture_console_output("show_row_diff", row_diff=diff)
+
+    # Expected output with boxes
+    expected_output = r"""
+Row Counts:
+├──  FULL MATCH: 1 rows (33.33%)
+└──  PARTIAL MATCH: 2 rows (66.67%)
+
+COMMON ROWS column comparison stats:
+       pct_match
+value  33.333333
+
+
+COMMON ROWS sample data differences:
+Column: value
+┏━━━━━┳━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ key ┃ DEV            ┃ PROD                   ┃
+┡━━━━━╇━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ 1   │ [51.2, 4.5678] │ [51.2, 4.5679]         │
+│ 2   │ [2.31, 12.2]   │ [2.31, 12.2, 3.6, 1.9] │
+└─────┴────────────────┴────────────────────────┘
+"""
+
+    stripped_output = strip_ansi_codes(output)
+    stripped_expected = expected_output.strip()
+    assert stripped_output == stripped_expected

@@ -8,7 +8,8 @@ import uuid
 import logging
 import textwrap
 from pathlib import Path
-
+import pandas as pd
+import numpy as np
 from hyperscript import h
 from rich.console import Console as RichConsole
 from rich.live import Live
@@ -1904,10 +1905,37 @@ class TerminalConsole(Console):
                     # Create a table with the joined keys and comparison columns
                     column_table = row_diff.joined_sample[keys + [source_column, target_column]]
 
-                    # Filter out identical-valued rows
+                    def compare_cells(x: t.Any, y: t.Any) -> bool:
+                        """Compare two cells and returns true if they're not equal, handling array objects."""
+                        if x is None or y is None:
+                            return x != y
+
+                        # Convert any array-like object to list for consistent comparison
+                        def to_list(val: t.Any) -> t.Any:
+                            return (
+                                list(val)
+                                if isinstance(val, (pd.Series, np.ndarray, list, tuple, set))
+                                else val
+                            )
+
+                        x = to_list(x)
+                        y = to_list(y)
+                        if isinstance(x, list) and isinstance(y, list):
+                            if len(x) != len(y):
+                                return True
+                            return any(a != b for a, b in zip(x, y))
+
+                        return x != y
+
+                    # Filter to retain non identical-valued rows
                     column_table = column_table[
-                        column_table[source_column] != column_table[target_column]
+                        column_table.apply(
+                            lambda row: compare_cells(row[source_column], row[target_column]),
+                            axis=1,
+                        )
                     ]
+
+                    # Rename the column headers for readability
                     column_table = column_table.rename(
                         columns={
                             source_column: source_name,
@@ -1921,7 +1949,16 @@ class TerminalConsole(Console):
                         table.add_column(column_name, style=style, header_style=style)
 
                     for _, row in column_table.iterrows():
-                        table.add_row(*[str(cell) for cell in row])
+                        table.add_row(
+                            *[
+                                str(
+                                    round(cell, row_diff.decimals)
+                                    if isinstance(cell, float)
+                                    else cell
+                                )
+                                for cell in row
+                            ]
+                        )
 
                     self.console.print(
                         f"Column: [underline][bold cyan]{column}[/bold cyan][/underline]",
