@@ -76,6 +76,8 @@ REQUIREMENTS = "sqlmesh-requirements.lock"
 DEFAULT_SCHEMA = "default"
 
 SQLMESH_VARS = "__sqlmesh__vars__"
+SQLMESH_BLUEPRINT_VARS = "__sqlmesh__blueprint__vars__"
+
 VAR = "var"
 GATEWAY = "gateway"
 

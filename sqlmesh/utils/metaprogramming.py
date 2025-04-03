@@ -11,6 +11,7 @@ import sys
 import textwrap
 import types
 import typing as t
+from dataclasses import dataclass
 from enum import Enum
 from numbers import Number
 from pathlib import Path
@@ -349,6 +350,13 @@ def build_env(
     walk(obj, name)
 
 
+@dataclass
+class SqlValue:
+    """A SQL string representing a generated SQLGlot AST."""
+
+    sql: str
+
+
 class ExecutableKind(str, Enum):
     """The kind of of executable. The order of the members is used when serializing the python model to text."""
 
@@ -490,11 +498,12 @@ def prepare_env(
         python_env.items(), key=lambda item: 0 if item[1].is_import else 1
     ):
         if executable.is_value:
-            env[name] = ast.literal_eval(executable.payload)
+            env[name] = eval(executable.payload)
         else:
             exec(executable.payload, env)
             if executable.alias and executable.name:
                 env[executable.alias] = env[executable.name]
+
     return env
 
 

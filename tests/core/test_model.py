@@ -64,7 +64,7 @@ from sqlmesh.core.snapshot import Snapshot, SnapshotChangeCategory
 from sqlmesh.utils.date import TimeLike, to_datetime, to_ds, to_timestamp
 from sqlmesh.utils.errors import ConfigError, SQLMeshError, LinterError
 from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroInfo, MacroExtractor
-from sqlmesh.utils.metaprogramming import Executable
+from sqlmesh.utils.metaprogramming import Executable, SqlValue
 from sqlmesh.core.macros import RuntimeStage
 from tests.utils.test_helpers import use_terminal_console
 
@@ -8200,6 +8200,7 @@ from sqlmesh import model
 )
 def entrypoint(context, *args, **kwargs):
     x_var = context.var("x")
+    assert context.blueprint_var("blueprint").startswith("gw")
     return pd.DataFrame({"x": [x_var]})"""
     )
     blueprint_pysql = tmp_path / "models" / "blueprint_sql.py"
@@ -8218,6 +8219,7 @@ from sqlmesh import model
 )
 def entrypoint(evaluator):
     x_var = evaluator.var("x")
+    assert evaluator.blueprint_var("blueprint", default="").startswith("gw")
     return f'SELECT {x_var} AS x'"""
     )
 
@@ -8231,11 +8233,21 @@ def entrypoint(evaluator):
 
     for model_name in ("test_model_sql", "test_model_pydf", "test_model_pysql"):
         for gateway_no in range(1, 3):
-            model = models.get(f'"db"."gw{gateway_no}"."{model_name}"')
+            blueprint_value = f"gw{gateway_no}"
 
+            model = models.get(f'"db"."{blueprint_value}"."{model_name}"')
             assert model is not None
             assert "blueprints" not in model.all_fields()
-            assert model.python_env.get(c.SQLMESH_VARS) == Executable.value({"x": gateway_no})
+
+            python_env = model.python_env
+            serialized_blueprint = (
+                SqlValue(sql=blueprint_value) if model_name == "test_model_sql" else blueprint_value
+            )
+            assert python_env.get(c.SQLMESH_VARS) == Executable.value({"x": gateway_no})
+            assert python_env.get(c.SQLMESH_BLUEPRINT_VARS) == Executable.value(
+                {"blueprint": serialized_blueprint}
+            )
+
             assert context.fetchdf(f"from {model.fqn}").to_dict() == {"x": {0: gateway_no}}
 
     multi_variable_blueprint_example = tmp_path / "models" / "multi_variable_blueprint_example.sql"
@@ -8245,15 +8257,17 @@ def entrypoint(evaluator):
         MODEL (
           name @{customer}.my_table,
           blueprints (
-            (customer := customer1, foo := 'bar'),
-            (customer := customer2, foo := qux),
+            (customer := customer1, customer_field := 'bar'),
+            (customer := customer2, customer_field := qux),
           ),
           kind FULL
         );
 
         SELECT
-          @VAR('foo') AS foo,
-        FROM @VAR('customer').my_source
+          @customer_field AS foo,
+          @{customer_field} AS foo2,
+          @BLUEPRINT_VAR('customer_field') AS foo3,
+        FROM @{customer}.my_source
         """
     )
 
@@ -8264,23 +8278,29 @@ def entrypoint(evaluator):
     assert len(models) == 8
 
     customer1_model = models.get('"db"."customer1"."my_table"')
-
     assert customer1_model is not None
-    assert customer1_model.python_env.get(c.SQLMESH_VARS) == Executable.value(
-        {"customer": "customer1", "foo": "'bar'"}
+
+    customer1_python_env = customer1_model.python_env
+    assert customer1_python_env.get(c.SQLMESH_VARS) is None
+    assert customer1_python_env.get(c.SQLMESH_BLUEPRINT_VARS) == Executable.value(
+        {"customer": SqlValue(sql="customer1"), "customer_field": SqlValue(sql="'bar'")}
     )
+
     assert t.cast(exp.Expression, customer1_model.render_query()).sql() == (
-        """SELECT '''bar''' AS "foo" FROM "db"."customer1"."my_source" AS "my_source\""""
+        """SELECT 'bar' AS "foo", "bar" AS "foo2", 'bar' AS "foo3" FROM "db"."customer1"."my_source" AS "my_source\""""
     )
 
     customer2_model = models.get('"db"."customer2"."my_table"')
-
     assert customer2_model is not None
-    assert customer2_model.python_env.get(c.SQLMESH_VARS) == Executable.value(
-        {"customer": "customer2", "foo": "qux"}
+
+    customer2_python_env = customer2_model.python_env
+    assert customer2_python_env.get(c.SQLMESH_VARS) is None
+    assert customer2_python_env.get(c.SQLMESH_BLUEPRINT_VARS) == Executable.value(
+        {"customer": SqlValue(sql="customer2"), "customer_field": SqlValue(sql="qux")}
     )
+
     assert t.cast(exp.Expression, customer2_model.render_query()).sql() == (
-        '''SELECT 'qux' AS "foo" FROM "db"."customer2"."my_source" AS "my_source"'''
+        '''SELECT "qux" AS "foo", "qux" AS "foo2", "qux" AS "foo3" FROM "db"."customer2"."my_source" AS "my_source"'''
     )
 
 
@@ -8350,6 +8370,174 @@ def test_single_blueprint(tmp_path: Path) -> None:
 
     assert len(ctx.models) == 1
     assert '"memory"."bar"."some_table"' in ctx.models
+
+
+def test_blueprinting_with_quotes(tmp_path: Path) -> None:
+    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+
+    template_with_quoted_vars = tmp_path / "models/template_with_quoted_vars.sql"
+    template_with_quoted_vars.parent.mkdir(parents=True, exist_ok=True)
+    template_with_quoted_vars.write_text(
+        """
+        MODEL (
+          name m.@{bp_var},
+          blueprints (
+            (bp_var := "a b"),
+            (bp_var := 'c d'),
+          ),
+        );
+
+        SELECT @bp_var AS c1, @{bp_var} AS c2
+        """
+    )
+
+    ctx = Context(
+        config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb")), paths=tmp_path
+    )
+    assert len(ctx.models) == 2
+
+    m1 = ctx.get_model('m."a b"', raise_if_missing=True)
+    m2 = ctx.get_model('m."c d"', raise_if_missing=True)
+
+    assert m1.name == 'm."a b"'
+    assert m2.name == 'm."c d"'
+    assert t.cast(exp.Query, m1.render_query()).sql() == '''SELECT "a b" AS "c1", "a b" AS "c2"'''
+    assert t.cast(exp.Query, m2.render_query()).sql() == '''SELECT 'c d' AS "c1", "c d" AS "c2"'''
+
+
+def test_blueprint_variable_precedence_sql(tmp_path: Path, assert_exp_eq: t.Callable) -> None:
+    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+
+    blueprint_variables = tmp_path / "models/blueprint_variables.sql"
+    blueprint_variables.parent.mkdir(parents=True, exist_ok=True)
+    blueprint_variables.write_text(
+        """
+        MODEL (
+          name s.@{bp_name},
+          blueprints (
+            (bp_name := m1, var1 := 'v1', var2 := 'v2'),
+            (bp_name := m2, var1 := 'v3'),
+          ),
+        );
+
+        @DEF(bp_name, override);
+
+        SELECT
+          @var1 AS var1_macro_var,
+          @{var1} AS var1_identifier,
+          @VAR('var1') AS var1_var_macro_func,
+          @BLUEPRINT_VAR('var1') AS var1_blueprint_var_macro_func,
+
+          @var2 AS var2_macro_var,
+          @{var2} AS var2_identifier,
+          @VAR('var2') AS var2_var_macro_func,
+          @BLUEPRINT_VAR('var2') AS var2_blueprint_var_macro_func,
+
+          @bp_name AS bp_name_macro_var,
+          @{bp_name} AS bp_name_identifier,
+          @VAR('bp_name') AS bp_name_var_macro_func,
+          @BLUEPRINT_VAR('bp_name') AS bp_name_blueprint_var_macro_func,
+        """
+    )
+
+    ctx = Context(
+        config=Config(
+            model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+            variables={"var2": "1"},
+        ),
+        paths=tmp_path,
+    )
+    assert len(ctx.models) == 2
+
+    m1 = ctx.get_model("s.m1", raise_if_missing=True)
+    m2 = ctx.get_model("s.m2", raise_if_missing=True)
+
+    assert_exp_eq(
+        m1.render_query(),
+        """
+        SELECT
+          'v1' AS "var1_macro_var",
+          "v1" AS "var1_identifier",
+          NULL AS "var1_var_macro_func",
+          'v1' AS "var1_blueprint_var_macro_func",
+          'v2' AS "var2_macro_var",
+          "v2" AS "var2_identifier",
+          '1' AS "var2_var_macro_func",
+          'v2' AS "var2_blueprint_var_macro_func",
+          "override" AS "bp_name_macro_var",
+          "override" AS "bp_name_identifier",
+          NULL AS "bp_name_var_macro_func",
+          "m1" AS "bp_name_blueprint_var_macro_func"
+        """,
+    )
+    assert_exp_eq(
+        m2.render_query(),
+        """
+        SELECT
+          'v3' AS "var1_macro_var",
+          "v3" AS "var1_identifier",
+          NULL AS "var1_var_macro_func",
+          'v3' AS "var1_blueprint_var_macro_func",
+          '1' AS "var2_macro_var",
+          "1" AS "var2_identifier",
+          '1' AS "var2_var_macro_func",
+          NULL AS "var2_blueprint_var_macro_func",
+          "override" AS "bp_name_macro_var",
+          "override" AS "bp_name_identifier",
+          NULL AS "bp_name_var_macro_func",
+          "m2" AS "bp_name_blueprint_var_macro_func"
+        """,
+    )
+
+
+def test_blueprint_variable_precedence_python(tmp_path: Path, mocker: MockerFixture) -> None:
+    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+
+    blueprint_variables = tmp_path / "models/blueprint_variables.py"
+    blueprint_variables.parent.mkdir(parents=True, exist_ok=True)
+    blueprint_variables.write_text(
+        """
+import pandas as pd
+from sqlglot import exp
+from sqlmesh import model
+
+
+@model(
+    "s.@{bp_name}",
+    blueprints=[{"bp_name": "m", "var1": exp.to_column("v1"), "var2": 1}],
+    kind="FULL",
+    columns={"x": "INT"},
+)
+def entrypoint(context, *args, **kwargs):
+    assert "bp_name" not in kwargs
+    assert "var1" not in kwargs
+    assert kwargs.get("var2") == "1"
+
+    assert context.var("bp_name") is None
+    assert context.var("var1") is None
+    assert context.var("var2") == "1"
+
+    assert context.blueprint_var("bp_name") == "m"
+    assert context.blueprint_var("var1") == exp.to_column("v1")
+    assert context.blueprint_var("var2") == 1
+
+    return pd.DataFrame({"x": [1]})
+        """
+    )
+
+    ctx = Context(
+        config=Config(
+            model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+            variables={"var2": "1"},
+        ),
+        paths=tmp_path,
+    )
+    assert len(ctx.models) == 1
+
+    m = ctx.get_model("s.m", raise_if_missing=True)
+    context = ExecutionContext(mocker.Mock(), {}, None, None)
+
+    assert t.cast(pd.DataFrame, list(m.render(context=context))[0]).to_dict() == {"x": {0: 1}}
 
 
 @time_machine.travel("2020-01-01 00:00:00 UTC")
