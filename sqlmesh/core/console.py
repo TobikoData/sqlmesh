@@ -8,7 +8,8 @@ import uuid
 import logging
 import textwrap
 from pathlib import Path
-
+import pandas as pd
+import numpy as np
 from hyperscript import h
 from rich.console import Console as RichConsole
 from rich.live import Live
@@ -1904,10 +1905,15 @@ class TerminalConsole(Console):
                     # Create a table with the joined keys and comparison columns
                     column_table = row_diff.joined_sample[keys + [source_column, target_column]]
 
-                    # Filter out identical-valued rows
+                    # Filter to retain non identical-valued rows
                     column_table = column_table[
-                        column_table[source_column] != column_table[target_column]
+                        column_table.apply(
+                            lambda row: not _cells_match(row[source_column], row[target_column]),
+                            axis=1,
+                        )
                     ]
+
+                    # Rename the column headers for readability
                     column_table = column_table.rename(
                         columns={
                             source_column: source_name,
@@ -1921,7 +1927,16 @@ class TerminalConsole(Console):
                         table.add_column(column_name, style=style, header_style=style)
 
                     for _, row in column_table.iterrows():
-                        table.add_row(*[str(cell) for cell in row])
+                        table.add_row(
+                            *[
+                                str(
+                                    round(cell, row_diff.decimals)
+                                    if isinstance(cell, float)
+                                    else cell
+                                )
+                                for cell in row
+                            ]
+                        )
 
                     self.console.print(
                         f"Column: [underline][bold cyan]{column}[/bold cyan][/underline]",
@@ -2025,6 +2040,16 @@ class TerminalConsole(Console):
             self.log_error(msg)
         else:
             self.log_warning(msg)
+
+
+def _cells_match(x: t.Any, y: t.Any) -> bool:
+    """Helper function to compare two cells and returns true if they're equal, handling array objects."""
+
+    # Convert array-like objects to list for consistent comparison
+    def _normalize(val: t.Any) -> t.Any:
+        return list(val) if isinstance(val, (pd.Series, np.ndarray)) else val
+
+    return _normalize(x) == _normalize(y)
 
 
 def add_to_layout_widget(target_widget: LayoutWidget, *widgets: widgets.Widget) -> LayoutWidget:
