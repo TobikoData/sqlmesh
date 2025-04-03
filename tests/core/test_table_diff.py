@@ -431,7 +431,7 @@ def test_tables_and_grain_inferred_from_model(sushi_context_fixed_date: Context)
 
 
 @pytest.mark.slow
-def test_data_diff_array(sushi_context_fixed_date):
+def test_data_diff_array_dict(sushi_context_fixed_date):
     engine_adapter = sushi_context_fixed_date.engine_adapter
 
     engine_adapter.ctas(
@@ -440,6 +440,7 @@ def test_data_diff_array(sushi_context_fixed_date):
             {
                 "key": [1, 2, 3],
                 "value": [np.array([51.2, 4.5678]), np.array([2.31, 12.2]), np.array([5.0])],
+                "dict": [{"key1": 10, "key2": 20, "key3": 30}, {"key1": 10}, {}],
             }
         ),
     )
@@ -454,6 +455,7 @@ def test_data_diff_array(sushi_context_fixed_date):
                     np.array([2.31, 12.2, 3.6, 1.9]),
                     np.array([5.0]),
                 ],
+                "dict": [{"key1": 10, "key2": 13}, {"key1": 10}, {}],
             }
         ),
     )
@@ -487,6 +489,7 @@ Row Counts:
 COMMON ROWS column comparison stats:
        pct_match
 value  33.333333
+dict   66.666667
 
 
 COMMON ROWS sample data differences:
@@ -497,6 +500,12 @@ Column: value
 │ 1   │ [51.2, 4.5678] │ [51.2, 4.5679]         │
 │ 2   │ [2.31, 12.2]   │ [2.31, 12.2, 3.6, 1.9] │
 └─────┴────────────────┴────────────────────────┘
+Column: dict
+┏━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━┓
+┃ key ┃ DEV                         ┃ PROD               ┃
+┡━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━┩
+│ 1   │ {key1=10, key2=20, key3=30} │ {key1=10, key2=13} │
+└─────┴─────────────────────────────┴────────────────────┘
 """
 
     stripped_output = strip_ansi_codes(output)

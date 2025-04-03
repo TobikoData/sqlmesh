@@ -1905,32 +1905,10 @@ class TerminalConsole(Console):
                     # Create a table with the joined keys and comparison columns
                     column_table = row_diff.joined_sample[keys + [source_column, target_column]]
 
-                    def compare_cells(x: t.Any, y: t.Any) -> bool:
-                        """Compare two cells and returns true if they're not equal, handling array objects."""
-                        if x is None or y is None:
-                            return x != y
-
-                        # Convert any array-like object to list for consistent comparison
-                        def to_list(val: t.Any) -> t.Any:
-                            return (
-                                list(val)
-                                if isinstance(val, (pd.Series, np.ndarray, list, tuple, set))
-                                else val
-                            )
-
-                        x = to_list(x)
-                        y = to_list(y)
-                        if isinstance(x, list) and isinstance(y, list):
-                            if len(x) != len(y):
-                                return True
-                            return any(a != b for a, b in zip(x, y))
-
-                        return x != y
-
                     # Filter to retain non identical-valued rows
                     column_table = column_table[
                         column_table.apply(
-                            lambda row: compare_cells(row[source_column], row[target_column]),
+                            lambda row: _compare_df_cells(row[source_column], row[target_column]),
                             axis=1,
                         )
                     ]
@@ -2062,6 +2040,25 @@ class TerminalConsole(Console):
             self.log_error(msg)
         else:
             self.log_warning(msg)
+
+
+def _compare_df_cells(x: t.Any, y: t.Any) -> bool:
+    """Helper function to compare two cells and returns true if they're not equal, handling array objects."""
+    if x is None or y is None:
+        return x != y
+
+    # Convert any array-like object to list for consistent comparison
+    def to_list(val: t.Any) -> t.Any:
+        return list(val) if isinstance(val, (pd.Series, np.ndarray, list, tuple, set)) else val
+
+    x = to_list(x)
+    y = to_list(y)
+    if isinstance(x, list) and isinstance(y, list):
+        if len(x) != len(y):
+            return True
+        return any(a != b for a, b in zip(x, y))
+
+    return x != y
 
 
 def add_to_layout_widget(target_widget: LayoutWidget, *widgets: widgets.Widget) -> LayoutWidget:
