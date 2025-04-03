@@ -52,6 +52,7 @@ from sqlmesh.utils.jinja import JinjaMacroRegistry, extract_macro_references_and
 from sqlmesh.utils.pydantic import PydanticModel, PRIVATE_FIELDS
 from sqlmesh.utils.metaprogramming import (
     Executable,
+    SqlValue,
     build_env,
     prepare_env,
     serialize_env,
@@ -1749,8 +1750,10 @@ class PythonModel(_Model):
         variables = env.get(c.SQLMESH_VARS, {})
         variables.update(kwargs.pop("variables", {}))
 
-        blueprint_variables = env.get(c.SQLMESH_BLUEPRINT_VARS, {})
-
+        blueprint_variables = {
+            k: d.parse_one(v.sql, dialect=self.dialect) if isinstance(v, SqlValue) else v
+            for k, v in env.get(c.SQLMESH_BLUEPRINT_VARS, {}).items()
+        }
         try:
             kwargs = {
                 **variables,

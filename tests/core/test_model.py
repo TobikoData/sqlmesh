@@ -8405,6 +8405,141 @@ def test_blueprinting_with_quotes(tmp_path: Path) -> None:
     assert t.cast(exp.Query, m2.render_query()).sql() == '''SELECT 'c d' AS "c1", "c d" AS "c2"'''
 
 
+def test_blueprint_variable_precedence_sql(tmp_path: Path, assert_exp_eq: t.Callable) -> None:
+    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+
+    blueprint_variables = tmp_path / "models/blueprint_variables.sql"
+    blueprint_variables.parent.mkdir(parents=True, exist_ok=True)
+    blueprint_variables.write_text(
+        """
+        MODEL (
+          name s.@{bp_name},
+          blueprints (
+            (bp_name := m1, var1 := 'v1', var2 := 'v2'),
+            (bp_name := m2, var1 := 'v3'),
+          ),
+        );
+
+        @DEF(bp_name, override);
+
+        SELECT
+          @var1 AS var1_macro_var,
+          @{var1} AS var1_identifier,
+          @VAR('var1') AS var1_var_macro_func,
+          @BLUEPRINT_VAR('var1') AS var1_blueprint_var_macro_func,
+
+          @var2 AS var2_macro_var,
+          @{var2} AS var2_identifier,
+          @VAR('var2') AS var2_var_macro_func,
+          @BLUEPRINT_VAR('var2') AS var2_blueprint_var_macro_func,
+
+          @bp_name AS bp_name_macro_var,
+          @{bp_name} AS bp_name_identifier,
+          @VAR('bp_name') AS bp_name_var_macro_func,
+          @BLUEPRINT_VAR('bp_name') AS bp_name_blueprint_var_macro_func,
+        """
+    )
+
+    ctx = Context(
+        config=Config(
+            model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+            variables={"var2": "1"},
+        ),
+        paths=tmp_path,
+    )
+    assert len(ctx.models) == 2
+
+    m1 = ctx.get_model("s.m1", raise_if_missing=True)
+    m2 = ctx.get_model("s.m2", raise_if_missing=True)
+
+    assert_exp_eq(
+        m1.render_query(),
+        """
+        SELECT
+          'v1' AS "var1_macro_var",
+          "v1" AS "var1_identifier",
+          NULL AS "var1_var_macro_func",
+          'v1' AS "var1_blueprint_var_macro_func",
+          'v2' AS "var2_macro_var",
+          "v2" AS "var2_identifier",
+          '1' AS "var2_var_macro_func",
+          'v2' AS "var2_blueprint_var_macro_func",
+          "override" AS "bp_name_macro_var",
+          "override" AS "bp_name_identifier",
+          NULL AS "bp_name_var_macro_func",
+          "m1" AS "bp_name_blueprint_var_macro_func"
+        """,
+    )
+    assert_exp_eq(
+        m2.render_query(),
+        """
+        SELECT
+          'v3' AS "var1_macro_var",
+          "v3" AS "var1_identifier",
+          NULL AS "var1_var_macro_func",
+          'v3' AS "var1_blueprint_var_macro_func",
+          '1' AS "var2_macro_var",
+          "1" AS "var2_identifier",
+          '1' AS "var2_var_macro_func",
+          NULL AS "var2_blueprint_var_macro_func",
+          "override" AS "bp_name_macro_var",
+          "override" AS "bp_name_identifier",
+          NULL AS "bp_name_var_macro_func",
+          "m2" AS "bp_name_blueprint_var_macro_func"
+        """,
+    )
+
+
+def test_blueprint_variable_precedence_python(tmp_path: Path, mocker: MockerFixture) -> None:
+    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+
+    blueprint_variables = tmp_path / "models/blueprint_variables.py"
+    blueprint_variables.parent.mkdir(parents=True, exist_ok=True)
+    blueprint_variables.write_text(
+        """
+import pandas as pd
+from sqlglot import exp
+from sqlmesh import model
+
+
+@model(
+    "s.@{bp_name}",
+    blueprints=[{"bp_name": "m", "var1": exp.to_column("v1"), "var2": 1}],
+    kind="FULL",
+    columns={"x": "INT"},
+)
+def entrypoint(context, *args, **kwargs):
+    assert "bp_name" not in kwargs
+    assert "var1" not in kwargs
+    assert kwargs.get("var2") == "1"
+
+    assert context.var("bp_name") is None
+    assert context.var("var1") is None
+    assert context.var("var2") == "1"
+
+    assert context.blueprint_var("bp_name") == "m"
+    assert context.blueprint_var("var1") == exp.to_column("v1")
+    assert context.blueprint_var("var2") == 1
+
+    return pd.DataFrame({"x": [1]})
+        """
+    )
+
+    ctx = Context(
+        config=Config(
+            model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+            variables={"var2": "1"},
+        ),
+        paths=tmp_path,
+    )
+    assert len(ctx.models) == 1
+
+    m = ctx.get_model("s.m", raise_if_missing=True)
+    context = ExecutionContext(mocker.Mock(), {}, None, None)
+
+    assert t.cast(pd.DataFrame, list(m.render(context=context))[0]).to_dict() == {"x": {0: 1}}
+
+
 @time_machine.travel("2020-01-01 00:00:00 UTC")
 def test_dynamic_date_spine_model(assert_exp_eq):
     @macro()
