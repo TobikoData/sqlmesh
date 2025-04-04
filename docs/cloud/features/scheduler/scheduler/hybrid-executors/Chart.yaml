@@ -1,0 +1,8 @@
+apiVersion: v2
+name: hybrid-executors
+description: Tobiko Cloud Hybrid Executors Deployment
+
+type: application
+
+version: 1.0.0
+appVersion: "1.0.0"

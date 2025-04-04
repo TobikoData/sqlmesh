@@ -1,0 +1,99 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "hybrid-executors.fullname" . }}-run
+  labels:
+    {{- include "hybrid-executors.labels" . | nindent 4 }}
+    app.kubernetes.io/component: run-executor
+spec:
+  replicas: {{ .Values.run.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "hybrid-executors.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: run-executor
+  template:
+    metadata:
+      labels:
+        {{- include "hybrid-executors.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: run-executor
+    spec:
+      containers:
+        - name: run-executor
+          image: "{{ .Values.global.image.repository }}:{{ .Values.global.image.tag }}"
+          imagePullPolicy: {{ .Values.global.image.pullPolicy }}
+          args:
+            - "executor"
+            - "run"
+          env:
+            - name: TCLOUD_URL
+              value: {{ include "hybrid-executors.cloudUrl" . | quote }}
+            - name: TCLOUD_CLIENT_ID
+              value: {{ .Values.global.cloud.clientId | quote }}
+            - name: TCLOUD_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.run.envFromSecret | default (include "hybrid-executors.secretName" .) }}
+                  key: TCLOUD_CLIENT_SECRET
+            - name: SQLMESH__DEFAULT_GATEWAY
+              value: {{ include "hybrid-executors.defaultGateway" . | upper | quote }}
+            {{- range $gatewayName, $gateway := .Values.global.sqlmesh.gateways }}
+              {{- range $paramName, $paramValue := $gateway.connection }}
+                {{- $isSecret := include "hybrid-executors.isSecretParam" $paramName }}
+                
+                {{- /* Override based on secretParams if specified */}}
+                {{- if $.Values.global.sqlmesh.secretParams }}
+                  {{- range $.Values.global.sqlmesh.secretParams }}
+                    {{- if eq . $paramName }}
+                      {{- $isSecret = "true" }}
+                    {{- end }}
+                  {{- end }}
+                {{- end }}
+                
+                {{- /* Override based on nonSecretParams if specified */}}
+                {{- if $.Values.global.sqlmesh.nonSecretParams }}
+                  {{- range $.Values.global.sqlmesh.nonSecretParams }}
+                    {{- if eq . $paramName }}
+                      {{- $isSecret = "false" }}
+                    {{- end }}
+                  {{- end }}
+                {{- end }}
+                
+                {{- if eq $isSecret "true" }}
+            - name: SQLMESH__GATEWAYS__{{ upper $gatewayName }}__CONNECTION__{{ upper $paramName }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.run.envFromSecret | default (include "hybrid-executors.secretName" $) }}
+                  key: {{ printf "SQLMESH__GATEWAYS__%s__CONNECTION__%s" (upper $gatewayName) (upper $paramName) }}
+                {{- else }}
+            - name: SQLMESH__GATEWAYS__{{ upper $gatewayName }}__CONNECTION__{{ upper $paramName }}
+              value: {{ $paramValue | quote }}
+                {{- end }}
+              {{- end }}
+            {{- end }}
+            {{- with .Values.run.additionalEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.run.resources | nindent 12 }}
+          readinessProbe:
+            exec:
+              command:
+                - "/app/pex"
+                - "executor"
+                - "run"
+                - "--check"
+            timeoutSeconds: 5
+            initialDelaySeconds: 10
+            periodSeconds: 30
+      {{- with .Values.run.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.run.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.run.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }} 
