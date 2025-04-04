@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://github.com/TobikoData/sqlmesh/blob/main/docs/readme/sqlmesh.png?raw=true" alt="SQLMesh logo" width="50%" height="50%">
+  <img src="docs/readme/sqlmesh.png" alt="SQLMesh logo" width="50%" height="50%">
 </p>
 
 SQLMesh is a next-generation data transformation framework designed to ship data quickly, efficiently, and without error. Data teams can efficiently run and deploy data transformations written in SQL or Python with visibility and control at any size.
@@ -7,7 +7,7 @@ SQLMesh is a next-generation data transformation framework designed to ship data
 It is more than just a [dbt alternative](https://tobikodata.com/reduce_costs_with_cron_and_partitions.html).
 
 <p align="center">
-  <img src="https://github.com/TobikoData/sqlmesh/blob/main/docs/readme/architecture_diagram.png?raw=true" alt="Architecture Diagram" width="100%" height="100%">
+  <img src="docs/readme/architecture_diagram.png" alt="Architecture Diagram" width="100%" height="100%">
 </p>
 
 ## Core Features
