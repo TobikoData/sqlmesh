@@ -42,7 +42,7 @@ def make_python_env(
 ) -> t.Dict[str, Executable]:
     python_env = {} if python_env is None else python_env
     variables = variables or {}
-    env: t.Dict[str, t.Any] = {}
+    env: t.Dict[str, t.Tuple[t.Any, t.Optional[bool]]] = {}
     used_macros = {}
     used_variables = (used_variables or set()).copy()
 

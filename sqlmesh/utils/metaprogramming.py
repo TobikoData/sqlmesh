@@ -266,7 +266,7 @@ def normalize_source(obj: t.Any) -> str:
 def build_env(
     obj: t.Any,
     *,
-    env: t.Dict[str, t.Any],
+    env: t.Dict[str, t.Tuple[t.Any, t.Optional[bool]]],
     name: str,
     path: Path,
 ) -> None:
@@ -291,16 +291,12 @@ def build_env(
         visited.add(name)
         name_missing_from_env = name not in env
 
-        if name_missing_from_env or (
-            not is_metadata and env[name] == obj and getattr(env[name], c.SQLMESH_METADATA, None)
-        ):
+        if name_missing_from_env or (not is_metadata and env[name] == (obj, True)):
             if not name_missing_from_env:
                 # The existing object in the env is "metadata only" but we're walking it again as a
                 # non-"metadata only" dependency, so we update this flag to ensure all transitive
                 # dependencies are also not marked as "metadata only"
-                is_metadata = False
-                if hasattr(obj, c.SQLMESH_METADATA):
-                    delattr(obj, c.SQLMESH_METADATA)
+                is_metadata = None
 
             if hasattr(obj, c.SQLMESH_MACRO):
                 # We only need to add the undecorated code of @macro() functions in env, which
@@ -320,14 +316,9 @@ def build_env(
                 or not hasattr(obj_module, "__file__")
                 or not _is_relative_to(obj_module.__file__, path)
             ):
-                if is_metadata:
-                    setattr(obj, c.SQLMESH_METADATA, True)
-                elif hasattr(obj, c.SQLMESH_METADATA):
-                    delattr(obj, c.SQLMESH_METADATA)
-
-                env[name] = obj
+                env[name] = (obj, is_metadata)
                 return
-        elif env[name] != obj:
+        elif env[name][0] != obj:
             raise SQLMeshError(
                 f"Cannot store {obj} in environment, duplicate definitions found for '{name}'"
             )
@@ -359,13 +350,10 @@ def build_env(
             for k, v in func_globals(obj).items():
                 walk(v, k, is_metadata)
 
-        if is_metadata:
-            setattr(obj, c.SQLMESH_METADATA, True)
-
         # We store the object in the environment after its dependencies, because otherwise we
         # could crash at environment hydration time, since dicts are ordered and the top-level
         # objects would be loaded before their dependencies.
-        env[name] = obj
+        env[name] = (obj, is_metadata)
 
     # The "metadata only" annotation of the object is transitive
     walk(obj, name, getattr(obj, c.SQLMESH_METADATA, None))
@@ -416,8 +404,8 @@ class Executable(PydanticModel):
         return self.kind == ExecutableKind.VALUE
 
     @classmethod
-    def value(cls, v: t.Any) -> Executable:
-        return Executable(payload=repr(v), kind=ExecutableKind.VALUE)
+    def value(cls, v: t.Any, is_metadata: t.Optional[bool] = None) -> Executable:
+        return Executable(payload=repr(v), kind=ExecutableKind.VALUE, is_metadata=is_metadata)
 
 
 def serialize_env(env: t.Dict[str, t.Any], path: Path) -> t.Dict[str, Executable]:
@@ -431,11 +419,9 @@ def serialize_env(env: t.Dict[str, t.Any], path: Path) -> t.Dict[str, Executable
     """
     serialized = {}
 
-    for k, v in env.items():
-        is_metadata = getattr(v, c.SQLMESH_METADATA, None)
-
+    for k, (v, is_metadata) in env.items():
         if isinstance(v, LITERALS) or v is None:
-            serialized[k] = Executable.value(v)
+            serialized[k] = Executable.value(v, is_metadata=is_metadata)
         elif inspect.ismodule(v):
             name = v.__name__
             if hasattr(v, "__file__") and _is_relative_to(v.__file__, path):
@@ -471,7 +457,6 @@ def serialize_env(env: t.Dict[str, t.Any], path: Path) -> t.Dict[str, Executable
                     v = wrapped
                     file_path = Path(inspect.getfile(wrapped))
                     relative_obj_file_path = _is_relative_to(file_path, path)
-                    is_metadata = is_metadata or getattr(v, c.SQLMESH_METADATA, None)
             except TypeError:
                 file_path = None
                 relative_obj_file_path = False
