@@ -85,15 +85,33 @@ Update your project's `config.yaml` file to specify a scheduler of type `cloud`.
 
     This gateway name must match the name of the gateway that was specified when adding the connection in the Tobiko Cloud UI.
 
-```yaml linenums="1" hl_lines="3 4"
-gateways:
-  my_cloud_gateway:
-    scheduler:
-      type: cloud
+=== "YAML"
 
-default_gateway: my_cloud_gateway
-```
-<br></br>
+    ```yaml linenums="1" hl_lines="3 4"
+    gateways:
+      gateway_a:
+        scheduler:
+          type: cloud
+    
+    default_gateway: gateway_a
+    ```
+
+=== "Python"
+
+    ```python linenums="1" hl_lines="8"
+    from sqlmesh.core.config import GatewayConfig
+    
+    from tobikodata.sqlmesh_enterprise.config import EnterpriseConfig, RemoteCloudSchedulerConfig
+    
+    config = EnterpriseConfig(
+        gateways={
+            "gateway_a": GatewayConfig(
+                scheduler=RemoteCloudSchedulerConfig()
+            ),
+        },
+        default_gateway="gateway_a",
+    )
+    ```
 
 ### Pausing model executions
 
@@ -165,20 +183,42 @@ This gives you complete control over data security and network access while stil
 
 Self-hosted executors as the name indicates are self-hosted workers that take on the responsibility of "executing" changes to the data warehouse. While Tobiko Cloud schedules and plans changes, the executors are responsible for executing those changes. Executors are docker containers that are configured to connect to Tobiko Cloud as well as your data warehouse. Connected to both, the executor pulls work from the cloud, whether it's a plan or scheduled background work from a run, and execute it on your data warehouse.
 
+### Deployment Options
+
+You can deploy the executor containers using any method that works for your infrastructure and operational requirements. The executors are standard Docker containers that can be deployed in any container environment as long as they're properly configured with the required environment variables.
+
+For your convenience, we provide two reference implementations:
+
+1. **Kubernetes with Helm Chart**: For production environments, we provide a [Helm chart](./hybrid_executors_helm.md) that includes robust configurability, secret management, and scaling options.
+
+2. **Docker Compose**: For simpler environments or testing, we offer a [Docker Compose setup](./hybrid_executors_docker_compose) to quickly deploy executors on any machine with Docker.
+
+You're free to adapt these reference implementations or create your own deployment method that fits your specific needs. The only requirement is that two executor instances must be running (one for run operations and one for apply operations) and properly configured.
+
 ### Configuration
 
-Exact configuration is left to the user and will vary based on the infrastructure and setup of the user, for example the executors could be run on a Kubernetes cluster or as a standalone pair of Docker containers depending on the user's infrastructure. The following details are an example of how this is done for a Postgres data warehouse and a pair of local containers running in docker.
+The following covers basic configuration concepts for hybrid executors. For detailed configuration options, please refer to the specific documentation for your chosen deployment method above.
 
-Tobiko Cloud requires 2 docker instances to be running, one to pick up runs and one for plan applications. The entrypoint for both is `executor run` and `executor apply` respectively. The executor container can be found on [Docker Hub](https://hub.docker.com/r/tobikodata/tcloud). In addition to running the container, the user will need to configure the executor with environment variables that point to Tobiko Cloud as well as the data warehouse.
+Tobiko Cloud requires 2 executor instances to be running:
 
-To connect to the Tobiko Cloud, the user will need to provide the following environment variables, replaced with the user's own values.
+1. **Run Executor**: Handles scheduled model execution
+2. **Apply Executor**: Handles applying changes to the data warehouse
+
+Both executors need to be properly configured with environment variables to connect to Tobiko Cloud and your data warehouse.
+
+#### Basic Environment Variables
+
+To connect to Tobiko Cloud, you'll need to provide:
 
 ```env
 TCLOUD_URL=https://cloud.tobikodata.com/sqlmesh/acme/analytics_project
-TCLOUD_TOKEN=your_token
+TCLOUD_CLIENT_ID=your_client_id
+TCLOUD_CLIENT_SECRET=your_client_secret
 ```
 
-In addition to the above variables, a gateway is needed to provide a connection to a data warehouse. The following details are an example of how this is done for a Postgres data warehouse where the gateway is named `GATEWAY_A`. For more details on how to configure a gateway, see the details on other [engines](../../../integrations/overview.md#execution-engines) and how to [overide variables](../../../guides/configuration.md#overrides) as done below. 
+![add_oath_client](./scheduler/add_oath_client.png)
+
+To connect to your data warehouse, configure a gateway:
 
 ```env
 SQLMESH__DEFAULT_GATEWAY=GATEWAY_A
@@ -190,7 +230,7 @@ SQLMESH__GATEWAYS__GATEWAY_A__CONNECTION__USER=example_user
 SQLMESH__GATEWAYS__GATEWAY_A__CONNECTION__PASSWORD=example_password
 ```
 
-**Note**: If there are multiple gateways, each gateway will need to have its own set of environment variables. For example, if there are two gateways, `GATEWAY_A` and `GATEWAY_B`, the environment variables will need to be set for both gateways.
+**Note**: For multiple gateways, each gateway needs its own set of environment variables:
 
 ```env
 SQLMESH__GATEWAYS__GATEWAY_A__CONNECTION__TYPE=<connection type>  
@@ -199,22 +239,27 @@ SQLMESH__GATEWAYS__GATEWAY_B__CONNECTION__TYPE=<connection type>
 # <Gateway B connection settings>  
 ```
 
-Once you have set up both sets of environment variables in a file named `local.env`, you can run the following command to start the executor:
+For more details, including secure secret management options, refer to the [Helm chart](./hybrid_executors_helm.md) or [Docker Compose](./hybrid_executors_docker_compose) documentation.
 
-```shell
-docker run -d --env-file local.env tobikodata/tcloud:latest -- executor run
-docker run -d --env-file local.env tobikodata/tcloud:latest -- executor apply
-```
+After the executors are properly configured and running, they will appear in the cloud UI where they can be used to apply plans and execute scheduled runs.
 
-After the executors are properly configured, they will appear in the cloud UI where they can be used to apply plans and execute scheduled runs.
-
-![executors](../scheduler/executors.png)
+![executors](./scheduler/executors.png)
 
 We recommend setting up monitoring for the executors to ensure they run smoothly and to help troubleshoot issues. This monitoring should include logs and system metrics like memory and CPU usage.
 
-### Ingress
+#### Network Configuration
 
-No ingress is required from executor containers to user environments. All network requests are outbound from user environments to Tobiko Cloud.
+No ingress is required from executor containers to user environments. All network requests are outbound from user environments to Tobiko Cloud. If the hybrid executors are running in a secure network, where public internet access is not available, you will need to configure the network to allow access to Tobiko Cloud on the following IPs:
+
+```bash
+34.28.17.91
+34.136.27.153
+34.136.131.201
+```
+
+#### Project Configuration
+
+Configuring a project using hybrid executors is the same as configuring a project for cloud scheduler. See [connection configuration](#connection-configuration) for details.
 
 ### Required specs
 
@@ -224,43 +269,18 @@ While the exact requirements for executors vary depending on the customer's spec
 
 Environment variables may also be passed to SQLMesh by mounting a `.env` file into the docker image and specifying it's full path with the environment variable `TCLOUD_ENV_FILE`. 
 
-**Note** These variables are only read at SQLMesh run time so variables that are used by `tcloud` such as `TCLOUD_URL`, `TCLOUD_TOKEN`, etc. must be passed as variables. 
+**Note** These variables are only read at SQLMesh run time so variables that are used by `tcloud` such as `TCLOUD_URL`, `TCLOUD_CLIENT_ID`, `TCLOUD_CLIENT_SECRET`, etc. must be passed as variables. 
 
 ### Health checks
 
-In production settings, we recommend setting up health checks as well, as these can be helpful in understanding the health of executors. When calling via the entrypoint, the health checks are as follows:
+In production settings, we recommend setting up health checks to monitor the status of your executors. Health checks help ensure your executors are operating correctly and can identify issues before they impact your workflows.
 
-```shell
-docker run -d --env-file local.env tobikodata/tcloud:latest -- executor run --check
-docker run -d --env-file local.env tobikodata/tcloud:latest -- executor apply --check
-```
+For detailed information on implementing health checks:
 
-For environments that ignore the container's entrypoint, for example in the case of Kubernetes healthchecks, the health check is invoked as follows:
+- **Kubernetes/Helm**: See the [Hybrid Executors Helm Chart documentation](./hybrid_executors_helm.md#verifying-the-installation) for information on health check configuration in Kubernetes.
 
-```yaml
-# For the run executor
-readinessProbe:
-  exec:
-    command:
-    - "/app/pex"
-    - "executor"
-    - "run"
-    - "--check"
-  timeoutSeconds: 5
-```
+- **Docker Compose**: Refer to the [Docker Compose setup documentation](./hybrid_executors_docker_compose#health-checking) for health check implementation with Docker Compose.
 
-```yaml
-# For the apply executor
-readinessProbe:
-  exec:
-    command:
-    - "/app/pex"
-    - "executor"
-    - "apply"
-    - "--check"
-  timeoutSeconds: 5
-```
+Both executor types (run and apply) should have appropriate health checks implemented to ensure proper monitoring and reliability.
 
-Each executor type (run or apply) should have its own health check implemented to ensure proper monitoring of both components.
-
-**Note** Please note the specified timeout. Depending on the allocated resources, sometimes the default timeout is too aggressive.
+**Note** When configuring health checks, ensure timeouts are set appropriately based on your resources. Default timeouts can sometimes be too aggressive depending on the allocated resources.
