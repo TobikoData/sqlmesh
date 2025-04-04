@@ -2482,7 +2482,7 @@ def _create_model(
         dialect=dialect,
     )
 
-    env: t.Dict[str, t.Any] = {}
+    env: t.Dict[str, t.Tuple[t.Any, t.Optional[bool]]] = {}
 
     for signal_name, _ in model.signals:
         if signal_definitions and signal_name in signal_definitions:
