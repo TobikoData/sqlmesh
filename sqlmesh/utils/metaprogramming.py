@@ -283,13 +283,25 @@ def build_env(
     # We don't rely on `env` to keep track of visited objects, because it's populated in post-order
     visited: t.Set[str] = set()
 
-    def walk(obj: t.Any, name: str) -> None:
+    def walk(obj: t.Any, name: str, is_metadata: t.Optional[bool] = None) -> None:
         obj_module = inspect.getmodule(obj)
         if name in visited or (obj_module and obj_module.__name__ == "builtins"):
             return
 
         visited.add(name)
-        if name not in env:
+        name_missing_from_env = name not in env
+
+        if name_missing_from_env or (
+            not is_metadata and env[name] == obj and getattr(env[name], c.SQLMESH_METADATA, None)
+        ):
+            if not name_missing_from_env:
+                # The existing object in the env is "metadata only" but we're walking it again as a
+                # non-"metadata only" dependency, so we update this flag to ensure all transitive
+                # dependencies are also not marked as "metadata only"
+                is_metadata = False
+                if hasattr(obj, c.SQLMESH_METADATA):
+                    delattr(obj, c.SQLMESH_METADATA)
+
             if hasattr(obj, c.SQLMESH_MACRO):
                 # We only need to add the undecorated code of @macro() functions in env, which
                 # is accessible through the `__wrapped__` attribute added by functools.wraps
@@ -308,6 +320,11 @@ def build_env(
                 or not hasattr(obj_module, "__file__")
                 or not _is_relative_to(obj_module.__file__, path)
             ):
+                if is_metadata:
+                    setattr(obj, c.SQLMESH_METADATA, True)
+                elif hasattr(obj, c.SQLMESH_METADATA):
+                    delattr(obj, c.SQLMESH_METADATA)
+
                 env[name] = obj
                 return
         elif env[name] != obj:
@@ -318,10 +335,10 @@ def build_env(
         if inspect.isclass(obj):
             for var in decorator_vars(obj):
                 if obj_module and var in obj_module.__dict__:
-                    walk(obj_module.__dict__[var], var)
+                    walk(obj_module.__dict__[var], var, is_metadata)
 
             for base in obj.__bases__:
-                walk(base, base.__qualname__)
+                walk(base, base.__qualname__, is_metadata)
 
             for k, v in obj.__dict__.items():
                 if k.startswith("__"):
@@ -335,19 +352,23 @@ def build_env(
                     # Walk the method if it's part of the object, else it's a global function and we just store it
                     if v.__qualname__.startswith(obj.__qualname__):
                         for k, v in func_globals(v).items():
-                            walk(v, k)
+                            walk(v, k, is_metadata)
                     else:
-                        walk(v, v.__name__)
+                        walk(v, v.__name__, is_metadata)
         elif callable(obj):
             for k, v in func_globals(obj).items():
-                walk(v, k)
+                walk(v, k, is_metadata)
+
+        if is_metadata:
+            setattr(obj, c.SQLMESH_METADATA, True)
 
         # We store the object in the environment after its dependencies, because otherwise we
         # could crash at environment hydration time, since dicts are ordered and the top-level
         # objects would be loaded before their dependencies.
         env[name] = obj
 
-    walk(obj, name)
+    # The "metadata only" annotation of the object is transitive
+    walk(obj, name, getattr(obj, c.SQLMESH_METADATA, None))
 
 
 @dataclass
@@ -411,6 +432,8 @@ def serialize_env(env: t.Dict[str, t.Any], path: Path) -> t.Dict[str, Executable
     serialized = {}
 
     for k, v in env.items():
+        is_metadata = getattr(v, c.SQLMESH_METADATA, None)
+
         if isinstance(v, LITERALS) or v is None:
             serialized[k] = Executable.value(v)
         elif inspect.ismodule(v):
@@ -423,6 +446,7 @@ def serialize_env(env: t.Dict[str, t.Any], path: Path) -> t.Dict[str, Executable
             serialized[k] = Executable(
                 payload=f"import {name}{postfix}",
                 kind=ExecutableKind.IMPORT,
+                is_metadata=is_metadata,
             )
         elif callable(v):
             name = v.__name__
@@ -447,6 +471,7 @@ def serialize_env(env: t.Dict[str, t.Any], path: Path) -> t.Dict[str, Executable
                     v = wrapped
                     file_path = Path(inspect.getfile(wrapped))
                     relative_obj_file_path = _is_relative_to(file_path, path)
+                    is_metadata = is_metadata or getattr(v, c.SQLMESH_METADATA, None)
             except TypeError:
                 file_path = None
                 relative_obj_file_path = False
@@ -459,12 +484,13 @@ def serialize_env(env: t.Dict[str, t.Any], path: Path) -> t.Dict[str, Executable
                     # Do `as_posix` to serialize windows path back to POSIX
                     path=t.cast(Path, file_path).relative_to(path.absolute()).as_posix(),
                     alias=k if name != k else None,
-                    is_metadata=getattr(v, c.SQLMESH_METADATA, None),
+                    is_metadata=is_metadata,
                 )
             else:
                 serialized[k] = Executable(
                     payload=f"from {v.__module__} import {name}",
                     kind=ExecutableKind.IMPORT,
+                    is_metadata=is_metadata,
                 )
         else:
             raise SQLMeshError(
