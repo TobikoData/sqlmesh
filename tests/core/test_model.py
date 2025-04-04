@@ -8667,6 +8667,133 @@ def test_data_hash_unchanged_when_column_type_uses_default_dialect():
     assert model.data_hash == deserialized_model.data_hash
 
 
+def test_transitive_dependency_of_metadata_only_object_is_metadata_only(tmp_path: Path) -> None:
+    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+
+    test_model = tmp_path / "models/test_model.sql"
+    test_model.parent.mkdir(parents=True, exist_ok=True)
+    test_model.write_text("MODEL (name test_model, kind FULL); @metadata_macro(); SELECT 1 AS c")
+
+    metadata_macro_code = """
+from sqlglot import parse_one
+from sqlmesh import macro
+
+def get_parsed_query():
+    return parse_one("SELECT 1")
+
+@macro(metadata_only=True)
+def metadata_macro(evaluator):
+    if evaluator.runtime_stage == "evaluating":
+        evaluator.engine_adapter.execute({query})"""
+
+    metadata_macro = tmp_path / "macros/metadata_macro.py"
+    metadata_macro.parent.mkdir(parents=True, exist_ok=True)
+    metadata_macro.write_text(metadata_macro_code.format(query='"SELECT 1"'))
+
+    ctx = Context(
+        config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb")),
+        paths=tmp_path,
+    )
+
+    model = ctx.get_model("test_model")
+    empty_executable = Executable(payload="")
+
+    assert len(model.python_env) == 1
+    assert (model.python_env.get("metadata_macro") or empty_executable).is_metadata
+
+    ctx.plan(no_prompts=True, auto_apply=True)
+
+    # This should make `parse_one` a dependency and so it'll be added in the python env
+    metadata_macro.write_text(metadata_macro_code.format(query='parse_one("SELECT 1")'))
+
+    ctx.load()
+    model = ctx.get_model("test_model")
+
+    assert len(model.python_env) == 2
+    assert (model.python_env.get("metadata_macro") or empty_executable).is_metadata
+    assert (model.python_env.get("parse_one") or empty_executable).is_metadata
+
+    plan = ctx.plan(no_prompts=True, auto_apply=True)
+    ctx_diff = plan.context_diff
+
+    assert len(ctx_diff.modified_snapshots) == 1
+
+    new_snapshot, _ = ctx_diff.modified_snapshots['"test_model"']
+    assert new_snapshot.change_category == SnapshotChangeCategory.METADATA
+
+    # This should make `get_parsed_query` a dependency and so it'll be added in
+    # the python env, carrying `parse_one` with it as another transitive dependency
+    metadata_macro.write_text(metadata_macro_code.format(query="get_parsed_query()"))
+
+    ctx.load()
+    model = ctx.get_model("test_model")
+
+    assert len(model.python_env) == 3
+    assert (model.python_env.get("metadata_macro") or empty_executable).is_metadata
+    assert (model.python_env.get("get_parsed_query") or empty_executable).is_metadata
+    assert (model.python_env.get("parse_one") or empty_executable).is_metadata
+
+    plan = ctx.plan(no_prompts=True, auto_apply=True)
+    ctx_diff = plan.context_diff
+
+    assert len(ctx_diff.modified_snapshots) == 1
+
+    new_snapshot, _ = ctx_diff.modified_snapshots['"test_model"']
+    assert new_snapshot.change_category == SnapshotChangeCategory.METADATA
+
+
+def test_non_metadata_object_takes_precedence_over_metadata_only_object(tmp_path: Path) -> None:
+    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+
+    test_model = tmp_path / "models/test_model.sql"
+    test_model.parent.mkdir(parents=True, exist_ok=True)
+    test_model.write_text("MODEL (name test_model, kind FULL); @m1(); @m2(); SELECT 1 AS c")
+
+    macro_code = """
+from sqlglot import parse_one
+from sqlmesh import macro
+
+def common_dep():
+    pass
+
+def m1_dep():
+    pass
+
+@macro(metadata_only=True)
+def m1(evaluator):
+    m1_dep()
+    common_dep()
+    if evaluator.runtime_stage == "evaluating":
+        evaluator.engine_adapter.execute(parse_one("SELECT 1"))
+
+@macro()
+def m2(evaluator):
+    common_dep()
+    if evaluator.runtime_stage == "evaluating":
+        evaluator.engine_adapter.execute(parse_one("SELECT 1"))"""
+
+    test_macros = tmp_path / "macros/test_macros.py"
+    test_macros.parent.mkdir(parents=True, exist_ok=True)
+    test_macros.write_text(macro_code)
+
+    ctx = Context(
+        config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb")),
+        paths=tmp_path,
+    )
+    model = ctx.get_model("test_model")
+    empty_executable = Executable(payload="")
+
+    # Both `m1` and `m2` refer to `parse_one`, so for `m1` it would be a transitive metadata-only
+    # object, but since the python env is a flat namespace and `parse_one` is also a dependency
+    # of `m2`, it needs to be treated as non-metadata.
+    assert len(model.python_env) == 5
+    assert (model.python_env.get("m1") or empty_executable).is_metadata
+    assert (model.python_env.get("m1_dep") or empty_executable).is_metadata
+    assert not (model.python_env.get("m2") or empty_executable).is_metadata
+    assert not (model.python_env.get("parse_one") or empty_executable).is_metadata
+    assert not (model.python_env.get("common_dep") or empty_executable).is_metadata
+
+
 def test_scd_type_2_full_history_restatement():
     assert ModelKindName.SCD_TYPE_2.full_history_restatement_only is True
     assert ModelKindName.SCD_TYPE_2_BY_TIME.full_history_restatement_only is True
