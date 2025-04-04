@@ -1,0 +1,113 @@
+# Name override options
+nameOverride: ""
+fullnameOverride: ""
+
+# Secret configuration options
+secrets:
+  # Option 1: Define secrets directly in values (not recommended for production)
+  # For production, consider using sealedSecrets, external-secrets, or envFromSecret
+  tcloudClientSecret: "" # Your Tobiko Cloud API client secret
+  data: {}       # Additional secrets can be added here as key-value pairs
+  
+  # Option 2: Use existing secret(s)
+  existingSecret: ""  # Name of existing secret with TCLOUD_CLIENT_SECRET and gateway passwords
+  
+  # Option 3: External Secret Manager Configuration (for use with external-secrets operator)
+  externalSecrets:
+    enabled: false
+    secretStore: "" # Name of the SecretStore resource
+    keyPrefix: ""   # Optional prefix for keys in the external secret store
+  
+  # Option 4: SealedSecrets Configuration
+  sealedSecrets:
+    enabled: false
+
+# Common configuration for hybrid executors
+global:
+  image:
+    repository: tobikodata/tcloud
+    tag: latest
+    pullPolicy: IfNotPresent
+  cloud:
+    baseUrl: "https://cloud.tobikodata.com"
+    org: "your-organization"
+    project: "your-project"
+    clientId: ""  # Your Tobiko Cloud API client ID (not a secret)
+    token: ""  # Deprecated: Use secrets.tcloudClientSecret instead
+  sqlmesh:
+    defaultGateway: ""  # Optional. If not provided, the first gateway will be used
+    # Optional: Parameters to explicitly treat as secrets, regardless of name
+    secretParams: []  # e.g. ["api_key", "certificate"]
+    # Optional: Parameters to explicitly NOT treat as secrets, even if they contain words like "password"
+    nonSecretParams: []  # e.g. ["token_endpoint", "password_expiry_days"]
+    gateways:
+      # Example gateway configurations - add your own as needed
+#      GATEWAY_A:
+#        connection:
+          # Only 'type' is required; all other connection parameters are dynamic
+          # and will depend on the database type you're connecting to
+#          type: postgres  # Required: database type (postgres, snowflake, bigquery, etc.)
+          
+          # Examples of common connection parameters (not required - customize as needed):
+          # host: "localhost"
+          # port: 5432
+          # database: "mydb"
+          # user: "dbuser"
+          # password: ""  # Will be automatically treated as a secret
+          
+          # For Snowflake you might use:
+          # account: "your-account"
+          # warehouse: "your-warehouse"
+          # role: "your-role"
+          # database: "your-database"
+          # schema: "your-schema"
+          # user: "your-user"
+          # password: "your-password"
+          
+          # For BigQuery:
+          # project: "your-project"
+          # dataset: "your-dataset"
+          # credentials_file: "/path/to/credentials.json"  # Or use credentials_json
+          
+          # Any parameter with 'password', 'secret', or 'token' in the name 
+          # will be automatically treated as a secret
+          
+      # You can define multiple gateways
+      # GATEWAY_B:
+      #   connection:
+      #     type: snowflake
+      #     # Add connection parameters as needed
+
+# Apply executor specific configuration
+apply:
+  enabled: true
+  replicaCount: 1
+  resources:
+    requests:
+      memory: "2Gi"
+      cpu: "1"
+    limits:
+      memory: "4Gi"
+      cpu: "2"
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  envFromSecret: ""  # Name of existing secret to use instead of generated ones
+  additionalEnv: []
+
+# Run executor specific configuration
+run:
+  enabled: true
+  replicaCount: 1
+  resources:
+    requests:
+      memory: "2Gi"
+      cpu: "1"
+    limits:
+      memory: "4Gi"
+      cpu: "2"
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  envFromSecret: ""  # Name of existing secret to use instead of generated ones
+  additionalEnv: []
