@@ -28,7 +28,13 @@ def _gen_config(
     start: t.Optional[str],
     template: ProjectTemplate,
 ) -> str:
-    if not settings:
+    connection_settings = (
+        settings
+        or """      type: duckdb
+      database: db.db"""
+    )
+
+    if not settings and template != ProjectTemplate.DBT:
         doc_link = "https://sqlmesh.readthedocs.io/en/stable/integrations/engines{engine_link}"
         engine_link = ""
 
@@ -69,8 +75,6 @@ def _gen_config(
             "      # https://sqlmesh.readthedocs.io/en/stable/reference/configuration/#connections\n"
             f"      # {doc_link.format(engine_link=engine_link)}\n{connection_settings}"
         )
-    else:
-        connection_settings = settings
 
     default_configs = {
         ProjectTemplate.DEFAULT: f"""gateways:
