@@ -1614,3 +1614,24 @@ def test_state_import_local(runner: CliRunner, tmp_path: Path) -> None:
     assert result.exit_code == 1
     assert "State file is marked as not importable" in result.output
     assert "Aborting" in result.output
+
+
+def test_dbt_init(tmp_path):
+    # The dbt init project doesn't require a dialect
+    init_example_project(tmp_path, dialect=None, template=ProjectTemplate.DBT)
+
+    config_path = tmp_path / "config.py"
+    assert config_path.exists()
+
+    with open(config_path) as file:
+        config = file.read()
+
+    assert (
+        config
+        == """from pathlib import Path
+
+from sqlmesh.dbt.loader import sqlmesh_config
+
+config = sqlmesh_config(Path(__file__).parent)
+"""
+    )
