@@ -41,7 +41,7 @@ from sqlmesh.utils import (
 from sqlmesh.utils.date import DatetimeRanges, to_datetime, to_date
 from sqlmesh.utils.errors import MacroEvalError, SQLMeshError
 from sqlmesh.utils.jinja import JinjaMacroRegistry, has_jinja
-from sqlmesh.utils.metaprogramming import Executable, prepare_env, print_exception
+from sqlmesh.utils.metaprogramming import Executable, SqlValue, prepare_env, print_exception
 
 if t.TYPE_CHECKING:
     from sqlglot.dialects.dialect import DialectType
@@ -173,14 +173,15 @@ class MacroEvaluator:
             "MacroEvaluator": MacroEvaluator,
         }
         self.python_env = python_env or {}
-        self._jinja_env: t.Optional[Environment] = jinja_env
         self.macros = {normalize_macro_name(k): v.func for k, v in macro.get_registry().items()}
+        self.columns_to_types_called = False
+        self.default_catalog = default_catalog
+
+        self._jinja_env: t.Optional[Environment] = jinja_env
         self._schema = schema
         self._resolve_table = resolve_table
         self._resolve_tables = resolve_tables
-        self.columns_to_types_called = False
         self._snapshots = snapshots if snapshots is not None else {}
-        self.default_catalog = default_catalog
         self._path = path
         self._environment_naming_info = environment_naming_info
 
@@ -191,7 +192,18 @@ class MacroEvaluator:
             elif v.is_import and getattr(self.env.get(k), c.SQLMESH_MACRO, None):
                 self.macros[normalize_macro_name(k)] = self.env[k]
             elif v.is_value:
-                self.locals[k] = self.env[k]
+                value = self.env[k]
+                if k in (c.SQLMESH_VARS, c.SQLMESH_BLUEPRINT_VARS):
+                    value = {
+                        var_name: (
+                            self.parse_one(var_value.sql)
+                            if isinstance(var_value, SqlValue)
+                            else var_value
+                        )
+                        for var_name, var_value in value.items()
+                    }
+
+                self.locals[k] = value
 
     def send(
         self, name: str, *args: t.Any, **kwargs: t.Any
@@ -219,13 +231,15 @@ class MacroEvaluator:
 
             if isinstance(node, MacroVar):
                 changed = True
-                variables = self.locals.get(c.SQLMESH_VARS, {})
+                variables = self.variables
+
                 if node.name not in self.locals and node.name.lower() not in variables:
                     if not isinstance(node.parent, StagedFilePath):
                         raise SQLMeshError(f"Macro variable '{node.name}' is undefined.")
 
                     return node
 
+                # Precedence order is locals (e.g. @DEF) > blueprint variables > config variables
                 value = self.locals.get(node.name, variables.get(node.name.lower()))
                 if isinstance(value, list):
                     return exp.convert(
@@ -233,6 +247,7 @@ class MacroEvaluator:
                             self.transform(v) if isinstance(v, exp.Expression) else v for v in value
                         )
                     )
+
                 return exp.convert(
                     self.transform(value) if isinstance(value, exp.Expression) else value
                 )
@@ -279,17 +294,12 @@ class MacroEvaluator:
         Returns:
            The rendered string.
         """
-        mapping = {}
-
-        variables = self.locals.get(c.SQLMESH_VARS, {})
-
-        for k, v in chain(variables.items(), self.locals.items(), local_variables.items()):
-            # try to convert all variables into sqlglot expressions
-            # because they're going to be converted into strings in sql
-            # we don't convert strings because that would result in adding quotes
-            if k != c.SQLMESH_VARS:
-                mapping[k] = convert_sql(v, self.dialect)
-
+        # We try to convert all variables into sqlglot expressions because they're going to be converted
+        # into strings; in sql we don't convert strings because that would result in adding quotes
+        mapping = {
+            k: convert_sql(v, self.dialect)
+            for k, v in chain(self.variables.items(), self.locals.items(), local_variables.items())
+        }
         return MacroStrTemplate(str(text)).safe_substitute(mapping)
 
     def evaluate(self, node: MacroFunc) -> exp.Expression | t.List[exp.Expression] | None:
@@ -466,6 +476,17 @@ class MacroEvaluator:
     def var(self, var_name: str, default: t.Optional[t.Any] = None) -> t.Optional[t.Any]:
         """Returns the value of the specified variable, or the default value if it doesn't exist."""
         return (self.locals.get(c.SQLMESH_VARS) or {}).get(var_name.lower(), default)
+
+    def blueprint_var(self, var_name: str, default: t.Optional[t.Any] = None) -> t.Optional[t.Any]:
+        """Returns the value of the specified blueprint variable, or the default value if it doesn't exist."""
+        return (self.locals.get(c.SQLMESH_BLUEPRINT_VARS) or {}).get(var_name.lower(), default)
+
+    @property
+    def variables(self) -> t.Dict[str, t.Any]:
+        return {
+            **self.locals.get(c.SQLMESH_VARS, {}),
+            **self.locals.get(c.SQLMESH_BLUEPRINT_VARS, {}),
+        }
 
     def _coerce(self, expr: exp.Expression, typ: t.Any, strict: bool = False) -> t.Any:
         """Coerces the given expression to the specified type on a best-effort basis."""
@@ -1052,6 +1073,19 @@ def var(
         raise SQLMeshError(f"Invalid variable name '{var_name.sql()}'. Expected a string literal.")
 
     return exp.convert(evaluator.var(var_name.this, default))
+
+
+@macro("BLUEPRINT_VAR")
+def blueprint_var(
+    evaluator: MacroEvaluator, var_name: exp.Expression, default: t.Optional[exp.Expression] = None
+) -> exp.Expression:
+    """Returns the value of a blueprint variable or the default value if the variable is not set."""
+    if not var_name.is_string:
+        raise SQLMeshError(
+            f"Invalid blueprint variable name '{var_name.sql()}'. Expected a string literal."
+        )
+
+    return exp.convert(evaluator.blueprint_var(var_name.this, default))
 
 
 @macro()

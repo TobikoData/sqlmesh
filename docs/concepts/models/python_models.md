@@ -360,9 +360,9 @@ def entrypoint(
 ) -> pd.DataFrame:
     return pd.DataFrame(
         {
-            "field_a": [context.var("field_a")],
-            "field_b": [context.var("field_b")],
-            "customer": [context.var("customer")],
+            "field_a": [context.blueprint_var("field_a")],
+            "field_b": [context.blueprint_var("field_b")],
+            "customer": [context.blueprint_var("customer")],
         }
     )
 ```

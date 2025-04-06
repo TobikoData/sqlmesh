@@ -21,9 +21,10 @@ dependencies = [
     "requests",
     "rich[jupyter]",
     "ruamel.yaml",
-    "sqlglot[rs]~=26.12.0",
+    "sqlglot[rs]~=26.12.1",
     "tenacity",
     "time-machine",
+    "json-stream"
 ]
 classifiers = [
     "Intended Audience :: Developers",
@@ -203,5 +204,6 @@ module = [
     "pydantic_core.*",
     "dlt.*",
     "bigframes.*",
+    "json_stream.*"
 ]
 ignore_missing_imports = true

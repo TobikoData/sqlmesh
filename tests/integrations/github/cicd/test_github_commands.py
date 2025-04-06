@@ -497,7 +497,7 @@ def test_run_all_test_failed(
     )
     assert (
         prod_plan_preview_checks_runs[1]["output"]["summary"]
-        == "Unit Test(s) Failed so skipping creating prod plan"
+        == "Linter or Unit Test(s) failed so skipping creating prod plan"
     )
 
     assert "SQLMesh - PR Environment Synced" in controller._check_run_mapping
@@ -625,7 +625,7 @@ def test_run_all_test_exception(
     )
     assert (
         prod_plan_preview_checks_runs[1]["output"]["summary"]
-        == "Unit Test(s) Failed so skipping creating prod plan"
+        == "Linter or Unit Test(s) failed so skipping creating prod plan"
     )
 
     assert "SQLMesh - PR Environment Synced" in controller._check_run_mapping

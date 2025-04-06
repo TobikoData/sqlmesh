@@ -18,6 +18,7 @@ from sqlmesh.core.config import load_configs
 from sqlmesh.core.context import Context
 from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.errors import MissingDependencyError
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -1030,3 +1031,84 @@ def lint(
 ) -> None:
     """Run the linter for the target model(s)."""
     obj.lint_models(models)
+
+
+@cli.group(no_args_is_help=True)
+def state() -> None:
+    """Commands for interacting with state"""
+    pass
+
+
+@state.command("export")
+@click.option(
+    "-o",
+    "--output-file",
+    required=True,
+    help="Path to write the state export to",
+    type=click.Path(dir_okay=False, writable=True, path_type=Path),
+)
+@click.option(
+    "--environment",
+    multiple=True,
+    help="Name of environment to export. Specify multiple --environment arguments to export multiple environments",
+)
+@click.option(
+    "--local",
+    is_flag=True,
+    help="Export local state only. Note that the resulting file will not be importable",
+)
+@click.option(
+    "--no-confirm",
+    is_flag=True,
+    help="Do not prompt for confirmation before exporting existing state",
+)
+@click.pass_obj
+@error_handler
+@cli_analytics
+def state_export(
+    obj: Context,
+    output_file: Path,
+    environment: t.Optional[t.Tuple[str]],
+    local: bool,
+    no_confirm: bool,
+) -> None:
+    """Export the state database to a file"""
+    confirm = not no_confirm
+
+    if environment and local:
+        raise click.ClickException("Cannot specify both --environment and --local")
+
+    environment_names = list(environment) if environment else None
+    obj.export_state(
+        output_file=output_file,
+        environment_names=environment_names,
+        local_only=local,
+        confirm=confirm,
+    )
+
+
+@state.command("import")
+@click.option(
+    "-i",
+    "--input-file",
+    help="Path to the state file",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False, readable=True, path_type=Path),
+)
+@click.option(
+    "--replace",
+    is_flag=True,
+    help="Clear the remote state before loading the file. If omitted, a merge is performed instead",
+)
+@click.option(
+    "--no-confirm",
+    is_flag=True,
+    help="Do not prompt for confirmation before updating existing state",
+)
+@click.pass_obj
+@error_handler
+@cli_analytics
+def state_import(obj: Context, input_file: Path, replace: bool, no_confirm: bool) -> None:
+    """Import a state export file back into the state database"""
+    confirm = not no_confirm
+    obj.import_state(input_file=input_file, clear=replace, confirm=confirm)

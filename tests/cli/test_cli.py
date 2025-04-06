@@ -7,6 +7,7 @@ from click import ClickException
 import pytest
 from click.testing import CliRunner
 import time_machine
+import json
 
 from sqlmesh.cli.example_project import ProjectTemplate, init_example_project
 from sqlmesh.cli.main import cli
@@ -128,22 +129,22 @@ def assert_new_env(result, new_env="prod", from_env="prod", initialize=True) -> 
     ) in result.output
 
 
-def assert_model_versions_created(result) -> None:
-    assert "Model versions created successfully" in result.output
+def assert_physical_layer_updated(result) -> None:
+    assert "Physical layer updated" in result.output
 
 
 def assert_model_batches_executed(result) -> None:
-    assert "Model batches executed successfully" in result.output
+    assert "Model batches executed" in result.output
 
 
-def assert_target_env_updated(result) -> None:
-    assert "Target environment updated successfully" in result.output
+def assert_virtual_layer_updated(result) -> None:
+    assert "Virtual layer updated" in result.output
 
 
 def assert_backfill_success(result) -> None:
-    assert_model_versions_created(result)
+    assert_physical_layer_updated(result)
     assert_model_batches_executed(result)
-    assert_target_env_updated(result)
+    assert_virtual_layer_updated(result)
 
 
 def assert_plan_success(result, new_env="prod", from_env="prod") -> None:
@@ -154,7 +155,7 @@ def assert_plan_success(result, new_env="prod", from_env="prod") -> None:
 
 
 def assert_virtual_update(result) -> None:
-    assert "Virtual Update executed successfully" in result.output
+    assert "Virtual Update executed" in result.output
 
 
 def test_version(runner, tmp_path):
@@ -242,9 +243,9 @@ def test_plan_restate_model(runner, tmp_path):
     assert result.exit_code == 0
     assert_duckdb_test(result)
     assert "No changes to plan: project files match the `prod` environment" in result.output
-    assert "sqlmesh_example.full_model evaluated in" in result.output
+    assert "sqlmesh_example.full_model                           [full refresh" in result.output
     assert_model_batches_executed(result)
-    assert_target_env_updated(result)
+    assert_virtual_layer_updated(result)
 
 
 @pytest.mark.parametrize("flag", ["--skip-backfill", "--dry-run"])
@@ -268,7 +269,7 @@ def test_plan_skip_backfill(runner, tmp_path, flag):
     )
     assert result.exit_code == 0
     assert_virtual_update(result)
-    assert "Model batches executed successfully" not in result.output
+    assert "Model batches executed" not in result.output
 
 
 def test_plan_auto_apply(runner, tmp_path):
@@ -282,7 +283,7 @@ def test_plan_auto_apply(runner, tmp_path):
 
     # confirm verbose output not present
     assert "sqlmesh_example.seed_model created" not in result.output
-    assert "sqlmesh_example.seed_model promoted" not in result.output
+    assert "sqlmesh_example.seed_model updated" not in result.output
 
 
 def test_plan_verbose(runner, tmp_path):
@@ -293,8 +294,8 @@ def test_plan_verbose(runner, tmp_path):
         cli, ["--log-file-dir", tmp_path, "--paths", tmp_path, "plan", "--verbose"], input="y\n"
     )
     assert_plan_success(result)
-    assert "sqlmesh_example.seed_model created" in result.output
-    assert "sqlmesh_example.seed_model promoted" in result.output
+    assert "sqlmesh_example.seed_model                           created" in result.output
+    assert "sqlmesh_example.seed_model                           promoted" in result.output
 
 
 def test_plan_very_verbose(runner, tmp_path, copy_to_temp_path):
@@ -396,7 +397,7 @@ def test_plan_dev_create_from_virtual(runner, tmp_path):
     )
     assert result.exit_code == 0
     assert_new_env(result, "dev2", "dev", initialize=False)
-    assert_target_env_updated(result)
+    assert_virtual_layer_updated(result)
     assert_virtual_update(result)
 
 
@@ -495,9 +496,9 @@ def test_plan_dev_no_prompts(runner, tmp_path):
         cli, ["--log-file-dir", tmp_path, "--paths", tmp_path, "plan", "dev", "--no-prompts"]
     )
     assert "Apply - Backfill Tables [y/n]: " in result.output
-    assert "Model versions created successfully" not in result.output
-    assert "Model batches executed successfully" not in result.output
-    assert "The target environment has been updated successfully" not in result.output
+    assert "Physical layer updated" not in result.output
+    assert "Model batches executed" not in result.output
+    assert "The target environment has been updated" not in result.output
 
 
 def test_plan_dev_auto_apply(runner, tmp_path):
@@ -533,7 +534,7 @@ def test_plan_dev_no_changes(runner, tmp_path):
     )
     assert result.exit_code == 0
     assert_new_env(result, "dev", initialize=False)
-    assert_target_env_updated(result)
+    assert_virtual_layer_updated(result)
     assert_virtual_update(result)
 
 
@@ -552,8 +553,8 @@ def test_plan_nonbreaking(runner, tmp_path):
     assert "+  'a' AS new_col" in result.output
     assert "Directly Modified: sqlmesh_example.incremental_model (Non-breaking)" in result.output
     assert "sqlmesh_example.full_model (Indirect Non-breaking)" in result.output
-    assert "sqlmesh_example.incremental_model evaluated in" in result.output
-    assert "sqlmesh_example.full_model evaluated in" not in result.output
+    assert "sqlmesh_example.incremental_model                    [insert" in result.output
+    assert "sqlmesh_example.full_model evaluated [full refresh" not in result.output
     assert_backfill_success(result)
 
 
@@ -610,8 +611,8 @@ def test_plan_breaking(runner, tmp_path):
     assert result.exit_code == 0
     assert "+  item_id + 1 AS item_id," in result.output
     assert "Directly Modified: sqlmesh_example.full_model (Breaking)" in result.output
-    assert "sqlmesh_example.full_model evaluated in" in result.output
-    assert "sqlmesh_example.incremental_model evaluated in" not in result.output
+    assert "sqlmesh_example.full_model                           [full refresh" in result.output
+    assert "sqlmesh_example.incremental_model                     [insert" not in result.output
     assert_backfill_success(result)
 
 
@@ -649,8 +650,8 @@ def test_plan_dev_select(runner, tmp_path):
     assert "+  item_id + 1 AS item_id," not in result.output
     assert "Directly Modified: sqlmesh_example__dev.full_model (Breaking)" not in result.output
     # only incremental_model backfilled
-    assert "sqlmesh_example__dev.incremental_model evaluated in" in result.output
-    assert "sqlmesh_example__dev.full_model evaluated in" not in result.output
+    assert "sqlmesh_example__dev.incremental_model               [insert" in result.output
+    assert "sqlmesh_example__dev.full_model                    [full refresh" not in result.output
     assert_backfill_success(result)
 
 
@@ -688,8 +689,8 @@ def test_plan_dev_backfill(runner, tmp_path):
         "Directly Modified: sqlmesh_example__dev.incremental_model (Non-breaking)" in result.output
     )
     # only incremental_model backfilled
-    assert "sqlmesh_example__dev.incremental_model evaluated in" in result.output
-    assert "sqlmesh_example__dev.full_model evaluated in" not in result.output
+    assert "sqlmesh_example__dev.incremental_model               [insert" in result.output
+    assert "sqlmesh_example__dev.full_model                      [full refresh" not in result.output
     assert_backfill_success(result)
 
 
@@ -1099,7 +1100,7 @@ def test_init_project_dialects(tmp_path):
     dialect_to_config = {
         "redshift": "# concurrent_tasks: 4\n      # register_comments: True\n      # pre_ping: False\n      # pretty_sql: False\n      # user: \n      # password: \n      # database: \n      # host: \n      # port: \n      # source_address: \n      # unix_sock: \n      # ssl: \n      # sslmode: \n      # timeout: \n      # tcp_keepalive: \n      # application_name: \n      # preferred_role: \n      # principal_arn: \n      # credentials_provider: \n      # region: \n      # cluster_identifier: \n      # iam: \n      # is_serverless: \n      # serverless_acct_id: \n      # serverless_work_group: \n      # enable_merge: ",
         "bigquery": "# concurrent_tasks: 1\n      # register_comments: True\n      # pre_ping: False\n      # pretty_sql: False\n      # method: oauth\n      # project: \n      # execution_project: \n      # quota_project: \n      # location: \n      # keyfile: \n      # keyfile_json: \n      # token: \n      # refresh_token: \n      # client_id: \n      # client_secret: \n      # token_uri: \n      # scopes: \n      # impersonated_service_account: \n      # job_creation_timeout_seconds: \n      # job_execution_timeout_seconds: \n      # job_retries: 1\n      # job_retry_deadline_seconds: \n      # priority: \n      # maximum_bytes_billed: ",
-        "snowflake": "account: \n      # concurrent_tasks: 4\n      # register_comments: True\n      # pre_ping: False\n      # pretty_sql: False\n      # user: \n      # password: \n      # warehouse: \n      # database: \n      # role: \n      # authenticator: \n      # token: \n      # application: Tobiko_SQLMesh\n      # private_key: \n      # private_key_path: \n      # private_key_passphrase: \n      # session_parameters: ",
+        "snowflake": "account: \n      # concurrent_tasks: 4\n      # register_comments: True\n      # pre_ping: False\n      # pretty_sql: False\n      # user: \n      # password: \n      # warehouse: \n      # database: \n      # role: \n      # authenticator: \n      # token: \n      # host: \n      # port: \n      # application: Tobiko_SQLMesh\n      # private_key: \n      # private_key_path: \n      # private_key_passphrase: \n      # session_parameters: ",
         "databricks": "# concurrent_tasks: 1\n      # register_comments: True\n      # pre_ping: False\n      # pretty_sql: False\n      # server_hostname: \n      # http_path: \n      # access_token: \n      # auth_type: \n      # oauth_client_id: \n      # oauth_client_secret: \n      # catalog: \n      # http_headers: \n      # session_configuration: \n      # databricks_connect_server_hostname: \n      # databricks_connect_access_token: \n      # databricks_connect_cluster_id: \n      # databricks_connect_use_serverless: False\n      # force_databricks_connect: False\n      # disable_databricks_connect: False\n      # disable_spark_session: False",
         "postgres": "host: \n      user: \n      password: \n      port: \n      database: \n      # concurrent_tasks: 4\n      # register_comments: True\n      # pre_ping: True\n      # pretty_sql: False\n      # keepalives_idle: \n      # connect_timeout: 10\n      # role: \n      # sslmode: \n      # application_name: ",
     }
@@ -1240,3 +1241,397 @@ def test_lint(runner, tmp_path):
     )
     assert result.output.count("Linter errors for") == 2
     assert result.exit_code == 1
+
+
+def test_state_export(runner: CliRunner, tmp_path: Path) -> None:
+    create_example_project(tmp_path)
+
+    state_export_file = tmp_path / "state_export.json"
+
+    # create some state
+    result = runner.invoke(
+        cli,
+        [
+            "--paths",
+            str(tmp_path),
+            "plan",
+            "--no-prompts",
+            "--auto-apply",
+        ],
+    )
+    assert result.exit_code == 0
+
+    # export it
+    result = runner.invoke(
+        cli,
+        ["--paths", str(tmp_path), "state", "export", "-o", str(state_export_file), "--no-confirm"],
+        catch_exceptions=False,
+    )
+    assert result.exit_code == 0
+
+    # verify output
+    assert "Gateway: local" in result.output
+    assert "Type: duckdb" in result.output
+    assert "Exporting versions" in result.output
+    assert "Exporting snapshots" in result.output
+    assert "Exporting environments" in result.output
+    assert "State exported successfully" in result.output
+
+    assert state_export_file.exists()
+    assert len(state_export_file.read_text()) > 0
+
+
+def test_state_export_specific_environments(runner: CliRunner, tmp_path: Path) -> None:
+    create_example_project(tmp_path)
+
+    state_export_file = tmp_path / "state_export.json"
+
+    # create prod
+    result = runner.invoke(
+        cli,
+        [
+            "--paths",
+            str(tmp_path),
+            "plan",
+            "--no-prompts",
+            "--auto-apply",
+        ],
+    )
+    assert result.exit_code == 0
+
+    (tmp_path / "models" / "new_model.sql").write_text(
+        """
+    MODEL (
+        name sqlmesh_example.new_model,
+        kind FULL
+    );
+
+    SELECT 1;
+    """
+    )
+
+    # create dev env with new model
+    result = runner.invoke(
+        cli,
+        [
+            "--paths",
+            str(tmp_path),
+            "plan",
+            "dev",
+            "--no-prompts",
+            "--auto-apply",
+        ],
+    )
+    assert result.exit_code == 0
+
+    # export non existent env - should fail
+    result = runner.invoke(
+        cli,
+        [
+            "--paths",
+            str(tmp_path),
+            "state",
+            "export",
+            "--environment",
+            "nonexist",
+            "-o",
+            str(state_export_file),
+            "--no-confirm",
+        ],
+        catch_exceptions=False,
+    )
+    assert result.exit_code == 1
+    assert "No such environment: nonexist" in result.output
+
+    # export dev, should contain original snapshots + new one
+    result = runner.invoke(
+        cli,
+        [
+            "--paths",
+            str(tmp_path),
+            "state",
+            "export",
+            "--environment",
+            "dev",
+            "-o",
+            str(state_export_file),
+            "--no-confirm",
+        ],
+        catch_exceptions=False,
+    )
+    assert result.exit_code == 0
+    assert "Environment: dev" in result.output
+    assert "State exported successfully" in result.output
+
+    state = json.loads(state_export_file.read_text(encoding="utf8"))
+    assert len(state["snapshots"]) == 4
+    assert any("new_model" in s["name"] for s in state["snapshots"])
+    assert len(state["environments"]) == 1
+    assert "dev" in state["environments"]
+    assert "prod" not in state["environments"]
+
+
+def test_state_export_local(runner: CliRunner, tmp_path: Path) -> None:
+    create_example_project(tmp_path)
+
+    state_export_file = tmp_path / "state_export.json"
+
+    # note: we have not plan+applied at all, we are just exporting local state
+    result = runner.invoke(
+        cli,
+        [
+            "--paths",
+            str(tmp_path),
+            "state",
+            "export",
+            "--local",
+            "-o",
+            str(state_export_file),
+            "--no-confirm",
+        ],
+        catch_exceptions=False,
+    )
+    assert result.exit_code == 0
+    assert "Exporting local state" in result.output
+    assert "the resulting file cannot be imported" in result.output
+    assert "State exported successfully" in result.output
+
+    state = json.loads(state_export_file.read_text(encoding="utf8"))
+    assert len(state["snapshots"]) == 3
+    assert not state["metadata"]["importable"]
+    assert len(state["environments"]) == 0
+
+    # test mutually exclusive with --environment
+    result = runner.invoke(
+        cli,
+        [
+            "--paths",
+            str(tmp_path),
+            "state",
+            "export",
+            "--environment",
+            "foo",
+            "--local",
+            "-o",
+            str(state_export_file),
+            "--no-confirm",
+        ],
+        catch_exceptions=False,
+    )
+    assert result.exit_code == 1
+
+    assert "Cannot specify both --environment and --local" in result.output
+
+
+def test_state_import(runner: CliRunner, tmp_path: Path) -> None:
+    create_example_project(tmp_path)
+
+    state_export_file = tmp_path / "state_export.json"
+
+    # create some state
+    result = runner.invoke(
+        cli,
+        [
+            "--paths",
+            str(tmp_path),
+            "plan",
+            "--no-prompts",
+            "--auto-apply",
+        ],
+    )
+    assert result.exit_code == 0
+
+    # export it
+    result = runner.invoke(
+        cli,
+        ["--paths", str(tmp_path), "state", "export", "-o", str(state_export_file), "--no-confirm"],
+        catch_exceptions=False,
+    )
+    assert result.exit_code == 0
+
+    # import it back
+    result = runner.invoke(
+        cli,
+        ["--paths", str(tmp_path), "state", "import", "-i", str(state_export_file), "--no-confirm"],
+        catch_exceptions=False,
+    )
+    assert result.exit_code == 0
+
+    assert "Gateway: local" in result.output
+    assert "Type: duckdb" in result.output
+    assert "Importing versions" in result.output
+    assert "Importing snapshots" in result.output
+    assert "Importing environments" in result.output
+    assert "State imported successfully" in result.output
+
+    # plan should have no changes
+    result = runner.invoke(
+        cli,
+        [
+            "--paths",
+            str(tmp_path),
+            "plan",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "No changes to plan" in result.output
+
+
+def test_state_import_replace(runner: CliRunner, tmp_path: Path) -> None:
+    create_example_project(tmp_path)
+
+    state_export_file = tmp_path / "state_export.json"
+
+    # prod
+    result = runner.invoke(
+        cli,
+        [
+            "--paths",
+            str(tmp_path),
+            "plan",
+            "--no-prompts",
+            "--auto-apply",
+        ],
+    )
+    assert result.exit_code == 0
+
+    (tmp_path / "models" / "new_model.sql").write_text(
+        """
+    MODEL (
+        name sqlmesh_example.new_model,
+        kind FULL
+    );
+
+    SELECT 1;
+    """
+    )
+
+    # create dev with new model
+    result = runner.invoke(
+        cli,
+        [
+            "--paths",
+            str(tmp_path),
+            "plan",
+            "dev",
+            "--no-prompts",
+            "--auto-apply",
+        ],
+    )
+    assert result.exit_code == 0
+
+    # prove both dev and prod exist
+    result = runner.invoke(
+        cli,
+        [
+            "--paths",
+            str(tmp_path),
+            "environments",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "dev -" in result.output
+    assert "prod -" in result.output
+
+    # export just prod
+    result = runner.invoke(
+        cli,
+        [
+            "--paths",
+            str(tmp_path),
+            "state",
+            "export",
+            "--environment",
+            "prod",
+            "-o",
+            str(state_export_file),
+            "--no-confirm",
+        ],
+        catch_exceptions=False,
+    )
+    assert result.exit_code == 0
+
+    # import it back with --replace
+    result = runner.invoke(
+        cli,
+        [
+            "--paths",
+            str(tmp_path),
+            "state",
+            "import",
+            "-i",
+            str(state_export_file),
+            "--replace",
+            "--no-confirm",
+        ],
+        catch_exceptions=False,
+    )
+    assert result.exit_code == 0
+    assert "State imported successfully" in result.output
+
+    # prove only prod exists now
+    result = runner.invoke(
+        cli,
+        [
+            "--paths",
+            str(tmp_path),
+            "environments",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "dev -" not in result.output
+    assert "prod -" in result.output
+
+
+def test_state_import_local(runner: CliRunner, tmp_path: Path) -> None:
+    create_example_project(tmp_path)
+
+    state_export_file = tmp_path / "state_export.json"
+
+    # local state export
+    result = runner.invoke(
+        cli,
+        [
+            "--paths",
+            str(tmp_path),
+            "state",
+            "export",
+            "--local",
+            "-o",
+            str(state_export_file),
+            "--no-confirm",
+        ],
+        catch_exceptions=False,
+    )
+    assert result.exit_code == 0
+
+    # import should fail - local state is not importable
+    result = runner.invoke(
+        cli,
+        ["--paths", str(tmp_path), "state", "import", "-i", str(state_export_file), "--no-confirm"],
+        catch_exceptions=False,
+    )
+    assert result.exit_code == 1
+    assert "State file is marked as not importable" in result.output
+    assert "Aborting" in result.output
+
+
+def test_dbt_init(tmp_path):
+    # The dbt init project doesn't require a dialect
+    init_example_project(tmp_path, dialect=None, template=ProjectTemplate.DBT)
+
+    config_path = tmp_path / "config.py"
+    assert config_path.exists()
+
+    with open(config_path) as file:
+        config = file.read()
+
+    assert (
+        config
+        == """from pathlib import Path
+
+from sqlmesh.dbt.loader import sqlmesh_config
+
+config = sqlmesh_config(Path(__file__).parent)
+"""
+    )

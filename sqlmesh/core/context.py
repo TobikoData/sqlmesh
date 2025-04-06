@@ -253,6 +253,7 @@ class ExecutionContext(BaseContext):
         default_dialect: t.Optional[str] = None,
         default_catalog: t.Optional[str] = None,
         variables: t.Optional[t.Dict[str, t.Any]] = None,
+        blueprint_variables: t.Optional[t.Dict[str, t.Any]] = None,
     ):
         self.snapshots = snapshots
         self.deployability_index = deployability_index
@@ -260,6 +261,7 @@ class ExecutionContext(BaseContext):
         self._default_catalog = default_catalog
         self._default_dialect = default_dialect
         self._variables = variables or {}
+        self._blueprint_variables = blueprint_variables or {}
 
     @property
     def default_dialect(self) -> t.Optional[str]:
@@ -288,7 +290,15 @@ class ExecutionContext(BaseContext):
         """Returns a variable value."""
         return self._variables.get(var_name.lower(), default)
 
-    def with_variables(self, variables: t.Dict[str, t.Any]) -> ExecutionContext:
+    def blueprint_var(self, var_name: str, default: t.Optional[t.Any] = None) -> t.Optional[t.Any]:
+        """Returns a blueprint variable value."""
+        return self._blueprint_variables.get(var_name.lower(), default)
+
+    def with_variables(
+        self,
+        variables: t.Dict[str, t.Any],
+        blueprint_variables: t.Optional[t.Dict[str, t.Any]] = None,
+    ) -> ExecutionContext:
         """Returns a new ExecutionContext with additional variables."""
         return ExecutionContext(
             self._engine_adapter,
@@ -297,6 +307,7 @@ class ExecutionContext(BaseContext):
             self._default_dialect,
             self._default_catalog,
             variables=variables,
+            blueprint_variables=blueprint_variables,
         )
 
 
@@ -392,6 +403,9 @@ class GenericContext(BaseContext, t.Generic[C]):
         ]
 
         self._connection_config = self.config.get_connection(self.gateway)
+        self._state_connection_config = (
+            self.config.get_state_connection(self.gateway) or self._connection_config
+        )
         self.concurrent_tasks = concurrent_tasks or self._connection_config.concurrent_tasks
 
         self._engine_adapters: t.Dict[str, EngineAdapter] = {
@@ -2089,6 +2103,64 @@ class GenericContext(BaseContext, t.Generic[C]):
         for path in self.configs:
             rmtree(path / c.CACHE)
 
+    def export_state(
+        self,
+        output_file: Path,
+        environment_names: t.Optional[t.List[str]] = None,
+        local_only: bool = False,
+        confirm: bool = True,
+    ) -> None:
+        from sqlmesh.core.state_sync.export_import import export_state
+
+        # trigger a connection to the StateSync so we can fail early if there is a problem
+        # note we still need to do this even if we are doing a local export so we know what 'versions' to write
+        self.state_sync.get_versions(validate=True)
+
+        local_snapshots = self.snapshots if local_only else None
+
+        if self.console.start_state_export(
+            output_file=output_file,
+            gateway=self.selected_gateway,
+            state_connection_config=self._state_connection_config,
+            environment_names=environment_names,
+            local_only=local_only,
+            confirm=confirm,
+        ):
+            try:
+                export_state(
+                    state_sync=self.state_sync,
+                    output_file=output_file,
+                    local_snapshots=local_snapshots,
+                    environment_names=environment_names,
+                    console=self.console,
+                )
+                self.console.stop_state_export(success=True, output_file=output_file)
+            except:
+                self.console.stop_state_export(success=False, output_file=output_file)
+                raise
+
+    def import_state(self, input_file: Path, clear: bool = False, confirm: bool = True) -> None:
+        from sqlmesh.core.state_sync.export_import import import_state
+
+        if self.console.start_state_import(
+            input_file=input_file,
+            gateway=self.selected_gateway,
+            state_connection_config=self._state_connection_config,
+            clear=clear,
+            confirm=confirm,
+        ):
+            try:
+                import_state(
+                    state_sync=self.state_sync,
+                    input_file=input_file,
+                    clear=clear,
+                    console=self.console,
+                )
+                self.console.stop_state_import(success=True, input_file=input_file)
+            except:
+                self.console.stop_state_import(success=False, input_file=input_file)
+                raise
+
     def _run_tests(
         self, verbosity: Verbosity = Verbosity.DEFAULT
     ) -> t.Tuple[unittest.result.TestResult, str]:
@@ -2394,7 +2466,10 @@ class GenericContext(BaseContext, t.Generic[C]):
             )
         return models_for_interval_end
 
-    def lint_models(self, models: t.Optional[t.Iterable[t.Union[str, Model]]] = None) -> None:
+    def lint_models(
+        self,
+        models: t.Optional[t.Iterable[t.Union[str, Model]]] = None,
+    ) -> None:
         found_error = False
 
         model_list = (
@@ -2403,7 +2478,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         for model in model_list:
             # Linter may be `None` if the context is not loaded yet
             if linter := self._linters.get(model.project):
-                found_error = linter.lint_model(model) or found_error
+                found_error = linter.lint_model(model, console=self.console) or found_error
 
         if found_error:
             raise LinterError(

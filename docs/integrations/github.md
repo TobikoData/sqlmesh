@@ -5,6 +5,7 @@
 The GitHub Actions CI/CD Bot enables teams to automate their SQLMesh projects using GitHub Actions. It can be configured to perform the following things:
 
 * Automatically run unit tests on PRs
+* Automatically run the linter on PRs
 * Automatically create PR environments that represent the code changes in the PR
 * Automatically categorize and backfill data for models that have changed
 * Automatically deploy changes to production with automatic data gap prevention and merge the PR
@@ -350,6 +351,7 @@ These can be used to potentially trigger follow up steps in the workflow.
 These are the possible outputs (based on how the bot is configured) that are created by the bot:
 
 * `run_unit_tests`
+* `linter`
 * `has_required_approval`
 * `pr_environment_synced`
 * `prod_plan_preview`
@@ -372,6 +374,8 @@ In addition, there are custom outputs listed below:
 
 * `created_pr_environment` - set to `"true"` (a string with a value of `true`) if a PR environment was created for the first time. It is absent, or considered empty string if you check for it, if it is not created for the first time
 * `pr_environment_name` - the name of the PR environment. It is output whenever PR environment synced check reaches a conclusion. Therefore make sure to check the status of `created_pr_environment` or `pr_environment_synced` before acting on this output 
+
+Note: The `linter` step will run only if it's enabled in the project's configuration (`config.yaml` / `config.py`). The step will fail if the linter finds errors, otherwise it'll output only the warnings.
 
 ## Custom Workflow Configuration
 You can configure each individual action to run as a separate step. This can allow for more complex workflows or integrating specific steps with other actions you want to trigger. Run `sqlmesh_cicd github` to see a list of commands that can be supplied and their potential options.
@@ -460,6 +464,10 @@ jobs:
 ## Example Screenshots
 ### Automated Unit Tests with Error Summary
 ![Automated Unit Tests with Error Summary](github/github_test_summary.png)
+### Automated Linting with Error Summary
+![Automated Linting with Error Summary](github/linter_errors.png)
+### Automated Linting with Warning Summary
+![Automated Linting with Warning Summary](github/linter_warnings.png)
 ### Automatically create PR Environments that represent the code changes in the PR
 ![Environment Summary](github/github_env_summary.png)
 ### Enforce that certain reviewers have approved of the PR before it can be merged

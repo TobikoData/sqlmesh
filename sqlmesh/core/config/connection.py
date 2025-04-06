@@ -417,6 +417,8 @@ class SnowflakeConnectionConfig(ConnectionConfig):
         register_comments: Whether or not to register model comments with the SQL engine.
         pre_ping: Whether or not to pre-ping the connection before starting a new transaction to ensure it is still alive.
         session_parameters: The optional session parameters to set for the connection.
+        host: Host address for the connection.
+        port: Port for the connection.
     """
 
     account: str
@@ -427,6 +429,8 @@ class SnowflakeConnectionConfig(ConnectionConfig):
     role: t.Optional[str] = None
     authenticator: t.Optional[str] = None
     token: t.Optional[str] = None
+    host: t.Optional[str] = None
+    port: t.Optional[int] = None
     application: t.Literal["Tobiko_SQLMesh"] = "Tobiko_SQLMesh"
 
     # Private Key Auth
@@ -560,6 +564,8 @@ class SnowflakeConnectionConfig(ConnectionConfig):
             "private_key",
             "session_parameters",
             "application",
+            "host",
+            "port",
         }
 
     @property

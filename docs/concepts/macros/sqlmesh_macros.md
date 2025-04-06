@@ -41,11 +41,11 @@ It uses the following five step approach to accomplish this:
 
 ## User-defined variables
 
-SQLMesh supports three kinds of user-defined macro variables: [global](#global-variables), [gateway](#gateway-variables), and [local](#local-variables).
+SQLMesh supports four kinds of user-defined macro variables: [global](#global-variables), [gateway](#gateway-variables), [blueprint](#blueprint-variables) and [local](#local-variables).
 
-Global and gateway macro variables are defined in the project configuration file and can be accessed in any project model. Local macro variables are defined in a model definition and can only be accessed in that model.
+Global and gateway macro variables are defined in the project configuration file and can be accessed in any project model. Blueprint and macro variables are defined in a model definition and can only be accessed in that model.
 
-Macro variables with the same name may be specified at any or all of the global, gateway, and local levels. When variables are specified at multiple levels, the value of the most specific level takes precedence. For example, the value of a local variable takes precedence over the value of a gateway variable with the same name, and the value of a gateway variable takes precedence over the value of a global variable.
+Macro variables with the same name may be specified at any or all of the global, gateway, blueprint and local levels. When variables are specified at multiple levels, the value of the most specific level takes precedence. For example, the value of a local variable takes precedence over the value of a blueprint or gateway variable with the same name, and the value of a gateway variable takes precedence over the value of a global variable.
 
 ### Global variables
 
@@ -152,9 +152,33 @@ Access them in models using the same methods as [global variables](#global-varia
 
 Gateway-specific variable values take precedence over variables with the same name specified in the root `variables` key.
 
+### Blueprint variables
+
+Blueprint macro variables are defined in a model. Blueprint variable values take precedence over [global](#global-variables) or [gateway-specific](#gateway-variables) variables with the same name.
+
+Blueprint variables are defined as a property of the `MODEL` statement, and serve as a mechanism for [creating model templates](../models/sql_models.md):
+
+```sql linenums="1"
+MODEL (
+  name @customer.some_table,
+  kind FULL,
+  blueprints (
+    (customer := customer1, field_a := x, field_b := y),
+    (customer := customer2, field_a := z, field_b := w)
+  )
+);
+
+SELECT
+  @field_a,
+  @{field_b} AS field_b
+FROM @customer.some_source
+```
+
+Blueprint variables can be accessed using the syntax shown above, or through the `@BLUEPRINT_VAR()` macro function, which also supports specifying default values in case the variable is undefined (similar to `@VAR()`).
+
 ### Local variables
 
-Local macro variables are defined in a model. Local variable values take precedence over [global](#global-variables) or [gateway-specific](#gateway-variables) variables with the same name.
+Local macro variables are defined in a model. Local variable values take precedence over [global](#global-variables), [blueprint](#blueprint-variables), or [gateway-specific](#gateway-variables) variables with the same name.
 
 Define your own local macro variables with the `@DEF` macro operator. For example, you could set the macro variable `macro_var` to the value `1` with:
 

@@ -3,6 +3,7 @@ import typing as t
 import pytest
 from pytest_mock.plugin import MockerFixture
 
+from sqlmesh.core.config import Config
 from sqlmesh.core.console import set_console, get_console, MarkdownConsole
 from sqlmesh.integrations.github.cicd.config import GithubCICDBotConfig
 from sqlmesh.integrations.github.cicd.controller import (
@@ -67,6 +68,7 @@ def make_controller(mocker: MockerFixture, copy_to_temp_path: t.Callable) -> t.C
         merge_state_status: MergeStateStatus = MergeStateStatus.CLEAN,
         bot_config: t.Optional[GithubCICDBotConfig] = None,
         mock_out_context: bool = True,
+        config: t.Optional[t.Union[Config, str]] = None,
     ) -> GithubController:
         if mock_out_context:
             mocker.patch("sqlmesh.core.context.Context.apply", mocker.MagicMock())
@@ -97,6 +99,7 @@ def make_controller(mocker: MockerFixture, copy_to_temp_path: t.Callable) -> t.C
                     else GithubEvent.from_obj(event_path)
                 ),
                 client=client,
+                config=config,
             )
         finally:
             set_console(orig_console)
