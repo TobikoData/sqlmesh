@@ -182,7 +182,13 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
     def _begin_session(self, properties: SessionProperties) -> None:
         from google.cloud.bigquery import QueryJobConfig
 
-        job = self.client.query("SELECT 1;", job_config=QueryJobConfig(create_session=True))
+        job = self.client.query(
+            f"""
+            SET @@query_label = '{",".join([":".join([str(k), str(v)]) for k, v in properties.items()])}';
+            SELECT 1;
+            """,
+            job_config=QueryJobConfig(create_session=True),
+        )
         session_info = job.session_info
         session_id = session_info.session_id if session_info else None
         self._session_id = session_id
