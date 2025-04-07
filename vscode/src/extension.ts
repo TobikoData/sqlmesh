@@ -13,6 +13,7 @@ import { checkIfConfigurationChanged } from './common/settings'
 import { getInterpreterFromSetting } from './common/settings'
 import { startWebServer, WebServer } from './web-server/server'
 import { isErr } from './functional/result'
+import { LineagePanel } from './webviews/lineagePanel'
 
 let lsClient: LanguageClient | undefined
 let webServer: WebServer | undefined
@@ -112,6 +113,12 @@ export function activate(context: vscode.ExtensionContext) {
 
 	startServer(serverOutputChannel)
 
+	// Register the webview
+	const lineagePanel = new LineagePanel(context.extensionUri, () => webServer?.url ?? "")
+	context.subscriptions.push(
+		vscode.window.registerWebviewViewProvider(LineagePanel.viewType, lineagePanel)
+	)
+
 	setImmediate(async () => {
 		const interpreterDetails = await getInterpreterDetails()
 		if (interpreterDetails.path) {
@@ -121,7 +128,7 @@ export function activate(context: vscode.ExtensionContext) {
 	traceInfo("Extension activated")
 }
 
-export async function startServer(serverOutputChannel: vscode.LogOutputChannel) {
+export async function startServer(serverOutputChannel: vscode.LogOutputChannel): Promise<WebServer> {
     if (webServer) {
         return webServer
     }
