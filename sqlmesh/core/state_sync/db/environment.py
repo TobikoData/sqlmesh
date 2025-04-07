@@ -48,6 +48,7 @@ class EnvironmentState:
             "catalog_name_override": exp.DataType.build("text"),
             "previous_finalized_snapshots": exp.DataType.build(blob_type),
             "normalize_name": exp.DataType.build("boolean"),
+            "gateway_managed_virtual_layer": exp.DataType.build("boolean"),
             "requirements": exp.DataType.build(blob_type),
         }
 
@@ -327,6 +328,7 @@ def _environment_to_df(environment: Environment) -> pd.DataFrame:
                     else None
                 ),
                 "normalize_name": environment.normalize_name,
+                "gateway_managed_virtual_layer": environment.gateway_managed_virtual_layer,
                 "requirements": json.dumps(environment.requirements),
             }
         ]

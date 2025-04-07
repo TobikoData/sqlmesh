@@ -32,12 +32,15 @@ class EnvironmentNamingInfo(PydanticModel):
         catalog_name_override: The name of the catalog to use for this environment if an override was provided
         normalize_name: Indicates whether the environment's name will be normalized. For example, if it's
             `dev`, then it will become `DEV` when targeting Snowflake.
+        gateway_managed_virtual_layer: Determines whether the virtual layer's views are created by the model-specific
+            gateways, otherwise the default gateway is used. Default: False.
     """
 
     name: str = c.PROD
     suffix_target: EnvironmentSuffixTarget = Field(default=EnvironmentSuffixTarget.SCHEMA)
     catalog_name_override: t.Optional[str] = None
     normalize_name: bool = True
+    gateway_managed_virtual_layer: bool = False
 
     @field_validator("name", mode="before")
     @classmethod
@@ -48,6 +51,11 @@ class EnvironmentNamingInfo(PydanticModel):
     @classmethod
     def _validate_normalize_name(cls, v: t.Any) -> bool:
         return True if v is None else bool(v)
+
+    @field_validator("gateway_managed_virtual_layer", mode="before")
+    @classmethod
+    def _validate_gateway_managed_virtual_layer(cls, v: t.Any) -> bool:
+        return False if v is None else bool(v)
 
     @t.overload
     @classmethod
@@ -194,6 +202,7 @@ class Environment(EnvironmentNamingInfo):
             suffix_target=self.suffix_target,
             catalog_name_override=self.catalog_name_override,
             normalize_name=self.normalize_name,
+            gateway_managed_virtual_layer=self.gateway_managed_virtual_layer,
         )
 
     @property

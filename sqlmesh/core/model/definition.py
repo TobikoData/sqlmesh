@@ -1907,6 +1907,13 @@ def create_models_from_blueprints(
         else:
             gateway_name = None
 
+        if (
+            (catalogs := loader_kwargs.pop("catalogs", None))
+            and gateway_name
+            and (catalog := catalogs.get(gateway_name))
+        ):
+            loader_kwargs["default_catalog"] = catalog
+
         model_blueprints.append(
             loader(
                 path=path,

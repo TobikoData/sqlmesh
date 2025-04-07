@@ -1,4 +1,4 @@
-"""Readds indexes and primary keys in case tables were restored from a backup."""
+"""Reads indexes and primary keys in case tables were restored from a backup."""
 
 from sqlglot import exp
 from sqlmesh.utils import random_id

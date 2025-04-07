@@ -151,6 +151,7 @@ class PlanBuilder:
             name=self._context_diff.environment,
             suffix_target=environment_suffix_target,
             normalize_name=self._context_diff.normalize_environment_name,
+            gateway_managed_virtual_layer=self._context_diff.gateway_managed_virtual_layer,
         )
 
         self._latest_plan: t.Optional[Plan] = None
