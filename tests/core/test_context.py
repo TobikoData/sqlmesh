@@ -340,12 +340,6 @@ def test_gateway_specific_adapters(copy_to_temp_path, mocker):
     assert len(ctx._engine_adapters) == 1
     assert ctx.engine_adapter == ctx._engine_adapters["dev"]
 
-    mocker.patch.object(
-        Context,
-        "_snapshot_gateways",
-        new_callable=mocker.PropertyMock(return_value={"test_snapshot": "test"}),
-    )
-
     ctx = Context(paths=path, config="isolated_systems_config")
 
     assert len(ctx.engine_adapters) == 3

@@ -380,6 +380,8 @@ class GenericContext(BaseContext, t.Generic[C]):
         self.pinned_environments = Environment.sanitize_names(self.config.pinned_environments)
         self.auto_categorize_changes = self.config.plan.auto_categorize_changes
         self.selected_gateway = gateway or self.config.default_gateway_name
+        self.gateway_managed_virtual_layer = self.config.gateway_managed_virtual_layer
+        self.catalogs: t.Dict[str, str] = {}
 
         gw_model_defaults = self.config.gateways[self.selected_gateway].model_defaults
         if gw_model_defaults:
@@ -584,6 +586,15 @@ class GenericContext(BaseContext, t.Generic[C]):
     def load(self, update_schemas: bool = True) -> GenericContext[C]:
         """Load all files in the context's path."""
         load_start_ts = time.perf_counter()
+
+        # In a multi virtual layer setup we need the catalog of each engine
+        # since there is a possibility of not a shared catalog between them
+        if self.gateway_managed_virtual_layer:
+            self.catalogs = {
+                name: adapter.default_catalog
+                for name, adapter in self.engine_adapters.items()
+                if adapter.default_catalog
+            }
 
         loaded_projects = [loader.load() for loader in self._loaders]
 
@@ -2212,16 +2223,6 @@ class GenericContext(BaseContext, t.Generic[C]):
             for fqn, snapshot in self.snapshots.items()
         }
 
-    @property
-    def _snapshot_gateways(self) -> t.Dict[str, str]:
-        """Mapping of snapshot name to the gateway if specified in the model."""
-
-        return {
-            fqn: snapshot.model.gateway
-            for fqn, snapshot in self.snapshots.items()
-            if snapshot.is_model and snapshot.model.gateway
-        }
-
     @cached_property
     def engine_adapters(self) -> t.Dict[str, EngineAdapter]:
         """Returns all the engine adapters for the gateways defined in the configuration."""
@@ -2292,14 +2293,18 @@ class GenericContext(BaseContext, t.Generic[C]):
             ensure_finalized_snapshots=ensure_finalized_snapshots,
             diff_rendered=diff_rendered,
             environment_statements=self._environment_statements,
+            gateway_managed_virtual_layer=self.gateway_managed_virtual_layer,
         )
 
     def _run_janitor(self, ignore_ttl: bool = False) -> None:
         self._cleanup_environments()
-        expired_snapshots = self.state_sync.delete_expired_snapshots(ignore_ttl=ignore_ttl)
+        expired_snapshots, snapshot_gateways = self.state_sync.delete_expired_snapshots(
+            ignore_ttl=ignore_ttl
+        )
+
         self.snapshot_evaluator.cleanup(
             expired_snapshots,
-            self._snapshot_gateways,
+            snapshot_gateways,
             on_complete=self.console.update_cleanup_progress,
         )
 

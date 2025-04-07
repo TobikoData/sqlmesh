@@ -195,7 +195,7 @@ class SnapshotState:
 
     def delete_expired_snapshots(
         self, environments: t.Iterable[Environment], ignore_ttl: bool = False
-    ) -> t.Tuple[t.Set[SnapshotId], t.List[SnapshotTableCleanupTask]]:
+    ) -> t.Tuple[t.Set[SnapshotId], t.List[SnapshotTableCleanupTask], t.Dict[str, str]]:
         """Deletes expired snapshots.
 
         Args:
@@ -220,7 +220,7 @@ class SnapshotState:
             for name, identifier, version in fetchall(self.engine_adapter, expired_query)
         }
         if not expired_candidates:
-            return set(), []
+            return set(), [], {}
 
         promoted_snapshot_ids = {
             snapshot.snapshot_id
@@ -240,6 +240,7 @@ class SnapshotState:
         )
         cleanup_targets = []
         expired_snapshot_ids = set()
+        gateways = {}
         for versions_batch in version_batches:
             snapshots = self._get_snapshots_with_same_version(versions_batch)
 
@@ -253,6 +254,9 @@ class SnapshotState:
             expired_snapshot_ids.update([s.snapshot_id for s in expired_snapshots])
 
             for snapshot in expired_snapshots:
+                if (node := snapshot.raw_snapshot.get("node")) and (gateway := node.get("gateway")):
+                    gateways[snapshot.snapshot_id.name] = gateway
+
                 shared_version_snapshots = snapshots_by_version[(snapshot.name, snapshot.version)]
                 shared_version_snapshots.discard(snapshot.snapshot_id)
 
@@ -271,7 +275,7 @@ class SnapshotState:
 
         if expired_snapshot_ids:
             self.delete_snapshots(expired_snapshot_ids)
-        return expired_snapshot_ids, cleanup_targets
+        return expired_snapshot_ids, cleanup_targets, gateways
 
     def delete_snapshots(self, snapshot_ids: t.Iterable[SnapshotIdLike]) -> None:
         """Deletes snapshots.
