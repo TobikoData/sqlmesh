@@ -118,8 +118,6 @@ gateways:
       database: {{ env_var('SNOWFLAKE_DATABASE') }}
       user: {{ env_var('SNOWFLAKE_USER') }}
       password: {{ env_var('SNOWFLAKE_PASSWORD') }}
-    state_connection:
-      type: duckdb
 
   inttest_databricks:
     connection:
@@ -128,8 +126,6 @@ gateways:
       server_hostname: {{ env_var('DATABRICKS_SERVER_HOSTNAME') }}
       http_path: {{ env_var('DATABRICKS_HTTP_PATH') }}
       access_token: {{ env_var('DATABRICKS_ACCESS_TOKEN') }}
-    state_connection:
-      type: duckdb
 
   inttest_redshift:
     connection:
@@ -138,16 +134,12 @@ gateways:
       user: {{ env_var('REDSHIFT_USER') }}
       password: {{ env_var('REDSHIFT_PASSWORD') }}
       database: {{ env_var('REDSHIFT_DATABASE') }}
-    state_connection:
-      type: duckdb
 
   inttest_bigquery:
     connection:
       type: bigquery
       method: service-account
       keyfile: {{ env_var('BIGQUERY_KEYFILE') }}
-    state_connection:
-      type: duckdb
 
   inttest_clickhouse_cloud:
     connection:
