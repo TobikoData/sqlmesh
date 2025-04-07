@@ -118,6 +118,8 @@ gateways:
       database: {{ env_var('SNOWFLAKE_DATABASE') }}
       user: {{ env_var('SNOWFLAKE_USER') }}
       password: {{ env_var('SNOWFLAKE_PASSWORD') }}
+    state_connection:
+      type: duckdb
 
   inttest_databricks:
     connection:
@@ -140,6 +142,8 @@ gateways:
       type: bigquery
       method: service-account
       keyfile: {{ env_var('BIGQUERY_KEYFILE') }}
+    state_connection:
+      type: duckdb
 
   inttest_clickhouse_cloud:
     connection:
