@@ -226,15 +226,23 @@ class SnapshotEvaluator:
             deployability_index: Determines snapshots that are deployable in the context of this promotion.
             on_complete: A callback to call on each successfully promoted snapshot.
         """
-        self._create_schemas(
-            [
-                s.qualified_view_name.table_for_environment(
-                    environment_naming_info, dialect=self.adapter.dialect
+
+        gateway_by_schema: t.Dict[t.Any, str] = {}
+        tables: t.List[t.Any] = []
+        for snapshot in target_snapshots:
+            if snapshot.is_model and not snapshot.is_symbolic:
+                table = snapshot.qualified_view_name.table_for_environment(
+                    environment_naming_info,
+                    dialect=self._get_adapter(snapshot.model_gateway).dialect
+                    if environment_naming_info.gateway_managed_virtual_layer
+                    else self.adapter.dialect,
                 )
-                for s in target_snapshots
-                if s.is_model and not s.is_symbolic
-            ]
-        )
+                tables.append(table)
+                if environment_naming_info.gateway_managed_virtual_layer:
+                    table_schema = d.schema_(table.db, catalog=table.catalog)
+                    gateway_by_schema[table_schema] = snapshot.model_gateway or ""
+        self._create_schemas(tables=tables, gateways=gateway_by_schema)
+
         deployability_index = deployability_index or DeployabilityIndex.all_deployable()
         with self.concurrent_context():
             concurrent_apply_to_snapshots(
@@ -920,7 +928,11 @@ class SnapshotEvaluator:
         table_mapping: t.Optional[t.Dict[str, str]] = None,
     ) -> None:
         if snapshot.is_model:
-            adapter = self.adapter
+            adapter = (
+                self._get_adapter(snapshot.model_gateway)
+                if environment_naming_info.gateway_managed_virtual_layer
+                else self.adapter
+            )
             table_name = snapshot.table_name(deployability_index.is_representative(snapshot))
             view_name = snapshot.qualified_view_name.for_environment(
                 environment_naming_info, dialect=adapter.dialect
@@ -953,7 +965,12 @@ class SnapshotEvaluator:
         environment_naming_info: EnvironmentNamingInfo,
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]],
     ) -> None:
-        adapter = self.adapter
+        adapter = (
+            self._get_adapter(snapshot.model_gateway)
+            if environment_naming_info.gateway_managed_virtual_layer
+            and isinstance(snapshot, Snapshot)
+            else self.adapter
+        )
         view_name = snapshot.qualified_view_name.for_environment(
             environment_naming_info, dialect=adapter.dialect
         )

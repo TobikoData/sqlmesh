@@ -423,8 +423,16 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         environment_naming_info: EnvironmentNamingInfo,
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]] = None,
     ) -> None:
+        # In a multi virtual layer setup we need the gateway info from the snapshots for demotion
+        snapshots_to_demote: t.List[Snapshot] = []
+        if environment_naming_info.gateway_managed_virtual_layer:
+            removed_snapshots = self.state_sync.get_snapshots(target_snapshots)
+            snapshots_to_demote = [removed_snapshots[s.snapshot_id] for s in target_snapshots]
+
         self.snapshot_evaluator.demote(
-            target_snapshots, environment_naming_info, on_complete=on_complete
+            snapshots_to_demote or target_snapshots,
+            environment_naming_info,
+            on_complete=on_complete,
         )
 
     def _restate(self, plan: EvaluatablePlan, snapshots_by_name: t.Dict[str, Snapshot]) -> None:

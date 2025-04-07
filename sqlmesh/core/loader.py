@@ -468,6 +468,7 @@ class SqlMeshLoader(Loader):
                         default_catalog=self.context.default_catalog,
                         infer_names=self.config.model_naming.infer_names,
                         signal_definitions=signals,
+                        catalogs=self.context.catalogs,
                     )
                 except Exception as ex:
                     raise ConfigError(f"Failed to load model definition at '{path}'.\n{ex}")
@@ -525,6 +526,7 @@ class SqlMeshLoader(Loader):
                             default_catalog=self.context.default_catalog,
                             infer_names=self.config.model_naming.infer_names,
                             audit_definitions=audits,
+                            catalogs=self.context.catalogs,
                         ):
                             if model.enabled:
                                 models[model.fqn] = model

@@ -172,7 +172,7 @@ class HttpStateSync(StateSync):
 
     def delete_expired_snapshots(
         self, ignore_ttl: bool = False
-    ) -> t.List[SnapshotTableCleanupTask]:
+    ) -> t.Tuple[t.List[SnapshotTableCleanupTask], t.Dict[str, str]]:
         """Removes expired snapshots.
 
         Expired snapshots are snapshots that have exceeded their time-to-live

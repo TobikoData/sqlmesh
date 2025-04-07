@@ -170,6 +170,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
                 ],
                 "start_at": "2022-01-01",
                 "end_at": "2022-01-01",
+                "gateway_managed_virtual_layer": False,
                 "plan_id": "test_plan_id",
                 "previous_plan_id": "previous_plan_id",
                 "promoted_snapshot_ids": [

@@ -199,7 +199,11 @@ class EngineAdapterStateSync(StateSync):
                 )
                 != table_infos[name].qualified_view_name.for_environment(environment.naming_info)
             }
-            if not existing_environment.expired:
+            if (
+                not existing_environment.expired
+                and existing_environment.gateway_managed_virtual_layer
+                == environment.gateway_managed_virtual_layer
+            ):
                 if environment.previous_plan_id != existing_environment.plan_id:
                     raise ConflictingPlanError(
                         f"Plan '{environment.plan_id}' is no longer valid for the target environment '{environment.name}'. "
@@ -273,12 +277,14 @@ class EngineAdapterStateSync(StateSync):
     @transactional()
     def delete_expired_snapshots(
         self, ignore_ttl: bool = False
-    ) -> t.List[SnapshotTableCleanupTask]:
-        expired_snapshot_ids, cleanup_targets = self.snapshot_state.delete_expired_snapshots(
-            self.environment_state.get_environments(), ignore_ttl=ignore_ttl
+    ) -> t.Tuple[t.List[SnapshotTableCleanupTask], t.Dict[str, str]]:
+        expired_snapshot_ids, cleanup_targets, gateways = (
+            self.snapshot_state.delete_expired_snapshots(
+                self.environment_state.get_environments(), ignore_ttl=ignore_ttl
+            )
         )
         self.interval_state.cleanup_intervals(cleanup_targets, expired_snapshot_ids)
-        return cleanup_targets
+        return cleanup_targets, gateways
 
     @transactional()
     def delete_expired_environments(self) -> t.List[Environment]:
