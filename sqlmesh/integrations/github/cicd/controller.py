@@ -29,8 +29,9 @@ from sqlmesh.core.snapshot.definition import (
     format_intervals,
 )
 from sqlmesh.core.user import User
+from sqlmesh.core.config import Config
 from sqlmesh.integrations.github.cicd.config import GithubCICDBotConfig
-from sqlmesh.utils import word_characters_only
+from sqlmesh.utils import word_characters_only, Verbosity
 from sqlmesh.utils.concurrency import NodeExecutionFailedError
 from sqlmesh.utils.date import now
 from sqlmesh.utils.errors import (
@@ -38,6 +39,7 @@ from sqlmesh.utils.errors import (
     NoChangesPlanError,
     PlanError,
     UncategorizedPlanError,
+    LinterError,
 )
 from sqlmesh.utils.pydantic import PydanticModel
 
@@ -49,8 +51,6 @@ if t.TYPE_CHECKING:
     from github.PullRequest import PullRequest
     from github.PullRequestReview import PullRequestReview
     from github.Repository import Repository
-
-    from sqlmesh.core.config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -326,10 +326,7 @@ class GithubController:
             if review.state.lower() == "approved"
         }
         logger.debug(f"Approvers: {', '.join(self._approvers)}")
-        self._context: Context = Context(
-            paths=self._paths,
-            config=self.config,
-        )
+        self._context: Context = Context(paths=self._paths, config=self.config)
 
     @property
     def deploy_command_enabled(self) -> bool:
@@ -394,6 +391,7 @@ class GithubController:
             self._pr_plan_builder = self._context.plan_builder(
                 environment=self.pr_environment_name,
                 skip_tests=True,
+                skip_linter=True,
                 categorizer_config=self.bot_config.auto_categorize_changes,
                 start=self.bot_config.default_pr_start,
                 skip_backfill=self.bot_config.skip_pr_backfill,
@@ -409,6 +407,7 @@ class GithubController:
                 c.PROD,
                 no_gaps=True,
                 skip_tests=True,
+                skip_linter=True,
                 categorizer_config=self.bot_config.auto_categorize_changes,
                 run=self.bot_config.run_on_deploy_to_prod,
             )
@@ -423,6 +422,7 @@ class GithubController:
                 no_gaps=False,
                 no_auto_categorization=True,
                 skip_tests=True,
+                skip_linter=True,
                 run=self.bot_config.run_on_deploy_to_prod,
             )
         assert self._prod_plan_with_gaps_builder
@@ -476,7 +476,14 @@ class GithubController:
         """
         Run tests for the PR
         """
-        return self._context._run_tests(verbose=True)
+        return self._context._run_tests(verbosity=Verbosity.VERBOSE)
+
+    def run_linter(self) -> None:
+        """
+        Run linter for the PR
+        """
+        self._console.clear_captured_outputs()
+        self._context.lint_models()
 
     def _get_or_create_comment(self, header: str = BOT_HEADER_MSG) -> IssueComment:
         comment = seq_get(
@@ -654,6 +661,37 @@ class GithubController:
             full_summary=summary,
         )
 
+    def update_linter_check(
+        self,
+        status: GithubCheckStatus,
+        conclusion: t.Optional[GithubCheckConclusion] = None,
+    ) -> None:
+        if not self._context.config.linter.enabled:
+            return
+
+        def conclusion_handler(
+            conclusion: GithubCheckConclusion,
+        ) -> t.Tuple[GithubCheckConclusion, str, t.Optional[str]]:
+            linter_summary = self._console.consume_captured_output() or "Linter Success"
+
+            title = "Linter results"
+
+            return conclusion, title, linter_summary
+
+        self._update_check_handler(
+            check_name="SQLMesh - Linter",
+            status=status,
+            conclusion=conclusion,
+            status_handler=lambda status: (
+                {
+                    GithubCheckStatus.IN_PROGRESS: "Running linter",
+                    GithubCheckStatus.QUEUED: "Waiting to Run linter",
+                }[status],
+                None,
+            ),
+            conclusion_handler=conclusion_handler,
+        )
+
     def update_test_check(
         self,
         status: GithubCheckStatus,
@@ -751,7 +789,7 @@ class GithubController:
         Updates the status of the merge commit for the PR environment.
         """
         conclusion: t.Optional[GithubCheckConclusion] = None
-        if isinstance(exception, (NoChangesPlanError, TestFailure)):
+        if isinstance(exception, (NoChangesPlanError, TestFailure, LinterError)):
             conclusion = GithubCheckConclusion.SKIPPED
         elif isinstance(exception, UncategorizedPlanError):
             conclusion = GithubCheckConclusion.ACTION_REQUIRED

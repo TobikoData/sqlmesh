@@ -884,6 +884,42 @@ def test_schema_diff_calculate_type_transitions():
             ],
             {},
         ),
+        # Increase the precision of a type is ALTER when the type is supported
+        (
+            "STRUCT<id INT, address VARCHAR(120)>",
+            "STRUCT<id INT, address VARCHAR(121)>",
+            [
+                TableAlterOperation.alter_type(
+                    TableAlterColumn.primitive("address"),
+                    "VARCHAR(121)",
+                    current_type="VARCHAR(120)",
+                    expected_table_struct="STRUCT<id INT, address VARCHAR(121)>",
+                )
+            ],
+            dict(
+                precision_increase_allowed_types={exp.DataType.build("VARCHAR").this},
+            ),
+        ),
+        # Increase the precision of a type is DROP/ADD when the type is not supported
+        (
+            "STRUCT<id INT, address VARCHAR(120)>",
+            "STRUCT<id INT, address VARCHAR(121)>",
+            [
+                TableAlterOperation.drop(
+                    TableAlterColumn.primitive("address"),
+                    "STRUCT<id INT>",
+                    "VARCHAR(120)",
+                ),
+                TableAlterOperation.add(
+                    TableAlterColumn.primitive("address"),
+                    "VARCHAR(121)",
+                    expected_table_struct="STRUCT<id INT, address VARCHAR(121)>",
+                ),
+            ],
+            dict(
+                precision_increase_allowed_types={exp.DataType.build("DECIMAL").this},
+            ),
+        ),
         # Decrease the precision of a type is DROP/ADD
         (
             "STRUCT<id INT, address VARCHAR(120)>",

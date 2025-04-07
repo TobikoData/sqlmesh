@@ -4,6 +4,7 @@ import typing as t
 from collections import Counter
 from datetime import timedelta
 from unittest import mock
+from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
@@ -25,7 +26,7 @@ from sqlmesh.core.config import (
     ModelDefaultsConfig,
     DuckDBConnectionConfig,
 )
-from sqlmesh.core.console import Console
+from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.context import Context
 from sqlmesh.core.config.categorizer import CategorizerConfig
 from sqlmesh.core.engine_adapter import EngineAdapter
@@ -59,7 +60,7 @@ from sqlmesh.utils.date import TimeLike, now, to_date, to_datetime, to_timestamp
 from sqlmesh.utils.errors import NoChangesPlanError
 from sqlmesh.utils.pydantic import validate_string
 from tests.conftest import DuckDBMetadata, SushiDataValidator
-
+from tests.utils.test_helpers import use_terminal_console
 
 if t.TYPE_CHECKING:
     from sqlmesh import QueryOrDF
@@ -1428,6 +1429,58 @@ def test_forward_only_precedence_over_indirect_non_breaking(init_and_plan_contex
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_breaking_only_impacts_immediate_children(init_and_plan_context: t.Callable):
+    context, plan = init_and_plan_context("examples/sushi")
+    context.apply(plan)
+
+    breaking_model = context.get_model("sushi.orders")
+    breaking_model = breaking_model.copy(update={"stamp": "force new version"})
+    context.upsert_model(breaking_model)
+    breaking_snapshot = context.get_snapshot(breaking_model, raise_if_missing=True)
+
+    non_breaking_model = context.get_model("sushi.waiter_revenue_by_day")
+    context.upsert_model(add_projection_to_model(t.cast(SqlModel, non_breaking_model)))
+    non_breaking_snapshot = context.get_snapshot(non_breaking_model, raise_if_missing=True)
+    top_waiter_snapshot = context.get_snapshot("sushi.top_waiters", raise_if_missing=True)
+
+    plan_builder = context.plan_builder("dev", skip_tests=True, enable_preview=False)
+    plan_builder.set_choice(breaking_snapshot, SnapshotChangeCategory.BREAKING)
+    plan = plan_builder.build()
+    assert (
+        plan.context_diff.snapshots[breaking_snapshot.snapshot_id].change_category
+        == SnapshotChangeCategory.BREAKING
+    )
+    assert (
+        plan.context_diff.snapshots[non_breaking_snapshot.snapshot_id].change_category
+        == SnapshotChangeCategory.NON_BREAKING
+    )
+    assert (
+        plan.context_diff.snapshots[top_waiter_snapshot.snapshot_id].change_category
+        == SnapshotChangeCategory.INDIRECT_NON_BREAKING
+    )
+    assert plan.start == to_timestamp("2023-01-01")
+    assert not any(i.snapshot_id == top_waiter_snapshot.snapshot_id for i in plan.missing_intervals)
+
+    context.apply(plan)
+    assert (
+        not context.plan_builder("dev", skip_tests=True, enable_preview=False)
+        .build()
+        .requires_backfill
+    )
+
+    # Deploy everything to prod.
+    plan = context.plan_builder("prod", skip_tests=True).build()
+    assert not plan.missing_intervals
+
+    context.apply(plan)
+    assert (
+        not context.plan_builder("prod", skip_tests=True, enable_preview=False)
+        .build()
+        .requires_backfill
+    )
+
+
+@time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_run_with_select_models(
     init_and_plan_context: t.Callable,
 ):
@@ -1456,6 +1509,44 @@ def test_run_with_select_models(
             "assert_item_price_above_zero": to_timestamp("2023-01-08"),
             '"memory"."sushi"."active_customers"': to_timestamp("2023-01-08"),
             '"memory"."sushi"."customers"': to_timestamp("2023-01-08"),
+        }
+
+
+@time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_plan_with_run(
+    init_and_plan_context: t.Callable,
+):
+    context, plan = init_and_plan_context("examples/sushi")
+    context.apply(plan)
+
+    model = context.get_model("sushi.waiter_revenue_by_day")
+    context.upsert_model(add_projection_to_model(t.cast(SqlModel, model)))
+
+    with time_machine.travel("2023-01-09 00:00:00 UTC"):
+        plan = context.plan(run=True)
+        assert plan.has_changes
+        assert plan.missing_intervals
+
+        context.apply(plan)
+
+        snapshots = context.state_sync.state_sync.get_snapshots(context.snapshots.values())
+        assert {s.name: s.intervals[0][1] for s in snapshots.values() if s.intervals} == {
+            '"memory"."sushi"."waiter_revenue_by_day"': to_timestamp("2023-01-09"),
+            '"memory"."sushi"."order_items"': to_timestamp("2023-01-09"),
+            '"memory"."sushi"."orders"': to_timestamp("2023-01-09"),
+            '"memory"."sushi"."items"': to_timestamp("2023-01-09"),
+            '"memory"."sushi"."customer_revenue_lifetime"': to_timestamp("2023-01-09"),
+            '"memory"."sushi"."customer_revenue_by_day"': to_timestamp("2023-01-09"),
+            '"memory"."sushi"."latest_order"': to_timestamp("2023-01-09"),
+            '"memory"."sushi"."waiter_names"': to_timestamp("2023-01-08"),
+            '"memory"."sushi"."raw_marketing"': to_timestamp("2023-01-09"),
+            '"memory"."sushi"."marketing"': to_timestamp("2023-01-09"),
+            '"memory"."sushi"."waiter_as_customer_by_day"': to_timestamp("2023-01-09"),
+            '"memory"."sushi"."top_waiters"': to_timestamp("2023-01-09"),
+            '"memory"."raw"."demographics"': to_timestamp("2023-01-09"),
+            "assert_item_price_above_zero": to_timestamp("2023-01-09"),
+            '"memory"."sushi"."active_customers"': to_timestamp("2023-01-09"),
+            '"memory"."sushi"."customers"': to_timestamp("2023-01-09"),
         }
 
 
@@ -2085,6 +2176,71 @@ def test_indirect_non_breaking_view_model_non_representative_snapshot(
     assert context.engine_adapter.table_exists(
         context.get_snapshot(view_downstream_model_name).table_name()
     )
+
+
+@time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_indirect_non_breaking_view_model_non_representative_snapshot_migration(
+    init_and_plan_context: t.Callable,
+):
+    context, _ = init_and_plan_context("examples/sushi")
+
+    forward_only_model_expr = d.parse(
+        """
+        MODEL (
+            name memory.sushi.forward_only_model,
+            kind INCREMENTAL_BY_TIME_RANGE (
+                time_column ds,
+                forward_only TRUE,
+                on_destructive_change 'allow',
+            ),
+        );
+
+        SELECT '2023-01-07' AS ds, 1 AS a;
+        """
+    )
+    forward_only_model = load_sql_based_model(forward_only_model_expr)
+    context.upsert_model(forward_only_model)
+
+    downstream_view_a_expr = d.parse(
+        """
+        MODEL (
+            name memory.sushi.downstream_view_a,
+            kind VIEW,
+        );
+
+        SELECT a from memory.sushi.forward_only_model;
+        """
+    )
+    downstream_view_a = load_sql_based_model(downstream_view_a_expr)
+    context.upsert_model(downstream_view_a)
+
+    downstream_view_b_expr = d.parse(
+        """
+        MODEL (
+            name memory.sushi.downstream_view_b,
+            kind VIEW,
+        );
+
+        SELECT a from memory.sushi.downstream_view_a;
+        """
+    )
+    downstream_view_b = load_sql_based_model(downstream_view_b_expr)
+    context.upsert_model(downstream_view_b)
+
+    context.plan(auto_apply=True, no_prompts=True, skip_tests=True)
+
+    # Make a forward-only change
+    context.upsert_model(add_projection_to_model(t.cast(SqlModel, forward_only_model)))
+    # Make a non-breaking change downstream
+    context.upsert_model(add_projection_to_model(t.cast(SqlModel, downstream_view_a)))
+
+    context.plan(auto_apply=True, no_prompts=True, skip_tests=True)
+
+    # Make sure the downstrean indirect non-breaking view is available in prod
+    count = context.engine_adapter.fetchone("SELECT COUNT(*) FROM memory.sushi.downstream_view_b")[
+        0
+    ]
+    assert count > 0
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
@@ -3756,7 +3912,7 @@ def test_create_environment_no_changes_with_selector(init_and_plan_context: t.Ca
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
-def test_empty_bacfkill(init_and_plan_context: t.Callable):
+def test_empty_backfill(init_and_plan_context: t.Callable):
     context, _ = init_and_plan_context("examples/sushi")
 
     plan = context.plan_builder("prod", skip_tests=True, empty_backfill=True).build()
@@ -3776,6 +3932,10 @@ def test_empty_bacfkill(init_and_plan_context: t.Callable):
     assert not plan.requires_backfill
     assert not plan.has_changes
     assert not plan.missing_intervals
+
+    snapshots = plan.snapshots
+    for snapshot in snapshots.values():
+        assert snapshot.intervals[-1][1] <= to_timestamp("2023-01-08")
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
@@ -4265,8 +4425,17 @@ def test_auto_categorization(sushi_context: Context):
     )
 
 
+@use_terminal_console
 def test_multi(mocker):
     context = Context(paths=["examples/multi/repo_1", "examples/multi/repo_2"], gateway="memory")
+
+    with patch.object(get_console(), "log_warning") as mock_logger:
+        context.plan_builder(environment="dev")
+        warnings = mock_logger.call_args[0][0]
+        repo1_path, repo2_path = context.configs.keys()
+        assert f"Linter warnings for {repo1_path}" in warnings
+        assert f"Linter warnings for {repo2_path}" not in warnings
+
     assert (
         context.render("bronze.a").sql()
         == '''SELECT 1 AS "col_a", 'b' AS "col_b", 1 AS "one", 'repo_1' AS "dup"'''
@@ -4332,6 +4501,24 @@ def test_multi_dbt(mocker):
     assert len(plan.new_snapshots) == 4
     context.apply(plan)
     validate_apply_basics(context, c.PROD, plan.snapshots.values())
+
+    environment_statements = context.state_sync.get_environment_statements(c.PROD)
+    assert len(environment_statements) == 2
+    bronze_statements = environment_statements[0]
+    assert bronze_statements.before_all == [
+        "JINJA_STATEMENT_BEGIN;\nCREATE TABLE IF NOT EXISTS analytic_stats (physical_table VARCHAR, evaluation_time VARCHAR);\nJINJA_END;"
+    ]
+    assert not bronze_statements.after_all
+    silver_statements = environment_statements[1]
+    assert not silver_statements.before_all
+    assert silver_statements.after_all == [
+        "JINJA_STATEMENT_BEGIN;\n{{ store_schemas(schemas) }}\nJINJA_END;"
+    ]
+    assert "store_schemas" in silver_statements.jinja_macros.root_macros
+    analytics_table = context.fetchdf("select * from analytic_stats;")
+    assert sorted(analytics_table.columns) == sorted(["physical_table", "evaluation_time"])
+    schema_table = context.fetchdf("select * from schema_table;")
+    assert sorted(schema_table.all_schemas[0]) == sorted(["bronze", "silver"])
 
 
 def test_multi_hybrid(mocker):
@@ -4795,9 +4982,13 @@ def test_plan_production_environment_statements(tmp_path: Path):
             f.write(defn)
 
     before_all = [
-        "CREATE TABLE IF NOT EXISTS schema_names_for_@this_env (physical_schema_name VARCHAR)"
+        "CREATE TABLE IF NOT EXISTS schema_names_for_@this_env (physical_schema_name VARCHAR)",
+        "@IF(@runtime_stage = 'before_all', CREATE TABLE IF NOT EXISTS should_create AS SELECT @runtime_stage)",
     ]
-    after_all = ["@IF(@this_env = 'prod', CREATE TABLE IF NOT EXISTS after_t AS SELECT @var_5)"]
+    after_all = [
+        "@IF(@this_env = 'prod', CREATE TABLE IF NOT EXISTS after_t AS SELECT @var_5)",
+        "@IF(@runtime_stage = 'before_all', CREATE TABLE IF NOT EXISTS not_create AS SELECT @runtime_stage)",
+    ]
     config = Config(
         model_defaults=ModelDefaultsConfig(dialect="duckdb"),
         before_all=before_all,
@@ -4818,6 +5009,75 @@ def test_plan_production_environment_statements(tmp_path: Path):
     assert environment_statements[0].after_all == after_all
     assert environment_statements[0].python_env.keys() == {"__sqlmesh__vars__"}
     assert environment_statements[0].python_env["__sqlmesh__vars__"].payload == "{'var_5': 5}"
+
+    should_create = ctx.fetchdf("select * from should_create").to_dict()
+    assert should_create["before_all"][0] == "before_all"
+
+    with pytest.raises(
+        Exception, match=r"Catalog Error: Table with name not_create does not exist!"
+    ):
+        ctx.fetchdf("select * from not_create")
+
+
+@time_machine.travel("2025-03-08 00:00:00 UTC")
+def test_tz(init_and_plan_context):
+    context, _ = init_and_plan_context("examples/sushi")
+
+    model = context.get_model("sushi.waiter_revenue_by_day")
+    context.upsert_model(
+        SqlModel.parse_obj(
+            {**model.dict(), "cron_tz": "America/Los_Angeles", "start": "2025-03-07"}
+        )
+    )
+
+    def assert_intervals(plan, intervals):
+        assert (
+            next(
+                intervals.intervals
+                for intervals in plan.missing_intervals
+                if intervals.snapshot_id.name == model.fqn
+            )
+            == intervals
+        )
+
+    plan = context.plan_builder("prod", skip_tests=True).build()
+
+    # we have missing intervals but not waiter_revenue_by_day because it's not midnight pacific yet
+    assert plan.missing_intervals
+
+    with pytest.raises(StopIteration):
+        assert_intervals(plan, [])
+
+    # now we're ready 8AM UTC == midnight PST
+    with time_machine.travel("2025-03-08 08:00:00 UTC"):
+        plan = context.plan_builder("prod", skip_tests=True).build()
+        assert_intervals(plan, [(to_timestamp("2025-03-07"), to_timestamp("2025-03-08"))])
+
+    with time_machine.travel("2025-03-09 07:00:00 UTC"):
+        plan = context.plan_builder("prod", skip_tests=True).build()
+
+        assert_intervals(
+            plan,
+            [
+                (to_timestamp("2025-03-07"), to_timestamp("2025-03-08")),
+            ],
+        )
+
+    with time_machine.travel("2025-03-09 08:00:00 UTC"):
+        plan = context.plan_builder("prod", skip_tests=True).build()
+
+        assert_intervals(
+            plan,
+            [
+                (to_timestamp("2025-03-07"), to_timestamp("2025-03-08")),
+                (to_timestamp("2025-03-08"), to_timestamp("2025-03-09")),
+            ],
+        )
+
+        context.apply(plan)
+
+        plan = context.plan_builder("prod", skip_tests=True).build()
+        assert not plan.missing_intervals
 
 
 def apply_to_environment(
@@ -5008,3 +5268,32 @@ def add_projection_to_model(model: SqlModel, literal: bool = True) -> SqlModel:
         "query": model.query.select(one_expr),  # type: ignore
     }
     return SqlModel.parse_obj(kwargs)
+
+
+def test_plan_environment_statements_doesnt_cause_extra_diff(tmp_path: Path):
+    model_a = """
+    MODEL (
+        name test_schema.a,
+        kind FULL,
+    );
+
+    SELECT 1;
+    """
+
+    models_dir = tmp_path / "models"
+    models_dir.mkdir()
+
+    (models_dir / "a.sql").write_text(model_a)
+
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        before_all=["select 1 as before_all"],
+        after_all=["select 2 as after_all"],
+    )
+    ctx = Context(paths=[tmp_path], config=config)
+
+    # first plan - should apply changes
+    assert ctx.plan(auto_apply=True, no_prompts=True).has_changes
+
+    # second plan - nothing has changed so should report no changes
+    assert not ctx.plan(auto_apply=True, no_prompts=True).has_changes

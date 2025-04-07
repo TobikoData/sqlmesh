@@ -341,6 +341,7 @@ class SchemaDiffer(PydanticModel):
     coerceable_types_: t.Dict[exp.DataType, t.Set[exp.DataType]] = Field(
         default_factory=dict, alias="coerceable_types"
     )
+    precision_increase_allowed_types: t.Optional[t.Set[exp.DataType.Type]] = None
     support_coercing_compatible_types: bool = False
     drop_cascade: bool = False
     parameterized_type_defaults: t.Dict[
@@ -367,7 +368,10 @@ class SchemaDiffer(PydanticModel):
     def _is_compatible_type(self, current_type: exp.DataType, new_type: exp.DataType) -> bool:
         # types are identical or both types are parameterized and new has higher precision
         # - default parameter values are automatically provided if not present
-        if current_type == new_type or self._is_precision_increase(current_type, new_type):
+        if current_type == new_type or (
+            self._is_precision_increase_allowed(current_type)
+            and self._is_precision_increase(current_type, new_type)
+        ):
             return True
         # types are un-parameterized and compatible
         if current_type in self.compatible_types:
@@ -389,6 +393,12 @@ class SchemaDiffer(PydanticModel):
 
             return is_coerceable
         return False
+
+    def _is_precision_increase_allowed(self, current_type: exp.DataType) -> bool:
+        return (
+            self.precision_increase_allowed_types is None
+            or current_type.this in self.precision_increase_allowed_types
+        )
 
     def _is_precision_increase(self, current_type: exp.DataType, new_type: exp.DataType) -> bool:
         if current_type.this == new_type.this and not current_type.is_type(

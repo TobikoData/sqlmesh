@@ -145,7 +145,7 @@ MODEL (
 
 SELECT
   @field_a,
-  @field_b
+  @{field_b} AS field_b
 FROM @customer.some_source
 ```
 
@@ -159,8 +159,8 @@ MODEL (
 );
 
 SELECT
-  x,
-  y
+  'x',
+  y AS field_b
 FROM customer1.some_source
 
 -- This uses the second variable mapping
@@ -170,8 +170,8 @@ MODEL (
 );
 
 SELECT
-  z,
-  w
+  'z',
+  w AS field_b
 FROM customer2.some_source
 ```
 
@@ -249,9 +249,9 @@ from sqlmesh.core.macros import MacroEvaluator
     ],
 )
 def entrypoint(evaluator: MacroEvaluator) -> str | exp.Expression:
-    field_a = evaluator.var("field_a")
-    field_b = evaluator.var("field_b")
-    customer = evaluator.var("customer")
+    field_a = evaluator.blueprint_var("field_a")
+    field_b = evaluator.blueprint_var("field_b")
+    customer = evaluator.blueprint_var("customer")
 
     return exp.select(field_a, field_b).from_(f"{customer}.some_source")
 ```

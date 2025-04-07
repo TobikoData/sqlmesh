@@ -28,6 +28,14 @@ This will create the configuration file and directories, which are found in all 
 
 SQLMesh will also automatically generate models to ingest data from the pipeline incrementally. Incremental loading is ideal for large datasets where recomputing entire tables is resource-intensive. In this case utilizing the [`INCREMENTAL_BY_TIME_RANGE` model kind](../concepts/models/model_kinds.md#incremental_by_time_range). However, these model definitions can be customized to meet your specific project needs.
 
+#### Specify the path to the pipelines directory
+
+The default location for dlt pipelines is `~/.dlt/pipelines/<pipeline_name>`. If your pipelines are in a [different directory](https://dlthub.com/docs/general-usage/pipeline#separate-working-environments-with-pipelines_dir), use the `--dlt-path` argument to specify the path explicitly:
+
+```bash
+$ sqlmesh init -t dlt --dlt-pipeline <pipeline-name> --dlt-path <pipelines-directory> dialect
+```
+
 ### Generating models on demand
 
 To update the models in your SQLMesh project on demand, use the `dlt_refresh` command. This allows you to either specify individual tables to generate incremental models from or update all models at once.
@@ -48,6 +56,12 @@ $ sqlmesh dlt_refresh <pipeline-name> --force
 
 ```bash
 $ sqlmesh dlt_refresh <pipeline-name> --table <dlt-table>
+```
+
+- **Provide the explicit path to the pipelines directory** (using `--dlt-path`):
+
+```bash
+$ sqlmesh dlt_refresh <pipeline-name> --dlt-path <pipelines-directory>
 ```
 
 #### Configuration

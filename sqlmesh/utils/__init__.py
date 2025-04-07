@@ -16,6 +16,7 @@ import uuid
 from collections import defaultdict
 from contextlib import contextmanager
 from copy import deepcopy
+from enum import IntEnum
 from functools import lru_cache, reduce, wraps
 from pathlib import Path
 
@@ -338,3 +339,11 @@ def type_is_known(d_type: t.Union[exp.DataType, exp.ColumnDef]) -> bool:
 def columns_to_types_all_known(columns_to_types: t.Dict[str, exp.DataType]) -> bool:
     """Checks that all column types are known and not NULL."""
     return all(type_is_known(expression) for expression in columns_to_types.values())
+
+
+class Verbosity(IntEnum):
+    """Verbosity levels for SQLMesh output."""
+
+    DEFAULT = 0
+    VERBOSE = 1
+    VERY_VERBOSE = 2

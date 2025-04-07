@@ -143,7 +143,9 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                 deployability_index_for_evaluation,
                 circuit_breaker=circuit_breaker,
             )
-            promotion_result = self._promote(plan, snapshots, before_promote_snapshots)
+            promotion_result = self._promote(
+                plan, snapshots, before_promote_snapshots, deployability_index_for_creation
+            )
             self._backfill(
                 plan,
                 snapshots_by_name,
@@ -195,7 +197,9 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         if plan.empty_backfill:
             intervals_to_add = []
             for snapshot in snapshots_by_name.values():
-                intervals = [snapshot.inclusive_exclusive(plan.start, plan.end, strict=False)]
+                intervals = [
+                    snapshot.inclusive_exclusive(plan.start, plan.end, strict=False, expand=False)
+                ]
                 is_deployable = deployability_index.is_deployable(snapshot)
                 intervals_to_add.append(
                     SnapshotIntervals(
@@ -301,6 +305,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         plan: EvaluatablePlan,
         snapshots: t.Dict[SnapshotId, Snapshot],
         no_gaps_snapshot_names: t.Optional[t.Set[str]] = None,
+        deployability_index: t.Optional[DeployabilityIndex] = None,
     ) -> PromotionResult:
         """Promote a plan.
 
@@ -320,7 +325,8 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                 self.snapshot_evaluator.migrate(
                     [s for s in snapshots.values() if s.is_paused],
                     snapshots,
-                    plan.allow_destructive_models,
+                    allow_destructive_snapshots=plan.allow_destructive_models,
+                    deployability_index=deployability_index,
                 )
             except NodeExecutionFailedError as ex:
                 raise PlanError(str(ex.__cause__) if ex.__cause__ else str(ex))

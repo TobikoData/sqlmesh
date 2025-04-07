@@ -998,6 +998,16 @@ def test_dbt_version(sushi_test_project: Project):
 
 
 @pytest.mark.xdist_group("dbt_manifest")
+def test_dbt_on_run_start_end(sushi_test_project: Project):
+    context = sushi_test_project.context
+    assert context._manifest
+    assert context._manifest._on_run_start == [
+        "CREATE TABLE IF NOT EXISTS analytic_stats (physical_table VARCHAR, evaluation_time VARCHAR);"
+    ]
+    assert context._manifest._on_run_end == ["{{ create_tables(schemas) }}"]
+
+
+@pytest.mark.xdist_group("dbt_manifest")
 def test_parsetime_adapter_call(
     assert_exp_eq, sushi_test_project: Project, sushi_test_dbt_context: Context
 ):
@@ -1451,7 +1461,7 @@ def test_refs_in_jinja_globals(sushi_test_project: Project, mocker: MockerFixtur
     }
 
 
-def test_dbt_incremental_allow_partials_by_default():
+def test_allow_partials_by_default():
     context = DbtContext()
     context._target = SnowflakeConfig(
         name="target",
@@ -1471,7 +1481,7 @@ def test_dbt_incremental_allow_partials_by_default():
         materialized=Materialization.TABLE.value,
     )
     assert model.allow_partials is None
-    assert not model.to_sqlmesh(context).allow_partials
+    assert model.to_sqlmesh(context).allow_partials
 
     model.materialized = Materialization.INCREMENTAL.value
     assert model.allow_partials is None

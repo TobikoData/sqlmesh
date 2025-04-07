@@ -578,21 +578,23 @@ class PlanBuilder:
                     if mode == AutoCategorizationMode.FULL:
                         snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
         elif self._context_diff.indirectly_modified(snapshot.name):
-            categories = []
+            all_upstream_categories = set()
+            direct_parent_categories = set()
 
             for p_id in dag.upstream(s_id):
                 parent = self._context_diff.snapshots.get(p_id)
 
                 if parent and self._is_new_snapshot(parent):
-                    categories.append(parent.change_category)
+                    all_upstream_categories.add(parent.change_category)
+                    if p_id in snapshot.parents:
+                        direct_parent_categories.add(parent.change_category)
 
-            if not categories or any(
-                category.is_breaking or category.is_indirect_breaking
-                for category in categories
-                if category
+            if not direct_parent_categories or direct_parent_categories.intersection(
+                {SnapshotChangeCategory.BREAKING, SnapshotChangeCategory.INDIRECT_BREAKING}
             ):
                 snapshot.categorize_as(SnapshotChangeCategory.INDIRECT_BREAKING)
-            elif any(category.is_forward_only for category in categories if category):
+            elif SnapshotChangeCategory.FORWARD_ONLY in all_upstream_categories:
+                # FORWARD_ONLY must take precedence over INDIRECT_NON_BREAKING
                 snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
             else:
                 snapshot.categorize_as(SnapshotChangeCategory.INDIRECT_NON_BREAKING)

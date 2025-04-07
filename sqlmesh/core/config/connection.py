@@ -130,6 +130,30 @@ class ConnectionConfig(abc.ABC, BaseConfig):
         return None
 
 
+class DuckDBAttachOptions(BaseConfig):
+    type: str
+    path: str
+    read_only: bool = False
+    token: t.Optional[str] = None
+
+    def to_sql(self, alias: str) -> str:
+        options = []
+        # 'duckdb' is actually not a supported type, but we'd like to allow it for
+        # fully qualified attach options or integration testing, similar to duckdb-dbt
+        if self.type not in ("duckdb", "motherduck"):
+            options.append(f"TYPE {self.type.upper()}")
+        if self.read_only:
+            options.append("READ_ONLY")
+        # TODO: Add support for Postgres schema. Currently adding it blocks access to the information_schema
+        alias_sql = (
+            # MotherDuck does not support aliasing
+            f" AS {alias}" if not (self.type == "motherduck" or self.path.startswith("md:")) else ""
+        )
+        options_sql = f" ({', '.join(options)})" if options else ""
+        token_sql = "?motherduck_token=" + self.token if self.token else ""
+        return f"ATTACH '{self.path}{token_sql}'{alias_sql}{options_sql}"
+
+
 class BaseDuckDBConnectionConfig(ConnectionConfig):
     """Common configuration for the DuckDB-based connections.
 
@@ -357,30 +381,6 @@ class MotherDuckConnectionConfig(BaseDuckDBConnectionConfig):
         return {"database": connection_str, "config": custom_user_agent_config}
 
 
-class DuckDBAttachOptions(BaseConfig):
-    type: str
-    path: str
-    read_only: bool = False
-    token: t.Optional[str] = None
-
-    def to_sql(self, alias: str) -> str:
-        options = []
-        # 'duckdb' is actually not a supported type, but we'd like to allow it for
-        # fully qualified attach options or integration testing, similar to duckdb-dbt
-        if self.type not in ("duckdb", "motherduck"):
-            options.append(f"TYPE {self.type.upper()}")
-        if self.read_only:
-            options.append("READ_ONLY")
-        # TODO: Add support for Postgres schema. Currently adding it blocks access to the information_schema
-        alias_sql = (
-            # MotherDuck does not support aliasing
-            f" AS {alias}" if not (self.type == "motherduck" or self.path.startswith("md:")) else ""
-        )
-        options_sql = f" ({', '.join(options)})" if options else ""
-        token_sql = "?motherduck_token=" + self.token if self.token else ""
-        return f"ATTACH '{self.path}{token_sql}'{alias_sql}{options_sql}"
-
-
 class DuckDBConnectionConfig(BaseDuckDBConnectionConfig):
     """Configuration for the DuckDB connection."""
 
@@ -407,6 +407,8 @@ class SnowflakeConnectionConfig(ConnectionConfig):
         register_comments: Whether or not to register model comments with the SQL engine.
         pre_ping: Whether or not to pre-ping the connection before starting a new transaction to ensure it is still alive.
         session_parameters: The optional session parameters to set for the connection.
+        host: Host address for the connection.
+        port: Port for the connection.
     """
 
     account: str
@@ -417,6 +419,8 @@ class SnowflakeConnectionConfig(ConnectionConfig):
     role: t.Optional[str] = None
     authenticator: t.Optional[str] = None
     token: t.Optional[str] = None
+    host: t.Optional[str] = None
+    port: t.Optional[int] = None
     application: t.Literal["Tobiko_SQLMesh"] = "Tobiko_SQLMesh"
 
     # Private Key Auth
@@ -550,6 +554,8 @@ class SnowflakeConnectionConfig(ConnectionConfig):
             "private_key",
             "session_parameters",
             "application",
+            "host",
+            "port",
         }
 
     @property
@@ -861,8 +867,9 @@ class BigQueryConnectionConfig(ConnectionConfig):
     client_secret: t.Optional[str] = None
     token_uri: t.Optional[str] = None
     scopes: t.Tuple[str, ...] = ("https://www.googleapis.com/auth/bigquery",)
-    job_creation_timeout_seconds: t.Optional[int] = None
+    impersonated_service_account: t.Optional[str] = None
     # Extra Engine Config
+    job_creation_timeout_seconds: t.Optional[int] = None
     job_execution_timeout_seconds: t.Optional[int] = None
     job_retries: t.Optional[int] = 1
     job_retry_deadline_seconds: t.Optional[int] = None
@@ -911,6 +918,7 @@ class BigQueryConnectionConfig(ConnectionConfig):
     def _static_connection_kwargs(self) -> t.Dict[str, t.Any]:
         """The static connection kwargs for this connection"""
         import google.auth
+        from google.auth import impersonated_credentials
         from google.api_core import client_info, client_options
         from google.oauth2 import credentials, service_account
 
@@ -935,6 +943,13 @@ class BigQueryConnectionConfig(ConnectionConfig):
             )
         else:
             raise ConfigError("Invalid BigQuery Connection Method")
+
+        if self.impersonated_service_account:
+            creds = impersonated_credentials.Credentials(
+                source_credentials=creds,
+                target_principal=self.impersonated_service_account,
+                target_scopes=self.scopes,
+            )
 
         options = client_options.ClientOptions(quota_project_id=self.quota_project)
         project = self.execution_project or self.project or None
@@ -1187,6 +1202,7 @@ class PostgresConnectionConfig(ConnectionConfig):
     connect_timeout: int = 10
     role: t.Optional[str] = None
     sslmode: t.Optional[str] = None
+    application_name: t.Optional[str] = None
 
     concurrent_tasks: int = 4
     register_comments: bool = True
@@ -1205,6 +1221,7 @@ class PostgresConnectionConfig(ConnectionConfig):
             "keepalives_idle",
             "connect_timeout",
             "sslmode",
+            "application_name",
         }
 
     @property

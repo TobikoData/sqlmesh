@@ -963,3 +963,11 @@ def test_environment_statements_config(tmp_path):
         "@grant_schema_privileges()",
         "GRANT REFERENCES ON FUTURE VIEWS IN DATABASE db TO ROLE admin_role;",
     ]
+
+
+# https://github.com/TobikoData/sqlmesh/pull/4049
+def test_pydantic_import_error() -> None:
+    class TestConfig(DuckDBConnectionConfig):
+        pass
+
+    TestConfig()

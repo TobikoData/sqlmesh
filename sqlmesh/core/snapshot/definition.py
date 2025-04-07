@@ -329,11 +329,11 @@ class SnapshotInfoMixin(ModelKindMixin):
     base_table_name_override: t.Optional[str]
     dev_table_suffix: str
 
-    @property
+    @cached_property
     def identifier(self) -> str:
         return self.fingerprint.to_identifier()
 
-    @property
+    @cached_property
     def snapshot_id(self) -> SnapshotId:
         return SnapshotId(name=self.name, identifier=self.identifier)
 
@@ -480,6 +480,12 @@ class SnapshotTableInfo(PydanticModel, SnapshotInfoMixin, frozen=True):
 
     def __lt__(self, other: SnapshotTableInfo) -> bool:
         return self.name < other.name
+
+    def __eq__(self, other: t.Any) -> bool:
+        return isinstance(other, SnapshotTableInfo) and self.fingerprint == other.fingerprint
+
+    def __hash__(self) -> int:
+        return hash((self.__class__, self.name, self.fingerprint))
 
     def table_name(self, is_deployable: bool = True) -> str:
         """Full table name pointing to the materialized location of the snapshot.
@@ -1438,21 +1444,24 @@ class DeployabilityIndex(PydanticModel, frozen=True):
     ) -> DeployabilityIndex:
         if not isinstance(snapshots, dict):
             snapshots = {s.snapshot_id: s for s in snapshots}
-        dag = snapshots_to_dag(snapshots.values())
-        reversed_dag = dag.reversed.graph
 
         deployability_mapping: t.Dict[SnapshotId, bool] = {}
+        children_deployability_mapping: t.Dict[SnapshotId, bool] = {}
         representative_shared_version_ids: t.Set[SnapshotId] = set()
 
         start_date_cache: t.Optional[t.Dict[str, datetime]] = {}
 
-        def _visit(node: SnapshotId, deployable: bool = True) -> None:
-            if deployability_mapping.get(node) in (False, deployable) and (
-                deployable or node not in representative_shared_version_ids
-            ):
-                return
-
-            if deployable and node in snapshots:
+        dag = snapshots_to_dag(snapshots.values())
+        for node in dag:
+            if node not in snapshots:
+                continue
+            # Make sure that the node is deployable according to all its parents
+            this_deployable = all(
+                children_deployability_mapping[p_id]
+                for p_id in snapshots[node].parents
+                if p_id in children_deployability_mapping
+            )
+            if this_deployable:
                 snapshot = snapshots[node]
                 is_forward_only_model = snapshot.is_model and snapshot.model.forward_only
                 has_auto_restatement = (
@@ -1481,8 +1490,8 @@ class DeployabilityIndex(PydanticModel, frozen=True):
                     if not snapshot.is_paused or snapshot.is_indirect_non_breaking:
                         # This snapshot represents what's currently deployed in prod.
                         representative_shared_version_ids.add(node)
-                else:
-                    this_deployable = True
+
+                # A child can still be deployable even if its parent is not
                 children_deployable = (
                     is_valid_start
                     and not (
@@ -1491,18 +1500,12 @@ class DeployabilityIndex(PydanticModel, frozen=True):
                     and not has_auto_restatement
                 )
             else:
-                this_deployable, children_deployable = False, False
-                if node in snapshots and not snapshots[node].is_paused:
+                children_deployable = False
+                if not snapshots[node].is_paused:
                     representative_shared_version_ids.add(node)
-                else:
-                    representative_shared_version_ids.discard(node)
 
-            deployability_mapping[node] = deployability_mapping.get(node, True) and this_deployable
-            for child in reversed_dag[node]:
-                _visit(child, children_deployable)
-
-        for node in dag.roots:
-            _visit(node)
+            deployability_mapping[node] = this_deployable
+            children_deployability_mapping[node] = children_deployable
 
         deployable_ids = {
             snapshot_id for snapshot_id, deployable in deployability_mapping.items() if deployable
@@ -1556,6 +1559,15 @@ def display_name(
     Returns the model name as a qualified view name.
     This is just used for presenting information back to the user and `qualified_view_name` should be used
     when wanting a view name in all other cases.
+
+    Args:
+        snapshot_info_like: The snapshot info object to get the display name for
+        environment_naming_info: Environment naming info to use for display name formatting
+        default_catalog: Optional default catalog name to use. If None, the default catalog will always be included in the display name.
+        dialect: Optional dialect type to use for name formatting
+
+    Returns:
+        The formatted display name as a string
     """
     if snapshot_info_like.is_audit:
         return snapshot_info_like.name
@@ -1745,7 +1757,7 @@ def has_paused_forward_only(
 
 
 def missing_intervals(
-    snapshots: t.Collection[Snapshot],
+    snapshots: t.Union[t.Collection[Snapshot], t.Dict[SnapshotId, Snapshot]],
     start: t.Optional[TimeLike] = None,
     end: t.Optional[TimeLike] = None,
     execution_time: t.Optional[TimeLike] = None,
@@ -1756,6 +1768,9 @@ def missing_intervals(
     end_bounded: bool = False,
 ) -> t.Dict[Snapshot, Intervals]:
     """Returns all missing intervals given a collection of snapshots."""
+    if not isinstance(snapshots, dict):
+        # Make sure that the mapping is only constructed once
+        snapshots = {snapshot.snapshot_id: snapshot for snapshot in snapshots}
     missing = {}
     cache: t.Dict[str, datetime] = {}
     end_date = end or now_timestamp()
@@ -1768,7 +1783,7 @@ def missing_intervals(
     interval_end_per_model = interval_end_per_model or {}
     deployability_index = deployability_index or DeployabilityIndex.all_deployable()
 
-    for snapshot in snapshots:
+    for snapshot in snapshots.values():
         if not snapshot.evaluatable:
             continue
         snapshot_start_date = start_dt
@@ -1941,7 +1956,7 @@ def inclusive_exclusive(
 
 
 def earliest_start_date(
-    snapshots: t.Collection[Snapshot],
+    snapshots: t.Union[t.Collection[Snapshot], t.Dict[SnapshotId, Snapshot]],
     cache: t.Optional[t.Dict[str, datetime]] = None,
     relative_to: t.Optional[TimeLike] = None,
 ) -> datetime:
@@ -1956,9 +1971,12 @@ def earliest_start_date(
     """
     cache = {} if cache is None else cache
     if snapshots:
+        if not isinstance(snapshots, dict):
+            # Make sure that the mapping is only constructed once
+            snapshots = {snapshot.snapshot_id: snapshot for snapshot in snapshots}
         return min(
             start_date(snapshot, snapshots, cache=cache, relative_to=relative_to)
-            for snapshot in snapshots
+            for snapshot in snapshots.values()
         )
     return yesterday()
 

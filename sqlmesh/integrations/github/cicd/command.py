@@ -13,7 +13,7 @@ from sqlmesh.integrations.github.cicd.controller import (
     GithubController,
     TestFailure,
 )
-from sqlmesh.utils.errors import CICDBotError, ConflictingPlanError, PlanError
+from sqlmesh.utils.errors import CICDBotError, ConflictingPlanError, PlanError, LinterError
 
 logger = logging.getLogger(__name__)
 
@@ -78,6 +78,25 @@ def _run_tests(controller: GithubController) -> bool:
             output=traceback.format_exc(),
         )
         return False
+
+
+def _run_linter(controller: GithubController) -> bool:
+    controller.update_linter_check(status=GithubCheckStatus.IN_PROGRESS)
+    try:
+        controller.run_linter()
+    except LinterError:
+        controller.update_linter_check(
+            status=GithubCheckStatus.COMPLETED,
+            conclusion=GithubCheckConclusion.FAILURE,
+        )
+        return False
+
+    controller.update_linter_check(
+        status=GithubCheckStatus.COMPLETED,
+        conclusion=GithubCheckConclusion.SUCCESS,
+    )
+
+    return True
 
 
 @github.command()
@@ -204,11 +223,13 @@ def _run_all(controller: GithubController) -> None:
             has_required_approval = True
         else:
             raise CICDBotError(f"Unsupported command: {command}")
+    controller.update_linter_check(status=GithubCheckStatus.QUEUED)
     controller.update_pr_environment_check(status=GithubCheckStatus.QUEUED)
     controller.update_prod_plan_preview_check(status=GithubCheckStatus.QUEUED)
     controller.update_test_check(status=GithubCheckStatus.QUEUED)
     if is_auto_deploying_prod:
         controller.update_prod_environment_check(status=GithubCheckStatus.QUEUED)
+    linter_passed = _run_linter(controller)
     tests_passed = _run_tests(controller)
     if controller.do_required_approval_check:
         if has_required_approval:
@@ -218,23 +239,25 @@ def _run_all(controller: GithubController) -> None:
         else:
             controller.update_required_approval_check(status=GithubCheckStatus.QUEUED)
             has_required_approval = _check_required_approvers(controller)
-    if not tests_passed:
+    if not tests_passed or not linter_passed:
         controller.update_pr_environment_check(
             status=GithubCheckStatus.COMPLETED,
-            exception=TestFailure(),
+            exception=LinterError("") if not linter_passed else TestFailure(),
         )
         controller.update_prod_plan_preview_check(
             status=GithubCheckStatus.COMPLETED,
             conclusion=GithubCheckConclusion.SKIPPED,
-            summary="Unit Test(s) Failed so skipping creating prod plan",
+            summary="Linter or Unit Test(s) failed so skipping creating prod plan",
         )
         if is_auto_deploying_prod:
             controller.update_prod_environment_check(
                 status=GithubCheckStatus.COMPLETED,
                 conclusion=GithubCheckConclusion.SKIPPED,
-                skip_reason="Unit Test(s) Failed so skipping deploying to production",
+                skip_reason="Linter or Unit Test(s) failed so skipping deploying to production",
             )
-        raise CICDBotError("Failed to run tests. See check status for more information.")
+
+        raise CICDBotError("Linter or Unit Test(s) failed. See check status for more information.")
+
     pr_environment_updated = _update_pr_environment(controller)
     prod_plan_generated = False
     if pr_environment_updated:

@@ -60,6 +60,7 @@ DEFAULT_LOG_FILE_DIR = "logs"
 AUDITS = "audits"
 CACHE = ".cache"
 EXTERNAL_MODELS = "external_models"
+LINTER = "linter"
 MACROS = "macros"
 MATERIALIZATIONS = "materializations"
 METRICS = "metrics"
@@ -75,6 +76,8 @@ REQUIREMENTS = "sqlmesh-requirements.lock"
 DEFAULT_SCHEMA = "default"
 
 SQLMESH_VARS = "__sqlmesh__vars__"
+SQLMESH_BLUEPRINT_VARS = "__sqlmesh__blueprint__vars__"
+
 VAR = "var"
 GATEWAY = "gateway"
 

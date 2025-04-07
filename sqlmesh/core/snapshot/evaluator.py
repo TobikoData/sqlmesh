@@ -57,7 +57,6 @@ from sqlmesh.core.snapshot import (
     DeployabilityIndex,
     Intervals,
     Snapshot,
-    SnapshotChangeCategory,
     SnapshotId,
     SnapshotInfoLike,
     SnapshotTableCleanupTask,
@@ -281,7 +280,7 @@ class SnapshotEvaluator:
         deployability_index: t.Optional[DeployabilityIndex] = None,
         on_start: t.Optional[t.Callable] = None,
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]] = None,
-        allow_destructive_snapshots: t.Set[str] = set(),
+        allow_destructive_snapshots: t.Optional[t.Set[str]] = None,
     ) -> None:
         """Creates a physical snapshot schema and table for the given collection of snapshots.
 
@@ -297,6 +296,7 @@ class SnapshotEvaluator:
         tables_by_schema = defaultdict(set)
         gateway_by_schema: t.Dict[exp.Table, str] = {}
         table_deployability: t.Dict[str, bool] = {}
+        allow_destructive_snapshots = allow_destructive_snapshots or set()
 
         for snapshot in target_snapshots:
             if not snapshot.is_model or snapshot.is_symbolic:
@@ -389,7 +389,8 @@ class SnapshotEvaluator:
         self,
         target_snapshots: t.Iterable[Snapshot],
         snapshots: t.Dict[SnapshotId, Snapshot],
-        allow_destructive_snapshots: t.Set[str] = set(),
+        allow_destructive_snapshots: t.Optional[t.Set[str]] = None,
+        deployability_index: t.Optional[DeployabilityIndex] = None,
     ) -> None:
         """Alters a physical snapshot table to match its snapshot's schema for the given collection of snapshots.
 
@@ -397,8 +398,10 @@ class SnapshotEvaluator:
             target_snapshots: Target snapshots.
             snapshots: Mapping of snapshot ID to snapshot.
             allow_destructive_snapshots: Set of snapshots that are allowed to have destructive schema changes.
+            deployability_index: Determines snapshots that are deployable in the context of this evaluation.
         """
-
+        allow_destructive_snapshots = allow_destructive_snapshots or set()
+        deployability_index = deployability_index or DeployabilityIndex.all_deployable()
         with self.concurrent_context():
             concurrent_apply_to_snapshots(
                 target_snapshots,
@@ -407,6 +410,7 @@ class SnapshotEvaluator:
                     snapshots,
                     allow_destructive_snapshots,
                     self._get_adapter(s.model_gateway),
+                    deployability_index,
                 ),
                 self.ddl_concurrent_tasks,
             )
@@ -667,7 +671,9 @@ class SnapshotEvaluator:
                     physical_properties=rendered_physical_properties,
                 )
 
-        with adapter.transaction(), adapter.session(snapshot.model.session_properties):
+        with adapter.transaction(), adapter.session(
+            snapshot.model.render_session_properties(**render_statements_kwargs)
+        ):
             wap_id: t.Optional[str] = None
             if (
                 table_name
@@ -766,7 +772,9 @@ class SnapshotEvaluator:
             deployability_index=deployability_index,
         )
 
-        with adapter.transaction(), adapter.session(snapshot.model.session_properties):
+        with adapter.transaction(), adapter.session(
+            snapshot.model.render_session_properties(**create_render_kwargs)
+        ):
             rendered_physical_properties = snapshot.model.render_physical_properties(
                 **create_render_kwargs
             )
@@ -846,15 +854,13 @@ class SnapshotEvaluator:
         snapshots: t.Dict[SnapshotId, Snapshot],
         allow_destructive_snapshots: t.Set[str],
         adapter: EngineAdapter,
+        deployability_index: DeployabilityIndex,
     ) -> None:
-        if not snapshot.is_paused or not snapshot.is_model:
-            return
-
-        needs_migration = snapshot.model.forward_only or snapshot.change_category in (
-            SnapshotChangeCategory.FORWARD_ONLY,
-            SnapshotChangeCategory.INDIRECT_NON_BREAKING,
-        )
-        if not needs_migration:
+        if (
+            not snapshot.is_paused
+            or not snapshot.is_model
+            or deployability_index.is_representative(snapshot)
+        ):
             return
 
         target_table_name = snapshot.table_name()
@@ -886,7 +892,9 @@ class SnapshotEvaluator:
                 runtime_stage=RuntimeStage.CREATING,
                 deployability_index=deployability_index,
             )
-            with adapter.transaction(), adapter.session(snapshot.model.session_properties):
+            with adapter.transaction(), adapter.session(
+                snapshot.model.render_session_properties(**render_kwargs)
+            ):
                 self._execute_create(
                     snapshot=snapshot,
                     table_name=target_table_name,
@@ -917,12 +925,6 @@ class SnapshotEvaluator:
             view_name = snapshot.qualified_view_name.for_environment(
                 environment_naming_info, dialect=adapter.dialect
             )
-            _evaluation_strategy(snapshot, adapter).promote(
-                table_name=table_name,
-                view_name=view_name,
-                model=snapshot.model,
-                environment=environment_naming_info.name,
-            )
             render_kwargs: t.Dict[str, t.Any] = dict(
                 start=start,
                 end=end,
@@ -932,6 +934,13 @@ class SnapshotEvaluator:
                 deployability_index=deployability_index,
                 table_mapping=table_mapping,
                 runtime_stage=RuntimeStage.PROMOTING,
+            )
+            _evaluation_strategy(snapshot, adapter).promote(
+                table_name=table_name,
+                view_name=view_name,
+                model=snapshot.model,
+                environment=environment_naming_info.name,
+                **render_kwargs,
             )
             adapter.execute(snapshot.model.render_on_virtual_update(**render_kwargs))
 
@@ -1366,12 +1375,22 @@ class PromotableStrategy(EvaluationStrategy):
     ) -> None:
         is_prod = environment == c.PROD
         logger.info("Updating view '%s' to point at table '%s'", view_name, table_name)
+        render_kwargs: t.Dict[str, t.Any] = dict(
+            start=kwargs.get("start"),
+            end=kwargs.get("end"),
+            execution_time=kwargs.get("execution_time"),
+            engine_adapter=kwargs.get("engine_adapter"),
+            snapshots=kwargs.get("snapshots"),
+            deployability_index=kwargs.get("deployability_index"),
+            table_mapping=kwargs.get("table_mapping"),
+            runtime_stage=kwargs.get("runtime_stage"),
+        )
         self.adapter.create_view(
             view_name,
             exp.select("*").from_(table_name, dialect=self.adapter.dialect),
             table_description=model.description if is_prod else None,
             column_descriptions=model.column_descriptions if is_prod else None,
-            view_properties=model.virtual_properties,
+            view_properties=model.render_virtual_properties(**render_kwargs),
         )
 
     def demote(self, view_name: str, **kwargs: t.Any) -> None:
@@ -1692,6 +1711,7 @@ class SCDType2Strategy(MaterializableStrategy):
                 invalidate_hard_deletes=model.kind.invalidate_hard_deletes,
                 updated_at_as_valid_from=model.kind.updated_at_as_valid_from,
                 columns_to_types=columns_to_types,
+                table_format=model.table_format,
                 table_description=model.description,
                 column_descriptions=model.column_descriptions,
                 truncate=is_first_insert,
@@ -1708,6 +1728,7 @@ class SCDType2Strategy(MaterializableStrategy):
                 invalidate_hard_deletes=model.kind.invalidate_hard_deletes,
                 execution_time_as_valid_from=model.kind.execution_time_as_valid_from,
                 columns_to_types=columns_to_types,
+                table_format=model.table_format,
                 table_description=model.description,
                 column_descriptions=model.column_descriptions,
                 truncate=is_first_insert,
@@ -1737,6 +1758,7 @@ class SCDType2Strategy(MaterializableStrategy):
                 invalidate_hard_deletes=model.kind.invalidate_hard_deletes,
                 updated_at_as_valid_from=model.kind.updated_at_as_valid_from,
                 columns_to_types=columns_to_types,
+                table_format=model.table_format,
                 table_description=model.description,
                 column_descriptions=model.column_descriptions,
                 **kwargs,
@@ -1750,6 +1772,7 @@ class SCDType2Strategy(MaterializableStrategy):
                 valid_to_col=model.kind.valid_to_name,
                 check_columns=model.kind.columns,
                 columns_to_types=columns_to_types,
+                table_format=model.table_format,
                 invalidate_hard_deletes=model.kind.invalidate_hard_deletes,
                 execution_time_as_valid_from=model.kind.execution_time_as_valid_from,
                 table_description=model.description,

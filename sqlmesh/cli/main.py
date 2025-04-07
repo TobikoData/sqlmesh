@@ -13,10 +13,12 @@ from sqlmesh.cli import options as opt
 from sqlmesh.cli.example_project import ProjectTemplate, init_example_project
 from sqlmesh.core.analytics import cli_analytics
 from sqlmesh.core.console import configure_console, get_console
+from sqlmesh.utils import Verbosity
 from sqlmesh.core.config import load_configs
 from sqlmesh.core.context import Context
 from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.errors import MissingDependencyError
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -135,6 +137,11 @@ def cli(
     type=str,
     help="DLT pipeline for which to generate a SQLMesh project. Use alongside template: dlt",
 )
+@click.option(
+    "--dlt-path",
+    type=str,
+    help="The directory where the DLT pipeline resides. Use alongside template: dlt",
+)
 @click.pass_context
 @error_handler
 @cli_analytics
@@ -143,6 +150,7 @@ def init(
     sql_dialect: t.Optional[str] = None,
     template: t.Optional[str] = None,
     dlt_pipeline: t.Optional[str] = None,
+    dlt_path: t.Optional[str] = None,
 ) -> None:
     """Create a new SQLMesh repository."""
     try:
@@ -150,7 +158,11 @@ def init(
     except ValueError:
         raise click.ClickException(f"Invalid project template '{template}'")
     init_example_project(
-        ctx.obj, dialect=sql_dialect, template=project_template, pipeline=dlt_pipeline
+        ctx.obj,
+        dialect=sql_dialect,
+        template=project_template,
+        pipeline=dlt_pipeline,
+        dlt_path=dlt_path,
     )
 
 
@@ -329,6 +341,11 @@ def diff(ctx: click.Context, environment: t.Optional[str] = None) -> None:
     help="Skip tests prior to generating the plan if they are defined.",
 )
 @click.option(
+    "--skip-linter",
+    is_flag=True,
+    help="Skip linting prior to generating the plan if the linter is enabled.",
+)
+@click.option(
     "--restate-model",
     "-r",
     type=str,
@@ -432,7 +449,10 @@ def diff(ctx: click.Context, environment: t.Optional[str] = None) -> None:
 @error_handler
 @cli_analytics
 def plan(
-    ctx: click.Context, verbose: bool, environment: t.Optional[str] = None, **kwargs: t.Any
+    ctx: click.Context,
+    verbose: int,
+    environment: t.Optional[str] = None,
+    **kwargs: t.Any,
 ) -> None:
     """Apply local changes to the target environment."""
     context = ctx.obj
@@ -440,7 +460,8 @@ def plan(
     select_models = kwargs.pop("select_model") or None
     allow_destructive_models = kwargs.pop("allow_destructive_model") or None
     backfill_models = kwargs.pop("backfill_model") or None
-    setattr(get_console(), "verbose", verbose)
+    setattr(get_console(), "verbosity", Verbosity(verbose))
+
     context.plan(
         environment,
         restate_models=restate_models,
@@ -633,7 +654,7 @@ def create_test(
 def test(
     obj: Context,
     k: t.List[str],
-    verbose: bool,
+    verbose: int,
     preserve_fixtures: bool,
     tests: t.List[str],
 ) -> None:
@@ -641,7 +662,7 @@ def test(
     result = obj.test(
         match_patterns=k,
         tests=tests,
-        verbose=verbose,
+        verbosity=Verbosity(verbose),
         preserve_fixtures=preserve_fixtures,
     )
     if not result.wasSuccessful():
@@ -693,13 +714,13 @@ def fetchdf(ctx: click.Context, sql: str) -> None:
 @click.pass_obj
 @error_handler
 @cli_analytics
-def info(obj: Context, skip_connection: bool, verbose: bool) -> None:
+def info(obj: Context, skip_connection: bool, verbose: int) -> None:
     """
     Print information about a SQLMesh project.
 
     Includes counts of project models and macros and connection tests for the data warehouse.
     """
-    obj.print_info(skip_connection=skip_connection, verbose=verbose)
+    obj.print_info(skip_connection=skip_connection, verbosity=Verbosity(verbose))
 
 
 @cli.command("ui")
@@ -894,7 +915,11 @@ def rewrite(obj: Context, sql: str, read: str = "", write: str = "") -> None:
 @error_handler
 @cli_analytics
 def prompt(
-    ctx: click.Context, prompt: str, evaluate: bool, temperature: float, verbose: bool
+    ctx: click.Context,
+    prompt: str,
+    evaluate: bool,
+    temperature: float,
+    verbose: int,
 ) -> None:
     """Uses LLM to generate a SQL query from a prompt."""
     from sqlmesh.integrations.llm import LLMIntegration
@@ -905,7 +930,7 @@ def prompt(
         context.models.values(),
         context.engine_adapter.dialect,
         temperature=temperature,
-        verbose=verbose,
+        verbosity=Verbosity(verbose),
     )
     query = llm_integration.query(prompt)
 
@@ -955,6 +980,11 @@ def table_name(obj: Context, model_name: str, dev: bool) -> None:
     default=False,
     help="If set, existing models are overwritten with the new DLT tables.",
 )
+@click.option(
+    "--dlt-path",
+    type=str,
+    help="The directory where the DLT pipeline resides.",
+)
 @click.pass_context
 @error_handler
 @cli_analytics
@@ -963,11 +993,12 @@ def dlt_refresh(
     pipeline: str,
     force: bool,
     table: t.List[str] = [],
+    dlt_path: t.Optional[str] = None,
 ) -> None:
     """Attaches to a DLT pipeline with the option to update specific or all missing tables in the SQLMesh project."""
     from sqlmesh.integrations.dlt import generate_dlt_models
 
-    sqlmesh_models = generate_dlt_models(ctx.obj, pipeline, list(table or []), force)
+    sqlmesh_models = generate_dlt_models(ctx.obj, pipeline, list(table or []), force, dlt_path)
     if sqlmesh_models:
         model_names = "\n".join([f"- {model_name}" for model_name in sqlmesh_models])
         ctx.obj.console.log_success(f"Updated SQLMesh project with models:\n{model_names}")
@@ -982,3 +1013,102 @@ def dlt_refresh(
 def environments(obj: Context) -> None:
     """Prints the list of SQLMesh environments with its expiry datetime."""
     obj.print_environment_names()
+
+
+@cli.command("lint")
+@click.option(
+    "--models",
+    "--model",
+    multiple=True,
+    help="A model to lint. Multiple models can be linted. If no models are specified, every model will be linted.",
+)
+@click.pass_obj
+@error_handler
+@cli_analytics
+def lint(
+    obj: Context,
+    models: t.Iterator[str],
+) -> None:
+    """Run the linter for the target model(s)."""
+    obj.lint_models(models)
+
+
+@cli.group(no_args_is_help=True)
+def state() -> None:
+    """Commands for interacting with state"""
+    pass
+
+
+@state.command("export")
+@click.option(
+    "-o",
+    "--output-file",
+    required=True,
+    help="Path to write the state export to",
+    type=click.Path(dir_okay=False, writable=True, path_type=Path),
+)
+@click.option(
+    "--environment",
+    multiple=True,
+    help="Name of environment to export. Specify multiple --environment arguments to export multiple environments",
+)
+@click.option(
+    "--local",
+    is_flag=True,
+    help="Export local state only. Note that the resulting file will not be importable",
+)
+@click.option(
+    "--no-confirm",
+    is_flag=True,
+    help="Do not prompt for confirmation before exporting existing state",
+)
+@click.pass_obj
+@error_handler
+@cli_analytics
+def state_export(
+    obj: Context,
+    output_file: Path,
+    environment: t.Optional[t.Tuple[str]],
+    local: bool,
+    no_confirm: bool,
+) -> None:
+    """Export the state database to a file"""
+    confirm = not no_confirm
+
+    if environment and local:
+        raise click.ClickException("Cannot specify both --environment and --local")
+
+    environment_names = list(environment) if environment else None
+    obj.export_state(
+        output_file=output_file,
+        environment_names=environment_names,
+        local_only=local,
+        confirm=confirm,
+    )
+
+
+@state.command("import")
+@click.option(
+    "-i",
+    "--input-file",
+    help="Path to the state file",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False, readable=True, path_type=Path),
+)
+@click.option(
+    "--replace",
+    is_flag=True,
+    help="Clear the remote state before loading the file. If omitted, a merge is performed instead",
+)
+@click.option(
+    "--no-confirm",
+    is_flag=True,
+    help="Do not prompt for confirmation before updating existing state",
+)
+@click.pass_obj
+@error_handler
+@cli_analytics
+def state_import(obj: Context, input_file: Path, replace: bool, no_confirm: bool) -> None:
+    """Import a state export file back into the state database"""
+    confirm = not no_confirm
+    obj.import_state(input_file=input_file, clear=replace, confirm=confirm)

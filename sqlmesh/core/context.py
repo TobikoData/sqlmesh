@@ -75,6 +75,8 @@ from sqlmesh.core.dialect import (
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.environment import Environment, EnvironmentNamingInfo, EnvironmentStatements
 from sqlmesh.core.loader import Loader
+from sqlmesh.core.linter.definition import Linter
+from sqlmesh.core.linter.rules import BUILTIN_RULES
 from sqlmesh.core.macros import ExecutableOrMacro, macro
 from sqlmesh.core.metric import Metric, rewrite
 from sqlmesh.core.model import Model, update_model_schemas
@@ -112,7 +114,7 @@ from sqlmesh.core.test import (
     run_tests,
 )
 from sqlmesh.core.user import User
-from sqlmesh.utils import UniqueKeyDict
+from sqlmesh.utils import UniqueKeyDict, Verbosity
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import TimeLike, now_ds, to_timestamp, format_tz_datetime
 from sqlmesh.utils.errors import (
@@ -121,6 +123,7 @@ from sqlmesh.utils.errors import (
     PlanError,
     SQLMeshError,
     UncategorizedPlanError,
+    LinterError,
 )
 from sqlmesh.utils.config import print_config
 from sqlmesh.utils.jinja import JinjaMacroRegistry
@@ -250,6 +253,7 @@ class ExecutionContext(BaseContext):
         default_dialect: t.Optional[str] = None,
         default_catalog: t.Optional[str] = None,
         variables: t.Optional[t.Dict[str, t.Any]] = None,
+        blueprint_variables: t.Optional[t.Dict[str, t.Any]] = None,
     ):
         self.snapshots = snapshots
         self.deployability_index = deployability_index
@@ -257,6 +261,7 @@ class ExecutionContext(BaseContext):
         self._default_catalog = default_catalog
         self._default_dialect = default_dialect
         self._variables = variables or {}
+        self._blueprint_variables = blueprint_variables or {}
 
     @property
     def default_dialect(self) -> t.Optional[str]:
@@ -285,7 +290,15 @@ class ExecutionContext(BaseContext):
         """Returns a variable value."""
         return self._variables.get(var_name.lower(), default)
 
-    def with_variables(self, variables: t.Dict[str, t.Any]) -> ExecutionContext:
+    def blueprint_var(self, var_name: str, default: t.Optional[t.Any] = None) -> t.Optional[t.Any]:
+        """Returns a blueprint variable value."""
+        return self._blueprint_variables.get(var_name.lower(), default)
+
+    def with_variables(
+        self,
+        variables: t.Dict[str, t.Any],
+        blueprint_variables: t.Optional[t.Dict[str, t.Any]] = None,
+    ) -> ExecutionContext:
         """Returns a new ExecutionContext with additional variables."""
         return ExecutionContext(
             self._engine_adapter,
@@ -294,6 +307,7 @@ class ExecutionContext(BaseContext):
             self._default_dialect,
             self._default_catalog,
             variables=variables,
+            blueprint_variables=blueprint_variables,
         )
 
 
@@ -349,6 +363,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         self._environment_statements: t.List[EnvironmentStatements] = []
         self._excluded_requirements: t.Set[str] = set()
         self._default_catalog: t.Optional[str] = None
+        self._linters: t.Dict[str, Linter] = {}
         self._loaded: bool = False
 
         self.path, self.config = t.cast(t.Tuple[Path, C], next(iter(self.configs.items())))
@@ -388,6 +403,9 @@ class GenericContext(BaseContext, t.Generic[C]):
         ]
 
         self._connection_config = self.config.get_connection(self.gateway)
+        self._state_connection_config = (
+            self.config.get_state_connection(self.gateway) or self._connection_config
+        )
         self.concurrent_tasks = concurrent_tasks or self._connection_config.concurrent_tasks
 
         self._engine_adapters: t.Dict[str, EngineAdapter] = {
@@ -576,9 +594,10 @@ class GenericContext(BaseContext, t.Generic[C]):
         self._metrics.clear()
         self._requirements.clear()
         self._excluded_requirements.clear()
+        self._linters.clear()
         self._environment_statements = []
 
-        for project in loaded_projects:
+        for loader, project in zip(self._loaders, loaded_projects):
             self._jinja_macros = self._jinja_macros.merge(project.jinja_macros)
             self._macros.update(project.macros)
             self._models.update(project.models)
@@ -589,6 +608,11 @@ class GenericContext(BaseContext, t.Generic[C]):
             self._excluded_requirements.update(project.excluded_requirements)
             if project.environment_statements:
                 self._environment_statements.append(project.environment_statements)
+
+            config = loader.config
+            self._linters[config.project] = Linter.from_rules(
+                BUILTIN_RULES.union(project.user_rules), config.linter
+            )
 
         uncached = set()
 
@@ -623,7 +647,8 @@ class GenericContext(BaseContext, t.Generic[C]):
 
             update_model_schemas(self.dag, models=self._models, context_path=self.path)
 
-            for model in self.models.values():
+            models = self.models.values()
+            for model in models:
                 # The model definition can be validated correctly only after the schema is set.
                 model.validate_definition()
 
@@ -1051,7 +1076,9 @@ class GenericContext(BaseContext, t.Generic[C]):
         **kwargs: t.Any,
     ) -> bool:
         """Format all SQL models and audits."""
+        unformatted_file_paths = []
         format_targets = {**self._models, **self._audits}
+
         for target in format_targets.values():
             if target._path is None or target._path.suffix != ".sql":
                 continue
@@ -1093,7 +1120,17 @@ class GenericContext(BaseContext, t.Generic[C]):
                     file.write(after)
                     file.truncate()
                 elif before != after:
-                    return False
+                    unformatted_file_paths.append(target._path)
+
+        if unformatted_file_paths:
+            for path in unformatted_file_paths:
+                self.console.log_status_update(f"{path} needs reformatting.")
+
+            self.console.log_status_update(
+                f"\n{len(unformatted_file_paths)} file(s) need reformatting."
+            )
+            return False
+
         return True
 
     @python_api_analytics
@@ -1124,6 +1161,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         no_diff: t.Optional[bool] = None,
         run: bool = False,
         diff_rendered: bool = False,
+        skip_linter: bool = False,
     ) -> Plan:
         """Interactively creates a plan.
 
@@ -1168,6 +1206,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             no_diff: Hide text differences for changed models.
             run: Whether to run latest intervals as part of the plan application.
             diff_rendered: Whether the diff should compare raw vs rendered models
+            skip_linter: Linter runs by default so this will skip it if enabled
 
         Returns:
             The populated Plan object.
@@ -1194,6 +1233,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             enable_preview=enable_preview,
             run=run,
             diff_rendered=diff_rendered,
+            skip_linter=skip_linter,
         )
 
         if no_auto_categorization:
@@ -1235,6 +1275,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         enable_preview: t.Optional[bool] = None,
         run: bool = False,
         diff_rendered: bool = False,
+        skip_linter: bool = False,
     ) -> PlanBuilder:
         """Creates a plan builder.
 
@@ -1290,6 +1331,9 @@ class GenericContext(BaseContext, t.Generic[C]):
         if run and is_dev:
             raise ConfigError("The '--run' flag is only supported for the production environment.")
 
+        if not skip_linter:
+            self.lint_models()
+
         self._run_plan_tests(skip_tests=skip_tests)
 
         environment_ttl = (
@@ -1326,6 +1370,13 @@ class GenericContext(BaseContext, t.Generic[C]):
         if restate_models is not None:
             expanded_restate_models = model_selector.expand_model_selections(restate_models)
 
+        if (restate_models is not None and not expanded_restate_models) or (
+            backfill_models is not None and not backfill_models
+        ):
+            raise PlanError(
+                "Selector did not return any models. Please check your model selection and try again."
+            )
+
         snapshots = self._snapshots(models_override)
         context_diff = self._context_diff(
             environment or c.PROD,
@@ -1351,17 +1402,20 @@ class GenericContext(BaseContext, t.Generic[C]):
             # This ensures that no models outside the impacted sub-DAG(s) will be backfilled unexpectedly.
             backfill_models = modified_model_names or None
 
-        max_interval_end_per_model = self._get_max_interval_end_per_model(
-            snapshots, backfill_models
-        )
-        # If no end date is specified, use the max interval end from prod
-        # to prevent unintended evaluation of the entire DAG.
-        default_start, default_end = self._get_plan_default_start_end(
-            snapshots, max_interval_end_per_model, backfill_models, modified_model_names
-        )
+        max_interval_end_per_model = None
+        default_start, default_end = None, None
+        if not run:
+            max_interval_end_per_model = self._get_max_interval_end_per_model(
+                snapshots, backfill_models
+            )
+            # If no end date is specified, use the max interval end from prod
+            # to prevent unintended evaluation of the entire DAG.
+            default_start, default_end = self._get_plan_default_start_end(
+                snapshots, max_interval_end_per_model, backfill_models, modified_model_names
+            )
 
-        # Refresh snapshot intervals to ensure that they are up to date with values reflected in the max_interval_end_per_model.
-        self.state_sync.refresh_snapshot_intervals(context_diff.snapshots.values())
+            # Refresh snapshot intervals to ensure that they are up to date with values reflected in the max_interval_end_per_model.
+            self.state_sync.refresh_snapshot_intervals(context_diff.snapshots.values())
 
         return self.PLAN_BUILDER_TYPE(
             context_diff=context_diff,
@@ -1719,16 +1773,13 @@ class GenericContext(BaseContext, t.Generic[C]):
         self,
         match_patterns: t.Optional[t.List[str]] = None,
         tests: t.Optional[t.List[str]] = None,
-        verbose: bool = False,
+        verbosity: Verbosity = Verbosity.DEFAULT,
         preserve_fixtures: bool = False,
         stream: t.Optional[t.TextIO] = None,
     ) -> ModelTextTestResult:
         """Discover and run model tests"""
-        if verbose:
+        if verbosity >= Verbosity.VERBOSE:
             pd.set_option("display.max_columns", None)
-            verbosity = 2
-        else:
-            verbosity = 1
 
         if tests:
             result = run_model_tests(
@@ -1932,7 +1983,9 @@ class GenericContext(BaseContext, t.Generic[C]):
             )
 
     @python_api_analytics
-    def print_info(self, skip_connection: bool = False, verbose: bool = False) -> None:
+    def print_info(
+        self, skip_connection: bool = False, verbosity: Verbosity = Verbosity.DEFAULT
+    ) -> None:
         """Prints information about connections, models, macros, etc. to the console."""
         self.console.log_status_update(f"Models: {len(self.models)}")
         self.console.log_status_update(f"Macros: {len(self._macros) - len(macro.get_registry())}")
@@ -1940,7 +1993,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         if skip_connection:
             return
 
-        if verbose:
+        if verbosity >= Verbosity.VERBOSE:
             self.console.log_status_update("")
             print_config(self.config.get_connection(self.gateway), self.console, "Connection")
             print_config(
@@ -2050,9 +2103,69 @@ class GenericContext(BaseContext, t.Generic[C]):
         for path in self.configs:
             rmtree(path / c.CACHE)
 
-    def _run_tests(self, verbose: bool = False) -> t.Tuple[unittest.result.TestResult, str]:
+    def export_state(
+        self,
+        output_file: Path,
+        environment_names: t.Optional[t.List[str]] = None,
+        local_only: bool = False,
+        confirm: bool = True,
+    ) -> None:
+        from sqlmesh.core.state_sync.export_import import export_state
+
+        # trigger a connection to the StateSync so we can fail early if there is a problem
+        # note we still need to do this even if we are doing a local export so we know what 'versions' to write
+        self.state_sync.get_versions(validate=True)
+
+        local_snapshots = self.snapshots if local_only else None
+
+        if self.console.start_state_export(
+            output_file=output_file,
+            gateway=self.selected_gateway,
+            state_connection_config=self._state_connection_config,
+            environment_names=environment_names,
+            local_only=local_only,
+            confirm=confirm,
+        ):
+            try:
+                export_state(
+                    state_sync=self.state_sync,
+                    output_file=output_file,
+                    local_snapshots=local_snapshots,
+                    environment_names=environment_names,
+                    console=self.console,
+                )
+                self.console.stop_state_export(success=True, output_file=output_file)
+            except:
+                self.console.stop_state_export(success=False, output_file=output_file)
+                raise
+
+    def import_state(self, input_file: Path, clear: bool = False, confirm: bool = True) -> None:
+        from sqlmesh.core.state_sync.export_import import import_state
+
+        if self.console.start_state_import(
+            input_file=input_file,
+            gateway=self.selected_gateway,
+            state_connection_config=self._state_connection_config,
+            clear=clear,
+            confirm=confirm,
+        ):
+            try:
+                import_state(
+                    state_sync=self.state_sync,
+                    input_file=input_file,
+                    clear=clear,
+                    console=self.console,
+                )
+                self.console.stop_state_import(success=True, input_file=input_file)
+            except:
+                self.console.stop_state_import(success=False, input_file=input_file)
+                raise
+
+    def _run_tests(
+        self, verbosity: Verbosity = Verbosity.DEFAULT
+    ) -> t.Tuple[unittest.result.TestResult, str]:
         test_output_io = StringIO()
-        result = self.test(stream=test_output_io, verbose=verbose)
+        result = self.test(stream=test_output_io, verbosity=verbosity)
         return result, test_output_io.getvalue()
 
     def _run_plan_tests(
@@ -2352,6 +2465,25 @@ class GenericContext(BaseContext, t.Generic[C]):
                 if s.name not in models_for_interval_end
             )
         return models_for_interval_end
+
+    def lint_models(
+        self,
+        models: t.Optional[t.Iterable[t.Union[str, Model]]] = None,
+    ) -> None:
+        found_error = False
+
+        model_list = (
+            list(self.get_model(model) for model in models) if models else self.models.values()
+        )
+        for model in model_list:
+            # Linter may be `None` if the context is not loaded yet
+            if linter := self._linters.get(model.project):
+                found_error = linter.lint_model(model, console=self.console) or found_error
+
+        if found_error:
+            raise LinterError(
+                "Linter detected errors in the code. Please fix them before proceeding."
+            )
 
 
 class Context(GenericContext[Config]):

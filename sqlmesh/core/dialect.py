@@ -13,7 +13,7 @@ from functools import lru_cache
 import pandas as pd
 from sqlglot import Dialect, Generator, ParseError, Parser, Tokenizer, TokenType, exp
 from sqlglot.dialects.dialect import DialectType
-from sqlglot.dialects.snowflake import Snowflake
+from sqlglot.dialects import DuckDB, Snowflake
 from sqlglot.helper import seq_get
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 from sqlglot.optimizer.qualify_columns import quote_identifiers
@@ -594,6 +594,7 @@ def _create_parser(expression_type: t.Type[exp.Expression], table_keys: t.List[s
                         ModelKindName.INCREMENTAL_BY_TIME_RANGE,
                         ModelKindName.INCREMENTAL_BY_UNIQUE_KEY,
                         ModelKindName.INCREMENTAL_BY_PARTITION,
+                        ModelKindName.INCREMENTAL_UNMANAGED,
                         ModelKindName.SEED,
                         ModelKindName.VIEW,
                         ModelKindName.SCD_TYPE_2,
@@ -641,6 +642,16 @@ def _props_sql(self: Generator, expressions: t.List[exp.Expression]) -> str:
         props.append(self.maybe_comment(sql, expression=prop))
 
     return "\n".join(props)
+
+
+def _on_virtual_update_sql(self: Generator, expressions: t.List[exp.Expression]) -> str:
+    statements = "\n".join(
+        self.sql(expression)
+        if isinstance(expression, JinjaStatement)
+        else f"{self.sql(expression)};"
+        for expression in expressions
+    )
+    return f"{ON_VIRTUAL_UPDATE_BEGIN};\n{statements}\n{ON_VIRTUAL_UPDATE_END};"
 
 
 def _sqlmesh_ddl_sql(self: Generator, expression: Model | Audit | Metric, name: str) -> str:
@@ -1003,6 +1014,7 @@ def extend_sqlglot() -> None:
                     JinjaQuery: lambda self, e: f"{JINJA_QUERY_BEGIN};\n{e.name}\n{JINJA_END};",
                     JinjaStatement: lambda self,
                     e: f"{JINJA_STATEMENT_BEGIN};\n{e.name}\n{JINJA_END};",
+                    VirtualUpdateStatement: lambda self, e: _on_virtual_update_sql(self, e),
                     MacroDef: lambda self, e: f"@DEF({self.sql(e.this)}, {self.sql(e.expression)})",
                     MacroFunc: _macro_func_sql,
                     MacroStrReplace: lambda self, e: f"@{self.sql(e.this)}",
@@ -1023,6 +1035,12 @@ def extend_sqlglot() -> None:
                 MacroDef,
             )
 
+        generator.UNWRAPPED_INTERVAL_VALUES = (
+            *generator.UNWRAPPED_INTERVAL_VALUES,
+            MacroStrReplace,
+            MacroVar,
+        )
+
     _override(Parser, _parse_select)
     _override(Parser, _parse_statement)
     _override(Parser, _parse_join)
@@ -1038,6 +1056,9 @@ def extend_sqlglot() -> None:
     _override(Parser, _parse_id_var)
     _override(Parser, _warn_unsupported)
     _override(Snowflake.Parser, _parse_table_parts)
+
+    # DuckDB's prefix absolute power operator `@` clashes with the macro syntax
+    DuckDB.Parser.NO_PAREN_FUNCTION_PARSERS.pop("@", None)
 
 
 def select_from_values(

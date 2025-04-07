@@ -1,0 +1,30 @@
+[project]
+name = "sqlmesh-tests"
+dynamic = ["version", "dependencies"]
+description = "Tests for SQLMesh"
+authors = [{ name = "TobikoData Inc.", email = "engineering@tobikodata.com" }]
+license = { text = "Apache License 2.0" }
+
+[project.urls]
+Homepage = "https://sqlmesh.com/"
+Documentation = "https://sqlmesh.readthedocs.io/en/stable/"
+Repository = "https://github.com/TobikoData/sqlmesh"
+Issues = "https://github.com/TobikoData/sqlmesh/issues"
+
+[build-system]
+requires = ["setuptools", "setuptools_scm", "toml"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.package-dir]
+sqlmesh_tests = ""
+
+[tool.setuptools_scm]
+root = "../"
+version_file = "_version.py"
+fallback_version = "0.0.0"
+local_scheme = "no-local-version"
+
+[tool.setuptools.package-data]
+"*" = ["fixtures/**", "*.toml"]
+
+

@@ -28,10 +28,13 @@ def _gen_config(
     start: t.Optional[str],
     template: ProjectTemplate,
 ) -> str:
-    if not settings:
-        connection_settings = """      type: duckdb
+    connection_settings = (
+        settings
+        or """      type: duckdb
       database: db.db"""
+    )
 
+    if not settings and template != ProjectTemplate.DBT:
         doc_link = "https://sqlmesh.readthedocs.io/en/stable/integrations/engines{engine_link}"
         engine_link = ""
 
@@ -72,8 +75,6 @@ def _gen_config(
             "      # https://sqlmesh.readthedocs.io/en/stable/reference/configuration/#connections\n"
             f"      # {doc_link.format(engine_link=engine_link)}\n{connection_settings}"
         )
-    else:
-        connection_settings = settings
 
     default_configs = {
         ProjectTemplate.DEFAULT: f"""gateways:
@@ -252,6 +253,7 @@ def init_example_project(
     dialect: t.Optional[str],
     template: ProjectTemplate = ProjectTemplate.DEFAULT,
     pipeline: t.Optional[str] = None,
+    dlt_path: t.Optional[str] = None,
     schema_name: str = "sqlmesh_example",
 ) -> None:
     root_path = Path(path)
@@ -276,7 +278,9 @@ def init_example_project(
     start = None
     if template == ProjectTemplate.DLT:
         if pipeline and dialect:
-            models, settings, start = generate_dlt_models_and_settings(pipeline, dialect)
+            models, settings, start = generate_dlt_models_and_settings(
+                pipeline_name=pipeline, dialect=dialect, dlt_path=dlt_path
+            )
         else:
             raise click.ClickException(
                 "DLT pipeline is a required argument to generate a SQLMesh project from DLT"

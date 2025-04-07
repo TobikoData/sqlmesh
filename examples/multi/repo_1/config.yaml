@@ -20,3 +20,8 @@ after_all:
 
 model_defaults:
   dialect: 'duckdb'
+
+linter:
+  enabled: True
+
+  warn_rules: "ALL"

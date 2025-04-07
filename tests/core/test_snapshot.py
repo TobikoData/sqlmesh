@@ -130,6 +130,7 @@ def test_json(snapshot: Snapshot):
                 "batch_size": 30,
                 "forward_only": False,
                 "on_destructive_change": "ERROR",
+                "partition_by_time_column": True,
                 "disable_restatement": False,
                 "dialect": "spark",
             },
@@ -859,7 +860,7 @@ def test_fingerprint(model: Model, parent_model: Model):
 
     original_fingerprint = SnapshotFingerprint(
         data_hash="1312415267",
-        metadata_hash="2967945306",
+        metadata_hash="1125608408",
     )
 
     assert fingerprint == original_fingerprint
@@ -920,7 +921,7 @@ def test_fingerprint_seed_model():
 
     expected_fingerprint = SnapshotFingerprint(
         data_hash="1909791099",
-        metadata_hash="1153541408",
+        metadata_hash="2315134974",
     )
 
     model = load_sql_based_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
@@ -959,7 +960,7 @@ def test_fingerprint_jinja_macros(model: Model):
     )
     original_fingerprint = SnapshotFingerprint(
         data_hash="923305614",
-        metadata_hash="2967945306",
+        metadata_hash="1125608408",
     )
 
     fingerprint = fingerprint_from_node(model, nodes={})
@@ -1032,6 +1033,48 @@ def test_fingerprint_virtual_properties(model: Model, parent_model: Model):
     assert updated_fingerprint != fingerprint
     assert updated_fingerprint.metadata_hash != fingerprint.metadata_hash
     assert updated_fingerprint.data_hash == fingerprint.data_hash
+
+
+def test_tableinfo_equality():
+    snapshot_a = SnapshotTableInfo(
+        name="test_schema.a",
+        fingerprint=SnapshotFingerprint(data_hash="1", metadata_hash="1"),
+        version="test_version",
+        physical_schema="test_physical_schema",
+        parents=[],
+        dev_table_suffix="dev",
+    )
+
+    snapshot_b = SnapshotTableInfo(
+        name="test_schema.b",
+        fingerprint=SnapshotFingerprint(data_hash="1", metadata_hash="1"),
+        version="test_version",
+        physical_schema="test_physical_schema",
+        parents=[],
+        dev_table_suffix="dev",
+    )
+
+    snapshot_c = SnapshotTableInfo(
+        name="test_schema.c",
+        fingerprint=SnapshotFingerprint(data_hash="1", metadata_hash="1"),
+        version="test_version",
+        physical_schema="test_physical_schema",
+        parents=[snapshot_a.snapshot_id, snapshot_b.snapshot_id],
+        dev_table_suffix="dev",
+    )
+
+    # parents in different order than snapshot_c
+    snapshot_c2 = SnapshotTableInfo(
+        name="test_schema.c",
+        fingerprint=SnapshotFingerprint(data_hash="1", metadata_hash="1"),
+        version="test_version",
+        physical_schema="test_physical_schema",
+        parents=[snapshot_b.snapshot_id, snapshot_a.snapshot_id],
+        dev_table_suffix="dev",
+    )
+
+    assert snapshot_c is not snapshot_c2
+    assert snapshot_c == snapshot_c2
 
 
 def test_stamp(model: Model):

@@ -126,7 +126,7 @@ Next, name your app "Tobiko Cloud". You can add the app logo by downloading the 
 
     ![okta_setup_3](./single_sign_on/okta_setup_3.png)
 
-2. Fill in the Attribute Statements section with email, first_name, and last_name: These are required to properly map to your users. 
+2. Fill in the Attribute Statements section with email, firstName, and lastName: These are required to properly map to your users. 
 
     ![okta_setup_4](./single_sign_on/okta_setup_4.png)
 
@@ -153,7 +153,7 @@ $ tcloud auth status
 
 ### Login
 
-To initiliaze the login process you can run the `login` command:
+Run the `login` command to begin the login process:
 
 ``` bash
 $ tcloud auth login
@@ -193,3 +193,28 @@ Not currently authenticated
 ![tcloud_logout](./single_sign_on/tcloud_logout.png)
 
 Otherwise, you will be logged out automatically when the SSO session expires (every 24 hours). 
+
+## OAuth Clients
+
+Sometimes, you want to grant an external service access to your Tobiko Cloud project. For example, the external service could be the [CICD bot](../../integrations/github.md) or a [scheduler integration](./scheduler/airflow.md).
+
+These services take `Client ID` and `Client Secret` credentials.
+
+!!! Info "One set of credentials per service"
+    It's best practice to provision a separate set of credentials for each service that you wish to connect to Tobiko Cloud. This gives you the flexibility to revoke credentials for a specific service without affecting access for other services.
+
+### Provisioning client credentials
+
+To provision OAuth credentials for a new service, browse to `Settings -> OAuth Clients` in the lefthand navigation menu.
+
+In the page's Create new Client section, enter a client name and human readable description:
+
+![Add new OAuth Client](./single_sign_on/oauth_client_1.png)
+
+Once you click `Save`, the client will be added to the list:
+
+![OAuth Client List](./single_sign_on/oauth_client_2.png)
+
+To fetch the Client ID or Client Secret, click `Copy ID` or `Copy Secret`. The values will be copied to the system clipboard.
+
+Paste these values into an external service's authentication configuration so it can connect to your Tobiko Cloud project.

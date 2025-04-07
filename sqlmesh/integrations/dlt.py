@@ -9,10 +9,23 @@ from sqlmesh.utils.date import yesterday_ds
 
 
 def generate_dlt_models_and_settings(
-    pipeline_name: str, dialect: str, tables: t.Optional[t.List[str]] = None
-) -> t.Tuple[t.Set[t.Tuple[str, str]], str, str]:
-    """This function attaches to a DLT pipeline and retrieves the connection configs and
+    pipeline_name: str,
+    dialect: str,
+    tables: t.Optional[t.List[str]] = None,
+    dlt_path: t.Optional[str] = None,
+) -> t.Tuple[t.Set[t.Tuple[str, str]], t.Optional[str], str]:
+    """
+    This function attaches to a DLT pipeline and retrieves the connection configs and
     SQLMesh models based on the tables present in the pipeline's default schema.
+
+    Args:
+        pipeline_name: The name of the DLT pipeline to attach to.
+        dialect: The SQL dialect to use for generating SQLMesh models.
+        tables: A list of table names to include.
+        dlt_path: The path to the directory containing the DLT pipelines.
+
+    Returns:
+        A tuple containing a set of the SQLMesh model definitions, the connection config and the start date.
     """
 
     import dlt
@@ -20,25 +33,33 @@ def generate_dlt_models_and_settings(
     from dlt.pipeline.exceptions import CannotRestorePipelineException
 
     try:
-        pipeline = dlt.attach(pipeline_name=pipeline_name)
+        pipeline = dlt.attach(pipeline_name=pipeline_name, pipelines_dir=dlt_path or "")
     except CannotRestorePipelineException:
         raise click.ClickException(f"Could not attach to pipeline {pipeline_name}")
 
     schema = pipeline.default_schema
     dataset = pipeline.dataset_name
 
-    client = pipeline._sql_job_client(schema)
-    config = client.config
-    credentials = config.credentials
-    db_type = pipeline.destination.to_name(pipeline.destination)
+    # Get the start date from the load_ids
     storage_ids = list(pipeline._get_load_storage().list_loaded_packages())
-    configs = {
-        key: value
-        for key in dir(credentials)
-        if not key.startswith("_")
-        and not callable(value := getattr(credentials, key))
-        and value is not None
-    }
+    start_date = get_start_date(storage_ids)
+
+    # Get the connection credentials
+    db_type = pipeline.destination.to_name(pipeline.destination)
+    if db_type == "filesystem":
+        connection_config = None
+    else:
+        client = pipeline._sql_job_client(schema)
+        config = client.config
+        credentials = config.credentials
+        configs = {
+            key: value
+            for key in dir(credentials)
+            if not key.startswith("_")
+            and not callable(value := getattr(credentials, key))
+            and value is not None
+        }
+        connection_config = format_config(configs, db_type)
 
     dlt_tables = {
         name: table
@@ -104,11 +125,15 @@ def generate_dlt_models_and_settings(
         )
         sqlmesh_models.add((incremental_model_name, incremental_model_sql))
 
-    return sqlmesh_models, format_config(configs, db_type), get_start_date(storage_ids)
+    return sqlmesh_models, connection_config, start_date
 
 
 def generate_dlt_models(
-    context: Context, pipeline_name: str, tables: t.List[str], force: bool
+    context: Context,
+    pipeline_name: str,
+    tables: t.List[str],
+    force: bool,
+    dlt_path: t.Optional[str] = None,
 ) -> t.List[str]:
     from sqlmesh.cli.example_project import _create_models
 
@@ -116,6 +141,7 @@ def generate_dlt_models(
         pipeline_name=pipeline_name,
         dialect=context.config.dialect or "",
         tables=tables if tables else None,
+        dlt_path=dlt_path,
     )
 
     if not tables and not force:

@@ -730,7 +730,6 @@ def test_create_table_from_query(make_mocked_engine_adapter: t.Callable, mocker:
         ),
         exists=False,
     )
-
     assert to_sql_calls(adapter) == [
         "CREATE VIEW [__temp_ctas_test_random_id] AS SELECT [a], [b], [x] + 1 AS [c], [d] AS [d], [e] FROM (SELECT * FROM [table]);",
         "DROP VIEW IF EXISTS [__temp_ctas_test_random_id];",
@@ -738,3 +737,17 @@ def test_create_table_from_query(make_mocked_engine_adapter: t.Callable, mocker:
     ]
 
     columns_mock.assert_called_once_with(exp.table_("__temp_ctas_test_random_id", quoted=True))
+
+    # We don't want to drop anything other than LIMIT 0
+    # See https://github.com/TobikoData/sqlmesh/issues/4048
+    adapter.ctas(
+        table_name="test_schema.test_table",
+        query_or_df=parse_one(
+            "SELECT * FROM (SELECT * FROM t WHERE FALSE LIMIT 1) WHERE FALSE LIMIT 0"
+        ),
+        exists=False,
+    )
+    assert (
+        "CREATE VIEW [__temp_ctas_test_random_id] AS SELECT * FROM (SELECT TOP 1 * FROM [t]);"
+        in to_sql_calls(adapter)
+    )

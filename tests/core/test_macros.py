@@ -921,7 +921,7 @@ def test_date_spine(assert_exp_eq, dialect, date_part):
                     CAST('2022-01-01' AS DATE),
                     CAST('2024-12-31' AS DATE),
                     INTERVAL '{interval}'
-                ) AS value
+                ) AS _t(value)
         ) AS _exploded(date_{date_part})
         """
     elif dialect == "spark":
@@ -1082,3 +1082,24 @@ def test_resolve_template_table():
         evaluator.transform(parsed_sql).sql(identify=True)
         == 'SELECT * FROM "test_catalog"."sqlmesh__test"."test__test_model__2517971505$partitions"'
     )
+
+
+def test_macro_with_spaces():
+    evaluator = MacroEvaluator()
+    evaluator.evaluate(d.parse_one(""" @DEF(x, "a b") """))
+    evaluator.evaluate(d.parse_one(""" @DEF(y, 'a b') """))
+    evaluator.evaluate(d.parse_one(""" @DEF(z, a."b c") """))
+
+    for sql, expected in (
+        ("@x", '"a b"'),
+        ("@{x}", '"a b"'),
+        ("a_@x", '"a_a b"'),
+        ("a.@x", 'a."a b"'),
+        ("@y", "'a b'"),
+        ("@{y}", '"a b"'),  # a little tricky here as it's not a string
+        ("a_@y", '"a_a b"'),
+        ("a.@{y}", 'a."a b"'),
+        ("@z", 'a."b c"'),
+        ("d.@z", 'd.a."b c"'),
+    ):
+        assert evaluator.transform(parse_one(sql)).sql() == expected

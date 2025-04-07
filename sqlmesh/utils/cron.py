@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import typing as t
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, tzinfo
 from functools import lru_cache
 
 from croniter import croniter
@@ -34,21 +34,22 @@ def interval_seconds(cron: str) -> int:
 
 
 class CroniterCache:
-    def __init__(self, cron: str, time: t.Optional[TimeLike] = None):
+    def __init__(self, cron: str, time: t.Optional[TimeLike] = None, tz: t.Optional[tzinfo] = None):
         self.cron = cron
-        self.curr: datetime = to_datetime(now() if time is None else time)
+        self.tz = tz
+        self.curr: datetime = to_datetime(now() if time is None else time, tz=self.tz)
         self.interval_seconds = interval_seconds(self.cron)
 
     def get_next(self, estimate: bool = False) -> datetime:
         if estimate and self.interval_seconds:
             self.curr = self.curr + timedelta(seconds=self.interval_seconds)
         else:
-            self.curr = to_datetime(croniter(self.cron, self.curr).get_next() * 1000)
+            self.curr = to_datetime(croniter(self.cron, self.curr).get_next() * 1000, tz=self.tz)
         return self.curr
 
     def get_prev(self, estimate: bool = False) -> datetime:
         if estimate and self.interval_seconds:
             self.curr = self.curr - timedelta(seconds=self.interval_seconds)
         else:
-            self.curr = to_datetime(croniter(self.cron, self.curr).get_prev() * 1000)
+            self.curr = to_datetime(croniter(self.cron, self.curr).get_prev() * 1000, tz=self.tz)
         return self.curr

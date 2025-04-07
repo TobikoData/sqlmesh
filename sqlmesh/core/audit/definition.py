@@ -270,6 +270,8 @@ class StandaloneAudit(_Node, AuditMixin):
                 *sorted(self.tags),
                 str(self.sorted_python_env),
                 self.stamp,
+                self.cron,
+                self.cron_tz.key if self.cron_tz else None,
             ]
 
             query = self.render_audit_query() or self.query

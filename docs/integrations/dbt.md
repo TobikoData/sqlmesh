@@ -324,7 +324,6 @@ The dbt jinja methods that are not currently supported are:
 * selected_sources
 * adapter.expand_target_column_types
 * adapter.rename_relation
-* schemas
 * graph.nodes.values
 * graph.metrics.values
 

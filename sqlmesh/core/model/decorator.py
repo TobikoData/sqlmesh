@@ -18,7 +18,9 @@ from sqlmesh.core.model.definition import (
     create_sql_model,
     create_models_from_blueprints,
     get_model_name,
+    parse_defaults_properties,
     render_meta_fields,
+    render_model_defaults,
 )
 from sqlmesh.core.model.kind import ModelKindName, _ModelKind
 from sqlmesh.utils import registry_decorator, DECORATOR_RETURN_TYPE
@@ -95,7 +97,7 @@ class model(registry_decorator):
     ) -> t.List[Model]:
         return create_models_from_blueprints(
             gateway=self.kwargs.get("gateway"),
-            blueprints=self.kwargs.get("blueprints"),
+            blueprints=self.kwargs.pop("blueprints", None),
             get_variables=get_variables,
             loader=self.model,
             path=path,
@@ -120,6 +122,7 @@ class model(registry_decorator):
         default_catalog: t.Optional[str] = None,
         variables: t.Optional[t.Dict[str, t.Any]] = None,
         infer_names: t.Optional[bool] = False,
+        blueprint_variables: t.Optional[t.Dict[str, t.Any]] = None,
     ) -> Model:
         """Get the model registered by this function."""
         env: t.Dict[str, t.Any] = {}
@@ -153,14 +156,32 @@ class model(registry_decorator):
             path=path,
             dialect=dialect,
             default_catalog=default_catalog,
+            blueprint_variables=blueprint_variables,
         )
 
         rendered_name = rendered_fields["name"]
         if isinstance(rendered_name, exp.Expression):
             rendered_fields["name"] = rendered_name.sql(dialect=dialect)
 
+        rendered_defaults = (
+            render_model_defaults(
+                defaults=defaults,
+                module_path=module_path,
+                macros=macros,
+                jinja_macros=jinja_macros,
+                variables=variables,
+                path=path,
+                dialect=dialect,
+                default_catalog=default_catalog,
+            )
+            if defaults
+            else {}
+        )
+
+        rendered_defaults = parse_defaults_properties(rendered_defaults, dialect=dialect)
+
         common_kwargs = {
-            "defaults": defaults,
+            "defaults": rendered_defaults,
             "path": path,
             "time_column_format": time_column_format,
             "python_env": serialize_env(env, path=module_path),
@@ -174,6 +195,7 @@ class model(registry_decorator):
             "macros": macros,
             "jinja_macros": jinja_macros,
             "audit_definitions": audit_definitions,
+            "blueprint_variables": blueprint_variables,
             **rendered_fields,
         }
 

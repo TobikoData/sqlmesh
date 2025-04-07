@@ -40,10 +40,12 @@ Commands:
   rewrite                 Rewrite a SQL expression with semantic...
   rollback                Rollback SQLMesh to the previous migration.
   run                     Evaluate missing intervals for the target...
+  state                   Commands for interacting with state
   table_diff              Show the diff between two tables.
   table_name              Prints the name of the physical table for the...
   test                    Run model unit tests.
   ui                      Start a browser-based SQLMesh UI.
+  lint                    Run the linter for the target model(s).
 ```
 
 ## audit
@@ -454,6 +456,56 @@ Options:
   --help                        Show this message and exit.
 ```
 
+## state
+
+```
+Usage: sqlmesh state [OPTIONS] COMMAND [ARGS]...
+
+  Commands for interacting with state
+
+Options:
+  --help  Show this message and exit.
+
+Commands:
+  export  Export the state database to a file
+  import  Import a state export file back into the state database
+```
+
+### export
+
+```
+Usage: sqlmesh state export [OPTIONS]
+
+  Export the state database to a file
+
+Options:
+  -o, --output-file FILE  Path to write the state export to  [required]
+  --environment TEXT      Name of environment to export. Specify multiple
+                          --environment arguments to export multiple
+                          environments
+  --local                 Export local state only. Note that the resulting
+                          file will not be importable
+  --no-confirm            Do not prompt for confirmation before exporting
+                          existing state
+  --help                  Show this message and exit.
+```
+
+### import
+
+```
+Usage: sqlmesh state import [OPTIONS]
+
+  Import a state export file back into the state database
+
+Options:
+  -i, --input-file FILE  Path to the state file  [required]
+  --replace              Clear the remote state before loading the file. If
+                         omitted, a merge is performed instead
+  --no-confirm           Do not prompt for confirmation before updating
+                         existing state
+  --help                 Show this message and exit.
+```
+
 ## table_diff
 
 ```
@@ -521,4 +573,15 @@ Options:
   --port INTEGER                  Bind socket to this port. Default: 8000
   --mode [ide|catalog|docs|plan]  Mode to start the UI in. Default: ide
   --help                          Show this message and exit.
+```
+
+## lint
+```
+Usage: sqlmesh lint [OPTIONS]
+  Run linter for the target model(s).
+
+Options:
+  --model TEXT           A model to lint. Multiple models can be linted.  If no models are specified, every model will be linted.
+  --help                 Show this message and exit.
+
 ```

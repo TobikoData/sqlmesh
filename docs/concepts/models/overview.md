@@ -227,7 +227,10 @@ Learn more about these properties and their default values in the [model configu
 :   Tags are one or more labels used to organize your models.
 
 ### cron
-:   Cron is used to schedule when your model processes or refreshes data. It accepts a [cron expression](https://en.wikipedia.org/wiki/Cron) or any of `@hourly`, `@daily`, `@weekly`, or `@monthly`. All times are assumed to be UTC timezone - it is not possible to specify them in a different timezone.
+:   Cron is used to schedule when your model processes or refreshes data. It accepts a [cron expression](https://en.wikipedia.org/wiki/Cron) or any of `@hourly`, `@daily`, `@weekly`, or `@monthly`. All times are assumed to be UTC timezone by default.
+
+### cron_tz
+:   Cron timezone is used to specify the timezone of the cron. This is only used for scheduling and does not affect the intervals processed in an incremental model. For example, if a model is `@daily` with cron_tz `America/Los_Angeles`, it will run every day 12AM pacific time, however the `start` and `end` variables passed to the incremental model will represent the UTC date boundaries.
 
 ### interval_unit
 :   Interval unit determines the temporal granularity with which time intervals are calculated for the model.
@@ -423,7 +426,9 @@ Learn more about these properties and their default values in the [model configu
 
     Setting `allow_partials` to `true` overrides this behavior, indicating that the model may process a segment of input data that is missing some of the data points.
 
-    NOTE: setting this attribute to `true` disregards the [cron](#cron) property.
+    NOTE: To force the model to run every time, set `allow_partials` to `true` and use the `--ignore-cron` argument: `sqlmesh run --ignore-cron`. Simply setting `allow_partials` to `true` does not guarantee that the model will run on every `sqlmesh run` command invocation. The model’s configured `cron` schedule is still respected, even when partial intervals are allowed. 
+
+    Similarly, using `--ignore-cron` without setting `allow_partials` to `true` does not guarantee the model will run every time. Depending on the time of day, the interval might not be complete and ready for execution, even when ignoring the `cron` schedule. Therefore, both are required to ensure that the model runs on every `sqlmesh run` invocation.
 
 ### enabled
 :   Whether the model is enabled. This attribute is `true` by default. Setting it to `false` causes SQLMesh to ignore this model when loading the project.
@@ -445,6 +450,12 @@ to `false` causes SQLMesh to disable query canonicalization & simplification. Th
 
 ### validate_query
 :   Whether the model's query will be validated at compile time. This attribute is `false` by default. Setting it to `true` causes SQLMesh to raise an error instead of emitting warnings. This will display invalid columns in your SQL statements along with models containing `SELECT *` that cannot be automatically expanded to list out all columns. This ensures SQL is verified locally before time and money are spent running the SQL in your data warehouse.
+
+!!! warning
+    This flag is deprecated as of v.0.159.7+ in favor of the [linter](../../guides/linter.md). To preserve validation during compilation, the [built-in rules](../../guides/linter.md#built-in-rules) that check for correctness should be [configured](../../guides/linter.md#rule-violation-behavior) to error severity.
+
+### ignored_rules
+: Specifies which linter rules should be ignored/excluded for this model.
 
 ## Incremental Model Properties
 

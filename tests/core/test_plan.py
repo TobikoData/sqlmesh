@@ -779,15 +779,17 @@ def test_restate_models(sushi_context_pre_scheduling: Context):
         '"memory"."sushi"."waiter_revenue_by_day"',
     }
 
-    plan = sushi_context_pre_scheduling.plan(restate_models=["unknown_model"], no_prompts=True)
-    assert not plan.has_changes
-    assert not plan.restatements
-    assert plan.models_to_backfill is None
+    with pytest.raises(
+        PlanError,
+        match="Selector did not return any models. Please check your model selection and try again.",
+    ):
+        sushi_context_pre_scheduling.plan(restate_models=["unknown_model"], no_prompts=True)
 
-    plan = sushi_context_pre_scheduling.plan(restate_models=["tag:unknown_tag"], no_prompts=True)
-    assert not plan.has_changes
-    assert not plan.restatements
-    assert plan.models_to_backfill is None
+    with pytest.raises(
+        PlanError,
+        match="Selector did not return any models. Please check your model selection and try again.",
+    ):
+        sushi_context_pre_scheduling.plan(restate_models=["tag:unknown_tag"], no_prompts=True)
 
     plan = sushi_context_pre_scheduling.plan(restate_models=["raw.demographics"], no_prompts=True)
     assert not plan.has_changes
@@ -1744,7 +1746,7 @@ def test_indirectly_modified_forward_only_model(make_snapshot, mocker: MockerFix
 
     assert updated_snapshot_a.change_category == SnapshotChangeCategory.BREAKING
     assert updated_snapshot_b.change_category == SnapshotChangeCategory.FORWARD_ONLY
-    assert updated_snapshot_c.change_category == SnapshotChangeCategory.INDIRECT_BREAKING
+    assert updated_snapshot_c.change_category == SnapshotChangeCategory.FORWARD_ONLY
     assert updated_snapshot_d.change_category == SnapshotChangeCategory.INDIRECT_BREAKING
 
     deployability_index = DeployabilityIndex.create(

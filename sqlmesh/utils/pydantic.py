@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import typing as t
+from datetime import tzinfo
 
 import pydantic
 from pydantic import ValidationInfo as ValidationInfo
@@ -72,6 +73,7 @@ class PydanticModel(pydantic.BaseModel):
             exp.Tuple: _expression_encoder,
             AuditQueryTypes: _expression_encoder,  # type: ignore
             ModelQueryTypes: _expression_encoder,  # type: ignore
+            tzinfo: lambda tz: tz.key,
         },
         arbitrary_types_allowed=True,
         extra="forbid",

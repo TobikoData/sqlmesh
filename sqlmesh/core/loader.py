@@ -6,22 +6,23 @@ import linecache
 import logging
 import os
 import typing as t
-from collections import defaultdict
+from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 
 from sqlglot.errors import SqlglotError
 from sqlglot import exp
+from sqlglot.helper import subclasses
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.audit import Audit, ModelAudit, StandaloneAudit, load_multiple_audits
 from sqlmesh.core.dialect import parse
 from sqlmesh.core.environment import EnvironmentStatements
+from sqlmesh.core.linter.rule import RuleSet, Rule
 from sqlmesh.core.macros import MacroRegistry, macro
 from sqlmesh.core.metric import Metric, MetricMeta, expand_metrics, load_metric_ddl
 from sqlmesh.core.model import (
     Model,
-    ExternalModel,
     ModelCache,
     SeedModel,
     create_external_model,
@@ -54,6 +55,15 @@ class LoadedProject:
     requirements: t.Dict[str, str]
     excluded_requirements: t.Set[str]
     environment_statements: t.Optional[EnvironmentStatements]
+    user_rules: RuleSet
+
+
+class CacheBase(abc.ABC):
+    @abc.abstractmethod
+    def get_or_load_models(
+        self, target_path: Path, loader: t.Callable[[], t.List[Model]]
+    ) -> t.List[Model]:
+        """Get or load all models from cache."""
 
 
 class Loader(abc.ABC):
@@ -120,6 +130,8 @@ class Loader(abc.ABC):
 
             environment_statements = self._load_environment_statements(macros=macros)
 
+            user_rules = self._load_linting_rules()
+
             project = LoadedProject(
                 macros=macros,
                 jinja_macros=jinja_macros,
@@ -130,6 +142,7 @@ class Loader(abc.ABC):
                 requirements=requirements,
                 excluded_requirements=excluded_requirements,
                 environment_statements=environment_statements,
+                user_rules=user_rules,
             )
             return project
 
@@ -186,6 +199,7 @@ class Loader(abc.ABC):
     def _load_external_models(
         self,
         audits: UniqueKeyDict[str, ModelAudit],
+        cache: CacheBase,
         gateway: t.Optional[str] = None,
     ) -> UniqueKeyDict[str, Model]:
         models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
@@ -202,32 +216,39 @@ class Loader(abc.ABC):
         if external_models_path.exists() and external_models_path.is_dir():
             paths_to_load.extend(self._glob_paths(external_models_path, extension=".yaml"))
 
+        def _load() -> t.List[Model]:
+            try:
+                with open(path, "r", encoding="utf-8") as file:
+                    return [
+                        create_external_model(
+                            defaults=self.config.model_defaults.dict(),
+                            path=path,
+                            project=self.config.project,
+                            audit_definitions=audits,
+                            **{
+                                "dialect": self.config.model_defaults.dialect,
+                                "default_catalog": self.context.default_catalog,
+                                **row,
+                            },
+                        )
+                        for row in YAML().load(file.read())
+                    ]
+            except Exception as ex:
+                raise ConfigError(f"Failed to load model definition at '{path}'.\n{ex}")
+
         for path in paths_to_load:
             self._track_file(path)
 
-            with open(path, "r", encoding="utf-8") as file:
-                external_models: t.List[ExternalModel] = []
-                for row in YAML().load(file.read()):
-                    model = create_external_model(
-                        defaults=self.config.model_defaults.dict(),
-                        path=path,
-                        project=self.config.project,
-                        audit_definitions=audits,
-                        **{
-                            "dialect": self.config.model_defaults.dialect,
-                            "default_catalog": self.context.default_catalog,
-                            **row,
-                        },
-                    )
-                    external_models.append(model)
-
-                # external models with no explicit gateway defined form the base set
-                for model in (e for e in external_models if e.gateway is None):
+            external_models = cache.get_or_load_models(path, _load)
+            # external models with no explicit gateway defined form the base set
+            for model in external_models:
+                if model.gateway is None:
                     models[model.fqn] = model
 
-                # however, if there is a gateway defined, gateway-specific models take precedence
-                if gateway:
-                    for model in (e for e in external_models if e.gateway == gateway):
+            # however, if there is a gateway defined, gateway-specific models take precedence
+            if gateway:
+                for model in external_models:
+                    if model.gateway == gateway:
                         models.update({model.fqn: model})
 
         return models
@@ -264,6 +285,10 @@ class Loader(abc.ABC):
                     requirements[dep] = ver
 
         return requirements, excluded_requirements
+
+    def _load_linting_rules(self) -> RuleSet:
+        """Loads user linting rules"""
+        return RuleSet()
 
     def _glob_paths(
         self,
@@ -386,11 +411,17 @@ class SqlMeshLoader(Loader):
         Loads all of the models within the model directory with their associated
         audits into a Dict and creates the dag
         """
-        models = self._load_sql_models(macros, jinja_macros, audits, signals)
-        models.update(self._load_external_models(audits, gateway))
-        models.update(self._load_python_models(macros, jinja_macros, audits, signals))
+        cache = SqlMeshLoader._Cache(self, self.config_path)
+        sql_models = self._load_sql_models(macros, jinja_macros, audits, signals, cache)
+        external_models = self._load_external_models(audits, cache, gateway)
+        python_models = self._load_python_models(macros, jinja_macros, audits, signals)
 
-        return models
+        all_model_names = list(sql_models) + list(external_models) + list(python_models)
+        duplicates = [name for name, count in Counter(all_model_names).items() if count > 1]
+        if duplicates:
+            raise ValueError(f"Duplicate model name(s) found: {', '.join(duplicates)}.")
+
+        return UniqueKeyDict("models", **sql_models, **external_models, **python_models)
 
     def _load_sql_models(
         self,
@@ -398,10 +429,10 @@ class SqlMeshLoader(Loader):
         jinja_macros: JinjaMacroRegistry,
         audits: UniqueKeyDict[str, ModelAudit],
         signals: UniqueKeyDict[str, signal],
+        cache: CacheBase,
     ) -> UniqueKeyDict[str, Model]:
         """Loads the sql models into a Dict"""
         models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
-        cache = SqlMeshLoader._Cache(self, self.config_path)
 
         for path in self._glob_paths(
             self.config_path / c.MODELS,
@@ -613,9 +644,13 @@ class SqlMeshLoader(Loader):
                 "before_all": self.config.before_all or [],
                 "after_all": self.config.after_all or [],
             }
-
+            dialect = self.config.model_defaults.dialect
             python_env = make_python_env(
-                [exp.maybe_parse(stmt) for stmts in statements.values() for stmt in stmts],
+                [
+                    exp.maybe_parse(stmt, dialect=dialect)
+                    for stmts in statements.values()
+                    for stmt in stmts
+                ],
                 module_path=self.config_path,
                 jinja_macro_references=None,
                 macros=macros,
@@ -626,7 +661,24 @@ class SqlMeshLoader(Loader):
             return EnvironmentStatements(**statements, python_env=python_env)
         return None
 
-    class _Cache:
+    def _load_linting_rules(self) -> RuleSet:
+        user_rules: UniqueKeyDict[str, type[Rule]] = UniqueKeyDict("rules")
+
+        for path in self._glob_paths(
+            self.config_path / c.LINTER,
+            ignore_patterns=self.config.ignore_patterns,
+            extension=".py",
+        ):
+            if os.path.getsize(path):
+                self._track_file(path)
+                module = import_python_file(path, self.config_path)
+                module_rules = subclasses(module.__name__, Rule, (Rule,))
+                for user_rule in module_rules:
+                    user_rules[user_rule.name] = user_rule
+
+        return RuleSet(user_rules.values())
+
+    class _Cache(CacheBase):
         def __init__(self, loader: SqlMeshLoader, config_path: Path):
             self._loader = loader
             self.config_path = config_path

@@ -318,7 +318,7 @@ In addition to specifying a time column in the `MODEL` DDL, the model's query mu
 
     A model's `time_column` should be in the [UTC time zone](https://en.wikipedia.org/wiki/Coordinated_Universal_Time) to ensure correct interaction with SQLMesh's scheduler and predefined macro variables.
 
-    This requirement aligns with the data engineering best practice of converting datetime/timestamp columns to UTC as soon as they are ingested into the data system and only converting them to local timezones when they exit the system for downstream uses.
+    This requirement aligns with the data engineering best practice of converting datetime/timestamp columns to UTC as soon as they are ingested into the data system and only converting them to local timezones when they exit the system for downstream uses. The `cron_tz` flag **does not** change this requirement.
 
     Placing all timezone conversion code in the system's first/last transformation models prevents inadvertent timezone-related errors as data flows between models.
 
@@ -406,6 +406,25 @@ FROM raw_events
 WHERE
   receipt_date BETWEEN @start_ds AND @end_ds
   AND event_date BETWEEN @start_ds AND @end_ds; -- `event_date` time column filter automatically added by SQLMesh
+```
+
+### Partitioning
+
+By default, we ensure that the `time_column` is part of the [partitioned_by](./overview.md#partitioned_by) property of the model so that it forms part of the partition key and allows the database engine to do partition pruning. If it is not explicitly listed in the Model definition, we will automatically add it.
+
+However, this may be undesirable if you want to exclusively partition on another column or you want to partition on something like `month(time_column)` but the engine you're using doesnt support partitioning based on expressions.
+
+To opt out of this behaviour, you can set `partition_by_time_column false` like so:
+
+```sql linenums="1" hl_lines="5"
+MODEL (
+  name db.events,
+  kind INCREMENTAL_BY_TIME_RANGE (
+    time_column event_date,
+    partition_by_time_column false
+  ),
+  partitioned_by (other_col) -- event_date will no longer be automatically added here and the partition key will just be 'other_col'
+);
 ```
 
 ### Idempotency
@@ -1553,3 +1572,30 @@ Depending on the target engine, models of the `INCREMENTAL_BY_PARTITION` kind ar
 | Redshift   | DELETE by partitioning key, then INSERT |
 | Postgres   | DELETE by partitioning key, then INSERT |
 | DuckDB     | DELETE by partitioning key, then INSERT |
+
+## INCREMENTAL_UNMANAGED
+
+The `INCREMENTAL_UNMANAGED` model kind exists to support append-only tables. It's "unmanaged" in the sense that SQLMesh doesnt try to manage how the data is loaded. SQLMesh will just run your query on the configured cadence and append whatever it gets into the table.
+
+!!! question "Should you use this model kind?"
+
+    Some patterns for data management, such as Data Vault, may rely on append-only tables. In this situation, `INCREMENTAL_UNMANAGED` is the correct type to use.
+
+    In most other situations, you probably want `INCREMENTAL_BY_TIME_RANGE` or `INCREMENTAL_BY_UNIQUE_KEY` because they give you much more control over how the data is loaded.
+
+Usage of the `INCREMENTAL_UNMANAGED` model kind is straightforward:
+
+```sql linenums="1" hl_lines="3"
+MODEL (
+  name db.events,
+  kind INCREMENTAL_UNMANAGED,
+);
+```
+
+Since it's unmanaged, it doesnt support the `batch_size` and `batch_concurrency` properties to control how data is loaded like the other incremental model types do.
+
+!!! warning "Only full restatements supported"
+
+    Similar to `INCREMENTAL_BY_PARTITION`, attempting to [restate](../plans.md#restatement-plans) an `INCREMENTAL_UNMANAGED` model will trigger a full restatement. That is, the model will be rebuilt from scratch rather than from a time slice you specify.
+
+    This is because an append-only table is inherently non-idempotent. Restating `INCREMENTAL_UNMANAGED` models may lead to data loss and should be performed with care.

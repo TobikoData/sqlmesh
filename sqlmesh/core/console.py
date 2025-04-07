@@ -7,7 +7,9 @@ import unittest
 import uuid
 import logging
 import textwrap
-
+from pathlib import Path
+import pandas as pd
+import numpy as np
 from hyperscript import h
 from rich.console import Console as RichConsole
 from rich.live import Live
@@ -24,18 +26,23 @@ from rich.status import Status
 from rich.syntax import Syntax
 from rich.table import Table
 from rich.tree import Tree
+from sqlglot import exp
 
 from sqlmesh.core.environment import EnvironmentNamingInfo
+from sqlmesh.core.linter.rule import RuleViolation
+from sqlmesh.core.model import Model
 from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotChangeCategory,
     SnapshotId,
     SnapshotInfoLike,
 )
+from sqlmesh.core.snapshot.definition import Interval
 from sqlmesh.core.test import ModelTest
 from sqlmesh.utils import rich as srich
+from sqlmesh.utils import Verbosity
 from sqlmesh.utils.concurrency import NodeExecutionFailedError
-from sqlmesh.utils.date import time_like_to_str, to_date, yesterday_ds
+from sqlmesh.utils.date import time_like_to_str, to_date, yesterday_ds, to_ds, to_datetime
 from sqlmesh.utils.errors import (
     PythonModelEvalError,
     NodeAuditsErrors,
@@ -50,6 +57,8 @@ if t.TYPE_CHECKING:
     from sqlmesh.core.context_diff import ContextDiff
     from sqlmesh.core.plan import Plan, EvaluatablePlan, PlanBuilder, SnapshotIntervals
     from sqlmesh.core.table_diff import TableDiff, RowDiff, SchemaDiff
+    from sqlmesh.core.config.connection import ConnectionConfig
+    from sqlmesh.core.state_sync import Versions
 
     LayoutWidget = t.TypeVar("LayoutWidget", bound=t.Union[widgets.VBox, widgets.HBox])
 
@@ -69,6 +78,9 @@ SNAPSHOT_CHANGE_CATEGORY_STR = {
 
 PROGRESS_BAR_WIDTH = 40
 LINE_WRAP_WIDTH = 100
+CHECK_MARK = "\u2714"
+GREEN_CHECK_MARK = f"[green]{CHECK_MARK}[/green]"
+RED_X_MARK = "\u274c"
 
 
 class Console(abc.ABC):
@@ -88,7 +100,7 @@ class Console(abc.ABC):
     @abc.abstractmethod
     def start_evaluation_progress(
         self,
-        batches: t.Dict[Snapshot, int],
+        batch_sizes: t.Dict[Snapshot, int],
         environment_naming_info: EnvironmentNamingInfo,
         default_catalog: t.Optional[str],
     ) -> None:
@@ -100,7 +112,13 @@ class Console(abc.ABC):
 
     @abc.abstractmethod
     def update_snapshot_evaluation_progress(
-        self, snapshot: Snapshot, batch_idx: int, duration_ms: t.Optional[int]
+        self,
+        snapshot: Snapshot,
+        interval: Interval,
+        batch_idx: int,
+        duration_ms: t.Optional[int],
+        num_audits_passed: int,
+        num_audits_failed: int,
     ) -> None:
         """Updates the snapshot evaluation progress."""
 
@@ -192,6 +210,62 @@ class Console(abc.ABC):
     @abc.abstractmethod
     def stop_env_migration_progress(self, success: bool = True) -> None:
         """Stop the environment migration progress."""
+
+    @abc.abstractmethod
+    def start_state_export(
+        self,
+        output_file: Path,
+        gateway: t.Optional[str] = None,
+        state_connection_config: t.Optional[ConnectionConfig] = None,
+        environment_names: t.Optional[t.List[str]] = None,
+        local_only: bool = False,
+        confirm: bool = True,
+    ) -> bool:
+        """State a state export"""
+
+    @abc.abstractmethod
+    def update_state_export_progress(
+        self,
+        version_count: t.Optional[int] = None,
+        versions_complete: bool = False,
+        snapshot_count: t.Optional[int] = None,
+        snapshots_complete: bool = False,
+        environment_count: t.Optional[int] = None,
+        environments_complete: bool = False,
+    ) -> None:
+        """Update the state export progress"""
+
+    @abc.abstractmethod
+    def stop_state_export(self, success: bool, output_file: Path) -> None:
+        """Finish a state export"""
+
+    @abc.abstractmethod
+    def start_state_import(
+        self,
+        input_file: Path,
+        gateway: str,
+        state_connection_config: ConnectionConfig,
+        clear: bool = False,
+        confirm: bool = True,
+    ) -> bool:
+        """Start a state import"""
+
+    @abc.abstractmethod
+    def update_state_import_progress(
+        self,
+        timestamp: t.Optional[str] = None,
+        state_file_version: t.Optional[int] = None,
+        versions: t.Optional[Versions] = None,
+        snapshot_count: t.Optional[int] = None,
+        snapshots_complete: bool = False,
+        environment_count: t.Optional[int] = None,
+        environments_complete: bool = False,
+    ) -> None:
+        """Update the state import process"""
+
+    @abc.abstractmethod
+    def stop_state_import(self, success: bool, input_file: Path) -> None:
+        """Finish a state import"""
 
     @abc.abstractmethod
     def show_model_difference_summary(
@@ -308,16 +382,29 @@ class Console(abc.ABC):
     def print_environments(self, environments_summary: t.Dict[str, int]) -> None:
         """Prints all environment names along with expiry datetime."""
 
-    def _limit_model_names(self, tree: Tree, verbose: bool = False) -> Tree:
+    @abc.abstractmethod
+    def print_connection_config(self, config: ConnectionConfig, title: str = "Connection") -> None:
+        """Print connection config information"""
+
+    def _limit_model_names(self, tree: Tree, verbosity: Verbosity = Verbosity.DEFAULT) -> Tree:
         """Trim long indirectly modified model lists below threshold."""
         modified_length = len(tree.children)
-        if not verbose and modified_length > self.INDIRECTLY_MODIFIED_DISPLAY_THRESHOLD:
+        if (
+            verbosity < Verbosity.VERY_VERBOSE
+            and modified_length > self.INDIRECTLY_MODIFIED_DISPLAY_THRESHOLD
+        ):
             tree.children = [
                 tree.children[0],
                 Tree(f".... {modified_length-2} more ...."),
                 tree.children[-1],
             ]
         return tree
+
+    @abc.abstractmethod
+    def show_linter_violations(
+        self, violations: t.List[RuleViolation], model: Model, is_error: bool = False
+    ) -> None:
+        """Prints all linter violations depending on their severity"""
 
 
 class NoopConsole(Console):
@@ -329,7 +416,7 @@ class NoopConsole(Console):
 
     def start_evaluation_progress(
         self,
-        batches: t.Dict[Snapshot, int],
+        batch_sizes: t.Dict[Snapshot, int],
         environment_naming_info: EnvironmentNamingInfo,
         default_catalog: t.Optional[str],
     ) -> None:
@@ -339,7 +426,13 @@ class NoopConsole(Console):
         pass
 
     def update_snapshot_evaluation_progress(
-        self, snapshot: Snapshot, batch_idx: int, duration_ms: t.Optional[int]
+        self,
+        snapshot: Snapshot,
+        interval: Interval,
+        batch_idx: int,
+        duration_ms: t.Optional[int],
+        num_audits_passed: int,
+        num_audits_failed: int,
     ) -> None:
         pass
 
@@ -402,6 +495,56 @@ class NoopConsole(Console):
         pass
 
     def stop_env_migration_progress(self, success: bool = True) -> None:
+        pass
+
+    def start_state_export(
+        self,
+        output_file: Path,
+        gateway: t.Optional[str] = None,
+        state_connection_config: t.Optional[ConnectionConfig] = None,
+        environment_names: t.Optional[t.List[str]] = None,
+        local_only: bool = False,
+        confirm: bool = True,
+    ) -> bool:
+        return confirm
+
+    def update_state_export_progress(
+        self,
+        version_count: t.Optional[int] = None,
+        versions_complete: bool = False,
+        snapshot_count: t.Optional[int] = None,
+        snapshots_complete: bool = False,
+        environment_count: t.Optional[int] = None,
+        environments_complete: bool = False,
+    ) -> None:
+        pass
+
+    def stop_state_export(self, success: bool, output_file: Path) -> None:
+        pass
+
+    def start_state_import(
+        self,
+        input_file: Path,
+        gateway: str,
+        state_connection_config: ConnectionConfig,
+        clear: bool = False,
+        confirm: bool = True,
+    ) -> bool:
+        return confirm
+
+    def update_state_import_progress(
+        self,
+        timestamp: t.Optional[str] = None,
+        state_file_version: t.Optional[int] = None,
+        versions: t.Optional[Versions] = None,
+        snapshot_count: t.Optional[int] = None,
+        snapshots_complete: bool = False,
+        environment_count: t.Optional[int] = None,
+        environments_complete: bool = False,
+    ) -> None:
+        pass
+
+    def stop_state_import(self, success: bool, input_file: Path) -> None:
         pass
 
     def show_model_difference_summary(
@@ -481,10 +624,24 @@ class NoopConsole(Console):
     def print_environments(self, environments_summary: t.Dict[str, int]) -> None:
         pass
 
+    def show_linter_violations(
+        self, violations: t.List[RuleViolation], model: Model, is_error: bool = False
+    ) -> None:
+        pass
 
-def make_progress_bar(message: str, console: t.Optional[RichConsole] = None) -> Progress:
+    def print_connection_config(
+        self, config: ConnectionConfig, title: t.Optional[str] = "Connection"
+    ) -> None:
+        pass
+
+
+def make_progress_bar(
+    message: str,
+    console: t.Optional[RichConsole] = None,
+    justify: t.Literal["default", "left", "center", "right", "full"] = "right",
+) -> Progress:
     return Progress(
-        TextColumn(f"[bold blue]{message}", justify="right"),
+        TextColumn(f"[bold blue]{message}", justify=justify),
         BarColumn(bar_width=PROGRESS_BAR_WIDTH),
         "[progress.percentage]{task.percentage:>3.1f}%",
         "•",
@@ -500,10 +657,17 @@ class TerminalConsole(Console):
 
     TABLE_DIFF_SOURCE_BLUE = "#0248ff"
 
+    PROGRESS_BAR_COLUMN_WIDTHS: t.Dict[str, int] = {
+        "batch": 7,
+        "name": 52,
+        "annotation": 50,
+        "duration": 8,
+    }
+
     def __init__(
         self,
         console: t.Optional[RichConsole] = None,
-        verbose: bool = False,
+        verbosity: Verbosity = Verbosity.DEFAULT,
         dialect: DialectType = None,
         ignore_warnings: bool = False,
         **kwargs: t.Any,
@@ -515,7 +679,6 @@ class TerminalConsole(Console):
         self.evaluation_total_task: t.Optional[TaskID] = None
         self.evaluation_model_progress: t.Optional[Progress] = None
         self.evaluation_model_tasks: t.Dict[str, TaskID] = {}
-        self.evaluation_model_batches: t.Dict[Snapshot, int] = {}
 
         # Put in temporary values that are replaced when evaluating
         self.environment_naming_info = EnvironmentNamingInfo()
@@ -535,7 +698,17 @@ class TerminalConsole(Console):
 
         self.loading_status: t.Dict[uuid.UUID, Status] = {}
 
-        self.verbose = verbose
+        self.state_export_progress: t.Optional[Progress] = None
+        self.state_export_version_task: t.Optional[TaskID] = None
+        self.state_export_snapshot_task: t.Optional[TaskID] = None
+        self.state_export_environment_task: t.Optional[TaskID] = None
+
+        self.state_import_progress: t.Optional[Progress] = None
+        self.state_import_version_task: t.Optional[TaskID] = None
+        self.state_import_snapshot_task: t.Optional[TaskID] = None
+        self.state_import_environment_task: t.Optional[TaskID] = None
+
+        self.verbosity = verbosity
         self.dialect = dialect
         self.ignore_warnings = ignore_warnings
 
@@ -556,13 +729,15 @@ class TerminalConsole(Console):
 
     def start_evaluation_progress(
         self,
-        batches: t.Dict[Snapshot, int],
+        batch_sizes: t.Dict[Snapshot, int],
         environment_naming_info: EnvironmentNamingInfo,
         default_catalog: t.Optional[str],
     ) -> None:
         """Indicates that a new snapshot evaluation progress has begun."""
         if not self.evaluation_progress_live:
-            self.evaluation_total_progress = make_progress_bar("Evaluating models", self.console)
+            self.evaluation_total_progress = make_progress_bar(
+                "Executing model batches", self.console
+            )
 
             self.evaluation_model_progress = Progress(
                 TextColumn("{task.fields[view_name]}", justify="right"),
@@ -578,26 +753,34 @@ class TerminalConsole(Console):
             self.evaluation_progress_live.start()
 
             self.evaluation_total_task = self.evaluation_total_progress.add_task(
-                "Evaluating models...", total=sum(batches.values())
+                "Executing models...", total=sum(batch_sizes.values())
             )
 
-            self.evaluation_model_batches = batches
+            self.evaluation_model_batch_sizes = batch_sizes
             self.environment_naming_info = environment_naming_info
             self.default_catalog = default_catalog
 
     def start_snapshot_evaluation_progress(self, snapshot: Snapshot) -> None:
         if self.evaluation_model_progress and snapshot.name not in self.evaluation_model_tasks:
             display_name = snapshot.display_name(
-                self.environment_naming_info, self.default_catalog, dialect=self.dialect
+                self.environment_naming_info,
+                self.default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None,
+                dialect=self.dialect,
             )
             self.evaluation_model_tasks[snapshot.name] = self.evaluation_model_progress.add_task(
                 f"Evaluating {display_name}...",
                 view_name=display_name,
-                total=self.evaluation_model_batches[snapshot],
+                total=self.evaluation_model_batch_sizes[snapshot],
             )
 
     def update_snapshot_evaluation_progress(
-        self, snapshot: Snapshot, batch_idx: int, duration_ms: t.Optional[int]
+        self,
+        snapshot: Snapshot,
+        interval: Interval,
+        batch_idx: int,
+        duration_ms: t.Optional[int],
+        num_audits_passed: int,
+        num_audits_failed: int,
     ) -> None:
         """Update the snapshot evaluation progress."""
         if (
@@ -605,11 +788,48 @@ class TerminalConsole(Console):
             and self.evaluation_model_progress
             and self.evaluation_progress_live
         ):
-            total_batches = self.evaluation_model_batches[snapshot]
+            total_batches = self.evaluation_model_batch_sizes[snapshot]
+            batch_num = str(batch_idx + 1).rjust(len(str(total_batches)))
+            batch = f"[{batch_num}/{total_batches}]".ljust(self.PROGRESS_BAR_COLUMN_WIDTHS["batch"])
 
             if duration_ms:
+                display_name = _justify_evaluation_model_info(
+                    snapshot.display_name(
+                        self.environment_naming_info,
+                        self.default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None,
+                        dialect=self.dialect,
+                    ),
+                    self.PROGRESS_BAR_COLUMN_WIDTHS["name"],
+                )
+
+                annotation = _create_evaluation_model_annotation(
+                    snapshot, _format_evaluation_model_interval(snapshot, interval)
+                )
+                audits_str = ""
+                if num_audits_passed:
+                    audits_str += f" {CHECK_MARK}{num_audits_passed}"
+                if num_audits_failed:
+                    audits_str += f" {RED_X_MARK}{num_audits_failed}"
+                audits_str = f", audits{audits_str}" if audits_str else ""
+
+                annotation_width = self.PROGRESS_BAR_COLUMN_WIDTHS["annotation"]
+                annotation = _justify_evaluation_model_info(
+                    annotation + audits_str,
+                    annotation_width
+                    if not num_audits_failed
+                    else annotation_width - 1,  # -1 for RED_X_MARK's extra space
+                    dots_side="right",
+                    prefix=" \\[",
+                    suffix="]",
+                )
+                annotation = annotation.replace(CHECK_MARK, GREEN_CHECK_MARK)
+
+                duration = f"{(duration_ms / 1000.0):.2f}s".ljust(
+                    self.PROGRESS_BAR_COLUMN_WIDTHS["duration"]
+                )
+
                 self.evaluation_progress_live.console.print(
-                    f"[{batch_idx + 1}/{total_batches}] {snapshot.display_name(self.environment_naming_info, self.default_catalog, dialect=self.dialect)} [green]evaluated[/green] in {(duration_ms / 1000.0):.2f}s"
+                    f"{batch}{display_name}{annotation} {duration}"
                 )
 
             self.evaluation_total_progress.update(
@@ -626,14 +846,14 @@ class TerminalConsole(Console):
         if self.evaluation_progress_live:
             self.evaluation_progress_live.stop()
             if success:
-                self.log_success("Model batches executed successfully")
+                self.log_success(f"{GREEN_CHECK_MARK} Model batches executed")
 
         self.evaluation_progress_live = None
         self.evaluation_total_progress = None
         self.evaluation_total_task = None
         self.evaluation_model_progress = None
         self.evaluation_model_tasks = {}
-        self.evaluation_model_batches = {}
+        self.evaluation_model_batch_sizes = {}
         self.environment_naming_info = EnvironmentNamingInfo()
         self.default_catalog = None
 
@@ -645,12 +865,12 @@ class TerminalConsole(Console):
     ) -> None:
         """Indicates that a new creation progress has begun."""
         if self.creation_progress is None:
-            message = "Creating physical table" if total_tasks == 1 else "Creating physical tables"
-            self.creation_progress = make_progress_bar(message, self.console)
+            self.creation_progress = make_progress_bar("Updating physical layer", self.console)
 
+            self._print("")
             self.creation_progress.start()
             self.creation_task = self.creation_progress.add_task(
-                "Creating physical tables...",
+                "Updating physical layer...",
                 total=total_tasks,
             )
 
@@ -660,9 +880,9 @@ class TerminalConsole(Console):
     def update_creation_progress(self, snapshot: SnapshotInfoLike) -> None:
         """Update the snapshot creation progress."""
         if self.creation_progress is not None and self.creation_task is not None:
-            if self.verbose:
+            if self.verbosity >= Verbosity.VERBOSE:
                 self.creation_progress.live.console.print(
-                    f"{snapshot.display_name(self.environment_naming_info, self.default_catalog, dialect=self.dialect)} [green]created[/green]"
+                    f"{snapshot.display_name(self.environment_naming_info, self.default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect).ljust(self.PROGRESS_BAR_COLUMN_WIDTHS['name'])} [green]created[/green]"
                 )
             self.creation_progress.update(self.creation_task, refresh=True, advance=1)
 
@@ -673,7 +893,7 @@ class TerminalConsole(Console):
             self.creation_progress.stop()
             self.creation_progress = None
             if success:
-                self.log_success("Model versions created successfully")
+                self.log_success(f"\n{GREEN_CHECK_MARK} Physical layer updated")
 
         self.environment_naming_info = EnvironmentNamingInfo()
         self.default_catalog = None
@@ -712,21 +932,13 @@ class TerminalConsole(Console):
     ) -> None:
         """Indicates that a new snapshot promotion progress has begun."""
         if self.promotion_progress is None:
-            self.promotion_progress = Progress(
-                TextColumn(
-                    f"[bold blue]Virtually Updating '{environment_naming_info.name}'",
-                    justify="right",
-                ),
-                BarColumn(bar_width=PROGRESS_BAR_WIDTH),
-                "[progress.percentage]{task.percentage:>3.1f}%",
-                "•",
-                TimeElapsedColumn(),
-                console=self.console,
+            self.promotion_progress = make_progress_bar(
+                "Updating virtual layer ", self.console, justify="left"
             )
 
             self.promotion_progress.start()
             self.promotion_task = self.promotion_progress.add_task(
-                f"Virtually Updating {environment_naming_info.name}...",
+                f"Virtually updating {environment_naming_info.name}...",
                 total=total_tasks,
             )
 
@@ -736,10 +948,12 @@ class TerminalConsole(Console):
     def update_promotion_progress(self, snapshot: SnapshotInfoLike, promoted: bool) -> None:
         """Update the snapshot promotion progress."""
         if self.promotion_progress is not None and self.promotion_task is not None:
-            if self.verbose:
-                action_str = "[green]promoted[/green]" if promoted else "[yellow]demoted[/yellow]"
+            if self.verbosity >= Verbosity.VERBOSE:
+                action_str = (
+                    "[green]promoted[/green]" if promoted else "[yellow]demoted[/yellow]"
+                ).ljust(len("promoted"))
                 self.promotion_progress.live.console.print(
-                    f"{snapshot.display_name(self.environment_naming_info, self.default_catalog, dialect=self.dialect)} {action_str}"
+                    f"{snapshot.display_name(self.environment_naming_info, self.default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect).ljust(self.PROGRESS_BAR_COLUMN_WIDTHS['name'])} {action_str}"
                 )
             self.promotion_progress.update(self.promotion_task, refresh=True, advance=1)
 
@@ -750,7 +964,7 @@ class TerminalConsole(Console):
             self.promotion_progress.stop()
             self.promotion_progress = None
             if success:
-                self.log_success("Target environment updated successfully")
+                self.log_success(f"\n{GREEN_CHECK_MARK} Virtual layer updated")
 
         self.environment_naming_info = EnvironmentNamingInfo()
         self.default_catalog = None
@@ -811,6 +1025,242 @@ class TerminalConsole(Console):
             self.env_migration_progress = None
             if success:
                 self.log_success("Environments migrated successfully")
+
+    def start_state_export(
+        self,
+        output_file: Path,
+        gateway: t.Optional[str] = None,
+        state_connection_config: t.Optional[ConnectionConfig] = None,
+        environment_names: t.Optional[t.List[str]] = None,
+        local_only: bool = False,
+        confirm: bool = True,
+    ) -> bool:
+        self.state_export_progress = None
+
+        if local_only:
+            self.log_status_update(f"Exporting [b]local[/b] state to '{output_file.as_posix()}'\n")
+            self.log_warning(
+                "Local state exports just contain the model versions in your local context. Therefore, the resulting file cannot be imported."
+            )
+        else:
+            self.log_status_update(
+                f"Exporting state to '{output_file.as_posix()}' from the following connection:\n"
+            )
+            if gateway:
+                self.log_status_update(f"[b]Gateway[/b]: [green]{gateway}[/green]")
+            if state_connection_config:
+                self.print_connection_config(state_connection_config, title="State Connection")
+            if environment_names:
+                heading = "Environments" if len(environment_names) > 1 else "Environment"
+                self.log_status_update(
+                    f"[b]{heading}[/b]: [yellow]{', '.join(environment_names)}[/yellow]"
+                )
+
+        should_continue = True
+        if confirm:
+            should_continue = self._confirm("\nContinue?")
+            self.log_status_update("")
+
+        if should_continue:
+            self.state_export_progress = make_progress_bar("{task.description}", self.console)
+            assert isinstance(self.state_export_progress, Progress)
+
+            self.state_export_version_task = self.state_export_progress.add_task(
+                "Exporting versions", start=False
+            )
+            self.state_export_snapshot_task = self.state_export_progress.add_task(
+                "Exporting snapshots", start=False
+            )
+            self.state_export_environment_task = self.state_export_progress.add_task(
+                "Exporting environments", start=False
+            )
+
+            self.state_export_progress.start()
+
+        return should_continue
+
+    def update_state_export_progress(
+        self,
+        version_count: t.Optional[int] = None,
+        versions_complete: bool = False,
+        snapshot_count: t.Optional[int] = None,
+        snapshots_complete: bool = False,
+        environment_count: t.Optional[int] = None,
+        environments_complete: bool = False,
+    ) -> None:
+        if self.state_export_progress:
+            if self.state_export_version_task is not None:
+                if version_count is not None:
+                    self.state_export_progress.start_task(self.state_export_version_task)
+                    self.state_export_progress.update(
+                        self.state_export_version_task,
+                        total=version_count,
+                        completed=version_count,
+                        refresh=True,
+                    )
+                if versions_complete:
+                    self.state_export_progress.stop_task(self.state_export_version_task)
+
+            if self.state_export_snapshot_task is not None:
+                if snapshot_count is not None:
+                    self.state_export_progress.start_task(self.state_export_snapshot_task)
+                    self.state_export_progress.update(
+                        self.state_export_snapshot_task,
+                        total=snapshot_count,
+                        completed=snapshot_count,
+                        refresh=True,
+                    )
+                if snapshots_complete:
+                    self.state_export_progress.stop_task(self.state_export_snapshot_task)
+
+            if self.state_export_environment_task is not None:
+                if environment_count is not None:
+                    self.state_export_progress.start_task(self.state_export_environment_task)
+                    self.state_export_progress.update(
+                        self.state_export_environment_task,
+                        total=environment_count,
+                        completed=environment_count,
+                        refresh=True,
+                    )
+                if environments_complete:
+                    self.state_export_progress.stop_task(self.state_export_environment_task)
+
+    def stop_state_export(self, success: bool, output_file: Path) -> None:
+        if self.state_export_progress:
+            self.state_export_progress.stop()
+            self.state_export_progress = None
+
+            self.log_status_update("")
+
+            if success:
+                self.log_success(f"State exported successfully to '{output_file.as_posix()}'")
+            else:
+                self.log_error("State export failed!")
+
+    def start_state_import(
+        self,
+        input_file: Path,
+        gateway: str,
+        state_connection_config: ConnectionConfig,
+        clear: bool = False,
+        confirm: bool = True,
+    ) -> bool:
+        self.log_status_update(
+            f"Loading state from '{input_file.as_posix()}' into the following connection:\n"
+        )
+        self.log_status_update(f"[b]Gateway[/b]: [green]{gateway}[/green]")
+        self.print_connection_config(state_connection_config, title="State Connection")
+        self.log_status_update("")
+
+        if clear:
+            self.log_warning(
+                f"This [b]destructive[/b] operation will delete all existing state against the '{gateway}' gateway \n"
+                f"and replace it with what's in the '{input_file.as_posix()}' file.\n"
+            )
+        else:
+            self.log_warning(
+                f"This operation will [b]merge[/b] the contents of the state file to the state located at the '{gateway}' gateway.\n"
+                "Matching snapshots or environments will be replaced.\n"
+                "Non-matching snapshots or environments will be ignored.\n"
+            )
+
+        should_continue = True
+        if confirm:
+            should_continue = self._confirm("[red]Are you sure?[/red]")
+            self.log_status_update("")
+
+        if should_continue:
+            self.state_import_progress = make_progress_bar("{task.description}", self.console)
+
+            self.state_import_info = Tree("[bold]State File Information:")
+
+            self.state_import_version_task = self.state_import_progress.add_task(
+                "Importing versions", start=False
+            )
+            self.state_import_snapshot_task = self.state_import_progress.add_task(
+                "Importing snapshots", start=False
+            )
+            self.state_import_environment_task = self.state_import_progress.add_task(
+                "Importing environments", start=False
+            )
+
+            self.state_import_progress.start()
+
+        return should_continue
+
+    def update_state_import_progress(
+        self,
+        timestamp: t.Optional[str] = None,
+        state_file_version: t.Optional[int] = None,
+        versions: t.Optional[Versions] = None,
+        snapshot_count: t.Optional[int] = None,
+        snapshots_complete: bool = False,
+        environment_count: t.Optional[int] = None,
+        environments_complete: bool = False,
+    ) -> None:
+        if self.state_import_progress:
+            if self.state_import_info:
+                if timestamp:
+                    self.state_import_info.add(f"Creation Timestamp: {timestamp}")
+                if state_file_version:
+                    self.state_import_info.add(f"File Version: {state_file_version}")
+                if versions:
+                    self.state_import_info.add(f"SQLMesh version: {versions.sqlmesh_version}")
+                    self.state_import_info.add(
+                        f"SQLMesh migration version: {versions.schema_version}"
+                    )
+                    self.state_import_info.add(f"SQLGlot version: {versions.sqlglot_version}\n")
+
+                    self._print(self.state_import_info)
+
+                    version_count = len(versions.model_dump())
+
+                    if self.state_import_version_task is not None:
+                        self.state_import_progress.start_task(self.state_import_version_task)
+                        self.state_import_progress.update(
+                            self.state_import_version_task,
+                            total=version_count,
+                            completed=version_count,
+                        )
+                        self.state_import_progress.stop_task(self.state_import_version_task)
+
+            if self.state_import_snapshot_task is not None:
+                if snapshot_count is not None:
+                    self.state_import_progress.start_task(self.state_import_snapshot_task)
+                    self.state_import_progress.update(
+                        self.state_import_snapshot_task,
+                        completed=snapshot_count,
+                        total=snapshot_count,
+                        refresh=True,
+                    )
+
+                if snapshots_complete:
+                    self.state_import_progress.stop_task(self.state_import_snapshot_task)
+
+            if self.state_import_environment_task is not None:
+                if environment_count is not None:
+                    self.state_import_progress.start_task(self.state_import_environment_task)
+                    self.state_import_progress.update(
+                        self.state_import_environment_task,
+                        completed=environment_count,
+                        total=environment_count,
+                        refresh=True,
+                    )
+
+                if environments_complete:
+                    self.state_import_progress.stop_task(self.state_import_environment_task)
+
+    def stop_state_import(self, success: bool, input_file: Path) -> None:
+        if self.state_import_progress:
+            self.state_import_progress.stop()
+            self.state_import_progress = None
+
+            self.log_status_update("")
+
+            if success:
+                self.log_success(f"State imported successfully from '{input_file.as_posix()}'")
+            else:
+                self.log_error("State import failed!")
 
     def show_model_difference_summary(
         self,
@@ -956,17 +1406,17 @@ class TerminalConsole(Console):
             for s_id in sorted(added_snapshot_ids):
                 snapshot = context_diff.snapshots[s_id]
                 added_tree.add(
-                    f"[added]{snapshot.display_name(environment_naming_info, default_catalog, dialect=self.dialect)}"
+                    f"[added]{snapshot.display_name(environment_naming_info, default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect)}"
                 )
-            tree.add(self._limit_model_names(added_tree, self.verbose))
+            tree.add(self._limit_model_names(added_tree, self.verbosity))
         if removed_snapshot_ids:
             removed_tree = Tree("[bold][removed]Removed:")
             for s_id in sorted(removed_snapshot_ids):
                 snapshot_table_info = context_diff.removed_snapshots[s_id]
                 removed_tree.add(
-                    f"[removed]{snapshot_table_info.display_name(environment_naming_info, default_catalog, dialect=self.dialect)}"
+                    f"[removed]{snapshot_table_info.display_name(environment_naming_info, default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect)}"
                 )
-            tree.add(self._limit_model_names(removed_tree, self.verbose))
+            tree.add(self._limit_model_names(removed_tree, self.verbosity))
         if modified_snapshot_ids:
             direct = Tree("[bold][direct]Directly Modified:")
             indirect = Tree("[bold][indirect]Indirectly Modified:")
@@ -974,7 +1424,9 @@ class TerminalConsole(Console):
             for s_id in modified_snapshot_ids:
                 name = s_id.name
                 display_name = context_diff.snapshots[s_id].display_name(
-                    environment_naming_info, default_catalog, dialect=self.dialect
+                    environment_naming_info,
+                    default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None,
+                    dialect=self.dialect,
                 )
                 if context_diff.directly_modified(name):
                     direct.add(
@@ -994,7 +1446,7 @@ class TerminalConsole(Console):
             if direct.children:
                 tree.add(direct)
             if indirect.children:
-                tree.add(self._limit_model_names(indirect, self.verbose))
+                tree.add(self._limit_model_names(indirect, self.verbosity))
             if metadata.children:
                 tree.add(metadata)
         self._print(tree)
@@ -1051,7 +1503,7 @@ class TerminalConsole(Console):
             if not no_diff:
                 self.show_sql(plan.context_diff.text_diff(snapshot.name))
             tree = Tree(
-                f"[bold][direct]Directly Modified: {snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)}"
+                f"[bold][direct]Directly Modified: {snapshot.display_name(plan.environment_naming_info, default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect)}"
             )
             indirect_tree = None
 
@@ -1061,10 +1513,10 @@ class TerminalConsole(Console):
                     indirect_tree = Tree("[indirect]Indirectly Modified Children:")
                     tree.add(indirect_tree)
                 indirect_tree.add(
-                    f"[indirect]{child_snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)}"
+                    f"[indirect]{child_snapshot.display_name(plan.environment_naming_info, default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect)}"
                 )
             if indirect_tree:
-                indirect_tree = self._limit_model_names(indirect_tree, self.verbose)
+                indirect_tree = self._limit_model_names(indirect_tree, self.verbosity)
 
             self._print(tree)
             if not no_prompts:
@@ -1079,7 +1531,7 @@ class TerminalConsole(Console):
             if context_diff.directly_modified(snapshot.name):
                 category_str = SNAPSHOT_CHANGE_CATEGORY_STR[snapshot.change_category]
                 tree = Tree(
-                    f"\n[bold][direct]Directly Modified: {snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)} ({category_str})"
+                    f"\n[bold][direct]Directly Modified: {snapshot.display_name(plan.environment_naming_info, default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect)} ({category_str})"
                 )
                 indirect_tree = None
                 for child_sid in sorted(plan.indirectly_modified.get(snapshot.snapshot_id, set())):
@@ -1091,13 +1543,13 @@ class TerminalConsole(Console):
                         child_snapshot.change_category
                     ]
                     indirect_tree.add(
-                        f"[indirect]{child_snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)} ({child_category_str})"
+                        f"[indirect]{child_snapshot.display_name(plan.environment_naming_info, default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect)} ({child_category_str})"
                     )
                 if indirect_tree:
-                    indirect_tree = self._limit_model_names(indirect_tree, self.verbose)
+                    indirect_tree = self._limit_model_names(indirect_tree, self.verbosity)
             elif context_diff.metadata_updated(snapshot.name):
                 tree = Tree(
-                    f"\n[bold][metadata]Metadata Updated: {snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)}"
+                    f"\n[bold][metadata]Metadata Updated: {snapshot.display_name(plan.environment_naming_info, default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect)}"
                 )
             else:
                 continue
@@ -1124,14 +1576,16 @@ class TerminalConsole(Console):
                 preview_modifier = " ([orange1]preview[/orange1])"
 
             display_name = snapshot.display_name(
-                plan.environment_naming_info, default_catalog, dialect=self.dialect
+                plan.environment_naming_info,
+                default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None,
+                dialect=self.dialect,
             )
             backfill.add(
                 f"{display_name}: \\[{_format_missing_intervals(snapshot, missing)}]{preview_modifier}"
             )
 
         if backfill:
-            backfill = self._limit_model_names(backfill, self.verbose)
+            backfill = self._limit_model_names(backfill, self.verbosity)
         self._print(backfill)
 
     def _prompt_effective_from(
@@ -1269,6 +1723,7 @@ class TerminalConsole(Console):
         logger.warning(long_message or short_message)
         if not self.ignore_warnings:
             if long_message:
+                file_path = None
                 for handler in logger.root.handlers:
                     if isinstance(handler, logging.FileHandler):
                         file_path = handler.baseFilename
@@ -1281,7 +1736,7 @@ class TerminalConsole(Console):
             self._print(message_formatted)
 
     def log_success(self, message: str) -> None:
-        self._print(f"\n[green]{message}[/green]\n")
+        self._print(f"[green]{message}[/green]\n")
 
     def loading_start(self, message: t.Optional[str] = None) -> uuid.UUID:
         id = uuid.uuid4()
@@ -1450,10 +1905,15 @@ class TerminalConsole(Console):
                     # Create a table with the joined keys and comparison columns
                     column_table = row_diff.joined_sample[keys + [source_column, target_column]]
 
-                    # Filter out identical-valued rows
+                    # Filter to retain non identical-valued rows
                     column_table = column_table[
-                        column_table[source_column] != column_table[target_column]
+                        column_table.apply(
+                            lambda row: not _cells_match(row[source_column], row[target_column]),
+                            axis=1,
+                        )
                     ]
+
+                    # Rename the column headers for readability
                     column_table = column_table.rename(
                         columns={
                             source_column: source_name,
@@ -1467,7 +1927,16 @@ class TerminalConsole(Console):
                         table.add_column(column_name, style=style, header_style=style)
 
                     for _, row in column_table.iterrows():
-                        table.add_row(*[str(cell) for cell in row])
+                        table.add_row(
+                            *[
+                                str(
+                                    round(cell, row_diff.decimals)
+                                    if isinstance(cell, float)
+                                    else cell
+                                )
+                                for cell in row
+                            ]
+                        )
 
                     self.console.print(
                         f"Column: [underline][bold cyan]{column}[/bold cyan][/underline]",
@@ -1495,6 +1964,16 @@ class TerminalConsole(Console):
         output_str = "\n".join([str(len(output)), *output])
         self.log_status_update(f"Number of SQLMesh environments are: {output_str}")
 
+    def print_connection_config(self, config: ConnectionConfig, title: str = "Connection") -> None:
+        engine_adapter_type = config._engine_adapter
+
+        tree = Tree(f"[b]{title}:[/b]")
+        tree.add(f"Type: [bold cyan]{config.type_}[/bold cyan]")
+        tree.add(f"Catalog: [bold cyan]{config.get_catalog()}[/bold cyan]")
+        tree.add(f"Dialect: [bold cyan]{engine_adapter_type.DIALECT}[/bold cyan]")
+
+        self._print(tree)
+
     def _get_snapshot_change_category(
         self,
         snapshot: Snapshot,
@@ -1521,7 +2000,9 @@ class TerminalConsole(Console):
         use_rich_formatting: bool = True,
     ) -> t.Dict[SnapshotChangeCategory, str]:
         direct = snapshot.display_name(
-            environment_naming_info, default_catalog, dialect=self.dialect
+            environment_naming_info,
+            default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None,
+            dialect=self.dialect,
         )
         if use_rich_formatting:
             direct = f"[direct]{direct}[/direct]"
@@ -1547,6 +2028,28 @@ class TerminalConsole(Console):
             k: f"[{SNAPSHOT_CHANGE_CATEGORY_STR[k]}] {v}" for k, v in choices.items()
         }
         return labeled_choices
+
+    def show_linter_violations(
+        self, violations: t.List[RuleViolation], model: Model, is_error: bool = False
+    ) -> None:
+        severity = "errors" if is_error else "warnings"
+        violations_msg = "\n".join(f" - {violation}" for violation in violations)
+        msg = f"Linter {severity} for {model._path}:\n{violations_msg}"
+
+        if is_error:
+            self.log_error(msg)
+        else:
+            self.log_warning(msg)
+
+
+def _cells_match(x: t.Any, y: t.Any) -> bool:
+    """Helper function to compare two cells and returns true if they're equal, handling array objects."""
+
+    # Convert array-like objects to list for consistent comparison
+    def _normalize(val: t.Any) -> t.Any:
+        return list(val) if isinstance(val, (pd.Series, np.ndarray)) else val
+
+    return _normalize(x) == _normalize(y)
 
 
 def add_to_layout_widget(target_widget: LayoutWidget, *widgets: widgets.Widget) -> LayoutWidget:
@@ -1968,14 +2471,17 @@ class MarkdownConsole(CaptureTerminalConsole):
             self._print("\n**Added Models:**")
             added_models = sorted(added_snapshot_models)
             list_length = len(added_models)
-            if not self.verbose and list_length > self.INDIRECTLY_MODIFIED_DISPLAY_THRESHOLD:
+            if (
+                self.verbosity < Verbosity.VERY_VERBOSE
+                and list_length > self.INDIRECTLY_MODIFIED_DISPLAY_THRESHOLD
+            ):
                 self._print(added_models[0])
                 self._print(f"- `.... {list_length-2} more ....`\n")
                 self._print(added_models[-1])
             else:
                 for snapshot in added_models:
                     self._print(
-                        f"- `{snapshot.display_name(environment_naming_info, default_catalog, dialect=self.dialect)}`"
+                        f"- `{snapshot.display_name(environment_naming_info, default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect)}`"
                     )
 
         added_snapshot_audits = {s for s in added_snapshots if s.is_audit}
@@ -1983,7 +2489,7 @@ class MarkdownConsole(CaptureTerminalConsole):
             self._print("\n**Added Standalone Audits:**")
             for snapshot in sorted(added_snapshot_audits):
                 self._print(
-                    f"- `{snapshot.display_name(environment_naming_info, default_catalog, dialect=self.dialect)}`"
+                    f"- `{snapshot.display_name(environment_naming_info, default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect)}`"
                 )
 
         removed_snapshot_table_infos = set(context_diff.removed_snapshots.values())
@@ -1992,14 +2498,17 @@ class MarkdownConsole(CaptureTerminalConsole):
             self._print("\n**Removed Models:**")
             removed_models = sorted(removed_model_snapshot_table_infos)
             list_length = len(removed_models)
-            if not self.verbose and list_length > self.INDIRECTLY_MODIFIED_DISPLAY_THRESHOLD:
+            if (
+                self.verbosity < Verbosity.VERY_VERBOSE
+                and list_length > self.INDIRECTLY_MODIFIED_DISPLAY_THRESHOLD
+            ):
                 self._print(removed_models[0])
                 self._print(f"- `.... {list_length-2} more ....`\n")
                 self._print(removed_models[-1])
             else:
                 for snapshot_table_info in removed_models:
                     self._print(
-                        f"- `{snapshot_table_info.display_name(environment_naming_info, default_catalog, dialect=self.dialect)}`"
+                        f"- `{snapshot_table_info.display_name(environment_naming_info, default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect)}`"
                     )
 
         removed_audit_snapshot_table_infos = {s for s in removed_snapshot_table_infos if s.is_audit}
@@ -2007,7 +2516,7 @@ class MarkdownConsole(CaptureTerminalConsole):
             self._print("\n**Removed Standalone Audits:**")
             for snapshot_table_info in sorted(removed_audit_snapshot_table_infos):
                 self._print(
-                    f"- `{snapshot_table_info.display_name(environment_naming_info, default_catalog, dialect=self.dialect)}`"
+                    f"- `{snapshot_table_info.display_name(environment_naming_info, default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect)}`"
                 )
 
         modified_snapshots = {
@@ -2028,7 +2537,7 @@ class MarkdownConsole(CaptureTerminalConsole):
                 self._print("\n**Directly Modified:**")
                 for snapshot in sorted(directly_modified):
                     self._print(
-                        f"- `{snapshot.display_name(environment_naming_info, default_catalog, dialect=self.dialect)}`"
+                        f"- `{snapshot.display_name(environment_naming_info, default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect)}`"
                     )
                     if not no_diff:
                         self._print(f"```diff\n{context_diff.text_diff(snapshot.name)}\n```")
@@ -2037,24 +2546,24 @@ class MarkdownConsole(CaptureTerminalConsole):
                 indirectly_modified = sorted(indirectly_modified)
                 modified_length = len(indirectly_modified)
                 if (
-                    not self.verbose
+                    self.verbosity < Verbosity.VERY_VERBOSE
                     and modified_length > self.INDIRECTLY_MODIFIED_DISPLAY_THRESHOLD
                 ):
                     self._print(
-                        f"- `{indirectly_modified[0].display_name(environment_naming_info, default_catalog, dialect=self.dialect)}`\n"
+                        f"- `{indirectly_modified[0].display_name(environment_naming_info, default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect)}`\n"
                         f"- `.... {modified_length-2} more ....`\n"
-                        f"- `{indirectly_modified[-1].display_name(environment_naming_info, default_catalog, dialect=self.dialect)}`"
+                        f"- `{indirectly_modified[-1].display_name(environment_naming_info, default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect)}`"
                     )
                 else:
                     for snapshot in indirectly_modified:
                         self._print(
-                            f"- `{snapshot.display_name(environment_naming_info, default_catalog, dialect=self.dialect)}`"
+                            f"- `{snapshot.display_name(environment_naming_info, default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect)}`"
                         )
             if metadata_modified:
                 self._print("\n**Metadata Updated:**")
                 for snapshot in sorted(metadata_modified):
                     self._print(
-                        f"- `{snapshot.display_name(environment_naming_info, default_catalog, dialect=self.dialect)}`"
+                        f"- `{snapshot.display_name(environment_naming_info, default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect)}`"
                     )
 
     def _show_missing_dates(self, plan: Plan, default_catalog: t.Optional[str]) -> None:
@@ -2074,14 +2583,19 @@ class MarkdownConsole(CaptureTerminalConsole):
                 preview_modifier = " (**preview**)"
 
             display_name = snapshot.display_name(
-                plan.environment_naming_info, default_catalog, dialect=self.dialect
+                plan.environment_naming_info,
+                default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None,
+                dialect=self.dialect,
             )
             snapshots.append(
                 f"* `{display_name}`: [{_format_missing_intervals(snapshot, missing)}]{preview_modifier}"
             )
 
         length = len(snapshots)
-        if not self.verbose and length > self.INDIRECTLY_MODIFIED_DISPLAY_THRESHOLD:
+        if (
+            self.verbosity < Verbosity.VERY_VERBOSE
+            and length > self.INDIRECTLY_MODIFIED_DISPLAY_THRESHOLD
+        ):
             self._print(snapshots[0])
             self._print(f"- `.... {length-2} more ....`\n")
             self._print(snapshots[-1])
@@ -2095,7 +2609,7 @@ class MarkdownConsole(CaptureTerminalConsole):
             if context_diff.directly_modified(snapshot.name):
                 category_str = SNAPSHOT_CHANGE_CATEGORY_STR[snapshot.change_category]
                 tree = Tree(
-                    f"[bold][direct]Directly Modified: {snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)} ({category_str})"
+                    f"[bold][direct]Directly Modified: {snapshot.display_name(plan.environment_naming_info, default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect)} ({category_str})"
                 )
                 indirect_tree = None
                 for child_sid in sorted(plan.indirectly_modified.get(snapshot.snapshot_id, set())):
@@ -2107,13 +2621,13 @@ class MarkdownConsole(CaptureTerminalConsole):
                         child_snapshot.change_category
                     ]
                     indirect_tree.add(
-                        f"[indirect]{child_snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)} ({child_category_str})"
+                        f"[indirect]{child_snapshot.display_name(plan.environment_naming_info, default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect)} ({child_category_str})"
                     )
                 if indirect_tree:
-                    indirect_tree = self._limit_model_names(indirect_tree, self.verbose)
+                    indirect_tree = self._limit_model_names(indirect_tree, self.verbosity)
             elif context_diff.metadata_updated(snapshot.name):
                 tree = Tree(
-                    f"[bold][metadata]Metadata Updated: {snapshot.display_name(plan.environment_naming_info, default_catalog, dialect=self.dialect)}"
+                    f"[bold][metadata]Metadata Updated: {snapshot.display_name(plan.environment_naming_info, default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect)}"
                 )
             else:
                 continue
@@ -2126,7 +2640,6 @@ class MarkdownConsole(CaptureTerminalConsole):
     def log_test_results(
         self, result: unittest.result.TestResult, output: t.Optional[str], target_dialect: str
     ) -> None:
-        # import ipywidgets as widgets
         if result.wasSuccessful():
             self._print(
                 f"**Successfully Ran `{str(result.testsRun)}` Tests Against `{target_dialect}`**\n\n"
@@ -2155,6 +2668,16 @@ class MarkdownConsole(CaptureTerminalConsole):
                 self._print(f"  **{node_name}**\n\n{msg}")
 
             self._print("```\n")
+
+    def show_linter_violations(
+        self, violations: t.List[RuleViolation], model: Model, is_error: bool = False
+    ) -> None:
+        severity = "**errors**" if is_error else "warnings"
+        violations_msg = "\n".join(f" - {violation}" for violation in violations)
+        msg = f"\nLinter {severity} for `{model._path}`:\n{violations_msg}\n"
+
+        self._print(msg)
+        self._errors.append(msg)
 
     def log_error(self, message: str) -> None:
         super().log_error(f"```\n\\[ERROR] {message}```\n\n")
@@ -2195,27 +2718,37 @@ class DatabricksMagicConsole(CaptureTerminalConsole):
 
     def start_evaluation_progress(
         self,
-        batches: t.Dict[Snapshot, int],
+        batch_sizes: t.Dict[Snapshot, int],
         environment_naming_info: EnvironmentNamingInfo,
         default_catalog: t.Optional[str],
     ) -> None:
-        self.evaluation_batches = batches
+        self.evaluation_model_batch_sizes = batch_sizes
         self.evaluation_environment_naming_info = environment_naming_info
         self.default_catalog = default_catalog
 
     def start_snapshot_evaluation_progress(self, snapshot: Snapshot) -> None:
         if not self.evaluation_batch_progress.get(snapshot.snapshot_id):
             display_name = snapshot.display_name(
-                self.evaluation_environment_naming_info, self.default_catalog, dialect=self.dialect
+                self.evaluation_environment_naming_info,
+                self.default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None,
+                dialect=self.dialect,
             )
             self.evaluation_batch_progress[snapshot.snapshot_id] = (display_name, 0)
-            print(f"Starting '{display_name}', Total batches: {self.evaluation_batches[snapshot]}")
+            print(
+                f"Starting '{display_name}', Total batches: {self.evaluation_model_batch_sizes[snapshot]}"
+            )
 
     def update_snapshot_evaluation_progress(
-        self, snapshot: Snapshot, batch_idx: int, duration_ms: t.Optional[int]
+        self,
+        snapshot: Snapshot,
+        interval: Interval,
+        batch_idx: int,
+        duration_ms: t.Optional[int],
+        num_audits_passed: int,
+        num_audits_failed: int,
     ) -> None:
         view_name, loaded_batches = self.evaluation_batch_progress[snapshot.snapshot_id]
-        total_batches = self.evaluation_batches[snapshot]
+        total_batches = self.evaluation_model_batch_sizes[snapshot]
 
         loaded_batches += 1
         self.evaluation_batch_progress[snapshot.snapshot_id] = (view_name, loaded_batches)
@@ -2227,7 +2760,7 @@ class DatabricksMagicConsole(CaptureTerminalConsole):
             total_finished_loading = len(
                 [
                     s
-                    for s, total in self.evaluation_batches.items()
+                    for s, total in self.evaluation_model_batch_sizes.items()
                     if self.evaluation_batch_progress.get(s.snapshot_id, (None, -1))[1] == total
                 ]
             )
@@ -2339,7 +2872,7 @@ class DebuggerTerminalConsole(TerminalConsole):
     ) -> None:
         self.console: RichConsole = console or srich.console
         self.dialect = dialect
-        self.verbose = False
+        self.verbosity = Verbosity.DEFAULT
         self.ignore_warnings = ignore_warnings
 
     def _write(self, msg: t.Any, *args: t.Any, **kwargs: t.Any) -> None:
@@ -2353,19 +2886,27 @@ class DebuggerTerminalConsole(TerminalConsole):
 
     def start_evaluation_progress(
         self,
-        batches: t.Dict[Snapshot, int],
+        batch_sizes: t.Dict[Snapshot, int],
         environment_naming_info: EnvironmentNamingInfo,
         default_catalog: t.Optional[str],
     ) -> None:
-        self._write(f"Starting evaluation for {len(batches)} snapshots")
+        self._write(f"Starting evaluation for {sum(batch_sizes.values())} snapshots")
 
     def start_snapshot_evaluation_progress(self, snapshot: Snapshot) -> None:
         self._write(f"Evaluating {snapshot.name}")
 
     def update_snapshot_evaluation_progress(
-        self, snapshot: Snapshot, batch_idx: int, duration_ms: t.Optional[int]
+        self,
+        snapshot: Snapshot,
+        interval: Interval,
+        batch_idx: int,
+        duration_ms: t.Optional[int],
+        num_audits_passed: int,
+        num_audits_failed: int,
     ) -> None:
-        self._write(f"Evaluating {snapshot.name} | batch={batch_idx} | duration={duration_ms}ms")
+        self._write(
+            f"Evaluating {snapshot.name} | batch={batch_idx} | duration={duration_ms}ms | num_audits_passed={num_audits_passed} | num_audits_failed={num_audits_failed}"
+        )
 
     def stop_evaluation_progress(self, success: bool = True) -> None:
         self._write(f"Stopping evaluation with success={success}")
@@ -2595,3 +3136,73 @@ def _format_audits_errors(error: NodeAuditsErrors) -> str:
         msg = msg.replace("\n", "\n  ")
         error_messages.append(msg)
     return "  " + "\n".join(error_messages)
+
+
+def _format_evaluation_model_interval(snapshot: Snapshot, interval: Interval) -> str:
+    if snapshot.is_model and (
+        snapshot.model.kind.is_incremental
+        or snapshot.model.kind.is_managed
+        or snapshot.model.kind.is_custom
+    ):
+        # include time if interval < 1 day
+        if (interval[1] - interval[0]) < datetime.timedelta(days=1).total_seconds() * 1000:
+            return f"insert {to_ds(interval[0])} {to_datetime(interval[0]).strftime('%H:%M:%S')}-{to_datetime(interval[1]).strftime('%H:%M:%S')}"
+        return f"insert {to_ds(interval[0])} - {to_ds(interval[1])}"
+    return ""
+
+
+def _justify_evaluation_model_info(
+    text: str,
+    length: int,
+    justify_direction: t.Literal["left", "right"] = "left",
+    dots_side: t.Literal["left", "right"] = "left",
+    prefix: str = "",
+    suffix: str = "",
+) -> str:
+    """Format a model evaluation info string by justifying and truncating if needed.
+
+    Args:
+        text: The string to format
+        length: The desired number of characters in the returned string
+        justify_direction: The justification direction ("left" or "l" or "right" or "r")
+        dots_side: The side of the dots if truncation is needed ("left" or "l" or "right" or "r")
+        prefix: A prefix to add to the returned string
+        suffix: A suffix to add to the returned string
+
+    Returns:
+        The justified string, truncated with "..." if needed
+    """
+    full_text = f"{prefix}{text}{suffix}"
+    if len(full_text) <= length:
+        return (
+            full_text.ljust(length)
+            if justify_direction.startswith("l")
+            else full_text.rjust(length)
+        )
+
+    trunc_length = length - len(prefix) - len(suffix)
+    truncated_text = (
+        "..." + text[-(trunc_length - 3) :]
+        if dots_side.startswith("l")
+        else text[: (trunc_length - 3)] + "..."
+    )
+    return f"{prefix}{truncated_text}{suffix}"
+
+
+def _create_evaluation_model_annotation(snapshot: Snapshot, interval_info: t.Optional[str]) -> str:
+    if snapshot.is_audit:
+        return "run standalone audit"
+    if snapshot.is_model and snapshot.model.kind.is_external:
+        return "run external audits"
+    if snapshot.model.kind.is_seed:
+        return "insert seed file"
+    if snapshot.model.kind.is_full:
+        return "full refresh"
+    if snapshot.model.kind.is_view:
+        return "recreate view"
+    if snapshot.model.kind.is_incremental_by_unique_key:
+        return "insert/update rows"
+    if snapshot.model.kind.is_incremental_by_partition:
+        return "insert partitions"
+
+    return interval_info if interval_info else ""

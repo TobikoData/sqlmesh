@@ -29,6 +29,7 @@ if t.TYPE_CHECKING:
     from sqlglot._typing import E
     from sqlglot.dialects.dialect import DialectType
 
+    from sqlmesh.core.linter.rule import Rule
     from sqlmesh.core.snapshot import DeployabilityIndex, Snapshot
 
 
@@ -51,7 +52,6 @@ class BaseExpressionRenderer:
         model_fqn: t.Optional[str] = None,
         normalize_identifiers: bool = True,
         optimize_query: t.Optional[bool] = True,
-        validate_query: t.Optional[bool] = False,
     ):
         self._expression = expression
         self._dialect = dialect
@@ -67,7 +67,6 @@ class BaseExpressionRenderer:
         self._cache: t.List[t.Optional[exp.Expression]] = []
         self._model_fqn = model_fqn
         self._optimize_query_flag = optimize_query is not False
-        self._validate_query = validate_query
 
     def update_schema(self, schema: t.Dict[str, t.Any]) -> None:
         self.schema = d.normalize_mapping_schema(schema, dialect=self._dialect)
@@ -108,17 +107,31 @@ class BaseExpressionRenderer:
 
         if environment_naming_info := kwargs.get("environment_naming_info", None):
             kwargs["this_env"] = getattr(environment_naming_info, "name")
+            if snapshots and (
+                schemas := set(
+                    [
+                        s.qualified_view_name.schema_for_environment(
+                            environment_naming_info, dialect=self._dialect
+                        )
+                        for s in snapshots.values()
+                        if s.is_model and not s.is_symbolic
+                    ]
+                )
+            ):
+                kwargs["schemas"] = list(schemas)
 
         this_model = kwargs.pop("this_model", None)
 
+        this_snapshot = (snapshots or {}).get(self._model_fqn) if self._model_fqn else None
         if not this_model and self._model_fqn:
-            this_snapshot = (snapshots or {}).get(self._model_fqn)
             this_model = self._resolve_table(
                 self._model_fqn,
                 snapshots={self._model_fqn: this_snapshot} if this_snapshot else None,
                 deployability_index=deployability_index,
                 table_mapping=table_mapping,
             )
+        if this_snapshot and (kind := this_snapshot.model_kind_name):
+            kwargs["model_kind_name"] = kind.name
 
         expressions = [self._expression]
 
@@ -385,6 +398,7 @@ class ExpressionRenderer(BaseExpressionRenderer):
                 execution_time=execution_time,
                 snapshots=snapshots,
                 deployability_index=deployability_index,
+                table_mapping=table_mapping,
                 **kwargs,
             )
         except ParsetimeAdapterCallError:
@@ -409,19 +423,21 @@ class ExpressionRenderer(BaseExpressionRenderer):
 
 def render_statements(
     statements: t.List[str],
-    dialect: DialectType = None,
+    dialect: str,
     default_catalog: t.Optional[str] = None,
     python_env: t.Optional[t.Dict[str, Executable]] = None,
+    jinja_macros: t.Optional[JinjaMacroRegistry] = None,
     **render_kwargs: t.Any,
 ) -> t.List[str]:
     rendered_statements: t.List[str] = []
     for statement in statements:
-        for expression in parse(statement, dialect=dialect):
+        for expression in d.parse(statement, default_dialect=dialect):
             if expression:
                 rendered = ExpressionRenderer(
                     expression,
                     dialect,
                     [],
+                    jinja_macro_registry=jinja_macros,
                     python_env=python_env,
                     default_catalog=default_catalog,
                     quote_identifiers=False,
@@ -443,6 +459,7 @@ class QueryRenderer(BaseExpressionRenderer):
     def __init__(self, *args: t.Any, **kwargs: t.Any):
         super().__init__(*args, **kwargs)
         self._optimized_cache: t.Optional[exp.Query] = None
+        self._violated_rules: t.Dict[type[Rule], t.Any] = {}
 
     def update_schema(self, schema: t.Dict[str, t.Any]) -> None:
         super().update_schema(schema)
@@ -550,7 +567,12 @@ class QueryRenderer(BaseExpressionRenderer):
 
         return query
 
-    def update_cache(self, expression: t.Optional[exp.Expression], optimized: bool = False) -> None:
+    def update_cache(
+        self,
+        expression: t.Optional[exp.Expression],
+        violated_rules: t.Optional[t.Dict[type[Rule], t.Any]] = None,
+        optimized: bool = False,
+    ) -> None:
         if optimized:
             if not isinstance(expression, exp.Query):
                 raise SQLMeshError(f"Expected a Query but got: {expression}")
@@ -558,7 +580,14 @@ class QueryRenderer(BaseExpressionRenderer):
         else:
             super().update_cache(expression)
 
+        self._violated_rules = violated_rules or {}
+
     def _optimize_query(self, query: exp.Query, all_deps: t.Set[str]) -> exp.Query:
+        from sqlmesh.core.linter.rules.builtin import (
+            AmbiguousOrInvalidColumn,
+            InvalidSelectStarExpansion,
+        )
+
         # We don't want to normalize names in the schema because that's handled by the optimizer
         original = query
         missing_deps = set()
@@ -571,20 +600,8 @@ class QueryRenderer(BaseExpressionRenderer):
                 missing_deps.add(dep)
 
         if self._model_fqn and not should_optimize and any(s.is_star for s in query.selects):
-            from sqlmesh.core.console import get_console
-
             deps = ", ".join(f"'{dep}'" for dep in sorted(missing_deps))
-
-            warning = (
-                f"SELECT * cannot be expanded due to missing schema(s) for model(s): {deps}. "
-                "Run `sqlmesh create_external_models` and / or make sure that the model "
-                f"'{self._model_fqn}' can be rendered at parse time."
-            )
-
-            if self._validate_query:
-                raise_config_error(warning, self._path)
-
-            get_console().log_warning(warning)
+            self._violated_rules[InvalidSelectStarExpansion] = deps
 
         try:
             if should_optimize:
@@ -600,21 +617,15 @@ class QueryRenderer(BaseExpressionRenderer):
                             quote_identifiers=self._quote_identifiers,
                         ),
                         schema=self.schema,
-                    )
+                        dialect=self._dialect,
+                    ),
+                    dialect=self._dialect,
                 )
         except SqlglotError as ex:
-            from sqlmesh.core.console import get_console
-
-            warning = (
-                f"{ex} for model '{self._model_fqn}', the column may not exist or is ambiguous."
-            )
-
-            if self._validate_query:
-                raise_config_error(warning, self._path)
+            self._violated_rules[AmbiguousOrInvalidColumn] = ex
 
             query = original
 
-            get_console().log_warning(warning)
         except Exception as ex:
             raise_config_error(
                 f"Failed to optimize query, please file an issue at https://github.com/TobikoData/sqlmesh/issues/new. {ex}",
