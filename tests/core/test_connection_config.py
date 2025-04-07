@@ -647,42 +647,66 @@ def test_duckdb_multithreaded_connection_factory(make_config):
 
 
 def test_motherduck_token_mask(make_config):
-    config = make_config(
+    config_1 = make_config(
         type="motherduck",
+        token="short",
+        database="whodunnit",
+    )
+    config_2 = make_config(
+        type="motherduck",
+        token="longtoken123456789",
+        database="whodunnit",
+    )
+    config_3 = make_config(
+        type="motherduck",
+        token="secret1235",
         catalogs={
-            "test2": DuckDBAttachOptions(
-                type="motherduck",
-                path="md:whodunnit?motherduck_token=short",
-            ),
             "test1": DuckDBAttachOptions(
-                type="motherduck", path="md:whodunnit", token="longtoken123456789"
+                type="motherduck",
+                path="md:whodunnit",
             ),
         },
     )
-    assert isinstance(config, MotherDuckConnectionConfig)
 
-    assert config._mask_motherduck_token(config.catalogs["test1"].path) == "md:whodunnit"
+    assert isinstance(config_1, MotherDuckConnectionConfig)
+    assert isinstance(config_2, MotherDuckConnectionConfig)
+    assert isinstance(config_3, MotherDuckConnectionConfig)
+    assert config_1._mask_motherduck_token(config_1.database) == "whodunnit"
     assert (
-        config._mask_motherduck_token(config.catalogs["test2"].path)
+        config_1._mask_motherduck_token(f"md:{config_1.database}?motherduck_token={config_1.token}")
         == "md:whodunnit?motherduck_token=*****"
     )
     assert (
-        config._mask_motherduck_token("?motherduck_token=secret1235")
-        == "?motherduck_token=**********"
+        config_1._mask_motherduck_token(
+            f"md:{config_1.database}?attach_mode=single&motherduck_token={config_1.token}"
+        )
+        == "md:whodunnit?attach_mode=single&motherduck_token=*****"
     )
     assert (
-        config._mask_motherduck_token("md:whodunnit?motherduck_token=short")
-        == "md:whodunnit?motherduck_token=*****"
-    )
-    assert (
-        config._mask_motherduck_token("md:whodunnit?motherduck_token=longtoken123456789")
+        config_2._mask_motherduck_token(f"md:{config_2.database}?motherduck_token={config_2.token}")
         == "md:whodunnit?motherduck_token=******************"
     )
     assert (
-        config._mask_motherduck_token("md:whodunnit?motherduck_token=")
+        config_3._mask_motherduck_token(f"md:?motherduck_token={config_3.token}")
+        == "md:?motherduck_token=**********"
+    )
+    assert (
+        config_1._mask_motherduck_token("?motherduck_token=secret1235")
+        == "?motherduck_token=**********"
+    )
+    assert (
+        config_1._mask_motherduck_token("md:whodunnit?motherduck_token=short")
+        == "md:whodunnit?motherduck_token=*****"
+    )
+    assert (
+        config_1._mask_motherduck_token("md:whodunnit?motherduck_token=longtoken123456789")
+        == "md:whodunnit?motherduck_token=******************"
+    )
+    assert (
+        config_1._mask_motherduck_token("md:whodunnit?motherduck_token=")
         == "md:whodunnit?motherduck_token="
     )
-    assert config._mask_motherduck_token(":memory:") == ":memory:"
+    assert config_1._mask_motherduck_token(":memory:") == ":memory:"
 
 
 def test_bigquery(make_config):
