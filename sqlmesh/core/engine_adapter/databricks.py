@@ -121,6 +121,7 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
         self._spark_engine_adapter = SparkEngineAdapter(
             partial(connection, spark=spark, catalog=catalog),
             default_catalog=catalog,
+            execute_log_level=self._execute_log_level,
         )
 
     @property
