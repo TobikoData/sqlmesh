@@ -52,7 +52,7 @@ class NoMissingAudits(Rule):
     """Model `audits` must be configured to test data quality."""
 
     def check_model(self, model: Model) -> t.Optional[RuleViolation]:
-        return self.violation() if not model.audits else None
+        return self.violation() if not model.audits and not model.kind.is_symbolic else None
 
 
 BUILTIN_RULES = RuleSet(subclasses(__name__, Rule, (Rule,)))
