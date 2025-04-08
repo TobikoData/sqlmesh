@@ -33,7 +33,7 @@ warnings.filterwarnings(
 
 
 # The Freshness Date Data Parser doesn't support plural units so we add the `s?` to the expression
-freshness_date_parser_module.PATTERN = re.compile(
+freshness_date_parser_module.PATTERN = re.compile(  # type: ignore
     r"(\d+[.,]?\d*)\s*(%s)s?\b" % freshness_date_parser_module._UNITS,  # type: ignore
     re.I | re.S | re.U,  # type: ignore
 )
