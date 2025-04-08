@@ -112,7 +112,7 @@ class CachingStateSync(DelegatingStateSync):
 
     def delete_expired_snapshots(
         self, ignore_ttl: bool = False
-    ) -> t.Tuple[t.List[SnapshotTableCleanupTask], t.Dict[str, str]]:
+    ) -> t.List[SnapshotTableCleanupTask]:
         self.snapshot_cache.clear()
         return self.state_sync.delete_expired_snapshots(ignore_ttl=ignore_ttl)
 

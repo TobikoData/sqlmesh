@@ -7,6 +7,7 @@ import pkgutil
 import typing as t
 
 from sqlglot import __version__ as SQLGLOT_VERSION
+from sqlglot import exp
 
 from sqlmesh import migrations
 from sqlmesh.core.environment import Environment, EnvironmentNamingInfo, EnvironmentStatements
@@ -305,7 +306,7 @@ class StateSync(StateReader, abc.ABC):
     @abc.abstractmethod
     def delete_expired_snapshots(
         self, ignore_ttl: bool = False
-    ) -> t.Tuple[t.List[SnapshotTableCleanupTask], t.Dict[str, str]]:
+    ) -> t.List[SnapshotTableCleanupTask]:
         """Removes expired snapshots.
 
         Expired snapshots are snapshots that have exceeded their time-to-live
@@ -320,12 +321,37 @@ class StateSync(StateReader, abc.ABC):
         """
 
     @abc.abstractmethod
+    def get_expired_snapshots(
+        self, ignore_ttl: bool = False
+    ) -> t.Tuple[t.Set[SnapshotId], t.List[SnapshotTableCleanupTask], t.Dict[str, str]]:
+        """Gets expired snapshots.
+
+        Expired snapshots are snapshots that have exceeded their time-to-live
+        and are no longer in use within an environment.
+
+        Args:
+            ignore_ttl: Ignore the TTL on the snapshot when considering it expired. This has the effect of deleting
+                all snapshots that are not referenced in any environment
+
+        Returns:
+            A tuple of expired snapshot IDs, cleanup targets and gateway per snapshot dictionary.
+        """
+
+    @abc.abstractmethod
     def invalidate_environment(self, name: str) -> None:
         """Invalidates the target environment by setting its expiration timestamp to now.
 
         Args:
             name: The name of the environment to invalidate.
         """
+
+    @abc.abstractmethod
+    def cleanup_intervals(
+        self,
+        cleanup_targets: t.List[SnapshotTableCleanupTask],
+        expired_snapshot_ids: t.Set[SnapshotId],
+    ) -> None:
+        """Cleans up intervals."""
 
     @abc.abstractmethod
     def remove_intervals(
@@ -390,6 +416,24 @@ class StateSync(StateReader, abc.ABC):
         """Removes expired environments.
 
         Expired environments are environments that have exceeded their time-to-live value.
+
+        Returns:
+            The list of removed environments.
+        """
+
+    @abc.abstractmethod
+    def get_expired_environments(self) -> t.Tuple[t.List[Environment], exp.LTE]:
+        """Returns the expired environments.
+
+        Expired environments are environments that have exceeded their time-to-live value.
+
+        Returns:
+            The list of environments to remove, the filter to remove environments.
+        """
+
+    @abc.abstractmethod
+    def delete_environments(self, environments: t.List[Environment], filter_expr: exp.LTE) -> None:
+        """Removes environments.
 
         Returns:
             The list of removed environments.

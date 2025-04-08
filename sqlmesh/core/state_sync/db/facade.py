@@ -277,18 +277,43 @@ class EngineAdapterStateSync(StateSync):
     @transactional()
     def delete_expired_snapshots(
         self, ignore_ttl: bool = False
-    ) -> t.Tuple[t.List[SnapshotTableCleanupTask], t.Dict[str, str]]:
-        expired_snapshot_ids, cleanup_targets, gateways = (
-            self.snapshot_state.delete_expired_snapshots(
-                self.environment_state.get_environments(), ignore_ttl=ignore_ttl
-            )
+    ) -> t.List[SnapshotTableCleanupTask]:
+        expired_snapshot_ids, cleanup_targets = self.snapshot_state.delete_expired_snapshots(
+            self.environment_state.get_environments(), ignore_ttl=ignore_ttl
         )
         self.interval_state.cleanup_intervals(cleanup_targets, expired_snapshot_ids)
-        return cleanup_targets, gateways
+        return cleanup_targets
 
     @transactional()
     def delete_expired_environments(self) -> t.List[Environment]:
         return self.environment_state.delete_expired_environments()
+
+    @transactional()
+    def delete_environments(self, environments: t.List[Environment], filter_expr: exp.LTE) -> None:
+        self.environment_state.delete_environments(
+            environments=environments, filter_expr=filter_expr
+        )
+
+    @transactional()
+    def cleanup_intervals(
+        self,
+        cleanup_targets: t.List[SnapshotTableCleanupTask],
+        expired_snapshot_ids: t.Set[SnapshotId],
+    ) -> None:
+        self.interval_state.cleanup_intervals(cleanup_targets, expired_snapshot_ids)
+
+    def get_expired_snapshots(
+        self, ignore_ttl: bool = False
+    ) -> t.Tuple[t.Set[SnapshotId], t.List[SnapshotTableCleanupTask], t.Dict[str, str]]:
+        expired_snapshot_ids, cleanup_targets, snapshot_gateways = (
+            self.snapshot_state.get_expired_snapshots(
+                self.environment_state.get_environments(), ignore_ttl=ignore_ttl
+            )
+        )
+        return expired_snapshot_ids, cleanup_targets, snapshot_gateways
+
+    def get_expired_environments(self) -> t.Tuple[t.List[Environment], exp.LTE]:
+        return self.environment_state.get_expired_environments()
 
     def delete_snapshots(self, snapshot_ids: t.Iterable[SnapshotIdLike]) -> None:
         self.snapshot_state.delete_snapshots(snapshot_ids)

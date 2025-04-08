@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 import pytest
 from pathlib import Path
+import os
 import time_machine
 from pytest_mock.plugin import MockerFixture
 from sqlglot import exp
@@ -4492,6 +4493,84 @@ def test_multi(mocker):
     assert environment_statements[0].after_all == [
         "CREATE TABLE IF NOT EXISTS after_1 AS select @dup()"
     ]
+
+
+@use_terminal_console
+def test_multi_virtual_layer(mocker):
+    context = Context(paths=["examples/multi_virtual_layer"])
+
+    local_db = "db.duckdb"
+    if os.path.exists(local_db):
+        os.remove(local_db)
+
+    # For the model without gateway the default should be used and the gateway variable should overide the global
+    assert (
+        context.render("local_schema.model_one").sql()
+        == 'SELECT \'gateway_1\' AS "item_id", 88 AS "global_one", 1 AS "macro_one"'
+    )
+
+    # For model with gateway specified the appropriate variable should be used to overide
+    assert (
+        context.render("memory.memory_schema.model_one").sql()
+        == 'SELECT \'gateway_2\' AS "item_id", 88 AS "global_one", 1 AS "macro_one"'
+    )
+
+    # context._new_state_sync().reset(default_catalog=context.default_catalog)
+    plan = context.plan_builder().build()
+    assert len(plan.new_snapshots) == 4
+    context.apply(plan)
+
+    # Validate the tables that source from the first tables are correct as well with evaluate
+    assert (
+        context.evaluate(
+            "local_schema.model_two", start=now(), end=now(), execution_time=now()
+        ).to_string()
+        == "     item_id  global_one\n0  gateway_1          88"
+    )
+    assert (
+        context.evaluate(
+            "memory.memory_schema.model_two", start=now(), end=now(), execution_time=now()
+        ).to_string()
+        == "     item_id  global_one\n0  gateway_2          88"
+    )
+
+    assert sorted(set(snapshot.name for snapshot in plan.directly_modified)) == [
+        '"db"."local_schema"."model_one"',
+        '"db"."local_schema"."model_two"',
+        '"memory"."memory_schema"."model_one"',
+        '"memory"."memory_schema"."model_two"',
+    ]
+
+    model = context.get_model("memory.memory_schema.model_one")
+
+    context.upsert_model(model.copy(update={"query": model.query.select("'c' AS extra")}))
+    plan = context.plan_builder().build()
+    context.apply(plan)
+
+    state_environments = context.state_reader.get_environments()
+    state_snapshots = context.state_reader.get_snapshots(context.snapshots.values())
+
+    assert state_environments[0].gateway_managed_virtual_layer
+    assert len(state_snapshots) == len(state_environments[0].snapshots)
+
+    assert [snapshot.name for snapshot in plan.directly_modified] == [
+        '"memory"."memory_schema"."model_one"'
+    ]
+    assert [x.name for x in list(plan.indirectly_modified.values())[0]] == [
+        '"memory"."memory_schema"."model_two"'
+    ]
+
+    assert len(plan.missing_intervals) == 1
+
+    assert (
+        context.evaluate(
+            "memory.memory_schema.model_one", start=now(), end=now(), execution_time=now()
+        ).to_string()
+        == "     item_id  global_one  macro_one extra\n0  gateway_2          88          1     c"
+    )
+
+    if os.path.exists(local_db):
+        os.remove(local_db)
 
 
 def test_multi_dbt(mocker):

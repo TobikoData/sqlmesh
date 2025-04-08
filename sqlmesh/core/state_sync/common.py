@@ -21,7 +21,10 @@ logger = logging.getLogger(__name__)
 
 
 def cleanup_expired_views(
-    adapter: EngineAdapter, environments: t.List[Environment], console: t.Optional[Console] = None
+    adapter: EngineAdapter,
+    environments: t.List[Environment],
+    environment_snapshot_adapters: t.Optional[t.Dict[str, t.Dict[str, EngineAdapter]]] = None,
+    console: t.Optional[Console] = None,
 ) -> None:
     expired_schema_environments = [
         environment for environment in environments if environment.suffix_target.is_schema
@@ -29,13 +32,25 @@ def cleanup_expired_views(
     expired_table_environments = [
         environment for environment in environments if environment.suffix_target.is_table
     ]
-    for expired_catalog, expired_schema in {
+
+    # Drop the schemas for the expired environments
+    # Note: We have to use the corresponding adapter if it is a gateway managed virtual layer
+    for engine_adapter, expired_catalog, expired_schema in {
         (
+            (
+                engine_adapter := (
+                    (environment_dict.get(snapshot.name) or adapter)
+                    if environment.gateway_managed_virtual_layer
+                    and environment_snapshot_adapters
+                    and (environment_dict := environment_snapshot_adapters.get(environment.name))
+                    else adapter
+                )
+            ),
             snapshot.qualified_view_name.catalog_for_environment(
-                environment.naming_info, dialect=adapter.dialect
+                environment.naming_info, dialect=engine_adapter.dialect
             ),
             snapshot.qualified_view_name.schema_for_environment(
-                environment.naming_info, dialect=adapter.dialect
+                environment.naming_info, dialect=engine_adapter.dialect
             ),
         )
         for environment in expired_schema_environments
@@ -44,27 +59,40 @@ def cleanup_expired_views(
     }:
         schema = schema_(expired_schema, expired_catalog)
         try:
-            adapter.drop_schema(
+            engine_adapter.drop_schema(
                 schema,
                 ignore_if_not_exists=True,
                 cascade=True,
             )
             if console:
-                console.update_cleanup_progress(schema.sql(dialect=adapter.dialect))
+                console.update_cleanup_progress(schema.sql(dialect=engine_adapter.dialect))
         except Exception as e:
             raise SQLMeshError(
                 f"Failed to drop the expired environment schema '{schema}': {e}"
             ) from e
-    for expired_view in {
-        snapshot.qualified_view_name.for_environment(
-            environment.naming_info, dialect=adapter.dialect
+
+    # Drop the views for the expired environments
+    for engine_adapter, expired_view in {
+        (
+            (
+                engine_adapter := (
+                    (environment_dict.get(snapshot.name) or adapter)
+                    if environment.gateway_managed_virtual_layer
+                    and environment_snapshot_adapters
+                    and (environment_dict := environment_snapshot_adapters.get(environment.name))
+                    else adapter
+                )
+            ),
+            snapshot.qualified_view_name.for_environment(
+                environment.naming_info, dialect=engine_adapter.dialect
+            ),
         )
         for environment in expired_table_environments
         for snapshot in environment.snapshots
         if snapshot.is_model and not snapshot.is_symbolic
     }:
         try:
-            adapter.drop_view(expired_view, ignore_if_not_exists=True)
+            engine_adapter.drop_view(expired_view, ignore_if_not_exists=True)
             if console:
                 console.update_cleanup_progress(expired_view)
         except Exception as e:
