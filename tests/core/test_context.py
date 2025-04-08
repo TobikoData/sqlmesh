@@ -43,7 +43,6 @@ from sqlmesh.utils.connection_pool import SingletonConnectionPool, ThreadLocalSh
 from sqlmesh.utils.date import (
     make_inclusive_end,
     now,
-    now_timestamp,
     to_date,
     to_timestamp,
     yesterday_ds,
@@ -780,34 +779,28 @@ def test_janitor(sushi_context, mocker: MockerFixture) -> None:
     adapter_mock = mocker.MagicMock()
     adapter_mock.dialect = "duckdb"
     state_sync_mock = mocker.MagicMock()
-    now_ts = now_timestamp()
-    filter_expr = exp.LTE(
-        this=exp.column("expiration_ts"),
-        expression=exp.Literal.number(now_ts),
-    )
-    state_sync_mock.get_expired_environments.return_value = (
-        [
-            Environment(
-                name="test_environment",
-                suffix_target=EnvironmentSuffixTarget.TABLE,
-                snapshots=[x.table_info for x in sushi_context.snapshots.values()],
-                start_at="2022-01-01",
-                end_at="2022-01-01",
-                plan_id="test_plan_id",
-                previous_plan_id="test_plan_id",
-            ),
-            Environment(
-                name="test_environment",
-                suffix_target=EnvironmentSuffixTarget.SCHEMA,
-                snapshots=[x.table_info for x in sushi_context.snapshots.values()],
-                start_at="2022-01-01",
-                end_at="2022-01-01",
-                plan_id="test_plan_id",
-                previous_plan_id="test_plan_id",
-            ),
-        ],
-        filter_expr,
-    )
+
+    state_sync_mock.delete_expired_environments.return_value = [
+        Environment(
+            name="test_environment",
+            suffix_target=EnvironmentSuffixTarget.TABLE,
+            snapshots=[x.table_info for x in sushi_context.snapshots.values()],
+            start_at="2022-01-01",
+            end_at="2022-01-01",
+            plan_id="test_plan_id",
+            previous_plan_id="test_plan_id",
+        ),
+        Environment(
+            name="test_environment",
+            suffix_target=EnvironmentSuffixTarget.SCHEMA,
+            snapshots=[x.table_info for x in sushi_context.snapshots.values()],
+            start_at="2022-01-01",
+            end_at="2022-01-01",
+            plan_id="test_plan_id",
+            previous_plan_id="test_plan_id",
+        ),
+    ]
+
     sushi_context._engine_adapters = {sushi_context.config.default_gateway: adapter_mock}
     sushi_context._state_sync = state_sync_mock
     state_sync_mock.get_expired_snapshots.return_value = (set({}), [], {})

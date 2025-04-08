@@ -2300,14 +2300,15 @@ class GenericContext(BaseContext, t.Generic[C]):
 
     def _run_janitor(self, ignore_ttl: bool = False) -> None:
         # Get expired environments and removes their views and schemas
-        expired_environments, filter_expr = self._cleanup_environments()
+        self._cleanup_environments()
 
         # Get expired snapshots and corresponding gateways per snapshot when applied
         expired_snapshots_ids, cleanup_targets, snapshot_gateways = (
             self.state_sync.get_expired_snapshots(ignore_ttl=ignore_ttl)
         )
 
-        # Clean up intervals from the state sync
+        # Clean up snapshots and intervals from the state sync
+        self.state_sync.delete_snapshots(expired_snapshots_ids)
         self.state_sync.cleanup_intervals(cleanup_targets, expired_snapshots_ids)
 
         # Remove the expired snapshots tables
@@ -2317,13 +2318,10 @@ class GenericContext(BaseContext, t.Generic[C]):
             on_complete=self.console.update_cleanup_progress,
         )
 
-        # Finally, remove the expired environments and snapshots from the state sync
-        self.state_sync.delete_environments(expired_environments, filter_expr)
-        self.state_sync.delete_snapshots(expired_snapshots_ids)
         self.state_sync.compact_intervals()
 
-    def _cleanup_environments(self) -> t.Tuple[t.List[Environment], exp.LTE]:
-        expired_environments, filter_expr = self.state_sync.get_expired_environments()
+    def _cleanup_environments(self) -> None:
+        expired_environments = self.state_sync.delete_expired_environments()
 
         environment_snapshot_adapters: t.Dict[str, t.Dict[str, EngineAdapter]] = {}
         for environment in expired_environments:
@@ -2343,8 +2341,6 @@ class GenericContext(BaseContext, t.Generic[C]):
             console=self.console,
             environment_snapshot_adapters=environment_snapshot_adapters,
         )
-
-        return expired_environments, filter_expr
 
     def _try_connection(self, connection_name: str, validator: t.Callable[[], None]) -> None:
         connection_name = connection_name.capitalize()
