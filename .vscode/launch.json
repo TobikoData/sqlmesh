@@ -11,10 +11,10 @@
 			"request": "launch",
 			"args": [
 				"${workspaceFolder}/examples/sushi",
-				"--extensionDevelopmentPath=${workspaceFolder}/vscode",
+				"--extensionDevelopmentPath=${workspaceFolder}/vscode/extension",
 			],
 			"outFiles": [
-				"${workspaceFolder}/dist/**/*.js"
+				"${workspaceFolder}/vscode/extension/dist/**/*.js"
 			],
 			"preLaunchTask": "${defaultBuildTask}"
 		}
