@@ -142,7 +142,7 @@ class IntervalState:
         if not snapshots:
             return []
 
-        _, intervals = self._get_snapshot_intervals(snapshots)
+        _, intervals = self._get_snapshot_intervals([s for s in snapshots if s.version])
         for s in snapshots:
             s.intervals = []
             s.dev_intervals = []
