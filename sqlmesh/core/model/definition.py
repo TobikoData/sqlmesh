@@ -2407,11 +2407,12 @@ def _create_model(
     if "on_virtual_update" in kwargs:
         statements.extend(kwargs["on_virtual_update"])
 
-    # to allow variables like @gateway to be used in these properties
-    # since rendering shifted from load time to run time
+    # This is done to allow variables like @gateway to be used in these properties
+    # since rendering shifted from load time to run time.
+    # Note: we check for Tuple since that's what we expect from _resolve_properties
     for property_name in PROPERTIES:
-        if property_values := kwargs.get(property_name):
-            statements.extend(property_values)
+        if isinstance(property_values := kwargs.get(property_name), exp.Tuple):
+            statements.extend(property_values.expressions)
 
     jinja_macro_references, used_variables = extract_macro_references_and_variables(
         *(gen(e) for e in statements)
