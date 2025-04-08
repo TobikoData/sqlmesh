@@ -122,3 +122,9 @@ graph TD
     React [React Server] --> |passes on api requests| B
     C --> |reads react webpages from| React
 ```
+ 
+In development mode, the React app is not embedded into the python server. Instead a separate instance of the React app is run. This allows you to make changes to the UI and see them immediately.
+
+The React App runs on the port 5173. The VSCode extension will automatically open the React app in a new tab.
+The python server will run on the port 5174.
+
