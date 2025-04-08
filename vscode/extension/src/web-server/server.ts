@@ -3,6 +3,7 @@ import { isErr, ok, Result } from "../functional/result"
 import getPort from "../get-port"
 import { sqlmesh_exec } from "../sqlmesh/sqlmesh"
 import * as vscode from 'vscode'
+import { isProduction } from "../is_dev"
 
 export interface Server {
     port: number;
@@ -15,7 +16,7 @@ export const startWebServer = async (outputChannel: vscode.OutputChannel): Promi
     if (isErr(sqlmesh)) {
         return sqlmesh
     }
-    const port = await getPort()
+    const port = !isProduction() ? 5174 : await getPort()
     const { bin, workspacePath, env } = sqlmesh.value
     const process = spawn(bin, ['ui', '--port', port.toString()], {
         cwd: workspacePath,
