@@ -35,12 +35,12 @@ import {
 import ModelLineageSearch from './ModelLineageSearch'
 import { Popover } from '@headlessui/react'
 import ModelLineageDetails from './ModelLineageDetails'
-import { Divider } from '@components/divider/Divider'
+import { Divider } from '@/components/divider/Divider'
 import { type ModelLineageApiLineageModelNameGet200 } from '@api/client'
 
 const WITH_COLUMNS_LIMIT = 30
 
-export default function ModelLineage({
+export function ModelLineage({
   model,
   highlightedNodes,
 }: {
