@@ -1,0 +1,28 @@
+gateways:
+  local:
+    connection:
+      type: duckdb
+      database: db.duckdb
+    variables:
+      overriden_var: 'gateway_1'
+  memory:
+    connection:
+      type: duckdb
+    variables:
+      overriden_var: 'gateway_2'
+
+default_gateway: local
+
+model_defaults:
+  dialect: 'duckdb'
+
+model_naming:
+  infer_names: True
+
+gateway_managed_virtual_layer: True
+
+variables:
+  overriden_var: 'global'
+  global_one: 88
+
+

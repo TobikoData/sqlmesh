@@ -364,6 +364,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         self._environment_statements: t.List[EnvironmentStatements] = []
         self._excluded_requirements: t.Set[str] = set()
         self._default_catalog: t.Optional[str] = None
+        self._catalogs: t.Dict[str, str] = {}
         self._linters: t.Dict[str, Linter] = {}
         self._loaded: bool = False
 
@@ -381,7 +382,6 @@ class GenericContext(BaseContext, t.Generic[C]):
         self.auto_categorize_changes = self.config.plan.auto_categorize_changes
         self.selected_gateway = gateway or self.config.default_gateway_name
         self.gateway_managed_virtual_layer = self.config.gateway_managed_virtual_layer
-        self.catalogs: t.Dict[str, str] = {}
 
         gw_model_defaults = self.config.gateways[self.selected_gateway].model_defaults
         if gw_model_defaults:
@@ -586,15 +586,6 @@ class GenericContext(BaseContext, t.Generic[C]):
     def load(self, update_schemas: bool = True) -> GenericContext[C]:
         """Load all files in the context's path."""
         load_start_ts = time.perf_counter()
-
-        # In a multi virtual layer setup we need the catalog of each engine
-        # since there is a possibility of not a shared catalog between them
-        if self.gateway_managed_virtual_layer:
-            self.catalogs = {
-                name: adapter.default_catalog
-                for name, adapter in self.engine_adapters.items()
-                if adapter.default_catalog
-            }
 
         loaded_projects = [loader.load() for loader in self._loaders]
 
@@ -2233,6 +2224,17 @@ class GenericContext(BaseContext, t.Generic[C]):
                 self._engine_adapters[gateway_name] = adapter
         return self._engine_adapters
 
+    @cached_property
+    def catalogs(self) -> t.Dict[str, str]:
+        """Returns the catalogs for each engine adapter in a multi virtual layer setup when the catalog isn't shared."""
+        if self.gateway_managed_virtual_layer:
+            self._catalogs = {
+                name: adapter.default_catalog
+                for name, adapter in self.engine_adapters.items()
+                if adapter.default_catalog
+            }
+        return self._catalogs
+
     def _get_engine_adapter(self, gateway: t.Optional[str] = None) -> EngineAdapter:
         if gateway:
             if adapter := self.engine_adapters.get(gateway):
@@ -2297,22 +2299,52 @@ class GenericContext(BaseContext, t.Generic[C]):
         )
 
     def _run_janitor(self, ignore_ttl: bool = False) -> None:
-        self._cleanup_environments()
-        expired_snapshots, snapshot_gateways = self.state_sync.delete_expired_snapshots(
-            ignore_ttl=ignore_ttl
+        # Get expired environments and removes their views and schemas
+        expired_environments, filter_expr = self._cleanup_environments()
+
+        # Get expired snapshots and corresponding gateways per snapshot when applied
+        expired_snapshots_ids, cleanup_targets, snapshot_gateways = (
+            self.state_sync.get_expired_snapshots(ignore_ttl=ignore_ttl)
         )
 
+        # Clean up intervals from the state sync
+        self.state_sync.cleanup_intervals(cleanup_targets, expired_snapshots_ids)
+
+        # Remove the expired snapshots tables
         self.snapshot_evaluator.cleanup(
-            expired_snapshots,
-            snapshot_gateways,
+            target_snapshots=cleanup_targets,
+            snapshot_gateways=snapshot_gateways,
             on_complete=self.console.update_cleanup_progress,
         )
 
+        # Finally, remove the expired environments and snapshots from the state sync
+        self.state_sync.delete_environments(expired_environments, filter_expr)
+        self.state_sync.delete_snapshots(expired_snapshots_ids)
         self.state_sync.compact_intervals()
 
-    def _cleanup_environments(self) -> None:
-        expired_environments = self.state_sync.delete_expired_environments()
-        cleanup_expired_views(self.engine_adapter, expired_environments, console=self.console)
+    def _cleanup_environments(self) -> t.Tuple[t.List[Environment], exp.LTE]:
+        expired_environments, filter_expr = self.state_sync.get_expired_environments()
+
+        environment_snapshot_adapters: t.Dict[str, t.Dict[str, EngineAdapter]] = {}
+        for environment in expired_environments:
+            snapshot_adapters: t.Dict[str, EngineAdapter] = {}
+            if environment.gateway_managed_virtual_layer:
+                snapshots = self.state_sync.get_snapshots(environment.snapshots)
+                for snapshot_id, snapshot in snapshots.items():
+                    if snapshot.is_model and not snapshot.is_symbolic:
+                        snapshot_adapters[snapshot_id.name] = self._get_engine_adapter(
+                            snapshot.model_gateway
+                        )
+                environment_snapshot_adapters[environment.name] = snapshot_adapters
+
+        cleanup_expired_views(
+            adapter=self.engine_adapter,
+            environments=expired_environments,
+            console=self.console,
+            environment_snapshot_adapters=environment_snapshot_adapters,
+        )
+
+        return expired_environments, filter_expr
 
     def _try_connection(self, connection_name: str, validator: t.Callable[[], None]) -> None:
         connection_name = connection_name.capitalize()

@@ -168,21 +168,20 @@ class EnvironmentState:
         Returns:
             A list of deleted environments.
         """
-        now_ts = now_timestamp()
-        filter_expr = exp.LTE(
-            this=exp.column("expiration_ts"),
-            expression=exp.Literal.number(now_ts),
-        )
+        environments, filter_expr = self.get_expired_environments()
+        self.delete_environments(environments=environments, filter_expr=filter_expr)
+        return environments
 
-        rows = fetchall(
-            self.engine_adapter,
-            self._environments_query(
-                where=filter_expr,
-                lock_for_update=True,
-            ),
-        )
-        environments = [self._environment_from_row(r) for r in rows]
+    def delete_environments(self, environments: t.List[Environment], filter_expr: exp.LTE) -> None:
+        """Deletes environments and corresponding environment statements.
 
+        Returns:
+            The list of deleted environments.
+        """
+        if not environments:
+            return
+
+        # Delete the expired environments
         self.engine_adapter.delete_from(
             self.environments_table,
             where=filter_expr,
@@ -199,7 +198,32 @@ class EnvironmentState:
                 where=exp.or_(*expired_environments),
             )
 
-        return environments
+    def get_expired_environments(self) -> t.Tuple[t.List[Environment], exp.LTE]:
+        """Fetches expired environments along with their filter expression and snapshot gateways.
+
+        Returns:
+            A tuple containing:
+            - A list of expired environments.
+            - The filter expression used to identify expired environments.
+        """
+
+        now_ts = now_timestamp()
+        filter_expr = exp.LTE(
+            this=exp.column("expiration_ts"),
+            expression=exp.Literal.number(now_ts),
+        )
+
+        rows = fetchall(
+            self.engine_adapter,
+            self._environments_query(
+                where=filter_expr,
+                lock_for_update=True,
+            ),
+        )
+
+        environments = [self._environment_from_row(r) for r in rows]
+
+        return environments, filter_expr
 
     def get_environments(self) -> t.List[Environment]:
         """Fetches all environments.

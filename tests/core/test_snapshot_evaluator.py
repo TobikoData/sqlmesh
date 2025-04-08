@@ -4038,7 +4038,8 @@ def test_multi_engine_python_model_with_macros(adapters, make_snapshot):
     assert len(create_args) == 1
     assert create_args[0][0] == (f"sqlmesh__db.db__multi_engine_test_model__{snapshot.version}",)
 
-    evaluator.promote([snapshot], EnvironmentNamingInfo(name="test_env"))
+    environment_naming_info = EnvironmentNamingInfo(name="test_env")
+    evaluator.promote([snapshot], environment_naming_info)
 
     # Verify that the default gateway creates the view for the virtual layer
     engine_adapters["secondary"].create_view.assert_not_called()
@@ -4053,3 +4054,89 @@ def test_multi_engine_python_model_with_macros(adapters, make_snapshot):
     # Validate that the get_catalog_type method was called only on the secondary engine from the macro evaluator
     engine_adapters["default"].get_catalog_type.assert_not_called()
     assert len(engine_adapters["secondary"].get_catalog_type.call_args_list) == 2
+
+    evaluator.demote([snapshot], environment_naming_info)
+    engine_adapters["default"].drop_view.assert_called_once_with(
+        "db__test_env.multi_engine_test_model",
+        cascade=False,
+    )
+
+    environment_naming_info_gw = EnvironmentNamingInfo(
+        name="test_env", gateway_managed_virtual_layer=True
+    )
+    # Validate that promoting with gateway_managed_virtual_layer leads to this gateway being used for virtual layer
+    evaluator.promote([snapshot], environment_naming_info_gw)
+    view_args = engine_adapters["secondary"].create_view.call_args_list
+    assert len(view_args) == 1
+    assert view_args[0][0][0] == "db__test_env.multi_engine_test_model"
+
+    # Similarly for demotion
+    evaluator.demote([snapshot], environment_naming_info_gw)
+    engine_adapters["secondary"].drop_view.assert_called_once_with(
+        "db__test_env.multi_engine_test_model",
+        cascade=False,
+    )
+
+
+def test_multiple_engine_virtual_layer(snapshot: Snapshot, adapters, make_snapshot):
+    engine_adapters = {"default": adapters[0], "secondary": adapters[1], "third": adapters[2]}
+    evaluator = SnapshotEvaluator(engine_adapters)
+
+    model = load_sql_based_model(
+        parse(  # type: ignore
+            """
+            MODEL (
+                name test_schema.test_model,
+                kind FULL,
+                gateway secondary,
+                dialect postgres,
+            );
+            SELECT a::int FROM tbl;
+            CREATE INDEX IF NOT EXISTS test_idx ON test_schema.test_model(a);
+            """
+        ),
+    )
+
+    snapshot_2 = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    snapshot_2.categorize_as(SnapshotChangeCategory.BREAKING)
+    evaluator.create([snapshot_2, snapshot], {}, DeployabilityIndex.all_deployable())
+
+    # Default gateway adapter to create table without gateway
+    create_args = engine_adapters["default"].create_table.call_args_list
+    assert len(create_args) == 1
+    assert create_args[0][0] == (f"sqlmesh__db.db__model__{snapshot.version}",)
+
+    # Secondary gateway for gateway-specicied model
+    create_args_2 = engine_adapters["secondary"].create_table.call_args_list
+    assert len(create_args_2) == 1
+    assert create_args_2[0][0] == (
+        f"sqlmesh__test_schema.test_schema__test_model__{snapshot_2.version}",
+    )
+
+    environment_naming_info = EnvironmentNamingInfo(
+        name="test_env", gateway_managed_virtual_layer=True
+    )
+    engine_adapters["third"].create_table.assert_not_called()
+    evaluator.promote([snapshot, snapshot_2], environment_naming_info)
+
+    # Virtual layer will use the model-specified gateway adapter for the second model and default otherwise
+    view_args_default = engine_adapters["default"].create_view.call_args_list
+    engine_adapters["third"].create_view.assert_not_called()
+    view_args_secondary = engine_adapters["secondary"].create_view.call_args_list
+
+    assert len(view_args_default) == 1
+    assert view_args_default[0][0][0] == "db__test_env.model"
+    assert len(view_args_secondary) == 1
+    assert view_args_secondary[0][0][0] == "test_schema__test_env.test_model"
+
+    # Demotion will follow with the same pattern
+    evaluator.demote([snapshot_2, snapshot], environment_naming_info)
+    engine_adapters["default"].drop_view.assert_called_once_with(
+        "db__test_env.model",
+        cascade=False,
+    )
+    engine_adapters["secondary"].drop_view.assert_called_once_with(
+        "test_schema__test_env.test_model",
+        cascade=False,
+    )
