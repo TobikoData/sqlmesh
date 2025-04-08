@@ -541,7 +541,11 @@ def test_begin_end_session(mocker: MockerFixture):
     adapter.execute("SELECT 3;")
 
     begin_session_call = connection_mock._client.query.call_args_list[0]
-    assert begin_session_call[0][0] == "SELECT 1;"
+    begin_session_statements = [
+        s.strip() for s in begin_session_call[0][0].splitlines() if s.strip()
+    ]
+    assert begin_session_statements[0] == "SET @@query_label = '';"
+    assert begin_session_statements[1] == "SELECT 1;"
 
     execute_a_call = connection_mock._client.query.call_args_list[1]
     assert execute_a_call[1]["query"] == "SELECT 2;"
