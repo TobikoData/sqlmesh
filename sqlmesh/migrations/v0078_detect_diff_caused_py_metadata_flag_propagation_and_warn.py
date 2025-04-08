@@ -17,7 +17,6 @@ import types
 import typing as t
 import zlib
 
-import pandas as pd
 from dataclasses import dataclass
 from enum import Enum
 from jinja2 import Environment, nodes
@@ -27,8 +26,6 @@ from sqlglot.optimizer.simplify import gen
 import sqlmesh.core.dialect as d
 from sqlmesh.core.console import get_console
 from sqlmesh.utils import unique
-from sqlmesh.utils.migration import index_text_type
-from sqlmesh.utils.migration import blob_text_type
 from sqlmesh.utils.pydantic import PydanticModel
 
 GATEWAY = "gateway"
@@ -41,11 +38,8 @@ def migrate(state_sync, **kwargs):  # type: ignore
     engine_adapter = state_sync.engine_adapter
     schema = state_sync.schema
     snapshots_table = "_snapshots"
-    index_type = index_text_type(engine_adapter.dialect)
     if schema:
         snapshots_table = f"{schema}.{snapshots_table}"
-
-    new_snapshots = []
 
     for (
         name,
@@ -145,40 +139,6 @@ def migrate(state_sync, **kwargs):  # type: ignore
                             break
         except Exception:
             pass
-
-        new_snapshots.append(
-            {
-                "name": name,
-                "identifier": identifier,
-                "version": version,
-                "snapshot": json.dumps(parsed_snapshot),
-                "kind_name": kind_name,
-                "updated_ts": updated_ts,
-                "unpaused_ts": unpaused_ts,
-                "ttl_ms": ttl_ms,
-                "unrestorable": unrestorable,
-            }
-        )
-
-    if new_snapshots:
-        engine_adapter.delete_from(snapshots_table, "TRUE")
-        blob_type = blob_text_type(engine_adapter.dialect)
-
-        engine_adapter.insert_append(
-            snapshots_table,
-            pd.DataFrame(new_snapshots),
-            columns_to_types={
-                "name": exp.DataType.build(index_type),
-                "identifier": exp.DataType.build(index_type),
-                "version": exp.DataType.build(index_type),
-                "snapshot": exp.DataType.build(blob_type),
-                "kind_name": exp.DataType.build(index_type),
-                "updated_ts": exp.DataType.build("bigint"),
-                "unpaused_ts": exp.DataType.build("bigint"),
-                "ttl_ms": exp.DataType.build("bigint"),
-                "unrestorable": exp.DataType.build("boolean"),
-            },
-        )
 
 
 def environment(**kwargs):
