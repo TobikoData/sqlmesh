@@ -1,7 +1,7 @@
 import { isFalse, isNil, isNotNil, truncate } from '@utils/index'
 import { useLineageFlow } from './context'
 import { useReactFlow, type Node } from 'reactflow'
-import { Button, EnumButtonFormat } from '@components/button/Button'
+import { Button, EnumButtonFormat } from '@/components/button/Button'
 import { EnumSize, EnumVariant } from '~/types/enum'
 import { EnumLineageNodeModelType } from './ModelNode'
 
