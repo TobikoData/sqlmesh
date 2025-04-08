@@ -1,7 +1,8 @@
 {
     "name": "sqlmesh",
     "workspaces" : [
-        "vscode",
+        "vscode/extension",
+        "vscode/react",
         "web/client"
     ],
     "scripts": {
