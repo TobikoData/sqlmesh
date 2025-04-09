@@ -6,12 +6,12 @@ from functools import partial
 
 import pandas as pd
 from sqlglot import exp
-
+from sqlmesh.core.dialect import to_schema
 from sqlmesh.core.engine_adapter.shared import (
     CatalogSupport,
     DataObject,
+    DataObjectType,
     InsertOverwriteStrategy,
-    set_catalog,
     SourceQuery,
 )
 from sqlmesh.core.engine_adapter.spark import SparkEngineAdapter
@@ -27,11 +27,6 @@ if t.TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-@set_catalog(
-    {
-        "_get_data_objects": CatalogSupport.REQUIRES_SET_CATALOG,
-    }
-)
 class DatabricksEngineAdapter(SparkEngineAdapter):
     DIALECT = "databricks"
     INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.REPLACE_WHERE
@@ -251,7 +246,43 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
     def _get_data_objects(
         self, schema_name: SchemaName, object_names: t.Optional[t.Set[str]] = None
     ) -> t.List[DataObject]:
-        return super()._get_data_objects(schema_name, object_names=object_names)
+        """
+        Returns all the data objects that exist in the given schema and catalog.
+        """
+        schema = to_schema(schema_name)
+        catalog_name = schema.catalog or self.get_current_catalog()
+        query = (
+            exp.select(
+                exp.column("table_name").as_("name"),
+                exp.column("table_schema").as_("schema"),
+                exp.column("table_catalog").as_("catalog"),
+                exp.case(exp.column("table_type"))
+                .when(exp.Literal.string("VIEW"), exp.Literal.string("view"))
+                .when(exp.Literal.string("MATERIALIZED_VIEW"), exp.Literal.string("view"))
+                .else_(exp.Literal.string("table"))
+                .as_("type"),
+            )
+            .from_(
+                # always query `system` information_schema
+                exp.table_("tables", "information_schema", "system")
+            )
+            .where(exp.column("table_catalog").eq(catalog_name))
+            .where(exp.column("table_schema").eq(schema.db))
+        )
+
+        if object_names:
+            query = query.where(exp.column("table_name").isin(*object_names))
+
+        df = self.fetchdf(query)
+        return [
+            DataObject(
+                catalog=row.catalog,  # type: ignore
+                schema=row.schema,  # type: ignore
+                name=row.name,  # type: ignore
+                type=DataObjectType.from_str(row.type),  # type: ignore
+            )
+            for row in df.itertuples()
+        ]
 
     def clone_table(
         self,
