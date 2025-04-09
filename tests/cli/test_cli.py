@@ -154,10 +154,6 @@ def assert_plan_success(result, new_env="prod", from_env="prod") -> None:
     assert_backfill_success(result)
 
 
-def assert_virtual_update(result) -> None:
-    assert "Virtual Update executed" in result.output
-
-
 def test_version(runner, tmp_path):
     from sqlmesh import __version__ as SQLMESH_VERSION
 
@@ -275,7 +271,7 @@ def test_plan_skip_backfill(runner, tmp_path, flag):
         input="y\n",
     )
     assert result.exit_code == 0
-    assert_virtual_update(result)
+    assert_virtual_layer_updated(result)
     assert "Model batches executed" not in result.output
 
 
@@ -404,8 +400,9 @@ def test_plan_dev_create_from_virtual(runner, tmp_path):
     )
     assert result.exit_code == 0
     assert_new_env(result, "dev2", "dev", initialize=False)
+    assert "SKIP: No physical layer updates to perform" in result.output
+    assert "SKIP: No model batches to execute" in result.output
     assert_virtual_layer_updated(result)
-    assert_virtual_update(result)
 
 
 def test_plan_dev_create_from(runner, tmp_path):
@@ -542,7 +539,6 @@ def test_plan_dev_no_changes(runner, tmp_path):
     assert result.exit_code == 0
     assert_new_env(result, "dev", initialize=False)
     assert_virtual_layer_updated(result)
-    assert_virtual_update(result)
 
 
 def test_plan_nonbreaking(runner, tmp_path):
