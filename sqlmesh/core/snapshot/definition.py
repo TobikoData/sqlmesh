@@ -477,6 +477,7 @@ class SnapshotTableInfo(PydanticModel, SnapshotInfoMixin, frozen=True):
     base_table_name_override: t.Optional[str] = None
     custom_materialization: t.Optional[str] = None
     dev_table_suffix: str
+    model_gateway: t.Optional[str] = None
 
     def __lt__(self, other: SnapshotTableInfo) -> bool:
         return self.name < other.name
@@ -1177,6 +1178,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             node_type=self.node_type,
             custom_materialization=custom_materialization,
             dev_table_suffix=self.dev_table_suffix,
+            model_gateway=self.model_gateway,
         )
 
     @property
@@ -1336,7 +1338,6 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
 class SnapshotTableCleanupTask(PydanticModel):
     snapshot: SnapshotTableInfo
     dev_table_only: bool
-    gateway: t.Optional[str] = None
 
 
 SnapshotIdLike = t.Union[SnapshotId, SnapshotTableInfo, Snapshot]

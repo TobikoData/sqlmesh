@@ -201,8 +201,7 @@ class EngineAdapterStateSync(StateSync):
             }
             if (
                 not existing_environment.expired
-                and existing_environment.gateway_managed_virtual_layer
-                == environment.gateway_managed_virtual_layer
+                and existing_environment.gateway_managed == environment.gateway_managed
             ):
                 if environment.previous_plan_id != existing_environment.plan_id:
                     raise ConflictingPlanError(

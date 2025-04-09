@@ -14,7 +14,7 @@ def migrate(state_sync, **kwargs):  # type: ignore
         kind="TABLE",
         actions=[
             exp.ColumnDef(
-                this=exp.to_column("gateway_managed_virtual_layer"),
+                this=exp.to_column("gateway_managed"),
                 kind=exp.DataType.build("boolean"),
             )
         ],
@@ -23,6 +23,6 @@ def migrate(state_sync, **kwargs):  # type: ignore
 
     state_sync.engine_adapter.update_table(
         environments_table,
-        {"gateway_managed_virtual_layer": False},
+        {"gateway_managed": False},
         where=exp.true(),
     )
