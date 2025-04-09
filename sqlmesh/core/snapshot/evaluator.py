@@ -234,11 +234,11 @@ class SnapshotEvaluator:
                 table = snapshot.qualified_view_name.table_for_environment(
                     environment_naming_info,
                     dialect=self._get_adapter(snapshot.model_gateway).dialect
-                    if environment_naming_info.gateway_managed_virtual_layer
+                    if environment_naming_info.gateway_managed
                     else self.adapter.dialect,
                 )
                 tables.append(table)
-                if environment_naming_info.gateway_managed_virtual_layer:
+                if environment_naming_info.gateway_managed:
                     table_schema = d.schema_(table.db, catalog=table.catalog)
                     gateway_by_schema[table_schema] = snapshot.model_gateway or ""
         self._create_schemas(tables=tables, gateways=gateway_by_schema)
@@ -437,7 +437,6 @@ class SnapshotEvaluator:
         snapshots_to_dev_table_only = {
             t.snapshot.snapshot_id: t.dev_table_only for t in target_snapshots
         }
-        snapshot_gateways = {t.snapshot.snapshot_id: t.gateway for t in target_snapshots}
 
         with self.concurrent_context():
             concurrent_apply_to_snapshots(
@@ -445,7 +444,7 @@ class SnapshotEvaluator:
                 lambda s: self._cleanup_snapshot(
                     s,
                     snapshots_to_dev_table_only[s.snapshot_id],
-                    self._get_adapter(snapshot_gateways[s.snapshot_id]),
+                    self._get_adapter(s.model_gateway),
                     on_complete,
                 ),
                 self.ddl_concurrent_tasks,
@@ -931,7 +930,7 @@ class SnapshotEvaluator:
         if snapshot.is_model:
             adapter = (
                 self._get_adapter(snapshot.model_gateway)
-                if environment_naming_info.gateway_managed_virtual_layer
+                if environment_naming_info.gateway_managed
                 else self.adapter
             )
             table_name = snapshot.table_name(deployability_index.is_representative(snapshot))
@@ -968,8 +967,7 @@ class SnapshotEvaluator:
     ) -> None:
         adapter = (
             self._get_adapter(snapshot.model_gateway)
-            if environment_naming_info.gateway_managed_virtual_layer
-            and isinstance(snapshot, Snapshot)
+            if environment_naming_info.gateway_managed
             else self.adapter
         )
         view_name = snapshot.qualified_view_name.for_environment(

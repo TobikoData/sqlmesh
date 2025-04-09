@@ -2316,23 +2316,11 @@ class GenericContext(BaseContext, t.Generic[C]):
     def _cleanup_environments(self) -> None:
         expired_environments = self.state_sync.delete_expired_environments()
 
-        environment_snapshot_adapters: t.Dict[str, t.Dict[str, EngineAdapter]] = {}
-        for environment in expired_environments:
-            snapshot_adapters: t.Dict[str, EngineAdapter] = {}
-            if environment.gateway_managed_virtual_layer:
-                snapshots = self.state_sync.get_snapshots(environment.snapshots)
-                for snapshot_id, snapshot in snapshots.items():
-                    if snapshot.is_model and not snapshot.is_symbolic:
-                        snapshot_adapters[snapshot_id.name] = self._get_engine_adapter(
-                            snapshot.model_gateway
-                        )
-                environment_snapshot_adapters[environment.name] = snapshot_adapters
-
         cleanup_expired_views(
             adapter=self.engine_adapter,
             environments=expired_environments,
             console=self.console,
-            environment_snapshot_adapters=environment_snapshot_adapters,
+            engine_adapters=self.engine_adapters,
         )
 
     def _try_connection(self, connection_name: str, validator: t.Callable[[], None]) -> None:
