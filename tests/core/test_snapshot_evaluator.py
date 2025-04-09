@@ -3967,13 +3967,15 @@ def test_multiple_engine_cleanup(snapshot: Snapshot, adapters, make_snapshot):
         f"sqlmesh__test_schema.test_schema__test_model__{snapshot_2.version}",
     )
 
-    snapshot_gateways = {snapshot.name: "default", snapshot_2.name: "secondary"}
     evaluator.cleanup(
         [
-            SnapshotTableCleanupTask(snapshot=snapshot.table_info, dev_table_only=True),
-            SnapshotTableCleanupTask(snapshot=snapshot_2.table_info, dev_table_only=True),
+            SnapshotTableCleanupTask(
+                snapshot=snapshot.table_info, dev_table_only=True, gateway="default"
+            ),
+            SnapshotTableCleanupTask(
+                snapshot=snapshot_2.table_info, dev_table_only=True, gateway="secondary"
+            ),
         ],
-        snapshot_gateways,
     )
 
     # The clean up will happen using the specific gateway the model was created with
