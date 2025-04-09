@@ -1,5 +1,6 @@
 import { useApiModelLineage, useApiModels } from '@/api/index'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { type ModelSQLMeshModel } from '@/domain/sqlmesh-model'
 import { type HighlightedNodes, useLineageFlow } from './context'
 import { ChevronDownIcon } from '@heroicons/react/24/solid'
 import ReactFlow, {
@@ -18,6 +19,7 @@ import ReactFlow, {
 } from 'reactflow'
 import Loading from '@/components/loading/Loading'
 import Spinner from '@/components/logo/Spinner'
+import { createLineageWorker } from '@/workers'
 import { isArrayEmpty, isFalse, isNil, isNotNil } from '@/utils/index'
 import ListboxShow from '@/components/listbox/ListboxShow'
 import clsx from 'clsx'
@@ -42,7 +44,7 @@ export function ModelLineage({
   model,
   highlightedNodes,
 }: {
-  model: Model 
+  model: ModelSQLMeshModel
   highlightedNodes?: HighlightedNodes
 }): JSX.Element {
   const {
@@ -67,17 +69,16 @@ export function ModelLineage({
     isFetching: isFetchingModelLineage,
   } = useApiModelLineage(model.name)
   const { isFetching: isFetchingModels } = useApiModels()
-  const [isMergingModels, setIsMergingModels] = useState(false)
+
+  const [isMegringModels, setIsMergingModels] = useState(false)
   const [modelLineage, setModelLineage] =
     useState<ModelLineageApiLineageModelNameGet200 | undefined>(undefined)
 
-  console.log('model to lineage', model)
-  console.log('modelLineage', modelLineage)
-  console.log('models', models)
-  console.log('isFetchingModelLineage', isFetchingModelLineage)
-
-
   useEffect(() => {
+    const lineageWorker = createLineageWorker()
+
+    lineageWorker.addEventListener('message', handleLineageWorkerMessage)
+
     getModelLineage()
       .then(({ data }) => {
         setModelLineage(data)
@@ -85,6 +86,15 @@ export function ModelLineage({
         if (isNil(data)) return
 
         setIsMergingModels(true)
+
+        lineageWorker.postMessage({
+          topic: 'lineage',
+          payload: {
+            currentLineage: {},
+            newLineage: data,
+            mainNode: model.fqn,
+          },
+        })
       })
       .catch(error => {
         handleError?.(error)
@@ -101,6 +111,9 @@ export function ModelLineage({
     return () => {
       // void cancel?.()
 
+      lineageWorker.removeEventListener('message', handleLineageWorkerMessage)
+      lineageWorker.terminate()
+
       setLineage({})
       setNodeConnections({})
       setMainNode(undefined)
@@ -113,10 +126,10 @@ export function ModelLineage({
       modelName = encodeURI(modelName)
 
       if (
-        !models[modelName] &&
-        !unknownModels[modelName]
+        isFalse(modelName in models) &&
+        isFalse(modelName in unknownModels)
       ) {
-        unknownModels[modelName]
+        unknownModels.add(modelName)
       }
     })
 
@@ -127,13 +140,27 @@ export function ModelLineage({
     setHighlightedNodes(highlightedNodes ?? {})
   }, [highlightedNodes])
 
-  const isFetching =
-    isFetchingModelLineage || isFetchingModels || isMergingModels
-  console.log('isFetchingModelLineage', isFetchingModelLineage)
-  console.log('isFetchingModels', isFetchingModels)
-  console.log('isMegringModels', isMergingModels)
-  console.log('isFetching', isFetching)
+  function handleLineageWorkerMessage(e: MessageEvent): void {
+    if (e.data.topic === 'lineage') {
+      setIsMergingModels(false)
+      setNodeConnections(e.data.payload.nodesConnections)
+      setLineage(e.data.payload.lineage)
 
+      if (
+        Object.values(e.data.payload?.lineage ?? {}).length > WITH_COLUMNS_LIMIT
+      ) {
+        setWithColumns(false)
+      }
+    }
+
+    if (e.data.topic === 'error') {
+      handleError?.(e.data.error)
+      setIsMergingModels(false)
+    }
+  }
+
+  const isFetching =
+    isFetchingModelLineage || isFetchingModels || isMegringModels
 
   return (
     <div className="relative h-full w-full overflow-hidden">
