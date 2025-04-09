@@ -110,8 +110,7 @@ from sqlmesh.core.table_diff import TableDiff
 from sqlmesh.core.test import (
     ModelTextTestResult,
     generate_test,
-    get_all_model_tests,
-    run_model_tests,
+    load_model_tests,
     run_tests,
 )
 from sqlmesh.core.user import User
@@ -1786,47 +1785,30 @@ class GenericContext(BaseContext, t.Generic[C]):
         if verbosity >= Verbosity.VERBOSE:
             pd.set_option("display.max_columns", None)
 
-        if tests:
-            result = run_model_tests(
-                tests=tests,
-                models=self._models,
-                config=self.config,
-                gateway=self.gateway,
-                dialect=self.default_dialect,
-                verbosity=verbosity,
-                patterns=match_patterns,
-                preserve_fixtures=preserve_fixtures,
-                stream=stream,
-                default_catalog=self.default_catalog,
-                default_catalog_dialect=self.engine_adapter.DIALECT,
-            )
-        else:
-            test_meta = []
+        default_gateway = self.gateway or self.config.default_gateway_name
 
-            for path, config in self.configs.items():
-                test_meta.extend(
-                    get_all_model_tests(
-                        path / c.TESTS,
-                        patterns=match_patterns,
-                        ignore_patterns=config.ignore_patterns,
-                        variables=config.variables,
-                    )
-                )
+        # Merge the root variables with the gateway's variables
+        variables = {**self.config.variables, **self.config.get_gateway(default_gateway).variables}
 
-            result = run_tests(
-                model_test_metadata=test_meta,
-                models=self._models,
-                config=self.config,
-                gateway=self.gateway,
-                dialect=self.default_dialect,
-                verbosity=verbosity,
-                preserve_fixtures=preserve_fixtures,
-                stream=stream,
-                default_catalog=self.default_catalog,
-                default_catalog_dialect=self.engine_adapter.DIALECT,
-            )
+        test_meta = load_model_tests(
+            configs=self.configs,
+            tests=tests,
+            patterns=match_patterns,
+            variables=variables,
+        )
 
-        return result
+        return run_tests(
+            model_test_metadata=test_meta,
+            models=self._models,
+            config=self.config,
+            default_gateway=default_gateway,
+            dialect=self.default_dialect,
+            verbosity=verbosity,
+            preserve_fixtures=preserve_fixtures,
+            stream=stream,
+            default_catalog=self.default_catalog,
+            default_catalog_dialect=self.engine_adapter.DIALECT,
+        )
 
     @python_api_analytics
     def audit(

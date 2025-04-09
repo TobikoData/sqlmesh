@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import sys
 import time
-import pathlib
 import threading
 import typing as t
 import unittest
@@ -86,7 +85,7 @@ def run_tests(
     model_test_metadata: list[ModelTestMetadata],
     models: UniqueKeyDict[str, Model],
     config: C,
-    gateway: t.Optional[str] = None,
+    default_gateway: str,
     dialect: str | None = None,
     verbosity: Verbosity = Verbosity.DEFAULT,
     preserve_fixtures: bool = False,
@@ -102,8 +101,6 @@ def run_tests(
         verbosity: The verbosity level.
         preserve_fixtures: Preserve the fixture tables in the testing database, useful for debugging.
     """
-    default_gateway = gateway or config.default_gateway_name
-
     default_test_connection = config.get_test_connection(
         gateway_name=default_gateway,
         default_catalog=default_catalog,
@@ -128,34 +125,40 @@ def run_tests(
 
     def _run_single_test(
         metadata: ModelTestMetadata, engine_adapter: EngineAdapter
-    ) -> ModelTextTestResult:
-        test = ModelTest.create_test(
-            body=metadata.body,
-            test_name=metadata.test_name,
-            models=models,
-            engine_adapter=engine_adapter,
-            dialect=dialect,
-            path=metadata.path,
-            default_catalog=default_catalog,
-            preserve_fixtures=preserve_fixtures,
-        )
+    ) -> t.Optional[ModelTextTestResult]:
+        result: t.Optional[ModelTextTestResult] = None
+        try:
+            test = ModelTest.create_test(
+                body=metadata.body,
+                test_name=metadata.test_name,
+                models=models,
+                engine_adapter=engine_adapter,
+                dialect=dialect,
+                path=metadata.path,
+                default_catalog=default_catalog,
+                preserve_fixtures=preserve_fixtures,
+            )
 
-        result = t.cast(
-            ModelTextTestResult,
-            ModelTextTestRunner().run(t.cast(unittest.TestCase, test)),
-        )
+            result = t.cast(
+                ModelTextTestResult,
+                ModelTextTestRunner().run(t.cast(unittest.TestCase, test)),
+            )
 
-        with lock:
-            if result.successes:
-                combined_results.addSuccess(result.successes[0])
-            elif result.errors:
-                combined_results.addError(result.original_err[0], result.original_err[1])
-            elif result.failures:
-                combined_results.addFailure(result.original_err[0], result.original_err[1])
-            elif result.skipped:
-                skipped_args = result.skipped[0]
-                combined_results.addSkip(skipped_args[0], skipped_args[1])
-        return result
+            with lock:
+                if result.successes:
+                    combined_results.addSuccess(result.successes[0])
+                elif result.errors:
+                    combined_results.addError(result.original_err[0], result.original_err[1])
+                elif result.failures:
+                    combined_results.addFailure(result.original_err[0], result.original_err[1])
+                elif result.skipped:
+                    skipped_args = result.skipped[0]
+                    combined_results.addSkip(skipped_args[0], skipped_args[1])
+
+                combined_results.testsRun += 1
+
+        finally:
+            return result
 
     test_results = []
 
@@ -180,57 +183,6 @@ def run_tests(
 
     end_time = time.perf_counter()
 
-    combined_results.testsRun = len(test_results)
-
     combined_results.log_test_report(test_duration=end_time - start_time)
 
     return combined_results
-
-
-def run_model_tests(
-    tests: list[str],
-    models: UniqueKeyDict[str, Model],
-    config: C,
-    gateway: t.Optional[str] = None,
-    dialect: str | None = None,
-    verbosity: Verbosity = Verbosity.DEFAULT,
-    patterns: list[str] | None = None,
-    preserve_fixtures: bool = False,
-    stream: t.TextIO | None = None,
-    default_catalog: t.Optional[str] = None,
-    default_catalog_dialect: str = "",
-) -> ModelTextTestResult:
-    """Load and run tests.
-
-    Args:
-        tests: A list of tests to run, e.g. [tests/test_orders.yaml::test_single_order]
-        models: All models to use for expansion and mapping of physical locations.
-        verbosity: The verbosity level.
-        patterns: A list of patterns to match against.
-        preserve_fixtures: Preserve the fixture tables in the testing database, useful for debugging.
-    """
-    loaded_tests = []
-    for test in tests:
-        filename, test_name = test.split("::", maxsplit=1) if "::" in test else (test, "")
-        path = pathlib.Path(filename)
-
-        if test_name:
-            loaded_tests.append(load_model_test_file(path, variables=config.variables)[test_name])
-        else:
-            loaded_tests.extend(load_model_test_file(path, variables=config.variables).values())
-
-    if patterns:
-        loaded_tests = filter_tests_by_patterns(loaded_tests, patterns)
-
-    return run_tests(
-        loaded_tests,
-        models,
-        config,
-        gateway=gateway,
-        dialect=dialect,
-        verbosity=verbosity,
-        preserve_fixtures=preserve_fixtures,
-        stream=stream,
-        default_catalog=default_catalog,
-        default_catalog_dialect=default_catalog_dialect,
-    )
