@@ -53,7 +53,11 @@ def make_python_env(
                 if macro_func_or_var.__class__ is d.MacroFunc:
                     name = macro_func_or_var.this.name.lower()
                     if name in macros:
-                        used_macros[name] = macros[name]
+                        used_macro = macros[name]
+                        if callable(used_macro) and expression.meta.get("metadata_only"):
+                            setattr(used_macro.func, c.SQLMESH_METADATA, True)
+
+                        used_macros[name] = used_macro
                         if name == c.VAR:
                             args = macro_func_or_var.this.expressions
                             if len(args) < 1:

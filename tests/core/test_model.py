@@ -8696,10 +8696,12 @@ def metadata_macro(evaluator):
     )
 
     model = ctx.get_model("test_model")
+    python_env = model.python_env
+
     empty_executable = Executable(payload="")
 
-    assert len(model.python_env) == 1
-    assert (model.python_env.get("metadata_macro") or empty_executable).is_metadata
+    assert len(python_env) == 1
+    assert (python_env.get("metadata_macro") or empty_executable).is_metadata
 
     ctx.plan(no_prompts=True, auto_apply=True)
 
@@ -8708,10 +8710,11 @@ def metadata_macro(evaluator):
 
     ctx.load()
     model = ctx.get_model("test_model")
+    python_env = model.python_env
 
-    assert len(model.python_env) == 2
-    assert (model.python_env.get("metadata_macro") or empty_executable).is_metadata
-    assert (model.python_env.get("parse_one") or empty_executable).is_metadata
+    assert len(python_env) == 2
+    assert (python_env.get("metadata_macro") or empty_executable).is_metadata
+    assert (python_env.get("parse_one") or empty_executable).is_metadata
 
     plan = ctx.plan(no_prompts=True, auto_apply=True)
     ctx_diff = plan.context_diff
@@ -8727,11 +8730,12 @@ def metadata_macro(evaluator):
 
     ctx.load()
     model = ctx.get_model("test_model")
+    python_env = model.python_env
 
-    assert len(model.python_env) == 3
-    assert (model.python_env.get("metadata_macro") or empty_executable).is_metadata
-    assert (model.python_env.get("get_parsed_query") or empty_executable).is_metadata
-    assert (model.python_env.get("parse_one") or empty_executable).is_metadata
+    assert len(python_env) == 3
+    assert (python_env.get("metadata_macro") or empty_executable).is_metadata
+    assert (python_env.get("get_parsed_query") or empty_executable).is_metadata
+    assert (python_env.get("parse_one") or empty_executable).is_metadata
 
     plan = ctx.plan(no_prompts=True, auto_apply=True)
     ctx_diff = plan.context_diff
@@ -8783,15 +8787,95 @@ def m2(evaluator):
     model = ctx.get_model("test_model")
     empty_executable = Executable(payload="")
 
+    python_env = model.python_env
+
     # Both `m1` and `m2` refer to `parse_one`, so for `m1` it would be a transitive metadata-only
     # object, but since the python env is a flat namespace and `parse_one` is also a dependency
     # of `m2`, it needs to be treated as non-metadata.
-    assert len(model.python_env) == 5
-    assert (model.python_env.get("m1") or empty_executable).is_metadata
-    assert (model.python_env.get("m1_dep") or empty_executable).is_metadata
-    assert not (model.python_env.get("m2") or empty_executable).is_metadata
-    assert not (model.python_env.get("parse_one") or empty_executable).is_metadata
-    assert not (model.python_env.get("common_dep") or empty_executable).is_metadata
+    assert len(python_env) == 5
+    assert (python_env.get("m1") or empty_executable).is_metadata
+    assert (python_env.get("m1_dep") or empty_executable).is_metadata
+    assert not (python_env.get("m2") or empty_executable).is_metadata
+    assert not (python_env.get("parse_one") or empty_executable).is_metadata
+    assert not (python_env.get("common_dep") or empty_executable).is_metadata
+
+
+def test_macros_referenced_in_audits_or_signals_are_metadata_only(tmp_path: Path) -> None:
+    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+
+    test_model = tmp_path / "models/test_model.sql"
+    test_model.parent.mkdir(parents=True, exist_ok=True)
+    test_model.write_text(
+        """
+        MODEL (
+          name test_model,
+          kind FULL,
+          signals (
+            test_signal_always_true(arg := @m1())
+          ),
+          audits (
+            unique_values(columns := @m2())
+          ),
+        );
+
+        SELECT
+          1 AS c
+        """
+    )
+
+    macro_code = """
+from sqlglot import exp
+from sqlmesh import macro
+
+def baz():
+    pass
+
+@macro()
+def m1(evaluator):
+    baz()
+    return 1
+
+@macro()
+def m2(evaluator):
+    return exp.column("c")"""
+
+    test_macros = tmp_path / "macros/test_macros.py"
+    test_macros.parent.mkdir(parents=True, exist_ok=True)
+    test_macros.write_text(macro_code)
+
+    signal_code = """
+import typing as t
+
+from sqlmesh import signal
+
+def bar():
+    pass
+
+@signal()
+def test_signal_always_true(batch, arg):
+    bar()
+    return True"""
+
+    test_signals = tmp_path / "signals/test_signals.py"
+    test_signals.parent.mkdir(parents=True, exist_ok=True)
+    test_signals.write_text(signal_code)
+
+    ctx = Context(
+        config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb")),
+        paths=tmp_path,
+    )
+    model = ctx.get_model("test_model")
+    empty_executable = Executable(payload="")
+
+    python_env = model.python_env
+
+    assert len(python_env) == 6
+    assert (python_env.get("test_signal_always_true") or empty_executable).is_metadata
+    assert (python_env.get("bar") or empty_executable).is_metadata
+    assert (python_env.get("m1") or empty_executable).is_metadata
+    assert (python_env.get("baz") or empty_executable).is_metadata
+    assert (python_env.get("m2") or empty_executable).is_metadata
+    assert (python_env.get("exp") or empty_executable).is_metadata
 
 
 def test_scd_type_2_full_history_restatement():

@@ -2462,10 +2462,14 @@ def _create_model(
 
     statements.extend(audit.query for audit in audit_definitions.values())
     for _, audit_args in model.audits:
-        statements.extend(audit_args.values())
+        for audit_arg_expression in audit_args.values():
+            audit_arg_expression.meta["metadata_only"] = True
+            statements.append(audit_arg_expression)
 
     for _, kwargs in model.signals:
-        statements.extend(kwargs.values())
+        for signal_kwarg in kwargs.values():
+            signal_kwarg.meta["metadata_only"] = True
+            statements.append(signal_kwarg)
 
     python_env = python_env or {}
 
