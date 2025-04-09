@@ -47,7 +47,7 @@ class ModelTextTestRunner(unittest.TextTestRunner):
 def create_testing_engine_adapters(
     model_test_metadata: list[ModelTestMetadata],
     config: C,
-    default_gateway: str,
+    selected_gateway: str,
     default_catalog: str | None = None,
     default_catalog_dialect: str = "",
 ) -> t.Dict[ModelTestMetadata, EngineAdapter]:
@@ -55,7 +55,7 @@ def create_testing_engine_adapters(
     metadata_to_adapter = {}
 
     for metadata in model_test_metadata:
-        gateway = metadata.body.get("gateway") or default_gateway
+        gateway = metadata.body.get("gateway") or selected_gateway
         test_connection = config.get_test_connection(
             gateway, default_catalog, default_catalog_dialect
         )
@@ -85,7 +85,7 @@ def run_tests(
     model_test_metadata: list[ModelTestMetadata],
     models: UniqueKeyDict[str, Model],
     config: C,
-    default_gateway: str,
+    selected_gateway: str,
     dialect: str | None = None,
     verbosity: Verbosity = Verbosity.DEFAULT,
     preserve_fixtures: bool = False,
@@ -102,7 +102,7 @@ def run_tests(
         preserve_fixtures: Preserve the fixture tables in the testing database, useful for debugging.
     """
     default_test_connection = config.get_test_connection(
-        gateway_name=default_gateway,
+        gateway_name=selected_gateway,
         default_catalog=default_catalog,
         default_catalog_dialect=default_catalog_dialect,
     )
@@ -118,7 +118,7 @@ def run_tests(
     metadata_to_adapter = create_testing_engine_adapters(
         model_test_metadata=model_test_metadata,
         config=config,
-        default_gateway=default_gateway,
+        selected_gateway=selected_gateway,
         default_catalog=default_catalog,
         default_catalog_dialect=default_catalog_dialect,
     )
@@ -126,39 +126,39 @@ def run_tests(
     def _run_single_test(
         metadata: ModelTestMetadata, engine_adapter: EngineAdapter
     ) -> t.Optional[ModelTextTestResult]:
-        result: t.Optional[ModelTextTestResult] = None
-        try:
-            test = ModelTest.create_test(
-                body=metadata.body,
-                test_name=metadata.test_name,
-                models=models,
-                engine_adapter=engine_adapter,
-                dialect=dialect,
-                path=metadata.path,
-                default_catalog=default_catalog,
-                preserve_fixtures=preserve_fixtures,
-            )
+        test = ModelTest.create_test(
+            body=metadata.body,
+            test_name=metadata.test_name,
+            models=models,
+            engine_adapter=engine_adapter,
+            dialect=dialect,
+            path=metadata.path,
+            default_catalog=default_catalog,
+            preserve_fixtures=preserve_fixtures,
+        )
 
-            result = t.cast(
-                ModelTextTestResult,
-                ModelTextTestRunner().run(t.cast(unittest.TestCase, test)),
-            )
+        if not test:
+            return None
 
-            with lock:
-                if result.successes:
-                    combined_results.addSuccess(result.successes[0])
-                elif result.errors:
-                    combined_results.addError(result.original_err[0], result.original_err[1])
-                elif result.failures:
-                    combined_results.addFailure(result.original_err[0], result.original_err[1])
-                elif result.skipped:
-                    skipped_args = result.skipped[0]
-                    combined_results.addSkip(skipped_args[0], skipped_args[1])
+        result = t.cast(
+            ModelTextTestResult,
+            ModelTextTestRunner().run(t.cast(unittest.TestCase, test)),
+        )
 
-                combined_results.testsRun += 1
+        with lock:
+            if result.successes:
+                combined_results.addSuccess(result.successes[0])
+            elif result.errors:
+                combined_results.addError(result.original_err[0], result.original_err[1])
+            elif result.failures:
+                combined_results.addFailure(result.original_err[0], result.original_err[1])
+            elif result.skipped:
+                skipped_args = result.skipped[0]
+                combined_results.addSkip(skipped_args[0], skipped_args[1])
 
-        finally:
-            return result
+            combined_results.testsRun += 1
+
+        return result
 
     test_results = []
 

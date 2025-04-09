@@ -1785,10 +1785,11 @@ class GenericContext(BaseContext, t.Generic[C]):
         if verbosity >= Verbosity.VERBOSE:
             pd.set_option("display.max_columns", None)
 
-        default_gateway = self.gateway or self.config.default_gateway_name
-
         # Merge the root variables with the gateway's variables
-        variables = {**self.config.variables, **self.config.get_gateway(default_gateway).variables}
+        variables = {
+            **self.config.variables,
+            **self.config.get_gateway(self.selected_gateway).variables,
+        }
 
         test_meta = load_model_tests(
             configs=self.configs,
@@ -1801,7 +1802,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             model_test_metadata=test_meta,
             models=self._models,
             config=self.config,
-            default_gateway=default_gateway,
+            selected_gateway=self.selected_gateway,
             dialect=self.default_dialect,
             verbosity=verbosity,
             preserve_fixtures=preserve_fixtures,
