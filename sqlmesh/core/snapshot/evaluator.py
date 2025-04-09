@@ -426,7 +426,6 @@ class SnapshotEvaluator:
     def cleanup(
         self,
         target_snapshots: t.Iterable[SnapshotTableCleanupTask],
-        snapshot_gateways: t.Optional[t.Dict[str, str]] = None,
         on_complete: t.Optional[t.Callable[[str], None]] = None,
     ) -> None:
         """Cleans up the given snapshots by removing its table
@@ -438,6 +437,7 @@ class SnapshotEvaluator:
         snapshots_to_dev_table_only = {
             t.snapshot.snapshot_id: t.dev_table_only for t in target_snapshots
         }
+        snapshot_gateways = {t.snapshot.snapshot_id: t.gateway for t in target_snapshots}
 
         with self.concurrent_context():
             concurrent_apply_to_snapshots(
@@ -445,9 +445,7 @@ class SnapshotEvaluator:
                 lambda s: self._cleanup_snapshot(
                     s,
                     snapshots_to_dev_table_only[s.snapshot_id],
-                    self._get_adapter(
-                        snapshot_gateways.get(s.snapshot_id.name) if snapshot_gateways else None
-                    ),
+                    self._get_adapter(snapshot_gateways[s.snapshot_id]),
                     on_complete,
                 ),
                 self.ddl_concurrent_tasks,
