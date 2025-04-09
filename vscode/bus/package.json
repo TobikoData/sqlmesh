@@ -1,0 +1,26 @@
+{
+    "name": "sqlmesh-extension-bus",
+    "private": true,
+    "version": "0.0.1",
+    "scripts": {
+      "build": "tsc",
+      "dev": "tsc -w",
+      "test": "jest"
+    },
+    "files": [
+      "/dist"
+    ],
+    "main": "dist/index.js",
+    "types": "dist/index.d.ts",
+    "dependencies": {
+      "@types/vscode": "^1.92.0"
+    },
+    "devDependencies": {
+      "@jest/globals": "^29.7.0",
+      "@types/jest": "^29.5.12",
+      "@types/vscode-webview": "^1.57.5",
+      "jest": "^29.7.0",
+      "ts-jest": "^29.2.5",
+      "typescript": "^5.5.4"
+    }
+  }
