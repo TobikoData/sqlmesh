@@ -74,7 +74,7 @@ def make_python_env(
                 # If this macro has been seen before as a non-metadata macro, prioritize that
                 used_macros[name] = (
                     macros[name],
-                    (used_macros.get(name) or (None, is_metadata))[1],
+                    used_macros.get(name, (None, is_metadata))[1],
                 )
                 if name == c.VAR:
                     args = macro_func_or_var.this.expressions
@@ -92,7 +92,7 @@ def make_python_env(
                     # If this macro has been seen before as a non-metadata macro, prioritize that
                     used_macros[name] = (
                         macros[name],
-                        (used_macros.get(name) or (None, is_metadata))[1],
+                        used_macros.get(name, (None, is_metadata))[1],
                     )
                 elif name in variables:
                     used_variables.add(name)
@@ -114,14 +114,13 @@ def make_python_env(
         if isinstance(used_macro, Executable):
             python_env[name] = used_macro
         elif not hasattr(used_macro, c.SQLMESH_BUILTIN) and name not in python_env:
-            used_macro_func = used_macro.func
-            previous_is_metadata = getattr(used_macro_func, c.SQLMESH_METADATA, None)
-
-            if is_metadata:
-                setattr(used_macro_func, c.SQLMESH_METADATA, is_metadata)
-
-            build_env(used_macro.func, env=env, name=name, path=module_path)
-            setattr(used_macro_func, c.SQLMESH_METADATA, previous_is_metadata)
+            build_env(
+                used_macro.func,
+                env=env,
+                name=name,
+                path=module_path,
+                is_metadata_obj=is_metadata,
+            )
 
     python_env.update(serialize_env(env, path=module_path))
     return _add_variables_to_python_env(

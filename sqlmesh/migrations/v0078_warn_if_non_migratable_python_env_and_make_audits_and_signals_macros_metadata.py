@@ -34,10 +34,10 @@ def migrate(state_sync, **kwargs):  # type: ignore
     warning = (
         "SQLMesh detected that it may not be able to fully migrate the state database. This should not impact "
         "the migration process, but may result in unexpected changes being reported by the next `sqlmesh plan` "
-        "command. Please run the `sqlmesh diff` (https://sqlmesh.readthedocs.io/en/stable/reference/cli/?h=cli#diff) "
-        "command after the migration has completed, before making any new changes. If any unexpected changes are reported, "
-        "consider running a forward-only plan (https://sqlmesh.readthedocs.io/en/stable/concepts/plans/#forward-only-plans) "
-        "to avoid unnecessary backfills.\n"
+        "command. Please run `sqlmesh diff prod` after the migration has completed, before making any new "
+        "changes. If any unexpected changes are reported, consider running a forward-only plan to apply these "
+        "changes and avoid unnecessary backfills: sqlmesh plan prod --forward-only. "
+        "See https://sqlmesh.readthedocs.io/en/stable/concepts/plans/#forward-only-plans for more details.\n"
     )
 
     for (snapshot,) in engine_adapter.fetchall(
@@ -50,7 +50,6 @@ def migrate(state_sync, **kwargs):  # type: ignore
         if node.get("source_type") == "audit":
             continue
 
-        name = node["name"]
         python_env = node.get("python_env") or {}
 
         has_metadata = False
@@ -69,29 +68,33 @@ def migrate(state_sync, **kwargs):  # type: ignore
         dialect = node.get("dialect")
         metadata_hash_statements = []
 
-        if on_virtual_update := node.get("on_virtual_update"):
-            metadata_hash_statements.extend(parse_expression(on_virtual_update, dialect))
+        # We use try-except here as a conservative measure to avoid any unexpected exceptions
+        try:
+            if on_virtual_update := node.get("on_virtual_update"):
+                metadata_hash_statements.extend(parse_expression(on_virtual_update, dialect))
 
-        for _, audit_args in func_call_validator(node.get("audits") or []):
-            metadata_hash_statements.extend(audit_args.values())
+            for _, audit_args in func_call_validator(node.get("audits") or []):
+                metadata_hash_statements.extend(audit_args.values())
 
-        for signal_name, signal_args in func_call_validator(
-            node.get("signals") or [], is_signal=True
-        ):
-            metadata_hash_statements.extend(signal_args.values())
+            for signal_name, signal_args in func_call_validator(
+                node.get("signals") or [], is_signal=True
+            ):
+                metadata_hash_statements.extend(signal_args.values())
 
-        if audit_definitions := node.get("audit_definitions"):
-            audit_queries = [
-                parse_expression(audit["query"], audit["dialect"])
-                for audit in audit_definitions.values()
-            ]
-            metadata_hash_statements.extend(audit_queries)
+            if audit_definitions := node.get("audit_definitions"):
+                audit_queries = [
+                    parse_expression(audit["query"], audit["dialect"])
+                    for audit in audit_definitions.values()
+                ]
+                metadata_hash_statements.extend(audit_queries)
 
-        for macro_name in extract_used_macros(metadata_hash_statements):
-            serialized_macro = python_env.get(macro_name)
-            if isinstance(serialized_macro, dict) and not serialized_macro.get("is_metadata"):
-                get_console().log_warning(warning)
-                return
+            for macro_name in extract_used_macros(metadata_hash_statements):
+                serialized_macro = python_env.get(macro_name)
+                if isinstance(serialized_macro, dict) and not serialized_macro.get("is_metadata"):
+                    get_console().log_warning(warning)
+                    return
+        except Exception:
+            pass
 
 
 def extract_used_macros(expressions):
