@@ -44,8 +44,8 @@ export type UseQueryWithTimeoutOptions<
 }
 
 export function useApiMeta(
-): UseQueryWithTimeoutOptions<Meta> {
-  return useQueryWithTimeout(
+): UseQueryResult<Meta> {
+  return useQuery(
     {
       queryKey: ['/api/meta'],
       queryFn: getApiMetaApiMetaGet,
@@ -55,8 +55,8 @@ export function useApiMeta(
 }
 
 export function useApiModels(
-): UseQueryWithTimeoutOptions<GetModelsApiModelsGet200> {
-  return useQueryWithTimeout(
+): UseQueryResult<GetModelsApiModelsGet200> {
+  return useQuery(
     {
       queryKey: ['/api/models'],
       queryFn: getModelsApiModelsGet,
@@ -66,8 +66,8 @@ export function useApiModels(
 
 export function useApiModel(
   modelName: string,
-): UseQueryWithTimeoutOptions<Model> {
-  return useQueryWithTimeout(
+): UseQueryResult<Model> {
+  return useQuery(
     {
       queryKey: ['/api/models', modelName],
       queryFn: async ({ signal }) =>
@@ -94,8 +94,8 @@ export function useApiColumnLineage(
   model: string,
   column: string,
   params?: ColumnLineageApiLineageModelNameColumnNameGetParams,
-): UseQueryWithTimeoutOptions<ColumnLineageApiLineageModelNameColumnNameGet200> {
-  return useQueryWithTimeout(
+): UseQueryResult<ColumnLineageApiLineageModelNameColumnNameGet200> {
+  return useQuery(
     {
       queryKey: ['/api/lineage', model, column],
       queryFn: async ({ signal }) =>
@@ -109,46 +109,4 @@ export function useApiColumnLineage(
         ),
     },
   )
-}
-
-function useQueryWithTimeout<
-  TQueryFnData = unknown,
-  TError extends ApiExceptionPayload = ApiExceptionPayload,
-  TData = TQueryFnData,
-  TQueryKey extends QueryKey = QueryKey,
->(
-  options: UseQueryOptions<TQueryFnData, TError, TData, TQueryKey> & {
-    meta?: ApiQueryMeta
-    queryKey: TQueryKey
-  },
-): UseQueryWithTimeoutOptions<TData, TError> {
-  async function queryFn(...args: any[]): Promise<TQueryFnData> {
-    return (options.queryFn as (...args: any[]) => Promise<TQueryFnData>)(
-      ...args,
-    )
-  }
-
-  const q = useQuery<TQueryFnData, TError, TData, TQueryKey>({
-    cacheTime: 0,
-    enabled: false,
-    queryKey: options.queryKey,
-    queryFn,
-    meta: {
-      ...options.meta,
-     },
-  })
-
-  return {
-    ...q,
-    refetch: async (...args: any[]) =>
-      new Promise(resolve => {
-        q.refetch(...args, { throwOnError: true })
-          .then(resolve)
-          .catch(err => err)
-      }),
-    cancel: () => {
-      console.log('cancel')
-    },
-    isTimeout: false,
-  }
 }
