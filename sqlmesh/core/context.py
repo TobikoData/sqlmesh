@@ -2299,22 +2299,15 @@ class GenericContext(BaseContext, t.Generic[C]):
         )
 
     def _run_janitor(self, ignore_ttl: bool = False) -> None:
-        # Get expired environments and removes their views and schemas
+        # Clean up expired environments by removing their views and schemas
         self._cleanup_environments()
 
-        # Get expired snapshots and corresponding gateways per snapshot when applied
-        expired_snapshots_ids, cleanup_targets, snapshot_gateways = (
-            self.state_sync.get_expired_snapshots(ignore_ttl=ignore_ttl)
-        )
-
-        # Clean up snapshots and intervals from the state sync
-        self.state_sync.delete_snapshots(expired_snapshots_ids)
-        self.state_sync.cleanup_intervals(cleanup_targets, expired_snapshots_ids)
+        # Identify and delete expired snapshots
+        cleanup_targets = self.state_sync.delete_expired_snapshots(ignore_ttl=ignore_ttl)
 
         # Remove the expired snapshots tables
         self.snapshot_evaluator.cleanup(
             target_snapshots=cleanup_targets,
-            snapshot_gateways=snapshot_gateways,
             on_complete=self.console.update_cleanup_progress,
         )
 

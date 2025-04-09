@@ -205,26 +205,6 @@ class SnapshotState:
             A tuple of expired snapshot IDs and cleanup targets.
         """
 
-        expired_snapshot_ids, cleanup_targets, _ = self.get_expired_snapshots(
-            environments=environments, ignore_ttl=ignore_ttl
-        )
-
-        if expired_snapshot_ids:
-            self.delete_snapshots(expired_snapshot_ids)
-
-        return expired_snapshot_ids, cleanup_targets
-
-    def get_expired_snapshots(
-        self, environments: t.Iterable[Environment], ignore_ttl: bool = False
-    ) -> t.Tuple[t.Set[SnapshotId], t.List[SnapshotTableCleanupTask], t.Dict[str, str]]:
-        """Gets the expired snapshots.
-
-        Args:
-            ignore_ttl: Whether to ignore the TTL of the snapshots.
-
-        Returns:
-            A tuple of expired snapshot IDs, cleanup targets and gateway per snapshot dictionary.
-        """
         current_ts = now_timestamp(minute_floor=False)
 
         expired_query = exp.select("name", "identifier", "version").from_(self.snapshots_table)
@@ -241,7 +221,7 @@ class SnapshotState:
             for name, identifier, version in fetchall(self.engine_adapter, expired_query)
         }
         if not expired_candidates:
-            return set(), [], {}
+            return set(), []
 
         promoted_snapshot_ids = {
             snapshot.snapshot_id
@@ -261,7 +241,6 @@ class SnapshotState:
         )
         cleanup_targets = []
         expired_snapshot_ids = set()
-        snapshot_gateways: t.Dict[str, str] = {}
         for versions_batch in version_batches:
             snapshots = self._get_snapshots_with_same_version(versions_batch)
 
@@ -275,9 +254,6 @@ class SnapshotState:
             expired_snapshot_ids.update([s.snapshot_id for s in expired_snapshots])
 
             for snapshot in expired_snapshots:
-                if (node := snapshot.raw_snapshot.get("node")) and (gateway := node.get("gateway")):
-                    snapshot_gateways[snapshot.snapshot_id.name] = gateway
-
                 shared_version_snapshots = snapshots_by_version[(snapshot.name, snapshot.version)]
                 shared_version_snapshots.discard(snapshot.snapshot_id)
 
@@ -291,10 +267,14 @@ class SnapshotState:
                         SnapshotTableCleanupTask(
                             snapshot=snapshot.full_snapshot.table_info,
                             dev_table_only=bool(shared_version_snapshots),
+                            gateway=snapshot.raw_snapshot.get("node", {}).get("gateway", None),
                         )
                     )
 
-        return expired_snapshot_ids, cleanup_targets, snapshot_gateways
+        if expired_snapshot_ids:
+            self.delete_snapshots(expired_snapshot_ids)
+
+        return expired_snapshot_ids, cleanup_targets
 
     def delete_snapshots(self, snapshot_ids: t.Iterable[SnapshotIdLike]) -> None:
         """Deletes snapshots.

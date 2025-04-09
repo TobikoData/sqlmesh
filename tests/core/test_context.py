@@ -803,7 +803,6 @@ def test_janitor(sushi_context, mocker: MockerFixture) -> None:
 
     sushi_context._engine_adapters = {sushi_context.config.default_gateway: adapter_mock}
     sushi_context._state_sync = state_sync_mock
-    state_sync_mock.get_expired_snapshots.return_value = (set({}), [], {})
     sushi_context._run_janitor()
     # Assert that the schemas are dropped just twice for the schema based environment
     # Make sure that external model schemas/tables are not dropped

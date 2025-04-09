@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 import typing as t
 
-from sqlglot import exp
 from sqlmesh.core.console import Console
 from sqlmesh.core.environment import Environment, EnvironmentStatements
 from sqlmesh.core.snapshot import (
@@ -294,41 +293,6 @@ class HttpStateSync(StateSync):
             "Deleting expired environments is not supported by the Airflow state sync."
         )
 
-    def get_expired_environments(self) -> t.Tuple[t.List[Environment], exp.LTE]:
-        """Returns the expired environments.
-
-        Expired environments are environments that have exceeded their time-to-live value.
-
-        """
-        raise NotImplementedError(
-            "Getting expired environments is not supported by the Airflow state sync."
-        )
-
-    def delete_environments(self, environments: t.List[Environment], filter_expr: exp.LTE) -> None:
-        """Removes environments.
-
-        Returns:
-            The list of removed environments.
-        """
-        raise NotImplementedError(
-            "Deleting environments is not supported by the Airflow state sync."
-        )
-
-    def get_expired_snapshots(
-        self, ignore_ttl: bool = False
-    ) -> t.Tuple[t.Set[SnapshotId], t.List[SnapshotTableCleanupTask], t.Dict[str, str]]:
-        """Gets expired snapshots.
-
-        Expired snapshots are snapshots that have exceeded their time-to-live
-        and are no longer in use within an environment.
-
-        Returns:
-            A tuple of expired snapshot IDs, cleanup targets and gateway per snapshot dictionary.
-        """
-        raise NotImplementedError(
-            "Getting expired snapshots is not supported by the Airflow state sync."
-        )
-
     def unpause_snapshots(
         self, snapshots: t.Collection[SnapshotInfoLike], unpaused_dt: TimeLike
     ) -> None:
@@ -352,17 +316,6 @@ class HttpStateSync(StateSync):
         """
         raise NotImplementedError(
             "Compacting intervals is not supported by the Airflow state sync."
-        )
-
-    def cleanup_intervals(
-        self,
-        cleanup_targets: t.List[SnapshotTableCleanupTask],
-        expired_snapshot_ids: t.Set[SnapshotId],
-    ) -> None:
-        """Cleans up intervals."""
-
-        raise NotImplementedError(
-            "Cleaning up intervals is not supported by the Airflow state sync."
         )
 
     def update_auto_restatements(

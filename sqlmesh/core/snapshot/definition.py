@@ -1338,6 +1338,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
 class SnapshotTableCleanupTask(PydanticModel):
     snapshot: SnapshotTableInfo
     dev_table_only: bool
+    gateway: t.Optional[str] = None
 
 
 SnapshotIdLike = t.Union[SnapshotId, SnapshotTableInfo, Snapshot]
