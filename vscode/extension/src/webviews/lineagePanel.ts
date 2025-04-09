@@ -64,7 +64,7 @@ import {
     
     const isProd = isProduction()
     
-    const externalUrl = !isProd ? "http://localhost:5173" : this.getServerUrl()
+    const externalUrl = !isProd ? "http://localhost:5173/lineage" : this.getServerUrl() + "/lineage"
     const externalAuthority = new URL(externalUrl).origin;
     
     // The CSP is too restrictive - it only allows frame-src but no other resources
