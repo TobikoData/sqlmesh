@@ -131,14 +131,14 @@ class ModelKindMixin:
     @property
     def full_history_restatement_only(self) -> bool:
         """Whether or not this model only supports restatement of full history."""
-        return self.model_kind_name in (
-            ModelKindName.INCREMENTAL_UNMANAGED,
-            ModelKindName.INCREMENTAL_BY_UNIQUE_KEY,
-            ModelKindName.INCREMENTAL_BY_PARTITION,
-            ModelKindName.SCD_TYPE_2,
-            ModelKindName.MANAGED,
-            ModelKindName.FULL,
-            ModelKindName.VIEW,
+        return (
+            self.is_incremental_unmanaged
+            or self.is_incremental_by_unique_key
+            or self.is_incremental_by_partition
+            or self.is_scd_type_2
+            or self.is_managed
+            or self.is_full
+            or self.is_view
         )
 
     @property
