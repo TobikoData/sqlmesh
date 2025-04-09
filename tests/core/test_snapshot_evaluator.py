@@ -3972,12 +3972,8 @@ def test_multiple_engine_cleanup(snapshot: Snapshot, adapters, make_snapshot):
 
     evaluator.cleanup(
         [
-            SnapshotTableCleanupTask(
-                snapshot=snapshot.table_info, dev_table_only=True, gateway="default"
-            ),
-            SnapshotTableCleanupTask(
-                snapshot=snapshot_2.table_info, dev_table_only=True, gateway="secondary"
-            ),
+            SnapshotTableCleanupTask(snapshot=snapshot.table_info, dev_table_only=True),
+            SnapshotTableCleanupTask(snapshot=snapshot_2.table_info, dev_table_only=True),
         ],
     )
 
@@ -4066,10 +4062,8 @@ def test_multi_engine_python_model_with_macros(adapters, make_snapshot):
         cascade=False,
     )
 
-    environment_naming_info_gw = EnvironmentNamingInfo(
-        name="test_env", gateway_managed_virtual_layer=True
-    )
-    # Validate that promoting with gateway_managed_virtual_layer leads to this gateway being used for virtual layer
+    environment_naming_info_gw = EnvironmentNamingInfo(name="test_env", gateway_managed=True)
+    # Validate that promoting with gateway_managed leads to this gateway being used for virtual layer
     evaluator.promote([snapshot], environment_naming_info_gw)
     view_args = engine_adapters["secondary"].create_view.call_args_list
     assert len(view_args) == 1
@@ -4119,9 +4113,7 @@ def test_multiple_engine_virtual_layer(snapshot: Snapshot, adapters, make_snapsh
         f"sqlmesh__test_schema.test_schema__test_model__{snapshot_2.version}",
     )
 
-    environment_naming_info = EnvironmentNamingInfo(
-        name="test_env", gateway_managed_virtual_layer=True
-    )
+    environment_naming_info = EnvironmentNamingInfo(name="test_env", gateway_managed=True)
     engine_adapters["third"].create_table.assert_not_called()
     evaluator.promote([snapshot, snapshot_2], environment_naming_info)
 

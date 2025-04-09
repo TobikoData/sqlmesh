@@ -204,7 +204,6 @@ class SnapshotState:
         Returns:
             A tuple of expired snapshot IDs and cleanup targets.
         """
-
         current_ts = now_timestamp(minute_floor=False)
 
         expired_query = exp.select("name", "identifier", "version").from_(self.snapshots_table)
@@ -267,13 +266,11 @@ class SnapshotState:
                         SnapshotTableCleanupTask(
                             snapshot=snapshot.full_snapshot.table_info,
                             dev_table_only=bool(shared_version_snapshots),
-                            gateway=snapshot.raw_snapshot.get("node", {}).get("gateway", None),
                         )
                     )
 
         if expired_snapshot_ids:
             self.delete_snapshots(expired_snapshot_ids)
-
         return expired_snapshot_ids, cleanup_targets
 
     def delete_snapshots(self, snapshot_ids: t.Iterable[SnapshotIdLike]) -> None:

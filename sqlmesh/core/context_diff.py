@@ -121,11 +121,7 @@ class ContextDiff(PydanticModel):
         env = state_reader.get_environment(environment)
 
         create_from_env_exists = False
-        if (
-            env is None
-            or env.expired
-            or env.gateway_managed_virtual_layer != gateway_managed_virtual_layer
-        ):
+        if env is None or env.expired or env.gateway_managed != gateway_managed_virtual_layer:
             env = state_reader.get_environment(create_from.lower())
 
             if not env and create_from != c.PROD:

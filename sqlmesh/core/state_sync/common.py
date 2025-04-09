@@ -23,8 +23,8 @@ logger = logging.getLogger(__name__)
 def cleanup_expired_views(
     adapter: EngineAdapter,
     environments: t.List[Environment],
-    environment_snapshot_adapters: t.Optional[t.Dict[str, t.Dict[str, EngineAdapter]]] = None,
     console: t.Optional[Console] = None,
+    engine_adapters: t.Optional[t.Dict[str, EngineAdapter]] = None,
 ) -> None:
     expired_schema_environments = [
         environment for environment in environments if environment.suffix_target.is_schema
@@ -33,19 +33,16 @@ def cleanup_expired_views(
         environment for environment in environments if environment.suffix_target.is_table
     ]
 
+    # We have to use the corresponding adapter if the virtual layer is gateway managed
+    def get_adapter(gateway_managed: bool, gateway: t.Optional[str] = None) -> EngineAdapter:
+        if gateway_managed and gateway:
+            return (engine_adapters or {}).get(gateway, adapter)
+        return adapter
+
     # Drop the schemas for the expired environments
-    # Note: We have to use the corresponding adapter if it is a gateway managed virtual layer
     for engine_adapter, expired_catalog, expired_schema in {
         (
-            (
-                engine_adapter := (
-                    (environment_dict.get(snapshot.name) or adapter)
-                    if environment.gateway_managed_virtual_layer
-                    and environment_snapshot_adapters
-                    and (environment_dict := environment_snapshot_adapters.get(environment.name))
-                    else adapter
-                )
-            ),
+            (engine_adapter := get_adapter(environment.gateway_managed, snapshot.model_gateway)),
             snapshot.qualified_view_name.catalog_for_environment(
                 environment.naming_info, dialect=engine_adapter.dialect
             ),
@@ -74,15 +71,7 @@ def cleanup_expired_views(
     # Drop the views for the expired environments
     for engine_adapter, expired_view in {
         (
-            (
-                engine_adapter := (
-                    (environment_dict.get(snapshot.name) or adapter)
-                    if environment.gateway_managed_virtual_layer
-                    and environment_snapshot_adapters
-                    and (environment_dict := environment_snapshot_adapters.get(environment.name))
-                    else adapter
-                )
-            ),
+            (engine_adapter := get_adapter(environment.gateway_managed, snapshot.model_gateway)),
             snapshot.qualified_view_name.for_environment(
                 environment.naming_info, dialect=engine_adapter.dialect
             ),

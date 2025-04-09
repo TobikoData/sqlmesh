@@ -4550,7 +4550,7 @@ def test_multi_virtual_layer(mocker):
     state_environments = context.state_reader.get_environments()
     state_snapshots = context.state_reader.get_snapshots(context.snapshots.values())
 
-    assert state_environments[0].gateway_managed_virtual_layer
+    assert state_environments[0].gateway_managed
     assert len(state_snapshots) == len(state_environments[0].snapshots)
 
     assert [snapshot.name for snapshot in plan.directly_modified] == [

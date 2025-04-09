@@ -48,7 +48,7 @@ class EnvironmentState:
             "catalog_name_override": exp.DataType.build("text"),
             "previous_finalized_snapshots": exp.DataType.build(blob_type),
             "normalize_name": exp.DataType.build("boolean"),
-            "gateway_managed_virtual_layer": exp.DataType.build("boolean"),
+            "gateway_managed": exp.DataType.build("boolean"),
             "requirements": exp.DataType.build(blob_type),
         }
 
@@ -168,7 +168,6 @@ class EnvironmentState:
         Returns:
             A list of deleted environments.
         """
-
         now_ts = now_timestamp()
         filter_expr = exp.LTE(
             this=exp.column("expiration_ts"),
@@ -182,10 +181,8 @@ class EnvironmentState:
                 lock_for_update=True,
             ),
         )
-
         environments = [self._environment_from_row(r) for r in rows]
 
-        # Delete the expired environments
         self.engine_adapter.delete_from(
             self.environments_table,
             where=filter_expr,
@@ -331,7 +328,7 @@ def _environment_to_df(environment: Environment) -> pd.DataFrame:
                     else None
                 ),
                 "normalize_name": environment.normalize_name,
-                "gateway_managed_virtual_layer": environment.gateway_managed_virtual_layer,
+                "gateway_managed": environment.gateway_managed,
                 "requirements": json.dumps(environment.requirements),
             }
         ]
