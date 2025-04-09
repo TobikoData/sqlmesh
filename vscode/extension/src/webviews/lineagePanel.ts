@@ -76,8 +76,6 @@ import {
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; frame-src ${externalAuthority}; connect-src ${externalAuthority}; img-src ${externalAuthority} data:; script-src 'unsafe-inline' ${externalAuthority}; style-src 'unsafe-inline' ${externalAuthority};">
 </head>
 <body>
-  <div>${isProd ? "Production" : "Development"}</div>
-  <div>${externalUrl}</div>
   <iframe src="${externalUrl}" style="width:100%; height:100vh;" frameborder="0" allow="clipboard-read; clipboard-write"></iframe>
 </body>
 </html>        `

@@ -92,6 +92,7 @@ export function LineageComponentFromWeb({
         handleClickModel={handleClickModel}
         handleError={handleError}
         models={models}
+        showControls={false}
       >
         <ModelLineage model={model} />
       </LineageFlowProvider>
