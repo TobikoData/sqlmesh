@@ -125,7 +125,7 @@ class model(registry_decorator):
         blueprint_variables: t.Optional[t.Dict[str, t.Any]] = None,
     ) -> Model:
         """Get the model registered by this function."""
-        env: t.Dict[str, t.Any] = {}
+        env: t.Dict[str, t.Tuple[t.Any, t.Optional[bool]]] = {}
         entrypoint = self.func.__name__
 
         if not self.name_provided and not infer_names:

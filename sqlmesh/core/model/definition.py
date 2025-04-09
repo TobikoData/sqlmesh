@@ -2035,14 +2035,7 @@ def load_sql_based_model(
             continue
 
         prop_name = prop.name.lower()
-        if (
-            prop_name
-            in {
-                "signals",
-                "audits",
-            }
-            | PROPERTIES
-        ):
+        if prop_name in {"signals", "audits"} | PROPERTIES:
             unrendered_properties[prop_name] = prop.args.get("value")
         elif (
             prop.name.lower() == "kind"
@@ -2404,14 +2397,17 @@ def _create_model(
         statements.append(kwargs["query"])
     if "post_statements" in kwargs:
         statements.extend(kwargs["post_statements"])
-    if "on_virtual_update" in kwargs:
-        statements.extend(kwargs["on_virtual_update"])
 
-    # to allow variables like @gateway to be used in these properties
-    # since rendering shifted from load time to run time
+    # Macros extracted from these statements need to be treated as metadata only
+    if "on_virtual_update" in kwargs:
+        statements.extend((stmt, True) for stmt in kwargs["on_virtual_update"])
+
+    # This is done to allow variables like @gateway to be used in these properties
+    # since rendering shifted from load time to run time.
+    # Note: we check for Tuple since that's what we expect from _resolve_properties
     for property_name in PROPERTIES:
-        if property_values := kwargs.get(property_name):
-            statements.extend(property_values)
+        if isinstance(property_values := kwargs.get(property_name), exp.Tuple):
+            statements.extend(property_values.expressions)
 
     jinja_macro_references, used_variables = extract_macro_references_and_variables(
         *(gen(e) for e in statements)
@@ -2443,11 +2439,15 @@ def _create_model(
         raise_config_error(str(ex), location=path)
         raise
 
-    audit_definitions = audit_definitions or {}
-    inline_audits = inline_audits or {}
-    audit_definitions = {**audit_definitions, **inline_audits}
+    audit_definitions = {
+        **(audit_definitions or {}),
+        **(inline_audits or {}),
+    }
 
-    used_audits = set(inline_audits)
+    # TODO: default_audits needs to be merged with model.audits; the former's arguments
+    # are silently dropped today because we add them in audit_definitions. We also need
+    # to check for duplicates when we implement this merging logic.
+    used_audits: t.Set[str] = set()
     used_audits.update(audit_name for audit_name, _ in default_audits or [])
     used_audits.update(audit_name for audit_name, _ in model.audits)
 
@@ -2459,12 +2459,15 @@ def _create_model(
 
     model.audit_definitions.update(audit_definitions)
 
-    statements.extend(audit.query for audit in audit_definitions.values())
+    # Any macro referenced in audits or signals needs to be treated as metadata-only
+    statements.extend((audit.query, True) for audit in audit_definitions.values())
     for _, audit_args in model.audits:
-        statements.extend(audit_args.values())
+        statements.extend(
+            (audit_arg_expression, True) for audit_arg_expression in audit_args.values()
+        )
 
     for _, kwargs in model.signals:
-        statements.extend(kwargs.values())
+        statements.extend((signal_kwarg, True) for signal_kwarg in kwargs.values())
 
     python_env = python_env or {}
 
@@ -2482,7 +2485,7 @@ def _create_model(
         dialect=dialect,
     )
 
-    env: t.Dict[str, t.Any] = {}
+    env: t.Dict[str, t.Tuple[t.Any, t.Optional[bool]]] = {}
 
     for signal_name, _ in model.signals:
         if signal_definitions and signal_name in signal_definitions:
