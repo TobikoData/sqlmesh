@@ -37,6 +37,7 @@ from sqlmesh.core.snapshot import (
     SnapshotInfoLike,
     SnapshotTableInfo,
 )
+from sqlmesh.core.scheduler import CompletionStatus
 from sqlmesh.core.state_sync import StateSync
 from sqlmesh.core.state_sync.base import PromotionResult
 from sqlmesh.core.user import User
@@ -136,7 +137,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             self._push(plan, snapshots, deployability_index_for_creation)
             update_intervals_for_new_snapshots(plan.new_snapshots, self.state_sync)
             self._restate(plan, snapshots_by_name)
-            self._backfill(
+            first_bf_completion_status = self._backfill(
                 plan,
                 snapshots_by_name,
                 before_promote_snapshots,
@@ -146,19 +147,21 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             promotion_result = self._promote(
                 plan, snapshots, before_promote_snapshots, deployability_index_for_creation
             )
-            self._backfill(
+            second_bf_completion_status = self._backfill(
                 plan,
                 snapshots_by_name,
                 after_promote_snapshots,
                 deployability_index_for_evaluation,
                 circuit_breaker=circuit_breaker,
             )
+            if (
+                first_bf_completion_status.is_nothing_to_do
+                and second_bf_completion_status.is_nothing_to_do
+            ):
+                self.console.log_status_update("[green]SKIP: No model batches to execute[/green]\n")
             self._update_views(
                 plan, snapshots, promotion_result, deployability_index_for_evaluation
             )
-
-            if not plan.requires_backfill:
-                self.console.log_success("Virtual Update executed successfully")
 
             execute_environment_statements(
                 adapter=self.snapshot_evaluator.adapter,
@@ -187,7 +190,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         selected_snapshots: t.Set[str],
         deployability_index: DeployabilityIndex,
         circuit_breaker: t.Optional[t.Callable[[], bool]] = None,
-    ) -> None:
+    ) -> CompletionStatus:
         """Backfill missing intervals for snapshots that are part of the given plan.
 
         Args:
@@ -212,10 +215,10 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                     )
                 )
             self.state_sync.add_snapshots_intervals(intervals_to_add)
-            return
+            return CompletionStatus.NOTHING_TO_DO
 
         if not plan.requires_backfill or not selected_snapshots:
-            return
+            return CompletionStatus.NOTHING_TO_DO
 
         scheduler = self.create_scheduler(snapshots_by_name.values())
         completion_status = scheduler.run(
@@ -235,6 +238,8 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         )
         if completion_status.is_failure:
             raise PlanError("Plan application failed.")
+
+        return completion_status
 
     def _push(
         self,
@@ -279,6 +284,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                 on_start=lambda x: self.console.start_creation_progress(
                     x, plan.environment, self.default_catalog
                 ),
+                on_no_work=self.console.log_status_update,
                 on_complete=self.console.update_creation_progress,
             )
             completed = True
