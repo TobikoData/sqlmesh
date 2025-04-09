@@ -24,7 +24,10 @@ from sqlmesh.utils.pydantic import ValidationInfo, field_validator
 
 if t.TYPE_CHECKING:
     from sqlglot.dialects.dialect import DialectType
+    from sqlmesh.utils import registry_decorator
     from sqlmesh.utils.jinja import MacroReference
+
+    MacroCallable = registry_decorator
 
 
 def make_python_env(
@@ -43,56 +46,74 @@ def make_python_env(
     python_env = {} if python_env is None else python_env
     variables = variables or {}
     env: t.Dict[str, t.Tuple[t.Any, t.Optional[bool]]] = {}
-    used_macros = {}
+    used_macros: t.Dict[
+        str,
+        t.Tuple[t.Union[Executable | MacroCallable], t.Optional[bool]],
+    ] = {}
     used_variables = (used_variables or set()).copy()
 
     expressions = ensure_list(expressions)
     for expression in expressions:
-        if not isinstance(expression, d.Jinja):
-            for macro_func_or_var in expression.find_all(d.MacroFunc, d.MacroVar, exp.Identifier):
-                if macro_func_or_var.__class__ is d.MacroFunc:
-                    name = macro_func_or_var.this.name.lower()
-                    if name in macros:
-                        used_macro = macros[name]
-                        if callable(used_macro) and expression.meta.get("metadata_only"):
-                            setattr(used_macro.func, c.SQLMESH_METADATA, True)
+        if isinstance(expression, d.Jinja):
+            continue
 
-                        used_macros[name] = used_macro
-                        if name == c.VAR:
-                            args = macro_func_or_var.this.expressions
-                            if len(args) < 1:
-                                raise_config_error("Macro VAR requires at least one argument", path)
-                            if not args[0].is_string:
-                                raise_config_error(
-                                    f"The variable name must be a string literal, '{args[0].sql()}' was given instead",
-                                    path,
-                                )
-                            used_variables.add(args[0].this.lower())
-                elif macro_func_or_var.__class__ is d.MacroVar:
-                    name = macro_func_or_var.name.lower()
-                    if name in macros:
-                        used_macros[name] = macros[name]
-                    elif name in variables:
-                        used_variables.add(name)
-                elif (
-                    isinstance(macro_func_or_var, (exp.Identifier, d.MacroStrReplace, d.MacroSQL))
-                ) and "@" in macro_func_or_var.name:
-                    for _, identifier, braced_identifier, _ in MacroStrTemplate.pattern.findall(
-                        macro_func_or_var.name
-                    ):
-                        var_name = braced_identifier or identifier
-                        if var_name in variables:
-                            used_variables.add(var_name)
+        for macro_func_or_var in expression.find_all(d.MacroFunc, d.MacroVar, exp.Identifier):
+            if macro_func_or_var.__class__ is d.MacroFunc:
+                name = macro_func_or_var.this.name.lower()
+                if name not in macros:
+                    continue
+
+                # If this macro has been seen before as a non-metadata macro, prioritize that
+                used_macros[name] = (
+                    macros[name],
+                    (used_macros.get(name) or (None, expression.meta.get("is_metadata")))[1],
+                )
+                if name == c.VAR:
+                    args = macro_func_or_var.this.expressions
+                    if len(args) < 1:
+                        raise_config_error("Macro VAR requires at least one argument", path)
+                    if not args[0].is_string:
+                        raise_config_error(
+                            f"The variable name must be a string literal, '{args[0].sql()}' was given instead",
+                            path,
+                        )
+                    used_variables.add(args[0].this.lower())
+            elif macro_func_or_var.__class__ is d.MacroVar:
+                name = macro_func_or_var.name.lower()
+                if name in macros:
+                    # If this macro has been seen before as a non-metadata macro, prioritize that
+                    used_macros[name] = (
+                        macros[name],
+                        (used_macros.get(name) or (None, expression.meta.get("is_metadata")))[1],
+                    )
+                elif name in variables:
+                    used_variables.add(name)
+            elif (
+                isinstance(macro_func_or_var, (exp.Identifier, d.MacroStrReplace, d.MacroSQL))
+            ) and "@" in macro_func_or_var.name:
+                for _, identifier, braced_identifier, _ in MacroStrTemplate.pattern.findall(
+                    macro_func_or_var.name
+                ):
+                    var_name = braced_identifier or identifier
+                    if var_name in variables:
+                        used_variables.add(var_name)
 
     for macro_ref in jinja_macro_references or set():
         if macro_ref.package is None and macro_ref.name in macros:
-            used_macros[macro_ref.name] = macros[macro_ref.name]
+            used_macros[macro_ref.name] = (macros[macro_ref.name], None)
 
-    for name, used_macro in used_macros.items():
+    for name, (used_macro, is_metadata) in used_macros.items():
         if isinstance(used_macro, Executable):
             python_env[name] = used_macro
         elif not hasattr(used_macro, c.SQLMESH_BUILTIN) and name not in python_env:
+            used_macro_func = used_macro.func
+            previous_is_metadata = getattr(used_macro_func, c.SQLMESH_METADATA, None)
+
+            if is_metadata:
+                setattr(used_macro_func, c.SQLMESH_METADATA, is_metadata)
+
             build_env(used_macro.func, env=env, name=name, path=module_path)
+            setattr(used_macro_func, c.SQLMESH_METADATA, previous_is_metadata)
 
     python_env.update(serialize_env(env, path=module_path))
     return _add_variables_to_python_env(

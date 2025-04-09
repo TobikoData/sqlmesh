@@ -8811,7 +8811,7 @@ def test_macros_referenced_in_audits_or_signals_are_metadata_only(tmp_path: Path
           name test_model,
           kind FULL,
           signals (
-            test_signal_always_true(arg := @m1())
+            test_signal_always_true(arg1 := @m1(), arg2 := @non_metadata_macro())
           ),
           audits (
             unique_values(columns := @m2())
@@ -8819,7 +8819,8 @@ def test_macros_referenced_in_audits_or_signals_are_metadata_only(tmp_path: Path
         );
 
         SELECT
-          1 AS c
+          1 AS c1,
+          @non_metadata_macro() AS c2,
         """
     )
 
@@ -8837,7 +8838,11 @@ def m1(evaluator):
 
 @macro()
 def m2(evaluator):
-    return exp.column("c")"""
+    return exp.column("c")
+
+@macro()
+def non_metadata_macro(evaluator):
+    return 1"""
 
     test_macros = tmp_path / "macros/test_macros.py"
     test_macros.parent.mkdir(parents=True, exist_ok=True)
@@ -8852,7 +8857,7 @@ def bar():
     pass
 
 @signal()
-def test_signal_always_true(batch, arg):
+def test_signal_always_true(batch, arg1, arg2):
     bar()
     return True"""
 
@@ -8869,13 +8874,18 @@ def test_signal_always_true(batch, arg):
 
     python_env = model.python_env
 
-    assert len(python_env) == 6
+    assert len(python_env) == 7
     assert (python_env.get("test_signal_always_true") or empty_executable).is_metadata
     assert (python_env.get("bar") or empty_executable).is_metadata
     assert (python_env.get("m1") or empty_executable).is_metadata
     assert (python_env.get("baz") or empty_executable).is_metadata
     assert (python_env.get("m2") or empty_executable).is_metadata
     assert (python_env.get("exp") or empty_executable).is_metadata
+
+    # non_metadata_macro is referenced in the signal, which makes that reference "metadata only",
+    # but it's also referenced in the model's query and the macro itself is not "metadata only",
+    # so the corresponding executable needs to be included in the data hash calculation
+    assert not (python_env.get("non_metadata_macro") or empty_executable).is_metadata
 
 
 def test_scd_type_2_full_history_restatement():
