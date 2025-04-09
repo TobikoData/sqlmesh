@@ -13,4 +13,4 @@ def generate_openapi_spec(app: FastAPI, path: str) -> None:
 if __name__ == "__main__":
     app = create_app()
 
-    generate_openapi_spec(app, "web/client/openapi.json")
+    generate_openapi_spec(app, "vscode/openapi.json")
