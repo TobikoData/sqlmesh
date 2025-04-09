@@ -1619,7 +1619,7 @@ test_parameterized_model_names:
     # Case 2: Test gateway variables
     context.config = Config(
         gateways={
-            "main": GatewayConfig(connection=DuckDBConnectionConfig(), variables=variables),
+            "": GatewayConfig(connection=DuckDBConnectionConfig(), variables=variables),
         },
         model_defaults=ModelDefaultsConfig(dialect="duckdb"),
     )
@@ -1633,7 +1633,7 @@ test_parameterized_model_names:
     # Case 3: Test gateway variables overriding root variables
     context.config = Config(
         gateways={
-            "main": GatewayConfig(connection=DuckDBConnectionConfig(), variables=variables),
+            "": GatewayConfig(connection=DuckDBConnectionConfig(), variables=variables),
         },
         model_defaults=ModelDefaultsConfig(dialect="duckdb"),
         variables={"gold": "foo", "silver": "bar"},
