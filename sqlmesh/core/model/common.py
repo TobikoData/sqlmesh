@@ -31,7 +31,10 @@ if t.TYPE_CHECKING:
 
 
 def make_python_env(
-    expressions: t.Union[exp.Expression, t.List[exp.Expression]],
+    expressions: t.Union[
+        exp.Expression,
+        t.List[t.Union[exp.Expression, t.Tuple[exp.Expression, bool]]],
+    ],
     jinja_macro_references: t.Optional[t.Set[MacroReference]],
     module_path: Path,
     macros: MacroRegistry,
@@ -53,7 +56,12 @@ def make_python_env(
     used_variables = (used_variables or set()).copy()
 
     expressions = ensure_list(expressions)
-    for expression in expressions:
+    for expression_metadata in expressions:
+        if isinstance(expression_metadata, tuple):
+            expression, is_metadata = expression_metadata
+        else:
+            expression, is_metadata = expression_metadata, None
+
         if isinstance(expression, d.Jinja):
             continue
 
@@ -66,7 +74,7 @@ def make_python_env(
                 # If this macro has been seen before as a non-metadata macro, prioritize that
                 used_macros[name] = (
                     macros[name],
-                    (used_macros.get(name) or (None, expression.meta.get("is_metadata")))[1],
+                    (used_macros.get(name) or (None, is_metadata))[1],
                 )
                 if name == c.VAR:
                     args = macro_func_or_var.this.expressions
@@ -84,7 +92,7 @@ def make_python_env(
                     # If this macro has been seen before as a non-metadata macro, prioritize that
                     used_macros[name] = (
                         macros[name],
-                        (used_macros.get(name) or (None, expression.meta.get("is_metadata")))[1],
+                        (used_macros.get(name) or (None, is_metadata))[1],
                     )
                 elif name in variables:
                     used_variables.add(name)

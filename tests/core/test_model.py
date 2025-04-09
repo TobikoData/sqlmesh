@@ -1369,12 +1369,17 @@ def test_enable_audits_from_model_defaults():
     """
     )
 
-    model = load_sql_based_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
+    model_defaults = ModelDefaultsConfig(dialect="duckdb", audits=["assert_positive_order_ids"])
+
+    model = load_sql_based_model(
+        expressions,
+        path=Path("./examples/sushi/models/test_model.sql"),
+        default_audits=model_defaults.audits,
+    )
+
     assert len(model.audits) == 0
 
-    config = Config(
-        model_defaults=ModelDefaultsConfig(dialect="duckdb", audits=["assert_positive_order_ids"])
-    )
+    config = Config(model_defaults=model_defaults)
     assert config.model_defaults.audits[0] == ("assert_positive_order_ids", {})
 
     audits_with_args = model.audits_with_args
@@ -8800,7 +8805,9 @@ def m2(evaluator):
     assert not (python_env.get("common_dep") or empty_executable).is_metadata
 
 
-def test_macros_referenced_in_audits_or_signals_are_metadata_only(tmp_path: Path) -> None:
+def test_macros_referenced_in_metadata_statements_and_properties_are_metadata_only(
+    tmp_path: Path,
+) -> None:
     init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
 
     test_model = tmp_path / "models/test_model.sql"
@@ -8814,13 +8821,24 @@ def test_macros_referenced_in_audits_or_signals_are_metadata_only(tmp_path: Path
             test_signal_always_true(arg1 := @m1(), arg2 := @non_metadata_macro())
           ),
           audits (
-            unique_values(columns := @m2())
+            non_zero_c1,
+            unique_values(columns := @m2()),
           ),
         );
 
         SELECT
           1 AS c1,
-          @non_metadata_macro() AS c2,
+          @zero_alt() AS c2,
+          @zero_metadata() AS c3,
+          @non_metadata_macro() AS c4;
+
+
+        ON_VIRTUAL_UPDATE_BEGIN;
+
+        @bla();
+
+        ON_VIRTUAL_UPDATE_END;
+
         """
     )
 
@@ -8831,6 +8849,13 @@ from sqlmesh import macro
 def baz():
     pass
 
+def bob():
+    pass
+
+@macro()
+def bla():
+    bob()
+
 @macro()
 def m1(evaluator):
     baz()
@@ -8839,6 +8864,18 @@ def m1(evaluator):
 @macro()
 def m2(evaluator):
     return exp.column("c")
+
+@macro()
+def zero(evaluator):
+    return 0
+
+@macro()
+def zero_alt(evaluator):
+    return 0
+
+@macro(metadata_only=True)
+def zero_metadata(evaluator):
+    return 0
 
 @macro()
 def non_metadata_macro(evaluator):
@@ -8865,6 +8902,22 @@ def test_signal_always_true(batch, arg1, arg2):
     test_signals.parent.mkdir(parents=True, exist_ok=True)
     test_signals.write_text(signal_code)
 
+    audit_code = """
+    AUDIT (
+      name non_zero_c1,
+    );
+
+    SELECT
+      *
+    FROM @this_model
+    WHERE
+      c = @zero() OR c = @zero_alt() OR c = @zero_metadata();
+    """
+
+    test_audits = tmp_path / "audits/non_zero_c1.sql"
+    test_audits.parent.mkdir(parents=True, exist_ok=True)
+    test_audits.write_text(audit_code)
+
     ctx = Context(
         config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb")),
         paths=tmp_path,
@@ -8874,17 +8927,23 @@ def test_signal_always_true(batch, arg1, arg2):
 
     python_env = model.python_env
 
-    assert len(python_env) == 7
+    assert len(python_env) == 12
     assert (python_env.get("test_signal_always_true") or empty_executable).is_metadata
     assert (python_env.get("bar") or empty_executable).is_metadata
     assert (python_env.get("m1") or empty_executable).is_metadata
     assert (python_env.get("baz") or empty_executable).is_metadata
     assert (python_env.get("m2") or empty_executable).is_metadata
     assert (python_env.get("exp") or empty_executable).is_metadata
+    assert (python_env.get("zero") or empty_executable).is_metadata
+    assert (python_env.get("zero_metadata") or empty_executable).is_metadata
+    assert (python_env.get("bla") or empty_executable).is_metadata
+    assert (python_env.get("bob") or empty_executable).is_metadata
 
     # non_metadata_macro is referenced in the signal, which makes that reference "metadata only",
     # but it's also referenced in the model's query and the macro itself is not "metadata only",
-    # so the corresponding executable needs to be included in the data hash calculation
+    # so the corresponding executable needs to be included in the data hash calculation. The same
+    # is true for zero_alt, which is referenced in the non_zero_c1 audit.
+    assert not (python_env.get("zero_alt") or empty_executable).is_metadata
     assert not (python_env.get("non_metadata_macro") or empty_executable).is_metadata
 
 

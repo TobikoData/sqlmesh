@@ -849,7 +849,7 @@ def test_load_inline_audits(assert_exp_eq):
         MODEL (
             name db.table,
             dialect spark,
-            audits(does_not_exceed_threshold)
+            audits(does_not_exceed_threshold, assert_positive_id)
         );
 
         SELECT id FROM tbl;
@@ -871,7 +871,7 @@ def test_load_inline_audits(assert_exp_eq):
     )
 
     model = load_sql_based_model(expressions)
-    assert len(model.audits) == 1
+    assert len(model.audits) == 2
     assert len(model.audits_with_args) == 2
     assert isinstance(model.audit_definitions["assert_positive_id"], ModelAudit)
     assert isinstance(model.audit_definitions["does_not_exceed_threshold"], ModelAudit)
