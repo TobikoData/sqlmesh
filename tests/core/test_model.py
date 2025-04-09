@@ -8665,3 +8665,10 @@ def test_data_hash_unchanged_when_column_type_uses_default_dialect():
 
     # int == int64 in bigquery
     assert model.data_hash == deserialized_model.data_hash
+
+
+def test_scd_type_2_full_history_restatement():
+    assert ModelKindName.SCD_TYPE_2.full_history_restatement_only is True
+    assert ModelKindName.SCD_TYPE_2_BY_TIME.full_history_restatement_only is True
+    assert ModelKindName.SCD_TYPE_2_BY_COLUMN.full_history_restatement_only is True
+    assert ModelKindName.INCREMENTAL_BY_TIME_RANGE.full_history_restatement_only is False
