@@ -32,6 +32,8 @@ from sqlmesh.utils.errors import ConfigError, SQLMeshError, TestError
 from sqlmesh.utils.yaml import dump as dump_yaml
 from sqlmesh.utils.yaml import load as load_yaml
 
+from tests.utils.test_helpers import use_terminal_console
+
 if t.TYPE_CHECKING:
     from unittest import TestResult
 
@@ -1560,10 +1562,13 @@ test_pyspark_model:
 def test_variable_usage(tmp_path: Path) -> None:
     init_example_project(tmp_path, dialect="duckdb")
 
+    variables = {"gold": "gold_db", "silver": "silver_db"}
+
+    # Case 1: Test root variables
     config = Config(
         default_connection=DuckDBConnectionConfig(),
         model_defaults=ModelDefaultsConfig(dialect="duckdb"),
-        variables={"gold": "gold_db", "silver": "silver_db"},
+        variables=variables,
     )
     context = Context(paths=tmp_path, config=config)
 
@@ -1609,6 +1614,35 @@ test_parameterized_model_names:
     assert not results.errors
 
     # The example project has one test and we added another one above
+    assert len(results.successes) == 2
+
+    # Case 2: Test gateway variables
+    context.config = Config(
+        gateways={
+            "main": GatewayConfig(connection=DuckDBConnectionConfig(), variables=variables),
+        },
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+    )
+
+    results = context.test()
+
+    assert not results.failures
+    assert not results.errors
+    assert len(results.successes) == 2
+
+    # Case 3: Test gateway variables overriding root variables
+    context.config = Config(
+        gateways={
+            "main": GatewayConfig(connection=DuckDBConnectionConfig(), variables=variables),
+        },
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        variables={"gold": "foo", "silver": "bar"},
+    )
+
+    results = context.test()
+
+    assert not results.failures
+    assert not results.errors
     assert len(results.successes) == 2
 
 
@@ -2203,3 +2237,53 @@ AssertionError: Data mismatch (exp: expected, act: actual)
 
     assert "Ran 102 tests" in output.stderr
     assert "FAILED (failures=51)" in output.stderr
+
+
+@use_terminal_console
+def test_test_output_with_invalid_model_name(tmp_path: Path) -> None:
+    init_example_project(tmp_path, dialect="duckdb")
+
+    wrong_test_file = tmp_path / "tests" / "test_incorrect_model_name.yaml"
+    wrong_test_file.write_text(
+        """
+test_example_full_model:
+  model: invalid_model
+  description: This is an invalid test
+  inputs:
+    sqlmesh_example.incremental_model:
+      rows:
+      - id: 1
+        item_id: 1
+      - id: 2
+        item_id: 1
+      - id: 3
+        item_id: 2
+  outputs:
+    query:
+      rows:
+      - item_id: 1
+        num_orders: 2
+      - item_id: 2
+        num_orders: 2 
+        """
+    )
+
+    config = Config(
+        default_connection=DuckDBConnectionConfig(),
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+    )
+    context = Context(paths=tmp_path, config=config)
+
+    with patch.object(get_console(), "log_warning") as mock_logger:
+        with capture_output() as output:
+            context.test()
+
+        assert (
+            f"""Model '"invalid_model"' was not found at {wrong_test_file}"""
+            in mock_logger.call_args[0][0]
+        )
+        assert (
+            ".\n----------------------------------------------------------------------\nRan 1 test in"
+            in output.stderr
+        )
+        assert "OK" in output.stderr

@@ -8,9 +8,13 @@ from collections.abc import Iterator
 
 import ruamel
 
+from sqlmesh.core import constants as c
 from sqlmesh.utils import unique
 from sqlmesh.utils.pydantic import PydanticModel
 from sqlmesh.utils.yaml import load as yaml_load
+
+if t.TYPE_CHECKING:
+    from sqlmesh.core.config.loader import C
 
 
 class ModelTestMetadata(PydanticModel):
@@ -113,3 +117,46 @@ def get_all_model_tests(
     if patterns:
         model_test_metadatas = filter_tests_by_patterns(model_test_metadatas, patterns)
     return model_test_metadatas
+
+
+def load_model_tests(
+    configs: dict[pathlib.Path, C],
+    tests: t.Optional[t.List[str]] = None,
+    patterns: list[str] | None = None,
+    variables: dict[str, t.Any] | None = None,
+) -> list[ModelTestMetadata]:
+    """Load model tests into a list of ModelTestMetadata which will be propagated to the test runner.
+
+    Args:
+        tests: A list of tests to load; If not specified, all tests are loaded
+        patterns: A list of patterns to match against.
+        variables: A dictionary of variables to use when loading the tests.
+        configs: A dictionary of configs to use when loading all the tests.
+    """
+    test_meta = []
+
+    if tests:
+        for test in tests:
+            filename, test_name = test.split("::", maxsplit=1) if "::" in test else (test, "")
+
+            test_file = load_model_test_file(pathlib.Path(filename), variables=variables)
+            if test_name:
+                test_meta.append(test_file[test_name])
+            else:
+                test_meta.extend(test_file.values())
+
+        if patterns:
+            test_meta = filter_tests_by_patterns(test_meta, patterns)
+
+    else:
+        for path, config in configs.items():
+            test_meta.extend(
+                get_all_model_tests(
+                    path / c.TESTS,
+                    patterns=patterns,
+                    ignore_patterns=config.ignore_patterns,
+                    variables=variables,
+                )
+            )
+
+    return test_meta
