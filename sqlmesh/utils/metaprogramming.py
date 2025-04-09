@@ -280,7 +280,7 @@ def build_env(
         env: Dictionary to store the env.
         name: Name of the object in the env.
         path: The module path to serialize. Other modules will not be walked and treated as imports.
-        is_metadata_obj: An optional flag that determins whether the input object is metadata-only.
+        is_metadata_obj: An optional flag that determines whether the input object is metadata-only.
     """
     # We don't rely on `env` to keep track of visited objects, because it's populated in post-order
     visited: t.Set[str] = set()
