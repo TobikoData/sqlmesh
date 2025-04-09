@@ -46,7 +46,7 @@ export default function ModelNode({
   } = useLineageFlow()
 
   const columns: Column[] = useMemo(() => {
-    const model = models.get(id)
+    const model = models[id]
     const modelColumns = model?.columns ?? []
 
     Object.keys(lineage[id]?.columns ?? {}).forEach((column: string) => {

@@ -172,7 +172,7 @@ function getNodeMap({
   const modelNames = Object.keys(lineage)
 
   return modelNames.reduce((acc: Record<string, Node>, modelName: string) => {
-    const model = models.get(modelName)
+    const model = models[modelName]
     const node = createGraphNode(modelName, {
       label: model?.displayName ?? modelName,
       withColumns,
@@ -187,7 +187,7 @@ function getNodeMap({
           : EnumLineageNodeModelType.cte,
     })
     const columnsCount = withColumns
-      ? (models.get(modelName)?.columns?.length ?? 0)
+      ? (models[modelName]?.columns?.length ?? 0)
       : 0
 
     const maxWidth = Math.min(
@@ -216,7 +216,7 @@ function getNodeMap({
 
   function getNodeMaxWidth(label: string, hasColumns: boolean = false): number {
     const defaultWidth = label.length * CHAR_WIDTH
-    const columns = models.get(label)?.columns ?? []
+    const columns = models[label]?.columns ?? []
 
     return hasColumns
       ? Math.max(...columns.map(getColumnWidth), defaultWidth)

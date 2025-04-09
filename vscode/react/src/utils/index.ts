@@ -18,7 +18,7 @@ export function isNumber(value: unknown): value is number {
   return typeof value === 'number'
 }
 
-export function isPrimitive(value: unknown): value is Primitive {
+export function isPrimitive(value: unknown): value is string | number | boolean {
   return isString(value) || isNumber(value) || typeof value === 'boolean'
 }
 
@@ -130,7 +130,7 @@ export function toRatio(
   return (top / bottom) * multiplier
 }
 
-export function parseJSON<T>(value: string | null): Optional<T> {
+export function parseJSON<T>(value: string | null): T | undefined {
   if (isNil(value)) return undefined
 
   try {
