@@ -1,17 +1,19 @@
 """
-This migration script has two purposes:
+This script's goal is to warn users if there is both a metadata and non-metadata reference in
+the python environment of a model. Additionally, it warns them if there's a macro referenced
+in a used audit's query, in the argument list of the audits and signals properties, or in an
+on_virtual_update statement.
 
-1) Mark all python env macros referenced in audits, signals or on_virtual_update statements
-   as metadata, unless they're referenced elsewhere in the model and they're not metadata-only.
+Context:
 
-2) Warn if there is both metadata and non-metadata reference in the python environment of a model.
+The metadata status for macros and signals is now transitive, i.e. every dependency of a
+metadata macro or signal is also metadata, unless it is referenced by a non-metadata object.
 
-   The metadata status for macros and signals is now transitive, i.e. every dependency of a
-   metadata macro or signal is also metadata, unless it is referenced by a non-metadata object.
+This means that global references of metadata objects may now be excluded from the data hash
+calculation because of their new metadata status, which would lead to a diff.
 
-   This means that global references of metadata objects may now be excluded from the
-   data hash calculation because of their new metadata status, which would lead to a
-   diff. This script detects the possibility for such a diff and warns users ahead of time.
+Additionally, we now implicitly treat macro refs in the aforementioned statements as "metadata-only",
+even though they may not be marked as such by a user. This may also lead to a diff.
 """
 
 import json
@@ -29,11 +31,13 @@ def migrate(state_sync, **kwargs):  # type: ignore
     if schema:
         snapshots_table = f"{schema}.{snapshots_table}"
 
-    common_msg = (
-        "Since the metadata status is now propagated transitively, this means that the next plan "
-        "command may detect unexpected changes and prompt about backfilling this model, or others, "
-        "for the same reason. If this is a concern, consider running a forward-only plan instead: "
-        "https://sqlmesh.readthedocs.io/en/stable/concepts/plans/#forward-only-plans.\n"
+    warning = (
+        "SQLMesh detected that it may not be able to fully migrate the state database. This should not impact "
+        "the migration process, but may result in unexpected changes being reported by the next `sqlmesh plan` "
+        "command. Please run the `sqlmesh diff` (https://sqlmesh.readthedocs.io/en/stable/reference/cli/?h=cli#diff) "
+        "command after the migration has completed, before making any new changes. If any unexpected changes are reported, "
+        "consider running a forward-only plan (https://sqlmesh.readthedocs.io/en/stable/concepts/plans/#forward-only-plans) "
+        "to avoid unnecessary backfills.\n"
     )
 
     for (snapshot,) in engine_adapter.fetchall(
@@ -59,10 +63,7 @@ def migrate(state_sync, **kwargs):  # type: ignore
                 has_non_metadata = True
 
             if has_metadata and has_non_metadata:
-                get_console().log_warning(
-                    f"Model '{name}' references both metadata and non-metadata functions (macros or signals). "
-                    + common_msg
-                )
+                get_console().log_warning(warning)
                 return
 
         dialect = node.get("dialect")
@@ -89,10 +90,7 @@ def migrate(state_sync, **kwargs):  # type: ignore
         for macro_name in extract_used_macros(metadata_hash_statements):
             serialized_macro = python_env.get(macro_name)
             if isinstance(serialized_macro, dict) and not serialized_macro.get("is_metadata"):
-                get_console().log_warning(
-                    f"Model '{name}' references macro '{macro_name}' which is now implicitly treated as metadata-only. "
-                    + common_msg
-                )
+                get_console().log_warning(warning)
                 return
 
 
