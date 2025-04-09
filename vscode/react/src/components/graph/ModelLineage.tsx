@@ -19,7 +19,7 @@ import ReactFlow, {
 } from 'reactflow'
 import Loading from '@/components/loading/Loading'
 import Spinner from '@/components/logo/Spinner'
-import { createLineageWorker } from '@/workers'
+import { createLineageWorker } from '@/workers/index'
 import { isArrayEmpty, isFalse, isNil, isNotNil } from '@/utils/index'
 import ListboxShow from '@/components/listbox/ListboxShow'
 import clsx from 'clsx'
@@ -37,6 +37,7 @@ import { Popover } from '@headlessui/react'
 import ModelLineageDetails from './ModelLineageDetails'
 import { Divider } from '@/components/divider/Divider'
 import { type ModelLineageApiLineageModelNameGet200 } from '@/api/client'
+import './Graph.css'
 
 const WITH_COLUMNS_LIMIT = 30
 
@@ -62,7 +63,17 @@ export function ModelLineage({
     setUnknownModels,
     models,
     unknownModels,
+    setWithSecondary,
+    setWithConnected,
+    setWithImpacted,
   } = useLineageFlow()
+
+  useEffect(() => {
+    setWithColumns(true)
+    setWithSecondary(true)
+    setWithConnected(true)
+    setWithImpacted(true)
+  }, [setWithSecondary])
 
   const {
     refetch: getModelLineage,
@@ -414,6 +425,13 @@ function GraphControls({ nodes = [] }: { nodes: Node[] }): JSX.Element {
     setWithSecondary,
     setHasBackground,
   } = useLineageFlow()
+
+  useEffect(() => {
+    setWithColumns(true)
+    setWithSecondary(true)
+    setWithConnected(true)
+    setWithImpacted(true)
+  }, [setWithSecondary])
 
   const lineageInfoTrigger = useRef<HTMLButtonElement>(null)
 

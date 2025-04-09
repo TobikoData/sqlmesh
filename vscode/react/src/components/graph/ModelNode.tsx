@@ -20,8 +20,8 @@ export const EnumColumnType = {
   STRUCT: 'STRUCT',
 } as const
 
-export type LineageNodeModelType = KeyOf<typeof EnumLineageNodeModelType>
-export type ColumnType = KeyOf<typeof EnumColumnType>
+export type LineageNodeModelType = keyof typeof EnumLineageNodeModelType
+export type ColumnType = keyof typeof EnumColumnType
 
 export default function ModelNode({
   id,
