@@ -1575,32 +1575,15 @@ def test_variable_usage(tmp_path: Path) -> None:
         meta="MODEL (name gold_db.sch.a, kind INCREMENTAL_BY_TIME_RANGE(time_column ds))",
     )
 
-    def init_context(config: Config, **kwargs):
-        context = Context(paths=tmp_path, config=config, **kwargs)
-        context.upsert_model(parent)
-        context.upsert_model(child)
-        return context
-
-    # Case 1: Test root variables
-    config = Config(
-        default_connection=DuckDBConnectionConfig(),
-        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
-        variables=variables,
-    )
-
-    context = init_context(config)
-
-    test_file = tmp_path / "tests" / "test_parameterized_model_names.yaml"
-    test_file.write_text(
-        """
+    test_text = """
 test_parameterized_model_names:
-  model: {{ var('gold') }}.sch.a
+  model: {{{{ var('gold') }}}}.sch.a {gateway}
   vars:
     myvar: True
     start_ds: 2022-01-01
     end_ds: 2022-01-03
   inputs:
-    {{ var('silver') }}.sch.b:
+    {{{{ var('silver') }}}}.sch.b:
       - ds: 2022-01-01
         id: 1
       - ds: 2022-01-01
@@ -1610,17 +1593,31 @@ test_parameterized_model_names:
       - ds: 2022-01-01
         id: 1
       - ds: 2022-01-01
-        id: 2
-        """
+        id: 2"""
+
+    test_file = tmp_path / "tests" / "test_parameterized_model_names.yaml"
+
+    def init_context_and_validate_results(config: Config, **kwargs):
+        context = Context(paths=tmp_path, config=config, **kwargs)
+        context.upsert_model(parent)
+        context.upsert_model(child)
+
+        results = context.test()
+
+        assert not results.failures
+        assert not results.errors
+        assert len(results.successes) == 2
+
+    # Case 1: Test root variables
+    config = Config(
+        default_connection=DuckDBConnectionConfig(),
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        variables=variables,
     )
 
-    results = context.test()
+    test_file.write_text(test_text.format(gateway=""))
 
-    assert not results.failures
-    assert not results.errors
-
-    # The example project has one test and we added another one above
-    assert len(results.successes) == 2
+    init_context_and_validate_results(config)
 
     # Case 2: Test gateway variables
     config = Config(
@@ -1629,14 +1626,7 @@ test_parameterized_model_names:
         },
         model_defaults=ModelDefaultsConfig(dialect="duckdb"),
     )
-
-    context = init_context(config, gateway="main")
-
-    results = context.test()
-
-    assert not results.failures
-    assert not results.errors
-    assert len(results.successes) == 2
+    init_context_and_validate_results(config)
 
     # Case 3: Test gateway variables overriding root variables
     config = Config(
@@ -1646,41 +1636,9 @@ test_parameterized_model_names:
         model_defaults=ModelDefaultsConfig(dialect="duckdb"),
         variables=incorrect_variables,
     )
-
-    context = init_context(config, gateway="main")
-
-    results = context.test()
-
-    assert not results.failures
-    assert not results.errors
-    assert len(results.successes) == 2
+    init_context_and_validate_results(config, gateway="main")
 
     # Case 4: Use variable from the defined gateway
-    test_file = tmp_path / "tests" / "test_parameterized_model_names.yaml"
-    test_file.write_text(
-        """
-test_parameterized_model_names:
-  model: {{ var('gold') }}.sch.a
-  gateway: secondary
-  vars:
-    myvar: True
-    start_ds: 2022-01-01
-    end_ds: 2022-01-03
-  inputs:
-    {{ var('silver') }}.sch.b:
-      - ds: 2022-01-01
-        id: 1
-      - ds: 2022-01-01
-        id: 2
-  outputs:
-    query:
-      - ds: 2022-01-01
-        id: 1
-      - ds: 2022-01-01
-        id: 2
-        """
-    )
-
     config = Config(
         gateways={
             "main": GatewayConfig(
@@ -1691,13 +1649,22 @@ test_parameterized_model_names:
         model_defaults=ModelDefaultsConfig(dialect="duckdb"),
     )
 
-    context = init_context(config, gateway="main")
+    test_file.write_text(test_text.format(gateway="\n  gateway: secondary"))
+    init_context_and_validate_results(config, gateway="main")
 
-    results = context.test()
+    # Case 5: Use gateways with escaped characters
+    config = Config(
+        gateways={
+            "main": GatewayConfig(
+                connection=DuckDBConnectionConfig(), variables=incorrect_variables
+            ),
+            "secon\tdary": GatewayConfig(connection=DuckDBConnectionConfig(), variables=variables),
+        },
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+    )
 
-    assert not results.failures
-    assert not results.errors
-    assert len(results.successes) == 2
+    test_file.write_text(test_text.format(gateway='\n  gateway: "secon\\tdary"'))
+    init_context_and_validate_results(config, gateway="main")
 
 
 def test_custom_testing_schema(mocker: MockerFixture) -> None:

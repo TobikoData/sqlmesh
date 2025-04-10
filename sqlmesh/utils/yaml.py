@@ -49,6 +49,7 @@ def load(
 ) -> t.Dict:
     """Loads a YAML object from either a raw string or a file."""
     path: t.Optional[Path] = None
+    yaml = YAML()
 
     if isinstance(source, Path):
         path = source
@@ -56,8 +57,12 @@ def load(
             source = file.read()
 
     if get_variables:
-        gateway = GATEWAY_PATTERN.search(source)
-        variables = get_variables(config, gateway.group(1) if gateway else None)
+        # If the user has specified a quoted/escaped gateway (e.g. "gateway: 'ma\tin'"), we need to
+        # parse it as YAML to match the gateway name stored in the config
+        gateway_line = GATEWAY_PATTERN.search(source)
+        gateway = yaml.load(gateway_line.group(0))["gateway"] if gateway_line else None
+
+        variables = get_variables(config, gateway)
 
     if render_jinja:
         source = ENVIRONMENT.from_string(source).render(
@@ -67,7 +72,6 @@ def load(
             }
         )
 
-    yaml = YAML()
     yaml.allow_duplicate_keys = allow_duplicate_keys
     contents = yaml.load(source)
     if contents is None:
