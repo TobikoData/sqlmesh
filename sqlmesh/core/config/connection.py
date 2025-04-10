@@ -9,6 +9,7 @@ import re
 import typing as t
 from enum import Enum
 from functools import partial, lru_cache
+from urllib.parse import urlencode
 
 import pydantic
 from pydantic import Field
@@ -383,16 +384,16 @@ class MotherDuckConnectionConfig(BaseDuckDBConnectionConfig):
 
         connection_str = "md:"
 
-        query_params = []
-        query_params.append(f"custom_user_agent=SQLMesh/{__version__}")
+        query_params = {}
+        query_params["custom_user_agent"] = f"SQLMesh/{__version__}"
         if self.database:
             # Attach single MD database instead of all databases on the account
             connection_str += self.database
-            query_params.append("attach_mode=single")
+            query_params["attach_mode"] = "single"
         if self.token:
-            query_params.append(f"motherduck_token={self.token}")
+            query_params["motherduck_token"] = self.token
 
-        connection_str += f"?{'&'.join(query_params)}"
+        connection_str += f"?{urlencode(query_params)}"
 
         return {"database": connection_str}
 
