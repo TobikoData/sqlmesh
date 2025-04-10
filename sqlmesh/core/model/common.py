@@ -74,7 +74,7 @@ def make_python_env(
                 # If this macro has been seen before as a non-metadata macro, prioritize that
                 used_macros[name] = (
                     macros[name],
-                    used_macros.get(name, (None, is_metadata))[1],
+                    used_macros.get(name, (None, is_metadata))[1] and is_metadata,
                 )
                 if name == c.VAR:
                     args = macro_func_or_var.this.expressions
@@ -92,7 +92,7 @@ def make_python_env(
                     # If this macro has been seen before as a non-metadata macro, prioritize that
                     used_macros[name] = (
                         macros[name],
-                        used_macros.get(name, (None, is_metadata))[1],
+                        used_macros.get(name, (None, is_metadata))[1] and is_metadata,
                     )
                 elif name in variables:
                     used_variables.add(name)
