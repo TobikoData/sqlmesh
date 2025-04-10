@@ -1563,6 +1563,23 @@ def test_variable_usage(tmp_path: Path) -> None:
     init_example_project(tmp_path, dialect="duckdb")
 
     variables = {"gold": "gold_db", "silver": "silver_db"}
+    incorrect_variables = {"gold": "foo", "silver": "bar"}
+
+    parent = _create_model(
+        "SELECT 1 AS id, '2022-01-02'::DATE AS ds, @start_ts AS start_ts",
+        meta="MODEL (name silver_db.sch.b, kind INCREMENTAL_BY_TIME_RANGE(time_column ds))",
+    )
+
+    child = _create_model(
+        "SELECT ds, @IF(@VAR('myvar'), id, id + 1) AS id FROM silver_db.sch.b WHERE ds BETWEEN @start_ds and @end_ds",
+        meta="MODEL (name gold_db.sch.a, kind INCREMENTAL_BY_TIME_RANGE(time_column ds))",
+    )
+
+    def init_context(config: Config, **kwargs):
+        context = Context(paths=tmp_path, config=config, **kwargs)
+        context.upsert_model(parent)
+        context.upsert_model(child)
+        return context
 
     # Case 1: Test root variables
     config = Config(
@@ -1570,19 +1587,8 @@ def test_variable_usage(tmp_path: Path) -> None:
         model_defaults=ModelDefaultsConfig(dialect="duckdb"),
         variables=variables,
     )
-    context = Context(paths=tmp_path, config=config)
 
-    parent = _create_model(
-        "SELECT 1 AS id, '2022-01-02'::DATE AS ds, @start_ts AS start_ts",
-        meta="MODEL (name silver_db.sch.b, kind INCREMENTAL_BY_TIME_RANGE(time_column ds))",
-    )
-    parent = t.cast(SqlModel, context.upsert_model(parent))
-
-    child = _create_model(
-        "SELECT ds, @IF(@VAR('myvar'), id, id + 1) AS id FROM silver_db.sch.b WHERE ds BETWEEN @start_ds and @end_ds",
-        meta="MODEL (name gold_db.sch.a, kind INCREMENTAL_BY_TIME_RANGE(time_column ds))",
-    )
-    child = t.cast(SqlModel, context.upsert_model(child))
+    context = init_context(config)
 
     test_file = tmp_path / "tests" / "test_parameterized_model_names.yaml"
     test_file.write_text(
@@ -1617,12 +1623,14 @@ test_parameterized_model_names:
     assert len(results.successes) == 2
 
     # Case 2: Test gateway variables
-    context.config = Config(
+    config = Config(
         gateways={
-            "": GatewayConfig(connection=DuckDBConnectionConfig(), variables=variables),
+            "main": GatewayConfig(connection=DuckDBConnectionConfig(), variables=variables),
         },
         model_defaults=ModelDefaultsConfig(dialect="duckdb"),
     )
+
+    context = init_context(config, gateway="main")
 
     results = context.test()
 
@@ -1631,13 +1639,59 @@ test_parameterized_model_names:
     assert len(results.successes) == 2
 
     # Case 3: Test gateway variables overriding root variables
-    context.config = Config(
+    config = Config(
         gateways={
-            "": GatewayConfig(connection=DuckDBConnectionConfig(), variables=variables),
+            "main": GatewayConfig(connection=DuckDBConnectionConfig(), variables=variables),
         },
         model_defaults=ModelDefaultsConfig(dialect="duckdb"),
-        variables={"gold": "foo", "silver": "bar"},
+        variables=incorrect_variables,
     )
+
+    context = init_context(config, gateway="main")
+
+    results = context.test()
+
+    assert not results.failures
+    assert not results.errors
+    assert len(results.successes) == 2
+
+    # Case 4: Use variable from the defined gateway
+    test_file = tmp_path / "tests" / "test_parameterized_model_names.yaml"
+    test_file.write_text(
+        """
+test_parameterized_model_names:
+  model: {{ var('gold') }}.sch.a
+  gateway: secondary
+  vars:
+    myvar: True
+    start_ds: 2022-01-01
+    end_ds: 2022-01-03
+  inputs:
+    {{ var('silver') }}.sch.b:
+      - ds: 2022-01-01
+        id: 1
+      - ds: 2022-01-01
+        id: 2
+  outputs:
+    query:
+      - ds: 2022-01-01
+        id: 1
+      - ds: 2022-01-01
+        id: 2
+        """
+    )
+
+    config = Config(
+        gateways={
+            "main": GatewayConfig(
+                connection=DuckDBConnectionConfig(), variables=incorrect_variables
+            ),
+            "secondary": GatewayConfig(connection=DuckDBConnectionConfig(), variables=variables),
+        },
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+    )
+
+    context = init_context(config, gateway="main")
 
     results = context.test()
 

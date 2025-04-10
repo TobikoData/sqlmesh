@@ -14,7 +14,7 @@ from sqlmesh.utils.pydantic import PydanticModel
 from sqlmesh.utils.yaml import load as yaml_load
 
 if t.TYPE_CHECKING:
-    from sqlmesh.core.config.loader import C
+    from sqlmesh.core.loader import Loader
 
 
 class ModelTestMetadata(PydanticModel):
@@ -31,7 +31,8 @@ class ModelTestMetadata(PydanticModel):
 
 
 def load_model_test_file(
-    path: pathlib.Path, variables: dict[str, t.Any] | None = None
+    path: pathlib.Path,
+    get_variables: t.Callable[[t.Optional[str]], t.Dict[str, str]],
 ) -> dict[str, ModelTestMetadata]:
     """Load a single model test file.
 
@@ -42,7 +43,7 @@ def load_model_test_file(
         A list of ModelTestMetadata named tuples.
     """
     model_test_metadata = {}
-    contents = yaml_load(path, variables=variables)
+    contents = yaml_load(path, get_variables=get_variables)
 
     for test_name, value in contents.items():
         model_test_metadata[test_name] = ModelTestMetadata(
@@ -53,8 +54,8 @@ def load_model_test_file(
 
 def discover_model_tests(
     path: pathlib.Path,
+    get_variables: t.Callable[[t.Optional[str]], t.Dict[str, str]],
     ignore_patterns: list[str] | None = None,
-    variables: dict[str, t.Any] | None = None,
 ) -> Iterator[ModelTestMetadata]:
     """Discover model tests.
 
@@ -78,7 +79,7 @@ def discover_model_tests(
                 break
         else:
             for model_test_metadata in load_model_test_file(
-                yaml_file, variables=variables
+                yaml_file, get_variables=get_variables
             ).values():
                 yield model_test_metadata
 
@@ -103,34 +104,16 @@ def filter_tests_by_patterns(
     )
 
 
-def get_all_model_tests(
-    *paths: pathlib.Path,
-    patterns: list[str] | None = None,
-    ignore_patterns: list[str] | None = None,
-    variables: dict[str, t.Any] | None = None,
-) -> list[ModelTestMetadata]:
-    model_test_metadatas = [
-        meta
-        for path in paths
-        for meta in discover_model_tests(pathlib.Path(path), ignore_patterns, variables=variables)
-    ]
-    if patterns:
-        model_test_metadatas = filter_tests_by_patterns(model_test_metadatas, patterns)
-    return model_test_metadatas
-
-
 def load_model_tests(
-    configs: dict[pathlib.Path, C],
+    loaders: list[Loader],
     tests: t.Optional[t.List[str]] = None,
     patterns: list[str] | None = None,
-    variables: dict[str, t.Any] | None = None,
 ) -> list[ModelTestMetadata]:
     """Load model tests into a list of ModelTestMetadata which will be propagated to the test runner.
 
     Args:
         tests: A list of tests to load; If not specified, all tests are loaded
-        patterns: A list of patterns to match against.
-        variables: A dictionary of variables to use when loading the tests.
+        patterns: A list of patterns that'll be used to filter tests by file name.
         configs: A dictionary of configs to use when loading all the tests.
     """
     test_meta = []
@@ -139,24 +122,27 @@ def load_model_tests(
         for test in tests:
             filename, test_name = test.split("::", maxsplit=1) if "::" in test else (test, "")
 
-            test_file = load_model_test_file(pathlib.Path(filename), variables=variables)
+            test_file = load_model_test_file(
+                pathlib.Path(filename), get_variables=loaders[0]._get_variables
+            )
             if test_name:
                 test_meta.append(test_file[test_name])
             else:
                 test_meta.extend(test_file.values())
-
-        if patterns:
-            test_meta = filter_tests_by_patterns(test_meta, patterns)
-
     else:
-        for path, config in configs.items():
+        for loader in loaders:
             test_meta.extend(
-                get_all_model_tests(
-                    path / c.TESTS,
-                    patterns=patterns,
-                    ignore_patterns=config.ignore_patterns,
-                    variables=variables,
-                )
+                [
+                    meta
+                    for meta in discover_model_tests(
+                        pathlib.Path(loader.config_path / c.TESTS),
+                        ignore_patterns=loader.config.ignore_patterns,  # type: ignore
+                        get_variables=loader._get_variables,
+                    )
+                ]
             )
+
+    if patterns:
+        test_meta = filter_tests_by_patterns(test_meta, patterns)
 
     return test_meta
