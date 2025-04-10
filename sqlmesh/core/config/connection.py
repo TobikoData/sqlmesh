@@ -391,7 +391,7 @@ class MotherDuckConnectionConfig(BaseDuckDBConnectionConfig):
             query_params.append("attach_mode=single")
         if self.token:
             query_params.append(f"motherduck_token={self.token}")
-        
+
         connection_str += f"?{'&'.join(query_params)}"
 
         return {"database": connection_str}
