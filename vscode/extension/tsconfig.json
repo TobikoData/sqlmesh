@@ -14,9 +14,13 @@
 		// "noFallthroughCasesInSwitch": true, /* Report errors for fallthrough cases in switch statement. */
 		// "noUnusedParameters": true,  /* Report errors on unused parameters. */
 		"paths": {
-			"@sqlmesh/extension-bus": ["../bus/src"]
+			"@bus/*": ["../bus/src/*"]
 		}
 	},
+	"include": [
+		"src/**/*",
+		"../bus/src/**/*"
+	],
 	"exclude": [
 		"node_modules", "../node_modules"
 	]

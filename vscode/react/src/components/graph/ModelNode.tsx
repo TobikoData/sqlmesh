@@ -86,8 +86,11 @@ export default function ModelNode({
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
-
-      handleClickModel?.(id)
+      if (handleClickModel) {
+        console.log('handleClickModel', id)
+        console.log('handleClickModel', models)
+        handleClickModel(id)
+      }
     },
     [handleClickModel, id, data.isInteractive],
   )
@@ -141,11 +144,11 @@ export default function ModelNode({
         activeNodes.has(id) ||
         (withConnected && connectedNodes.has(id))
       : connectedNodes.has(id)
-  const isInteractive =
-    mainNode !== id &&
-    isNotNil(handleClickModel) &&
-    isFalse(isCTE) &&
-    isFalse(isModelUnknown)
+  const isInteractive = true
+    // mainNode !== id &&
+    // isNotNil(handleClickModel) &&
+    // isFalse(isCTE) &&
+    // isFalse(isModelUnknown)
   const shouldDisableColumns = isFalse(isModelSQL)
 
   return (
