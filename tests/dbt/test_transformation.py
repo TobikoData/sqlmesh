@@ -286,6 +286,12 @@ def test_model_kind():
         context
     ) == IncrementalUnmanagedKind(insert_overwrite=True, disable_restatement=False)
 
+    assert ModelConfig(materialized=Materialization.INCREMENTAL, forward_only=False).model_kind(
+        context
+    ) == IncrementalUnmanagedKind(
+        insert_overwrite=True, disable_restatement=False, forward_only=False
+    )
+
     assert ModelConfig(
         materialized=Materialization.INCREMENTAL, incremental_strategy="append"
     ).model_kind(context) == IncrementalUnmanagedKind(disable_restatement=False)
