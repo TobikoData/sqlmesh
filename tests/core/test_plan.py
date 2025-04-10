@@ -4,6 +4,8 @@ from datetime import timedelta
 from unittest.mock import patch
 
 import pytest
+from sqlmesh.utils.metaprogramming import Executable
+from tests.core.test_table_diff import create_test_console, strip_ansi_codes
 import time_machine
 from pytest_mock.plugin import MockerFixture
 from sqlglot import parse_one
@@ -3000,9 +3002,13 @@ def test_plan_environment_statements_diff(make_snapshot):
         previous_finalized_snapshots=None,
         environment_statements=[
             EnvironmentStatements(
-                before_all=["CREATE OR REPLACE TABLE table_1 AS SELECT 1"],
+                before_all=["CREATE OR REPLACE TABLE table_1 AS SELECT 1", "@test_macro()"],
                 after_all=["CREATE OR REPLACE TABLE table_2 AS SELECT 2"],
-                python_env={},
+                python_env={
+                    "test_macro": Executable(
+                        payload="def test_macro(evaluator):\n    return 'one'"
+                    ),
+                },
             )
         ],
         previous_gateway_managed_virtual_layer=False,
@@ -3011,11 +3017,25 @@ def test_plan_environment_statements_diff(make_snapshot):
 
     assert context_diff.has_changes
     assert context_diff.has_environment_statements_changes
-    assert (
-        context_diff.environment_statements_diff()
-        == """  before_all:
-    + CREATE OR REPLACE TABLE table_1 AS SELECT 1
-  after_all:
-    + CREATE OR REPLACE TABLE table_2 AS SELECT 2
-"""
+
+    console_output, terminal_console = create_test_console()
+
+    for stmt in context_diff.environment_statements_diff():
+        terminal_console._print(stmt)
+    output = console_output.getvalue()
+    stripped = strip_ansi_codes(output)
+
+    expected_output = (
+        "=== before_all ===                                                              \n"
+        "  + CREATE OR REPLACE TABLE table_1 AS SELECT 1                                 \n"
+        "  + @test_macro()                                                               \n"
+        "                                                                                \n"
+        "=== after_all ===                                                               \n"
+        "  + CREATE OR REPLACE TABLE table_2 AS SELECT 2                                 \n"
+        "                                                                                \n"
+        "=== dependencies ===                                                            \n"
+        "  + def test_macro(evaluator):                                                  \n"
+        "    return 'one'"
     )
+    assert stripped == expected_output
+    console_output.close()
