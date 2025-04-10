@@ -8,6 +8,7 @@ import {
 import { useApiModelLineage, useApiModels } from '@/api'
 import LineageFlowProvider from '@/components/graph/context'
 import { ModelLineage } from '@/components/graph/ModelLineage'
+import { useVSCode } from '@/hooks/vscode'
 
 export const Route = createFileRoute('/lineage')({
   component: Wrappper,
@@ -71,11 +72,16 @@ export function LineageComponentFromWeb({
   models,
 }: {
   selectedModel: string,
-  models: Record<string, Model[]>;
+  models: Record<string, Model>;
 }): JSX.Element {
-  function handleClickModel(modelName: string): void {
-    const model = models[modelName]
-    console.log(model)
+  const vscode = useVSCode()
+  function handleClickModel(id: string): void {
+    const decodedId = decodeURIComponent(id);
+    const model = Object.values(models).find((m: Model) => m.fqn === decodedId);
+    if (!model) {
+      throw new Error('Model not found');
+    }
+    vscode('openFile', { path: model.path });
   }
 
   function handleError(error: any): void {

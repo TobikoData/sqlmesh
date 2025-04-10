@@ -2,6 +2,7 @@
     "name": "sqlmesh-extension-bus",
     "private": true,
     "version": "0.0.1",
+    "type": "module",
     "scripts": {
       "build": "tsc",
       "dev": "tsc -w",
