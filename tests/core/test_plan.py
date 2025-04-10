@@ -3019,22 +3019,18 @@ def test_plan_environment_statements_diff(make_snapshot):
     assert context_diff.has_environment_statements_changes
 
     console_output, terminal_console = create_test_console()
-
-    for stmt in context_diff.environment_statements_diff():
-        terminal_console._print(stmt)
+    for _, diff in context_diff.environment_statements_diff():
+        terminal_console._print(diff)
     output = console_output.getvalue()
     stripped = strip_ansi_codes(output)
-
     expected_output = (
-        "=== before_all ===                                                              \n"
-        "  + CREATE OR REPLACE TABLE table_1 AS SELECT 1                                 \n"
-        "  + @test_macro()                                                               \n"
-        "                                                                                \n"
-        "=== after_all ===                                                               \n"
-        "  + CREATE OR REPLACE TABLE table_2 AS SELECT 2                                 \n"
-        "                                                                                \n"
-        "=== dependencies ===                                                            \n"
-        "  + def test_macro(evaluator):                                                  \n"
+        "=== before_all ===\n"
+        "  + CREATE OR REPLACE TABLE table_1 AS SELECT 1\n"
+        "  + @test_macro()\n\n"
+        "=== after_all ===\n"
+        "  + CREATE OR REPLACE TABLE table_2 AS SELECT 2\n\n"
+        "=== dependencies ===\n"
+        "  + def test_macro(evaluator):\n"
         "    return 'one'"
     )
     assert stripped == expected_output

@@ -352,6 +352,14 @@ def depends_on(cls: t.Type, v: t.Any, info: ValidationInfo) -> t.Optional[t.Set[
     return v
 
 
+def python_env_payloads(sorted_python_env: t.List[t.Tuple[str, Executable]]) -> t.List[str]:
+    """Returns the payloads of the sorted python env."""
+    return [
+        v.payload if v.is_import or v.is_definition else f"{k} = {v.payload}"
+        for k, v in sorted_python_env
+    ]
+
+
 expression_validator: t.Callable = field_validator(
     "query",
     "expressions_",

@@ -16,10 +16,10 @@ import sys
 import typing as t
 from difflib import ndiff
 from functools import cached_property
-from rich.syntax import Syntax
 from sqlmesh.core import constants as c
 from sqlmesh.core.console import get_console
 from sqlmesh.core.macros import RuntimeStage
+from sqlmesh.core.model.common import python_env_payloads
 from sqlmesh.core.snapshot import Snapshot, SnapshotId, SnapshotTableInfo
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
@@ -341,58 +341,47 @@ class ContextDiff(PydanticModel):
             )
         )
 
-    def environment_statements_diff(self) -> t.List[Syntax]:
-        PYTHON_ENV = "python_env"
-
-        def extract_python_env(python_env: t.Dict[str, Executable]) -> t.List[str]:
-            return [
-                v.payload if v.is_import or v.is_definition else f"{k} = {v.payload}"
-                for k, v in python_env.items()
-            ]
-
+    def environment_statements_diff(self) -> t.List[t.Tuple[str, str]]:
         def extract_statements(statements: t.List[EnvironmentStatements], attr: str) -> t.List[str]:
             return [
                 expr
                 for statement in statements
                 for expr in (
-                    extract_python_env(statement.python_env)
-                    if attr == PYTHON_ENV
+                    python_env_payloads(
+                        sorted(statement.python_env.items(), key=lambda x: (x[1].kind, x[0]))
+                    )
+                    if attr == "python_env"
                     else getattr(statement, attr)
                 )
             ]
 
-        def format_diff(attribute: str) -> t.Optional[Syntax]:
+        def format_diff(attribute: str) -> t.Optional[t.Tuple[str, str]]:
             previous = extract_statements(self.previous_environment_statements, attribute)
             current = extract_statements(self.environment_statements, attribute)
 
             if previous == current:
                 return None
 
+            diff_lines = list(ndiff(previous, current))
             diff_text = (
                 f"=== {attribute} ===\n"
-                if not attribute == PYTHON_ENV
+                if not attribute == "python_env"
                 else "=== dependencies ===\n"
             )
 
-            diff_lines = list(ndiff(previous, current))
             if any(line.startswith(("-", "+")) for line in diff_lines):
                 diff_text += "  " + "\n  ".join(diff_lines) + "\n"
 
-            return Syntax(
-                diff_text, "python" if attribute == PYTHON_ENV else "sql", line_numbers=False
-            )
+            return "python" if attribute == "python_env" else "sql", diff_text
 
         return [
             diff
-            for diff in (
-                format_diff(attribute)
-                for attribute in [
-                    RuntimeStage.BEFORE_ALL.value,
-                    RuntimeStage.AFTER_ALL.value,
-                    PYTHON_ENV,
-                ]
-            )
-            if diff is not None
+            for attribute in [
+                RuntimeStage.BEFORE_ALL.value,
+                RuntimeStage.AFTER_ALL.value,
+                "python_env",
+            ]
+            if (diff := format_diff(attribute)) is not None
         ]
 
     @property

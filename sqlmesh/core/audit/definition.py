@@ -16,6 +16,7 @@ from sqlmesh.core.model.common import (
     default_catalog_validator,
     depends_on_validator,
     expression_validator,
+    python_env_payloads,
 )
 from sqlmesh.core.model.common import make_python_env, single_value_or_tuple
 from sqlmesh.core.node import _Node
@@ -337,12 +338,7 @@ class StandaloneAudit(_Node, AuditMixin):
         jinja_expressions = []
         python_expressions = []
         if include_python:
-            python_env = d.PythonCode(
-                expressions=[
-                    v.payload if v.is_import or v.is_definition else f"{k} = {v.payload}"
-                    for k, v in self.sorted_python_env
-                ]
-            )
+            python_env = d.PythonCode(expressions=python_env_payloads(self.sorted_python_env))
             if python_env.expressions:
                 python_expressions.append(python_env)
 

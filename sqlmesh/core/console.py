@@ -1312,8 +1312,8 @@ class TerminalConsole(Console):
 
         if context_diff.has_environment_statements_changes:
             self._print("[bold]Environment statements:\n")
-            for changes in context_diff.environment_statements_diff():
-                self._print(changes)
+            for type, diff in context_diff.environment_statements_diff():
+                self._print(Syntax(diff, type, line_numbers=False))
 
         self._show_summary_tree_for(
             context_diff,
@@ -2464,8 +2464,8 @@ class MarkdownConsole(CaptureTerminalConsole):
 
         if context_diff.has_environment_statements_changes:
             self._print("[bold]Environment statements:\n")
-            for changes in context_diff.environment_statements_diff():
-                self._print(changes)
+            for _, diff in context_diff.environment_statements_diff():
+                self._print(diff)
 
         added_snapshots = {context_diff.snapshots[s_id] for s_id in context_diff.added}
         added_snapshot_models = {s for s in added_snapshots if s.is_model}
@@ -2979,8 +2979,8 @@ class DebuggerTerminalConsole(TerminalConsole):
 
         if context_diff.has_environment_statements_changes:
             self._write("Environment statements:\n")
-            for changes in context_diff.environment_statements_diff():
-                self._write(changes)
+            for _, diff in context_diff.environment_statements_diff():
+                self._write(diff)
 
         for added in context_diff.new_snapshots:
             self._write(f"  Added: {added}")
