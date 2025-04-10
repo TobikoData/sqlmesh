@@ -778,7 +778,7 @@ def ui(ctx: click.Context, host: str, port: int, mode: str) -> None:
 @cli_analytics
 def lsp(obj: Context) -> None:
     """Start a language server for SQLMesh."""
-    from web.lsp.main import server
+    from lsp.main import server
 
     server.start_io()
 

@@ -47,3 +47,37 @@ export const sqlmesh_exec = async (): Promise<Result<sqlmesh_exec, string>> => {
         })
     }
 }
+
+export const sqlmesh_lsp_exec = async (): Promise<Result<sqlmesh_exec, string>> => {
+    const workspaceFolders = getWorkspaceFolders()
+    if (workspaceFolders.length !== 1) {
+        return err("Invalid number of workspace folders")
+    }
+    const workspacePath = workspaceFolders[0].uri.fsPath
+    const interpreterDetails = await getInterpreterDetails()
+    traceLog(`Interpreter details: ${JSON.stringify(interpreterDetails)}`)
+    if (interpreterDetails.path) {
+        traceVerbose(`Using interpreter from Python extension: ${interpreterDetails.path.join(' ')}`)
+    }
+    if (interpreterDetails.isVirtualEnvironment) {
+        traceLog('Using virtual environment')
+        const binPath = path.join(interpreterDetails.binPath!, 'sqlmesh_lsp')
+        traceLog(`Bin path: ${binPath}`)
+        return ok({
+            bin: binPath,
+            workspacePath,
+            env: {
+                PYTHONPATH: interpreterDetails.path?.[0],
+                VIRTUAL_ENV: path.dirname(interpreterDetails.binPath!),
+                PATH: path.join(path.dirname(interpreterDetails.binPath!), 'bin')
+            }
+         })
+    } else {
+        return ok({
+            bin: 'sqlmesh_lsp',
+            workspacePath,
+            env: {},
+        })
+    }
+
+}

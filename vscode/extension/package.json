@@ -9,19 +9,21 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onLanguage:sql"
+  ],
   "main": "./dist/extension.js",
   "contributes": {
     "viewsContainers": {
-    "panel": [
-      {
-        "id": "lineage_view",
-        "title": "Lineage",
-        "icon": "./assets/images/dag.svg"
-      }
-    ]
+      "panel": [
+        {
+          "id": "lineage_view",
+          "title": "Lineage",
+          "icon": "./assets/images/dag.svg"
+        }
+      ]
     },
-   "views": {
+    "views": {
       "lineage_view": [
         {
           "id": "sqlmesh.lineage",
