@@ -121,7 +121,7 @@ export default function LineageFlowProvider({
   handleError,
   handleClickModel,
   children,
-  showColumns = false,
+  showColumns = true,
   showConnected = false,
   showControls = true,
   models,
@@ -157,6 +157,7 @@ export default function LineageFlowProvider({
   const [hasBackground, setHasBackground] = useState(true)
   const [withImpacted, setWithImpacted] = useState(true)
   const [withSecondary, setWithSecondary] = useState(false)
+  console.log('withColumns in provider', withColumns)
 
   const nodesMap = useMemo(
     () =>
