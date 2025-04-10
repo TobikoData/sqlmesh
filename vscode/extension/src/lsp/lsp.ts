@@ -1,5 +1,5 @@
 import path from "path";
-import { workspace, ExtensionContext } from "vscode";
+import { workspace, ExtensionContext, OutputChannel, window } from "vscode";
 import { ServerOptions, LanguageClientOptions, LanguageClient, TransportKind } from "vscode-languageclient/node";
 import { sqlmesh_exec, sqlmesh_lsp_exec } from "../sqlmesh/sqlmesh";
 import { err, isErr, ok, Result } from "../functional/result";
@@ -16,45 +16,42 @@ export async function activateLsp(context: ExtensionContext): Promise<Result<und
     if (workspaceFolders.length !== 1) {
         return err("Invalid number of workspace folders")
     }
+    const outputChannel: OutputChannel = window.createOutputChannel('sqlmesh_actual_lsp_implementation');
+
+    let folder = workspaceFolders[0]
     const workspacePath = workspaceFolders[0].uri.fsPath
     let serverOptions: ServerOptions = {
         run: {
             command: sqlmesh.value.bin,
             transport: TransportKind.stdio,
             options: {
-                env: {
-                    ...process.env,
-                },
                 cwd: workspacePath,
-            }
+            },
         },
         debug: {
             command: sqlmesh.value.bin,
             transport: TransportKind.stdio,
             options: {
-                env: {
-                    ...process.env,
-                },
                 cwd: workspacePath,
             }
         }
     }
     let clientOptions: LanguageClientOptions = {
         documentSelector: [
-            {
-                scheme: 'file',
-                language: 'sql',
-                pattern: '**/*.sql'
-            }
+            { scheme: 'file', pattern: `**/*.sql` }
         ],
-        synchronize: {
-            fileEvents: workspace.createFileSystemWatcher('**/*.{sql,py}'),
-        }
+        workspaceFolder: folder,
+        diagnosticCollectionName: 'sqlmesh',
+        outputChannel: outputChannel,
+        // synchronize: {
+            // fileEvents: workspace.createFileSystemWatcher('**/*.{sql,py}'),
+        // }
     }
 
-    client = new LanguageClient('sqlmesh', 'SQLMesh Language Server', serverOptions, clientOptions)
+    client = new LanguageClient('sqlmesh-lsp-example', 'SQLMesh Language Server', serverOptions, clientOptions)
     console.log('Starting language client')
-    await client.start()
+    client.start()
+
     console.log('Language client started')
     return ok(undefined)
 }
