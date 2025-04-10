@@ -368,7 +368,11 @@ class ContextDiff(PydanticModel):
             if previous == current:
                 return None
 
-            diff_text = f"=== {attribute if not attribute == PYTHON_ENV else "dependencies"} ===\n"
+            diff_text = (
+                f"=== {attribute} ===\n"
+                if not attribute == PYTHON_ENV
+                else "=== dependencies ===\n"
+            )
 
             diff_lines = list(ndiff(previous, current))
             if any(line.startswith(("-", "+")) for line in diff_lines):
