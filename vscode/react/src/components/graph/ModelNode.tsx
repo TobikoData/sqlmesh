@@ -46,10 +46,15 @@ export default function ModelNode({
   } = useLineageFlow()
 
   const columns: Column[] = useMemo(() => {
-    const model = models[id]
+    const modelsArray = Object.values(models)
+    const decodedId = decodeURIComponent(id)
+    const model = modelsArray.find((m: Model) => m.fqn === decodedId)
+    if (!model) {
+      throw new Error(`Model not found: ${id}`)
+  }
     const modelColumns = model?.columns ?? []
 
-    Object.keys(lineage[id]?.columns ?? {}).forEach((column: string) => {
+    Object.keys(lineage[decodedId]?.columns ?? {}).forEach((column: string) => {
       const found = modelColumns.find(({ name }) => {
         try {
           return name === decodeURI(column)
@@ -131,11 +136,6 @@ export default function ModelNode({
   const isModelSeed = nodeData.type === EnumLineageNodeModelType.seed
   const isModelUnknown = nodeData.type === EnumLineageNodeModelType.unknown
   const showColumns =
-    (hasSelectedColumns ||
-      nodeData.withColumns ||
-      isMouseOver ||
-      isSelected ||
-      isMainNode) &&
     isArrayNotEmpty(columns) &&
     isFalse(hasHighlightedNodes)
   const isActiveNode =
@@ -150,6 +150,10 @@ export default function ModelNode({
     // isFalse(isCTE) &&
     // isFalse(isModelUnknown)
   const shouldDisableColumns = isFalse(isModelSQL)
+
+  console.log(
+    'showcolumns', showColumns,
+  )
 
   return (
     <div

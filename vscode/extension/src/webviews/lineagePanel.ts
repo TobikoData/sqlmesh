@@ -139,6 +139,7 @@ export class LineagePanel implements WebviewViewProvider, Disposable {
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; frame-src ${externalAuthority}; connect-src ${externalAuthority}; img-src ${externalAuthority} data:; script-src 'unsafe-inline' ${externalAuthority}; style-src 'unsafe-inline' ${externalAuthority};">
 </head>
 <body>
+  ${isProduction() ? '' : `<div>${externalUrl}</div>`}
   <iframe src="${externalUrl}" style="width:100%; height:100vh;" frameborder="0" allow="clipboard-read; clipboard-write"></iframe>
 </body>
 </html>        `;
