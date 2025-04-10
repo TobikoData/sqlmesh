@@ -381,14 +381,20 @@ class MotherDuckConnectionConfig(BaseDuckDBConnectionConfig):
         """kwargs that are for execution config only"""
         from sqlmesh import __version__
 
-        custom_user_agent_config = {"custom_user_agent": f"SQLMesh/{__version__}"}
         connection_str = "md:"
+
+        query_params = []
+        query_params.append(f"custom_user_agent=SQLMesh/{__version__}")
         if self.database:
             # Attach single MD database instead of all databases on the account
-            connection_str += f"{self.database}?attach_mode=single"
+            connection_str += self.database
+            query_params.append("attach_mode=single")
         if self.token:
-            connection_str += f"{'&' if self.database else '?'}motherduck_token={self.token}"
-        return {"database": connection_str, "config": custom_user_agent_config}
+            query_params.append(f"motherduck_token={self.token}")
+        
+        connection_str += f"?{'&'.join(query_params)}"
+
+        return {"database": connection_str}
 
 
 class DuckDBConnectionConfig(BaseDuckDBConnectionConfig):
