@@ -215,3 +215,8 @@ async def did_change_watched_files(ls: LanguageServer, params: types.DidChangeWa
                     )
                     updated[context.path] = True
 
+def main():
+    server.start_io()
+
+if __name__ == "__main__":
+    main()

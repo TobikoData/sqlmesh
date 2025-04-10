@@ -23,7 +23,7 @@ JINJA_QUERY_BEGIN;
 
 SELECT
   w.waiter_id as waiter_id,
-  wn.name as waiter_name,
+  wn.name as waiter_name ,
   {{ alias(identity(x), 'flag') }},
   w.event_date as event_date
 FROM sushi.waiters AS w
