@@ -5,7 +5,7 @@ from pytest_mock.plugin import MockerFixture
 from sqlglot import parse_one, parse
 from sqlglot.helper import first
 
-from sqlmesh.core.context import Context
+from sqlmesh.core.context import Context, ExecutionContext
 from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.model import load_sql_based_model
 from sqlmesh.core.model.definition import AuditResult, SqlModel
@@ -66,9 +66,9 @@ def test_interval_params(scheduler: Scheduler, sushi_context_fixed_date: Context
 
 
 @pytest.fixture
-def get_batched_missing_intervals() -> (
-    t.Callable[[Scheduler, TimeLike, TimeLike, t.Optional[TimeLike]], SnapshotToIntervals]
-):
+def get_batched_missing_intervals(
+    mocker: MockerFixture,
+) -> t.Callable[[Scheduler, TimeLike, TimeLike, t.Optional[TimeLike]], SnapshotToIntervals]:
     def _get_batched_missing_intervals(
         scheduler: Scheduler,
         start: TimeLike,
@@ -76,7 +76,7 @@ def get_batched_missing_intervals() -> (
         execution_time: t.Optional[TimeLike] = None,
     ) -> SnapshotToIntervals:
         merged_intervals = scheduler.merged_missing_intervals(start, end, execution_time)
-        return scheduler.batch_intervals(merged_intervals)
+        return scheduler.batch_intervals(merged_intervals, mocker.Mock())
 
     return _get_batched_missing_intervals
 
@@ -622,7 +622,9 @@ def test_interval_diff():
 
 def test_signal_intervals(mocker: MockerFixture, make_snapshot, get_batched_missing_intervals):
     @signal()
-    def signal_a(batch: DatetimeRanges):
+    def signal_a(batch: DatetimeRanges, context: ExecutionContext):
+        if not hasattr(context, "engine_adapter"):
+            raise
         return [batch[0], batch[1]]
 
     @signal()

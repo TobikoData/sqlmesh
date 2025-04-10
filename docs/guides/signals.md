@@ -116,3 +116,18 @@ MODEL (
 
 SELECT @start_ds AS ds
 ```
+
+### Accessing execution context / engine adapter
+It is possible to access the execution context in a signal and access the engine adapter (warehouse connection).
+
+```python
+import typing as t
+
+from sqlmesh import signal, DatetimeRanges, ExecutionContext
+
+
+# add the context argument to your function
+@signal()
+def one_week_ago(batch: DatetimeRanges, context: ExecutionContext) -> t.Union[bool, DatetimeRanges]:
+    return len(context.engine_adapter.fetchdf("SELECT 1")) > 1
+```
