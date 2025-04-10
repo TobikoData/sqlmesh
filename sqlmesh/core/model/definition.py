@@ -1907,6 +1907,7 @@ def create_models_from_blueprints(
         else:
             gateway_name = None
 
+        # We pop to avoid pydantic validation issues since catalogs is not a model property
         if (
             (catalogs := loader_kwargs.pop("catalogs", None))
             and gateway_name
