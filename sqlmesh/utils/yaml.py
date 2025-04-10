@@ -5,6 +5,7 @@ import typing as t
 from decimal import Decimal
 from os import getenv
 from pathlib import Path
+import re
 
 from ruamel import yaml
 
@@ -15,6 +16,9 @@ from sqlmesh.utils.jinja import ENVIRONMENT, create_var
 JINJA_METHODS = {
     "env_var": lambda key, default=None: getenv(key, default),
 }
+
+
+gateway_pattern = re.compile(r"gateway:\s*([^\s]+)")
 
 
 def YAML(typ: t.Optional[str] = "safe") -> yaml.YAML:
@@ -36,6 +40,7 @@ def load(
     render_jinja: bool = True,
     allow_duplicate_keys: bool = False,
     variables: t.Optional[t.Dict[str, t.Any]] = None,
+    get_variables: t.Callable[[t.Optional[str]], t.Dict[str, str]] | None = None,
 ) -> t.Dict:
     """Loads a YAML object from either a raw string or a file."""
     path: t.Optional[Path] = None
@@ -44,6 +49,10 @@ def load(
         path = source
         with open(source, "r", encoding="utf-8") as file:
             source = file.read()
+
+    if get_variables:
+        gateway = gateway_pattern.search(source)
+        variables = get_variables(gateway.group(1) if gateway else None)
 
     if render_jinja:
         source = ENVIRONMENT.from_string(source).render(

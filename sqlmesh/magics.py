@@ -26,13 +26,12 @@ from IPython.utils.process import arg_split
 from rich.jupyter import JupyterRenderable
 from sqlmesh.cli.example_project import ProjectTemplate, init_example_project
 from sqlmesh.core import analytics
-from sqlmesh.core import constants as c
 from sqlmesh.core.config import load_configs
 from sqlmesh.core.console import create_console, set_console, configure_console
 from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import format_model_expressions, parse
 from sqlmesh.core.model import load_sql_based_model
-from sqlmesh.core.test import ModelTestMetadata, get_all_model_tests
+from sqlmesh.core.test import ModelTestMetadata, load_model_tests
 from sqlmesh.utils import sqlglot_dialects, yaml, Verbosity
 from sqlmesh.utils.errors import MagicError, MissingContextException, SQLMeshError
 
@@ -273,15 +272,7 @@ class SQLMeshMagics(Magics):
         if not args.test_name and not args.ls:
             raise MagicError("Must provide either test name or `--ls` to list tests")
 
-        test_meta = []
-
-        for path, config in context.configs.items():
-            test_meta.extend(
-                get_all_model_tests(
-                    path / c.TESTS,
-                    ignore_patterns=config.ignore_patterns,
-                )
-            )
+        test_meta = load_model_tests(loaders=context._loaders)
 
         tests: t.Dict[str, t.Dict[str, ModelTestMetadata]] = defaultdict(dict)
         for model_test_metadata in test_meta:
