@@ -14,7 +14,7 @@ from sqlmesh.utils.pydantic import PydanticModel
 from sqlmesh.utils.yaml import load as yaml_load
 
 if t.TYPE_CHECKING:
-    from sqlmesh.core.loader import Loader
+    from sqlmesh.core.config.loader import C
 
 
 class ModelTestMetadata(PydanticModel):
@@ -32,7 +32,8 @@ class ModelTestMetadata(PydanticModel):
 
 def load_model_test_file(
     path: pathlib.Path,
-    get_variables: t.Callable[[t.Optional[str]], t.Dict[str, str]],
+    config: C,
+    get_variables: t.Callable[[t.Optional[C], t.Optional[str]], t.Dict[str, str]],
 ) -> dict[str, ModelTestMetadata]:
     """Load a single model test file.
 
@@ -43,7 +44,7 @@ def load_model_test_file(
         A list of ModelTestMetadata named tuples.
     """
     model_test_metadata = {}
-    contents = yaml_load(path, get_variables=get_variables)
+    contents = yaml_load(path, config=config, get_variables=get_variables)
 
     for test_name, value in contents.items():
         model_test_metadata[test_name] = ModelTestMetadata(
@@ -54,8 +55,8 @@ def load_model_test_file(
 
 def discover_model_tests(
     path: pathlib.Path,
-    get_variables: t.Callable[[t.Optional[str]], t.Dict[str, str]],
-    ignore_patterns: list[str] | None = None,
+    config: C,
+    get_variables: t.Callable[[t.Optional[C], t.Optional[str]], t.Dict[str, str]],
 ) -> Iterator[ModelTestMetadata]:
     """Discover model tests.
 
@@ -74,12 +75,12 @@ def discover_model_tests(
         search_path.glob("**/test*.yaml"),
         search_path.glob("**/test*.yml"),
     ):
-        for ignore_pattern in ignore_patterns or []:
+        for ignore_pattern in config.ignore_patterns or []:
             if yaml_file.match(ignore_pattern):
                 break
         else:
             for model_test_metadata in load_model_test_file(
-                yaml_file, get_variables=get_variables
+                yaml_file, config=config, get_variables=get_variables
             ).values():
                 yield model_test_metadata
 
@@ -105,7 +106,8 @@ def filter_tests_by_patterns(
 
 
 def load_model_tests(
-    loaders: list[Loader],
+    configs: t.Dict[pathlib.Path, C],
+    get_variables: t.Callable[[t.Optional[C], t.Optional[str]], t.Dict[str, str]],
     tests: t.Optional[t.List[str]] = None,
     patterns: list[str] | None = None,
 ) -> list[ModelTestMetadata]:
@@ -123,23 +125,22 @@ def load_model_tests(
             filename, test_name = test.split("::", maxsplit=1) if "::" in test else (test, "")
 
             test_file = load_model_test_file(
-                pathlib.Path(filename), get_variables=loaders[0]._get_variables
+                pathlib.Path(filename),
+                config=next(iter(configs.values())),
+                get_variables=get_variables,
             )
             if test_name:
                 test_meta.append(test_file[test_name])
             else:
                 test_meta.extend(test_file.values())
     else:
-        for loader in loaders:
+        for path, config in configs.items():
             test_meta.extend(
-                [
-                    meta
-                    for meta in discover_model_tests(
-                        pathlib.Path(loader.config_path / c.TESTS),
-                        ignore_patterns=loader.config.ignore_patterns,  # type: ignore
-                        get_variables=loader._get_variables,
-                    )
-                ]
+                discover_model_tests(
+                    pathlib.Path(path / c.TESTS),
+                    config=config,
+                    get_variables=get_variables,
+                )
             )
 
     if patterns:
