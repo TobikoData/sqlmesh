@@ -8824,6 +8824,9 @@ def test_macros_referenced_in_metadata_statements_and_properties_are_metadata_on
             non_zero_c1,
             unique_values(columns := @m2()),
           ),
+          physical_properties (
+            random_prop = @random_prop_macro()
+          ),
         );
 
         SELECT
@@ -8836,6 +8839,7 @@ def test_macros_referenced_in_metadata_statements_and_properties_are_metadata_on
         ON_VIRTUAL_UPDATE_BEGIN;
 
         @bla();
+        @random_prop_macro();
 
         ON_VIRTUAL_UPDATE_END;
 
@@ -8879,6 +8883,10 @@ def zero_metadata(evaluator):
 
 @macro()
 def non_metadata_macro(evaluator):
+    return 1
+
+@macro()
+def random_prop_macro(evaluator):
     return 1"""
 
     test_macros = tmp_path / "macros/test_macros.py"
@@ -8927,7 +8935,7 @@ def test_signal_always_true(batch, arg1, arg2):
 
     python_env = model.python_env
 
-    assert len(python_env) == 12
+    assert len(python_env) == 13
     assert (python_env.get("test_signal_always_true") or empty_executable).is_metadata
     assert (python_env.get("bar") or empty_executable).is_metadata
     assert (python_env.get("m1") or empty_executable).is_metadata
@@ -8945,6 +8953,7 @@ def test_signal_always_true(batch, arg1, arg2):
     # is true for zero_alt, which is referenced in the non_zero_c1 audit.
     assert not (python_env.get("zero_alt") or empty_executable).is_metadata
     assert not (python_env.get("non_metadata_macro") or empty_executable).is_metadata
+    assert not (python_env.get("random_prop_macro") or empty_executable).is_metadata
 
 
 def test_scd_type_2_full_history_restatement():
