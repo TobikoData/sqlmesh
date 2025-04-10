@@ -74,7 +74,6 @@ class Loader(abc.ABC):
         self.context = context
         self.config_path = path
         self.config = self.context.configs[self.config_path]
-        self._variables_by_gateway: t.Dict[str, t.Dict[str, t.Any]] = {}
 
     def load(self) -> LoadedProject:
         """
@@ -329,26 +328,7 @@ class Loader(abc.ABC):
         self._path_mtimes[path] = path.stat().st_mtime
 
     def _get_variables(self, gateway_name: t.Optional[str] = None) -> t.Dict[str, t.Any]:
-        gateway_name = gateway_name or self.context.selected_gateway
-
-        if gateway_name not in self._variables_by_gateway:
-            try:
-                gateway = self.config.get_gateway(gateway_name)
-            except ConfigError:
-                from sqlmesh.core.console import get_console
-
-                get_console().log_warning(
-                    f"Gateway '{gateway_name}' not found in project '{self.config.project}'."
-                )
-                gateway = None
-
-            self._variables_by_gateway[gateway_name] = {
-                **self.config.variables,
-                **(gateway.variables if gateway else {}),
-                c.GATEWAY: gateway_name,
-            }
-
-        return self._variables_by_gateway[gateway_name]
+        return self.context._get_variables(config=self.config, gateway_name=gateway_name)
 
 
 class SqlMeshLoader(Loader):

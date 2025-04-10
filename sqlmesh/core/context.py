@@ -364,6 +364,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         self._excluded_requirements: t.Set[str] = set()
         self._default_catalog: t.Optional[str] = None
         self._linters: t.Dict[str, Linter] = {}
+        self._variables_by_project_gateway: t.Dict[t.Tuple[str, str], t.Dict[str, t.Any]] = {}
         self._loaded: bool = False
 
         self.path, self.config = t.cast(t.Tuple[Path, C], next(iter(self.configs.items())))
@@ -1786,9 +1787,10 @@ class GenericContext(BaseContext, t.Generic[C]):
             pd.set_option("display.max_columns", None)
 
         test_meta = load_model_tests(
-            loaders=self._loaders,
+            configs=self.configs,
             tests=tests,
             patterns=match_patterns,
+            get_variables=self._get_variables,
         )
 
         return run_tests(
@@ -2465,6 +2467,32 @@ class GenericContext(BaseContext, t.Generic[C]):
             raise LinterError(
                 "Linter detected errors in the code. Please fix them before proceeding."
             )
+
+    def _get_variables(
+        self, config: t.Optional[C] = None, gateway_name: t.Optional[str] = None
+    ) -> t.Dict[str, t.Any]:
+        config = config or self.config
+        gateway_name = gateway_name or self.selected_gateway
+
+        key = (config.project, gateway_name)
+        if key not in self._variables_by_project_gateway:
+            try:
+                gateway = config.get_gateway(gateway_name)
+            except ConfigError:
+                from sqlmesh.core.console import get_console
+
+                get_console().log_warning(
+                    f"Gateway '{gateway_name}' not found in project '{config.project}'."
+                )
+                gateway = None
+
+            self._variables_by_project_gateway[key] = {
+                **config.variables,
+                **(gateway.variables if gateway else {}),
+                c.GATEWAY: gateway_name,
+            }
+
+        return self._variables_by_project_gateway[key]
 
 
 class Context(GenericContext[Config]):

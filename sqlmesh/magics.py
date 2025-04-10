@@ -272,7 +272,7 @@ class SQLMeshMagics(Magics):
         if not args.test_name and not args.ls:
             raise MagicError("Must provide either test name or `--ls` to list tests")
 
-        test_meta = load_model_tests(loaders=context._loaders)
+        test_meta = load_model_tests(configs=context.configs, get_variables=context._get_variables)
 
         tests: t.Dict[str, t.Dict[str, ModelTestMetadata]] = defaultdict(dict)
         for model_test_metadata in test_meta:

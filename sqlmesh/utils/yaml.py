@@ -13,12 +13,16 @@ from sqlmesh.core.constants import VAR
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.jinja import ENVIRONMENT, create_var
 
+if t.TYPE_CHECKING:
+    from sqlmesh.core.config.loader import C
+
+
 JINJA_METHODS = {
     "env_var": lambda key, default=None: getenv(key, default),
 }
 
 
-gateway_pattern = re.compile(r"gateway:\s*([^\s]+)")
+GATEWAY_PATTERN = re.compile(r"gateway:\s*([^\s]+)")
 
 
 def YAML(typ: t.Optional[str] = "safe") -> yaml.YAML:
@@ -40,7 +44,8 @@ def load(
     render_jinja: bool = True,
     allow_duplicate_keys: bool = False,
     variables: t.Optional[t.Dict[str, t.Any]] = None,
-    get_variables: t.Callable[[t.Optional[str]], t.Dict[str, str]] | None = None,
+    config: t.Optional[C] = None,
+    get_variables: t.Callable[[t.Optional[C], t.Optional[str]], t.Dict[str, str]] | None = None,
 ) -> t.Dict:
     """Loads a YAML object from either a raw string or a file."""
     path: t.Optional[Path] = None
@@ -51,8 +56,8 @@ def load(
             source = file.read()
 
     if get_variables:
-        gateway = gateway_pattern.search(source)
-        variables = get_variables(gateway.group(1) if gateway else None)
+        gateway = GATEWAY_PATTERN.search(source)
+        variables = get_variables(config, gateway.group(1) if gateway else None)
 
     if render_jinja:
         source = ENVIRONMENT.from_string(source).render(
