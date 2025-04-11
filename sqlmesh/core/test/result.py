@@ -107,7 +107,6 @@ class ModelTextTestResult(unittest.TextTestResult):
         for _, error in errors:
             stream.writeln(unittest.TextTestResult.separator1)
             stream.writeln(f"ERROR: {error}")
-            stream.writeln(unittest.TextTestResult.separator2)
 
         # Output final report
         stream.writeln(unittest.TextTestResult.separator2)
