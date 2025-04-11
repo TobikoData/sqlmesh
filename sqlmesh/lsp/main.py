@@ -11,14 +11,15 @@ from lsprotocol import types
 from pygls.server import LanguageServer
 from pygls.workspace import TextDocument
 from sqlmesh._version import __version__
+from sqlmesh.core.dialect import Audit
 from sqlmesh.core.model import Model
 
 logger = logging.getLogger(__name__)
 
-CONTEXT: t.Optional[
+GLOBAL_CONTEXT: t.Optional[
     t.Tuple[
         Context,
-        t.Dict[str, t.Tuple[Context, Model]],
+        t.Dict[str, t.Tuple[Context, t.Union[Model, Audit]]],
     ]
 ] = None
 
@@ -29,20 +30,31 @@ server = LanguageServer("sqlmesh_lsp", __version__)
 def ensure_context_for_document(document: TextDocument) -> TextDocument:
     """Ensure that a context exists for the given document if applicable by searching for a config.py or config.yml file in the parent directories."""
     # If the context is already loaded, return the document, if it is part of the same context
-    if CONTEXT is not None:
-        CONTEXT[0].reload()
-        if document.uri in CONTEXT[1]:
+    global GLOBAL_CONTEXT
+    if GLOBAL_CONTEXT is not None:
+        GLOBAL_CONTEXT[0].load()
+        if document.uri in GLOBAL_CONTEXT[1]:
             return document
         else:
-            for model in CONTEXT[1]._models:
+            for model in GLOBAL_CONTEXT[0]._models.values():
+                if model._path is None:
+                    continue
                 path = model._path.resolve()
                 if path == document.path:
-                    CONTEXT = (CONTEXT[0], CONTEXT[1] | {document.uri: (CONTEXT[0], model)})
+                    GLOBAL_CONTEXT = (
+                        GLOBAL_CONTEXT[0],
+                        GLOBAL_CONTEXT[1] | {document.uri: (GLOBAL_CONTEXT[0], model)},
+                    )
                     return document
-            for audit in CONTEXT[1]._audits:
+            for audit in GLOBAL_CONTEXT[0]._audits.values():
+                if audit._path is None:
+                    continue
                 path = audit._path.resolve()
                 if path == document.path:
-                    CONTEXT = (CONTEXT[0], CONTEXT[1] | {document.uri: (CONTEXT[0], audit)})
+                    GLOBAL_CONTEXT = (
+                        GLOBAL_CONTEXT[0],
+                        GLOBAL_CONTEXT[1] | {document.uri: (GLOBAL_CONTEXT[0], audit)},
+                    )
                     return document
             return document
 
@@ -57,7 +69,7 @@ def ensure_context_for_document(document: TextDocument) -> TextDocument:
             if config_path.exists():
                 with suppress(Exception):
                     handle = Context(paths=[path])
-                    CONTEXT = (handle, {})
+                    GLOBAL_CONTEXT = (handle, {})
                     server.show_message(f"Context loaded for: {path}")
                     loaded = True
                     return ensure_context_for_document(document)
@@ -73,10 +85,10 @@ def formatting(
     """Format the document using SQLMesh format_model_expressions."""
     try:
         document = ensure_context_for_document(ls.workspace.get_document(params.text_document.uri))
-        context = CONTEXT
+        context = GLOBAL_CONTEXT
         if context is None:
             raise Exception(f"No context found for document: {document.path}")
-        context.format(paths=(Path(document.path),))
+        context[0].format(paths=(Path(document.path),))
         with open(document.path, "r+", encoding="utf-8") as file:
             return [
                 types.TextEdit(
