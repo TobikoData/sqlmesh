@@ -134,7 +134,11 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                 execution_time=plan.execution_time,
             )
 
-            self._push(plan, snapshots, deployability_index_for_creation)
+            push_completion_status = self._push(plan, snapshots, deployability_index_for_creation)
+            if push_completion_status.is_nothing_to_do:
+                self.console.log_status_update(
+                    "\n[green]SKIP: No physical layer updates to perform[/green]\n"
+                )
             update_intervals_for_new_snapshots(plan.new_snapshots, self.state_sync)
             self._restate(plan, snapshots_by_name)
             first_bf_completion_status = self._backfill(
@@ -246,7 +250,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         plan: EvaluatablePlan,
         snapshots: t.Dict[SnapshotId, Snapshot],
         deployability_index: t.Optional[DeployabilityIndex] = None,
-    ) -> None:
+    ) -> CompletionStatus:
         """Push the snapshots to the state sync.
 
         As a part of plan pushing, snapshot tables are created.
@@ -273,7 +277,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
 
         snapshots_to_create = [s for s in snapshots.values() if _should_create(s)]
 
-        completed = False
+        completion_status = None
         progress_stopped = False
         try:
             completion_status = self.snapshot_evaluator.create(
@@ -286,11 +290,6 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                 ),
                 on_complete=self.console.update_creation_progress,
             )
-            if completion_status.is_nothing_to_do:
-                self.console.log_status_update(
-                    "\n[green]SKIP: No physical layer updates to perform[/green]\n"
-                )
-            completed = True
         except NodeExecutionFailedError as ex:
             self.console.stop_creation_progress(success=False)
             progress_stopped = True
@@ -301,13 +300,16 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             raise PlanError("Plan application failed.")
         finally:
             if not progress_stopped:
-                self.console.stop_creation_progress(success=completed)
+                self.console.stop_creation_progress(
+                    success=completion_status is not None and completion_status.is_success
+                )
 
         self.state_sync.push_snapshots(plan.new_snapshots)
 
         analytics.collector.on_snapshots_created(
             new_snapshots=plan.new_snapshots, plan_id=plan.plan_id
         )
+        return completion_status
 
     def _promote(
         self,
