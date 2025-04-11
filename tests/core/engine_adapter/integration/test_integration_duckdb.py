@@ -5,7 +5,7 @@ import random
 from sqlglot import exp
 
 from sqlmesh.core.config.connection import DuckDBConnectionConfig
-from sqlmesh.utils.connection_pool import ThreadLocalConnectionPool
+from sqlmesh.utils.connection_pool import ThreadLocalSharedConnectionPool
 
 pytestmark = [pytest.mark.duckdb, pytest.mark.engine, pytest.mark.slow]
 
@@ -21,7 +21,7 @@ def test_multithread_concurrency(tmp_path, database: t.Optional[str]):
 
     adapter = config.create_engine_adapter()
 
-    assert isinstance(adapter._connection_pool, ThreadLocalConnectionPool)
+    assert isinstance(adapter._connection_pool, ThreadLocalSharedConnectionPool)
 
     # this test loosely follows this example: https://duckdb.org/docs/guides/python/multiple_threads.html
     adapter.execute(
