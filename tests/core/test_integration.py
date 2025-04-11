@@ -4570,6 +4570,36 @@ def test_multi_virtual_layer(mocker):
         == "     item_id  global_one  macro_one extra\n0  gateway_2          88          1     c"
     )
 
+    # Create dev environment
+    model = context.get_model("db.local_schema.model_one")
+    context.upsert_model(model.copy(update={"query": model.query.select("'d' AS extra")}))
+    plan = context.plan_builder("dev").build()
+    context.apply(plan)
+
+    dev_environment = context.state_sync.get_environment("dev")
+    assert dev_environment is not None
+    metadata = DuckDBMetadata.from_context(context)
+    start_schemas = set(metadata.schemas)
+    assert sorted(start_schemas) == sorted(
+        {"local_schema", "local_schema__dev", "sqlmesh", "sqlmesh__local_schema"}
+    )
+
+    # Invalidate dev environment
+    context.invalidate_environment("dev")
+    invalidate_environment = context.state_sync.get_environment("dev")
+    assert invalidate_environment is not None
+    schemas_prior_to_janitor = set(metadata.schemas)
+    assert invalidate_environment.expiration_ts < dev_environment.expiration_ts  # type: ignore
+    assert sorted(start_schemas) == sorted(schemas_prior_to_janitor)
+
+    # Run janitor
+    context._run_janitor()
+    removed_schemas = start_schemas - set(metadata.schemas)
+    assert context.state_sync.get_environment("dev") is None
+    assert removed_schemas == {"local_schema__dev"}
+    prod_environment = context.state_sync.get_environment("prod")
+    assert len(prod_environment.snapshots_) == 4
+
     # Changing the flag should show a diff
     context.gateway_managed_virtual_layer = False
     plan = context.plan_builder().build()
