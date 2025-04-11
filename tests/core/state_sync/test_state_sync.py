@@ -2635,7 +2635,7 @@ def test_cleanup_expired_views(
         previous_plan_id="test_plan_id",
         catalog_name_override="catalog_override",
     )
-    cleanup_expired_views(adapter, [schema_environment, table_environment])
+    cleanup_expired_views(adapter, {}, [schema_environment, table_environment])
     assert adapter.drop_schema.called
     assert adapter.drop_view.called
     assert adapter.drop_schema.call_args_list == [

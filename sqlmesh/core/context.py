@@ -364,7 +364,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         self._environment_statements: t.List[EnvironmentStatements] = []
         self._excluded_requirements: t.Set[str] = set()
         self._default_catalog: t.Optional[str] = None
-        self._catalogs: t.Dict[str, str] = {}
+        self._default_catalog_per_gateway: t.Dict[str, str] = {}
         self._linters: t.Dict[str, Linter] = {}
         self._loaded: bool = False
 
@@ -2225,15 +2225,15 @@ class GenericContext(BaseContext, t.Generic[C]):
         return self._engine_adapters
 
     @cached_property
-    def catalogs(self) -> t.Dict[str, str]:
+    def default_catalog_per_gateway(self) -> t.Dict[str, str]:
         """Returns the catalogs for each engine adapter in a multi virtual layer setup when the catalog isn't shared."""
         if self.gateway_managed_virtual_layer:
-            self._catalogs = {
+            self._default_catalog_per_gateway = {
                 name: adapter.default_catalog
                 for name, adapter in self.engine_adapters.items()
                 if adapter.default_catalog
             }
-        return self._catalogs
+        return self._default_catalog_per_gateway
 
     def _get_engine_adapter(self, gateway: t.Optional[str] = None) -> EngineAdapter:
         if gateway:
@@ -2317,10 +2317,10 @@ class GenericContext(BaseContext, t.Generic[C]):
         expired_environments = self.state_sync.delete_expired_environments()
 
         cleanup_expired_views(
-            adapter=self.engine_adapter,
+            default_adapter=self.engine_adapter,
+            engine_adapters=self.engine_adapters,
             environments=expired_environments,
             console=self.console,
-            engine_adapters=self.engine_adapters,
         )
 
     def _try_connection(self, connection_name: str, validator: t.Callable[[], None]) -> None:
