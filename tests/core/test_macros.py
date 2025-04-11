@@ -695,7 +695,7 @@ def test_macro_parameter_resolution(macro_evaluator):
     # with the former one. This ensures we capture both.
     assert str(e.value.__cause__) in (
         "'pos_only' parameter is positional only, but was passed as a keyword",
-        "missing a required argument: 'a1'",
+        "missing a required positional-only argument: 'pos_only'",
     )
 
     with pytest.raises(MacroEvalError) as e:
