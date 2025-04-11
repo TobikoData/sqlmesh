@@ -772,17 +772,6 @@ def ui(ctx: click.Context, host: str, port: int, mode: str) -> None:
     )
 
 
-@cli.command("lsp")
-@click.pass_obj
-@error_handler
-@cli_analytics
-def lsp(obj: Context) -> None:
-    """Start a language server for SQLMesh."""
-    from lsp.main import server
-
-    server.start_io()
-
-
 @cli.command("migrate")
 @click.pass_context
 @error_handler
