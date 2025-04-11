@@ -13,10 +13,6 @@ from sqlmesh.core.constants import VAR
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.jinja import ENVIRONMENT, create_var
 
-if t.TYPE_CHECKING:
-    from sqlmesh.core.config.loader import C
-
-
 JINJA_METHODS = {
     "env_var": lambda key, default=None: getenv(key, default),
 }
@@ -44,8 +40,7 @@ def load(
     render_jinja: bool = True,
     allow_duplicate_keys: bool = False,
     variables: t.Optional[t.Dict[str, t.Any]] = None,
-    config: t.Optional[C] = None,
-    get_variables: t.Callable[[t.Optional[C], t.Optional[str]], t.Dict[str, str]] | None = None,
+    get_variables: t.Callable[[t.Optional[str]], t.Dict[str, str]] | None = None,
 ) -> t.Dict:
     """Loads a YAML object from either a raw string or a file."""
     path: t.Optional[Path] = None
@@ -62,7 +57,7 @@ def load(
         gateway_line = GATEWAY_PATTERN.search(source)
         gateway = yaml.load(gateway_line.group(0))["gateway"] if gateway_line else None
 
-        variables = get_variables(config, gateway)
+        variables = get_variables(gateway)
 
     if render_jinja:
         source = ENVIRONMENT.from_string(source).render(
