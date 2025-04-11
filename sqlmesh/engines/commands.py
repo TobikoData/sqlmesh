@@ -140,7 +140,7 @@ def cleanup(
     if isinstance(command_payload, str):
         command_payload = CleanupCommandPayload.parse_raw(command_payload)
 
-    cleanup_expired_views(evaluator.adapter, command_payload.environments)
+    cleanup_expired_views(evaluator.adapter, evaluator.adapters, command_payload.environments)
     evaluator.cleanup(command_payload.tasks)
 
 

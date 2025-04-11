@@ -93,6 +93,7 @@ class model(registry_decorator):
         path: Path,
         module_path: Path,
         dialect: t.Optional[str] = None,
+        default_catalog_per_gateway: t.Optional[t.Dict[str, str]] = None,
         **loader_kwargs: t.Any,
     ) -> t.List[Model]:
         return create_models_from_blueprints(
@@ -103,6 +104,7 @@ class model(registry_decorator):
             path=path,
             module_path=module_path,
             dialect=dialect,
+            default_catalog_per_gateway=default_catalog_per_gateway,
             **loader_kwargs,
         )
 
