@@ -37,7 +37,7 @@ from sqlmesh.core.snapshot import (
     SnapshotInfoLike,
     SnapshotTableInfo,
 )
-from sqlmesh.core.scheduler import CompletionStatus
+from sqlmesh.utils import CompletionStatus
 from sqlmesh.core.state_sync import StateSync
 from sqlmesh.core.state_sync.base import PromotionResult
 from sqlmesh.core.user import User
@@ -276,7 +276,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         completed = False
         progress_stopped = False
         try:
-            self.snapshot_evaluator.create(
+            completion_status = self.snapshot_evaluator.create(
                 snapshots_to_create,
                 snapshots,
                 allow_destructive_snapshots=plan.allow_destructive_models,
@@ -284,9 +284,12 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                 on_start=lambda x: self.console.start_creation_progress(
                     x, plan.environment, self.default_catalog
                 ),
-                on_no_work=self.console.log_status_update,
                 on_complete=self.console.update_creation_progress,
             )
+            if completion_status.is_nothing_to_do:
+                self.console.log_status_update(
+                    "\n[green]SKIP: No physical layer updates to perform[/green]\n"
+                )
             completed = True
         except NodeExecutionFailedError as ex:
             self.console.stop_creation_progress(success=False)
