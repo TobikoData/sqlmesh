@@ -679,6 +679,7 @@ class TerminalConsole(Console):
         self.evaluation_total_task: t.Optional[TaskID] = None
         self.evaluation_model_progress: t.Optional[Progress] = None
         self.evaluation_model_tasks: t.Dict[str, TaskID] = {}
+        self.evaluation_model_batch_sizes: t.Dict[Snapshot, int] = {}
 
         # Put in temporary values that are replaced when evaluating
         self.environment_naming_info = EnvironmentNamingInfo()
@@ -949,11 +950,16 @@ class TerminalConsole(Console):
         """Update the snapshot promotion progress."""
         if self.promotion_progress is not None and self.promotion_task is not None:
             if self.verbosity >= Verbosity.VERBOSE:
-                action_str = (
-                    "[green]promoted[/green]" if promoted else "[yellow]demoted[/yellow]"
-                ).ljust(len("promoted"))
+                action_str = ""
+                if promoted:
+                    action_str = (
+                        "[yellow]updated[/yellow]"
+                        if snapshot.previous_version
+                        else "[green]created[/green]"
+                    )
+                action_str = action_str or "[red]dropped[/red]"
                 self.promotion_progress.live.console.print(
-                    f"{snapshot.display_name(self.environment_naming_info, self.default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect).ljust(self.PROGRESS_BAR_COLUMN_WIDTHS['name'])} {action_str}"
+                    f"{snapshot.display_name(self.environment_naming_info, self.default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect).ljust(self.PROGRESS_BAR_COLUMN_WIDTHS['name'])} {action_str.ljust(7)}"
                 )
             self.promotion_progress.update(self.promotion_task, refresh=True, advance=1)
 
