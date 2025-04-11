@@ -233,7 +233,7 @@ class SnapshotEvaluator:
                 gateway = (
                     snapshot.model_gateway if environment_naming_info.gateway_managed else None
                 )
-                adapter = self._get_adapter(gateway)
+                adapter = self.get_adapter(gateway)
                 table = snapshot.qualified_view_name.table_for_environment(
                     environment_naming_info, dialect=adapter.dialect
                 )
@@ -333,7 +333,7 @@ class SnapshotEvaluator:
             gateway: t.Optional[str] = None,
         ) -> t.Set[str]:
             logger.info("Listing data objects in schema %s", schema.sql())
-            objs = self._get_adapter(gateway).get_data_objects(schema, object_names)
+            objs = self.get_adapter(gateway).get_data_objects(schema, object_names)
             return {obj.name for obj in objs}
 
         with self.concurrent_context():
@@ -457,7 +457,7 @@ class SnapshotEvaluator:
                 lambda s: self._cleanup_snapshot(
                     s,
                     snapshots_to_dev_table_only[s.snapshot_id],
-                    self._get_adapter(s.model_gateway),
+                    self.get_adapter(s.model_gateway),
                     on_complete,
                 ),
                 self.ddl_concurrent_tasks,
@@ -942,7 +942,7 @@ class SnapshotEvaluator:
     ) -> None:
         if snapshot.is_model:
             adapter = (
-                self._get_adapter(snapshot.model_gateway)
+                self.get_adapter(snapshot.model_gateway)
                 if environment_naming_info.gateway_managed
                 else self.adapter
             )
@@ -979,7 +979,7 @@ class SnapshotEvaluator:
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]],
     ) -> None:
         adapter = (
-            self._get_adapter(snapshot.model_gateway)
+            self.get_adapter(snapshot.model_gateway)
             if environment_naming_info.gateway_managed
             else self.adapter
         )
@@ -1097,7 +1097,7 @@ class SnapshotEvaluator:
         for schema_name, catalog in unique_schemas:
             schema = schema_(schema_name, catalog)
             logger.info("Creating schema '%s'", schema)
-            adapter = self._get_adapter(gateway)
+            adapter = self.get_adapter(gateway)
             adapter.create_schema(schema)
 
     def get_adapter(self, gateway: t.Optional[str] = None) -> EngineAdapter:
