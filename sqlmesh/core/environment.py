@@ -233,7 +233,7 @@ def execute_environment_statements(
     end: t.Optional[TimeLike] = None,
     execution_time: t.Optional[TimeLike] = None,
 ) -> None:
-    if rendered_expressions := [
+    rendered_expressions = [
         expr
         for statements in environment_statements
         for expr in render_statements(
@@ -250,7 +250,8 @@ def execute_environment_statements(
             runtime_stage=runtime_stage,
             engine_adapter=adapter,
         )
-    ]:
+    ]
+    if rendered_expressions:
         with adapter.transaction():
             for expr in rendered_expressions:
                 adapter.execute(expr)

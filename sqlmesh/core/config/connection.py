@@ -152,7 +152,8 @@ class DuckDBAttachOptions(BaseConfig):
         # TODO: Add support for Postgres schema. Currently adding it blocks access to the information_schema
         if self.type == "motherduck":
             # MotherDuck does not support aliasing
-            if (md_db := self.path.replace("md:", "")) != alias.replace('"', ""):
+            md_db = self.path.replace("md:", "")
+            if md_db != alias.replace('"', ""):
                 raise ConfigError(
                     f"MotherDuck does not support assigning an alias different from the database name {md_db}."
                 )
@@ -195,7 +196,8 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
         if not isinstance(data, dict):
             return data
 
-        if db_path := data.get("database") and data.get("catalogs"):
+        db_path = data.get("database")
+        if db_path and data.get("catalogs"):
             raise ConfigError(
                 "Cannot specify both `database` and `catalogs`. Define all your catalogs in `catalogs` and have the first entry be the default catalog"
             )
@@ -302,7 +304,8 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
         data_files.discard(":memory:")
         for data_file in data_files:
             key = data_file if isinstance(data_file, str) else data_file.path
-            if adapter := BaseDuckDBConnectionConfig._data_file_to_adapter.get(key):
+            adapter = BaseDuckDBConnectionConfig._data_file_to_adapter.get(key)
+            if adapter is not None:
                 logger.info(
                     f"Using existing DuckDB adapter due to overlapping data file: {self._mask_motherduck_token(key)}"
                 )

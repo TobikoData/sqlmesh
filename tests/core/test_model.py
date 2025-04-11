@@ -8961,3 +8961,25 @@ def test_scd_type_2_full_history_restatement():
     assert ModelKindName.SCD_TYPE_2_BY_TIME.full_history_restatement_only is True
     assert ModelKindName.SCD_TYPE_2_BY_COLUMN.full_history_restatement_only is True
     assert ModelKindName.INCREMENTAL_BY_TIME_RANGE.full_history_restatement_only is False
+
+
+def test_python_model_boolean_values():
+    @model(
+        "db.test_model",
+        kind=dict(
+            name=ModelKindName.SCD_TYPE_2_BY_TIME,
+            unique_key=["id"],
+            disable_restatement=False,
+        ),
+        columns={"id": "string", "name": "string"},
+        optimize_query=False,
+    )
+    def test_model(context, **kwargs):
+        return pd.DataFrame([{"id": context.var("1")}])
+
+    python_model = model.get_registry()["db.test_model"].model(
+        module_path=Path("."), path=Path("."), dialect="duckdb"
+    )
+
+    assert python_model.kind.disable_restatement is False
+    assert python_model.optimize_query is False

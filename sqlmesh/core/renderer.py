@@ -105,10 +105,11 @@ class BaseExpressionRenderer:
         if should_cache and self._cache:
             return self._cache
 
-        if environment_naming_info := kwargs.get("environment_naming_info", None):
+        environment_naming_info = kwargs.get("environment_naming_info")
+        if environment_naming_info is not None:
             kwargs["this_env"] = getattr(environment_naming_info, "name")
-            if snapshots and (
-                schemas := set(
+            if snapshots:
+                schemas = set(
                     [
                         s.qualified_view_name.schema_for_environment(
                             environment_naming_info, dialect=self._dialect
@@ -117,8 +118,8 @@ class BaseExpressionRenderer:
                         if s.is_model and not s.is_symbolic
                     ]
                 )
-            ):
-                kwargs["schemas"] = list(schemas)
+                if schemas:
+                    kwargs["schemas"] = list(schemas)
 
         this_model = kwargs.pop("this_model", None)
 

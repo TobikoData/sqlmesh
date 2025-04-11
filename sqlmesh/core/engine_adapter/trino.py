@@ -353,8 +353,8 @@ class TrinoEngineAdapter(
             match_key = schema.db
 
             # only consider the catalog if it is present
-            if catalog := schema.catalog:
-                match_key = f"{catalog}.{match_key}"
+            if schema.catalog:
+                match_key = f"{schema.catalog}.{match_key}"
 
             for k, v in mapping.items():
                 if re.match(k, match_key):

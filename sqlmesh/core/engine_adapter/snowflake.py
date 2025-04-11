@@ -221,7 +221,10 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
                 )
             )
 
-        if clustered_by and (clustered_by_prop := self._build_clustered_by_exp(clustered_by)):
+        if (
+            clustered_by
+            and (clustered_by_prop := self._build_clustered_by_exp(clustered_by)) is not None
+        ):
             properties.append(clustered_by_prop)
 
         if table_properties:

@@ -830,7 +830,8 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
             return exp.DataType(this=col_type.this, expressions=column_expressions, nested=True)
 
         # Recursively build column definitions for BigQuery's RECORDs (struct) and REPEATED RECORDs (array of struct)
-        if isinstance(col_type, exp.DataType) and (expressions := col_type.expressions):
+        if isinstance(col_type, exp.DataType) and col_type.expressions:
+            expressions = col_type.expressions
             if col_type.is_type(exp.DataType.Type.STRUCT):
                 col_type = _build_struct_with_descriptions(col_type, nested_names + [col_name])
             elif col_type.is_type(exp.DataType.Type.ARRAY) and expressions[0].is_type(
