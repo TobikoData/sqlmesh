@@ -226,6 +226,7 @@ class EngineAdapterStateSync(StateSync):
             existing_environment
             and existing_environment.finalized_ts
             and not existing_environment.expired
+            and existing_environment.gateway_managed == environment.gateway_managed
         ):
             # Only promote new snapshots.
             added_table_infos -= set(existing_environment.promoted_snapshots)

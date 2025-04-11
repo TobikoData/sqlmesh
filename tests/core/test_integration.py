@@ -10,6 +10,8 @@ import numpy as np
 import pandas as pd
 import pytest
 from pathlib import Path
+import os
+from sqlmesh.utils.concurrency import NodeExecutionFailedError
 import time_machine
 from pytest_mock.plugin import MockerFixture
 from sqlglot import exp
@@ -4492,6 +4494,128 @@ def test_multi(mocker):
     assert environment_statements[0].after_all == [
         "CREATE TABLE IF NOT EXISTS after_1 AS select @dup()"
     ]
+
+
+@use_terminal_console
+def test_multi_virtual_layer(mocker):
+    context = Context(paths=["tests/fixtures/multi_virtual_layer"])
+
+    local_db = "db.duckdb"
+    if os.path.exists(local_db):
+        os.remove(local_db)
+
+    # For the model without gateway the default should be used and the gateway variable should overide the global
+    assert (
+        context.render("local_schema.model_one").sql()
+        == 'SELECT \'gateway_1\' AS "item_id", 88 AS "global_one", 1 AS "macro_one"'
+    )
+
+    # For model with gateway specified the appropriate variable should be used to overide
+    assert (
+        context.render("memory.memory_schema.model_one").sql()
+        == 'SELECT \'gateway_2\' AS "item_id", 88 AS "global_one", 1 AS "macro_one"'
+    )
+
+    # context._new_state_sync().reset(default_catalog=context.default_catalog)
+    plan = context.plan_builder().build()
+    assert len(plan.new_snapshots) == 4
+    context.apply(plan)
+
+    # Validate the tables that source from the first tables are correct as well with evaluate
+    assert (
+        context.evaluate(
+            "local_schema.model_two", start=now(), end=now(), execution_time=now()
+        ).to_string()
+        == "     item_id  global_one\n0  gateway_1          88"
+    )
+    assert (
+        context.evaluate(
+            "memory.memory_schema.model_two", start=now(), end=now(), execution_time=now()
+        ).to_string()
+        == "     item_id  global_one\n0  gateway_2          88"
+    )
+
+    assert sorted(set(snapshot.name for snapshot in plan.directly_modified)) == [
+        '"db"."local_schema"."model_one"',
+        '"db"."local_schema"."model_two"',
+        '"memory"."memory_schema"."model_one"',
+        '"memory"."memory_schema"."model_two"',
+    ]
+
+    model = context.get_model("memory.memory_schema.model_one")
+
+    context.upsert_model(model.copy(update={"query": model.query.select("'c' AS extra")}))
+    plan = context.plan_builder().build()
+    context.apply(plan)
+
+    state_environments = context.state_reader.get_environments()
+    state_snapshots = context.state_reader.get_snapshots(context.snapshots.values())
+
+    assert state_environments[0].gateway_managed
+    assert len(state_snapshots) == len(state_environments[0].snapshots)
+
+    assert [snapshot.name for snapshot in plan.directly_modified] == [
+        '"memory"."memory_schema"."model_one"'
+    ]
+    assert [x.name for x in list(plan.indirectly_modified.values())[0]] == [
+        '"memory"."memory_schema"."model_two"'
+    ]
+
+    assert len(plan.missing_intervals) == 1
+
+    assert (
+        context.evaluate(
+            "memory.memory_schema.model_one", start=now(), end=now(), execution_time=now()
+        ).to_string()
+        == "     item_id  global_one  macro_one extra\n0  gateway_2          88          1     c"
+    )
+
+    # Create dev environment
+    model = context.get_model("db.local_schema.model_one")
+    context.upsert_model(model.copy(update={"query": model.query.select("'d' AS extra")}))
+    plan = context.plan_builder("dev").build()
+    context.apply(plan)
+
+    dev_environment = context.state_sync.get_environment("dev")
+    assert dev_environment is not None
+    metadata = DuckDBMetadata.from_context(context)
+    start_schemas = set(metadata.schemas)
+    assert sorted(start_schemas) == sorted(
+        {"local_schema", "local_schema__dev", "sqlmesh", "sqlmesh__local_schema"}
+    )
+
+    # Invalidate dev environment
+    context.invalidate_environment("dev")
+    invalidate_environment = context.state_sync.get_environment("dev")
+    assert invalidate_environment is not None
+    schemas_prior_to_janitor = set(metadata.schemas)
+    assert invalidate_environment.expiration_ts < dev_environment.expiration_ts  # type: ignore
+    assert sorted(start_schemas) == sorted(schemas_prior_to_janitor)
+
+    # Run janitor
+    context._run_janitor()
+    removed_schemas = start_schemas - set(metadata.schemas)
+    assert context.state_sync.get_environment("dev") is None
+    assert removed_schemas == {"local_schema__dev"}
+    prod_environment = context.state_sync.get_environment("prod")
+    assert len(prod_environment.snapshots_) == 4
+
+    # Changing the flag should show a diff
+    context.gateway_managed_virtual_layer = False
+    plan = context.plan_builder().build()
+    assert not plan.requires_backfill
+    assert (
+        plan.context_diff.previous_gateway_managed_virtual_layer
+        != plan.context_diff.gateway_managed_virtual_layer
+    )
+    assert plan.context_diff.has_changes
+
+    # This should error since the default_gateway won't have access to create the view on a non-shared catalog
+    with pytest.raises(NodeExecutionFailedError, match=r"Execution failed for node SnapshotId*"):
+        context.apply(plan)
+
+    if os.path.exists(local_db):
+        os.remove(local_db)
 
 
 def test_multi_dbt(mocker):
