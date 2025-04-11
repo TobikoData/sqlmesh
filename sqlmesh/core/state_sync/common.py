@@ -21,10 +21,10 @@ logger = logging.getLogger(__name__)
 
 
 def cleanup_expired_views(
-    adapter: EngineAdapter,
+    default_adapter: EngineAdapter,
+    engine_adapters: t.Dict[str, EngineAdapter],
     environments: t.List[Environment],
     console: t.Optional[Console] = None,
-    engine_adapters: t.Optional[t.Dict[str, EngineAdapter]] = None,
 ) -> None:
     expired_schema_environments = [
         environment for environment in environments if environment.suffix_target.is_schema
@@ -36,8 +36,8 @@ def cleanup_expired_views(
     # We have to use the corresponding adapter if the virtual layer is gateway managed
     def get_adapter(gateway_managed: bool, gateway: t.Optional[str] = None) -> EngineAdapter:
         if gateway_managed and gateway:
-            return (engine_adapters or {}).get(gateway, adapter)
-        return adapter
+            return engine_adapters.get(gateway, default_adapter)
+        return default_adapter
 
     # Drop the schemas for the expired environments
     for engine_adapter, expired_catalog, expired_schema in {

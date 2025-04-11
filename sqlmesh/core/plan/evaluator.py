@@ -424,9 +424,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]] = None,
     ) -> None:
         self.snapshot_evaluator.demote(
-            target_snapshots,
-            environment_naming_info,
-            on_complete=on_complete,
+            target_snapshots, environment_naming_info, on_complete=on_complete
         )
 
     def _restate(self, plan: EvaluatablePlan, snapshots_by_name: t.Dict[str, Snapshot]) -> None:

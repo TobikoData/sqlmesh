@@ -1886,6 +1886,7 @@ def create_models_from_blueprints(
     path: Path = Path(),
     module_path: Path = Path(),
     dialect: DialectType = None,
+    default_catalog_per_gateway: t.Optional[t.Dict[str, str]] = None,
     **loader_kwargs: t.Any,
 ) -> t.List[Model]:
     model_blueprints: t.List[Model] = []
@@ -1907,11 +1908,10 @@ def create_models_from_blueprints(
         else:
             gateway_name = None
 
-        # We pop to avoid pydantic validation issues since catalogs is not a model property
         if (
-            (catalogs := loader_kwargs.pop("catalogs", None))
+            default_catalog_per_gateway
             and gateway_name
-            and (catalog := catalogs.get(gateway_name))
+            and (catalog := default_catalog_per_gateway.get(gateway_name))
         ):
             loader_kwargs["default_catalog"] = catalog
 
@@ -1935,6 +1935,7 @@ def load_sql_based_models(
     path: Path = Path(),
     module_path: Path = Path(),
     dialect: DialectType = None,
+    default_catalog_per_gateway: t.Optional[t.Dict[str, str]] = None,
     **loader_kwargs: t.Any,
 ) -> t.List[Model]:
     gateway: t.Optional[exp.Expression] = None
@@ -1972,6 +1973,7 @@ def load_sql_based_models(
         path=path,
         module_path=module_path,
         dialect=dialect,
+        default_catalog_per_gateway=default_catalog_per_gateway,
         **loader_kwargs,
     )
 
