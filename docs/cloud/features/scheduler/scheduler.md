@@ -92,7 +92,7 @@ Update your project's `config.yaml` file to specify a scheduler of type `cloud`.
       gateway_a:
         scheduler:
           type: cloud
-    
+
     default_gateway: gateway_a
     ```
 
@@ -100,9 +100,9 @@ Update your project's `config.yaml` file to specify a scheduler of type `cloud`.
 
     ```python linenums="1" hl_lines="8"
     from sqlmesh.core.config import GatewayConfig
-    
+
     from tobikodata.sqlmesh_enterprise.config import EnterpriseConfig, RemoteCloudSchedulerConfig
-    
+
     config = EnterpriseConfig(
         gateways={
             "gateway_a": GatewayConfig(
@@ -168,119 +168,3 @@ Tobiko Cloud automatically manages Python dependencies of your Python macros and
 SQLMesh automatically infers which Python libraries are used by statically analyzing the code of your models and macros.
 
 For fine-grained control, dependencies can be specified, pinned, or excluded using the `sqlmesh-requirements.lock` file. See the [Python library dependencies](../../../guides/configuration.md#python-library-dependencies) section in the SQLMesh configuration guide for more information.
-
-## Hybrid Deployment (Self-hosted executors)
-
-Letting Tobiko Cloud manage your data warehouse connections is a secure and convenient way to run your project.
-
-However, some organizations may prefer not to share their data warehouse credentials with a third party or to bring the execution closer to their data. To support this, Tobiko Cloud offers the ability for you to host your own SQLMesh executors.
-
-With this approach, Tobiko Cloud uses project metadata to manage user access control, schedule and trigger runs, and apply plans, but all data access and query execution occurs within your own infrastructure. Tobiko cloud has no access to your data or warehouse credentials.
-
-This gives you complete control over data security and network access while still benefiting from Tobiko Cloud's scheduling capabilities.
-
-### How it works
-
-Self-hosted executors as the name indicates are self-hosted workers that take on the responsibility of "executing" changes to the data warehouse. While Tobiko Cloud schedules and plans changes, the executors are responsible for executing those changes. Executors are docker containers that are configured to connect to Tobiko Cloud as well as your data warehouse. Connected to both, the executor pulls work from the cloud, whether it's a plan or scheduled background work from a run, and execute it on your data warehouse.
-
-### Deployment Options
-
-You can deploy the executor containers using any method that works for your infrastructure and operational requirements. The executors are standard Docker containers that can be deployed in any container environment as long as they're properly configured with the required environment variables.
-
-For your convenience, we provide two reference implementations:
-
-1. **Kubernetes with Helm Chart**: For production environments, we provide a [Helm chart](./hybrid_executors_helm.md) that includes robust configurability, secret management, and scaling options.
-
-2. **Docker Compose**: For simpler environments or testing, we offer a [Docker Compose setup](./hybrid_executors_docker_compose) to quickly deploy executors on any machine with Docker.
-
-You're free to adapt these reference implementations or create your own deployment method that fits your specific needs. The only requirement is that two executor instances must be running (one for run operations and one for apply operations) and properly configured.
-
-### Configuration
-
-The following covers basic configuration concepts for hybrid executors. For detailed configuration options, please refer to the specific documentation for your chosen deployment method above.
-
-Tobiko Cloud requires 2 executor instances to be running:
-
-1. **Run Executor**: Handles scheduled model execution
-2. **Apply Executor**: Handles applying changes to the data warehouse
-
-Both executors need to be properly configured with environment variables to connect to Tobiko Cloud and your data warehouse.
-
-#### Basic Environment Variables
-
-To connect to Tobiko Cloud, you'll need to provide:
-
-```env
-TCLOUD_URL=https://cloud.tobikodata.com/sqlmesh/acme/analytics_project
-TCLOUD_CLIENT_ID=your_client_id
-TCLOUD_CLIENT_SECRET=your_client_secret
-```
-
-![add_oath_client](./scheduler/add_oath_client.png)
-
-To connect to your data warehouse, configure a gateway:
-
-```env
-SQLMESH__DEFAULT_GATEWAY=GATEWAY_A
-SQLMESH__GATEWAYS__GATEWAY_A__CONNECTION__TYPE=postgres
-SQLMESH__GATEWAYS__GATEWAY_A__CONNECTION__HOST=10.10.10.10
-SQLMESH__GATEWAYS__GATEWAY_A__CONNECTION__PORT=5432
-SQLMESH__GATEWAYS__GATEWAY_A__CONNECTION__DATABASE=example_db
-SQLMESH__GATEWAYS__GATEWAY_A__CONNECTION__USER=example_user
-SQLMESH__GATEWAYS__GATEWAY_A__CONNECTION__PASSWORD=example_password
-```
-
-**Note**: For multiple gateways, each gateway needs its own set of environment variables:
-
-```env
-SQLMESH__GATEWAYS__GATEWAY_A__CONNECTION__TYPE=<connection type>  
-# <Gateway A connection settings>  
-SQLMESH__GATEWAYS__GATEWAY_B__CONNECTION__TYPE=<connection type>  
-# <Gateway B connection settings>  
-```
-
-For more details, including secure secret management options, refer to the [Helm chart](./hybrid_executors_helm.md) or [Docker Compose](./hybrid_executors_docker_compose) documentation.
-
-After the executors are properly configured and running, they will appear in the cloud UI where they can be used to apply plans and execute scheduled runs.
-
-![executors](./scheduler/executors.png)
-
-We recommend setting up monitoring for the executors to ensure they run smoothly and to help troubleshoot issues. This monitoring should include logs and system metrics like memory and CPU usage.
-
-#### Network Configuration
-
-No ingress is required from executor containers to user environments. All network requests are outbound from user environments to Tobiko Cloud. If the hybrid executors are running in a secure network, where public internet access is not available, you will need to configure the network to allow access to Tobiko Cloud on the following IPs:
-
-```bash
-34.28.17.91
-34.136.27.153
-34.136.131.201
-```
-
-#### Project Configuration
-
-Configuring a project using hybrid executors is the same as configuring a project for cloud scheduler. See [connection configuration](#connection-configuration) for details.
-
-### Required specs
-
-While the exact requirements for executors vary depending on the customer's specific needs and primarily depend on the Python models being run (whose requirements can vary greatly), we recommend a minimum of 2GB of RAM and 1 vCPU for each executor.
-
-### '.env' file
-
-Environment variables may also be passed to SQLMesh by mounting a `.env` file into the docker image and specifying it's full path with the environment variable `TCLOUD_ENV_FILE`. 
-
-**Note** These variables are only read at SQLMesh run time so variables that are used by `tcloud` such as `TCLOUD_URL`, `TCLOUD_CLIENT_ID`, `TCLOUD_CLIENT_SECRET`, etc. must be passed as variables. 
-
-### Health checks
-
-In production settings, we recommend setting up health checks to monitor the status of your executors. Health checks help ensure your executors are operating correctly and can identify issues before they impact your workflows.
-
-For detailed information on implementing health checks:
-
-- **Kubernetes/Helm**: See the [Hybrid Executors Helm Chart documentation](./hybrid_executors_helm.md#verifying-the-installation) for information on health check configuration in Kubernetes.
-
-- **Docker Compose**: Refer to the [Docker Compose setup documentation](./hybrid_executors_docker_compose#health-checking) for health check implementation with Docker Compose.
-
-Both executor types (run and apply) should have appropriate health checks implemented to ensure proper monitoring and reliability.
-
-**Note** When configuring health checks, ensure timeouts are set appropriately based on your resources. Default timeouts can sometimes be too aggressive depending on the allocated resources.

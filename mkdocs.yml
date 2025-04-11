@@ -114,8 +114,9 @@ nav:
       - Scheduler:
         - "Cloud": cloud/features/scheduler/scheduler.md
         - "Cloud Hybrid Deployments":
-          - "Hybrid Executors Helm Chart": cloud/features/scheduler/hybrid_executors_helm.md
-          - "Hybrid Executors Docker Compose": cloud/features/scheduler/hybrid_executors_docker_compose.md
+          - "Overview": cloud/features/scheduler/hybrid_executors_overview.md
+          - "Helm Chart example": cloud/features/scheduler/hybrid_executors_helm.md
+          - "Docker Compose example": cloud/features/scheduler/hybrid_executors_docker_compose.md
         - cloud/features/scheduler/airflow.md
         - cloud/features/scheduler/dagster.md
 #      - Observability:

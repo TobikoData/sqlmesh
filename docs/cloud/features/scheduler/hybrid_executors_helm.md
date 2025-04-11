@@ -1,27 +1,27 @@
 # Tobiko Cloud Hybrid Executors Helm Chart
 
-This Helm chart deploys Tobiko Cloud hybrid executors, enabling your on-premise Kubernetes cluster to connect to Tobiko Cloud for operations. Hybrid executors allow you to run operations on your own infrastructure while leveraging Tobiko Cloud for orchestration.
+This Helm chart deploys Tobiko Cloud hybrid executors, enabling your on-premise Kubernetes cluster to connect to Tobiko Cloud for operations.
 
-## What This Chart Does
+Hybrid executors allow you to run operations on your own infrastructure while leveraging Tobiko Cloud for orchestration.
 
-The hybrid executors connect your data warehouse to Tobiko Cloud in a secure way:
+## What this chart does
+
+This chart deploys two hybrid executors that pass work tasks from Tobiko Cloud to your data warehouse in a secure way:
 
 - **Apply Executor**: Handles applying changes to the data warehouse
 - **Run Executor**: Handles scheduled model execution
 
-Both executors need to be properly configured with environment variables to connect to Tobiko Cloud and your data warehouse.
+Both executors must be properly configured with environment variables to connect to Tobiko Cloud and your data warehouse.
 
 ## Prerequisites
 
-- Access to a data warehouse (e.g., Postgres, Snowflake, BigQuery)
+- Access to a [data warehouse supported by Tobiko Cloud](../../../integrations/overview.md#execution-engines) (e.g., Postgres, Snowflake, BigQuery)
 - Helm 3.8+
-- A Tobiko Cloud account with client ID and client secret
+- A Tobiko Cloud account with [client ID and client secret](../single_sign_on.md#provisioning-client-credentials)
 
-- ![add_oath_client](./scheduler/add_oath_client.png)
+## Quick start guide
 
-## Quick Start Guide
-
-Create a `values.yaml` file with your configuration. 
+Create a `values.yaml` file with your Tobiko Cloud configuration.
 
 ```bash
 # Create a values file
@@ -44,31 +44,35 @@ global:
 EOF
 ```
 
-### Option 1: Install Directly With Helm
+### Option 1: Install Directly with Helm
 
 ```bash
 # Install the chart from local directory
 helm install executors oci://registry-1.docker.io/tobikodata/hybrid-executors -f my-values.yaml
 ```
 
-### Option 2: Generate YAML Files Without Installing
+### Option 2: Generate YAML files without installing
 
 If you prefer to review and apply the Kubernetes YAML files manually:
 
 ```bash
 # Generate YAML files without installing
 helm template executors oci://registry-1.docker.io/tobikodata/hybrid-executors -f my-values.yaml > generated-manifests.yaml
+```
 
+```bash
 # Review the generated files
 cat generated-manifests.yaml
+```
 
+```bash
 # Apply when ready
 kubectl apply -f generated-manifests.yaml
 ```
 
-## Basic Configuration
+## Basic configuration
 
-The most important configuration values:
+The most important configuration values are:
 
 | Parameter                   | Description                         | Required           |
 |-----------------------------|-------------------------------------|--------------------|
@@ -78,9 +82,9 @@ The most important configuration values:
 | `global.cloud.clientSecret` | Your Tobiko Cloud client secret     | Yes                |
 | `global.sqlmesh.gateways`   | Database connections configuration  | Yes                |
 
-### Database Configuration
+### Gateway configuration
 
-Configure your database connection in the `global.sqlmesh.gateways` section:
+Configure your gateway's SQL engine connection in the `global.sqlmesh.gateways` section:
 
 ```yaml
 global:
@@ -96,45 +100,51 @@ global:
           # Password should be managed as a secret (see below)
 ```
 
-## Secret Management Options
+## Secret management options
 
-The chart provides multiple options for managing secrets to facilitate different security requirements and deployment patterns:
+The chart provides multiple options for managing secrets. Use the one most aligned with your security requirements and deployment patterns.
 
-### Dynamic Secret Detection
+### Context: Helm's dynamic secret detection
 
-The chart automatically treats `global.cloud.clientSecret` and any gateway connection parameter with `password`, `secret`, or `token` in its name as a secret:
+The chart automatically treats `global.cloud.clientSecret` and any gateway connection parameter with keywords `password`, `secret`, or `token` in its name as a secret:
 
 ```yaml
 global:
   cloud:
     clientId: "your-client-id"  # Not a secret
-    clientSecret: "your-client-secret"  # Treated as a secret
+    clientSecret: "your-client-secret"  # Automatically treated as a secret (contains keyword "secret")
   sqlmesh:
     gateways:
       gateway_a:
         connection:
           type: postgres          # Not a secret
           host: "my-db-host"      # Not a secret
-          password: "p@ssw0rd"    # Treated as a secret
-          client_secret: "xyz123" # Treated as a secret
-          api_token: "abc456"     # Treated as a secret
-          access_key: "key123"    # Not a secret (doesn't contain a secret keyword)
+          password: "p@ssw0rd"    # Automatically treated as a secret (contains keyword "password")
+          client_secret: "xyz123" # Automatically treated as a secret (contains keyword "secret")
+          api_token: "abc456"     # Automatically treated as a secret (contains keyword "token")
+          access_key: "key123"    # Not a secret
 ```
 
-You can explicitly control which parameters should be treated as secrets:
+Use the `secretParams` key to force parameters to be treated as secrets (even if their name doesn't contain a secret keyword):
 
 ```yaml
 global:
   sqlmesh:
     # Force these parameters to be treated as secrets regardless of name
-    secretParams: ["access_key", "certificate"] 
+    secretParams: ["access_key", "certificate"]
     # Force these parameters to NOT be treated as secrets even if they contain secret keywords
     nonSecretParams: ["token_endpoint", "password_policy"]
 ```
 
-### Option 1: Directly in values.yaml (Development Only)
+### Option 1: Secrets directly in values.yaml (development only)
 
-Secrets can be defined directly in the values file:
+!!! warning "Development only"
+
+    This approach is only recommended for development environments and testing.
+
+    Never store secrets in plain text in version control.
+
+Define secrets directly in the values file:
 
 ```yaml
 global:
@@ -143,9 +153,7 @@ global:
     clientSecret: "your-tobiko-cloud-client-secret"  # Automatically treated as a secret
 ```
 
-⚠️ **WARNING**: This approach is only recommended for development environments. Never store secrets in plain text in version control.
-
-### Option 2: Using Existing Kubernetes Secrets
+### Option 2: Existing Kubernetes Secrets
 
 Reference an existing Kubernetes Secret:
 
@@ -157,9 +165,9 @@ secrets:
 The existing secret must contain the required keys:
 
 - `TCLOUD_CLIENT_SECRET`
-- `SQLMESH__GATEWAYS__<GATEWAY_NAME>__CONNECTION__<SECRET KEY>` for each gateway secret
+- `SQLMESH__GATEWAYS__<GATEWAY_NAME>__CONNECTION__<SECRET KEY PARAMETER NAME>` for each gateway secret
 
-Alternatively, specify secrets at the executor level:
+If your executors use different secrets, you can specify secrets at the executor level:
 
 ```yaml
 apply:
@@ -170,7 +178,7 @@ run:
 
 ### Option 3: External Secrets Operator
 
-If you're using [External Secrets Operator](https://external-secrets.io/):
+If you're using [External Secrets Operator](https://external-secrets.io/), you can pull secrets from your secret store:
 
 ```yaml
 secrets:
@@ -182,7 +190,7 @@ secrets:
 
 This will create an ExternalSecret resource that pulls secrets from your configured secret provider.
 
-## Example: Creating a Secret Manually
+### Example: Creating a secret manually
 
 Create a secret with all required credentials:
 
@@ -225,54 +233,7 @@ global:
           # client_secret: (loaded from secret)
 ```
 
-## Customizing Resources
-
-You can customize CPU, memory, and ephemeral-storage for each executor:
-
-```yaml
-apply:
-  resources:
-    requests:
-      memory: "2Gi"
-      cpu: "1"
-      ephemeral-storage: "10Gi"
-    limits:
-      memory: "4Gi"
-      cpu: "2"
-      ephemeral-storage: "10Gi"
-```
-
-## Verifying the Installation
-
-After installation, check that the executors are running:
-
-```bash
-kubectl get pods -l app.kubernetes.io/instance=my-executors
-```
-
-You should see pods for both apply and run executors (if enabled):
-```
-NAME                                  READY   STATUS    RESTARTS   AGE
-my-executors-apply-7b6c9d8f9-abc12    1/1     Running   0          1m
-my-executors-run-6d5b8c7e8-def34     1/1     Running   0          1m
-```
-
-## Troubleshooting
-
-If your executors aren't starting properly, check the logs:
-
-```bash
-kubectl logs -l app.kubernetes.io/instance=my-executors,app.kubernetes.io/component=apply-executor
-kubectl logs -l app.kubernetes.io/instance=my-executors,app.kubernetes.io/component=run-executor
-```
-
-Common issues:
-
-- Incorrect client ID or client secret
-- Database connection issues
-- Insufficient permissions
-
-## Full Example Using an Existing Secret
+### Example: Using an existing secret
 
 ```yaml
 # values.yaml
@@ -299,7 +260,54 @@ global:
 
 apply:
   replicaCount: 1
-  
+
 run:
   replicaCount: 2
 ```
+
+## Customizing resources
+
+You can customize CPU, memory, and ephemeral-storage for each executor. This sets the resources for the `apply` executor:
+
+```yaml
+apply:
+  resources:
+    requests:
+      memory: "2Gi"
+      cpu: "1"
+      ephemeral-storage: "10Gi"
+    limits:
+      memory: "4Gi"
+      cpu: "2"
+      ephemeral-storage: "10Gi"
+```
+
+## Verifying the installation
+
+After installation, check that the executors are running:
+
+```bash
+kubectl get pods -l app.kubernetes.io/instance=my-executors
+```
+
+You should see pods for both apply and run executors:
+```
+NAME                                  READY   STATUS    RESTARTS   AGE
+my-executors-apply-7b6c9d8f9-abc12    1/1     Running   0          1m
+my-executors-run-6d5b8c7e8-def34     1/1     Running   0          1m
+```
+
+## Troubleshooting
+
+If your executors aren't starting properly, check the logs:
+
+```bash
+kubectl logs -l app.kubernetes.io/instance=my-executors,app.kubernetes.io/component=apply-executor
+kubectl logs -l app.kubernetes.io/instance=my-executors,app.kubernetes.io/component=run-executor
+```
+
+Common issues:
+
+- Incorrect client ID or client secret
+- SQL engine connection issues
+- Insufficient permissions
