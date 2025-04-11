@@ -115,6 +115,7 @@ class ThreadLocalConnectionPool(_TransactionManagementMixin):
     def __init__(
         self,
         connection_factory: t.Callable[[], t.Any],
+        shared_connection: bool = False,
         cursor_init: t.Optional[t.Callable[[t.Any], None]] = None,
     ):
         self._connection_factory = connection_factory
@@ -125,6 +126,7 @@ class ThreadLocalConnectionPool(_TransactionManagementMixin):
         self._thread_connections_lock = Lock()
         self._thread_cursors_lock = Lock()
         self._thread_transactions_lock = Lock()
+        self._shared_connection = shared_connection
         self._cursor_init = cursor_init
 
     def get_cursor(self) -> t.Any:
@@ -187,6 +189,9 @@ class ThreadLocalConnectionPool(_TransactionManagementMixin):
             self._thread_attributes.pop(thread_id, None)
 
     def close_all(self, exclude_calling_thread: bool = False) -> None:
+        if exclude_calling_thread and self._shared_connection:
+            return
+
         calling_thread_id = get_ident()
         with self._thread_cursors_lock, self._thread_connections_lock:
             for thread_id, connection in self._thread_connections.copy().items():
@@ -269,10 +274,13 @@ class SingletonConnectionPool(_TransactionManagementMixin):
 def create_connection_pool(
     connection_factory: t.Callable[[], t.Any],
     multithreaded: bool,
+    shared_connection: bool = False,
     cursor_init: t.Optional[t.Callable[[t.Any], None]] = None,
 ) -> ConnectionPool:
     return (
-        ThreadLocalConnectionPool(connection_factory, cursor_init=cursor_init)
+        ThreadLocalConnectionPool(
+            connection_factory, shared_connection=shared_connection, cursor_init=cursor_init
+        )
         if multithreaded
         else SingletonConnectionPool(connection_factory, cursor_init=cursor_init)
     )

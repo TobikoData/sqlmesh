@@ -119,6 +119,7 @@ class EngineAdapter:
         register_comments: bool = True,
         pre_ping: bool = False,
         pretty_sql: bool = False,
+        shared_connection: bool = False,
         **kwargs: t.Any,
     ):
         self.dialect = dialect.lower() or self.DIALECT
@@ -126,7 +127,10 @@ class EngineAdapter:
             connection_factory_or_pool
             if isinstance(connection_factory_or_pool, ConnectionPool)
             else create_connection_pool(
-                connection_factory_or_pool, multithreaded, cursor_init=cursor_init
+                connection_factory_or_pool,
+                multithreaded,
+                shared_connection=shared_connection,
+                cursor_init=cursor_init,
             )
         )
         self._sql_gen_kwargs = sql_gen_kwargs or {}
