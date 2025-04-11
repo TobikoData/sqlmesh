@@ -321,7 +321,7 @@ class SnapshotEvaluator:
 
         def _get_data_objects(schema: exp.Table, gateway: t.Optional[str] = None) -> t.Set[str]:
             logger.info("Listing data objects in schema %s", schema.sql())
-            objs = self._get_adapter(gateway).get_data_objects(schema, tables_by_schema[schema])
+            objs = self.get_adapter(gateway).get_data_objects(schema, tables_by_schema[schema])
             return {obj.name for obj in objs}
 
         with self.concurrent_context():
@@ -409,7 +409,7 @@ class SnapshotEvaluator:
                     s,
                     snapshots,
                     allow_destructive_snapshots,
-                    self._get_adapter(s.model_gateway),
+                    self.get_adapter(s.model_gateway),
                     deployability_index,
                 ),
                 self.ddl_concurrent_tasks,
@@ -437,7 +437,7 @@ class SnapshotEvaluator:
                 lambda s: self._cleanup_snapshot(
                     s,
                     snapshots_to_dev_table_only[s.snapshot_id],
-                    self._get_adapter(
+                    self.get_adapter(
                         snapshot_gateways.get(s.snapshot_id.name) if snapshot_gateways else None
                     ),
                     on_complete,
@@ -471,7 +471,7 @@ class SnapshotEvaluator:
             kwargs: Additional kwargs to pass to the renderer.
         """
         deployability_index = deployability_index or DeployabilityIndex.all_deployable()
-        adapter = self._get_adapter(snapshot.model_gateway)
+        adapter = self.get_adapter(snapshot.model_gateway)
 
         if not snapshot.version:
             raise ConfigError(
@@ -605,7 +605,7 @@ class SnapshotEvaluator:
             else snapshot.table_name(is_deployable=deployability_index.is_deployable(snapshot))
         )
 
-        adapter = self._get_adapter(model.gateway)
+        adapter = self.get_adapter(model.gateway)
         evaluation_strategy = _evaluation_strategy(snapshot, adapter)
 
         # https://github.com/TobikoData/sqlmesh/issues/2609
@@ -764,7 +764,7 @@ class SnapshotEvaluator:
 
         deployability_index = deployability_index or DeployabilityIndex.all_deployable()
 
-        adapter = self._get_adapter(snapshot.model.gateway)
+        adapter = self.get_adapter(snapshot.model.gateway)
         create_render_kwargs: t.Dict[str, t.Any] = dict(
             engine_adapter=adapter,
             snapshots=parent_snapshots_by_name(snapshot, snapshots),
@@ -994,7 +994,7 @@ class SnapshotEvaluator:
     ) -> None:
         deployability_index = deployability_index or DeployabilityIndex.all_deployable()
         table_name = snapshot.table_name(is_deployable=deployability_index.is_deployable(snapshot))
-        adapter = self._get_adapter(snapshot.model_gateway)
+        adapter = self.get_adapter(snapshot.model_gateway)
         adapter.wap_publish(table_name, wap_id)
 
     def _audit(
@@ -1021,7 +1021,7 @@ class SnapshotEvaluator:
         blocking = audit_args.pop("blocking", None)
         blocking = blocking == exp.true() if blocking else audit.blocking
 
-        adapter = self._get_adapter(snapshot.model_gateway)
+        adapter = self.get_adapter(snapshot.model_gateway)
 
         kwargs = {
             "start": start,
@@ -1068,10 +1068,10 @@ class SnapshotEvaluator:
         for schema_name, catalog in unique_schemas:
             schema = schema_(schema_name, catalog)
             logger.info("Creating schema '%s'", schema)
-            adapter = self._get_adapter(gateways.get(schema)) if gateways else self.adapter
+            adapter = self.get_adapter(gateways.get(schema)) if gateways else self.adapter
             adapter.create_schema(schema)
 
-    def _get_adapter(self, gateway: t.Optional[str] = None) -> EngineAdapter:
+    def get_adapter(self, gateway: t.Optional[str] = None) -> EngineAdapter:
         """Returns the adapter for the specified gateway or the default adapter if none is provided."""
         if gateway:
             if adapter := self.adapters.get(gateway):
@@ -1089,7 +1089,7 @@ class SnapshotEvaluator:
         rendered_physical_properties: t.Dict[str, exp.Expression],
         dry_run: bool,
     ) -> None:
-        adapter = self._get_adapter(snapshot.model.gateway)
+        adapter = self.get_adapter(snapshot.model.gateway)
         evaluation_strategy = _evaluation_strategy(snapshot, adapter)
 
         # It can still be useful for some strategies to know if the snapshot was actually deployable

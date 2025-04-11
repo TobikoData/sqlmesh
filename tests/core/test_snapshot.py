@@ -2499,7 +2499,7 @@ def test_contiguous_intervals():
 
 def test_check_ready_intervals(mocker: MockerFixture):
     def assert_always_signal(intervals):
-        assert _check_ready_intervals(lambda _: True, intervals) == intervals
+        assert _check_ready_intervals(lambda _: True, intervals, mocker.Mock()) == intervals
 
     assert_always_signal([])
     assert_always_signal([(0, 1)])
@@ -2507,7 +2507,7 @@ def test_check_ready_intervals(mocker: MockerFixture):
     assert_always_signal([(0, 1), (2, 3)])
 
     def assert_never_signal(intervals):
-        assert _check_ready_intervals(lambda _: False, intervals) == []
+        assert _check_ready_intervals(lambda _: False, intervals, mocker.Mock()) == []
 
     assert_never_signal([])
     assert_never_signal([(0, 1)])
@@ -2515,7 +2515,7 @@ def test_check_ready_intervals(mocker: MockerFixture):
     assert_never_signal([(0, 1), (2, 3)])
 
     def assert_empty_signal(intervals):
-        assert _check_ready_intervals(lambda _: [], intervals) == []
+        assert _check_ready_intervals(lambda _: [], intervals, mocker.Mock()) == []
 
     assert_empty_signal([])
     assert_empty_signal([(0, 1)])
@@ -2532,7 +2532,7 @@ def test_check_ready_intervals(mocker: MockerFixture):
     ):
         mock = mocker.Mock()
         mock.side_effect = [to_intervals(r) for r in ready]
-        _check_ready_intervals(mock, intervals) == expected
+        _check_ready_intervals(mock, intervals, mocker.Mock()) == expected
 
     assert_check_intervals([], [], [])
     assert_check_intervals([(0, 1)], [[]], [])
@@ -2894,7 +2894,7 @@ def test_apply_auto_restatements_disable_restatement_downstream(make_snapshot):
     ]
 
 
-def test_render_signal(make_snapshot):
+def test_render_signal(make_snapshot, mocker):
     @signal()
     def check_types(batch, env: str, default: int = 0):
         if env != "in_memory" or not default == 0:
@@ -2917,4 +2917,4 @@ def test_render_signal(make_snapshot):
         signal_definitions=signal.get_registry(),
     )
     snapshot_a = make_snapshot(sql_model)
-    assert snapshot_a.check_ready_intervals([(0, 1)]) == [(0, 1)]
+    assert snapshot_a.check_ready_intervals([(0, 1)], mocker.Mock()) == [(0, 1)]

@@ -46,6 +46,7 @@ from sqlmesh.utils.pydantic import PydanticModel, field_validator
 if t.TYPE_CHECKING:
     from sqlglot.dialects.dialect import DialectType
     from sqlmesh.core.environment import EnvironmentNamingInfo
+    from sqlmesh.core.context import ExecutionContext
 
 Interval = t.Tuple[int, int]
 Intervals = t.List[Interval]
@@ -940,7 +941,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             model_end_ts,
         )
 
-    def check_ready_intervals(self, intervals: Intervals) -> Intervals:
+    def check_ready_intervals(self, intervals: Intervals, context: ExecutionContext) -> Intervals:
         """Returns a list of intervals that are considered ready by the provided signal.
 
         Note that this will handle gaps in the provided intervals. The returned intervals
@@ -959,6 +960,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
                 intervals = _check_ready_intervals(
                     env[signal_name],
                     intervals,
+                    context,
                     dialect=self.model.dialect,
                     path=self.model._path,
                     kwargs=kwargs,
@@ -2148,6 +2150,7 @@ def _contiguous_intervals(intervals: Intervals) -> t.List[Intervals]:
 def _check_ready_intervals(
     check: t.Callable,
     intervals: Intervals,
+    context: ExecutionContext,
     dialect: DialectType = None,
     path: Path = Path(),
     kwargs: t.Optional[t.Dict] = None,
@@ -2158,7 +2161,14 @@ def _check_ready_intervals(
         batch = [(to_datetime(start), to_datetime(end)) for start, end in interval_batch]
 
         try:
-            ready_intervals = call_macro(check, dialect, path, batch, **(kwargs or {}))
+            ready_intervals = call_macro(
+                check,
+                dialect,
+                path,
+                provided_args=(batch,),
+                provided_kwargs=(kwargs or {}),
+                context=context,
+            )
         except Exception:
             raise SQLMeshError("Error evaluating signal")
 

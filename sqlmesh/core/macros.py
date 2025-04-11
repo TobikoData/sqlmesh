@@ -214,7 +214,9 @@ class MacroEvaluator:
             raise SQLMeshError(f"Macro '{name}' does not exist.")
 
         try:
-            return call_macro(func, self.dialect, self._path, self, *args, **kwargs)  # type: ignore
+            return call_macro(
+                func, self.dialect, self._path, provided_args=(self, *args), provided_kwargs=kwargs
+            )  # type: ignore
         except Exception as e:
             print_exception(e, self.python_env)
             raise MacroEvalError("Error trying to eval macro.") from e
@@ -1286,12 +1288,21 @@ def call_macro(
     func: t.Callable,
     dialect: DialectType,
     path: Path,
-    *args: t.Any,
-    **kwargs: t.Any,
+    provided_args: t.Tuple[t.Any, ...],
+    provided_kwargs: t.Dict[str, t.Any],
+    **optional_kwargs: t.Any,
 ) -> t.Any:
     # Bind the macro's actual parameters to its formal parameters
     sig = inspect.signature(func)
-    bound = sig.bind(*args, **kwargs)
+
+    if optional_kwargs:
+        provided_kwargs = provided_kwargs.copy()
+
+    for k, v in optional_kwargs.items():
+        if k in sig.parameters:
+            provided_kwargs[k] = v
+
+    bound = sig.bind(*provided_args, **provided_kwargs)
     bound.apply_defaults()
 
     try:

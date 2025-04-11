@@ -95,6 +95,7 @@ class Scheduler:
     ):
         self.state_sync = state_sync
         self.snapshots = {s.snapshot_id: s for s in snapshots}
+        self.snapshots_by_name = {snapshot.name: snapshot for snapshot in self.snapshots.values()}
         self.snapshot_per_version = _resolve_one_snapshot_per_version(self.snapshots.values())
         self.default_catalog = default_catalog
         self.snapshot_evaluator = snapshot_evaluator
@@ -348,7 +349,11 @@ class Scheduler:
 
         return CompletionStatus.FAILURE if errors else CompletionStatus.SUCCESS
 
-    def batch_intervals(self, merged_intervals: SnapshotToIntervals) -> t.Dict[Snapshot, Intervals]:
+    def batch_intervals(
+        self,
+        merged_intervals: SnapshotToIntervals,
+        deployability_index: t.Optional[DeployabilityIndex],
+    ) -> t.Dict[Snapshot, Intervals]:
         dag = snapshots_to_dag(merged_intervals)
 
         snapshot_intervals: t.Dict[SnapshotId, t.Tuple[Snapshot, t.List[Interval]]] = {
@@ -369,7 +374,20 @@ class Scheduler:
                 continue
             snapshot, intervals = snapshot_intervals[snapshot_id]
             unready = set(intervals)
-            intervals = snapshot.check_ready_intervals(intervals)
+
+            from sqlmesh.core.context import ExecutionContext
+
+            adapter = self.snapshot_evaluator.get_adapter(snapshot.model_gateway)
+
+            context = ExecutionContext(
+                adapter,
+                self.snapshots_by_name,
+                deployability_index,
+                default_dialect=adapter.dialect,
+                default_catalog=self.default_catalog,
+            )
+
+            intervals = snapshot.check_ready_intervals(intervals, context)
             unready -= set(intervals)
 
             for parent in snapshot.parents:
@@ -424,7 +442,7 @@ class Scheduler:
         """
         execution_time = execution_time or now_timestamp()
 
-        batched_intervals = self.batch_intervals(merged_intervals)
+        batched_intervals = self.batch_intervals(merged_intervals, deployability_index)
 
         self.console.start_evaluation_progress(
             {snapshot: len(intervals) for snapshot, intervals in batched_intervals.items()},
@@ -433,8 +451,6 @@ class Scheduler:
         )
 
         dag = self._dag(batched_intervals)
-
-        snapshots_by_name = {snapshot.name: snapshot for snapshot in self.snapshots.values()}
 
         if run_environment_statements:
             environment_statements = self.state_sync.get_environment_statements(
@@ -446,7 +462,7 @@ class Scheduler:
                 runtime_stage=RuntimeStage.BEFORE_ALL,
                 environment_naming_info=environment_naming_info,
                 default_catalog=self.default_catalog,
-                snapshots=snapshots_by_name,
+                snapshots=self.snapshots_by_name,
                 start=start,
                 end=end,
                 execution_time=execution_time,
@@ -459,7 +475,7 @@ class Scheduler:
             snapshot_name, ((start, end), batch_idx) = node
             if batch_idx == -1:
                 return
-            snapshot = snapshots_by_name[snapshot_name]
+            snapshot = self.snapshots_by_name[snapshot_name]
 
             self.console.start_snapshot_evaluation_progress(snapshot)
 
@@ -520,7 +536,7 @@ class Scheduler:
                     runtime_stage=RuntimeStage.AFTER_ALL,
                     environment_naming_info=environment_naming_info,
                     default_catalog=self.default_catalog,
-                    snapshots=snapshots_by_name,
+                    snapshots=self.snapshots_by_name,
                     start=start,
                     end=end,
                     execution_time=execution_time,

@@ -3751,9 +3751,9 @@ def test_multiple_engine_creation(snapshot: Snapshot, adapters, make_snapshot):
 
     assert len(evaluator.adapters) == 3
     assert evaluator.adapter == engine_adapters["default"]
-    assert evaluator._get_adapter() == engine_adapters["default"]
-    assert evaluator._get_adapter("third") == engine_adapters["third"]
-    assert evaluator._get_adapter("secondary") == engine_adapters["secondary"]
+    assert evaluator.get_adapter() == engine_adapters["default"]
+    assert evaluator.get_adapter("third") == engine_adapters["third"]
+    assert evaluator.get_adapter("secondary") == engine_adapters["secondary"]
 
     model = load_sql_based_model(
         parse(  # type: ignore
