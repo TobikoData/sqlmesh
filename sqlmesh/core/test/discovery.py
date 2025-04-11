@@ -4,17 +4,11 @@ import fnmatch
 import itertools
 import pathlib
 import typing as t
-from collections.abc import Iterator
 
 import ruamel
 
-from sqlmesh.core import constants as c
 from sqlmesh.utils import unique
 from sqlmesh.utils.pydantic import PydanticModel
-from sqlmesh.utils.yaml import load as yaml_load
-
-if t.TYPE_CHECKING:
-    from sqlmesh.core.config.loader import C
 
 
 class ModelTestMetadata(PydanticModel):
@@ -28,61 +22,6 @@ class ModelTestMetadata(PydanticModel):
 
     def __hash__(self) -> int:
         return self.fully_qualified_test_name.__hash__()
-
-
-def load_model_test_file(
-    path: pathlib.Path,
-    config: C,
-    get_variables: t.Callable[[t.Optional[C], t.Optional[str]], t.Dict[str, str]],
-) -> dict[str, ModelTestMetadata]:
-    """Load a single model test file.
-
-    Args:
-        path: The path to the test file
-
-    returns:
-        A list of ModelTestMetadata named tuples.
-    """
-    model_test_metadata = {}
-    contents = yaml_load(path, config=config, get_variables=get_variables)
-
-    for test_name, value in contents.items():
-        model_test_metadata[test_name] = ModelTestMetadata(
-            path=path, test_name=test_name, body=value
-        )
-    return model_test_metadata
-
-
-def discover_model_tests(
-    path: pathlib.Path,
-    config: C,
-    get_variables: t.Callable[[t.Optional[C], t.Optional[str]], t.Dict[str, str]],
-) -> Iterator[ModelTestMetadata]:
-    """Discover model tests.
-
-    Model tests are defined in YAML files and contain the inputs and outputs used to test model queries.
-
-    Args:
-        path: A path to search for tests.
-        ignore_patterns: An optional list of patterns to ignore.
-
-    Returns:
-        A list of ModelTestMetadata named tuples.
-    """
-    search_path = pathlib.Path(path)
-
-    for yaml_file in itertools.chain(
-        search_path.glob("**/test*.yaml"),
-        search_path.glob("**/test*.yml"),
-    ):
-        for ignore_pattern in config.ignore_patterns or []:
-            if yaml_file.match(ignore_pattern):
-                break
-        else:
-            for model_test_metadata in load_model_test_file(
-                yaml_file, config=config, get_variables=get_variables
-            ).values():
-                yield model_test_metadata
 
 
 def filter_tests_by_patterns(
@@ -103,47 +42,3 @@ def filter_tests_by_patterns(
         if ("*" in pattern and fnmatch.fnmatchcase(test.fully_qualified_test_name, pattern))
         or pattern in test.fully_qualified_test_name
     )
-
-
-def load_model_tests(
-    configs: t.Dict[pathlib.Path, C],
-    get_variables: t.Callable[[t.Optional[C], t.Optional[str]], t.Dict[str, str]],
-    tests: t.Optional[t.List[str]] = None,
-    patterns: list[str] | None = None,
-) -> list[ModelTestMetadata]:
-    """Load model tests into a list of ModelTestMetadata which will be propagated to the test runner.
-
-    Args:
-        tests: A list of tests to load; If not specified, all tests are loaded
-        patterns: A list of patterns that'll be used to filter tests by file name.
-        configs: A dictionary of configs to use when loading all the tests.
-    """
-    test_meta = []
-
-    if tests:
-        for test in tests:
-            filename, test_name = test.split("::", maxsplit=1) if "::" in test else (test, "")
-
-            test_file = load_model_test_file(
-                pathlib.Path(filename),
-                config=next(iter(configs.values())),
-                get_variables=get_variables,
-            )
-            if test_name:
-                test_meta.append(test_file[test_name])
-            else:
-                test_meta.extend(test_file.values())
-    else:
-        for path, config in configs.items():
-            test_meta.extend(
-                discover_model_tests(
-                    pathlib.Path(path / c.TESTS),
-                    config=config,
-                    get_variables=get_variables,
-                )
-            )
-
-    if patterns:
-        test_meta = filter_tests_by_patterns(test_meta, patterns)
-
-    return test_meta

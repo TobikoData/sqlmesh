@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import abc
 import glob
+import itertools
 import linecache
 import logging
 import os
@@ -31,11 +32,13 @@ from sqlmesh.core.model import (
 from sqlmesh.core.model import model as model_registry
 from sqlmesh.core.model.common import make_python_env
 from sqlmesh.core.signal import signal
+from sqlmesh.core.test import ModelTestMetadata, filter_tests_by_patterns
 from sqlmesh.utils import UniqueKeyDict, sys_path
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroExtractor
 from sqlmesh.utils.metaprogramming import import_python_file
-from sqlmesh.utils.yaml import YAML
+from sqlmesh.utils.yaml import YAML, load as yaml_load
+
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.context import GenericContext
@@ -74,6 +77,7 @@ class Loader(abc.ABC):
         self.context = context
         self.config_path = path
         self.config = self.context.configs[self.config_path]
+        self._variables_by_gateway: t.Dict[str, t.Dict[str, t.Any]] = {}
 
     def load(self) -> LoadedProject:
         """
@@ -289,6 +293,12 @@ class Loader(abc.ABC):
         """Loads user linting rules"""
         return RuleSet()
 
+    def _load_model_tests(
+        self, tests: t.Optional[t.List[str]] = None, patterns: list[str] | None = None
+    ) -> t.List[ModelTestMetadata]:
+        """Loads YAML-based model tests"""
+        return []
+
     def _glob_paths(
         self,
         path: Path,
@@ -328,7 +338,26 @@ class Loader(abc.ABC):
         self._path_mtimes[path] = path.stat().st_mtime
 
     def _get_variables(self, gateway_name: t.Optional[str] = None) -> t.Dict[str, t.Any]:
-        return self.context._get_variables(config=self.config, gateway_name=gateway_name)
+        gateway_name = gateway_name or self.context.selected_gateway
+
+        if gateway_name not in self._variables_by_gateway:
+            try:
+                gateway = self.config.get_gateway(gateway_name)
+            except ConfigError:
+                from sqlmesh.core.console import get_console
+
+                get_console().log_warning(
+                    f"Gateway '{gateway_name}' not found in project '{self.config.project}'."
+                )
+                gateway = None
+
+            self._variables_by_gateway[gateway_name] = {
+                **self.config.variables,
+                **(gateway.variables if gateway else {}),
+                c.GATEWAY: gateway_name,
+            }
+
+        return self._variables_by_gateway[gateway_name]
 
 
 class SqlMeshLoader(Loader):
@@ -657,6 +686,53 @@ class SqlMeshLoader(Loader):
                     user_rules[user_rule.name] = user_rule
 
         return RuleSet(user_rules.values())
+
+    def _load_model_test_file(self, path: Path) -> dict[str, ModelTestMetadata]:
+        """Load a single model test file."""
+        model_test_metadata = {}
+        contents = yaml_load(path, get_variables=self._get_variables)
+
+        for test_name, value in contents.items():
+            model_test_metadata[test_name] = ModelTestMetadata(
+                path=path, test_name=test_name, body=value
+            )
+
+        return model_test_metadata
+
+    def _load_model_tests(
+        self, tests: t.Optional[t.List[str]] = None, patterns: list[str] | None = None
+    ) -> t.List[ModelTestMetadata]:
+        """Loads YAML-based model tests"""
+        test_meta: t.List[ModelTestMetadata] = []
+
+        if tests:
+            for test in tests:
+                filename, test_name = test.split("::", maxsplit=1) if "::" in test else (test, "")
+
+                test_file = self._load_model_test_file(Path(filename))
+                if test_name:
+                    test_meta.append(test_file[test_name])
+                else:
+                    test_meta.extend(test_file.values())
+        else:
+            search_path = Path(self.config_path) / c.TESTS
+
+            for yaml_file in itertools.chain(
+                search_path.glob("**/test*.yaml"),
+                search_path.glob("**/test*.yml"),
+            ):
+                if any(
+                    yaml_file.match(ignore_pattern)
+                    for ignore_pattern in self.config.ignore_patterns or []
+                ):
+                    continue
+
+                test_meta.extend(self._load_model_test_file(yaml_file).values())
+
+        if patterns:
+            test_meta = filter_tests_by_patterns(test_meta, patterns)
+
+        return test_meta
 
     class _Cache(CacheBase):
         def __init__(self, loader: SqlMeshLoader, config_path: Path):

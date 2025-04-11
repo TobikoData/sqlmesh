@@ -31,7 +31,7 @@ from sqlmesh.core.console import create_console, set_console, configure_console
 from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import format_model_expressions, parse
 from sqlmesh.core.model import load_sql_based_model
-from sqlmesh.core.test import ModelTestMetadata, load_model_tests
+from sqlmesh.core.test import ModelTestMetadata
 from sqlmesh.utils import sqlglot_dialects, yaml, Verbosity
 from sqlmesh.utils.errors import MagicError, MissingContextException, SQLMeshError
 
@@ -272,7 +272,7 @@ class SQLMeshMagics(Magics):
         if not args.test_name and not args.ls:
             raise MagicError("Must provide either test name or `--ls` to list tests")
 
-        test_meta = load_model_tests(configs=context.configs, get_variables=context._get_variables)
+        test_meta = context._load_model_tests()
 
         tests: t.Dict[str, t.Dict[str, ModelTestMetadata]] = defaultdict(dict)
         for model_test_metadata in test_meta:

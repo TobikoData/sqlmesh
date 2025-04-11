@@ -2308,3 +2308,67 @@ test_example_full_model:
             in output.stderr
         )
         assert "OK" in output.stderr
+
+
+def test_number_of_tests_found(tmp_path: Path) -> None:
+    init_example_project(tmp_path, dialect="duckdb")
+
+    # Example project contains 1 test and we add a new file with 2 tests
+    test_file = tmp_path / "tests" / "test_new.yaml"
+    test_file.write_text(
+        """
+test_example_full_model1:
+  model: sqlmesh_example.full_model
+  description: This is an invalid test
+  inputs:
+    sqlmesh_example.incremental_model:
+      rows:
+      - id: 1
+        item_id: 1
+      - id: 2
+        item_id: 1
+      - id: 3
+        item_id: 2
+  outputs:
+    query:
+      rows:
+      - item_id: 1
+        num_orders: 2
+      - item_id: 2
+        num_orders: 1
+        
+test_example_full_model2:
+  model: sqlmesh_example.full_model
+  description: This is an invalid test
+  inputs:
+    sqlmesh_example.incremental_model:
+      rows:
+      - id: 1
+        item_id: 1
+      - id: 2
+        item_id: 1
+      - id: 3
+        item_id: 2
+  outputs:
+    query:
+      rows:
+      - item_id: 1
+        num_orders: 2
+      - item_id: 2
+        num_orders: 1
+        """
+    )
+
+    context = Context(paths=tmp_path)
+
+    # Case 1: All 3 tests should run without any tests specified
+    results = context.test()
+    assert len(results.successes) == 3
+
+    # Case 1: The "new_test.yaml" should amount to 2 subtests
+    results = context.test(tests=[f"{test_file}"])
+    assert len(results.successes) == 2
+
+    # Case 3: The "new_test.yaml::test_example_full_model2" should amount to a single subtest
+    results = context.test(tests=[f"{test_file}::test_example_full_model2"])
+    assert len(results.successes) == 1

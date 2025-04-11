@@ -109,8 +109,8 @@ from sqlmesh.core.state_sync import (
 from sqlmesh.core.table_diff import TableDiff
 from sqlmesh.core.test import (
     ModelTextTestResult,
+    ModelTestMetadata,
     generate_test,
-    load_model_tests,
     run_tests,
 )
 from sqlmesh.core.user import User
@@ -364,7 +364,6 @@ class GenericContext(BaseContext, t.Generic[C]):
         self._excluded_requirements: t.Set[str] = set()
         self._default_catalog: t.Optional[str] = None
         self._linters: t.Dict[str, Linter] = {}
-        self._variables_by_project_gateway: t.Dict[t.Tuple[str, str], t.Dict[str, t.Any]] = {}
         self._loaded: bool = False
 
         self.path, self.config = t.cast(t.Tuple[Path, C], next(iter(self.configs.items())))
@@ -1786,12 +1785,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         if verbosity >= Verbosity.VERBOSE:
             pd.set_option("display.max_columns", None)
 
-        test_meta = load_model_tests(
-            configs=self.configs,
-            tests=tests,
-            patterns=match_patterns,
-            get_variables=self._get_variables,
-        )
+        test_meta = self._load_model_tests(tests=tests, patterns=match_patterns)
 
         return run_tests(
             model_test_metadata=test_meta,
@@ -2468,31 +2462,15 @@ class GenericContext(BaseContext, t.Generic[C]):
                 "Linter detected errors in the code. Please fix them before proceeding."
             )
 
-    def _get_variables(
-        self, config: t.Optional[C] = None, gateway_name: t.Optional[str] = None
-    ) -> t.Dict[str, t.Any]:
-        config = config or self.config
-        gateway_name = gateway_name or self.selected_gateway
+    def _load_model_tests(
+        self, tests: t.Optional[t.List[str]] = None, patterns: list[str] | None = None
+    ) -> t.List[ModelTestMetadata]:
+        model_tests = []
 
-        key = (config.project, gateway_name)
-        if key not in self._variables_by_project_gateway:
-            try:
-                gateway = config.get_gateway(gateway_name)
-            except ConfigError:
-                from sqlmesh.core.console import get_console
+        for loader in self._loaders:
+            model_tests.extend(loader._load_model_tests(tests=tests, patterns=patterns))
 
-                get_console().log_warning(
-                    f"Gateway '{gateway_name}' not found in project '{config.project}'."
-                )
-                gateway = None
-
-            self._variables_by_project_gateway[key] = {
-                **config.variables,
-                **(gateway.variables if gateway else {}),
-                c.GATEWAY: gateway_name,
-            }
-
-        return self._variables_by_project_gateway[key]
+        return model_tests
 
 
 class Context(GenericContext[Config]):
