@@ -500,7 +500,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         # for any affected full_history_restatement_only snapshots, we need to widen the intervals being restated to
         # include the whole time range for that snapshot. This requires a call to state to load the full snapshot record,
         # so we only do it if necessary
-        if full_history_restatement_snapshot_ids := [
+        full_history_restatement_snapshot_ids = [
             # FIXME: full_history_restatement_only is just one indicator that the snapshot can only be fully refreshed, the other one is Model.depends_on_self
             # however, to figure out depends_on_self, we have to render all the model queries which, alongside having to fetch full snapshots from state,
             # is problematic in secure environments that are deliberately isolated from arbitrary user code (since rendering a query may require user macros to be present)
@@ -508,7 +508,8 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             s_id
             for s_id, s in snapshots_to_restate.items()
             if s[0].full_history_restatement_only
-        ]:
+        ]
+        if full_history_restatement_snapshot_ids:
             # only load full snapshot records that we havent already loaded
             additional_snapshots = self.state_sync.get_snapshots(
                 [

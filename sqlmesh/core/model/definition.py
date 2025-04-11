@@ -2406,7 +2406,8 @@ def _create_model(
     # since rendering shifted from load time to run time.
     # Note: we check for Tuple since that's what we expect from _resolve_properties
     for property_name in PROPERTIES:
-        if isinstance(property_values := kwargs.get(property_name), exp.Tuple):
+        property_values = kwargs.get(property_name)
+        if isinstance(property_values, exp.Tuple):
             statements.extend(property_values.expressions)
 
     jinja_macro_references, used_variables = extract_macro_references_and_variables(
@@ -2682,30 +2683,41 @@ def render_meta_fields(
 
     for field_name, field_info in ModelMeta.all_field_infos().items():
         field = field_info.alias or field_name
-        if field not in RUNTIME_RENDERED_MODEL_FIELDS and (field_value := fields.get(field)):
-            if isinstance(field_value, dict):
-                rendered_dict = {}
-                for key, value in field_value.items():
-                    if key in RUNTIME_RENDERED_MODEL_FIELDS:
-                        rendered_dict[key] = value
-                    elif rendered := render_field_value(value):
-                        rendered_dict[key] = rendered
-                if rendered_dict:
-                    fields[field] = rendered_dict
-                else:
-                    fields.pop(field)
-            elif isinstance(field_value, list):
-                if rendered_list := [
-                    rendered for value in field_value if (rendered := render_field_value(value))
-                ]:
-                    fields[field] = rendered_list
-                else:
-                    fields.pop(field)
+
+        if field in RUNTIME_RENDERED_MODEL_FIELDS:
+            continue
+
+        field_value = fields.get(field)
+        if field_value is None:
+            continue
+
+        if isinstance(field_value, dict):
+            rendered_dict = {}
+            for key, value in field_value.items():
+                if key in RUNTIME_RENDERED_MODEL_FIELDS:
+                    rendered_dict[key] = value
+                elif (rendered := render_field_value(value)) is not None:
+                    rendered_dict[key] = rendered
+            if rendered_dict:
+                fields[field] = rendered_dict
             else:
-                if rendered_field := render_field_value(field_value):
-                    fields[field] = rendered_field
-                else:
-                    fields.pop(field)
+                fields.pop(field)
+        elif isinstance(field_value, list):
+            rendered_list = [
+                rendered
+                for value in field_value
+                if (rendered := render_field_value(value)) is not None
+            ]
+            if rendered_list:
+                fields[field] = rendered_list
+            else:
+                fields.pop(field)
+        else:
+            rendered_field = render_field_value(field_value)
+            if rendered_field is not None:
+                fields[field] = rendered_field
+            else:
+                fields.pop(field)
 
     return fields
 
@@ -2733,12 +2745,13 @@ def render_model_defaults(
 
     # Validate defaults that have macros are rendered to boolean
     for boolean in {"optimize_query", "allow_partials", "enabled"}:
-        if var := rendered_defaults.get(boolean):
-            if not isinstance(var, (exp.Boolean, bool)):
-                raise ConfigError(f"Expected boolean for '{var}', got '{type(var)}' instead")
+        var = rendered_defaults.get(boolean)
+        if var is not None and not isinstance(var, (exp.Boolean, bool)):
+            raise ConfigError(f"Expected boolean for '{var}', got '{type(var)}' instead")
 
     # Validate the 'interval_unit' if present is an Interval Unit
-    if (var := rendered_defaults.get("interval_unit")) and isinstance(var, str):
+    var = rendered_defaults.get("interval_unit")
+    if isinstance(var, str):
         try:
             rendered_defaults["interval_unit"] = IntervalUnit(var)
         except ValueError as e:
@@ -2751,10 +2764,10 @@ def parse_defaults_properties(
     defaults: t.Dict[str, t.Any], dialect: DialectType
 ) -> t.Dict[str, t.Any]:
     for prop in PROPERTIES:
-        if default_properties := defaults.get(prop):
-            for key, value in default_properties.items():
-                if isinstance(key, str) and d.SQLMESH_MACRO_PREFIX in str(value):
-                    defaults[prop][key] = exp.maybe_parse(value, dialect=dialect)
+        default_properties = defaults.get(prop)
+        for key, value in (default_properties or {}).items():
+            if isinstance(key, str) and d.SQLMESH_MACRO_PREFIX in str(value):
+                defaults[prop][key] = exp.maybe_parse(value, dialect=dialect)
 
     return defaults
 

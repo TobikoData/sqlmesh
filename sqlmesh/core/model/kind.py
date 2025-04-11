@@ -996,9 +996,10 @@ def create_model_kind(v: t.Any, dialect: str, defaults: t.Dict[str, t.Any]) -> M
             # we dont want to throw an error here because we still want Models with a CustomKind to be able
             # to be serialized / deserialized in contexts where the custom materialization class may not be available,
             # such as in HTTP request handlers
-            if custom_materialization := get_custom_materialization_type(
+            custom_materialization = get_custom_materialization_type(
                 validate_string(props.get("materialization")), raise_errors=False
-            ):
+            )
+            if custom_materialization is not None:
                 actual_kind_type, _ = custom_materialization
                 return actual_kind_type(**props)
 

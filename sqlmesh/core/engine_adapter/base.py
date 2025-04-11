@@ -1046,17 +1046,25 @@ class EngineAdapter:
         if materialized_properties:
             partitioned_by = materialized_properties.pop("partitioned_by", None)
             clustered_by = materialized_properties.pop("clustered_by", None)
-            if partitioned_by and (
-                partitioned_by_prop := self._build_partitioned_by_exp(
-                    partitioned_by, **materialized_properties
+            if (
+                partitioned_by
+                and (
+                    partitioned_by_prop := self._build_partitioned_by_exp(
+                        partitioned_by, **materialized_properties
+                    )
                 )
+                is not None
             ):
                 materialized_properties["catalog_name"] = exp.to_table(view_name).catalog
                 properties.append("expressions", partitioned_by_prop)
-            if clustered_by and (
-                clustered_by_prop := self._build_clustered_by_exp(
-                    clustered_by, **materialized_properties
+            if (
+                clustered_by
+                and (
+                    clustered_by_prop := self._build_clustered_by_exp(
+                        clustered_by, **materialized_properties
+                    )
                 )
+                is not None
             ):
                 properties.append("expressions", clustered_by_prop)
 

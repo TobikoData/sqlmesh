@@ -2029,7 +2029,8 @@ def get_custom_materialization_type(
 def get_custom_materialization_type_or_raise(
     name: str,
 ) -> t.Tuple[t.Type[CustomKind], t.Type[CustomMaterialization]]:
-    if types := get_custom_materialization_type(name, raise_errors=True):
+    types = get_custom_materialization_type(name, raise_errors=True)
+    if types is not None:
         return types[0], types[1]
 
     # Shouldnt get here as get_custom_materialization_type() has raise_errors=True, but just in case...

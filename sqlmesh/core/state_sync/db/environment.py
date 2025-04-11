@@ -188,10 +188,11 @@ class EnvironmentState:
         )
 
         # Delete the expired environments' corresponding environment statements
-        if expired_environments := [
+        expired_environments = [
             exp.EQ(this=exp.column("environment_name"), expression=exp.Literal.string(env.name))
             for env in environments
-        ]:
+        ]
+        if expired_environments:
             self.engine_adapter.delete_from(
                 self.environment_statements_table,
                 where=exp.or_(*expired_environments),
