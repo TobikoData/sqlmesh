@@ -8,7 +8,7 @@ import pathlib
 import re
 import typing as t
 from enum import Enum
-from functools import partial, lru_cache
+from functools import partial
 
 import pydantic
 from pydantic import Field
@@ -97,21 +97,13 @@ class ConnectionConfig(abc.ABC, BaseConfig):
     @property
     def _connection_factory_with_kwargs(self) -> t.Callable[[], t.Any]:
         """A function that is called to return a connection object for the given Engine Adapter"""
-        factory = partial(
+        return partial(
             self._connection_factory,
             **{
                 **self._static_connection_kwargs,
                 **{k: v for k, v in self.dict().items() if k in self._connection_kwargs_keys},
             },
         )
-        if self.shared_connection:
-            # Make sure that a single connection is created and returned
-            @lru_cache
-            def _cached_connection() -> t.Any:
-                return factory()
-
-            return _cached_connection
-        return factory
 
     def connection_validator(self) -> t.Callable[[], None]:
         """A function that validates the connection configuration"""

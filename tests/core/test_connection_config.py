@@ -607,7 +607,7 @@ def test_duckdb_attach_options():
 
 def test_duckdb_multithreaded_connection_factory(make_config):
     from sqlmesh.core.engine_adapter import DuckDBEngineAdapter
-    from sqlmesh.utils.connection_pool import ThreadLocalConnectionPool
+    from sqlmesh.utils.connection_pool import ThreadLocalSharedConnectionPool
     from threading import Thread
 
     config = make_config(type="duckdb")
@@ -620,7 +620,7 @@ def test_duckdb_multithreaded_connection_factory(make_config):
     config = make_config(type="duckdb", concurrent_tasks=8)
     adapter = config.create_engine_adapter()
     assert isinstance(adapter, DuckDBEngineAdapter)
-    assert isinstance(adapter._connection_pool, ThreadLocalConnectionPool)
+    assert isinstance(adapter._connection_pool, ThreadLocalSharedConnectionPool)
 
     threads = []
     connection_objects = []
