@@ -1078,11 +1078,19 @@ class GenericContext(BaseContext, t.Generic[C]):
     ) -> bool:
         """Format all SQL models and audits."""
         filtered_targets = [
-            target for target in self._models.values() | self._audits.values()
-            if target._path is not None and target._path.suffix == ".sql"
+            target
+            for target in chain(self._models.values(), self._audits.values())
+            if target._path is not None
+            and target._path.suffix == ".sql"
             and (not paths or any(target._path.samefile(p) for p in paths))
         ]
+        unformatted_file_paths = []
+
         for target in filtered_targets:
+            if (
+                target._path is None
+            ):  # introduced to satisfy type checker as still want to pull filter out as many targets as possible before loop
+                continue
             with open(target._path, "r+", encoding="utf-8") as file:
                 before = file.read()
                 expressions = parse(before, default_dialect=self.config_for_node(target).dialect)
@@ -1129,11 +1137,6 @@ class GenericContext(BaseContext, t.Generic[C]):
             return False
 
         return True
-    
-        
-
-    
-
 
     @python_api_analytics
     def plan(

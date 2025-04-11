@@ -32,7 +32,7 @@ WITH current_marketing AS (
 )
 SELECT DISTINCT
   o.customer_id::INT AS customer_id, /* this comment should not be registered */
-  m.status,
+  m.status ,
   d.zip
 FROM sushi.orders AS o
 LEFT JOIN current_marketing AS m
