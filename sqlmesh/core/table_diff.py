@@ -314,18 +314,18 @@ class TableDiff:
 
             source_query = (
                 exp.select(
-                    *(exp.column(c) for c in source_schema),
+                    *(exp.column(c, "s") for c in source_schema),
                     self.source_key_expression.as_(SQLMESH_JOIN_KEY_COL),
                 )
-                .from_(self.source_table)
+                .from_(self.source_table.as_("s"))
                 .where(self.where)
             )
             target_query = (
                 exp.select(
-                    *(exp.column(c) for c in target_schema),
+                    *(exp.column(c, "t") for c in target_schema),
                     self.target_key_expression.as_(SQLMESH_JOIN_KEY_COL),
                 )
-                .from_(self.target_table)
+                .from_(self.target_table.as_("t"))
                 .where(self.where)
             )
 

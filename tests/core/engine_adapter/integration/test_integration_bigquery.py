@@ -403,3 +403,31 @@ def test_column_types(ctx: TestContext):
     coldef = col3.find(exp.ColumnDef)
     assert col3.is_type("STRUCT")
     assert coldef and coldef.kind and coldef.kind.is_type("ARRAY<JSON>")
+
+
+def test_table_diff_table_name_matches_column_name(ctx: TestContext):
+    src_table = ctx.table("source")
+    target_table = ctx.table("target")
+
+    # BigQuery has a quirk where if you do SELECT foo FROM project-id.schema.foo, the projection is
+    # interpreted as a struct column, reflecting the scanned table's schema, even if the table has
+    # a column with the same name (foo).
+    #
+    # This is a problem, because we compare the columns of the source and target tables using the
+    # equality operator (=), which is not defined for struct values in BigQuery, leading to an error.
+    query: exp.Query = exp.maybe_parse("SELECT 1 AS id, 2 AS source, 3 AS target")
+
+    ctx.engine_adapter.ctas(src_table, query)
+    ctx.engine_adapter.ctas(target_table, query)
+
+    table_diff = TableDiff(
+        adapter=ctx.engine_adapter,
+        source=exp.table_name(src_table),
+        target=exp.table_name(target_table),
+        on=["id"],
+    )
+
+    row_diff = table_diff.row_diff()
+
+    assert row_diff.stats["join_count"] == 1
+    assert row_diff.full_match_count == 1
