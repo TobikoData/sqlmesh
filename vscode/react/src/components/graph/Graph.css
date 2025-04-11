@@ -1,0 +1,24 @@
+.react-flow__node {
+  z-index: 10 !important;
+}
+.react-flow__handle {
+  background-color: currentColor;
+}
+.react-flow__node.react-flow__node-model:hover,
+.react-flow__node.react-flow__node-model:active {
+  z-index: 20 !important;
+}
+react-flow__attribution {
+  background: transparent;
+}
+.lineage__column-source b {
+  font-weight: 900;
+  color: var(--color-primary);
+}
+.react-flow__edge {
+  pointer-events: none !important;
+  z-index: -1 !important;
+}
+.react-flow__background path {
+  stroke: inherit;
+}
