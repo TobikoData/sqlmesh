@@ -51,7 +51,7 @@ from sqlmesh.core.model import (
     ViewKind,
     CustomKind,
 )
-
+from sqlmesh.utils import CompletionStatus
 from sqlmesh.core.schema_diff import has_drop_alteration, get_dropped_column_names
 from sqlmesh.core.snapshot import (
     DeployabilityIndex,
@@ -281,7 +281,7 @@ class SnapshotEvaluator:
         on_start: t.Optional[t.Callable] = None,
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]] = None,
         allow_destructive_snapshots: t.Optional[t.Set[str]] = None,
-    ) -> None:
+    ) -> CompletionStatus:
         """Creates a physical snapshot schema and table for the given collection of snapshots.
 
         Args:
@@ -291,6 +291,9 @@ class SnapshotEvaluator:
             on_start: A callback to initialize the snapshot creation progress bar.
             on_complete: A callback to call on each successfully created snapshot.
             allow_destructive_snapshots: Set of snapshots that are allowed to have destructive schema changes.
+
+        Returns:
+            CompletionStatus: The status of the creation operation (success, failure, nothing to do).
         """
         snapshots_with_table_names = defaultdict(set)
         tables_by_schema = defaultdict(set)
@@ -348,7 +351,7 @@ class SnapshotEvaluator:
                 target_deployability_flags[snapshot.name].sort()
 
         if not snapshots_to_create:
-            return
+            return CompletionStatus.NOTHING_TO_DO
         if on_start:
             on_start(len(snapshots_to_create))
         self._create_schemas(tables_by_schema, gateway_by_schema)
@@ -360,6 +363,7 @@ class SnapshotEvaluator:
             on_complete=on_complete,
             allow_destructive_snapshots=allow_destructive_snapshots,
         )
+        return CompletionStatus.SUCCESS
 
     def _create_snapshots(
         self,
