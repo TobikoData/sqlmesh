@@ -1,5 +1,4 @@
 from __future__ import annotations
-from enum import Enum
 import logging
 import typing as t
 from sqlglot import exp
@@ -31,6 +30,7 @@ from sqlmesh.core.snapshot.definition import (
     parent_snapshots_by_name,
 )
 from sqlmesh.core.state_sync import StateSync
+from sqlmesh.utils import CompletionStatus
 from sqlmesh.utils.concurrency import concurrent_apply_to_dag, NodeExecutionFailedError
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import (
@@ -46,24 +46,6 @@ SnapshotToIntervals = t.Dict[Snapshot, Intervals]
 # we store snapshot name instead of snapshots/snapshotids because pydantic
 # is extremely slow to hash. snapshot names should be unique within a dag run
 SchedulingUnit = t.Tuple[str, t.Tuple[Interval, int]]
-
-
-class CompletionStatus(Enum):
-    SUCCESS = "success"
-    FAILURE = "failure"
-    NOTHING_TO_DO = "nothing_to_do"
-
-    @property
-    def is_success(self) -> bool:
-        return self == CompletionStatus.SUCCESS
-
-    @property
-    def is_failure(self) -> bool:
-        return self == CompletionStatus.FAILURE
-
-    @property
-    def is_nothing_to_do(self) -> bool:
-        return self == CompletionStatus.NOTHING_TO_DO
 
 
 class Scheduler:
