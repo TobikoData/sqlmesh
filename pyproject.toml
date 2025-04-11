@@ -120,11 +120,16 @@ web = [
     "sse-starlette>=0.2.2",
     "pyarrow",
 ]
+lsp = [
+    "pygls",
+    "lsprotocol"
+]
 risingwave = ["psycopg2"]
 
 [project.scripts]
 sqlmesh = "sqlmesh.cli.main:cli"
 sqlmesh_cicd = "sqlmesh.cicd.bot:bot"
+sqlmesh_lsp = "sqlmesh.lsp.main:main"
 
 [project.entry-points."airflow.plugins"]
 sqlmesh_airflow = "sqlmesh.schedulers.airflow.plugin:SqlmeshAirflowPlugin"
