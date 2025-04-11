@@ -336,6 +336,12 @@ You may restate external models. An [external model](./models/external_models.md
 
 The plan's `--start` and `--end` date options determine which data intervals will be reprocessed. Some model kinds cannot be backfilled for limited date ranges, though - learn more [below](#model-kind-limitations).
 
+!!! info "Just catching up"
+
+    Restatement plans "catch models up" to the latest time interval already processed in the environment. They cannot process additional intervals because the required data has not yet been processed upstream.
+
+    If you pass an `--end` date later than the environment's most recent time interval, SQLMesh will just catch up to the environment and will ignore any additional intervals.
+
 To prevent models from ever being restated, set the [disable_restatement](models/overview.md#disable_restatement) attribute to `true`.
 
 <a name="restatement-examples"></a>
@@ -376,28 +382,23 @@ These examples demonstrate how to select which models to restate based on model 
 
 Restatement plans behave differently depending on if you're targeting the `prod` environment or a [development environment](./environments.md#how-to-use-environments).
 
-If you target a development environment like so:
+If you target a development environment by including an environment name like `dev`:
 
 ```bash
 sqlmesh plan dev --restate-model "db.model_a" --start "2024-01-01" --end "2024-01-10"
 ```
 
-the restatement plan will restate the requested intervals for the specified model in the `dev` environment. Versions of the model in other environments will be unaffected.
+the restatement plan will restate the requested intervals for the specified model in the `dev` environment. In other environments, the model will be unaffected.
 
-However, if you target the `prod` environment:
+However, if you target the `prod` environment by omitting an environment name:
 
 ```bash
 sqlmesh plan --restate-model "db.model_a" --start "2024-01-01" --end "2024-01-10"
 ```
 
-the restatement plan will restate the intervals in the `prod` table *and clear the intervals from state for every other version of that model*.
+the restatement plan will restate the intervals in the `prod` table *and clear the model's time intervals from state in every other environment*.
 
-This means that next time you do a run in `dev`, those intervals will be restated in the development environment as well.
-
-The reason for this is to prevent old data from getting promoted to `prod`. One of the benefits of SQLMesh is being able to [reuse tables](#virtual-update) from development environments to ensure that production deployments consist of quick, painless pointer swaps.
-
-!!! info
-    If restating data in `prod` did not also trigger a restatement in `dev`, when `sqlmesh plan` is run against `prod` to deploy changes, a table containing old data may be promoted.
+The next time you do a run in `dev`, the intervals already reprocessed in `prod` are reprocessed in `dev` as well. This is to prevent old data from getting promoted to `prod` in the future.
 
 This behavior also clears the affected intervals for downstream tables that only exist in development environments. Consider the following example:
 
@@ -405,11 +406,13 @@ This behavior also clears the affected intervals for downstream tables that only
  - A virtual environment `dev` is created with new tables `B` and `C` downstream of `A`
     - the DAG in `prod` looks like `A`
     - the DAG in `dev` looks like `A <- B <- C`
- - A restatement plan is created against table `A` in `prod`
- - SQLMesh will ensure that the affected intervals are also cleared for `B` and `C` in `dev` even though those tables do not exist in `prod`
+ - A restatement plan is executed against table `A` in `prod`
+ - SQLMesh will clear the affected intervals for `B` and `C` in `dev` even though those tables do not exist in `prod`
 
 !!! info "Bringing development environments up to date"
 
-    If a restatement plan against `prod` cleared intervals from state for tables in development environments, you need to `sqlmesh run <env>` to trigger the reprocessing of that data.
+    A restatement plan against `prod` clears time intervals from state for models in development environments, but it does not trigger a run to reprocess those intervals.
 
-    This is because SQLMesh limits the work done in the `prod` restatement plan to just the `prod` environment. That way the restatement can be applied as quickly as possible and avoid doing unnecessary work.
+    Execute `sqlmesh run <environment name>` to trigger reprocessing in the development environment.
+
+    This is necessary because a `prod` restatement plan only does work in the `prod` environment for speed and efficiency.
