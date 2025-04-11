@@ -115,7 +115,11 @@ We strongly recommend setting up a monitoring system for the executor containers
 
 As mentioned above, `TCLOUD` environment variables **must** be set on the executor's Docker container. However, other environment variables can be set later because they are only needed after the executor is connected to Tobiko Cloud.
 
-Instead of setting a variable on the container, you can use a `.env` file. This can be useful for environment variables that require frequent updating, such as API tokens.
+Instead of setting a variable on the container, you can use a `.env` file. This can be useful for environment variables that require frequent updating, such as short-lived API tokens.
+
+!!! note "Only if necessary"
+
+    Using a `.env` file increases the complexity of your deployment, so only use it if you have environment variables that require frequent updates.
 
 Create a `.env` file and define your environment variables in it. Then, mount the `.env` file into the docker image. Any external process can update the file with a new variable value, and the executor will automatically pick up the changes.
 
@@ -127,9 +131,7 @@ Tell the executor where to find the `.env` file by specifying the file's full pa
 
 Tobiko Cloud never pushes information into your network, so it doesn't need inbound access.
 
-Instead, the executors you host make outbound requests polling Tobiko Cloud for work tasks and other information.
-
-Inside your network, executors have no direct connection to local user environments. They are only required to connect to Tobiko Cloud and your SQL engine, with all information flowing via outbound requests.
+Instead, the executors you host make outbound requests polling Tobiko Cloud for work tasks and other information. Executors are only required to connect to Tobiko Cloud and your SQL engine, with all information flowing via outbound requests.
 
 If the executors are running in a network without public internet access, configure the network to allow executor and local user access to Tobiko Cloud on these IP addresses:
 
