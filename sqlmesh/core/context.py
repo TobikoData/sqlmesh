@@ -2465,9 +2465,12 @@ class GenericContext(BaseContext, t.Generic[C]):
     def _load_model_tests(
         self, tests: t.Optional[t.List[str]] = None, patterns: list[str] | None = None
     ) -> t.List[ModelTestMetadata]:
-        model_tests = []
+        # If a set of tests is provided, use a single loader to load them
+        # Otherwise, gather all tests from all loaders/repos
+        loaders = [self._loaders[0]] if tests else self._loaders
 
-        for loader in self._loaders:
+        model_tests = []
+        for loader in loaders:
             model_tests.extend(loader._load_model_tests(tests=tests, patterns=patterns))
 
         return model_tests
