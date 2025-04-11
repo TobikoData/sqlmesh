@@ -66,7 +66,7 @@ def ensure_context_for_document(document: TextDocument) -> TextDocument:
 def formatting(
     ls: LanguageServer, params: types.DocumentFormattingParams
 ) -> t.List[types.TextEdit]:
-    """Format the document based using SQLMesh format_model_expressions."""
+    """Format the document using SQLMesh format_model_expressions."""
     try:
         document = ensure_context_for_document(ls.workspace.get_document(params.text_document.uri))
         context, _ = PATHS_TO_MODELS.get(document.path, (None, None))
