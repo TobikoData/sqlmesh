@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import abc
 import collections
+from itertools import chain
 import logging
 import sys
 import time
@@ -1076,15 +1077,20 @@ class GenericContext(BaseContext, t.Generic[C]):
         **kwargs: t.Any,
     ) -> bool:
         """Format all SQL models and audits."""
+        filtered_targets = [
+            target
+            for target in chain(self._models.values(), self._audits.values())
+            if target._path is not None
+            and target._path.suffix == ".sql"
+            and (not paths or any(target._path.samefile(p) for p in paths))
+        ]
         unformatted_file_paths = []
-        format_targets = {**self._models, **self._audits}
 
-        for target in format_targets.values():
-            if target._path is None or target._path.suffix != ".sql":
+        for target in filtered_targets:
+            if (
+                target._path is None
+            ):  # introduced to satisfy type checker as still want to pull filter out as many targets as possible before loop
                 continue
-            if paths and not any(target._path.samefile(p) for p in paths):
-                continue
-
             with open(target._path, "r+", encoding="utf-8") as file:
                 before = file.read()
                 expressions = parse(before, default_dialect=self.config_for_node(target).dialect)
@@ -1125,7 +1131,6 @@ class GenericContext(BaseContext, t.Generic[C]):
         if unformatted_file_paths:
             for path in unformatted_file_paths:
                 self.console.log_status_update(f"{path} needs reformatting.")
-
             self.console.log_status_update(
                 f"\n{len(unformatted_file_paths)} file(s) need reformatting."
             )
