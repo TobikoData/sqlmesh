@@ -19,7 +19,6 @@ from __future__ import annotations
 import contextlib
 import logging
 import typing as t
-import itertools
 from pathlib import Path
 from datetime import datetime
 
@@ -450,7 +449,9 @@ class EngineAdapterStateSync(StateSync):
 
     @transactional()
     def export(self, environment_names: t.Optional[t.List[str]] = None) -> StateStream:
-        state_sync = self
+        versions = self.get_versions(
+            validate=True
+        )  # will throw if the state db hasnt been created or there is a version mismatch
 
         snapshot_ids_to_export: t.Set[SnapshotId] = set()
         selected_environments: t.List[Environment] = []
@@ -460,35 +461,24 @@ class EngineAdapterStateSync(StateSync):
                 if not environment:
                     raise SQLMeshError(f"No such environment: {env_name}")
                 selected_environments.append(environment)
+        else:
+            selected_environments = self.get_environments()
 
-            for env in selected_environments:
-                snapshot_ids_to_export |= set([s.snapshot_id for s in env.snapshots or []])
-
-        def _include_snapshot(s_id: SnapshotId) -> bool:
-            if environment_names:
-                return s_id in snapshot_ids_to_export
-            return True
+        for env in selected_environments:
+            snapshot_ids_to_export |= set([s.snapshot_id for s in env.snapshots or []])
 
         def _export_snapshots() -> t.Iterator[Snapshot]:
-            all_snapshot_ids = {
-                s.snapshot_id
-                for e in state_sync.get_environments()
-                for s in e.snapshots
-                if _include_snapshot(s.snapshot_id)
-            }
-            for chunk in chunk_iterable(all_snapshot_ids, SnapshotState.SNAPSHOT_BATCH_SIZE):
-                yield from state_sync.get_snapshots(chunk).values()
+            for chunk in chunk_iterable(snapshot_ids_to_export, SnapshotState.SNAPSHOT_BATCH_SIZE):
+                yield from self.get_snapshots(chunk).values()
 
         def _export_environments() -> t.Iterator[EnvironmentWithStatements]:
-            envs = selected_environments if environment_names else state_sync.get_environments()
-
-            for env in envs:
+            for env in selected_environments:
                 yield EnvironmentWithStatements(
-                    environment=env, statements=state_sync.get_environment_statements(env.name)
+                    environment=env, statements=self.get_environment_statements(env.name)
                 )
 
         return StateStream.from_iterators(
-            versions=state_sync.get_versions(),
+            versions=versions,
             snapshots=_export_snapshots(),
             environments=_export_environments(),
         )
@@ -521,21 +511,19 @@ class EngineAdapterStateSync(StateSync):
                 for snapshot_chunk in chunk_iterable(
                     state_chunk, SnapshotState.SNAPSHOT_BATCH_SIZE
                 ):
-                    snapshot_iterator, intervals_iterator, auto_restatments_iterator = (
-                        itertools.tee(snapshot_chunk, 3)
-                    )
+                    snapshot_chunk = list(snapshot_chunk)
                     overwrite_existing_snapshots = (
                         not clear
                     )  # if clear=True, all existing snapshots were dropped anyway
                     self.snapshot_state.push_snapshots(
-                        snapshot_iterator, overwrite=overwrite_existing_snapshots
+                        snapshot_chunk, overwrite=overwrite_existing_snapshots
                     )
-                    self.add_snapshots_intervals((s.snapshot_intervals for s in intervals_iterator))
+                    self.add_snapshots_intervals((s.snapshot_intervals for s in snapshot_chunk))
 
                     auto_restatements.update(
                         {
                             s.name_version: s.next_auto_restatement_ts
-                            for s in auto_restatments_iterator
+                            for s in snapshot_chunk
                             if s.next_auto_restatement_ts
                         }
                     )
