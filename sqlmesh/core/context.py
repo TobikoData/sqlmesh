@@ -363,7 +363,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         self._environment_statements: t.List[EnvironmentStatements] = []
         self._excluded_requirements: t.Set[str] = set()
         self._default_catalog: t.Optional[str] = None
-        self._default_catalog_per_gateway: t.Dict[str, str] = {}
+        self._default_catalog_per_gateway: t.Optional[t.Dict[str, str]] = None
         self._linters: t.Dict[str, Linter] = {}
         self._loaded: bool = False
 
@@ -2222,7 +2222,7 @@ class GenericContext(BaseContext, t.Generic[C]):
     @cached_property
     def default_catalog_per_gateway(self) -> t.Dict[str, str]:
         """Returns the catalogs for each engine adapter in a multi virtual layer setup when the catalog isn't shared."""
-        if self.gateway_managed_virtual_layer:
+        if self._default_catalog_per_gateway is None:
             self._default_catalog_per_gateway = {
                 name: adapter.default_catalog
                 for name, adapter in self.engine_adapters.items()
