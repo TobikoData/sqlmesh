@@ -1785,7 +1785,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         if verbosity >= Verbosity.VERBOSE:
             pd.set_option("display.max_columns", None)
 
-        test_meta = self._load_model_tests(tests=tests, patterns=match_patterns)
+        test_meta = self.load_model_tests(tests=tests, patterns=match_patterns)
 
         return run_tests(
             model_test_metadata=test_meta,
@@ -2462,7 +2462,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                 "Linter detected errors in the code. Please fix them before proceeding."
             )
 
-    def _load_model_tests(
+    def load_model_tests(
         self, tests: t.Optional[t.List[str]] = None, patterns: list[str] | None = None
     ) -> t.List[ModelTestMetadata]:
         # If a set of tests is provided, use a single loader to load them
