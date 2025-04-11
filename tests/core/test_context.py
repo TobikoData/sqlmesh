@@ -39,7 +39,7 @@ from sqlmesh.core.model.kind import ModelKindName
 from sqlmesh.core.plan import BuiltInPlanEvaluator, PlanBuilder
 from sqlmesh.core.state_sync.cache import CachingStateSync
 from sqlmesh.core.state_sync.db import EngineAdapterStateSync
-from sqlmesh.utils.connection_pool import SingletonConnectionPool, ThreadLocalConnectionPool
+from sqlmesh.utils.connection_pool import SingletonConnectionPool, ThreadLocalSharedConnectionPool
 from sqlmesh.utils.date import (
     make_inclusive_end,
     now,
@@ -1209,7 +1209,7 @@ def test_duckdb_state_connection_automatic_multithreaded_mode(tmp_path):
     state_sync = context.state_sync.state_sync
     assert isinstance(state_sync, EngineAdapterStateSync)
     assert isinstance(state_sync.engine_adapter, DuckDBEngineAdapter)
-    assert isinstance(state_sync.engine_adapter._connection_pool, ThreadLocalConnectionPool)
+    assert isinstance(state_sync.engine_adapter._connection_pool, ThreadLocalSharedConnectionPool)
 
 
 def test_requirements(copy_to_temp_path: t.Callable):

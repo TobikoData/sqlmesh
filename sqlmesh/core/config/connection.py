@@ -8,7 +8,7 @@ import pathlib
 import re
 import typing as t
 from enum import Enum
-from functools import partial, lru_cache
+from functools import partial
 
 import pydantic
 from pydantic import Field
@@ -50,6 +50,9 @@ class ConnectionConfig(abc.ABC, BaseConfig):
     register_comments: bool
     pre_ping: bool
     pretty_sql: bool = False
+
+    # Whether to share a  single connection across threads or create a new connection per thread.
+    shared_connection: t.ClassVar[bool] = False
 
     @property
     @abc.abstractmethod
@@ -116,6 +119,7 @@ class ConnectionConfig(abc.ABC, BaseConfig):
             register_comments=register_comments_override or self.register_comments,
             pre_ping=self.pre_ping,
             pretty_sql=self.pretty_sql,
+            shared_connection=self.shared_connection,
             **self._extra_engine_config,
         )
 
@@ -182,6 +186,8 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
 
     token: t.Optional[str] = None
 
+    shared_connection: t.ClassVar[bool] = True
+
     _data_file_to_adapter: t.ClassVar[t.Dict[str, EngineAdapter]] = {}
 
     @model_validator(mode="before")
@@ -211,43 +217,6 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
     @property
     def _connection_factory(self) -> t.Callable:
         import duckdb
-
-        if self.concurrent_tasks > 1:
-            # ensures a single connection instance is used across threads rather than a new connection being established per thread
-            # this is in line with https://duckdb.org/docs/guides/python/multiple_threads.html
-            # the important thing is that the *cursor*'s are per thread, but the connection should be shared
-            @lru_cache
-            def _factory(*args: t.Any, **kwargs: t.Any) -> t.Any:
-                class ConnWrapper:
-                    def __init__(self, conn: duckdb.DuckDBPyConnection):
-                        self.conn = conn
-
-                    def __getattr__(self, attr: str) -> t.Any:
-                        return getattr(self.conn, attr)
-
-                    def close(self) -> None:
-                        # This overrides conn.close() to be a no-op to work with ThreadLocalConnectionPool which assumes that a new connection should
-                        # be created per thread. However, DuckDB expects the same connection instance to be shared across threads. There is a pattern
-                        # in the SQLMesh codebase that `EngineAdapter.recycle()` is called after doing things like merging intervals. This in turn causes
-                        # `ThreadLocalConnectionPool.close_all(exclude_calling_thread=True)` to be called.
-                        #
-                        # The problem with sharing a connection across threads and then allowing it to be closed for every thread except the current one
-                        # is that it gets closed for the current one too because its shared. This causes any ":memory:" databases to be discarded.
-                        # ":memory:" databases are convienient and are used heavily in our test suite amongst other things.
-                        #
-                        # Ok, so why not have a connection per thread as is the default for ThreadLocalConnectionPool? Two reasons:
-                        # - It makes any ":memory:" databases unique to that thread. So if one thread creates tables, another thread cant see them
-                        # - If you use local files instead (eg point each connection to the same db file) then all the connection instances
-                        #   fight over locks to the same file and performance tanks heavily
-                        #
-                        # From what I can tell, DuckDB expects the single process reading / writing the database from multiple
-                        # threads to /share the same connection/ and just use thread-local cursors. In order to support ":memory:" databases
-                        # and remove lock contention, the connection needs to live for the life of the application and not be closed
-                        pass
-
-                return ConnWrapper(duckdb.connect(*args, **kwargs))
-
-            return _factory
 
         return duckdb.connect
 
