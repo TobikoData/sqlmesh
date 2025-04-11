@@ -1076,15 +1076,12 @@ class GenericContext(BaseContext, t.Generic[C]):
         **kwargs: t.Any,
     ) -> bool:
         """Format all SQL models and audits."""
-        unformatted_file_paths = []
-        format_targets = {**self._models, **self._audits}
-
-        for target in format_targets.values():
-            if target._path is None or target._path.suffix != ".sql":
-                continue
-            if paths and not any(target._path.samefile(p) for p in paths):
-                continue
-
+        filtered_targets = [
+            target for target in self._models.values() | self._audits.values()
+            if target._path is not None and target._path.suffix == ".sql"
+            and (not paths or any(target._path.samefile(p) for p in paths))
+        ]
+        for target in filtered_targets:
             with open(target._path, "r+", encoding="utf-8") as file:
                 before = file.read()
                 expressions = parse(before, default_dialect=self.config_for_node(target).dialect)
