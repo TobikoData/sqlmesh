@@ -317,7 +317,7 @@ class TableDiff:
                     *(exp.column(c) for c in source_schema),
                     self.source_key_expression.as_(SQLMESH_JOIN_KEY_COL),
                 )
-                .from_(self.source_table)
+                .from_(self.source_table.as_("s"))
                 .where(self.where)
             )
             target_query = (
@@ -325,9 +325,15 @@ class TableDiff:
                     *(exp.column(c) for c in target_schema),
                     self.target_key_expression.as_(SQLMESH_JOIN_KEY_COL),
                 )
-                .from_(self.target_table)
+                .from_(self.target_table.as_("t"))
                 .where(self.where)
             )
+
+            # Ensure every column is qualified with the alias in the source and target queries
+            for col in source_query.find_all(exp.Column):
+                col.set("table", exp.to_identifier("s"))
+            for col in target_query.find_all(exp.Column):
+                col.set("table", exp.to_identifier("t"))
 
             source_table = exp.table_("__source")
             target_table = exp.table_("__target")
