@@ -1965,12 +1965,16 @@ class TerminalConsole(Console):
         self.log_status_update(f"Number of SQLMesh environments are: {output_str}")
 
     def print_connection_config(self, config: ConnectionConfig, title: str = "Connection") -> None:
-        engine_adapter_type = config._engine_adapter
-
         tree = Tree(f"[b]{title}:[/b]")
         tree.add(f"Type: [bold cyan]{config.type_}[/bold cyan]")
         tree.add(f"Catalog: [bold cyan]{config.get_catalog()}[/bold cyan]")
-        tree.add(f"Dialect: [bold cyan]{engine_adapter_type.DIALECT}[/bold cyan]")
+
+        try:
+            engine_adapter_type = config._engine_adapter
+            tree.add(f"Dialect: [bold cyan]{engine_adapter_type.DIALECT}[/bold cyan]")
+        except NotImplementedError:
+            # not all ConnectionConfig's have an engine adapter associated. The CloudConnectionConfig has a HTTP client instead
+            pass
 
         self._print(tree)
 

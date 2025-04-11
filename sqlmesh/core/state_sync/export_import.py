@@ -1,11 +1,18 @@
 import json
 import typing as t
+
 from sqlmesh.core.state_sync import StateSync
 from sqlmesh.core.snapshot import Snapshot
 from sqlmesh.utils.date import now, to_tstz
 from sqlmesh.utils.pydantic import _expression_encoder
 from sqlmesh.core.state_sync import Versions
-from sqlmesh.core.state_sync.common import StateStream, EnvironmentWithStatements
+from sqlmesh.core.state_sync.common import (
+    EnvironmentsChunk,
+    SnapshotsChunk,
+    VersionsChunk,
+    EnvironmentWithStatements,
+    StateStream,
+)
 from sqlmesh.core.console import Console
 from pathlib import Path
 from sqlmesh.core.console import NoopConsole
@@ -31,23 +38,6 @@ class SQLMeshJSONStreamEncoder(JSONStreamEncoder):
 def _dump_pydantic_model(model: PydanticModel) -> t.Dict[str, t.Any]:
     dump_args: t.Dict[str, t.Any] = PYDANTIC_DEFAULT_ARGS
     return model.model_dump(mode="json", **dump_args)
-
-
-def _create_local_state_stream(versions: Versions, snapshots: t.Dict[str, Snapshot]) -> StateStream:
-    class _LocalStateStream(StateStream):
-        @property
-        def versions(self) -> Versions:
-            return versions
-
-        @property
-        def snapshots(self) -> t.Iterable[Snapshot]:
-            return iter(snapshots.values())
-
-        @property
-        def environments(self) -> t.Iterable[EnvironmentWithStatements]:
-            return []
-
-    return _LocalStateStream()
 
 
 def _export(state_stream: StateStream, importable: bool, console: Console) -> StreamableDict:
@@ -81,15 +71,21 @@ def _export(state_stream: StateStream, importable: bool, console: Console) -> St
     def _do_export() -> t.Iterator[t.Tuple[str, t.Any]]:
         yield "metadata", {"timestamp": to_tstz(now()), "file_version": 1, "importable": importable}
 
-        versions = _dump_pydantic_model(state_stream.versions)
-        yield "versions", versions
-        console.update_state_export_progress(version_count=len(versions), versions_complete=True)
+        for state_chunk in state_stream:
+            if isinstance(state_chunk, VersionsChunk):
+                versions = _dump_pydantic_model(state_chunk.versions)
+                yield "versions", versions
+                console.update_state_export_progress(
+                    version_count=len(versions), versions_complete=True
+                )
 
-        yield "snapshots", _dump_snapshots(state_stream.snapshots)
-        console.update_state_export_progress(snapshots_complete=True)
+            if isinstance(state_chunk, SnapshotsChunk):
+                yield "snapshots", _dump_snapshots(state_chunk)
+                console.update_state_export_progress(snapshots_complete=True)
 
-        yield "environments", _dump_environments(state_stream.environments)
-        console.update_state_export_progress(environments_complete=True)
+            if isinstance(state_chunk, EnvironmentsChunk):
+                yield "environments", _dump_environments(state_chunk)
+                console.update_state_export_progress(environments_complete=True)
 
     return _do_export()
 
@@ -109,37 +105,29 @@ def _import(
         console: A Console instance to print progress to
     """
 
-    class _FileStateStream(StateStream):
-        @property
-        def versions(self) -> Versions:
-            versions_raw = to_standard_types(data()["versions"])
-            return Versions.model_validate(versions_raw)
+    def _load_snapshots() -> t.Iterator[Snapshot]:
+        stream = data()["snapshots"]
 
-        @property
-        def snapshots(self) -> t.Iterable[Snapshot]:
-            stream = data()["snapshots"]
+        console.update_state_import_progress(snapshot_count=0)
+        for idx, raw_snapshot in enumerate(stream):
+            snapshot = Snapshot.model_validate(to_standard_types(raw_snapshot))
+            yield snapshot
+            console.update_state_import_progress(snapshot_count=idx + 1)
 
-            console.update_state_import_progress(snapshot_count=0)
-            for idx, raw_snapshot in enumerate(stream):
-                snapshot = Snapshot.model_validate(to_standard_types(raw_snapshot))
-                yield snapshot
-                console.update_state_import_progress(snapshot_count=idx + 1)
+        console.update_state_import_progress(snapshots_complete=True)
 
-            console.update_state_import_progress(snapshots_complete=True)
+    def _load_environments() -> t.Iterator[EnvironmentWithStatements]:
+        stream = data()["environments"]
 
-        @property
-        def environments(self) -> t.Iterable[EnvironmentWithStatements]:
-            stream = data()["environments"]
+        console.update_state_import_progress(environment_count=0)
+        for idx, (_, raw_environment) in enumerate(stream.items()):
+            environment = EnvironmentWithStatements.model_validate(
+                to_standard_types(raw_environment)
+            )
+            yield environment
+            console.update_state_import_progress(environment_count=idx + 1)
 
-            console.update_state_import_progress(environment_count=0)
-            for idx, (_, raw_environment) in enumerate(stream.items()):
-                environment = EnvironmentWithStatements.model_validate(
-                    to_standard_types(raw_environment)
-                )
-                yield environment
-                console.update_state_import_progress(environment_count=idx + 1)
-
-            console.update_state_import_progress(environments_complete=True)
+        console.update_state_import_progress(environments_complete=True)
 
     metadata = to_standard_types(data()["metadata"])
 
@@ -150,9 +138,13 @@ def _import(
         timestamp=timestamp, state_file_version=metadata["file_version"]
     )
 
-    stream = _FileStateStream()
+    versions = Versions.model_validate(to_standard_types(data()["versions"]))
 
-    console.update_state_import_progress(versions=stream.versions)
+    stream = StateStream.from_iterators(
+        versions=versions, snapshots=_load_snapshots(), environments=_load_environments()
+    )
+
+    console.update_state_import_progress(versions=versions)
 
     state_sync.import_(stream, clear=clear)
 
@@ -167,7 +159,11 @@ def export_state(
     console = console or NoopConsole()
 
     state_stream = (
-        _create_local_state_stream(state_sync.get_versions(), local_snapshots)
+        StateStream.from_iterators(
+            versions=state_sync.get_versions(),
+            snapshots=iter(local_snapshots.values()),
+            environments=iter([]),
+        )
         if local_snapshots
         else state_sync.export(environment_names=environment_names)
     )
