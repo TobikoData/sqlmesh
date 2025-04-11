@@ -11,6 +11,7 @@ import pandas as pd
 import pytest
 from pathlib import Path
 import os
+from sqlmesh.utils.concurrency import NodeExecutionFailedError
 import time_machine
 from pytest_mock.plugin import MockerFixture
 from sqlglot import exp
@@ -4497,7 +4498,7 @@ def test_multi(mocker):
 
 @use_terminal_console
 def test_multi_virtual_layer(mocker):
-    context = Context(paths=["examples/multi_virtual_layer"])
+    context = Context(paths=["tests/fixtures/multi_virtual_layer"])
 
     local_db = "db.duckdb"
     if os.path.exists(local_db):
@@ -4568,6 +4569,20 @@ def test_multi_virtual_layer(mocker):
         ).to_string()
         == "     item_id  global_one  macro_one extra\n0  gateway_2          88          1     c"
     )
+
+    # Changing the flag should show a diff
+    context.gateway_managed_virtual_layer = False
+    plan = context.plan_builder().build()
+    assert not plan.requires_backfill
+    assert (
+        plan.context_diff.previous_gateway_managed_virtual_layer
+        != plan.context_diff.gateway_managed_virtual_layer
+    )
+    assert plan.context_diff.has_changes
+
+    # This should error since the default_gateway won't have access to create the view on a non-shared catalog
+    with pytest.raises(NodeExecutionFailedError, match=r"Execution failed for node SnapshotId*"):
+        context.apply(plan)
 
     if os.path.exists(local_db):
         os.remove(local_db)

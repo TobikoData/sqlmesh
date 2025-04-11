@@ -270,6 +270,8 @@ class ContextDiff(PydanticModel):
             previous_requirements=env.requirements,
             requirements=env.requirements,
             previous_environment_statements=[],
+            previous_gateway_managed_virtual_layer=env.gateway_managed,
+            gateway_managed_virtual_layer=env.gateway_managed,
         )
 
     @property

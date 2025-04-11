@@ -239,6 +239,7 @@ class SnapshotEvaluator:
                 )
                 tables_by_gateway[gateway].append(table)
 
+        # A schema can be shared across multiple engines, so we need to group by gateway
         for gateway, tables in tables_by_gateway.items():
             self._create_schemas(tables=tables, gateway=gateway)
 
@@ -337,6 +338,7 @@ class SnapshotEvaluator:
 
         with self.concurrent_context():
             existing_objects: t.Set[str] = set()
+            # A schema can be shared across multiple engines, so we need to group tables by both gateway and schema
             for gateway, tables_by_schema in tables_by_gateway_and_schema.items():
                 objs_for_gateway = {
                     obj
