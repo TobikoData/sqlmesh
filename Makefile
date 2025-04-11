@@ -1,7 +1,7 @@
 .PHONY: docs
 
 install-dev:
-	pip3 install -e ".[dev,web,slack,dlt]" ./examples/custom_materializations
+	pip3 install -e ".[dev,web,slack,dlt,lsp]" ./examples/custom_materializations
 
 install-doc:
 	pip3 install -r ./docs/requirements.txt
