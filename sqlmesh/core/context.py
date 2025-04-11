@@ -2226,7 +2226,7 @@ class GenericContext(BaseContext, t.Generic[C]):
 
     @cached_property
     def default_catalog_per_gateway(self) -> t.Dict[str, str]:
-        """Returns the catalogs for each engine adapter in a multi virtual layer setup when the catalog isn't shared."""
+        """Returns the default catalogs for each engine adapter."""
         if self._default_catalog_per_gateway is None:
             self._default_catalog_per_gateway = {
                 name: adapter.default_catalog
