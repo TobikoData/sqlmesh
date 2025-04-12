@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 """A Language Server Protocol (LSP) server for SQL with SQLMesh integration."""
 
+import itertools
 import logging
 import typing as t
 from contextlib import suppress
@@ -16,7 +17,7 @@ from sqlmesh.core.model import Model
 
 logger = logging.getLogger(__name__)
 
-GLOBAL_CONTEXT: t.Optional[Context,] = None
+GLOBAL_CONTEXT: t.Optional[Context] = None
 FILE_MAP: t.Dict[str, t.Union[Model, ModelAudit]] = {}
 
 
@@ -31,22 +32,16 @@ def ensure_context_for_document(document: TextDocument) -> TextDocument:
         GLOBAL_CONTEXT.load()
         if document.uri in FILE_MAP:
             return document
-        else:
-            for model in GLOBAL_CONTEXT._models.values():
-                if model._path is None:
-                    continue
-                path = model._path.resolve()
-                if path == document.path:
-                    FILE_MAP[document.uri] = model
-                    return document
-            for audit in GLOBAL_CONTEXT._audits.values():
-                if audit._path is None:
-                    continue
-                path = audit._path.resolve()
-                if path == document.path:
-                    FILE_MAP[document.uri] = audit
-                    return document
-            return document
+        for model in itertools.chain(
+            GLOBAL_CONTEXT._models.values(), GLOBAL_CONTEXT._audits.values()
+        ):
+            if model._path is None:
+                continue
+            path = model._path.resolve()
+            if path == document.path:
+                FILE_MAP[document.uri] = model
+                return document
+        return document
 
     # If there is no context, load the context and then call this function again
     path = Path(document.path).resolve()
