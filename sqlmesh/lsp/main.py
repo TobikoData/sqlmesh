@@ -6,12 +6,12 @@ import typing as t
 from contextlib import suppress
 from pathlib import Path
 
+from sqlmesh.core.audit.definition import ModelAudit
 from sqlmesh.core.context import Context
 from lsprotocol import types
 from pygls.server import LanguageServer
 from pygls.workspace import TextDocument
 from sqlmesh._version import __version__
-from sqlmesh.core.dialect import Audit
 from sqlmesh.core.model import Model
 
 logger = logging.getLogger(__name__)
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 GLOBAL_CONTEXT: t.Optional[
     t.Tuple[
         Context,
-        t.Dict[str, t.Tuple[Context, t.Union[Model, Audit]]],
+        t.Dict[str, t.Tuple[Context, t.Union[Model, ModelAudit]]],
     ]
 ] = None
 
