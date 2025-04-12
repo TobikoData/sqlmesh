@@ -6,11 +6,12 @@ from datetime import timedelta
 from unittest import mock
 from unittest.mock import patch
 
+import os
 import numpy as np
 import pandas as pd
 import pytest
 from pathlib import Path
-import os
+from sqlmesh.core.config.naming import NameInferenceConfig
 from sqlmesh.utils.concurrency import NodeExecutionFailedError
 import time_machine
 from pytest_mock.plugin import MockerFixture
@@ -4497,26 +4498,44 @@ def test_multi(mocker):
 
 
 @use_terminal_console
-def test_multi_virtual_layer(mocker):
-    context = Context(paths=["tests/fixtures/multi_virtual_layer"])
+def test_multi_virtual_layer(copy_to_temp_path):
+    paths = copy_to_temp_path("tests/fixtures/multi_virtual_layer")
+    path = Path(paths[0])
+    first_db_path = str(path / "db_1.db")
+    second_db_path = str(path / "db_2.db")
 
-    local_db = "db.duckdb"
-    if os.path.exists(local_db):
-        os.remove(local_db)
+    config = Config(
+        gateways={
+            "first": GatewayConfig(
+                connection=DuckDBConnectionConfig(database=first_db_path),
+                variables={"overriden_var": "gateway_1"},
+            ),
+            "second": GatewayConfig(
+                connection=DuckDBConnectionConfig(database=second_db_path),
+                variables={"overriden_var": "gateway_2"},
+            ),
+        },
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        model_naming=NameInferenceConfig(infer_names=True),
+        default_gateway="first",
+        gateway_managed_virtual_layer=True,
+        variables={"overriden_var": "global", "global_one": 88},
+    )
+
+    context = Context(paths=paths, config=config)
 
     # For the model without gateway the default should be used and the gateway variable should overide the global
     assert (
-        context.render("local_schema.model_one").sql()
+        context.render("first_schema.model_one").sql()
         == 'SELECT \'gateway_1\' AS "item_id", 88 AS "global_one", 1 AS "macro_one"'
     )
 
     # For model with gateway specified the appropriate variable should be used to overide
     assert (
-        context.render("memory.memory_schema.model_one").sql()
+        context.render("db_2.second_schema.model_one").sql()
         == 'SELECT \'gateway_2\' AS "item_id", 88 AS "global_one", 1 AS "macro_one"'
     )
 
-    # context._new_state_sync().reset(default_catalog=context.default_catalog)
     plan = context.plan_builder().build()
     assert len(plan.new_snapshots) == 4
     context.apply(plan)
@@ -4524,25 +4543,25 @@ def test_multi_virtual_layer(mocker):
     # Validate the tables that source from the first tables are correct as well with evaluate
     assert (
         context.evaluate(
-            "local_schema.model_two", start=now(), end=now(), execution_time=now()
+            "first_schema.model_two", start=now(), end=now(), execution_time=now()
         ).to_string()
         == "     item_id  global_one\n0  gateway_1          88"
     )
     assert (
         context.evaluate(
-            "memory.memory_schema.model_two", start=now(), end=now(), execution_time=now()
+            "db_2.second_schema.model_two", start=now(), end=now(), execution_time=now()
         ).to_string()
         == "     item_id  global_one\n0  gateway_2          88"
     )
 
     assert sorted(set(snapshot.name for snapshot in plan.directly_modified)) == [
-        '"db"."local_schema"."model_one"',
-        '"db"."local_schema"."model_two"',
-        '"memory"."memory_schema"."model_one"',
-        '"memory"."memory_schema"."model_two"',
+        '"db_1"."first_schema"."model_one"',
+        '"db_1"."first_schema"."model_two"',
+        '"db_2"."second_schema"."model_one"',
+        '"db_2"."second_schema"."model_two"',
     ]
 
-    model = context.get_model("memory.memory_schema.model_one")
+    model = context.get_model("db_1.first_schema.model_one")
 
     context.upsert_model(model.copy(update={"query": model.query.select("'c' AS extra")}))
     plan = context.plan_builder().build()
@@ -4553,52 +4572,70 @@ def test_multi_virtual_layer(mocker):
 
     assert state_environments[0].gateway_managed
     assert len(state_snapshots) == len(state_environments[0].snapshots)
-
     assert [snapshot.name for snapshot in plan.directly_modified] == [
-        '"memory"."memory_schema"."model_one"'
+        '"db_1"."first_schema"."model_one"'
     ]
     assert [x.name for x in list(plan.indirectly_modified.values())[0]] == [
-        '"memory"."memory_schema"."model_two"'
+        '"db_1"."first_schema"."model_two"'
     ]
 
     assert len(plan.missing_intervals) == 1
-
     assert (
         context.evaluate(
-            "memory.memory_schema.model_one", start=now(), end=now(), execution_time=now()
+            "db_1.first_schema.model_one", start=now(), end=now(), execution_time=now()
         ).to_string()
-        == "     item_id  global_one  macro_one extra\n0  gateway_2          88          1     c"
+        == "     item_id  global_one  macro_one extra\n0  gateway_1          88          1     c"
     )
 
-    # Create dev environment
-    model = context.get_model("db.local_schema.model_one")
+    # Create dev environment with changed models
+    model = context.get_model("db_2.second_schema.model_one")
     context.upsert_model(model.copy(update={"query": model.query.select("'d' AS extra")}))
+    model = context.get_model("first_schema.model_two")
+    context.upsert_model(model.copy(update={"query": model.query.select("'d2' AS col")}))
     plan = context.plan_builder("dev").build()
     context.apply(plan)
 
     dev_environment = context.state_sync.get_environment("dev")
     assert dev_environment is not None
-    metadata = DuckDBMetadata.from_context(context)
-    start_schemas = set(metadata.schemas)
-    assert sorted(start_schemas) == sorted(
-        {"local_schema", "local_schema__dev", "sqlmesh", "sqlmesh__local_schema"}
+
+    metadata_engine_1 = DuckDBMetadata.from_context(context)
+    start_schemas_1 = set(metadata_engine_1.schemas)
+    assert sorted(start_schemas_1) == sorted(
+        {"first_schema__dev", "sqlmesh", "first_schema", "sqlmesh__first_schema"}
+    )
+
+    metadata_engine_2 = DuckDBMetadata(context._get_engine_adapter("second"))
+    start_schemas_2 = set(metadata_engine_2.schemas)
+    assert sorted(start_schemas_2) == sorted(
+        {"sqlmesh__second_schema", "second_schema", "second_schema__dev"}
     )
 
     # Invalidate dev environment
     context.invalidate_environment("dev")
     invalidate_environment = context.state_sync.get_environment("dev")
     assert invalidate_environment is not None
-    schemas_prior_to_janitor = set(metadata.schemas)
     assert invalidate_environment.expiration_ts < dev_environment.expiration_ts  # type: ignore
-    assert sorted(start_schemas) == sorted(schemas_prior_to_janitor)
+    assert sorted(start_schemas_1) == sorted(set(metadata_engine_1.schemas))
+    assert sorted(start_schemas_2) == sorted(set(metadata_engine_2.schemas))
 
     # Run janitor
     context._run_janitor()
-    removed_schemas = start_schemas - set(metadata.schemas)
     assert context.state_sync.get_environment("dev") is None
-    assert removed_schemas == {"local_schema__dev"}
+    removed_schemas = start_schemas_1 - set(metadata_engine_1.schemas)
+    assert removed_schemas == {"first_schema__dev"}
+    removed_schemas = start_schemas_2 - set(metadata_engine_2.schemas)
+    assert removed_schemas == {"second_schema__dev"}
     prod_environment = context.state_sync.get_environment("prod")
-    assert len(prod_environment.snapshots_) == 4
+
+    # Remove the second gateway's second model and apply plan
+    second_model = path / "models/second_schema/model_two.sql"
+    os.remove(second_model)
+    assert not second_model.exists()
+    context = Context(paths=paths, config=config)
+    plan = context.plan_builder().build()
+    context.apply(plan)
+    prod_environment = context.state_sync.get_environment("prod")
+    assert len(prod_environment.snapshots_) == 3
 
     # Changing the flag should show a diff
     context.gateway_managed_virtual_layer = False
@@ -4613,9 +4650,6 @@ def test_multi_virtual_layer(mocker):
     # This should error since the default_gateway won't have access to create the view on a non-shared catalog
     with pytest.raises(NodeExecutionFailedError, match=r"Execution failed for node SnapshotId*"):
         context.apply(plan)
-
-    if os.path.exists(local_db):
-        os.remove(local_db)
 
 
 def test_multi_dbt(mocker):

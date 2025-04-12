@@ -6,4 +6,4 @@ SELECT
   item_id,
   global_one
 FROM
-  local_schema.model_one;
+  first_schema.model_one;

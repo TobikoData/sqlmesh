@@ -1,10 +1,10 @@
 MODEL (
   kind FULL,
-  gateway memory
+  gateway second
 );
 
 SELECT
   item_id,
   global_one
 FROM
-  memory_schema.model_one;
+  second_schema.model_one;

@@ -1,6 +1,6 @@
 MODEL (
   kind FULL,
-  gateway memory
+  gateway second
 );
 
 SELECT
