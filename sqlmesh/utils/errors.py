@@ -180,6 +180,12 @@ class LinterError(SQLMeshError):
     pass
 
 
+class SignalEvalError(SQLMeshError):
+    """Errors when evaluating a signal that is because of a user mistake and not a SQLMesh bug."""
+
+    pass
+
+
 def raise_config_error(
     msg: str,
     location: t.Optional[str | Path] = None,

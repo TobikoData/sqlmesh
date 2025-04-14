@@ -63,7 +63,7 @@ from sqlmesh.core.snapshot.definition import (
 )
 from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.date import DatetimeRanges, to_date, to_datetime, to_timestamp
-from sqlmesh.utils.errors import SQLMeshError
+from sqlmesh.utils.errors import SQLMeshError, SignalEvalError
 from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroInfo
 from sqlmesh.core.console import get_console
 
@@ -2571,6 +2571,15 @@ def test_check_ready_intervals(mocker: MockerFixture):
         [[(0, 1)], [(3, 4)]],
         [(0, 1), (3, 4)],
     )
+    with pytest.raises(SignalEvalError) as excinfo:
+        _check_ready_intervals(
+            lambda _: (_ for _ in ()).throw(MemoryError("Some exception")),
+            [(0, 1), (1, 2)],
+            mocker.Mock(),
+        )
+
+    assert isinstance(excinfo.value.__cause__, MemoryError)
+    assert str(excinfo.value.__cause__) == "Some exception"
 
 
 @pytest.mark.parametrize(

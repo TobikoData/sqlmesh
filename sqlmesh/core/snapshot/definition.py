@@ -38,7 +38,7 @@ from sqlmesh.utils.date import (
     validate_date_range,
     yesterday,
 )
-from sqlmesh.utils.errors import SQLMeshError
+from sqlmesh.utils.errors import SQLMeshError, SignalEvalError
 from sqlmesh.utils.metaprogramming import prepare_env, print_exception
 from sqlmesh.utils.hashing import hash_data
 from sqlmesh.utils.pydantic import PydanticModel, field_validator
@@ -2171,8 +2171,8 @@ def _check_ready_intervals(
                 provided_kwargs=(kwargs or {}),
                 context=context,
             )
-        except Exception:
-            raise SQLMeshError("Error evaluating signal")
+        except Exception as ex:
+            raise SignalEvalError("Error evaluating signal") from ex
 
         if isinstance(ready_intervals, bool):
             if not ready_intervals:
@@ -2180,10 +2180,10 @@ def _check_ready_intervals(
         elif isinstance(ready_intervals, list):
             for i in ready_intervals:
                 if i not in batch:
-                    raise SQLMeshError(f"Unknown interval {i} for signal")
+                    raise SignalEvalError(f"Unknown interval {i} for signal")
             batch = ready_intervals
         else:
-            raise SQLMeshError(f"Expected bool | list, got {type(ready_intervals)} for signal")
+            raise SignalEvalError(f"Expected bool | list, got {type(ready_intervals)} for signal")
 
         checked_intervals.extend((to_timestamp(start), to_timestamp(end)) for start, end in batch)
 
