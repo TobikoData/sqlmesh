@@ -12,6 +12,7 @@ from sqlglot import exp, parse_one
 from sqlglot.helper import ensure_list
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 from sqlglot.optimizer.qualify_columns import quote_identifiers
+from sqlglot.optimizer.scope import find_all_in_scope
 
 from sqlmesh.utils.pydantic import PydanticModel
 
@@ -314,7 +315,7 @@ class TableDiff:
 
             source_query = (
                 exp.select(
-                    *(exp.column(c, "s") for c in source_schema),
+                    *(exp.column(c) for c in source_schema),
                     self.source_key_expression.as_(SQLMESH_JOIN_KEY_COL),
                 )
                 .from_(self.source_table.as_("s"))
@@ -322,12 +323,18 @@ class TableDiff:
             )
             target_query = (
                 exp.select(
-                    *(exp.column(c, "t") for c in target_schema),
+                    *(exp.column(c) for c in target_schema),
                     self.target_key_expression.as_(SQLMESH_JOIN_KEY_COL),
                 )
                 .from_(self.target_table.as_("t"))
                 .where(self.where)
             )
+
+            # Ensure every column is qualified with the alias in the source and target queries
+            for col in find_all_in_scope(source_query, exp.Column):
+                col.set("table", exp.to_identifier("s"))
+            for col in find_all_in_scope(target_query, exp.Column):
+                col.set("table", exp.to_identifier("t"))
 
             source_table = exp.table_("__source")
             target_table = exp.table_("__target")
