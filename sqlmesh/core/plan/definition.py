@@ -185,7 +185,14 @@ class Plan(PydanticModel, frozen=True):
 
         snapshots_by_name = self.context_diff.snapshots_by_name
         snapshots = [s.table_info for s in self.snapshots.values()]
-        promoted_snapshot_ids = None
+
+        # only promote snapshots with virtual layer views
+        promoted_snapshot_ids = [
+            s.snapshot_id
+            for s in snapshots
+            if s.is_model and s.model_kind_name and not s.model_kind_name.is_symbolic
+        ]
+
         if self.is_dev and not self.include_unmodified:
             if self.selected_models_to_backfill is not None:
                 # Only promote models that have been explicitly selected for backfill.
@@ -201,7 +208,7 @@ class Plan(PydanticModel, frozen=True):
                 promotable_snapshot_ids = self.context_diff.promotable_snapshot_ids.copy()
 
             promoted_snapshot_ids = [
-                s.snapshot_id for s in snapshots if s.snapshot_id in promotable_snapshot_ids
+                id for id in promoted_snapshot_ids if id in promotable_snapshot_ids
             ]
 
         previous_finalized_snapshots = (
