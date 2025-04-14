@@ -113,6 +113,10 @@ nav:
       - cloud/features/single_sign_on.md
       - Scheduler:
         - "Cloud": cloud/features/scheduler/scheduler.md
+        - "Cloud Hybrid Deployments":
+          - "Overview": cloud/features/scheduler/hybrid_executors_overview.md
+          - "Helm Chart example": cloud/features/scheduler/hybrid_executors_helm.md
+          - "Docker Compose example": cloud/features/scheduler/hybrid_executors_docker_compose.md
         - cloud/features/scheduler/airflow.md
         - cloud/features/scheduler/dagster.md
 #      - Observability:
@@ -175,6 +179,7 @@ markdown_extensions:
   - attr_list
   - md_in_html
   - pymdownx.caret
+  - sane_lists
 extra_css:
   - stylesheets/extra.css
 copyright: Tobiko Data Inc.
