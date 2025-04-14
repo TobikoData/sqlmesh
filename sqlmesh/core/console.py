@@ -395,7 +395,7 @@ class Console(abc.ABC):
         ):
             tree.children = [
                 tree.children[0],
-                Tree(f".... {modified_length-2} more ...."),
+                Tree(f".... {modified_length - 2} more ...."),
                 tree.children[-1],
             ]
         return tree
@@ -1985,9 +1985,9 @@ class TerminalConsole(Console):
             snapshot, plan_builder.environment_naming_info, default_catalog
         )
         response = self._prompt(
-            "\n".join([f"[{i+1}] {choice}" for i, choice in enumerate(choices.values())]),
+            "\n".join([f"[{i + 1}] {choice}" for i, choice in enumerate(choices.values())]),
             show_choices=False,
-            choices=[f"{i+1}" for i in range(len(choices))],
+            choices=[f"{i + 1}" for i in range(len(choices))],
         )
         choice = list(choices)[int(response) - 1]
         plan_builder.set_choice(snapshot, choice)
@@ -2476,7 +2476,7 @@ class MarkdownConsole(CaptureTerminalConsole):
                 and list_length > self.INDIRECTLY_MODIFIED_DISPLAY_THRESHOLD
             ):
                 self._print(added_models[0])
-                self._print(f"- `.... {list_length-2} more ....`\n")
+                self._print(f"- `.... {list_length - 2} more ....`\n")
                 self._print(added_models[-1])
             else:
                 for snapshot in added_models:
@@ -2503,7 +2503,7 @@ class MarkdownConsole(CaptureTerminalConsole):
                 and list_length > self.INDIRECTLY_MODIFIED_DISPLAY_THRESHOLD
             ):
                 self._print(removed_models[0])
-                self._print(f"- `.... {list_length-2} more ....`\n")
+                self._print(f"- `.... {list_length - 2} more ....`\n")
                 self._print(removed_models[-1])
             else:
                 for snapshot_table_info in removed_models:
@@ -2551,7 +2551,7 @@ class MarkdownConsole(CaptureTerminalConsole):
                 ):
                     self._print(
                         f"- `{indirectly_modified[0].display_name(environment_naming_info, default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect)}`\n"
-                        f"- `.... {modified_length-2} more ....`\n"
+                        f"- `.... {modified_length - 2} more ....`\n"
                         f"- `{indirectly_modified[-1].display_name(environment_naming_info, default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect)}`"
                     )
                 else:
@@ -2597,7 +2597,7 @@ class MarkdownConsole(CaptureTerminalConsole):
             and length > self.INDIRECTLY_MODIFIED_DISPLAY_THRESHOLD
         ):
             self._print(snapshots[0])
-            self._print(f"- `.... {length-2} more ....`\n")
+            self._print(f"- `.... {length - 2} more ....`\n")
             self._print(snapshots[-1])
         else:
             for snap in snapshots:

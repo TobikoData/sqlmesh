@@ -112,8 +112,8 @@ class ModelTextTestResult(unittest.TextTestResult):
         # Output final report
         stream.writeln(unittest.TextTestResult.separator2)
         stream.writeln(
-            f'Ran {tests_run} {"tests" if tests_run > 1 else "test"} in {test_duration:.3f}s \n'
+            f"Ran {tests_run} {'tests' if tests_run > 1 else 'test'} in {test_duration:.3f}s \n"
         )
         stream.writeln(
-            f'{"OK" if is_success else "FAILED"}{" (" + ", ".join(infos) + ")" if infos else ""}'
+            f"{'OK' if is_success else 'FAILED'}{' (' + ', '.join(infos) + ')' if infos else ''}"
         )

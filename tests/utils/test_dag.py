@@ -82,7 +82,7 @@ def test_sorted_with_cycles():
 
     expected_error_message = (
         "Last nodes added to the DAG: c\n"
-        "Possible candidates to check for circular references: b, d"
+        + "Possible candidates to check for circular references: b, d"
     )
 
     assert expected_error_message in str(ex.value)
