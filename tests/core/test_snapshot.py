@@ -2571,12 +2571,15 @@ def test_check_ready_intervals(mocker: MockerFixture):
         [[(0, 1)], [(3, 4)]],
         [(0, 1), (3, 4)],
     )
-    with pytest.raises(SignalEvalError):
+    with pytest.raises(SignalEvalError) as excinfo:
         _check_ready_intervals(
-            lambda _: (_ for _ in ()).throw(Exception("Some exception")),
+            lambda _: (_ for _ in ()).throw(MemoryError("Some exception")),
             [(0, 1), (1, 2)],
             mocker.Mock(),
         )
+
+    assert isinstance(excinfo.value.__cause__, MemoryError)
+    assert str(excinfo.value.__cause__) == "Some exception"
 
 
 @pytest.mark.parametrize(

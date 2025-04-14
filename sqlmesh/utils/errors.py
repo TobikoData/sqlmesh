@@ -181,6 +181,8 @@ class LinterError(SQLMeshError):
 
 
 class SignalEvalError(SQLMeshError):
+    """Errors when evaluating a signal that is because of a user mistake and not a SQLMesh bug."""
+
     pass
 
 
