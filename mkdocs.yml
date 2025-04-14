@@ -34,6 +34,8 @@ nav:
       - guides/tablediff.md
       - guides/linter.md
       - guides/observer.md
+    - Advanced usage:
+      - guides/customizing_sqlmesh.md
   - Concepts:
     - concepts/overview.md
     - Development:
