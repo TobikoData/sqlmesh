@@ -12,9 +12,14 @@ MODEL (
 );
 
 CREATE SCHEMA IF NOT EXISTS raw;
+
 DROP VIEW IF EXISTS raw.demographics;
-CREATE VIEW raw.demographics AS (
-  SELECT 1 AS customer_id, '00000' AS zip
+
+CREATE VIEW raw.demographics AS
+(
+  SELECT
+    1 AS customer_id,
+    '00000' AS zip
 );
 
 WITH current_marketing AS (
@@ -22,13 +27,14 @@ WITH current_marketing AS (
     customer_id,
     status
   FROM sushi.marketing
-  WHERE valid_to is null
+  WHERE
+    valid_to IS NULL
 )
 SELECT DISTINCT
-  o.customer_id::INT AS customer_id, -- this comment should not be registered
-  m.status,
+  o.customer_id::INT AS customer_id, /* this comment should not be registered */
+  m.status ,
   d.zip
-  FROM sushi.orders AS o
+FROM sushi.orders AS o
 LEFT JOIN current_marketing AS m
   ON o.customer_id = m.customer_id
 LEFT JOIN raw.demographics AS d

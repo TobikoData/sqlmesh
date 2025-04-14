@@ -3,4 +3,4 @@ MODEL (
   enabled False,
 );
 
-SELECT 1 AS a;
+SELECT 1 AS a ;

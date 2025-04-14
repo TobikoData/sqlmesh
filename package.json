@@ -1,0 +1,14 @@
+{
+    "name": "sqlmesh",
+    "workspaces": [
+        "vscode/extension",
+        "vscode/react",
+        "web/client"
+    ],
+    "scripts": {
+        "ci": "npm run ci --workspaces"
+    },
+    "devDependencies": {
+        "orval": "^7.8.0"
+    }
+}

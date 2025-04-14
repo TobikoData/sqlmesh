@@ -6,4 +6,4 @@ AUDIT (
 
 SELECT *
 FROM sushi.items
-WHERE price <= 0
+WHERE price <= 0   

@@ -3,7 +3,7 @@ MODEL (
   name sushi.top_waiters,
   owner jen,
   audits (
-    unique_values(columns := waiter_id)
+    UNIQUE_VALUES(columns := waiter_id)
   ),
   grain waiter_id
 );
@@ -12,7 +12,7 @@ WITH test_macros AS (
   SELECT
     @ADD_ONE(1) AS lit_two,
     @MULTIPLY(revenue, 2.0) AS sql_exp,
-    @SQL_LITERAL(revenue::text, 'x', 'y', a, "b") AS sql_lit,
+    @SQL_LITERAL(revenue::TEXT, 'x', 'y', a, "b") AS sql_lit
   FROM sushi.waiter_revenue_by_day
 )
 SELECT

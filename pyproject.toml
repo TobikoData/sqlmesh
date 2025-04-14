@@ -119,12 +119,19 @@ web = [
     "uvicorn[standard]==0.22.0",
     "sse-starlette>=0.2.2",
     "pyarrow",
+    "lsprotocol",
+    "pygls",
+]
+lsp = [
+    "pygls",
+    "lsprotocol"
 ]
 risingwave = ["psycopg2"]
 
 [project.scripts]
 sqlmesh = "sqlmesh.cli.main:cli"
 sqlmesh_cicd = "sqlmesh.cicd.bot:bot"
+sqlmesh_lsp = "sqlmesh.lsp.main:main"
 
 [project.entry-points."airflow.plugins"]
 sqlmesh_airflow = "sqlmesh.schedulers.airflow.plugin:SqlmeshAirflowPlugin"
@@ -148,7 +155,7 @@ fallback_version = "0.0.0"
 local_scheme = "no-local-version"
 
 [tool.setuptools.packages.find]
-include = ["sqlmesh", "sqlmesh.*", "web*"]
+include = ["sqlmesh", "sqlmesh.*", "web*"] 
 
 [tool.setuptools.package-data]
 web = ["client/dist/**"]

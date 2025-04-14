@@ -1,0 +1,81 @@
+{
+  "name": "sqlmesh",
+  "displayName": "SQLMesh",
+  "description": "Official SQLMesh extension for VSCode",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.98.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onLanguage:sql"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "panel": [
+        {
+          "id": "lineage_view",
+          "title": "Lineage",
+          "icon": "./assets/images/dag.svg"
+        }
+      ]
+    },
+    "views": {
+      "lineage_view": [
+        {
+          "id": "sqlmesh.lineage",
+          "name": "",
+          "type": "webview"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "sqlmesh.format",
+        "title": "Format SQLMesh Project",
+        "description": "SQLMesh"
+      },
+      {
+        "command": "sqlmesh.restart",
+        "title": "Restart SQLMesh Server",
+        "description": "SQLMesh"
+      }
+    ]
+  },
+  "scripts": {
+    "ci": "npm run lint && npm run compile && npm run test",
+    "vscode:prepublish": "npm run package",
+    "compile": "tsc --noEmit && webpack",
+    "watch": "webpack --watch",
+    "package": "webpack --mode production --devtool hidden-source-map",
+    "compile-tests": "tsc -p . --outDir out",
+    "watch-tests": "tsc -p . -w --outDir out",
+    "pretest": "npm run compile-tests && npm run compile && npm run lint",
+    "lint": "eslint src",
+    "lint:fix": "eslint src --fix",
+    "test": "vscode-test"
+  },
+  "dependencies": {
+    "@types/fs-extra": "^11.0.4",
+    "@vscode/python-extension": "^1.0.5",
+    "fs-extra": "^11.3.0",
+    "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.10",
+    "@types/node": "20.x",
+    "@types/vscode": "^1.98.0",
+    "@typescript-eslint/eslint-plugin": "^8.28.0",
+    "@typescript-eslint/parser": "^8.28.0",
+    "@vscode/test-cli": "^0.0.10",
+    "@vscode/test-electron": "^2.4.1",
+    "eslint": "^9.23.0",
+    "ts-loader": "^9.5.2",
+    "typescript": "^5.8.2",
+    "webpack": "^5.98.0",
+    "webpack-cli": "^6.0.1"
+  }
+}
