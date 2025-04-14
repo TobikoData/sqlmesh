@@ -19,6 +19,7 @@ from functools import cached_property
 from sqlmesh.core import constants as c
 from sqlmesh.core.console import get_console
 from sqlmesh.core.macros import RuntimeStage
+from sqlmesh.core.model.common import sorted_python_env_payloads
 from sqlmesh.core.snapshot import Snapshot, SnapshotId, SnapshotTableInfo
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
@@ -340,22 +341,43 @@ class ContextDiff(PydanticModel):
             )
         )
 
-    def environment_statements_diff(self) -> str:
+    def environment_statements_diff(self) -> t.List[t.Tuple[str, str]]:
         def extract_statements(statements: t.List[EnvironmentStatements], attr: str) -> t.List[str]:
-            return [str(stmt) for statement in statements for stmt in getattr(statement, attr)]
+            return [
+                expr
+                for statement in statements
+                for expr in (
+                    sorted_python_env_payloads(statement.python_env)
+                    if attr == "python_env"
+                    else getattr(statement, attr)
+                )
+            ]
 
-        def format_diff(runtime_stage: str) -> str:
-            previous = extract_statements(self.previous_environment_statements, runtime_stage)
-            current = extract_statements(self.environment_statements, runtime_stage)
-            return (
-                f"  {runtime_stage}:\n    " + "\n    ".join(ndiff(previous, current)) + "\n"
-                if previous or current
-                else ""
-            )
+        def compute_diff(attribute: str) -> t.Optional[t.Tuple[str, str]]:
+            previous = extract_statements(self.previous_environment_statements, attribute)
+            current = extract_statements(self.environment_statements, attribute)
 
-        return format_diff(RuntimeStage.BEFORE_ALL.value) + format_diff(
-            RuntimeStage.AFTER_ALL.value
-        )
+            if previous == current:
+                return None
+
+            diff_lines = list(ndiff(previous, current))
+            diff_text = attribute if not attribute == "python_env" else "dependencies"
+            diff_text += ":\n"
+
+            if any(line.startswith(("-", "+")) for line in diff_lines):
+                diff_text += "  " + "\n  ".join(diff_lines) + "\n"
+
+            return "python" if attribute == "python_env" else "sql", diff_text
+
+        return [
+            diff
+            for attribute in [
+                RuntimeStage.BEFORE_ALL.value,
+                RuntimeStage.AFTER_ALL.value,
+                "python_env",
+            ]
+            if (diff := compute_diff(attribute)) is not None
+        ]
 
     @property
     def environment_snapshots(self) -> t.List[SnapshotTableInfo]:

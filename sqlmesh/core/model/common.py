@@ -352,6 +352,19 @@ def depends_on(cls: t.Type, v: t.Any, info: ValidationInfo) -> t.Optional[t.Set[
     return v
 
 
+def sort_python_env(python_env: t.Dict[str, Executable]) -> t.List[t.Tuple[str, Executable]]:
+    """Returns the python env sorted."""
+    return sorted(python_env.items(), key=lambda x: (x[1].kind, x[0]))
+
+
+def sorted_python_env_payloads(python_env: t.Dict[str, Executable]) -> t.List[str]:
+    """Returns the payloads of the sorted python env."""
+    return [
+        v.payload if v.is_import or v.is_definition else f"{k} = {v.payload}"
+        for k, v in sort_python_env(python_env)
+    ]
+
+
 expression_validator: t.Callable = field_validator(
     "query",
     "expressions_",
