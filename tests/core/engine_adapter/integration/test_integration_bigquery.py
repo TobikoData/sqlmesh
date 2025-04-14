@@ -415,7 +415,7 @@ def test_table_diff_table_name_matches_column_name(ctx: TestContext):
     #
     # This is a problem, because we compare the columns of the source and target tables using the
     # equality operator (=), which is not defined for struct values in BigQuery, leading to an error.
-    query: exp.Query = exp.maybe_parse("SELECT 1 AS id, 2 AS source, 3 AS target")
+    query: exp.Query = exp.maybe_parse("SELECT 1 AS s, 2 AS source, 3 AS target")
 
     ctx.engine_adapter.ctas(src_table, query)
     ctx.engine_adapter.ctas(target_table, query)
@@ -424,7 +424,7 @@ def test_table_diff_table_name_matches_column_name(ctx: TestContext):
         adapter=ctx.engine_adapter,
         source=exp.table_name(src_table),
         target=exp.table_name(target_table),
-        on=["id"],
+        on=["s"],
     )
 
     row_diff = table_diff.row_diff()
