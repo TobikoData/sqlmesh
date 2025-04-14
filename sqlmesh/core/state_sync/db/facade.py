@@ -19,7 +19,6 @@ from __future__ import annotations
 import contextlib
 import logging
 import typing as t
-import itertools
 from pathlib import Path
 from datetime import datetime
 
@@ -48,6 +47,9 @@ from sqlmesh.core.state_sync.base import (
     Versions,
 )
 from sqlmesh.core.state_sync.common import (
+    EnvironmentsChunk,
+    SnapshotsChunk,
+    VersionsChunk,
     transactional,
     StateStream,
     chunk_iterable,
@@ -448,7 +450,9 @@ class EngineAdapterStateSync(StateSync):
 
     @transactional()
     def export(self, environment_names: t.Optional[t.List[str]] = None) -> StateStream:
-        state_sync = self
+        versions = self.get_versions(
+            validate=True
+        )  # will throw if the state db hasnt been created or there is a version mismatch
 
         snapshot_ids_to_export: t.Set[SnapshotId] = set()
         selected_environments: t.List[Environment] = []
@@ -458,89 +462,84 @@ class EngineAdapterStateSync(StateSync):
                 if not environment:
                     raise SQLMeshError(f"No such environment: {env_name}")
                 selected_environments.append(environment)
+        else:
+            selected_environments = self.get_environments()
 
+        for env in selected_environments:
+            snapshot_ids_to_export |= set([s.snapshot_id for s in env.snapshots or []])
+
+        def _export_snapshots() -> t.Iterator[Snapshot]:
+            for chunk in chunk_iterable(snapshot_ids_to_export, SnapshotState.SNAPSHOT_BATCH_SIZE):
+                yield from self.get_snapshots(chunk).values()
+
+        def _export_environments() -> t.Iterator[EnvironmentWithStatements]:
             for env in selected_environments:
-                snapshot_ids_to_export |= set([s.snapshot_id for s in env.snapshots or []])
+                yield EnvironmentWithStatements(
+                    environment=env, statements=self.get_environment_statements(env.name)
+                )
 
-        def _include_snapshot(s_id: SnapshotId) -> bool:
-            if environment_names:
-                return s_id in snapshot_ids_to_export
-            return True
-
-        class _DumpStateStream(StateStream):
-            @property
-            def versions(self) -> Versions:
-                return state_sync.get_versions()
-
-            @property
-            def snapshots(self) -> t.Iterable[Snapshot]:
-                all_snapshot_ids = {
-                    s.snapshot_id
-                    for e in state_sync.get_environments()
-                    for s in e.snapshots
-                    if _include_snapshot(s.snapshot_id)
-                }
-                for chunk in chunk_iterable(all_snapshot_ids, SnapshotState.SNAPSHOT_BATCH_SIZE):
-                    yield from state_sync.get_snapshots(chunk).values()
-
-            @property
-            def environments(self) -> t.Iterable[EnvironmentWithStatements]:
-                envs = selected_environments if environment_names else state_sync.get_environments()
-
-                for env in envs:
-                    yield EnvironmentWithStatements(
-                        environment=env, statements=state_sync.get_environment_statements(env.name)
-                    )
-
-        return _DumpStateStream()
+        return StateStream.from_iterators(
+            versions=versions,
+            snapshots=_export_snapshots(),
+            environments=_export_environments(),
+        )
 
     @transactional()
     def import_(self, stream: StateStream, clear: bool = True) -> None:
         existing_versions = self.get_versions()
 
-        # SQLMesh major/minor version must match so that we can be sure the JSON contained in the state file
-        # is compatible with our Pydantic model definitions. Patch versions dont need to match because the assumption
-        # is that they dont contain any breaking changes
-        incoming_versions = stream.versions
-        if incoming_versions.minor_sqlmesh_version != existing_versions.minor_sqlmesh_version:
-            raise SQLMeshError(
-                f"SQLMesh version mismatch. You are running '{existing_versions.sqlmesh_version}' but the state file was created with '{incoming_versions.sqlmesh_version}'.\n"
-                "Please upgrade/downgrade your SQLMesh version to match the state file before performing the import."
-            )
+        for state_chunk in stream:
+            if isinstance(state_chunk, VersionsChunk):
+                # SQLMesh major/minor version must match so that we can be sure the JSON contained in the state file
+                # is compatible with our Pydantic model definitions. Patch versions dont need to match because the assumption
+                # is that they dont contain any breaking changes
+                incoming_versions = state_chunk.versions
+                if (
+                    incoming_versions.minor_sqlmesh_version
+                    != existing_versions.minor_sqlmesh_version
+                ):
+                    raise SQLMeshError(
+                        f"SQLMesh version mismatch. You are running '{existing_versions.sqlmesh_version}' but the state file was created with '{incoming_versions.sqlmesh_version}'.\n"
+                        "Please upgrade/downgrade your SQLMesh version to match the state file before performing the import."
+                    )
 
-        if clear:
-            self.reset(default_catalog=None)
+                if clear:
+                    self.reset(default_catalog=None)
 
-        auto_restatements: t.Dict[SnapshotNameVersion, t.Optional[int]] = {}
+            if isinstance(state_chunk, SnapshotsChunk):
+                auto_restatements: t.Dict[SnapshotNameVersion, t.Optional[int]] = {}
 
-        for snapshot_chunk in chunk_iterable(stream.snapshots, SnapshotState.SNAPSHOT_BATCH_SIZE):
-            snapshot_iterator, intervals_iterator, auto_restatments_iterator = itertools.tee(
-                snapshot_chunk, 3
-            )
-            overwrite_existing_snapshots = (
-                not clear
-            )  # if clear=True, all existing snapshots were dropped anyway
-            self.snapshot_state.push_snapshots(
-                snapshot_iterator, overwrite=overwrite_existing_snapshots
-            )
-            self.add_snapshots_intervals((s.snapshot_intervals for s in intervals_iterator))
+                for snapshot_chunk in chunk_iterable(
+                    state_chunk, SnapshotState.SNAPSHOT_BATCH_SIZE
+                ):
+                    snapshot_chunk = list(snapshot_chunk)
+                    overwrite_existing_snapshots = (
+                        not clear
+                    )  # if clear=True, all existing snapshots were dropped anyway
+                    self.snapshot_state.push_snapshots(
+                        snapshot_chunk, overwrite=overwrite_existing_snapshots
+                    )
+                    self.add_snapshots_intervals((s.snapshot_intervals for s in snapshot_chunk))
 
-            auto_restatements.update(
-                {
-                    s.name_version: s.next_auto_restatement_ts
-                    for s in auto_restatments_iterator
-                    if s.next_auto_restatement_ts
-                }
-            )
+                    auto_restatements.update(
+                        {
+                            s.name_version: s.next_auto_restatement_ts
+                            for s in snapshot_chunk
+                            if s.next_auto_restatement_ts
+                        }
+                    )
 
-        for environment_with_statements in stream.environments:
-            environment = environment_with_statements.environment
-            self.environment_state.update_environment(environment)
-            self.environment_state.update_environment_statements(
-                environment.name, environment.plan_id, environment_with_statements.statements
-            )
+                self.update_auto_restatements(auto_restatements)
 
-        self.update_auto_restatements(auto_restatements)
+            if isinstance(state_chunk, EnvironmentsChunk):
+                for environment_with_statements in state_chunk:
+                    environment = environment_with_statements.environment
+                    self.environment_state.update_environment(environment)
+                    self.environment_state.update_environment_statements(
+                        environment.name,
+                        environment.plan_id,
+                        environment_with_statements.statements,
+                    )
 
     def state_type(self) -> str:
         return self.engine_adapter.dialect

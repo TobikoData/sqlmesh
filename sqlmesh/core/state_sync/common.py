@@ -6,6 +6,8 @@ from functools import wraps
 import itertools
 import abc
 
+from dataclasses import dataclass
+
 from sqlmesh.core.console import Console
 from sqlmesh.core.dialect import schema_
 from sqlmesh.utils.pydantic import PydanticModel
@@ -119,23 +121,62 @@ class EnvironmentWithStatements(PydanticModel):
     statements: t.List[EnvironmentStatements] = []
 
 
+@dataclass
+class VersionsChunk:
+    versions: Versions
+
+
+class SnapshotsChunk:
+    def __init__(self, items: t.Iterator[Snapshot]):
+        self.items = items
+
+    def __iter__(self) -> t.Iterator[Snapshot]:
+        return self.items
+
+
+class EnvironmentsChunk:
+    def __init__(self, items: t.Iterator[EnvironmentWithStatements]):
+        self.items = items
+
+    def __iter__(self) -> t.Iterator[EnvironmentWithStatements]:
+        return self.items
+
+
+StateStreamContents = t.Union[VersionsChunk, SnapshotsChunk, EnvironmentsChunk]
+
+
 class StateStream(abc.ABC):
     """
     Represents a stream of state either going into the StateSync (perhaps loaded from a file)
     or out of the StateSync (perhaps being dumped to a file)
+
+    Iterating over the stream produces the following chunks:
+
+        VersionsChunk: The versions of the objects contained in this StateStream
+        SnapshotsChunk: Is itself an iterator that streams Snapshot objects. Note that they should be fully populated with any relevant Intervals
+        EnvironmentsChunk: Is itself an iterator emitting a stream of Environments with any EnvironmentStatements attached
+
+    The idea here is to give some structure to the stream and ensure that callers have the opportunity to process all its components while not
+    needing to worry about the order they are emitted in
     """
 
-    @property
     @abc.abstractmethod
-    def versions(self) -> Versions:
-        """The versions of the objects contained in this StateStream"""
+    def __iter__(self) -> t.Iterator[StateStreamContents]:
+        pass
 
-    @property
-    @abc.abstractmethod
-    def snapshots(self) -> t.Iterable[Snapshot]:
-        """A stream of Snapshot objects. Note that they should be fully populated with any relevant Intervals"""
+    @classmethod
+    def from_iterators(
+        cls: t.Type["StateStream"],
+        versions: Versions,
+        snapshots: t.Iterator[Snapshot],
+        environments: t.Iterator[EnvironmentWithStatements],
+    ) -> "StateStream":
+        class _StateStream(cls):  # type: ignore
+            def __iter__(self) -> t.Iterator[StateStreamContents]:
+                yield VersionsChunk(versions)
 
-    @property
-    @abc.abstractmethod
-    def environments(self) -> t.Iterable[EnvironmentWithStatements]:
-        """A stream of Environments with any EnvironmentStatements attached"""
+                yield SnapshotsChunk(snapshots)
+
+                yield EnvironmentsChunk(environments)
+
+        return _StateStream()
