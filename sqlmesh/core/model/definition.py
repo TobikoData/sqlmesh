@@ -1911,7 +1911,7 @@ def create_models_from_blueprints(
         if (
             default_catalog_per_gateway
             and gateway_name
-            and (catalog := default_catalog_per_gateway.get(gateway_name))
+            and (catalog := default_catalog_per_gateway.get(gateway_name)) is not None
         ):
             loader_kwargs["default_catalog"] = catalog
 
