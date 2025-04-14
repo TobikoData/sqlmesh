@@ -48,6 +48,7 @@ class EnvironmentState:
             "catalog_name_override": exp.DataType.build("text"),
             "previous_finalized_snapshots": exp.DataType.build(blob_type),
             "normalize_name": exp.DataType.build("boolean"),
+            "gateway_managed": exp.DataType.build("boolean"),
             "requirements": exp.DataType.build(blob_type),
         }
 
@@ -188,11 +189,10 @@ class EnvironmentState:
         )
 
         # Delete the expired environments' corresponding environment statements
-        expired_environments = [
+        if expired_environments := [
             exp.EQ(this=exp.column("environment_name"), expression=exp.Literal.string(env.name))
             for env in environments
-        ]
-        if expired_environments:
+        ]:
             self.engine_adapter.delete_from(
                 self.environment_statements_table,
                 where=exp.or_(*expired_environments),
@@ -328,6 +328,7 @@ def _environment_to_df(environment: Environment) -> pd.DataFrame:
                     else None
                 ),
                 "normalize_name": environment.normalize_name,
+                "gateway_managed": environment.gateway_managed,
                 "requirements": json.dumps(environment.requirements),
             }
         ]

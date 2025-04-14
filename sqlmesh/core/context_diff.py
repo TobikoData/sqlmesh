@@ -53,6 +53,10 @@ class ContextDiff(PydanticModel):
     """Whether the currently stored environment record is in unfinalized state."""
     normalize_environment_name: bool
     """Whether the environment name should be normalized."""
+    previous_gateway_managed_virtual_layer: bool
+    """Whether the previous environment's virtual layer's views were created by the model specified gateways."""
+    gateway_managed_virtual_layer: bool
+    """Whether the virtual layer's views will be created by the model specified gateways."""
     create_from: str
     """The name of the environment the target environment will be created from if new."""
     create_from_env_exists: bool
@@ -96,6 +100,7 @@ class ContextDiff(PydanticModel):
         excluded_requirements: t.Optional[t.Set[str]] = None,
         diff_rendered: bool = False,
         environment_statements: t.Optional[t.List[EnvironmentStatements]] = [],
+        gateway_managed_virtual_layer: bool = False,
     ) -> ContextDiff:
         """Create a ContextDiff object.
 
@@ -226,6 +231,8 @@ class ContextDiff(PydanticModel):
             diff_rendered=diff_rendered,
             previous_environment_statements=previous_environment_statements,
             environment_statements=environment_statements,
+            previous_gateway_managed_virtual_layer=env.gateway_managed if env else False,
+            gateway_managed_virtual_layer=gateway_managed_virtual_layer,
         )
 
     @classmethod
@@ -263,6 +270,8 @@ class ContextDiff(PydanticModel):
             previous_requirements=env.requirements,
             requirements=env.requirements,
             previous_environment_statements=[],
+            previous_gateway_managed_virtual_layer=env.gateway_managed,
+            gateway_managed_virtual_layer=env.gateway_managed,
         )
 
     @property
@@ -273,6 +282,7 @@ class ContextDiff(PydanticModel):
             or self.is_unfinalized_environment
             or self.has_requirement_changes
             or self.has_environment_statements_changes
+            or self.previous_gateway_managed_virtual_layer != self.gateway_managed_virtual_layer
         )
 
     @property

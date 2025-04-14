@@ -364,6 +364,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         self._environment_statements: t.List[EnvironmentStatements] = []
         self._excluded_requirements: t.Set[str] = set()
         self._default_catalog: t.Optional[str] = None
+        self._default_catalog_per_gateway: t.Optional[t.Dict[str, str]] = None
         self._linters: t.Dict[str, Linter] = {}
         self._loaded: bool = False
 
@@ -380,6 +381,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         self.pinned_environments = Environment.sanitize_names(self.config.pinned_environments)
         self.auto_categorize_changes = self.config.plan.auto_categorize_changes
         self.selected_gateway = gateway or self.config.default_gateway_name
+        self.gateway_managed_virtual_layer = self.config.gateway_managed_virtual_layer
 
         gw_model_defaults = self.config.gateways[self.selected_gateway].model_defaults
         if gw_model_defaults:
@@ -2212,16 +2214,6 @@ class GenericContext(BaseContext, t.Generic[C]):
             for fqn, snapshot in self.snapshots.items()
         }
 
-    @property
-    def _snapshot_gateways(self) -> t.Dict[str, str]:
-        """Mapping of snapshot name to the gateway if specified in the model."""
-
-        return {
-            fqn: snapshot.model.gateway
-            for fqn, snapshot in self.snapshots.items()
-            if snapshot.is_model and snapshot.model.gateway
-        }
-
     @cached_property
     def engine_adapters(self) -> t.Dict[str, EngineAdapter]:
         """Returns all the engine adapters for the gateways defined in the configuration."""
@@ -2231,6 +2223,17 @@ class GenericContext(BaseContext, t.Generic[C]):
                 adapter = connection.create_engine_adapter()
                 self._engine_adapters[gateway_name] = adapter
         return self._engine_adapters
+
+    @cached_property
+    def default_catalog_per_gateway(self) -> t.Dict[str, str]:
+        """Returns the default catalogs for each engine adapter."""
+        if self._default_catalog_per_gateway is None:
+            self._default_catalog_per_gateway = {
+                name: adapter.default_catalog
+                for name, adapter in self.engine_adapters.items()
+                if adapter.default_catalog
+            }
+        return self._default_catalog_per_gateway
 
     def _get_engine_adapter(self, gateway: t.Optional[str] = None) -> EngineAdapter:
         if gateway:
@@ -2292,14 +2295,19 @@ class GenericContext(BaseContext, t.Generic[C]):
             ensure_finalized_snapshots=ensure_finalized_snapshots,
             diff_rendered=diff_rendered,
             environment_statements=self._environment_statements,
+            gateway_managed_virtual_layer=self.gateway_managed_virtual_layer,
         )
 
     def _run_janitor(self, ignore_ttl: bool = False) -> None:
+        # Clean up expired environments by removing their views and schemas
         self._cleanup_environments()
-        expired_snapshots = self.state_sync.delete_expired_snapshots(ignore_ttl=ignore_ttl)
+
+        # Identify and delete expired snapshots
+        cleanup_targets = self.state_sync.delete_expired_snapshots(ignore_ttl=ignore_ttl)
+
+        # Remove the expired snapshots tables
         self.snapshot_evaluator.cleanup(
-            expired_snapshots,
-            self._snapshot_gateways,
+            target_snapshots=cleanup_targets,
             on_complete=self.console.update_cleanup_progress,
         )
 
@@ -2307,7 +2315,13 @@ class GenericContext(BaseContext, t.Generic[C]):
 
     def _cleanup_environments(self) -> None:
         expired_environments = self.state_sync.delete_expired_environments()
-        cleanup_expired_views(self.engine_adapter, expired_environments, console=self.console)
+
+        cleanup_expired_views(
+            default_adapter=self.engine_adapter,
+            engine_adapters=self.engine_adapters,
+            environments=expired_environments,
+            console=self.console,
+        )
 
     def _try_connection(self, connection_name: str, validator: t.Callable[[], None]) -> None:
         connection_name = connection_name.capitalize()

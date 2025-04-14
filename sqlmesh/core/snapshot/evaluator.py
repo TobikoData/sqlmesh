@@ -226,15 +226,23 @@ class SnapshotEvaluator:
             deployability_index: Determines snapshots that are deployable in the context of this promotion.
             on_complete: A callback to call on each successfully promoted snapshot.
         """
-        self._create_schemas(
-            [
-                s.qualified_view_name.table_for_environment(
-                    environment_naming_info, dialect=self.adapter.dialect
+
+        tables_by_gateway: t.Dict[t.Union[str, None], t.List[exp.Table]] = defaultdict(list)
+        for snapshot in target_snapshots:
+            if snapshot.is_model and not snapshot.is_symbolic:
+                gateway = (
+                    snapshot.model_gateway if environment_naming_info.gateway_managed else None
                 )
-                for s in target_snapshots
-                if s.is_model and not s.is_symbolic
-            ]
-        )
+                adapter = self.get_adapter(gateway)
+                table = snapshot.qualified_view_name.table_for_environment(
+                    environment_naming_info, dialect=adapter.dialect
+                )
+                tables_by_gateway[gateway].append(table)
+
+        # A schema can be shared across multiple engines, so we need to group by gateway
+        for gateway, tables in tables_by_gateway.items():
+            self._create_schemas(tables=tables, gateway=gateway)
+
         deployability_index = deployability_index or DeployabilityIndex.all_deployable()
         with self.concurrent_context():
             concurrent_apply_to_snapshots(
@@ -293,8 +301,9 @@ class SnapshotEvaluator:
             allow_destructive_snapshots: Set of snapshots that are allowed to have destructive schema changes.
         """
         snapshots_with_table_names = defaultdict(set)
-        tables_by_schema = defaultdict(set)
-        gateway_by_schema: t.Dict[exp.Table, str] = {}
+        tables_by_gateway_and_schema: t.Dict[t.Union[str, None], t.Dict[exp.Table, set[str]]] = (
+            defaultdict(lambda: defaultdict(set))
+        )
         table_deployability: t.Dict[str, bool] = {}
         allow_destructive_snapshots = allow_destructive_snapshots or set()
 
@@ -316,24 +325,33 @@ class SnapshotEvaluator:
                 snapshots_with_table_names[snapshot].add(table.name)
                 table_deployability[table.name] = is_deployable
                 table_schema = d.schema_(table.db, catalog=table.catalog)
-                tables_by_schema[table_schema].add(table.name)
-                gateway_by_schema[table_schema] = snapshot.model.gateway or ""
+                tables_by_gateway_and_schema[snapshot.model_gateway][table_schema].add(table.name)
 
-        def _get_data_objects(schema: exp.Table, gateway: t.Optional[str] = None) -> t.Set[str]:
+        def _get_data_objects(
+            schema: exp.Table,
+            object_names: t.Optional[t.Set[str]] = None,
+            gateway: t.Optional[str] = None,
+        ) -> t.Set[str]:
             logger.info("Listing data objects in schema %s", schema.sql())
-            objs = self.get_adapter(gateway).get_data_objects(schema, tables_by_schema[schema])
+            objs = self.get_adapter(gateway).get_data_objects(schema, object_names)
             return {obj.name for obj in objs}
 
         with self.concurrent_context():
-            existing_objects = {
-                obj
-                for objs in concurrent_apply_to_values(
-                    list(tables_by_schema),
-                    lambda s: _get_data_objects(s, gateway_by_schema[s]),
-                    self.ddl_concurrent_tasks,
-                )
-                for obj in objs
-            }
+            existing_objects: t.Set[str] = set()
+            # A schema can be shared across multiple engines, so we need to group tables by both gateway and schema
+            for gateway, tables_by_schema in tables_by_gateway_and_schema.items():
+                objs_for_gateway = {
+                    obj
+                    for objs in concurrent_apply_to_values(
+                        list(tables_by_schema),
+                        lambda s: _get_data_objects(
+                            schema=s, object_names=tables_by_schema.get(s), gateway=gateway
+                        ),
+                        self.ddl_concurrent_tasks,
+                    )
+                    for obj in objs
+                }
+                existing_objects.update(objs_for_gateway)
 
         snapshots_to_create = []
         target_deployability_flags: t.Dict[str, t.List[bool]] = defaultdict(list)
@@ -351,7 +369,10 @@ class SnapshotEvaluator:
             return
         if on_start:
             on_start(len(snapshots_to_create))
-        self._create_schemas(tables_by_schema, gateway_by_schema)
+
+        for gateway, tables_by_schema in tables_by_gateway_and_schema.items():
+            self._create_schemas(tables=tables_by_schema, gateway=gateway)
+
         self._create_snapshots(
             snapshots_to_create=snapshots_to_create,
             snapshots=snapshots,
@@ -418,7 +439,6 @@ class SnapshotEvaluator:
     def cleanup(
         self,
         target_snapshots: t.Iterable[SnapshotTableCleanupTask],
-        snapshot_gateways: t.Optional[t.Dict[str, str]] = None,
         on_complete: t.Optional[t.Callable[[str], None]] = None,
     ) -> None:
         """Cleans up the given snapshots by removing its table
@@ -437,9 +457,7 @@ class SnapshotEvaluator:
                 lambda s: self._cleanup_snapshot(
                     s,
                     snapshots_to_dev_table_only[s.snapshot_id],
-                    self.get_adapter(
-                        snapshot_gateways.get(s.snapshot_id.name) if snapshot_gateways else None
-                    ),
+                    self.get_adapter(s.model_gateway),
                     on_complete,
                 ),
                 self.ddl_concurrent_tasks,
@@ -923,7 +941,11 @@ class SnapshotEvaluator:
         table_mapping: t.Optional[t.Dict[str, str]] = None,
     ) -> None:
         if snapshot.is_model:
-            adapter = self.adapter
+            adapter = (
+                self.get_adapter(snapshot.model_gateway)
+                if environment_naming_info.gateway_managed
+                else self.adapter
+            )
             table_name = snapshot.table_name(deployability_index.is_representative(snapshot))
             view_name = snapshot.qualified_view_name.for_environment(
                 environment_naming_info, dialect=adapter.dialect
@@ -956,7 +978,11 @@ class SnapshotEvaluator:
         environment_naming_info: EnvironmentNamingInfo,
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]],
     ) -> None:
-        adapter = self.adapter
+        adapter = (
+            self.get_adapter(snapshot.model_gateway)
+            if environment_naming_info.gateway_managed
+            else self.adapter
+        )
         view_name = snapshot.qualified_view_name.for_environment(
             environment_naming_info, dialect=adapter.dialect
         )
@@ -1062,7 +1088,7 @@ class SnapshotEvaluator:
     def _create_schemas(
         self,
         tables: t.Iterable[t.Union[exp.Table, str]],
-        gateways: t.Optional[t.Dict[exp.Table, str]] = None,
+        gateway: t.Optional[str] = None,
     ) -> None:
         table_exprs = [exp.to_table(t) for t in tables]
         unique_schemas = {(t.args["db"], t.args.get("catalog")) for t in table_exprs if t and t.db}
@@ -1071,7 +1097,7 @@ class SnapshotEvaluator:
         for schema_name, catalog in unique_schemas:
             schema = schema_(schema_name, catalog)
             logger.info("Creating schema '%s'", schema)
-            adapter = self.get_adapter(gateways.get(schema)) if gateways else self.adapter
+            adapter = self.get_adapter(gateway)
             adapter.create_schema(schema)
 
     def get_adapter(self, gateway: t.Optional[str] = None) -> EngineAdapter:

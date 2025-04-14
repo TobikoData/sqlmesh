@@ -327,27 +327,15 @@ def test_evaluate_limit():
 def test_gateway_specific_adapters(copy_to_temp_path, mocker):
     path = copy_to_temp_path("examples/sushi")
     ctx = Context(paths=path, config="isolated_systems_config", gateway="prod")
-    assert len(ctx._engine_adapters) == 1
+    assert len(ctx._engine_adapters) == 3
     assert ctx.engine_adapter == ctx._engine_adapters["prod"]
-
-    with pytest.raises(SQLMeshError):
-        assert ctx._get_engine_adapter("non_existing")
-
-    # This will create the requested engine adapter
     assert ctx._get_engine_adapter("dev") == ctx._engine_adapters["dev"]
 
     ctx = Context(paths=path, config="isolated_systems_config")
-    assert len(ctx._engine_adapters) == 1
+    assert len(ctx._engine_adapters) == 3
     assert ctx.engine_adapter == ctx._engine_adapters["dev"]
 
-    mocker.patch.object(
-        Context,
-        "_snapshot_gateways",
-        new_callable=mocker.PropertyMock(return_value={"test_snapshot": "test"}),
-    )
-
     ctx = Context(paths=path, config="isolated_systems_config")
-
     assert len(ctx.engine_adapters) == 3
     assert ctx.engine_adapter == ctx._get_engine_adapter()
     assert ctx._get_engine_adapter("test") == ctx._engine_adapters["test"]
@@ -785,6 +773,7 @@ def test_janitor(sushi_context, mocker: MockerFixture) -> None:
     adapter_mock = mocker.MagicMock()
     adapter_mock.dialect = "duckdb"
     state_sync_mock = mocker.MagicMock()
+
     state_sync_mock.delete_expired_environments.return_value = [
         Environment(
             name="test_environment",
@@ -805,6 +794,7 @@ def test_janitor(sushi_context, mocker: MockerFixture) -> None:
             previous_plan_id="test_plan_id",
         ),
     ]
+
     sushi_context._engine_adapters = {sushi_context.config.default_gateway: adapter_mock}
     sushi_context._state_sync = state_sync_mock
     sushi_context._run_janitor()

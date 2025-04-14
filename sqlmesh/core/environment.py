@@ -16,7 +16,7 @@ from sqlmesh.utils import word_characters_only
 from sqlmesh.utils.date import TimeLike, now_timestamp
 from sqlmesh.utils.jinja import JinjaMacroRegistry
 from sqlmesh.utils.metaprogramming import Executable
-from sqlmesh.utils.pydantic import PydanticModel, field_validator
+from sqlmesh.utils.pydantic import PydanticModel, field_validator, ValidationInfo
 
 T = t.TypeVar("T", bound="EnvironmentNamingInfo")
 PydanticType = t.TypeVar("PydanticType", bound="PydanticModel")
@@ -32,22 +32,27 @@ class EnvironmentNamingInfo(PydanticModel):
         catalog_name_override: The name of the catalog to use for this environment if an override was provided
         normalize_name: Indicates whether the environment's name will be normalized. For example, if it's
             `dev`, then it will become `DEV` when targeting Snowflake.
+        gateway_managed: Determines whether the virtual layer's views are created by the model-specific
+            gateways, otherwise the default gateway is used. Default: False.
     """
 
     name: str = c.PROD
     suffix_target: EnvironmentSuffixTarget = Field(default=EnvironmentSuffixTarget.SCHEMA)
     catalog_name_override: t.Optional[str] = None
     normalize_name: bool = True
+    gateway_managed: bool = False
 
     @field_validator("name", mode="before")
     @classmethod
     def _sanitize_name(cls, v: str) -> str:
         return word_characters_only(v).lower()
 
-    @field_validator("normalize_name", mode="before")
+    @field_validator("normalize_name", "gateway_managed", mode="before")
     @classmethod
-    def _validate_normalize_name(cls, v: t.Any) -> bool:
-        return True if v is None else bool(v)
+    def _validate_boolean_field(cls, v: t.Any, info: ValidationInfo) -> bool:
+        if v is None:
+            return info.field_name == "normalize_name"
+        return bool(v)
 
     @t.overload
     @classmethod
@@ -194,6 +199,7 @@ class Environment(EnvironmentNamingInfo):
             suffix_target=self.suffix_target,
             catalog_name_override=self.catalog_name_override,
             normalize_name=self.normalize_name,
+            gateway_managed=self.gateway_managed,
         )
 
     @property
