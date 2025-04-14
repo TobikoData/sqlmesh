@@ -1,6 +1,6 @@
 # Linter guide
 
-![Linter](linter_example.png)
+![Linter](./linter/linter_example.png)
 
 Linting is a powerful tool for improving code quality and consistency. It enables you to automatically validate model definition, ensuring they adhere to your team's best practices.
 
