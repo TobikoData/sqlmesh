@@ -24,7 +24,7 @@ SQLMesh's `SqlMeshLoader` class handles the loading process - customize it by su
 
 ### Modify every model
 
-One reason to customize the loading process is to do something to or verify something about every model. For example, you might want to add a post-statement to every model or verify that every model's `owner` field is populated.
+One reason to customize the loading process is to do something to every model. For example, you might want to add a post-statement to every model.
 
 The loading process parses all model SQL statements, so new or modified SQL must be parsed by SQLGlot before being passed to a model object.
 
@@ -58,8 +58,8 @@ class CustomLoader(SqlMeshLoader):
                 # Existing post-statements from model object
                 *model.post_statements,
                 # New post-statement is raw SQL, so we parse it with SQLGlot's `parse_one` function.
-                # Make sure to specify the SQL dialect.
-                parse_one(f"UNLOAD ...", dialect="redshift"),
+                # Make sure to specify the SQL dialect if different from the project default.
+                parse_one(f"VACUUM @this_model"),
             ]
             # Create a copy of the model with the `post_statements_` field updated
             new_models[model_name] = model.copy(update={"post_statements_": new_post_statements})
