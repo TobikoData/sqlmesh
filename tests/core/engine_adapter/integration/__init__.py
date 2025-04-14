@@ -210,7 +210,7 @@ class TestContext:
                 batch_end=sys.maxsize,
                 columns_to_types=columns_to_types,
             )
-        elif self.test_type == "pyspark":
+        if self.test_type == "pyspark":
             return self.engine_adapter.spark.createDataFrame(data)  # type: ignore
         return self._format_df(data, to_datetime=self.dialect != "trino")
 
@@ -550,7 +550,7 @@ class TestContext:
     def drop_catalog(self, catalog_name: str):
         if self.dialect == "bigquery":
             return  # bigquery cannot create/drop catalogs
-        elif self.dialect == "databricks":
+        if self.dialect == "databricks":
             self.engine_adapter.execute(f"DROP CATALOG IF EXISTS {catalog_name} CASCADE")
         else:
             self.engine_adapter.execute(f'DROP DATABASE IF EXISTS "{catalog_name}"')

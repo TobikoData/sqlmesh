@@ -375,33 +375,32 @@ class EngineAdapter:
                 column_descriptions=column_descriptions,
                 **kwargs,
             )
-        else:
-            if self_referencing:
-                with self.temp_table(
-                    self._select_columns(columns_to_types).from_(target_table),
-                    name=target_table,
-                    columns_to_types=columns_to_types,
-                    **kwargs,
-                ) as temp_table:
-                    for source_query in source_queries:
-                        source_query.add_transform(
-                            lambda node: (  # type: ignore
-                                temp_table  # type: ignore
-                                if isinstance(node, exp.Table)
-                                and quote_identifiers(node) == quote_identifiers(target_table)
-                                else node
-                            )
+        if self_referencing:
+            with self.temp_table(
+                self._select_columns(columns_to_types).from_(target_table),
+                name=target_table,
+                columns_to_types=columns_to_types,
+                **kwargs,
+            ) as temp_table:
+                for source_query in source_queries:
+                    source_query.add_transform(
+                        lambda node: (  # type: ignore
+                            temp_table  # type: ignore
+                            if isinstance(node, exp.Table)
+                            and quote_identifiers(node) == quote_identifiers(target_table)
+                            else node
                         )
-                    return self._insert_overwrite_by_condition(
-                        target_table,
-                        source_queries,
-                        columns_to_types,
                     )
-            return self._insert_overwrite_by_condition(
-                target_table,
-                source_queries,
-                columns_to_types,
-            )
+                return self._insert_overwrite_by_condition(
+                    target_table,
+                    source_queries,
+                    columns_to_types,
+                )
+        return self._insert_overwrite_by_condition(
+            target_table,
+            source_queries,
+            columns_to_types,
+        )
 
     def create_index(
         self,

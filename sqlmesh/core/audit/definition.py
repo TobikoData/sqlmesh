@@ -95,7 +95,7 @@ def audit_map_validator(cls: t.Type, v: t.Any, values: t.Any) -> t.Dict[str, t.A
         return dict([_maybe_parse_arg_pair(v.unnest())])
     if isinstance(v, (exp.Tuple, exp.Array)):
         return dict(map(_maybe_parse_arg_pair, v.expressions))
-    elif isinstance(v, dict):
+    if isinstance(v, dict):
         dialect = get_dialect(values)
         return {
             key: value
@@ -103,10 +103,7 @@ def audit_map_validator(cls: t.Type, v: t.Any, values: t.Any) -> t.Dict[str, t.A
             else d.parse_one(str(value), dialect=dialect)
             for key, value in v.items()
         }
-    else:
-        raise_config_error(
-            "Defaults must be a tuple of exp.EQ or a dict", error_type=AuditConfigError
-        )
+    raise_config_error("Defaults must be a tuple of exp.EQ or a dict", error_type=AuditConfigError)
     return {}
 
 

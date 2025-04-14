@@ -1169,11 +1169,10 @@ def test_migrate(mocker: MockerFixture, make_snapshot):
                 "c": exp.DataType.build("int"),
                 "b": exp.DataType.build("int"),
             }
-        else:
-            return {
-                "c": exp.DataType.build("int"),
-                "a": exp.DataType.build("int"),
-            }
+        return {
+            "c": exp.DataType.build("int"),
+            "a": exp.DataType.build("int"),
+        }
 
     adapter.columns = columns  # type: ignore
     adapter.table_exists = lambda _: True  # type: ignore
@@ -1702,11 +1701,10 @@ def test_on_destructive_change_runtime_check(
                 "c": exp.DataType.build("int"),
                 "b": exp.DataType.build("int"),
             }
-        else:
-            return {
-                "c": exp.DataType.build("int"),
-                "a": exp.DataType.build("int"),
-            }
+        return {
+            "c": exp.DataType.build("int"),
+            "a": exp.DataType.build("int"),
+        }
 
     adapter.columns = columns  # type: ignore
 
@@ -3892,11 +3890,10 @@ def test_multiple_engine_migration(mocker: MockerFixture, adapter_mock, make_sna
                 "c": exp.DataType.build("int"),
                 "b": exp.DataType.build("int"),
             }
-        else:
-            return {
-                "c": exp.DataType.build("int"),
-                "a": exp.DataType.build("int"),
-            }
+        return {
+            "c": exp.DataType.build("int"),
+            "a": exp.DataType.build("int"),
+        }
 
     adapter.columns = columns  # type: ignore
     adapter_mock.columns = columns  # type: ignore

@@ -147,13 +147,12 @@ def test_alter_table(make_mocked_engine_adapter: t.Callable):
                 "complex": exp.DataType.build("STRUCT<complex_a: INT, complex_b: STRING>"),
                 "ds": exp.DataType.build("STRING"),
             }
-        else:
-            return {
-                "id": exp.DataType.build("BIGINT"),
-                "a": exp.DataType.build("STRING"),
-                "complex": exp.DataType.build("STRUCT<complex_a: INT>"),
-                "ds": exp.DataType.build("INT"),
-            }
+        return {
+            "id": exp.DataType.build("BIGINT"),
+            "a": exp.DataType.build("STRING"),
+            "complex": exp.DataType.build("STRUCT<complex_a: INT>"),
+            "ds": exp.DataType.build("INT"),
+        }
 
     adapter.columns = table_columns
 

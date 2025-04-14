@@ -671,8 +671,9 @@ class SnapshotEvaluator:
                     physical_properties=rendered_physical_properties,
                 )
 
-        with adapter.transaction(), adapter.session(
-            snapshot.model.render_session_properties(**render_statements_kwargs)
+        with (
+            adapter.transaction(),
+            adapter.session(snapshot.model.render_session_properties(**render_statements_kwargs)),
         ):
             wap_id: t.Optional[str] = None
             if (
@@ -724,7 +725,7 @@ class SnapshotEvaluator:
             # workaround for that would be to serialize pandas to disk and then read it back with Spark.
             # Note: We assume that if multiple things are yielded from `queries_or_dfs` that they are dataframes
             # and not SQL expressions.
-            elif (
+            if (
                 adapter.INSERT_OVERWRITE_STRATEGY
                 in (
                     InsertOverwriteStrategy.INSERT_OVERWRITE,
@@ -772,8 +773,9 @@ class SnapshotEvaluator:
             deployability_index=deployability_index,
         )
 
-        with adapter.transaction(), adapter.session(
-            snapshot.model.render_session_properties(**create_render_kwargs)
+        with (
+            adapter.transaction(),
+            adapter.session(snapshot.model.render_session_properties(**create_render_kwargs)),
         ):
             rendered_physical_properties = snapshot.model.render_physical_properties(
                 **create_render_kwargs
@@ -892,8 +894,9 @@ class SnapshotEvaluator:
                 runtime_stage=RuntimeStage.CREATING,
                 deployability_index=deployability_index,
             )
-            with adapter.transaction(), adapter.session(
-                snapshot.model.render_session_properties(**render_kwargs)
+            with (
+                adapter.transaction(),
+                adapter.session(snapshot.model.render_session_properties(**render_kwargs)),
             ):
                 self._execute_create(
                     snapshot=snapshot,

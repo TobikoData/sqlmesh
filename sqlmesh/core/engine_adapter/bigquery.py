@@ -602,9 +602,12 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
             raise SQLMeshError(
                 f"The partition expression '{partition_sql}' doesn't contain a column."
             )
-        with self.session({}), self.temp_table(
-            query_or_df, name=table_name, partitioned_by=partitioned_by
-        ) as temp_table_name:
+        with (
+            self.session({}),
+            self.temp_table(
+                query_or_df, name=table_name, partitioned_by=partitioned_by
+            ) as temp_table_name,
+        ):
             if columns_to_types is None or columns_to_types[
                 partition_column.name
             ] == exp.DataType.build("unknown"):
@@ -1158,7 +1161,7 @@ class _ErrorCounter:
 
         if isinstance(error, self.retryable_errors):
             return True
-        elif isinstance(error, Forbidden) and any(
+        if isinstance(error, Forbidden) and any(
             e["reason"] == "rateLimitExceeded" for e in error.errors
         ):
             return True

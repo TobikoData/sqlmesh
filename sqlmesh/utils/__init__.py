@@ -177,8 +177,7 @@ def sys_path(*paths: Path) -> t.Iterator[None]:
 def format_exception(exception: BaseException) -> t.List[str]:
     if sys.version_info < (3, 10):
         return traceback.format_exception(type(exception), exception, exception.__traceback__)  # type: ignore
-    else:
-        return traceback.format_exception(exception)  # type: ignore
+    return traceback.format_exception(exception)  # type: ignore
 
 
 def word_characters_only(s: str, replacement_char: str = "_") -> str:

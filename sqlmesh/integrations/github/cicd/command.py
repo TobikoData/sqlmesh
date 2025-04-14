@@ -219,7 +219,7 @@ def _run_all(controller: GithubController) -> None:
         if command.is_invalid:
             # Probably a comment unrelated to SQLMesh so we do nothing
             return
-        elif command.is_deploy_prod:
+        if command.is_deploy_prod:
             has_required_approval = True
         else:
             raise CICDBotError(f"Unsupported command: {command}")

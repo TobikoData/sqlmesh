@@ -505,8 +505,7 @@ def _refs(node: ManifestNode) -> t.Set[str]:
                 ref_name = f"{ref_name}_v{r.version}"
             result.add(ref_name)
         return result
-    else:
-        return {".".join(r) for r in node.refs}  # type: ignore
+    return {".".join(r) for r in node.refs}  # type: ignore
 
 
 def _sources(node: ManifestNode) -> t.Set[str]:

@@ -149,8 +149,7 @@ class PydanticModel(pydantic.BaseModel):
         if (PYDANTIC_MAJOR_VERSION, PYDANTIC_MINOR_VERSION) < (2, 6):
             if isinstance(other, pydantic.BaseModel):
                 return self.dict() == other.dict()
-            else:
-                return self.dict() == other
+            return self.dict() == other
         return super().__eq__(other)
 
     def __hash__(self) -> int:

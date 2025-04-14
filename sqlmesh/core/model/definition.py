@@ -2159,19 +2159,18 @@ def load_sql_based_model(
             time_column_format=time_column_format,
             **common_kwargs,
         )
-    else:
-        seed_properties = {
-            p.name.lower(): p.args.get("value") for p in common_kwargs.pop("kind").expressions
-        }
-        try:
-            return create_seed_model(
-                name,
-                SeedKind(**seed_properties),
-                **common_kwargs,
-            )
-        except Exception as ex:
-            raise_config_error(str(ex), path)
-            raise
+    seed_properties = {
+        p.name.lower(): p.args.get("value") for p in common_kwargs.pop("kind").expressions
+    }
+    try:
+        return create_seed_model(
+            name,
+            SeedKind(**seed_properties),
+            **common_kwargs,
+        )
+    except Exception as ex:
+        raise_config_error(str(ex), path)
+        raise
 
 
 def create_sql_model(
@@ -2565,7 +2564,7 @@ def _split_sql_model_statements(
     if not query_positions:
         return None, sql_statements, [], on_virtual_update, inline_audits
 
-    elif len(query_positions) > 1:
+    if len(query_positions) > 1:
         raise_config_error("Only one SELECT query is allowed per model", path)
 
     query, pos = query_positions[0]

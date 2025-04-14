@@ -167,10 +167,7 @@ def test_alter_table(
             return {
                 k: exp.DataType.build(v, dialect=adapter.dialect) for k, v in current_table.items()
             }
-        else:
-            return {
-                k: exp.DataType.build(v, dialect=adapter.dialect) for k, v in target_table.items()
-            }
+        return {k: exp.DataType.build(v, dialect=adapter.dialect) for k, v in target_table.items()}
 
     adapter.columns = table_columns  # type: ignore
 

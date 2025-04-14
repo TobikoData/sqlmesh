@@ -96,7 +96,7 @@ def cli(
         if ctx.invoked_subcommand in SKIP_CONTEXT_COMMANDS:
             ctx.obj = path
             return
-        elif ctx.invoked_subcommand in SKIP_LOAD_COMMANDS:
+        if ctx.invoked_subcommand in SKIP_LOAD_COMMANDS:
             load = False
 
     configs = load_configs(config, Context.CONFIG_TYPE, paths)

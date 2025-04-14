@@ -208,3 +208,8 @@ module = [
     "json_stream.*"
 ]
 ignore_missing_imports = true
+
+[tool.ruff.lint]
+select = [
+    "RET505",  
+]

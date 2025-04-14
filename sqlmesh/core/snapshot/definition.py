@@ -1243,7 +1243,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     def node_type(self) -> NodeType:
         if self.node.is_model:
             return NodeType.MODEL
-        elif self.node.is_audit:
+        if self.node.is_audit:
             return NodeType.AUDIT
         raise SQLMeshError(f"Snapshot {self.snapshot_id} has an unknown node type.")
 
