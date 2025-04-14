@@ -83,7 +83,7 @@ dev = [
     "pytest-xdist",
     "pytz",
     "redshift_connector",
-    "ruff~=0.7.0",
+    "ruff~=0.11.0",
     "snowflake-connector-python[pandas,secure-local-storage]>=3.0.2",
     "sqlalchemy-stubs",
     "trino",

@@ -881,9 +881,7 @@ def test_modules(sushi_test_project: Project):
     assert context.render("{{ modules.re.search('(?<=abc)def', 'abcdef').group(0) }}") == "def"
 
     # itertools
-    itertools_jinja = (
-        "{% for num in modules.itertools.accumulate([5]) %}" "{{ num }}" "{% endfor %}"
-    )
+    itertools_jinja = "{% for num in modules.itertools.accumulate([5]) %}{{ num }}{% endfor %}"
     assert context.render(itertools_jinja) == "5"
 
 
@@ -920,7 +918,7 @@ def test_column(sushi_test_project: Project):
     assert context.render("{{ api.Column }}") == "<class 'dbt.adapters.base.column.Column'>"
 
     jinja = (
-        "{% set col = api.Column('foo', 'integer') %}" "{{ col.is_integer() }} {{ col.is_string()}}"
+        "{% set col = api.Column('foo', 'integer') %}{{ col.is_integer() }} {{ col.is_string()}}"
     )
 
     assert context.render(jinja) == "True False"

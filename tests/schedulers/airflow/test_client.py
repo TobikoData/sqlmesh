@@ -107,7 +107,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
                         "clustered_by": [],
                         "cron": "@daily",
                         "dialect": "spark",
-                        "pre_statements": ["@DEF(key, " "'value')"],
+                        "pre_statements": ["@DEF(key, 'value')"],
                         "kind": {
                             "name": "INCREMENTAL_BY_TIME_RANGE",
                             "time_column": {"column": "`ds`"},

@@ -544,7 +544,7 @@ def format_evaluated_code_exception(
 
         error_match = re.search("^.*?Error: ", error_line)
         if error_match:
-            tb.append(f"{indent*2}  {error_line}")
+            tb.append(f"{indent * 2}  {error_line}")
             continue
 
         eval_code_match = re.search('File "<string>", line (.*), in (.*)', error_line)

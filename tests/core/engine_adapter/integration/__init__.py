@@ -290,7 +290,7 @@ class TestContext:
                 WHERE
                     n.nspname = '{schema_name}'
                     AND pgc.relname = '{table_name}'
-                    AND pgc.relkind = '{'v' if table_kind == "VIEW" else 'r'}'
+                    AND pgc.relkind = '{"v" if table_kind == "VIEW" else "r"}'
                 ;
             """
         elif self.dialect in ["mysql", "snowflake"]:
@@ -362,7 +362,7 @@ class TestContext:
                 WHERE 
                     c.relname = '{table_name}'
                     AND n.nspname= '{schema_name}'
-                    AND c.relkind = '{'v' if table_kind == "VIEW" else 'r'}'
+                    AND c.relkind = '{"v" if table_kind == "VIEW" else "r"}'
                 ;
             """
 
@@ -405,7 +405,7 @@ class TestContext:
                 WHERE
                     n.nspname = '{schema_name}'
                     AND pgc.relname = '{table_name}'
-                    AND pgc.relkind = '{'v' if table_kind == "VIEW" else 'r'}'
+                    AND pgc.relkind = '{"v" if table_kind == "VIEW" else "r"}'
                 ;
             """
         elif self.dialect in ["mysql", "snowflake", "trino"]:
@@ -471,7 +471,7 @@ class TestContext:
                 WHERE
                     n.nspname = '{schema_name}'
                     AND c.relname = '{table_name}' 
-                    AND c.relkind = '{'v' if table_kind == "VIEW" else 'r'}'
+                    AND c.relkind = '{"v" if table_kind == "VIEW" else "r"}'
                 ;
             """
 

@@ -279,7 +279,7 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
                             'database with name "memory" already exists' in str(e)
                             and path_options == ":memory:"
                         )
-                        and f"""database with name "{path_options.path.replace('md:', '')}" already exists"""
+                        and f"""database with name "{path_options.path.replace("md:", "")}" already exists"""
                         not in str(e)
                     ):
                         raise e
