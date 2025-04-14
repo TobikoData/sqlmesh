@@ -901,8 +901,7 @@ def test_alter_table(
     def table_columns(table_name: str) -> t.Dict[str, exp.DataType]:
         if table_name == current_table_name:
             return {k: exp.DataType.build(v) for k, v in current_table.items()}
-        else:
-            return {k: exp.DataType.build(v) for k, v in target_table.items()}
+        return {k: exp.DataType.build(v) for k, v in target_table.items()}
 
     adapter.columns = table_columns
 

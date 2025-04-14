@@ -346,8 +346,7 @@ class BaseExpressionRenderer:
                                     alias=node.alias or model.view_name,
                                     copy=False,
                                 )
-                            else:
-                                logger.warning("Failed to expand the nested model '%s'", name)
+                            logger.warning("Failed to expand the nested model '%s'", name)
                     return node
 
                 expression = expression.transform(_expand, copy=False)  # type: ignore

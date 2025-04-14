@@ -225,5 +225,4 @@ def get_start_date(load_ids: t.List[str]) -> str:
     if timestamps:
         start_timestamp = min(timestamps) - timedelta(days=1)
         return start_timestamp.strftime("%Y-%m-%d")
-    else:
-        return yesterday_ds()
+    return yesterday_ds()

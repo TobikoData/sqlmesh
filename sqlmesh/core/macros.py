@@ -281,7 +281,7 @@ class MacroEvaluator:
                     self.parse_one(node.sql(dialect=self.dialect, copy=False))
                     for node in transformed
                 ]
-            elif isinstance(transformed, exp.Expression):
+            if isinstance(transformed, exp.Expression):
                 return self.parse_one(transformed.sql(dialect=self.dialect, copy=False))
 
         return transformed
@@ -1265,7 +1265,7 @@ def resolve_template(
         if mode.lower() == "table":
             return exp.to_table(result, dialect=evaluator.dialect)
         return exp.Literal.string(result)
-    elif evaluator.runtime_stage != RuntimeStage.LOADING.value:
+    if evaluator.runtime_stage != RuntimeStage.LOADING.value:
         # only error if we are CREATING, EVALUATING or TESTING and @this_model is not present; this could indicate a bug
         # otherwise, for LOADING, it's a no-op
         raise SQLMeshError(
@@ -1391,7 +1391,7 @@ def _coerce(
                 return tuple(expr.expressions)
             if generic[-1] is ...:
                 return tuple(_coerce(expr, generic[0], dialect, path) for expr in expr.expressions)
-            elif len(generic) == len(expr.expressions):
+            if len(generic) == len(expr.expressions):
                 return tuple(
                     _coerce(expr, generic[i], dialect, path)
                     for i, expr in enumerate(expr.expressions)

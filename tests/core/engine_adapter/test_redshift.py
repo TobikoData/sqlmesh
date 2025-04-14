@@ -355,8 +355,7 @@ def test_alter_table_drop_column_cascade(adapter: t.Callable):
     def table_columns(table_name: str) -> t.Dict[str, exp.DataType]:
         if table_name == current_table_name:
             return {"id": exp.DataType.build("int"), "test_column": exp.DataType.build("int")}
-        else:
-            return {"id": exp.DataType.build("int")}
+        return {"id": exp.DataType.build("int")}
 
     adapter.columns = table_columns
 
@@ -376,11 +375,10 @@ def test_alter_table_precision_increase_varchar(adapter: t.Callable):
                 "id": exp.DataType.build("int"),
                 "test_column": exp.DataType.build("VARCHAR(10)"),
             }
-        else:
-            return {
-                "id": exp.DataType.build("int"),
-                "test_column": exp.DataType.build("VARCHAR(20)"),
-            }
+        return {
+            "id": exp.DataType.build("int"),
+            "test_column": exp.DataType.build("VARCHAR(20)"),
+        }
 
     adapter.columns = table_columns
 
@@ -400,11 +398,10 @@ def test_alter_table_precision_increase_decimal(adapter: t.Callable):
                 "id": exp.DataType.build("int"),
                 "test_column": exp.DataType.build("DECIMAL(10, 10)"),
             }
-        else:
-            return {
-                "id": exp.DataType.build("int"),
-                "test_column": exp.DataType.build("DECIMAL(25, 10)"),
-            }
+        return {
+            "id": exp.DataType.build("int"),
+            "test_column": exp.DataType.build("DECIMAL(25, 10)"),
+        }
 
     adapter.columns = table_columns
 

@@ -153,8 +153,7 @@ def test_alter_table_drop_column_cascade(make_mocked_engine_adapter: t.Callable)
     def table_columns(table_name: str) -> t.Dict[str, exp.DataType]:
         if table_name == current_table_name:
             return {"id": exp.DataType.build("int"), "test_column": exp.DataType.build("int")}
-        else:
-            return {"id": exp.DataType.build("int")}
+        return {"id": exp.DataType.build("int")}
 
     adapter.columns = table_columns
 

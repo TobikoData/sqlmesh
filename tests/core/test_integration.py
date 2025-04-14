@@ -4855,8 +4855,9 @@ def execute(
 
     # monkey-patch PythonModel to default to kind: View again
     # and ViewKind to allow python models again
-    with mock.patch.object(ViewKind, "supports_python_models", return_value=True), mock.patch(
-        "sqlmesh.core.model.definition.PythonModel", OldPythonModel
+    with (
+        mock.patch.object(ViewKind, "supports_python_models", return_value=True),
+        mock.patch("sqlmesh.core.model.definition.PythonModel", OldPythonModel),
     ):
         context.load()
 

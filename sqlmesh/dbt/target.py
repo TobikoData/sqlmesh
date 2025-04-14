@@ -85,23 +85,23 @@ class TargetConfig(abc.ABC, DbtConfig):
         db_type = data["type"]
         if db_type == "databricks":
             return DatabricksConfig(**data)
-        elif db_type == "duckdb":
+        if db_type == "duckdb":
             return DuckDbConfig(**data)
-        elif db_type == "postgres":
+        if db_type == "postgres":
             return PostgresConfig(**data)
-        elif db_type == "redshift":
+        if db_type == "redshift":
             return RedshiftConfig(**data)
-        elif db_type == "snowflake":
+        if db_type == "snowflake":
             return SnowflakeConfig(**data)
-        elif db_type == "bigquery":
+        if db_type == "bigquery":
             return BigQueryConfig(**data)
-        elif db_type == "sqlserver":
+        if db_type == "sqlserver":
             return MSSQLConfig(**data)
-        elif db_type == "trino":
+        if db_type == "trino":
             return TrinoConfig(**data)
-        elif db_type == "clickhouse":
+        if db_type == "clickhouse":
             return ClickhouseConfig(**data)
-        elif db_type == "athena":
+        if db_type == "athena":
             return AthenaConfig(**data)
 
         raise ConfigError(f"{db_type} not supported.")
@@ -424,8 +424,7 @@ class RedshiftConfig(TargetConfig):
             from dbt.adapters.redshift import RedshiftColumn  # type: ignore
 
             return RedshiftColumn
-        else:
-            return super(RedshiftConfig, cls).column_class
+        return super(RedshiftConfig, cls).column_class
 
     def to_sqlmesh(self, **kwargs: t.Any) -> ConnectionConfig:
         return RedshiftConnectionConfig(

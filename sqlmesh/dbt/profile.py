@@ -73,7 +73,7 @@ class Profile:
         path = Path(project_root, dir, cls.PROFILE_FILE)
         if path.exists():
             return path
-        elif dir:
+        if dir:
             return None
 
         path = Path(Path.home(), ".dbt", cls.PROFILE_FILE)

@@ -181,8 +181,7 @@ class SushiDataValidator:
             assert list(results["event_date"].values()) == expected_dates
 
             return results
-        else:
-            raise NotImplementedError(f"Unknown model_name: {model_name}")
+        raise NotImplementedError(f"Unknown model_name: {model_name}")
 
 
 def pytest_collection_modifyitems(items, *args, **kwargs):

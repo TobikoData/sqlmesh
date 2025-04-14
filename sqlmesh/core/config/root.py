@@ -255,12 +255,9 @@ class Config(BaseConfig):
                 raise ConfigError(f"Missing gateway with name '{name}'.")
 
             return self.gateways[name]
-        else:
-            if name is not None:
-                raise ConfigError(
-                    "Gateway name is not supported when only one gateway is configured."
-                )
-            return self.gateways
+        if name is not None:
+            raise ConfigError("Gateway name is not supported when only one gateway is configured.")
+        return self.gateways
 
     def get_connection(self, gateway_name: t.Optional[str] = None) -> ConnectionConfig:
         return self.get_gateway(gateway_name).connection or self.default_connection
