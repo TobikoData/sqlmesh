@@ -29,8 +29,8 @@ from sqlmesh.core.model.common import (
     expression_validator,
     make_python_env,
     parse_dependencies,
-    python_env_payloads,
     single_value_or_tuple,
+    sorted_python_env_payloads,
 )
 from sqlmesh.core.model.meta import ModelMeta, FunctionCall
 from sqlmesh.core.model.kind import (
@@ -258,7 +258,7 @@ class _Model(ModelMeta, frozen=True):
         jinja_expressions = []
         python_expressions = []
         if include_python:
-            python_env = d.PythonCode(expressions=python_env_payloads(self.sorted_python_env))
+            python_env = d.PythonCode(expressions=sorted_python_env_payloads(self.python_env))
             if python_env.expressions:
                 python_expressions.append(python_env)
 

@@ -16,7 +16,8 @@ from sqlmesh.core.model.common import (
     default_catalog_validator,
     depends_on_validator,
     expression_validator,
-    python_env_payloads,
+    sort_python_env,
+    sorted_python_env_payloads,
 )
 from sqlmesh.core.model.common import make_python_env, single_value_or_tuple
 from sqlmesh.core.node import _Node
@@ -237,7 +238,7 @@ class StandaloneAudit(_Node, AuditMixin):
     @property
     def sorted_python_env(self) -> t.List[t.Tuple[str, Executable]]:
         """Returns the python env sorted by executable kind and then var name."""
-        return sorted(self.python_env.items(), key=lambda x: (x[1].kind, x[0]))
+        return sort_python_env(self.python_env)
 
     @property
     def data_hash(self) -> str:
@@ -338,7 +339,7 @@ class StandaloneAudit(_Node, AuditMixin):
         jinja_expressions = []
         python_expressions = []
         if include_python:
-            python_env = d.PythonCode(expressions=python_env_payloads(self.sorted_python_env))
+            python_env = d.PythonCode(expressions=sorted_python_env_payloads(self.python_env))
             if python_env.expressions:
                 python_expressions.append(python_env)
 

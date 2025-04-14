@@ -19,7 +19,7 @@ from functools import cached_property
 from sqlmesh.core import constants as c
 from sqlmesh.core.console import get_console
 from sqlmesh.core.macros import RuntimeStage
-from sqlmesh.core.model.common import python_env_payloads
+from sqlmesh.core.model.common import sorted_python_env_payloads
 from sqlmesh.core.snapshot import Snapshot, SnapshotId, SnapshotTableInfo
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
@@ -347,15 +347,13 @@ class ContextDiff(PydanticModel):
                 expr
                 for statement in statements
                 for expr in (
-                    python_env_payloads(
-                        sorted(statement.python_env.items(), key=lambda x: (x[1].kind, x[0]))
-                    )
+                    sorted_python_env_payloads(statement.python_env)
                     if attr == "python_env"
                     else getattr(statement, attr)
                 )
             ]
 
-        def format_diff(attribute: str) -> t.Optional[t.Tuple[str, str]]:
+        def compute_diff(attribute: str) -> t.Optional[t.Tuple[str, str]]:
             previous = extract_statements(self.previous_environment_statements, attribute)
             current = extract_statements(self.environment_statements, attribute)
 
@@ -363,11 +361,8 @@ class ContextDiff(PydanticModel):
                 return None
 
             diff_lines = list(ndiff(previous, current))
-            diff_text = (
-                f"=== {attribute} ===\n"
-                if not attribute == "python_env"
-                else "=== dependencies ===\n"
-            )
+            diff_text = attribute if not attribute == "python_env" else "dependencies"
+            diff_text += ":\n"
 
             if any(line.startswith(("-", "+")) for line in diff_lines):
                 diff_text += "  " + "\n  ".join(diff_lines) + "\n"
@@ -381,7 +376,7 @@ class ContextDiff(PydanticModel):
                 RuntimeStage.AFTER_ALL.value,
                 "python_env",
             ]
-            if (diff := format_diff(attribute)) is not None
+            if (diff := compute_diff(attribute)) is not None
         ]
 
     @property

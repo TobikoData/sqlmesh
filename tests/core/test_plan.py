@@ -3024,12 +3024,12 @@ def test_plan_environment_statements_diff(make_snapshot):
     output = console_output.getvalue()
     stripped = strip_ansi_codes(output)
     expected_output = (
-        "=== before_all ===\n"
+        "before_all:\n"
         "  + CREATE OR REPLACE TABLE table_1 AS SELECT 1\n"
         "  + @test_macro()\n\n"
-        "=== after_all ===\n"
+        "after_all:\n"
         "  + CREATE OR REPLACE TABLE table_2 AS SELECT 2\n\n"
-        "=== dependencies ===\n"
+        "dependencies:\n"
         "  + def test_macro(evaluator):\n"
         "    return 'one'"
     )
