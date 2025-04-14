@@ -5,7 +5,6 @@ import typing as t
 from decimal import Decimal
 from os import getenv
 from pathlib import Path
-import re
 
 from ruamel import yaml
 
@@ -16,9 +15,6 @@ from sqlmesh.utils.jinja import ENVIRONMENT, create_var
 JINJA_METHODS = {
     "env_var": lambda key, default=None: getenv(key, default),
 }
-
-
-GATEWAY_PATTERN = re.compile(r"gateway:\s*([^\s]+)")
 
 
 def YAML(typ: t.Optional[str] = "safe") -> yaml.YAML:
@@ -40,24 +36,14 @@ def load(
     render_jinja: bool = True,
     allow_duplicate_keys: bool = False,
     variables: t.Optional[t.Dict[str, t.Any]] = None,
-    get_variables: t.Callable[[t.Optional[str]], t.Dict[str, str]] | None = None,
 ) -> t.Dict:
     """Loads a YAML object from either a raw string or a file."""
     path: t.Optional[Path] = None
-    yaml = YAML()
 
     if isinstance(source, Path):
         path = source
         with open(source, "r", encoding="utf-8") as file:
             source = file.read()
-
-    if get_variables:
-        # If the user has specified a quoted/escaped gateway (e.g. "gateway: 'ma\tin'"), we need to
-        # parse it as YAML to match the gateway name stored in the config
-        gateway_line = GATEWAY_PATTERN.search(source)
-        gateway = yaml.load(gateway_line.group(0))["gateway"] if gateway_line else None
-
-        variables = get_variables(gateway)
 
     if render_jinja:
         source = ENVIRONMENT.from_string(source).render(
@@ -67,6 +53,7 @@ def load(
             }
         )
 
+    yaml = YAML()
     yaml.allow_duplicate_keys = allow_duplicate_keys
     contents = yaml.load(source)
     if contents is None:

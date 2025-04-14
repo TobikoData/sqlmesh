@@ -6,6 +6,7 @@ import itertools
 import linecache
 import logging
 import os
+import re
 import typing as t
 from collections import Counter, defaultdict
 from dataclasses import dataclass
@@ -45,6 +46,8 @@ if t.TYPE_CHECKING:
 
 
 logger = logging.getLogger(__name__)
+
+GATEWAY_PATTERN = re.compile(r"gateway:\s*([^\s]+)")
 
 
 @dataclass
@@ -690,7 +693,15 @@ class SqlMeshLoader(Loader):
     def _load_model_test_file(self, path: Path) -> dict[str, ModelTestMetadata]:
         """Load a single model test file."""
         model_test_metadata = {}
-        contents = yaml_load(path, get_variables=self._get_variables)
+
+        with open(path, "r", encoding="utf-8") as file:
+            source = file.read()
+            # If the user has specified a quoted/escaped gateway (e.g. "gateway: 'ma\tin'"), we need to
+            # parse it as YAML to match the gateway name stored in the config
+            gateway_line = GATEWAY_PATTERN.search(source)
+            gateway = YAML().load(gateway_line.group(0))["gateway"] if gateway_line else None
+
+        contents = yaml_load(source, variables=self._get_variables(gateway))
 
         for test_name, value in contents.items():
             model_test_metadata[test_name] = ModelTestMetadata(
