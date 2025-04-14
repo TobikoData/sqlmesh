@@ -16,7 +16,7 @@ import uuid
 from collections import defaultdict
 from contextlib import contextmanager
 from copy import deepcopy
-from enum import IntEnum
+from enum import IntEnum, Enum
 from functools import lru_cache, reduce, wraps
 from pathlib import Path
 
@@ -346,3 +346,21 @@ class Verbosity(IntEnum):
     DEFAULT = 0
     VERBOSE = 1
     VERY_VERBOSE = 2
+
+
+class CompletionStatus(Enum):
+    SUCCESS = "success"
+    FAILURE = "failure"
+    NOTHING_TO_DO = "nothing_to_do"
+
+    @property
+    def is_success(self) -> bool:
+        return self == CompletionStatus.SUCCESS
+
+    @property
+    def is_failure(self) -> bool:
+        return self == CompletionStatus.FAILURE
+
+    @property
+    def is_nothing_to_do(self) -> bool:
+        return self == CompletionStatus.NOTHING_TO_DO

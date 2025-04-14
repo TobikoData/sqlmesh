@@ -1303,7 +1303,7 @@ class TerminalConsole(Console):
         ):
             self._print(
                 Tree(
-                    f"[bold]Differences from the `{context_diff.create_from if context_diff.is_new_environment else context_diff.environment}` environment:\n"
+                    f"\n[bold]Differences from the `{context_diff.create_from if context_diff.is_new_environment else context_diff.environment}` environment:\n"
                 )
             )
 

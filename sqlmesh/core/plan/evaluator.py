@@ -37,6 +37,7 @@ from sqlmesh.core.snapshot import (
     SnapshotInfoLike,
     SnapshotTableInfo,
 )
+from sqlmesh.utils import CompletionStatus
 from sqlmesh.core.state_sync import StateSync
 from sqlmesh.core.state_sync.base import PromotionResult
 from sqlmesh.core.user import User
@@ -133,10 +134,14 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                 execution_time=plan.execution_time,
             )
 
-            self._push(plan, snapshots, deployability_index_for_creation)
+            push_completion_status = self._push(plan, snapshots, deployability_index_for_creation)
+            if push_completion_status.is_nothing_to_do:
+                self.console.log_status_update(
+                    "\n[green]SKIP: No physical layer updates to perform[/green]\n"
+                )
             update_intervals_for_new_snapshots(plan.new_snapshots, self.state_sync)
             self._restate(plan, snapshots_by_name)
-            self._backfill(
+            first_bf_completion_status = self._backfill(
                 plan,
                 snapshots_by_name,
                 before_promote_snapshots,
@@ -146,19 +151,21 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             promotion_result = self._promote(
                 plan, snapshots, before_promote_snapshots, deployability_index_for_creation
             )
-            self._backfill(
+            second_bf_completion_status = self._backfill(
                 plan,
                 snapshots_by_name,
                 after_promote_snapshots,
                 deployability_index_for_evaluation,
                 circuit_breaker=circuit_breaker,
             )
+            if (
+                first_bf_completion_status.is_nothing_to_do
+                and second_bf_completion_status.is_nothing_to_do
+            ):
+                self.console.log_status_update("[green]SKIP: No model batches to execute[/green]\n")
             self._update_views(
                 plan, snapshots, promotion_result, deployability_index_for_evaluation
             )
-
-            if not plan.requires_backfill:
-                self.console.log_success("Virtual Update executed successfully")
 
             execute_environment_statements(
                 adapter=self.snapshot_evaluator.adapter,
@@ -187,7 +194,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         selected_snapshots: t.Set[str],
         deployability_index: DeployabilityIndex,
         circuit_breaker: t.Optional[t.Callable[[], bool]] = None,
-    ) -> None:
+    ) -> CompletionStatus:
         """Backfill missing intervals for snapshots that are part of the given plan.
 
         Args:
@@ -212,10 +219,10 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                     )
                 )
             self.state_sync.add_snapshots_intervals(intervals_to_add)
-            return
+            return CompletionStatus.NOTHING_TO_DO
 
         if not plan.requires_backfill or not selected_snapshots:
-            return
+            return CompletionStatus.NOTHING_TO_DO
 
         scheduler = self.create_scheduler(snapshots_by_name.values())
         completion_status = scheduler.run(
@@ -236,12 +243,14 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         if completion_status.is_failure:
             raise PlanError("Plan application failed.")
 
+        return completion_status
+
     def _push(
         self,
         plan: EvaluatablePlan,
         snapshots: t.Dict[SnapshotId, Snapshot],
         deployability_index: t.Optional[DeployabilityIndex] = None,
-    ) -> None:
+    ) -> CompletionStatus:
         """Push the snapshots to the state sync.
 
         As a part of plan pushing, snapshot tables are created.
@@ -268,10 +277,10 @@ class BuiltInPlanEvaluator(PlanEvaluator):
 
         snapshots_to_create = [s for s in snapshots.values() if _should_create(s)]
 
-        completed = False
+        completion_status = None
         progress_stopped = False
         try:
-            self.snapshot_evaluator.create(
+            completion_status = self.snapshot_evaluator.create(
                 snapshots_to_create,
                 snapshots,
                 allow_destructive_snapshots=plan.allow_destructive_models,
@@ -281,7 +290,6 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                 ),
                 on_complete=self.console.update_creation_progress,
             )
-            completed = True
         except NodeExecutionFailedError as ex:
             self.console.stop_creation_progress(success=False)
             progress_stopped = True
@@ -292,13 +300,16 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             raise PlanError("Plan application failed.")
         finally:
             if not progress_stopped:
-                self.console.stop_creation_progress(success=completed)
+                self.console.stop_creation_progress(
+                    success=completion_status is not None and completion_status.is_success
+                )
 
         self.state_sync.push_snapshots(plan.new_snapshots)
 
         analytics.collector.on_snapshots_created(
             new_snapshots=plan.new_snapshots, plan_id=plan.plan_id
         )
+        return completion_status
 
     def _promote(
         self,
