@@ -39,7 +39,12 @@ from sqlmesh.utils.date import (
     yesterday,
 )
 from sqlmesh.utils.errors import SQLMeshError, SignalEvalError
-from sqlmesh.utils.metaprogramming import prepare_env, print_exception
+from sqlmesh.utils.metaprogramming import (
+    prepare_env,
+    print_exception,
+    format_evaluated_code_exception,
+    Executable,
+)
 from sqlmesh.utils.hashing import hash_data
 from sqlmesh.utils.pydantic import PydanticModel, field_validator
 
@@ -962,6 +967,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
                     env[signal_name],
                     intervals,
                     context,
+                    python_env=python_env,
                     dialect=self.model.dialect,
                     path=self.model._path,
                     kwargs=kwargs,
@@ -2153,6 +2159,7 @@ def _check_ready_intervals(
     check: t.Callable,
     intervals: Intervals,
     context: ExecutionContext,
+    python_env: t.Dict[str, Executable],
     dialect: DialectType = None,
     path: Path = Path(),
     kwargs: t.Optional[t.Dict] = None,
@@ -2172,7 +2179,7 @@ def _check_ready_intervals(
                 context=context,
             )
         except Exception as ex:
-            raise SignalEvalError("Error evaluating signal") from ex
+            raise SignalEvalError(format_evaluated_code_exception(ex, python_env))
 
         if isinstance(ready_intervals, bool):
             if not ready_intervals:

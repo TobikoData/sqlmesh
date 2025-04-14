@@ -539,7 +539,9 @@ def format_evaluated_code_exception(
     for error_line in format_exception(exception):
         traceback_match = error_line.startswith("Traceback (most recent call last):")
         model_def_match = re.search('File ".*?core/model/definition.py', error_line)
-        if traceback_match or model_def_match:
+        snapshot_def_match = re.search('File ".*?core/snapshot/definition.py', error_line)
+        core_macros_match = re.search('File ".*?core/macros.py', error_line)
+        if traceback_match or model_def_match or snapshot_def_match or core_macros_match:
             continue
 
         error_match = re.search("^.*?Error: ", error_line)

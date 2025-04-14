@@ -2499,7 +2499,10 @@ def test_contiguous_intervals():
 
 def test_check_ready_intervals(mocker: MockerFixture):
     def assert_always_signal(intervals):
-        assert _check_ready_intervals(lambda _: True, intervals, mocker.Mock()) == intervals
+        assert (
+            _check_ready_intervals(lambda _: True, intervals, mocker.Mock(), mocker.Mock())
+            == intervals
+        )
 
     assert_always_signal([])
     assert_always_signal([(0, 1)])
@@ -2507,7 +2510,9 @@ def test_check_ready_intervals(mocker: MockerFixture):
     assert_always_signal([(0, 1), (2, 3)])
 
     def assert_never_signal(intervals):
-        assert _check_ready_intervals(lambda _: False, intervals, mocker.Mock()) == []
+        assert (
+            _check_ready_intervals(lambda _: False, intervals, mocker.Mock(), mocker.Mock()) == []
+        )
 
     assert_never_signal([])
     assert_never_signal([(0, 1)])
@@ -2515,7 +2520,7 @@ def test_check_ready_intervals(mocker: MockerFixture):
     assert_never_signal([(0, 1), (2, 3)])
 
     def assert_empty_signal(intervals):
-        assert _check_ready_intervals(lambda _: [], intervals, mocker.Mock()) == []
+        assert _check_ready_intervals(lambda _: [], intervals, mocker.Mock(), mocker.Mock()) == []
 
     assert_empty_signal([])
     assert_empty_signal([(0, 1)])
@@ -2532,7 +2537,7 @@ def test_check_ready_intervals(mocker: MockerFixture):
     ):
         mock = mocker.Mock()
         mock.side_effect = [to_intervals(r) for r in ready]
-        _check_ready_intervals(mock, intervals, mocker.Mock()) == expected
+        _check_ready_intervals(mock, intervals, mocker.Mock(), mocker.Mock()) == expected
 
     assert_check_intervals([], [], [])
     assert_check_intervals([(0, 1)], [[]], [])
@@ -2571,15 +2576,14 @@ def test_check_ready_intervals(mocker: MockerFixture):
         [[(0, 1)], [(3, 4)]],
         [(0, 1), (3, 4)],
     )
-    with pytest.raises(SignalEvalError) as excinfo:
+
+    with pytest.raises(SignalEvalError):
         _check_ready_intervals(
             lambda _: (_ for _ in ()).throw(MemoryError("Some exception")),
             [(0, 1), (1, 2)],
             mocker.Mock(),
+            mocker.Mock(),
         )
-
-    assert isinstance(excinfo.value.__cause__, MemoryError)
-    assert str(excinfo.value.__cause__) == "Some exception"
 
 
 @pytest.mark.parametrize(
