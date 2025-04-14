@@ -2363,7 +2363,7 @@ test_example_full_model2:
     results = context.test()
     assert len(results.successes) == 3
 
-    # Case 1: The "new_test.yaml" should amount to 2 subtests
+    # Case 2: The "new_test.yaml" should amount to 2 subtests
     results = context.test(tests=[f"{test_file}"])
     assert len(results.successes) == 2
 
