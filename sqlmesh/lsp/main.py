@@ -32,7 +32,6 @@ class SQLMeshLanguageServer:
         self.server = LanguageServer(server_name, version)
         self.context_class = context_class
         self.context: t.Optional[Context] = None
-        self.file_map: t.Dict[str, t.Union[Model, ModelAudit]] = {}
 
         # Register LSP features (e.g., formatting, hover, etc.)
         self._register_features()
@@ -83,18 +82,6 @@ class SQLMeshLanguageServer:
         # If the context is already loaded, check if this document belongs to it.
         if self.context is not None:
             self.context.load()  # Reload or refresh context
-            if document.uri in self.file_map:
-                return document
-
-            # Try to match the document path with existing models/audits
-            for model in itertools.chain(
-                self.context._models.values(), self.context._audits.values()
-            ):
-                if model._path is None:
-                    continue
-                if model._path.resolve() == Path(document.path):
-                    self.file_map[document.uri] = model
-                    return document
             return document
 
         # No context yet: try to find config and load it
