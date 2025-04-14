@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""A Language Server Protocol (LSP) server for SQL with SQLMesh integration."""
+"""A Language Server Protocol (LSP) server for SQL with SQLMesh integration, refactored without globals."""
 
 import itertools
 import logging
@@ -7,90 +7,128 @@ import typing as t
 from contextlib import suppress
 from pathlib import Path
 
-from sqlmesh.core.audit.definition import ModelAudit
-from sqlmesh.core.context import Context
 from lsprotocol import types
 from pygls.server import LanguageServer
 from pygls.workspace import TextDocument
+
 from sqlmesh._version import __version__
+from sqlmesh.core.audit.definition import ModelAudit
+from sqlmesh.core.context import Context
 from sqlmesh.core.model import Model
 
-logger = logging.getLogger(__name__)
 
-GLOBAL_CONTEXT: t.Optional[Context] = None
-FILE_MAP: t.Dict[str, t.Union[Model, ModelAudit]] = {}
+class SQLMeshLanguageServer:
+    def __init__(
+        self,
+        context_class: t.Type[Context],
+        server_name: str = "sqlmesh_lsp",
+        version: str = __version__,
+    ):
+        """
+        :param context_class: A class that inherits from `Context`.
+        :param server_name: Name for the language server.
+        :param version: Version string.
+        """
+        self.server = LanguageServer(server_name, version)
+        self.context_class = context_class
+        self.context: t.Optional[Context] = None
+        self.file_map: t.Dict[str, t.Union[Model, ModelAudit]] = {}
 
+        # Register LSP features (e.g., formatting, hover, etc.)
+        self._register_features()
 
-server = LanguageServer("sqlmesh_lsp", __version__)
+    def _register_features(self) -> None:
+        """Register LSP features on the internal LanguageServer instance."""
 
-
-def ensure_context_for_document(document: TextDocument) -> TextDocument:
-    """Ensure that a context exists for the given document if applicable by searching for a config.py or config.yml file in the parent directories."""
-    # If the context is already loaded, return the document, if it is part of the same context
-    global GLOBAL_CONTEXT, FILE_MAP
-    if GLOBAL_CONTEXT is not None:
-        GLOBAL_CONTEXT.load()
-        if document.uri in FILE_MAP:
-            return document
-        for model in itertools.chain(
-            GLOBAL_CONTEXT._models.values(), GLOBAL_CONTEXT._audits.values()
-        ):
-            if model._path is None:
-                continue
-            path = model._path.resolve()
-            if path == document.path:
-                FILE_MAP[document.uri] = model
-                return document
-        return document
-
-    # If there is no context, load the context and then call this function again
-    path = Path(document.path).resolve()
-    if path.suffix not in (".sql", ".py"):
-        return document
-    loaded = False
-    while path.parents and not loaded:
-        for ext in ("py", "yml", "yaml"):
-            config_path = path / f"config.{ext}"
-            if config_path.exists():
-                with suppress(Exception):
-                    GLOBAL_CONTEXT = Context(paths=[path])
-                    server.show_message(f"Context loaded for: {path}")
-                    loaded = True
-                    return ensure_context_for_document(document)
-        path = path.parent
-
-    return document
-
-
-@server.feature(types.TEXT_DOCUMENT_FORMATTING)
-def formatting(
-    ls: LanguageServer, params: types.DocumentFormattingParams
-) -> t.List[types.TextEdit]:
-    """Format the document using SQLMesh format_model_expressions."""
-    try:
-        document = ensure_context_for_document(ls.workspace.get_document(params.text_document.uri))
-        context = GLOBAL_CONTEXT
-        if context is None:
-            raise Exception(f"No context found for document: {document.path}")
-        context.format(paths=(Path(document.path),))
-        with open(document.path, "r+", encoding="utf-8") as file:
-            return [
-                types.TextEdit(
-                    range=types.Range(
-                        types.Position(0, 0),
-                        types.Position(len(document.lines), len(document.lines[-1])),
-                    ),
-                    new_text=file.read(),
+        @self.server.feature(types.TEXT_DOCUMENT_FORMATTING)
+        def formatting(
+            ls: LanguageServer, params: types.DocumentFormattingParams
+        ) -> t.List[types.TextEdit]:
+            """Format the document using SQLMesh `format_model_expressions`."""
+            try:
+                document = self.ensure_context_for_document(
+                    ls.workspace.get_document(params.text_document.uri)
                 )
-            ]
-    except Exception as e:
-        ls.show_message(f"Error formatting SQL: {e}", types.MessageType.Error)
-        return []
+
+                if self.context is None:
+                    raise RuntimeError(f"No context found for document: {document.path}")
+
+                # Perform formatting using the loaded context
+                self.context.format(paths=(Path(document.path),))
+                with open(document.path, "r+", encoding="utf-8") as file:
+                    new_text = file.read()
+
+                # Return a single edit that replaces the entire file.
+                return [
+                    types.TextEdit(
+                        range=types.Range(
+                            start=types.Position(line=0, character=0),
+                            end=types.Position(
+                                line=len(document.lines),
+                                character=len(document.lines[-1]) if document.lines else 0,
+                            ),
+                        ),
+                        new_text=new_text,
+                    )
+                ]
+            except Exception as e:
+                ls.show_message(f"Error formatting SQL: {e}", types.MessageType.Error)
+                return []
+
+    def ensure_context_for_document(self, document: TextDocument) -> TextDocument:
+        """
+        Ensure that a context exists for the given document if applicable by searching
+        for a config.py or config.yml file in the parent directories.
+        """
+        # If the context is already loaded, check if this document belongs to it.
+        if self.context is not None:
+            self.context.load()  # Reload or refresh context
+            if document.uri in self.file_map:
+                return document
+
+            # Try to match the document path with existing models/audits
+            for model in itertools.chain(
+                self.context._models.values(), self.context._audits.values()
+            ):
+                if model._path is None:
+                    continue
+                if model._path.resolve() == Path(document.path):
+                    self.file_map[document.uri] = model
+                    return document
+            return document
+
+        # No context yet: try to find config and load it
+        path = Path(document.path).resolve()
+        if path.suffix not in (".sql", ".py"):
+            return document
+
+        loaded = False
+        # Ascend directories to look for config
+        while path.parents and not loaded:
+            for ext in ("py", "yml", "yaml"):
+                config_path = path / f"config.{ext}"
+                if config_path.exists():
+                    with suppress(Exception):
+                        # Use user-provided instantiator to build the context
+                        self.context = self.context_class(paths=[path])
+                        self.server.show_message(f"Context loaded for: {path}")
+                        loaded = True
+                        # Re-check context for document now that it's loaded
+                        return self.ensure_context_for_document(document)
+            path = path.parent
+
+        return document
+
+    def start(self) -> None:
+        """Start the server with I/O transport."""
+        logging.basicConfig(level=logging.DEBUG)
+        self.server.start_io()
 
 
 def main() -> None:
-    logging.basicConfig(level=logging.DEBUG)
-    server.start_io()
+    # Example instantiator that just uses the same signature as your original `Context` usage.
+    sqlmesh_server = SQLMeshLanguageServer(context_class=Context)
+    sqlmesh_server.start()
 
 
 if __name__ == "__main__":
