@@ -82,8 +82,6 @@ docker compose exec apply-executor /app/pex executor apply --check
 docker compose exec run-executor /app/pex executor run --check
 ```
 
-Check for exit code 0 using `echo $?` to confirm the executors are healthy.
-
 Example successful output:
 
 ```bash
@@ -91,6 +89,8 @@ Example successful output:
 2025-04-09 21:24:49,873 - MainThread - httpx - INFO - HTTP Request: GET https://cloud.tobikodata.com/sqlmesh/<YOUR ORG>/<YOUR PROJECT>/api/state-sync/enterprise-version/upgrade "HTTP/1.1 200 OK" (_client.py:1025)
 2025-04-09 21:24:49,889 - MainThread - tobikodata.tcloud.installer - INFO - Executor is installed (installer.py:180)
 ```
+
+In addition, ensure the executors are healthy by running `echo $?` to confirm the check command returned exit code 0.
 
 ## Stopping the executors
 

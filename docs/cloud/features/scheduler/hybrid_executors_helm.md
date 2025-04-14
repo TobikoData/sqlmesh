@@ -265,6 +265,21 @@ run:
   replicaCount: 2
 ```
 
+## Defining Custom Environment Variables
+
+If there are additional environment variables that are required to run your project, you will want to define them for both the apply and run executors. 
+
+```yaml
+apply:
+  extraEnvVars:
+    - name: MY_CUSTOM_ENV_VAR
+      value: "my_value"
+run:
+  extraEnvVars:
+    - name: MY_CUSTOM_ENV_VAR
+      value: "my_value"
+```
+
 ## Customizing resources
 
 You can customize CPU, memory, and ephemeral-storage for each executor. This sets the resources for the `apply` executor:
