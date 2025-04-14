@@ -2319,7 +2319,6 @@ def test_number_of_tests_found(tmp_path: Path) -> None:
         """
 test_example_full_model1:
   model: sqlmesh_example.full_model
-  description: This is an invalid test
   inputs:
     sqlmesh_example.incremental_model:
       rows:
@@ -2339,7 +2338,6 @@ test_example_full_model1:
         
 test_example_full_model2:
   model: sqlmesh_example.full_model
-  description: This is an invalid test
   inputs:
     sqlmesh_example.incremental_model:
       rows:

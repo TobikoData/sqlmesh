@@ -293,7 +293,7 @@ class Loader(abc.ABC):
         """Loads user linting rules"""
         return RuleSet()
 
-    def _load_model_tests(
+    def load_model_tests(
         self, tests: t.Optional[t.List[str]] = None, patterns: list[str] | None = None
     ) -> t.List[ModelTestMetadata]:
         """Loads YAML-based model tests"""
@@ -699,21 +699,21 @@ class SqlMeshLoader(Loader):
 
         return model_test_metadata
 
-    def _load_model_tests(
+    def load_model_tests(
         self, tests: t.Optional[t.List[str]] = None, patterns: list[str] | None = None
     ) -> t.List[ModelTestMetadata]:
         """Loads YAML-based model tests"""
-        test_meta: t.List[ModelTestMetadata] = []
+        test_meta_list: t.List[ModelTestMetadata] = []
 
         if tests:
             for test in tests:
                 filename, test_name = test.split("::", maxsplit=1) if "::" in test else (test, "")
 
-                test_file = self._load_model_test_file(Path(filename))
+                test_meta = self._load_model_test_file(Path(filename))
                 if test_name:
-                    test_meta.append(test_file[test_name])
+                    test_meta_list.append(test_meta[test_name])
                 else:
-                    test_meta.extend(test_file.values())
+                    test_meta_list.extend(test_meta.values())
         else:
             search_path = Path(self.config_path) / c.TESTS
 
@@ -727,12 +727,12 @@ class SqlMeshLoader(Loader):
                 ):
                     continue
 
-                test_meta.extend(self._load_model_test_file(yaml_file).values())
+                test_meta_list.extend(self._load_model_test_file(yaml_file).values())
 
         if patterns:
-            test_meta = filter_tests_by_patterns(test_meta, patterns)
+            test_meta_list = filter_tests_by_patterns(test_meta_list, patterns)
 
-        return test_meta
+        return test_meta_list
 
     class _Cache(CacheBase):
         def __init__(self, loader: SqlMeshLoader, config_path: Path):
