@@ -109,9 +109,8 @@ from sqlmesh.core.state_sync import (
 from sqlmesh.core.table_diff import TableDiff
 from sqlmesh.core.test import (
     ModelTextTestResult,
+    ModelTestMetadata,
     generate_test,
-    get_all_model_tests,
-    run_model_tests,
     run_tests,
 )
 from sqlmesh.core.user import User
@@ -1788,47 +1787,20 @@ class GenericContext(BaseContext, t.Generic[C]):
         if verbosity >= Verbosity.VERBOSE:
             pd.set_option("display.max_columns", None)
 
-        if tests:
-            result = run_model_tests(
-                tests=tests,
-                models=self._models,
-                config=self.config,
-                gateway=self.gateway,
-                dialect=self.default_dialect,
-                verbosity=verbosity,
-                patterns=match_patterns,
-                preserve_fixtures=preserve_fixtures,
-                stream=stream,
-                default_catalog=self.default_catalog,
-                default_catalog_dialect=self.engine_adapter.DIALECT,
-            )
-        else:
-            test_meta = []
+        test_meta = self.load_model_tests(tests=tests, patterns=match_patterns)
 
-            for path, config in self.configs.items():
-                test_meta.extend(
-                    get_all_model_tests(
-                        path / c.TESTS,
-                        patterns=match_patterns,
-                        ignore_patterns=config.ignore_patterns,
-                        variables=config.variables,
-                    )
-                )
-
-            result = run_tests(
-                model_test_metadata=test_meta,
-                models=self._models,
-                config=self.config,
-                gateway=self.gateway,
-                dialect=self.default_dialect,
-                verbosity=verbosity,
-                preserve_fixtures=preserve_fixtures,
-                stream=stream,
-                default_catalog=self.default_catalog,
-                default_catalog_dialect=self.engine_adapter.DIALECT,
-            )
-
-        return result
+        return run_tests(
+            model_test_metadata=test_meta,
+            models=self._models,
+            config=self.config,
+            selected_gateway=self.selected_gateway,
+            dialect=self.default_dialect,
+            verbosity=verbosity,
+            preserve_fixtures=preserve_fixtures,
+            stream=stream,
+            default_catalog=self.default_catalog,
+            default_catalog_dialect=self.engine_adapter.DIALECT,
+        )
 
     @python_api_analytics
     def audit(
@@ -2503,6 +2475,19 @@ class GenericContext(BaseContext, t.Generic[C]):
             raise LinterError(
                 "Linter detected errors in the code. Please fix them before proceeding."
             )
+
+    def load_model_tests(
+        self, tests: t.Optional[t.List[str]] = None, patterns: list[str] | None = None
+    ) -> t.List[ModelTestMetadata]:
+        # If a set of specific test path(s) are provided, we can use a single loader
+        # since it's not required to walk every tests/ folder in each repo
+        loaders = [self._loaders[0]] if tests else self._loaders
+
+        model_tests = []
+        for loader in loaders:
+            model_tests.extend(loader.load_model_tests(tests=tests, patterns=patterns))
+
+        return model_tests
 
 
 class Context(GenericContext[Config]):

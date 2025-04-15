@@ -32,6 +32,8 @@ from sqlmesh.utils.errors import ConfigError, SQLMeshError, TestError
 from sqlmesh.utils.yaml import dump as dump_yaml
 from sqlmesh.utils.yaml import load as load_yaml
 
+from tests.utils.test_helpers import use_terminal_console
+
 if t.TYPE_CHECKING:
     from unittest import TestResult
 
@@ -1560,36 +1562,28 @@ test_pyspark_model:
 def test_variable_usage(tmp_path: Path) -> None:
     init_example_project(tmp_path, dialect="duckdb")
 
-    config = Config(
-        default_connection=DuckDBConnectionConfig(),
-        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
-        variables={"gold": "gold_db", "silver": "silver_db"},
-    )
-    context = Context(paths=tmp_path, config=config)
+    variables = {"gold": "gold_db", "silver": "silver_db"}
+    incorrect_variables = {"gold": "foo", "silver": "bar"}
 
     parent = _create_model(
         "SELECT 1 AS id, '2022-01-02'::DATE AS ds, @start_ts AS start_ts",
         meta="MODEL (name silver_db.sch.b, kind INCREMENTAL_BY_TIME_RANGE(time_column ds))",
     )
-    parent = t.cast(SqlModel, context.upsert_model(parent))
 
     child = _create_model(
         "SELECT ds, @IF(@VAR('myvar'), id, id + 1) AS id FROM silver_db.sch.b WHERE ds BETWEEN @start_ds and @end_ds",
         meta="MODEL (name gold_db.sch.a, kind INCREMENTAL_BY_TIME_RANGE(time_column ds))",
     )
-    child = t.cast(SqlModel, context.upsert_model(child))
 
-    test_file = tmp_path / "tests" / "test_parameterized_model_names.yaml"
-    test_file.write_text(
-        """
+    test_text = """
 test_parameterized_model_names:
-  model: {{ var('gold') }}.sch.a
+  model: {{{{ var('gold') }}}}.sch.a {gateway}
   vars:
     myvar: True
     start_ds: 2022-01-01
     end_ds: 2022-01-03
   inputs:
-    {{ var('silver') }}.sch.b:
+    {{{{ var('silver') }}}}.sch.b:
       - ds: 2022-01-01
         id: 1
       - ds: 2022-01-01
@@ -1599,17 +1593,78 @@ test_parameterized_model_names:
       - ds: 2022-01-01
         id: 1
       - ds: 2022-01-01
-        id: 2
-        """
+        id: 2"""
+
+    test_file = tmp_path / "tests" / "test_parameterized_model_names.yaml"
+
+    def init_context_and_validate_results(config: Config, **kwargs):
+        context = Context(paths=tmp_path, config=config, **kwargs)
+        context.upsert_model(parent)
+        context.upsert_model(child)
+
+        results = context.test()
+
+        assert not results.failures
+        assert not results.errors
+        assert len(results.successes) == 2
+
+    # Case 1: Test root variables
+    config = Config(
+        default_connection=DuckDBConnectionConfig(),
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        variables=variables,
     )
 
-    results = context.test()
+    test_file.write_text(test_text.format(gateway=""))
 
-    assert not results.failures
-    assert not results.errors
+    init_context_and_validate_results(config)
 
-    # The example project has one test and we added another one above
-    assert len(results.successes) == 2
+    # Case 2: Test gateway variables
+    config = Config(
+        gateways={
+            "main": GatewayConfig(connection=DuckDBConnectionConfig(), variables=variables),
+        },
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+    )
+    init_context_and_validate_results(config)
+
+    # Case 3: Test gateway variables overriding root variables
+    config = Config(
+        gateways={
+            "main": GatewayConfig(connection=DuckDBConnectionConfig(), variables=variables),
+        },
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        variables=incorrect_variables,
+    )
+    init_context_and_validate_results(config, gateway="main")
+
+    # Case 4: Use variable from the defined gateway
+    config = Config(
+        gateways={
+            "main": GatewayConfig(
+                connection=DuckDBConnectionConfig(), variables=incorrect_variables
+            ),
+            "secondary": GatewayConfig(connection=DuckDBConnectionConfig(), variables=variables),
+        },
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+    )
+
+    test_file.write_text(test_text.format(gateway="\n  gateway: secondary"))
+    init_context_and_validate_results(config, gateway="main")
+
+    # Case 5: Use gateways with escaped characters
+    config = Config(
+        gateways={
+            "main": GatewayConfig(
+                connection=DuckDBConnectionConfig(), variables=incorrect_variables
+            ),
+            "secon\tdary": GatewayConfig(connection=DuckDBConnectionConfig(), variables=variables),
+        },
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+    )
+
+    test_file.write_text(test_text.format(gateway='\n  gateway: "secon\\tdary"'))
+    init_context_and_validate_results(config, gateway="main")
 
 
 def test_custom_testing_schema(mocker: MockerFixture) -> None:
@@ -2203,3 +2258,115 @@ AssertionError: Data mismatch (exp: expected, act: actual)
 
     assert "Ran 102 tests" in output.stderr
     assert "FAILED (failures=51)" in output.stderr
+
+
+@use_terminal_console
+def test_test_output_with_invalid_model_name(tmp_path: Path) -> None:
+    init_example_project(tmp_path, dialect="duckdb")
+
+    wrong_test_file = tmp_path / "tests" / "test_incorrect_model_name.yaml"
+    wrong_test_file.write_text(
+        """
+test_example_full_model:
+  model: invalid_model
+  description: This is an invalid test
+  inputs:
+    sqlmesh_example.incremental_model:
+      rows:
+      - id: 1
+        item_id: 1
+      - id: 2
+        item_id: 1
+      - id: 3
+        item_id: 2
+  outputs:
+    query:
+      rows:
+      - item_id: 1
+        num_orders: 2
+      - item_id: 2
+        num_orders: 2 
+        """
+    )
+
+    config = Config(
+        default_connection=DuckDBConnectionConfig(),
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+    )
+    context = Context(paths=tmp_path, config=config)
+
+    with patch.object(get_console(), "log_warning") as mock_logger:
+        with capture_output() as output:
+            context.test()
+
+        assert (
+            f"""Model '"invalid_model"' was not found at {wrong_test_file}"""
+            in mock_logger.call_args[0][0]
+        )
+        assert (
+            ".\n----------------------------------------------------------------------\nRan 1 test in"
+            in output.stderr
+        )
+        assert "OK" in output.stderr
+
+
+def test_number_of_tests_found(tmp_path: Path) -> None:
+    init_example_project(tmp_path, dialect="duckdb")
+
+    # Example project contains 1 test and we add a new file with 2 tests
+    test_file = tmp_path / "tests" / "test_new.yaml"
+    test_file.write_text(
+        """
+test_example_full_model1:
+  model: sqlmesh_example.full_model
+  inputs:
+    sqlmesh_example.incremental_model:
+      rows:
+      - id: 1
+        item_id: 1
+      - id: 2
+        item_id: 1
+      - id: 3
+        item_id: 2
+  outputs:
+    query:
+      rows:
+      - item_id: 1
+        num_orders: 2
+      - item_id: 2
+        num_orders: 1
+        
+test_example_full_model2:
+  model: sqlmesh_example.full_model
+  inputs:
+    sqlmesh_example.incremental_model:
+      rows:
+      - id: 1
+        item_id: 1
+      - id: 2
+        item_id: 1
+      - id: 3
+        item_id: 2
+  outputs:
+    query:
+      rows:
+      - item_id: 1
+        num_orders: 2
+      - item_id: 2
+        num_orders: 1
+        """
+    )
+
+    context = Context(paths=tmp_path)
+
+    # Case 1: All 3 tests should run without any tests specified
+    results = context.test()
+    assert len(results.successes) == 3
+
+    # Case 2: The "new_test.yaml" should amount to 2 subtests
+    results = context.test(tests=[f"{test_file}"])
+    assert len(results.successes) == 2
+
+    # Case 3: The "new_test.yaml::test_example_full_model2" should amount to a single subtest
+    results = context.test(tests=[f"{test_file}::test_example_full_model2"])
+    assert len(results.successes) == 1
