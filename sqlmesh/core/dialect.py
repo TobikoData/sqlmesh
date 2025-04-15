@@ -635,7 +635,7 @@ def _props_sql(self: Generator, expressions: t.List[exp.Expression]) -> str:
 
     for i, prop in enumerate(expressions):
         if isinstance(prop, MacroFunc):
-            sql = self.indent(f"{self.sql(prop, comment=False)}")
+            sql = self.indent(self.sql(prop, comment=False))
         else:
             sql = self.indent(f"{prop.name} {self.sql(prop, 'value')}")
 
