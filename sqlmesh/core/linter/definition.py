@@ -7,7 +7,7 @@ from sqlmesh.core.config.linter import LinterConfig
 from sqlmesh.core.model import Model
 
 from sqlmesh.utils.errors import raise_config_error
-from sqlmesh.core.console import get_console, Console
+from sqlmesh.core.console import LinterConsole, get_console, Console
 from sqlmesh.core.linter.rule import RuleSet
 
 
@@ -50,7 +50,7 @@ class Linter:
 
         return Linter(config.enabled, all_rules, rules, warn_rules)
 
-    def lint_model(self, model: Model, console: Console = get_console()) -> bool:
+    def lint_model(self, model: Model, console: LinterConsole = get_console()) -> bool:
         if not self.enabled:
             return False
 
