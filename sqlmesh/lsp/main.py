@@ -95,13 +95,17 @@ class SQLMeshLanguageServer:
             for ext in ("py", "yml", "yaml"):
                 config_path = path / f"config.{ext}"
                 if config_path.exists():
-                    with suppress(Exception):
+                    try:
                         # Use user-provided instantiator to build the context
                         self.context = self.context_class(paths=[path])
                         self.server.show_message(f"Context loaded for: {path}")
                         loaded = True
                         # Re-check context for document now that it's loaded
                         return self.ensure_context_for_document(document)
+                    except Exception as e:
+                        self.server.show_message(
+                            f"Error loading context: {e}", types.MessageType.Error
+                        )
             path = path.parent
 
         return document
