@@ -102,7 +102,7 @@ First, open a terminal within your terminal/IDE (ex: VSCode). Then follow the fo
     ```bash linenums="1"
     uv venv --python 3.12 --seed  # create a virtual environment inside the project directory
     source .venv/bin/activate # activate the virtual environment
-    pip install -r requirements.txt # install the tcloud CLI
+    uv pip install -r requirements.txt # install the tcloud CLI
     which tcloud # verify the tcloud CLI is installed in the venv in the path above
     ```
 
@@ -139,10 +139,11 @@ Now we're ready to connect your data warehouse to Tobiko Cloud:
 
     ```yaml
     projects:
-        public-demo: # TODO: update this for the project name in the URL
-            url: https://cloud.tobikodata.com/sqlmesh/tobiko/public-demo/ # TODO: update for your unique URL
-            gateway: tobiko_cloud
-            extras: bigquery,web,github  # TODO: update bigquery for your data warehouse
+      public-demo: # TODO: update this for the project name in the URL
+        url: https://cloud.tobikodata.com/sqlmesh/tobiko/public-demo/ # TODO: update for your unique URL
+        gateway: tobiko_cloud
+        extras: bigquery,web,github  # TODO: update bigquery for your data warehouse
+        pip_executable: uv pip
     default_project: public-demo # TODO: update this for the project name in the URL
     ```
 
