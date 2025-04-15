@@ -26,6 +26,7 @@ def test_format_model_expressions():
      a,
      (b, c) as d,
      ),  -- c
+       @macro_prop_with_comment(proper := 'foo'), -- k
      audits [
     not_null(columns=[
       foo_id,
@@ -91,6 +92,7 @@ def test_format_model_expressions():
   name a.b, /* a */
   kind FULL, /* b */
   references (a, (b, c) AS d), /* c */
+  @macro_prop_with_comment(proper := 'foo'), /* k */
   audits ARRAY(
     NOT_NULL(
       columns = ARRAY(
@@ -269,7 +271,7 @@ def test_format_body_macros():
         format_model_expressions(
             parse(
                 """
-    Model ( name foo );
+    Model ( name foo , @macro_dialect(), @properties_macro(prop_1 := 'max', prop_2 := 33));
     @WITH(TRUE) x AS (SELECT 1)
     SELECT col::int
     FROM foo
@@ -281,7 +283,9 @@ def test_format_body_macros():
             )
         )
         == """MODEL (
-  name foo
+  name foo,
+  @macro_dialect(),
+  @properties_macro(prop_1 := 'max', prop_2 := 33)
 );
 
 @WITH(TRUE) x AS (
