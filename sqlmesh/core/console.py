@@ -83,7 +83,15 @@ GREEN_CHECK_MARK = f"[green]{CHECK_MARK}[/green]"
 RED_X_MARK = "\u274c"
 
 
-class Console(abc.ABC):
+class LinterConsole(abc.ABC):
+    @abc.abstractmethod
+    def show_linter_violations(
+        self, violations: t.List[RuleViolation], model: Model, is_error: bool = False
+    ) -> None:
+        """Prints all linter violations depending on their severity"""
+
+
+class Console(LinterConsole, abc.ABC):
     """Abstract base class for defining classes used for displaying information to the user and also interact
     with them when their input is needed."""
 
@@ -399,12 +407,6 @@ class Console(abc.ABC):
                 tree.children[-1],
             ]
         return tree
-
-    @abc.abstractmethod
-    def show_linter_violations(
-        self, violations: t.List[RuleViolation], model: Model, is_error: bool = False
-    ) -> None:
-        """Prints all linter violations depending on their severity"""
 
 
 class NoopConsole(Console):
