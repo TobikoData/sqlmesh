@@ -1,7 +1,6 @@
-import path from "path"
-import { workspace, ExtensionContext, OutputChannel, window, Disposable } from "vscode"
+import { window, OutputChannel, Disposable } from "vscode"
 import { ServerOptions, LanguageClientOptions, LanguageClient, TransportKind } from "vscode-languageclient/node"
-import { sqlmesh_exec, sqlmesh_lsp_exec } from "../utilities/sqlmesh/sqlmesh"
+import { sqlmesh_lsp_exec } from "../utilities/sqlmesh/sqlmesh"
 import { err, isErr, ok, Result } from "../utilities/functional/result"
 import { getWorkspaceFolders } from "../utilities/common/vscodeapi"
 
@@ -14,7 +13,7 @@ export class LSPClient implements Disposable {
         this.client = undefined
     }
 
-    public async start() {
+    public async start(): Promise<Result<undefined, string>> {
         if (!outputChannel) {
             outputChannel = window.createOutputChannel('sqlmesh_actual_lsp_implementation')
         }
@@ -59,7 +58,8 @@ export class LSPClient implements Disposable {
         }
     
         this.client = new LanguageClient('sqlmesh-lsp-example', 'SQLMesh Language Server', serverOptions, clientOptions)
-        this.client.start()
+        await this.client.start()
+        return ok(undefined)
     }
 
     public async restart() {

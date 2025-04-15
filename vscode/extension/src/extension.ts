@@ -56,7 +56,7 @@ export async function activate(context: vscode.ExtensionContext) {
     onDidChangePythonInterpreter(async () => {
       await restart()
     }),
-    onDidChangeConfiguration(async (e: vscode.ConfigurationChangeEvent) => {
+    onDidChangeConfiguration(async (_: vscode.ConfigurationChangeEvent) => {
       await restart()
     }),
     registerCommand(`sqlmesh.restart`, async () => {

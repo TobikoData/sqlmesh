@@ -1,8 +1,7 @@
 import path from "path"
 import { traceLog, traceVerbose } from "../common/log"
 import { getInterpreterDetails } from "../common/python"
-import { getWorkspaceFolders } from "../common/vscodeapi"
-import { Result, err, ok } from "../functional/result"
+import { Result, ok } from "../functional/result"
 import { getProjectRoot } from "../common/utilities"
 
 export type sqlmesh_exec = {
