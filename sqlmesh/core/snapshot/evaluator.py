@@ -371,7 +371,7 @@ class SnapshotEvaluator:
         if not snapshots_to_create:
             return CompletionStatus.NOTHING_TO_DO
         if on_start:
-            on_start(len(snapshots_to_create))
+            on_start(snapshots_to_create)
 
         for gateway, tables_by_schema in tables_by_gateway_and_schema.items():
             self._create_schemas(tables=tables_by_schema, gateway=gateway)
