@@ -47,9 +47,6 @@ clickhouse = ["clickhouse-connect"]
 databricks = ["databricks-sql-connector"]
 dev = [
     "agate==1.7.1",
-    "apache-airflow==2.9.1",
-    "apache-airflow-providers-fab==1.5.3", # pip is having trouble resolving this dependency of airflow
-    "opentelemetry-proto==1.27.0", # pip was having trouble resolving this transitive dependency of airflow
     "beautifulsoup4",
     "clickhouse-connect",
     "cryptography",
@@ -68,6 +65,7 @@ dev = [
     "google-auth",
     "google-cloud-bigquery",
     "google-cloud-bigquery-storage",
+    "httpx",
     "mypy~=1.13.0",
     "pandas-stubs",
     "pre-commit",
@@ -131,9 +129,6 @@ sqlmesh = "sqlmesh.cli.main:cli"
 sqlmesh_cicd = "sqlmesh.cicd.bot:bot"
 sqlmesh_lsp = "sqlmesh.lsp.main:main"
 
-[project.entry-points."airflow.plugins"]
-sqlmesh_airflow = "sqlmesh.schedulers.airflow.plugin:SqlmeshAirflowPlugin"
-
 [project.urls]
 Homepage = "https://sqlmesh.com/"
 Documentation = "https://sqlmesh.readthedocs.io/en/stable/"
@@ -180,7 +175,6 @@ disable_error_code = "annotation-unchecked"
 [[tool.mypy.overrides]]
 module = [
     "api.*",
-    "airflow.*",
     "astor.*",
     "IPython.*",
     "hyperscript.*",

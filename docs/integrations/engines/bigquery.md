@@ -165,49 +165,6 @@ pip install "sqlmesh[bigquery]"
 | `priority`                      | The priority of the underlying job. (Default: `INTERACTIVE`)                                                                                                      | string |    N     |
 | `maximum_bytes_billed`          | The maximum number of bytes to be billed for the underlying job.                                                                                                  |  int   |    N     |
 
-## Airflow Scheduler
-**Engine Name:** `bigquery`
-
-In order to share a common implementation across local and Airflow, SQLMesh BigQuery implements its own hook and operator.
-
-### Installation
-
-To enable support for this operator, the Airflow BigQuery provider package should be installed on the target Airflow cluster along with SQLMesh with the BigQuery extra:
-```
-pip install "apache-airflow-providers-google"
-pip install "sqlmesh[bigquery]"
-```
-
-### Connection info
-
-The operator requires an [Airflow connection](https://airflow.apache.org/docs/apache-airflow/stable/howto/connection.html) to determine the target BigQuery account. Please see [GoogleBaseHook](https://airflow.apache.org/docs/apache-airflow-providers-google/stable/_api/airflow/providers/google/common/hooks/base_google/index.html#airflow.providers.google.common.hooks.base_google.GoogleBaseHook) and [GCP connection](https://airflow.apache.org/docs/apache-airflow-providers-google/stable/connections/gcp.html)for more details. Use the `sqlmesh_google_cloud_bigquery_default` (by default) connection ID instead of the `google_cloud_default` one in the Airflow guide.
-
-By default, the connection ID is set to `sqlmesh_google_cloud_bigquery_default`, but it can be overridden using the `engine_operator_args` parameter to the `SQLMeshAirflow` instance as in the example below:
-```python linenums="1"
-sqlmesh_airflow = SQLMeshAirflow(
-    "bigquery",
-    default_catalog="<project id>",
-    engine_operator_args={
-        "bigquery_conn_id": "<Connection ID>"
-    },
-)
-```
-
-#### Optional Arguments
-
-* `location`: Sets the default location for datasets and tables. If not set, BigQuery defaults to US for new datasets. See `location` in [Connection options](#connection-options) for more details.
-
-```python linenums="1"
-sqlmesh_airflow = SQLMeshAirflow(
-    "bigquery",
-    default_catalog="<project id>",
-    engine_operator_args={
-        "bigquery_conn_id": "<Connection ID>",
-        "location": "<location>"
-    },
-)
-```
-
 ## Authentication Methods
 - [oauth](https://google-auth.readthedocs.io/en/master/reference/google.auth.html#google.auth.default) (default)
     - Related Credential Configuration:

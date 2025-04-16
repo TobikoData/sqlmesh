@@ -2,7 +2,7 @@
 
 This page provides information about how to use SQLMesh with MotherDuck. 
 
-It begins with a [Connection Quickstart](#connection-quickstart) that demonstrates how to connect to MotherDuck, or you can skip directly to information about using MotherDuck with the built-in or airflow schedules.
+It begins with a [Connection Quickstart](#connection-quickstart) that demonstrates how to connect to MotherDuck, or you can skip directly to information about using MotherDuck with the built-in scheduler.
 
 ## Connection quickstart
 

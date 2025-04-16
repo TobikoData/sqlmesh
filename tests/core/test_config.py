@@ -16,8 +16,6 @@ from sqlmesh.core.config import (
     BigQueryConnectionConfig,
     MotherDuckConnectionConfig,
     BuiltInSchedulerConfig,
-    MWAASchedulerConfig,
-    AirflowSchedulerConfig,
 )
 from sqlmesh.core.config.connection import DuckDBAttachOptions, RedshiftConnectionConfig
 from sqlmesh.core.config.feature_flag import DbtFeatureFlag, FeatureFlag
@@ -306,7 +304,6 @@ def test_load_config_from_env_no_config_vars():
     with mock.patch.dict(
         os.environ,
         {
-            "SQLMESH__AIRFLOW__DISABLE_STATE_MIGRATION": "1",
             "DUMMY_ENV_VAR": "dummy",
         },
     ):
@@ -413,31 +410,6 @@ def test_load_config_from_python_module_invalid_config_object(tmp_path):
         match=r"^Config needs to be a valid object.*",
     ):
         load_config_from_python_module(Config, config_path)
-
-
-def test_cloud_composer_scheduler_config(tmp_path_factory):
-    config_path = tmp_path_factory.mktemp("yaml_config") / "config.yaml"
-    with open(config_path, "w", encoding="utf-8") as fd:
-        fd.write(
-            """
-gateways:
-    another_gateway:
-        connection:
-            type: duckdb
-            database: test_db
-        scheduler:
-            type: cloud_composer
-            airflow_url: https://airflow.url
-
-model_defaults:
-    dialect: bigquery
-        """
-        )
-
-    assert load_config_from_paths(
-        Config,
-        project_paths=[config_path],
-    )
 
 
 @pytest.mark.parametrize(
@@ -691,14 +663,6 @@ def test_scheduler_config(tmp_path_factory):
         fd.write(
             """
 gateways:
-    airflow_gateway:
-        scheduler:
-            type: airflow
-            airflow_url: https://airflow.url
-    mwaa_gateway:
-        scheduler:
-            type: mwaa
-            environment: test_environment
     builtin_gateway:
         scheduler:
             type: builtin
@@ -716,8 +680,6 @@ model_defaults:
         project_paths=[config_path],
     )
     assert isinstance(config.default_scheduler, BuiltInSchedulerConfig)
-    assert isinstance(config.get_gateway("airflow_gateway").scheduler, AirflowSchedulerConfig)
-    assert isinstance(config.get_gateway("mwaa_gateway").scheduler, MWAASchedulerConfig)
     assert isinstance(config.get_gateway("builtin_gateway").scheduler, BuiltInSchedulerConfig)
 
 

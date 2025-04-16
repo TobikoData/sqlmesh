@@ -272,33 +272,6 @@ SQLMesh does not have its own package manager; however, SQLMesh's dbt adapter is
 ## Documentation
 Model documentation is available in the [SQLMesh UI](../quickstart/ui.md#2-open-the-sqlmesh-web-ui).
 
-## Using Airflow
-To use SQLMesh and dbt projects with Airflow, first configure SQLMesh to use Airflow as described in the [Airflow integrations documentation](./airflow.md).
-
-Then, install dbt-core within airflow.
-
-Finally, replace the contents of `config.py` with:
-
-```bash
-> from pathlib import Path
->
-> from sqlmesh.core.config import AirflowSchedulerConfig
-> from sqlmesh.dbt.loader import sqlmesh_config
->
-> config = sqlmesh_config(
->     Path(__file__).parent,
->     default_scheduler=AirflowSchedulerConfig(
->         airflow_url="https://<Airflow Webserver Host>:<Airflow Webserver Port>/",
->         username="<Airflow Username>",
->         password="<Airflow Password>",
->     )
-> )
-```
-
-See the [Airflow configuration documentation](https://airflow.apache.org/docs/apache-airflow/2.1.0/configurations-ref.html) for a list of all AirflowSchedulerConfig configuration options. Note: only the python config file format is supported for dbt at this time.
-
-The project is now configured to use airflow. Going forward, this also means that the engine configured in airflow will be used instead of the target engine specified in profiles.yml.
-
 ## Supported dbt jinja methods
 
 SQLMesh supports running dbt projects using the majority of dbt jinja methods, including:

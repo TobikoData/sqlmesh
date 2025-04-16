@@ -22,9 +22,6 @@ from sqlmesh.core import constants as c
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.environment import EnvironmentNamingInfo, execute_environment_statements
 from sqlmesh.core.macros import RuntimeStage
-from sqlmesh.core.notification_target import (
-    NotificationTarget,
-)
 from sqlmesh.core.snapshot.definition import Interval, to_view_mapping
 from sqlmesh.core.plan.definition import EvaluatablePlan
 from sqlmesh.core.scheduler import Scheduler
@@ -40,12 +37,8 @@ from sqlmesh.core.snapshot import (
 from sqlmesh.utils import CompletionStatus
 from sqlmesh.core.state_sync import StateSync
 from sqlmesh.core.state_sync.base import PromotionResult
-from sqlmesh.core.user import User
-from sqlmesh.schedulers.airflow import common as airflow_common
-from sqlmesh.schedulers.airflow.client import AirflowClient, BaseAirflowClient
-from sqlmesh.schedulers.airflow.mwaa_client import MWAAClient
 from sqlmesh.utils.concurrency import NodeExecutionFailedError
-from sqlmesh.utils.errors import SQLMeshError, PlanError
+from sqlmesh.utils.errors import PlanError
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import now
 
@@ -547,190 +540,6 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                 snapshots_to_restate[full_snapshot_id] = (full_snapshot.table_info, new_intervals)
 
         return set(snapshots_to_restate.values())
-
-
-class BaseAirflowPlanEvaluator(PlanEvaluator):
-    def __init__(
-        self,
-        console: t.Optional[Console],
-        blocking: bool,
-        dag_run_poll_interval_secs: int,
-        dag_creation_poll_interval_secs: int,
-        dag_creation_max_retry_attempts: int,
-    ):
-        self.blocking = blocking
-        self.dag_run_poll_interval_secs = dag_run_poll_interval_secs
-        self.dag_creation_poll_interval_secs = dag_creation_poll_interval_secs
-        self.dag_creation_max_retry_attempts = dag_creation_max_retry_attempts
-        self.console = console or get_console()
-
-    def evaluate(
-        self, plan: EvaluatablePlan, circuit_breaker: t.Optional[t.Callable[[], bool]] = None
-    ) -> None:
-        plan_request_id = plan.plan_id
-        self._apply_plan(plan, plan_request_id)
-
-        analytics.collector.on_plan_apply_start(
-            plan=plan,
-            engine_type=None,
-            state_sync_type=None,
-            scheduler_type=c.AIRFLOW,
-        )
-
-        if self.blocking:
-            plan_application_dag_id = airflow_common.plan_application_dag_id(
-                plan.environment.name, plan_request_id
-            )
-
-            self.console.log_status_update(
-                f"Waiting for the plan application DAG '{plan_application_dag_id}' to be provisioned on Airflow"
-            )
-
-            plan_application_dag_run_id = self.client.wait_for_first_dag_run(
-                plan_application_dag_id,
-                self.dag_creation_poll_interval_secs,
-                self.dag_creation_max_retry_attempts,
-            )
-
-            self.client.print_tracking_url(
-                plan_application_dag_id,
-                plan_application_dag_run_id,
-                "plan application",
-            )
-            plan_application_succeeded = self.client.wait_for_dag_run_completion(
-                plan_application_dag_id,
-                plan_application_dag_run_id,
-                self.dag_run_poll_interval_secs,
-            )
-            if not plan_application_succeeded:
-                msg = "Plan application failed."
-                logger.info(msg)
-                raise PlanError(msg)
-
-            self.console.log_success("Plan applied successfully")
-
-    @property
-    def client(self) -> BaseAirflowClient:
-        raise NotImplementedError
-
-    def _apply_plan(self, plan: EvaluatablePlan, plan_request_id: str) -> None:
-        raise NotImplementedError
-
-
-class StateBasedAirflowPlanEvaluator(BaseAirflowPlanEvaluator):
-    backfill_concurrent_tasks: int
-    ddl_concurrent_tasks: int
-    notification_targets: t.Optional[t.List[NotificationTarget]]
-    users: t.Optional[t.List[User]]
-
-    def _apply_plan(self, plan: EvaluatablePlan, plan_request_id: str) -> None:
-        from sqlmesh.schedulers.airflow.plan import PlanDagState, create_plan_dag_spec
-
-        plan_application_request = airflow_common.PlanApplicationRequest(
-            plan=plan,
-            notification_targets=self.notification_targets or [],
-            backfill_concurrent_tasks=self.backfill_concurrent_tasks,
-            ddl_concurrent_tasks=self.ddl_concurrent_tasks,
-            users=self.users or [],
-        )
-        plan_dag_spec = create_plan_dag_spec(plan_application_request, self.state_sync)
-        PlanDagState.from_state_sync(self.state_sync).add_dag_spec(plan_dag_spec)
-
-    @property
-    def state_sync(self) -> StateSync:
-        raise NotImplementedError
-
-
-class AirflowPlanEvaluator(StateBasedAirflowPlanEvaluator):
-    def __init__(
-        self,
-        airflow_client: AirflowClient,
-        console: t.Optional[Console] = None,
-        blocking: bool = True,
-        dag_run_poll_interval_secs: int = 10,
-        dag_creation_poll_interval_secs: int = 30,
-        dag_creation_max_retry_attempts: int = 10,
-        notification_targets: t.Optional[t.List[NotificationTarget]] = None,
-        backfill_concurrent_tasks: int = 1,
-        ddl_concurrent_tasks: int = 1,
-        users: t.Optional[t.List[User]] = None,
-        state_sync: t.Optional[StateSync] = None,
-    ):
-        super().__init__(
-            console,
-            blocking,
-            dag_run_poll_interval_secs,
-            dag_creation_poll_interval_secs,
-            dag_creation_max_retry_attempts,
-        )
-        self._airflow_client = airflow_client
-        self.notification_targets = notification_targets or []
-        self.backfill_concurrent_tasks = backfill_concurrent_tasks
-        self.ddl_concurrent_tasks = ddl_concurrent_tasks
-        self.users = users or []
-
-        self._state_sync = state_sync
-
-    @property
-    def client(self) -> BaseAirflowClient:
-        return self._airflow_client
-
-    @property
-    def state_sync(self) -> StateSync:
-        if self._state_sync is None:
-            raise SQLMeshError("State Sync is not configured")
-        return self._state_sync
-
-    def _apply_plan(self, plan: EvaluatablePlan, plan_request_id: str) -> None:
-        if self._state_sync is not None:
-            super()._apply_plan(plan, plan_request_id)
-            return
-
-        self._airflow_client.apply_plan(
-            plan,
-            notification_targets=self.notification_targets,
-            backfill_concurrent_tasks=self.backfill_concurrent_tasks,
-            ddl_concurrent_tasks=self.ddl_concurrent_tasks,
-            users=self.users,
-        )
-
-
-class MWAAPlanEvaluator(StateBasedAirflowPlanEvaluator):
-    def __init__(
-        self,
-        client: MWAAClient,
-        state_sync: StateSync,
-        console: t.Optional[Console] = None,
-        blocking: bool = True,
-        dag_run_poll_interval_secs: int = 10,
-        dag_creation_poll_interval_secs: int = 30,
-        dag_creation_max_retry_attempts: int = 10,
-        notification_targets: t.Optional[t.List[NotificationTarget]] = None,
-        backfill_concurrent_tasks: int = 1,
-        ddl_concurrent_tasks: int = 1,
-        users: t.Optional[t.List[User]] = None,
-    ):
-        super().__init__(
-            console,
-            blocking,
-            dag_run_poll_interval_secs,
-            dag_creation_poll_interval_secs,
-            dag_creation_max_retry_attempts,
-        )
-        self._mwaa_client = client
-        self._state_sync = state_sync
-        self.notification_targets = notification_targets or []
-        self.backfill_concurrent_tasks = backfill_concurrent_tasks
-        self.ddl_concurrent_tasks = ddl_concurrent_tasks
-        self.users = users or []
-
-    @property
-    def client(self) -> BaseAirflowClient:
-        return self._mwaa_client
-
-    @property
-    def state_sync(self) -> StateSync:
-        return self._state_sync
 
 
 def update_intervals_for_new_snapshots(

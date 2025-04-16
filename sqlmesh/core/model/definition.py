@@ -2127,7 +2127,7 @@ def load_sql_based_model(
         raise_config_error("Model must have a name", path)
     if "default_catalog" in meta_fields:
         raise_config_error(
-            "`default_catalog` cannot be set on a per-model basis. It must be set at the connection level or in Airflow.",
+            "`default_catalog` cannot be set on a per-model basis. It must be set at the connection level.",
             path,
         )
 

@@ -138,15 +138,6 @@ dmypy.json
 *~
 *#
 
-# Airflow example
-examples/airflow/Dockerfile
-examples/airflow/docker-compose.yaml
-examples/airflow/airflow.sh
-examples/airflow/.env
-examples/airflow/logs
-examples/airflow/plugins
-examples/airflow/warehouse
-
 *.duckdb
 *.duckdb.wal
 
