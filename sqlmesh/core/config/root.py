@@ -41,6 +41,7 @@ from sqlmesh.core.config.ui import UIConfig
 from sqlmesh.core.loader import Loader, SqlMeshLoader
 from sqlmesh.core.notification_target import NotificationTarget
 from sqlmesh.core.user import User
+from sqlmesh.utils.date import to_timestamp, now, now_timestamp
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import field_validator, model_validator
 
@@ -97,8 +98,8 @@ class Config(BaseConfig):
     default_gateway: str = ""
     notification_targets: t.List[NotificationTarget] = []
     project: str = ""
-    snapshot_ttl: str = c.DEFAULT_SNAPSHOT_TTL
-    environment_ttl: t.Optional[str] = c.DEFAULT_ENVIRONMENT_TTL
+    snapshot_ttl: NoPastTTLString = c.DEFAULT_SNAPSHOT_TTL
+    environment_ttl: t.Optional[NoPastTTLString] = c.DEFAULT_ENVIRONMENT_TTL
     ignore_patterns: t.List[str] = c.IGNORE_PATTERNS
     time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT
     users: t.List[User] = []
@@ -302,3 +303,20 @@ class Config(BaseConfig):
     @property
     def fingerprint(self) -> str:
         return str(zlib.crc32(pickle.dumps(self.dict(exclude={"loader", "notification_targets"}))))
+
+
+def validate_no_past_ttl(v: str) -> str:
+    current_time = now()
+    if to_timestamp(v, relative_base=current_time) < to_timestamp(current_time):
+        raise ValueError(
+            f"TTL '{v}' is in the past. Please specify a relative time in the future. Ex: `in 1 week` instead of `1 week`."
+        )
+    return v
+
+
+if t.TYPE_CHECKING:
+    NoPastTTLString = str
+else:
+    from pydantic.functional_validators import BeforeValidator
+
+    NoPastTTLString = t.Annotated[str, BeforeValidator(validate_no_past_ttl)]

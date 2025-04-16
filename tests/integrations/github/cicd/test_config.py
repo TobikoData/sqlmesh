@@ -200,3 +200,48 @@ model_defaults:
         ValueError, match="merge_method must be set if enable_deploy_command is True"
     ):
         load_config_from_paths(Config, project_paths=[tmp_path / "config.yaml"])
+
+
+def test_ttl_in_past(tmp_path):
+    create_temp_file(
+        tmp_path,
+        pathlib.Path("config.yaml"),
+        """
+environment_ttl: in 1 week
+model_defaults:
+    dialect: duckdb
+""",
+    )
+
+    config = load_config_from_paths(Config, project_paths=[tmp_path / "config.yaml"])
+    assert config.environment_ttl == "in 1 week"
+
+    create_temp_file(
+        tmp_path,
+        pathlib.Path("config.yaml"),
+        """
+environment_ttl: 1 week
+model_defaults:
+    dialect: duckdb
+""",
+    )
+    with pytest.raises(
+        ValueError,
+        match="TTL '1 week' is in the past. Please specify a relative time in the future. Ex: `in 1 week` instead of `1 week`.",
+    ):
+        load_config_from_paths(Config, project_paths=[tmp_path / "config.yaml"])
+
+        create_temp_file(
+            tmp_path,
+            pathlib.Path("config.yaml"),
+            """
+snapshot_ttl: 1 week
+model_defaults:
+    dialect: duckdb
+    """,
+        )
+        with pytest.raises(
+            ValueError,
+            match="TTL '1 week' is in the past. Please specify a relative time in the future. Ex: `in 1 week` instead of `1 week`.",
+        ):
+            load_config_from_paths(Config, project_paths=[tmp_path / "config.yaml"])
