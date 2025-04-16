@@ -7,6 +7,7 @@ from sqlglot import exp, parse_one
 
 import sqlmesh.core.dialect as d
 from sqlmesh.core.dialect import normalize_model_name
+from sqlmesh.core.engine_adapter.base import EngineAdapter
 from sqlmesh.core.model import load_sql_based_model
 from sqlmesh.core.engine_adapter import SnowflakeEngineAdapter
 from sqlmesh.core.model.definition import SqlModel
@@ -634,3 +635,34 @@ def test_create_view(make_mocked_engine_adapter: t.Callable):
         'CREATE OR REPLACE VIEW "test_view" COPY GRANTS AS SELECT 1',
         'CREATE VIEW "test_view" AS SELECT 1',
     ]
+
+
+def test_clone_table(mocker: MockerFixture, make_mocked_engine_adapter: t.Callable):
+    mocker.patch("sqlmesh.core.engine_adapter.snowflake.SnowflakeEngineAdapter.set_current_catalog")
+    adapter = make_mocked_engine_adapter(SnowflakeEngineAdapter, default_catalog="test_catalog")
+    adapter.clone_table("target_table", "source_table")
+    adapter.cursor.execute.assert_called_once_with(
+        'CREATE TABLE "target_table" CLONE "source_table"'
+    )
+
+    # Validate with transient type we create the clone table accordingly
+    rendered_physical_properties = {
+        "creatable_type": exp.column("transient"),
+    }
+    adapter = make_mocked_engine_adapter(SnowflakeEngineAdapter, default_catalog="test_catalog")
+    adapter.clone_table(
+        "target_table", "source_table", rendered_physical_properties=rendered_physical_properties
+    )
+    adapter.cursor.execute.assert_called_once_with(
+        'CREATE TRANSIENT TABLE "target_table" CLONE "source_table"'
+    )
+
+    # Validate other engine adapters would work as usual even when we pass the properties
+    adapter = make_mocked_engine_adapter(EngineAdapter, default_catalog="test_catalog")
+    adapter.SUPPORTS_CLONING = True
+    adapter.clone_table(
+        "target_table", "source_table", rendered_physical_properties=rendered_physical_properties
+    )
+    adapter.cursor.execute.assert_called_once_with(
+        'CREATE TABLE "target_table" CLONE "source_table"'
+    )

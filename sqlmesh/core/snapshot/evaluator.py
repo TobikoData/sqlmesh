@@ -830,7 +830,12 @@ class SnapshotEvaluator:
                 )
 
                 try:
-                    adapter.clone_table(target_table_name, snapshot.table_name(), replace=True)
+                    adapter.clone_table(
+                        target_table_name,
+                        snapshot.table_name(),
+                        replace=True,
+                        rendered_physical_properties=rendered_physical_properties,
+                    )
                     alter_expressions = adapter.get_alter_expressions(
                         target_table_name, tmp_table_name
                     )

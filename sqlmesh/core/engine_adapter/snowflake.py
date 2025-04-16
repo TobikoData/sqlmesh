@@ -469,3 +469,25 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
                 f"Column comments for table '{table.alias_or_name}' not registered - this may be due to limited permissions.",
                 exc_info=True,
             )
+
+    def clone_table(
+        self,
+        target_table_name: TableName,
+        source_table_name: TableName,
+        replace: bool = False,
+        clone_kwargs: t.Optional[t.Dict[str, t.Any]] = None,
+        **kwargs: t.Any,
+    ) -> None:
+        # The Snowflake adapter should use the transient property to clone transient tables
+        if physical_properties := kwargs.get("rendered_physical_properties"):
+            table_type = self._pop_creatable_type_from_properties(physical_properties)
+            if isinstance(table_type, exp.TransientProperty):
+                kwargs["properties"] = exp.Properties(expressions=[table_type])
+
+        super().clone_table(
+            target_table_name,
+            source_table_name,
+            replace=replace,
+            clone_kwargs=clone_kwargs,
+            **kwargs,
+        )

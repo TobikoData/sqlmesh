@@ -890,6 +890,8 @@ class EngineAdapter:
         """
         if not self.SUPPORTS_CLONING:
             raise NotImplementedError(f"Engine does not support cloning: {type(self)}")
+
+        kwargs.pop("rendered_physical_properties", None)
         self.execute(
             exp.Create(
                 this=exp.to_table(target_table_name),
