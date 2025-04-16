@@ -1503,6 +1503,7 @@ def test_create_clone_in_dev(mocker: MockerFixture, adapter_mock, make_snapshot)
         f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}__dev",
         f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}",
         replace=True,
+        rendered_physical_properties={},
     )
 
     adapter_mock.get_alter_expressions.assert_called_once_with(
@@ -1601,6 +1602,7 @@ def test_drop_clone_in_dev_when_migration_fails(mocker: MockerFixture, adapter_m
         f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}__dev",
         f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}",
         replace=True,
+        rendered_physical_properties={},
     )
 
     adapter_mock.get_alter_expressions.assert_called_once_with(
