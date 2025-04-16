@@ -676,6 +676,7 @@ class TerminalConsole(Console):
         self.evaluation_total_task: t.Optional[TaskID] = None
         self.evaluation_model_progress: t.Optional[Progress] = None
         self.evaluation_model_tasks: t.Dict[str, TaskID] = {}
+        self.evaluation_model_batch_sizes: t.Dict[Snapshot, int] = {}
         self.evaluation_column_widths: t.Dict[str, int] = {}
 
         # Put in temporary values that are replaced when evaluating
@@ -967,10 +968,13 @@ class TerminalConsole(Console):
                 "Updating virtual layer ", self.console, justify="left"
             )
 
+            snapshots_with_virtual_views = [
+                s for s in snapshots if s.is_model and not s.is_symbolic
+            ]
             self.promotion_progress.start()
             self.promotion_task = self.promotion_progress.add_task(
                 f"Virtually updating {environment_naming_info.name}...",
-                total=len(snapshots),
+                total=len(snapshots_with_virtual_views),
             )
 
             # determine name column widths if we're printing names
@@ -983,7 +987,7 @@ class TerminalConsole(Console):
                             dialect=self.dialect,
                         )
                     )
-                    for snapshot in snapshots
+                    for snapshot in snapshots_with_virtual_views
                 )
 
             self.environment_naming_info = environment_naming_info
@@ -991,16 +995,26 @@ class TerminalConsole(Console):
 
     def update_promotion_progress(self, snapshot: SnapshotInfoLike, promoted: bool) -> None:
         """Update the snapshot promotion progress."""
-        if self.promotion_progress is not None and self.promotion_task is not None:
+        if (
+            self.promotion_progress is not None
+            and self.promotion_task is not None
+            and snapshot.is_model
+            and not snapshot.is_symbolic
+        ):
             if self.verbosity >= Verbosity.VERBOSE:
                 display_name = snapshot.display_name(
                     self.environment_naming_info,
                     self.default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None,
                     dialect=self.dialect,
                 ).ljust(self.promotion_column_widths["name"])
-                action_str = (
-                    "[green]promoted[/green]" if promoted else "[yellow]demoted[/yellow]"
-                ).ljust(len("promoted"))
+                action_str = ""
+                if promoted:
+                    action_str = (
+                        "[yellow]updated[/yellow]"
+                        if snapshot.previous_version
+                        else "[green]created[/green]"
+                    )
+                action_str = action_str or "[red]dropped[/red]"
                 self.promotion_progress.live.console.print(f"{display_name}  {action_str}")
             self.promotion_progress.update(self.promotion_task, refresh=True, advance=1)
 
