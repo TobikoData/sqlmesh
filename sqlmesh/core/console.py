@@ -768,7 +768,7 @@ class TerminalConsole(Console):
             self.evaluation_column_widths["name"] = max(
                 len(
                     snapshot.display_name(
-                        self.environment_naming_info,
+                        environment_naming_info,
                         default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None,
                         dialect=self.dialect,
                     )
@@ -894,7 +894,7 @@ class TerminalConsole(Console):
                 self.creation_column_widths["name"] = max(
                     len(
                         snapshot.display_name(
-                            self.environment_naming_info,
+                            environment_naming_info,
                             default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None,
                             dialect=self.dialect,
                         )
@@ -982,7 +982,7 @@ class TerminalConsole(Console):
                 self.promotion_column_widths["name"] = max(
                     len(
                         snapshot.display_name(
-                            self.environment_naming_info,
+                            environment_naming_info,
                             default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None,
                             dialect=self.dialect,
                         )
