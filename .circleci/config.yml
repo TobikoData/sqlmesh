@@ -20,6 +20,23 @@ orbs:
   path-filtering: circleci/path-filtering@1.1.0
 
 jobs:
+  vscode-extension-setup:
+    docker:
+      - image: cimg/node:20
+    resource_class: small
+    steps:
+      - checkout
+      - run:
+          name: Install VSCode extension dependencies
+          command: |
+            cd vscode/extensions
+            npm ci
+      - run:
+          name: Run VSCode extension CI
+          command: |
+            cd vscode/extensions
+            npm run ci
+
   publish:
     docker:
       - image: cimg/python:3.10
@@ -98,7 +115,10 @@ workflows:
             (sqlmesh|tests|examples|web/server)/.* python true
             pytest.ini|setup.cfg|setup.py python true
             \.circleci/.*|Makefile|\.pre-commit-config\.yaml common true
+            vscode/extensions/.* vscode true
 
+      - vscode-extension-setup:
+          <<: *on_main_or_tag_filter
       - gh-release:
           <<: *on_tag_filter
       - ui-build:
