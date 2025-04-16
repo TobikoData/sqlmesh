@@ -479,8 +479,7 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
         **kwargs: t.Any,
     ) -> None:
         # The Snowflake adapter should use the transient property to clone transient tables
-        physical_properties = kwargs.get("rendered_physical_properties")
-        if physical_properties:
+        if physical_properties := kwargs.get("rendered_physical_properties"):
             table_type = self._pop_creatable_type_from_properties(physical_properties)
             if isinstance(table_type, exp.TransientProperty):
                 kwargs["properties"] = exp.Properties(expressions=[table_type])
