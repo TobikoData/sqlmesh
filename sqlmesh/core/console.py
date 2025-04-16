@@ -760,39 +760,9 @@ class TerminalConsole(Console):
             )
 
             # determine column widths
-            annotation_width = 0
-            for snapshot, intervals in batched_intervals.items():
-                interval_str_len = 0
-                for interval in intervals:
-                    interval_str_len = max(
-                        interval_str_len,
-                        len(
-                            _create_evaluation_model_annotation(
-                                snapshot, _format_evaluation_model_interval(snapshot, interval)
-                            )
-                        ),
-                    )
-
-                # The annotation includes audit results. We cannot build the audits result string
-                # until after evaluation occurs, but we must determine the annotation column width here.
-                # Therefore, we add enough padding for the longest possible audits result string.
-                audit_str_len = 0
-                if snapshot.is_model and snapshot.model.audits:
-                    num_audits = len(snapshot.model.audits_with_args)
-                    num_nonblocking_audits = sum(
-                        1
-                        for audit in snapshot.model.audits_with_args
-                        if not audit[0].blocking
-                        or ("blocking" in audit[1] and audit[1]["blocking"] == exp.false())
-                    )
-                    # make enough room for all audits to pass
-                    audit_str_len = len(f", audits {CHECK_MARK}{str(num_audits)}")
-                    if num_nonblocking_audits:
-                        # and add enough room for all nonblocking audits to fail
-                        audit_str_len += len(f" {RED_X_MARK}{str(num_nonblocking_audits)}") + 1
-                annotation_width = max(annotation_width, interval_str_len + audit_str_len)
             self.evaluation_column_widths["annotation"] = (
-                annotation_width + 3  # brackets and opening escape backslash
+                _calculate_annotation_str_len(batched_intervals)
+                + 3  # brackets and opening escape backslash
             )
             self.evaluation_column_widths["name"] = max(
                 len(
@@ -3261,3 +3231,47 @@ def _create_evaluation_model_annotation(snapshot: Snapshot, interval_info: t.Opt
         return "insert partitions"
 
     return interval_info if interval_info else ""
+
+
+def _calculate_interval_str_len(batched_intervals: t.Dict[Snapshot, t.List[Interval]]) -> int:
+    interval_str_len = 0
+    for snapshot, intervals in batched_intervals.items():
+        for interval in intervals:
+            interval_str_len = max(
+                interval_str_len,
+                len(
+                    _create_evaluation_model_annotation(
+                        snapshot, _format_evaluation_model_interval(snapshot, interval)
+                    )
+                ),
+            )
+    return interval_str_len
+
+
+def _calculate_audit_str_len(batched_intervals: t.Dict[Snapshot, t.List[Interval]]) -> int:
+    # The annotation includes audit results. We cannot build the audits result string
+    # until after evaluation occurs, but we must determine the annotation column width here.
+    # Therefore, we add enough padding for the longest possible audits result string.
+    audit_str_len = 0
+    for snapshot in batched_intervals:
+        if snapshot.is_model and snapshot.model.audits:
+            num_audits = len(snapshot.model.audits_with_args)
+            num_nonblocking_audits = sum(
+                1
+                for audit in snapshot.model.audits_with_args
+                if not audit[0].blocking
+                or ("blocking" in audit[1] and audit[1]["blocking"] == exp.false())
+            )
+            # make enough room for all audits to pass
+            audit_len = len(f", audits {CHECK_MARK}{str(num_audits)}")
+            if num_nonblocking_audits:
+                # and add enough room for all nonblocking audits to fail
+                audit_len += len(f" {RED_X_MARK}{str(num_nonblocking_audits)}") + 1
+            audit_str_len = max(audit_str_len, audit_len)
+    return audit_str_len
+
+
+def _calculate_annotation_str_len(batched_intervals: t.Dict[Snapshot, t.List[Interval]]) -> int:
+    return _calculate_interval_str_len(batched_intervals) + _calculate_audit_str_len(
+        batched_intervals
+    )
