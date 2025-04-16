@@ -282,7 +282,7 @@ class Console(LinterConsole, StateExporterConsole, StateImporterConsole, Janitor
         """Stop the environment migration progress."""
 
     @abc.abstractmethod
-    def show_model_difference_summary(
+    def show_difference_summary(
         self,
         context_diff: ContextDiff,
         environment_naming_info: EnvironmentNamingInfo,
@@ -552,7 +552,7 @@ class NoopConsole(Console):
     def stop_state_import(self, success: bool, input_file: Path) -> None:
         pass
 
-    def show_model_difference_summary(
+    def show_difference_summary(
         self,
         context_diff: ContextDiff,
         environment_naming_info: EnvironmentNamingInfo,
@@ -1326,7 +1326,7 @@ class TerminalConsole(Console):
             else:
                 self.log_error("State import failed!")
 
-    def show_model_difference_summary(
+    def show_difference_summary(
         self,
         context_diff: ContextDiff,
         environment_naming_info: EnvironmentNamingInfo,
@@ -1557,7 +1557,7 @@ class TerminalConsole(Console):
         """Get the user's change category for the directly modified models."""
         plan = plan_builder.build()
 
-        self.show_model_difference_summary(
+        self.show_difference_summary(
             plan.context_diff,
             plan.environment_naming_info,
             default_catalog=default_catalog,
@@ -2503,7 +2503,7 @@ class MarkdownConsole(CaptureTerminalConsole):
     def __init__(self, **kwargs: t.Any) -> None:
         super().__init__(**{**kwargs, "console": RichConsole(no_color=True)})
 
-    def show_model_difference_summary(
+    def show_difference_summary(
         self,
         context_diff: ContextDiff,
         environment_naming_info: EnvironmentNamingInfo,
@@ -3044,7 +3044,7 @@ class DebuggerTerminalConsole(TerminalConsole):
     def stop_env_migration_progress(self, success: bool = True) -> None:
         self._write(f"Stopping environment migration with success={success}")
 
-    def show_model_difference_summary(
+    def show_difference_summary(
         self,
         context_diff: ContextDiff,
         environment_naming_info: EnvironmentNamingInfo,

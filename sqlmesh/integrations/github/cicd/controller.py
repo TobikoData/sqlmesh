@@ -457,7 +457,7 @@ class GithubController:
         try:
             # Clear out any output that might exist from prior steps
             self._console.clear_captured_outputs()
-            self._console.show_model_difference_summary(
+            self._console.show_difference_summary(
                 context_diff=plan.context_diff,
                 environment_naming_info=plan.environment_naming_info,
                 default_catalog=self._context.default_catalog,

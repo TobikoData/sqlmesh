@@ -1533,7 +1533,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         environment = environment or self.config.default_target_environment
         environment = Environment.sanitize_name(environment)
         context_diff = self._context_diff(environment)
-        self.console.show_model_difference_summary(
+        self.console.show_difference_summary(
             context_diff,
             EnvironmentNamingInfo.from_environment_catalog_mapping(
                 self.config.environment_catalog_mapping,
