@@ -91,7 +91,92 @@ class LinterConsole(abc.ABC):
         """Prints all linter violations depending on their severity"""
 
 
-class Console(LinterConsole, abc.ABC):
+class StateExporterConsole(abc.ABC):
+    @abc.abstractmethod
+    def start_state_export(
+        self,
+        output_file: Path,
+        gateway: t.Optional[str] = None,
+        state_connection_config: t.Optional[ConnectionConfig] = None,
+        environment_names: t.Optional[t.List[str]] = None,
+        local_only: bool = False,
+        confirm: bool = True,
+    ) -> bool:
+        """State a state export"""
+
+    @abc.abstractmethod
+    def update_state_export_progress(
+        self,
+        version_count: t.Optional[int] = None,
+        versions_complete: bool = False,
+        snapshot_count: t.Optional[int] = None,
+        snapshots_complete: bool = False,
+        environment_count: t.Optional[int] = None,
+        environments_complete: bool = False,
+    ) -> None:
+        """Update the state export progress"""
+
+    @abc.abstractmethod
+    def stop_state_export(self, success: bool, output_file: Path) -> None:
+        """Finish a state export"""
+
+
+class StateImporterConsole(abc.ABC):
+    @abc.abstractmethod
+    def start_state_import(
+        self,
+        input_file: Path,
+        gateway: str,
+        state_connection_config: ConnectionConfig,
+        clear: bool = False,
+        confirm: bool = True,
+    ) -> bool:
+        """Start a state import"""
+
+    @abc.abstractmethod
+    def update_state_import_progress(
+        self,
+        timestamp: t.Optional[str] = None,
+        state_file_version: t.Optional[int] = None,
+        versions: t.Optional[Versions] = None,
+        snapshot_count: t.Optional[int] = None,
+        snapshots_complete: bool = False,
+        environment_count: t.Optional[int] = None,
+        environments_complete: bool = False,
+    ) -> None:
+        """Update the state import process"""
+
+    @abc.abstractmethod
+    def stop_state_import(self, success: bool, input_file: Path) -> None:
+        """Finish a state import"""
+
+
+class JanitorConsole(abc.ABC):
+    @abc.abstractmethod
+    def start_cleanup(self, ignore_ttl: bool) -> bool:
+        """Start a janitor / snapshot cleanup run.
+
+        Args:
+            ignore_ttl: Indicates that the user wants to ignore the snapshot TTL and clean up everything not promoted to an environment
+
+        Returns:
+            Whether or not the cleanup run should proceed
+        """
+
+    @abc.abstractmethod
+    def update_cleanup_progress(self, object_name: str) -> None:
+        """Update the snapshot cleanup progress."""
+
+    @abc.abstractmethod
+    def stop_cleanup(self, success: bool = True) -> None:
+        """Indicates the janitor / snapshot cleanup run has ended
+
+        Args:
+            success: Whether or not the cleanup completed successfully
+        """
+
+
+class Console(LinterConsole, StateExporterConsole, StateImporterConsole, JanitorConsole, abc.ABC):
     """Abstract base class for defining classes used for displaying information to the user and also interact
     with them when their input is needed."""
 
@@ -152,29 +237,6 @@ class Console(LinterConsole, abc.ABC):
         """Stop the snapshot creation progress."""
 
     @abc.abstractmethod
-    def start_cleanup(self, ignore_ttl: bool) -> bool:
-        """Start a janitor / snapshot cleanup run.
-
-        Args:
-            ignore_ttl: Indicates that the user wants to ignore the snapshot TTL and clean up everything not promoted to an environment
-
-        Returns:
-            Whether or not the cleanup run should proceed
-        """
-
-    @abc.abstractmethod
-    def update_cleanup_progress(self, object_name: str) -> None:
-        """Update the snapshot cleanup progress."""
-
-    @abc.abstractmethod
-    def stop_cleanup(self, success: bool = True) -> None:
-        """Indicates the janitor / snapshot cleanup run has ended
-
-        Args:
-            success: Whether or not the cleanup completed successfully
-        """
-
-    @abc.abstractmethod
     def start_promotion_progress(
         self,
         total_tasks: int,
@@ -218,62 +280,6 @@ class Console(LinterConsole, abc.ABC):
     @abc.abstractmethod
     def stop_env_migration_progress(self, success: bool = True) -> None:
         """Stop the environment migration progress."""
-
-    @abc.abstractmethod
-    def start_state_export(
-        self,
-        output_file: Path,
-        gateway: t.Optional[str] = None,
-        state_connection_config: t.Optional[ConnectionConfig] = None,
-        environment_names: t.Optional[t.List[str]] = None,
-        local_only: bool = False,
-        confirm: bool = True,
-    ) -> bool:
-        """State a state export"""
-
-    @abc.abstractmethod
-    def update_state_export_progress(
-        self,
-        version_count: t.Optional[int] = None,
-        versions_complete: bool = False,
-        snapshot_count: t.Optional[int] = None,
-        snapshots_complete: bool = False,
-        environment_count: t.Optional[int] = None,
-        environments_complete: bool = False,
-    ) -> None:
-        """Update the state export progress"""
-
-    @abc.abstractmethod
-    def stop_state_export(self, success: bool, output_file: Path) -> None:
-        """Finish a state export"""
-
-    @abc.abstractmethod
-    def start_state_import(
-        self,
-        input_file: Path,
-        gateway: str,
-        state_connection_config: ConnectionConfig,
-        clear: bool = False,
-        confirm: bool = True,
-    ) -> bool:
-        """Start a state import"""
-
-    @abc.abstractmethod
-    def update_state_import_progress(
-        self,
-        timestamp: t.Optional[str] = None,
-        state_file_version: t.Optional[int] = None,
-        versions: t.Optional[Versions] = None,
-        snapshot_count: t.Optional[int] = None,
-        snapshots_complete: bool = False,
-        environment_count: t.Optional[int] = None,
-        environments_complete: bool = False,
-    ) -> None:
-        """Update the state import process"""
-
-    @abc.abstractmethod
-    def stop_state_import(self, success: bool, input_file: Path) -> None:
-        """Finish a state import"""
 
     @abc.abstractmethod
     def show_model_difference_summary(
@@ -389,10 +395,6 @@ class Console(LinterConsole, abc.ABC):
     @abc.abstractmethod
     def print_environments(self, environments_summary: t.Dict[str, int]) -> None:
         """Prints all environment names along with expiry datetime."""
-
-    @abc.abstractmethod
-    def print_connection_config(self, config: ConnectionConfig, title: str = "Connection") -> None:
-        """Print connection config information"""
 
     def _limit_model_names(self, tree: Tree, verbosity: Verbosity = Verbosity.DEFAULT) -> Tree:
         """Trim long indirectly modified model lists below threshold."""
