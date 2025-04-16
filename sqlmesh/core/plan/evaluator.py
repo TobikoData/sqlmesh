@@ -204,6 +204,9 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         if plan.empty_backfill:
             intervals_to_add = []
             for snapshot in snapshots_by_name.values():
+                if not snapshot.evaluatable or not plan.is_selected_for_backfill(snapshot.name):
+                    # Skip snapshots that are not evaluatable or not selected for backfill.
+                    continue
                 intervals = [
                     snapshot.inclusive_exclusive(plan.start, plan.end, strict=False, expand=False)
                 ]
