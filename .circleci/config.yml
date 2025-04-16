@@ -22,7 +22,7 @@ orbs:
 jobs:
   vscode-extension-setup:
     docker:
-      - image: cimg/node:20
+      - image: cimg/node:20.19.0
     resource_class: small
     steps:
       - checkout
