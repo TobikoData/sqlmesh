@@ -282,13 +282,20 @@ class Console(LinterConsole, StateExporterConsole, StateImporterConsole, Janitor
         """Stop the environment migration progress."""
 
     @abc.abstractmethod
-    def show_difference_summary(
+    def show_environment_difference_summary(
+        self,
+        context_diff: ContextDiff,
+        no_diff: bool = True,
+    ) -> None:
+        """Displays a summary of differences for the environment."""
+
+    @abc.abstractmethod
+    def show_model_difference_summary(
         self,
         context_diff: ContextDiff,
         environment_naming_info: EnvironmentNamingInfo,
         default_catalog: t.Optional[str],
         no_diff: bool = True,
-        show_environment_statements: bool = True,
     ) -> None:
         """Displays a summary of differences for the given models."""
 
@@ -552,14 +559,19 @@ class NoopConsole(Console):
     def stop_state_import(self, success: bool, input_file: Path) -> None:
         pass
 
-    def show_difference_summary(
+    def show_environment_difference_summary(
+        self,
+        context_diff: ContextDiff,
+        no_diff: bool = True,
+    ) -> None:
+        pass
+
+    def show_model_difference_summary(
         self,
         context_diff: ContextDiff,
         environment_naming_info: EnvironmentNamingInfo,
         default_catalog: t.Optional[str],
         no_diff: bool = True,
-        show_environment_statements: bool = True,
-        ignored_snapshot_ids: t.Optional[t.Set[SnapshotId]] = None,
     ) -> None:
         pass
 
@@ -1326,21 +1338,16 @@ class TerminalConsole(Console):
             else:
                 self.log_error("State import failed!")
 
-    def show_difference_summary(
+    def show_environment_difference_summary(
         self,
         context_diff: ContextDiff,
-        environment_naming_info: EnvironmentNamingInfo,
-        default_catalog: t.Optional[str],
         no_diff: bool = True,
-        show_environment_statements: bool = True,
     ) -> None:
-        """Shows a summary of the differences.
+        """Shows a summary of the environment differences.
 
         Args:
             context_diff: The context diff to use to print the summary
-            environment_naming_info: The environment naming info to reference when printing model names
-            default_catalog: The default catalog to reference when deciding to remove catalog from display names
-            no_diff: Hide the actual SQL differences.
+            no_diff: Hide the actual environment statement differences.
         """
         if context_diff.is_new_environment:
             msg = (
@@ -1375,13 +1382,28 @@ class TerminalConsole(Console):
         if context_diff.has_requirement_changes:
             self._print(f"[bold]Requirements:\n{context_diff.requirements_diff()}")
 
-        if context_diff.has_environment_statements_changes and show_environment_statements:
+        if context_diff.has_environment_statements_changes and not no_diff:
             self._print("[bold]Environment statements:\n")
             for type, diff in context_diff.environment_statements_diff(
                 include_python_env=not context_diff.is_new_environment
             ):
                 self._print(Syntax(diff, type, line_numbers=False))
 
+    def show_model_difference_summary(
+        self,
+        context_diff: ContextDiff,
+        environment_naming_info: EnvironmentNamingInfo,
+        default_catalog: t.Optional[str],
+        no_diff: bool = True,
+    ) -> None:
+        """Shows a summary of the model differences.
+
+        Args:
+            context_diff: The context diff to use to print the summary
+            environment_naming_info: The environment naming info to reference when printing model names
+            default_catalog: The default catalog to reference when deciding to remove catalog from display names
+            no_diff: Hide the actual SQL differences.
+        """
         self._show_summary_tree_for(
             context_diff,
             "Models",
@@ -1557,12 +1579,17 @@ class TerminalConsole(Console):
         """Get the user's change category for the directly modified models."""
         plan = plan_builder.build()
 
-        self.show_difference_summary(
+        self.show_environment_difference_summary(
             plan.context_diff,
-            plan.environment_naming_info,
-            default_catalog=default_catalog,
-            show_environment_statements=not no_diff,
+            no_diff=no_diff,
         )
+
+        if plan.context_diff.has_changes:
+            self.show_model_difference_summary(
+                plan.context_diff,
+                plan.environment_naming_info,
+                default_catalog=default_catalog,
+            )
 
         if not no_diff:
             self._show_categorized_snapshots(plan, default_catalog)
@@ -2503,21 +2530,16 @@ class MarkdownConsole(CaptureTerminalConsole):
     def __init__(self, **kwargs: t.Any) -> None:
         super().__init__(**{**kwargs, "console": RichConsole(no_color=True)})
 
-    def show_difference_summary(
+    def show_environment_difference_summary(
         self,
         context_diff: ContextDiff,
-        environment_naming_info: EnvironmentNamingInfo,
-        default_catalog: t.Optional[str],
         no_diff: bool = True,
-        show_environment_statements: bool = True,
     ) -> None:
-        """Shows a summary of the differences.
+        """Shows a summary of the environment differences.
 
         Args:
             context_diff: The context diff to use to print the summary.
-            environment_naming_info: The environment naming info to reference when printing model names
-            default_catalog: The default catalog to reference when deciding to remove catalog from display names
-            no_diff: Hide the actual SQL differences.
+            no_diff: Hide the actual environment statements differences.
         """
         if context_diff.is_new_environment:
             self._print(
@@ -2535,13 +2557,28 @@ class MarkdownConsole(CaptureTerminalConsole):
         if context_diff.has_requirement_changes:
             self._print(f"Requirements:\n{context_diff.requirements_diff()}")
 
-        if context_diff.has_environment_statements_changes and show_environment_statements:
+        if context_diff.has_environment_statements_changes and not no_diff:
             self._print("[bold]Environment statements:\n")
             for _, diff in context_diff.environment_statements_diff(
                 include_python_env=not context_diff.is_new_environment
             ):
                 self._print(diff)
 
+    def show_model_difference_summary(
+        self,
+        context_diff: ContextDiff,
+        environment_naming_info: EnvironmentNamingInfo,
+        default_catalog: t.Optional[str],
+        no_diff: bool = True,
+    ) -> None:
+        """Shows a summary of the model differences.
+
+        Args:
+            context_diff: The context diff to use to print the summary.
+            environment_naming_info: The environment naming info to reference when printing model names
+            default_catalog: The default catalog to reference when deciding to remove catalog from display names
+            no_diff: Hide the actual SQL differences.
+        """
         added_snapshots = {context_diff.snapshots[s_id] for s_id in context_diff.added}
         added_snapshot_models = {s for s in added_snapshots if s.is_model}
         if added_snapshot_models:
@@ -3044,25 +3081,31 @@ class DebuggerTerminalConsole(TerminalConsole):
     def stop_env_migration_progress(self, success: bool = True) -> None:
         self._write(f"Stopping environment migration with success={success}")
 
-    def show_difference_summary(
+    def show_environment_difference_summary(
         self,
         context_diff: ContextDiff,
-        environment_naming_info: EnvironmentNamingInfo,
-        default_catalog: t.Optional[str],
         no_diff: bool = True,
-        show_environment_statements: bool = True,
     ) -> None:
-        self._write("Model Difference Summary:")
+        self._write("Environment Difference Summary:")
 
         if context_diff.has_requirement_changes:
             self._write(f"Requirements:\n{context_diff.requirements_diff()}")
 
-        if context_diff.has_environment_statements_changes and show_environment_statements:
+        if context_diff.has_environment_statements_changes and not no_diff:
             self._write("Environment statements:\n")
             for _, diff in context_diff.environment_statements_diff(
                 include_python_env=not context_diff.is_new_environment
             ):
                 self._write(diff)
+
+    def show_model_difference_summary(
+        self,
+        context_diff: ContextDiff,
+        environment_naming_info: EnvironmentNamingInfo,
+        default_catalog: t.Optional[str],
+        no_diff: bool = True,
+    ) -> None:
+        self._write("Model Difference Summary:")
 
         for added in context_diff.new_snapshots:
             self._write(f"  Added: {added}")

@@ -457,12 +457,15 @@ class GithubController:
         try:
             # Clear out any output that might exist from prior steps
             self._console.clear_captured_outputs()
-            self._console.show_difference_summary(
+            self._console.show_environment_difference_summary(
+                context_diff=plan.context_diff,
+                no_diff=False,
+            )
+            self._console.show_model_difference_summary(
                 context_diff=plan.context_diff,
                 environment_naming_info=plan.environment_naming_info,
                 default_catalog=self._context.default_catalog,
                 no_diff=False,
-                show_environment_statements=True,
             )
             difference_summary = self._console.consume_captured_output()
             self._console._show_missing_dates(plan, self._context.default_catalog)
