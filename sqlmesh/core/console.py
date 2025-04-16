@@ -37,7 +37,7 @@ from sqlmesh.core.snapshot import (
     SnapshotId,
     SnapshotInfoLike,
 )
-from sqlmesh.core.snapshot.definition import Interval
+from sqlmesh.core.snapshot.definition import Interval, Intervals, SnapshotTableInfo
 from sqlmesh.core.test import ModelTest
 from sqlmesh.utils import rich as srich
 from sqlmesh.utils import Verbosity
@@ -100,7 +100,7 @@ class Console(abc.ABC):
     @abc.abstractmethod
     def start_evaluation_progress(
         self,
-        batch_sizes: t.Dict[Snapshot, int],
+        batched_intervals: t.Dict[Snapshot, Intervals],
         environment_naming_info: EnvironmentNamingInfo,
         default_catalog: t.Optional[str],
     ) -> None:
@@ -129,7 +129,7 @@ class Console(abc.ABC):
     @abc.abstractmethod
     def start_creation_progress(
         self,
-        total_tasks: int,
+        snapshots: t.List[Snapshot],
         environment_naming_info: EnvironmentNamingInfo,
         default_catalog: t.Optional[str],
     ) -> None:
@@ -169,7 +169,7 @@ class Console(abc.ABC):
     @abc.abstractmethod
     def start_promotion_progress(
         self,
-        total_tasks: int,
+        snapshots: t.List[SnapshotTableInfo],
         environment_naming_info: EnvironmentNamingInfo,
         default_catalog: t.Optional[str],
     ) -> None:
@@ -416,7 +416,7 @@ class NoopConsole(Console):
 
     def start_evaluation_progress(
         self,
-        batch_sizes: t.Dict[Snapshot, int],
+        batched_intervals: t.Dict[Snapshot, Intervals],
         environment_naming_info: EnvironmentNamingInfo,
         default_catalog: t.Optional[str],
     ) -> None:
@@ -441,7 +441,7 @@ class NoopConsole(Console):
 
     def start_creation_progress(
         self,
-        total_tasks: int,
+        snapshots: t.List[Snapshot],
         environment_naming_info: EnvironmentNamingInfo,
         default_catalog: t.Optional[str],
     ) -> None:
@@ -464,7 +464,7 @@ class NoopConsole(Console):
 
     def start_promotion_progress(
         self,
-        total_tasks: int,
+        snapshots: t.List[SnapshotTableInfo],
         environment_naming_info: EnvironmentNamingInfo,
         default_catalog: t.Optional[str],
     ) -> None:
@@ -657,13 +657,6 @@ class TerminalConsole(Console):
 
     TABLE_DIFF_SOURCE_BLUE = "#0248ff"
 
-    PROGRESS_BAR_COLUMN_WIDTHS: t.Dict[str, int] = {
-        "batch": 7,
-        "name": 52,
-        "annotation": 50,
-        "duration": 8,
-    }
-
     def __init__(
         self,
         console: t.Optional[RichConsole] = None,
@@ -679,15 +672,18 @@ class TerminalConsole(Console):
         self.evaluation_total_task: t.Optional[TaskID] = None
         self.evaluation_model_progress: t.Optional[Progress] = None
         self.evaluation_model_tasks: t.Dict[str, TaskID] = {}
+        self.evaluation_column_widths: t.Dict[str, int] = {}
 
         # Put in temporary values that are replaced when evaluating
         self.environment_naming_info = EnvironmentNamingInfo()
         self.default_catalog: t.Optional[str] = None
 
         self.creation_progress: t.Optional[Progress] = None
+        self.creation_column_widths: t.Dict[str, int] = {}
         self.creation_task: t.Optional[TaskID] = None
 
         self.promotion_progress: t.Optional[Progress] = None
+        self.promotion_column_widths: t.Dict[str, int] = {}
         self.promotion_task: t.Optional[TaskID] = None
 
         self.migration_progress: t.Optional[Progress] = None
@@ -729,7 +725,7 @@ class TerminalConsole(Console):
 
     def start_evaluation_progress(
         self,
-        batch_sizes: t.Dict[Snapshot, int],
+        batched_intervals: t.Dict[Snapshot, Intervals],
         environment_naming_info: EnvironmentNamingInfo,
         default_catalog: t.Optional[str],
     ) -> None:
@@ -752,9 +748,31 @@ class TerminalConsole(Console):
             self.evaluation_progress_live = Live(progress_table, refresh_per_second=10)
             self.evaluation_progress_live.start()
 
+            batch_sizes = {
+                snapshot: len(intervals) for snapshot, intervals in batched_intervals.items()
+            }
             self.evaluation_total_task = self.evaluation_total_progress.add_task(
                 "Executing models...", total=sum(batch_sizes.values())
             )
+
+            # determine column widths
+            self.evaluation_column_widths["annotation"] = (
+                _calculate_annotation_str_len(batched_intervals)
+                + 3  # brackets and opening escape backslash
+            )
+            self.evaluation_column_widths["name"] = max(
+                len(
+                    snapshot.display_name(
+                        self.environment_naming_info,
+                        default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None,
+                        dialect=self.dialect,
+                    )
+                )
+                for snapshot in batched_intervals
+            )
+            largest_batch_size = max(batch_sizes.values())
+            self.evaluation_column_widths["batch"] = len(str(largest_batch_size)) * 2 + 3  # [X/X]
+            self.evaluation_column_widths["duration"] = 8
 
             self.evaluation_model_batch_sizes = batch_sizes
             self.environment_naming_info = environment_naming_info
@@ -790,17 +808,14 @@ class TerminalConsole(Console):
         ):
             total_batches = self.evaluation_model_batch_sizes[snapshot]
             batch_num = str(batch_idx + 1).rjust(len(str(total_batches)))
-            batch = f"[{batch_num}/{total_batches}]".ljust(self.PROGRESS_BAR_COLUMN_WIDTHS["batch"])
+            batch = f"[{batch_num}/{total_batches}]".ljust(self.evaluation_column_widths["batch"])
 
             if duration_ms:
-                display_name = _justify_evaluation_model_info(
-                    snapshot.display_name(
-                        self.environment_naming_info,
-                        self.default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None,
-                        dialect=self.dialect,
-                    ),
-                    self.PROGRESS_BAR_COLUMN_WIDTHS["name"],
-                )
+                display_name = snapshot.display_name(
+                    self.environment_naming_info,
+                    self.default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None,
+                    dialect=self.dialect,
+                ).ljust(self.evaluation_column_widths["name"])
 
                 annotation = _create_evaluation_model_annotation(
                     snapshot, _format_evaluation_model_interval(snapshot, interval)
@@ -811,26 +826,20 @@ class TerminalConsole(Console):
                 if num_audits_failed:
                     audits_str += f" {RED_X_MARK}{num_audits_failed}"
                 audits_str = f", audits{audits_str}" if audits_str else ""
-
-                annotation_width = self.PROGRESS_BAR_COLUMN_WIDTHS["annotation"]
-                annotation = _justify_evaluation_model_info(
-                    annotation + audits_str,
-                    annotation_width
-                    if not num_audits_failed
-                    else annotation_width - 1,  # -1 for RED_X_MARK's extra space
-                    dots_side="right",
-                    prefix=" \\[",
-                    suffix="]",
+                annotation_len = self.evaluation_column_widths["annotation"]
+                annotation = f"\[{annotation + audits_str}]".ljust(
+                    annotation_len - 1 if num_audits_failed else annotation_len
                 )
-                annotation = annotation.replace(CHECK_MARK, GREEN_CHECK_MARK)
 
                 duration = f"{(duration_ms / 1000.0):.2f}s".ljust(
-                    self.PROGRESS_BAR_COLUMN_WIDTHS["duration"]
+                    self.evaluation_column_widths["duration"]
                 )
 
-                self.evaluation_progress_live.console.print(
-                    f"{batch}{display_name}{annotation} {duration}"
+                msg = f"{batch} {display_name}  {annotation} {duration}".replace(
+                    CHECK_MARK, GREEN_CHECK_MARK
                 )
+
+                self.evaluation_progress_live.console.print(msg)
 
             self.evaluation_total_progress.update(
                 self.evaluation_total_task or TaskID(0), refresh=True, advance=1
@@ -854,12 +863,13 @@ class TerminalConsole(Console):
         self.evaluation_model_progress = None
         self.evaluation_model_tasks = {}
         self.evaluation_model_batch_sizes = {}
+        self.evaluation_column_widths = {}
         self.environment_naming_info = EnvironmentNamingInfo()
         self.default_catalog = None
 
     def start_creation_progress(
         self,
-        total_tasks: int,
+        snapshots: t.List[Snapshot],
         environment_naming_info: EnvironmentNamingInfo,
         default_catalog: t.Optional[str],
     ) -> None:
@@ -871,8 +881,21 @@ class TerminalConsole(Console):
             self.creation_progress.start()
             self.creation_task = self.creation_progress.add_task(
                 "Updating physical layer...",
-                total=total_tasks,
+                total=len(snapshots),
             )
+
+            # determine name column widths if we're printing name
+            if self.verbosity >= Verbosity.VERBOSE:
+                self.creation_column_widths["name"] = max(
+                    len(
+                        snapshot.display_name(
+                            self.environment_naming_info,
+                            default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None,
+                            dialect=self.dialect,
+                        )
+                    )
+                    for snapshot in snapshots
+                )
 
             self.environment_naming_info = environment_naming_info
             self.default_catalog = default_catalog
@@ -881,9 +904,12 @@ class TerminalConsole(Console):
         """Update the snapshot creation progress."""
         if self.creation_progress is not None and self.creation_task is not None:
             if self.verbosity >= Verbosity.VERBOSE:
-                self.creation_progress.live.console.print(
-                    f"{snapshot.display_name(self.environment_naming_info, self.default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect).ljust(self.PROGRESS_BAR_COLUMN_WIDTHS['name'])} [green]created[/green]"
-                )
+                msg = snapshot.display_name(
+                    self.environment_naming_info,
+                    self.default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None,
+                    dialect=self.dialect,
+                ).ljust(self.creation_column_widths["name"])
+                self.creation_progress.live.console.print(msg + "  [green]created[/green]")
             self.creation_progress.update(self.creation_task, refresh=True, advance=1)
 
     def stop_creation_progress(self, success: bool = True) -> None:
@@ -897,6 +923,7 @@ class TerminalConsole(Console):
 
         self.environment_naming_info = EnvironmentNamingInfo()
         self.default_catalog = None
+        self.creation_column_widths = {}
 
     def start_cleanup(self, ignore_ttl: bool) -> bool:
         if ignore_ttl:
@@ -926,7 +953,7 @@ class TerminalConsole(Console):
 
     def start_promotion_progress(
         self,
-        total_tasks: int,
+        snapshots: t.List[SnapshotTableInfo],
         environment_naming_info: EnvironmentNamingInfo,
         default_catalog: t.Optional[str],
     ) -> None:
@@ -939,8 +966,21 @@ class TerminalConsole(Console):
             self.promotion_progress.start()
             self.promotion_task = self.promotion_progress.add_task(
                 f"Virtually updating {environment_naming_info.name}...",
-                total=total_tasks,
+                total=len(snapshots),
             )
+
+            # determine name column widths if we're printing names
+            if self.verbosity >= Verbosity.VERBOSE:
+                self.promotion_column_widths["name"] = max(
+                    len(
+                        snapshot.display_name(
+                            self.environment_naming_info,
+                            default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None,
+                            dialect=self.dialect,
+                        )
+                    )
+                    for snapshot in snapshots
+                )
 
             self.environment_naming_info = environment_naming_info
             self.default_catalog = default_catalog
@@ -949,12 +989,15 @@ class TerminalConsole(Console):
         """Update the snapshot promotion progress."""
         if self.promotion_progress is not None and self.promotion_task is not None:
             if self.verbosity >= Verbosity.VERBOSE:
+                display_name = snapshot.display_name(
+                    self.environment_naming_info,
+                    self.default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None,
+                    dialect=self.dialect,
+                ).ljust(self.promotion_column_widths["name"])
                 action_str = (
                     "[green]promoted[/green]" if promoted else "[yellow]demoted[/yellow]"
                 ).ljust(len("promoted"))
-                self.promotion_progress.live.console.print(
-                    f"{snapshot.display_name(self.environment_naming_info, self.default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect).ljust(self.PROGRESS_BAR_COLUMN_WIDTHS['name'])} {action_str}"
-                )
+                self.promotion_progress.live.console.print(f"{display_name}  {action_str}")
             self.promotion_progress.update(self.promotion_task, refresh=True, advance=1)
 
     def stop_promotion_progress(self, success: bool = True) -> None:
@@ -968,6 +1011,7 @@ class TerminalConsole(Console):
 
         self.environment_naming_info = EnvironmentNamingInfo()
         self.default_catalog = None
+        self.promotion_column_widths = {}
 
     def start_snapshot_migration_progress(self, total_tasks: int) -> None:
         """Indicates that a new snapshot migration progress has begun."""
@@ -2718,11 +2762,13 @@ class DatabricksMagicConsole(CaptureTerminalConsole):
 
     def start_evaluation_progress(
         self,
-        batch_sizes: t.Dict[Snapshot, int],
+        batched_intervals: t.Dict[Snapshot, Intervals],
         environment_naming_info: EnvironmentNamingInfo,
         default_catalog: t.Optional[str],
     ) -> None:
-        self.evaluation_model_batch_sizes = batch_sizes
+        self.evaluation_model_batch_sizes = {
+            snapshot: len(intervals) for snapshot, intervals in batched_intervals.items()
+        }
         self.evaluation_environment_naming_info = environment_naming_info
         self.default_catalog = default_catalog
 
@@ -2774,12 +2820,12 @@ class DatabricksMagicConsole(CaptureTerminalConsole):
 
     def start_creation_progress(
         self,
-        total_tasks: int,
+        snapshots: t.List[Snapshot],
         environment_naming_info: EnvironmentNamingInfo,
         default_catalog: t.Optional[str],
     ) -> None:
         """Indicates that a new creation progress has begun."""
-        self.model_creation_status = (0, total_tasks)
+        self.model_creation_status = (0, len(snapshots))
         print("Starting Creating New Model Versions")
 
     def update_creation_progress(self, snapshot: SnapshotInfoLike) -> None:
@@ -2797,12 +2843,12 @@ class DatabricksMagicConsole(CaptureTerminalConsole):
 
     def start_promotion_progress(
         self,
-        total_tasks: int,
+        snapshots: t.List[SnapshotTableInfo],
         environment_naming_info: EnvironmentNamingInfo,
         default_catalog: t.Optional[str],
     ) -> None:
         """Indicates that a new snapshot promotion progress has begun."""
-        self.promotion_status = (0, total_tasks)
+        self.promotion_status = (0, len(snapshots))
         print(f"Virtually Updating '{environment_naming_info.name}'")
 
     def update_promotion_progress(self, snapshot: SnapshotInfoLike, promoted: bool) -> None:
@@ -2886,11 +2932,13 @@ class DebuggerTerminalConsole(TerminalConsole):
 
     def start_evaluation_progress(
         self,
-        batch_sizes: t.Dict[Snapshot, int],
+        batched_intervals: t.Dict[Snapshot, Intervals],
         environment_naming_info: EnvironmentNamingInfo,
         default_catalog: t.Optional[str],
     ) -> None:
-        self._write(f"Starting evaluation for {sum(batch_sizes.values())} snapshots")
+        self._write(
+            f"Starting evaluation for {sum(len(intervals) for intervals in batched_intervals.values())} snapshots"
+        )
 
     def start_snapshot_evaluation_progress(self, snapshot: Snapshot) -> None:
         self._write(f"Evaluating {snapshot.name}")
@@ -2913,11 +2961,11 @@ class DebuggerTerminalConsole(TerminalConsole):
 
     def start_creation_progress(
         self,
-        total_tasks: int,
+        snapshots: t.List[Snapshot],
         environment_naming_info: EnvironmentNamingInfo,
         default_catalog: t.Optional[str],
     ) -> None:
-        self._write(f"Starting creation for {total_tasks} snapshots")
+        self._write(f"Starting creation for {len(snapshots)} snapshots")
 
     def update_creation_progress(self, snapshot: SnapshotInfoLike) -> None:
         self._write(f"Creating {snapshot.name}")
@@ -2930,11 +2978,11 @@ class DebuggerTerminalConsole(TerminalConsole):
 
     def start_promotion_progress(
         self,
-        total_tasks: int,
+        snapshots: t.List[SnapshotTableInfo],
         environment_naming_info: EnvironmentNamingInfo,
         default_catalog: t.Optional[str],
     ) -> None:
-        self._write(f"Starting promotion for {total_tasks} snapshots")
+        self._write(f"Starting promotion for {len(snapshots)} snapshots")
 
     def update_promotion_progress(self, snapshot: SnapshotInfoLike, promoted: bool) -> None:
         self._write(f"Promoting {snapshot.name}")
@@ -3154,44 +3202,6 @@ def _format_evaluation_model_interval(snapshot: Snapshot, interval: Interval) ->
     return ""
 
 
-def _justify_evaluation_model_info(
-    text: str,
-    length: int,
-    justify_direction: t.Literal["left", "right"] = "left",
-    dots_side: t.Literal["left", "right"] = "left",
-    prefix: str = "",
-    suffix: str = "",
-) -> str:
-    """Format a model evaluation info string by justifying and truncating if needed.
-
-    Args:
-        text: The string to format
-        length: The desired number of characters in the returned string
-        justify_direction: The justification direction ("left" or "l" or "right" or "r")
-        dots_side: The side of the dots if truncation is needed ("left" or "l" or "right" or "r")
-        prefix: A prefix to add to the returned string
-        suffix: A suffix to add to the returned string
-
-    Returns:
-        The justified string, truncated with "..." if needed
-    """
-    full_text = f"{prefix}{text}{suffix}"
-    if len(full_text) <= length:
-        return (
-            full_text.ljust(length)
-            if justify_direction.startswith("l")
-            else full_text.rjust(length)
-        )
-
-    trunc_length = length - len(prefix) - len(suffix)
-    truncated_text = (
-        "..." + text[-(trunc_length - 3) :]
-        if dots_side.startswith("l")
-        else text[: (trunc_length - 3)] + "..."
-    )
-    return f"{prefix}{truncated_text}{suffix}"
-
-
 def _create_evaluation_model_annotation(snapshot: Snapshot, interval_info: t.Optional[str]) -> str:
     if snapshot.is_audit:
         return "run standalone audit"
@@ -3209,3 +3219,47 @@ def _create_evaluation_model_annotation(snapshot: Snapshot, interval_info: t.Opt
         return "insert partitions"
 
     return interval_info if interval_info else ""
+
+
+def _calculate_interval_str_len(batched_intervals: t.Dict[Snapshot, t.List[Interval]]) -> int:
+    interval_str_len = 0
+    for snapshot, intervals in batched_intervals.items():
+        for interval in intervals:
+            interval_str_len = max(
+                interval_str_len,
+                len(
+                    _create_evaluation_model_annotation(
+                        snapshot, _format_evaluation_model_interval(snapshot, interval)
+                    )
+                ),
+            )
+    return interval_str_len
+
+
+def _calculate_audit_str_len(batched_intervals: t.Dict[Snapshot, t.List[Interval]]) -> int:
+    # The annotation includes audit results. We cannot build the audits result string
+    # until after evaluation occurs, but we must determine the annotation column width here.
+    # Therefore, we add enough padding for the longest possible audits result string.
+    audit_str_len = 0
+    for snapshot in batched_intervals:
+        if snapshot.is_model and snapshot.model.audits:
+            num_audits = len(snapshot.model.audits_with_args)
+            num_nonblocking_audits = sum(
+                1
+                for audit in snapshot.model.audits_with_args
+                if not audit[0].blocking
+                or ("blocking" in audit[1] and audit[1]["blocking"] == exp.false())
+            )
+            # make enough room for all audits to pass
+            audit_len = len(f", audits {CHECK_MARK}{str(num_audits)}")
+            if num_nonblocking_audits:
+                # and add enough room for all nonblocking audits to fail
+                audit_len += len(f" {RED_X_MARK}{str(num_nonblocking_audits)}") + 1
+            audit_str_len = max(audit_str_len, audit_len)
+    return audit_str_len
+
+
+def _calculate_annotation_str_len(batched_intervals: t.Dict[Snapshot, t.List[Interval]]) -> int:
+    return _calculate_interval_str_len(batched_intervals) + _calculate_audit_str_len(
+        batched_intervals
+    )

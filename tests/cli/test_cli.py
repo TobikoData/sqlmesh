@@ -186,10 +186,7 @@ def test_plan(runner, tmp_path):
     assert_plan_success(result)
     # 'Models needing backfill' section and eval progress bar should display the same inclusive intervals
     assert "sqlmesh_example.incremental_model: [2020-01-01 - 2022-12-31]" in result.output
-    assert (
-        "sqlmesh_example.incremental_model                    [insert 2020-01-01 -\n2022-12-31]"
-        in result.output
-    )
+    assert "sqlmesh_example.incremental_model  [insert 2020-01-01 - 2022-12-31]" in result.output
 
 
 def test_plan_skip_tests(runner, tmp_path):
@@ -250,7 +247,7 @@ def test_plan_restate_model(runner, tmp_path):
     assert result.exit_code == 0
     assert_duckdb_test(result)
     assert "No changes to plan: project files match the `prod` environment" in result.output
-    assert "sqlmesh_example.full_model                           [full refresh" in result.output
+    assert "sqlmesh_example.full_model  [full refresh" in result.output
     assert_model_batches_executed(result)
     assert_virtual_layer_updated(result)
 
@@ -301,8 +298,8 @@ def test_plan_verbose(runner, tmp_path):
         cli, ["--log-file-dir", tmp_path, "--paths", tmp_path, "plan", "--verbose"], input="y\n"
     )
     assert_plan_success(result)
-    assert "sqlmesh_example.seed_model                           created" in result.output
-    assert "sqlmesh_example.seed_model                           promoted" in result.output
+    assert "sqlmesh_example.seed_model         created" in result.output
+    assert "sqlmesh_example.seed_model         promoted" in result.output
 
 
 def test_plan_very_verbose(runner, tmp_path, copy_to_temp_path):
@@ -560,8 +557,8 @@ def test_plan_nonbreaking(runner, tmp_path):
     assert "+  'a' AS new_col" in result.output
     assert "Directly Modified: sqlmesh_example.incremental_model (Non-breaking)" in result.output
     assert "sqlmesh_example.full_model (Indirect Non-breaking)" in result.output
-    assert "sqlmesh_example.incremental_model                    [insert" in result.output
-    assert "sqlmesh_example.full_model evaluated [full refresh" not in result.output
+    assert "sqlmesh_example.incremental_model  [insert" in result.output
+    assert "sqlmesh_example.full_model  [full refresh" not in result.output
     assert_backfill_success(result)
 
 
@@ -618,8 +615,8 @@ def test_plan_breaking(runner, tmp_path):
     assert result.exit_code == 0
     assert "+  item_id + 1 AS item_id," in result.output
     assert "Directly Modified: sqlmesh_example.full_model (Breaking)" in result.output
-    assert "sqlmesh_example.full_model                           [full refresh" in result.output
-    assert "sqlmesh_example.incremental_model                     [insert" not in result.output
+    assert "sqlmesh_example.full_model  [full refresh" in result.output
+    assert "sqlmesh_example.incremental_model  [insert" not in result.output
     assert_backfill_success(result)
 
 
@@ -657,8 +654,8 @@ def test_plan_dev_select(runner, tmp_path):
     assert "+  item_id + 1 AS item_id," not in result.output
     assert "Directly Modified: sqlmesh_example__dev.full_model (Breaking)" not in result.output
     # only incremental_model backfilled
-    assert "sqlmesh_example__dev.incremental_model               [insert" in result.output
-    assert "sqlmesh_example__dev.full_model                    [full refresh" not in result.output
+    assert "sqlmesh_example__dev.incremental_model  [insert" in result.output
+    assert "sqlmesh_example__dev.full_model  [full refresh" not in result.output
     assert_backfill_success(result)
 
 
@@ -696,8 +693,8 @@ def test_plan_dev_backfill(runner, tmp_path):
         "Directly Modified: sqlmesh_example__dev.incremental_model (Non-breaking)" in result.output
     )
     # only incremental_model backfilled
-    assert "sqlmesh_example__dev.incremental_model               [insert" in result.output
-    assert "sqlmesh_example__dev.full_model                      [full refresh" not in result.output
+    assert "sqlmesh_example__dev.incremental_model  [insert" in result.output
+    assert "sqlmesh_example__dev.full_model  [full refresh" not in result.output
     assert_backfill_success(result)
 
 

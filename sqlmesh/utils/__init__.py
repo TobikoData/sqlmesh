@@ -347,3 +347,15 @@ class Verbosity(IntEnum):
     DEFAULT = 0
     VERBOSE = 1
     VERY_VERBOSE = 2
+
+    @property
+    def is_default(self) -> bool:
+        return self == Verbosity.DEFAULT
+
+    @property
+    def is_verbose(self) -> bool:
+        return self == Verbosity.VERBOSE
+
+    @property
+    def is_very_verbose(self) -> bool:
+        return self == Verbosity.VERY_VERBOSE

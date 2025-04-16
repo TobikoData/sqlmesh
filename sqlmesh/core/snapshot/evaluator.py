@@ -350,7 +350,7 @@ class SnapshotEvaluator:
         if not snapshots_to_create:
             return
         if on_start:
-            on_start(len(snapshots_to_create))
+            on_start(snapshots_to_create)
         self._create_schemas(tables_by_schema, gateway_by_schema)
         self._create_snapshots(
             snapshots_to_create=snapshots_to_create,
