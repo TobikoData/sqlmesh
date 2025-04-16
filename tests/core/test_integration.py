@@ -3938,7 +3938,61 @@ def test_empty_backfill(init_and_plan_context: t.Callable):
 
     snapshots = plan.snapshots
     for snapshot in snapshots.values():
+        if not snapshot.intervals:
+            continue
         assert snapshot.intervals[-1][1] <= to_timestamp("2023-01-08")
+
+
+@time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_empty_backfill_new_model(init_and_plan_context: t.Callable):
+    context, plan = init_and_plan_context("examples/sushi")
+    context.apply(plan)
+
+    new_model = load_sql_based_model(
+        d.parse(
+            """
+        MODEL (
+            name memory.sushi.new_model,
+            kind FULL,
+            cron '0 8 * * *',
+            start '2023-01-01',
+        );
+
+        SELECT 1 AS one;
+        """
+        )
+    )
+    new_model_name = context.upsert_model(new_model).fqn
+
+    with time_machine.travel("2023-01-09 00:00:00 UTC"):
+        plan = context.plan_builder("dev", skip_tests=True, empty_backfill=True).build()
+        assert plan.end == to_datetime("2023-01-09")
+        assert plan.missing_intervals
+        assert plan.empty_backfill
+        assert not plan.requires_backfill
+
+        context.apply(plan)
+
+        for model in context.models.values():
+            if model.is_seed or model.kind.is_symbolic:
+                continue
+            row_num = context.engine_adapter.fetchone(f"SELECT COUNT(*) FROM sushi__dev.new_model")[
+                0
+            ]
+            assert row_num == 0
+
+        plan = context.plan_builder("prod", skip_tests=True).build()
+        assert not plan.requires_backfill
+        assert not plan.missing_intervals
+
+        snapshots = plan.snapshots
+        for snapshot in snapshots.values():
+            if not snapshot.intervals:
+                continue
+            elif snapshot.name == new_model_name:
+                assert snapshot.intervals[-1][1] == to_timestamp("2023-01-09")
+            else:
+                assert snapshot.intervals[-1][1] <= to_timestamp("2023-01-08")
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
