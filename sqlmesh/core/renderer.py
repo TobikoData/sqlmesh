@@ -213,16 +213,16 @@ class BaseExpressionRenderer:
             environment_naming_info=environment_naming_info,
         )
 
+        macro_evaluator.locals.update(render_kwargs)
+
+        if variables:
+            macro_evaluator.locals.setdefault(c.SQLMESH_VARS, {}).update(variables)
+
         for definition in self._macro_definitions:
             try:
                 macro_evaluator.evaluate(definition)
             except Exception as ex:
                 raise_config_error(f"Failed to evaluate macro '{definition}'. {ex}", self._path)
-
-        macro_evaluator.locals.update(render_kwargs)
-
-        if variables:
-            macro_evaluator.locals.setdefault(c.SQLMESH_VARS, {}).update(variables)
 
         resolved_expressions: t.List[t.Optional[exp.Expression]] = []
 
