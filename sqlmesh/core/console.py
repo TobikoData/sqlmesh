@@ -288,6 +288,7 @@ class Console(LinterConsole, StateExporterConsole, StateImporterConsole, Janitor
         environment_naming_info: EnvironmentNamingInfo,
         default_catalog: t.Optional[str],
         no_diff: bool = True,
+        show_environment_statements: bool = True,
     ) -> None:
         """Displays a summary of differences for the given models."""
 
@@ -557,6 +558,7 @@ class NoopConsole(Console):
         environment_naming_info: EnvironmentNamingInfo,
         default_catalog: t.Optional[str],
         no_diff: bool = True,
+        show_environment_statements: bool = True,
         ignored_snapshot_ids: t.Optional[t.Set[SnapshotId]] = None,
     ) -> None:
         pass
@@ -1330,6 +1332,7 @@ class TerminalConsole(Console):
         environment_naming_info: EnvironmentNamingInfo,
         default_catalog: t.Optional[str],
         no_diff: bool = True,
+        show_environment_statements: bool = True,
     ) -> None:
         """Shows a summary of the differences.
 
@@ -1372,9 +1375,11 @@ class TerminalConsole(Console):
         if context_diff.has_requirement_changes:
             self._print(f"[bold]Requirements:\n{context_diff.requirements_diff()}")
 
-        if context_diff.has_environment_statements_changes:
+        if context_diff.has_environment_statements_changes and show_environment_statements:
             self._print("[bold]Environment statements:\n")
-            for type, diff in context_diff.environment_statements_diff():
+            for type, diff in context_diff.environment_statements_diff(
+                include_python_env=not context_diff.is_new_environment
+            ):
                 self._print(Syntax(diff, type, line_numbers=False))
 
         self._show_summary_tree_for(
@@ -1556,6 +1561,7 @@ class TerminalConsole(Console):
             plan.context_diff,
             plan.environment_naming_info,
             default_catalog=default_catalog,
+            show_environment_statements=not no_diff,
         )
 
         if not no_diff:
@@ -2503,6 +2509,7 @@ class MarkdownConsole(CaptureTerminalConsole):
         environment_naming_info: EnvironmentNamingInfo,
         default_catalog: t.Optional[str],
         no_diff: bool = True,
+        show_environment_statements: bool = True,
     ) -> None:
         """Shows a summary of the differences.
 
@@ -2528,9 +2535,11 @@ class MarkdownConsole(CaptureTerminalConsole):
         if context_diff.has_requirement_changes:
             self._print(f"Requirements:\n{context_diff.requirements_diff()}")
 
-        if context_diff.has_environment_statements_changes:
+        if context_diff.has_environment_statements_changes and show_environment_statements:
             self._print("[bold]Environment statements:\n")
-            for _, diff in context_diff.environment_statements_diff():
+            for _, diff in context_diff.environment_statements_diff(
+                include_python_env=not context_diff.is_new_environment
+            ):
                 self._print(diff)
 
         added_snapshots = {context_diff.snapshots[s_id] for s_id in context_diff.added}
@@ -3041,15 +3050,18 @@ class DebuggerTerminalConsole(TerminalConsole):
         environment_naming_info: EnvironmentNamingInfo,
         default_catalog: t.Optional[str],
         no_diff: bool = True,
+        show_environment_statements: bool = True,
     ) -> None:
         self._write("Model Difference Summary:")
 
         if context_diff.has_requirement_changes:
             self._write(f"Requirements:\n{context_diff.requirements_diff()}")
 
-        if context_diff.has_environment_statements_changes:
+        if context_diff.has_environment_statements_changes and show_environment_statements:
             self._write("Environment statements:\n")
-            for _, diff in context_diff.environment_statements_diff():
+            for _, diff in context_diff.environment_statements_diff(
+                include_python_env=not context_diff.is_new_environment
+            ):
                 self._write(diff)
 
         for added in context_diff.new_snapshots:

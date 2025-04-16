@@ -462,6 +462,7 @@ class GithubController:
                 environment_naming_info=plan.environment_naming_info,
                 default_catalog=self._context.default_catalog,
                 no_diff=False,
+                show_environment_statements=True,
             )
             difference_summary = self._console.consume_captured_output()
             self._console._show_missing_dates(plan, self._context.default_catalog)

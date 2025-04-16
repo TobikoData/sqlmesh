@@ -1543,6 +1543,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             ),
             self.default_catalog,
             no_diff=not detailed,
+            show_environment_statements=detailed,
         )
         return context_diff.has_changes
 
