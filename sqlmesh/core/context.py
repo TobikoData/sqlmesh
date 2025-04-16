@@ -2307,7 +2307,12 @@ class GenericContext(BaseContext, t.Generic[C]):
 
     def _cleanup_environments(self) -> None:
         expired_environments = self.state_sync.delete_expired_environments()
-        cleanup_expired_views(self.engine_adapter, expired_environments, console=self.console)
+        cleanup_expired_views(
+            self.engine_adapter,
+            expired_environments,
+            warn_on_delete_failure=self.config.janitor.warn_on_delete_failure,
+            console=self.console,
+        )
 
     def _try_connection(self, connection_name: str, validator: t.Callable[[], None]) -> None:
         connection_name = connection_name.capitalize()
