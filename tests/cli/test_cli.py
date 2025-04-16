@@ -294,8 +294,23 @@ def test_plan_verbose(runner, tmp_path):
         cli, ["--log-file-dir", tmp_path, "--paths", tmp_path, "plan", "--verbose"], input="y\n"
     )
     assert_plan_success(result)
-    assert "sqlmesh_example.seed_model                           created" in result.output
-    assert "sqlmesh_example.full_model                           created" in result.output
+    assert "sqlmesh_example.seed_model         created" in result.output
+    assert "sqlmesh_example.full_model         created" in result.output
+
+    # confirm virtual layer action labels correct
+    update_incremental_model(tmp_path)
+    import os
+
+    os.remove(tmp_path / "models" / "full_model.sql")
+
+    # Input: `y` to apply and backfill
+    result = runner.invoke(
+        cli, ["--log-file-dir", tmp_path, "--paths", tmp_path, "plan", "--verbose"], input="y\n"
+    )
+    assert result.exit_code == 0
+    assert_backfill_success(result)
+    assert "sqlmesh_example.incremental_model  updated" in result.output
+    assert "sqlmesh_example.full_model         dropped" in result.output
 
 
 def test_plan_very_verbose(runner, tmp_path, copy_to_temp_path):

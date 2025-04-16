@@ -172,11 +172,7 @@ class ApiConsole(TerminalConsole):
 
         self.log_event_plan_apply()
 
-    def update_promotion_progress(
-        self,
-        snapshot: SnapshotInfoLike,
-        promoted: bool,
-    ) -> None:
+    def update_promotion_progress(self, snapshot: SnapshotInfoLike, promoted: bool) -> None:
         if self.plan_apply_stage_tracker and self.plan_apply_stage_tracker.promote:
             self.plan_apply_stage_tracker.promote.update(
                 {"num_tasks": self.plan_apply_stage_tracker.promote.num_tasks + 1}

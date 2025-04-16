@@ -973,8 +973,8 @@ class SnapshotEvaluator:
             )
             adapter.execute(snapshot.model.render_on_virtual_update(**render_kwargs))
 
-            if on_complete is not None:
-                on_complete(snapshot)
+        if on_complete is not None:
+            on_complete(snapshot)
 
     def _demote_snapshot(
         self,

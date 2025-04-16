@@ -167,9 +167,6 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                 plan, snapshots, promotion_result, deployability_index_for_evaluation
             )
 
-            if not plan.requires_backfill:
-                self.console.log_success("Virtual Update executed successfully")
-
             execute_environment_statements(
                 adapter=self.snapshot_evaluator.adapter,
                 environment_statements=plan.environment_statements or [],
@@ -376,7 +373,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         environment = plan.environment
 
         self.console.start_promotion_progress(
-            len(promotion_result.added) + len(promotion_result.removed),
+            promotion_result.added + promotion_result.removed,
             environment.naming_info,
             self.default_catalog,
         )
