@@ -3,6 +3,7 @@ import { ServerOptions, LanguageClientOptions, LanguageClient, TransportKind } f
 import { sqlmesh_lsp_exec } from "../utilities/sqlmesh/sqlmesh"
 import { err, isErr, ok, Result } from "../utilities/functional/result"
 import { getWorkspaceFolders } from "../utilities/common/vscodeapi"
+import { traceError } from "../utilities/common/log"
 
 let outputChannel: OutputChannel | undefined
 
@@ -20,10 +21,12 @@ export class LSPClient implements Disposable {
 
         const sqlmesh = await sqlmesh_lsp_exec()
         if (isErr(sqlmesh)) {
+            traceError(`Failed to get sqlmesh_lsp_exec: ${sqlmesh.error}`)
             return sqlmesh
         }
         const workspaceFolders = getWorkspaceFolders()
         if (workspaceFolders.length !== 1) {
+            traceError(`Invalid number of workspace folders: ${workspaceFolders.length}`)
             return err("Invalid number of workspace folders")
         }
     
@@ -36,13 +39,15 @@ export class LSPClient implements Disposable {
                 options: {
                     cwd: workspacePath,
                 },
+                args: sqlmesh.value.args,
             },
             debug: {
                 command: sqlmesh.value.bin,
                 transport: TransportKind.stdio,
                 options: {
                     cwd: workspacePath,
-                }
+                },
+                args: sqlmesh.value.args,
             }
         }
         let clientOptions: LanguageClientOptions = {
