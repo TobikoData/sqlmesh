@@ -104,6 +104,16 @@ Formatting settings for the `sqlmesh format` command and UI.
 | `append_newline`      | Whether to append a newline to the end of the file (Default: False)                            | boolean |    N     |
 | `no_rewrite_casts`    | Preserve the existing casts, without rewriting them to use the :: syntax. (Default: False)                  | boolean |    N     |
 
+
+## Janitor
+
+Configuration for the `sqlmesh janitor` command.
+
+| Option                   | Description                                                                                                                | Type    | Required |
+|--------------------------|----------------------------------------------------------------------------------------------------------------------------|:-------:|:--------:|
+| `warn_on_delete_failure` | Whether to warn instead of erroring if the janitor fails to delete the expired environment schema / views (Default: False) | boolean | N        |
+
+
 ## UI
 
 SQLMesh UI settings.

@@ -26,6 +26,7 @@ def cleanup_expired_views(
     default_adapter: EngineAdapter,
     engine_adapters: t.Dict[str, EngineAdapter],
     environments: t.List[Environment],
+    warn_on_delete_failure: bool = False,
     console: t.Optional[Console] = None,
 ) -> None:
     expired_schema_environments = [
@@ -66,9 +67,11 @@ def cleanup_expired_views(
             if console:
                 console.update_cleanup_progress(schema.sql(dialect=engine_adapter.dialect))
         except Exception as e:
-            raise SQLMeshError(
-                f"Failed to drop the expired environment schema '{schema}': {e}"
-            ) from e
+            message = f"Failed to drop the expired environment schema '{schema}': {e}"
+            if warn_on_delete_failure:
+                logger.warning(message)
+            else:
+                raise SQLMeshError(message) from e
 
     # Drop the views for the expired environments
     for engine_adapter, expired_view in {
@@ -87,9 +90,11 @@ def cleanup_expired_views(
             if console:
                 console.update_cleanup_progress(expired_view)
         except Exception as e:
-            raise SQLMeshError(
-                f"Failed to drop the expired environment view '{expired_view}': {e}"
-            ) from e
+            message = f"Failed to drop the expired environment view '{expired_view}': {e}"
+            if warn_on_delete_failure:
+                logger.warning(message)
+            else:
+                raise SQLMeshError(message) from e
 
 
 def transactional() -> t.Callable[[t.Callable], t.Callable]:
