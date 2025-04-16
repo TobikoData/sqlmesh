@@ -89,7 +89,7 @@ class Config(BaseConfig):
         after_all: SQL statements or macros to be executed at the end of the `sqlmesh plan` and `sqlmesh run` commands.
     """
 
-    gateways: t.Dict[str, GatewayConfig] = {"": GatewayConfig()}
+    gateways: GatewayDict = {"": GatewayConfig()}
     default_connection: SerializableConnectionConfig = DuckDBConnectionConfig()
     default_test_connection_: t.Optional[SerializableConnectionConfig] = Field(
         default=None, alias="default_test_connection"
@@ -109,12 +109,12 @@ class Config(BaseConfig):
     loader_kwargs: t.Dict[str, t.Any] = {}
     env_vars: t.Dict[str, str] = {}
     username: str = ""
-    physical_schema_mapping: t.Dict[re.Pattern, str] = {}
+    physical_schema_mapping: RegexKeyDict = {}
     environment_suffix_target: EnvironmentSuffixTarget = Field(
         default=EnvironmentSuffixTarget.default
     )
     gateway_managed_virtual_layer: bool = False
-    environment_catalog_mapping: t.Dict[re.Pattern, str] = {}
+    environment_catalog_mapping: RegexKeyDict = {}
     default_target_environment: str = c.PROD
     log_limit: int = c.DEFAULT_LOG_LIMIT
     cicd_bot: t.Optional[CICDBotConfig] = None
@@ -154,23 +154,6 @@ class Config(BaseConfig):
     _connection_config_validator = connection_config_validator
     _scheduler_config_validator = scheduler_config_validator  # type: ignore
     _variables_validator = variables_validator
-
-    @field_validator("gateways", mode="before")
-    @classmethod
-    def _gateways_ensure_dict(cls, value: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
-        try:
-            if not isinstance(value, GatewayConfig):
-                GatewayConfig.parse_obj(value)
-            return {"": value}
-        except Exception:
-            return value
-
-    @field_validator("environment_catalog_mapping", "physical_schema_mapping", mode="before")
-    @classmethod
-    def _validate_regex_keys(
-        cls, value: t.Dict[str | re.Pattern, t.Any]
-    ) -> t.Dict[re.Pattern, t.Any]:
-        return compile_regex_mapping(value)
 
     @model_validator(mode="before")
     def _normalize_and_validate_fields(cls, data: t.Any) -> t.Any:
@@ -314,9 +297,26 @@ def validate_no_past_ttl(v: str) -> str:
     return v
 
 
+def gateways_ensure_dict(value: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
+    try:
+        if not isinstance(value, GatewayConfig):
+            GatewayConfig.parse_obj(value)
+        return {"": value}
+    except Exception:
+        return value
+
+
+def validate_regex_key_dict(value: t.Dict[str | re.Pattern, t.Any]) -> t.Dict[re.Pattern, t.Any]:
+    return compile_regex_mapping(value)
+
+
 if t.TYPE_CHECKING:
     NoPastTTLString = str
+    GatewayDict = t.Dict[str, GatewayConfig]
+    RegexKeyDict = t.Dict[re.Pattern, str]
 else:
     from pydantic.functional_validators import BeforeValidator
 
     NoPastTTLString = t.Annotated[str, BeforeValidator(validate_no_past_ttl)]
+    GatewayDict = t.Annotated[t.Dict[str, GatewayConfig], BeforeValidator(gateways_ensure_dict)]
+    RegexKeyDict = t.Annotated[t.Dict[re.Pattern, str], BeforeValidator(validate_regex_key_dict)]
