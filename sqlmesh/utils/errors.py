@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import traceback
 import typing as t
 from enum import auto
 from pathlib import Path

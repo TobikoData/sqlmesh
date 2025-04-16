@@ -7,7 +7,7 @@ from sqlmesh.core.config.linter import LinterConfig
 from sqlmesh.core.model import Model
 
 from sqlmesh.utils.errors import raise_config_error
-from sqlmesh.core.console import LinterConsole, get_console, Console
+from sqlmesh.core.console import LinterConsole, get_console
 from sqlmesh.core.linter.rule import RuleSet
 
 

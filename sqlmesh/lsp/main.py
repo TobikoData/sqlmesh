@@ -1,10 +1,8 @@
 #!/usr/bin/env python
 """A Language Server Protocol (LSP) server for SQL with SQLMesh integration, refactored without globals."""
 
-import itertools
 import logging
 import typing as t
-from contextlib import suppress
 from pathlib import Path
 
 from lsprotocol import types
@@ -12,9 +10,7 @@ from pygls.server import LanguageServer
 from pygls.workspace import TextDocument
 
 from sqlmesh._version import __version__
-from sqlmesh.core.audit.definition import ModelAudit
 from sqlmesh.core.context import Context
-from sqlmesh.core.model import Model
 
 
 class SQLMeshLanguageServer:

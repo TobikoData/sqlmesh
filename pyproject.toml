@@ -216,5 +216,6 @@ ignore_missing_imports = true
 
 [tool.ruff.lint]
 select = [
-    "RET505",  
+    "F401",
+    "RET505",
 ]

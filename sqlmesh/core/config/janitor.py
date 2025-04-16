@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import typing as t
 
 from sqlmesh.core.config.base import BaseConfig
 
