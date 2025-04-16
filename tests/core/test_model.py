@@ -8983,3 +8983,29 @@ def test_python_model_boolean_values():
 
     assert python_model.kind.disable_restatement is False
     assert python_model.optimize_query is False
+
+
+def test_var_in_def(assert_exp_eq):
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.table,
+            kind INCREMENTAL_BY_TIME_RANGE(
+                time_column ds
+            ),
+        );
+
+        @DEF(var, @start_ds);
+
+        SELECT @var AS ds
+    """
+    )
+
+    model = load_sql_based_model(expressions)
+
+    assert_exp_eq(
+        model.render_query(),
+        """
+        SELECT '1970-01-01' AS "ds"
+        """,
+    )
