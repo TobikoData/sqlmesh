@@ -76,7 +76,7 @@ from sqlmesh.core.dialect import (
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.environment import Environment, EnvironmentNamingInfo, EnvironmentStatements
 from sqlmesh.core.loader import Loader
-from sqlmesh.core.linter.definition import Linter
+from sqlmesh.core.linter.definition import AnnotatedRuleViolation, Linter
 from sqlmesh.core.linter.rules import BUILTIN_RULES
 from sqlmesh.core.macros import ExecutableOrMacro, macro
 from sqlmesh.core.metric import Metric, rewrite
@@ -2466,21 +2466,28 @@ class GenericContext(BaseContext, t.Generic[C]):
     def lint_models(
         self,
         models: t.Optional[t.Iterable[t.Union[str, Model]]] = None,
-    ) -> None:
+        raise_on_error: bool = True,
+    ) -> t.List[AnnotatedRuleViolation]:
         found_error = False
 
         model_list = (
             list(self.get_model(model) for model in models) if models else self.models.values()
         )
+        all_violations = []
         for model in model_list:
             # Linter may be `None` if the context is not loaded yet
             if linter := self._linters.get(model.project):
-                found_error = linter.lint_model(model, console=self.console) or found_error
+                found_error, violations = (
+                    linter.lint_model(model, console=self.console) or found_error
+                )
+                all_violations.extend(violations)
 
-        if found_error:
+        if raise_on_error and found_error:
             raise LinterError(
                 "Linter detected errors in the code. Please fix them before proceeding."
             )
+
+        return all_violations
 
     def load_model_tests(
         self, tests: t.Optional[t.List[str]] = None, patterns: list[str] | None = None
