@@ -25,6 +25,7 @@ from sqlmesh.core.config.connection import (
 from sqlmesh.core.config.feature_flag import FeatureFlag
 from sqlmesh.core.config.format import FormatConfig
 from sqlmesh.core.config.gateway import GatewayConfig
+from sqlmesh.core.config.janitor import JanitorConfig
 from sqlmesh.core.config.migration import MigrationConfig
 from sqlmesh.core.config.model import ModelDefaultsConfig
 from sqlmesh.core.config.naming import NameInferenceConfig as NameInferenceConfig
@@ -128,6 +129,7 @@ class Config(BaseConfig):
     before_all: t.Optional[t.List[str]] = None
     after_all: t.Optional[t.List[str]] = None
     linter: LinterConfig = LinterConfig()
+    janitor: JanitorConfig = JanitorConfig()
 
     _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {
         "gateways": UpdateStrategy.NESTED_UPDATE,

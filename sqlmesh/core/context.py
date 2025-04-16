@@ -2292,6 +2292,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             default_adapter=self.engine_adapter,
             engine_adapters=self.engine_adapters,
             environments=expired_environments,
+            warn_on_delete_failure=self.config.janitor.warn_on_delete_failure,
             console=self.console,
         )
 

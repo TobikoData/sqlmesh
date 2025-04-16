@@ -2651,6 +2651,43 @@ def test_cleanup_expired_views(
     ]
 
 
+@pytest.mark.parametrize(
+    "suffix_target", [EnvironmentSuffixTarget.SCHEMA, EnvironmentSuffixTarget.TABLE]
+)
+def test_cleanup_expired_environment_schema_warn_on_delete_failure(
+    mocker: MockerFixture, make_snapshot: t.Callable, suffix_target: EnvironmentSuffixTarget
+):
+    adapter = mocker.MagicMock()
+    adapter.dialect = None
+    adapter.drop_schema.side_effect = Exception("Failed to drop the schema")
+    adapter.drop_view.side_effect = Exception("Failed to drop the view")
+
+    snapshot = make_snapshot(
+        SqlModel(name="test_catalog.test_schema.test_model", query=parse_one("select 1, ds"))
+    )
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    schema_environment = Environment(
+        name="test_environment",
+        suffix_target=suffix_target,
+        snapshots=[snapshot.table_info],
+        start_at="2022-01-01",
+        end_at="2022-01-01",
+        plan_id="test_plan_id",
+        previous_plan_id="test_plan_id",
+        catalog_name_override="catalog_override",
+    )
+
+    with pytest.raises(SQLMeshError, match="Failed to drop the expired environment .*"):
+        cleanup_expired_views(adapter, {}, [schema_environment], warn_on_delete_failure=False)
+
+    cleanup_expired_views(adapter, {}, [schema_environment], warn_on_delete_failure=True)
+
+    if suffix_target == EnvironmentSuffixTarget.SCHEMA:
+        assert adapter.drop_schema.called
+    else:
+        assert adapter.drop_view.called
+
+
 def test_max_interval_end_per_model(
     state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
 ) -> None:
