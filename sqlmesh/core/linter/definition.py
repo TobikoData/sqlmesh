@@ -1,14 +1,14 @@
 from __future__ import annotations
-
 import typing as t
-
 from sqlmesh.core.config.linter import LinterConfig
-
 from sqlmesh.core.model import Model
-
 from sqlmesh.utils.errors import raise_config_error
 from sqlmesh.core.console import LinterConsole, get_console
-from sqlmesh.core.linter.rule import RuleSet
+import operator as op
+from collections.abc import Iterator, Iterable, Set, Mapping, Callable
+from functools import reduce
+from sqlmesh.core.model import Model
+from sqlmesh.core.linter.rule import Rule, RuleViolation
 
 
 def select_rules(all_rules: RuleSet, rule_names: t.Set[str]) -> RuleSet:
@@ -70,3 +70,50 @@ class Linter:
             return True
 
         return False
+
+
+class RuleSet(Mapping[str, type[Rule]]):
+    def __init__(self, rules: Iterable[type[Rule]] = ()) -> None:
+        self._underlying = {rule.name: rule for rule in rules}
+
+    def check_model(self, model: Model) -> t.List[RuleViolation]:
+        violations = []
+
+        for rule in self._underlying.values():
+            violation = rule().check_model(model)
+
+            if violation:
+                violations.append(violation)
+
+        return violations
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self._underlying)
+
+    def __len__(self) -> int:
+        return len(self._underlying)
+
+    def __getitem__(self, rule: str | type[Rule]) -> type[Rule]:
+        key = rule if isinstance(rule, str) else rule.name
+        return self._underlying[key]
+
+    def __op(
+        self,
+        op: Callable[[Set[type[Rule]], Set[type[Rule]]], Set[type[Rule]]],
+        other: RuleSet,
+        /,
+    ) -> RuleSet:
+        rules = set()
+        for rule in op(set(self.values()), set(other.values())):
+            rules.add(other[rule] if rule in other else self[rule])
+
+        return RuleSet(rules)
+
+    def union(self, *others: RuleSet) -> RuleSet:
+        return reduce(lambda lhs, rhs: lhs.__op(op.or_, rhs), (self, *others))
+
+    def intersection(self, *others: RuleSet) -> RuleSet:
+        return reduce(lambda lhs, rhs: lhs.__op(op.and_, rhs), (self, *others))
+
+    def difference(self, *others: RuleSet) -> RuleSet:
+        return reduce(lambda lhs, rhs: lhs.__op(op.sub, rhs), (self, *others))

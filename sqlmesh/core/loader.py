@@ -20,7 +20,8 @@ from sqlmesh.core import constants as c
 from sqlmesh.core.audit import Audit, ModelAudit, StandaloneAudit, load_multiple_audits
 from sqlmesh.core.dialect import parse
 from sqlmesh.core.environment import EnvironmentStatements
-from sqlmesh.core.linter.rule import RuleSet, Rule
+from sqlmesh.core.linter.rule import Rule
+from sqlmesh.core.linter.definition import RuleSet
 from sqlmesh.core.macros import MacroRegistry, macro
 from sqlmesh.core.metric import Metric, MetricMeta, expand_metrics, load_metric_ddl
 from sqlmesh.core.model import (
