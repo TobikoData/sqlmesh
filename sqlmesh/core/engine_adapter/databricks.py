@@ -45,7 +45,7 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
 
     def __init__(self, *args: t.Any, **kwargs: t.Any) -> None:
         super().__init__(*args, **kwargs)
-        self._set_spark_engine_adapter_if_needed(kwargs.get("multithreaded", False))
+        self._set_spark_engine_adapter_if_needed()
 
     @classmethod
     def can_access_spark_session(cls, disable_spark_session: bool) -> bool:
@@ -92,7 +92,7 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
     def is_spark_session_connection(self) -> bool:
         return isinstance(self.connection, SparkSessionConnection)
 
-    def _set_spark_engine_adapter_if_needed(self, multithreaded: bool) -> None:
+    def _set_spark_engine_adapter_if_needed(self) -> None:
         self._spark_engine_adapter = None
 
         if not self._use_spark_session or self.is_spark_session_connection:
@@ -117,7 +117,7 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
             partial(connection, spark=spark, catalog=catalog),
             default_catalog=catalog,
             execute_log_level=self._execute_log_level,
-            multithreaded=multithreaded,
+            multithreaded=self._multithreaded,
             sql_gen_kwargs=self._sql_gen_kwargs,
             register_comments=self._register_comments,
             pre_ping=self._pre_ping,
