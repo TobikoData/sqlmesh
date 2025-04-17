@@ -29,12 +29,12 @@ jobs:
       - run:
           name: Install VSCode extension dependencies
           command: |
-            cd vscode/extensions
+            cd vscode/extension
             npm ci
       - run:
           name: Run VSCode extension CI
           command: |
-            cd vscode/extensions
+            cd vscode/extension
             npm run ci
 
   publish:
