@@ -214,13 +214,47 @@ class DifferenceConsole(abc.ABC):
         """Displays a summary of differences for the given models."""
 
 
+class BaseConsole(abc.ABC):
+    @abc.abstractmethod
+    def log_error(self, message: str) -> None:
+        """Display error info to the user."""
+
+    @abc.abstractmethod
+    def log_warning(self, short_message: str, long_message: t.Optional[str] = None) -> None:
+        """Display warning info to the user.
+
+        Args:
+            short_message: The warning message to print to console.
+            long_message: The warning message to log to file. If not provided, `short_message` is used.
+        """
+
+    @abc.abstractmethod
+    def log_success(self, message: str) -> None:
+        """Display a general successful message to the user."""
+
+
+class PlanBuilderConsole(BaseConsole, abc.ABC):
+    @abc.abstractmethod
+    def log_destructive_change(
+        self,
+        snapshot_name: str,
+        dropped_column_names: t.List[str],
+        alter_expressions: t.List[exp.Alter],
+        dialect: str,
+        error: bool = True,
+    ) -> None:
+        """Display a destructive change error or warning to the user."""
+
+
 class Console(
+    PlanBuilderConsole,
     LinterConsole,
     StateExporterConsole,
     StateImporterConsole,
     JanitorConsole,
     EnvironmentsConsole,
     DifferenceConsole,
+    BaseConsole,
     abc.ABC,
 ):
     """Abstract base class for defining classes used for displaying information to the user and also interact
@@ -377,34 +411,6 @@ class Console(
     @abc.abstractmethod
     def log_failed_models(self, errors: t.List[NodeExecutionFailedError]) -> None:
         """Display list of models that failed during evaluation to the user."""
-
-    @abc.abstractmethod
-    def log_destructive_change(
-        self,
-        snapshot_name: str,
-        dropped_column_names: t.List[str],
-        alter_expressions: t.List[exp.Alter],
-        dialect: str,
-        error: bool = True,
-    ) -> None:
-        """Display a destructive change error or warning to the user."""
-
-    @abc.abstractmethod
-    def log_error(self, message: str) -> None:
-        """Display error info to the user."""
-
-    @abc.abstractmethod
-    def log_warning(self, short_message: str, long_message: t.Optional[str] = None) -> None:
-        """Display warning info to the user.
-
-        Args:
-            short_message: The warning message to print to console.
-            long_message: The warning message to log to file. If not provided, `short_message` is used.
-        """
-
-    @abc.abstractmethod
-    def log_success(self, message: str) -> None:
-        """Display a general successful message to the user."""
 
     @abc.abstractmethod
     def loading_start(self, message: t.Optional[str] = None) -> uuid.UUID:
