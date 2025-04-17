@@ -148,17 +148,18 @@ $ sqlmesh plan
 ======================================================================
 Successfully Ran 1 tests against duckdb
 ----------------------------------------------------------------------
+
 `prod` environment will be initialized
 
 Models:
 └── Added:
-    ├── sqlmesh_example.seed_model
+    ├── sqlmesh_example.full_model
     ├── sqlmesh_example.incremental_model
-    └── sqlmesh_example.full_model
-Models needing backfill (missing dates):
-├── sqlmesh_example.full_model: 2020-01-01 - 2023-05-31
-├── sqlmesh_example.incremental_model: 2020-01-01 - 2023-05-31
-└── sqlmesh_example.seed_model: 2023-05-31 - 2023-05-31
+    └── sqlmesh_example.seed_model
+Models needing backfill:
+├── sqlmesh_example.full_model: [full refresh]
+├── sqlmesh_example.incremental_model: [2020-01-01 - 2025-04-15]
+└── sqlmesh_example.seed_model: [full refresh]
 Apply - Backfill Tables [y/n]:
 ```
 
@@ -168,10 +169,7 @@ Line 5 describes what environments the plan will affect when applied - a new `pr
 
 Lines 7-11 of the output show that SQLMesh detected three new models relative to the current empty environment.
 
-Lines 12-15 list each model that will be executed by the plan, along with the date intervals that will be run. Note that `full_model` and `incremental_model` both show `2020-01-01` as their start date because:
-
-1. The incremental model specifies that date in the `start` property of its `MODEL` statement and
-2. The full model depends on the incremental model.
+Lines 13-16 list each model that will be executed by the plan, along with the date intervals or refresh types. Note that for incremental_model the date range [2020-01-01 - 2025-04-15] is shown, while for full_model and seed_model it indicates [full refresh]. The incremental model starts from 2020-01-01 because that date is specified in the start property of its MODEL statement, and the full model requires a full refresh because it depends on the incremental model.
 
 The `seed_model` date range begins on the same day the plan was made because `SEED` models have no temporality associated with them other than whether they have been modified since the previous SQLMesh plan.
 
@@ -254,20 +252,24 @@ Line 16 asks you whether to proceed with executing the model backfills described
 
 ```bash linenums="1"
 Apply - Backfill Tables [y/n]: y
-Creating physical tables ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 3/3 • 0:00:00
 
-All model versions have been created successfully
+Updating physical layer ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 3/3 • 0:00:00
 
-[1/1] sqlmesh_example.seed_model evaluated in 0.01s
-[1/1] sqlmesh_example.incremental_model evaluated in 0.01s
-[1/1] sqlmesh_example.full_model evaluated in 0.02s
-Evaluating models ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 3/3 • 0:00:00
+✔ Physical layer updated
 
-All model batches have been executed successfully
+[1/1]  sqlmesh_example.seed_model                           [insert seed file]
+0.01s
+[1/1]  sqlmesh_example.incremental_model                    [insert 2020-01-01 - 2025-04-15]
+0.03s
+[1/1]  sqlmesh_example.full_model                           [full refresh, audits ✔1]
+0.03s
+Executing model batches ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 3/3 • 0:00:00
 
-Virtually Updating 'prod' ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 0:00:00
+✔ Model batches executed
 
-The target environment has been updated successfully
+Updating virtual layer  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 3/3 • 0:00:00
+
+✔ Virtual layer updated
 ```
 
 SQLMesh performs three actions when applying the plan:
@@ -327,6 +329,7 @@ Successfully Ran 1 tests against duckdb
 
 New environment `dev` will be created from `prod`
 
+
 Differences from the `prod` environment:
 
 Models:
@@ -334,25 +337,27 @@ Models:
 │   └── sqlmesh_example__dev.incremental_model
 └── Indirectly Modified:
     └── sqlmesh_example__dev.full_model
+
 ---
-
-+++
-
-@@ -10,6 +10,7 @@
-
+                                                                                                
++++                                                                                             
+                                                                                                
+@@ -14,6 +14,7 @@
+                                                                                                
  SELECT
-   id,
-   item_id,
+   id,                                                                                          
+   item_id,                                                                                     
 +  'z' AS new_column,
-   event_date
+   event_date                                                                                   
  FROM sqlmesh_example.seed_model
  WHERE
+
 Directly Modified: sqlmesh_example__dev.incremental_model (Non-breaking)
 └── Indirectly Modified Children:
     └── sqlmesh_example__dev.full_model (Indirect Non-breaking)
 Models needing backfill:
-└── sqlmesh_example__dev.incremental_model: [2020-01-01 - 2023-05-31]
-Apply - Backfill Tables [y/n]: y
+└── sqlmesh_example__dev.incremental_model: [2020-01-01 - 2025-04-15]
+Apply - Backfill Tables [y/n]:
 ```
 
 Line 6 of the output states that a new environment `dev` will be created from the existing `prod` environment.
@@ -365,21 +370,23 @@ Enter `y` at the prompt and press `Enter` to apply the plan and execute the back
 
 ```bash linenums="1"
 Apply - Backfill Tables [y/n]: y
-Creating physical tables ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 2/2 • 0:00:00
 
-Model versions created successfully
+Updating physical layer ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 2/2 • 0:00:00
 
-[1/1] sqlmesh_example__dev.incremental_model evaluated in 0.01s
-Evaluating models ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 1/1 • 0:00:00
+✔ Physical layer updated
 
-Model batches executed successfully
+[1/1]  sqlmesh_example__dev.incremental_model               [insert 2020-01-01 - 2025-04-15]    
+0.03s
+Executing model batches ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 1/1 • 0:00:00
 
-Virtually Updating 'dev' ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 0:00:00
+✔ Model batches executed
 
-Target environment updated successfully
+Updating virtual layer  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 2/2 • 0:00:00
+
+✔ Virtual layer updated
 ```
 
-Line 6 of the output shows that SQLMesh applied the change and evaluated `sqlmesh_example__dev.incremental_model`.
+Lines 6-9 show the progress of updating the physical layer. Line 8 shows that SQLMesh applied the change and evaluated sqlmesh_example__dev.incremental_model for the date range from 2020-01-01 to 2025-04-15. Lines 11-14 show the execution of model batches, and lines 17-20 show the update of the virtual layer.
 
 SQLMesh did not need to backfill anything for the `full_model` since the change was `Non-breaking`.
 
@@ -432,6 +439,7 @@ $ sqlmesh plan
 ======================================================================
 Successfully Ran 1 tests against duckdb
 ----------------------------------------------------------------------
+
 Differences from the `prod` environment:
 
 Models:
@@ -439,31 +447,35 @@ Models:
 │   └── sqlmesh_example.incremental_model
 └── Indirectly Modified:
     └── sqlmesh_example.full_model
+
 ---
-
-+++
-
-@@ -10,6 +10,7 @@
-
+                                                                                                
++++                                                                                             
+                                                                                                
+@@ -14,6 +14,7 @@
+                                                                                                
  SELECT
-   id,
-   item_id,
+   id,                                                                                          
+   item_id,                                                                                     
 +  'z' AS new_column,
-   event_date
+   event_date                                                                                   
  FROM sqlmesh_example.seed_model
  WHERE
+
 Directly Modified: sqlmesh_example.incremental_model (Non-breaking)
 └── Indirectly Modified Children:
-    └── sqlmesh_example.full_model (Indirect Non-breaking)
-Apply - Virtual Update [y/n]: y
-Virtually Updating 'prod' ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 0:00:00
+    └── sqlmesh_example.full_model (Indirect Non-breaking) 
+Apply - Virtual Update [y/n]:
+SKIP: No physical layer updates to perform
 
-Target environment updated successfully
+SKIP: No model batches to execute
 
-Virtual Update executed successfully
+Updating virtual layer  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 2/2 • 0:00:00
+
+✔ Virtual layer updated
 ```
 
-Note that a backfill was not necessary and only a Virtual Update occurred.
+Note that a backfill was not necessary and only a Virtual Update occurred, as indicated by the "SKIP: No physical layer updates to perform" and "SKIP: No model batches to execute" messages. This is because the changes were already calculated and executed in the dev environment, and SQLMesh is smart enough to recognize that it only needs to update the virtual references to the existing tables rather than recomputing everything.
 
 ### 5.2 Validate updates in prod
 Double-check that the data updated in `prod` by running `sqlmesh fetchdf "select * from sqlmesh_example.incremental_model"`:
