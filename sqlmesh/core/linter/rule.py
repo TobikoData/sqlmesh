@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import abc
 
-
 from sqlmesh.core.model import Model
 
 from typing import Type

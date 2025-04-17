@@ -13,6 +13,7 @@ from sqlmesh.core.config import (
     PlanConfig,
     SparkConnectionConfig,
 )
+from sqlmesh.core.config.linter import LinterConfig
 from sqlmesh.core.notification_target import (
     BasicSMTPNotificationTarget,
     SlackApiNotificationTarget,
@@ -41,6 +42,15 @@ config = Config(
     },
     default_gateway="duckdb",
     model_defaults=model_defaults,
+    linter=LinterConfig(
+        enabled=False,
+        rules=[
+            "ambiguousorinvalidcolumn",
+            "invalidselectstarexpansion",
+            "noselectstar",
+            "nomissingaudits",
+        ],
+    ),
 )
 
 bigquery_config = Config(

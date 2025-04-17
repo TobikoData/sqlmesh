@@ -9,6 +9,7 @@ from collections.abc import Iterator, Iterable, Set, Mapping, Callable
 from functools import reduce
 from sqlmesh.core.model import Model
 from sqlmesh.core.linter.rule import Rule, RuleViolation
+from sqlmesh.core.console import LinterConsole, get_console
 
 
 def select_rules(all_rules: RuleSet, rule_names: t.Set[str]) -> RuleSet:
@@ -50,9 +51,11 @@ class Linter:
 
         return Linter(config.enabled, all_rules, rules, warn_rules)
 
-    def lint_model(self, model: Model, console: LinterConsole = get_console()) -> bool:
+    def lint_model(
+        self, model: Model, console: LinterConsole = get_console()
+    ) -> t.Tuple[bool, t.List[AnnotatedRuleViolation]]:
         if not self.enabled:
-            return False
+            return False, []
 
         ignored_rules = select_rules(self.all_rules, model.ignored_rules)
 
@@ -62,14 +65,31 @@ class Linter:
         error_violations = rules.check_model(model)
         warn_violations = warn_rules.check_model(model)
 
+        all_violations: t.List[AnnotatedRuleViolation] = [
+            AnnotatedRuleViolation(
+                rule=violation.rule,
+                violation_msg=violation.violation_msg,
+                model=model,
+                violation_type="error",
+            )
+            for violation in error_violations
+        ] + [
+            AnnotatedRuleViolation(
+                rule=violation.rule,
+                violation_msg=violation.violation_msg,
+                model=model,
+                violation_type="warning",
+            )
+            for violation in warn_violations
+        ]
+
         if warn_violations:
             console.show_linter_violations(warn_violations, model)
-
         if error_violations:
             console.show_linter_violations(error_violations, model, is_error=True)
-            return True
+            return True, all_violations
 
-        return False
+        return False, all_violations
 
 
 class RuleSet(Mapping[str, type[Rule]]):
@@ -117,3 +137,16 @@ class RuleSet(Mapping[str, type[Rule]]):
 
     def difference(self, *others: RuleSet) -> RuleSet:
         return reduce(lambda lhs, rhs: lhs.__op(op.sub, rhs), (self, *others))
+
+
+class AnnotatedRuleViolation(RuleViolation):
+    def __init__(
+        self,
+        rule: Rule,
+        violation_msg: str,
+        model: Model,
+        violation_type: t.Literal["error", "warning"],
+    ) -> None:
+        super().__init__(rule, violation_msg)
+        self.model = model
+        self.violation_type = violation_type
