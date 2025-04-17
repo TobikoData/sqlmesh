@@ -832,7 +832,7 @@ class TerminalConsole(Console):
                     audits_str += f" {RED_X_MARK}{num_audits_failed}"
                 audits_str = f", audits{audits_str}" if audits_str else ""
                 annotation_len = self.evaluation_column_widths["annotation"]
-                annotation = f"\[{annotation + audits_str}]".ljust(
+                annotation = f"\\[{annotation + audits_str}]".ljust(
                     annotation_len - 1 if num_audits_failed else annotation_len
                 )
 
