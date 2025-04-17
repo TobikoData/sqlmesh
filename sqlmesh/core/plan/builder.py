@@ -496,7 +496,7 @@ class PlanBuilder:
                     dropped_column_names = get_dropped_column_names(schema_diff)
                     model_dialect = snapshot.model.dialect
 
-                    get_console().log_destructive_change(
+                    self._console.log_destructive_change(
                         snapshot_name,
                         dropped_column_names,
                         schema_diff,
