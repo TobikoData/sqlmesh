@@ -555,7 +555,7 @@ class SnapshotEvaluator:
 
         if wap_id is not None:
             logger.info(
-                "Publishing evalaution results for snapshot %s, WAP ID '%s'",
+                "Publishing evaluation results for snapshot %s, WAP ID '%s'",
                 snapshot.snapshot_id,
                 wap_id,
             )
