@@ -84,6 +84,8 @@ RED_X_MARK = "\u274c"
 
 
 class LinterConsole(abc.ABC):
+    """Console for displaying linter violations"""
+
     @abc.abstractmethod
     def show_linter_violations(
         self, violations: t.List[RuleViolation], model: Model, is_error: bool = False
@@ -92,6 +94,8 @@ class LinterConsole(abc.ABC):
 
 
 class StateExporterConsole(abc.ABC):
+    """Console for describing a state export"""
+
     @abc.abstractmethod
     def start_state_export(
         self,
@@ -122,6 +126,8 @@ class StateExporterConsole(abc.ABC):
 
 
 class StateImporterConsole(abc.ABC):
+    """Console for describing a state import"""
+
     @abc.abstractmethod
     def start_state_import(
         self,
@@ -152,6 +158,8 @@ class StateImporterConsole(abc.ABC):
 
 
 class JanitorConsole(abc.ABC):
+    """Console for describing a janitor / snapshot cleanup run"""
+
     @abc.abstractmethod
     def start_cleanup(self, ignore_ttl: bool) -> bool:
         """Start a janitor / snapshot cleanup run.
@@ -176,7 +184,45 @@ class JanitorConsole(abc.ABC):
         """
 
 
-class Console(LinterConsole, StateExporterConsole, StateImporterConsole, JanitorConsole, abc.ABC):
+class EnvironmentsConsole(abc.ABC):
+    """Console for displaying environments"""
+
+    @abc.abstractmethod
+    def print_environments(self, environments_summary: t.Dict[str, int]) -> None:
+        """Prints all environment names along with expiry datetime."""
+
+
+class DifferenceConsole(abc.ABC):
+    """Console for displaying environment differences"""
+
+    @abc.abstractmethod
+    def show_environment_difference_summary(
+        self,
+        context_diff: ContextDiff,
+        no_diff: bool = True,
+    ) -> None:
+        """Displays a summary of differences for the environment."""
+
+    @abc.abstractmethod
+    def show_model_difference_summary(
+        self,
+        context_diff: ContextDiff,
+        environment_naming_info: EnvironmentNamingInfo,
+        default_catalog: t.Optional[str],
+        no_diff: bool = True,
+    ) -> None:
+        """Displays a summary of differences for the given models."""
+
+
+class Console(
+    LinterConsole,
+    StateExporterConsole,
+    StateImporterConsole,
+    JanitorConsole,
+    EnvironmentsConsole,
+    DifferenceConsole,
+    abc.ABC,
+):
     """Abstract base class for defining classes used for displaying information to the user and also interact
     with them when their input is needed."""
 
@@ -282,24 +328,6 @@ class Console(LinterConsole, StateExporterConsole, StateImporterConsole, Janitor
         """Stop the environment migration progress."""
 
     @abc.abstractmethod
-    def show_environment_difference_summary(
-        self,
-        context_diff: ContextDiff,
-        no_diff: bool = True,
-    ) -> None:
-        """Displays a summary of differences for the environment."""
-
-    @abc.abstractmethod
-    def show_model_difference_summary(
-        self,
-        context_diff: ContextDiff,
-        environment_naming_info: EnvironmentNamingInfo,
-        default_catalog: t.Optional[str],
-        no_diff: bool = True,
-    ) -> None:
-        """Displays a summary of differences for the given models."""
-
-    @abc.abstractmethod
     def plan(
         self,
         plan_builder: PlanBuilder,
@@ -399,24 +427,6 @@ class Console(LinterConsole, StateExporterConsole, StateImporterConsole, Janitor
         self, row_diff: RowDiff, show_sample: bool = True, skip_grain_check: bool = False
     ) -> None:
         """Show table summary diff."""
-
-    @abc.abstractmethod
-    def print_environments(self, environments_summary: t.Dict[str, int]) -> None:
-        """Prints all environment names along with expiry datetime."""
-
-    def _limit_model_names(self, tree: Tree, verbosity: Verbosity = Verbosity.DEFAULT) -> Tree:
-        """Trim long indirectly modified model lists below threshold."""
-        modified_length = len(tree.children)
-        if (
-            verbosity < Verbosity.VERY_VERBOSE
-            and modified_length > self.INDIRECTLY_MODIFIED_DISPLAY_THRESHOLD
-        ):
-            tree.children = [
-                tree.children[0],
-                Tree(f".... {modified_length - 2} more ...."),
-                tree.children[-1],
-            ]
-        return tree
 
 
 class NoopConsole(Console):
@@ -726,6 +736,20 @@ class TerminalConsole(Console):
         self.verbosity = verbosity
         self.dialect = dialect
         self.ignore_warnings = ignore_warnings
+
+    def _limit_model_names(self, tree: Tree, verbosity: Verbosity = Verbosity.DEFAULT) -> Tree:
+        """Trim long indirectly modified model lists below threshold."""
+        modified_length = len(tree.children)
+        if (
+            verbosity < Verbosity.VERY_VERBOSE
+            and modified_length > self.INDIRECTLY_MODIFIED_DISPLAY_THRESHOLD
+        ):
+            tree.children = [
+                tree.children[0],
+                Tree(f".... {modified_length - 2} more ...."),
+                tree.children[-1],
+            ]
+        return tree
 
     def _print(self, value: t.Any, **kwargs: t.Any) -> None:
         self.console.print(value, **kwargs)
