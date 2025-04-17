@@ -239,5 +239,5 @@ The user account must have [sufficient permissions to impersonate the service ac
 ## Permissions Required
 With any of the above connection methods, ensure these BigQuery permissions are enabled to allow SQLMesh to work correctly.
 
-- [`BigQuery Data Editor`](https://cloud.google.com/bigquery/docs/access-control#bigquery.dataEditor)
+- [`BigQuery Data Owner`](https://cloud.google.com/bigquery/docs/access-control#bigquery.dataOwner)
 - [`BigQuery User`](https://cloud.google.com/bigquery/docs/access-control#bigquery.user)
