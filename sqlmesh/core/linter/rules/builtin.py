@@ -6,7 +6,8 @@ import typing as t
 
 from sqlglot.helper import subclasses
 
-from sqlmesh.core.linter.rule import Rule, RuleViolation, RuleSet
+from sqlmesh.core.linter.rule import Rule, RuleViolation
+from sqlmesh.core.linter.definition import RuleSet
 from sqlmesh.core.model import Model, SqlModel
 
 
