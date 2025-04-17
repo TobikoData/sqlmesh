@@ -865,6 +865,33 @@ This may be useful in cases where the name casing needs to be preserved, since t
 
 See [here](https://sqlglot.com/sqlglot/dialects/dialect.html#NormalizationStrategy) to learn more about the supported normalization strategies.
 
+##### Gateway-specific model defaults
+
+You can also define gateway specific `model_defaults` in the `gateways` section, which override the global defaults for that gateway.
+
+```yaml linenums="1"
+gateways:
+  redshift:
+    connection:
+      type: redshift
+    model_defaults:
+      dialect: "snowflake,normalization_strategy=case_insensitive"
+  snowflake:
+    connection:
+      type: snowflake
+
+default_gateway: snowflake
+
+model_defaults:
+  dialect: snowflake
+  start: 2025-02-05
+```
+
+This allows you to tailor the behavior of models for each gateway without affecting the global model_defaults.
+
+For example, you can adjust dialect-specific behavior, like the normalization to be case insensitive, to better match the engine’s requirements and avoid compatibility issues.
+
+
 #### Model Kinds
 
 Model kinds are required in each model file's `MODEL` DDL statement. They may optionally be used to specify a default kind in the model defaults configuration key.
