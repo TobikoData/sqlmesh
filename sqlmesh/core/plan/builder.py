@@ -7,7 +7,7 @@ from collections import defaultdict
 from functools import cached_property
 
 
-from sqlmesh.core.console import Console, get_console
+from sqlmesh.core.console import PlanBuilderConsole, get_console
 from sqlmesh.core.config import (
     AutoCategorizationMode,
     CategorizerConfig,
@@ -106,7 +106,7 @@ class PlanBuilder:
         end_bounded: bool = False,
         ensure_finalized_snapshots: bool = False,
         interval_end_per_model: t.Optional[t.Dict[str, int]] = None,
-        console: t.Optional[Console] = None,
+        console: t.Optional[PlanBuilderConsole] = None,
     ):
         self._context_diff = context_diff
         self._no_gaps = no_gaps
