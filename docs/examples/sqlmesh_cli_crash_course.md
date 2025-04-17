@@ -286,4 +286,20 @@ asdf
     tcloud sqlmesh janitor
     ```
 
+Fun for the whole family:
+
+```bash
+brew install bat
+```
+
+```bash
+bat --theme='ansi' $(ls -t logs/ | head -n 1 | sed 's/^/logs\//')
+```
+
+- view logs
+- a special treat for you ;)
+- https://github.com/sharkdp/bat
+- In simple terms: "Show me the contents of the newest log file in the logs directory, with nice formatting and syntax highlighting.”
+- `q` to quit out of big files in the terminal
+
 - Manually clean up old development schemas outside the automated schedule
