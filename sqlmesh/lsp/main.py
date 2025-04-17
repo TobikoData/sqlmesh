@@ -44,7 +44,7 @@ class SQLMeshLanguageServer:
         """
         self.server = LanguageServer(server_name, version)
         self.context_class = context_class
-        self.context: t.Optional[LSPContext] = None
+        self.lsp_context: t.Optional[LSPContext] = None
         self.lint_cache: t.Dict[str, t.List[AnnotatedRuleViolation]] = {}
 
         # Register LSP features (e.g., formatting, hover, etc.)
@@ -120,11 +120,11 @@ class SQLMeshLanguageServer:
             try:
                 self._ensure_context_for_document(params.text_document.uri)
                 document = ls.workspace.get_document(params.text_document.uri)
-                if self.context is None:
+                if self.lsp_context is None:
                     raise RuntimeError(f"No context found for document: {document.path}")
 
                 # Perform formatting using the loaded context
-                self.context.context.format(paths=(Path(document.path),))
+                self.lsp_context.context.format(paths=(Path(document.path),))
                 with open(document.path, "r+", encoding="utf-8") as file:
                     new_text = file.read()
 
@@ -146,11 +146,11 @@ class SQLMeshLanguageServer:
                 return []
 
     def _context_get_or_load(self, document_uri: str) -> LSPContext:
-        if self.context is None:
+        if self.lsp_context is None:
             self._ensure_context_for_document(document_uri)
-        if self.context is None:
+        if self.lsp_context is None:
             raise RuntimeError("No context found")
-        return self.context
+        return self.lsp_context
 
     def _ensure_context_for_document(
         self,
@@ -160,10 +160,10 @@ class SQLMeshLanguageServer:
         Ensure that a context exists for the given document if applicable by searching
         for a config.py or config.yml file in the parent directories.
         """
-        if self.context is not None:
-            context = self.context
+        if self.lsp_context is not None:
+            context = self.lsp_context
             context.context.load()  # Reload or refresh context
-            self.context = LSPContext(context.context)
+            self.lsp_context = LSPContext(context.context)
             return
 
         # No context yet: try to find config and load it
@@ -180,7 +180,7 @@ class SQLMeshLanguageServer:
                     try:
                         # Use user-provided instantiator to build the context
                         created_context = self.context_class(paths=[path])
-                        self.context = LSPContext(created_context)
+                        self.lsp_context = LSPContext(created_context)
                         loaded = True
                         # Re-check context for document now that it's loaded
                         return self._ensure_context_for_document(document_uri)
