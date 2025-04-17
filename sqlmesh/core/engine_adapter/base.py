@@ -140,6 +140,7 @@ class EngineAdapter:
         self._register_comments = register_comments
         self._pre_ping = pre_ping
         self._pretty_sql = pretty_sql
+        self._multithreaded = multithreaded
 
     def with_log_level(self, level: int) -> EngineAdapter:
         adapter = self.__class__(
@@ -150,6 +151,7 @@ class EngineAdapter:
             execute_log_level=level,
             register_comments=self._register_comments,
             null_connection=True,
+            multithreaded=self._multithreaded,
             **self._extra_config,
         )
 
