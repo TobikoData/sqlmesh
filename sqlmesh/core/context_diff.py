@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import sys
 import typing as t
-from difflib import ndiff
+from difflib import ndiff, unified_diff
 from functools import cached_property
 from sqlmesh.core import constants as c
 from sqlmesh.core.console import get_console
@@ -341,16 +341,19 @@ class ContextDiff(PydanticModel):
             )
         )
 
-    def environment_statements_diff(self) -> t.List[t.Tuple[str, str]]:
+    def environment_statements_diff(
+        self, include_python_env: bool = False
+    ) -> t.List[t.Tuple[str, str]]:
         def extract_statements(statements: t.List[EnvironmentStatements], attr: str) -> t.List[str]:
             return [
-                expr
+                string
                 for statement in statements
                 for expr in (
                     sorted_python_env_payloads(statement.python_env)
                     if attr == "python_env"
                     else getattr(statement, attr)
                 )
+                for string in expr.split("\n")
             ]
 
         def compute_diff(attribute: str) -> t.Optional[t.Tuple[str, str]]:
@@ -360,21 +363,24 @@ class ContextDiff(PydanticModel):
             if previous == current:
                 return None
 
-            diff_lines = list(ndiff(previous, current))
             diff_text = attribute if not attribute == "python_env" else "dependencies"
             diff_text += ":\n"
+            if attribute == "python_env":
+                diff = list(unified_diff(previous, current))
+                diff_text += "\n".join(diff[2:] if len(diff) > 1 else diff)
+                return "python", diff_text + "\n"
 
+            diff_lines = list(ndiff(previous, current))
             if any(line.startswith(("-", "+")) for line in diff_lines):
                 diff_text += "  " + "\n  ".join(diff_lines) + "\n"
-
-            return "python" if attribute == "python_env" else "sql", diff_text
+            return "sql", diff_text
 
         return [
             diff
             for attribute in [
                 RuntimeStage.BEFORE_ALL.value,
                 RuntimeStage.AFTER_ALL.value,
-                "python_env",
+                *(["python_env"] if include_python_env else []),
             ]
             if (diff := compute_diff(attribute)) is not None
         ]

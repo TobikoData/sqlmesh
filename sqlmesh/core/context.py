@@ -1533,17 +1533,22 @@ class GenericContext(BaseContext, t.Generic[C]):
         environment = environment or self.config.default_target_environment
         environment = Environment.sanitize_name(environment)
         context_diff = self._context_diff(environment)
-        self.console.show_model_difference_summary(
+        self.console.show_environment_difference_summary(
             context_diff,
-            EnvironmentNamingInfo.from_environment_catalog_mapping(
-                self.config.environment_catalog_mapping,
-                name=environment,
-                suffix_target=self.config.environment_suffix_target,
-                normalize_name=context_diff.normalize_environment_name,
-            ),
-            self.default_catalog,
             no_diff=not detailed,
         )
+        if context_diff.has_changes:
+            self.console.show_model_difference_summary(
+                context_diff,
+                EnvironmentNamingInfo.from_environment_catalog_mapping(
+                    self.config.environment_catalog_mapping,
+                    name=environment,
+                    suffix_target=self.config.environment_suffix_target,
+                    normalize_name=context_diff.normalize_environment_name,
+                ),
+                self.default_catalog,
+                no_diff=not detailed,
+            )
         return context_diff.has_changes
 
     @python_api_analytics

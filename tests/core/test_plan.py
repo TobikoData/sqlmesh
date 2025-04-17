@@ -3023,6 +3023,23 @@ def test_plan_environment_statements_diff(make_snapshot):
         terminal_console._print(diff)
     output = console_output.getvalue()
     stripped = strip_ansi_codes(output)
+
+    expected_output = (
+        "before_all:\n"
+        "  + CREATE OR REPLACE TABLE table_1 AS SELECT 1\n"
+        "  + @test_macro()\n\n"
+        "after_all:\n"
+        "  + CREATE OR REPLACE TABLE table_2 AS SELECT 2"
+    )
+    assert stripped == expected_output
+    console_output.close()
+
+    # Validate with python env included
+    console_output, terminal_console = create_test_console()
+    for _, diff in context_diff.environment_statements_diff(include_python_env=True):
+        terminal_console._print(diff)
+    output = console_output.getvalue()
+    stripped = strip_ansi_codes(output)
     expected_output = (
         "before_all:\n"
         "  + CREATE OR REPLACE TABLE table_1 AS SELECT 1\n"
@@ -3030,8 +3047,9 @@ def test_plan_environment_statements_diff(make_snapshot):
         "after_all:\n"
         "  + CREATE OR REPLACE TABLE table_2 AS SELECT 2\n\n"
         "dependencies:\n"
-        "  + def test_macro(evaluator):\n"
-        "    return 'one'"
+        "@@ -0,0 +1,2 @@\n\n"
+        "+def test_macro(evaluator):\n"
+        "+    return 'one'"
     )
     assert stripped == expected_output
     console_output.close()
