@@ -869,7 +869,7 @@ See [here](https://sqlglot.com/sqlglot/dialects/dialect.html#NormalizationStrate
 
 You can also define gateway specific `model_defaults` in the `gateways` section, which override the global defaults for that gateway.
 
-```yaml linenums="1"
+```yaml linenums="1" hl_lines="6 14"
 gateways:
   redshift:
     connection:
@@ -891,9 +891,9 @@ This allows you to tailor the behavior of models for each gateway without affect
 
 For example, in some SQL engines identifiers like table and column names are case-sensitive, but they are case-insensitive in other engines. By default, a project that uses both types of engines would need to ensure the models for each engine aligned with the engine's normalization behavior, which makes project maintenance and debugging more challenging.
 
-Gateway-specific `model_defaults` allow you to change how SQLMesh performs identifier normalization *by engine* to align the different engines' behavior. 
+Gateway-specific `model_defaults` allow you to change how SQLMesh performs identifier normalization *by engine* to align the different engines' behavior.
 
-In the example above, the project's default dialect is `snowflake` (line 14). The `redshift` gateway configuration overrides that global default dialect with `"snowflake,normalization_strategy=case_insensitive"` (line 6). 
+In the example above, the project's default dialect is `snowflake` (line 14). The `redshift` gateway configuration overrides that global default dialect with `"snowflake,normalization_strategy=case_insensitive"` (line 6).
 
 That value tells SQLMesh that the `redshift` gateway's models will be written in the Snowflake SQL dialect (so need to be transpiled from Snowflake to Redshift), but that the resulting Redshift SQL should treat identifiers as case-insensitive to match Snowflake's behavior.
 

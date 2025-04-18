@@ -97,8 +97,6 @@ In this setup, the PostgreSQL engine is set as the default, so it will be used t
     )
     ```
 
-Given this configuration, when a model’s gateway is set to duckdb, it will be materialized within the PostgreSQL `main_db` catalog, but it will be evaluated using DuckDB’s engine.
-
 Given this configuration, when a model’s gateway is set to DuckDB, the DuckDB engine will perform the calculations before materializing the physical table in the PostgreSQL `main_db` catalog.
 
 ```sql linenums="1"
@@ -139,7 +137,7 @@ First, add the connections to your configuration and set the `gateway_managed_vi
 
 === "YAML"
 
-```yaml linenums="1"
+```yaml linenums="1" hl_lines="30"
 gateways:
   redshift:
     connection:
@@ -178,7 +176,7 @@ variables:
 
 === "Python"
 
-```python linenums="1"
+```python linenums="1" hl_lines="48"
 from sqlmesh.core.config import (
     Config,
     ModelDefaultsConfig,
@@ -255,7 +253,7 @@ FROM
 
 For the `athena_schema.order_status` model, we explicitly specify the `athena` gateway:
 
-```sql linenums="1"
+```sql linenums="1" hl_lines="4"
 MODEL (
   name athena_schema.order_status,
   table_format iceberg,
@@ -271,7 +269,7 @@ FROM
 
 Finally, specifying the `snowflake` gateway for the `customer_orders` model ensures it is isolated from the rest and reads from a table within the Snowflake database:
 
-```sql linenums="1"
+```sql linenums="1" hl_lines="4"
 MODEL (
   name snowflake_schema.customer_orders,
   table_format iceberg,
@@ -303,7 +301,7 @@ Models:
 Models needing backfill:
 ├── awsdatacatalog.athena_schema.order_status: [full refresh]
 ├── redshift_schema.order_dates: [full refresh]
-└── silver.snowflake_schema.customers: [full refresh]
+└── silver.snowflake_schema.customer_orders: [full refresh]
 Apply - Backfill Tables [y/n]: y
 ```
 
