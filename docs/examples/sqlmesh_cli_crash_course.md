@@ -679,7 +679,8 @@ This is great to catch issues before wasting runtime in your data warehouse. You
 You'll use these commands ad hoc to validate your changes are behaving as expected. Audits (data tests) are a great first step, and you'll want to evolve into to feel confident about the changes. The workflow is as follows:
 
 1. Render the model to verify the SQL is looking as expected
-2. Run in debug mode to verify SQLMesh's behavior.
+2. Run in verbose mode to verify SQLMesh's behavior.
+3. View the logs easily in your terminal.
 
 ### Render your SQL Changes
 
@@ -848,6 +849,54 @@ This is useful to see exactly what SQLMesh is doing in the physical and virtual 
     Updating virtual layer  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 3/3 • 0:00:00
 
     ✔ Virtual layer updated
+    ```
+
+### View Logs Easily
+
+Each time you perform a SQLMesh command, it creates a log file in the `logs` directory. This is useful to see what exact queries were executed to apply your changes. Admittedly, this is outside of native functionality, but it's a quick and easy way to view the logs.
+
+```bash
+# install this open source tool that enhances the default `cat` command
+brew install bat
+```
+
+```bash
+bat --theme='ansi' $(ls -t logs/ | head -n 1 | sed 's/^/logs\//')
+```
+
+- In simple terms this command works like this: "Show me the contents of the newest log file in the logs directory, with nice formatting and syntax highlighting.”
+- press `q` to quit out of big files in the terminal
+
+??? "Example Output"
+
+    This is the log file for the `sqlmesh plan dev` command. If you want to see the log file directly, you can click on the file path in the output directly to open it in your code editor.
+
+    ```bash
+    ──────┬──────────────────────────────────────────────────────────────────────────────────────────────
+          │ File: logs/sqlmesh_2025_04_18_12_34_35.log
+    ──────┼──────────────────────────────────────────────────────────────────────────────────────────────
+      1   │ 2025-04-18 12:34:35,715 - MainThread - sqlmesh.core.config.connection - INFO - Creating new D
+          │ uckDB adapter for data files: {'db.db'} (connection.py:319)
+      2   │ 2025-04-18 12:34:35,951 - MainThread - sqlmesh.core.console - WARNING - Linter warnings for /
+          │ Users/sung/Desktop/git_repos/sqlmesh-cli-revamp/models/incremental_by_partition.sql:
+      3   │  - nomissingaudits: Model `audits` must be configured to test data quality. (console.py:1848)
+      4   │ 2025-04-18 12:34:35,953 - MainThread - sqlmesh.core.console - WARNING - Linter warnings for /
+          │ Users/sung/Desktop/git_repos/sqlmesh-cli-revamp/models/seed_model.sql:
+      5   │  - nomissingaudits: Model `audits` must be configured to test data quality. (console.py:1848)
+      6   │ 2025-04-18 12:34:35,953 - MainThread - sqlmesh.core.console - WARNING - Linter warnings for /
+          │ Users/sung/Desktop/git_repos/sqlmesh-cli-revamp/models/incremental_by_unique_key.sql:
+      7   │  - nomissingaudits: Model `audits` must be configured to test data quality. (console.py:1848)
+      8   │ 2025-04-18 12:34:35,953 - MainThread - sqlmesh.core.console - WARNING - Linter warnings for /
+          │ Users/sung/Desktop/git_repos/sqlmesh-cli-revamp/models/incremental_model.sql:
+      9   │  - nomissingaudits: Model `audits` must be configured to test data quality. (console.py:1848)
+      10  │ 2025-04-18 12:34:35,954 - MainThread - sqlmesh.core.config.connection - INFO - Using existing
+          │  DuckDB adapter due to overlapping data file: db.db (connection.py:309)
+      11  │ 2025-04-18 12:34:37,071 - MainThread - sqlmesh.core.snapshot.evaluator - INFO - Listing data 
+          │ objects in schema db.sqlmesh__sqlmesh_example (evaluator.py:338)
+      12  │ 2025-04-18 12:34:37,072 - MainThread - sqlmesh.core.engine_adapter.base - INFO - Executing SQ
+          │ L: SELECT CURRENT_CATALOG() (base.py:2128)
+      13  │ 2025-04-18 12:34:37,072 - MainThread - sqlmesh.core.engine_adapter.base - INFO - Executing SQ
+          │ L: SELECT CURRENT_CATALOG() (base.py:2128)
     ```
 
 ## **Run Commands**
