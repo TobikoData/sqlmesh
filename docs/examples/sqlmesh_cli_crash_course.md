@@ -992,11 +992,11 @@ This command is intended be run on a schedule. It will skip the physical and vir
     );
     ```
 
-### **Forward-Only Development Workflow**
+## **Forward-Only Development Workflow**
 
-This is an advanced workflow and specifically designed for extremely large incremental models that take a long time to run even during development. It solves for:
+This is an advanced workflow and specifically designed for large incremental models (ex: > 200 million rows) that take a long time to run even during development. It solves for:
 
-- Transformaing data with constant schema evolution in json and nested array data types.
+- Transforming data with constant schema evolution in json and nested array data types.
 - Retaining history of a calculated column and applying a new calculation to new rows going forward.
 
 When you apply the plan to `prod` after the dev worfklow, it will NOT backfill historical data. It will only execute model batches **forward only** for new intervals (new rows).
@@ -1025,8 +1025,8 @@ When you apply the plan to `prod` after the dev worfklow, it will NOT backfill h
 
     - I applied a change to a new column
     - It impacts 2 downstream models
-    - I enforced a forward-only plan to avoid backfilling historical data
-    - I previewed the changes in a clone of the models impacted (clones will NOT be reused in production)
+    - I enforced a forward-only plan to avoid backfilling historical data for the incremental model (ex: `preview` language in the CLI output)
+    - I previewed the changes in a clone of the incremental impacted (clones will NOT be reused in production) along with the full and view models (these are NOT clones).
 
     ```bash
     Differences from the `dev` environment:
@@ -1058,7 +1058,7 @@ When you apply the plan to `prod` after the dev worfklow, it will NOT backfill h
         ├── sqlmesh_example__dev.full_model (Forward-only)
         └── sqlmesh_example__dev.view_model (Forward-only)
     Models needing backfill:
-    ├── sqlmesh_example__dev.full_model: [full refresh] (preview) -- preview is a signal that a clone will be created if supported by the query engine
+    ├── sqlmesh_example__dev.full_model: [full refresh] (preview)
     ├── sqlmesh_example__dev.incremental_model: [2025-04-17 - 2025-04-17] (preview)
     └── sqlmesh_example__dev.view_model: [recreate view] (preview)
     Apply - Preview Tables [y/n]: y
@@ -1080,7 +1080,7 @@ When you apply the plan to `prod` after the dev worfklow, it will NOT backfill h
     ```
 
 
-    When this is applied to `prod`, it will only execute model batches for new intervals (new rows). That's why you notice it only made a virtual layer update for this example.
+    When this is applied to `prod`, it will only execute model batches for new intervals (new rows). This will NOT re-use `preview` models in development.
 
     ```bash
     Differences from the `prod` environment:
@@ -1131,7 +1131,7 @@ When you apply the plan to `prod` after the dev worfklow, it will NOT backfill h
     ```
 
 
-### **Miscellaneous**
+## **Miscellaneous**
 
 If you notice you have a lot of old development schemas/data, you can clean them up with the following command. This process runs automatically during the `sqlmesh run` command. This defaults to deleting old data past 7 days.
 
