@@ -169,7 +169,7 @@ Line 5 describes what environments the plan will affect when applied - a new `pr
 
 Lines 7-11 of the output show that SQLMesh detected three new models relative to the current empty environment.
 
-Lines 12-16 list each model that will be executed by the plan, along with the date intervals or refresh types. For both `full_model` and `seed_model`, it shows `[full refresh]`, while for `incremental_model` it shows a specific date range `[2020-01-01 - 2025-04-17]`. The incremental model date range begins from 2020-01-01 because that date is specified in the `start` property of its `MODEL` statement.
+Lines 12-16 list each model that will be executed by the plan, along with the date intervals or refresh types. For both `full_model` and `seed_model`, it shows `[full refresh]`, while for `incremental_model` it shows a specific date range `[2020-01-01 - 2025-04-17]`. The incremental model date range begins from 2020-01-01 because the `full` model kind always fully rebuilds its table.
 
 The `seed_model` date range begins on the same day the plan was made because `SEED` models have no temporality associated with them other than whether they have been modified since the previous SQLMesh plan.
 
