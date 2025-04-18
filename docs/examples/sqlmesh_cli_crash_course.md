@@ -994,9 +994,141 @@ This command is intended be run on a schedule. It will skip the physical and vir
 
 ### **Forward-Only Development Workflow**
 
-https://www.loom.com/share/209181d9532d44969313ac0ac23f501f
+This is an advanced workflow and specifically designed for extremely large incremental models that take a long time to run even during development. It solves for:
 
-- codify this especially the commented out steps
+- Transformaing data with constant schema evolution in json and nested array data types.
+- Retaining history of a calculated column and applying a new calculation to new rows going forward.
+
+When you apply the plan to `prod` after the dev worfklow, it will NOT backfill historical data. It will only execute model batches **forward only** for new intervals (new rows).
+
+=== "SQLMesh"
+
+    ```bash
+    sqlmesh plan dev --forward-only
+    ```
+
+    ```bash
+    sqlmesh plan <environment> --forward-only
+    ```
+
+=== "Tobiko Cloud"
+
+    ```bash
+    tcloud sqlmesh plan dev --forward-only
+    ```
+
+    ```bash
+    tcloud sqlmesh plan <environment> --forward-only
+    ```
+
+??? "Example Output"
+
+    - I applied a change to a new column
+    - It impacts 2 downstream models
+    - I enforced a forward-only plan to avoid backfilling historical data
+    - I previewed the changes in a clone of the models impacted (clones will NOT be reused in production)
+
+    ```bash
+    Differences from the `dev` environment:
+
+    Models:
+    ├── Directly Modified:
+    │   └── sqlmesh_example__dev.incremental_model
+    └── Indirectly Modified:
+        ├── sqlmesh_example__dev.view_model
+        └── sqlmesh_example__dev.full_model
+
+    ---                                                                                                   
+                                                                                                          
+    +++                                                                                                   
+                                                                                                          
+    @@ -16,7 +16,7 @@                                                                                     
+                                                                                                          
+      id,                                                                                                
+      item_id,                                                                                           
+      event_date,                                                                                        
+    -  9 AS new_column                                                                                    
+    +  10 AS new_column                                                                                   
+    FROM sqlmesh_example.seed_model                                                                      
+    WHERE                                                                                                
+      event_date BETWEEN @start_date AND @end_date                                                       
+
+    Directly Modified: sqlmesh_example__dev.incremental_model (Forward-only)
+    └── Indirectly Modified Children:
+        ├── sqlmesh_example__dev.full_model (Forward-only)
+        └── sqlmesh_example__dev.view_model (Forward-only)
+    Models needing backfill:
+    ├── sqlmesh_example__dev.full_model: [full refresh] (preview) -- preview is a signal that a clone will be created if supported by the query engine
+    ├── sqlmesh_example__dev.incremental_model: [2025-04-17 - 2025-04-17] (preview)
+    └── sqlmesh_example__dev.view_model: [recreate view] (preview)
+    Apply - Preview Tables [y/n]: y
+
+    Updating physical layer ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 3/3 • 0:00:00
+
+    ✔ Physical layer updated
+
+    [1/1] sqlmesh_example__dev.incremental_model  [insert 2025-04-17 - 2025-04-17]                0.01s   
+    [1/1] sqlmesh_example__dev.full_model         [full refresh, audits ✔1]                       0.01s   
+    [1/1] sqlmesh_example__dev.view_model         [recreate view, audits ✔3]                      0.01s   
+    Executing model batches ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 3/3 • 0:00:00               
+                                                                                                          
+    ✔ Model batches executed
+
+    Updating virtual layer  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 3/3 • 0:00:00
+
+    ✔ Virtual layer updated
+    ```
+
+
+    When this is applied to `prod`, it will only execute model batches for new intervals (new rows). That's why you notice it only made a virtual layer update for this example.
+
+    ```bash
+    Differences from the `prod` environment:
+
+    Models:
+    ├── Directly Modified:
+    │   └── sqlmesh_example.incremental_model
+    └── Indirectly Modified:
+        ├── sqlmesh_example.view_model
+        └── sqlmesh_example.full_model
+
+    ---                                                                                                   
+                                                                                                          
+    +++                                                                                                   
+                                                                                                          
+    @@ -9,13 +9,14 @@                                                                                     
+                                                                                                          
+        disable_restatement FALSE,                                                                       
+        on_destructive_change 'ERROR'                                                                    
+      ),                                                                                                 
+    -  grains ((id, event_date))                                                                          
+    +  grains ((id, event_date)),                                                                         
+    +  allow_partials TRUE                                                                                
+    )                                                                                                    
+    SELECT                                                                                               
+      id,                                                                                                
+      item_id,                                                                                           
+      event_date,                                                                                        
+    -  7 AS new_column                                                                                    
+    +  10 AS new_column                                                                                   
+    FROM sqlmesh_example.seed_model                                                                      
+    WHERE                                                                                                
+      event_date BETWEEN @start_date AND @end_date                                                       
+
+    Directly Modified: sqlmesh_example.incremental_model (Forward-only)
+    └── Indirectly Modified Children:
+        ├── sqlmesh_example.full_model (Forward-only)
+        └── sqlmesh_example.view_model (Forward-only)
+    Apply - Virtual Update [y/n]: y
+
+    SKIP: No physical layer updates to perform
+
+    SKIP: No model batches to execute
+
+    Updating virtual layer  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 3/3 • 0:00:00
+
+    ✔ Virtual layer updated
+    ```
 
 
 ### **Miscellaneous**
