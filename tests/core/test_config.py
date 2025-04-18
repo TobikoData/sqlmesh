@@ -26,7 +26,7 @@ from sqlmesh.core.config.loader import (
 )
 from sqlmesh.core.context import Context
 from sqlmesh.core.engine_adapter.athena import AthenaEngineAdapter
-from sqlmesh.core.engine_adapter.bigquery import BigQueryEngineAdapter
+from sqlmesh.core.engine_adapter.duckdb import DuckDBEngineAdapter
 from sqlmesh.core.engine_adapter.redshift import RedshiftEngineAdapter
 from sqlmesh.core.notification_target import ConsoleNotificationTarget
 from sqlmesh.core.user import User
@@ -710,10 +710,10 @@ gateways:
             aws_secret_access_key: accesskey
             work_group: group
             s3_warehouse_location: s3://location
-    bigquery:
+    duckdb:
         connection:
-            type: bigquery
-
+            type: duckdb
+            database: db.db
 
 default_gateway: redshift
 
@@ -733,11 +733,11 @@ model_defaults:
     assert len(ctx.engine_adapters) == 3
     assert isinstance(ctx.engine_adapters["athena"], AthenaEngineAdapter)
     assert isinstance(ctx.engine_adapters["redshift"], RedshiftEngineAdapter)
-    assert isinstance(ctx.engine_adapters["bigquery"], BigQueryEngineAdapter)
+    assert isinstance(ctx.engine_adapters["duckdb"], DuckDBEngineAdapter)
     assert ctx.engine_adapter == ctx._get_engine_adapter("redshift")
 
-    # The bigquery engine adapter should be have been set as multithreaded as well
-    assert ctx.engine_adapters["bigquery"]._multithreaded
+    # The duckdb engine adapter should be have been set as multithreaded as well
+    assert ctx.engine_adapters["duckdb"]._multithreaded
 
 
 def test_multi_gateway_single_threaded_config(tmp_path):
