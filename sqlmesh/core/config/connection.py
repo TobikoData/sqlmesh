@@ -113,11 +113,11 @@ class ConnectionConfig(abc.ABC, BaseConfig):
         self, register_comments_override: bool = False, concurrent_tasks: t.Optional[int] = None
     ) -> EngineAdapter:
         """Returns a new instance of the Engine Adapter."""
-        if concurrent_tasks:
-            self.concurrent_tasks = concurrent_tasks
+
+        concurrent_tasks = concurrent_tasks or self.concurrent_tasks
         return self._engine_adapter(
             self._connection_factory_with_kwargs,
-            multithreaded=self.concurrent_tasks > 1,
+            multithreaded=concurrent_tasks > 1,
             default_catalog=self.get_catalog(),
             cursor_init=self._cursor_init,
             register_comments=register_comments_override or self.register_comments,
