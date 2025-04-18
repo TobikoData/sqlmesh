@@ -17,7 +17,7 @@ You’ll use these commands 80% of the time because this is how you apply code c
 5. Run data diff against prod
 6. Apply the changes to prod
 
-### Preview, Apply, and Audit Changes in dev
+### Preview, Apply, and Audit Changes in `dev`
 
 All these steps are bundled into a single command below:
 
@@ -601,8 +601,8 @@ Pro tip: run this after running `sqlmesh table_diff` to get a full picture of th
     ```
 
     ```bash
-    -- construct arbitrary query
-    tcloud sqlmesh fetchdf "select * from <schema__environment>.<model_name> limit 5" -- double underscore is important. Not needed for prod.
+    # construct arbitrary query
+    tcloud sqlmesh fetchdf "select * from <schema__environment>.<model_name> limit 5" # double underscore is important. Not needed for prod.
     ```
 
 ??? "Example Output"
@@ -714,7 +714,6 @@ This is great to verify the SQL is looking as expected before applying the chang
     tcloud sqlmesh render <model_name> --dialect <dialect>
     ```
 
-    ```bash
 ??? "Example Output"
 
     It outputs the full SQL code in the default or target dialect.
@@ -857,6 +856,7 @@ Each time you perform a SQLMesh command, it creates a log file in the `logs` dir
 
 ```bash
 # install this open source tool that enhances the default `cat` command
+# https://github.com/sharkdp/bat
 brew install bat
 ```
 
@@ -864,7 +864,7 @@ brew install bat
 bat --theme='ansi' $(ls -t logs/ | head -n 1 | sed 's/^/logs\//')
 ```
 
-- In simple terms this command works like this: "Show me the contents of the newest log file in the logs directory, with nice formatting and syntax highlighting.”
+- In simple terms this command works like this: "Show me the contents of the newest log file in the `logs/` directory, with nice formatting and syntax highlighting.”
 - press `q` to quit out of big files in the terminal
 
 ??? "Example Output"
@@ -899,7 +899,15 @@ bat --theme='ansi' $(ls -t logs/ | head -n 1 | sed 's/^/logs\//')
           │ L: SELECT CURRENT_CATALOG() (base.py:2128)
     ```
 
-## **Run Commands**
+## **Run on Production Schedule**
+
+If you're using open source SQLMesh, you can run this in your orchestrator (ex: Dagster, GitHub Actions, etc.) every 5 minutes or at your lowest model cron schedule (ex: every 1 hour). Don't worry! It will only run executions that need to be run.
+
+If you're using Tobiko Cloud, this configures automatically without additional configuration.
+
+### Run Models
+
+This command is intended be run on a schedule. It will skip the physical and virtual layer updates and simply execute the model batches. 
 
 === "SQLMesh"
 
@@ -913,21 +921,49 @@ bat --theme='ansi' $(ls -t logs/ | head -n 1 | sed 's/^/logs\//')
     tcloud sqlmesh run
     ```
 
-asdf
+??? "Example Output"
 
-=== "SQLMesh"
-
-    ```bash
-    sqlmesh run dev
-    ```
-
-=== "Tobiko Cloud"
+    This is what it looks like if models are ready to run.
 
     ```bash
-    tcloud sqlmesh run dev
+    [1/1] sqlmesh_example.incremental_model               [insert 2025-04-17 - 2025-04-17]                
+    0.01s   
+    [1/1] sqlmesh_example.incremental_unique_model        [insert/update rows]                            
+    0.01s   
+    [1/1] sqlmesh_example_v3.incremental_partition_model  [insert partitions]                             
+    0.01s   
+    Executing model batches ━━━━━━━━━━━━━━━━╺━━━━━━━━━━━━━━━━━━━━━━━ 40.0% • 2/5 • 0:00:00
+    sqlmesh_example_v3.incremental_partition_model .                                      
+    [WARNING] sqlmesh_example.full_model: 'assert_positive_order_ids' audit error: 2 rows failed. Learn 
+    more in logs: /Users/sung/Desktop/git_repos/sqlmesh-cli-revamp/logs/sqlmesh_2025_04_18_12_48_35.log
+    [1/1] sqlmesh_example.full_model                      [full refresh, audits ❌1]                      
+    0.01s   
+    Executing model batches ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╺━━━━━━━ 80.0% • 4/5 • 0:00:00
+    sqlmesh_example.view_model .                                                          
+    [WARNING] sqlmesh_example.view_model: 'assert_positive_order_ids' audit error: 2 rows failed. Learn 
+    more in logs: /Users/sung/Desktop/git_repos/sqlmesh-cli-revamp/logs/sqlmesh_2025_04_18_12_48_35.log
+    [1/1] sqlmesh_example.view_model                      [recreate view, audits ✔2 ❌1]                  
+    0.01s   
+    Executing model batches ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 5/5 • 0:00:00               
+                                                                                                          
+    ✔ Model batches executed
+
+    Run finished for environment 'prod'
     ```
 
-asdf
+    This is what it looks like if no models are ready to run.
+
+    ```bash
+    No models are ready to run. Please wait until a model `cron` interval has elapsed.
+
+    Next run will be ready at 2025-04-18 05:00PM PDT (2025-04-19 12:00AM UTC).
+    ```
+
+### Run Models with Incomplete Intervals (Warning)
+
+!!! warning "Run Models with Incomplete Intervals"
+    This only applies to incremental models that have `allow_partials` set to `true`. 
+    This is generally not recommended for production environments as you risk shipping incomplete data which will be perceived as broken data.
 
 === "SQLMesh"
 
@@ -941,25 +977,31 @@ asdf
     tcloud sqlmesh run --ignore-cron
     ```
 
-asdf
+??? "Example Model Config"
 
-- allow_partials
+    ```sql
+    MODEL (
+      name sqlmesh_example.incremental_model,
+      kind INCREMENTAL_BY_TIME_RANGE (
+        time_column event_date
+      ),
+      start '2020-01-01',
+      cron '@daily', -- daily at midnight UTC
+      grain (id, event_date),
+      allow_partials true
+    );
+    ```
 
-## **Working with Incremental Forward-Only Models**
+### **Forward-Only Development Workflow**
 
 https://www.loom.com/share/209181d9532d44969313ac0ac23f501f
 
 - codify this especially the commented out steps
 
 
-## **Validating Changes**
+### **Miscellaneous**
 
-You'll these commands ad hoc to verify your changes are behaving as expected.
-
-
-
-
-## **Miscellaneous**
+If you notice you have a lot of old development schemas/data, you can clean them up with the following command. This process runs automatically during the `sqlmesh run` command. This defaults to deleting old data past 7 days.
 
 === "SQLMesh"
 
@@ -972,21 +1014,3 @@ You'll these commands ad hoc to verify your changes are behaving as expected.
     ```bash
     tcloud sqlmesh janitor
     ```
-
-Fun for the whole family:
-
-```bash
-brew install bat
-```
-
-```bash
-bat --theme='ansi' $(ls -t logs/ | head -n 1 | sed 's/^/logs\//')
-```
-
-- view logs
-- a special treat for you ;)
-- https://github.com/sharkdp/bat
-- In simple terms: "Show me the contents of the newest log file in the logs directory, with nice formatting and syntax highlighting.”
-- `q` to quit out of big files in the terminal
-
-- Manually clean up old development schemas outside the automated schedule
