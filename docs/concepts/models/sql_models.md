@@ -175,6 +175,10 @@ SELECT
 FROM customer2.some_source
 ```
 
+!!! note
+
+    Blueprint variable mappings can also be evaluated dynamically, by using a macro (i.e. `blueprints @gen_blueprints()`). This is useful in cases where the `blueprints` list needs to be sourced from external sources, e.g. CSV files.
+
 ## Python-based definition
 
 The Python-based definition of SQL models consists of a single python function, decorated with SQLMesh's `@model` [decorator](https://wiki.python.org/moin/PythonDecorators). The decorator is required to have the `is_sql` keyword argument set to `True` to distinguish it from [Python models](./python_models.md) that return DataFrame instances.
@@ -257,6 +261,10 @@ def entrypoint(evaluator: MacroEvaluator) -> str | exp.Expression:
 ```
 
 The two models produced from this template are the same as in the [example](#SQL-model-blueprinting) for SQL-based blueprinting.
+
+!!! note
+
+    Blueprint variable mappings can also be evaluated dynamically, by using a macro (i.e. `blueprints="@gen_blueprints()"`). This is useful in cases where the `blueprints` list needs to be sourced from external sources, e.g. CSV files.
 
 ## Automatic dependencies
 

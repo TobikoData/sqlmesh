@@ -24,7 +24,7 @@ from sqlmesh.core.model.definition import (
 )
 from sqlmesh.core.model.kind import ModelKindName, _ModelKind
 from sqlmesh.utils import registry_decorator, DECORATOR_RETURN_TYPE
-from sqlmesh.utils.errors import ConfigError
+from sqlmesh.utils.errors import ConfigError, raise_config_error
 from sqlmesh.utils.metaprogramming import build_env, serialize_env
 
 
@@ -96,9 +96,32 @@ class model(registry_decorator):
         default_catalog_per_gateway: t.Optional[t.Dict[str, str]] = None,
         **loader_kwargs: t.Any,
     ) -> t.List[Model]:
+        blueprints = self.kwargs.pop("blueprints", None)
+
+        if isinstance(blueprints, str):
+            blueprints = parse_one(blueprints, dialect=dialect)
+
+        if isinstance(blueprints, MacroFunc):
+            from sqlmesh.core.model.definition import render_expression
+
+            blueprints = render_expression(
+                expression=blueprints,
+                module_path=module_path,
+                macros=loader_kwargs.get("macros"),
+                jinja_macros=loader_kwargs.get("jinja_macros"),
+                variables=get_variables(None),
+                path=path,
+                dialect=dialect,
+                default_catalog=loader_kwargs.get("default_catalog"),
+            )
+            if not blueprints:
+                raise_config_error("Failed to render blueprints property", path)
+
+            blueprints = blueprints[0]
+
         return create_models_from_blueprints(
             gateway=self.kwargs.get("gateway"),
-            blueprints=self.kwargs.pop("blueprints", None),
+            blueprints=blueprints,
             get_variables=get_variables,
             loader=self.model,
             path=path,
