@@ -3354,7 +3354,13 @@ def _calculate_audit_str_len(batched_intervals: t.Dict[Snapshot, t.List[Interval
     # until after evaluation occurs, but we must determine the annotation column width here.
     # Therefore, we add enough padding for the longest possible audits result string.
     audit_str_len = 0
+    audit_base_str_len = len(f", audits ") + 1  # +1 for check/X
     for snapshot in batched_intervals:
+        if snapshot.is_audit:
+            # +1 for "1" audit count, +1 for red X
+            audit_str_len = max(
+                audit_str_len, audit_base_str_len + (2 if not snapshot.audit.blocking else 1)
+            )
         if snapshot.is_model and snapshot.model.audits:
             num_audits = len(snapshot.model.audits_with_args)
             num_nonblocking_audits = sum(
@@ -3363,11 +3369,14 @@ def _calculate_audit_str_len(batched_intervals: t.Dict[Snapshot, t.List[Interval
                 if not audit[0].blocking
                 or ("blocking" in audit[1] and audit[1]["blocking"] == exp.false())
             )
-            # make enough room for all audits to pass
-            audit_len = len(f", audits {CHECK_MARK}{str(num_audits)}")
-            if num_nonblocking_audits:
-                # and add enough room for all nonblocking audits to fail
-                audit_len += len(f" {RED_X_MARK}{str(num_nonblocking_audits)}") + 1
+            if num_audits == 1:
+                # +1 for "1" audit count, +1 for red X
+                audit_len = audit_base_str_len + (2 if num_nonblocking_audits else 1)
+            else:
+                audit_len = audit_base_str_len + len(str(num_audits))
+                if num_nonblocking_audits:
+                    # +1 for space, +1 for red X
+                    audit_len += len(str(num_nonblocking_audits)) + 2
             audit_str_len = max(audit_str_len, audit_len)
     return audit_str_len
 
