@@ -2,16 +2,39 @@
 
 This doc is designed to get you intimate with 90% of the SQLMesh commands you’ll use to build *and* maintain data pipelines. The goal is after 30 minutes, using SQLMesh becomes muscle memory. This is designed to live on your second monitor or in a side by side window, so you can swiftly copy/paste into your terminal. 
 
-This is *not* an exhaustive list, but it is an earnest one.
+This is designed based on community observations, face to face conversations, live screenshares, and debugging sessions. This is *not* an exhaustive list, but it is an earnest one.
 
-## **Development Commands**
+You can follow along in this: [open source github repo](https://github.com/sungchun12/sqlmesh-cli-crash-course)
 
-You’ll use these commands 80% of the time because this is how you apply code changes.
+## **Development Workflow**
+
+You’ll use these commands 80% of the time because this is how you apply code changes. 
+
+The workflow is as follows:
+
+1. Make changes to your models directly in SQL and python files (pre-made in examples below)
+2. Plan the changes in your dev environment (assumes a prod environment exists-see quickstart)
+3. Apply the changes to your dev environment
+4. Audit the changes (test data quality)
+5. Run data diff against prod
+6. Apply the changes to prod
+
+---
+
+All these steps are bundled into a single command below:
+
+- Plan the changes in your dev environment.
+- Apply the changes to your dev environment by entering `y` at the prompt.
+- Audit the changes (test data quality). This happens automatically when you apply the changes to dev.
 
 === "SQLMesh"
 
     ```bash
     sqlmesh plan dev
+    ```
+
+    ```bash
+    sqlmesh plan <environment>
     ```
 
 === "Tobiko Cloud"
@@ -20,7 +43,140 @@ You’ll use these commands 80% of the time because this is how you apply code c
     tcloud sqlmesh plan dev
     ```
 
-asdf
+    ```bash
+    tcloud sqlmesh plan <environment>
+    ```
+
+??? "Example Output"
+    I made a big change to the `incremental_model` and `full_model`. 
+
+    - Showed me the models impacted by the changes.
+    - Showed me the changes that will be made to the models.
+    - Showed me the models that need to be backfilled.
+    - Prompted me to apply the changes to `dev`.
+    - Showed me the audit failures that raise as warnings.
+    - Updated the physical layer to validate the SQL.
+    - Executed the model batches by inserting the data into the physical layer.
+    - Updated the virtual layer with view pointers to reflect the changes.
+
+    ```bash
+    Differences from the `dev` environment:
+
+    Models:
+    ├── Directly Modified:
+    │   ├── sqlmesh_example__dev.incremental_model
+    │   └── sqlmesh_example__dev.full_model
+    └── Indirectly Modified:
+        └── sqlmesh_example__dev.view_model
+
+    ---                                                                                                                                                                                     
+                                                                                                                                                                                            
+    +++                                                                                                                                                                                     
+                                                                                                                                                                                            
+    @@ -9,7 +9,8 @@                                                                                                                                                                         
+                                                                                                                                                                                            
+     SELECT                                                                                                                                                                                 
+       item_id,                                                                                                                                                                             
+       COUNT(DISTINCT id) AS num_orders,                                                                                                                                                    
+    -  6 AS new_column                                                                                                                                                                      
+    +  new_column                                                                                                                                                                           
+     FROM sqlmesh_example.incremental_model                                                                                                                                                 
+     GROUP BY                                                                                                                                                                               
+    -  item_id                                                                                                                                                                              
+    +  item_id,                                                                                                                                                                             
+    +  new_column                                                                                                                                                                           
+
+    Directly Modified: sqlmesh_example__dev.full_model (Breaking)
+
+    ---                                                                                                                                                                                     
+                                                                                                                                                                                            
+    +++                                                                                                                                                                                     
+                                                                                                                                                                                            
+    @@ -15,7 +15,7 @@                                                                                                                                                                       
+                                                                                                                                                                                            
+       id,                                                                                                                                                                                  
+       item_id,                                                                                                                                                                             
+       event_date,                                                                                                                                                                          
+    -  5 AS new_column                                                                                                                                                                      
+    +  7 AS new_column                                                                                                                                                                      
+     FROM sqlmesh_example.seed_model                                                                                                                                                        
+     WHERE                                                                                                                                                                                  
+       event_date BETWEEN @start_date AND @end_date                                                                                                                                         
+
+    Directly Modified: sqlmesh_example__dev.incremental_model (Breaking)
+    └── Indirectly Modified Children:
+        └── sqlmesh_example__dev.view_model (Indirect Breaking)
+    Models needing backfill:
+    ├── sqlmesh_example__dev.full_model: [full refresh]
+    ├── sqlmesh_example__dev.incremental_model: [2020-01-01 - 2025-04-16]
+    └── sqlmesh_example__dev.view_model: [recreate view]
+    Apply - Backfill Tables [y/n]: y
+
+    Updating physical layer ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 2/2 • 0:00:00
+
+    ✔ Physical layer updated
+
+    [1/1]  sqlmesh_example__dev.incremental_model               [insert 2020-01-01 - 2025-04-16]                 0.03s   
+    Executing model batches ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0.0% • pending • 0:00:00
+    sqlmesh_example__dev.incremental_model .                                                 
+    [WARNING] sqlmesh_example__dev.full_model: 'assert_positive_order_ids' audit error: 2 rows failed. Learn more in logs: 
+    /Users/sung/Desktop/git_repos/sqlmesh-cli-revamp/logs/sqlmesh_2025_04_18_10_33_43.log
+    [1/1]  sqlmesh_example__dev.full_model                      [full refresh, audits ❌1]                       0.01s   
+    Executing model batches ━━━━━━━━━━━━━╺━━━━━━━━━━━━━━━━━━━━━━━━━━ 33.3% • 1/3 • 0:00:00
+    sqlmesh_example__dev.full_model .                                                     
+    [WARNING] sqlmesh_example__dev.view_model: 'assert_positive_order_ids' audit error: 2 rows failed. Learn more in logs: 
+    /Users/sung/Desktop/git_repos/sqlmesh-cli-revamp/logs/sqlmesh_2025_04_18_10_33_43.log
+    [1/1]  sqlmesh_example__dev.view_model                      [recreate view, audits ✔2 ❌1]                   0.01s   
+    Executing model batches ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 3/3 • 0:00:00                                                                                                 
+                                                                                                                                                                                            
+    ✔ Model batches executed
+
+    Updating virtual layer  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 3/3 • 0:00:00
+
+    ✔ Virtual layer updated
+    ```
+
+
+Run data diff against prod. This is a good way to verify the changes are behaving as expected **after** applying them to `dev`.
+
+=== "SQLMesh"
+
+    ```bash
+    sqlmesh table_diff prod:dev sqlmesh_example.full_model --show-sample
+    ```
+
+    ```bash
+    sqlmesh table_diff <environment>:<environment> <model_name> --show-sample
+    ```
+
+
+=== "Tobiko Cloud"
+
+    ```bash
+    tcloud sqlmesh table_diff prod:dev sqlmesh_example.full_model --show-sample
+    ```
+
+    ```bash
+    tcloud sqlmesh table_diff <environment>:<environment> <model_name> --show-sample
+    ```
+
+Apply the changes to prod. This step is recommended only in CICD as best practice. 
+
+For learning purposes and hot fixes, you can apply the changes to prod by entering `y` at the prompt.
+
+=== "SQLMesh"
+
+    ```bash
+    sqlmesh plan 
+    ```
+
+=== "Tobiko Cloud"
+
+    ```bash
+    tcloud sqlmesh plan
+    ```
+
+---
   
 === "SQLMesh"
 
