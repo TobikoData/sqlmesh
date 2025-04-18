@@ -2,7 +2,7 @@
 
 This doc is designed to get you intimate with a **majority** of the SQLMesh commands you’ll use to build *and* maintain data pipelines. The goal is after 30 minutes, using SQLMesh becomes muscle memory. This is designed to live on your second monitor or in a side by side window, so you can swiftly copy/paste into your terminal. 
 
-This is designed based on community observations, face to face conversations, live screenshares, and debugging sessions. This is *not* an exhaustive list, but it is an earnest one.
+This is inspired by community observations, face to face conversations, live screenshares, and debugging sessions. This is *not* an exhaustive list, but it is an earnest one.
 
 You can follow along in this: [open source github repo](https://github.com/sungchun12/sqlmesh-cli-crash-course)
 
@@ -590,8 +590,8 @@ Pro tip: run this after running `sqlmesh table_diff` to get a full picture of th
     ```
 
     ```bash
-    -- construct arbitrary query
-    sqlmesh fetchdf "select * from <schema__environment>.<model_name> limit 5" -- double underscore is important. Not needed for prod.
+    # construct arbitrary query
+    sqlmesh fetchdf "select * from <schema__environment>.<model_name> limit 5" # double underscore is important. Not needed for prod.
     ```
 
 === "Tobiko Cloud"
@@ -681,6 +681,174 @@ You'll use these commands ad hoc to validate your changes are behaving as expect
 1. Render the model to verify the SQL is looking as expected
 2. Run in debug mode to verify SQLMesh's behavior.
 
+### Render your SQL Changes
+
+This is great to verify the SQL is looking as expected before applying the changes. This is especially important if you're migrating from another query engine (ex: postgres to databricks).
+
+=== "SQLMesh"
+
+    ```bash
+    sqlmesh render sqlmesh_example.incremental_model 
+    ```
+
+    ```bash
+    sqlmesh render sqlmesh_example.incremental_model --dialect databricks
+    ```
+
+    ```bash
+    sqlmesh render <model_name> --dialect <dialect>
+    ```
+
+=== "Tobiko Cloud"
+
+    ```bash
+    tcloud sqlmesh render sqlmesh_example.incremental_model 
+    ```
+
+    ```bash
+    tcloud sqlmesh render sqlmesh_example.incremental_model --dialect databricks
+    ```
+
+    ```bash
+    tcloud sqlmesh render <model_name> --dialect <dialect>
+    ```
+
+    ```bash
+??? "Example Output"
+
+    It outputs the full SQL code in the default or target dialect.
+
+    ```sql
+    -- rendered sql in default dialect
+    SELECT                                                                                                
+      "seed_model"."id" AS "id",                                                                          
+      "seed_model"."item_id" AS "item_id",                                                                
+      "seed_model"."event_date" AS "event_date",                                                          
+      7 AS "new_column"                                                                                   
+    FROM "db"."sqlmesh__sqlmesh_example"."sqlmesh_example__seed_model__3294646944" AS "seed_model" /*     
+    db.sqlmesh_example.seed_model */                                                                      
+    WHERE                                                                                                 
+      "seed_model"."event_date" <= CAST('1970-01-01' AS DATE) -- placeholder dates for date macros                                             
+      AND "seed_model"."event_date" >= CAST('1970-01-01' AS DATE) 
+    ```
+
+    ```sql
+    -- rendered sql in databricks dialect
+    SELECT                                                                                                
+      `seed_model`.`id` AS `id`,                                                                          
+      `seed_model`.`item_id` AS `item_id`,                                                                
+      `seed_model`.`event_date` AS `event_date`,                                                          
+      7 AS `new_column`                                                                                   
+    FROM `db`.`sqlmesh__sqlmesh_example`.`sqlmesh_example__seed_model__3294646944` AS `seed_model` /*     
+    db.sqlmesh_example.seed_model */                                                                      
+    WHERE                                                                                                 
+      `seed_model`.`event_date` <= CAST('1970-01-01' AS DATE)                                             
+      AND `seed_model`.`event_date` >= CAST('1970-01-01' AS DATE)   
+    ```
+
+    ```sql
+    -- original sqlmesh model code
+    MODEL (
+      name sqlmesh_example.incremental_model,
+      kind INCREMENTAL_BY_TIME_RANGE (
+        time_column event_date
+      ),
+      start '2020-01-01',
+      cron '@daily',
+      grain (id, event_date)
+    );
+
+    SELECT
+      id,
+      item_id,
+      event_date,
+      7 as new_column
+    FROM
+      sqlmesh_example.seed_model
+    WHERE
+      event_date BETWEEN @start_date AND @end_date
+    ```
+
+### Apply Plan Changes in Verbose Mode
+
+This is useful to see exactly what SQLMesh is doing in the physical and virtual layers. After, you can copy/paste the fully qualified table/view name into your query console to validate the data (if that's your preference).
+
+=== "SQLMesh"
+
+    ```bash
+    sqlmesh plan dev -vv
+    ```
+
+    ```bash
+    sqlmesh plan <environment> -vv
+    ```
+
+=== "Tobiko Cloud"
+
+    ```bash
+    tcloud sqlmesh plan dev -vv
+    ```
+
+    ```bash
+    tcloud sqlmesh plan <environment> -vv
+    ```
+
+??? "Example Output"
+
+    ```bash
+    [WARNING] Linter warnings for 
+    /Users/sung/Desktop/git_repos/sqlmesh-cli-revamp/models/incremental_by_partition.sql:
+    - nomissingaudits: Model `audits` must be configured to test data quality.
+    [WARNING] Linter warnings for /Users/sung/Desktop/git_repos/sqlmesh-cli-revamp/models/seed_model.sql:
+    - nomissingaudits: Model `audits` must be configured to test data quality.
+    [WARNING] Linter warnings for 
+    /Users/sung/Desktop/git_repos/sqlmesh-cli-revamp/models/incremental_by_unique_key.sql:
+    - nomissingaudits: Model `audits` must be configured to test data quality.
+    [WARNING] Linter warnings for 
+    /Users/sung/Desktop/git_repos/sqlmesh-cli-revamp/models/incremental_model.sql:
+    - nomissingaudits: Model `audits` must be configured to test data quality.
+
+    Differences from the `dev` environment:
+
+    Models:
+    ├── Directly Modified:
+    │   └── db.sqlmesh_example__dev.incremental_model
+    └── Indirectly Modified:
+        ├── db.sqlmesh_example__dev.full_model
+        └── db.sqlmesh_example__dev.view_model
+
+    ---                                                                                                   
+                                                                                                          
+    +++                                                                                                   
+                                                                                                          
+    @@ -15,7 +15,7 @@                                                                                     
+                                                                                                          
+      id,                                                                                                
+      item_id,                                                                                           
+      event_date,                                                                                        
+    -  9 AS new_column                                                                                    
+    +  7 AS new_column                                                                                    
+    FROM sqlmesh_example.seed_model                                                                      
+    WHERE                                                                                                
+      event_date BETWEEN @start_date AND @end_date                                                       
+
+    Directly Modified: db.sqlmesh_example__dev.incremental_model (Breaking)
+    └── Indirectly Modified Children:
+        ├── db.sqlmesh_example__dev.full_model (Breaking)
+        └── db.sqlmesh_example__dev.view_model (Indirect Breaking)
+    Apply - Virtual Update [y/n]: y
+
+    SKIP: No physical layer updates to perform
+
+    SKIP: No model batches to execute
+
+    db.sqlmesh_example__dev.incremental_model  updated # you'll notice that it's updated vs. promoted because we changed the existing view definition
+    db.sqlmesh_example__dev.full_model         updated
+    db.sqlmesh_example__dev.view_model         updated
+    Updating virtual layer  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 3/3 • 0:00:00
+
+    ✔ Virtual layer updated
+    ```
 
 ## **Run Commands**
 
@@ -739,43 +907,10 @@ https://www.loom.com/share/209181d9532d44969313ac0ac23f501f
 
 You'll these commands ad hoc to verify your changes are behaving as expected.
 
-=== "SQLMesh"
-
-    ```bash
-    sqlmesh render sqlmesh_example.incremental_model 
-    ```
-
-=== "Tobiko Cloud"
-
-    ```bash
-    tcloud sqlmesh render sqlmesh_example.incremental_model 
-    ```
-
-asdf
 
 
-
-asdf
-
-
-
-asdf
 
 ## **Miscellaneous**
-
-=== "SQLMesh"
-
-    ```bash
-    sqlmesh migrate
-    ```
-
-=== "Tobiko Cloud"
-
-    ```bash
-    tcloud sqlmesh migrate
-    ```
-
-- migrate state schemas
 
 === "SQLMesh"
 
