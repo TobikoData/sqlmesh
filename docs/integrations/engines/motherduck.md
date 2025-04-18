@@ -1,6 +1,6 @@
 # MotherDuck
 
-This page provides information about how to use SQLMesh with MotherDuck. 
+This page provides information about how to use SQLMesh with MotherDuck.
 
 It begins with a [Connection Quickstart](#connection-quickstart) that demonstrates how to connect to MotherDuck, or you can skip directly to information about using MotherDuck with the built-in scheduler.
 
@@ -8,25 +8,25 @@ It begins with a [Connection Quickstart](#connection-quickstart) that demonstrat
 
 Connecting to cloud warehouses involves a few steps, so this connection quickstart provides the info you need to get up and running with MotherDuck.
 
-It demonstrates connecting to MotherDuck with the `duckdb` library bundled with SQLMesh. 
+It demonstrates connecting to MotherDuck with the `duckdb` library bundled with SQLMesh.
 
 MotherDuck provides a single way to authorize a connection. This quickstart demonstrates authenticating with a token.
 
-!!! tip  
+!!! tip
     This quick start assumes you are familiar with basic SQLMesh commands and functionality.
 
-    If you’re not familiar, work through the [SQLMesh Quickstart](../../quick_start.md) before continuing.  
+    If you’re not familiar, work through the [SQLMesh Quickstart](../../quick_start.md) before continuing.
 
 ### Prerequisites
 
 Before working through this quickstart guide, ensure that:
 
-1. You have a motherduck account and an access token.  
-2. Your computer has SQLMesh installed with the DuckDB extra available.  
-   1. Install from command line with the command `pip install “sqlmesh[duckdb]”`  
-3. You have initialized a SQLMesh example project on your computer  
-   1. Open a command line interface and navigate to the directory where the project files should go.  
-   2. Initialize the project with the command `sqlmesh init motherduck`
+1. You have a motherduck account and an access token.
+2. Your computer has SQLMesh installed with the DuckDB extra available.
+   1. Install from command line with the command `pip install “sqlmesh[duckdb]”`
+3. You have initialized a SQLMesh example project on your computer
+   1. Open a command line interface and navigate to the directory where the project files should go.
+   2. Initialize the project with the command `sqlmesh init duckdb`, since `duckdb` is the dialect.
 
 #### Access control permissions
 
@@ -38,18 +38,20 @@ We now have what is required to configure SQLMesh’s connection to MotherDuck.
 
 We start the configuration by adding a gateway named `motherduck` to our example project’s config.yaml file and making it our `default gateway`, as well as adding our token, persistent, and ephemeral catalogs.
 
-```yaml  
-gateways:  
-    motherduck:  
-        connection:   
-            type: motherduck  
-            catalogs:  
-                persistent: ‘md:’  
-                ephemeral: ‘:memory:’  
-            token: \<your\_token\>
+```yaml
+gateways:
+  motherduck:
+    connection:
+      type: motherduck
+        catalogs:
+          persistent: "md:"
+          ephemeral: ":memory:"
+      token: <your_token>
 
-default\_gateway: motherduck  
+default_gateway: motherduck
 ```
+
+Catalogs can be defined to connect to anything that [DuckDB can be attached to](./duckdb.md#other-connection-catalogs-example).
 
 !!! warning
     Best practice for storing secrets like tokens is placing them in [environment variables that the configuration file loads dynamically](../../guides/configuration.md#environment-variables). For simplicity, this guide instead places the value directly in the configuration file.
@@ -57,11 +59,11 @@ default\_gateway: motherduck
     This code demonstrates how to use the environment variable `MOTHERDUCK_TOKEN` for the configuration's `token` parameter:
 
     ```yaml linenums="1" hl_lines="5"
-    gateways:  
-        motherduck:  
-            connection:   
-                type: motherduck  
-            token: {{ env_var('MOTHERDUCK_TOKEN') }}
+    gateways:
+      motherduck:
+        connection:
+          type: motherduck
+          token: {{ env_var('MOTHERDUCK_TOKEN') }}
     ```
 
 ### Check connection

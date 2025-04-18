@@ -597,12 +597,47 @@ def test_duckdb_attach_options():
 
     assert (
         options.to_sql(alias="db")
-        == "ATTACH 'dbname=postgres user=postgres host=127.0.0.1' AS db (TYPE POSTGRES, READ_ONLY)"
+        == "ATTACH IF NOT EXISTS 'dbname=postgres user=postgres host=127.0.0.1' AS db (TYPE POSTGRES, READ_ONLY)"
     )
 
     options = DuckDBAttachOptions(type="duckdb", path="test.db", read_only=False)
 
-    assert options.to_sql(alias="db") == "ATTACH 'test.db' AS db"
+    assert options.to_sql(alias="db") == "ATTACH IF NOT EXISTS 'test.db' AS db"
+
+
+def test_motherduck_attach_catalog(make_config):
+    config = make_config(
+        type="motherduck",
+        catalogs={
+            "test1": "md:test1",
+            "test2": DuckDBAttachOptions(
+                type="motherduck",
+                path="md:test2",
+            ),
+        },
+    )
+    assert isinstance(config, MotherDuckConnectionConfig)
+    assert config.get_catalog() == "test1"
+
+    assert config.catalogs.get("test2").read_only is False
+    assert config.catalogs.get("test2").path == "md:test2"
+    assert not config.is_recommended_for_state_sync
+
+
+def test_motherduck_attach_options():
+    options = DuckDBAttachOptions(
+        type="postgres", path="dbname=postgres user=postgres host=127.0.0.1", read_only=True
+    )
+
+    assert (
+        options.to_sql(alias="db")
+        == "ATTACH IF NOT EXISTS 'dbname=postgres user=postgres host=127.0.0.1' AS db (TYPE POSTGRES, READ_ONLY)"
+    )
+
+    options = DuckDBAttachOptions(type="motherduck", path="md:test.db", read_only=False)
+
+    # Here the alias should be ignored compared to duckdb
+    assert options.to_sql(alias="db") == "ATTACH IF NOT EXISTS 'md:test.db'"
 
 
 def test_duckdb_multithreaded_connection_factory(make_config):
