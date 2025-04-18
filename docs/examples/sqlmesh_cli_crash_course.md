@@ -48,7 +48,7 @@ All these steps are bundled into a single command below:
     ```
 
 ??? "Example Output"
-    I made a big change to the `incremental_model` and `full_model`. 
+    I made a breaking change to `incremental_model` and `full_model`. 
 
     - Showed me the models impacted by the changes.
     - Showed me the changes that will be made to the models.
@@ -149,7 +149,6 @@ Run data diff against prod. This is a good way to verify the changes are behavin
     sqlmesh table_diff <environment>:<environment> <model_name> --show-sample
     ```
 
-
 === "Tobiko Cloud"
 
     ```bash
@@ -158,6 +157,74 @@ Run data diff against prod. This is a good way to verify the changes are behavin
 
     ```bash
     tcloud sqlmesh table_diff <environment>:<environment> <model_name> --show-sample
+    ```
+
+??? "Example Output"
+    I compare the `prod` and `dev` environments for `sqlmesh_example.full_model`.
+
+    - Verified environments and models to diff along with the join on grain configured.
+    - Showed me schema diffs between the environments.
+    - Showed me row count diffs between the environments.
+    - Showed me common rows stats between the environments.
+    - Showed me sample data differences between the environments.
+    - This is where your human judgement comes in to verify the changes are behaving as expected.
+
+    ```sql
+    -- models/full_model.sql
+    MODEL (
+      name sqlmesh_example.full_model,
+      kind FULL,
+      cron '@daily',
+      grain item_id, -- grain is optional BUT necessary for table diffs to work correctly. It's your primary key that is unique and not null.
+      audits (assert_positive_order_ids),
+    );
+
+    SELECT
+      item_id,
+      COUNT(DISTINCT id) AS num_orders,
+      new_column
+    FROM
+        sqlmesh_example.incremental_model
+    GROUP BY item_id, new_column
+    ```
+
+    ```bash
+    Table Diff
+    ├── Model:
+    │   └── sqlmesh_example.full_model
+    ├── Environment:
+    │   ├── Source: prod
+    │   └── Target: dev
+    ├── Tables:
+    │   ├── Source: db.sqlmesh_example.full_model
+    │   └── Target: db.sqlmesh_example__dev.full_model
+    └── Join On:
+        └── item_id
+
+    Schema Diff Between 'PROD' and 'DEV' environments for model 'sqlmesh_example.full_model':
+    └── Schemas match
+
+
+    Row Counts:
+    └──  PARTIAL MATCH: 5 rows (100.0%)
+
+    COMMON ROWS column comparison stats:
+                pct_match
+    num_orders      100.0
+    new_column        0.0
+
+
+    COMMON ROWS sample data differences:
+    Column: new_column
+    ┏━━━━━━━━━┳━━━━━━┳━━━━━┓
+    ┃ item_id ┃ PROD ┃ DEV ┃
+    ┡━━━━━━━━━╇━━━━━━╇━━━━━┩
+    │ -11     │ 5    │ 7   │
+    │ -3      │ 5    │ 7   │
+    │ 1       │ 5    │ 7   │
+    │ 3       │ 5    │ 7   │
+    │ 9       │ 5    │ 7   │
+    └─────────┴──────┴─────┘
     ```
 
 Apply the changes to prod. This step is recommended only in CICD as best practice. 
@@ -174,6 +241,74 @@ For learning purposes and hot fixes, you can apply the changes to prod by enteri
 
     ```bash
     tcloud sqlmesh plan
+    ```
+
+??? "Example Output"
+    After I feel confident about the changes, I apply them to `prod`.
+
+    - Showed me the models impacted by the changes.
+    - Showed me the changes that will be made to the models.
+    - Showed me the models that need to be backfilled. None in this case as it was already backfilled earlier in `dev`.
+    - Prompted me to apply the changes to `prod`.
+    - Showed me physical layer and execution steps are skipped as the changes were already applied to `dev`.
+    - Updated the virtual layer with view pointers to reflect the changes.
+
+    ```bash
+    Differences from the `prod` environment:
+
+    Models:
+    ├── Directly Modified:
+    │   ├── sqlmesh_example.full_model
+    │   └── sqlmesh_example.incremental_model
+    └── Indirectly Modified:
+        └── sqlmesh_example.view_model
+
+    ---                                                                                                                                                                                     
+                                                                                                                                                                                            
+    +++                                                                                                                                                                                     
+                                                                                                                                                                                            
+    @@ -9,7 +9,8 @@                                                                                                                                                                         
+                                                                                                                                                                                            
+    SELECT                                                                                                                                                                                 
+      item_id,                                                                                                                                                                             
+      COUNT(DISTINCT id) AS num_orders,                                                                                                                                                    
+    -  5 AS new_column                                                                                                                                                                      
+    +  new_column                                                                                                                                                                           
+    FROM sqlmesh_example.incremental_model                                                                                                                                                 
+    GROUP BY                                                                                                                                                                               
+    -  item_id                                                                                                                                                                              
+    +  item_id,                                                                                                                                                                             
+    +  new_column                                                                                                                                                                           
+
+    Directly Modified: sqlmesh_example.full_model (Breaking)
+
+    ---                                                                                                                                                                                     
+                                                                                                                                                                                            
+    +++                                                                                                                                                                                     
+                                                                                                                                                                                            
+    @@ -15,7 +15,7 @@                                                                                                                                                                       
+                                                                                                                                                                                            
+      id,                                                                                                                                                                                  
+      item_id,                                                                                                                                                                             
+      event_date,                                                                                                                                                                          
+    -  5 AS new_column                                                                                                                                                                      
+    +  7 AS new_column                                                                                                                                                                      
+    FROM sqlmesh_example.seed_model                                                                                                                                                        
+    WHERE                                                                                                                                                                                  
+      event_date BETWEEN @start_date AND @end_date                                                                                                                                         
+
+    Directly Modified: sqlmesh_example.incremental_model (Breaking)
+    └── Indirectly Modified Children:
+        └── sqlmesh_example.view_model (Indirect Breaking)
+    Apply - Virtual Update [y/n]: y
+
+    SKIP: No physical layer updates to perform
+
+    SKIP: No model batches to execute
+
+    Updating virtual layer  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 3/3 • 0:00:00
+
+    ✔ Virtual layer updated
     ```
 
 ---
