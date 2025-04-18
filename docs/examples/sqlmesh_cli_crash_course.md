@@ -1,6 +1,6 @@
 # SQLMesh CLI Crash Course
 
-This doc is designed to get you intimate with a **majority** of the SQLMesh commands you’ll use to build *and* maintain data pipelines. The goal is after 30 minutes, using SQLMesh becomes muscle memory. This is designed to live on your second monitor or in a side by side window, so you can swiftly copy/paste into your terminal. 
+This doc is designed to get you intimate with a **majority** of the SQLMesh workflows and commands you’ll use to build *and* maintain data pipelines. The goal is after 30 minutes, using SQLMesh becomes muscle memory. This is designed to live on your second monitor or in a side by side window, so you can swiftly copy/paste into your terminal. 
 
 This is inspired by community observations, face to face conversations, live screenshares, and debugging sessions. This is *not* an exhaustive list, but it is an earnest one.
 
