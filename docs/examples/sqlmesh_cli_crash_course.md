@@ -577,6 +577,43 @@ You'll use these commands to validate your changes are behaving as expected. Aud
     FAILED (failures=1)
     ```
 
+### Run Ad Hoc Queries
+
+This is great to validate the look and feel of your changes without context switching to your query console.
+
+Pro tip: run this after running `sqlmesh table_diff` to get a full picture of the changes.
+
+=== "SQLMesh"
+
+    ```bash
+    sqlmesh fetchdf "select * from sqlmesh_example__dev.full_model limit 5"
+    ```
+
+    ```bash
+    -- construct arbitrary query
+    sqlmesh fetchdf "select * from <schema__environment>.<model_name> limit 5" -- double underscore is important. Not needed for prod.
+    ```
+
+=== "Tobiko Cloud"
+
+    ```bash
+    tcloud sqlmesh fetchdf "select * from sqlmesh_example__dev.full_model limit 5"
+    ```
+
+    ```bash
+    -- construct arbitrary query
+    tcloud sqlmesh fetchdf "select * from <schema__environment>.<model_name> limit 5" -- double underscore is important. Not needed for prod.
+    ```
+
+??? "Example Output"
+    ```bash
+    item_id  num_orders  new_column
+    0        9           1           7
+    1      -11           1           7
+    2        3           1           7
+    3       -3           1           7
+    4        1           4           7
+    ```
 
 ## **Debugging Workflow**
 
@@ -657,17 +694,7 @@ You'll these commands ad hoc to verify your changes are behaving as expected.
 
 asdf
 
-=== "SQLMesh"
 
-    ```bash
-    sqlmesh fetchdf "select * from tcloud_demo__dev_debug.gsheets_example_v3"
-    ```
-
-=== "Tobiko Cloud"
-
-    ```bash
-    tcloud sqlmesh fetchdf "select * from tcloud_demo__dev_debug.gsheets_example_v3"
-    ```
 
 asdf
 
