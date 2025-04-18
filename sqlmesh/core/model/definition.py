@@ -1849,7 +1849,7 @@ def _extract_blueprints(blueprints: t.Any, path: Path) -> t.List[t.Any]:
         return blueprints
 
     raise_config_error(
-        "Expected a list or tuple consisting of key-value mappings for"
+        "Expected a list or tuple consisting of key-value mappings for "
         f"the 'blueprints' property, got '{blueprints}' instead",
         path,
     )

@@ -367,6 +367,10 @@ def entrypoint(
     )
 ```
 
+!!! note
+
+    Blueprint variable mappings can also be evaluated dynamically, by using a macro (i.e. `blueprints="@gen_blueprints()"`). This is useful in cases where the `blueprints` list needs to be sourced from external sources, e.g. CSV files.
+
 ## Examples
 ### Basic
 The following is an example of a Python model returning a static Pandas DataFrame.

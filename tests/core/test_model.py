@@ -8312,9 +8312,9 @@ def entrypoint(evaluator):
 def test_dynamic_blueprinting(tmp_path: Path) -> None:
     init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
 
-    dynamic_template = tmp_path / "models/dynamic_template.sql"
-    dynamic_template.parent.mkdir(parents=True, exist_ok=True)
-    dynamic_template.write_text(
+    dynamic_template_sql = tmp_path / "models/dynamic_template.sql"
+    dynamic_template_sql.parent.mkdir(parents=True, exist_ok=True)
+    dynamic_template_sql.write_text(
         """
         MODEL (
           name @customer.some_table,
@@ -8328,6 +8328,24 @@ def test_dynamic_blueprinting(tmp_path: Path) -> None:
         FROM @customer.some_source
 
         """
+    )
+
+    dynamic_template_py = tmp_path / "models/dynamic_template.py"
+    dynamic_template_py.parent.mkdir(parents=True, exist_ok=True)
+    dynamic_template_py.write_text(
+        """
+from sqlmesh import model
+
+@model(
+    "@{customer}.some_other_table",
+    kind="FULL",
+    blueprints="@gen_blueprints()",
+    is_sql=True,
+)
+def entrypoint(evaluator):
+    field_a = evaluator.blueprint_var("field_a")
+    return f"SELECT {field_a}, @BLUEPRINT_VAR('field_b') AS field_b FROM @customer.some_source"
+"""
     )
 
     gen_blueprints = tmp_path / "macros/gen_blueprints.py"
@@ -8347,9 +8365,11 @@ def gen_blueprints(evaluator):
         config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb")), paths=tmp_path
     )
 
-    assert len(ctx.models) == 2
+    assert len(ctx.models) == 4
     assert '"memory"."customer1"."some_table"' in ctx.models
     assert '"memory"."customer2"."some_table"' in ctx.models
+    assert '"memory"."customer1"."some_other_table"' in ctx.models
+    assert '"memory"."customer2"."some_other_table"' in ctx.models
 
 
 def test_single_blueprint(tmp_path: Path) -> None:
