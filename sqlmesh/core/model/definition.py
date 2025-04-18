@@ -491,10 +491,11 @@ class _Model(ModelMeta, frozen=True):
                 pass
 
         if self.time_column:
-            where = self.time_column.column.between(
-                self.convert_to_time_column(start or c.EPOCH, columns_to_types),
-                self.convert_to_time_column(end or c.EPOCH, columns_to_types),
-            )
+            low, high = [
+                self.convert_to_time_column(dt, columns_to_types)
+                for dt in make_inclusive(start or c.EPOCH, end or c.EPOCH, self.dialect)
+            ]
+            where = self.time_column.column.between(low, high)
         else:
             where = None
 
