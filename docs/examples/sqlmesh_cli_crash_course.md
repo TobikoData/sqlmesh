@@ -1,6 +1,6 @@
 # SQLMesh CLI Crash Course
 
-This doc is designed to get you intimate with 90% of the SQLMesh commands you’ll use to build *and* maintain data pipelines. The goal is after 30 minutes, using SQLMesh becomes muscle memory. This is designed to live on your second monitor or in a side by side window, so you can swiftly copy/paste into your terminal. 
+This doc is designed to get you intimate with a **majority** of the SQLMesh commands you’ll use to build *and* maintain data pipelines. The goal is after 30 minutes, using SQLMesh becomes muscle memory. This is designed to live on your second monitor or in a side by side window, so you can swiftly copy/paste into your terminal. 
 
 This is designed based on community observations, face to face conversations, live screenshares, and debugging sessions. This is *not* an exhaustive list, but it is an earnest one.
 
@@ -8,12 +8,10 @@ You can follow along in this: [open source github repo](https://github.com/sungc
 
 ## **Development Workflow**
 
-You’ll use these commands 80% of the time because this is how you apply code changes. 
-
-The workflow is as follows:
+You’ll use these commands 80% of the time because this is how you apply code changes. The workflow is as follows:
 
 1. Make changes to your models directly in SQL and python files (pre-made in examples below)
-2. Plan the changes in your dev environment (assumes a prod environment exists-see quickstart)
+2. Plan the changes in your dev environment
 3. Apply the changes to your dev environment
 4. Audit the changes (test data quality)
 5. Run data diff against prod
@@ -37,6 +35,12 @@ All these steps are bundled into a single command below:
     sqlmesh plan <environment>
     ```
 
+    If you want to move faster, you can add the `--auto-apply` flag to avoid the manual prompt.
+
+    ```bash
+    sqlmesh plan <environment> --auto-apply
+    ```
+
 === "Tobiko Cloud"
 
     ```bash
@@ -45,6 +49,12 @@ All these steps are bundled into a single command below:
 
     ```bash
     tcloud sqlmesh plan <environment>
+    ```
+
+    If you want to move faster, you can add the `--auto-apply` flag to avoid the manual prompt.
+
+    ```bash
+    tcloud sqlmesh plan <environment> --auto-apply
     ```
 
 ??? "Example Output"
@@ -227,9 +237,9 @@ Run data diff against prod. This is a good way to verify the changes are behavin
     └─────────┴──────┴─────┘
     ```
 
-Apply the changes to prod. This step is recommended only in CICD as best practice. 
-
-For learning purposes and hot fixes, you can apply the changes to prod by entering `y` at the prompt.
+!!! warning "Apply the changes to prod"
+    This step is recommended **only in CI/CD** as best practice. # TODO: link to github cicd bot setup
+    For learning purposes and hot fixes, you can apply the changes to prod by entering `y` at the prompt.
 
 === "SQLMesh"
 
@@ -312,115 +322,15 @@ For learning purposes and hot fixes, you can apply the changes to prod by enteri
     ```
 
 ---
-  
-=== "SQLMesh"
 
-    ```bash
-    sqlmesh plan dev --start 2025-01-01 --end now
-    ```
+## **Enhanced Testing Workflow**
 
-=== "Tobiko Cloud"
+You'll use these commands ad hoc to validate your changes are behaving as expected. Audits (data tests) are a great first step, and you'll want to evolve into to feel confident about the changes. The workflow is as follows:
 
-    ```bash
-    tcloud sqlmesh plan dev --start 2025-01-01 --end now
-    ```
+1. Create external models outside of SQLMesh's control (ex: data loaded in by Fivetran, Airbyte, etc.)
+2. Automatically generate unit tests
+3. Ad hoc query the data directly in the CLI
 
-asdf
-
-=== "SQLMesh"
-
-    ```bash
-    sqlmesh --debug plan dev
-    ```
-
-=== "Tobiko Cloud"
-
-    ```bash
-    tcloud sqlmesh --debug plan dev
-    ```
-
-asdf
-=== "SQLMesh"
-
-    ```bash
-    sqlmesh plan dev --auto-apply
-    ```
-
-=== "Tobiko Cloud"
-
-    ```bash
-    tcloud sqlmesh plan dev --auto-apply # - good for iterating faster
-    ```
-
-asdf
-
-=== "SQLMesh"
-
-    ```bash
-    sqlmesh plan dev --dry-run
-    ```
-
-=== "Tobiko Cloud"
-
-    ```bash
-    tcloud sqlmesh plan dev --dry-run
-    ```
-
-asdf
-=== "SQLMesh"
-
-    ```bash
-    sqlmesh plan dev --diff-rendered
-    ```
-
-=== "Tobiko Cloud"
-
-    ```bash
-    tcloud sqlmesh plan dev --diff-rendered
-    ```
-
-asdf
-=== "SQLMesh"
-
-    ```bash
-    sqlmesh plan dev --no-diff
-    ```
-
-=== "Tobiko Cloud"
-
-    ```bash
-    tcloud sqlmesh plan dev --no-diff
-    ```
-
-asdf
-
-=== "SQLMesh"
-
-    ```bash
-    sqlmesh plan dev --empty-backfill
-    ```
-
-=== "Tobiko Cloud"
-
-    ```bash
-    tcloud sqlmesh plan dev --empty-backfill
-    ```
-
-asdf
-
-=== "SQLMesh"
-
-    ```bash
-    sqlmesh plan dev --forward-only
-    ```
-
-=== "Tobiko Cloud"
-
-    ```bash
-    tcloud sqlmesh plan dev --forward-only
-    ```
-
-asdf
 
 === "SQLMesh"
 
@@ -434,7 +344,13 @@ asdf
     tcloud sqlmesh create_external_models
     ```
 
-asdf
+## **Debugging Workflow**
+
+You'll use these commands ad hoc to validate your changes are behaving as expected. Audits (data tests) are a great first step, and you'll want to evolve into to feel confident about the changes. The workflow is as follows:
+
+1. Render the model to verify the SQL is looking as expected
+2. Run in debug mode to verify SQLMesh's behavior.
+
 
 ## **Run Commands**
 
@@ -503,20 +419,6 @@ You'll these commands ad hoc to verify your changes are behaving as expected.
 
     ```bash
     tcloud sqlmesh render sqlmesh_example.incremental_model 
-    ```
-
-asdf
-
-=== "SQLMesh"
-
-    ```bash
-    sqlmesh table_diff ajwioejfioajowe
-    ```
-
-=== "Tobiko Cloud"
-
-    ```bash
-    tcloud sqlmesh table_diff ajwioejfioajowe
     ```
 
 asdf
