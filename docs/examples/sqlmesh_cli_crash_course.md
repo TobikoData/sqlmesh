@@ -325,12 +325,12 @@ Run data diff against prod. This is a good way to verify the changes are behavin
 
 ## **Enhanced Testing Workflow**
 
-You'll use these commands ad hoc to validate your changes are behaving as expected. Audits (data tests) are a great first step, and you'll want to evolve into to feel confident about the changes. The workflow is as follows:
+You'll use these commands to validate your changes are behaving as expected. Audits (data tests) are a great first step, and you'll want to grow from there to feel confident about your changes. The workflow is as follows:
 
-1. Create external models outside of SQLMesh's control (ex: data loaded in by Fivetran, Airbyte, etc.)
+1. Create and audit external models outside of SQLMesh's control (ex: data loaded in by Fivetran, Airbyte, etc.)
 2. Automatically generate unit tests
 3. Ad hoc query the data directly in the CLI
-
+4. Add linting
 
 === "SQLMesh"
 
@@ -342,6 +342,127 @@ You'll use these commands ad hoc to validate your changes are behaving as expect
 
     ```bash
     tcloud sqlmesh create_external_models
+    ```
+
+??? "Example Output"
+    Note: this is an example from a separate Tobiko Cloud project, so you can't following along in the github repo above.
+
+    - Generated external models from the `bigquery-public-data` dataset.
+    - I added an audit to the external model to ensure `event_date` is not null.
+    - Viewed a plan preview of the changes that will be made to the external model.
+  
+    ```sql
+    -- models/external_model_example.sql
+    MODEL (
+      name tcloud_demo.external_model
+    );
+
+    SELECT
+      event_date,
+      event_timestamp,
+      event_name,
+      event_params,
+      event_previous_timestamp,
+      event_value_in_usd,
+      event_bundle_sequence_id,
+      event_server_timestamp_offset,
+      user_id,
+      user_pseudo_id,
+      privacy_info,
+      user_properties,
+      user_first_touch_timestamp,
+      user_ltv,
+      device,
+      geo,
+      app_info,
+      traffic_source,
+      stream_id,
+      platform,
+      event_dimensions,
+      ecommerce
+    /*   items */
+    FROM bigquery-public-data.ga4_obfuscated_sample_ecommerce.events_20210131 -- I fully qualified the external table name and sqlmesh will automatically create the external model
+    ```
+  
+    ```yaml
+    # external_models.yaml
+    - name: '`bigquery-public-data`.`ga4_obfuscated_sample_ecommerce`.`events_20210131`'
+      audits: # I added this audit manually to the external model
+        - name: not_null
+          columns: "[event_date]"
+      columns:
+        event_date: STRING
+        event_timestamp: INT64
+        event_name: STRING
+        event_params: ARRAY<STRUCT<key STRING, value STRUCT<string_value STRING, int_value
+          INT64, float_value FLOAT64, double_value FLOAT64>>>
+        event_previous_timestamp: INT64
+        event_value_in_usd: FLOAT64
+        event_bundle_sequence_id: INT64
+        event_server_timestamp_offset: INT64
+        user_id: STRING
+        user_pseudo_id: STRING
+        privacy_info: STRUCT<analytics_storage INT64, ads_storage INT64, uses_transient_token
+          STRING>
+        user_properties: ARRAY<STRUCT<key INT64, value STRUCT<string_value INT64, int_value
+          INT64, float_value INT64, double_value INT64, set_timestamp_micros INT64>>>
+        user_first_touch_timestamp: INT64
+        user_ltv: STRUCT<revenue FLOAT64, currency STRING>
+        device: STRUCT<category STRING, mobile_brand_name STRING, mobile_model_name STRING,
+          mobile_marketing_name STRING, mobile_os_hardware_model INT64, operating_system
+          STRING, operating_system_version STRING, vendor_id INT64, advertising_id INT64,
+          language STRING, is_limited_ad_tracking STRING, time_zone_offset_seconds INT64,
+          web_info STRUCT<browser STRING, browser_version STRING>>
+        geo: STRUCT<continent STRING, sub_continent STRING, country STRING, region STRING,
+          city STRING, metro STRING>
+        app_info: STRUCT<id STRING, version STRING, install_store STRING, firebase_app_id
+          STRING, install_source STRING>
+        traffic_source: STRUCT<medium STRING, name STRING, source STRING>
+        stream_id: INT64
+        platform: STRING
+        event_dimensions: STRUCT<hostname STRING>
+        ecommerce: STRUCT<total_item_quantity INT64, purchase_revenue_in_usd FLOAT64,
+          purchase_revenue FLOAT64, refund_value_in_usd FLOAT64, refund_value FLOAT64,
+          shipping_value_in_usd FLOAT64, shipping_value FLOAT64, tax_value_in_usd FLOAT64,
+          tax_value FLOAT64, unique_items INT64, transaction_id STRING>
+        items: ARRAY<STRUCT<item_id STRING, item_name STRING, item_brand STRING, item_variant
+          STRING, item_category STRING, item_category2 STRING, item_category3 STRING,
+          item_category4 STRING, item_category5 STRING, price_in_usd FLOAT64, price FLOAT64,
+          quantity INT64, item_revenue_in_usd FLOAT64, item_revenue FLOAT64, item_refund_in_usd
+          FLOAT64, item_refund FLOAT64, coupon STRING, affiliation STRING, location_id
+          STRING, item_list_id STRING, item_list_name STRING, item_list_index STRING,
+          promotion_id STRING, promotion_name STRING, creative_name STRING, creative_slot
+          STRING>>
+      gateway: public-demo
+    ```
+
+    ```bash
+    Differences from the `dev_sung` environment:
+
+    Models:
+    └── Metadata Updated:
+        └── "bigquery-public-data".ga4_obfuscated_sample_ecommerce__dev_sung.events_20210131
+
+    ---                                                                                                                                                                                                                   
+                                                                                                                                                                                                                          
+    +++                                                                                                                                                                                                                   
+                                                                                                                                                                                                                          
+    @@ -29,5 +29,6 @@                                                                                                                                                                                                     
+                                                                                                                                                                                                                          
+        ecommerce STRUCT<total_item_quantity INT64, purchase_revenue_in_usd FLOAT64, purchase_revenue FLOAT64, refund_value_in_usd FLOAT64, refund_value FLOAT64, shipping_value_in_usd FLOAT64, shipping_value FLOAT64, 
+    tax_value_in_usd FLOAT64, tax_value FLOAT64, unique_items INT64, transaction_id STRING>,                                                                                                                              
+        items ARRAY<STRUCT<item_id STRING, item_name STRING, item_brand STRING, item_variant STRING, item_category STRING, item_category2 STRING, item_category3 STRING, item_category4 STRING, item_category5 STRING,   
+    price_in_usd FLOAT64, price FLOAT64, quantity INT64, item_revenue_in_usd FLOAT64, item_revenue FLOAT64, item_refund_in_usd FLOAT64, item_refund FLOAT64, coupon STRING, affiliation STRING, location_id STRING,       
+    item_list_id STRING, item_list_name STRING, item_list_index STRING, promotion_id STRING, promotion_name STRING, creative_name STRING, creative_slot STRING>>                                                          
+      ),                                                                                                                                                                                                                 
+    +  audits (not_null('columns' = [event_date])),                                                                                                                                                                       
+      gateway `public-demo`                                                                                                                                                                                              
+    )                                                                                                                                                                                                                    
+
+    Metadata Updated: "bigquery-public-data".ga4_obfuscated_sample_ecommerce__dev_sung.events_20210131
+    Models needing backfill:
+    └── "bigquery-public-data".ga4_obfuscated_sample_ecommerce__dev_sung.events_20210131: [full refresh]
+    Apply - Backfill Tables [y/n]:
     ```
 
 ## **Debugging Workflow**
