@@ -1625,6 +1625,8 @@ class TerminalConsole(Console):
             self._show_categorized_snapshots(plan, default_catalog)
 
         for snapshot in plan.uncategorized:
+            if snapshot.is_model and snapshot.model.forward_only:
+                continue
             if not no_diff:
                 self.show_sql(plan.context_diff.text_diff(snapshot.name))
             tree = Tree(

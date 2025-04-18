@@ -33,7 +33,7 @@ from sqlmesh.utils.date import (
     yesterday_ds,
     to_timestamp,
 )
-from sqlmesh.utils.errors import NoChangesPlanError, PlanError, SQLMeshError
+from sqlmesh.utils.errors import NoChangesPlanError, PlanError
 
 logger = logging.getLogger(__name__)
 
@@ -197,16 +197,16 @@ class PlanBuilder:
         if self._forward_only:
             raise PlanError("Choice setting is not supported by a forward-only plan.")
         if not self._is_new_snapshot(snapshot):
-            raise SQLMeshError(
-                f"A choice can't be changed for the existing version of '{snapshot.name}'."
+            raise PlanError(
+                f"A choice can't be changed for the existing version of {snapshot.name}."
             )
         if (
             not self._context_diff.directly_modified(snapshot.name)
             and snapshot.snapshot_id not in self._context_diff.added
         ):
-            raise SQLMeshError(
-                f"Only directly modified models can be categorized ({snapshot.name})."
-            )
+            raise PlanError(f"Only directly modified models can be categorized ({snapshot.name}).")
+        if snapshot.is_model and snapshot.model.forward_only:
+            raise PlanError(f"Forward-only model {snapshot.name} cannot be categorized manually.")
 
         self._choices[snapshot.snapshot_id] = choice
         self._latest_plan = None
@@ -215,7 +215,7 @@ class PlanBuilder:
     def apply(self) -> None:
         """Builds and applies the plan."""
         if not self._apply:
-            raise SQLMeshError("Plan was not initialized with an applier.")
+            raise PlanError("Plan was not initialized with an applier.")
         self._apply(self.build())
 
     def build(self) -> Plan:
