@@ -82,10 +82,10 @@ class _EngineAdapterStateSyncSchedulerConfig(SchedulerConfig):
                     + f"multi threaded mode with {warehouse_connection.concurrent_tasks} concurrent tasks."
                     + " This can cause SQLMesh to hang. Overriding the duckdb state connection config to use multi threaded mode."
                 )
-                # this triggers multithreaded mode and has to happen before the engine adapter is created below
-                state_connection.concurrent_tasks = warehouse_connection.concurrent_tasks
 
-        engine_adapter = state_connection.create_engine_adapter()
+        engine_adapter = state_connection.create_engine_adapter(
+            concurrent_tasks=warehouse_connection.concurrent_tasks
+        )
         if state_connection.is_forbidden_for_state_sync:
             raise ConfigError(
                 f"The {engine_adapter.DIALECT.upper()} engine cannot be used to store SQLMesh state - please specify a different `state_connection` engine."
