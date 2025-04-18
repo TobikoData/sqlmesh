@@ -615,6 +615,65 @@ Pro tip: run this after running `sqlmesh table_diff` to get a full picture of th
     4        1           4           7
     ```
 
+### Linting
+
+If enabled, this will run automatically during development. These can be overridden per model too.
+This is great to catch issues before wasting runtime in your data warehouse. You can run it manually to check for any issues.
+
+=== "SQLMesh"
+
+    ```bash
+    sqlmesh lint
+    ```
+
+=== "Tobiko Cloud"
+
+    ```bash
+    tcloud sqlmesh lint
+    ```
+
+??? "Example Output"
+
+    You add linting rules in your `config.yaml` file.
+
+    ```yaml
+    gateways:
+      duckdb:
+        connection:
+          type: duckdb
+          database: db.db
+
+    default_gateway: duckdb
+
+    model_defaults:
+      dialect: duckdb
+      start: 2025-03-26
+
+    linter:
+      enabled: true
+      rules: ["ambiguousorinvalidcolumn", "invalidselectstarexpansion"] # raise errors for these rules
+      warn_rules: ["noselectstar", "nomissingaudits"]
+      # ignored_rules: ["noselectstar"]
+    ```
+
+    ```bash
+    [WARNING] Linter warnings for /Users/sung/Desktop/git_repos/sqlmesh-cli-revamp/models/lint_warn.sql:
+    - noselectstar: Query should not contain SELECT * on its outer most projections, even if it can be 
+    expanded.
+    - nomissingaudits: Model `audits` must be configured to test data quality.
+    [WARNING] Linter warnings for 
+    /Users/sung/Desktop/git_repos/sqlmesh-cli-revamp/models/incremental_by_partition.sql:
+    - nomissingaudits: Model `audits` must be configured to test data quality.
+    [WARNING] Linter warnings for /Users/sung/Desktop/git_repos/sqlmesh-cli-revamp/models/seed_model.sql:
+    - nomissingaudits: Model `audits` must be configured to test data quality.
+    [WARNING] Linter warnings for 
+    /Users/sung/Desktop/git_repos/sqlmesh-cli-revamp/models/incremental_by_unique_key.sql:
+    - nomissingaudits: Model `audits` must be configured to test data quality.
+    [WARNING] Linter warnings for 
+    /Users/sung/Desktop/git_repos/sqlmesh-cli-revamp/models/incremental_model.sql:
+    - nomissingaudits: Model `audits` must be configured to test data quality.
+    ```
+
 ## **Debugging Workflow**
 
 You'll use these commands ad hoc to validate your changes are behaving as expected. Audits (data tests) are a great first step, and you'll want to evolve into to feel confident about the changes. The workflow is as follows:
