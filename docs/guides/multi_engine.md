@@ -2,9 +2,9 @@
 
 Organizations typically connect to a data warehouse through a single engine to ensure data consistency. However, there are cases where the processing capabilities of one engine may be better suited to specific tasks than another.
 
-Across the industry, companies are increasingly decoupling storage from compute, demanding interoperability across platforms and tools, focusing on cost efficiency and a growing support for open table formats like Apache Iceberg and Hive.
+Companies are increasingly decoupling how/where data is stored from the how computations are run on the data, requiring interoperability across platforms and tools. Open table formats like Apache Iceberg, Delta Lake, and Hive provide a common storage format that can be used by multiple SQL engines.
 
-In SQLMesh, you can use multiple engine adapters within a single project, giving you the flexibility to choose the most suitable engine for each task. This allows individual models to run on a specified engine based on their specific requirements.
+SQLMesh enables this decoupling by supporting multiple engine adapters within a single project, giving you the flexibility to choose the best engine for each computational task. You can specify the engine each model uses, based on what computations the model performs or other organization-specific considerations.
 
 ## Configuring a Project with Multiple Engines
 
@@ -15,9 +15,9 @@ Configuring your project to use multiple engines follows a simple process:
 
 If no gateway is explicitly defined for a model, the [default_gateway](../reference/configuration.md#default-gateway) of the project is used.
 
-By default, the `default_gateway` is also responsible to create the views of the virtual layer. This assumes that all engines can read from and write to the same shared catalog.
+By default, virtual layer views are created in the `default_gateway`. This approach requires that all engines can read from and write to the same shared catalog, so a view in the `default_gateway` can access a table in another gateway.
 
-Alternatively, you can configure the model-specific gateway to create the views of the virtual layer by setting [gateway_managed_virtual_layer](#gateway-managed-virtual-layer) flag in your configuration to true.
+Alternatively, each gateway can create the virtual layer views for the models it runs. Use this approach by setting the [gateway_managed_virtual_layer](#gateway-managed-virtual-layer) flag to `true` in your project configuration.
 
 ### Shared Virtual Layer
 
@@ -31,7 +31,7 @@ In a multi-engine project with a shared data catalog, the model-specific gateway
 
 Below is a simple example of setting up a project with connections to both DuckDB and PostgreSQL.
 
-In this setup, the PostgreSQL engine is set as the default, so it will be used to manage views in the virtual layer. Meanwhile, the DuckDB's [attach](https://duckdb.org/docs/sql/statements/attach.html) feature enables read-write access to the PostgreSQL catalog's physical tables.
+In this setup, the PostgreSQL engine is set as the default, so it will be used to manage views in the virtual layer. Meanwhile, DuckDB's [attach](https://duckdb.org/docs/sql/statements/attach.html) feature enables read-write access to the PostgreSQL catalog's physical tables.
 
 === "YAML"
 
@@ -99,7 +99,7 @@ In this setup, the PostgreSQL engine is set as the default, so it will be used t
 
 Given this configuration, when a model’s gateway is set to duckdb, it will be materialized within the PostgreSQL `main_db` catalog, but it will be evaluated using DuckDB’s engine.
 
-Given this configuration, when a model’s gateway is set to duckdb, it will be materialized within the PostgreSQL `main_db` catalog, but it will be evaluated using DuckDB’s engine.
+Given this configuration, when a model’s gateway is set to DuckDB, the DuckDB engine will perform the calculations before materializing the physical table in the PostgreSQL `main_db` catalog.
 
 ```sql linenums="1"
 MODEL (
@@ -115,23 +115,27 @@ FROM
   iceberg_scan('data/bucket/lineitem_iceberg', allow_moved_paths = true);
 ```
 
-In the `order_ship_date` model, the DuckDB engine is set, which will be used to create the physical table in the PostgreSQL database.
+The `order_ship_date` model specifies the DuckDB engine, which will perform the computations used to create the physical table in the PostgreSQL database.
 
 This allows you to efficiently scan data from an Iceberg table, or even query tables directly from S3 when used with the [HTTPFS](https://duckdb.org/docs/stable/extensions/httpfs/overview.html) extension.
 
 ![PostgreSQL + DuckDB](./multi_engine/postgres_duckdb.png)
 
-In models where no gateway is specified, such as the `customer_orders` model, the default PostgreSQL engine will be used to create the physical table as well as to create and manage the views of the virtual layer.
+In models where no gateway is specified, such as the `customer_orders` model, the default PostgreSQL engine will  both create the physical table and the views in the virtual layer.
 
 ### Gateway-Managed Virtual Layer
 
-For projects where the engines don’t share a catalog or your raw data is located in different warehouses, you may prefer each gateway to manage its own virtual layer. This ensures isolation and each model’s views being created by its respective gateway.
+By default, all virtual layer views are created in the project's default gateway.
+
+If your project's engines don’t have a mutually accessible catalog or your raw data is located in different engines, you may prefer for each model's virtual layer view to exist in the gateway that ran the model. This allows a single SQLMesh project to manage isolated sets of models in different gateways, which is sometimes necessary for data governance or security concerns.
 
 To enable this, set `gateway_managed_virtual_layer` to `true` in your configuration. By default, this flag is set to false.
 
 #### Example: Redshift + Athena + Snowflake
 
-Consider a scenario where you need to create a project with models in Redshift, Athena and Snowflake. To set this you, add the connections to your configuration and set the `gateway_managed_virtual_layer` flag:
+Consider a scenario where you need to create a project with models in Redshift, Athena and Snowflake, where each engine hosts its models' virtual layer views.
+
+First, add the connections to your configuration and set the `gateway_managed_virtual_layer` flag to `true`:
 
 === "YAML"
 
@@ -230,9 +234,11 @@ config = Config(
 )
 ```
 
-Note that gateway-specific variables take precedence over global ones. In the example above, the `gw_var` used in a model will take the value defined for the respective gateway.
+Note that gateway-specific variables take precedence over global ones. In the example above, the `gw_var` used in a model will resolve to the value specified in the model's gateway.
 
 For further customization, you can also enable [gateway-specific model defaults](../guides/configuration.md#gateway-specific-model-defaults). This allows you to define custom behaviors, such as specifying a dialect with case-insensitivity normalization.
+
+The default gateway is `redshift` In the example configuration above, so all models without a `gateway` specification will run on redshift, as in this `order_dates` model:
 
 ```sql linenums="1"
 MODEL (
@@ -247,7 +253,7 @@ FROM
   bucket.raw_data;
 ```
 
-In this setup, since the default gateway is set to redshift, omitting the gateway from a model will default to this, as seen in the `order_dates` model above.
+For the `athena_schema.order_status` model, we explicitly specify the `athena` gateway:
 
 ```sql linenums="1"
 MODEL (
@@ -263,7 +269,7 @@ FROM
   bucket.raw_data;
 ```
 
-While in the case of the `athena_schema.order_status` model above, the gateway is specified to athena explicitly.
+Finally, specifying the `snowflake` gateway for the `customer_orders` model ensures it is isolated from the rest and reads from a table within the Snowflake database:
 
 ```sql linenums="1"
 MODEL (
@@ -279,11 +285,10 @@ FROM
   bronze_schema.customer_data;
 ```
 
-Finally, specifying the snowflake gateway for the `customer_orders` model ensures it is isolated from the rest and sources from a table within the snowflake database.
 
 ![Athena + Redshift + Snowflake](./multi_engine/athena_redshift_snowflake.png)
 
-When you run the plan, the catalogs for each model will be set automatically based on the gateway’s connection and each corresponding model will be evaluated against the specified engine.
+When you run the plan, the catalogs for each model will be set automatically based on the gateway’s connection and each corresponding model will be executed by the specified engine:
 
 ```bash
 ❯ sqlmesh plan
@@ -292,7 +297,7 @@ When you run the plan, the catalogs for each model will be set automatically bas
 
 Models:
 └── Added:
-    ├── awsdatacatalog.athena_schema.order_status
+    ├── awsdatacatalog.athena_schema.order_status # each model uses its gateway's catalog and schema
     ├── redshift_schema.order_dates
     └── silver.snowflake_schema.customers
 Models needing backfill:
@@ -305,5 +310,3 @@ Apply - Backfill Tables [y/n]: y
 The views of the virtual layer will also be created by each corresponding engine.
 
 This approach provides isolation between your models, while maintaining centralized control over your project.
-
-This allows users to leverage multiple engines within a single SQLMesh project, particularly as the industry shifts toward data lakes, open table formats, and greater interoperability.
