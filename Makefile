@@ -19,7 +19,7 @@ ui-style:
 	SKIP=ruff,ruff-format,mypy pre-commit run --all-files
 
 doc-test:
-	PYTEST_PLUGINS=tests.common_fixtures python -m pytest --doctest-modules sqlmesh/core sqlmesh/utils
+	python -m pytest --doctest-modules sqlmesh/core sqlmesh/utils
 
 package:
 	pip3 install build && python3 -m build
@@ -32,24 +32,6 @@ package-tests:
 
 publish-tests: package-tests
 	pip3 install twine && python3 -m twine upload -r tobiko-private tests/dist/*
-
-airflow-init:
-	export AIRFLOW_ENGINE_OPERATOR=spark && make -C ./examples/airflow init
-
-airflow-run:
-	make -C ./examples/airflow run
-
-airflow-stop:
-	make -C ./examples/airflow stop
-
-airflow-clean:
-	make -C ./examples/airflow clean
-
-airflow-psql:
-	make -C ./examples/airflow psql
-
-airflow-spark-sql:
-	make -C ./examples/airflow spark-sql
 
 docs-serve:
 	mkdocs serve
@@ -91,27 +73,10 @@ cicd-test:
 	pytest -n auto -m "fast or slow" --junitxml=test-results/junit-cicd.xml && pytest -m "isolated"
 
 core-fast-test:
-	pytest -n auto -m "fast and not web and not github and not dbt and not airflow and not jupyter"
+	pytest -n auto -m "fast and not web and not github and not dbt and not jupyter"
 
 core-slow-test:
-	pytest -n auto -m "(fast or slow) and not web and not github and not dbt and not airflow and not jupyter"
-
-airflow-fast-test:
-	pytest -n auto -m "fast and airflow"
-
-airflow-test:
-	pytest -n auto -m "(fast or slow) and airflow"
-
-airflow-local-test:
-	export AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@localhost/airflow && \
-		pytest -n 1 -m "docker and airflow"
-
-airflow-docker-test:
-	make -C ./examples/airflow docker-test
-
-airflow-local-test-with-env: install-dev airflow-clean airflow-init airflow-run airflow-local-test airflow-stop
-
-airflow-docker-test-with-env: install-dev airflow-clean airflow-init airflow-run airflow-docker-test airflow-stop
+	pytest -n auto -m "(fast or slow) and not web and not github and not dbt and not jupyter"
 
 engine-slow-test:
 	pytest -n auto -m "(fast or slow) and engine"

@@ -33,28 +33,3 @@ pip install "sqlmesh[redshift]"
 | `serverless_acct_id`    | The account ID of the serverless cluster                                                                    | string |    N     |
 | `serverless_work_group` | The name of work group for serverless end point                                                             | string |    N     |
 | `enable_merge`         | Whether the incremental_by_unique_key model kind will use the native Redshift MERGE operation or SQLMesh's logical merge. (Default: `False`)           |  bool  |    N     |
-
-
-## Airflow Scheduler
-**Engine Name:** `redshift`
-
-In order to share a common implementation across local and Airflow, SQLMesh's Redshift engine implements its own hook and operator.
-
-To enable support for this operator, the Airflow Redshift provider package should be installed on the target Airflow cluster along with SQLMesh with the Redshift extra:
-```
-pip install "apache-airflow-providers-amazon"
-pip install "sqlmesh[redshift]"
-```
-
-The operator requires an [Airflow connection](https://airflow.apache.org/docs/apache-airflow/stable/howto/connection.html) to determine the target Redshift account. Refer to [AmazonRedshiftConnection](https://airflow.apache.org/docs/apache-airflow-providers-amazon/stable/connections/redshift.html#authenticating-to-amazon-redshift) for details on how to define a connection string.
-
-By default, the connection ID is set to `sqlmesh_redshift_default`, but it can be overridden using the `engine_operator_args` parameter to the `SQLMeshAirflow` instance as in the example below:
-```python linenums="1"
-sqlmesh_airflow = SQLMeshAirflow(
-    "redshift",
-    default_catalog="<database name>",
-    engine_operator_args={
-        "redshift_conn_id": "<Connection ID>"
-    },
-)
-```

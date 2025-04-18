@@ -41,8 +41,6 @@ from sqlmesh.utils import random_id
 from sqlmesh.utils.date import TimeLike, to_date
 from sqlmesh.core.engine_adapter.shared import CatalogSupport
 
-pytest_plugins = ["tests.common_fixtures"]
-
 T = t.TypeVar("T", bound=EngineAdapter)
 
 

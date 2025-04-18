@@ -144,6 +144,3 @@ DuckDB can read data directly from cloud services via extensions (e.g., [httpfs]
 Loading credentials at runtime using `load_aws_credentials()` or similar functions may fail when using SQLMesh.
 
 Instead, create persistent and automatically used authentication credentials with the [DuckDB secrets manager](https://duckdb.org/docs/configuration/secrets_manager.html) (available in DuckDB v0.10.0 or greater).
-
-## Airflow Scheduler
-DuckDB only works when running locally; therefore it does not support Airflow.

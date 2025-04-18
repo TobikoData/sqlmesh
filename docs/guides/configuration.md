@@ -501,7 +501,7 @@ These pages describe the connection configuration options for each execution eng
 
 Configuration for the state backend connection if different from the data warehouse connection.
 
-The data warehouse connection is used to store SQLMesh state if the `state_connection` key is not specified, unless the configuration uses an Airflow or Google Cloud Composer scheduler. If using one of those schedulers, the scheduler's database is used (not the data warehouse) unless an [Airflow Connection has been configured](../integrations/airflow.md#state-connection).
+The data warehouse connection is used to store SQLMesh state if the `state_connection` key is not specified.
 
 Unlike data transformations, storing state information requires database transactions. Data warehouses aren’t optimized for executing transactions, and storing state information in them can slow down your project or produce corrupted data due to simultaneous writes to the same table. Therefore, production SQLMesh deployments should use a dedicated state connection.
 
@@ -675,7 +675,7 @@ Configuration for a connection used to run unit tests. An in-memory DuckDB datab
 
 ### Scheduler
 
-Identifies which scheduler backend to use. The scheduler backend is used both for storing metadata and for executing [plans](../concepts/plans.md). By default, the scheduler type is set to `builtin`, which uses the existing SQL engine to store metadata. Use the `airflow` type integrate with Airflow.
+Identifies which scheduler backend to use. The scheduler backend is used both for storing metadata and for executing [plans](../concepts/plans.md). By default, the scheduler type is set to `builtin`, which uses the existing SQL engine to store metadata. 
 
 These options are in the [scheduler](../reference/configuration.md#scheduler) section of the configuration reference page.
 
@@ -716,89 +716,6 @@ Example configuration:
 
 No additional configuration options are supported by this scheduler type.
 
-#### Airflow
-
-Example configuration:
-
-=== "YAML"
-
-    ```yaml linenums="1"
-    gateways:
-      my_gateway:
-        scheduler:
-          type: airflow
-          airflow_url: <airflow_url>
-          username: <username>
-          password: <password>
-    ```
-
-=== "Python"
-
-    An Airflow scheduler is specified with an `AirflowSchedulerConfig` object.
-
-    ```python linenums="1"
-    from sqlmesh.core.config import (
-        Config,
-        ModelDefaultsConfig,
-        GatewayConfig,
-        AirflowSchedulerConfig,
-    )
-
-    config = Config(
-        model_defaults=ModelDefaultsConfig(dialect=<dialect>),
-        gateways={
-            "my_gateway": GatewayConfig(
-                scheduler=AirflowSchedulerConfig(
-                    airflow_url=<airflow_url>,
-                    username=<username>,
-                    password=<password>,
-                ),
-            ),
-        }
-    )
-    ```
-
-See [Airflow Integration Guide](../integrations/airflow.md) for information about how to integrate Airflow with SQLMesh. See the [configuration reference page](../reference/configuration.md#airflow) for a list of all parameters.
-
-#### Cloud Composer
-
-The Google Cloud Composer scheduler type shares the same configuration options as the `airflow` type, except for `username` and `password`. Cloud Composer relies on `gcloud` authentication, so the `username` and `password` options are not required.
-
-Example configuration:
-
-=== "YAML"
-
-    ```yaml linenums="1"
-    gateways:
-      my_gateway:
-        scheduler:
-          type: cloud_composer
-          airflow_url: <airflow_url>
-    ```
-
-=== "Python"
-
-    An Google Cloud Composer scheduler is specified with an `CloudComposerSchedulerConfig` object.
-
-    ```python linenums="1"
-    from sqlmesh.core.config import (
-        Config,
-        ModelDefaultsConfig,
-        GatewayConfig,
-        CloudComposerSchedulerConfig,
-    )
-
-    config = Config(
-        model_defaults=ModelDefaultsConfig(dialect=<dialect>),
-        gateways={
-            "my_gateway": GatewayConfig(
-                scheduler=CloudComposerSchedulerConfig(
-                    airflow_url=<airflow_url>,
-                ),
-            ),
-        }
-    )
-    ```
 
 ### Gateway/connection defaults
 

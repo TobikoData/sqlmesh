@@ -2,7 +2,7 @@
 
 This page provides information about how to use SQLMesh with the Snowflake SQL engine.
 
-It begins with a [Connection Quickstart](#connection-quickstart) that demonstrates how to connect to Snowflake, or you can skip directly to information about using Snowflake with the [built-in](#localbuilt-in-scheduler) or [airflow](#airflow-scheduler) schedulers.
+It begins with a [Connection Quickstart](#connection-quickstart) that demonstrates how to connect to Snowflake, or you can skip directly to information about using Snowflake with the [built-in](#localbuilt-in-scheduler).
 
 ## Connection quickstart
 
@@ -512,30 +512,6 @@ __Private Key Bytes__
     ```
 
 The authenticator method is assumed to be `snowflake_jwt` when `private_key` is provided, but it can also be explicitly provided in the connection configuration.
-
-## Airflow Scheduler
-**Engine Name:** `snowflake`
-
-The SQLMesh Snowflake Operator is similar to the [SnowflakeOperator](https://airflow.apache.org/docs/apache-airflow-providers-snowflake/stable/operators/snowflake.html), and relies on the same [SnowflakeHook](https://airflow.apache.org/docs/apache-airflow-providers-snowflake/stable/_api/airflow/providers/snowflake/hooks/snowflake/index.html) implementation.
-
-To enable support for this operator, the Airflow Snowflake provider package should be installed on the target Airflow cluster along with SQLMesh with the Snowflake extra:
-```
-pip install "apache-airflow-providers-snowflake[common.sql]"
-pip install "sqlmesh[snowflake]"
-```
-
-The operator requires an [Airflow connection](https://airflow.apache.org/docs/apache-airflow/stable/howto/connection.html) to determine the target Snowflake account. Refer to [Snowflake connection](https://airflow.apache.org/docs/apache-airflow-providers-snowflake/stable/connections/snowflake.html) for more details.
-
-By default, the connection ID is set to `snowflake_default`, but can be overridden using the `engine_operator_args` parameter to the `SQLMeshAirflow` instance as in the example below:
-```python linenums="1"
-sqlmesh_airflow = SQLMeshAirflow(
-    "snowflake",
-    default_catalog="<database name>",
-    engine_operator_args={
-        "snowflake_conn_id": "<Connection ID>"
-    },
-)
-```
 
 ## Configuring Virtual Warehouses
 

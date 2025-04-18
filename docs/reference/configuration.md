@@ -135,7 +135,7 @@ gateways:
   gate1:
     connection:
       ...
-    state_connection: # defaults to `connection` if omitted and not using airflow or google cloud composer scheduler
+    state_connection: # defaults to `connection` if omitted
       ...
     test_connection: # defaults to `connection` if omitted
       ...
@@ -159,7 +159,7 @@ A named gateway key may define any or all of a data warehouse connection, state 
 Some connections use default values if not specified:
 
 - The `connection` key may be omitted if a [`default_connection`](#default-connectionsscheduler) is specified.
-- The state connection defaults to `connection` unless the configuration uses an Airflow or Google Cloud Composer scheduler. If using one of those schedulers, the state connection defaults to the scheduler's database.
+- The state connection defaults to `connection` if omitted.
 - The test connection defaults to `connection` if omitted.
 
 NOTE: Spark and Trino engines may not be used for the state connection.
@@ -212,7 +212,7 @@ These pages describe the connection configuration options for each execution eng
 
 Identifies which scheduler backend to use. The scheduler backend is used both for storing metadata and for executing [plans](../concepts/plans.md).
 
-By default, the scheduler type is set to `builtin` and uses the gateway's connection to store metadata. Use the `airflow` type to integrate with Airflow.
+By default, the scheduler type is set to `builtin` and uses the gateway's connection to store metadata.
 
 Below is the list of configuration options specific to each corresponding scheduler type. Find additional details in the [configuration overview scheduler section](../guides/configuration.md#scheduler).
 
@@ -221,44 +221,6 @@ Below is the list of configuration options specific to each corresponding schedu
 **Type:** `builtin`
 
 No configuration options are supported by this scheduler type.
-
-#### Airflow
-
-**Type:** `airflow`
-
-See [Airflow Integration Guide](../integrations/airflow.md) for information about how to integrate Airflow with SQLMesh.
-
-| Option                            | Description                                                                                                                                                                                                                                                                                                     |  Type   | Required |
-| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :-----: | :------: |
-| `airflow_url`                     | The URL of the Airflow Webserver                                                                                                                                                                                                                                                                                | string  |    Y     |
-| `username`                        | The Airflow username                                                                                                                                                                                                                                                                                            | string  |    Y     |
-| `password`                        | The Airflow password                                                                                                                                                                                                                                                                                            | string  |    Y     |
-| `dag_run_poll_interval_secs`      | Determines, in seconds, how often a running DAG can be polled (Default: `10`)                                                                                                                                                                                                                                   |   int   |    N     |
-| `dag_creation_poll_interval_secs` | Determines, in seconds, how often SQLMesh should check whether a DAG has been created (Default: `30`)                                                                                                                                                                                                           |   int   |    N     |
-| `dag_creation_max_retry_attempts` | Determines the maximum number of attempts that SQLMesh will make while checking for whether a DAG has been created (Default: `10`)                                                                                                                                                                              |   int   |    N     |
-| `backfill_concurrent_tasks`       | The number of concurrent tasks used for model backfilling during plan application (Default: `4`)                                                                                                                                                                                                                |   int   |    N     |
-| `ddl_concurrent_tasks`            | The number of concurrent tasks used for DDL operations like table/view creation, deletion, and so forth (Default: `4`)                                                                                                                                                                                          |   int   |    N     |
-| `max_snapshot_ids_per_request`    | The maximum number of snapshot IDs that can be sent in a single HTTP GET request to the Airflow Webserver (Default: `None`)                                                                                                                                                                                     |   int   |    N     |
-| `use_state_connection`            | Whether to use the `state_connection` configuration to bypass Airflow Webserver and access the SQLMesh state directly (Default: `false`)                                                                                                                                                                        | boolean |    N     |
-| `default_catalog_override`        | Overrides the default catalog value for this project. If specified, this value takes precedence over the default catalog value set on the Airflow side. This only applies in the [multi-repo](../guides/multi_repo.md) setup when different projects require different default catalog values (Default: `None`) | string  |    N     |
-
-
-#### Cloud Composer
-
-**Type:** `cloud_composer`
-
-The Google Cloud Composer scheduler type shares the same configuration options as the `airflow` type, except for `username` and `password`. Cloud Composer relies on `gcloud` authentication, so the `username` and `password` options are not required.
-
-#### YC Airflow
-
-**Type:** `yc_airflow`
-
-Yandex Managed Airflow shares similar configuration options with the standard `airflow` type, with the following exceptions:
-
-- `max_snapshot_ids_per_request`: This option is deprecated and not supported.
-- Authentication: YC Airflow requires additional credentials, including both a `token` and a combination of `username` and `password`.
-
-Unlike the `airflow` type, YC Airflow leverages Yandex Cloud's internal authentication mechanisms. Therefore, all requests to the Airflow API must include a valid Yandex Cloud IAM-token for authentication.
 
 ## Gateway/connection defaults
 

@@ -281,7 +281,7 @@ JOIN countries
 
 SQLMesh will detect that the model depends on both `employees` and `countries`. When executing this model, it will ensure that `employees` and `countries` are executed first.
 
-External dependencies not defined in SQLMesh are also supported. SQLMesh can either depend on them implicitly through the order in which they are executed, or through signals if you are using [Airflow](../../integrations/airflow.md).
+External dependencies not defined in SQLMesh are also supported. SQLMesh can either depend on them implicitly through the order in which they are executed, or through [signals](../../guides/signals.md).
 
 Although automatic dependency detection works most of the time, there may be specific cases for which you want to define dependencies manually. You can do so in the `MODEL` DDL with the [dependencies property](./overview.md#properties).
 

@@ -397,7 +397,7 @@ Commands:
 ```
 
 ## Example Synchronized Full Workflow
-This workflow involves configuring a SQLMesh connection to Databricks and configuring access to GCP to talk to Cloud Composer (Airflow).
+This workflow involves configuring a SQLMesh connection to Databricks.
 
 ```yaml
 name: SQLMesh Bot
@@ -451,11 +451,6 @@ jobs:
       - name: Install Dependencies
         run: pip install -r requirements.txt
         shell: bash
-      - id: auth
-        name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v1
-        with:
-          credentials_json: '${{ secrets.GOOGLE_CREDENTIALS }}'
       - name: Run CI/CD Bot
         run: |
           sqlmesh_cicd -p ${{ github.workspace }} github --token ${{ secrets.GITHUB_TOKEN }} run-all

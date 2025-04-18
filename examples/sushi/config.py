@@ -1,7 +1,6 @@
 import os
 
 from sqlmesh.core.config import (
-    AirflowSchedulerConfig,
     AutoCategorizationMode,
     BigQueryConnectionConfig,
     CategorizerConfig,
@@ -11,7 +10,6 @@ from sqlmesh.core.config import (
     GatewayConfig,
     ModelDefaultsConfig,
     PlanConfig,
-    SparkConnectionConfig,
 )
 from sqlmesh.core.config.linter import LinterConfig
 from sqlmesh.core.notification_target import (
@@ -74,26 +72,6 @@ test_config = Config(
         )
     ),
     model_defaults=model_defaults,
-)
-
-airflow_config = Config(
-    default_scheduler=AirflowSchedulerConfig(),
-    gateways=GatewayConfig(
-        connection=SparkConnectionConfig(
-            config_dir=os.path.join(CURRENT_FILE_PATH, "..", "airflow", "spark_conf"),
-            config={
-                "spark.hadoop.javax.jdo.option.ConnectionURL": "jdbc:postgresql://localhost:5432/metastore_db"
-            },
-        )
-    ),
-    model_defaults=model_defaults_iceberg,
-)
-
-
-airflow_config_docker = Config(
-    default_scheduler=AirflowSchedulerConfig(airflow_url="http://airflow-webserver:8080/"),
-    gateways=GatewayConfig(connection=SparkConnectionConfig()),
-    model_defaults=model_defaults_iceberg,
 )
 
 # A DuckDB config with a physical schema map.

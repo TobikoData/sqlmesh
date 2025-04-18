@@ -23,27 +23,3 @@ pip install "sqlmesh[postgres]"
 | `role`             | The role to use for authentication with the Postgres server                     | string | N        |
 | `sslmode`          | The security of the connection to the Postgres server                           | string | N        |
 | `application_name` | The name of the application to use for the connection                           | string | N        |
-
-## Airflow Scheduler
-**Engine Name:** `postgres`
-
-The SQLMesh Postgres Operator is similar to the [PostgresOperator](https://airflow.apache.org/docs/apache-airflow-providers-postgres/stable/_api/airflow/providers/postgres/operators/postgres/index.html), and relies on the same [PostgresHook](https://airflow.apache.org/docs/apache-airflow-providers-postgres/stable/_api/airflow/providers/postgres/hooks/postgres/index.html) implementation.
-
-To enable support for this operator, the Airflow Postgres provider package should be installed on the target Airflow cluster along with SQLMesh with the Postgres extra:
-```
-pip install "apache-airflow-providers-postgres"
-pip install "sqlmesh[postgres]"
-```
-
-The operator requires an [Airflow connection](https://airflow.apache.org/docs/apache-airflow/stable/howto/connection.html) to determine the target Postgres account. Refer to [Postgres connection](https://airflow.apache.org/docs/apache-airflow-providers-postgres/stable/connections/postgres.html) for more details.
-
-By default, the connection ID is set to `postgres_default`, but can be overridden using the `engine_operator_args` parameter to the `SQLMeshAirflow` instance as in the example below:
-```python linenums="1"
-sqlmesh_airflow = SQLMeshAirflow(
-    "postgres",
-    default_catalog="<database name>",
-    engine_operator_args={
-        "postgres_conn_id": "<Connection ID>"
-    },
-)
-```

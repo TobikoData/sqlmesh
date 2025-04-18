@@ -130,7 +130,7 @@ def cli(
     "-t",
     "--template",
     type=str,
-    help="Project template. Supported values: airflow, dbt, dlt, default, empty.",
+    help="Project template. Supported values: dbt, dlt, default, empty.",
 )
 @click.option(
     "--dlt-pipeline",

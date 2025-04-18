@@ -15,7 +15,6 @@ PRIMITIVES = (str, int, bool, float)
 
 
 class ProjectTemplate(Enum):
-    AIRFLOW = "airflow"
     DBT = "dbt"
     DLT = "dlt"
     DEFAULT = "default"
@@ -87,23 +86,6 @@ default_gateway: {dialect}
 model_defaults:
   dialect: {dialect}
   start: {start or yesterday_ds()}
-""",
-        ProjectTemplate.AIRFLOW: f"""gateways:
-  {dialect}:
-    connection:
-{connection_settings}
-
-default_gateway: {dialect}
-
-default_scheduler:
-  type: airflow
-  airflow_url: http://localhost:8080/
-  username: airflow
-  password: airflow
-
-model_defaults:
-  dialect: {dialect}
-  start: {yesterday_ds()}
 """,
         ProjectTemplate.DBT: """from pathlib import Path
 

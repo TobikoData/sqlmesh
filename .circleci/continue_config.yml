@@ -143,39 +143,6 @@ jobs:
           name: Run tests
           command: npm --prefix web/client run test
 
-  airflow_docker_tests:
-    machine:
-      image: ubuntu-2204:2022.10.2
-      docker_layer_caching: true
-    resource_class: large
-    environment:
-      PYTEST_XDIST_AUTO_NUM_WORKERS: 8
-      SQLMESH__DISABLE_ANONYMIZED_ANALYTICS: "1"
-    steps:
-      - checkout
-      - run:
-          name: Install envsubst
-          command: sudo apt-get update && sudo apt-get install gettext-base
-      - run:
-          name: Setup python env
-          command: |
-            pip3 install --upgrade pip
-            pip3 install ruamel.yaml==0.16.0
-            python3 --version
-      - run:
-          name: Run Airflow slow tests
-          command: make airflow-docker-test-with-env
-          no_output_timeout: 15m
-      - run:
-          name: Collect Airflow logs
-          command: |
-            tar -czf ./airflow_logs.tgz -C ./examples/airflow/logs .
-            mkdir -p /tmp/airflow_logs
-            cp ./airflow_logs.tgz /tmp/airflow_logs/
-          when: on_fail
-      - store_artifacts:
-          path: /tmp/airflow_logs
-
   trigger_private_tests:
       docker:
         - image: cimg/python:3.12.0
@@ -281,13 +248,6 @@ workflows:
                 - "3.10"
                 - "3.11"
                 - "3.12"
-      - airflow_docker_tests:
-          requires:
-            - style_and_cicd_tests
-          filters:
-            branches:
-              only:
-                - main
       - engine_tests_docker:
           name: engine_<< matrix.engine >>
           matrix:

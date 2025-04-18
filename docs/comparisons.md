@@ -37,7 +37,6 @@ SQLMesh aims to be dbt format-compatible. Importing existing dbt projects with m
 | `Virtual Data Environments`       | ❌ | [✅](../concepts/environments)
 | `Open-source CI/CD bot`           | ❌ | [✅](../integrations/github)
 | `Data consistency enforcement`    | ❌ | ✅
-| `Native Airflow integration`      | ❌ | [✅](../integrations/airflow)
 | Interfaces
 | `CLI`                             | ✅ | [✅](../reference/cli)
 | `Paid UI`                         | ✅ | ❌
