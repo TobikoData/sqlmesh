@@ -996,7 +996,7 @@ This command is intended be run on a schedule. It will skip the physical and vir
 
 This is an advanced workflow and specifically designed for large incremental models (ex: > 200 million rows) that take a long time to run even during development. It solves for:
 
-- Transforming data with constant schema evolution in json and nested array data types.
+- Transforming data with schema evolution in json and nested array data types.
 - Retaining history of a calculated column and applying a new calculation to new rows going forward.
 
 When you apply the plan to `prod` after the dev worfklow, it will NOT backfill historical data. It will only execute model batches **forward only** for new intervals (new rows).
