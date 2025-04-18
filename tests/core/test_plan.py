@@ -3053,3 +3053,55 @@ def test_plan_environment_statements_diff(make_snapshot):
     )
     assert stripped == expected_output
     console_output.close()
+
+
+def test_set_choice_for_forward_only_model(make_snapshot):
+    snapshot = make_snapshot(
+        SqlModel(
+            name="a",
+            query=parse_one("select 1, ds"),
+            dialect="duckdb",
+            kind=IncrementalByTimeRangeKind(time_column="ds", forward_only=True),
+        )
+    )
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    updated_snapshot = make_snapshot(
+        SqlModel(
+            name="a",
+            query=parse_one("select 3, ds"),
+            kind=IncrementalByTimeRangeKind(time_column="ds", forward_only=True),
+            dialect="duckdb",
+        )
+    )
+    updated_snapshot.previous_versions = snapshot.all_versions
+
+    context_diff = ContextDiff(
+        environment="test_environment",
+        is_new_environment=True,
+        is_unfinalized_environment=False,
+        normalize_environment_name=True,
+        create_from="prod",
+        create_from_env_exists=True,
+        added=set(),
+        removed_snapshots={},
+        modified_snapshots={updated_snapshot.name: (updated_snapshot, snapshot)},
+        snapshots={updated_snapshot.snapshot_id: updated_snapshot},
+        new_snapshots={updated_snapshot.snapshot_id: updated_snapshot},
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
+        previous_gateway_managed_virtual_layer=False,
+        gateway_managed_virtual_layer=False,
+    )
+
+    schema_differ = DuckDBEngineAdapter.SCHEMA_DIFFER
+    plan_builder = PlanBuilder(context_diff, schema_differ, is_dev=True)
+
+    with pytest.raises(PlanError, match='Forward-only model "a" cannot be categorized manually.'):
+        plan_builder.set_choice(updated_snapshot, SnapshotChangeCategory.BREAKING)
+
+    plan = plan_builder.build()
+    assert (
+        plan.snapshots[updated_snapshot.snapshot_id].change_category
+        == SnapshotChangeCategory.FORWARD_ONLY
+    )
