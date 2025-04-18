@@ -17,7 +17,7 @@ You’ll use these commands 80% of the time because this is how you apply code c
 5. Run data diff against prod
 6. Apply the changes to prod
 
----
+### Preview, Apply, and Audit Changes in dev
 
 All these steps are bundled into a single command below:
 
@@ -146,6 +146,7 @@ All these steps are bundled into a single command below:
     ✔ Virtual layer updated
     ```
 
+### Run Data Diff Against Prod
 
 Run data diff against prod. This is a good way to verify the changes are behaving as expected **after** applying them to `dev`.
 
@@ -236,6 +237,8 @@ Run data diff against prod. This is a good way to verify the changes are behavin
     │ 9       │ 5    │ 7   │
     └─────────┴──────┴─────┘
     ```
+
+### Apply Changes to Prod
 
 !!! warning "Apply the changes to prod"
     This step is recommended **only in CI/CD** as best practice. # TODO: link to github cicd bot setup
@@ -331,6 +334,10 @@ You'll use these commands to validate your changes are behaving as expected. Aud
 2. Automatically generate unit tests
 3. Ad hoc query the data directly in the CLI
 4. Add linting
+
+---
+
+### Create and Audit External Models
 
 === "SQLMesh"
 
@@ -465,6 +472,112 @@ You'll use these commands to validate your changes are behaving as expected. Aud
     Apply - Backfill Tables [y/n]:
     ```
 
+### Automatically Generate Unit Tests
+
+=== "SQLMesh"
+
+    ```bash
+    sqlmesh create_test sqlmesh_example.full_model \
+      --query sqlmesh_example.incremental_model \
+      "select * from sqlmesh_example.incremental_model limit 5"
+    ```
+
+    ```bash
+    sqlmesh create_test <model_name> \
+      --query <model_name upstream> \
+      "select * from <model_name upstream> limit 5" 
+    ```
+
+
+=== "Tobiko Cloud"
+
+    ```bash
+    tcloud sqlmesh create_test demo.stg_payments \
+      --query demo.seed_raw_payments \
+      "select * from demo.seed_raw_payments limit 5" 
+    ```
+
+    ```bash
+    tcloud sqlmesh create_test <model_name> \
+      --query <model_name upstream> \
+      "select * from <model_name upstream> limit 5" 
+    ```
+
+??? "Example Output"
+    - Generated unit tests for the `sqlmesh_example.full_model` model live querying the data.
+    - I ran the tests and they passed locally.
+    - If you're using a cloud data warehouse, this will transpile your SQL syntax to its equivalent in duckdb.
+    - This runs fast and free on your local machine.
+  
+    ```yaml
+    # tests/test_full_model.yaml
+    test_full_model:
+      model: '"db"."sqlmesh_example"."full_model"'
+      inputs:
+        '"db"."sqlmesh_example"."incremental_model"':
+        - id: -11
+          item_id: -11
+          event_date: 2020-01-01
+          new_column: 7
+        - id: 1
+          item_id: 1
+          event_date: 2020-01-01
+          new_column: 7
+        - id: 3
+          item_id: 3
+          event_date: 2020-01-03
+          new_column: 7
+        - id: 4
+          item_id: 1
+          event_date: 2020-01-04
+          new_column: 7
+        - id: 5
+          item_id: 1
+          event_date: 2020-01-05
+          new_column: 7
+      outputs:
+        query:
+        - item_id: 3
+          num_orders: 1
+          new_column: 7
+        - item_id: 1
+          num_orders: 3
+          new_column: 7
+        - item_id: -11
+          num_orders: 1
+          new_column: 7
+    ```
+
+    ```bash
+    (demo) ➜  demo git:(main) ✗ sqlmesh test                                    
+    .
+    ----------------------------------------------------------------------
+    Ran 1 test in 0.053s 
+
+    OK
+    ```
+
+    ```bash
+    # what if the test fails?
+    (demo) ➜  demo git:(main) ✗ sqlmesh test                                    
+    F
+    ======================================================================
+    FAIL: test_full_model (/Users/sung/Desktop/git_repos/sqlmesh-cli-revamp/tests/test_full_model.yaml)
+    None
+    ----------------------------------------------------------------------
+    AssertionError: Data mismatch (exp: expected, act: actual)
+
+      new_column     
+            exp  act
+    0        0.0  7.0
+
+    ----------------------------------------------------------------------
+    Ran 1 test in 0.020s 
+
+    FAILED (failures=1)
+    ```
+
+
 ## **Debugging Workflow**
 
 You'll use these commands ad hoc to validate your changes are behaving as expected. Audits (data tests) are a great first step, and you'll want to evolve into to feel confident about the changes. The workflow is as follows:
@@ -558,17 +671,7 @@ asdf
 
 asdf
 
-=== "SQLMesh"
 
-    ```bash
-    sqlmesh create_test demo.stg_payments --query demo.seed_raw_payments "select * from demo.seed_raw_payments limit 5" 
-    ```
-
-=== "Tobiko Cloud"
-
-    ```bash
-    tcloud sqlmesh create_test demo.stg_payments --query demo.seed_raw_payments "select * from demo.seed_raw_payments limit 5" 
-    ```
 
 asdf
 
