@@ -150,16 +150,12 @@ class DuckDBAttachOptions(BaseConfig):
         options_sql = f" ({', '.join(options)})" if options else ""
         alias_sql = ""
         # TODO: Add support for Postgres schema. Currently adding it blocks access to the information_schema
-        if self.type == "motherduck":
-            # MotherDuck does not support aliasing
-            md_db = self.path.replace("md:", "")
-            if md_db != alias.replace('"', ""):
-                raise ConfigError(
-                    f"MotherDuck does not support assigning an alias different from the database name {md_db}."
-                )
-        else:
-            alias_sql += f" AS {alias}"
-        return f"ATTACH '{self.path}'{alias_sql}{options_sql}"
+
+        # MotherDuck does not support aliasing
+        alias_sql = (
+            f" AS {alias}" if not (self.type == "motherduck" or self.path.startswith("md:")) else ""
+        )
+        return f"ATTACH IF NOT EXISTS '{self.path}'{alias_sql}{options_sql}"
 
 
 class BaseDuckDBConnectionConfig(ConnectionConfig):
@@ -264,7 +260,7 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
                     if isinstance(path_options, DuckDBAttachOptions):
                         query = path_options.to_sql(alias)
                     else:
-                        query = f"ATTACH '{path_options}'"
+                        query = f"ATTACH IF NOT EXISTS '{path_options}'"
                         if not path_options.startswith("md:"):
                             query += f" AS {alias}"
                     cursor.execute(query)
