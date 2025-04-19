@@ -1,10 +1,14 @@
 # SQLMesh CLI Crash Course
 
-This doc is designed to get you intimate with a **majority** of the SQLMesh workflows and commands you’ll use to build *and* maintain data pipelines. The goal is after 30 minutes, using SQLMesh becomes muscle memory. This is designed to live on your second monitor or in a side by side window, so you can swiftly copy/paste into your terminal. 
+This doc is designed to get you intimate with a **majority** of the SQLMesh workflows you’ll use to build *and* maintain transformation data pipelines. The goal is after 30 minutes, using SQLMesh becomes muscle memory. 
 
-This is inspired by community observations, face to face conversations, live screenshares, and debugging sessions. This is *not* an exhaustive list, but it is an earnest one.
+This is inspired by community observations, face to face conversations, live screenshares, and debugging sessions. This is *not* an exhaustive list but is rooted in lived experience.
 
 You can follow along in this: [open source GitHub repo](https://github.com/sungchun12/sqlmesh-cli-crash-course)
+
+If you're new to how SQLMesh uses virtual data environments, [watch this quick explainer](https://www.loom.com/share/216835d64b3a4d56b2e061fa4bd9ee76?sid=88b3289f-e19b-4ccc-8b88-3faf9d7c9ce3).
+
+Note: This is designed to live on your second monitor or in a side by side window, so you can swiftly copy/paste into your terminal.
 
 ## **Development Workflow**
 
@@ -180,7 +184,7 @@ Run data diff against prod. This is a good way to verify the changes are behavin
     - Showed me sample data differences between the environments.
     - This is where your human judgement comes in to verify the changes are behaving as expected.
 
-    ```sql
+    ```sql linenums="1" hl_lines="6"
     -- models/full_model.sql
     MODEL (
       name sqlmesh_example.full_model,
@@ -358,10 +362,9 @@ You can automatically parse fully qualified table/view names that are outside of
 
     - Generated external models from the `bigquery-public-data`.`ga4_obfuscated_sample_ecommerce`.`events_20210131` tabled parsed in the model's SQL.
     - I added an audit to the external model to ensure `event_date` is not null.
-    - Viewed a plan preview of the changes that will be made to the external model.
+    - Viewed a plan preview of the changes that will be made for the external model.
   
-    ```sql
-    -- models/external_model_example.sql
+    ```sql linenums="1" hl_lines="29"  title="models/external_model_example.sql"
     MODEL (
       name tcloud_demo.external_model
     );
@@ -393,8 +396,7 @@ You can automatically parse fully qualified table/view names that are outside of
     FROM bigquery-public-data.ga4_obfuscated_sample_ecommerce.events_20210131 -- I fully qualified the external table name and sqlmesh will automatically create the external model
     ```
   
-    ```yaml
-    # external_models.yaml
+    ```yaml linenums="1" hl_lines="2 3 4" title="external_models.yaml"
     - name: '`bigquery-public-data`.`ga4_obfuscated_sample_ecommerce`.`events_20210131`'
       audits: # I added this audit manually to the external model
         - name: not_null
@@ -513,8 +515,7 @@ You can ensure business logic is working as expected with static sample data. Th
     - If you're using a cloud data warehouse, this will transpile your SQL syntax to its equivalent in duckdb.
     - This runs fast and free on your local machine.
   
-    ```yaml
-    # tests/test_full_model.yaml
+    ```yaml linenums="1" title="tests/test_full_model.yaml"
     test_full_model:
       model: '"db"."sqlmesh_example"."full_model"'
       inputs:
@@ -640,7 +641,7 @@ This is great to catch issues before wasting runtime in your data warehouse. You
 
     You add linting rules in your `config.yaml` file.
 
-    ```yaml
+    ```yaml linenums="1" hl_lines="13-17" title="config.yaml"
     gateways:
       duckdb:
         connection:
@@ -722,7 +723,7 @@ This is great to verify the SQL is looking as expected before applying the chang
 
     It outputs the full SQL code in the default or target dialect.
 
-    ```sql
+    ```sql hl_lines="10"
     -- rendered sql in default dialect
     SELECT                                                                                                
       "seed_model"."id" AS "id",                                                                          
@@ -750,8 +751,7 @@ This is great to verify the SQL is looking as expected before applying the chang
       AND `seed_model`.`event_date` >= CAST('1970-01-01' AS DATE)   
     ```
 
-    ```sql
-    -- original sqlmesh model code
+    ```sql linenums="1" title="models/incremental_model.sql"
     MODEL (
       name sqlmesh_example.incremental_model,
       kind INCREMENTAL_BY_TIME_RANGE (
@@ -799,7 +799,7 @@ You can see detailed operations in the physical and virtual layers. This is usef
 
 ??? "Example Output"
 
-    ```bash
+    ```bash hl_lines="47-49"
     [WARNING] Linter warnings for 
     /Users/sung/Desktop/git_repos/sqlmesh-cli-revamp/models/incremental_by_partition.sql:
     - nomissingaudits: Model `audits` must be configured to test data quality.
@@ -905,6 +905,16 @@ bat --theme='ansi' $(ls -t logs/ | head -n 1 | sed 's/^/logs\//')
 
 ## **Run on Production Schedule**
 
+SQLMesh schedules your transformation on a per-model basis in proper DAG order. This makes it easy to configure how often each step in your pipeline runs to backfill data without running when upstream models are late or failed. Rerunning from point of failure is also a default!
+
+`stg_transactions`(cron: `@hourly`) -> `fct_transcations`(cron: `@daily`). All times in UTC.
+
+1. `stg_transactions` runs hourly
+2. `fct_transcations` runs at 12am UTC if `stg_transactions` is fresh and updated since its most recent hour interval
+3. If `stg_transactions` failed from 11pm-11:59:59pm, it will prevent `fct_transcations` from running and put it in a `pending` state
+4. If `fct_transactions` is `pending` past its full interval (1 full day), it will be put in a `late` state
+5. Once `stg_transactions` runs successfully either from a retry or a fix from a pull request, `fct_transactions` will rerun from the point of failure. This is true even if `fct_transactions` has been `late` for several days.
+
 If you're using open source SQLMesh, you can run this command in your orchestrator (ex: Dagster, GitHub Actions, etc.) every 5 minutes or at your lowest model cron schedule (ex: every 1 hour). Don't worry! It will only run executions that need to be run.
 
 If you're using Tobiko Cloud, this configures automatically without additional configuration.
@@ -985,7 +995,7 @@ You can run models that execute backfills each time you invoke a run whether ad 
 
 ??? "Example Model Config"
 
-    ```sql
+    ```sql linenums="1" hl_lines="9" title="models/incremental_model.sql"
     MODEL (
       name sqlmesh_example.incremental_model,
       kind INCREMENTAL_BY_TIME_RANGE (
@@ -1002,8 +1012,9 @@ You can run models that execute backfills each time you invoke a run whether ad 
 
 This is an advanced workflow and specifically designed for large incremental models (ex: > 200 million rows) that take a long time to run even during development. It solves for:
 
-- Transforming data with schema evolution in json and nested array data types.
+- Transforming data with schema evolution in `struct` and nested `array` data types.
 - Retaining history of a calculated column and applying a new calculation to new rows going forward.
+- Retain history of a column with complex conditional `CASE WHEN` logic and apply new conditions to new rows going forward.
 
 When you apply the plan to `prod` after the dev worfklow, it will NOT backfill historical data. It will only execute model batches **forward only** for new intervals (new rows).
 
