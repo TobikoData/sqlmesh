@@ -693,6 +693,42 @@ def audit(
     obj.audit(models=models, start=start, end=end, execution_time=execution_time)
 
 
+@cli.command("check_intervals")
+@click.option(
+    "--no-signals",
+    is_flag=True,
+    help="Disable signal checks and only show missing intervals.",
+    default=False,
+)
+@click.argument("environment", required=False)
+@click.option(
+    "--select-model",
+    type=str,
+    multiple=True,
+    help="Select specific models to show missing intervals for.",
+)
+@opt.start_time
+@opt.end_time
+@click.pass_context
+@error_handler
+@cli_analytics
+def check_intervals(
+    ctx: click.Context,
+    environment: t.Optional[str],
+    no_signals: bool,
+    select_model: t.List[str],
+    start: TimeLike,
+    end: TimeLike,
+) -> None:
+    """Show missing intervals in an environment, respecting signals."""
+    context = ctx.obj
+    context.console.show_intervals(
+        context.check_intervals(
+            environment, no_signals=no_signals, select_models=select_model, start=start, end=end
+        )
+    )
+
+
 @cli.command("fetchdf")
 @click.argument("sql")
 @click.pass_context
