@@ -1090,7 +1090,7 @@ If you want to see a full walkthough, [go here](incremental_time_full_walkthroug
 
     `sqlmesh plan`
 
-    When this is applied to `prod`, it will only execute model batches for new intervals (new rows). This will NOT re-use `preview` models in development.
+    When this is applied to `prod`, it will only execute model batches for new intervals (new rows). This will NOT re-use `preview` models (backfilled data) in development.
 
     ```bash
     Differences from the `prod` environment:
