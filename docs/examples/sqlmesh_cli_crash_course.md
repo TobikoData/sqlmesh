@@ -1024,7 +1024,7 @@ You can run models that execute backfills each time you invoke a run whether ad 
       event_date BETWEEN @start_date AND @end_date
     ```
 
-    ```shell
+    ```bash
     [1/1] sqlmesh_example.incremental_model  [insert 2025-04-19 - 2025-04-19, audits ✔2] 0.05s   
     Executing model batches ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 1/1 • 0:00:00         
                                                                                                     
