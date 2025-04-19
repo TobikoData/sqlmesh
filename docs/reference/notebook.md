@@ -438,6 +438,27 @@ options:
                         Execution time.
 ```
 
+#### check_intervals
+```
+%check_intervals [--no-signals] [--select-model [SELECT_MODEL ...]]
+                   [--start START] [--end END]
+                   [environment]
+
+Show missing intervals in an environment, respecting signals.
+
+positional arguments:
+  environment           The environment to check intervals for.
+
+options:
+  --no-signals          Disable signal checks and only show missing intervals.
+  --select-model <[SELECT_MODEL ...]>
+                        Select specific model changes that should be included
+                        in the plan.
+  --start START, -s START
+                        Start date of intervals to check for.
+  --end END, -e END     End date of intervals to check for.
+```
+
 #### rollback
 ```
 %rollback
@@ -499,7 +520,7 @@ options:
 
 #### lint
 ```
-%lint [--models ...] 
+%lint [--models ...]
 
 Run the linter on the target models(s)
 

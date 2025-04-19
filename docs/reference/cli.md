@@ -65,6 +65,24 @@ Options:
   --help                 Show this message and exit.
 ```
 
+## check_intervals
+
+```
+Usage: sqlmesh check_intervals [OPTIONS] [ENVIRONMENT]
+
+  Show missing intervals in an environment, respecting signals.
+
+Options:
+  --no-signals         Disable signal checks and only show missing intervals.
+  --select-model TEXT  Select specific models to show missing intervals for.
+  -s, --start TEXT     The start datetime of the interval for which this
+                       command will be applied.
+  -e, --end TEXT       The end datetime of the interval for which this command
+                       will be applied.
+  --help               Show this message and exit.
+```
+
+
 ## clean
 
 ```

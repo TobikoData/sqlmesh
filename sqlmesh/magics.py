@@ -1008,6 +1008,38 @@ class SQLMeshMagics(Magics):
         )
 
     @magic_arguments()
+    @argument("environment", nargs="?", type=str, help="The environment to check intervals for.")
+    @argument(
+        "--no-signals",
+        action="store_true",
+        help="Disable signal checks and only show missing intervals.",
+        default=False,
+    )
+    @argument(
+        "--select-model",
+        type=str,
+        nargs="*",
+        help="Select specific model changes that should be included in the plan.",
+    )
+    @argument("--start", "-s", type=str, help="Start date of intervals to check for.")
+    @argument("--end", "-e", type=str, help="End date of intervals to check for.")
+    @line_magic
+    @pass_sqlmesh_context
+    def check_intervals(self, context: Context, line: str) -> None:
+        """Show missing intervals in an environment, respecting signals."""
+        args = parse_argstring(self.check_intervals, line)
+
+        context.console.show_intervals(
+            context.check_intervals(
+                environment=args.environment,
+                no_signals=args.no_signals,
+                select_models=args.select_model,
+                start=args.start,
+                end=args.end,
+            )
+        )
+
+    @magic_arguments()
     @argument(
         "--skip-connection",
         action="store_true",
