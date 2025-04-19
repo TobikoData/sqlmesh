@@ -17,6 +17,7 @@ import { LSPClient } from "./lsp/lsp"
 import { AuthenticationProviderTobikoCloud } from "./auth/auth"
 import { signOut } from "./commands/signout"
 import { signIn } from "./commands/signin"
+import { signInSpecifyFlow } from "./commands/signinSpecifyFlow"
 
 let lspClient: LSPClient | undefined
 
@@ -44,6 +45,11 @@ export async function activate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(
     vscode.commands.registerCommand("sqlmesh.signin", signIn(authProvider))
+  )
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("sqlmesh.signinSpecifyFlow", signInSpecifyFlow(authProvider)
+    )
   )
 
   context.subscriptions.push(
