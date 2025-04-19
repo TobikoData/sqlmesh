@@ -12,10 +12,11 @@ import {
   traceInfo,
   traceVerbose,
 } from "./utilities/common/log"
-import {
- onDidChangePythonInterpreter,
-} from "./utilities/common/python"
+import { onDidChangePythonInterpreter } from "./utilities/common/python"
 import { LSPClient } from "./lsp/lsp"
+import { AuthenticationProviderTobikoCloud } from "./auth/auth"
+import { signOut } from "./commands/signout"
+import { signIn } from "./commands/signin"
 
 let lspClient: LSPClient | undefined
 
@@ -29,17 +30,36 @@ export async function activate(context: vscode.ExtensionContext) {
   )
   traceInfo("Activating SQLMesh extension")
 
-  context.subscriptions.push(vscode.commands.registerCommand(
-    "sqlmesh.format",
-    async () => {
+  traceInfo("Registering authentication provider")
+  const authProvider = new AuthenticationProviderTobikoCloud()
+  context.subscriptions.push(
+    vscode.authentication.registerAuthenticationProvider(
+      AuthenticationProviderTobikoCloud.id,
+      AuthenticationProviderTobikoCloud.name,
+      authProvider,
+      { supportsMultipleAccounts: false }
+    )
+  )
+  traceInfo("Authentication provider registered")
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("sqlmesh.signin", signIn(authProvider))
+  )
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("sqlmesh.signout", signOut(authProvider))
+  )
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("sqlmesh.format", async () => {
       const out = await actual_callout.format()
       if (out === 0) {
         vscode.window.showInformationMessage("Project formatted successfully")
       } else {
         vscode.window.showErrorMessage("Project format failed")
       }
-    }
-  ))
+    })
+  )
 
   lspClient = new LSPClient()
   await lspClient.start()
@@ -64,7 +84,7 @@ export async function activate(context: vscode.ExtensionContext) {
     })
   )
 
- traceInfo("Extension activated")
+  traceInfo("Extension activated")
 }
 
 // This method is called when your extension is deactivated

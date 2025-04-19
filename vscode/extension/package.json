@@ -19,6 +19,12 @@
   ],
   "main": "./dist/extension.js",
   "contributes": {
+    "authentication": [
+      {
+        "id": "tobikodata",
+        "label": "Tobiko"
+      }
+    ],
     "commands": [
       {
         "command": "sqlmesh.format",
@@ -28,6 +34,16 @@
       {
         "command": "sqlmesh.restart",
         "title": "Restart SQLMesh Servers",
+        "description": "SQLMesh"
+      },
+      {
+        "command": "sqlmesh.signin",
+        "title": "Sign in to Tobiko Cloud",
+        "description": "SQLMesh"
+      },
+      {
+        "command": "sqlmesh.signout",
+        "title": "Sign out from Tobiko Cloud",
         "description": "SQLMesh"
       }
     ]
@@ -52,7 +68,8 @@
     "@types/fs-extra": "^11.0.4",
     "@vscode/python-extension": "^1.0.5",
     "fs-extra": "^11.3.0",
-    "vscode-languageclient": "^9.0.1"
+    "vscode-languageclient": "^9.0.1",
+    "zod": "^3.24.3"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",
