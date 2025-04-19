@@ -328,16 +328,18 @@ Run data diff against prod. This is a good way to verify the changes are behavin
 
 ## **Enhanced Testing Workflow**
 
-You'll use these commands to validate your changes are behaving as expected. Audits (data tests) are a great first step, and you'll want to grow from there to feel confident about your changes. The workflow is as follows:
+You'll use these commands to validate your changes are behaving as expected. Audits (data tests) are a great first step, and you'll want to grow from there to feel confident about your testing. The workflow is as follows:
 
 1. Create and audit external models outside of SQLMesh's control (ex: data loaded in by Fivetran, Airbyte, etc.)
 2. Automatically generate unit tests
 3. Ad hoc query the data directly in the CLI
-4. Add linting
+4. Lint your models to catch known syntax errors
 
 ---
 
 ### Create and Audit External Models
+
+SQLMesh will automatically parse fully qualified table/view names that are outside of SQLMesh's control (ex: `bigquery-public-data`.`ga4_obfuscated_sample_ecommerce`.`events_20210131`). You can add audits to test data quality. If they fail, SQLMesh prevents downstream models from wastefully running.
 
 === "SQLMesh"
 
@@ -354,7 +356,7 @@ You'll use these commands to validate your changes are behaving as expected. Aud
 ??? "Example Output"
     Note: this is an example from a separate Tobiko Cloud project, so you can't following along in the github repo above.
 
-    - Generated external models from the `bigquery-public-data` dataset.
+    - Generated external models from the `bigquery-public-data`.`ga4_obfuscated_sample_ecommerce`.`events_20210131` tabled parsed in the model's SQL.
     - I added an audit to the external model to ensure `event_date` is not null.
     - Viewed a plan preview of the changes that will be made to the external model.
   
@@ -474,6 +476,8 @@ You'll use these commands to validate your changes are behaving as expected. Aud
 
 ### Automatically Generate Unit Tests
 
+This ensures your business logic is working as expected with static sample data. This is great for testing complex business logic (ex: `CASE WHEN` conditions). No need to write them manually neither!
+
 === "SQLMesh"
 
     ```bash
@@ -579,9 +583,9 @@ You'll use these commands to validate your changes are behaving as expected. Aud
 
 ### Run Ad Hoc Queries
 
-This is great to validate the look and feel of your changes without context switching to your query console.
+You can run live queries directly from the CLI. This is great to validate the look and feel of your changes without context switching to your query console.
 
-Pro tip: run this after running `sqlmesh table_diff` to get a full picture of the changes.
+Pro tip: run this after running `sqlmesh table_diff` to get a full picture of your changes.
 
 === "SQLMesh"
 
@@ -676,7 +680,7 @@ This is great to catch issues before wasting runtime in your data warehouse. You
 
 ## **Debugging Workflow**
 
-You'll use these commands ad hoc to validate your changes are behaving as expected. Audits (data tests) are a great first step, and you'll want to evolve into to feel confident about the changes. The workflow is as follows:
+You'll use these commands ad hoc to validate your changes are behaving as expected. This is great to get more details beyond the defaults above. The workflow is as follows:
 
 1. Render the model to verify the SQL is looking as expected
 2. Run in verbose mode to verify SQLMesh's behavior.
@@ -771,7 +775,7 @@ This is great to verify the SQL is looking as expected before applying the chang
 
 ### Apply Plan Changes in Verbose Mode
 
-This is useful to see exactly what SQLMesh is doing in the physical and virtual layers. After, you can copy/paste the fully qualified table/view name into your query console to validate the data (if that's your preference).
+You can see detailed operations in the physical and virtual layers. This is useful to see exactly what SQLMesh is doing every step. After, you can copy/paste the fully qualified table/view name into your query console to validate the data (if that's your preference).
 
 === "SQLMesh"
 
@@ -852,7 +856,7 @@ This is useful to see exactly what SQLMesh is doing in the physical and virtual 
 
 ### View Logs Easily
 
-Each time you perform a SQLMesh command, it creates a log file in the `logs` directory. This is useful to see what exact queries were executed to apply your changes. Admittedly, this is outside of native functionality, but it's a quick and easy way to view the logs.
+Each time you perform a SQLMesh command, it creates a log file in the `logs` directory. You can view them by manually navigating to the correct file name with latest timestamp or with this simple shell command. This is useful to see what exact queries were executed to apply your changes. Admittedly, this is outside of native functionality, but it's a quick and easy way to view logs.
 
 ```bash
 # install this open source tool that enhances the default `cat` command
@@ -901,7 +905,7 @@ bat --theme='ansi' $(ls -t logs/ | head -n 1 | sed 's/^/logs\//')
 
 ## **Run on Production Schedule**
 
-If you're using open source SQLMesh, you can run this in your orchestrator (ex: Dagster, GitHub Actions, etc.) every 5 minutes or at your lowest model cron schedule (ex: every 1 hour). Don't worry! It will only run executions that need to be run.
+If you're using open source SQLMesh, you can run this command in your orchestrator (ex: Dagster, GitHub Actions, etc.) every 5 minutes or at your lowest model cron schedule (ex: every 1 hour). Don't worry! It will only run executions that need to be run.
 
 If you're using Tobiko Cloud, this configures automatically without additional configuration.
 
@@ -960,6 +964,8 @@ This command is intended be run on a schedule. It will skip the physical and vir
     ```
 
 ### Run Models with Incomplete Intervals (Warning)
+
+You can run models that execute backfills each time you invoke a run whether ad hoc or on a schedule.
 
 !!! warning "Run Models with Incomplete Intervals"
     This only applies to incremental models that have `allow_partials` set to `true`. 
@@ -1079,6 +1085,8 @@ When you apply the plan to `prod` after the dev worfklow, it will NOT backfill h
     ✔ Virtual layer updated
     ```
 
+
+    `sqlmesh plan`
 
     When this is applied to `prod`, it will only execute model batches for new intervals (new rows). This will NOT re-use `preview` models in development.
 
