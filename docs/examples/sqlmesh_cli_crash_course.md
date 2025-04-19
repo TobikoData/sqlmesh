@@ -905,7 +905,7 @@ bat --theme='ansi' $(ls -t logs/ | head -n 1 | sed 's/^/logs\//')
 
 ## **Run on Production Schedule**
 
-SQLMesh schedules your transformation on a per-model basis in proper DAG order. This makes it easy to configure how often each step in your pipeline runs to backfill data without running when upstream models are late or failed. Rerunning from point of failure is also a default!
+SQLMesh schedules your transformation on a per-model basis in proper DAG order. This makes it easy to configure how often each step in your pipeline runs to backfill data without running when upstream models are late or failed. Rerunning from point of failure is also a default! Example below:
 
 `stg_transactions`(cron: `@hourly`) -> `fct_transcations`(cron: `@daily`). All times in UTC.
 
