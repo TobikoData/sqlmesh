@@ -332,7 +332,7 @@ Run data diff against prod. This is a good way to verify the changes are behavin
 
 ## **Enhanced Testing Workflow**
 
-You'll use these commands to validate your changes are behaving as expected. Audits (data tests) are a great first step, and you'll want to grow from there to feel confident about your testing. The workflow is as follows:
+You'll use these commands to validate your changes are behaving as expected. Audits (data tests) are a great first step, and you'll want to grow from there to feel confident about your pipelines. The workflow is as follows:
 
 1. Create and audit external models outside of SQLMesh's control (ex: data loaded in by Fivetran, Airbyte, etc.)
 2. Automatically generate unit tests
