@@ -993,19 +993,44 @@ You can run models that execute backfills each time you invoke a run whether ad 
     tcloud sqlmesh run --ignore-cron
     ```
 
-??? "Example Model Config"
+??? "Example Output"
 
-    ```sql linenums="1" hl_lines="9" title="models/incremental_model.sql"
+    ```sql linenums="1" hl_lines="15" title="models/incremental_model.sql"
     MODEL (
       name sqlmesh_example.incremental_model,
       kind INCREMENTAL_BY_TIME_RANGE (
         time_column event_date
       ),
       start '2020-01-01',
-      cron '@daily', -- daily at midnight UTC
+      cron '@daily',
       grain (id, event_date),
+      audits( UNIQUE_VALUES(columns = (
+          id,
+      )), NOT_NULL(columns = (
+          id,
+          event_date
+      ))),
       allow_partials true
     );
+
+    SELECT
+      id,
+      item_id,
+      event_date,
+      16 as new_column
+    FROM
+      sqlmesh_example.seed_model
+    WHERE
+      event_date BETWEEN @start_date AND @end_date
+    ```
+
+    ```shell
+    [1/1] sqlmesh_example.incremental_model  [insert 2025-04-19 - 2025-04-19, audits ✔2] 0.05s   
+    Executing model batches ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 1/1 • 0:00:00         
+                                                                                                    
+    ✔ Model batches executed
+
+    Run finished for environment 'prod'
     ```
 
 ## **Forward-Only Development Workflow**
