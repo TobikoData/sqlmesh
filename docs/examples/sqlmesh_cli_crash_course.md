@@ -8,7 +8,7 @@ You can follow along in this: [open source GitHub repo](https://github.com/sungc
 
 If you're new to how SQLMesh uses virtual data environments, [watch this quick explainer](https://www.loom.com/share/216835d64b3a4d56b2e061fa4bd9ee76?sid=88b3289f-e19b-4ccc-8b88-3faf9d7c9ce3).
 
-Note: This is designed to live on your second monitor or in a side by side window, so you can swiftly copy/paste into your terminal.
+!!! important "Put this on your second monitor or in a side by side window to swiftly copy/paste into your terminal."
 
 ## **Development Workflow**
 
