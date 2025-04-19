@@ -241,7 +241,7 @@ Run data diff against prod. This is a good way to verify the changes are behavin
 ### Apply Changes to Prod
 
 !!! warning "Apply the changes to prod"
-    This step is recommended **only in CI/CD** as best practice. # TODO: link to github cicd bot setup
+    This step is recommended [**only in CI/CD**](../integrations/github.md) as best practice. 
     For learning purposes and hot fixes, you can apply the changes to prod by entering `y` at the prompt.
 
 === "SQLMesh"
@@ -1006,6 +1006,8 @@ This is an advanced workflow and specifically designed for large incremental mod
 - Retaining history of a calculated column and applying a new calculation to new rows going forward.
 
 When you apply the plan to `prod` after the dev worfklow, it will NOT backfill historical data. It will only execute model batches **forward only** for new intervals (new rows).
+
+If you want to see a full walkthough, [go here](incremental_time_full_walkthrough.md). 
 
 === "SQLMesh"
 
