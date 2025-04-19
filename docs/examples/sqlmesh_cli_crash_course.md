@@ -19,7 +19,7 @@ You’ll use these commands 80% of the time because this is how you apply code c
 
 ### Preview, Apply, and Audit Changes in `dev`
 
-All these steps are bundled into a single command below:
+You can make changes quickly and confidently through a simple command:
 
 - Plan the changes in your dev environment.
 - Apply the changes to your dev environment by entering `y` at the prompt.
@@ -339,7 +339,7 @@ You'll use these commands to validate your changes are behaving as expected. Aud
 
 ### Create and Audit External Models
 
-SQLMesh will automatically parse fully qualified table/view names that are outside of SQLMesh's control (ex: `bigquery-public-data`.`ga4_obfuscated_sample_ecommerce`.`events_20210131`). You can add audits to test data quality. If they fail, SQLMesh prevents downstream models from wastefully running.
+You can automatically parse fully qualified table/view names that are outside of SQLMesh's control (ex: `bigquery-public-data`.`ga4_obfuscated_sample_ecommerce`.`events_20210131`) and create full schemas with data types. These schemas will be used for column level lineage. You can add audits to test data quality. If they fail, SQLMesh prevents downstream models from wastefully running.
 
 === "SQLMesh"
 
@@ -476,7 +476,7 @@ SQLMesh will automatically parse fully qualified table/view names that are outsi
 
 ### Automatically Generate Unit Tests
 
-This ensures your business logic is working as expected with static sample data. This is great for testing complex business logic (ex: `CASE WHEN` conditions). No need to write them manually neither!
+You can ensure business logic is working as expected with static sample data. This is great for testing complex business logic (ex: `CASE WHEN` conditions). No need to write them manually neither!
 
 === "SQLMesh"
 
