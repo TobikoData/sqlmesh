@@ -87,7 +87,7 @@ from sqlmesh.core.notification_target import (
     NotificationTarget,
     NotificationTargetManager,
 )
-from sqlmesh.core.plan import Plan, PlanBuilder
+from sqlmesh.core.plan import Plan, PlanBuilder, SnapshotIntervals
 from sqlmesh.core.reference import ReferenceGraph
 from sqlmesh.core.scheduler import Scheduler, CompletionStatus
 from sqlmesh.core.schema_loader import create_external_models_file
@@ -97,6 +97,7 @@ from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotEvaluator,
     SnapshotFingerprint,
+    missing_intervals,
     to_table_mapping,
 )
 from sqlmesh.core.snapshot.definition import get_next_model_interval_start
@@ -469,11 +470,12 @@ class GenericContext(BaseContext, t.Generic[C]):
         self,
         deployability_index: t.Optional[DeployabilityIndex] = None,
         engine_adapter: t.Optional[EngineAdapter] = None,
+        snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
     ) -> ExecutionContext:
         """Returns an execution context."""
         return ExecutionContext(
             engine_adapter=engine_adapter or self.engine_adapter,
-            snapshots=self.snapshots,
+            snapshots=snapshots or self.snapshots,
             deployability_index=deployability_index,
             default_dialect=self.default_dialect,
             default_catalog=self.default_catalog,
@@ -1892,6 +1894,61 @@ class GenericContext(BaseContext, t.Generic[C]):
             metrics=self._metrics,
             dialect=dialect or self.default_dialect,
         )
+
+    @python_api_analytics
+    def check_intervals(
+        self,
+        environment: t.Optional[str],
+        no_signals: bool,
+        select_models: t.Collection[str],
+        start: t.Optional[TimeLike] = None,
+        end: t.Optional[TimeLike] = None,
+    ) -> t.Dict[Snapshot, SnapshotIntervals]:
+        """Check intervals for a given environment.
+
+        Args:
+            environment: The environment or prod if None.
+            select_models: A list of model selection strings to show intervals for.
+            start: The start of the intervals to check.
+            end: The end of the intervals to check.
+        """
+
+        environment = environment or c.PROD
+        env = self.state_reader.get_environment(environment)
+        if not env:
+            raise SQLMeshError(f"Environment '{environment}' was not found.")
+
+        snapshots = {k.name: v for k, v in self.state_sync.get_snapshots(env.snapshots).items()}
+
+        missing = {
+            k.name: v
+            for k, v in missing_intervals(
+                snapshots.values(), start=start, end=end, execution_time=end
+            ).items()
+        }
+
+        if select_models:
+            selected: t.Collection[str] = self._select_models_for_run(
+                select_models, True, snapshots.values()
+            )
+        else:
+            selected = snapshots.keys()
+
+        results = {}
+        execution_context = self.execution_context(snapshots=snapshots)
+
+        for fqn in selected:
+            snapshot = snapshots[fqn]
+            intervals = missing.get(fqn) or []
+
+            results[snapshot] = SnapshotIntervals(
+                snapshot.snapshot_id,
+                intervals
+                if no_signals
+                else snapshot.check_ready_intervals(intervals, execution_context),
+            )
+
+        return results
 
     @python_api_analytics
     def migrate(self) -> None:

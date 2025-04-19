@@ -191,6 +191,10 @@ class EnvironmentsConsole(abc.ABC):
     def print_environments(self, environments_summary: t.Dict[str, int]) -> None:
         """Prints all environment names along with expiry datetime."""
 
+    @abc.abstractmethod
+    def show_intervals(self, snapshot_intervals: t.Dict[Snapshot, SnapshotIntervals]) -> None:
+        """Show ready intervals"""
+
 
 class DifferenceConsole(abc.ABC):
     """Console for displaying environment differences"""
@@ -656,6 +660,9 @@ class NoopConsole(Console):
         pass
 
     def print_environments(self, environments_summary: t.Dict[str, int]) -> None:
+        pass
+
+    def show_intervals(self, snapshot_intervals: t.Dict[Snapshot, SnapshotIntervals]) -> None:
         pass
 
     def show_linter_violations(
@@ -2090,6 +2097,24 @@ class TerminalConsole(Console):
         ]
         output_str = "\n".join([str(len(output)), *output])
         self.log_status_update(f"Number of SQLMesh environments are: {output_str}")
+
+    def show_intervals(self, snapshot_intervals: t.Dict[Snapshot, SnapshotIntervals]) -> None:
+        complete = Tree(f"[b]Complete Intervals[/b]")
+        incomplete = Tree(f"[b]Missing Intervals[/b]")
+
+        for snapshot, intervals in sorted(snapshot_intervals.items(), key=lambda s: s[0].node.name):
+            if intervals.intervals:
+                incomplete.add(
+                    f"{snapshot.node.name}: [{intervals.format_intervals(snapshot.node.interval_unit)}]"
+                )
+            else:
+                complete.add(snapshot.node.name)
+
+        if complete.children:
+            self._print(complete)
+
+        if incomplete.children:
+            self._print(incomplete)
 
     def print_connection_config(self, config: ConnectionConfig, title: str = "Connection") -> None:
         tree = Tree(f"[b]{title}:[/b]")

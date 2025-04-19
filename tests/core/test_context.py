@@ -1993,3 +1993,36 @@ def test_plan_audit_intervals(tmp_path: pathlib.Path, capsys, caplog):
         """SELECT COUNT(*) FROM (SELECT ("date_id") AS "date_id" FROM (SELECT * FROM "sqlmesh__sqlmesh_audit"."sqlmesh_audit__date_example__4100277424" AS "sqlmesh_audit__date_example__4100277424" WHERE "date_id" BETWEEN CAST('2025-02-01' AS DATE) AND CAST('2025-02-01' AS DATE)) AS "_q_0" WHERE TRUE GROUP BY ("date_id") HAVING COUNT(*) > 1) AS "audit\""""
         in caplog.text
     )
+
+
+def test_check_intervals(sushi_context, mocker):
+    with pytest.raises(
+        SQLMeshError,
+        match="Environment 'dev' was not found",
+    ):
+        sushi_context.check_intervals(environment="dev", no_signals=False, select_models=[])
+
+    spy = mocker.spy(sqlmesh.core.snapshot.definition, "_check_ready_intervals")
+    intervals = sushi_context.check_intervals(environment=None, no_signals=False, select_models=[])
+
+    min_intervals = 19
+    assert spy.call_count == 1
+    assert len(intervals) >= min_intervals
+
+    for i in intervals.values():
+        assert not i.intervals
+
+    spy.reset_mock()
+    intervals = sushi_context.check_intervals(environment=None, no_signals=True, select_models=[])
+    assert spy.call_count == 0
+    assert len(intervals) >= min_intervals
+
+    intervals = sushi_context.check_intervals(
+        environment=None, no_signals=False, select_models=["*waiter_as_customer*"]
+    )
+    assert len(intervals) == 1
+
+    intervals = sushi_context.check_intervals(
+        environment=None, no_signals=False, select_models=["*waiter_as_customer*"], end="next week"
+    )
+    assert tuple(intervals.values())[0].intervals
