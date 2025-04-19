@@ -4,7 +4,7 @@ This doc is designed to get you intimate with a **majority** of the SQLMesh work
 
 This is inspired by community observations, face to face conversations, live screenshares, and debugging sessions. This is *not* an exhaustive list, but it is an earnest one.
 
-You can follow along in this: [open source github repo](https://github.com/sungchun12/sqlmesh-cli-crash-course)
+You can follow along in this: [open source GitHub repo](https://github.com/sungchun12/sqlmesh-cli-crash-course)
 
 ## **Development Workflow**
 
