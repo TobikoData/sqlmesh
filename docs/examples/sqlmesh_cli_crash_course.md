@@ -480,7 +480,7 @@ You can automatically parse fully qualified table/view names that are outside of
 
 ### Automatically Generate Unit Tests
 
-You can ensure business logic is working as expected with static sample data. This is great for testing complex business logic (ex: `CASE WHEN` conditions). No need to write them manually neither!
+You can ensure business logic is working as expected with static sample data. Unit tests run *before* a plan is applied automatically. This is great for testing complex business logic (ex: `CASE WHEN` conditions) *before* you backfill data. No need to write them manually neither!
 
 === "SQLMesh"
 
