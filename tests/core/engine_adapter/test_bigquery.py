@@ -116,9 +116,7 @@ def test_insert_overwrite_by_partition_query_unknown_column_types(
         },
     )
 
-    columns_mock.assert_called_once_with(
-        exp.to_table(f"test_schema.__temp_test_table_{temp_table_id}")
-    )
+    columns_mock.assert_called_once_with(table_name)
 
     sql_calls = _to_sql_calls(execute_mock)
     assert sql_calls == [
