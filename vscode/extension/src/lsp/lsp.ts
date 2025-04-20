@@ -16,7 +16,7 @@ export class LSPClient implements Disposable {
 
     public async start(): Promise<Result<undefined, string>> {
         if (!outputChannel) {
-            outputChannel = window.createOutputChannel('sqlmesh_actual_lsp_implementation')
+            outputChannel = window.createOutputChannel('sqlmesh-lsp')
         }
 
         const sqlmesh = await sqlmesh_lsp_exec()
@@ -62,7 +62,7 @@ export class LSPClient implements Disposable {
             // }
         }
     
-        this.client = new LanguageClient('sqlmesh-lsp-example', 'SQLMesh Language Server', serverOptions, clientOptions)
+        this.client = new LanguageClient('sqlmesh-lsp', 'SQLMesh Language Server', serverOptions, clientOptions)
         await this.client.start()
         return ok(undefined)
     }
