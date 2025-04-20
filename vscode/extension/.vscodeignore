@@ -13,3 +13,4 @@ vsc-extension-quickstart.md
 **/*.ts
 **/.vscode-test.*
 assets/logo.svg
+esbuild.js
