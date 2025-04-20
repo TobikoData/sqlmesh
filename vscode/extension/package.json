@@ -42,6 +42,11 @@
         "description": "SQLMesh"
       },
       {
+          "command": "sqlmesh.signinSpecifyFlow",
+          "title": "Sign in to Tobiko Cloud (Specify Auth Flow)",
+          "description": "SQLMesh"
+      },
+      {
         "command": "sqlmesh.signout",
         "title": "Sign out from Tobiko Cloud",
         "description": "SQLMesh"
