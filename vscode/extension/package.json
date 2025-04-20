@@ -17,6 +17,9 @@
   "activationEvents": [
     "onLanguage:sql"
   ],
+  "extensionKind": [
+    "workspace"
+  ],
   "main": "./dist/extension.js",
   "contributes": {
     "authentication": [
@@ -42,9 +45,9 @@
         "description": "SQLMesh"
       },
       {
-          "command": "sqlmesh.signinSpecifyFlow",
-          "title": "Sign in to Tobiko Cloud (Specify Auth Flow)",
-          "description": "SQLMesh"
+        "command": "sqlmesh.signinSpecifyFlow",
+        "title": "Sign in to Tobiko Cloud (Specify Auth Flow)",
+        "description": "SQLMesh"
       },
       {
         "command": "sqlmesh.signout",
