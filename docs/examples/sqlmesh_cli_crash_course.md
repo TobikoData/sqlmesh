@@ -447,6 +447,8 @@ You can automatically parse fully qualified table/view names that are outside of
       gateway: public-demo
     ```
 
+    `tcloud sqlmesh plan dev_sung`
+
     ```bash
     Differences from the `dev_sung` environment:
 
