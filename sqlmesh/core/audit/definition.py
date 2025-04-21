@@ -71,7 +71,7 @@ class AuditMixin(AuditCommonMetaMixin):
     defaults: t.Dict[str, exp.Expression]
     expressions_: t.Optional[t.List[exp.Expression]]
     jinja_macros: JinjaMacroRegistry
-    format: t.Optional[bool] = Field(default=None, exclude=True)
+    formatting: t.Optional[bool] = Field(default=None, exclude=True)
 
     @property
     def expressions(self) -> t.List[exp.Expression]:

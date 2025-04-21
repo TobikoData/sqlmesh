@@ -9031,12 +9031,12 @@ def test_var_in_def(assert_exp_eq):
     )
 
 
-def test_format_flag_serde():
+def test_formatting_flag_serde():
     expressions = d.parse(
         """
         MODEL(
             name test_model,
-            format False,
+            formatting False,
         );
         SELECT * FROM tbl;
     """,
@@ -9047,7 +9047,7 @@ def test_format_flag_serde():
 
     model_json = model.json()
 
-    assert "format" not in json.loads(model_json)
+    assert "formatting" not in json.loads(model_json)
 
     deserialized_model = SqlModel.parse_raw(model_json)
     assert deserialized_model.dict() == model.dict()

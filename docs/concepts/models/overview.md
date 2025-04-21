@@ -457,6 +457,9 @@ to `false` causes SQLMesh to disable query canonicalization & simplification. Th
 ### ignored_rules
 : Specifies which linter rules should be ignored/excluded for this model.
 
+### formatting
+:   Whether the model will be formatted. All models are formatted by default. Setting this to `false` causes SQLMesh to ignore this model during `sqlmesh format`. 
+
 ## Incremental Model Properties
 
 These properties can be specified in an incremental model's `kind` definition.

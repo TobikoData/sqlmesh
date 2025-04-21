@@ -962,13 +962,13 @@ def test_multiple_audits_with_same_name():
     assert model.audits[1][1] == model.audits[2][1]
 
 
-def test_audit_format_flag_serde():
+def test_audit_formatting_flag_serde():
     expressions = parse(
         """
         AUDIT (
             name my_audit,
             dialect bigquery,
-            format false,
+            formatting false,
         );
 
         SELECT * FROM db.table WHERE col = @VAR('test_var')
@@ -984,7 +984,7 @@ def test_audit_format_flag_serde():
 
     audit_json = audit.json()
 
-    assert "format" not in json.loads(audit_json)
+    assert "formatting" not in json.loads(audit_json)
 
     deserialized_audit = ModelAudit.parse_raw(audit_json)
     assert deserialized_audit.dict() == audit.dict()

@@ -103,21 +103,23 @@ def test_format_files(tmp_path: pathlib.Path, mocker: MockerFixture):
     )
 
 
-def test_ignore_format_files(tmp_path: pathlib.Path):
+def test_ignore_formating_files(tmp_path: pathlib.Path):
     models_dir = pathlib.Path("models")
     audits_dir = pathlib.Path("audits")
 
     # Case 1: Model and Audit are not formatted if the flag is set to false (overriding defaults)
-    model1_text = "MODEL(name this.model1, dialect 'duckdb', format false); SELECT 1 col"
+    model1_text = "MODEL(name this.model1, dialect 'duckdb', formatting false); SELECT 1 col"
     model1 = create_temp_file(tmp_path, pathlib.Path(models_dir, "model_1.sql"), model1_text)
 
-    audit1_text = "AUDIT(name audit1, dialect 'duckdb', format false); SELECT col1 col2 FROM @this_model WHERE     foo < 0;"
+    audit1_text = "AUDIT(name audit1, dialect 'duckdb', formatting false); SELECT col1 col2 FROM @this_model WHERE     foo < 0;"
     audit1 = create_temp_file(tmp_path, pathlib.Path(audits_dir, "audit_1.sql"), audit1_text)
 
-    audit2_text = "AUDIT(name audit2, dialect 'duckdb', standalone true, format false); SELECT col1 col2 FROM @this_model WHERE     foo < 0;"
+    audit2_text = "AUDIT(name audit2, dialect 'duckdb', standalone true, formatting false); SELECT col1 col2 FROM @this_model WHERE     foo < 0;"
     audit2 = create_temp_file(tmp_path, pathlib.Path(audits_dir, "audit_2.sql"), audit2_text)
 
-    Context(paths=tmp_path, config=Config(model_defaults=ModelDefaultsConfig(format=True))).format()
+    Context(
+        paths=tmp_path, config=Config(model_defaults=ModelDefaultsConfig(formatting=True))
+    ).format()
 
     assert model1.read_text(encoding="utf-8") == model1_text
     assert audit1.read_text(encoding="utf-8") == audit1_text
@@ -127,20 +129,18 @@ def test_ignore_format_files(tmp_path: pathlib.Path):
     model2_text = "MODEL(name this.model2, dialect 'duckdb'); SELECT 1 col"
     model2 = create_temp_file(tmp_path, pathlib.Path(models_dir, "model_2.sql"), model2_text)
 
-    model3_text = (
-        "MODEL(name this.model3, dialect 'duckdb', format false, format true); SELECT 1 col"
-    )
+    model3_text = "MODEL(name this.model3, dialect 'duckdb', formatting true); SELECT 1 col"
     model3 = create_temp_file(tmp_path, pathlib.Path(models_dir, "model_3.sql"), model3_text)
 
     Context(
-        paths=tmp_path, config=Config(model_defaults=ModelDefaultsConfig(format=False))
+        paths=tmp_path, config=Config(model_defaults=ModelDefaultsConfig(formatting=False))
     ).format()
 
-    # Model is not formatted if the defaults flag is set to false
+    # Case 2.1: Model is not formatted if the defaults flag is set to false
     assert model2.read_text(encoding="utf-8") == model2_text
 
-    # Model is formatted if it's flag is set to true, overriding defaults
+    # Case 2.2: Model is formatted if it's flag is set to true, overriding defaults
     assert (
         model3.read_text(encoding="utf-8")
-        == "MODEL (\n  name this.model3,\n  dialect 'duckdb',\n  format FALSE,\n  format TRUE\n);\n\nSELECT\n  1 AS col"
+        == "MODEL (\n  name this.model3,\n  dialect 'duckdb',\n  formatting TRUE\n);\n\nSELECT\n  1 AS col"
     )
