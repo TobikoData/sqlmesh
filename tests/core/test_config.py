@@ -26,6 +26,7 @@ from sqlmesh.core.config.loader import (
 )
 from sqlmesh.core.context import Context
 from sqlmesh.core.engine_adapter.athena import AthenaEngineAdapter
+from sqlmesh.core.engine_adapter.duckdb import DuckDBEngineAdapter
 from sqlmesh.core.engine_adapter.redshift import RedshiftEngineAdapter
 from sqlmesh.core.notification_target import ConsoleNotificationTarget
 from sqlmesh.core.user import User
@@ -709,6 +710,10 @@ gateways:
             aws_secret_access_key: accesskey
             work_group: group
             s3_warehouse_location: s3://location
+    duckdb:
+        connection:
+            type: duckdb
+            database: db.db
 
 default_gateway: redshift
 
@@ -725,10 +730,52 @@ model_defaults:
     ctx = Context(paths=tmp_path, config=config)
 
     assert isinstance(ctx._connection_config, RedshiftConnectionConfig)
-    assert len(ctx.engine_adapters) == 2
+    assert len(ctx.engine_adapters) == 3
     assert isinstance(ctx.engine_adapters["athena"], AthenaEngineAdapter)
     assert isinstance(ctx.engine_adapters["redshift"], RedshiftEngineAdapter)
+    assert isinstance(ctx.engine_adapters["duckdb"], DuckDBEngineAdapter)
     assert ctx.engine_adapter == ctx._get_engine_adapter("redshift")
+
+    # The duckdb engine adapter should be have been set as multithreaded as well
+    assert ctx.engine_adapters["duckdb"]._multithreaded
+
+
+def test_multi_gateway_single_threaded_config(tmp_path):
+    config_path = tmp_path / "config_duck_athena.yaml"
+    with open(config_path, "w", encoding="utf-8") as fd:
+        fd.write(
+            """
+gateways:
+    duckdb:
+        connection:
+            type: duckdb
+            database: db.db
+    athena:
+        connection:
+            type: athena
+            aws_access_key_id: '1234'
+            aws_secret_access_key: accesskey
+            work_group: group
+            s3_warehouse_location: s3://location
+default_gateway: duckdb
+model_defaults:
+    dialect: duckdb
+        """
+        )
+
+    config = load_config_from_paths(
+        Config,
+        project_paths=[config_path],
+    )
+
+    ctx = Context(paths=tmp_path, config=config)
+    assert isinstance(ctx._connection_config, DuckDBConnectionConfig)
+    assert len(ctx.engine_adapters) == 2
+    assert ctx.engine_adapter == ctx._get_engine_adapter("duckdb")
+    assert isinstance(ctx.engine_adapters["athena"], AthenaEngineAdapter)
+
+    # In this case athena should use 1 concurrent task as the default gateway is duckdb
+    assert not ctx.engine_adapters["athena"]._multithreaded
 
 
 def test_trino_schema_location_mapping_syntax(tmp_path):

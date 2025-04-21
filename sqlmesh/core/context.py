@@ -2254,7 +2254,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         for gateway_name in self.config.gateways:
             if gateway_name != self.selected_gateway:
                 connection = self.config.get_connection(gateway_name)
-                adapter = connection.create_engine_adapter()
+                adapter = connection.create_engine_adapter(concurrent_tasks=self.concurrent_tasks)
                 self._engine_adapters[gateway_name] = adapter
         return self._engine_adapters
 

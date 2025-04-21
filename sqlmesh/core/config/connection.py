@@ -109,11 +109,15 @@ class ConnectionConfig(abc.ABC, BaseConfig):
         """A function that validates the connection configuration"""
         return self.create_engine_adapter().ping
 
-    def create_engine_adapter(self, register_comments_override: bool = False) -> EngineAdapter:
+    def create_engine_adapter(
+        self, register_comments_override: bool = False, concurrent_tasks: t.Optional[int] = None
+    ) -> EngineAdapter:
         """Returns a new instance of the Engine Adapter."""
+
+        concurrent_tasks = concurrent_tasks or self.concurrent_tasks
         return self._engine_adapter(
             self._connection_factory_with_kwargs,
-            multithreaded=self.concurrent_tasks > 1,
+            multithreaded=concurrent_tasks > 1,
             default_catalog=self.get_catalog(),
             cursor_init=self._cursor_init,
             register_comments=register_comments_override or self.register_comments,
@@ -284,7 +288,9 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
 
         return init
 
-    def create_engine_adapter(self, register_comments_override: bool = False) -> EngineAdapter:
+    def create_engine_adapter(
+        self, register_comments_override: bool = False, concurrent_tasks: t.Optional[int] = None
+    ) -> EngineAdapter:
         """Checks if another engine adapter has already been created that shares a catalog that points to the same data
         file. If so, it uses that same adapter instead of creating a new one. As a result, any additional configuration
         associated with the new adapter will be ignored."""
@@ -315,7 +321,9 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
             logger.info(f"Creating new DuckDB adapter for data files: {masked_files}")
         else:
             logger.info("Creating new DuckDB adapter for in-memory database")
-        adapter = super().create_engine_adapter(register_comments_override)
+        adapter = super().create_engine_adapter(
+            register_comments_override, concurrent_tasks=concurrent_tasks
+        )
         for data_file in data_files:
             key = data_file if isinstance(data_file, str) else data_file.path
             BaseDuckDBConnectionConfig._data_file_to_adapter[key] = adapter
