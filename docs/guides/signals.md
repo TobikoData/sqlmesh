@@ -131,3 +131,19 @@ from sqlmesh import signal, DatetimeRanges, ExecutionContext
 def one_week_ago(batch: DatetimeRanges, context: ExecutionContext) -> t.Union[bool, DatetimeRanges]:
     return len(context.engine_adapter.fetchdf("SELECT 1")) > 1
 ```
+
+### Testing Signals
+Signals only evaluate on `run` or with `check_intervals`.
+
+To test signals with the [check_intervals](../reference/cli.md#check_intervals) command:
+
+1. Deploy your changes to an environment with `sqlmesh plan my_dev`.
+2. Run `sqlmesh check_intervals my_dev`.
+
+   * To check a subset of models use the --select-model flag.
+   * To turn off signals and just check missing intervals, use the --no-signals flag.
+
+3. To iterate, make changes to the signal, and redeploy with step 1.
+
+!!! note
+    `check_intervals` only works on remote models in an environment. Local signal changes are never run.
