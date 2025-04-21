@@ -6,7 +6,7 @@ import { getProjectRoot } from "../common/utilities"
 import { execFile } from "child_process"
 import { promisify } from "util"
 import { isPythonModuleInstalled } from "../python"
-
+import fs from "fs"
 
 export type sqlmesh_exec = {
   workspacePath: string;
@@ -16,13 +16,18 @@ export type sqlmesh_exec = {
 };
 
 /**
- * Check if tcloud is installed in the current Python environment.
+ * Returns true if the current project is a Tcloud project. To detect this we,
+ * 1. Check if the project has a tcloud.yaml file in the project root. If it does, we assume it's a Tcloud project.
+ * 2. Check if the project has tcloud installed in the Python environment.
  *
  * @returns A Result indicating whether tcloud is installed.
  */
-export const is_tcloud_installed = async (): Promise<
-  Result<boolean, string>
-> => {
+export const isTcloudProject = async (): Promise<Result<boolean, string>> => {
+  const projectRoot = await getProjectRoot()
+  const tcloudYamlPath = path.join(projectRoot.uri.fsPath, "tcloud.yaml")
+  if (fs.existsSync(tcloudYamlPath)) {
+    return ok(true)
+  }
   return isPythonModuleInstalled("tcloud")
 }
 
@@ -60,7 +65,7 @@ export const sqlmesh_exec = async (): Promise<Result<sqlmesh_exec, string>> => {
   }
   if (interpreterDetails.isVirtualEnvironment) {
     traceLog("Using virtual environment")
-    const tcloudInstalled = await is_tcloud_installed()
+    const tcloudInstalled = await isTcloudProject()
     if (isErr(tcloudInstalled)) {
       return tcloudInstalled
     }
@@ -77,7 +82,7 @@ export const sqlmesh_exec = async (): Promise<Result<sqlmesh_exec, string>> => {
           VIRTUAL_ENV: path.dirname(interpreterDetails.binPath!),
           PATH: interpreterDetails.binPath!,
         },
-        args:[], 
+        args: [],
       })
     }
     const binPath = path.join(interpreterDetails.binPath!, "sqlmesh")
@@ -123,7 +128,7 @@ export const sqlmesh_lsp_exec = async (): Promise<
   }
   if (interpreterDetails.isVirtualEnvironment) {
     traceLog("Using virtual environment")
-    const tcloudInstalled = await is_tcloud_installed()
+    const tcloudInstalled = await isTcloudProject()
     if (isErr(tcloudInstalled)) {
       return tcloudInstalled
     }
@@ -137,9 +142,9 @@ export const sqlmesh_lsp_exec = async (): Promise<
       await execFileAsync(tcloudBin.value, ["install_sqlmesh"], {
         cwd: workspacePath,
         env: {
-            PYTHONPATH: interpreterDetails.path?.[0],
-            VIRTUAL_ENV: path.dirname(interpreterDetails.binPath!),
-            PATH: interpreterDetails.binPath!,
+          PYTHONPATH: interpreterDetails.path?.[0],
+          VIRTUAL_ENV: path.dirname(interpreterDetails.binPath!),
+          PATH: interpreterDetails.binPath!,
         },
       })
     }
