@@ -2,27 +2,27 @@
 
 ## Functionality
 
-The following section outlines all the functionality in the Visual Studio Code extension. It is broken up into logical sections. 
+The following section outlines all the functionality in the Visual Studio Code extension. It is broken up into logical sections.
 
-### Authentication 
+### Authentication
 
-The extension allows you to manage your tcloud session within visual studio code 
+The extension allows you to manage your tcloud session within Visual Studio Code.
 
-- Sign in 
-- Sign out 
-- Sign in with specified flow
+- Sign in
+- Sign out
+- Sign in with a specified flow
 
-Can see in the bottom left your user account.
+You can see your user account in the bottom left.
 
-### Formatting 
+### Formatting
 
 The extension allows you to:
 
-- format individual documents explicitely 
-- format individual documents on save
-- format a whole project
+- Format individual documents explicitly
+- Format individual documents on save
+- Format a whole project
 
-### Linting 
+### Linting
 
-The extension allows you to see linting errors and warnings in line.
+The extension allows you to see linting errors and warnings inline.
 
