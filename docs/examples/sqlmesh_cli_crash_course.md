@@ -29,6 +29,8 @@ You can make changes quickly and confidently through a simple command:
 - Apply the changes to your dev environment by entering `y` at the prompt.
 - Audit the changes (test data quality). This happens automatically when you apply the changes to dev.
 
+Note: If you run this without making any changes, SQLMesh will prompt you to make changes or use the `--include-unmodified` flag like this `sqlmesh plan dev --include-unmodified`. We recommend you make changes first before running this command to avoid creating a lot of noise in your dev environment with extraneous views in the virtual layer.
+
 === "SQLMesh"
 
     ```bash
@@ -39,7 +41,7 @@ You can make changes quickly and confidently through a simple command:
     sqlmesh plan <environment>
     ```
 
-    If you want to move faster, you can add the `--auto-apply` flag to avoid the manual prompt.
+    If you want to move faster, you can add the `--auto-apply` flag to avoid the manual prompt and apply the plan. You should do this when you're familiar with the plan output, and don't need to see tiny changes in the diff output before applying the plan.
 
     ```bash
     sqlmesh plan <environment> --auto-apply
