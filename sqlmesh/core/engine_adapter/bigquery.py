@@ -608,7 +608,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
             if columns_to_types is None or columns_to_types[
                 partition_column.name
             ] == exp.DataType.build("unknown"):
-                columns_to_types = self.columns(temp_table_name)
+                columns_to_types = self.columns(table_name)
 
             partition_type_sql = columns_to_types[partition_column.name].sql(dialect=self.dialect)
 
