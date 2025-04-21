@@ -213,7 +213,7 @@ Run data diff against prod. This is a good way to verify the changes are behavin
 
     Table diff:
     ```bash
-    > sqlmesh table_diff prod:dev sqlmesh_example.full_model
+    > sqlmesh table_diff prod:dev sqlmesh_example.full_model --show-sample
     Table Diff
     ├── Model:
     │   └── sqlmesh_example.full_model
