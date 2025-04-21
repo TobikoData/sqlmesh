@@ -6,6 +6,7 @@ import typing as t
 import zlib
 
 from pydantic import Field
+from pydantic.functional_validators import BeforeValidator
 from sqlglot import exp
 from sqlglot.helper import first
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
@@ -45,8 +46,39 @@ from sqlmesh.utils.date import to_timestamp, now
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import model_validator, field_validator
 
+
+def validate_no_past_ttl(v: str) -> str:
+    current_time = now()
+    if to_timestamp(v, relative_base=current_time) < to_timestamp(current_time):
+        raise ValueError(
+            f"TTL '{v}' is in the past. Please specify a relative time in the future. Ex: `in 1 week` instead of `1 week`."
+        )
+    return v
+
+
+def gateways_ensure_dict(value: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
+    try:
+        if not isinstance(value, GatewayConfig):
+            GatewayConfig.parse_obj(value)
+        return {"": value}
+    except Exception:
+        return value
+
+
+def validate_regex_key_dict(value: t.Dict[str | re.Pattern, t.Any]) -> t.Dict[re.Pattern, t.Any]:
+    return compile_regex_mapping(value)
+
+
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import Self
+
+    NoPastTTLString = str
+    GatewayDict = t.Dict[str, GatewayConfig]
+    RegexKeyDict = t.Dict[re.Pattern, str]
+else:
+    NoPastTTLString = t.Annotated[str, BeforeValidator(validate_no_past_ttl)]
+    GatewayDict = t.Annotated[t.Dict[str, GatewayConfig], BeforeValidator(gateways_ensure_dict)]
+    RegexKeyDict = t.Annotated[t.Dict[re.Pattern, str], BeforeValidator(validate_regex_key_dict)]
 
 
 class Config(BaseConfig):
