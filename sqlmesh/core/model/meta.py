@@ -80,6 +80,7 @@ class ModelMeta(_Node):
     ignored_rules_: t.Optional[t.Set[str]] = Field(
         default=None, exclude=True, alias="ignored_rules"
     )
+    formatting: t.Optional[bool] = Field(default=None, exclude=True)
 
     _bool_validator = bool_validator
     _model_kind_validator = model_kind_validator
