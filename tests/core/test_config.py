@@ -974,3 +974,10 @@ def test_pydantic_import_error() -> None:
         pass
 
     TestConfig()
+
+
+@pytest.mark.isolated
+def test_config_subclassing() -> None:
+    class ConfigSubclass(Config): ...
+
+    ConfigSubclass()
