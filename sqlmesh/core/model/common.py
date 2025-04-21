@@ -386,6 +386,7 @@ bool_validator: t.Callable = field_validator(
     "allow_partials",
     "enabled",
     "optimize_query",
+    "format",
     mode="before",
     check_fields=False,
 )(parse_bool)

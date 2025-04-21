@@ -9029,3 +9029,25 @@ def test_var_in_def(assert_exp_eq):
         SELECT '1970-01-01' AS "ds"
         """,
     )
+
+
+def test_format_flag_serde():
+    expressions = d.parse(
+        """
+        MODEL(
+            name test_model,
+            format False,
+        );
+        SELECT * FROM tbl;
+    """,
+        default_dialect="duckdb",
+    )
+
+    model = load_sql_based_model(expressions)
+
+    model_json = model.json()
+
+    assert "format" not in json.loads(model_json)
+
+    deserialized_model = SqlModel.parse_raw(model_json)
+    assert deserialized_model.dict() == model.dict()

@@ -1,3 +1,4 @@
+import json
 import pytest
 from sqlglot import exp, parse_one
 
@@ -959,3 +960,31 @@ def test_multiple_audits_with_same_name():
     # Testing that audit arguments are identical for second and third audit
     # This establishes that identical audits are preserved
     assert model.audits[1][1] == model.audits[2][1]
+
+
+def test_audit_format_flag_serde():
+    expressions = parse(
+        """
+        AUDIT (
+            name my_audit,
+            dialect bigquery,
+            format false,
+        );
+
+        SELECT * FROM db.table WHERE col = @VAR('test_var')
+    """
+    )
+
+    audit = load_audit(
+        expressions,
+        path="/path/to/audit",
+        dialect="bigquery",
+        variables={"test_var": "test_val", "test_var_unused": "unused_val"},
+    )
+
+    audit_json = audit.json()
+
+    assert "format" not in json.loads(audit_json)
+
+    deserialized_audit = ModelAudit.parse_raw(audit_json)
+    assert deserialized_audit.dict() == audit.dict()

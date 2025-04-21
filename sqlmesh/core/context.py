@@ -1089,9 +1089,10 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         for target in filtered_targets:
             if (
-                target._path is None
+                target._path is None or target.format is False
             ):  # introduced to satisfy type checker as still want to pull filter out as many targets as possible before loop
                 continue
+
             with open(target._path, "r+", encoding="utf-8") as file:
                 before = file.read()
                 expressions = parse(before, default_dialect=self.config_for_node(target).dialect)

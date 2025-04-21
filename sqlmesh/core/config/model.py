@@ -60,6 +60,7 @@ class ModelDefaultsConfig(BaseConfig):
     allow_partials: t.Optional[t.Union[str, bool]] = None
     interval_unit: t.Optional[t.Union[str, IntervalUnit]] = None
     enabled: t.Optional[t.Union[str, bool]] = None
+    format: t.Optional[t.Union[str, bool]] = None
 
     _model_kind_validator = model_kind_validator
     _on_destructive_change_validator = on_destructive_change_validator
