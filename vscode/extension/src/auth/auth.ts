@@ -332,3 +332,18 @@ export class AuthenticationProviderTobikoCloud
     }
   }
 }
+
+/**
+ * Checks if the user is currently signed into Tobiko Cloud.
+ * @returns A promise that resolves to true if the user is signed in, false otherwise.
+ */
+export async function isSignedIntoTobikoCloud(): Promise<boolean> {
+  try {
+    const authProvider = new AuthenticationProviderTobikoCloud()
+    const sessions = await authProvider.getSessions()
+    return sessions.length > 0
+  } catch (error) {
+    traceError(`Error checking authentication status: ${error}`)
+    return false
+  }
+}

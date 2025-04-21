@@ -4,6 +4,7 @@ import { sqlmesh_lsp_exec } from "../utilities/sqlmesh/sqlmesh"
 import { err, isErr, ok, Result } from "../utilities/functional/result"
 import { getWorkspaceFolders } from "../utilities/common/vscodeapi"
 import { traceError } from "../utilities/common/log"
+import { ErrorType } from "../utilities/errors"
 
 let outputChannel: OutputChannel | undefined
 
@@ -14,7 +15,7 @@ export class LSPClient implements Disposable {
         this.client = undefined
     }
 
-    public async start(): Promise<Result<undefined, string>> {
+    public async start(): Promise<Result<undefined, ErrorType>> {
         if (!outputChannel) {
             outputChannel = window.createOutputChannel('sqlmesh-lsp')
         }
@@ -22,12 +23,15 @@ export class LSPClient implements Disposable {
         const sqlmesh = await sqlmesh_lsp_exec()
         if (isErr(sqlmesh)) {
             traceError(`Failed to get sqlmesh_lsp_exec: ${sqlmesh.error}`)
-            return sqlmesh
+            return sqlmesh 
         }
         const workspaceFolders = getWorkspaceFolders()
         if (workspaceFolders.length !== 1) {
             traceError(`Invalid number of workspace folders: ${workspaceFolders.length}`)
-            return err("Invalid number of workspace folders")
+            return err({
+                type: "generic",
+                message: "Invalid number of workspace folders",
+            })
         }
     
         let folder = workspaceFolders[0]
@@ -67,9 +71,9 @@ export class LSPClient implements Disposable {
         return ok(undefined)
     }
 
-    public async restart() {
+    public async restart(): Promise<Result<undefined, ErrorType>> {
         await this.stop()
-        await this.start()
+        return await this.start()
     }
 
     public async stop() {
