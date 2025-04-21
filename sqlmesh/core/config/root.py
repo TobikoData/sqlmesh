@@ -41,9 +41,9 @@ from sqlmesh.core.config.ui import UIConfig
 from sqlmesh.core.loader import Loader, SqlMeshLoader
 from sqlmesh.core.notification_target import NotificationTarget
 from sqlmesh.core.user import User
-from sqlmesh.utils.date import to_timestamp, now, now_timestamp
+from sqlmesh.utils.date import to_timestamp, now
 from sqlmesh.utils.errors import ConfigError
-from sqlmesh.utils.pydantic import field_validator, model_validator
+from sqlmesh.utils.pydantic import model_validator
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import Self
