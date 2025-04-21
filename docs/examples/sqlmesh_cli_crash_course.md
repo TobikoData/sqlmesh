@@ -948,6 +948,8 @@ Example scenario and model DAG:
 4. If `fct_transactions` is `pending` past its full interval (1 full day), it will be put in a `late` state
 5. Once `stg_transactions` runs successfully either from a retry or a fix from a pull request, `fct_transactions` will rerun from the point of failure. This is true even if `fct_transactions` has been `late` for several days.
 
+Note: `pending` and `late` states are only supported in Tobiko Cloud. In SQLMesh, it will only understand if the model is ready or not ready to execute without mention of these states.
+
 If you're using open source SQLMesh, you can run this command in your orchestrator (ex: Dagster, GitHub Actions, etc.) every 5 minutes or at your lowest model cron schedule (ex: every 1 hour). Don't worry! It will only run executions that need to be run.
 
 If you're using Tobiko Cloud, this configures automatically without additional configuration.
