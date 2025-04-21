@@ -1,7 +1,5 @@
-// The module 'vscode' contains the VS Code extensibility API
-// Import the module and reference it with the alias vscode in your code below
 import * as vscode from "vscode"
-import { actual_callout } from "./commands/format"
+import { format } from "./commands/format"
 import {
   createOutputChannel,
   onDidChangeConfiguration,
@@ -48,23 +46,16 @@ export async function activate(context: vscode.ExtensionContext) {
   )
 
   context.subscriptions.push(
-    vscode.commands.registerCommand("sqlmesh.signinSpecifyFlow", signInSpecifyFlow(authProvider)
+    vscode.commands.registerCommand(
+      "sqlmesh.signinSpecifyFlow",
+      signInSpecifyFlow(authProvider)
     )
   )
-
   context.subscriptions.push(
     vscode.commands.registerCommand("sqlmesh.signout", signOut(authProvider))
   )
-
   context.subscriptions.push(
-    vscode.commands.registerCommand("sqlmesh.format", async () => {
-      const out = await actual_callout.format()
-      if (out === 0) {
-        vscode.window.showInformationMessage("Project formatted successfully")
-      } else {
-        vscode.window.showErrorMessage("Project format failed")
-      }
-    })
+    vscode.commands.registerCommand("sqlmesh.format", format)
   )
 
   lspClient = new LSPClient()
@@ -77,12 +68,11 @@ export async function activate(context: vscode.ExtensionContext) {
       await lspClient.restart()
     }
   }
-
   context.subscriptions.push(
     onDidChangePythonInterpreter(async () => {
       await restart()
     }),
-    onDidChangeConfiguration(async (_: vscode.ConfigurationChangeEvent) => {
+    onDidChangeConfiguration(async () => {
       await restart()
     }),
     registerCommand(`sqlmesh.restart`, async () => {
