@@ -1,18 +1,20 @@
 # SQLMesh CLI Crash Course
 
-This doc is designed to get you intimate with a **majority** of the SQLMesh workflows you’ll use to build *and* maintain transformation data pipelines. The goal is after 30 minutes, using SQLMesh becomes muscle memory. 
+This doc is designed to get you intimate with a **majority** of the SQLMesh workflows you’ll use to build *and* maintain transformation data pipelines. The goal is to get SQLMesh into muscle memory in 30 minutes or less.
 
-This is inspired by community observations, face to face conversations, live screenshares, and debugging sessions. This is *not* an exhaustive list but is rooted in lived experience.
+This doc is inspired by community observations, face-to-face conversations, live screenshares, and debugging sessions. This is *not* an exhaustive list but is rooted in lived experience.
 
-You can follow along in this: [open source GitHub repo](https://github.com/sungchun12/sqlmesh-cli-crash-course)
+You can follow along in the [open source GitHub repo](https://github.com/sungchun12/sqlmesh-cli-crash-course).
 
 If you're new to how SQLMesh uses virtual data environments, [watch this quick explainer](https://www.loom.com/share/216835d64b3a4d56b2e061fa4bd9ee76?sid=88b3289f-e19b-4ccc-8b88-3faf9d7c9ce3).
 
-!!! important "Put this on your second monitor or in a side by side window to swiftly copy/paste into your terminal."
+!!! important
 
-## **Development Workflow**
+    Put this page on your second monitor or in a side by side window to swiftly copy/paste into your terminal.
 
-You’ll use these commands 80% of the time because this is how you apply code changes. The workflow is as follows:
+## Development Workflow
+
+You’ll use these commands 80% of the time because this is how you apply the changes you make to models. The workflow is:
 
 1. Make changes to your models directly in SQL and python files (pre-made in examples below)
 2. Plan the changes in your dev environment
@@ -23,13 +25,13 @@ You’ll use these commands 80% of the time because this is how you apply code c
 
 ### Preview, Apply, and Audit Changes in `dev`
 
-You can make changes quickly and confidently through a simple command:
+You can make changes quickly and confidently through one simple command: `sqlmesh plan dev`
 
 - Plan the changes in your dev environment.
 - Apply the changes to your dev environment by entering `y` at the prompt.
 - Audit the changes (test data quality). This happens automatically when you apply the changes to dev.
 
-Note: If you run this without making any changes, SQLMesh will prompt you to make changes or use the `--include-unmodified` flag like this `sqlmesh plan dev --include-unmodified`. We recommend you make changes first before running this command to avoid creating a lot of noise in your dev environment with extraneous views in the virtual layer.
+Note: If you run this without making any changes, SQLMesh will prompt you to make changes or use the `--include-unmodified` flag like this `sqlmesh plan dev --include-unmodified`. We recommend you make changes first before running this command to avoid creating a lot of noise in your dev environment with extraneous virtual layer views.
 
 === "SQLMesh"
 
@@ -41,7 +43,7 @@ Note: If you run this without making any changes, SQLMesh will prompt you to mak
     sqlmesh plan <environment>
     ```
 
-    If you want to move faster, you can add the `--auto-apply` flag to avoid the manual prompt and apply the plan. You should do this when you're familiar with the plan output, and don't need to see tiny changes in the diff output before applying the plan.
+    If you want to move faster, you can add the `--auto-apply` flag to skip the manual prompt and apply the plan. You should do this when you're familiar with the plan output, and don't need to see tiny changes in the diff output before applying the plan.
 
     ```bash
     sqlmesh plan <environment> --auto-apply
@@ -64,18 +66,21 @@ Note: If you run this without making any changes, SQLMesh will prompt you to mak
     ```
 
 ??? "Example Output"
-    I made a breaking change to `incremental_model` and `full_model`. 
+    I made a breaking change to `incremental_model` and `full_model`.
 
-    - Showed me the models impacted by the changes.
-    - Showed me the changes that will be made to the models.
-    - Showed me the models that need to be backfilled.
-    - Prompted me to apply the changes to `dev`.
-    - Showed me the audit failures that raise as warnings.
-    - Updated the physical layer to validate the SQL.
-    - Executed the model batches by inserting the data into the physical layer.
-    - Updated the virtual layer with view pointers to reflect the changes.
+    SQLMesh:
+
+      - Showed me the models impacted by the changes.
+      - Showed me the changes that will be made to the models.
+      - Showed me the models that need to be backfilled.
+      - Prompted me to apply the changes to `dev`.
+      - Showed me the audit failures that raise as warnings.
+      - Updated the physical layer to validate the SQL.
+      - Executed the model batches by inserting the data into the physical layer.
+      - Updated the virtual layer's view pointers to reflect the changes.
 
     ```bash
+    > sqlmesh plan dev
     Differences from the `dev` environment:
 
     Models:
@@ -85,39 +90,39 @@ Note: If you run this without making any changes, SQLMesh will prompt you to mak
     └── Indirectly Modified:
         └── sqlmesh_example__dev.view_model
 
-    ---                                                                                                                                                                                     
-                                                                                                                                                                                            
-    +++                                                                                                                                                                                     
-                                                                                                                                                                                            
-    @@ -9,7 +9,8 @@                                                                                                                                                                         
-                                                                                                                                                                                            
-     SELECT                                                                                                                                                                                 
-       item_id,                                                                                                                                                                             
-       COUNT(DISTINCT id) AS num_orders,                                                                                                                                                    
-    -  6 AS new_column                                                                                                                                                                      
-    +  new_column                                                                                                                                                                           
-     FROM sqlmesh_example.incremental_model                                                                                                                                                 
-     GROUP BY                                                                                                                                                                               
-    -  item_id                                                                                                                                                                              
-    +  item_id,                                                                                                                                                                             
-    +  new_column                                                                                                                                                                           
+    ---
+
+    +++
+
+    @@ -9,7 +9,8 @@
+
+     SELECT
+       item_id,
+       COUNT(DISTINCT id) AS num_orders,
+    -  6 AS new_column
+    +  new_column
+     FROM sqlmesh_example.incremental_model
+     GROUP BY
+    -  item_id
+    +  item_id,
+    +  new_column
 
     Directly Modified: sqlmesh_example__dev.full_model (Breaking)
 
-    ---                                                                                                                                                                                     
-                                                                                                                                                                                            
-    +++                                                                                                                                                                                     
-                                                                                                                                                                                            
-    @@ -15,7 +15,7 @@                                                                                                                                                                       
-                                                                                                                                                                                            
-       id,                                                                                                                                                                                  
-       item_id,                                                                                                                                                                             
-       event_date,                                                                                                                                                                          
-    -  5 AS new_column                                                                                                                                                                      
-    +  7 AS new_column                                                                                                                                                                      
-     FROM sqlmesh_example.seed_model                                                                                                                                                        
-     WHERE                                                                                                                                                                                  
-       event_date BETWEEN @start_date AND @end_date                                                                                                                                         
+    ---
+
+    +++
+
+    @@ -15,7 +15,7 @@
+
+       id,
+       item_id,
+       event_date,
+    -  5 AS new_column
+    +  7 AS new_column
+     FROM sqlmesh_example.seed_model
+     WHERE
+       event_date BETWEEN @start_date AND @end_date
 
     Directly Modified: sqlmesh_example__dev.incremental_model (Breaking)
     └── Indirectly Modified Children:
@@ -132,19 +137,19 @@ Note: If you run this without making any changes, SQLMesh will prompt you to mak
 
     ✔ Physical layer updated
 
-    [1/1]  sqlmesh_example__dev.incremental_model               [insert 2020-01-01 - 2025-04-16]                 0.03s   
+    [1/1]  sqlmesh_example__dev.incremental_model               [insert 2020-01-01 - 2025-04-16]                 0.03s
     Executing model batches ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0.0% • pending • 0:00:00
-    sqlmesh_example__dev.incremental_model .                                                 
-    [WARNING] sqlmesh_example__dev.full_model: 'assert_positive_order_ids' audit error: 2 rows failed. Learn more in logs: 
+    sqlmesh_example__dev.incremental_model .
+    [WARNING] sqlmesh_example__dev.full_model: 'assert_positive_order_ids' audit error: 2 rows failed. Learn more in logs:
     /Users/sung/Desktop/git_repos/sqlmesh-cli-revamp/logs/sqlmesh_2025_04_18_10_33_43.log
-    [1/1]  sqlmesh_example__dev.full_model                      [full refresh, audits ❌1]                       0.01s   
+    [1/1]  sqlmesh_example__dev.full_model                      [full refresh, audits ❌1]                       0.01s
     Executing model batches ━━━━━━━━━━━━━╺━━━━━━━━━━━━━━━━━━━━━━━━━━ 33.3% • 1/3 • 0:00:00
-    sqlmesh_example__dev.full_model .                                                     
-    [WARNING] sqlmesh_example__dev.view_model: 'assert_positive_order_ids' audit error: 2 rows failed. Learn more in logs: 
+    sqlmesh_example__dev.full_model .
+    [WARNING] sqlmesh_example__dev.view_model: 'assert_positive_order_ids' audit error: 2 rows failed. Learn more in logs:
     /Users/sung/Desktop/git_repos/sqlmesh-cli-revamp/logs/sqlmesh_2025_04_18_10_33_43.log
-    [1/1]  sqlmesh_example__dev.view_model                      [recreate view, audits ✔2 ❌1]                   0.01s   
-    Executing model batches ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 3/3 • 0:00:00                                                                                                 
-                                                                                                                                                                                            
+    [1/1]  sqlmesh_example__dev.view_model                      [recreate view, audits ✔2 ❌1]                   0.01s
+    Executing model batches ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 3/3 • 0:00:00
+
     ✔ Model batches executed
 
     Updating virtual layer  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 3/3 • 0:00:00
@@ -186,6 +191,7 @@ Run data diff against prod. This is a good way to verify the changes are behavin
     - Showed me sample data differences between the environments.
     - This is where your human judgement comes in to verify the changes are behaving as expected.
 
+    Model definition:
     ```sql linenums="1" hl_lines="6"
     -- models/full_model.sql
     MODEL (
@@ -205,7 +211,9 @@ Run data diff against prod. This is a good way to verify the changes are behavin
     GROUP BY item_id, new_column
     ```
 
+    Table diff:
     ```bash
+    > sqlmesh table_diff prod:dev sqlmesh_example.full_model
     Table Diff
     ├── Model:
     │   └── sqlmesh_example.full_model
@@ -247,13 +255,13 @@ Run data diff against prod. This is a good way to verify the changes are behavin
 ### Apply Changes to Prod
 
 !!! warning "Apply the changes to prod"
-    This step is recommended [**only in CI/CD**](../integrations/github.md) as best practice. 
+    This step is recommended [**only in CI/CD**](../integrations/github.md) as best practice.
     For learning purposes and hot fixes, you can apply the changes to prod by entering `y` at the prompt.
 
 === "SQLMesh"
 
     ```bash
-    sqlmesh plan 
+    sqlmesh plan
     ```
 
 === "Tobiko Cloud"
@@ -270,9 +278,10 @@ Run data diff against prod. This is a good way to verify the changes are behavin
     - Showed me the models that need to be backfilled. None in this case as it was already backfilled earlier in `dev`.
     - Prompted me to apply the changes to `prod`.
     - Showed me physical layer and execution steps are skipped as the changes were already applied to `dev`.
-    - Updated the virtual layer with view pointers to reflect the changes.
+    - Updated the virtual layer view pointers to reflect the changes.
 
     ```bash
+    > sqlmesh plan
     Differences from the `prod` environment:
 
     Models:
@@ -282,39 +291,39 @@ Run data diff against prod. This is a good way to verify the changes are behavin
     └── Indirectly Modified:
         └── sqlmesh_example.view_model
 
-    ---                                                                                                                                                                                     
-                                                                                                                                                                                            
-    +++                                                                                                                                                                                     
-                                                                                                                                                                                            
-    @@ -9,7 +9,8 @@                                                                                                                                                                         
-                                                                                                                                                                                            
-    SELECT                                                                                                                                                                                 
-      item_id,                                                                                                                                                                             
-      COUNT(DISTINCT id) AS num_orders,                                                                                                                                                    
-    -  5 AS new_column                                                                                                                                                                      
-    +  new_column                                                                                                                                                                           
-    FROM sqlmesh_example.incremental_model                                                                                                                                                 
-    GROUP BY                                                                                                                                                                               
-    -  item_id                                                                                                                                                                              
-    +  item_id,                                                                                                                                                                             
-    +  new_column                                                                                                                                                                           
+    ---
+
+    +++
+
+    @@ -9,7 +9,8 @@
+
+    SELECT
+      item_id,
+      COUNT(DISTINCT id) AS num_orders,
+    -  5 AS new_column
+    +  new_column
+    FROM sqlmesh_example.incremental_model
+    GROUP BY
+    -  item_id
+    +  item_id,
+    +  new_column
 
     Directly Modified: sqlmesh_example.full_model (Breaking)
 
-    ---                                                                                                                                                                                     
-                                                                                                                                                                                            
-    +++                                                                                                                                                                                     
-                                                                                                                                                                                            
-    @@ -15,7 +15,7 @@                                                                                                                                                                       
-                                                                                                                                                                                            
-      id,                                                                                                                                                                                  
-      item_id,                                                                                                                                                                             
-      event_date,                                                                                                                                                                          
-    -  5 AS new_column                                                                                                                                                                      
-    +  7 AS new_column                                                                                                                                                                      
-    FROM sqlmesh_example.seed_model                                                                                                                                                        
-    WHERE                                                                                                                                                                                  
-      event_date BETWEEN @start_date AND @end_date                                                                                                                                         
+    ---
+
+    +++
+
+    @@ -15,7 +15,7 @@
+
+      id,
+      item_id,
+      event_date,
+    -  5 AS new_column
+    +  7 AS new_column
+    FROM sqlmesh_example.seed_model
+    WHERE
+      event_date BETWEEN @start_date AND @end_date
 
     Directly Modified: sqlmesh_example.incremental_model (Breaking)
     └── Indirectly Modified Children:
@@ -332,12 +341,12 @@ Run data diff against prod. This is a good way to verify the changes are behavin
 
 ---
 
-## **Enhanced Testing Workflow**
+## Enhanced Testing Workflow
 
 You'll use these commands to validate your changes are behaving as expected. Audits (data tests) are a great first step, and you'll want to grow from there to feel confident about your pipelines. The workflow is as follows:
 
 1. Create and audit external models outside of SQLMesh's control (ex: data loaded in by Fivetran, Airbyte, etc.)
-2. Automatically generate unit tests
+2. Automatically generate unit tests for your models
 3. Ad hoc query the data directly in the CLI
 4. Lint your models to catch known syntax errors
 
@@ -345,7 +354,9 @@ You'll use these commands to validate your changes are behaving as expected. Aud
 
 ### Create and Audit External Models
 
-You can automatically parse fully qualified table/view names that are outside of SQLMesh's control (ex: `bigquery-public-data`.`ga4_obfuscated_sample_ecommerce`.`events_20210131`) and create full schemas with data types. These schemas will be used for column level lineage. You can add audits to test data quality. If they fail, SQLMesh prevents downstream models from wastefully running.
+Sometimes models `SELECT` from tables/views that are outside of SQLMesh's control. SQLMesh can automatically parse their fully qualified names from model definitions (ex: `bigquery-public-data`.`ga4_obfuscated_sample_ecommerce`.`events_20210131`) and determine their full schemas and column data types.
+
+These "external model" schemas are used for column level lineage. You can also add audits to test data quality. If an audit fails, SQLMesh prevents downstream models from wastefully running.
 
 === "SQLMesh"
 
@@ -360,12 +371,12 @@ You can automatically parse fully qualified table/view names that are outside of
     ```
 
 ??? "Example Output"
-    Note: this is an example from a separate Tobiko Cloud project, so you can't following along in the github repo above.
+    Note: this is an example from a separate Tobiko Cloud project, so you can't follow along in the Github repo above.
 
-    - Generated external models from the `bigquery-public-data`.`ga4_obfuscated_sample_ecommerce`.`events_20210131` tabled parsed in the model's SQL.
-    - I added an audit to the external model to ensure `event_date` is not null.
+    - Generated external models from the `bigquery-public-data`.`ga4_obfuscated_sample_ecommerce`.`events_20210131` table parsed in the model's SQL.
+    - Added an audit to the external model to ensure `event_date` is not NULL.
     - Viewed a plan preview of the changes that will be made for the external model.
-  
+
     ```sql linenums="1" hl_lines="29"  title="models/external_model_example.sql"
     MODEL (
       name tcloud_demo.external_model
@@ -397,10 +408,12 @@ You can automatically parse fully qualified table/view names that are outside of
     /*   items */
     FROM bigquery-public-data.ga4_obfuscated_sample_ecommerce.events_20210131 -- I fully qualified the external table name and sqlmesh will automatically create the external model
     ```
-  
+
+    `sqlmesh create_external_models` output file:
+
     ```yaml linenums="1" hl_lines="2 3 4" title="external_models.yaml"
     - name: '`bigquery-public-data`.`ga4_obfuscated_sample_ecommerce`.`events_20210131`'
-      audits: # I added this audit manually to the external model
+      audits: # I added this audit manually to the external model YAML file
         - name: not_null
           columns: "[event_date]"
       columns:
@@ -449,30 +462,29 @@ You can automatically parse fully qualified table/view names that are outside of
       gateway: public-demo
     ```
 
-    `tcloud sqlmesh plan dev_sung`
-
     ```bash
+    > sqlmesh plan dev_sung
     Differences from the `dev_sung` environment:
 
     Models:
     └── Metadata Updated:
         └── "bigquery-public-data".ga4_obfuscated_sample_ecommerce__dev_sung.events_20210131
 
-    ---                                                                                                                                                                                                                   
-                                                                                                                                                                                                                          
-    +++                                                                                                                                                                                                                   
-                                                                                                                                                                                                                          
-    @@ -29,5 +29,6 @@                                                                                                                                                                                                     
-                                                                                                                                                                                                                          
-        ecommerce STRUCT<total_item_quantity INT64, purchase_revenue_in_usd FLOAT64, purchase_revenue FLOAT64, refund_value_in_usd FLOAT64, refund_value FLOAT64, shipping_value_in_usd FLOAT64, shipping_value FLOAT64, 
-    tax_value_in_usd FLOAT64, tax_value FLOAT64, unique_items INT64, transaction_id STRING>,                                                                                                                              
-        items ARRAY<STRUCT<item_id STRING, item_name STRING, item_brand STRING, item_variant STRING, item_category STRING, item_category2 STRING, item_category3 STRING, item_category4 STRING, item_category5 STRING,   
-    price_in_usd FLOAT64, price FLOAT64, quantity INT64, item_revenue_in_usd FLOAT64, item_revenue FLOAT64, item_refund_in_usd FLOAT64, item_refund FLOAT64, coupon STRING, affiliation STRING, location_id STRING,       
-    item_list_id STRING, item_list_name STRING, item_list_index STRING, promotion_id STRING, promotion_name STRING, creative_name STRING, creative_slot STRING>>                                                          
-      ),                                                                                                                                                                                                                 
-    +  audits (not_null('columns' = [event_date])),                                                                                                                                                                       
-      gateway `public-demo`                                                                                                                                                                                              
-    )                                                                                                                                                                                                                    
+    ---
+
+    +++
+
+    @@ -29,5 +29,6 @@
+
+        ecommerce STRUCT<total_item_quantity INT64, purchase_revenue_in_usd FLOAT64, purchase_revenue FLOAT64, refund_value_in_usd FLOAT64, refund_value FLOAT64, shipping_value_in_usd FLOAT64, shipping_value FLOAT64,
+    tax_value_in_usd FLOAT64, tax_value FLOAT64, unique_items INT64, transaction_id STRING>,
+        items ARRAY<STRUCT<item_id STRING, item_name STRING, item_brand STRING, item_variant STRING, item_category STRING, item_category2 STRING, item_category3 STRING, item_category4 STRING, item_category5 STRING,
+    price_in_usd FLOAT64, price FLOAT64, quantity INT64, item_revenue_in_usd FLOAT64, item_revenue FLOAT64, item_refund_in_usd FLOAT64, item_refund FLOAT64, coupon STRING, affiliation STRING, location_id STRING,
+    item_list_id STRING, item_list_name STRING, item_list_index STRING, promotion_id STRING, promotion_name STRING, creative_name STRING, creative_slot STRING>>
+      ),
+    +  audits (not_null('columns' = [event_date])),
+      gateway `public-demo`
+    )
 
     Metadata Updated: "bigquery-public-data".ga4_obfuscated_sample_ecommerce__dev_sung.events_20210131
     Models needing backfill:
@@ -482,9 +494,13 @@ You can automatically parse fully qualified table/view names that are outside of
 
 ### Automatically Generate Unit Tests
 
-You can ensure business logic is working as expected with static sample data. Unit tests run *before* a plan is applied automatically. This is great for testing complex business logic (ex: `CASE WHEN` conditions) *before* you backfill data. No need to write them manually neither!
+You can ensure business logic is working as expected by running your models against static sample data.
+
+Unit tests run *before* a plan is applied automatically. This is great for testing complex business logic (ex: `CASE WHEN` conditions) *before* you backfill data. No need to write them manually, either!
 
 === "SQLMesh"
+
+    Create a unit test based on 5 rows from the upstream `sqlmesh_example.incremental_model`.
 
     ```bash
     sqlmesh create_test sqlmesh_example.full_model \
@@ -495,7 +511,7 @@ You can ensure business logic is working as expected with static sample data. Un
     ```bash
     sqlmesh create_test <model_name> \
       --query <model_name upstream> \
-      "select * from <model_name upstream> limit 5" 
+      "select * from <model_name upstream> limit 5"
     ```
 
 
@@ -504,21 +520,23 @@ You can ensure business logic is working as expected with static sample data. Un
     ```bash
     tcloud sqlmesh create_test demo.stg_payments \
       --query demo.seed_raw_payments \
-      "select * from demo.seed_raw_payments limit 5" 
+      "select * from demo.seed_raw_payments limit 5"
     ```
 
     ```bash
     tcloud sqlmesh create_test <model_name> \
       --query <model_name upstream> \
-      "select * from <model_name upstream> limit 5" 
+      "select * from <model_name upstream> limit 5"
     ```
 
 ??? "Example Output"
-    - Generated unit tests for the `sqlmesh_example.full_model` model live querying the data.
-    - I ran the tests and they passed locally.
+    - Generated unit tests for the `sqlmesh_example.full_model` model by live querying the data.
+    - Ran the tests and they passed locally in DuckDB.
     - If you're using a cloud data warehouse, this will transpile your SQL syntax to its equivalent in duckdb.
     - This runs fast and free on your local machine.
-  
+
+    Generated test definition file:
+
     ```yaml linenums="1" title="tests/test_full_model.yaml"
     test_full_model:
       model: '"db"."sqlmesh_example"."full_model"'
@@ -558,17 +576,17 @@ You can ensure business logic is working as expected with static sample data. Un
     ```
 
     ```bash
-    (demo) ➜  demo git:(main) ✗ sqlmesh test                                    
+    (demo) ➜  demo git:(main) ✗ sqlmesh test
     .
     ----------------------------------------------------------------------
-    Ran 1 test in 0.053s 
+    Ran 1 test in 0.053s
 
     OK
     ```
 
     ```bash
-    # what if the test fails?
-    (demo) ➜  demo git:(main) ✗ sqlmesh test                                    
+    # what do we see if the test fails?
+    (demo) ➜  demo git:(main) ✗ sqlmesh test
     F
     ======================================================================
     FAIL: test_full_model (/Users/sung/Desktop/git_repos/sqlmesh-cli-revamp/tests/test_full_model.yaml)
@@ -576,21 +594,21 @@ You can ensure business logic is working as expected with static sample data. Un
     ----------------------------------------------------------------------
     AssertionError: Data mismatch (exp: expected, act: actual)
 
-      new_column     
+      new_column
             exp  act
     0        0.0  7.0
 
     ----------------------------------------------------------------------
-    Ran 1 test in 0.020s 
+    Ran 1 test in 0.020s
 
     FAILED (failures=1)
     ```
 
-### Run Ad Hoc Queries
+### Run Ad-Hoc Queries
 
 You can run live queries directly from the CLI. This is great to validate the look and feel of your changes without context switching to your query console.
 
-Pro tip: run this after running `sqlmesh table_diff` to get a full picture of your changes.
+Pro tip: run this after `sqlmesh table_diff` to get a full picture of your changes.
 
 === "SQLMesh"
 
@@ -600,7 +618,7 @@ Pro tip: run this after running `sqlmesh table_diff` to get a full picture of yo
 
     ```bash
     # construct arbitrary query
-    sqlmesh fetchdf "select * from <schema__environment>.<model_name> limit 5" # double underscore is important. Not needed for prod.
+    sqlmesh fetchdf "select * from <schema__environment>.<model_name> limit 5" # double underscore in schema name is important. Not needed for prod.
     ```
 
 === "Tobiko Cloud"
@@ -611,7 +629,7 @@ Pro tip: run this after running `sqlmesh table_diff` to get a full picture of yo
 
     ```bash
     # construct arbitrary query
-    tcloud sqlmesh fetchdf "select * from <schema__environment>.<model_name> limit 5" # double underscore is important. Not needed for prod.
+    tcloud sqlmesh fetchdf "select * from <schema__environment>.<model_name> limit 5" # double underscore in schema name is important. Not needed for prod.
     ```
 
 ??? "Example Output"
@@ -626,8 +644,9 @@ Pro tip: run this after running `sqlmesh table_diff` to get a full picture of yo
 
 ### Linting
 
-If enabled, this will run automatically during development. These can be overridden per model too.
-This is great to catch issues before wasting runtime in your data warehouse. You can run it manually to check for any issues.
+If enabled, linting runs automatically during development. The linting rules can be overridden per model, too.
+
+This is great to catch SQL issues before wasting runtime in your data warehouse. It runs automatically, or you can run it manually to proactively check for any issues.
 
 === "SQLMesh"
 
@@ -666,39 +685,40 @@ This is great to catch issues before wasting runtime in your data warehouse. You
     ```
 
     ```bash
+    > sqlmesh lint
     [WARNING] Linter warnings for /Users/sung/Desktop/git_repos/sqlmesh-cli-revamp/models/lint_warn.sql:
-    - noselectstar: Query should not contain SELECT * on its outer most projections, even if it can be 
+    - noselectstar: Query should not contain SELECT * on its outer most projections, even if it can be
     expanded.
     - nomissingaudits: Model `audits` must be configured to test data quality.
-    [WARNING] Linter warnings for 
+    [WARNING] Linter warnings for
     /Users/sung/Desktop/git_repos/sqlmesh-cli-revamp/models/incremental_by_partition.sql:
     - nomissingaudits: Model `audits` must be configured to test data quality.
     [WARNING] Linter warnings for /Users/sung/Desktop/git_repos/sqlmesh-cli-revamp/models/seed_model.sql:
     - nomissingaudits: Model `audits` must be configured to test data quality.
-    [WARNING] Linter warnings for 
+    [WARNING] Linter warnings for
     /Users/sung/Desktop/git_repos/sqlmesh-cli-revamp/models/incremental_by_unique_key.sql:
     - nomissingaudits: Model `audits` must be configured to test data quality.
-    [WARNING] Linter warnings for 
+    [WARNING] Linter warnings for
     /Users/sung/Desktop/git_repos/sqlmesh-cli-revamp/models/incremental_model.sql:
     - nomissingaudits: Model `audits` must be configured to test data quality.
     ```
 
-## **Debugging Workflow**
+## Debugging Workflow
 
-You'll use these commands ad hoc to validate your changes are behaving as expected. This is great to get more details beyond the defaults above. The workflow is as follows:
+You'll use these commands as needed to validate that your changes are behaving as expected. This is great to get more details beyond the defaults above. The workflow is as follows:
 
-1. Render the model to verify the SQL is looking as expected
-2. Run in verbose mode to verify SQLMesh's behavior.
+1. Render the model to verify the SQL is looking as expected.
+2. Run SQLMesh in verbose mode so you can verify its behavior.
 3. View the logs easily in your terminal.
 
 ### Render your SQL Changes
 
-This is great to verify the SQL is looking as expected before applying the changes. This is especially important if you're migrating from another query engine (ex: postgres to databricks).
+This is a great way to verify that your model's SQL is looking as expected before applying the changes. It is especially important if you're migrating from one query engine to another (ex: postgres to databricks).
 
 === "SQLMesh"
 
     ```bash
-    sqlmesh render sqlmesh_example.incremental_model 
+    sqlmesh render sqlmesh_example.incremental_model
     ```
 
     ```bash
@@ -712,7 +732,7 @@ This is great to verify the SQL is looking as expected before applying the chang
 === "Tobiko Cloud"
 
     ```bash
-    tcloud sqlmesh render sqlmesh_example.incremental_model 
+    tcloud sqlmesh render sqlmesh_example.incremental_model
     ```
 
     ```bash
@@ -725,35 +745,7 @@ This is great to verify the SQL is looking as expected before applying the chang
 
 ??? "Example Output"
 
-    It outputs the full SQL code in the default or target dialect.
-
-    ```sql hl_lines="10"
-    -- rendered sql in default dialect
-    SELECT                                                                                                
-      "seed_model"."id" AS "id",                                                                          
-      "seed_model"."item_id" AS "item_id",                                                                
-      "seed_model"."event_date" AS "event_date",                                                          
-      7 AS "new_column"                                                                                   
-    FROM "db"."sqlmesh__sqlmesh_example"."sqlmesh_example__seed_model__3294646944" AS "seed_model" /*     
-    db.sqlmesh_example.seed_model */                                                                      
-    WHERE                                                                                                 
-      "seed_model"."event_date" <= CAST('1970-01-01' AS DATE) -- placeholder dates for date macros                                             
-      AND "seed_model"."event_date" >= CAST('1970-01-01' AS DATE) 
-    ```
-
-    ```sql
-    -- rendered sql in databricks dialect
-    SELECT                                                                                                
-      `seed_model`.`id` AS `id`,                                                                          
-      `seed_model`.`item_id` AS `item_id`,                                                                
-      `seed_model`.`event_date` AS `event_date`,                                                          
-      7 AS `new_column`                                                                                   
-    FROM `db`.`sqlmesh__sqlmesh_example`.`sqlmesh_example__seed_model__3294646944` AS `seed_model` /*     
-    db.sqlmesh_example.seed_model */                                                                      
-    WHERE                                                                                                 
-      `seed_model`.`event_date` <= CAST('1970-01-01' AS DATE)                                             
-      AND `seed_model`.`event_date` >= CAST('1970-01-01' AS DATE)   
-    ```
+    Model definition:
 
     ```sql linenums="1" title="models/incremental_model.sql"
     MODEL (
@@ -775,6 +767,38 @@ This is great to verify the SQL is looking as expected before applying the chang
       sqlmesh_example.seed_model
     WHERE
       event_date BETWEEN @start_date AND @end_date
+    ```
+
+    It outputs the full SQL code in the default or target dialect.
+
+    ```sql hl_lines="11"
+    > sqlmesh render sqlmesh_example.incremental_model
+    -- rendered sql in default dialect
+    SELECT
+      "seed_model"."id" AS "id",
+      "seed_model"."item_id" AS "item_id",
+      "seed_model"."event_date" AS "event_date",
+      7 AS "new_column"
+    FROM "db"."sqlmesh__sqlmesh_example"."sqlmesh_example__seed_model__3294646944" AS "seed_model" /*
+    db.sqlmesh_example.seed_model */
+    WHERE
+      "seed_model"."event_date" <= CAST('1970-01-01' AS DATE) -- placeholder dates for date macros
+      AND "seed_model"."event_date" >= CAST('1970-01-01' AS DATE)
+    ```
+
+    ```sql
+    > sqlmesh render sqlmesh_example.incremental_model --dialect databricks
+    -- rendered sql in databricks dialect
+    SELECT
+      `seed_model`.`id` AS `id`,
+      `seed_model`.`item_id` AS `item_id`,
+      `seed_model`.`event_date` AS `event_date`,
+      7 AS `new_column`
+    FROM `db`.`sqlmesh__sqlmesh_example`.`sqlmesh_example__seed_model__3294646944` AS `seed_model` /*
+    db.sqlmesh_example.seed_model */
+    WHERE
+      `seed_model`.`event_date` <= CAST('1970-01-01' AS DATE)
+      AND `seed_model`.`event_date` >= CAST('1970-01-01' AS DATE)
     ```
 
 ### Apply Plan Changes in Verbose Mode
@@ -803,16 +827,17 @@ You can see detailed operations in the physical and virtual layers. This is usef
 
 ??? "Example Output"
 
-    ```bash hl_lines="47-49"
-    [WARNING] Linter warnings for 
+    ```bash hl_lines="48-50"
+    > sqlmesh plan dev -vv
+    [WARNING] Linter warnings for
     /Users/sung/Desktop/git_repos/sqlmesh-cli-revamp/models/incremental_by_partition.sql:
     - nomissingaudits: Model `audits` must be configured to test data quality.
     [WARNING] Linter warnings for /Users/sung/Desktop/git_repos/sqlmesh-cli-revamp/models/seed_model.sql:
     - nomissingaudits: Model `audits` must be configured to test data quality.
-    [WARNING] Linter warnings for 
+    [WARNING] Linter warnings for
     /Users/sung/Desktop/git_repos/sqlmesh-cli-revamp/models/incremental_by_unique_key.sql:
     - nomissingaudits: Model `audits` must be configured to test data quality.
-    [WARNING] Linter warnings for 
+    [WARNING] Linter warnings for
     /Users/sung/Desktop/git_repos/sqlmesh-cli-revamp/models/incremental_model.sql:
     - nomissingaudits: Model `audits` must be configured to test data quality.
 
@@ -825,20 +850,20 @@ You can see detailed operations in the physical and virtual layers. This is usef
         ├── db.sqlmesh_example__dev.full_model
         └── db.sqlmesh_example__dev.view_model
 
-    ---                                                                                                   
-                                                                                                          
-    +++                                                                                                   
-                                                                                                          
-    @@ -15,7 +15,7 @@                                                                                     
-                                                                                                          
-      id,                                                                                                
-      item_id,                                                                                           
-      event_date,                                                                                        
-    -  9 AS new_column                                                                                    
-    +  7 AS new_column                                                                                    
-    FROM sqlmesh_example.seed_model                                                                      
-    WHERE                                                                                                
-      event_date BETWEEN @start_date AND @end_date                                                       
+    ---
+
+    +++
+
+    @@ -15,7 +15,7 @@
+
+      id,
+      item_id,
+      event_date,
+    -  9 AS new_column
+    +  7 AS new_column
+    FROM sqlmesh_example.seed_model
+    WHERE
+      event_date BETWEEN @start_date AND @end_date
 
     Directly Modified: db.sqlmesh_example__dev.incremental_model (Breaking)
     └── Indirectly Modified Children:
@@ -860,12 +885,14 @@ You can see detailed operations in the physical and virtual layers. This is usef
 
 ### View Logs Easily
 
-Each time you perform a SQLMesh command, it creates a log file in the `logs` directory. You can view them by manually navigating to the correct file name with latest timestamp or with this simple shell command. This is useful to see what exact queries were executed to apply your changes. Admittedly, this is outside of native functionality, but it's a quick and easy way to view logs.
+Each time you perform a SQLMesh command, it creates a log file in the `logs` directory. You can view them by manually navigating to the correct file name with latest timestamp or with this simple shell command.
+
+This is useful to see the exact queries that were executed to apply your changes. Admittedly, this is outside of native functionality, but it's a quick and easy way to view logs.
 
 ```bash
 # install this open source tool that enhances the default `cat` command
 # https://github.com/sharkdp/bat
-brew install bat
+brew install bat # installation command if using homebrew
 ```
 
 ```bash
@@ -877,7 +904,7 @@ bat --theme='ansi' $(ls -t logs/ | head -n 1 | sed 's/^/logs\//')
 
 ??? "Example Output"
 
-    This is the log file for the `sqlmesh plan dev` command. If you want to see the log file directly, you can click on the file path in the output directly to open it in your code editor.
+    This is the log file for the `sqlmesh plan dev` command. If you want to see the log file directly, you can click on the file path in the output to open it in your code editor.
 
     ```bash
     ──────┬──────────────────────────────────────────────────────────────────────────────────────────────
@@ -899,7 +926,7 @@ bat --theme='ansi' $(ls -t logs/ | head -n 1 | sed 's/^/logs\//')
       9   │  - nomissingaudits: Model `audits` must be configured to test data quality. (console.py:1848)
       10  │ 2025-04-18 12:34:35,954 - MainThread - sqlmesh.core.config.connection - INFO - Using existing
           │  DuckDB adapter due to overlapping data file: db.db (connection.py:309)
-      11  │ 2025-04-18 12:34:37,071 - MainThread - sqlmesh.core.snapshot.evaluator - INFO - Listing data 
+      11  │ 2025-04-18 12:34:37,071 - MainThread - sqlmesh.core.snapshot.evaluator - INFO - Listing data
           │ objects in schema db.sqlmesh__sqlmesh_example (evaluator.py:338)
       12  │ 2025-04-18 12:34:37,072 - MainThread - sqlmesh.core.engine_adapter.base - INFO - Executing SQ
           │ L: SELECT CURRENT_CATALOG() (base.py:2128)
@@ -907,9 +934,11 @@ bat --theme='ansi' $(ls -t logs/ | head -n 1 | sed 's/^/logs\//')
           │ L: SELECT CURRENT_CATALOG() (base.py:2128)
     ```
 
-## **Run on Production Schedule**
+## Run on Production Schedule
 
-SQLMesh schedules your transformation on a per-model basis in proper DAG order. This makes it easy to configure how often each step in your pipeline runs to backfill data without running when upstream models are late or failed. Rerunning from point of failure is also a default! Example below:
+SQLMesh schedules your transformation on a per-model basis in proper DAG order. This makes it easy to configure how often each step in your pipeline runs to backfill data without running when upstream models are late or failed. Rerunning from point of failure is also a default!
+
+Example scenario and model DAG:
 
 `stg_transactions`(cron: `@hourly`) -> `fct_transcations`(cron: `@daily`). All times in UTC.
 
@@ -925,7 +954,7 @@ If you're using Tobiko Cloud, this configures automatically without additional c
 
 ### Run Models
 
-This command is intended be run on a schedule. It will skip the physical and virtual layer updates and simply execute the model batches. 
+This command is intended be run on a schedule. It will skip the physical and virtual layer updates and simply execute the model batches.
 
 === "SQLMesh"
 
@@ -944,26 +973,27 @@ This command is intended be run on a schedule. It will skip the physical and vir
     This is what it looks like if models are ready to run.
 
     ```bash
-    [1/1] sqlmesh_example.incremental_model               [insert 2025-04-17 - 2025-04-17]                
-    0.01s   
-    [1/1] sqlmesh_example.incremental_unique_model        [insert/update rows]                            
-    0.01s   
-    [1/1] sqlmesh_example_v3.incremental_partition_model  [insert partitions]                             
-    0.01s   
+    > sqlmesh run
+    [1/1] sqlmesh_example.incremental_model               [insert 2025-04-17 - 2025-04-17]
+    0.01s
+    [1/1] sqlmesh_example.incremental_unique_model        [insert/update rows]
+    0.01s
+    [1/1] sqlmesh_example_v3.incremental_partition_model  [insert partitions]
+    0.01s
     Executing model batches ━━━━━━━━━━━━━━━━╺━━━━━━━━━━━━━━━━━━━━━━━ 40.0% • 2/5 • 0:00:00
-    sqlmesh_example_v3.incremental_partition_model .                                      
-    [WARNING] sqlmesh_example.full_model: 'assert_positive_order_ids' audit error: 2 rows failed. Learn 
+    sqlmesh_example_v3.incremental_partition_model .
+    [WARNING] sqlmesh_example.full_model: 'assert_positive_order_ids' audit error: 2 rows failed. Learn
     more in logs: /Users/sung/Desktop/git_repos/sqlmesh-cli-revamp/logs/sqlmesh_2025_04_18_12_48_35.log
-    [1/1] sqlmesh_example.full_model                      [full refresh, audits ❌1]                      
-    0.01s   
+    [1/1] sqlmesh_example.full_model                      [full refresh, audits ❌1]
+    0.01s
     Executing model batches ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╺━━━━━━━ 80.0% • 4/5 • 0:00:00
-    sqlmesh_example.view_model .                                                          
-    [WARNING] sqlmesh_example.view_model: 'assert_positive_order_ids' audit error: 2 rows failed. Learn 
+    sqlmesh_example.view_model .
+    [WARNING] sqlmesh_example.view_model: 'assert_positive_order_ids' audit error: 2 rows failed. Learn
     more in logs: /Users/sung/Desktop/git_repos/sqlmesh-cli-revamp/logs/sqlmesh_2025_04_18_12_48_35.log
-    [1/1] sqlmesh_example.view_model                      [recreate view, audits ✔2 ❌1]                  
-    0.01s   
-    Executing model batches ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 5/5 • 0:00:00               
-                                                                                                          
+    [1/1] sqlmesh_example.view_model                      [recreate view, audits ✔2 ❌1]
+    0.01s
+    Executing model batches ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 5/5 • 0:00:00
+
     ✔ Model batches executed
 
     Run finished for environment 'prod'
@@ -972,6 +1002,7 @@ This command is intended be run on a schedule. It will skip the physical and vir
     This is what it looks like if no models are ready to run.
 
     ```bash
+    > sqlmesh run
     No models are ready to run. Please wait until a model `cron` interval has elapsed.
 
     Next run will be ready at 2025-04-18 05:00PM PDT (2025-04-19 12:00AM UTC).
@@ -979,10 +1010,10 @@ This command is intended be run on a schedule. It will skip the physical and vir
 
 ### Run Models with Incomplete Intervals (Warning)
 
-You can run models that execute backfills each time you invoke a run whether ad hoc or on a schedule.
+You can run models that execute backfills each time you invoke a `run`, whether ad hoc or on a schedule.
 
 !!! warning "Run Models with Incomplete Intervals"
-    This only applies to incremental models that have `allow_partials` set to `true`. 
+    This only applies to incremental models that have `allow_partials` set to `true`.
     This is generally not recommended for production environments as you risk shipping incomplete data which will be perceived as broken data.
 
 === "SQLMesh"
@@ -999,6 +1030,7 @@ You can run models that execute backfills each time you invoke a run whether ad 
 
 ??? "Example Output"
 
+    Model definition:
     ```sql linenums="1" hl_lines="15" title="models/incremental_model.sql"
     MODEL (
       name sqlmesh_example.incremental_model,
@@ -1029,15 +1061,16 @@ You can run models that execute backfills each time you invoke a run whether ad 
     ```
 
     ```bash
-    [1/1] sqlmesh_example.incremental_model  [insert 2025-04-19 - 2025-04-19, audits ✔2] 0.05s   
-    Executing model batches ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 1/1 • 0:00:00         
-                                                                                                    
+    > sqlmesh run --ignore-cron
+    [1/1] sqlmesh_example.incremental_model  [insert 2025-04-19 - 2025-04-19, audits ✔2] 0.05s
+    Executing model batches ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 1/1 • 0:00:00
+
     ✔ Model batches executed
 
     Run finished for environment 'prod'
     ```
 
-## **Forward-Only Development Workflow**
+## Forward-Only Development Workflow
 
 This is an advanced workflow and specifically designed for large incremental models (ex: > 200 million rows) that take a long time to run even during development. It solves for:
 
@@ -1045,9 +1078,9 @@ This is an advanced workflow and specifically designed for large incremental mod
 - Retaining history of a calculated column and applying a new calculation to new rows going forward.
 - Retain history of a column with complex conditional `CASE WHEN` logic and apply new conditions to new rows going forward.
 
-When you apply the plan to `prod` after the dev worfklow, it will NOT backfill historical data. It will only execute model batches **forward only** for new intervals (new rows).
+When you modify a forward-only model and apply the plan to `prod` after the dev workflow, it will NOT backfill historical data. It will only execute model batches for new intervals **going forward in time** (i.e., only for new rows).
 
-If you want to see a full walkthough, [go here](incremental_time_full_walkthrough.md). 
+If you want to see a full walkthrough, [go here](incremental_time_full_walkthrough.md).
 
 === "SQLMesh"
 
@@ -1077,6 +1110,7 @@ If you want to see a full walkthough, [go here](incremental_time_full_walkthroug
     - I previewed the changes in a clone of the incremental impacted (clones will NOT be reused in production) along with the full and view models (these are NOT clones).
 
     ```bash
+    > sqlmesh plan dev
     Differences from the `dev` environment:
 
     Models:
@@ -1086,20 +1120,20 @@ If you want to see a full walkthough, [go here](incremental_time_full_walkthroug
         ├── sqlmesh_example__dev.view_model
         └── sqlmesh_example__dev.full_model
 
-    ---                                                                                                   
-                                                                                                          
-    +++                                                                                                   
-                                                                                                          
-    @@ -16,7 +16,7 @@                                                                                     
-                                                                                                          
-      id,                                                                                                
-      item_id,                                                                                           
-      event_date,                                                                                        
-    -  9 AS new_column                                                                                    
-    +  10 AS new_column                                                                                   
-    FROM sqlmesh_example.seed_model                                                                      
-    WHERE                                                                                                
-      event_date BETWEEN @start_date AND @end_date                                                       
+    ---
+
+    +++
+
+    @@ -16,7 +16,7 @@
+
+      id,
+      item_id,
+      event_date,
+    -  9 AS new_column
+    +  10 AS new_column
+    FROM sqlmesh_example.seed_model
+    WHERE
+      event_date BETWEEN @start_date AND @end_date
 
     Directly Modified: sqlmesh_example__dev.incremental_model (Forward-only)
     └── Indirectly Modified Children:
@@ -1115,11 +1149,11 @@ If you want to see a full walkthough, [go here](incremental_time_full_walkthroug
 
     ✔ Physical layer updated
 
-    [1/1] sqlmesh_example__dev.incremental_model  [insert 2025-04-17 - 2025-04-17]                0.01s   
-    [1/1] sqlmesh_example__dev.full_model         [full refresh, audits ✔1]                       0.01s   
-    [1/1] sqlmesh_example__dev.view_model         [recreate view, audits ✔3]                      0.01s   
-    Executing model batches ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 3/3 • 0:00:00               
-                                                                                                          
+    [1/1] sqlmesh_example__dev.incremental_model  [insert 2025-04-17 - 2025-04-17]                0.01s
+    [1/1] sqlmesh_example__dev.full_model         [full refresh, audits ✔1]                       0.01s
+    [1/1] sqlmesh_example__dev.view_model         [recreate view, audits ✔3]                      0.01s
+    Executing model batches ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 3/3 • 0:00:00
+
     ✔ Model batches executed
 
     Updating virtual layer  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 3/3 • 0:00:00
@@ -1127,12 +1161,10 @@ If you want to see a full walkthough, [go here](incremental_time_full_walkthroug
     ✔ Virtual layer updated
     ```
 
-
-    `sqlmesh plan`
-
-    When this is applied to `prod`, it will only execute model batches for new intervals (new rows). This will NOT re-use `preview` models (backfilled data) in development.
+    When the plan is applied to `prod`, it will only execute model batches for new intervals (new rows). This will NOT re-use `preview` models (backfilled data) in development.
 
     ```bash
+    > sqlmesh plan
     Differences from the `prod` environment:
 
     Models:
@@ -1142,28 +1174,28 @@ If you want to see a full walkthough, [go here](incremental_time_full_walkthroug
         ├── sqlmesh_example.view_model
         └── sqlmesh_example.full_model
 
-    ---                                                                                                   
-                                                                                                          
-    +++                                                                                                   
-                                                                                                          
-    @@ -9,13 +9,14 @@                                                                                     
-                                                                                                          
-        disable_restatement FALSE,                                                                       
-        on_destructive_change 'ERROR'                                                                    
-      ),                                                                                                 
-    -  grains ((id, event_date))                                                                          
-    +  grains ((id, event_date)),                                                                         
-    +  allow_partials TRUE                                                                                
-    )                                                                                                    
-    SELECT                                                                                               
-      id,                                                                                                
-      item_id,                                                                                           
-      event_date,                                                                                        
-    -  7 AS new_column                                                                                    
-    +  10 AS new_column                                                                                   
-    FROM sqlmesh_example.seed_model                                                                      
-    WHERE                                                                                                
-      event_date BETWEEN @start_date AND @end_date                                                       
+    ---
+
+    +++
+
+    @@ -9,13 +9,14 @@
+
+        disable_restatement FALSE,
+        on_destructive_change 'ERROR'
+      ),
+    -  grains ((id, event_date))
+    +  grains ((id, event_date)),
+    +  allow_partials TRUE
+    )
+    SELECT
+      id,
+      item_id,
+      event_date,
+    -  7 AS new_column
+    +  10 AS new_column
+    FROM sqlmesh_example.seed_model
+    WHERE
+      event_date BETWEEN @start_date AND @end_date
 
     Directly Modified: sqlmesh_example.incremental_model (Forward-only)
     └── Indirectly Modified Children:
@@ -1181,9 +1213,9 @@ If you want to see a full walkthough, [go here](incremental_time_full_walkthroug
     ```
 
 
-## **Miscellaneous**
+## Miscellaneous
 
-If you notice you have a lot of old development schemas/data, you can clean them up with the following command. This process runs automatically during the `sqlmesh run` command. This defaults to deleting old data past 7 days.
+If you notice you have a lot of old development schemas/data, you can clean them up with the following command. This process runs automatically during the `sqlmesh run` command. This defaults to deleting data older than 7 days.
 
 === "SQLMesh"
 
