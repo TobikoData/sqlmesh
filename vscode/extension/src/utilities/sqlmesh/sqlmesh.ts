@@ -5,6 +5,7 @@ import { Result, err, isErr, ok } from "../functional/result"
 import { getProjectRoot } from "../common/utilities"
 import { execFile } from "child_process"
 import { promisify } from "util"
+import { isPythonModuleInstalled } from "../python"
 
 
 export type sqlmesh_exec = {
@@ -22,39 +23,7 @@ export type sqlmesh_exec = {
 export const is_tcloud_installed = async (): Promise<
   Result<boolean, string>
 > => {
-  const interpreterDetails = await getInterpreterDetails()
-  if (!interpreterDetails.path) {
-    return err("No Python interpreter found")
-  }
-  traceVerbose(
-    `Using interpreter from Python extension: ${interpreterDetails.path.join(
-      " "
-    )}`
-  )
-
-  const pythonPath = interpreterDetails.path[0]
-  const checkScript = `
-import sys
-if sys.version_info >= (3, 12):
-    from importlib import metadata
-else:
-    import importlib_metadata as metadata
-
-try:
-    metadata.version('tcloud')
-    print("true")
-except metadata.PackageNotFoundError:
-    print("false")
-`
-  try {
-    const execFileAsync = promisify(execFile)
-    traceVerbose(`Checking tcloud installation with script: ${checkScript}`)
-    const { stdout } = await execFileAsync(pythonPath, ["-c", checkScript])
-    traceVerbose(`tcloud installation check result: ${stdout.trim()}`)
-    return ok(stdout.trim() === "true")
-  } catch (error) {
-    return err(`Failed to check tcloud installation: ${error}`)
-  }
+  return isPythonModuleInstalled("tcloud")
 }
 
 /**
