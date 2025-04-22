@@ -239,6 +239,7 @@ jobs:
 workflows:
   main_pr:
     jobs:
+      - vscode-extension-setup
       - doc_tests
       - style_and_cicd_tests:
           matrix:
