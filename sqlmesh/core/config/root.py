@@ -44,7 +44,7 @@ from sqlmesh.core.notification_target import NotificationTarget
 from sqlmesh.core.user import User
 from sqlmesh.utils.date import to_timestamp, now
 from sqlmesh.utils.errors import ConfigError
-from sqlmesh.utils.pydantic import model_validator, field_validator
+from sqlmesh.utils.pydantic import model_validator
 
 
 def validate_no_past_ttl(v: str) -> str:
