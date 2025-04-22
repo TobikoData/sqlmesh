@@ -1,5 +1,5 @@
-import * as vscode from "vscode"
 import { format } from "./commands/format"
+import * as vscode from "vscode"
 import {
   createOutputChannel,
   onDidChangeConfiguration,
@@ -16,6 +16,8 @@ import { AuthenticationProviderTobikoCloud } from "./auth/auth"
 import { signOut } from "./commands/signout"
 import { signIn } from "./commands/signin"
 import { signInSpecifyFlow } from "./commands/signinSpecifyFlow"
+import { isErr } from "./utilities/functional/result"
+import { handleNotSginedInError } from "./utilities/errors"
 
 let lspClient: LSPClient | undefined
 
@@ -44,7 +46,6 @@ export async function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand("sqlmesh.signin", signIn(authProvider))
   )
-
   context.subscriptions.push(
     vscode.commands.registerCommand(
       "sqlmesh.signinSpecifyFlow",
@@ -55,19 +56,26 @@ export async function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand("sqlmesh.signout", signOut(authProvider))
   )
   context.subscriptions.push(
-    vscode.commands.registerCommand("sqlmesh.format", format)
+    vscode.commands.registerCommand("sqlmesh.format", format(authProvider))
   )
 
   lspClient = new LSPClient()
-  await lspClient.start()
+  const result = await lspClient.start()
+  if (isErr(result)) {
+    handleNotSginedInError(authProvider)
+  }
   context.subscriptions.push(lspClient)
 
   const restart = async () => {
     if (lspClient) {
       traceVerbose("Restarting LSP client")
-      await lspClient.restart()
+      const result = await lspClient.restart()
+      if (isErr(result)) {
+        handleNotSginedInError(authProvider)
+      }
     }
   }
+
   context.subscriptions.push(
     onDidChangePythonInterpreter(async () => {
       await restart()

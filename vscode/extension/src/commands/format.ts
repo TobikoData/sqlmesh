@@ -1,36 +1,45 @@
-import { traceError, traceLog } from "../utilities/common/log"
+import { traceLog } from "../utilities/common/log"
 import { execSync } from "child_process"
 import { sqlmesh_exec } from "../utilities/sqlmesh/sqlmesh"
-import { isErr } from "../utilities/functional/result"
+import { err, isErr, ok, Result } from "../utilities/functional/result"
 import * as vscode from "vscode"
+import { ErrorType, handleNotSginedInError } from "../utilities/errors"
+import { AuthenticationProviderTobikoCloud } from "../auth/auth"
 
-export const format = async () => {
-  traceLog("Calling format")
-  const out = await internalFormat()
-  if (out === 0) {
+export const format =
+  (authProvider: AuthenticationProviderTobikoCloud) => async () => {
+    traceLog("Calling format")
+    const out = await internalFormat()
+    if (isErr(out)) {
+      if (out.error.type === "not_signed_in") {
+        handleNotSginedInError(authProvider)
+        return
+      } else {
+        vscode.window.showErrorMessage(
+          `Project format failed: ${out.error.message}`
+        )
+        return
+      }
+    }
     vscode.window.showInformationMessage("Project formatted successfully")
-  } else {
-    vscode.window.showErrorMessage("Project format failed")
   }
-}
 
-const internalFormat = async (): Promise<number> => {
+const internalFormat = async (): Promise<Result<number, ErrorType>> => {
   try {
     const exec = await sqlmesh_exec()
     if (isErr(exec)) {
-      traceError(exec.error)
-      return 1
+      return exec
     }
     execSync(`${exec.value.bin} format`, {
       encoding: "utf-8",
       cwd: exec.value.workspacePath,
       env: exec.value.env,
     })
-    return 0
+    return ok(0)
   } catch (error: any) {
-    traceError("Error executing sqlmesh format:", error.message)
-    traceError(error.stdout)
-    traceError(error.stderr)
-    return error.status || 1
+    return err({
+      type: "generic",
+      message: `Error executing sqlmesh format: ${error.message}`,
+    })
   }
 }

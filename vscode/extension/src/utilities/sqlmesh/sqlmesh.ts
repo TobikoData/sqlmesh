@@ -7,6 +7,8 @@ import { execFile } from "child_process"
 import { promisify } from "util"
 import { isPythonModuleInstalled } from "../python"
 import fs from "fs"
+import { ErrorType } from "../errors"
+import { isSignedIntoTobikoCloud } from "../../auth/auth"
 
 export type sqlmesh_exec = {
   workspacePath: string;
@@ -51,7 +53,7 @@ export const get_tcloud_bin = async (): Promise<Result<string, string>> => {
  *
  * @returns The sqlmesh executable for the current workspace.
  */
-export const sqlmesh_exec = async (): Promise<Result<sqlmesh_exec, string>> => {
+export const sqlmesh_exec = async (): Promise<Result<sqlmesh_exec, ErrorType>> => {
   const projectRoot = await getProjectRoot()
   const workspacePath = projectRoot.uri.fsPath
   const interpreterDetails = await getInterpreterDetails()
@@ -65,14 +67,26 @@ export const sqlmesh_exec = async (): Promise<Result<sqlmesh_exec, string>> => {
   }
   if (interpreterDetails.isVirtualEnvironment) {
     traceLog("Using virtual environment")
-    const tcloudInstalled = await isTcloudProject()
-    if (isErr(tcloudInstalled)) {
-      return tcloudInstalled
+    const isTcloudInstalled = await isTcloudProject()
+    if (isErr(isTcloudInstalled)) {
+      return err({
+        type: "generic",
+        message: isTcloudInstalled.error,
+      }) 
     }
-    if (tcloudInstalled.value) {
+    if (isTcloudInstalled.value) {
       const tcloudBin = await get_tcloud_bin()
       if (isErr(tcloudBin)) {
-        return tcloudBin
+        return err({
+          type: "generic",
+          message: tcloudBin.error,
+        })
+      }
+      const isSignedIn = await isSignedIntoTobikoCloud()
+      if (!isSignedIn) {
+        return err({
+          type: "not_signed_in",
+        })
       }
       return ok({
         bin: `${tcloudBin.value} sqlmesh`,
@@ -113,7 +127,7 @@ export const sqlmesh_exec = async (): Promise<Result<sqlmesh_exec, string>> => {
  * @returns The sqlmesh_lsp executable for the current workspace.
  */
 export const sqlmesh_lsp_exec = async (): Promise<
-  Result<sqlmesh_exec, string>
+  Result<sqlmesh_exec, ErrorType>
 > => {
   const projectRoot = await getProjectRoot()
   const workspacePath = projectRoot.uri.fsPath
@@ -130,13 +144,25 @@ export const sqlmesh_lsp_exec = async (): Promise<
     traceLog("Using virtual environment")
     const tcloudInstalled = await isTcloudProject()
     if (isErr(tcloudInstalled)) {
-      return tcloudInstalled
+      return err({
+        type: "generic",
+        message: tcloudInstalled.error,
+      })
     }
     if (tcloudInstalled.value) {
       traceLog("Tcloud installed, installing sqlmesh")
       const tcloudBin = await get_tcloud_bin()
       if (isErr(tcloudBin)) {
-        return tcloudBin
+        return err({
+          type: "generic",
+          message: tcloudBin.error,
+        })
+      }
+      const isSignedIn = await isSignedIntoTobikoCloud()
+      if (!isSignedIn) {
+        return err({
+          type: "not_signed_in",
+        })
       }
       const execFileAsync = promisify(execFile)
       await execFileAsync(tcloudBin.value, ["install_sqlmesh"], {
