@@ -137,106 +137,106 @@ First, add the connections to your configuration and set the `gateway_managed_vi
 
 === "YAML"
 
-```yaml linenums="1" hl_lines="30"
-gateways:
-  redshift:
-    connection:
-      type: redshift
-      user: <redshift_user>
-      password: <redshift_password>
-      host: <redshift_host>
-      database: <redshift_database>
-    variables:
-      gw_var: 'redshift'
-  athena:
-    connection:
-      type: athena
-      aws_access_key_id: <athena_aws_access_key_id>
-      aws_secret_access_key: <athena_aws_secret_access_key>
-      s3_warehouse_location: <athena_s3_warehouse_location>
-    variables:
-      gw_var: 'athena'
-  snowflake:
-    connection:
-      type: snowflake
-      account: <snowflake_account>
-      user: <snowflake_user>
-      database: <snowflake_database>
-      warehouse: <snowflake_warehouse>
-    variables:
-      gw_var: 'snowflake'
+    ```yaml linenums="1" hl_lines="30"
+    gateways:
+      redshift:
+        connection:
+          type: redshift
+          user: <redshift_user>
+          password: <redshift_password>
+          host: <redshift_host>
+          database: <redshift_database>
+        variables:
+          gw_var: 'redshift'
+      athena:
+        connection:
+          type: athena
+          aws_access_key_id: <athena_aws_access_key_id>
+          aws_secret_access_key: <athena_aws_secret_access_key>
+          s3_warehouse_location: <athena_s3_warehouse_location>
+        variables:
+          gw_var: 'athena'
+      snowflake:
+        connection:
+          type: snowflake
+          account: <snowflake_account>
+          user: <snowflake_user>
+          database: <snowflake_database>
+          warehouse: <snowflake_warehouse>
+        variables:
+          gw_var: 'snowflake'
 
-default_gateway: redshift
-gateway_managed_virtual_layer: true
+    default_gateway: redshift
+    gateway_managed_virtual_layer: true
 
-variables:
-  gw_var: 'global'
-  global_var: 5
-```
+    variables:
+      gw_var: 'global'
+      global_var: 5
+    ```
 
 === "Python"
 
-```python linenums="1" hl_lines="48"
-from sqlmesh.core.config import (
-    Config,
-    ModelDefaultsConfig,
-    GatewayConfig,
-    RedshiftConnectionConfig,
-    AthenaConnectionConfig,
-    SnowflakeConnectionConfig,
-)
+    ```python linenums="1" hl_lines="48"
+    from sqlmesh.core.config import (
+        Config,
+        ModelDefaultsConfig,
+        GatewayConfig,
+        RedshiftConnectionConfig,
+        AthenaConnectionConfig,
+        SnowflakeConnectionConfig,
+    )
 
-config = Config(
-    model_defaults=ModelDefaultsConfig(dialect="redshift"),
-    gateways={
-        "redshift": GatewayConfig(
-            connection=RedshiftConnectionConfig(
-                user="<redshift_user>",
-                password="<redshift_password>",
-                host="<redshift_host>",
-                database="<redshift_database>",
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="redshift"),
+        gateways={
+            "redshift": GatewayConfig(
+                connection=RedshiftConnectionConfig(
+                    user="<redshift_user>",
+                    password="<redshift_password>",
+                    host="<redshift_host>",
+                    database="<redshift_database>",
+                ),
+                variables={
+                    "gw_var": "redshift"
+                },
             ),
-            variables={
-                "gw_var": "redshift"
-            },
-        ),
-        "athena": GatewayConfig(
-            connection=AthenaConnectionConfig(
-                aws_access_key_id="<athena_aws_access_key_id>",
-                aws_secret_access_key="<athena_aws_secret_access_key>",
-                region_name="<athena_region_name>",
-                s3_warehouse_location="<athena_s3_warehouse_location>",
+            "athena": GatewayConfig(
+                connection=AthenaConnectionConfig(
+                    aws_access_key_id="<athena_aws_access_key_id>",
+                    aws_secret_access_key="<athena_aws_secret_access_key>",
+                    region_name="<athena_region_name>",
+                    s3_warehouse_location="<athena_s3_warehouse_location>",
+                ),
+                variables={
+                    "gw_var": "athena"
+                },
             ),
-            variables={
-                "gw_var": "athena"
-            },
-        ),
-        "snowflake": GatewayConfig(
-            connection=SnowflakeConnectionConfig(
-                account="<snowflake_account>",
-                user="<snowflake_user>",
-                database="<snowflake_database>",
-                warehouse="<snowflake_warehouse>",
+            "snowflake": GatewayConfig(
+                connection=SnowflakeConnectionConfig(
+                    account="<snowflake_account>",
+                    user="<snowflake_user>",
+                    database="<snowflake_database>",
+                    warehouse="<snowflake_warehouse>",
+                ),
+                variables={
+                    "gw_var": "snowflake"
+                },
             ),
-            variables={
-                "gw_var": "snowflake"
-            },
-        ),
-    },
-    default_gateway="redshift",
-    gateway_managed_virtual_layer=True,
-    variables={
-        "gw_var": "global",
-        "global_var": 5,
-    },
-)
-```
+        },
+        default_gateway="redshift",
+        gateway_managed_virtual_layer=True,
+        variables={
+            "gw_var": "global",
+            "global_var": 5,
+        },
+    )
+    ```
 
 Note that gateway-specific variables take precedence over global ones. In the example above, the `gw_var` used in a model will resolve to the value specified in the model's gateway.
 
 For further customization, you can also enable [gateway-specific model defaults](../guides/configuration.md#gateway-specific-model-defaults). This allows you to define custom behaviors, such as specifying a dialect with case-insensitivity normalization.
 
-The default gateway is `redshift` In the example configuration above, so all models without a `gateway` specification will run on redshift, as in this `order_dates` model:
+In the example configuration above the default gateway is `redshift`, so all models without a `gateway` specification will run on redshift, as in this `order_dates` model:
 
 ```sql linenums="1"
 MODEL (
