@@ -11,6 +11,13 @@ def generate_openapi_spec(app: FastAPI, path: str) -> None:
 
 
 if __name__ == "__main__":
-    app = create_app()
+    import argparse
 
-    generate_openapi_spec(app, "web/client/openapi.json")
+    parser = argparse.ArgumentParser(description="Generate OpenAPI specification")
+    parser.add_argument(
+        "--output", default="web/client/openapi.json", help="Path to output OpenAPI spec file"
+    )
+    args = parser.parse_args()
+
+    app = create_app()
+    generate_openapi_spec(app, args.output)
