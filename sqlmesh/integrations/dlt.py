@@ -49,7 +49,10 @@ def generate_dlt_models_and_settings(
     if db_type == "filesystem":
         connection_config = None
     else:
-        client = pipeline._sql_job_client(schema)
+        if dlt.__version__ >= "1.10.0":
+            client = pipeline.destination_client()
+        else:
+            client = pipeline._sql_job_client(schema)  # type: ignore
         config = client.config
         credentials = config.credentials
         configs = {
