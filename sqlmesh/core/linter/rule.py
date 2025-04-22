@@ -3,10 +3,14 @@ from __future__ import annotations
 import abc
 
 from sqlmesh.core.model import Model
+from sqlmesh.utils.dag import DAG
 
 from typing import Type
 
 import typing as t
+
+if t.TYPE_CHECKING:
+    from sqlmesh.core.context import LinterContext, ModelOrSnapshot
 
 
 class _Rule(abc.ABCMeta):
@@ -19,6 +23,9 @@ class Rule(abc.ABC, metaclass=_Rule):
     """The base class for a rule."""
 
     name = "rule"
+
+    def __init__(self, context: LinterContext):
+        self.context = context
 
     @abc.abstractmethod
     def check_model(self, model: Model) -> t.Optional[RuleViolation]:
@@ -35,6 +42,13 @@ class Rule(abc.ABC, metaclass=_Rule):
 
     def __repr__(self) -> str:
         return self.name
+
+    def get_model(self, model: ModelOrSnapshot) -> t.Optional[Model]:
+        """Get the model by name."""
+        return self.context.get_model(model)
+
+    def get_dag(self) -> DAG:
+        return self.context.get_dag()
 
 
 class RuleViolation:

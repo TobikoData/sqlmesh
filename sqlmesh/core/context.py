@@ -312,6 +312,20 @@ class ExecutionContext(BaseContext):
         )
 
 
+class LinterContext:
+    """Limited context used only for linting"""
+
+    def __init__(self, model_retriever: t.Callable[[ModelOrSnapshot], t.Optional[Model]], dag: DAG):
+        self._dag = dag
+        self._model_retriever = model_retriever
+
+    def get_model(self, model_or_snapshot: ModelOrSnapshot) -> t.Optional[Model]:
+        return self._model_retriever(model_or_snapshot)
+
+    def get_dag(self) -> DAG:
+        return self._dag
+
+
 class GenericContext(BaseContext, t.Generic[C]):
     """Encapsulates a SQLMesh environment supplying convenient functions to perform various tasks.
 
@@ -2534,11 +2548,13 @@ class GenericContext(BaseContext, t.Generic[C]):
             list(self.get_model(model) for model in models) if models else self.models.values()
         )
         all_violations = []
+
+        linter_context = self.linter_context()
         for model in model_list:
             # Linter may be `None` if the context is not loaded yet
             if linter := self._linters.get(model.project):
                 lint_violation, violations = (
-                    linter.lint_model(model, console=self.console) or found_error
+                    linter.lint_model(linter_context, model, console=self.console) or found_error
                 )
                 if lint_violation:
                     found_error = True
@@ -2563,6 +2579,21 @@ class GenericContext(BaseContext, t.Generic[C]):
             model_tests.extend(loader.load_model_tests(tests=tests, patterns=patterns))
 
         return model_tests
+
+    def linter_context(self) -> LinterContext:
+        """Returns a minimal context used only for linting
+
+        The full context is not passed in because it would be best not to have
+        access to the full context from a linting rule.
+        """
+
+        def model_retreiver(model: ModelOrSnapshot) -> t.Optional[Model]:
+            return self.get_model(model, False)
+
+        return LinterContext(
+            model_retreiver,
+            self.dag,
+        )
 
 
 class Context(GenericContext[Config]):
