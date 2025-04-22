@@ -27,9 +27,10 @@ const tokenSchema = z.object({
   exp: z.number(),
   email: z.string(),
 })
+
 const statusResponseSchema = z.object({
   is_logged_in: z.boolean(),
-  id_token: tokenSchema,
+  id_token: tokenSchema.optional().nullable(),
 })
 
 type StatusResponse = z.infer<typeof statusResponseSchema>;
@@ -298,7 +299,9 @@ export class AuthenticationProviderTobikoCloud
       )
 
       if (messageResult === "Open browser") {
-        await env.openExternal(Uri.parse(deviceCodeResponse.verification_uri_complete))
+        await env.openExternal(
+          Uri.parse(deviceCodeResponse.verification_uri_complete)
+        )
       }
       if (messageResult === "Cancel") {
         ac.abort()
