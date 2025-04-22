@@ -13,6 +13,7 @@ from sqlmesh.core.model.kind import (
     IncrementalByTimeRangeKind,
     IncrementalByUniqueKeyKind,
     TimeColumn,
+    SCDType2ByColumnKind,
 )
 from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.scheduler import (
@@ -810,3 +811,69 @@ def test_signals_snapshots_out_of_order(
         snapshot_b: [(to_timestamp("2023-01-01"), to_timestamp("2023-01-04"))],
         snapshot_c: [(to_timestamp("2023-01-01"), to_timestamp("2023-01-02"))],
     }
+
+
+@pytest.mark.parametrize(
+    "batch_size, expected_batches",
+    [
+        (
+            1,
+            [
+                (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+                (to_timestamp("2023-01-02"), to_timestamp("2023-01-03")),
+                (to_timestamp("2023-01-03"), to_timestamp("2023-01-04")),
+            ],
+        ),
+        (
+            None,
+            [
+                (to_timestamp("2023-01-01"), to_timestamp("2023-01-04")),
+            ],
+        ),
+    ],
+)
+def test_scd_type_2_batch_size(
+    mocker: MockerFixture,
+    make_snapshot,
+    get_batched_missing_intervals,
+    batch_size: t.Optional[int],
+    expected_batches: t.List[t.Tuple[int, int]],
+):
+    """
+    Test that SCD_TYPE_2_BY_COLUMN models are batched correctly based on batch_size.
+    With batch_size=1, we expect 3 separate batches for 3 days.
+    Without a specified batch_size, we expect a single batch for the entire period.
+    """
+    start = to_datetime("2023-01-01")
+    end = to_datetime("2023-01-04")
+
+    # Configure kind params
+    kind_params = {}
+    if batch_size is not None:
+        kind_params["batch_size"] = batch_size
+
+    # Create the model and snapshot
+    model = SqlModel(
+        name="test_scd_model",
+        kind=SCDType2ByColumnKind(columns="valid_to", unique_key=["id"], **kind_params),
+        cron="@daily",
+        start=start,
+        query=parse_one("SELECT id, valid_from, valid_to FROM source"),
+    )
+    snapshot = make_snapshot(model)
+
+    # Setup scheduler
+    snapshot_evaluator = SnapshotEvaluator(adapters=mocker.MagicMock(), ddl_concurrent_tasks=1)
+    scheduler = Scheduler(
+        snapshots=[snapshot],
+        snapshot_evaluator=snapshot_evaluator,
+        state_sync=mocker.MagicMock(),
+        max_workers=2,
+        default_catalog=None,
+    )
+
+    # Get batches for the time period
+    batches = get_batched_missing_intervals(scheduler, start, end, end)[snapshot]
+
+    # Verify batches match expectations
+    assert batches == expected_batches

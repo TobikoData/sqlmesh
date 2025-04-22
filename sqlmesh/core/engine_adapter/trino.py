@@ -228,7 +228,7 @@ class TrinoEngineAdapter(
         unique_key: t.Sequence[exp.Expression],
         valid_from_col: exp.Column,
         valid_to_col: exp.Column,
-        execution_time: TimeLike,
+        execution_time: t.Union[TimeLike, exp.Column],
         invalidate_hard_deletes: bool = True,
         updated_at_col: t.Optional[exp.Column] = None,
         check_columns: t.Optional[t.Union[exp.Star, t.Sequence[exp.Column]]] = None,

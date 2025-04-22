@@ -672,6 +672,7 @@ class _SCDType2Kind(_Incremental):
     valid_to_name: SQLGlotColumn = Field(exp.column("valid_to"), validate_default=True)
     invalidate_hard_deletes: SQLGlotBool = False
     time_data_type: exp.DataType = Field(exp.DataType.build("TIMESTAMP"), validate_default=True)
+    batch_size: t.Optional[SQLGlotPositiveInt] = None
 
     forward_only: SQLGlotBool = True
     disable_restatement: SQLGlotBool = True
@@ -711,6 +712,7 @@ class _SCDType2Kind(_Incremental):
             gen(self.valid_to_name),
             str(self.invalidate_hard_deletes),
             gen(self.time_data_type),
+            gen(self.batch_size) if self.batch_size is not None else None,
         ]
 
     @property
@@ -781,6 +783,7 @@ class SCDType2ByColumnKind(_SCDType2Kind):
     name: t.Literal[ModelKindName.SCD_TYPE_2_BY_COLUMN] = ModelKindName.SCD_TYPE_2_BY_COLUMN
     columns: SQLGlotListOfColumnsOrStar
     execution_time_as_valid_from: SQLGlotBool = False
+    updated_at_name: t.Optional[SQLGlotColumn] = None
 
     @property
     def data_hash_values(self) -> t.List[t.Optional[str]]:
@@ -789,7 +792,12 @@ class SCDType2ByColumnKind(_SCDType2Kind):
             if isinstance(self.columns, list)
             else [gen(self.columns)]
         )
-        return [*super().data_hash_values, *columns_sql, str(self.execution_time_as_valid_from)]
+        return [
+            *super().data_hash_values,
+            *columns_sql,
+            str(self.execution_time_as_valid_from),
+            gen(self.updated_at_name) if self.updated_at_name is not None else None,
+        ]
 
     def to_expression(
         self, expressions: t.Optional[t.List[exp.Expression]] = None, **kwargs: t.Any
