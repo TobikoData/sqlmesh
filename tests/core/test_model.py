@@ -9054,8 +9054,12 @@ def test_formatting_flag_serde():
 
 
 def test_call_python_macro_from_jinja():
+    def noop() -> None:
+        print("noop")
+
     @macro()
     def test_runtime_stage(evaluator):
+        noop()
         return evaluator.runtime_stage
 
     expressions = d.parse(
@@ -9083,3 +9087,4 @@ def test_call_python_macro_from_jinja():
 
     model = load_sql_based_model(expressions, jinja_macros=jinja_macros)
     assert model.render_query().sql() == "SELECT 'loading' AS a, 'loading_bla' AS b"
+    assert set(model.python_env) == {"noop", "test_runtime_stage"}

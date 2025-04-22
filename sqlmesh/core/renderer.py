@@ -648,9 +648,8 @@ class QueryRenderer(BaseExpressionRenderer):
 def _prepare_python_env_for_jinja(
     evaluator: MacroEvaluator,
     python_env: t.Dict[str, Executable],
-    env: t.Optional[t.Dict[str, t.Any]] = None,
 ) -> t.Dict[str, t.Any]:
-    prepared_env = prepare_env(python_env, env=env)
+    prepared_env = prepare_env(python_env)
     # Pass the evaluator to all macro functions
     return {
         key: partial(value, evaluator) if callable(value) else value
