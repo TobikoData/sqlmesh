@@ -1,5 +1,7 @@
 # SQLMesh CLI Crash Course
 
+<div style="position: relative; padding-bottom: 56.25%; height: 0;"><iframe src="https://www.loom.com/embed/03582d14ac7c4b27a254705ac25c380a?sid=75acdb2f-4fa1-4762-8cf8-c52a81712eac" frameborder="0" webkitallowfullscreen mozallowfullscreen allowfullscreen style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"></iframe></div>
+
 This doc is designed to get you intimate with a **majority** of the SQLMesh workflows you’ll use to build *and* maintain transformation data pipelines. The goal is to get SQLMesh into muscle memory in 30 minutes or less.
 
 This doc is inspired by community observations, face-to-face conversations, live screenshares, and debugging sessions. This is *not* an exhaustive list but is rooted in lived experience.
