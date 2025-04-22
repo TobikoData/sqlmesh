@@ -2476,9 +2476,7 @@ def _create_model(
     for _, kwargs in model.signals:
         statements.extend((signal_kwarg, True) for signal_kwarg in kwargs.values())
 
-    python_env = python_env or {}
-
-    make_python_env(
+    python_env = make_python_env(
         statements,
         jinja_macro_references,
         module_path,
