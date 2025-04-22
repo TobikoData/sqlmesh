@@ -28,6 +28,13 @@ class MacroConfig(PydanticModel):
     path: Path
 
 
+class HookConfig(PydanticModel):
+    """Class to contain on run start / on run end hooks."""
+
+    sql: str
+    path: Path
+
+
 class Package(PydanticModel):
     """Class to contain package configuration"""
 
@@ -38,6 +45,8 @@ class Package(PydanticModel):
     models: t.Dict[str, ModelConfig]
     variables: t.Dict[str, t.Any]
     macros: t.Dict[str, MacroConfig]
+    on_run_start: t.Dict[str, HookConfig]
+    on_run_end: t.Dict[str, HookConfig]
     files: t.Set[Path]
 
     @property
@@ -83,6 +92,8 @@ class PackageLoader:
         models = _fix_paths(self._context.manifest.models(package_name), package_root)
         seeds = _fix_paths(self._context.manifest.seeds(package_name), package_root)
         macros = _fix_paths(self._context.manifest.macros(package_name), package_root)
+        on_run_start = _fix_paths(self._context.manifest.on_run_start(package_name), package_root)
+        on_run_end = _fix_paths(self._context.manifest.on_run_end(package_name), package_root)
         sources = self._context.manifest.sources(package_name)
 
         config_paths = {
@@ -102,10 +113,12 @@ class PackageLoader:
             variables=package_variables,
             macros=macros,
             files=config_paths,
+            on_run_start=on_run_start,
+            on_run_end=on_run_end,
         )
 
 
-T = t.TypeVar("T", TestConfig, ModelConfig, MacroConfig, SeedConfig)
+T = t.TypeVar("T", TestConfig, ModelConfig, MacroConfig, SeedConfig, HookConfig)
 
 
 def _fix_paths(configs: t.Dict[str, T], package_root: Path) -> t.Dict[str, T]:

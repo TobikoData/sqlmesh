@@ -1003,12 +1003,23 @@ def test_dbt_version(sushi_test_project: Project):
 
 @pytest.mark.xdist_group("dbt_manifest")
 def test_dbt_on_run_start_end(sushi_test_project: Project):
-    context = sushi_test_project.context
-    assert context._manifest
-    assert context._manifest._on_run_start == [
-        "CREATE TABLE IF NOT EXISTS analytic_stats (physical_table VARCHAR, evaluation_time VARCHAR);"
-    ]
-    assert context._manifest._on_run_end == ["{{ create_tables(schemas) }}"]
+    assert (
+        sushi_test_project.packages["customers"].on_run_start["customers-on-run-start-0"].sql
+        == "CREATE TABLE IF NOT EXISTS analytic_stats_packaged_project (physical_table VARCHAR, evaluation_time VARCHAR);"
+    )
+    assert (
+        sushi_test_project.packages["customers"].on_run_end["customers-on-run-end-0"].sql
+        == "{{ packaged_tables(schemas) }}"
+    )
+    assert sushi_test_project.packages["sushi"].on_run_end
+    assert (
+        sushi_test_project.packages["sushi"].on_run_start["sushi-on-run-start-0"].sql
+        == "CREATE TABLE IF NOT EXISTS analytic_stats (physical_table VARCHAR, evaluation_time VARCHAR);"
+    )
+    assert (
+        sushi_test_project.packages["sushi"].on_run_end["sushi-on-run-end-0"].sql
+        == "{{ create_tables(schemas) }}"
+    )
 
 
 @pytest.mark.xdist_group("dbt_manifest")

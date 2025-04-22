@@ -27,7 +27,7 @@ from sqlmesh.core import constants as c
 from sqlmesh.dbt.basemodel import Dependencies
 from sqlmesh.dbt.builtin import BUILTIN_FILTERS, BUILTIN_GLOBALS, OVERRIDDEN_MACROS
 from sqlmesh.dbt.model import ModelConfig
-from sqlmesh.dbt.package import MacroConfig
+from sqlmesh.dbt.package import HookConfig, MacroConfig
 from sqlmesh.dbt.seed import SeedConfig
 from sqlmesh.dbt.source import SourceConfig
 from sqlmesh.dbt.target import TargetConfig
@@ -54,6 +54,7 @@ ModelConfigs = t.Dict[str, ModelConfig]
 SeedConfigs = t.Dict[str, SeedConfig]
 SourceConfigs = t.Dict[str, SourceConfig]
 MacroConfigs = t.Dict[str, MacroConfig]
+HookConfigs = t.Dict[str, HookConfig]
 
 
 IGNORED_PACKAGES = {"elementary"}
@@ -94,8 +95,8 @@ class ManifestHelper:
             self.project_path / c.CACHE, "jinja_calls"
         )
 
-        self._on_run_start: t.Optional[t.List[str]] = None
-        self._on_run_end: t.Optional[t.List[str]] = None
+        self._on_run_start_per_package: t.Dict[str, HookConfigs] = defaultdict(dict)
+        self._on_run_end_per_package: t.Dict[str, HookConfigs] = defaultdict(dict)
 
     def tests(self, package_name: t.Optional[str] = None) -> TestConfigs:
         self._load_all()
@@ -117,6 +118,14 @@ class ManifestHelper:
         self._load_all()
         return self._macros_per_package[package_name or self._project_name]
 
+    def on_run_start(self, package_name: t.Optional[str] = None) -> HookConfigs:
+        self._load_all()
+        return self._on_run_start_per_package[package_name or self._project_name]
+
+    def on_run_end(self, package_name: t.Optional[str] = None) -> HookConfigs:
+        self._load_all()
+        return self._on_run_end_per_package[package_name or self._project_name]
+
     @property
     def all_macros(self) -> t.Dict[str, t.Dict[str, MacroInfo]]:
         self._load_all()
@@ -136,6 +145,7 @@ class ManifestHelper:
         self._load_sources()
         self._load_tests()
         self._load_models_and_seeds()
+        self._load_on_run_start_end()
         self._is_loaded = True
 
         self._call_cache.put("", value={k: v for k, (v, used) in self._calls.items() if used})
@@ -274,6 +284,23 @@ class ManifestHelper:
                     **node_config,
                 )
 
+    def _load_on_run_start_end(self) -> None:
+        for node in self._manifest.nodes.values():
+            if node.resource_type == "operation" and (
+                set(node.tags) & {"on-run-start", "on-run-end"}
+            ):
+                sql = node.raw_code if DBT_VERSION >= (1, 3) else node.raw_sql  # type: ignore
+                node_name = node.name
+                node_path = Path(node.original_file_path)
+                if "on-run-start" in node.tags:
+                    self._on_run_start_per_package[node.package_name][node_name] = HookConfig(
+                        sql=sql, path=node_path
+                    )
+                else:
+                    self._on_run_end_per_package[node.package_name][node_name] = HookConfig(
+                        sql=sql, path=node_path
+                    )
+
     @property
     def _manifest(self) -> Manifest:
         if not self.__manifest:
@@ -314,11 +341,6 @@ class ManifestHelper:
             )
 
         runtime_config = RuntimeConfig.from_parts(project, profile, args)
-
-        if runtime_config.on_run_start:
-            self._on_run_start = runtime_config.on_run_start
-        if runtime_config.on_run_end:
-            self._on_run_end = runtime_config.on_run_end
 
         self._project_name = project.project_name
 

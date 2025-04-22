@@ -29,7 +29,6 @@ from sqlmesh.utils import UniqueKeyDict
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.jinja import (
     JinjaMacroRegistry,
-    MacroInfo,
     extract_macro_references_and_variables,
 )
 
@@ -238,59 +237,54 @@ class DbtLoader(Loader):
 
         return requirements, excluded_requirements
 
-    def _load_environment_statements(self, macros: MacroRegistry) -> EnvironmentStatements | None:
+    def _load_environment_statements(self, macros: MacroRegistry) -> t.List[EnvironmentStatements]:
         """Loads dbt's on_run_start, on_run_end hooks into sqlmesh's before_all, after_all statements respectively."""
 
-        on_run_start: t.List[str] = []
-        on_run_end: t.List[str] = []
-        jinja_root_macros: t.Dict[str, MacroInfo] = {}
-        variables: t.Dict[str, t.Any] = self._get_variables()
+        environment_statements: t.List[EnvironmentStatements] = []
         dialect = self.config.dialect
         for project in self._load_projects():
-            context = project.context.copy()
-            if manifest := context._manifest:
-                on_run_start.extend(manifest._on_run_start or [])
-                on_run_end.extend(manifest._on_run_end or [])
+            context = project.context
+            for package_name, package in project.packages.items():
+                context.set_and_render_variables(package.variables, package_name)
+                on_run_start: t.List[str] = []
+                on_run_end: t.List[str] = []
+                for hook in package.on_run_start.values():
+                    on_run_start.append(hook.sql)
+                for hook in package.on_run_end.values():
+                    on_run_end.append(hook.sql)
 
-            if root_package := context.jinja_macros.root_package_name:
-                if root_macros := context.jinja_macros.packages.get(root_package):
-                    jinja_root_macros |= root_macros
-                context.set_and_render_variables(context.variables, root_package)
-                variables |= context.variables
+                if statements := on_run_start + on_run_end:
+                    jinja_references, used_variables = extract_macro_references_and_variables(
+                        *(gen(stmt) for stmt in statements)
+                    )
+                    jinja_registry = context.jinja_macros.copy()
+                    jinja_registry.root_macros = jinja_registry.packages.get(package_name) or {}
+                    jinja_registry = jinja_registry.trim(jinja_references)
+                    python_env = make_python_env(
+                        [s for stmt in statements for s in d.parse(stmt, default_dialect=dialect)],
+                        jinja_macro_references=jinja_references,
+                        module_path=self.config_path,
+                        macros=macros,
+                        variables=context.variables,
+                        used_variables=used_variables,
+                        path=self.config_path,
+                    )
 
-        if statements := on_run_start + on_run_end:
-            jinja_macro_references, used_variables = extract_macro_references_and_variables(
-                *(gen(stmt) for stmt in statements)
-            )
-            jinja_macros = context.jinja_macros
-            jinja_macros.root_macros = jinja_root_macros
-            jinja_macros = (
-                jinja_macros.trim(jinja_macro_references)
-                if not jinja_macros.trimmed
-                else jinja_macros
-            )
-
-            python_env = make_python_env(
-                [s for stmt in statements for s in d.parse(stmt, default_dialect=dialect)],
-                jinja_macro_references=jinja_macro_references,
-                module_path=self.config_path,
-                macros=macros,
-                variables=variables,
-                used_variables=used_variables,
-                path=self.config_path,
-            )
-
-            return EnvironmentStatements(
-                before_all=[
-                    d.jinja_statement(stmt).sql(dialect=dialect) for stmt in on_run_start or []
-                ],
-                after_all=[
-                    d.jinja_statement(stmt).sql(dialect=dialect) for stmt in on_run_end or []
-                ],
-                python_env=python_env,
-                jinja_macros=jinja_macros,
-            )
-        return None
+                    environment_statements.append(
+                        EnvironmentStatements(
+                            before_all=[
+                                d.jinja_statement(stmt).sql(dialect=dialect)
+                                for stmt in on_run_start or []
+                            ],
+                            after_all=[
+                                d.jinja_statement(stmt).sql(dialect=dialect)
+                                for stmt in on_run_end or []
+                            ],
+                            python_env=python_env,
+                            jinja_macros=jinja_registry,
+                        )
+                    )
+        return environment_statements
 
     def _compute_yaml_max_mtime_per_subfolder(self, root: Path) -> t.Dict[Path, float]:
         if not root.is_dir():
