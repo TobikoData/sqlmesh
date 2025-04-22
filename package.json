@@ -1,0 +1,6 @@
+{
+    "workspaces": [
+        "vscode/extension",
+        "web/client"
+    ]
+}

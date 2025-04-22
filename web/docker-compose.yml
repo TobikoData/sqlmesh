@@ -18,12 +18,11 @@ services:
       context: ..
       dockerfile: web/Dockerfile.app
     command: npm run dev -- --host 0.0.0.0 --port 8001
-    working_dir: /app
+    working_dir: /app/web/client
     ports:
       - 8001:8001
     volumes:
-      - ../web/client:/app
-      - /app/node_modules
+      - ../web/client:/app/web/client
     tty: true
     networks:
       - tobiko-development

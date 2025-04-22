@@ -124,19 +124,19 @@ jobs:
 
   ui_test:
     docker:
-      - image: mcr.microsoft.com/playwright:v1.40.1-jammy
+      - image: mcr.microsoft.com/playwright:v1.52.0-jammy
     resource_class: medium
     steps:
       - halt_unless_client
       - checkout
       - restore_cache:
           keys:
-            - v1-nm-cache-{{ checksum "web/client/package-lock.json" }}
+            - v1-nm-cache-{{ checksum "package-lock.json" }}
       - run:
           name: Install packages
-          command: npm --prefix web/client ci
+          command: npm ci 
       - save_cache:
-          key: v1-nm-cache-{{ checksum "web/client/package-lock.json" }}
+          key: v1-nm-cache-{{ checksum "package-lock.json" }}
           paths:
             - /root/.npm
       - run:

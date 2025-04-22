@@ -77,7 +77,7 @@ jobs:
       - checkout
       - run:
           name: Install packages
-          command: npm --prefix web/client ci
+          command: npm ci
       - run:
           name: Build UI
           command: npm --prefix web/client run build
