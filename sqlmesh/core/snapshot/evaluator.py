@@ -1761,7 +1761,7 @@ class SCDType2Strategy(MaterializableStrategy):
                 unique_key=model.unique_key,
                 valid_from_col=model.kind.valid_from_name,
                 valid_to_col=model.kind.valid_to_name,
-                execution_time=kwargs["execution_time"],
+                execution_time=model.kind.updated_at_name or kwargs["execution_time"],
                 check_columns=model.kind.columns,
                 invalidate_hard_deletes=model.kind.invalidate_hard_deletes,
                 execution_time_as_valid_from=model.kind.execution_time_as_valid_from,

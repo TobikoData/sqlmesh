@@ -1411,7 +1411,7 @@ class EngineAdapter:
         unique_key: t.Sequence[exp.Expression],
         valid_from_col: exp.Column,
         valid_to_col: exp.Column,
-        execution_time: TimeLike,
+        execution_time: t.Union[TimeLike, exp.Column],
         updated_at_col: exp.Column,
         invalidate_hard_deletes: bool = True,
         updated_at_as_valid_from: bool = False,
@@ -1445,7 +1445,7 @@ class EngineAdapter:
         unique_key: t.Sequence[exp.Expression],
         valid_from_col: exp.Column,
         valid_to_col: exp.Column,
-        execution_time: TimeLike,
+        execution_time: t.Union[TimeLike, exp.Column],
         check_columns: t.Union[exp.Star, t.Sequence[exp.Column]],
         invalidate_hard_deletes: bool = True,
         execution_time_as_valid_from: bool = False,
@@ -1479,7 +1479,7 @@ class EngineAdapter:
         unique_key: t.Sequence[exp.Expression],
         valid_from_col: exp.Column,
         valid_to_col: exp.Column,
-        execution_time: TimeLike,
+        execution_time: t.Union[TimeLike, exp.Column],
         invalidate_hard_deletes: bool = True,
         updated_at_col: t.Optional[exp.Column] = None,
         check_columns: t.Optional[t.Union[exp.Star, t.Sequence[exp.Column]]] = None,
@@ -1554,7 +1554,11 @@ class EngineAdapter:
         # column names and then remove them from the unmanaged_columns
         if check_columns and check_columns == exp.Star():
             check_columns = [exp.column(col) for col in unmanaged_columns_to_types]
-        execution_ts = to_time_column(execution_time, time_data_type, self.dialect, nullable=True)
+        execution_ts = (
+            exp.cast(execution_time, time_data_type, dialect=self.dialect)
+            if isinstance(execution_time, exp.Column)
+            else to_time_column(execution_time, time_data_type, self.dialect, nullable=True)
+        )
         if updated_at_as_valid_from:
             if not updated_at_col:
                 raise SQLMeshError(

@@ -4403,6 +4403,7 @@ def test_scd_type_2_by_column_overrides():
                 forward_only False,
                 disable_restatement False,
                 invalidate_hard_deletes False,
+                batch_size 1
             ),
         );
         SELECT
@@ -4428,6 +4429,7 @@ def test_scd_type_2_by_column_overrides():
     assert scd_type_2_model.kind.is_scd_type_2
     assert scd_type_2_model.kind.is_materialized
     assert scd_type_2_model.kind.time_data_type == exp.DataType.build("TIMESTAMPTZ")
+    assert scd_type_2_model.kind.batch_size == 1
     assert not scd_type_2_model.kind.invalidate_hard_deletes
     assert not scd_type_2_model.kind.forward_only
     assert not scd_type_2_model.kind.disable_restatement
