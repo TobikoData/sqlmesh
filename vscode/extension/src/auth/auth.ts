@@ -97,6 +97,9 @@ export class AuthenticationProviderTobikoCloud
       return []
     }
     const token = statusResponse.id_token
+    if (!token) {
+      throw new Error("Invalid state from tcloud, failed to get token.")
+    }
     const session = {
       id: token.email,
       account: {
@@ -120,6 +123,9 @@ export class AuthenticationProviderTobikoCloud
       throw new Error("Failed to login to tcloud")
     }
     const token = statusResponse.id_token
+    if (!token) {
+      throw new Error("Failed to get tcloud token")
+    }
     const session: AuthenticationSession = {
       id: token.email,
       account: {
