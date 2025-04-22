@@ -20,9 +20,10 @@ This page links to a few different types of examples:
 
 ## Walkthroughs
 
-We're proud to present our very first walkthrough, an in-depth description of incremental by time range models:
+Walkthroughs are easy to follow and provide lots of information in a self-contained format.
 
-- [Incremental by Time Range: Full Walkthrough](./incremental_time_full_walkthrough.md) (BigQuery SQL engine)
+- Get the SQLMesh workflow under your fingers with the [SQLMesh CLI Crash Course](./sqlmesh_cli_crash_course.md)
+- See the end-to-end workflow in action with the [Incremental by Time Range: Full Walkthrough](./incremental_time_full_walkthrough.md) (BigQuery SQL engine)
 
 ## Projects
 

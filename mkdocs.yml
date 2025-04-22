@@ -68,6 +68,7 @@ nav:
   - Examples:
     - examples/overview.md
     - Walkthroughs:
+      - examples/sqlmesh_cli_crash_course.md
       - examples/incremental_time_full_walkthrough.md
   - Integrations:
     - "Overview": integrations/overview.md
