@@ -10,7 +10,7 @@ You can follow along in the [open source GitHub repo](https://github.com/sungchu
 
 If you're new to how SQLMesh uses virtual data environments, [watch this quick explainer](https://www.loom.com/share/216835d64b3a4d56b2e061fa4bd9ee76?sid=88b3289f-e19b-4ccc-8b88-3faf9d7c9ce3).
 
-!!! important
+!!! tip
 
     Put this page on your second monitor or in a side by side window to swiftly copy/paste into your terminal.
 
@@ -61,7 +61,7 @@ Note: If you run this without making any changes, SQLMesh will prompt you to mak
     tcloud sqlmesh plan <environment>
     ```
 
-    If you want to move faster, you can add the `--auto-apply` flag to avoid the manual prompt.
+    If you want to move faster, you can add the `--auto-apply` flag to skip the manual prompt and apply the plan. You should do this when you're familiar with the plan output, and don't need to see tiny changes in the diff output before applying the plan.
 
     ```bash
     tcloud sqlmesh plan <environment> --auto-apply
@@ -256,9 +256,11 @@ Run data diff against prod. This is a good way to verify the changes are behavin
 
 ### Apply Changes to Prod
 
+After you feel confident about the changes, apply them to `prod`.
+
 !!! warning "Apply the changes to prod"
-    This step is recommended [**only in CI/CD**](../integrations/github.md) as best practice.
-    For learning purposes and hot fixes, you can apply the changes to prod by entering `y` at the prompt.
+    We recommend only applying changes to `prod` [**using CI/CD**](../integrations/github.md) as best practice.
+    For learning purposes and hot fixes, you can manually apply the changes to prod by entering `y` at the prompt.
 
 === "SQLMesh"
 
@@ -274,6 +276,8 @@ Run data diff against prod. This is a good way to verify the changes are behavin
 
 ??? "Example Output"
     After I feel confident about the changes, I apply them to `prod`.
+
+    SQLMesh:
 
     - Showed me the models impacted by the changes.
     - Showed me the changes that will be made to the models.
@@ -373,7 +377,7 @@ These "external model" schemas are used for column level lineage. You can also a
     ```
 
 ??? "Example Output"
-    Note: this is an example from a separate Tobiko Cloud project, so you can't follow along in the Github repo above.
+    Note: this is an example from a separate Tobiko Cloud project, so you can't follow along in the Github repo.
 
     - Generated external models from the `bigquery-public-data`.`ga4_obfuscated_sample_ecommerce`.`events_20210131` table parsed in the model's SQL.
     - Added an audit to the external model to ensure `event_date` is not NULL.
@@ -532,6 +536,9 @@ Unit tests run *before* a plan is applied automatically. This is great for testi
     ```
 
 ??? "Example Output"
+
+    SQLMesh:
+
     - Generated unit tests for the `sqlmesh_example.full_model` model by live querying the data.
     - Ran the tests and they passed locally in DuckDB.
     - If you're using a cloud data warehouse, this will transpile your SQL syntax to its equivalent in duckdb.
@@ -576,6 +583,8 @@ Unit tests run *before* a plan is applied automatically. This is great for testi
           num_orders: 1
           new_column: 7
     ```
+
+    Manually execute tests with `sqlmesh test`:
 
     ```bash
     (demo) ➜  demo git:(main) ✗ sqlmesh test
@@ -648,7 +657,7 @@ Pro tip: run this after `sqlmesh table_diff` to get a full picture of your chang
 
 If enabled, linting runs automatically during development. The linting rules can be overridden per model, too.
 
-This is great to catch SQL issues before wasting runtime in your data warehouse. It runs automatically, or you can run it manually to proactively check for any issues.
+This is a great way to catch SQL issues before wasting runtime in your data warehouse. It runs automatically, or you can run it manually to proactively check for any issues.
 
 === "SQLMesh"
 
@@ -771,7 +780,7 @@ This is a great way to verify that your model's SQL is looking as expected befor
       event_date BETWEEN @start_date AND @end_date
     ```
 
-    It outputs the full SQL code in the default or target dialect.
+    SQLMesh returns the full SQL code in the default or target dialect.
 
     ```sql hl_lines="11"
     > sqlmesh render sqlmesh_example.incremental_model
@@ -805,7 +814,7 @@ This is a great way to verify that your model's SQL is looking as expected befor
 
 ### Apply Plan Changes in Verbose Mode
 
-You can see detailed operations in the physical and virtual layers. This is useful to see exactly what SQLMesh is doing every step. After, you can copy/paste the fully qualified table/view name into your query console to validate the data (if that's your preference).
+Verbose mode lets you see detailed operations in the physical and virtual layers. This is useful to see exactly what SQLMesh is doing every step. After, you can copy/paste the fully qualified table/view name into your query console to validate the data (if that's your preference).
 
 === "SQLMesh"
 
@@ -938,7 +947,9 @@ bat --theme='ansi' $(ls -t logs/ | head -n 1 | sed 's/^/logs\//')
 
 ## Run on Production Schedule
 
-SQLMesh schedules your transformation on a per-model basis in proper DAG order. This makes it easy to configure how often each step in your pipeline runs to backfill data without running when upstream models are late or failed. Rerunning from point of failure is also a default!
+SQLMesh schedules your transformation on a per-model basis in proper DAG order. This makes it easy to configure how often each step in your pipeline runs to backfill data.
+
+SQLMesh won't schedule models whose upstream models are late or failed, and they will rerun from point of failure by default!
 
 Example scenario and model DAG:
 
