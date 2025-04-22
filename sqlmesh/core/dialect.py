@@ -610,6 +610,12 @@ def _create_parser(expression_type: t.Type[exp.Expression], table_keys: t.List[s
                     value = self.expression(ModelKind, this=kind.value, expressions=props)
             elif key == "expression":
                 value = self._parse_conjunction()
+            elif key == "partitioned_by":
+                partitioned_by = self._parse_partitioned_by()
+                if isinstance(partitioned_by.this, exp.Schema):
+                    value = exp.tuple_(*partitioned_by.this.expressions)
+                else:
+                    value = partitioned_by.this
             else:
                 value = self._parse_bracket(self._parse_field(any_token=True))
 
