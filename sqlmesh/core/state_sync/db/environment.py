@@ -162,43 +162,51 @@ class EnvironmentState:
             where=environment_filter,
         )
 
-    def delete_expired_environments(self) -> t.List[Environment]:
+    def get_expired_environments(self, current_ts: int) -> t.List[Environment]:
+        """Returns the expired environments.
+
+        Expired environments are environments that have exceeded their time-to-live value.
+        Returns:
+            The list of environments to remove, the filter to remove environments.
+        """
+        rows = fetchall(
+            self.engine_adapter,
+            self._environments_query(
+                where=self._create_expiration_filter_expr(current_ts),
+                lock_for_update=True,
+            ),
+        )
+        expired_environments = [self._environment_from_row(r) for r in rows]
+
+        return expired_environments
+
+    def delete_expired_environments(
+        self, current_ts: t.Optional[int] = None
+    ) -> t.List[Environment]:
         """Deletes expired environments.
 
         Returns:
             A list of deleted environments.
         """
-        now_ts = now_timestamp()
-        filter_expr = exp.LTE(
-            this=exp.column("expiration_ts"),
-            expression=exp.Literal.number(now_ts),
-        )
-
-        rows = fetchall(
-            self.engine_adapter,
-            self._environments_query(
-                where=filter_expr,
-                lock_for_update=True,
-            ),
-        )
-        environments = [self._environment_from_row(r) for r in rows]
+        current_ts = current_ts or now_timestamp()
+        expired_environments = self.get_expired_environments(current_ts=current_ts)
 
         self.engine_adapter.delete_from(
             self.environments_table,
-            where=filter_expr,
+            where=self._create_expiration_filter_expr(current_ts),
         )
 
         # Delete the expired environments' corresponding environment statements
-        if expired_environments := [
+        if expired_environments_exprs := [
             exp.EQ(this=exp.column("environment_name"), expression=exp.Literal.string(env.name))
-            for env in environments
+            for env in expired_environments
         ]:
             self.engine_adapter.delete_from(
                 self.environment_statements_table,
-                where=exp.or_(*expired_environments),
+                where=exp.or_(*expired_environments_exprs),
             )
 
-        return environments
+        return expired_environments
 
     def get_environments(self) -> t.List[Environment]:
         """Fetches all environments.
@@ -307,6 +315,17 @@ class EnvironmentState:
         if lock_for_update:
             return query.lock(copy=False)
         return query
+
+    def _create_expiration_filter_expr(self, current_ts: int) -> exp.Expression:
+        """Creates a SQLGlot filter expression to find expired environments.
+
+        Args:
+            current_ts: The current timestamp.
+        """
+        return exp.LTE(
+            this=exp.column("expiration_ts"),
+            expression=exp.Literal.number(current_ts),
+        )
 
 
 def _environment_to_df(environment: Environment) -> pd.DataFrame:

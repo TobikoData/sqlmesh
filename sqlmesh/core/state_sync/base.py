@@ -281,6 +281,28 @@ class StateReader(abc.ABC):
             environment_names: An optional list of environment names to export. If not specified, all environments will be exported.
         """
 
+    @abc.abstractmethod
+    def get_expired_snapshots(
+        self, current_ts: int, ignore_ttl: bool = False
+    ) -> t.List[SnapshotTableCleanupTask]:
+        """Aggregates the id's of the expired snapshots and creates a list of table cleanup tasks.
+
+        Expired snapshots are snapshots that have exceeded their time-to-live
+        and are no longer in use within an environment.
+
+        Returns:
+           The list of table cleanup tasks.
+        """
+
+    @abc.abstractmethod
+    def get_expired_environments(self, current_ts: int) -> t.List[Environment]:
+        """Returns the expired environments.
+
+        Expired environments are environments that have exceeded their time-to-live value.
+        Returns:
+            The list of environments to remove, the filter to remove environments.
+        """
+
 
 class StateSync(StateReader, abc.ABC):
     """Abstract base class for snapshot and environment state management."""
@@ -309,7 +331,7 @@ class StateSync(StateReader, abc.ABC):
 
     @abc.abstractmethod
     def delete_expired_snapshots(
-        self, ignore_ttl: bool = False
+        self, ignore_ttl: bool = False, current_ts: t.Optional[int] = None
     ) -> t.List[SnapshotTableCleanupTask]:
         """Removes expired snapshots.
 
@@ -321,7 +343,7 @@ class StateSync(StateReader, abc.ABC):
                 all snapshots that are not referenced in any environment
 
         Returns:
-            The list of table cleanup tasks.
+            The list of snapshot table cleanup tasks.
         """
 
     @abc.abstractmethod
@@ -391,7 +413,9 @@ class StateSync(StateReader, abc.ABC):
         """
 
     @abc.abstractmethod
-    def delete_expired_environments(self) -> t.List[Environment]:
+    def delete_expired_environments(
+        self, current_ts: t.Optional[int] = None
+    ) -> t.List[Environment]:
         """Removes expired environments.
 
         Expired environments are environments that have exceeded their time-to-live value.
