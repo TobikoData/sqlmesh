@@ -2803,7 +2803,7 @@ def test_parse_expression_list_with_jinja():
 
 def test_no_depends_on_runtime_jinja_query():
     @macro()
-    def runtime_macro(**kwargs) -> None:
+    def runtime_macro(evaluator, **kwargs) -> None:
         from sqlmesh.utils.errors import ParsetimeAdapterCallError
 
         raise ParsetimeAdapterCallError("")
@@ -9051,3 +9051,40 @@ def test_formatting_flag_serde():
 
     deserialized_model = SqlModel.parse_raw(model_json)
     assert deserialized_model.dict() == model.dict()
+
+
+def test_call_python_macro_from_jinja():
+    def noop() -> None:
+        print("noop")
+
+    @macro()
+    def test_runtime_stage(evaluator):
+        noop()
+        return evaluator.runtime_stage
+
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.table,
+            dialect spark,
+            owner owner_name,
+        );
+
+        JINJA_QUERY_BEGIN;
+        SELECT '{{ test_runtime_stage() }}' AS a, '{{ test_runtime_stage_jinja('bla') }}' AS b;
+        JINJA_END;
+    """
+    )
+
+    jinja_macros = JinjaMacroRegistry(
+        root_macros={
+            "test_runtime_stage_jinja": MacroInfo(
+                definition="{% macro test_runtime_stage_jinja(value) %}{{ test_runtime_stage() }}_{{ value }}{% endmacro %}",
+                depends_on=[],
+            )
+        }
+    )
+
+    model = load_sql_based_model(expressions, jinja_macros=jinja_macros)
+    assert model.render_query().sql() == "SELECT 'loading' AS a, 'loading_bla' AS b"
+    assert set(model.python_env) == {"noop", "test_runtime_stage"}

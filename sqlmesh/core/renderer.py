@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import typing as t
 from contextlib import contextmanager
+from functools import partial
 from pathlib import Path
 
 from sqlglot import exp, parse
@@ -134,7 +135,35 @@ class BaseExpressionRenderer:
         if this_snapshot and (kind := this_snapshot.model_kind_name):
             kwargs["model_kind_name"] = kind.name
 
-        expressions = [self._expression]
+        def _resolve_table(table: str | exp.Table) -> str:
+            return self._resolve_table(
+                d.normalize_model_name(table, self._default_catalog, self._dialect),
+                snapshots=snapshots,
+                table_mapping=table_mapping,
+                deployability_index=deployability_index,
+            ).sql(dialect=self._dialect, identify=True, comments=False)
+
+        macro_evaluator = MacroEvaluator(
+            self._dialect,
+            python_env=self._python_env,
+            schema=self.schema,
+            runtime_stage=runtime_stage,
+            resolve_table=_resolve_table,
+            resolve_tables=lambda e: self._resolve_tables(
+                e,
+                snapshots=snapshots,
+                table_mapping=table_mapping,
+                deployability_index=deployability_index,
+                start=start,
+                end=end,
+                execution_time=execution_time,
+                runtime_stage=runtime_stage,
+            ),
+            snapshots=snapshots,
+            default_catalog=self._default_catalog,
+            path=self._path,
+            environment_naming_info=environment_naming_info,
+        )
 
         start_time, end_time = (
             make_inclusive(start or c.EPOCH, end or c.EPOCH, self._dialect)
@@ -153,18 +182,17 @@ class BaseExpressionRenderer:
 
         variables = kwargs.pop("variables", {})
         jinja_env_kwargs = {
-            **{**render_kwargs, **prepare_env(self._python_env), **variables},
+            **{
+                **render_kwargs,
+                **_prepare_python_env_for_jinja(macro_evaluator, self._python_env),
+                **variables,
+            },
             "snapshots": snapshots or {},
             "table_mapping": table_mapping,
             "deployability_index": deployability_index,
             "default_catalog": self._default_catalog,
             "runtime_stage": runtime_stage.value,
-            "resolve_table": lambda table: self._resolve_table(
-                d.normalize_model_name(table, self._default_catalog, self._dialect),
-                snapshots=snapshots,
-                table_mapping=table_mapping,
-                deployability_index=deployability_index,
-            ).sql(dialect=self._dialect, identify=True, comments=False),
+            "resolve_table": _resolve_table,
         }
         if this_model:
             render_kwargs["this_model"] = this_model
@@ -174,6 +202,7 @@ class BaseExpressionRenderer:
 
         jinja_env = self._jinja_macro_registry.build_environment(**jinja_env_kwargs)
 
+        expressions = [self._expression]
         if isinstance(self._expression, d.Jinja):
             try:
                 expressions = []
@@ -189,29 +218,6 @@ class BaseExpressionRenderer:
                 raise ConfigError(
                     f"Could not render or parse jinja at '{self._path}'.\n{ex}"
                 ) from ex
-
-        macro_evaluator = MacroEvaluator(
-            self._dialect,
-            python_env=self._python_env,
-            jinja_env=jinja_env,
-            schema=self.schema,
-            runtime_stage=runtime_stage,
-            resolve_table=jinja_env.globals["resolve_table"],  # type: ignore
-            resolve_tables=lambda e: self._resolve_tables(
-                e,
-                snapshots=snapshots,
-                table_mapping=table_mapping,
-                deployability_index=deployability_index,
-                start=start,
-                end=end,
-                execution_time=execution_time,
-                runtime_stage=runtime_stage,
-            ),
-            snapshots=snapshots,
-            default_catalog=self._default_catalog,
-            path=self._path,
-            environment_naming_info=environment_naming_info,
-        )
 
         macro_evaluator.locals.update(render_kwargs)
 
@@ -637,3 +643,15 @@ class QueryRenderer(BaseExpressionRenderer):
                 annotate_types(select)
 
         return query
+
+
+def _prepare_python_env_for_jinja(
+    evaluator: MacroEvaluator,
+    python_env: t.Dict[str, Executable],
+) -> t.Dict[str, t.Any]:
+    prepared_env = prepare_env(python_env)
+    # Pass the evaluator to all macro functions
+    return {
+        key: partial(value, evaluator) if callable(value) else value
+        for key, value in prepared_env.items()
+    }

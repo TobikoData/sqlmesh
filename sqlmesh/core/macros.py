@@ -150,10 +150,9 @@ class MacroEvaluator:
         self,
         dialect: DialectType = "",
         python_env: t.Optional[t.Dict[str, Executable]] = None,
-        jinja_env: t.Optional[Environment] = None,
         schema: t.Optional[MappingSchema] = None,
         runtime_stage: RuntimeStage = RuntimeStage.LOADING,
-        resolve_table: t.Optional[t.Callable[[str | exp.Expression], str]] = None,
+        resolve_table: t.Optional[t.Callable[[str | exp.Table], str]] = None,
         resolve_tables: t.Optional[t.Callable[[exp.Expression], exp.Expression]] = None,
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         default_catalog: t.Optional[str] = None,
@@ -177,7 +176,7 @@ class MacroEvaluator:
         self.columns_to_types_called = False
         self.default_catalog = default_catalog
 
-        self._jinja_env: t.Optional[Environment] = jinja_env
+        self._jinja_env: t.Optional[Environment] = None
         self._schema = schema
         self._resolve_table = resolve_table
         self._resolve_tables = resolve_tables
@@ -431,7 +430,7 @@ class MacroEvaluator:
             )
         )
 
-    def resolve_table(self, table: str | exp.Expression) -> str:
+    def resolve_table(self, table: str | exp.Table) -> str:
         """Gets the physical table name for a given model."""
         if not self._resolve_table:
             raise SQLMeshError(
