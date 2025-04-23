@@ -75,14 +75,24 @@ class MacroStrTemplate(Template):
 EXPRESSIONS_NAME_MAP = {}
 SQL = t.NewType("SQL", str)
 
-SUPPORTED_TYPES = {
-    "t": t,
-    "typing": t,
-    "List": t.List,
-    "Tuple": t.Tuple,
-    "Union": t.Union,
-    "DatetimeRanges": DatetimeRanges,
-}
+
+@lru_cache()
+def get_supported_types() -> t.Dict[str, t.Any]:
+    from sqlmesh.core.context import ExecutionContext
+
+    return {
+        "t": t,
+        "typing": t,
+        "List": t.List,
+        "Tuple": t.Tuple,
+        "Union": t.Union,
+        "DatetimeRanges": DatetimeRanges,
+        "exp": exp,
+        "SQL": SQL,
+        "MacroEvaluator": MacroEvaluator,
+        "ExecutionContext": ExecutionContext,
+    }
+
 
 for klass in sqlglot.Parser.EXPRESSION_PARSERS:
     name = klass if isinstance(klass, str) else klass.__name__  # type: ignore
@@ -1305,7 +1315,7 @@ def call_macro(
     bound.apply_defaults()
 
     try:
-        annotations = t.get_type_hints(func, localns=SUPPORTED_TYPES)
+        annotations = t.get_type_hints(func, localns=get_supported_types())
     except (NameError, TypeError):  # forward references aren't handled
         annotations = {}
 
