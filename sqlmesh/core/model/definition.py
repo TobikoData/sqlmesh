@@ -1337,7 +1337,11 @@ class SqlModel(_Model):
         if self.columns_to_types_ is not None:
             self._columns_to_types = self.columns_to_types_
         elif self._columns_to_types is None:
-            query = self._query_renderer.render()
+            try:
+                query = self._query_renderer.render()
+            except Exception:
+                logger.exception("Failed to render query for model %s", self.fqn)
+                return None
 
             if query is None:
                 return None

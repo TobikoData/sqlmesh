@@ -143,3 +143,6 @@ class CachingStateSync(DelegatingStateSync):
     ) -> None:
         self.snapshot_cache.clear()
         self.state_sync.unpause_snapshots(snapshots, unpaused_dt)
+
+    def clear_cache(self) -> None:
+        self.snapshot_cache.clear()

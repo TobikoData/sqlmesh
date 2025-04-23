@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import typing as t
 
 from pathlib import Path
@@ -11,6 +12,9 @@ from sqlmesh.core.model.cache import (
 from sqlmesh.core import constants as c
 from sqlmesh.core.snapshot.definition import Snapshot, SnapshotId
 from sqlmesh.utils.cache import FileCache
+
+
+logger = logging.getLogger(__name__)
 
 
 class SnapshotCache:
@@ -70,7 +74,12 @@ class SnapshotCache:
             self._update_node_hash_cache(snapshot)
 
             if snapshot.is_model and c.MAX_FORK_WORKERS == 1:
-                self._optimized_query_cache.with_optimized_query(snapshot.model)
+                try:
+                    self._optimized_query_cache.with_optimized_query(snapshot.model)
+                except Exception:
+                    logger.exception(
+                        "Failed to cache optimized query for snapshot %s", snapshot.snapshot_id
+                    )
 
             self.put(snapshot)
 
@@ -82,10 +91,13 @@ class SnapshotCache:
         if self._snapshot_cache.exists(entry_name):
             return
 
-        if snapshot.is_model:
-            # make sure we preload full_depends_on
-            snapshot.model.full_depends_on
-        self._snapshot_cache.put(entry_name, value=snapshot)
+        try:
+            if snapshot.is_model:
+                # make sure we preload full_depends_on
+                snapshot.model.full_depends_on
+            self._snapshot_cache.put(entry_name, value=snapshot)
+        except Exception:
+            logger.exception("Failed to cache snapshot %s", snapshot.snapshot_id)
 
     def clear(self) -> None:
         self._snapshot_cache.clear()
