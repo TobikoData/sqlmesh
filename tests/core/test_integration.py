@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import typing as t
+import json
 from collections import Counter
 from datetime import timedelta
 from unittest import mock
@@ -3993,6 +3994,59 @@ def test_empty_backfill_new_model(init_and_plan_context: t.Callable):
                 assert snapshot.intervals[-1][1] == to_timestamp("2023-01-09")
             else:
                 assert snapshot.intervals[-1][1] <= to_timestamp("2023-01-08")
+
+
+@time_machine.travel("2023-01-08 15:00:00 UTC")
+@pytest.mark.parametrize("forward_only", [False, True])
+def test_plan_repairs_unrenderable_snapshot_state(
+    init_and_plan_context: t.Callable, forward_only: bool
+):
+    context, plan = init_and_plan_context("examples/sushi")
+    context.apply(plan)
+
+    target_snapshot = context.get_snapshot("sushi.waiter_revenue_by_day")
+    assert target_snapshot
+
+    # Manually corrupt the snapshot's query
+    raw_snapshot = context.state_sync.state_sync.engine_adapter.fetchone(
+        f"SELECT snapshot FROM sqlmesh._snapshots WHERE name = '{target_snapshot.name}' AND identifier = '{target_snapshot.identifier}'"
+    )[0]  # type: ignore
+    parsed_snapshot = json.loads(raw_snapshot)
+    parsed_snapshot["node"]["query"] = "SELECT @missing_macro()"
+    context.state_sync.state_sync.engine_adapter.update_table(
+        "sqlmesh._snapshots",
+        {"snapshot": json.dumps(parsed_snapshot)},
+        f"name = '{target_snapshot.name}' AND identifier = '{target_snapshot.identifier}'",
+    )
+
+    context.clear_caches()
+
+    target_snapshot_in_state = context.state_sync.get_snapshots([target_snapshot.snapshot_id])[
+        target_snapshot.snapshot_id
+    ]
+    with pytest.raises(Exception):
+        target_snapshot_in_state.model.render_query_or_raise()
+
+    # Repair the snapshot by creating a new version of it
+    context.upsert_model(target_snapshot.model.name, stamp="repair")
+    target_snapshot = context.get_snapshot(target_snapshot.name)
+
+    plan_builder = context.plan_builder("prod", forward_only=forward_only)
+    plan = plan_builder.build()
+    assert plan.directly_modified == {target_snapshot.snapshot_id}
+    if not forward_only:
+        assert {i.snapshot_id for i in plan.missing_intervals} == {target_snapshot.snapshot_id}
+        plan_builder.set_choice(target_snapshot, SnapshotChangeCategory.NON_BREAKING)
+        plan = plan_builder.build()
+
+    context.apply(plan)
+
+    context.clear_caches()
+    assert context.get_snapshot(target_snapshot.name).model.render_query_or_raise()
+    target_snapshot_in_state = context.state_sync.get_snapshots([target_snapshot.snapshot_id])[
+        target_snapshot.snapshot_id
+    ]
+    assert target_snapshot_in_state.model.render_query_or_raise()
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
