@@ -7463,6 +7463,23 @@ def test_staged_file_path():
     query = model.render_query()
     assert query.sql(dialect="snowflake") == "SELECT * FROM @a.b/c/d.csv (FILE_FORMAT => 'b.ff')"
 
+    expressions = d.parse(
+        """
+        MODEL (name test, dialect snowflake);
+
+        SELECT
+          *
+        FROM @variable (FILE_FORMAT => 'foo'), @non_variable (FILE_FORMAT => 'bar')
+        LIMIT 100
+        """
+    )
+    model = load_sql_based_model(expressions, variables={"variable": "some_path"})
+    query = model.render_query()
+    assert (
+        query.sql(dialect="snowflake")
+        == """SELECT * FROM 'some_path' (FILE_FORMAT => 'foo') AS "SOME_PATH", @non_variable (FILE_FORMAT => 'bar') LIMIT 100"""
+    )
+
 
 def test_cache():
     expressions = d.parse(
