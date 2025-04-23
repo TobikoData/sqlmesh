@@ -553,6 +553,56 @@ def test_plan_dev_no_changes(runner, tmp_path):
     assert_virtual_layer_updated(result)
 
 
+def test_plan_dev_longnames(runner, tmp_path):
+    create_example_project(tmp_path)
+
+    long_model_names = {
+        "full": f"full_{'a' * 80}",
+        "incremental": f"incremental_{'b' * 80}",
+        "seed": f"seed_{'c' * 80}",
+    }
+    for model_name in long_model_names:
+        with open(tmp_path / "models" / f"{model_name}_model.sql", "r") as f:
+            model_text = f.read()
+            for more_model_names in long_model_names:
+                model_text = model_text.replace(
+                    f"sqlmesh_example.{more_model_names}_model",
+                    f"sqlmesh_example.{long_model_names[more_model_names]}_model",
+                )
+        with open(tmp_path / "models" / f"{model_name}_model.sql", "w") as f:
+            f.write(model_text)
+
+    # Input: `y` to apply and backfill
+    result = runner.invoke(
+        cli,
+        [
+            "--log-file-dir",
+            tmp_path,
+            "--paths",
+            tmp_path,
+            "plan",
+            "dev_butamuchlongerenvironmentname",
+            "--skip-tests",
+            "--no-prompts",
+            "--auto-apply",
+        ],
+    )
+    assert result.exit_code == 0
+    assert (
+        "sqlmesh_example__dev_butamuchlongerenvironmentname.seed_cccccccccccccccccccccccc\ncccccccccccccccccccccccccccccccccccccccccccccccccccccccc_model          [insert \nseed file]"
+        in result.output
+    )
+    assert (
+        "sqlmesh_example__dev_butamuchlongerenvironmentname.incremental_bbbbbbbbbbbbbbbbb\nbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb_model   [insert "
+        in result.output
+    )
+    assert (
+        "sqlmesh_example__dev_butamuchlongerenvironmentname.full_aaaaaaaaaaaaaaaaaaaaaaaa\naaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_model          [full \nrefresh"
+        in result.output
+    )
+    assert_backfill_success(result)
+
+
 def test_plan_nonbreaking(runner, tmp_path):
     create_example_project(tmp_path)
     init_prod_and_backfill(runner, tmp_path)
