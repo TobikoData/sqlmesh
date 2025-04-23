@@ -1003,15 +1003,33 @@ def test_dbt_version(sushi_test_project: Project):
 
 @pytest.mark.xdist_group("dbt_manifest")
 def test_dbt_on_run_start_end(sushi_test_project: Project):
+    # Validate perservation of dbt's order of execution
+    assert sushi_test_project.packages["sushi"].on_run_start["sushi-on-run-start-0"].index == 0
+    assert sushi_test_project.packages["sushi"].on_run_start["sushi-on-run-start-1"].index == 1
+    assert sushi_test_project.packages["sushi"].on_run_end["sushi-on-run-end-0"].index == 0
+    assert sushi_test_project.packages["sushi"].on_run_end["sushi-on-run-end-1"].index == 1
+    assert (
+        sushi_test_project.packages["customers"].on_run_start["customers-on-run-start-0"].index == 0
+    )
+    assert (
+        sushi_test_project.packages["customers"].on_run_start["customers-on-run-start-1"].index == 1
+    )
+    assert sushi_test_project.packages["customers"].on_run_end["customers-on-run-end-0"].index == 0
+    assert sushi_test_project.packages["customers"].on_run_end["customers-on-run-end-1"].index == 1
+
     assert (
         sushi_test_project.packages["customers"].on_run_start["customers-on-run-start-0"].sql
+        == "CREATE TABLE IF NOT EXISTS to_be_executed_first (col VARCHAR);"
+    )
+    assert (
+        sushi_test_project.packages["customers"].on_run_start["customers-on-run-start-1"].sql
         == "CREATE TABLE IF NOT EXISTS analytic_stats_packaged_project (physical_table VARCHAR, evaluation_time VARCHAR);"
     )
     assert (
-        sushi_test_project.packages["customers"].on_run_end["customers-on-run-end-0"].sql
+        sushi_test_project.packages["customers"].on_run_end["customers-on-run-end-1"].sql
         == "{{ packaged_tables(schemas) }}"
     )
-    assert sushi_test_project.packages["sushi"].on_run_end
+
     assert (
         sushi_test_project.packages["sushi"].on_run_start["sushi-on-run-start-0"].sql
         == "CREATE TABLE IF NOT EXISTS analytic_stats (physical_table VARCHAR, evaluation_time VARCHAR);"

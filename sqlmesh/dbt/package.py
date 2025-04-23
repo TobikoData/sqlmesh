@@ -32,6 +32,7 @@ class HookConfig(PydanticModel):
     """Class to contain on run start / on run end hooks."""
 
     sql: str
+    index: int
     path: Path
 
 

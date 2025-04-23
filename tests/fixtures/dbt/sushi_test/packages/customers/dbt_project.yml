@@ -33,6 +33,8 @@ vars:
 
 
 on-run-start:
+  - 'CREATE TABLE IF NOT EXISTS to_be_executed_first (col VARCHAR);'
   - 'CREATE TABLE IF NOT EXISTS analytic_stats_packaged_project (physical_table VARCHAR, evaluation_time VARCHAR);'
 on-run-end:
+  - 'DROP TABLE to_be_executed_first'
   - '{{ packaged_tables(schemas) }}'

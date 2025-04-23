@@ -30,6 +30,7 @@ from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.jinja import (
     JinjaMacroRegistry,
     extract_macro_references_and_variables,
+    make_jinja_registry,
 )
 
 if sys.version_info >= (3, 12):
@@ -244,22 +245,27 @@ class DbtLoader(Loader):
         dialect = self.config.dialect
         for project in self._load_projects():
             context = project.context
+            hooks_by_package_name: t.Dict[str, EnvironmentStatements] = {}
             for package_name, package in project.packages.items():
                 context.set_and_render_variables(package.variables, package_name)
-                on_run_start: t.List[str] = []
-                on_run_end: t.List[str] = []
-                for hook in package.on_run_start.values():
-                    on_run_start.append(hook.sql)
-                for hook in package.on_run_end.values():
-                    on_run_end.append(hook.sql)
+                on_run_start: t.List[str] = [
+                    on_run_hook.sql
+                    for on_run_hook in sorted(package.on_run_start.values(), key=lambda h: h.index)
+                ]
+                on_run_end: t.List[str] = [
+                    on_run_hook.sql
+                    for on_run_hook in sorted(package.on_run_end.values(), key=lambda h: h.index)
+                ]
 
                 if statements := on_run_start + on_run_end:
                     jinja_references, used_variables = extract_macro_references_and_variables(
                         *(gen(stmt) for stmt in statements)
                     )
-                    jinja_registry = context.jinja_macros.copy()
-                    jinja_registry.root_macros = jinja_registry.packages.get(package_name) or {}
-                    jinja_registry = jinja_registry.trim(jinja_references)
+
+                    jinja_registry = make_jinja_registry(
+                        context.jinja_macros, package_name, jinja_references
+                    )
+
                     python_env = make_python_env(
                         [s for stmt in statements for s in d.parse(stmt, default_dialect=dialect)],
                         jinja_macro_references=jinja_references,
@@ -270,20 +276,26 @@ class DbtLoader(Loader):
                         path=self.config_path,
                     )
 
-                    environment_statements.append(
-                        EnvironmentStatements(
-                            before_all=[
-                                d.jinja_statement(stmt).sql(dialect=dialect)
-                                for stmt in on_run_start or []
-                            ],
-                            after_all=[
-                                d.jinja_statement(stmt).sql(dialect=dialect)
-                                for stmt in on_run_end or []
-                            ],
-                            python_env=python_env,
-                            jinja_macros=jinja_registry,
-                        )
+                    hooks_by_package_name[package_name] = EnvironmentStatements(
+                        before_all=[
+                            d.jinja_statement(stmt).sql(dialect=dialect)
+                            for stmt in on_run_start or []
+                        ],
+                        after_all=[
+                            d.jinja_statement(stmt).sql(dialect=dialect)
+                            for stmt in on_run_end or []
+                        ],
+                        python_env=python_env,
+                        jinja_macros=jinja_registry,
                     )
+                # Project hooks should be executed first and then rest of the packages
+                environment_statements = [
+                    statements
+                    for _, statements in sorted(
+                        hooks_by_package_name.items(),
+                        key=lambda item: 0 if item[0] == context.project_name else 1,
+                    )
+                ]
         return environment_statements
 
     def _compute_yaml_max_mtime_per_subfolder(self, root: Path) -> t.Dict[Path, float]:

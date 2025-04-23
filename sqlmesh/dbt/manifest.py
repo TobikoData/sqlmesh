@@ -294,11 +294,11 @@ class ManifestHelper:
                 node_path = Path(node.original_file_path)
                 if "on-run-start" in node.tags:
                     self._on_run_start_per_package[node.package_name][node_name] = HookConfig(
-                        sql=sql, path=node_path
+                        sql=sql, index=node.index or 0, path=node_path
                     )
                 else:
                     self._on_run_end_per_package[node.package_name][node_name] = HookConfig(
-                        sql=sql, path=node_path
+                        sql=sql, index=node.index or 0, path=node_path
                     )
 
     @property
