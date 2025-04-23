@@ -71,7 +71,7 @@ class AuditMixin(AuditCommonMetaMixin):
     defaults: t.Dict[str, exp.Expression]
     expressions_: t.Optional[t.List[exp.Expression]]
     jinja_macros: JinjaMacroRegistry
-    formatting: t.Optional[bool] = Field(default=None, exclude=True)
+    formatting: t.Optional[bool]
 
     @property
     def expressions(self) -> t.List[exp.Expression]:
@@ -126,6 +126,7 @@ class ModelAudit(PydanticModel, AuditMixin, frozen=True):
     defaults: t.Dict[str, exp.Expression] = {}
     expressions_: t.Optional[t.List[exp.Expression]] = Field(default=None, alias="expressions")
     jinja_macros: JinjaMacroRegistry = JinjaMacroRegistry()
+    formatting: t.Optional[bool] = Field(default=None, exclude=True)
 
     _path: t.Optional[Path] = None
 
@@ -159,6 +160,7 @@ class StandaloneAudit(_Node, AuditMixin):
     default_catalog: t.Optional[str] = None
     depends_on_: t.Optional[t.Set[str]] = Field(default=None, alias="depends_on")
     python_env: t.Dict[str, Executable] = {}
+    formatting: t.Optional[bool] = Field(default=None, exclude=True)
 
     source_type: t.Literal["audit"] = "audit"
 
