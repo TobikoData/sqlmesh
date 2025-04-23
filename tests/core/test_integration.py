@@ -4050,6 +4050,32 @@ def test_plan_repairs_unrenderable_snapshot_state(
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_no_backfill_for_model_downstream_of_metadata_change(init_and_plan_context: t.Callable):
+    context, _ = init_and_plan_context("examples/sushi")
+
+    # Make sushi.waiter_revenue_by_day a forward-only model.
+    forward_only_model = context.get_model("sushi.waiter_revenue_by_day")
+    updated_model_kind = forward_only_model.kind.copy(update={"forward_only": True})
+    forward_only_model = forward_only_model.copy(update={"kind": updated_model_kind})
+    context.upsert_model(forward_only_model)
+
+    context.plan("prod", auto_apply=True, no_prompts=True, skip_tests=True)
+
+    # Make a metadata change upstream of the forward-only model.
+    context.upsert_model("sushi.orders", owner="new_owner")
+
+    plan = context.plan_builder("test_dev").build()
+    assert plan.has_changes
+    assert not plan.directly_modified
+    assert not plan.indirectly_modified
+    assert not plan.missing_intervals
+    assert all(
+        snapshot.change_category == SnapshotChangeCategory.METADATA
+        for snapshot in plan.new_snapshots
+    )
+
+
+@time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_dbt_requirements(sushi_dbt_context: Context):
     assert set(sushi_dbt_context.requirements) == {"dbt-core", "dbt-duckdb"}
     assert sushi_dbt_context.requirements["dbt-core"].startswith("1.")

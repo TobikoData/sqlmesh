@@ -590,7 +590,9 @@ class PlanBuilder:
                     if p_id in snapshot.parents:
                         direct_parent_categories.add(parent.change_category)
 
-            if not direct_parent_categories or direct_parent_categories.intersection(
+            if snapshot.is_model and snapshot.model.forward_only:
+                snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+            elif not direct_parent_categories or direct_parent_categories.intersection(
                 {SnapshotChangeCategory.BREAKING, SnapshotChangeCategory.INDIRECT_BREAKING}
             ):
                 snapshot.categorize_as(SnapshotChangeCategory.INDIRECT_BREAKING)
@@ -619,6 +621,10 @@ class PlanBuilder:
                 snapshot.effective_from = self._effective_from
 
     def _is_forward_only_change(self, s_id: SnapshotId) -> bool:
+        if not self._context_diff.directly_modified(
+            s_id.name
+        ) and not self._context_diff.indirectly_modified(s_id.name):
+            return False
         snapshot = self._context_diff.snapshots[s_id]
         if snapshot.name in self._context_diff.modified_snapshots:
             _, old = self._context_diff.modified_snapshots[snapshot.name]

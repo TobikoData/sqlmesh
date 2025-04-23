@@ -1473,7 +1473,9 @@ class DeployabilityIndex(PydanticModel, frozen=True):
             )
             if this_deployable:
                 snapshot = snapshots[node]
-                is_forward_only_model = snapshot.is_model and snapshot.model.forward_only
+                is_forward_only_model = (
+                    snapshot.is_model and snapshot.model.forward_only and not snapshot.is_metadata
+                )
                 has_auto_restatement = (
                     snapshot.is_model and snapshot.model.auto_restatement_cron is not None
                 )
