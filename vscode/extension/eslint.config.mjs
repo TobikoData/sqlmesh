@@ -23,6 +23,7 @@ export default [{
         curly: "error",
         eqeqeq: "error",
         "no-throw-literal": "error",
-        semi: ["error", "never"]
+        semi: ["error", "never"],
+        "no-shadow": "error",
     },
 }];
