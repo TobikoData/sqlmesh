@@ -21,6 +21,7 @@ from sqlmesh.core.config import (
 from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import parse, parse_one
 from sqlmesh.core.environment import EnvironmentNamingInfo
+from sqlmesh.core.macros import SQL
 from sqlmesh.core.model import (
     FullKind,
     IncrementalByTimeRangeKind,
@@ -2909,8 +2910,14 @@ def test_apply_auto_restatements_disable_restatement_downstream(make_snapshot):
 
 def test_render_signal(make_snapshot, mocker):
     @signal()
-    def check_types(batch, env: str, default: int = 0):
-        if env != "in_memory" or not default == 0:
+    def check_types(batch, env: str, sql: list[SQL], table: exp.Table, default: int = 0):
+        if not (
+            env == "in_memory"
+            and default == 0
+            and isinstance(sql, list)
+            and isinstance(sql[0], str)
+            and isinstance(table, exp.Table)
+        ):
             raise
         return True
 
@@ -2919,7 +2926,7 @@ def test_render_signal(make_snapshot, mocker):
             """
         MODEL (
             name test_schema.test_model,
-            signals check_types(env := @gateway)
+            signals check_types(env := @gateway, sql := [a.b], table := b.c)
         );
         SELECT a FROM tbl;
         """
