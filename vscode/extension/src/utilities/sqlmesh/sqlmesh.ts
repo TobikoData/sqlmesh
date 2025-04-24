@@ -1,14 +1,15 @@
 import path from "path"
-import { traceLog, traceVerbose } from "../common/log"
+import { traceInfo, traceLog, traceVerbose } from "../common/log"
 import { getInterpreterDetails } from "../common/python"
 import { Result, err, isErr, ok } from "../functional/result"
 import { getProjectRoot } from "../common/utilities"
-import { execFile } from "child_process"
-import { promisify } from "util"
 import { isPythonModuleInstalled } from "../python"
 import fs from "fs"
 import { ErrorType } from "../errors"
 import { isSignedIntoTobikoCloud } from "../../auth/auth"
+import { execAsync } from "../exec"
+import z from "zod"
+import { ProgressLocation, window } from "vscode"
 
 export type sqlmesh_exec = {
   workspacePath: string;
@@ -48,12 +49,114 @@ export const get_tcloud_bin = async (): Promise<Result<string, string>> => {
   return ok(binPath)
 }
 
+const isSqlmeshInstalledSchema = z.object({
+  is_installed: z.boolean(),
+})
+
+/**
+ * Returns true if the current project is a sqlmesh enterprise project is installed and updated.
+ *
+ * @returns A Result indicating whether sqlmesh enterprise is installed and updated.
+ */
+export const isSqlmeshEnterpriseInstalled = async (): Promise<
+  Result<boolean, string>
+> => {
+  traceInfo("Checking if sqlmesh enterprise is installed")
+  const tcloudBin = await get_tcloud_bin()
+  if (isErr(tcloudBin)) {
+    return err(tcloudBin.error)
+  }
+  const called = await execAsync(tcloudBin.value, ["is_sqlmesh_installed"])
+  if (called.exitCode !== 0) {
+    return err(
+      `Failed to check if sqlmesh enterprise is installed: ${called.stderr}`
+    )
+  }
+  const parsed = isSqlmeshInstalledSchema.safeParse(JSON.parse(called.stdout))
+  if (!parsed.success) {
+    return err(
+      `Failed to parse sqlmesh enterprise installation status: ${parsed.error}`
+    )
+  }
+  return ok(parsed.data.is_installed)
+}
+
+/**
+ * Install sqlmesh enterprise.
+ *
+ * @returns A Result indicating whether sqlmesh enterprise was installed.
+ */
+export const installSqlmeshEnterprise = async (
+  abortController: AbortController
+): Promise<Result<boolean, string>> => {
+  const tcloudBin = await get_tcloud_bin()
+  if (isErr(tcloudBin)) {
+    return err(tcloudBin.error)
+  }
+  const called = await execAsync(tcloudBin.value, ["install_sqlmesh"], {
+    signal: abortController.signal,
+  })
+  if (called.exitCode !== 0) {
+    return err(`Failed to install sqlmesh enterprise: ${called.stderr}`)
+  }
+  return ok(true)
+}
+
+/**
+ * Checks if sqlmesh enterprise is installed and updated. If not, it will install it.
+ * This will also create a progress message in vscode in order to inform the user that sqlmesh enterprise is being installed.
+ *
+ * @returns A Result indicating whether sqlmesh enterprise was installed in the call.
+ */
+export const ensureSqlmeshEnterpriseInstalled = async (): Promise<
+  Result<boolean, string>
+> => {
+  traceInfo("Ensuring sqlmesh enterprise is installed")
+  const isInstalled = await isSqlmeshEnterpriseInstalled()
+  if (isErr(isInstalled)) {
+    return err(isInstalled.error)
+  }
+  if (isInstalled.value) {
+    traceInfo("Sqlmesh enterprise is installed")
+    return ok(false)
+  }
+  traceInfo("Sqlmesh enterprise is not installed, installing...")
+  const abortController = new AbortController()
+  const installResult = await window.withProgress(
+    {
+      location: ProgressLocation.Notification,
+      title: "Installing sqlmesh enterprise...",
+      cancellable: true,
+    },
+    async (progress, token) => {
+      // Connect the cancellation token to our abort controller
+      token.onCancellationRequested(() => {
+        abortController.abort()
+        traceInfo("Sqlmesh enterprise installation cancelled")
+        window.showInformationMessage("Installation cancelled")
+      })
+      progress.report({ message: "Installing sqlmesh enterprise..." })
+      const result = await installSqlmeshEnterprise(abortController)
+      if (isErr(result)) {
+        return result
+      }
+      return ok(true)
+    }
+  )
+  if (isErr(installResult)) {
+    return installResult
+  }
+  return ok(true)
+}
+
 /**
  * Get the sqlmesh executable for the current workspace.
  *
  * @returns The sqlmesh executable for the current workspace.
  */
-export const sqlmesh_exec = async (): Promise<Result<sqlmesh_exec, ErrorType>> => {
+export const sqlmesh_exec = async (): Promise<
+  Result<sqlmesh_exec, ErrorType>
+> => {
   const projectRoot = await getProjectRoot()
   const workspacePath = projectRoot.uri.fsPath
   const interpreterDetails = await getInterpreterDetails()
@@ -72,7 +175,7 @@ export const sqlmesh_exec = async (): Promise<Result<sqlmesh_exec, ErrorType>> =
       return err({
         type: "generic",
         message: isTcloudInstalled.error,
-      }) 
+      })
     }
     if (isTcloudInstalled.value) {
       const tcloudBin = await get_tcloud_bin()
@@ -86,6 +189,13 @@ export const sqlmesh_exec = async (): Promise<Result<sqlmesh_exec, ErrorType>> =
       if (!isSignedIn) {
         return err({
           type: "not_signed_in",
+        })
+      }
+      const ensured = await ensureSqlmeshEnterpriseInstalled()
+      if (isErr(ensured)) {
+        return err({
+          type: "generic",
+          message: ensured.error,
         })
       }
       return ok({
@@ -164,15 +274,13 @@ export const sqlmesh_lsp_exec = async (): Promise<
           type: "not_signed_in",
         })
       }
-      const execFileAsync = promisify(execFile)
-      await execFileAsync(tcloudBin.value, ["install_sqlmesh"], {
-        cwd: workspacePath,
-        env: {
-          PYTHONPATH: interpreterDetails.path?.[0],
-          VIRTUAL_ENV: path.dirname(interpreterDetails.binPath!),
-          PATH: interpreterDetails.binPath!,
-        },
-      })
+      const ensured = await ensureSqlmeshEnterpriseInstalled()
+      if (isErr(ensured)) {
+        return err({
+          type: "generic",
+          message: ensured.error,
+        })
+      }
     }
     const binPath = path.join(interpreterDetails.binPath!, "sqlmesh_lsp")
     traceLog(`Bin path: ${binPath}`)
