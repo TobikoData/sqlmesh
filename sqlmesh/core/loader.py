@@ -61,7 +61,7 @@ class LoadedProject:
     metrics: UniqueKeyDict[str, Metric]
     requirements: t.Dict[str, str]
     excluded_requirements: t.Set[str]
-    environment_statements: t.Optional[EnvironmentStatements]
+    environment_statements: t.List[EnvironmentStatements]
     user_rules: RuleSet
 
 
@@ -187,9 +187,9 @@ class Loader(abc.ABC):
     ) -> UniqueKeyDict[str, Audit]:
         """Loads all audits."""
 
-    def _load_environment_statements(self, macros: MacroRegistry) -> EnvironmentStatements | None:
+    def _load_environment_statements(self, macros: MacroRegistry) -> t.List[EnvironmentStatements]:
         """Loads environment statements."""
-        return None
+        return []
 
     def load_materializations(self) -> None:
         """Loads custom materializations."""
@@ -651,7 +651,7 @@ class SqlMeshLoader(Loader):
 
         return metrics
 
-    def _load_environment_statements(self, macros: MacroRegistry) -> EnvironmentStatements | None:
+    def _load_environment_statements(self, macros: MacroRegistry) -> t.List[EnvironmentStatements]:
         """Loads environment statements."""
 
         if self.config.before_all or self.config.after_all:
@@ -673,8 +673,8 @@ class SqlMeshLoader(Loader):
                 path=self.config_path,
             )
 
-            return EnvironmentStatements(**statements, python_env=python_env)
-        return None
+            return [EnvironmentStatements(**statements, python_env=python_env)]
+        return []
 
     def _load_linting_rules(self) -> RuleSet:
         user_rules: UniqueKeyDict[str, type[Rule]] = UniqueKeyDict("rules")

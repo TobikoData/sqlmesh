@@ -610,8 +610,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             self._standalone_audits.update(project.standalone_audits)
             self._requirements.update(project.requirements)
             self._excluded_requirements.update(project.excluded_requirements)
-            if project.environment_statements:
-                self._environment_statements.append(project.environment_statements)
+            self._environment_statements.extend(project.environment_statements)
 
             config = loader.config
             self._linters[config.project] = Linter.from_rules(
