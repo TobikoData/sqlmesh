@@ -2938,3 +2938,37 @@ def test_render_signal(make_snapshot, mocker):
     )
     snapshot_a = make_snapshot(sql_model)
     assert snapshot_a.check_ready_intervals([(0, 1)], mocker.Mock()) == [(0, 1)]
+
+
+def test_partitioned_by_roundtrip(make_snapshot: t.Callable):
+    sql_model = load_sql_based_model(
+        parse("""
+        MODEL (
+            name test_schema.test_model,
+            kind full,
+            partitioned_by (a, bucket(4, b), truncate(3, c), month(d))
+        );
+        SELECT a, b, c, d FROM tbl;
+        """)
+    )
+    snapshot = make_snapshot(sql_model)
+    assert isinstance(snapshot, Snapshot)
+    assert isinstance(snapshot.node, SqlModel)
+
+    assert snapshot.node.partitioned_by == [
+        exp.column("a", quoted=True),
+        exp.PartitionedByBucket(
+            this=exp.column("b", quoted=True), expression=exp.Literal.number(4)
+        ),
+        exp.PartitionByTruncate(
+            this=exp.column("c", quoted=True), expression=exp.Literal.number(3)
+        ),
+        exp.Month(this=exp.column("d", quoted=True)),
+    ]
+
+    # roundtrip through json and ensure we get correct AST nodes on the other end
+    serialized = snapshot.json()
+    deserialized = snapshot.parse_raw(serialized)
+
+    assert isinstance(deserialized.node, SqlModel)
+    assert deserialized.node.partitioned_by == snapshot.node.partitioned_by

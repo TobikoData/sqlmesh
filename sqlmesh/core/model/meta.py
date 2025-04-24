@@ -5,7 +5,7 @@ from functools import cached_property
 from typing_extensions import Self
 
 from pydantic import Field
-from sqlglot import Dialect, exp
+from sqlglot import Dialect, exp, parse_one
 from sqlglot.helper import ensure_collection, ensure_list
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
@@ -182,6 +182,14 @@ class ModelMeta(_Node):
     def _partition_and_cluster_validator(
         cls, v: t.Any, info: ValidationInfo
     ) -> t.List[exp.Expression]:
+        if isinstance(v, list) and info.field_name == "partitioned_by_":
+            # this branch gets hit when we are deserializing from json because `partitioned_by` is stored as a List[str]
+            string_to_parse = (
+                f"({','.join(v)})"  # recreate the (a, b, c) part of "partitioned_by (a, b, c)"
+            )
+            parsed = parse_one(string_to_parse, into=exp.PartitionedByProperty)
+            v = parsed.this.expressions if isinstance(parsed.this, exp.Schema) else v
+
         expressions = list_of_fields_validator(v, info.data)
 
         for expression in expressions:

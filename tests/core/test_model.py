@@ -1514,6 +1514,134 @@ def test_render_definition_with_defaults():
     ) == d.format_model_expressions(expected_expressions)
 
 
+def test_render_definition_partitioned_by():
+    # no parenthesis in definition, no parenthesis when rendered
+    model = load_sql_based_model(
+        d.parse(
+            f"""
+        MODEL (
+            name db.table,
+            kind FULL,
+            partitioned_by a
+        );
+
+        select 1 as a;
+        """
+        )
+    )
+
+    assert model.partitioned_by == [exp.column("a", quoted=True)]
+    assert (
+        model.render_definition()[0].sql(pretty=True)
+        == """MODEL (
+  name db.table,
+  kind FULL,
+  partitioned_by "a"
+)"""
+    )
+
+    # single column wrapped in parenthesis in defintion, no parenthesis in rendered
+    model = load_sql_based_model(
+        d.parse(
+            f"""
+        MODEL (
+            name db.table,
+            kind FULL,
+            partitioned_by (a)
+        );
+
+        select 1 as a;
+        """
+        )
+    )
+
+    assert model.partitioned_by == [exp.column("a", quoted=True)]
+    assert (
+        model.render_definition()[0].sql(pretty=True)
+        == """MODEL (
+  name db.table,
+  kind FULL,
+  partitioned_by "a"
+)"""
+    )
+
+    # multiple columns wrapped in parenthesis in definition, parenthesis in rendered
+    model = load_sql_based_model(
+        d.parse(
+            f"""
+        MODEL (
+            name db.table,
+            kind FULL,
+            partitioned_by (a, b)
+        );
+
+        select 1 as a, 2 as b;
+        """
+        )
+    )
+
+    assert model.partitioned_by == [exp.column("a", quoted=True), exp.column("b", quoted=True)]
+    assert (
+        model.render_definition()[0].sql(pretty=True)
+        == """MODEL (
+  name db.table,
+  kind FULL,
+  partitioned_by ("a", "b")
+)"""
+    )
+
+    # multiple columns not wrapped in parenthesis in the definition is an error
+    with pytest.raises(ParseError, match=r"keyword: 'value' missing"):
+        load_sql_based_model(
+            d.parse(
+                f"""
+            MODEL (
+                name db.table,
+                kind FULL,
+                partitioned_by a, b
+            );
+
+            select 1 as a, 2 as b;
+            """
+            )
+        )
+
+    # Iceberg transforms / functions
+    model = load_sql_based_model(
+        d.parse(
+            f"""
+        MODEL (
+            name db.table,
+            kind FULL,
+            partitioned_by (day(a), truncate(b, 4), bucket(c, 3))
+        );
+
+        select 1 as a, 2 as b, 3 as c;
+        """
+        ),
+        dialect="trino",
+    )
+
+    assert model.partitioned_by == [
+        exp.Day(this=exp.column("a", quoted=True)),
+        exp.PartitionByTruncate(
+            this=exp.column("b", quoted=True), expression=exp.Literal.number(4)
+        ),
+        exp.PartitionedByBucket(
+            this=exp.column("c", quoted=True), expression=exp.Literal.number(3)
+        ),
+    ]
+    assert (
+        model.render_definition()[0].sql(pretty=True)
+        == """MODEL (
+  name db.table,
+  dialect trino,
+  kind FULL,
+  partitioned_by (DAY("a"), TRUNCATE("b", 4), BUCKET("c", 3))
+)"""
+    )
+
+
 def test_cron():
     daily = _Node(name="x", cron="@daily")
     assert to_datetime(daily.cron_prev("2020-01-01")) == to_datetime("2019-12-31")
