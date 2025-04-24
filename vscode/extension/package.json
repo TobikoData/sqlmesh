@@ -72,7 +72,7 @@
     "check-types": "tsc --noEmit",
     "watch": "node esbuild.js --watch",
     "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
-    "vscode:package": "vsce package",
+    "vscode:package": "vsce package --no-dependencies",
     "vscode:prepublish": "cp ../../LICENSE . && npm run package",
     "package": "npm run check-types && node esbuild.js --production"
   },
