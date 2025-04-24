@@ -2034,11 +2034,11 @@ def test_deployability_index_categorized_forward_only_model(make_snapshot):
 
     snapshot_a = make_snapshot(model_a)
     snapshot_a.previous_versions = snapshot_a_old.all_versions
-    snapshot_a.categorize_as(SnapshotChangeCategory.METADATA)
+    snapshot_a.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
 
     snapshot_b = make_snapshot(SqlModel(name="b", query=parse_one("SELECT 1")))
     snapshot_b.parents = (snapshot_a.snapshot_id,)
-    snapshot_b.categorize_as(SnapshotChangeCategory.METADATA)
+    snapshot_b.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
 
     deployability_index = DeployabilityIndex.create(
         {s.snapshot_id: s for s in [snapshot_a, snapshot_b]}

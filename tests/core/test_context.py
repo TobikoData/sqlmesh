@@ -197,7 +197,7 @@ def test_render_sql_model(sushi_context, assert_exp_eq, copy_to_temp_path: t.Cal
 def test_render_non_deployable_parent(sushi_context, assert_exp_eq, copy_to_temp_path: t.Callable):
     model = sushi_context.get_model("sushi.waiter_revenue_by_day")
     forward_only_kind = model.kind.copy(update={"forward_only": True})
-    model = model.copy(update={"kind": forward_only_kind})
+    model = model.copy(update={"kind": forward_only_kind, "stamp": "trigger forward-only change"})
     sushi_context.upsert_model(model)
     sushi_context.plan("dev", no_prompts=True, auto_apply=True)
 
