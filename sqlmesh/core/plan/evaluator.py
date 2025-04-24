@@ -255,6 +255,11 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             plan: The plan to source snapshots from.
             deployability_index: Indicates which snapshots are deployable in the context of this creation.
         """
+        self.state_sync.push_snapshots(plan.new_snapshots)
+        analytics.collector.on_snapshots_created(
+            new_snapshots=plan.new_snapshots, plan_id=plan.plan_id
+        )
+
         promoted_snapshot_ids = (
             set(plan.environment.promoted_snapshot_ids)
             if plan.environment.promoted_snapshot_ids is not None
@@ -300,11 +305,6 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                     success=completion_status is not None and completion_status.is_success
                 )
 
-        self.state_sync.push_snapshots(plan.new_snapshots)
-
-        analytics.collector.on_snapshots_created(
-            new_snapshots=plan.new_snapshots, plan_id=plan.plan_id
-        )
         return completion_status
 
     def _promote(
