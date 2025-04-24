@@ -1,5 +1,6 @@
 # ruff: noqa: F811
 import json
+import re
 import typing as t
 from datetime import date, datetime
 from pathlib import Path
@@ -8447,6 +8448,37 @@ def test_blueprinting_with_quotes(tmp_path: Path) -> None:
     assert m2.name == 'm."c d"'
     assert t.cast(exp.Query, m1.render_query()).sql() == '''SELECT "a b" AS "c1", "a b" AS "c2"'''
     assert t.cast(exp.Query, m2.render_query()).sql() == '''SELECT 'c d' AS "c1", "c d" AS "c2"'''
+
+
+def test_blueprinting_with_error(tmp_path: Path) -> None:
+    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+
+    template_with_errors = tmp_path / "models/template_with_errors.sql"
+    template_with_errors.parent.mkdir(parents=True, exist_ok=True)
+    template_with_errors.write_text(
+        """
+        MODEL (
+          name m.@{bp_var},
+          blueprints (
+            (bp_var := "a b"),
+            (bp_var := 'c d'),
+          ),
+        );
+
+        SELECT @bp_var AS c1, @var{bp_var} AS c2
+        """
+    )
+
+    # Validate we display the stack trace as well before the error message
+    with pytest.raises(
+        ConfigError,
+        match=re.compile(
+            r"Traceback \(most recent call last\):.*Failed to resolve macros for", re.DOTALL
+        ),
+    ):
+        ctx = Context(
+            config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb")), paths=tmp_path
+        )
 
 
 def test_blueprint_variable_precedence_sql(tmp_path: Path, assert_exp_eq: t.Callable) -> None:

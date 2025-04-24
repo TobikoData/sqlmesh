@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import traceback
 import typing as t
 from contextlib import contextmanager
 from functools import partial
@@ -211,12 +212,16 @@ class BaseExpressionRenderer:
                     expressions = [e for e in parse(rendered_expression, read=self._dialect) if e]
 
                     if not expressions:
-                        raise ConfigError(f"Failed to parse an expression:\n{self._expression}")
+                        raise ConfigError(
+                            f"{traceback.format_exc()}"
+                            + f"Failed to parse an expression:\n{self._expression}"
+                        )
             except ParsetimeAdapterCallError:
                 raise
             except Exception as ex:
                 raise ConfigError(
-                    f"Could not render or parse jinja at '{self._path}'.\n{ex}"
+                    f"{traceback.format_exc()}"
+                    + f"Could not render or parse jinja at '{self._path}'.\n{ex}"
                 ) from ex
 
         macro_evaluator.locals.update(render_kwargs)
@@ -228,7 +233,10 @@ class BaseExpressionRenderer:
             try:
                 macro_evaluator.evaluate(definition)
             except Exception as ex:
-                raise_config_error(f"Failed to evaluate macro '{definition}'. {ex}", self._path)
+                raise_config_error(
+                    f"{traceback.format_exc()}" + f"Failed to evaluate macro '{definition}'. {ex}",
+                    self._path,
+                )
 
         resolved_expressions: t.List[t.Optional[exp.Expression]] = []
 
@@ -237,7 +245,8 @@ class BaseExpressionRenderer:
                 transformed_expressions = ensure_list(macro_evaluator.transform(expression))
             except Exception as ex:
                 raise_config_error(
-                    f"Failed to resolve macros for\n{expression.sql(dialect=self._dialect, pretty=True)}\n{ex}",
+                    f"{traceback.format_exc()}"
+                    + f"Failed to resolve macros for\n{expression.sql(dialect=self._dialect, pretty=True)}\n{ex}",
                     self._path,
                 )
 
@@ -532,10 +541,16 @@ class QueryRenderer(BaseExpressionRenderer):
             expressions = [e for e in expressions if not isinstance(e, exp.Semicolon)]
 
             if not expressions:
-                raise ConfigError(f"Failed to render query at '{self._path}':\n{self._expression}")
+                raise ConfigError(
+                    f"{traceback.format_exc()}"
+                    + f"Failed to render query at '{self._path}':\n{self._expression}"
+                )
 
             if len(expressions) > 1:
-                raise ConfigError(f"Too many statements in query:\n{self._expression}")
+                raise ConfigError(
+                    f"{traceback.format_exc()}"
+                    + f"Too many statements in query:\n{self._expression}"
+                )
 
             query = expressions[0]  # type: ignore
 
@@ -543,7 +558,9 @@ class QueryRenderer(BaseExpressionRenderer):
                 return None
             if not isinstance(query, exp.Query):
                 raise_config_error(
-                    f"Model query needs to be a SELECT or a UNION, got {query}.", self._path
+                    f"{traceback.format_exc()}"
+                    + f"Model query needs to be a SELECT or a UNION, got {query}.",
+                    self._path,
                 )
                 raise
 
@@ -581,7 +598,9 @@ class QueryRenderer(BaseExpressionRenderer):
     ) -> None:
         if optimized:
             if not isinstance(expression, exp.Query):
-                raise SQLMeshError(f"Expected a Query but got: {expression}")
+                raise SQLMeshError(
+                    f"{traceback.format_exc()}" + f"Expected a Query but got: {expression}"
+                )
             self._optimized_cache = expression
         else:
             super().update_cache(expression)
@@ -634,7 +653,8 @@ class QueryRenderer(BaseExpressionRenderer):
 
         except Exception as ex:
             raise_config_error(
-                f"Failed to optimize query, please file an issue at https://github.com/TobikoData/sqlmesh/issues/new. {ex}",
+                f"{traceback.format_exc()}"
+                + f"Failed to optimize query, please file an issue at https://github.com/TobikoData/sqlmesh/issues/new. {ex}",
                 self._path,
             )
 
