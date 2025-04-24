@@ -34,8 +34,8 @@ function resolveVariables(value: string[], workspace?: WorkspaceFolder): string[
     })
 
     return value.map((s) => {
-        for (const [key, value] of substitutions) {
-            s = s.replace(key, value)
+        for (const [k, v] of substitutions) {
+            s = s.replace(k, v)
         }
         return s
     })
