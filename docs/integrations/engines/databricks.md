@@ -50,11 +50,16 @@ Before working through this connection quickstart, ensure that:
 1. You have a Databricks account with access to an appropriate Databricks Workspace
     - The Workspace must support authenticating with [personal access tokens](https://docs.databricks.com/en/dev-tools/auth/pat.html) (Databricks [Community Edition workspaces do not](https://docs.databricks.com/en/admin/access-control/tokens.html))
     - Your account must have Workspace Access and Create Compute permissions (these permissions are enabled by default)
-2. Your computer has [SQLMesh installed](../../installation.md) with the [Databricks extra available](../../installation.md#install-extras)
+2. Your Databricks compute resources have [Unity Catalog](https://docs.databricks.com/aws/en/data-governance/unity-catalog/) activated
+3. Your computer has [SQLMesh installed](../../installation.md) with the [Databricks extra available](../../installation.md#install-extras)
     - Install from the command line with the command `pip install "sqlmesh[databricks]"`
-3. You have initialized a [SQLMesh example project](../../quickstart/cli#1-create-the-sqlmesh-project) on your computer
+4. You have initialized a [SQLMesh example project](../../quickstart/cli#1-create-the-sqlmesh-project) on your computer
     - Open a command line interface and navigate to the directory where the project files should go
     - Initialize the project with the command `sqlmesh init duckdb`
+
+!!! important "Unity Catalog required"
+
+    Databricks compute resources used by SQLMesh must have [Unity Catalog](https://docs.databricks.com/aws/en/data-governance/unity-catalog/) activated.
 
 ### Get connection info
 
