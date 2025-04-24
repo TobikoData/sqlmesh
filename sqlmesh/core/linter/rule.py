@@ -9,6 +9,10 @@ from typing import Type
 import typing as t
 
 
+if t.TYPE_CHECKING:
+    from sqlmesh.core.context import GenericContext
+
+
 class _Rule(abc.ABCMeta):
     def __new__(cls: Type[_Rule], clsname: str, bases: t.Tuple, attrs: t.Dict) -> _Rule:
         attrs["name"] = clsname.lower()
@@ -19,6 +23,9 @@ class Rule(abc.ABC, metaclass=_Rule):
     """The base class for a rule."""
 
     name = "rule"
+
+    def __init__(self, context: GenericContext):
+        self.context = context
 
     @abc.abstractmethod
     def check_model(self, model: Model) -> t.Optional[RuleViolation]:

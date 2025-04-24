@@ -2537,7 +2537,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             # Linter may be `None` if the context is not loaded yet
             if linter := self._linters.get(model.project):
                 lint_violation, violations = (
-                    linter.lint_model(model, console=self.console) or found_error
+                    linter.lint_model(model, self, console=self.console) or found_error
                 )
                 if lint_violation:
                     found_error = True

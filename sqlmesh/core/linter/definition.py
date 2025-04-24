@@ -11,6 +11,9 @@ from sqlmesh.core.model import Model
 from sqlmesh.core.linter.rule import Rule, RuleViolation
 from sqlmesh.core.console import LinterConsole, get_console
 
+if t.TYPE_CHECKING:
+    from sqlmesh.core.context import GenericContext
+
 
 def select_rules(all_rules: RuleSet, rule_names: t.Set[str]) -> RuleSet:
     if "all" in rule_names:
@@ -52,7 +55,7 @@ class Linter:
         return Linter(config.enabled, all_rules, rules, warn_rules)
 
     def lint_model(
-        self, model: Model, console: LinterConsole = get_console()
+        self, model: Model, context: GenericContext, console: LinterConsole = get_console()
     ) -> t.Tuple[bool, t.List[AnnotatedRuleViolation]]:
         if not self.enabled:
             return False, []
@@ -62,8 +65,8 @@ class Linter:
         rules = self.rules.difference(ignored_rules)
         warn_rules = self.warn_rules.difference(ignored_rules)
 
-        error_violations = rules.check_model(model)
-        warn_violations = warn_rules.check_model(model)
+        error_violations = rules.check_model(model, context)
+        warn_violations = warn_rules.check_model(model, context)
 
         all_violations: t.List[AnnotatedRuleViolation] = [
             AnnotatedRuleViolation(
@@ -96,11 +99,11 @@ class RuleSet(Mapping[str, type[Rule]]):
     def __init__(self, rules: Iterable[type[Rule]] = ()) -> None:
         self._underlying = {rule.name: rule for rule in rules}
 
-    def check_model(self, model: Model) -> t.List[RuleViolation]:
+    def check_model(self, model: Model, context: GenericContext) -> t.List[RuleViolation]:
         violations = []
 
         for rule in self._underlying.values():
-            violation = rule().check_model(model)
+            violation = rule(context).check_model(model)
 
             if violation:
                 violations.append(violation)
