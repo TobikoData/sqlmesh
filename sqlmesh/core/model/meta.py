@@ -39,6 +39,7 @@ from sqlmesh.utils.pydantic import (
     field_validator,
     list_of_fields_validator,
     model_validator,
+    get_dialect,
 )
 
 if t.TYPE_CHECKING:
@@ -182,12 +183,20 @@ class ModelMeta(_Node):
     def _partition_and_cluster_validator(
         cls, v: t.Any, info: ValidationInfo
     ) -> t.List[exp.Expression]:
-        if isinstance(v, list) and info.field_name == "partitioned_by_":
+        if (
+            isinstance(v, list)
+            and all(isinstance(i, str) for i in v)
+            and info.field_name == "partitioned_by_"
+        ):
             # this branch gets hit when we are deserializing from json because `partitioned_by` is stored as a List[str]
+            # however, we should only invoke this if the list contains strings because this validator is also
+            # called by Python models which might pass a List[exp.Expression]
             string_to_parse = (
                 f"({','.join(v)})"  # recreate the (a, b, c) part of "partitioned_by (a, b, c)"
             )
-            parsed = parse_one(string_to_parse, into=exp.PartitionedByProperty)
+            parsed = parse_one(
+                string_to_parse, into=exp.PartitionedByProperty, dialect=get_dialect(info)
+            )
             v = parsed.this.expressions if isinstance(parsed.this, exp.Schema) else v
 
         expressions = list_of_fields_validator(v, info.data)
