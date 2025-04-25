@@ -9,7 +9,8 @@ import {
   EnumErrorKey,
   useNotificationCenter,
 } from './library/pages/root/context/notificationCenter'
-import { isNotNil } from './utils'
+import { isArrayNotEmpty, isNotNil } from './utils'
+import NotFound from './library/pages/root/NotFound'
 
 const IS_HEADLESS: boolean = Boolean((window as any).__IS_HEADLESS__ ?? false)
 const Header: Optional<React.LazyExoticComponent<() => JSX.Element>> =
@@ -50,14 +51,19 @@ export default function App(): JSX.Element {
         </>
       )}
       <main className="h-full overflow-hidden relative">
-        {isFetching && (
+        {isFetching ? (
           <LoadingSegment className="absolute w-full h-full bg-theme z-10">
             Building Modules...
           </LoadingSegment>
+        ) : (
+          <Suspense fallback={<LoadingSegment>Loading Page...</LoadingSegment>}>
+            {isArrayNotEmpty(modules.list) ? (
+              <RouterProvider router={router} />
+            ) : (
+              <NotFound description="No Modules Found" />
+            )}
+          </Suspense>
         )}
-        <Suspense fallback={<LoadingSegment>Loading Page...</LoadingSegment>}>
-          <RouterProvider router={router} />
-        </Suspense>
       </main>
       {isNotNil(Footer) && (
         <>
