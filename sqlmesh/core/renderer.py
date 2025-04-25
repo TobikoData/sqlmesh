@@ -317,7 +317,9 @@ class BaseExpressionRenderer:
                 **table_mapping,
             }
             expand = set(expand) | {
-                name for name, snapshot in snapshots.items() if snapshot.is_embedded
+                name
+                for name, snapshot in snapshots.items()
+                if snapshot.is_embedded or not snapshot.categorized
             }
 
             if expand:

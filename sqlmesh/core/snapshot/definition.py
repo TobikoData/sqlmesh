@@ -1014,6 +1014,11 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
 
         self.change_category = category
 
+    @property
+    def categorized(self) -> bool:
+        """Whether the snapshot has been categorized."""
+        return self.change_category is not None and self.version is not None
+
     def table_name(self, is_deployable: bool = True) -> str:
         """Full table name pointing to the materialized location of the snapshot.
 

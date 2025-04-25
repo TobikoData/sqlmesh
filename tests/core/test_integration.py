@@ -4076,6 +4076,25 @@ def test_no_backfill_for_model_downstream_of_metadata_change(init_and_plan_conte
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_evaluate_of_uncategorized_snapshot(init_and_plan_context: t.Callable):
+    context, plan = init_and_plan_context("examples/sushi")
+    context.apply(plan)
+
+    # Add a new projection
+    model = context.get_model("sushi.waiter_revenue_by_day")
+    context.upsert_model(add_projection_to_model(t.cast(SqlModel, model)))
+
+    # Downstream model references the new projection
+    downstream_model = context.get_model("sushi.top_waiters")
+    context.upsert_model(add_projection_to_model(t.cast(SqlModel, downstream_model), literal=False))
+
+    df = context.evaluate(
+        "sushi.top_waiters", start="2023-01-05", end="2023-01-06", execution_time=now()
+    )
+    assert set(df["one"].tolist()) == {1}
+
+
+@time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_dbt_requirements(sushi_dbt_context: Context):
     assert set(sushi_dbt_context.requirements) == {"dbt-core", "dbt-duckdb"}
     assert sushi_dbt_context.requirements["dbt-core"].startswith("1.")
