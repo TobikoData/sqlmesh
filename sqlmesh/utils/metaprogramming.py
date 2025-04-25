@@ -61,6 +61,16 @@ def _code_globals(code: types.CodeType) -> t.Dict[str, None]:
     return variables
 
 
+def _globals_match(obj1: t.Any, obj2: t.Any) -> bool:
+    return type(obj1) == type(obj2) and (
+        obj1 == obj2
+        or (
+            getattr(obj1, "__module__", None) == getattr(obj2, "__module__", None)
+            and getattr(obj1, "__name__", None) == getattr(obj2, "__name__", None)
+        )
+    )
+
+
 def func_globals(func: t.Callable) -> t.Dict[str, t.Any]:
     """Finds all global references and closures in a function and nested functions.
 
@@ -287,8 +297,16 @@ def build_env(
 
     def walk(obj: t.Any, name: str, is_metadata: t.Optional[bool] = None) -> None:
         obj_module = inspect.getmodule(obj)
-        if name in visited or (obj_module and obj_module.__name__ == "builtins"):
+        if obj_module and obj_module.__name__ == "builtins":
             return
+
+        if name in visited:
+            if name not in env or _globals_match(env[name][0], obj):
+                return
+
+            raise SQLMeshError(
+                f"Cannot store {obj} in environment, duplicate definitions found for '{name}'"
+            )
 
         visited.add(name)
         name_missing_from_env = name not in env
@@ -320,7 +338,7 @@ def build_env(
             ):
                 env[name] = (obj, is_metadata)
                 return
-        elif env[name][0] != obj:
+        elif not _globals_match(env[name][0], obj):
             raise SQLMeshError(
                 f"Cannot store {obj} in environment, duplicate definitions found for '{name}'"
             )
