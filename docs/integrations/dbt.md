@@ -57,9 +57,15 @@ Models **require** a start date for backfilling data through use of the `start` 
 
 ### Configuration
 
-SQLMesh determines a project's configuration settings from its dbt configuration files.
+SQLMesh derives a project's configuration from its dbt configuration files. This section outlines additional settings specific to SQLMesh that can be defined.
 
-This section describes using runtime variables to create multiple configurations and how to disable SQLMesh's automatic model description and comment registration.
+#### Selecting a different state connection
+
+[Certain engines](https://sqlmesh.readthedocs.io/en/stable/guides/configuration/?h=unsupported#state-connection), like Trino, cannot be used to store SQLMesh's state.
+
+As a workaround, we recommend specifying a supported state engine using the `state_connection` argument instead.
+
+Learn more about how to configure state connections in Python [here](https://sqlmesh.readthedocs.io/en/stable/guides/configuration/#state-connection).
 
 #### Runtime vars
 
