@@ -1000,10 +1000,10 @@ class SQLMeshMagics(Magics):
     @argument("--execution-time", type=str, help="Execution time.")
     @line_magic
     @pass_sqlmesh_context
-    def audit(self, context: Context, line: str) -> None:
+    def audit(self, context: Context, line: str) -> bool:
         """Run audit(s)"""
         args = parse_argstring(self.audit, line)
-        context.audit(
+        return context.audit(
             models=args.models, start=args.start, end=args.end, execution_time=args.execution_time
         )
 
