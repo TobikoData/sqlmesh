@@ -898,14 +898,21 @@ def create_external_models(obj: Context, **kwargs: t.Any) -> None:
 def table_diff(
     obj: Context, source_to_target: str, model: t.Optional[str], **kwargs: t.Any
 ) -> None:
-    """Show the diff between two tables."""
+    """Show the diff between two tables or all impacted when no model is specified."""
     source, target = source_to_target.split(":")
-    obj.table_diff(
-        source=source,
-        target=target,
-        model_or_snapshot=model,
-        **kwargs,
-    )
+    if model:
+        obj.table_diff(
+            source=source,
+            target=target,
+            model_or_snapshot=model,
+            **kwargs,
+        )
+    else:
+        obj.table_diff_impacted_models(
+            source=source,
+            target=target,
+            **kwargs,
+        )
 
 
 @cli.command("rewrite")
