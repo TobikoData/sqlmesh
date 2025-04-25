@@ -684,7 +684,13 @@ class NoopConsole(Console):
         skip_grain_check: bool = False,
         temp_schema: t.Optional[str] = None,
     ) -> None:
-        pass
+        self.show_table_diff_summary(table_diff)
+        self.show_schema_diff(table_diff.schema_diff())
+        self.show_row_diff(
+            table_diff.row_diff(temp_schema=temp_schema, skip_grain_check=skip_grain_check),
+            show_sample=show_sample,
+            skip_grain_check=skip_grain_check,
+        )
 
     def show_table_diff_summary(self, table_diff: TableDiff) -> None:
         pass
