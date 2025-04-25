@@ -152,6 +152,7 @@ class EngineAdapter:
             register_comments=self._register_comments,
             null_connection=True,
             multithreaded=self._multithreaded,
+            pretty_sql=self._pretty_sql,
             **self._extra_config,
         )
 
