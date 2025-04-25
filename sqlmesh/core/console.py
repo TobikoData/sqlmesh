@@ -218,6 +218,26 @@ class DifferenceConsole(abc.ABC):
         """Displays a summary of differences for the given models."""
 
     @abc.abstractmethod
+    def show_impacted_tables_diff(
+        self,
+        table_diffs: t.List[TableDiff],
+        show_sample: bool = True,
+        skip_grain_check: bool = False,
+        temp_schema: t.Optional[str] = None,
+    ) -> None:
+        """Display the table diff between all mismatched tables."""
+
+    @abc.abstractmethod
+    def show_table_diff(
+        self,
+        table_diff: TableDiff,
+        show_sample: bool = True,
+        skip_grain_check: bool = False,
+        temp_schema: t.Optional[str] = None,
+    ) -> None:
+        """Display the table diff between two tables."""
+
+    @abc.abstractmethod
     def show_table_diff_summary(self, table_diff: TableDiff) -> None:
         """Display information about the tables being diffed and how they are being joined"""
 
@@ -646,6 +666,24 @@ class NoopConsole(Console):
         return uuid.uuid4()
 
     def loading_stop(self, id: uuid.UUID) -> None:
+        pass
+
+    def show_impacted_tables_diff(
+        self,
+        table_diffs: t.List[TableDiff],
+        show_sample: bool = True,
+        skip_grain_check: bool = False,
+        temp_schema: t.Optional[str] = None,
+    ) -> None:
+        pass
+
+    def show_table_diff(
+        self,
+        table_diff: TableDiff,
+        show_sample: bool = True,
+        skip_grain_check: bool = False,
+        temp_schema: t.Optional[str] = None,
+    ) -> None:
         pass
 
     def show_table_diff_summary(self, table_diff: TableDiff) -> None:
@@ -2112,6 +2150,77 @@ class TerminalConsole(Console):
             if row_diff.t_sample.shape[0] > 0:
                 self.console.print(f"\n[b][green]{target_name} ONLY[/green] sample rows:[/b]")
                 self.console.print(row_diff.t_sample.to_string(index=False), end="\n\n")
+
+
+    def show_table_diff(
+        self,
+        table_diff: TableDiff,
+        show_sample: bool = True,
+        skip_grain_check: bool = False,
+        temp_schema: t.Optional[str] = None,
+    ) -> None:
+        """Display the table diff between two tables.
+
+        Args:
+            table_diff: The TableDiff object containing schema and summary differences
+            show_sample: Show the sample dataframe in the console. Requires show=True.
+            skip_grain_check: Skip check for rows that contain null or duplicate grains.
+            temp_schema: The schema to use for temporary tables.
+        """
+
+        self.show_table_diff_summary(table_diff)
+        self.show_schema_diff(table_diff.schema_diff())
+        self.show_row_diff(
+            table_diff.row_diff(temp_schema=temp_schema, skip_grain_check=skip_grain_check),
+            show_sample=show_sample,
+            skip_grain_check=skip_grain_check,
+        )
+
+    def show_impacted_tables_diff(
+        self,
+        table_diffs: t.List[TableDiff],
+        show_sample: bool = True,
+        skip_grain_check: bool = False,
+        temp_schema: t.Optional[str] = None,
+    ) -> None:
+        """
+        Display the table diff between all mismatched tables.
+        """
+        mismatched_tables = []
+        fully_matched = []
+        for table_diff in table_diffs:
+            if (
+                table_diff.row_diff(
+                    temp_schema=temp_schema, skip_grain_check=skip_grain_check
+                ).full_match_pct
+                == 100
+            ):
+                fully_matched.append(table_diff)
+            else:
+                mismatched_tables.append(table_diff)
+
+        if fully_matched:
+            m_tree = Tree("\n[b]Identical Tables")
+            for m in fully_matched:
+                m_tree.add(
+                    f"[{self.TABLE_DIFF_SOURCE_BLUE}]{m.source}[/{self.TABLE_DIFF_SOURCE_BLUE}] - [{self.TABLE_DIFF_TARGET_GREEN}]{m.target}[/{self.TABLE_DIFF_TARGET_GREEN}]"
+                )
+            self._print(m_tree)
+
+        if mismatched_tables:
+            m_tree = Tree("\n[b]Mismatched Tables")
+            for m in mismatched_tables:
+                m_tree.add(
+                    f"[{self.TABLE_DIFF_SOURCE_BLUE}]{m.source}[/{self.TABLE_DIFF_SOURCE_BLUE}] - [{self.TABLE_DIFF_TARGET_GREEN}]{m.target}[/{self.TABLE_DIFF_TARGET_GREEN}]"
+                )
+            self._print(m_tree)
+            for diff in mismatched_tables:
+                self.show_table_diff(
+                    table_diff=diff,
+                    show_sample=show_sample,
+                    skip_grain_check=skip_grain_check,
+                    temp_schema=temp_schema,
+                )
 
     def print_environments(self, environments_summary: t.List[EnvironmentSummary]) -> None:
         """Prints all environment names along with expiry datetime."""

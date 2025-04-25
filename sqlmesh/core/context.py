@@ -1659,7 +1659,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             decimals=decimals,
         )
         if show:
-            self._show_table_diff(
+            self.console.show_table_diff(
                 table_diff=table_diff,
                 show_sample=show_sample,
                 skip_grain_check=skip_grain_check,
@@ -1667,31 +1667,6 @@ class GenericContext(BaseContext, t.Generic[C]):
             )
 
         return table_diff
-
-    def _show_table_diff(
-        self,
-        table_diff: TableDiff,
-        show_sample: bool = True,
-        skip_grain_check: bool = False,
-        temp_schema: t.Optional[str] = None,
-    ) -> None:
-        """Display the table diff between two tables.
-
-        Args:
-            table_diff: The TableDiff object containing schema and summary differences
-            show_sample: Show the sample dataframe in the console. Requires show=True.
-            skip_grain_check: Skip check for rows that contain null or duplicate grains.
-            temp_schema: The schema to use for temporary tables.
-
-        """
-
-        self.console.show_table_diff_summary(table_diff)
-        self.console.show_schema_diff(table_diff.schema_diff())
-        self.console.show_row_diff(
-            table_diff.row_diff(temp_schema=temp_schema, skip_grain_check=skip_grain_check),
-            show_sample=show_sample,
-            skip_grain_check=skip_grain_check,
-        )
 
     def _concurrent_table_diff(
         self,
@@ -1797,7 +1772,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             for _, (current_snapshot, _) in context_diff.modified_snapshots.items()
         }
         if modified_snapshot_ids:
-            results = self._concurrent_table_diff(
+            table_diffs = self._concurrent_table_diff(
                 modified_snapshot_ids=modified_snapshot_ids,
                 source=source,
                 target=target,
@@ -1813,14 +1788,10 @@ class GenericContext(BaseContext, t.Generic[C]):
                 temp_schema=temp_schema,
             )
             if show:
-                for result in results:
-                    self._show_table_diff(
-                        table_diff=result,
-                        show_sample=show_sample,
-                        skip_grain_check=skip_grain_check,
-                        temp_schema=temp_schema,
-                    )
-            return results
+                self.console.show_impacted_tables_diff(
+                    table_diffs, show_sample, skip_grain_check, temp_schema
+                )
+            return table_diffs
         return []
 
     @python_api_analytics
