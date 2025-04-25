@@ -1470,11 +1470,6 @@ def grant_usage_role(evaluator, schemas, role):
     context = Context(paths=tmp_path, config=config)
     snapshots = {s.name: s for s in context.snapshots.values()}
 
-    from sqlmesh.core.snapshot.definition import SnapshotChangeCategory
-
-    for s in snapshots.values():
-        s.categorize_as(SnapshotChangeCategory.BREAKING)
-
     environment_statements = context._environment_statements[0]
     before_all = environment_statements.before_all
     after_all = environment_statements.after_all
@@ -1501,7 +1496,6 @@ def grant_usage_role(evaluator, schemas, role):
         snapshots=snapshots,
         environment_naming_info=EnvironmentNamingInfo(name="prod"),
         runtime_stage=RuntimeStage.BEFORE_ALL,
-        engine_adapter=context.engine_adapter,
     )
 
     assert after_all_rendered == [

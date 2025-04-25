@@ -4076,7 +4076,7 @@ def test_no_backfill_for_model_downstream_of_metadata_change(init_and_plan_conte
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
-def test_evaluate_of_uncategorized_snapshot(init_and_plan_context: t.Callable):
+def test_evaluate_uncategorized_snapshot(init_and_plan_context: t.Callable):
     context, plan = init_and_plan_context("examples/sushi")
     context.apply(plan)
 
@@ -4598,7 +4598,7 @@ def test_multi(mocker):
     )
     assert (
         context.render("silver.d").sql()
-        == '''SELECT "c"."col_a" AS "col_a", 2 AS "two", 'repo_2' AS "dup" FROM (SELECT DISTINCT "a"."col_a" AS "col_a" FROM (SELECT 1 AS "col_a", 'b' AS "col_b", 1 AS "one", 'repo_1' AS "dup") AS "a") AS "c"'''
+        == '''SELECT "c"."col_a" AS "col_a", 2 AS "two", 'repo_2' AS "dup" FROM "memory"."silver"."c" AS "c"'''
     )
     context._new_state_sync().reset(default_catalog=context.default_catalog)
     plan = context.plan_builder().build()

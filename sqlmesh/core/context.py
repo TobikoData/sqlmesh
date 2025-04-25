@@ -901,13 +901,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         """
         if isinstance(node_or_snapshot, Snapshot):
             return node_or_snapshot
-        if isinstance(node_or_snapshot, str) and not self.standalone_audits.get(node_or_snapshot):
-            node_or_snapshot = normalize_model_name(
-                node_or_snapshot,
-                dialect=self.default_dialect,
-                default_catalog=self.default_catalog,
-            )
-        fqn = node_or_snapshot if isinstance(node_or_snapshot, str) else node_or_snapshot.fqn
+        fqn = self._node_or_snapshot_to_fqn(node_or_snapshot)
         snapshot = self.snapshots.get(fqn)
 
         if raise_if_missing and not snapshot:
@@ -1052,7 +1046,22 @@ class GenericContext(BaseContext, t.Generic[C]):
             execution_time: The date/time time reference to use for execution time.
             limit: A limit applied to the model.
         """
-        snapshot = self.get_snapshot(model_or_snapshot, raise_if_missing=True)
+        snapshots = self.snapshots
+        fqn = self._node_or_snapshot_to_fqn(model_or_snapshot)
+        if fqn not in snapshots:
+            raise SQLMeshError(f"Cannot find snapshot for '{fqn}'")
+        snapshot = snapshots[fqn]
+
+        # Expand all uncategorized parents since physical tables don't exist for them yet
+        expand = [
+            parent
+            for parent in self.dag.upstream(snapshot.model.fqn)
+            if (parent_snapshot := snapshots.get(parent))
+            and parent_snapshot.is_model
+            and parent_snapshot.model.is_sql
+            and not parent_snapshot.categorized
+        ]
+
         df = self.snapshot_evaluator.evaluate_and_fetch(
             snapshot,
             start=start,
@@ -1060,6 +1069,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             execution_time=execution_time,
             snapshots=self.snapshots,
             limit=limit or c.DEFAULT_MAX_LIMIT,
+            expand=expand,
         )
 
         if df is None:
@@ -2447,6 +2457,19 @@ class GenericContext(BaseContext, t.Generic[C]):
             )
             snapshots[snapshot.name] = snapshot
         return snapshots
+
+    def _node_or_snapshot_to_fqn(self, node_or_snapshot: NodeOrSnapshot) -> str:
+        if isinstance(node_or_snapshot, Snapshot):
+            return node_or_snapshot.name
+        if isinstance(node_or_snapshot, str) and not self.standalone_audits.get(node_or_snapshot):
+            return normalize_model_name(
+                node_or_snapshot,
+                dialect=self.default_dialect,
+                default_catalog=self.default_catalog,
+            )
+        if not isinstance(node_or_snapshot, str):
+            return node_or_snapshot.fqn
+        return node_or_snapshot
 
     @property
     def _plan_preview_enabled(self) -> bool:
