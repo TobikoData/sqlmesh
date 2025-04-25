@@ -1409,7 +1409,6 @@ def test_environment_statements(tmp_path: pathlib.Path):
         ],
         after_all=[
             "@grant_schema_usage()",
-            "@grant_select_privileges()",
             "@grant_usage_role(@schemas, 'admin')",
         ],
     )
@@ -1427,29 +1426,6 @@ SELECT 1 AS col_a;
         tmp_path,
         pathlib.Path(models_dir, "db", "test_after_model.sql"),
         expression,
-    )
-
-    create_temp_file(
-        tmp_path,
-        pathlib.Path(macros_dir, "grant_select_file.py"),
-        """
-from sqlmesh.core.macros import macro
-from sqlmesh.core.snapshot.definition import to_view_mapping
-
-@macro()
-def grant_select_privileges(evaluator):
-    if evaluator._environment_naming_info and evaluator.runtime_stage == 'before_all':
-        mapping = to_view_mapping(
-            evaluator._snapshots.values(), evaluator._environment_naming_info
-        )
-        return [
-            stmt
-            for stmt in [
-                f"GRANT SELECT ON VIEW {view_name} TO ROLE admin_role;"
-                for view_name in mapping.values()
-            ]
-        ]
-""",
     )
 
     create_temp_file(
@@ -1494,13 +1470,18 @@ def grant_usage_role(evaluator, schemas, role):
     context = Context(paths=tmp_path, config=config)
     snapshots = {s.name: s for s in context.snapshots.values()}
 
+    from sqlmesh.core.snapshot.definition import SnapshotChangeCategory
+
+    for s in snapshots.values():
+        s.categorize_as(SnapshotChangeCategory.BREAKING)
+
     environment_statements = context._environment_statements[0]
     before_all = environment_statements.before_all
     after_all = environment_statements.after_all
     python_env = environment_statements.python_env
 
-    assert isinstance(python_env["to_view_mapping"], Executable)
-    assert isinstance(python_env["grant_select_privileges"], Executable)
+    assert isinstance(python_env["grant_schema_usage"], Executable)
+    assert isinstance(python_env["grant_usage_role"], Executable)
 
     before_all_rendered = render_statements(
         statements=before_all,
@@ -1520,11 +1501,11 @@ def grant_usage_role(evaluator, schemas, role):
         snapshots=snapshots,
         environment_naming_info=EnvironmentNamingInfo(name="prod"),
         runtime_stage=RuntimeStage.BEFORE_ALL,
+        engine_adapter=context.engine_adapter,
     )
 
     assert after_all_rendered == [
         "GRANT USAGE ON SCHEMA db TO user_role",
-        "GRANT SELECT ON VIEW memory.db.test_after_model TO ROLE admin_role",
         'GRANT USAGE ON SCHEMA "db" TO "admin"',
     ]
 
@@ -1539,7 +1520,6 @@ def grant_usage_role(evaluator, schemas, role):
 
     assert after_all_rendered_dev == [
         "GRANT USAGE ON SCHEMA db__dev TO user_role",
-        "GRANT SELECT ON VIEW memory.db__dev.test_after_model TO ROLE admin_role",
         'GRANT USAGE ON SCHEMA "db__dev" TO "admin"',
     ]
 

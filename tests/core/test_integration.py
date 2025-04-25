@@ -4598,7 +4598,7 @@ def test_multi(mocker):
     )
     assert (
         context.render("silver.d").sql()
-        == '''SELECT "c"."col_a" AS "col_a", 2 AS "two", 'repo_2' AS "dup" FROM "memory"."silver"."c" AS "c"'''
+        == '''SELECT "c"."col_a" AS "col_a", 2 AS "two", 'repo_2' AS "dup" FROM (SELECT DISTINCT "a"."col_a" AS "col_a" FROM (SELECT 1 AS "col_a", 'b' AS "col_b", 1 AS "one", 'repo_1' AS "dup") AS "a") AS "c"'''
     )
     context._new_state_sync().reset(default_catalog=context.default_catalog)
     plan = context.plan_builder().build()

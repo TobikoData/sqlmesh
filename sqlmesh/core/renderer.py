@@ -319,7 +319,8 @@ class BaseExpressionRenderer:
             expand = set(expand) | {
                 name
                 for name, snapshot in snapshots.items()
-                if snapshot.is_embedded or not snapshot.categorized
+                if snapshot.is_embedded
+                or (snapshot.is_model and snapshot.model.is_sql and not snapshot.categorized)
             }
 
             if expand:
