@@ -1827,7 +1827,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         *,
         models: t.Optional[t.Iterator[str]] = None,
         execution_time: t.Optional[TimeLike] = None,
-    ) -> None:
+    ) -> bool:
         """Audit models.
 
         Args:
@@ -1835,6 +1835,9 @@ class GenericContext(BaseContext, t.Generic[C]):
             end: The end of the interval to audit.
             models: The models to audit. All models will be audited if not specified.
             execution_time: The date/time time reference to use for execution time. Defaults to now.
+
+        Returns:
+            False if any of the audits failed, True otherwise.
         """
 
         snapshots = (
@@ -1845,6 +1848,7 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         num_audits = sum(len(snapshot.node.audits_with_args) for snapshot in snapshots)
         self.console.log_status_update(f"Found {num_audits} audit(s).")
+
         errors = []
         skipped_count = 0
         for snapshot in snapshots:
@@ -1884,6 +1888,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                 )
 
         self.console.log_status_update("Done.")
+        return not errors
 
     @python_api_analytics
     def rewrite(self, sql: str, dialect: str = "") -> exp.Expression:

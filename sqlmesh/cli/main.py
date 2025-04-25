@@ -690,7 +690,8 @@ def audit(
     execution_time: t.Optional[TimeLike] = None,
 ) -> None:
     """Run audits for the target model(s)."""
-    obj.audit(models=models, start=start, end=end, execution_time=execution_time)
+    if not obj.audit(models=models, start=start, end=end, execution_time=execution_time):
+        exit(1)
 
 
 @cli.command("check_intervals")

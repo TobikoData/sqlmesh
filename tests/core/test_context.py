@@ -2003,3 +2003,41 @@ def test_check_intervals(sushi_context, mocker):
         environment=None, no_signals=False, select_models=["*waiter_as_customer*"], end="next week"
     )
     assert tuple(intervals.values())[0].intervals
+
+
+def test_audit():
+    context = Context(config=Config())
+
+    parsed_model = parse(
+        """
+        MODEL (
+          name dummy,
+          audits (
+            not_null_non_blocking(columns=[c])
+          )
+        );
+
+        SELECT NULL AS c
+        """
+    )
+    context.upsert_model(load_sql_based_model(parsed_model))
+    context.plan(no_prompts=True, auto_apply=True)
+
+    assert context.audit(models=["dummy"], start="2020-01-01", end="2020-01-01") is False
+
+    parsed_model = parse(
+        """
+        MODEL (
+          name dummy,
+          audits (
+            not_null_non_blocking(columns=[c])
+          )
+        );
+
+        SELECT 1 AS c
+        """
+    )
+    context.upsert_model(load_sql_based_model(parsed_model))
+    context.plan(no_prompts=True, auto_apply=True)
+
+    assert context.audit(models=["dummy"], start="2020-01-01", end="2020-01-01") is True
