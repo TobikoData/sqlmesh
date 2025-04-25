@@ -482,9 +482,9 @@ def _parse_table_parts(
     )
 
     table_arg = table.this
-    name = table_arg.name
+    name = table_arg.name if isinstance(table_arg, exp.Var) else ""
 
-    if isinstance(table_arg, exp.Var) and name.startswith(SQLMESH_MACRO_PREFIX):
+    if name.startswith(SQLMESH_MACRO_PREFIX):
         # In these cases, we don't want to produce a `StagedFilePath` node:
         #
         # - @'...' needs to parsed as a string template

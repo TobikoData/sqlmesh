@@ -699,3 +699,7 @@ def test_model_name_cannot_be_string():
         )
 
     assert "\\'name\\' property cannot be a string value" in str(parse_error)
+
+
+def test_parse_snowflake_create_schema_ddl():
+    assert parse_one("CREATE SCHEMA d.s", dialect="snowflake").sql() == "CREATE SCHEMA d.s"
