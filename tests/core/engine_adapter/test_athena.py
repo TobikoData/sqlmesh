@@ -435,3 +435,51 @@ def test_drop_partitions_from_metastore_uses_batches(
     # third call 50-62
     assert calls[2][1]["PartitionsToDelete"][0]["Values"][0] == "50"
     assert calls[2][1]["PartitionsToDelete"][-1]["Values"][0] == "62"
+
+
+def test_iceberg_partition_transforms(adapter: AthenaEngineAdapter):
+    expressions = d.parse(
+        """
+        MODEL (
+            name test_table,
+            kind FULL,
+            table_format iceberg,
+            partitioned_by (month(business_date), bucket(4, colb), colc)
+        );
+
+        SELECT 1::timestamp AS business_date, 2::varchar as colb, 'foo' as colc;
+    """
+    )
+    model: SqlModel = t.cast(SqlModel, load_sql_based_model(expressions))
+
+    assert model.partitioned_by == [
+        exp.Month(this=exp.column("business_date", quoted=True)),
+        exp.PartitionedByBucket(
+            this=exp.column("colb", quoted=True), expression=exp.Literal.number(4)
+        ),
+        exp.column("colc", quoted=True),
+    ]
+
+    adapter.s3_warehouse_location = "s3://bucket/prefix/"
+
+    adapter.create_table(
+        table_name=model.name,
+        columns_to_types=model.columns_to_types_or_raise,
+        partitioned_by=model.partitioned_by,
+        table_format=model.table_format,
+    )
+
+    adapter.ctas(
+        table_name=model.name,
+        columns_to_types=model.columns_to_types_or_raise,
+        partitioned_by=model.partitioned_by,
+        query_or_df=model.ctas_query(),
+        table_format=model.table_format,
+    )
+
+    assert to_sql_calls(adapter) == [
+        # Hive syntax - create table
+        """CREATE TABLE IF NOT EXISTS `test_table` (`business_date` TIMESTAMP, `colb` STRING, `colc` STRING) PARTITIONED BY (MONTH(`business_date`), BUCKET(4, `colb`), `colc`) LOCATION 's3://bucket/prefix/test_table/' TBLPROPERTIES ('table_type'='iceberg')""",
+        # Trino syntax - CTAS
+        """CREATE TABLE IF NOT EXISTS "test_table" WITH (table_type='iceberg', partitioning=ARRAY['MONTH(business_date)', 'BUCKET(colb, 4)', 'colc'], location='s3://bucket/prefix/test_table/', is_external=false) AS SELECT CAST("business_date" AS TIMESTAMP) AS "business_date", CAST("colb" AS VARCHAR) AS "colb", CAST("colc" AS VARCHAR) AS "colc" FROM (SELECT CAST(1 AS TIMESTAMP) AS "business_date", CAST(2 AS VARCHAR) AS "colb", 'foo' AS "colc" LIMIT 0) AS "_subquery\"""",
+    ]
