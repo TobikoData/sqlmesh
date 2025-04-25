@@ -9235,3 +9235,129 @@ def test_call_python_macro_from_jinja():
     model = load_sql_based_model(expressions, jinja_macros=jinja_macros)
     assert model.render_query().sql() == "SELECT 'loading' AS a, 'loading_bla' AS b"
     assert set(model.python_env) == {"noop", "test_runtime_stage"}
+
+
+def test_python_env_references_are_unequal_but_point_to_same_definition(tmp_path: Path) -> None:
+    # This tests for regressions against an edge case bug which was due to reloading modules
+    # in sqlmesh.utils.metaprogramming.import_python_file. Depending on the module loading
+    # order, we could get a "duplicate symbol in python env" error, even though the references
+    # essentially pointed to the same definition (e.g. function or class).
+    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+
+    db_path = str(tmp_path / "db.db")
+    db_connection = DuckDBConnectionConfig(database=db_path)
+    config = Config(
+        gateways={"duckdb": GatewayConfig(connection=db_connection)},
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+    )
+
+    file_a = tmp_path / "macros" / "a.py"
+    file_b = tmp_path / "macros" / "b.py"
+    file_c = tmp_path / "macros" / "c.py"
+
+    file_a.write_text(
+        """from macros.c import target
+
+def f1():
+    target()
+"""
+    )
+    file_b.write_text(
+        """from sqlmesh import macro
+
+from macros.a import f1
+from macros.c import target
+
+@macro()
+def first_macro(evaluator):
+    f1()
+
+@macro()
+def second_macro(evaluator):
+    target()
+"""
+    )
+    file_c.write_text(
+        """def target():
+    pass
+"""
+    )
+
+    model_file = tmp_path / "models" / "model.sql"
+    model_file.write_text("MODEL (name a); @first_macro(); @second_macro(); SELECT 1 AS c")
+
+    ctx = Context(paths=tmp_path, config=config, load=False)
+    loader = ctx._loaders[0]
+
+    original_glob_paths = loader._glob_paths
+
+    def _patched_glob_paths(path, *args, **kwargs):
+        if path == tmp_path / "macros":
+            yield from [file_a, file_c, file_b]
+        else:
+            yield from original_glob_paths(path, *args, **kwargs)
+
+    # We force the import order to be a.py -> c.py -> b.py:
+    #
+    # 1. a.py is loaded, so "macros", "macros.a" and "macros.c" are loaded in sys.modules
+    # 2. c.py is loaded, so "macros" and "macros.c" are reloaded in sys.modules
+    # 3. b.py is loaded, so "macros" is reloaded and "macros.b" is loaded in sys.modules
+    #
+    # (1) => id(sys.modules["macros.a"].target) == id(sys.modules["macros.c"].target) == X
+    # (2) => id(sys.modules["macros.c"].target) == Y != X == id(sys.modules["macros.a"].target)
+    # (3) => affects neither sys.modules["macros.a"] nor sys.modules["macros.c"], just loads the macros
+    #
+    # At this point we have two different function instances, one in sys.modules["macros.a"] and one
+    # in sys.modules["macros.c"], which encapsulate the same definition (source code). This used to
+    # lead to a crash, because we prohibit unequal objects with the same name in the python env.
+    with patch.object(loader, "_glob_paths", side_effect=_patched_glob_paths):
+        ctx.load()
+
+    model = ctx.models['"a"']
+    python_env = model.python_env
+
+    assert len(python_env) == 4
+    assert python_env.get("target") == Executable(
+        payload="def target():\n    pass", name="target", path="macros/c.py"
+    )
+
+
+def test_unequal_duplicate_python_env_references_are_prohibited(tmp_path: Path) -> None:
+    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+
+    db_path = str(tmp_path / "db.db")
+    db_connection = DuckDBConnectionConfig(database=db_path)
+    config = Config(
+        gateways={"duckdb": GatewayConfig(connection=db_connection)},
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+    )
+
+    file_a = tmp_path / "macros" / "unimportant_macro.py"
+    file_b = tmp_path / "macros" / "just_f.py"
+
+    file_a.write_text(
+        """from sqlmesh import macro
+from macros.just_f import f
+
+a = False
+
+@macro()
+def unimportant_macro(evaluator):
+    print(a)
+    f()
+    return 1
+"""
+    )
+    file_b.write_text(
+        """a = 0
+
+def f():
+    print(a)
+"""
+    )
+
+    model_file = tmp_path / "models" / "model.sql"
+    model_file.write_text("MODEL (name m); SELECT @unimportant_macro() AS unimportant_macro")
+
+    with pytest.raises(SQLMeshError, match=r"duplicate definitions found"):
+        Context(paths=tmp_path, config=config)
