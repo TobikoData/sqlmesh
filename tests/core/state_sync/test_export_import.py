@@ -437,7 +437,11 @@ def test_import_partial(
     import_state(state_sync, output_file, clear=False)
 
     # StateSync should have "prod", "dev" and "dev2".
-    assert sorted(list(state_sync.get_environments_summary().keys())) == ["dev", "dev2", "prod"]
+    assert sorted(list(env.name for env in state_sync.get_environments_summary())) == [
+        "dev",
+        "dev2",
+        "prod",
+    ]
 
     assert not context.plan(environment="dev", skip_tests=True).has_changes
     assert not context.plan(environment="dev2", skip_tests=True).has_changes

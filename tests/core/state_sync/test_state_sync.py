@@ -3464,8 +3464,8 @@ def test_get_environments_summary(
     )
     state_sync.promote(prod)
 
-    actual = state_sync.get_environments_summary()
-    expected = {"prod": None, "test_environment_a": env_a_ttl, "test_environment_b": env_b_ttl}
+    actual = set(state_sync.get_environments_summary())
+    expected = {prod.summary, env_a.summary, env_b.summary}
     assert actual == expected
 
 
@@ -3493,12 +3493,12 @@ def test_get_environments_summary_only_prod(
     )
     state_sync.promote(prod)
     actual = state_sync.get_environments_summary()
-    expected = {"prod": None}
+    expected = [prod.summary]
     assert actual == expected
 
 
 def test_get_environments_summary_no_env(state_sync: EngineAdapterStateSync) -> None:
-    assert state_sync.get_environments_summary() == {}
+    assert state_sync.get_environments_summary() == []
 
 
 @time_machine.travel("2020-01-05 00:00:00 UTC")

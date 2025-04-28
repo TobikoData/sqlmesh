@@ -12,7 +12,7 @@ from sqlmesh.core.state_sync.db.utils import (
     fetchall,
     fetchone,
 )
-from sqlmesh.core.environment import Environment, EnvironmentStatements
+from sqlmesh.core.environment import Environment, EnvironmentStatements, EnvironmentSummary
 from sqlmesh.utils.migration import index_text_type, blob_text_type
 from sqlmesh.utils.date import now_timestamp, time_like_to_str
 from sqlmesh.utils.errors import SQLMeshError
@@ -211,18 +211,19 @@ class EnvironmentState:
             for row in fetchall(self.engine_adapter, self._environments_query())
         ]
 
-    def get_environments_summary(self) -> t.Dict[str, int]:
-        """Fetches all environment names along with expiry datetime.
+    def get_environments_summary(self) -> t.List[EnvironmentSummary]:
+        """Fetches summaries for all environments.
 
         Returns:
-            A dict of all environment names along with expiry datetime.
+            A list of all environment summaries.
         """
-        return dict(
-            fetchall(
+        return [
+            self._environment_summmary_from_row(row)
+            for row in fetchall(
                 self.engine_adapter,
-                self._environments_query(required_fields=["name", "expiration_ts"]),
-            ),
-        )
+                self._environments_query(required_fields=list(EnvironmentSummary.all_fields())),
+            )
+        ]
 
     def get_environment(
         self, environment: str, lock_for_update: bool = False
@@ -285,6 +286,11 @@ class EnvironmentState:
 
     def _environment_from_row(self, row: t.Tuple[str, ...]) -> Environment:
         return Environment(**{field: row[i] for i, field in enumerate(Environment.all_fields())})
+
+    def _environment_summmary_from_row(self, row: t.Tuple[str, ...]) -> EnvironmentSummary:
+        return EnvironmentSummary(
+            **{field: row[i] for i, field in enumerate(EnvironmentSummary.all_fields())}
+        )
 
     def _environments_query(
         self,

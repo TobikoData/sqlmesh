@@ -28,7 +28,7 @@ from rich.table import Table
 from rich.tree import Tree
 from sqlglot import exp
 
-from sqlmesh.core.environment import EnvironmentNamingInfo
+from sqlmesh.core.environment import EnvironmentNamingInfo, EnvironmentSummary
 from sqlmesh.core.linter.rule import RuleViolation
 from sqlmesh.core.model import Model
 from sqlmesh.core.snapshot import (
@@ -188,7 +188,7 @@ class EnvironmentsConsole(abc.ABC):
     """Console for displaying environments"""
 
     @abc.abstractmethod
-    def print_environments(self, environments_summary: t.Dict[str, int]) -> None:
+    def print_environments(self, environments_summary: t.List[EnvironmentSummary]) -> None:
         """Prints all environment names along with expiry datetime."""
 
     @abc.abstractmethod
@@ -659,7 +659,7 @@ class NoopConsole(Console):
     ) -> None:
         pass
 
-    def print_environments(self, environments_summary: t.Dict[str, int]) -> None:
+    def print_environments(self, environments_summary: t.List[EnvironmentSummary]) -> None:
         pass
 
     def show_intervals(self, snapshot_intervals: t.Dict[Snapshot, SnapshotIntervals]) -> None:
@@ -2089,11 +2089,13 @@ class TerminalConsole(Console):
                 self.console.print(f"\n[b][green]{target_name} ONLY[/green] sample rows:[/b]")
                 self.console.print(row_diff.t_sample.to_string(index=False), end="\n\n")
 
-    def print_environments(self, environments_summary: t.Dict[str, int]) -> None:
+    def print_environments(self, environments_summary: t.List[EnvironmentSummary]) -> None:
         """Prints all environment names along with expiry datetime."""
         output = [
-            f"{name} - {time_like_to_str(ts)}" if ts else f"{name} - No Expiry"
-            for name, ts in environments_summary.items()
+            f"{summary.name} - {time_like_to_str(summary.expiration_ts)}"
+            if summary.expiration_ts
+            else f"{summary.name} - No Expiry"
+            for summary in environments_summary
         ]
         output_str = "\n".join([str(len(output)), *output])
         self.log_status_update(f"Number of SQLMesh environments are: {output_str}")

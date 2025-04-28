@@ -95,19 +95,39 @@ class EnvironmentNamingInfo(PydanticModel):
         return cls(**construction_kwargs)
 
 
-class Environment(EnvironmentNamingInfo):
-    """Represents an isolated environment.
-
-    Environments are isolated workspaces that hold pointers to physical tables.
+class EnvironmentSummary(PydanticModel):
+    """Represents summary information of an isolated environment.
 
     Args:
-        snapshots: The snapshots that are part of this environment.
+        name: The name of the environment.
         start_at: The start time of the environment.
         end_at: The end time of the environment.
         plan_id: The ID of the plan that last updated this environment.
         previous_plan_id: The ID of the previous plan that updated this environment.
         expiration_ts: The timestamp when this environment will expire.
         finalized_ts: The timestamp when this environment was finalized.
+    """
+
+    name: str
+    start_at: TimeLike
+    end_at: t.Optional[TimeLike] = None
+    plan_id: str
+    previous_plan_id: t.Optional[str] = None
+    expiration_ts: t.Optional[int] = None
+    finalized_ts: t.Optional[int] = None
+
+    @property
+    def expired(self) -> bool:
+        return self.expiration_ts is not None and self.expiration_ts <= now_timestamp()
+
+
+class Environment(EnvironmentNamingInfo, EnvironmentSummary):
+    """Represents an isolated environment.
+
+    Environments are isolated workspaces that hold pointers to physical tables.
+
+    Args:
+        snapshots: The snapshots that are part of this environment.
         promoted_snapshot_ids: The IDs of the snapshots that are promoted in this environment
             (i.e. for which the views are created). If not specified, all snapshots are promoted.
         previous_finalized_snapshots: Snapshots that were part of this environment last time it was finalized.
@@ -115,12 +135,6 @@ class Environment(EnvironmentNamingInfo):
     """
 
     snapshots_: t.List[t.Any] = Field(alias="snapshots")
-    start_at: TimeLike
-    end_at: t.Optional[TimeLike] = None
-    plan_id: str
-    previous_plan_id: t.Optional[str] = None
-    expiration_ts: t.Optional[int] = None
-    finalized_ts: t.Optional[int] = None
     promoted_snapshot_ids_: t.Optional[t.List[t.Any]] = Field(
         default=None, alias="promoted_snapshot_ids"
     )
@@ -203,8 +217,16 @@ class Environment(EnvironmentNamingInfo):
         )
 
     @property
-    def expired(self) -> bool:
-        return self.expiration_ts is not None and self.expiration_ts <= now_timestamp()
+    def summary(self) -> EnvironmentSummary:
+        return EnvironmentSummary(
+            name=self.name,
+            start_at=self.start_at,
+            end_at=self.end_at,
+            plan_id=self.plan_id,
+            previous_plan_id=self.previous_plan_id,
+            expiration_ts=self.expiration_ts,
+            finalized_ts=self.finalized_ts,
+        )
 
     def _convert_list_to_models_and_store(
         self, field: str, type_: t.Type[PydanticType]
