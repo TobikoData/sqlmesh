@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import datetime
+import threading
 import typing as t
 import unittest
 from collections import Counter
-from contextlib import AbstractContextManager, nullcontext
+from contextlib import nullcontext, contextmanager, AbstractContextManager
 from itertools import chain
 from pathlib import Path
 from unittest.mock import patch
@@ -46,6 +47,8 @@ TIME_KWARG_KEYS = {
 class ModelTest(unittest.TestCase):
     __test__ = False
 
+    CONCURRENT_RENDER_LOCK = threading.Lock()
+
     def __init__(
         self,
         body: t.Dict[str, t.Any],
@@ -57,6 +60,7 @@ class ModelTest(unittest.TestCase):
         path: Path | None = None,
         preserve_fixtures: bool = False,
         default_catalog: str | None = None,
+        concurrency: bool = False,
     ) -> None:
         """ModelTest encapsulates a unit test for a model.
 
@@ -79,6 +83,7 @@ class ModelTest(unittest.TestCase):
         self.preserve_fixtures = preserve_fixtures
         self.default_catalog = default_catalog
         self.dialect = dialect
+        self.concurrency = concurrency
 
         self._fixture_table_cache: t.Dict[str, exp.Table] = {}
         self._normalized_column_name_cache: t.Dict[str, str] = {}
@@ -310,6 +315,7 @@ class ModelTest(unittest.TestCase):
         path: Path | None,
         preserve_fixtures: bool = False,
         default_catalog: str | None = None,
+        concurrency: bool = False,
     ) -> t.Optional[ModelTest]:
         """Create a SqlModelTest or a PythonModelTest.
 
@@ -353,6 +359,7 @@ class ModelTest(unittest.TestCase):
             path,
             preserve_fixtures,
             default_catalog,
+            concurrency,
         )
 
     def __str__(self) -> str:
@@ -512,10 +519,40 @@ class ModelTest(unittest.TestCase):
 
         return normalized_name
 
+    @contextmanager
+    def _concurrent_render_context(self) -> t.Iterator[None]:
+        """
+        Context manager that ensures that the tests are executed safely in a concurrent environment.
+        This is needed in case `execution_time` is set, as we'd then have to:
+        - Freeze time through `time_machine` (not thread safe)
+        - Globally patch the SQLGlot dialect so that any date/time nodes are evaluated at the `execution_time` during generation
+        """
+        import time_machine
+
+        lock_ctx: AbstractContextManager = (
+            self.CONCURRENT_RENDER_LOCK
+            if (self.concurrency and self._execution_time)
+            else nullcontext()
+        )
+        time_ctx: AbstractContextManager = nullcontext()
+        dialect_patch_ctx: AbstractContextManager = nullcontext()
+
+        if self._execution_time:
+            time_ctx = time_machine.travel(self._execution_time, tick=False)
+            dialect_patch_ctx = patch.dict(
+                self._test_adapter_dialect.generator_class.TRANSFORMS, self._transforms
+            )
+
+        with lock_ctx, time_ctx, dialect_patch_ctx:
+            yield
+
     def _execute(self, query: exp.Query) -> pd.DataFrame:
         """Executes the given query using the testing engine adapter and returns a DataFrame."""
-        with patch.dict(self._test_adapter_dialect.generator_class.TRANSFORMS, self._transforms):
-            return self.engine_adapter.fetchdf(query)
+
+        with self._concurrent_render_context():
+            sql = query.sql(self._test_adapter_dialect, pretty=self.engine_adapter._pretty_sql)
+
+        return self.engine_adapter.fetchdf(sql)
 
     def _create_df(
         self,
@@ -626,6 +663,7 @@ class PythonModelTest(ModelTest):
         path: Path | None = None,
         preserve_fixtures: bool = False,
         default_catalog: str | None = None,
+        concurrency: bool = False,
     ) -> None:
         """PythonModelTest encapsulates a unit test for a Python model.
 
@@ -651,6 +689,7 @@ class PythonModelTest(ModelTest):
             path,
             preserve_fixtures,
             default_catalog,
+            concurrency,
         )
 
         self.context = TestExecutionContext(
@@ -674,22 +713,13 @@ class PythonModelTest(ModelTest):
 
     def _execute_model(self) -> pd.DataFrame:
         """Executes the python model and returns a DataFrame."""
-        if self._execution_time:
-            import time_machine
+        with self._concurrent_render_context():
+            variables = self.body.get("vars", {}).copy()
+            time_kwargs = {key: variables.pop(key) for key in TIME_KWARG_KEYS if key in variables}
+            df = next(self.model.render(context=self.context, **time_kwargs, **variables))
 
-            time_ctx: AbstractContextManager = time_machine.travel(self._execution_time, tick=False)
-        else:
-            time_ctx = nullcontext()
-
-        with patch.dict(self._test_adapter_dialect.generator_class.TRANSFORMS, self._transforms):
-            with time_ctx:
-                variables = self.body.get("vars", {}).copy()
-                time_kwargs = {
-                    key: variables.pop(key) for key in TIME_KWARG_KEYS if key in variables
-                }
-                df = next(self.model.render(context=self.context, **time_kwargs, **variables))
-                assert not isinstance(df, exp.Expression)
-                return df if isinstance(df, pd.DataFrame) else df.toPandas()
+        assert not isinstance(df, exp.Expression)
+        return df if isinstance(df, pd.DataFrame) else df.toPandas()
 
 
 def generate_test(
