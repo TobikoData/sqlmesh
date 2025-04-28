@@ -3071,3 +3071,22 @@ def test_insert_overwrite_by_partition_query_insert_overwrite_strategy(
     assert sql_calls == [
         'INSERT OVERWRITE TABLE "test_schema"."test_table" ("a", "ds", "b") SELECT "a", "ds", "b" FROM "tbl"'
     ]
+
+
+def test_log_sql(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
+
+    mock_logger = mocker.patch("sqlmesh.core.engine_adapter.base.logger")
+
+    df = pd.DataFrame({"id": [1, 2, 3], "value": ["test1", "test2", "test3"]})
+
+    adapter.execute(parse_one("SELECT 1"))
+    adapter.execute(parse_one("INSERT INTO test SELECT * FROM source"))
+    adapter.execute(parse_one("INSERT INTO test (id, value) VALUES (1, 'test')"))
+    adapter.insert_append("test", df)
+
+    assert mock_logger.log.call_count == 4
+    assert mock_logger.log.call_args_list[0][0][2] == "SELECT 1"
+    assert mock_logger.log.call_args_list[1][0][2] == 'INSERT INTO "test" SELECT * FROM "source"'
+    assert mock_logger.log.call_args_list[2][0][2] == "<Redacted because SQL contains values>"
+    assert mock_logger.log.call_args_list[3][0][2] == "<Redacted because SQL contains values>"
