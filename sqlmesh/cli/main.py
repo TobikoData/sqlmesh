@@ -892,27 +892,26 @@ def create_external_models(obj: Context, **kwargs: t.Any) -> None:
     type=str,
     help="Schema used for temporary tables. It can be `CATALOG.SCHEMA` or `SCHEMA`. Default: `sqlmesh_temp`",
 )
+@click.option(
+    "--select-model",
+    type=str,
+    multiple=True,
+    help="Select specific model that should be diffed.",
+)
 @click.pass_obj
 @error_handler
 @cli_analytics
 def table_diff(
     obj: Context, source_to_target: str, model: t.Optional[str], **kwargs: t.Any
 ) -> None:
-    """Show the diff between two tables or all impacted when no model is specified."""
+    """Show the diff between two tables or a selection of models when they are specified."""
     source, target = source_to_target.split(":")
-    if model:
-        obj.table_diff(
-            source=source,
-            target=target,
-            model_or_snapshot=model,
-            **kwargs,
-        )
-    else:
-        obj.table_diff_impacted_models(
-            source=source,
-            target=target,
-            **kwargs,
-        )
+    obj.table_diff(
+        source=source,
+        target=target,
+        model_or_snapshot=model,
+        **kwargs,
+    )
 
 
 @cli.command("rewrite")

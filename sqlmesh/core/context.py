@@ -39,7 +39,6 @@ from itertools import chain
 import logging
 import sys
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
 import traceback
 import typing as t
 import unittest.result
@@ -101,7 +100,7 @@ from sqlmesh.core.snapshot import (
     missing_intervals,
     to_table_mapping,
 )
-from sqlmesh.core.snapshot.definition import SnapshotId, get_next_model_interval_start
+from sqlmesh.core.snapshot.definition import get_next_model_interval_start
 from sqlmesh.core.state_sync import (
     CachingStateSync,
     StateReader,
@@ -117,6 +116,7 @@ from sqlmesh.core.test import (
 )
 from sqlmesh.core.user import User
 from sqlmesh.utils import UniqueKeyDict, Verbosity
+from sqlmesh.utils.concurrency import concurrent_apply_to_values
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import TimeLike, now_ds, to_timestamp, format_tz_datetime, now_timestamp
 from sqlmesh.utils.errors import (
@@ -1572,6 +1572,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         on: t.List[str] | exp.Condition | None = None,
         skip_columns: t.List[str] | None = None,
         model_or_snapshot: t.Optional[ModelOrSnapshot] = None,
+        select_model: t.Optional[t.Collection[str]] = None,
         where: t.Optional[str | exp.Condition] = None,
         limit: int = 20,
         show: bool = True,
@@ -1579,7 +1580,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         decimals: int = 3,
         skip_grain_check: bool = False,
         temp_schema: t.Optional[str] = None,
-    ) -> TableDiff:
+    ) -> t.Union[TableDiff, t.List[TableDiff]]:
         """Show a diff between two tables.
 
         Args:
@@ -1598,53 +1599,155 @@ class GenericContext(BaseContext, t.Generic[C]):
             temp_schema: The schema to use for temporary tables.
 
         Returns:
-            The TableDiff object containing schema and summary differences.
+            The list of TableDiff objects containing schema and summary differences.
         """
-        source_alias, target_alias = source, target
 
-        adapter = self.engine_adapter
+        table_diffs: t.List[TableDiff] = []
 
-        if model_or_snapshot:
-            model = self.get_model(model_or_snapshot, raise_if_missing=True)
-            adapter = self._get_engine_adapter(model.gateway)
+        # Diffs multiple or a single model across two environments
+        if model_or_snapshot or select_model:
             source_env = self.state_reader.get_environment(source)
             target_env = self.state_reader.get_environment(target)
-
             if not source_env:
                 raise SQLMeshError(f"Could not find environment '{source}'")
             if not target_env:
                 raise SQLMeshError(f"Could not find environment '{target}'")
 
-            # Compare the virtual layer instead of the physical layer because the virtual layer is guaranteed to point
-            # to the correct/active snapshot for the model in the specified environment, taking into account things like dev previews
-            source = next(
-                snapshot for snapshot in source_env.snapshots if snapshot.name == model.fqn
-            ).qualified_view_name.for_environment(source_env.naming_info, adapter.dialect)
+            if select_model:
+                models_to_diff = self._new_selector().expand_model_selections(select_model)
+                target_snapshots = {
+                    s.name: s
+                    for s in self.state_reader.get_snapshots(target_env.snapshots).values()
+                    if s.name in models_to_diff
+                }
+                context_diff = self._context_diff(
+                    source,
+                    snapshots=target_snapshots,
+                    ensure_finalized_snapshots=self.config.plan.use_finalized_state,
+                )
+                modified_snapshots = {
+                    current_snapshot.snapshot_id.name
+                    for _, (current_snapshot, _) in context_diff.modified_snapshots.items()
+                }
+                tasks_num = min(len(modified_snapshots), self.concurrent_tasks)
+                table_diffs = concurrent_apply_to_values(
+                    list(modified_snapshots),
+                    lambda s: self._model_diff(
+                        source_env=source_env,
+                        target_env=target_env,
+                        model_or_snapshot=s,
+                        limit=limit,
+                        decimals=decimals,
+                        on=on,
+                        skip_columns=skip_columns,
+                        where=where,
+                    ),
+                    tasks_num=tasks_num,
+                )
+            elif model_or_snapshot:
+                table_diffs = [
+                    self._model_diff(
+                        source_env=source_env,
+                        target_env=target_env,
+                        model_or_snapshot=model_or_snapshot,
+                        limit=limit,
+                        decimals=decimals,
+                        on=on,
+                        skip_columns=skip_columns,
+                        where=where,
+                    )
+                ]
+        else:
+            table_diffs = [
+                self._table_diff(
+                    source=source,
+                    target=target,
+                    source_alias=source,
+                    target_alias=target,
+                    limit=limit,
+                    decimals=decimals,
+                    adapter=self.engine_adapter,
+                    on=on,
+                    skip_columns=skip_columns,
+                    where=where,
+                )
+            ]
 
-            target = next(
-                snapshot for snapshot in target_env.snapshots if snapshot.name == model.fqn
-            ).qualified_view_name.for_environment(target_env.naming_info, adapter.dialect)
+        if show:
+            self.console.show_table_diff(table_diffs, show_sample, skip_grain_check, temp_schema)
 
-            source_alias = source_env.name
-            target_alias = target_env.name
+        return table_diffs[0] if len(table_diffs) == 1 else table_diffs
 
-            if not on:
-                on = []
-                for expr in [ref.expression for ref in model.all_references if ref.unique]:
-                    if isinstance(expr, exp.Tuple):
-                        on.extend(
-                            [key.this.sql(dialect=adapter.dialect) for key in expr.expressions]
-                        )
-                    else:
-                        # Handle a single Column or Paren expression
-                        on.append(expr.this.sql(dialect=adapter.dialect))
+    def _model_diff(
+        self,
+        source_env: Environment,
+        target_env: Environment,
+        model_or_snapshot: ModelOrSnapshot,
+        limit: int,
+        decimals: int,
+        on: t.Optional[t.List[str] | exp.Condition] = None,
+        skip_columns: t.Optional[t.List[str]] = None,
+        where: t.Optional[str | exp.Condition] = None,
+    ) -> TableDiff:
+        model = self.get_model(model_or_snapshot, raise_if_missing=True)
+        adapter = self._get_engine_adapter(model.gateway)
 
+        # Compare the virtual layer instead of the physical layer because the virtual layer is guaranteed to point
+        # to the correct/active snapshot for the model in the specified environment, taking into account things like dev previews
+        source = next(
+            snapshot for snapshot in source_env.snapshots if snapshot.name == model.fqn
+        ).qualified_view_name.for_environment(source_env.naming_info, adapter.dialect)
+
+        target = next(
+            snapshot for snapshot in target_env.snapshots if snapshot.name == model.fqn
+        ).qualified_view_name.for_environment(target_env.naming_info, adapter.dialect)
+
+        source_alias = source_env.name
+        target_alias = target_env.name
+
+        if not on:
+            on = []
+            for expr in [ref.expression for ref in model.all_references if ref.unique]:
+                if isinstance(expr, exp.Tuple):
+                    on.extend([key.this.sql(dialect=adapter.dialect) for key in expr.expressions])
+                else:
+                    # Handle a single Column or Paren expression
+                    on.append(expr.this.sql(dialect=adapter.dialect))
+
+        return self._table_diff(
+            on=on,
+            skip_columns=skip_columns,
+            where=where,
+            limit=limit,
+            decimals=decimals,
+            model=model,
+            adapter=adapter,
+            source=source,
+            target=target,
+            source_alias=source_alias,
+            target_alias=target_alias,
+        )
+
+    def _table_diff(
+        self,
+        source: str,
+        target: str,
+        source_alias: str,
+        target_alias: str,
+        limit: int,
+        decimals: int,
+        adapter: EngineAdapter,
+        on: t.Optional[t.List[str] | exp.Condition] = None,
+        model: t.Optional[Model] = None,
+        skip_columns: t.Optional[t.List[str]] = None,
+        where: t.Optional[str | exp.Condition] = None,
+    ) -> TableDiff:
         if not on:
             raise SQLMeshError(
                 "SQLMesh doesn't know how to join the two tables. Specify the `grains` in each model definition or pass join column names in separate `-o` flags."
             )
 
-        table_diff = TableDiff(
+        return TableDiff(
             adapter=adapter.with_log_level(logger.getEffectiveLevel()),
             source=source,
             target=target,
@@ -1653,146 +1756,11 @@ class GenericContext(BaseContext, t.Generic[C]):
             where=where,
             source_alias=source_alias,
             target_alias=target_alias,
-            model_name=model.name if model_or_snapshot else None,
-            model_dialect=model.dialect if model_or_snapshot else None,
             limit=limit,
             decimals=decimals,
+            model_name=model.name if model else None,
+            model_dialect=model.dialect if model else None,
         )
-        if show:
-            self.console.show_table_diff(
-                table_diff=table_diff,
-                show_sample=show_sample,
-                skip_grain_check=skip_grain_check,
-                temp_schema=temp_schema,
-            )
-
-        return table_diff
-
-    def _concurrent_table_diff(
-        self,
-        modified_snapshot_ids: t.Set[SnapshotId],
-        source: str,
-        target: str,
-        max_workers: int = 4,
-        **kwargs: t.Any,
-    ) -> t.List[TableDiff]:
-        """
-        Runs table_diff in parallel for a list of snapshots.
-
-        Args:
-            modified_snapshot_ids: Snapshots to compare.
-            source: Source table or dataset.
-            target: Target table or dataset.
-            max_workers: Number of threads to use.
-            kwargs: Passed to table_diff.
-
-        Returns:
-            A list of TableDiff from each table_diff.
-        """
-
-        def run_diff(snapshot_name: str) -> TableDiff:
-            return self.table_diff(
-                source=source,
-                target=target,
-                model_or_snapshot=snapshot_name,
-                **kwargs,
-            )
-
-        table_diffs: t.List[TableDiff] = []
-        with ThreadPoolExecutor(
-            max_workers=min(len(modified_snapshot_ids), max_workers)
-        ) as executor:
-            future_to_snapshot = {
-                executor.submit(run_diff, snapshot.name): snapshot
-                for snapshot in modified_snapshot_ids
-            }
-
-            for future in as_completed(future_to_snapshot):
-                table_diffs.append(future.result())
-
-        return table_diffs
-
-    @python_api_analytics
-    def table_diff_impacted_models(
-        self,
-        source: str,
-        target: str,
-        on: t.List[str] | exp.Condition | None = None,
-        skip_columns: t.List[str] | None = None,
-        where: t.Optional[str | exp.Condition] = None,
-        limit: int = 20,
-        show: bool = True,
-        show_sample: bool = True,
-        decimals: int = 3,
-        skip_grain_check: bool = False,
-        temp_schema: t.Optional[str] = None,
-    ) -> t.List[TableDiff]:
-        """Show a diff between all impacted tables.
-
-        Args:
-            source: The source environment or table.
-            target: The target environment or table.
-            on: The join condition, table aliases must be "s" and "t" for source and target.
-                If omitted, the table's grain will be used.
-            skip_columns: The columns to skip when computing the table diff.
-            where: An optional where statement to filter results.
-            limit: The limit of the sample dataframe.
-            show: Show the table diff output in the console.
-            show_sample: Show the sample dataframe in the console. Requires show=True.
-            decimals: The number of decimal places to keep when comparing floating point columns.
-            skip_grain_check: Skip check for rows that contain null or duplicate grains.
-            temp_schema: The schema to use for temporary tables.
-
-        Returns:
-            The TableDiff object containing schema and summary differences.
-        """
-
-        source_env = self.state_reader.get_environment(source)
-        target_env = self.state_reader.get_environment(target)
-        if not source_env:
-            raise SQLMeshError(f"Could not find environment '{source}'")
-        if not target_env:
-            raise SQLMeshError(f"Could not find environment '{target}'")
-
-        target_snapshots = {
-            s.name: s for s in self.state_reader.get_snapshots(target_env.snapshots).values()
-        }
-
-        context_diff = self._context_diff(
-            source,
-            snapshots=target_snapshots,
-            ensure_finalized_snapshots=self.config.plan.use_finalized_state,
-        )
-
-        self.console.show_model_difference_summary(
-            context_diff, source_env.naming_info, default_catalog=None
-        )
-        modified_snapshot_ids = {
-            current_snapshot.snapshot_id
-            for _, (current_snapshot, _) in context_diff.modified_snapshots.items()
-        }
-        if modified_snapshot_ids:
-            table_diffs = self._concurrent_table_diff(
-                modified_snapshot_ids=modified_snapshot_ids,
-                source=source,
-                target=target,
-                max_workers=self.concurrent_tasks,
-                on=on,
-                skip_columns=skip_columns,
-                where=where,
-                limit=limit,
-                show=False,  # Pass false to display them later in order
-                show_sample=show_sample,
-                decimals=decimals,
-                skip_grain_check=skip_grain_check,
-                temp_schema=temp_schema,
-            )
-            if show:
-                self.console.show_impacted_tables_diff(
-                    table_diffs, show_sample, skip_grain_check, temp_schema
-                )
-            return table_diffs
-        return []
 
     @python_api_analytics
     def get_dag(

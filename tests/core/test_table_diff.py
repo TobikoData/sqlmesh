@@ -422,7 +422,7 @@ def test_tables_and_grain_inferred_from_model(sushi_context_fixed_date: Context)
     table_diff = sushi_context_fixed_date.table_diff(
         source="unit_test", target="prod", model_or_snapshot="sushi.waiter_revenue_by_day"
     )
-
+    assert isinstance(table_diff, TableDiff)
     assert table_diff.source == "memory.sushi__unit_test.waiter_revenue_by_day"
     assert table_diff.target == "memory.sushi.waiter_revenue_by_day"
 

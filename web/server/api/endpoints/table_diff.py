@@ -34,6 +34,7 @@ def get_table_diff(
         limit=limit,
         show=False,
     )
+    diff = diff[0] if isinstance(diff, list) else diff
     _schema_diff = diff.schema_diff()
     _row_diff = diff.row_diff(temp_schema=temp_schema)
     schema_diff = SchemaDiff(
