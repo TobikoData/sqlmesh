@@ -263,7 +263,7 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
             table_properties = {k.upper(): v for k, v in table_properties.items()}
             # if we are creating a non-dynamic table; remove any properties that are only valid for dynamic tables
             # this is necessary because we create "normal" tables from the same managed model definition for dev previews and the "normal" tables dont support these parameters
-            if table_kind and "DYNAMIC" not in table_kind:
+            if "DYNAMIC" not in (table_kind or "").upper():
                 for prop in {"WAREHOUSE", "TARGET_LAG", "REFRESH_MODE", "INITIALIZE"}:
                     table_properties.pop(prop, None)
 

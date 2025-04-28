@@ -3367,6 +3367,7 @@ def test_create_managed(adapter_mock, make_snapshot, mocker: MockerFixture):
         table_properties=model.physical_properties,
         table_description=model.description,
         column_descriptions=model.column_descriptions,
+        table_format=None,
     )
 
 
