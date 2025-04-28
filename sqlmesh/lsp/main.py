@@ -21,12 +21,11 @@ class LSPContext:
 
     def __init__(self, context: Context) -> None:
         self.context = context
-        map: t.Dict[str, t.List[str]] = defaultdict(list[str])
+        map: t.Dict[str, t.List[str]] = defaultdict(list)
         for model in context.models.values():
-            if model._path is None:
+            if model._path is not None:
                 path = Path(model._path).resolve()
                 map[f"file://{path.as_posix()}"].append(model.name)
-
         self.map = map
 
 
