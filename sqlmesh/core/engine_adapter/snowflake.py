@@ -112,6 +112,38 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
     def catalog_support(self) -> CatalogSupport:
         return CatalogSupport.FULL_SUPPORT
 
+    def _create_table(
+        self,
+        table_name_or_schema: t.Union[exp.Schema, TableName],
+        expression: t.Optional[exp.Expression],
+        exists: bool = True,
+        replace: bool = False,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        table_description: t.Optional[str] = None,
+        column_descriptions: t.Optional[t.Dict[str, str]] = None,
+        table_kind: t.Optional[str] = None,
+        **kwargs: t.Any,
+    ) -> None:
+        table_format = kwargs.get("table_format")
+        if table_format and isinstance(table_format, str):
+            table_format = table_format.upper()
+            if not table_kind:
+                table_kind = f"{table_format} TABLE"
+            elif table_kind == self.MANAGED_TABLE_KIND:
+                table_kind = f"DYNAMIC {table_format} TABLE"
+
+        super()._create_table(
+            table_name_or_schema=table_name_or_schema,
+            expression=expression,
+            exists=exists,
+            replace=replace,
+            columns_to_types=columns_to_types,
+            table_description=table_description,
+            column_descriptions=column_descriptions,
+            table_kind=table_kind,
+            **kwargs,
+        )
+
     def create_managed_table(
         self,
         table_name: TableName,
@@ -230,7 +262,8 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
         if table_properties:
             table_properties = {k.upper(): v for k, v in table_properties.items()}
             # if we are creating a non-dynamic table; remove any properties that are only valid for dynamic tables
-            if table_kind != self.MANAGED_TABLE_KIND:
+            # this is necessary because we create "normal" tables from the same managed model definition for dev previews and the "normal" tables dont support these parameters
+            if table_kind and "DYNAMIC" not in table_kind:
                 for prop in {"WAREHOUSE", "TARGET_LAG", "REFRESH_MODE", "INITIALIZE"}:
                     table_properties.pop(prop, None)
 
