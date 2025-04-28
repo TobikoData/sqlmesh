@@ -2126,14 +2126,30 @@ class EngineAdapter:
                         else e
                     ),
                 )
-                contains_values = isinstance(e, exp.Insert) and e.find(exp.Values) is not None
-                self._log_sql(sql, contains_values=contains_values)
+                self._log_sql(
+                    sql,
+                    expression=e if isinstance(e, exp.Expression) else None,
+                    quote_identifiers=quote_identifiers,
+                )
                 self._execute(sql, **kwargs)
 
-    def _log_sql(self, sql: str, contains_values: bool = False) -> None:
-        if contains_values:
-            sql = "<Redacted because SQL contains values>"
-        logger.log(self._execute_log_level, "Executing SQL: %s", sql)
+    def _log_sql(
+        self,
+        sql: str,
+        expression: t.Optional[exp.Expression] = None,
+        quote_identifiers: bool = True,
+    ) -> None:
+        if not logger.isEnabledFor(self._execute_log_level):
+            return
+
+        sql_to_log = sql
+        if expression is not None and not isinstance(expression, exp.Query):
+            values = expression.find(exp.Values)
+            if values:
+                values.set("expressions", [exp.to_identifier("<REDACTED VALUES>")])
+                sql_to_log = self._to_sql(expression, quote=quote_identifiers)
+
+        logger.log(self._execute_log_level, "Executing SQL: %s", sql_to_log)
 
     def _execute(self, sql: str, **kwargs: t.Any) -> None:
         self.cursor.execute(sql, **kwargs)

@@ -3084,9 +3084,20 @@ def test_log_sql(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
     adapter.execute(parse_one("INSERT INTO test SELECT * FROM source"))
     adapter.execute(parse_one("INSERT INTO test (id, value) VALUES (1, 'test')"))
     adapter.insert_append("test", df)
+    adapter.replace_query("test", df)
 
-    assert mock_logger.log.call_count == 4
+    assert mock_logger.log.call_count == 5
     assert mock_logger.log.call_args_list[0][0][2] == "SELECT 1"
     assert mock_logger.log.call_args_list[1][0][2] == 'INSERT INTO "test" SELECT * FROM "source"'
-    assert mock_logger.log.call_args_list[2][0][2] == "<Redacted because SQL contains values>"
-    assert mock_logger.log.call_args_list[3][0][2] == "<Redacted because SQL contains values>"
+    assert (
+        mock_logger.log.call_args_list[2][0][2]
+        == 'INSERT INTO "test" ("id", "value") VALUES "<REDACTED VALUES>"'
+    )
+    assert (
+        mock_logger.log.call_args_list[3][0][2]
+        == 'INSERT INTO "test" ("id", "value") SELECT CAST("id" AS BIGINT) AS "id", CAST("value" AS TEXT) AS "value" FROM (VALUES "<REDACTED VALUES>") AS "t"("id", "value")'
+    )
+    assert (
+        mock_logger.log.call_args_list[4][0][2]
+        == 'CREATE OR REPLACE TABLE "test" AS SELECT CAST("id" AS BIGINT) AS "id", CAST("value" AS TEXT) AS "value" FROM (SELECT CAST("id" AS BIGINT) AS "id", CAST("value" AS TEXT) AS "value" FROM (VALUES "<REDACTED VALUES>") AS "t"("id", "value")) AS "_subquery"'
+    )
