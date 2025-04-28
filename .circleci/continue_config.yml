@@ -134,7 +134,7 @@ jobs:
             - v1-nm-cache-{{ checksum "package-lock.json" }}
       - run:
           name: Install packages
-          command: npm ci
+          command: npm ci 
       - save_cache:
           key: v1-nm-cache-{{ checksum "package-lock.json" }}
           paths:
@@ -272,15 +272,15 @@ workflows:
             parameters:
               engine:
                 - snowflake
-                # - databricks
-                # - redshift
-                # - bigquery
-                # - clickhouse-cloud
-                # - athena
-          #filters:
-          # branches:
-          #   only:
-          #     - main
+                - databricks
+                - redshift
+                - bigquery
+                - clickhouse-cloud
+                - athena
+          filters:
+           branches:
+             only:
+               - main
       - trigger_private_tests:
           requires:
             - style_and_cicd_tests
