@@ -17,7 +17,7 @@ on_tag_filter: &on_tag_filter
       only: /^v.+/
 
 orbs:
-  path-filtering: circleci/path-filtering@1.1.0
+  path-filtering: circleci/path-filtering@1.2.0
 
 jobs:
   vscode-extension-setup:
@@ -116,6 +116,7 @@ workflows:
             pytest.ini|setup.cfg|setup.py python true
             \.circleci/.*|Makefile|\.pre-commit-config\.yaml common true
             vscode/extensions/.* vscode true
+          tag: "3.9"
 
       - vscode-extension-setup:
           <<: *on_main_or_tag_filter

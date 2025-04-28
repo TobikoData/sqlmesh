@@ -163,3 +163,50 @@ def test_mutating_clustered_by_forward_only(
 
     metadata = _get_data_object(target_table_1)
     assert not metadata.is_clustered
+
+
+def test_create_iceberg_table(ctx: TestContext, engine_adapter: SnowflakeEngineAdapter) -> None:
+    # Note: this test relies on a default Catalog and External Volume being configured in Snowflake
+    # ref: https://docs.snowflake.com/en/user-guide/tables-iceberg-configure-catalog-integration#set-a-default-catalog-at-the-account-database-or-schema-level
+    # ref: https://docs.snowflake.com/en/user-guide/tables-iceberg-configure-external-volume#set-a-default-external-volume-at-the-account-database-or-schema-level
+    # This has been done on the Snowflake account used by CI
+
+    model_name = ctx.table("TEST")
+    managed_model_name = ctx.table("TEST_DYNAMIC")
+    sqlmesh = ctx.create_context()
+
+    model = load_sql_based_model(
+        d.parse(f"""
+            MODEL (
+                name {model_name},
+                kind FULL,
+                table_format iceberg,
+                dialect 'snowflake'
+            );
+
+            select 1 as "ID", 'foo' as "NAME";
+            """)
+    )
+
+    managed_model = load_sql_based_model(
+        d.parse(f"""
+            MODEL (
+                name {managed_model_name},
+                kind MANAGED,
+                physical_properties (
+                    target_lag = '20 minutes'
+                ),
+                table_format iceberg,
+                dialect 'snowflake'
+            );
+
+            select "ID", "NAME" from {model_name};
+            """)
+    )
+
+    sqlmesh.upsert_model(model)
+    sqlmesh.upsert_model(managed_model)
+
+    result = sqlmesh.plan(auto_apply=True)
+
+    assert len(result.new_snapshots) == 2

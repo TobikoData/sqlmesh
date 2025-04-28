@@ -19,6 +19,13 @@ from tests.core.engine_adapter import to_sql_calls
 pytestmark = [pytest.mark.engine, pytest.mark.snowflake]
 
 
+@pytest.fixture
+def snowflake_mocked_engine_adapter(
+    make_mocked_engine_adapter: t.Callable,
+) -> SnowflakeEngineAdapter:
+    return make_mocked_engine_adapter(SnowflakeEngineAdapter)
+
+
 def test_get_temp_table(mocker: MockerFixture, make_mocked_engine_adapter: t.Callable):
     adapter = make_mocked_engine_adapter(SnowflakeEngineAdapter)
 
@@ -270,11 +277,25 @@ def test_create_managed_table(make_mocked_engine_adapter: t.Callable, mocker: Mo
         },
     )
 
+    # table_format=iceberg
+    adapter.create_managed_table(
+        table_name="test_table",
+        query=query,
+        columns_to_types=columns_to_types,
+        table_properties={
+            "target_lag": exp.Literal.string("20 minutes"),
+            "catalog": exp.Literal.string("snowflake"),
+            "external_volume": exp.Literal.string("test"),
+        },
+        table_format="iceberg",
+    )
+
     assert to_sql_calls(adapter) == [
         """CREATE OR REPLACE DYNAMIC TABLE "test_table" TARGET_LAG='20 minutes' WAREHOUSE="default_warehouse" AS SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM (SELECT "a", "b" FROM "source_table") AS "_subquery\"""",
         """CREATE OR REPLACE DYNAMIC TABLE "test_table" TARGET_LAG='20 minutes' WAREHOUSE="foo" AS SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM (SELECT "a", "b" FROM "source_table") AS "_subquery\"""",
         """CREATE OR REPLACE DYNAMIC TABLE "test_table" CLUSTER BY ("a") TARGET_LAG='20 minutes' WAREHOUSE="default_warehouse" AS SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM (SELECT "a", "b" FROM "source_table") AS "_subquery\"""",
         """CREATE OR REPLACE DYNAMIC TABLE "test_table" TARGET_LAG='20 minutes' REFRESH_MODE='auto' INITIALIZE='on_create' WAREHOUSE="default_warehouse" AS SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM (SELECT "a", "b" FROM "source_table") AS "_subquery\"""",
+        """CREATE OR REPLACE DYNAMIC ICEBERG TABLE "test_table" TARGET_LAG='20 minutes' CATALOG='snowflake' EXTERNAL_VOLUME='test' WAREHOUSE="default_warehouse" AS SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM (SELECT "a", "b" FROM "source_table") AS "_subquery\"""",
     ]
 
 
@@ -666,3 +687,44 @@ def test_clone_table(mocker: MockerFixture, make_mocked_engine_adapter: t.Callab
     adapter.cursor.execute.assert_called_once_with(
         'CREATE TABLE "target_table" CLONE "source_table"'
     )
+
+
+def test_table_format_iceberg(snowflake_mocked_engine_adapter: SnowflakeEngineAdapter) -> None:
+    adapter = snowflake_mocked_engine_adapter
+
+    model = load_sql_based_model(
+        expressions=d.parse("""
+        MODEL (
+            name test.table,
+            kind full,
+            table_format iceberg,
+            physical_properties (
+              catalog = 'snowflake',
+              external_volume = 'test'
+            )
+        );
+        SELECT a::INT;
+        """)
+    )
+    assert isinstance(model, SqlModel)
+    assert model.table_format == "iceberg"
+
+    adapter.create_table(
+        table_name=model.name,
+        columns_to_types=model.columns_to_types_or_raise,
+        table_format=model.table_format,
+        table_properties=model.physical_properties,
+    )
+
+    adapter.ctas(
+        table_name=model.name,
+        query_or_df=model.render_query_or_raise(),
+        columns_to_types=model.columns_to_types_or_raise,
+        table_format=model.table_format,
+        table_properties=model.physical_properties,
+    )
+
+    assert to_sql_calls(adapter) == [
+        'CREATE ICEBERG TABLE IF NOT EXISTS "test"."table" ("a" INT) CATALOG=\'snowflake\' EXTERNAL_VOLUME=\'test\'',
+        'CREATE ICEBERG TABLE IF NOT EXISTS "test"."table" CATALOG=\'snowflake\' EXTERNAL_VOLUME=\'test\' AS SELECT CAST("a" AS INT) AS "a" FROM (SELECT CAST("a" AS INT) AS "a") AS "_subquery"',
+    ]

@@ -2098,6 +2098,7 @@ class EngineManagedStrategy(MaterializableStrategy):
                 table_properties=kwargs.get("physical_properties", model.physical_properties),
                 table_description=model.description,
                 column_descriptions=model.column_descriptions,
+                table_format=model.table_format,
             )
         elif not is_table_deployable:
             # Only create the dev preview table as a normal table.
@@ -2134,6 +2135,7 @@ class EngineManagedStrategy(MaterializableStrategy):
                 table_properties=kwargs.get("physical_properties", model.physical_properties),
                 table_description=model.description,
                 column_descriptions=model.column_descriptions,
+                table_format=model.table_format,
             )
         elif not is_snapshot_deployable:
             # Snapshot isnt deployable; update the preview table instead

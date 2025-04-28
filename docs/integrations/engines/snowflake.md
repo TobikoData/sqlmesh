@@ -525,7 +525,7 @@ MODEL (
   ),
 );
 ```
- 
+
 ## Custom View and Table types
 
 SQLMesh supports custom view and table types for Snowflake models. You can apply these modifiers to either the physical layer or virtual layer of a model using the `physical_properties` and `virtual_properties` attributes respectively. For example:
@@ -535,8 +535,8 @@ SQLMesh supports custom view and table types for Snowflake models. You can apply
 A table can be exposed through a `SECURE` view in the virtual layer by specifying the `creatable_type` property and setting it to `SECURE`:
 
 ```sql linenums="1"
-Model (
-  name = schema_name.model_name,
+MODEL (
+  name schema_name.model_name,
   virtual_properties (
       creatable_type = SECURE
   )
@@ -550,8 +550,8 @@ SELECT a FROM schema_name.model_b;
 A model can use a `TRANSIENT` table in the physical layer by specifying the `creatable_type` property and setting it to `TRANSIENT`:
 
 ```sql linenums="1"
-Model (
-  name = schema_name.model_name,
+MODEL (
+  name schema_name.model_name,
   physical_properties (
       creatable_type = TRANSIENT
   )
@@ -559,6 +559,52 @@ Model (
 
 SELECT a FROM schema_name.model_b;
 ```
+
+### Iceberg Tables
+
+In order for Snowflake to be able to create an Iceberg table, there must be an [External Volume](https://docs.snowflake.com/en/user-guide/tables-iceberg-configure-external-volume) configured to store the Iceberg table data on.
+
+Once that is configured, you can create a model backed by an Iceberg table by using `table_format iceberg` like so:
+
+```sql linenums="1" hl_lines="4 6-7"
+MODEL (
+  name schema_name.model_name,
+  kind FULL,
+  table_format iceberg,
+  physical_properties (
+    catalog = 'snowflake',
+    external_volume = '<external volume name>'
+  )
+);
+```
+
+To prevent having to specify `catalog = 'snowflake'` and `external_volume = '<external volume name>'` on every model, see the Snowflake documentation for:
+
+  - [Configuring a default Catalog](https://docs.snowflake.com/en/user-guide/tables-iceberg-configure-catalog-integration#set-a-default-catalog-at-the-account-database-or-schema-level)
+  - [Configuring a default External Volume](https://docs.snowflake.com/en/user-guide/tables-iceberg-configure-external-volume#set-a-default-external-volume-at-the-account-database-or-schema-level)
+
+Alternatively you can also use [model defaults](../../guides/configuration.md#model-defaults) to set defaults at the SQLMesh level instead.
+
+To utilize the wide variety of [optional properties](https://docs.snowflake.com/en/sql-reference/sql/create-iceberg-table-snowflake#optional-parameters) that Snowflake makes available for Iceberg tables, simply specify them as `physical_properties`:
+
+```sql linenums="1" hl_lines="8"
+MODEL (
+  name schema_name.model_name,
+  kind FULL,
+  table_format iceberg,
+  physical_properties (
+    catalog = 'snowflake',
+    external_volume = 'my_external_volume',
+    base_location = 'my/product_reviews/'
+  )
+);
+```
+
+!!! warning "External catalogs"
+
+    Setting `catalog = 'snowflake'` to use Snowflake's internal catalog is a good default because SQLMesh needs to be able to write to the tables it's managing and Snowflake [does not support](https://docs.snowflake.com/en/user-guide/tables-iceberg#catalog-options) writing to Iceberg tables configured under external catalogs.
+
+    You can however still reference a table from an external catalog in your model as a normal [external table](../../concepts/models/external_models.md).
 
 ## Troubleshooting
 
