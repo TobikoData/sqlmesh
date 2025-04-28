@@ -9,7 +9,12 @@ import typing as t
 from sqlglot import __version__ as SQLGLOT_VERSION
 
 from sqlmesh import migrations
-from sqlmesh.core.environment import Environment, EnvironmentNamingInfo, EnvironmentStatements
+from sqlmesh.core.environment import (
+    Environment,
+    EnvironmentNamingInfo,
+    EnvironmentStatements,
+    EnvironmentSummary,
+)
 from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotId,
@@ -137,11 +142,11 @@ class StateReader(abc.ABC):
         """
 
     @abc.abstractmethod
-    def get_environments_summary(self) -> t.Dict[str, int]:
+    def get_environments_summary(self) -> t.List[EnvironmentSummary]:
         """Fetches all environment names along with expiry datetime.
 
         Returns:
-            A dict of all environment names along with expiry datetime.
+            A list of all environment summaries.
         """
 
     @abc.abstractmethod

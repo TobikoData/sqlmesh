@@ -26,7 +26,7 @@ from sqlglot import exp
 
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.engine_adapter import EngineAdapter
-from sqlmesh.core.environment import Environment, EnvironmentStatements
+from sqlmesh.core.environment import Environment, EnvironmentStatements, EnvironmentSummary
 from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotId,
@@ -330,11 +330,11 @@ class EngineAdapterStateSync(StateSync):
         """
         return self.environment_state.get_environments()
 
-    def get_environments_summary(self) -> t.Dict[str, int]:
+    def get_environments_summary(self) -> t.List[EnvironmentSummary]:
         """Fetches all environment names along with expiry datetime.
 
         Returns:
-            A dict of all environment names along with expiry datetime.
+            A list of all environment summaries.
         """
         return self.environment_state.get_environments_summary()
 
