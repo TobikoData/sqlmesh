@@ -1613,7 +1613,9 @@ class GenericContext(BaseContext, t.Generic[C]):
             if not target_env:
                 raise SQLMeshError(f"Could not find environment '{target}'")
 
-            modified_snapshots: t.Set[ModelOrSnapshot] = { model_or_snapshot } if model_or_snapshot else set()
+            modified_snapshots: t.Set[ModelOrSnapshot] = (
+                {model_or_snapshot} if model_or_snapshot else set()
+            )
             if select_model:
                 models_to_diff = self._new_selector().expand_model_selections(select_model)
                 target_snapshots = {

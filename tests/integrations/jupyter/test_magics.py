@@ -644,7 +644,7 @@ def test_table_diff(notebook, loaded_sushi_context, convert_all_html_output_to_t
     assert len(output.outputs) == 5
 
     assert convert_all_html_output_to_text(output) == [
-                """Table Diff
+        """Table Diff
 ├── Model:
 │   └── sushi.top_waiters
 ├── Environment:
