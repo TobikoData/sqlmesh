@@ -1,6 +1,6 @@
-import { AuthenticationProviderTobikoCloud } from "../auth/auth"
-import * as vscode from "vscode"
-import { isCodespaces } from "../utilities/isCodespaces"
+import { AuthenticationProviderTobikoCloud } from '../auth/auth'
+import * as vscode from 'vscode'
+import { isCodespaces } from '../utilities/isCodespaces'
 
 export const signIn =
   (authenticationProvider: AuthenticationProviderTobikoCloud) => async () => {
@@ -9,5 +9,5 @@ export const signIn =
     } else {
       await authenticationProvider.createSession()
     }
-    await vscode.window.showInformationMessage("Signed in successfully")
+    await vscode.window.showInformationMessage('Signed in successfully')
   }

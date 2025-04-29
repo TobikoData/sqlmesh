@@ -175,8 +175,8 @@ export default function PlanActions({
                   planAction.isRun
                     ? handleRun
                     : planCancel.isSuccessful
-                    ? undefined
-                    : handleApply
+                      ? undefined
+                      : handleApply
                 }
                 ref={setFocus}
                 variant={

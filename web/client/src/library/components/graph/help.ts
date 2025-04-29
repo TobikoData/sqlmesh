@@ -178,15 +178,15 @@ function getNodeMap({
       type: isNotNil(model)
         ? (model.type as LineageNodeModelType)
         : // If model name present in lineage but not in global models
-        // it means either this is a CTE or model is UNKNOWN
-        // CTEs only have connections between columns
-        // where UNKNOWN model has connection only from another model
-        unknownModels.has(modelName)
-        ? EnumLineageNodeModelType.unknown
-        : EnumLineageNodeModelType.cte,
+          // it means either this is a CTE or model is UNKNOWN
+          // CTEs only have connections between columns
+          // where UNKNOWN model has connection only from another model
+          unknownModels.has(modelName)
+          ? EnumLineageNodeModelType.unknown
+          : EnumLineageNodeModelType.cte,
     })
     const columnsCount = withColumns
-      ? models.get(modelName)?.columns?.length ?? 0
+      ? (models.get(modelName)?.columns?.length ?? 0)
       : 0
 
     const maxWidth = Math.min(

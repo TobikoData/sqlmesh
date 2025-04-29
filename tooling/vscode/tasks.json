@@ -1,55 +1,52 @@
 // See https://go.microsoft.com/fwlink/?LinkId=733558
 // for the documentation about the tasks.json format
 {
-	"version": "2.0.0",
-	"tasks": [
-		{
-			"label": "extension-watch",
-			"type": "npm",
-			"script": "watch",
-			"problemMatcher": "$ts-webpack-watch",
-			"isBackground": true,
-			"presentation": {
-				"reveal": "never",
-				"group": "watchers"
-			},
-			"group": {
-				"kind": "build",
-			},
-			"options": {
-				"cwd": "${workspaceFolder}/vscode/extension"
-			}
-		},
-			{
-			"label": "extension-watch-develop",
-			"group": {
-				"kind": "build",
-				"isDefault": true
-			},
-			"dependsOn": ["extension-watch"],
-			"dependsOrder": "parallel"
-		},
-		{
-			"type": "npm",
-			"script": "watch-tests",
-			"problemMatcher": "$tsc-watch",
-			"isBackground": true,
-			"presentation": {
-				"reveal": "never",
-				"group": "watchers"
-			},
-			"group": "build",
-			"options": {
-				"cwd": "${workspaceFolder}/vscode/extension"
-			}
-		},
-		{
-			"label": "tasks: watch-tests",
-			"dependsOn": [
-				"npm: watch",
-				"npm: watch-tests"
-			],
-			"problemMatcher": []
-		}
-	]
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "extension-watch",
+      "type": "npm",
+      "script": "watch",
+      "problemMatcher": "$ts-webpack-watch",
+      "isBackground": true,
+      "presentation": {
+        "reveal": "never",
+        "group": "watchers"
+      },
+      "group": {
+        "kind": "build"
+      },
+      "options": {
+        "cwd": "${workspaceFolder}/vscode/extension"
+      }
+    },
+    {
+      "label": "extension-watch-develop",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "dependsOn": ["extension-watch"],
+      "dependsOrder": "parallel"
+    },
+    {
+      "type": "npm",
+      "script": "watch-tests",
+      "problemMatcher": "$tsc-watch",
+      "isBackground": true,
+      "presentation": {
+        "reveal": "never",
+        "group": "watchers"
+      },
+      "group": "build",
+      "options": {
+        "cwd": "${workspaceFolder}/vscode/extension"
+      }
+    },
+    {
+      "label": "tasks: watch-tests",
+      "dependsOn": ["npm: watch", "npm: watch-tests"],
+      "problemMatcher": []
+    }
+  ]
 }

@@ -7,16 +7,16 @@ import {
   Event,
   EventEmitter,
   window,
-} from "vscode"
-import { get_tcloud_bin } from "../utilities/sqlmesh/sqlmesh"
-import { err, isErr, ok, Result } from "../utilities/functional/result"
-import { execAsync } from "../utilities/exec"
-import { getProjectRoot } from "../utilities/common/utilities"
-import z from "zod"
-import { traceError } from "../utilities/common/log"
+} from 'vscode'
+import { get_tcloud_bin } from '../utilities/sqlmesh/sqlmesh'
+import { err, isErr, ok, Result } from '../utilities/functional/result'
+import { execAsync } from '../utilities/exec'
+import { getProjectRoot } from '../utilities/common/utilities'
+import z from 'zod'
+import { traceError } from '../utilities/common/log'
 
-export const AUTH_TYPE = "tobikodata"
-export const AUTH_NAME = "Tobiko"
+export const AUTH_TYPE = 'tobikodata'
+export const AUTH_NAME = 'Tobiko'
 
 const tokenSchema = z.object({
   iss: z.string(),
@@ -33,7 +33,7 @@ const statusResponseSchema = z.object({
   id_token: tokenSchema.optional().nullable(),
 })
 
-type StatusResponse = z.infer<typeof statusResponseSchema>;
+type StatusResponse = z.infer<typeof statusResponseSchema>
 
 const loginUrlResponseSchema = z.object({
   url: z.string(),
@@ -73,13 +73,13 @@ export class AuthenticationProviderTobikoCloud
     const tcloudBinPath = tcloudBin.value
     const result = await execAsync(
       tcloudBinPath,
-      ["auth", "vscode", "status"],
+      ['auth', 'vscode', 'status'],
       {
         cwd: workspacePath.uri.fsPath,
-      }
+      },
     )
     if (result.exitCode !== 0) {
-      return err("Failed to get tcloud auth status")
+      return err('Failed to get tcloud auth status')
     }
     const status = result.stdout
     const statusToJson = JSON.parse(status)
@@ -98,7 +98,7 @@ export class AuthenticationProviderTobikoCloud
     }
     const token = statusResponse.id_token
     if (!token) {
-      throw new Error("Invalid state from tcloud, failed to get token.")
+      throw new Error('Invalid state from tcloud, failed to get token.')
     }
     const session = {
       id: token.email,
@@ -106,8 +106,8 @@ export class AuthenticationProviderTobikoCloud
         id: token.sub,
         label: token.email,
       },
-      scopes: token.scope.split(" "),
-      accessToken: "",
+      scopes: token.scope.split(' '),
+      accessToken: '',
     }
     return [session]
   }
@@ -116,24 +116,24 @@ export class AuthenticationProviderTobikoCloud
     await this.sign_in_oauth_flow()
     const status = await this.get_status()
     if (isErr(status)) {
-      throw new Error("Failed to get tcloud auth status")
+      throw new Error('Failed to get tcloud auth status')
     }
     const statusResponse = status.value
     if (!statusResponse.is_logged_in) {
-      throw new Error("Failed to login to tcloud")
+      throw new Error('Failed to login to tcloud')
     }
     const token = statusResponse.id_token
     if (!token) {
-      throw new Error("Failed to get tcloud token")
+      throw new Error('Failed to get tcloud token')
     }
     const session: AuthenticationSession = {
       id: token.email,
       account: {
         id: token.email,
-        label: "Tobiko",
+        label: 'Tobiko',
       },
-      scopes: token.scope.split(" "),
-      accessToken: "",
+      scopes: token.scope.split(' '),
+      accessToken: '',
     }
     this._sessionChangeEmitter.fire({
       added: [session],
@@ -149,14 +149,14 @@ export class AuthenticationProviderTobikoCloud
     const tcloudBin = await get_tcloud_bin()
     const workspacePath = await getProjectRoot()
     if (isErr(tcloudBin)) {
-      throw new Error("Failed to get tcloud bin")
+      throw new Error('Failed to get tcloud bin')
     }
     const tcloudBinPath = tcloudBin.value
-    const result = await execAsync(tcloudBinPath, ["auth", "logout"], {
+    const result = await execAsync(tcloudBinPath, ['auth', 'logout'], {
       cwd: workspacePath.uri.fsPath,
     })
     if (result.exitCode !== 0) {
-      throw new Error("Failed to logout from tcloud")
+      throw new Error('Failed to logout from tcloud')
     }
 
     // Emit event with the actual sessions that were removed
@@ -173,18 +173,18 @@ export class AuthenticationProviderTobikoCloud
     const workspacePath = await getProjectRoot()
     const tcloudBin = await get_tcloud_bin()
     if (isErr(tcloudBin)) {
-      throw new Error("Failed to get tcloud bin")
+      throw new Error('Failed to get tcloud bin')
     }
     const tcloudBinPath = tcloudBin.value
     const result = await execAsync(
       tcloudBinPath,
-      ["auth", "vscode", "login-url"],
+      ['auth', 'vscode', 'login-url'],
       {
         cwd: workspacePath.uri.fsPath,
-      }
+      },
     )
     if (result.exitCode !== 0) {
-      throw new Error("Failed to get tcloud login url")
+      throw new Error('Failed to get tcloud login url')
     }
 
     try {
@@ -193,37 +193,37 @@ export class AuthenticationProviderTobikoCloud
       const url = urlCode.url
 
       if (!url) {
-        throw new Error("Invalid login URL received")
+        throw new Error('Invalid login URL received')
       }
 
       const ac = new AbortController()
       const timeout = setTimeout(() => ac.abort(), 1000 * 60 * 5)
       const backgroundServerForLogin = execAsync(
         tcloudBinPath,
-        ["auth", "vscode", "start-server", urlCode.verifier_code],
+        ['auth', 'vscode', 'start-server', urlCode.verifier_code],
         {
           cwd: workspacePath.uri.fsPath,
           signal: ac.signal,
-        }
+        },
       )
 
       const messageResult = await window.showInformationMessage(
-        "Please login to Tobiko Cloud",
+        'Please login to Tobiko Cloud',
         {
           modal: true,
         },
-        "Sign in with browser",
-        "Cancel"
+        'Sign in with browser',
+        'Cancel',
       )
 
-      if (messageResult === "Sign in with browser") {
+      if (messageResult === 'Sign in with browser') {
         await env.openExternal(Uri.parse(url))
       } else {
         // Always abort the server if not proceeding with sign in
         ac.abort()
         clearTimeout(timeout)
-        if (messageResult === "Cancel") {
-          throw new Error("Login cancelled")
+        if (messageResult === 'Cancel') {
+          throw new Error('Login cancelled')
         }
         return
       }
@@ -231,9 +231,7 @@ export class AuthenticationProviderTobikoCloud
       try {
         const output = await backgroundServerForLogin
         if (output.exitCode !== 0) {
-          throw new Error(
-            `Failed to complete authentication: ${output.stderr}`
-          )
+          throw new Error(`Failed to complete authentication: ${output.stderr}`)
         }
         // Get updated session and notify about the change
         const sessions = await this.getSessions()
@@ -245,8 +243,8 @@ export class AuthenticationProviderTobikoCloud
           })
         }
       } catch (error) {
-        if (error instanceof Error && error.name === "AbortError") {
-          throw new Error("Authentication timeout or aborted")
+        if (error instanceof Error && error.name === 'AbortError') {
+          throw new Error('Authentication timeout or aborted')
         }
         traceError(`Server error: ${error}`)
         throw error
@@ -254,11 +252,11 @@ export class AuthenticationProviderTobikoCloud
         clearTimeout(timeout)
       }
     } catch (error) {
-      if (error instanceof Error && error.message === "Login cancelled") {
+      if (error instanceof Error && error.message === 'Login cancelled') {
         throw error
       }
       traceError(`Authentication flow error: ${error}`)
-      throw new Error("Failed to complete authentication flow")
+      throw new Error('Failed to complete authentication flow')
     }
   }
 
@@ -266,18 +264,18 @@ export class AuthenticationProviderTobikoCloud
     const workspacePath = await getProjectRoot()
     const tcloudBin = await get_tcloud_bin()
     if (isErr(tcloudBin)) {
-      throw new Error("Failed to get tcloud bin")
+      throw new Error('Failed to get tcloud bin')
     }
     const tcloudBinPath = tcloudBin.value
     const result = await execAsync(
       tcloudBinPath,
-      ["auth", "vscode", "device"],
+      ['auth', 'vscode', 'device'],
       {
         cwd: workspacePath.uri.fsPath,
-      }
+      },
     )
     if (result.exitCode !== 0) {
-      throw new Error("Failed to get device code")
+      throw new Error('Failed to get device code')
     }
 
     try {
@@ -288,11 +286,11 @@ export class AuthenticationProviderTobikoCloud
       const timeout = setTimeout(() => ac.abort(), 1000 * 60 * 5)
       const waiting = execAsync(
         tcloudBinPath,
-        ["auth", "vscode", "poll_device", deviceCodeResponse.device_code],
+        ['auth', 'vscode', 'poll_device', deviceCodeResponse.device_code],
         {
           cwd: workspacePath.uri.fsPath,
           signal: ac.signal,
-        }
+        },
       )
 
       const messageResult = await window.showInformationMessage(
@@ -300,18 +298,18 @@ export class AuthenticationProviderTobikoCloud
         {
           modal: true,
         },
-        "Open browser",
-        "Cancel"
+        'Open browser',
+        'Cancel',
       )
 
-      if (messageResult === "Open browser") {
+      if (messageResult === 'Open browser') {
         await env.openExternal(
-          Uri.parse(deviceCodeResponse.verification_uri_complete)
+          Uri.parse(deviceCodeResponse.verification_uri_complete),
         )
       }
-      if (messageResult === "Cancel") {
+      if (messageResult === 'Cancel') {
         ac.abort()
-        throw new Error("Login cancelled")
+        throw new Error('Login cancelled')
       }
 
       try {
@@ -337,7 +335,7 @@ export class AuthenticationProviderTobikoCloud
       }
     } catch (error) {
       traceError(`JSON parsing error: ${error}`)
-      throw new Error("Failed to parse device code response")
+      throw new Error('Failed to parse device code response')
     }
   }
 }

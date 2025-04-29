@@ -5,11 +5,9 @@
     "dev": "npm run generate:api && vite",
     "build": "npm run generate:api && tsc && vite build",
     "preview": "vite preview --no-open",
-    "prettier": "prettier --write .",
-    "lint:fix": "eslint --fix .",
-    "lint": "eslint src",
-    "format": "npm run prettier && npm run lint:fix",
-    "test": "npm run generate:api npm run test:unit && npm run test:e2e",
+    "lint": "eslint",
+    "lint:fix": "eslint --fix",
+    "test": "npm run generate:api && npm run test:unit && npm run test:e2e",
     "test:unit:watch": "NODE_ENV=development vitest --watch=true",
     "test:unit": "NODE_ENV=testing vitest --watch=false",
     "test:e2e": "NODE_ENV=testing playwright test",
@@ -68,12 +66,14 @@
     "jsdom": "^22.1.0",
     "orval": "^7.9.0",
     "postcss": "^8.4.29",
-    "prettier": "^3.0.3",
     "tailwindcss": "^3.3.3",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.31.1",
     "vite": "^6.3.4",
     "vite-plugin-css-injected-by-js": "^3.5.2",
     "vitest": "^3.1.2"
+  },
+  "optionalDependencies": {
+    "@swc/core-linux-x64-gnu": "^1.11.24"
   }
 }
