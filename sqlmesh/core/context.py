@@ -1613,6 +1613,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             if not target_env:
                 raise SQLMeshError(f"Could not find environment '{target}'")
 
+            modified_snapshots: t.Set[ModelOrSnapshot] = { model_or_snapshot } if model_or_snapshot else set()
             if select_model:
                 models_to_diff = self._new_selector().expand_model_selections(select_model)
                 target_snapshots = {
@@ -1629,34 +1630,21 @@ class GenericContext(BaseContext, t.Generic[C]):
                     current_snapshot.snapshot_id.name
                     for _, (current_snapshot, _) in context_diff.modified_snapshots.items()
                 }
-                tasks_num = min(len(modified_snapshots), self.concurrent_tasks)
-                table_diffs = concurrent_apply_to_values(
-                    list(modified_snapshots),
-                    lambda s: self._model_diff(
-                        source_env=source_env,
-                        target_env=target_env,
-                        model_or_snapshot=s,
-                        limit=limit,
-                        decimals=decimals,
-                        on=on,
-                        skip_columns=skip_columns,
-                        where=where,
-                    ),
-                    tasks_num=tasks_num,
-                )
-            elif model_or_snapshot:
-                table_diffs = [
-                    self._model_diff(
-                        source_env=source_env,
-                        target_env=target_env,
-                        model_or_snapshot=model_or_snapshot,
-                        limit=limit,
-                        decimals=decimals,
-                        on=on,
-                        skip_columns=skip_columns,
-                        where=where,
-                    )
-                ]
+            tasks_num = min(len(modified_snapshots), self.concurrent_tasks)
+            table_diffs = concurrent_apply_to_values(
+                list(modified_snapshots),
+                lambda s: self._model_diff(
+                    source_env=source_env,
+                    target_env=target_env,
+                    model_or_snapshot=s,
+                    limit=limit,
+                    decimals=decimals,
+                    on=on,
+                    skip_columns=skip_columns,
+                    where=where,
+                ),
+                tasks_num=tasks_num,
+            )
         else:
             table_diffs = [
                 self._table_diff(

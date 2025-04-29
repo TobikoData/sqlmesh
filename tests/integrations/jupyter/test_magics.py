@@ -641,11 +641,27 @@ def test_table_diff(notebook, loaded_sushi_context, convert_all_html_output_to_t
 
     assert not output.stdout
     assert not output.stderr
-    assert len(output.outputs) == 1
+    assert len(output.outputs) == 5
 
     assert convert_all_html_output_to_text(output) == [
-        """Identical Tables
-└── memory.sushi__dev.top_waiters - memory.sushi.top_waiters""",
+                """Table Diff
+├── Model:
+│   └── sushi.top_waiters
+├── Environment:
+│   ├── Source: dev
+│   └── Target: prod
+├── Tables:
+│   ├── Source: memory.sushi__dev.top_waiters
+│   └── Target: memory.sushi.top_waiters
+└── Join On:
+    └── waiter_id""",
+        """Schema Diff Between 'DEV' and 'PROD' environments for model 'sushi.top_waiters':
+└── Schemas match""",
+        """Row Counts:
+└──  FULL MATCH: 8 rows (100.0%)""",
+        """COMMON ROWS column comparison stats:""",
+        """pct_match
+revenue      100.0""",
     ]
 
 

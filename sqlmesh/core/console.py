@@ -2150,42 +2150,44 @@ class TerminalConsole(Console):
         """
         Display the table diff between all mismatched tables.
         """
-        mismatched_tables = []
-        fully_matched = []
+        if len(table_diffs) > 1:
+            mismatched_tables = []
+            fully_matched = []
+            for table_diff in table_diffs:
+                if (
+                    table_diff.row_diff(
+                        temp_schema=temp_schema, skip_grain_check=skip_grain_check
+                    ).full_match_pct
+                    == 100
+                ):
+                    fully_matched.append(table_diff)
+                else:
+                    mismatched_tables.append(table_diff)
+            table_diffs = mismatched_tables if mismatched_tables else []
+            if fully_matched:
+                m_tree = Tree("\n[b]Identical Tables")
+                for m in fully_matched:
+                    m_tree.add(
+                        f"[{self.TABLE_DIFF_SOURCE_BLUE}]{m.source}[/{self.TABLE_DIFF_SOURCE_BLUE}] - [{self.TABLE_DIFF_TARGET_GREEN}]{m.target}[/{self.TABLE_DIFF_TARGET_GREEN}]"
+                    )
+                self._print(m_tree)
+
+            if mismatched_tables:
+                m_tree = Tree("\n[b]Mismatched Tables")
+                for m in mismatched_tables:
+                    m_tree.add(
+                        f"[{self.TABLE_DIFF_SOURCE_BLUE}]{m.source}[/{self.TABLE_DIFF_SOURCE_BLUE}] - [{self.TABLE_DIFF_TARGET_GREEN}]{m.target}[/{self.TABLE_DIFF_TARGET_GREEN}]"
+                    )
+                self._print(m_tree)
+
         for table_diff in table_diffs:
-            if (
-                table_diff.row_diff(
-                    temp_schema=temp_schema, skip_grain_check=skip_grain_check
-                ).full_match_pct
-                == 100
-            ):
-                fully_matched.append(table_diff)
-            else:
-                mismatched_tables.append(table_diff)
-
-        if fully_matched:
-            m_tree = Tree("\n[b]Identical Tables")
-            for m in fully_matched:
-                m_tree.add(
-                    f"[{self.TABLE_DIFF_SOURCE_BLUE}]{m.source}[/{self.TABLE_DIFF_SOURCE_BLUE}] - [{self.TABLE_DIFF_TARGET_GREEN}]{m.target}[/{self.TABLE_DIFF_TARGET_GREEN}]"
-                )
-            self._print(m_tree)
-
-        if mismatched_tables:
-            m_tree = Tree("\n[b]Mismatched Tables")
-            for m in mismatched_tables:
-                m_tree.add(
-                    f"[{self.TABLE_DIFF_SOURCE_BLUE}]{m.source}[/{self.TABLE_DIFF_SOURCE_BLUE}] - [{self.TABLE_DIFF_TARGET_GREEN}]{m.target}[/{self.TABLE_DIFF_TARGET_GREEN}]"
-                )
-            self._print(m_tree)
-            for table_diff in mismatched_tables:
-                self.show_table_diff_summary(table_diff)
-                self.show_schema_diff(table_diff.schema_diff())
-                self.show_row_diff(
-                    table_diff.row_diff(temp_schema=temp_schema, skip_grain_check=skip_grain_check),
-                    show_sample=show_sample,
-                    skip_grain_check=skip_grain_check,
-                )
+            self.show_table_diff_summary(table_diff)
+            self.show_schema_diff(table_diff.schema_diff())
+            self.show_row_diff(
+                table_diff.row_diff(temp_schema=temp_schema, skip_grain_check=skip_grain_check),
+                show_sample=show_sample,
+                skip_grain_check=skip_grain_check,
+            )
 
     def print_environments(self, environments_summary: t.List[EnvironmentSummary]) -> None:
         """Prints all environment names along with expiry datetime."""
@@ -2779,53 +2781,6 @@ class MarkdownConsole(CaptureTerminalConsole):
             self._print_modified_models(
                 context_diff, modified_snapshots, environment_naming_info, default_catalog, no_diff
             )
-
-    def show_table_diff(
-        self,
-        table_diffs: t.List[TableDiff],
-        show_sample: bool = True,
-        skip_grain_check: bool = False,
-        temp_schema: t.Optional[str] = None,
-    ) -> None:
-        """
-        Display the table diff between all mismatched tables.
-        """
-        mismatched_tables = []
-        fully_matched = []
-        for table_diff in table_diffs:
-            if (
-                table_diff.row_diff(
-                    temp_schema=temp_schema, skip_grain_check=skip_grain_check
-                ).full_match_pct
-                == 100
-            ):
-                fully_matched.append(table_diff)
-            else:
-                mismatched_tables.append(table_diff)
-
-        if fully_matched:
-            m_tree = Tree("\n[b]Identical Tables")
-            for m in fully_matched:
-                m_tree.add(
-                    f"[{self.TABLE_DIFF_SOURCE_BLUE}]{m.source}[/{self.TABLE_DIFF_SOURCE_BLUE}] - [{self.TABLE_DIFF_TARGET_GREEN}]{m.target}[/{self.TABLE_DIFF_TARGET_GREEN}]"
-                )
-            self._print(m_tree)
-
-        if mismatched_tables:
-            m_tree = Tree("\n[b]Mismatched Tables")
-            for m in mismatched_tables:
-                m_tree.add(
-                    f"[{self.TABLE_DIFF_SOURCE_BLUE}]{m.source}[/{self.TABLE_DIFF_SOURCE_BLUE}] - [{self.TABLE_DIFF_TARGET_GREEN}]{m.target}[/{self.TABLE_DIFF_TARGET_GREEN}]"
-                )
-            self._print(m_tree)
-            for table_diff in mismatched_tables:
-                self.show_table_diff_summary(table_diff)
-                self.show_schema_diff(table_diff.schema_diff())
-                self.show_row_diff(
-                    table_diff.row_diff(temp_schema=temp_schema, skip_grain_check=skip_grain_check),
-                    show_sample=show_sample,
-                    skip_grain_check=skip_grain_check,
-                )
 
     def _print_models_with_threshold(
         self,
