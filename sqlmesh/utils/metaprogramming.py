@@ -554,12 +554,16 @@ def format_evaluated_code_exception(
     tb: t.List[str] = []
     indent = ""
 
+    skip_patterns = re.compile(
+        r"Traceback \(most recent call last\):|"
+        r'File ".*?core/model/definition\.py|'
+        r'File ".*?core/snapshot/definition\.py|'
+        r'File ".*?core/macros\.py|'
+        r'File ".*?inspect\.py'
+    )
+
     for error_line in format_exception(exception):
-        traceback_match = error_line.startswith("Traceback (most recent call last):")
-        model_def_match = re.search('File ".*?core/model/definition.py', error_line)
-        snapshot_def_match = re.search('File ".*?core/snapshot/definition.py', error_line)
-        core_macros_match = re.search('File ".*?core/macros.py', error_line)
-        if traceback_match or model_def_match or snapshot_def_match or core_macros_match:
+        if skip_patterns.search(error_line):
             continue
 
         error_match = re.search("^.*?Error: ", error_line)

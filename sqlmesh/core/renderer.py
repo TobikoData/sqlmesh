@@ -228,7 +228,9 @@ class BaseExpressionRenderer:
             try:
                 macro_evaluator.evaluate(definition)
             except Exception as ex:
-                raise_config_error(f"Failed to evaluate macro '{definition}'. {ex}", self._path)
+                raise_config_error(
+                    f"Failed to evaluate macro '{definition}'.\n\n{ex}\n", self._path
+                )
 
         resolved_expressions: t.List[t.Optional[exp.Expression]] = []
 
@@ -237,7 +239,7 @@ class BaseExpressionRenderer:
                 transformed_expressions = ensure_list(macro_evaluator.transform(expression))
             except Exception as ex:
                 raise_config_error(
-                    f"Failed to resolve macros for\n{expression.sql(dialect=self._dialect, pretty=True)}\n{ex}",
+                    f"Failed to resolve macros for\n\n{expression.sql(dialect=self._dialect, pretty=True)}\n\n{ex}\n",
                     self._path,
                 )
 
