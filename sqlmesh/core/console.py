@@ -2139,7 +2139,6 @@ class TerminalConsole(Console):
                 self.console.print(f"\n[b][green]{target_name} ONLY[/green] sample rows:[/b]")
                 self.console.print(row_diff.t_sample.to_string(index=False), end="\n\n")
 
-
     def show_table_diff(
         self,
         table_diffs: t.List[TableDiff],

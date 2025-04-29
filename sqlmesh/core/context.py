@@ -1644,6 +1644,9 @@ class GenericContext(BaseContext, t.Generic[C]):
                     on=on,
                     skip_columns=skip_columns,
                     where=where,
+                    show=show,
+                    temp_schema=temp_schema,
+                    skip_grain_check=skip_grain_check,
                 ),
                 tasks_num=tasks_num,
             )
@@ -1678,6 +1681,9 @@ class GenericContext(BaseContext, t.Generic[C]):
         on: t.Optional[t.List[str] | exp.Condition] = None,
         skip_columns: t.Optional[t.List[str]] = None,
         where: t.Optional[str | exp.Condition] = None,
+        show: bool = True,
+        temp_schema: t.Optional[str] = None,
+        skip_grain_check: bool = False,
     ) -> TableDiff:
         model = self.get_model(model_or_snapshot, raise_if_missing=True)
         adapter = self._get_engine_adapter(model.gateway)
@@ -1704,7 +1710,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                     # Handle a single Column or Paren expression
                     on.append(expr.this.sql(dialect=adapter.dialect))
 
-        return self._table_diff(
+        table_diff = self._table_diff(
             on=on,
             skip_columns=skip_columns,
             where=where,
@@ -1717,6 +1723,11 @@ class GenericContext(BaseContext, t.Generic[C]):
             source_alias=source_alias,
             target_alias=target_alias,
         )
+        # Trigger row_diff in parallel execution so it's available for ordered display later
+        if show:
+            table_diff.row_diff(temp_schema=temp_schema, skip_grain_check=skip_grain_check)
+
+        return table_diff
 
     def _table_diff(
         self,
