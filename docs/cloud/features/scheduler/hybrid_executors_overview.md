@@ -16,9 +16,9 @@ In a standard deployment, all three of these occur within the Tobiko Cloud envir
 
 In a hybrid deployment, Tobiko Cloud does not execute tasks directly with the engine. Instead, it passes tasks to the executors hosted in your environment, which then execute the tasks with the engine. This extra layer between Tobiko Cloud and your SQL engine means Tobiko Cloud has no knowledge of your credentials.
 
-![Architecture for standard and hybrid deployments](./hybrid_executors/hybrid-executors_standard-hybrid-deployment.png)
-
 Executors are Docker containers that connect to both Tobiko Cloud and your SQL engine. They pull work tasks from the Tobiko Cloud scheduler and execute them with your SQL engine.
+
+![Architecture for standard and hybrid deployments](./hybrid_executors/hybrid-executors_standard-hybrid-deployment.png)
 
 ## Deployment Options
 
