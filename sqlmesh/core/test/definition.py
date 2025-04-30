@@ -601,13 +601,22 @@ class SqlModelTest(ModelTest):
                 for alias, cte in ctes.items():
                     cte_query = cte_query.with_(alias, cte.this, recursive=recursive)
 
-                actual = self._execute(cte_query)
+                with self._concurrent_render_context():
+                    # Similar to the model's query, we render the CTE query under the locked context
+                    # so that the execution (fetchdf) can continue concurrently between the threads
+                    sql = cte_query.sql(
+                        self._test_adapter_dialect, pretty=self.engine_adapter._pretty_sql
+                    )
+
+                actual = self._execute(sql)
                 expected = self._create_df(values, columns=cte_query.named_selects, partial=partial)
 
                 self.assert_equal(expected, actual, sort=sort, partial=partial)
 
     def runTest(self) -> None:
         with self._concurrent_render_context():
+            # Render the model's query and generate the SQL under the locked context so that
+            # execution (fetchdf) can continue concurrently between the threads
             query = self._render_model_query()
             sql = query.sql(self._test_adapter_dialect, pretty=self.engine_adapter._pretty_sql)
 
