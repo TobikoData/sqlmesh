@@ -1,35 +1,28 @@
-import typescriptEslint from '@typescript-eslint/eslint-plugin'
-import tsParser from '@typescript-eslint/parser'
+import eslint from '@eslint/js'
+import tseslint from 'typescript-eslint'
 
-export default [
+export default tseslint.config(
+  eslint.configs.recommended,
+  tseslint.configs.strict,
+  tseslint.configs.stylistic,
+  tseslint.configs.recommendedTypeChecked,
   {
-    files: ['**/*.ts'],
-  },
-  {
-    plugins: {
-      '@typescript-eslint': typescriptEslint,
-    },
-
     languageOptions: {
-      parser: tsParser,
-      ecmaVersion: 2022,
-      sourceType: 'module',
-    },
-
-    rules: {
-      '@typescript-eslint/naming-convention': [
-        'warn',
-        {
-          selector: 'import',
-          format: ['camelCase', 'PascalCase'],
-        },
-      ],
-
-      curly: 'error',
-      eqeqeq: 'error',
-      'no-throw-literal': 'error',
-      semi: ['error', 'never'],
-      'no-shadow': 'error',
+      parserOptions: {
+        projectService: true,
+        tsconfigRootDir: import.meta.dirname,
+      },
     },
   },
-]
+  {
+    rules: {
+      '@typescript-eslint/switch-exhaustiveness-check': 'error',
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-non-null-assertion': 'off',
+      '@typescript-eslint/restrict-template-expressions': 'off',
+      '@typescript-eslint/no-unsafe-argument': 'off',
+      '@typescript-eslint/no-unsafe-member-access': 'off',
+    },
+  },
+)

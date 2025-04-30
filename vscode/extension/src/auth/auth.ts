@@ -82,7 +82,7 @@ export class AuthenticationProviderTobikoCloud
       return err('Failed to get tcloud auth status')
     }
     const status = result.stdout
-    const statusToJson = JSON.parse(status)
+    const statusToJson: any = JSON.parse(status)
     const statusResponse = statusResponseSchema.parse(statusToJson)
     return ok(statusResponse)
   }
@@ -188,7 +188,7 @@ export class AuthenticationProviderTobikoCloud
     }
 
     try {
-      const resultToJson = JSON.parse(result.stdout)
+      const resultToJson: any = JSON.parse(result.stdout)
       const urlCode = loginUrlResponseSchema.parse(resultToJson)
       const url = urlCode.url
 
@@ -197,7 +197,12 @@ export class AuthenticationProviderTobikoCloud
       }
 
       const ac = new AbortController()
-      const timeout = setTimeout(() => ac.abort(), 1000 * 60 * 5)
+      const timeout = setTimeout(
+        () => {
+          ac.abort()
+        },
+        1000 * 60 * 5,
+      )
       const backgroundServerForLogin = execAsync(
         tcloudBinPath,
         ['auth', 'vscode', 'start-server', urlCode.verifier_code],
@@ -279,11 +284,16 @@ export class AuthenticationProviderTobikoCloud
     }
 
     try {
-      const resultToJson = JSON.parse(result.stdout)
+      const resultToJson: any = JSON.parse(result.stdout)
       const deviceCodeResponse = deviceCodeResponseSchema.parse(resultToJson)
 
       const ac = new AbortController()
-      const timeout = setTimeout(() => ac.abort(), 1000 * 60 * 5)
+      const timeout = setTimeout(
+        () => {
+          ac.abort()
+        },
+        1000 * 60 * 5,
+      )
       const waiting = execAsync(
         tcloudBinPath,
         ['auth', 'vscode', 'poll_device', deviceCodeResponse.device_code],

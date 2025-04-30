@@ -27,7 +27,7 @@ export class LSPClient implements Disposable {
 
     const sqlmesh = await sqlmesh_lsp_exec()
     if (isErr(sqlmesh)) {
-      traceError(`Failed to get sqlmesh_lsp_exec: ${sqlmesh.error}`)
+      traceError(`Failed to get sqlmesh_lsp_exec, ${sqlmesh.error.type}`)
       return sqlmesh
     }
     const workspaceFolders = getWorkspaceFolders()
@@ -41,9 +41,9 @@ export class LSPClient implements Disposable {
       })
     }
 
-    let folder = workspaceFolders[0]
+    const folder = workspaceFolders[0]
     const workspacePath = workspaceFolders[0].uri.fsPath
-    let serverOptions: ServerOptions = {
+    const serverOptions: ServerOptions = {
       run: {
         command: sqlmesh.value.bin,
         transport: TransportKind.stdio,
@@ -61,7 +61,7 @@ export class LSPClient implements Disposable {
         args: sqlmesh.value.args,
       },
     }
-    let clientOptions: LanguageClientOptions = {
+    const clientOptions: LanguageClientOptions = {
       documentSelector: [{ scheme: 'file', pattern: `**/*.sql` }],
       workspaceFolder: folder,
       diagnosticCollectionName: 'sqlmesh',
