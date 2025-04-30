@@ -1,4 +1,4 @@
-version: "3.11"
+version: '3.11'
 services:
   generate-openapi-spec:
     image: tobiko-api
@@ -37,7 +37,10 @@ services:
     build:
       context: ..
       dockerfile: web/Dockerfile.api
-    command: python -m uvicorn web.server.app:app --host 0.0.0.0 --port 8000 --reload --reload-dir /sqlmesh/web/server --reload-dir /sqlmesh/sqlmesh --timeout-keep-alive 300 --timeout-graceful-shutdown 1
+    command:
+      python -m uvicorn web.server.app:app --host 0.0.0.0 --port 8000 --reload
+      --reload-dir /sqlmesh/web/server --reload-dir /sqlmesh/sqlmesh
+      --timeout-keep-alive 300 --timeout-graceful-shutdown 1
     ports:
       - 8000:8000
     volumes:

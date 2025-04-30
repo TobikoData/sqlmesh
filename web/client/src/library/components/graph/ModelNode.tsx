@@ -166,20 +166,20 @@ export default function ModelNode({
                 isCTE
                   ? 'border-accent-500 bg-accent-500 text-accent-500 dark:border-accent-300 dark:bg-accent-300 dark:text-accent-300'
                   : isModelUnknown
-                  ? 'border-neutral-500 bg-neutral-500 text-neutral-500 dark:border-neutral-300 dark:bg-neutral-300 dark:text-neutral-300'
-                  : 'border-secondary-500 bg-secondary-500 text-secondary-500 dark:bg-primary-500  dark:border-primary-500 dark:text-primary-500',
+                    ? 'border-neutral-500 bg-neutral-500 text-neutral-500 dark:border-neutral-300 dark:bg-neutral-300 dark:text-neutral-300'
+                    : 'border-secondary-500 bg-secondary-500 text-secondary-500 dark:bg-primary-500  dark:border-primary-500 dark:text-primary-500',
                 isMainNode
                   ? 'ring-8 ring-brand-50'
                   : isModelExternal || isModelSeed
-                  ? 'ring-8 ring-accent-50'
-                  : '',
+                    ? 'ring-8 ring-accent-50'
+                    : '',
               ]
           : highlighted,
         isSelected && isCTE
           ? 'ring-8 ring-accent-50'
           : isSelected && isModelUnknown
-          ? 'ring-8 ring-neutral-50'
-          : isSelected && 'ring-8 ring-secondary-50 dark:ring-primary-50',
+            ? 'ring-8 ring-neutral-50'
+            : isSelected && 'ring-8 ring-secondary-50 dark:ring-primary-50',
       )}
       style={{
         maxWidth: isNil(nodeData.width)

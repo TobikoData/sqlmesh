@@ -1,5 +1,6 @@
-version: "3.11"
+version: '3.11'
 services:
   app:
-    command: bash -c "cd ../.. && npm ci && npm --prefix /app/web/client run build"
+    command:
+      bash -c "cd ../.. && npm ci && npm --prefix /app/web/client run build"
     networks: []

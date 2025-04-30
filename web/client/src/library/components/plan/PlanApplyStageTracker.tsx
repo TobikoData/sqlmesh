@@ -133,7 +133,7 @@ export default function PlanApplyStageTracker(): JSX.Element {
                   start={planApply.evaluationStart}
                   end={
                     planApply.isFinished
-                      ? planApply.evaluationEnd ?? planCancel.meta?.end
+                      ? (planApply.evaluationEnd ?? planCancel.meta?.end)
                       : undefined
                   }
                 >
@@ -708,14 +708,14 @@ function Stage({
   const variant = isStatusSuccess
     ? EnumVariant.Success
     : isStatusFail
-    ? EnumVariant.Danger
-    : EnumVariant.Info
+      ? EnumVariant.Danger
+      : EnumVariant.Info
   const [titleSuccess, titleFail, titleDefault] = states
   const text = isStatusSuccess
     ? titleSuccess
     : isStatusFail
-    ? titleFail
-    : titleDefault
+      ? titleFail
+      : titleDefault
 
   return (
     <Transition

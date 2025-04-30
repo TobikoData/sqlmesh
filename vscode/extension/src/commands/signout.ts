@@ -1,7 +1,8 @@
-import { AuthenticationProviderTobikoCloud } from "../auth/auth"
-import * as vscode from "vscode"
+import { AuthenticationProviderTobikoCloud } from '../auth/auth'
+import * as vscode from 'vscode'
 
-export const signOut = (authenticationProvider: AuthenticationProviderTobikoCloud) => async () => {
+export const signOut =
+  (authenticationProvider: AuthenticationProviderTobikoCloud) => async () => {
     await authenticationProvider.removeSession()
-    await vscode.window.showInformationMessage("Signed out successfully")
-}
+    await vscode.window.showInformationMessage('Signed out successfully')
+  }
