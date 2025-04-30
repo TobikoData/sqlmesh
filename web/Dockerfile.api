@@ -3,6 +3,8 @@ FROM python:3.11
 WORKDIR /sqlmesh
 
 COPY pyproject.toml pyproject.toml
+COPY Makefile Makefile
+COPY examples/custom_materializations/ examples/custom_materializations/
 COPY sqlmesh/_version.py sqlmesh/_version.py
 
-RUN pip install -e .[dev,web]
+RUN make install-dev
