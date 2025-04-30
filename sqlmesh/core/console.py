@@ -228,6 +228,32 @@ class DifferenceConsole(abc.ABC):
         """Display the table diff between two or multiple tables."""
 
     @abc.abstractmethod
+    def update_table_diff_progress(self, model: str) -> None:
+        """Update table diff progress bar"""
+
+    @abc.abstractmethod
+    def start_table_diff_progress(self, models_to_diff: int) -> None:
+        """Start table diff progress bar"""
+
+    @abc.abstractmethod
+    def start_table_diff_model_progress(self, model: str) -> None:
+        """Start table diff model progress"""
+
+    @abc.abstractmethod
+    def stop_table_diff_progress(self) -> None:
+        """Stop table diff progress bar"""
+
+    @abc.abstractmethod
+    def show_table_diff_details(
+        self,
+        models_in_source: t.List[str],
+        models_in_target: t.List[str],
+        models_no_diff: t.List[str],
+        models_to_diff: t.List[str],
+    ) -> None:
+        """Display information about which tables are identical and which are diffed"""
+
+    @abc.abstractmethod
     def show_table_diff_summary(self, table_diff: TableDiff) -> None:
         """Display information about the tables being diffed and how they are being joined"""
 
@@ -674,6 +700,27 @@ class NoopConsole(Console):
                 skip_grain_check=skip_grain_check,
             )
 
+    def update_table_diff_progress(self, model: str) -> None:
+        pass
+
+    def start_table_diff_progress(self, models_to_diff: int) -> None:
+        pass
+
+    def start_table_diff_model_progress(self, model: str) -> None:
+        pass
+
+    def stop_table_diff_progress(self) -> None:
+        pass
+
+    def show_table_diff_details(
+        self,
+        models_in_source: t.List[str],
+        models_in_target: t.List[str],
+        models_no_diff: t.List[str],
+        models_to_diff: t.List[str],
+    ) -> None:
+        pass
+
     def show_table_diff_summary(self, table_diff: TableDiff) -> None:
         pass
 
@@ -772,6 +819,11 @@ class TerminalConsole(Console):
         self.state_import_version_task: t.Optional[TaskID] = None
         self.state_import_snapshot_task: t.Optional[TaskID] = None
         self.state_import_environment_task: t.Optional[TaskID] = None
+
+        self.table_diff_progress: t.Optional[Progress] = None
+        self.table_diff_model_progress: t.Optional[Progress] = None
+        self.table_diff_model_tasks: t.Dict[str, TaskID] = {}
+        self.table_diff_progress_live: t.Optional[Live] = None
 
         self.verbosity = verbosity
         self.dialect = dialect
@@ -1927,6 +1979,87 @@ class TerminalConsole(Console):
     def loading_stop(self, id: uuid.UUID) -> None:
         self.loading_status[id].stop()
         del self.loading_status[id]
+
+    def show_table_diff_details(
+        self,
+        models_in_source: t.List[str],
+        models_in_target: t.List[str],
+        models_no_diff: t.List[str],
+        models_to_diff: t.List[str],
+    ) -> None:
+        """Display information about which tables are identical and which are diffed"""
+
+        if models_in_source:
+            m_tree = Tree("\n[b]Models only in source environment:")
+            for m in models_in_source:
+                m_tree.add(f"[{self.TABLE_DIFF_SOURCE_BLUE}]{m}[/{self.TABLE_DIFF_SOURCE_BLUE}]")
+            self._print(m_tree)
+
+        if models_in_target:
+            m_tree = Tree("\n[b]Models only in target environment:")
+            for m in models_in_target:
+                m_tree.add(f"[{self.TABLE_DIFF_TARGET_GREEN}]{m}[/{self.TABLE_DIFF_TARGET_GREEN}]")
+            self._print(m_tree)
+
+        if models_no_diff:
+            m_tree = Tree("\n[b]Models without changes:")
+            for m in models_no_diff:
+                m_tree.add(f"[{self.TABLE_DIFF_SOURCE_BLUE}]{m}[/{self.TABLE_DIFF_SOURCE_BLUE}]")
+            self._print(m_tree)
+
+        if models_to_diff:
+            m_tree = Tree("\n[b]Models to compare:")
+            for m in models_to_diff:
+                m_tree.add(f"[{self.TABLE_DIFF_SOURCE_BLUE}]{m}[/{self.TABLE_DIFF_SOURCE_BLUE}]")
+            self._print(m_tree)
+            self._print("")
+
+    def start_table_diff_progress(self, models_to_diff: int) -> None:
+        if not self.table_diff_progress:
+            self.table_diff_progress = make_progress_bar(
+                "Calculating model differences", self.console
+            )
+            self.table_diff_model_progress = Progress(
+                TextColumn("{task.fields[view_name]}", justify="right"),
+                SpinnerColumn(spinner_name="simpleDots"),
+                console=self.console,
+            )
+
+            progress_table = Table.grid()
+            progress_table.add_row(self.table_diff_progress)
+            progress_table.add_row(self.table_diff_model_progress)
+
+            self.table_diff_progress_live = Live(progress_table, refresh_per_second=10)
+            self.table_diff_progress_live.start()
+
+            self.table_diff_model_task = self.table_diff_progress.add_task(
+                "Diffing", total=models_to_diff
+            )
+
+    def start_table_diff_model_progress(self, model: str) -> None:
+        if self.table_diff_model_progress and model not in self.table_diff_model_tasks:
+            self.table_diff_model_tasks[model] = self.table_diff_model_progress.add_task(
+                f"Diffing {model}...",
+                view_name=model,
+                total=1,
+            )
+
+    def update_table_diff_progress(self, model: str) -> None:
+        if self.table_diff_progress:
+            self.table_diff_progress.update(self.table_diff_model_task, refresh=True, advance=1)
+        if self.table_diff_model_progress and model in self.table_diff_model_tasks:
+            model_task_id = self.table_diff_model_tasks[model]
+            self.table_diff_model_progress.remove_task(model_task_id)
+
+    def stop_table_diff_progress(self) -> None:
+        if self.table_diff_progress_live:
+            self.table_diff_progress_live.stop()
+            self.table_diff_progress_live = None
+            self.log_status_update("")
+            self.log_success(f"{GREEN_CHECK_MARK} Table diff completed")
+        self.table_diff_progress = None
+        self.table_diff_model_progress = None
+        self.table_diff_model_tasks = {}
 
     def show_table_diff_summary(self, table_diff: TableDiff) -> None:
         tree = Tree("\n[b]Table Diff")

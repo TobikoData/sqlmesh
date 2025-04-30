@@ -1571,8 +1571,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         target: str,
         on: t.List[str] | exp.Condition | None = None,
         skip_columns: t.List[str] | None = None,
-        model_or_snapshot: t.Optional[ModelOrSnapshot] = None,
-        select_model: t.Optional[t.Collection[str]] = None,
+        select_models: t.Optional[t.Collection[str]] = None,
         where: t.Optional[str | exp.Condition] = None,
         limit: int = 20,
         show: bool = True,
@@ -1589,7 +1588,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             on: The join condition, table aliases must be "s" and "t" for source and target.
                 If omitted, the table's grain will be used.
             skip_columns: The columns to skip when computing the table diff.
-            model_or_snapshot: The model or snapshot to use when environments are passed in.
+            select_models: The modelσ or snapshotσ to use when environments are passed in.
             where: An optional where statement to filter results.
             limit: The limit of the sample dataframe.
             show: Show the table diff output in the console.
@@ -1605,7 +1604,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         table_diffs: t.List[TableDiff] = []
 
         # Diffs multiple or a single model across two environments
-        if model_or_snapshot or select_model:
+        if select_models:
             source_env = self.state_reader.get_environment(source)
             target_env = self.state_reader.get_environment(target)
             if not source_env:
@@ -1613,43 +1612,73 @@ class GenericContext(BaseContext, t.Generic[C]):
             if not target_env:
                 raise SQLMeshError(f"Could not find environment '{target}'")
 
-            modified_snapshots: t.Set[ModelOrSnapshot] = (
-                {model_or_snapshot} if model_or_snapshot else set()
-            )
-            if select_model:
-                models_to_diff = self._new_selector().expand_model_selections(select_model)
-                target_snapshots = {
-                    s.name: s
-                    for s in self.state_reader.get_snapshots(target_env.snapshots).values()
-                    if s.name in models_to_diff
-                }
-                context_diff = self._context_diff(
-                    source,
-                    snapshots=target_snapshots,
-                    ensure_finalized_snapshots=self.config.plan.use_finalized_state,
+            selected_models = self._new_selector().expand_model_selections(select_models)
+            models_to_diff: t.List[t.Tuple[Model, EngineAdapter, str, str]] = []
+            models_in_source: t.List[str] = []
+            models_in_target: t.List[str] = []
+            models_no_diff: t.List[str] = []
+
+            for model_or_snapshot in selected_models:
+                model = self.get_model(model_or_snapshot, raise_if_missing=True)
+                adapter = self._get_engine_adapter(model.gateway)
+                source_snapshot = next(
+                    (snapshot for snapshot in source_env.snapshots if snapshot.name == model.fqn),
+                    None,
                 )
-                modified_snapshots = {
-                    current_snapshot.snapshot_id.name
-                    for _, (current_snapshot, _) in context_diff.modified_snapshots.items()
-                }
-            tasks_num = min(len(modified_snapshots), self.concurrent_tasks)
-            table_diffs = concurrent_apply_to_values(
-                list(modified_snapshots),
-                lambda s: self._model_diff(
-                    source_env=source_env,
-                    target_env=target_env,
-                    model_or_snapshot=s,
-                    limit=limit,
-                    decimals=decimals,
-                    on=on,
-                    skip_columns=skip_columns,
-                    where=where,
-                    show=show,
-                    temp_schema=temp_schema,
-                    skip_grain_check=skip_grain_check,
-                ),
-                tasks_num=tasks_num,
+                target_snapshot = next(
+                    (snapshot for snapshot in target_env.snapshots if snapshot.name == model.fqn),
+                    None,
+                )
+                if source_snapshot is None and target_snapshot:
+                    models_in_source.append(model_or_snapshot)
+                elif target_snapshot is None and source_snapshot:
+                    models_in_target.append(model_or_snapshot)
+                elif target_snapshot and source_snapshot:
+                    if source_snapshot.fingerprint != target_snapshot.fingerprint:
+                        # Compare the virtual layer instead of the physical layer because the virtual layer is guaranteed to point
+                        # to the correct/active snapshot for the model in the specified environment, taking into account things like dev previews
+                        source = source_snapshot.qualified_view_name.for_environment(
+                            source_env.naming_info, adapter.dialect
+                        )
+                        target = target_snapshot.qualified_view_name.for_environment(
+                            target_env.naming_info, adapter.dialect
+                        )
+
+                        models_to_diff.append((model, adapter, source, target))
+                    else:
+                        models_no_diff.append(model_or_snapshot)
+
+            self.console.show_table_diff_details(
+                models_in_source,
+                models_in_target,
+                models_no_diff,
+                [model[0].name for model in models_to_diff],
             )
+
+            if models_to_diff:
+                self.console.start_table_diff_progress(len(models_to_diff))
+                tasks_num = min(len(models_to_diff), self.concurrent_tasks)
+                table_diffs = concurrent_apply_to_values(
+                    list(models_to_diff),
+                    lambda model_info: self._model_diff(
+                        model=model_info[0],
+                        adapter=model_info[1],
+                        source=model_info[2],
+                        target=model_info[3],
+                        source_alias=source_env.name,
+                        target_alias=target_env.name,
+                        limit=limit,
+                        decimals=decimals,
+                        on=on,
+                        skip_columns=skip_columns,
+                        where=where,
+                        show=show,
+                        temp_schema=temp_schema,
+                        skip_grain_check=skip_grain_check,
+                    ),
+                    tasks_num=tasks_num,
+                )
+                self.console.stop_table_diff_progress()
         else:
             table_diffs = [
                 self._table_diff(
@@ -1673,9 +1702,12 @@ class GenericContext(BaseContext, t.Generic[C]):
 
     def _model_diff(
         self,
-        source_env: Environment,
-        target_env: Environment,
-        model_or_snapshot: ModelOrSnapshot,
+        model: Model,
+        adapter: EngineAdapter,
+        source: str,
+        target: str,
+        source_alias: str,
+        target_alias: str,
         limit: int,
         decimals: int,
         on: t.Optional[t.List[str] | exp.Condition] = None,
@@ -1685,22 +1717,6 @@ class GenericContext(BaseContext, t.Generic[C]):
         temp_schema: t.Optional[str] = None,
         skip_grain_check: bool = False,
     ) -> TableDiff:
-        model = self.get_model(model_or_snapshot, raise_if_missing=True)
-        adapter = self._get_engine_adapter(model.gateway)
-
-        # Compare the virtual layer instead of the physical layer because the virtual layer is guaranteed to point
-        # to the correct/active snapshot for the model in the specified environment, taking into account things like dev previews
-        source = next(
-            snapshot for snapshot in source_env.snapshots if snapshot.name == model.fqn
-        ).qualified_view_name.for_environment(source_env.naming_info, adapter.dialect)
-
-        target = next(
-            snapshot for snapshot in target_env.snapshots if snapshot.name == model.fqn
-        ).qualified_view_name.for_environment(target_env.naming_info, adapter.dialect)
-
-        source_alias = source_env.name
-        target_alias = target_env.name
-
         if not on:
             on = []
             for expr in [ref.expression for ref in model.all_references if ref.unique]:
@@ -1709,6 +1725,8 @@ class GenericContext(BaseContext, t.Generic[C]):
                 else:
                     # Handle a single Column or Paren expression
                     on.append(expr.this.sql(dialect=adapter.dialect))
+
+        self.console.start_table_diff_model_progress(model.name)
 
         table_diff = self._table_diff(
             on=on,
@@ -1723,9 +1741,12 @@ class GenericContext(BaseContext, t.Generic[C]):
             source_alias=source_alias,
             target_alias=target_alias,
         )
-        # Trigger row_diff in parallel execution so it's available for ordered display later
+
         if show:
+            # Trigger row_diff in parallel execution so it's available for ordered display later
             table_diff.row_diff(temp_schema=temp_schema, skip_grain_check=skip_grain_check)
+
+        self.console.update_table_diff_progress(model.name)
 
         return table_diff
 

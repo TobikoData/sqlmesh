@@ -23,18 +23,22 @@ def get_table_diff(
     temp_schema: t.Optional[str] = None,
     limit: int = 20,
     context: Context = Depends(get_loaded_context),
-) -> TableDiff:
+) -> t.Optional[TableDiff]:
     """Calculate differences between tables, taking into account schema and row level differences."""
-    diff = context.table_diff(
+    table_diffs = context.table_diff(
         source=source,
         target=target,
         on=exp.condition(on) if on else None,
-        model_or_snapshot=model_or_snapshot,
+        select_models={model_or_snapshot} if model_or_snapshot else None,
         where=where,
         limit=limit,
         show=False,
     )
-    diff = diff[0] if isinstance(diff, list) else diff
+
+    if not table_diffs:
+        return None
+    diff = table_diffs[0] if isinstance(table_diffs, list) else table_diffs
+
     _schema_diff = diff.schema_diff()
     _row_diff = diff.row_diff(temp_schema=temp_schema)
     schema_diff = SchemaDiff(

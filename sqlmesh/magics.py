@@ -687,6 +687,12 @@ class SQLMeshMagics(Magics):
         help="The number of decimal places to keep when comparing floating point columns. Default: 3",
     )
     @argument(
+        "--select-model",
+        type=str,
+        nargs="*",
+        help="Select specific model changes that should be included in the plan.",
+    )
+    @argument(
         "--skip-grain-check",
         action="store_true",
         help="Disable the check for a primary key (grain) that is missing or is not unique.",
@@ -700,12 +706,13 @@ class SQLMeshMagics(Magics):
         """
         args = parse_argstring(self.table_diff, line)
         source, target = args.source_to_target.split(":")
+        select_models = {args.model} if args.model else args.select_model or None
         context.table_diff(
             source=source,
             target=target,
             on=args.on,
             skip_columns=args.skip_columns,
-            model_or_snapshot=args.model,
+            select_models=select_models,
             where=args.where,
             limit=args.limit,
             show_sample=args.show_sample,

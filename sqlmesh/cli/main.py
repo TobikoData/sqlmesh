@@ -906,10 +906,11 @@ def table_diff(
 ) -> None:
     """Show the diff between two tables or a selection of models when they are specified."""
     source, target = source_to_target.split(":")
+    select_models = {model} if model else kwargs.pop("select_model", None)
     obj.table_diff(
         source=source,
         target=target,
-        model_or_snapshot=model,
+        select_models=select_models,
         **kwargs,
     )
 
