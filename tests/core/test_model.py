@@ -8662,6 +8662,55 @@ def test_blueprint_variable_precedence_sql(tmp_path: Path, assert_exp_eq: t.Call
     )
 
 
+def test_blueprint_variable_jinja(tmp_path: Path, assert_exp_eq: t.Callable) -> None:
+    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+
+    blueprint_variables = tmp_path / "models/blueprint_variables.sql"
+    blueprint_variables.parent.mkdir(parents=True, exist_ok=True)
+    blueprint_variables.write_text(
+        """
+        MODEL (
+          name s.@{bp_name},
+          blueprints (
+            (bp_name := m1, var1 := 'v1', var2 := v2),
+            (bp_name := m2, var1 := 'v3'),
+          ),
+        );
+
+        @DEF(bp_name, override);
+
+        JINJA_QUERY_BEGIN;
+        SELECT
+            {{ blueprint_var('var1') }} AS var1,
+            '{{ blueprint_var('var2') }}' AS var2,
+            '{{ blueprint_var('var2', 'var2_default') }}' AS var2_default,
+            '{{ blueprint_var('bp_name') }}' AS bp_name
+        FROM s.{{ blueprint_var('bp_name') }}_source;
+        JINJA_END;
+        """
+    )
+    ctx = Context(
+        config=Config(
+            model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+            variables={"var2": "1"},
+        ),
+        paths=tmp_path,
+    )
+    assert len(ctx.models) == 2
+
+    m1 = ctx.get_model("s.m1", raise_if_missing=True)
+    m2 = ctx.get_model("s.m2", raise_if_missing=True)
+
+    assert_exp_eq(
+        m1.render_query(),
+        """SELECT 'v1' AS "var1", 'v2' AS "var2", 'v2' AS "var2_default", 'm1' AS "bp_name" FROM "memory"."s"."m1_source" AS "m1_source" """,
+    )
+    assert_exp_eq(
+        m2.render_query(),
+        """SELECT 'v3' AS "var1", 'None' AS "var2", 'var2_default' AS "var2_default", 'm2' AS "bp_name" FROM "memory"."s"."m2_source" AS "m2_source" """,
+    )
+
+
 def test_blueprint_variable_precedence_python(tmp_path: Path, mocker: MockerFixture) -> None:
     init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
 

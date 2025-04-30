@@ -122,6 +122,31 @@ Access gateway variables in models using the same methods as [global variables](
 
 Gateway-specific variable values take precedence over variables with the same name specified in the configuration file's root `variables` key.
 
+### Blueprint variables
+
+Blueprint variables are defined as a property of the `MODEL` statement, and serve as a mechanism for [creating model templates](../models/sql_models.md):
+
+```sql linenums="1"
+MODEL (
+  name @customer.some_table,
+  kind FULL,
+  blueprints (
+    (customer := customer1, field_a := x, field_b := y),
+    (customer := customer2, field_a := z)
+  )
+);
+
+JINJA_QUERY_BEGIN;
+SELECT
+  {{ blueprint_var('field_a') }}
+  {{ blueprint_var('field_b', 'default_b') }} AS field_b
+FROM {{ blueprint_var('customer') }}.some_source
+JINJA_END;
+```
+
+Blueprint variables can be accessed using the `{{ blueprint_var() }}` macro function, which also supports specifying default values in case the variable is undefined (similar to `{{ var() }}`).
+
+
 ### Local variables
 
 Define your own variables with the Jinja statement `{% set ... %}`. For example, we could specify the name of the `num_orders` column in the `sqlmesh_example.full_model` like this:
