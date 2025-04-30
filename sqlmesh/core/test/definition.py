@@ -530,9 +530,7 @@ class ModelTest(unittest.TestCase):
         import time_machine
 
         lock_ctx: AbstractContextManager = (
-            self.CONCURRENT_RENDER_LOCK
-            if (self.concurrency and self._execution_time)
-            else nullcontext()
+            self.CONCURRENT_RENDER_LOCK if self.concurrency else nullcontext()
         )
         time_ctx: AbstractContextManager = nullcontext()
         dialect_patch_ctx: AbstractContextManager = nullcontext()
