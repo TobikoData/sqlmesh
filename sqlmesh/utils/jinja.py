@@ -15,6 +15,7 @@ from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
 from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.pydantic import PRIVATE_FIELDS, PydanticModel, field_serializer, field_validator
+from sqlmesh.utils.metaprogramming import SqlValue
 
 
 if t.TYPE_CHECKING:
@@ -593,7 +594,10 @@ def jinja_call_arg_name(node: nodes.Node) -> str:
 
 def create_var(variables: t.Dict[str, t.Any]) -> t.Callable:
     def _var(var_name: str, default: t.Optional[t.Any] = None) -> t.Optional[t.Any]:
-        return variables.get(var_name.lower(), default)
+        value = variables.get(var_name.lower(), default)
+        if isinstance(value, SqlValue):
+            return value.sql
+        return value
 
     return _var
 
@@ -603,10 +607,12 @@ def create_builtin_globals(
 ) -> t.Dict[str, t.Any]:
     global_vars.pop(c.GATEWAY, None)
     variables = global_vars.pop(c.SQLMESH_VARS, None) or {}
+    blueprint_variables = global_vars.pop(c.SQLMESH_BLUEPRINT_VARS, None) or {}
     return {
+        **global_vars,
         c.VAR: create_var(variables),
         c.GATEWAY: lambda: variables.get(c.GATEWAY, None),
-        **global_vars,
+        c.BLUEPRINT_VAR: create_var(blueprint_variables),
     }
 
 

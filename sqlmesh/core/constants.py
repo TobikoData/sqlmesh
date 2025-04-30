@@ -79,6 +79,7 @@ SQLMESH_VARS = "__sqlmesh__vars__"
 SQLMESH_BLUEPRINT_VARS = "__sqlmesh__blueprint__vars__"
 
 VAR = "var"
+BLUEPRINT_VAR = "blueprint_var"
 GATEWAY = "gateway"
 
 SQLMESH_MACRO = "__sqlmesh__macro__"
