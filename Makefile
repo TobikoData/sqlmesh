@@ -16,7 +16,7 @@ py-style:
 	SKIP=prettier,eslint pre-commit run --all-files
 
 ui-style:
-	SKIP=ruff,ruff-format,mypy pre-commit run --all-files
+	npm run lint
 
 doc-test:
 	python -m pytest --doctest-modules sqlmesh/core sqlmesh/utils
