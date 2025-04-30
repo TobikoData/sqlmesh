@@ -2376,7 +2376,37 @@ def test_freeze_time_concurrent(tmp_path: Path) -> None:
     tests_dir = tmp_path / "tests"
     tests_dir.mkdir()
 
-    for model_name in ["sql_model", "py_model"]:
+    macros_dir = tmp_path / "macros"
+    macros_dir.mkdir()
+
+    macro_file = macros_dir / "test_datetime_now.py"
+    macro_file.write_text(
+        """
+from sqlglot import exp
+import datetime
+from sqlmesh.core.macros import macro
+
+@macro()
+def test_datetime_now(evaluator):
+  return exp.cast(exp.Literal.string(datetime.datetime.now(tz=datetime.timezone.utc)), exp.DataType.Type.DATE)
+  
+@macro()
+def test_sqlglot_expr(evaluator):
+  return exp.CurrentDate().sql(evaluator.dialect)
+    """
+    )
+
+    models_dir = tmp_path / "models"
+    models_dir.mkdir()
+    sql_model1 = models_dir / "sql_model1.sql"
+    sql_model1.write_text(
+        """
+        MODEL(NAME sql_model1);
+        SELECT @test_datetime_now() AS col_exec_ds_time, @test_sqlglot_expr() AS col_current_date;
+        """
+    )
+
+    for model_name in ["sql_model1", "sql_model2", "py_model"]:
         for i in range(5):
             test_2019 = tmp_path / "tests" / f"test_2019_{model_name}_{i}.yaml"
             test_2019.write_text(
@@ -2428,16 +2458,15 @@ def test_freeze_time_concurrent(tmp_path: Path) -> None:
         )
 
     python_model = model.get_registry()["py_model"].model(module_path=Path("."), path=Path("."))
+    ctx.upsert_model(python_model)
 
     ctx.upsert_model(
         _create_model(
-            meta="MODEL(NAME sql_model)",
+            meta="MODEL(NAME sql_model2)",
             query="SELECT @execution_ds::timestamp_ntz AS col_exec_ds_time, current_date()::date AS col_current_date",
             default_catalog=ctx.default_catalog,
         )
     )
 
-    ctx.upsert_model(python_model)
-
     results = ctx.test()
-    assert len(results.successes) == 20
+    assert len(results.successes) == 30

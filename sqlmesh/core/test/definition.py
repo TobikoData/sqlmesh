@@ -544,13 +544,9 @@ class ModelTest(unittest.TestCase):
         with lock_ctx, time_ctx, dialect_patch_ctx:
             yield
 
-    def _execute(self, query: exp.Query) -> pd.DataFrame:
+    def _execute(self, query: exp.Query | str) -> pd.DataFrame:
         """Executes the given query using the testing engine adapter and returns a DataFrame."""
-
-        with self._concurrent_render_context():
-            sql = query.sql(self._test_adapter_dialect, pretty=self.engine_adapter._pretty_sql)
-
-        return self.engine_adapter.fetchdf(sql)
+        return self.engine_adapter.fetchdf(query)
 
     def _create_df(
         self,
@@ -611,7 +607,10 @@ class SqlModelTest(ModelTest):
                 self.assert_equal(expected, actual, sort=sort, partial=partial)
 
     def runTest(self) -> None:
-        query = self._render_model_query()
+        with self._concurrent_render_context():
+            query = self._render_model_query()
+            sql = query.sql(self._test_adapter_dialect, pretty=self.engine_adapter._pretty_sql)
+
         with_clause = query.args.get("with")
 
         if with_clause:
@@ -628,7 +627,7 @@ class SqlModelTest(ModelTest):
             partial = values.get("partial")
             sort = query.args.get("order") is None
 
-            actual = self._execute(query)
+            actual = self._execute(sql)
             expected = self._create_df(values, columns=self.model.columns_to_types, partial=partial)
 
             self.assert_equal(expected, actual, sort=sort, partial=partial)
