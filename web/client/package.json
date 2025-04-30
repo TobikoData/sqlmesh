@@ -55,6 +55,7 @@
   "devDependencies": {
     "@eslint/js": "^9.25.1",
     "@playwright/test": "^1.37.1",
+    "@swc/core": "^1.11.24",
     "@testing-library/jest-dom": "^6.1.2",
     "@testing-library/react": "^14.0.0",
     "@testing-library/user-event": "^14.4.3",
@@ -62,7 +63,7 @@
     "@types/pluralize": "^0.0.30",
     "@types/react": "^18.2.21",
     "@types/react-dom": "^18.2.7",
-    "@vitejs/plugin-react-swc": "^3.3.2",
+    "@vitejs/plugin-react-swc": "^3.9.0",
     "autoprefixer": "^10.4.15",
     "jsdom": "^22.1.0",
     "orval": "^7.9.0",
@@ -71,8 +72,8 @@
     "tailwindcss": "^3.3.3",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.31.1",
-    "vite": "^4.4.9",
+    "vite": "^6.3.4",
     "vite-plugin-css-injected-by-js": "^3.5.2",
-    "vitest": "^0.34.3"
+    "vitest": "^3.1.2"
   }
 }

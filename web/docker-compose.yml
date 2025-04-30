@@ -23,6 +23,7 @@ services:
       - 8001:8001
     volumes:
       - ../web/client:/app/web/client
+      - /app/web/client/node_modules
     tty: true
     networks:
       - tobiko-development
