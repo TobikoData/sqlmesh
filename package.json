@@ -2,5 +2,9 @@
     "workspaces": [
         "vscode/extension",
         "web/client"
-    ]
+    ],
+    "scripts": {
+        "lint": "npm run lint --workspaces",
+        "lint:fix": "npm run lint:fix --workspaces"
+    }
 }

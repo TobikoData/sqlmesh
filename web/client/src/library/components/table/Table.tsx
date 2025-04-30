@@ -22,7 +22,6 @@ import { EnumSize } from '~/types/enum'
 import { isArrayNotEmpty, isNotNil } from '@utils/index'
 
 declare module '@tanstack/table-core' {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   interface ColumnMeta<TData extends RowData, TValue> {
     type: string
   }

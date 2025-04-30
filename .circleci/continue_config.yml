@@ -96,31 +96,24 @@ jobs:
 
   ui_style:
     docker:
-      - image: cimg/python:3.9
+      - image: cimg/node:20.19.0
     resource_class: small
     steps:
       - halt_unless_client
       - checkout
-      - run:
-          command: |
-            cp .pre-commit-config.yaml pre-commit-cache-key.txt
-            python --version --version >> pre-commit-cache-key.txt
       - restore_cache:
           keys:
-            - v1-pc-cache-{{ checksum "pre-commit-cache-key.txt" }}
+            - v1-nm-cache-{{ checksum "package-lock.json" }}
       - run:
-          name: Install pre-commit
-          command: pip install pre-commit
-      - run:
-          name: Fix Git URL override
-          command: git config --global --unset url."ssh://git@github.com".insteadOf
+          name: Install packages
+          command: npm ci
+      - save_cache:
+          key: v1-nm-cache-{{ checksum "package-lock.json" }}
+          paths:
+            - /root/.npm
       - run:
           name: Run linters and code style checks
-          command: make ui-style
-      - save_cache:
-          key: v1-pc-cache-{{ checksum "pre-commit-cache-key.txt" }}
-          paths:
-            - ~/.cache/pre-commit
+          command: npm run lint
 
   ui_test:
     docker:

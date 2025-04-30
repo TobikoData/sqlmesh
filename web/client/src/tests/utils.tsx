@@ -1,4 +1,3 @@
-/* eslint-disable import/export */
 import { cleanup, render, type RenderResult } from '@testing-library/react'
 import { afterEach } from 'vitest'
 
