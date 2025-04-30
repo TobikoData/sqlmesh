@@ -65,7 +65,7 @@
     "@vitejs/plugin-react-swc": "^3.3.2",
     "autoprefixer": "^10.4.15",
     "jsdom": "^22.1.0",
-    "orval": "^6.22.1",
+    "orval": "^7.9.0",
     "postcss": "^8.4.29",
     "prettier": "^3.0.3",
     "tailwindcss": "^3.3.3",
