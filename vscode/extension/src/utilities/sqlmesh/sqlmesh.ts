@@ -11,7 +11,7 @@ import { execAsync } from '../exec'
 import z from 'zod'
 import { ProgressLocation, window } from 'vscode'
 
-export type sqlmesh_exec = {
+export interface sqlmesh_exec {
   workspacePath: string
   bin: string
   env: Record<string, string | undefined>
@@ -75,7 +75,7 @@ export const isSqlmeshEnterpriseInstalled = async (): Promise<
   const parsed = isSqlmeshInstalledSchema.safeParse(JSON.parse(called.stdout))
   if (!parsed.success) {
     return err(
-      `Failed to parse sqlmesh enterprise installation status: ${parsed.error}`,
+      `Failed to parse sqlmesh enterprise installation status: ${parsed.error.message}`,
     )
   }
   return ok(parsed.data.is_installed)

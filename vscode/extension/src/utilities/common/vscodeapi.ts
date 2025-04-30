@@ -35,9 +35,9 @@ export function registerCommand(
 export const { onDidChangeConfiguration } = workspace
 
 export function isVirtualWorkspace(): boolean {
-  const isVirtual =
-    workspace.workspaceFolders &&
-    workspace.workspaceFolders.every(f => f.uri.scheme !== 'file')
+  const isVirtual = workspace.workspaceFolders?.every(
+    f => f.uri.scheme !== 'file',
+  )
   return !!isVirtual
 }
 

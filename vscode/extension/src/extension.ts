@@ -58,7 +58,7 @@ export async function activate(context: vscode.ExtensionContext) {
   lspClient = new LSPClient()
   const result = await lspClient.start()
   if (isErr(result)) {
-    handleNotSginedInError(authProvider)
+    await handleNotSginedInError(authProvider)
   }
   context.subscriptions.push(lspClient)
 
@@ -67,7 +67,7 @@ export async function activate(context: vscode.ExtensionContext) {
       traceVerbose('Restarting LSP client')
       const restartResult = await lspClient.restart()
       if (isErr(restartResult)) {
-        handleNotSginedInError(authProvider)
+        await handleNotSginedInError(authProvider)
       }
     }
   }

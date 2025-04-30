@@ -12,7 +12,7 @@ export const format =
     const out = await internalFormat()
     if (isErr(out)) {
       if (out.error.type === 'not_signed_in') {
-        handleNotSginedInError(authProvider)
+        await handleNotSginedInError(authProvider)
         return
       } else {
         vscode.window.showErrorMessage(

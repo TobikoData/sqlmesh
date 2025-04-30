@@ -58,8 +58,9 @@ export function execAsync(
       options.signal.addEventListener('abort', onAbort, { once: true })
 
       // Clean‑up the event listener when the promise settles
-      const cleanup = () =>
+      const cleanup = () => {
         options.signal!.removeEventListener('abort', onAbort)
+      }
       child.once('exit', cleanup)
       child.once('error', cleanup)
     }

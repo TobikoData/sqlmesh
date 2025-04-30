@@ -87,14 +87,13 @@
     "@types/mocha": "^10.0.10",
     "@types/node": "20.11.25",
     "@types/vscode": "1.96.0",
-    "@typescript-eslint/eslint-plugin": "^8.28.0",
-    "@typescript-eslint/parser": "^8.28.0",
     "@vscode/test-cli": "^0.0.10",
     "@vscode/test-electron": "^2.4.1",
     "@vscode/vsce": "^3.3.2",
     "esbuild": "^0.25.2",
     "eslint": "^9.23.0",
     "ts-loader": "^9.5.2",
-    "typescript": "^5.8.2"
+    "typescript": "^5.8.2",
+    "typescript-eslint": "^8.31.1"
   }
 }
