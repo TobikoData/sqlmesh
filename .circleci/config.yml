@@ -20,23 +20,6 @@ orbs:
   path-filtering: circleci/path-filtering@1.2.0
 
 jobs:
-  vscode-extension-setup:
-    docker:
-      - image: cimg/node:20.19.0-browsers
-    resource_class: small
-    steps:
-      - checkout
-      - run:
-          name: Install VSCode extension dependencies
-          command: |
-            cd vscode/extension
-            npm ci
-      - run:
-          name: Run VSCode extension CI
-          command: |
-            cd vscode/extension
-            npm run ci
-
   publish:
     docker:
       - image: cimg/python:3.10
@@ -86,25 +69,25 @@ jobs:
           paths:
             - dist
   trigger_private_renovate:
-      docker:
-        - image: cimg/base:2021.11
-      resource_class: small
-      steps:
-        - run:
-            name: Trigger private renovate
-            command: |
-              curl --request POST \
-                --url $TOBIKO_PRIVATE_CIRCLECI_URL \
-                --header "Circle-Token: $TOBIKO_PRIVATE_CIRCLECI_KEY" \
-                --header "content-type: application/json" \
-                --data '{
-                  "branch":"main",
-                  "parameters":{
-                    "run_main_pr":false,
-                    "run_sqlmesh_commit":false,
-                    "run_renovate":true
-                    }
-                }'
+    docker:
+      - image: cimg/base:2021.11
+    resource_class: small
+    steps:
+      - run:
+          name: Trigger private renovate
+          command: |
+            curl --request POST \
+              --url $TOBIKO_PRIVATE_CIRCLECI_URL \
+              --header "Circle-Token: $TOBIKO_PRIVATE_CIRCLECI_KEY" \
+              --header "content-type: application/json" \
+              --data '{
+                "branch":"main",
+                "parameters":{
+                  "run_main_pr":false,
+                  "run_sqlmesh_commit":false,
+                  "run_renovate":true
+                  }
+              }'
 
 workflows:
   setup-workflow:
@@ -117,9 +100,6 @@ workflows:
             \.circleci/.*|Makefile|\.pre-commit-config\.yaml common true
             vscode/extensions/.* vscode true
           tag: "3.9"
-
-      - vscode-extension-setup:
-          <<: *on_main_or_tag_filter
       - gh-release:
           <<: *on_tag_filter
       - ui-build:
