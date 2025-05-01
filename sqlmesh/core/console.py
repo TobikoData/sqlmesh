@@ -197,7 +197,7 @@ class EnvironmentsConsole(abc.ABC):
 
 
 class DifferenceConsole(abc.ABC):
-    """Console for displaying differences"""
+    """Console for displaying environment differences"""
 
     @abc.abstractmethod
     def show_environment_difference_summary(
@@ -216,6 +216,10 @@ class DifferenceConsole(abc.ABC):
         no_diff: bool = True,
     ) -> None:
         """Displays a summary of differences for the given models."""
+
+
+class TableDiffConsole(abc.ABC):
+    """Console for displaying table differences"""
 
     @abc.abstractmethod
     def show_table_diff(
@@ -308,6 +312,7 @@ class Console(
     JanitorConsole,
     EnvironmentsConsole,
     DifferenceConsole,
+    TableDiffConsole,
     BaseConsole,
     abc.ABC,
 ):
