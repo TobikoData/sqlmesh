@@ -232,6 +232,46 @@ export const sqlmesh_exec = async (): Promise<
 }
 
 /**
+ * Ensure that the sqlmesh_lsp dependencies are installed.
+ *
+ * @returns A Result indicating whether the sqlmesh_lsp dependencies were installed.
+ */
+export const ensureSqlmeshLspDependenciesInstalled = async (): Promise<
+  Result<undefined, ErrorType>
+> => {
+  const isPyglsInstalled = await isPythonModuleInstalled('pygls')
+  if (isErr(isPyglsInstalled)) {
+    return err({
+      type: 'generic',
+      message: isPyglsInstalled.error,
+    })
+  }
+  const isLsprotocolInstalled = await isPythonModuleInstalled('lsprotocol')
+  if (isErr(isLsprotocolInstalled)) {
+    return err({
+      type: 'generic',
+      message: isLsprotocolInstalled.error,
+    })
+  }
+  const isTobikoCloudInstalled = await isTcloudProject()
+  if (isErr(isTobikoCloudInstalled)) {
+    return err({
+      type: 'generic',
+      message: isTobikoCloudInstalled.error,
+    })
+  }
+  if (!isPyglsInstalled.value || !isLsprotocolInstalled.value) {
+    return err({
+      type: 'sqlmesh_lsp_dependencies_missing',
+      is_missing_pygls: !isPyglsInstalled.value,
+      is_missing_lsprotocol: !isLsprotocolInstalled.value,
+      is_tobiko_cloud: isTobikoCloudInstalled.value,
+    })
+  }
+  return ok(undefined)
+}
+
+/**
  * Get the sqlmesh_lsp executable for the current workspace.
  *
  * @returns The sqlmesh_lsp executable for the current workspace.
@@ -282,8 +322,17 @@ export const sqlmesh_lsp_exec = async (): Promise<
         })
       }
     }
+    const ensuredDependencies = await ensureSqlmeshLspDependenciesInstalled()
+    if (isErr(ensuredDependencies)) {
+      return ensuredDependencies
+    }
     const binPath = path.join(interpreterDetails.binPath!, 'sqlmesh_lsp')
     traceLog(`Bin path: ${binPath}`)
+    if (!fs.existsSync(binPath)) {
+      return err({
+        type: 'sqlmesh_lsp_not_found',
+      })
+    }
     return ok({
       bin: binPath,
       workspacePath,

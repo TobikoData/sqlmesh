@@ -3,22 +3,35 @@ import { execSync } from 'child_process'
 import { sqlmesh_exec } from '../utilities/sqlmesh/sqlmesh'
 import { err, isErr, ok, Result } from '../utilities/functional/result'
 import * as vscode from 'vscode'
-import { ErrorType, handleNotSginedInError } from '../utilities/errors'
+import {
+  ErrorType,
+  handleNotSginedInError,
+  handleSqlmeshLspNotFoundError,
+  handleSqlmeshLspDependenciesMissingError,
+} from '../utilities/errors'
 import { AuthenticationProviderTobikoCloud } from '../auth/auth'
 
 export const format =
-  (authProvider: AuthenticationProviderTobikoCloud) => async () => {
+  (authProvider: AuthenticationProviderTobikoCloud) =>
+  async (): Promise<void> => {
     traceLog('Calling format')
     const out = await internalFormat()
     if (isErr(out)) {
-      if (out.error.type === 'not_signed_in') {
-        await handleNotSginedInError(authProvider)
-        return
-      } else {
-        vscode.window.showErrorMessage(
-          `Project format failed: ${out.error.message}`,
-        )
-        return
+      switch (out.error.type) {
+        case 'not_signed_in':
+          await handleNotSginedInError(authProvider)
+          return
+        case 'sqlmesh_lsp_not_found':
+          await handleSqlmeshLspNotFoundError()
+          return
+        case 'sqlmesh_lsp_dependencies_missing':
+          await handleSqlmeshLspDependenciesMissingError(out.error)
+          return
+        case 'generic':
+          await vscode.window.showErrorMessage(
+            `Project format failed: ${out.error.message}`,
+          )
+          return
       }
     }
     vscode.window.showInformationMessage('Project formatted successfully')

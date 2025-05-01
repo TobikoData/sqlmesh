@@ -13,7 +13,11 @@ import { signOut } from './commands/signout'
 import { signIn } from './commands/signin'
 import { signInSpecifyFlow } from './commands/signinSpecifyFlow'
 import { isErr } from './utilities/functional/result'
-import { handleNotSginedInError } from './utilities/errors'
+import {
+  handleNotSginedInError,
+  handleSqlmeshLspNotFoundError,
+  handleSqlmeshLspDependenciesMissingError,
+} from './utilities/errors'
 
 let lspClient: LSPClient | undefined
 
@@ -58,17 +62,49 @@ export async function activate(context: vscode.ExtensionContext) {
   lspClient = new LSPClient()
   const result = await lspClient.start()
   if (isErr(result)) {
-    await handleNotSginedInError(authProvider)
+    switch (result.error.type) {
+      case 'not_signed_in':
+        await handleNotSginedInError(authProvider)
+        break
+      case 'sqlmesh_lsp_not_found':
+        await handleSqlmeshLspNotFoundError()
+        break
+      case 'sqlmesh_lsp_dependencies_missing':
+        await handleSqlmeshLspDependenciesMissingError(result.error)
+        break
+      case 'generic':
+        await vscode.window.showErrorMessage(
+          `Failed to start LSP: ${result.error.message}`,
+        )
+        break
+    }
+  } else {
+    context.subscriptions.push(lspClient)
   }
-  context.subscriptions.push(lspClient)
 
   const restart = async () => {
     if (lspClient) {
       traceVerbose('Restarting LSP client')
       const restartResult = await lspClient.restart()
       if (isErr(restartResult)) {
-        await handleNotSginedInError(authProvider)
+        switch (restartResult.error.type) {
+          case 'not_signed_in':
+            await handleNotSginedInError(authProvider)
+            return
+          case 'sqlmesh_lsp_not_found':
+            await handleSqlmeshLspNotFoundError()
+            return
+          case 'sqlmesh_lsp_dependencies_missing':
+            await handleSqlmeshLspDependenciesMissingError(restartResult.error)
+            return
+          case 'generic':
+            await vscode.window.showErrorMessage(
+              `Failed to restart LSP: ${restartResult.error.message}`,
+            )
+            return
+        }
       }
+      context.subscriptions.push(lspClient)
     }
   }
 

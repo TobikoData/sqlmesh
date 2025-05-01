@@ -16,6 +16,7 @@ export default tseslint.config(
   },
   {
     rules: {
+      'no-fallthrough': 'error',
       '@typescript-eslint/switch-exhaustiveness-check': 'error',
       '@typescript-eslint/no-unsafe-assignment': 'off',
       '@typescript-eslint/no-explicit-any': 'off',
