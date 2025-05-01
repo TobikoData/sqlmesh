@@ -27,7 +27,9 @@ export class LSPClient implements Disposable {
 
     const sqlmesh = await sqlmesh_lsp_exec()
     if (isErr(sqlmesh)) {
-      traceError(`Failed to get sqlmesh_lsp_exec, ${sqlmesh.error.type}`)
+      traceError(
+        `Failed to get sqlmesh_lsp_exec, ${JSON.stringify(sqlmesh.error)}`,
+      )
       return sqlmesh
     }
     const workspaceFolders = getWorkspaceFolders()
