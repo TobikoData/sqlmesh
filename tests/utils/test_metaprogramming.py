@@ -17,6 +17,7 @@ from sqlglot.optimizer.pushdown_projections import SELECT_ALL
 import tests.utils.test_date as test_date
 from sqlmesh.core.dialect import normalize_model_name
 from sqlmesh.core import constants as c
+from sqlmesh.core.macros import RuntimeStage
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.metaprogramming import (
     Executable,
@@ -47,7 +48,7 @@ def test_print_exception(mocker: MockerFixture):
     except Exception as ex:
         print_exception(ex, test_env, out_mock)
 
-    expected_message = r"""  File ".*?/tests/utils/test_metaprogramming\.py", line 46, in test_print_exception
+    expected_message = r"""  File ".*?/tests/utils/test_metaprogramming\.py", line 47, in test_print_exception
     eval\("test_fun\(\)", env\)
 
   File "<string>", line 1, in <module>
@@ -138,6 +139,18 @@ def main_func(y: int, foo=exp.true(), *, bar=expressions.Literal.number(1) + 2) 
         pass
 
     return closure(y) + other_func(Y)
+
+
+def macro1() -> str:
+    print("macro1 hello there")
+    print(RuntimeStage.CREATING)
+    return "1"
+
+
+def macro2() -> str:
+    print("macro2 hello there")
+    print(RuntimeStage.LOADING)
+    return "2"
 
 
 def test_func_globals() -> None:
@@ -404,4 +417,39 @@ def function_with_custom_decorator():
 
     # Every object is treated as "metadata only", transitively
     assert all(is_metadata for (_, is_metadata) in env.values())
+    assert serialized_env == expected_env
+
+
+def test_serialize_env_with_enum_import_appearing_in_two_functions() -> None:
+    path = Path("tests/utils")
+    env: t.Dict[str, t.Tuple[t.Any, t.Optional[bool]]] = {}
+
+    build_env(macro1, env=env, name="macro1", path=path)
+    build_env(macro2, env=env, name="macro2", path=path)
+
+    serialized_env = serialize_env(env, path=path)  # type: ignore
+    assert prepare_env(serialized_env)
+
+    expected_env = {
+        "RuntimeStage": Executable(
+            payload="from sqlmesh.core.macros import RuntimeStage", kind=ExecutableKind.IMPORT
+        ),
+        "macro1": Executable(
+            payload="""def macro1():
+    print('macro1 hello there')
+    print(RuntimeStage.CREATING)
+    return '1'""",
+            name="macro1",
+            path="test_metaprogramming.py",
+        ),
+        "macro2": Executable(
+            payload="""def macro2():
+    print('macro2 hello there')
+    print(RuntimeStage.LOADING)
+    return '2'""",
+            name="macro2",
+            path="test_metaprogramming.py",
+        ),
+    }
+
     assert serialized_env == expected_env
