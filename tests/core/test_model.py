@@ -1642,6 +1642,44 @@ def test_render_definition_partitioned_by():
     )
 
 
+def test_render_definition_with_virtual_update_statements():
+    # model has virtual update statements
+    model = load_sql_based_model(
+        d.parse(
+            f"""
+        MODEL (
+            name db.table,
+            kind FULL
+        );
+
+        select 1 as a;
+
+        ON_VIRTUAL_UPDATE_BEGIN;
+        GRANT SELECT ON VIEW @this_model TO ROLE role_name
+        ON_VIRTUAL_UPDATE_END;
+        """
+        )
+    )
+
+    assert model.on_virtual_update == [
+        exp.Grant(
+            privileges=[exp.GrantPrivilege(this=exp.Var(this="SELECT"))],
+            kind="VIEW",
+            securable=exp.Table(this=d.MacroVar(this="this_model")),
+            principals=[
+                exp.GrantPrincipal(this=exp.Identifier(this="role_name", quoted=False), kind="ROLE")
+            ],
+        )
+    ]
+    assert (
+        model.render_definition()[-1].sql(pretty=True)
+        == """ON_VIRTUAL_UPDATE_BEGIN;
+GRANT SELECT ON VIEW @this_model TO ROLE role_name
+ON_VIRTUAL_UPDATE_END;
+)"""
+    )
+
+
 def test_cron():
     daily = _Node(name="x", cron="@daily")
     assert to_datetime(daily.cron_prev("2020-01-01")) == to_datetime("2019-12-31")
