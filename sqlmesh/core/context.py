@@ -117,7 +117,7 @@ from sqlmesh.core.test import (
 from sqlmesh.core.user import User
 from sqlmesh.utils import UniqueKeyDict, Verbosity
 from sqlmesh.utils.dag import DAG
-from sqlmesh.utils.date import TimeLike, now_ds, to_timestamp, format_tz_datetime
+from sqlmesh.utils.date import TimeLike, now_ds, to_timestamp, format_tz_datetime, now_timestamp
 from sqlmesh.utils.errors import (
     CircuitBreakerError,
     ConfigError,
@@ -2350,11 +2350,14 @@ class GenericContext(BaseContext, t.Generic[C]):
         )
 
     def _run_janitor(self, ignore_ttl: bool = False) -> None:
-        # Clean up expired environments by removing their views and schemas
-        self._cleanup_environments()
+        current_ts = now_timestamp()
 
-        # Identify and delete expired snapshots
-        cleanup_targets = self.state_sync.delete_expired_snapshots(ignore_ttl=ignore_ttl)
+        # Clean up expired environments by removing their views and schemas
+        self._cleanup_environments(current_ts=current_ts)
+
+        cleanup_targets = self.state_sync.get_expired_snapshots(
+            ignore_ttl=ignore_ttl, current_ts=current_ts
+        )
 
         # Remove the expired snapshots tables
         self.snapshot_evaluator.cleanup(
@@ -2362,10 +2365,15 @@ class GenericContext(BaseContext, t.Generic[C]):
             on_complete=self.console.update_cleanup_progress,
         )
 
+        # Delete the expired snapshot records from the state sync
+        self.state_sync.delete_expired_snapshots(ignore_ttl=ignore_ttl, current_ts=current_ts)
+
         self.state_sync.compact_intervals()
 
-    def _cleanup_environments(self) -> None:
-        expired_environments = self.state_sync.delete_expired_environments()
+    def _cleanup_environments(self, current_ts: t.Optional[int] = None) -> None:
+        current_ts = current_ts or now_timestamp()
+
+        expired_environments = self.state_sync.get_expired_environments(current_ts=current_ts)
 
         cleanup_expired_views(
             default_adapter=self.engine_adapter,
@@ -2374,6 +2382,8 @@ class GenericContext(BaseContext, t.Generic[C]):
             warn_on_delete_failure=self.config.janitor.warn_on_delete_failure,
             console=self.console,
         )
+
+        self.state_sync.delete_expired_environments(current_ts=current_ts)
 
     def _try_connection(self, connection_name: str, validator: t.Callable[[], None]) -> None:
         connection_name = connection_name.capitalize()

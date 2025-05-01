@@ -5609,3 +5609,82 @@ def test_plan_environment_statements_doesnt_cause_extra_diff(tmp_path: Path):
 
     # second plan - nothing has changed so should report no changes
     assert not ctx.plan(auto_apply=True, no_prompts=True).has_changes
+
+
+def test_janitor_cleanup_order(mocker: MockerFixture, tmp_path: Path):
+    def setup_scenario():
+        models_dir = tmp_path / "models"
+
+        if not models_dir.exists():
+            models_dir.mkdir()
+
+        model1_path = models_dir / "model1.sql"
+
+        with open(model1_path, "w") as f:
+            f.write("MODEL(name test.model1, kind FULL); SELECT 1 AS col")
+
+        config = Config(
+            model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        )
+        ctx = Context(paths=[tmp_path], config=config)
+
+        ctx.plan("dev", no_prompts=True, auto_apply=True)
+
+        model1_snapshot = ctx.get_snapshot("test.model1")
+
+        # Delete the model file to cause a snapshot expiration
+        model1_path.unlink()
+
+        ctx.load()
+
+        ctx.plan("dev", no_prompts=True, auto_apply=True)
+
+        # Invalidate the environment to cause an environment cleanup
+        ctx.invalidate_environment("dev")
+
+        try:
+            ctx._run_janitor(ignore_ttl=True)
+        except:
+            pass
+
+        return ctx, model1_snapshot
+
+    # Case 1: Assume that the snapshot cleanup yields an error, the snapshot records
+    # should still exist in the state sync so the next janitor can retry
+    mocker.patch(
+        "sqlmesh.core.snapshot.evaluator.SnapshotEvaluator.cleanup",
+        side_effect=Exception("snapshot cleanup error"),
+    )
+    ctx, model1_snapshot = setup_scenario()
+
+    # - Check that the snapshot record exists in the state sync
+    state_snapshot = ctx.state_sync.state_sync.get_snapshots([model1_snapshot.snapshot_id])
+    assert state_snapshot
+
+    # - Run the janitor again, this time it should succeed
+    mocker.patch("sqlmesh.core.snapshot.evaluator.SnapshotEvaluator.cleanup")
+    ctx._run_janitor(ignore_ttl=True)
+
+    # - Check that the snapshot record does not exist in the state sync anymore
+    state_snapshot = ctx.state_sync.state_sync.get_snapshots([model1_snapshot.snapshot_id])
+    assert not state_snapshot
+
+    # Case 2: Assume that the view cleanup yields an error, the enviroment
+    # record should still exist
+    mocker.patch(
+        "sqlmesh.core.context.cleanup_expired_views", side_effect=Exception("view cleanup error")
+    )
+    ctx, model1_snapshot = setup_scenario()
+
+    views = ctx.fetchdf("FROM duckdb_views() SELECT * EXCLUDE(sql) WHERE NOT internal")
+    assert views.empty
+
+    # - Check that the environment record exists in the state sync
+    assert ctx.state_sync.get_environment("dev")
+
+    # - Run the janitor again, this time it should succeed
+    mocker.patch("sqlmesh.core.context.cleanup_expired_views")
+    ctx._run_janitor(ignore_ttl=True)
+
+    # - Check that the environment record does not exist in the state sync anymore
+    assert not ctx.state_sync.get_environment("dev")

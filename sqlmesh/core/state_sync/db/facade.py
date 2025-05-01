@@ -60,7 +60,7 @@ from sqlmesh.core.state_sync.db.environment import EnvironmentState
 from sqlmesh.core.state_sync.db.snapshot import SnapshotState
 from sqlmesh.core.state_sync.db.version import VersionState
 from sqlmesh.core.state_sync.db.migrator import StateMigrator
-from sqlmesh.utils.date import TimeLike, to_timestamp, time_like_to_str
+from sqlmesh.utils.date import TimeLike, to_timestamp, time_like_to_str, now_timestamp
 from sqlmesh.utils.errors import ConflictingPlanError, SQLMeshError
 
 logger = logging.getLogger(__name__)
@@ -273,19 +273,36 @@ class EngineAdapterStateSync(StateSync):
     def invalidate_environment(self, name: str) -> None:
         self.environment_state.invalidate_environment(name)
 
+    def get_expired_snapshots(
+        self, current_ts: int, ignore_ttl: bool = False
+    ) -> t.List[SnapshotTableCleanupTask]:
+        return self.snapshot_state.get_expired_snapshots(
+            self.environment_state.get_environments(), current_ts=current_ts, ignore_ttl=ignore_ttl
+        )
+
+    def get_expired_environments(self, current_ts: int) -> t.List[Environment]:
+        return self.environment_state.get_expired_environments(current_ts=current_ts)
+
     @transactional()
     def delete_expired_snapshots(
-        self, ignore_ttl: bool = False
+        self, ignore_ttl: bool = False, current_ts: t.Optional[int] = None
     ) -> t.List[SnapshotTableCleanupTask]:
-        expired_snapshot_ids, cleanup_targets = self.snapshot_state.delete_expired_snapshots(
-            self.environment_state.get_environments(), ignore_ttl=ignore_ttl
+        current_ts = current_ts or now_timestamp()
+        expired_snapshot_ids, cleanup_targets = self.snapshot_state._get_expired_snapshots(
+            self.environment_state.get_environments(), ignore_ttl=ignore_ttl, current_ts=current_ts
         )
+
+        self.snapshot_state.delete_snapshots(expired_snapshot_ids)
         self.interval_state.cleanup_intervals(cleanup_targets, expired_snapshot_ids)
+
         return cleanup_targets
 
     @transactional()
-    def delete_expired_environments(self) -> t.List[Environment]:
-        return self.environment_state.delete_expired_environments()
+    def delete_expired_environments(
+        self, current_ts: t.Optional[int] = None
+    ) -> t.List[Environment]:
+        current_ts = current_ts or now_timestamp()
+        return self.environment_state.delete_expired_environments(current_ts=current_ts)
 
     def delete_snapshots(self, snapshot_ids: t.Iterable[SnapshotIdLike]) -> None:
         self.snapshot_state.delete_snapshots(snapshot_ids)

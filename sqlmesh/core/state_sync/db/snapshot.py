@@ -193,19 +193,34 @@ class SnapshotState:
         if unrestorable_snapshots:
             self._update_snapshots(unrestorable_snapshots, unrestorable=True)
 
-    def delete_expired_snapshots(
-        self, environments: t.Iterable[Environment], ignore_ttl: bool = False
-    ) -> t.Tuple[t.Set[SnapshotId], t.List[SnapshotTableCleanupTask]]:
-        """Deletes expired snapshots.
+    def get_expired_snapshots(
+        self,
+        environments: t.Iterable[Environment],
+        current_ts: int,
+        ignore_ttl: bool = False,
+    ) -> t.List[SnapshotTableCleanupTask]:
+        """Aggregates the id's of the expired snapshots and creates a list of table cleanup tasks.
 
-        Args:
-            ignore_ttl: Whether to ignore the TTL of the snapshots.
+        Expired snapshots are snapshots that have exceeded their time-to-live
+        and are no longer in use within an environment.
 
         Returns:
-            A tuple of expired snapshot IDs and cleanup targets.
+            The set of expired snapshot ids.
+            The list of table cleanup tasks.
         """
-        current_ts = now_timestamp(minute_floor=False)
+        _, cleanup_targets = self._get_expired_snapshots(
+            environments=environments,
+            current_ts=current_ts,
+            ignore_ttl=ignore_ttl,
+        )
+        return cleanup_targets
 
+    def _get_expired_snapshots(
+        self,
+        environments: t.Iterable[Environment],
+        current_ts: int,
+        ignore_ttl: bool = False,
+    ) -> t.Tuple[t.Set[SnapshotId], t.List[SnapshotTableCleanupTask]]:
         expired_query = exp.select("name", "identifier", "version").from_(self.snapshots_table)
 
         if not ignore_ttl:
@@ -269,8 +284,6 @@ class SnapshotState:
                         )
                     )
 
-        if expired_snapshot_ids:
-            self.delete_snapshots(expired_snapshot_ids)
         return expired_snapshot_ids, cleanup_targets
 
     def delete_snapshots(self, snapshot_ids: t.Iterable[SnapshotIdLike]) -> None:

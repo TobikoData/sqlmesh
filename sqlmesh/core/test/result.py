@@ -100,7 +100,8 @@ class ModelTextTestResult(unittest.TextTestResult):
         for test_case, failure in failures:
             stream.writeln(unittest.TextTestResult.separator1)
             stream.writeln(f"FAIL: {test_case}")
-            stream.writeln(f"{test_case.shortDescription()}")
+            if test_description := test_case.shortDescription():
+                stream.writeln(test_description)
             stream.writeln(unittest.TextTestResult.separator2)
             stream.writeln(failure)
 

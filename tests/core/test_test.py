@@ -2370,3 +2370,103 @@ test_example_full_model2:
     # Case 3: The "new_test.yaml::test_example_full_model2" should amount to a single subtest
     results = context.test(tests=[f"{test_file}::test_example_full_model2"])
     assert len(results.successes) == 1
+
+
+def test_freeze_time_concurrent(tmp_path: Path) -> None:
+    tests_dir = tmp_path / "tests"
+    tests_dir.mkdir()
+
+    macros_dir = tmp_path / "macros"
+    macros_dir.mkdir()
+
+    macro_file = macros_dir / "test_datetime_now.py"
+    macro_file.write_text(
+        """
+from sqlglot import exp
+import datetime
+from sqlmesh.core.macros import macro
+
+@macro()
+def test_datetime_now(evaluator):
+  return exp.cast(exp.Literal.string(datetime.datetime.now(tz=datetime.timezone.utc)), exp.DataType.Type.DATE)
+  
+@macro()
+def test_sqlglot_expr(evaluator):
+  return exp.CurrentDate().sql(evaluator.dialect)
+    """
+    )
+
+    models_dir = tmp_path / "models"
+    models_dir.mkdir()
+    sql_model1 = models_dir / "sql_model1.sql"
+    sql_model1.write_text(
+        """
+        MODEL(NAME sql_model1);
+        SELECT @test_datetime_now() AS col_exec_ds_time, @test_sqlglot_expr() AS col_current_date;
+        """
+    )
+
+    for model_name in ["sql_model1", "sql_model2", "py_model"]:
+        for i in range(5):
+            test_2019 = tmp_path / "tests" / f"test_2019_{model_name}_{i}.yaml"
+            test_2019.write_text(
+                f"""
+    test_2019_{model_name}_{i}:
+      model: {model_name}
+      vars:
+        execution_time: '2019-12-01'
+      outputs:
+        query:
+          rows:
+            - col_exec_ds_time: '2019-12-01'
+              col_current_date: '2019-12-01'
+              """
+            )
+
+            test_2025 = tmp_path / "tests" / f"test_2025_{model_name}_{i}.yaml"
+            test_2025.write_text(
+                f"""
+    test_2025_{model_name}_{i}:
+      model: {model_name}
+      vars:
+        execution_time: '2025-12-01'
+      outputs:
+        query:
+          rows:
+            - col_exec_ds_time: '2025-12-01'
+              col_current_date: '2025-12-01'
+              """
+            )
+
+    ctx = Context(
+        paths=tmp_path,
+        config=Config(default_test_connection=DuckDBConnectionConfig(concurrent_tasks=8)),
+    )
+
+    @model(
+        "py_model",
+        columns={"col_exec_ds_time": "timestamp_ntz", "col_current_date": "timestamp_ntz"},
+    )
+    def execute(context, start, end, execution_time, **kwargs):
+        datetime_now_utc = datetime.datetime.now(tz=datetime.timezone.utc)
+
+        context.engine_adapter.execute(exp.select("CURRENT_DATE()"))
+        current_date = context.engine_adapter.cursor.fetchone()[0]
+
+        return pd.DataFrame(
+            [{"col_exec_ds_time": datetime_now_utc, "col_current_date": current_date}]
+        )
+
+    python_model = model.get_registry()["py_model"].model(module_path=Path("."), path=Path("."))
+    ctx.upsert_model(python_model)
+
+    ctx.upsert_model(
+        _create_model(
+            meta="MODEL(NAME sql_model2)",
+            query="SELECT @execution_ds::timestamp_ntz AS col_exec_ds_time, current_date()::date AS col_current_date",
+            default_catalog=ctx.default_catalog,
+        )
+    )
+
+    results = ctx.test()
+    assert len(results.successes) == 30
