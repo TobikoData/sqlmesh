@@ -1288,7 +1288,7 @@ def test_rendered_diff():
 
     plan = ctx.plan("dev", auto_apply=True, no_prompts=True, diff_rendered=True)
 
-    assert '''@@ -4,13 +4,13 @@
+    assert """@@ -4,13 +4,13 @@
 
  CREATE TABLE IF NOT EXISTS "foo" AS
  (
@@ -1308,7 +1308,7 @@ def test_rendered_diff():
 ON_VIRTUAL_UPDATE_BEGIN;
 -DROP VIEW "test"
 +DROP VIEW IF EXISTS "test"
-ON_VIRTUAL_UPDATE_END;''' in plan.context_diff.text_diff('"test"')
+ON_VIRTUAL_UPDATE_END;""" in plan.context_diff.text_diff('"test"')
 
 
 def test_plan_enable_preview_default(sushi_context: Context, sushi_dbt_context: Context):
