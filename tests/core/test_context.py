@@ -1305,8 +1305,10 @@ def test_rendered_diff():
 -    TRUE AND FALSE
 +    TRUE
  )
+ON_VIRTUAL_UPDATE_BEGIN;
 -DROP VIEW "test"
-+DROP VIEW IF EXISTS "test"''' in plan.context_diff.text_diff('"test"')
++DROP VIEW IF EXISTS "test"
+ON_VIRTUAL_UPDATE_END;''' in plan.context_diff.text_diff('"test"')
 
 
 def test_plan_enable_preview_default(sushi_context: Context, sushi_dbt_context: Context):
