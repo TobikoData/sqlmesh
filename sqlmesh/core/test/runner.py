@@ -120,6 +120,9 @@ def run_tests(
         default_catalog_dialect=default_catalog_dialect,
     )
 
+    # Ensure workers are not greater than the number of tests
+    num_workers = min(len(model_test_metadata) or 1, default_test_connection.concurrent_tasks)
+
     def _run_single_test(
         metadata: ModelTestMetadata, engine_adapter: EngineAdapter
     ) -> t.Optional[ModelTextTestResult]:
@@ -132,6 +135,7 @@ def run_tests(
             path=metadata.path,
             default_catalog=default_catalog,
             preserve_fixtures=preserve_fixtures,
+            concurrency=num_workers > 1,
         )
 
         if not test:
@@ -158,9 +162,6 @@ def run_tests(
         return result
 
     test_results = []
-
-    # Ensure workers are not greater than the number of tests
-    num_workers = min(len(model_test_metadata) or 1, default_test_connection.concurrent_tasks)
 
     start_time = time.perf_counter()
     try:
