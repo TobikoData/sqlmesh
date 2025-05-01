@@ -1319,12 +1319,12 @@ class SqlModel(_Model):
             result.extend(self.render_pre_statements())
             result.append(self.render_query() or self.query)
             result.extend(self.render_post_statements())
-            result.extend(self.render_on_virtual_update())
+            result.append(d.VirtualUpdateStatement(expressions=self.render_on_virtual_update()))
         else:
             result.extend(self.pre_statements)
             result.append(self.query)
             result.extend(self.post_statements)
-            result.extend(self.on_virtual_update)
+            result.append(d.VirtualUpdateStatement(self.on_virtual_update))
 
         return result
 
