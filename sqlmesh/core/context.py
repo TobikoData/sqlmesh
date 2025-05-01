@@ -2135,12 +2135,16 @@ class GenericContext(BaseContext, t.Generic[C]):
         )
 
     @python_api_analytics
-    def table_name(self, model_name: str, environment: t.Optional[str] = None) -> str:
+    def table_name(
+        self, model_name: str, environment: t.Optional[str] = None, prod: bool = False
+    ) -> str:
         """Returns the name of the pysical table for the given model name in the target environment.
 
         Args:
             model_name: The name of the model.
             environment: The environment to source the model version from.
+            prod: If True, return the name of the physical table that will be used in production for the model version
+                promoted in the target environment.
 
         Returns:
             The name of the physical table.
@@ -2161,7 +2165,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                 f"Model '{model_name}' was not found in environment '{environment}'."
             )
 
-        if target_env.name == c.PROD:
+        if target_env.name == c.PROD or prod:
             return snapshot_info.table_name()
 
         snapshots = self.state_reader.get_snapshots(target_env.snapshots)

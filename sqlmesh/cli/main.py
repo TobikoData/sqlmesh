@@ -993,12 +993,20 @@ def clean(obj: Context) -> None:
     "--env",
     help="The environment to source the model version from.",
 )
+@click.option(
+    "--prod",
+    is_flag=True,
+    default=False,
+    help="If set, return the name of the physical table that will be used in production for the model version promoted in the target environment.",
+)
 @click.pass_obj
 @error_handler
 @cli_analytics
-def table_name(obj: Context, model_name: str, environment: t.Optional[str] = None) -> None:
+def table_name(
+    obj: Context, model_name: str, environment: t.Optional[str] = None, prod: bool = False
+) -> None:
     """Prints the name of the physical table for the given model."""
-    print(obj.table_name(model_name, environment))
+    print(obj.table_name(model_name, environment, prod))
 
 
 @cli.command("dlt_refresh")

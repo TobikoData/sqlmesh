@@ -4142,6 +4142,11 @@ def test_table_name(init_and_plan_context: t.Callable):
         == f"memory.sqlmesh__sushi.sushi__waiter_revenue_by_day__{forward_only_snapshot.dev_version}__dev"
     )
 
+    assert (
+        context.table_name("sushi.waiter_revenue_by_day", "dev_b", prod=True)
+        == f"memory.sqlmesh__sushi.sushi__waiter_revenue_by_day__{snapshot.version}"
+    )
+
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_dbt_requirements(sushi_dbt_context: Context):

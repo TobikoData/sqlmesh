@@ -721,16 +721,23 @@ class SQLMeshMagics(Magics):
         help="The name of the model to get the table name for.",
     )
     @argument(
-        "--dev",
+        "--environment",
+        type=str,
+        help="The environment to source the model version from.",
+    )
+    @argument(
+        "--prod",
         action="store_true",
-        help="Print the name of the snapshot table used for previews in development environments.",
+        help="If set, return the name of the physical table that will be used in production for the model version promoted in the target environment.",
     )
     @line_magic
     @pass_sqlmesh_context
     def table_name(self, context: Context, line: str) -> None:
         """Prints the name of the physical table for the given model."""
         args = parse_argstring(self.table_name, line)
-        context.console.log_status_update(context.table_name(args.model_name, args.dev))
+        context.console.log_status_update(
+            context.table_name(args.model_name, args.environment, args.prod)
+        )
 
     @magic_arguments()
     @argument(
