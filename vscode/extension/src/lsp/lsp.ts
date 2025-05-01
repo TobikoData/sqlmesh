@@ -10,6 +10,7 @@ import { err, isErr, ok, Result } from '../utilities/functional/result'
 import { getWorkspaceFolders } from '../utilities/common/vscodeapi'
 import { traceError } from '../utilities/common/log'
 import { ErrorType } from '../utilities/errors'
+import { CustomLSPMethods } from './custom'
 
 let outputChannel: OutputChannel | undefined
 
@@ -97,5 +98,24 @@ export class LSPClient implements Disposable {
 
   public async dispose() {
     await this.stop()
+  }
+
+  public async call_custom_method<
+    Method extends CustomLSPMethods['method'],
+    Request extends Extract<CustomLSPMethods, { method: Method }>['request'],
+    Response extends Extract<CustomLSPMethods, { method: Method }>['response'],
+  >(method: Method, request: Request): Promise<Result<Response, string>> {
+    if (!this.client) {
+      return err('lsp client not ready')
+    }
+    try {
+      const result = await this.client.sendRequest<Response>(method, request)
+      return ok(result)
+    } catch (error) {
+      traceError(
+        `lsp '${method}' request ${JSON.stringify(request)} failed: ${JSON.stringify(error)}`,
+      )
+      return err(JSON.stringify(error))
+    }
   }
 }

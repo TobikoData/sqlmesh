@@ -11,7 +11,9 @@ from pygls.server import LanguageServer
 from sqlmesh._version import __version__
 from sqlmesh.core.context import Context
 from sqlmesh.core.linter.definition import AnnotatedRuleViolation
+from sqlmesh.lsp.completions import get_sql_completions
 from sqlmesh.lsp.context import LSPContext
+from sqlmesh.lsp.custom import ALL_MODELS_FEATURE, AllModelsRequest, AllModelsResponse
 from sqlmesh.lsp.reference import get_model_definitions_for_a_path
 
 
@@ -37,6 +39,14 @@ class SQLMeshLanguageServer:
 
     def _register_features(self) -> None:
         """Register LSP features on the internal LanguageServer instance."""
+
+        @self.server.feature(ALL_MODELS_FEATURE)
+        def all_models(ls: LanguageServer, params: AllModelsRequest) -> AllModelsResponse:
+            try:
+                context = self._context_get_or_load(params.textDocument.uri)
+                return get_sql_completions(context, params.textDocument.uri)
+            except Exception as e:
+                return get_sql_completions(None, params.textDocument.uri)
 
         @self.server.feature(types.TEXT_DOCUMENT_DID_OPEN)
         def did_open(ls: LanguageServer, params: types.DidOpenTextDocumentParams) -> None:
@@ -126,43 +136,6 @@ class SQLMeshLanguageServer:
                         new_text=new_text,
                     )
                 ]
-            except Exception as e:
-                ls.show_message(f"Error formatting SQL: {e}", types.MessageType.Error)
-                return []
-
-        @self.server.feature(types.TEXT_DOCUMENT_DEFINITION)
-        def goto_definition(
-            ls: LanguageServer, params: types.DefinitionParams
-        ) -> t.List[types.LocationLink]:
-            """Jump to an object's definition."""
-            try:
-                self._ensure_context_for_document(params.text_document.uri)
-                document = ls.workspace.get_document(params.text_document.uri)
-                if self.lsp_context is None:
-                    raise RuntimeError(f"No context found for document: {document.path}")
-
-                references = get_model_definitions_for_a_path(
-                    self.lsp_context, params.text_document.uri
-                )
-                if len(references) == 0:
-                    return []
-
-                return [
-                    types.LocationLink(
-                        target_uri=reference.uri,
-                        target_selection_range=types.Range(
-                            start=types.Position(line=0, character=0),
-                            end=types.Position(line=0, character=0),
-                        ),
-                        target_range=types.Range(
-                            start=types.Position(line=0, character=0),
-                            end=types.Position(line=0, character=0),
-                        ),
-                        origin_selection_range=reference.range,
-                    )
-                    for reference in references
-                ]
-
             except Exception as e:
                 ls.show_message(f"Error formatting SQL: {e}", types.MessageType.Error)
                 return []
