@@ -1324,7 +1324,7 @@ class SqlModel(_Model):
             result.extend(self.pre_statements)
             result.append(self.query)
             result.extend(self.post_statements)
-            result.append(d.VirtualUpdateStatement(self.on_virtual_update))
+            result.append(d.VirtualUpdateStatement(expressions=self.on_virtual_update))
 
         return result
 
