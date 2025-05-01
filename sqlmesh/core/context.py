@@ -2168,7 +2168,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         deployability_index = DeployabilityIndex.create(snapshots)
 
         return snapshot_info.table_name(
-            is_deployable=deployability_index.is_representative(snapshot_info.snapshot_id)
+            is_deployable=deployability_index.is_deployable(snapshot_info.snapshot_id)
         )
 
     def clear_caches(self) -> None:
