@@ -491,6 +491,26 @@ class MacroEvaluator:
         """Returns the gateway name."""
         return self.var(c.GATEWAY)
 
+    @property
+    def snapshots(self) -> t.Dict[str, Snapshot]:
+        """Returns the snapshots if available."""
+        return self._snapshots
+
+    @property
+    def this_env(self) -> t.Optional[str]:
+        """Returns the name of the current environment in before after all."""
+        return self.locals.get("this_env")
+
+    @property
+    def schemas(self) -> t.Optional[t.List[str]]:
+        """Returns the schemas of the current environment in before after all macros."""
+        return self.locals.get("schemas")
+
+    @property
+    def views(self) -> t.Optional[t.List[str]]:
+        """Returns the views of the current environment in before after all macros."""
+        return self.locals.get("views")
+
     def var(self, var_name: str, default: t.Optional[t.Any] = None) -> t.Optional[t.Any]:
         """Returns the value of the specified variable, or the default value if it doesn't exist."""
         return (self.locals.get(c.SQLMESH_VARS) or {}).get(var_name.lower(), default)

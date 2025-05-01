@@ -141,3 +141,4 @@ The following variables are also available in [`before_all` and `after_all` stat
 
 * @this_env - A string value containing the name of the current [environment](../environments.md).
 * @schemas - A list of the schema names of the [virtual layer](../../concepts/glossary.md#virtual-layer) of the current environment.
+* @views - A list of the views names of the [virtual layer](../../concepts/glossary.md#virtual-layer) of the current environment.

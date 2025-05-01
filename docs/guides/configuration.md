@@ -675,7 +675,7 @@ Configuration for a connection used to run unit tests. An in-memory DuckDB datab
 
 ### Scheduler
 
-Identifies which scheduler backend to use. The scheduler backend is used both for storing metadata and for executing [plans](../concepts/plans.md). By default, the scheduler type is set to `builtin`, which uses the existing SQL engine to store metadata. 
+Identifies which scheduler backend to use. The scheduler backend is used both for storing metadata and for executing [plans](../concepts/plans.md). By default, the scheduler type is set to `builtin`, which uses the existing SQL engine to store metadata.
 
 These options are in the [scheduler](../reference/configuration.md#scheduler) section of the configuration reference page.
 
@@ -1023,15 +1023,14 @@ from sqlmesh.core.snapshot.definition import to_view_mapping
 
 @macro()
 def grant_select_privileges(evaluator):
-    if evaluator._environment_naming_info:
-        mapping = to_view_mapping(
-            evaluator._snapshots.values(), evaluator._environment_naming_info
-        )
+    if evaluator.views:
         return [
-            f"GRANT SELECT ON VIEW {view_name} TO ROLE admin_role;"
-            for view_name in mapping.values()
+            f"GRANT SELECT ON VIEW {view_name} /* sqlglot.meta replace=false */ TO ROLE admin_role;"
+            for view_name in evaluator.views
         ]
 ```
+
+By including the comment `/* sqlglot.meta replace=false */`, you further ensure that the evaluator does not replace the view name with the physical table name during rendering.
 
 ##### Example: Granting Schema Privileges
 
@@ -1042,21 +1041,14 @@ from sqlmesh import macro
 
 @macro()
 def grant_schema_usage(evaluator):
-    if evaluator._environment_naming_info:
-        schemas = {
-            snapshot.qualified_view_name.schema_for_environment(
-                evaluator._environment_naming_info
-            )
-            for snapshot in evaluator._snapshots.values()
-            if snapshot.is_model
-        }
+    if evaluator.this_env == "prod" and evaluator.schemas:
         return [
             f"GRANT USAGE ON SCHEMA {schema} TO admin_role;"
-            for schema in schemas
+            for schema in evaluator.schemas
         ]
 ```
 
-As demonstrated in these examples, the `environment_naming_info` is available within the macro evaluator for macros invoked within the `before_all` and `after_all` statements. Additionally, the macro `this_env` provides access to the current environment name, which can be helpful for more advanced use cases that require fine-grained control over their behaviour.
+As demonstrated in these examples, the `schemas`  and `views` are available within the macro evaluator for macros invoked within the `before_all` and `after_all` statements. Additionally, the macro `this_env` provides access to the current environment name, which can be helpful for more advanced use cases that require fine-grained control over their behaviour.
 
 ### Linting
 
