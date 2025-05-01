@@ -5,8 +5,8 @@
   "tasks": [
     {
       "label": "extension-watch",
-      "type": "npm",
-      "script": "watch",
+      "type": "shell",
+      "command": "pnpm run watch",
       "problemMatcher": "$ts-webpack-watch",
       "isBackground": true,
       "presentation": {
@@ -18,6 +18,35 @@
       },
       "options": {
         "cwd": "${workspaceFolder}/vscode/extension"
+      },
+      "dependsOn": ["react-dev"],
+      "dependsOrder": "parallel"
+    },
+    {
+      "label": "react-dev",
+      "type": "shell",
+      "command": "pnpm run build:watch",
+      "options": {
+        "cwd": "${workspaceFolder}/vscode/react"
+      },
+      "group": {
+        "kind": "build"
+      },
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "npm",
+        "pattern": {
+          "regexp": "."
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": ".",
+          "endsPattern": "."
+        }
+      },
+      "presentation": {
+        "reveal": "never",
+        "group": "watchers"
       }
     },
     {
@@ -26,12 +55,12 @@
         "kind": "build",
         "isDefault": true
       },
-      "dependsOn": ["extension-watch"],
+      "dependsOn": ["react-dev", "extension-watch"],
       "dependsOrder": "parallel"
     },
     {
-      "type": "npm",
-      "script": "watch-tests",
+      "type": "shell",
+      "command": "pnpm run watch-tests",
       "problemMatcher": "$tsc-watch",
       "isBackground": true,
       "presentation": {
@@ -40,12 +69,12 @@
       },
       "group": "build",
       "options": {
-        "cwd": "${workspaceFolder}/vscode/extension"
+        "cwd": "${workspaceFolder}/vscode"
       }
     },
     {
       "label": "tasks: watch-tests",
-      "dependsOn": ["npm: watch", "npm: watch-tests"],
+      "dependsOn": ["watch-tests"],
       "problemMatcher": []
     }
   ]

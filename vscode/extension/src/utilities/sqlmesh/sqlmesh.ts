@@ -11,7 +11,7 @@ import { execAsync } from '../exec'
 import z from 'zod'
 import { ProgressLocation, window } from 'vscode'
 
-export interface sqlmesh_exec {
+export interface SqlmeshExecInfo {
   workspacePath: string
   bin: string
   env: Record<string, string | undefined>
@@ -39,7 +39,7 @@ export const isTcloudProject = async (): Promise<Result<boolean, string>> => {
  *
  * @returns The tcloud executable for the current Python environment.
  */
-export const get_tcloud_bin = async (): Promise<Result<string, string>> => {
+export const getTcloudBin = async (): Promise<Result<string, string>> => {
   const interpreterDetails = await getInterpreterDetails()
   if (!interpreterDetails.path) {
     return err('No Python interpreter found')
@@ -62,7 +62,7 @@ export const isSqlmeshEnterpriseInstalled = async (): Promise<
   Result<boolean, string>
 > => {
   traceInfo('Checking if sqlmesh enterprise is installed')
-  const tcloudBin = await get_tcloud_bin()
+  const tcloudBin = await getTcloudBin()
   if (isErr(tcloudBin)) {
     return err(tcloudBin.error)
   }
@@ -89,7 +89,7 @@ export const isSqlmeshEnterpriseInstalled = async (): Promise<
 export const installSqlmeshEnterprise = async (
   abortController: AbortController,
 ): Promise<Result<boolean, string>> => {
-  const tcloudBin = await get_tcloud_bin()
+  const tcloudBin = await getTcloudBin()
   if (isErr(tcloudBin)) {
     return err(tcloudBin.error)
   }
@@ -154,8 +154,8 @@ export const ensureSqlmeshEnterpriseInstalled = async (): Promise<
  *
  * @returns The sqlmesh executable for the current workspace.
  */
-export const sqlmesh_exec = async (): Promise<
-  Result<sqlmesh_exec, ErrorType>
+export const sqlmeshExec = async (): Promise<
+  Result<SqlmeshExecInfo, ErrorType>
 > => {
   const projectRoot = await getProjectRoot()
   const workspacePath = projectRoot.uri.fsPath
@@ -178,7 +178,7 @@ export const sqlmesh_exec = async (): Promise<
       })
     }
     if (isTcloudInstalled.value) {
-      const tcloudBin = await get_tcloud_bin()
+      const tcloudBin = await getTcloudBin()
       if (isErr(tcloudBin)) {
         return err({
           type: 'generic',
@@ -276,8 +276,8 @@ export const ensureSqlmeshLspDependenciesInstalled = async (): Promise<
  *
  * @returns The sqlmesh_lsp executable for the current workspace.
  */
-export const sqlmesh_lsp_exec = async (): Promise<
-  Result<sqlmesh_exec, ErrorType>
+export const sqlmeshLspExec = async (): Promise<
+  Result<SqlmeshExecInfo, ErrorType>
 > => {
   const projectRoot = await getProjectRoot()
   const workspacePath = projectRoot.uri.fsPath
@@ -301,7 +301,7 @@ export const sqlmesh_lsp_exec = async (): Promise<
     }
     if (tcloudInstalled.value) {
       traceLog('Tcloud installed, installing sqlmesh')
-      const tcloudBin = await get_tcloud_bin()
+      const tcloudBin = await getTcloudBin()
       if (isErr(tcloudBin)) {
         return err({
           type: 'generic',
