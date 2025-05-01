@@ -1288,27 +1288,30 @@ def test_rendered_diff():
 
     plan = ctx.plan("dev", auto_apply=True, no_prompts=True, diff_rendered=True)
 
-    assert """@@ -4,15 +4,15 @@
-
- CREATE TABLE IF NOT EXISTS "foo" AS
- (
-   SELECT
--    FALSE OR TRUE
-+    TRUE
- )
- SELECT
--  6 AS "_col_0"
-+  7 AS "_col_0"
- CREATE TABLE IF NOT EXISTS "foo2" AS
- (
-   SELECT
--    TRUE AND FALSE
-+    TRUE
- )
-ON_VIRTUAL_UPDATE_BEGIN;
--DROP VIEW "test"
-+DROP VIEW IF EXISTS "test"
-ON_VIRTUAL_UPDATE_END;""" in plan.context_diff.text_diff('"test"')
+    assert plan.context_diff.text_diff('"test"') == (
+        "--- \n\n"
+        "+++ \n\n"
+        "@@ -4,15 +4,15 @@\n\n"
+        ' CREATE TABLE IF NOT EXISTS "foo" AS\n'
+        " (\n"
+        "   SELECT\n"
+        "-    FALSE OR TRUE\n"
+        "+    TRUE\n"
+        " )\n"
+        " SELECT\n"
+        '-  6 AS "_col_0"\n'
+        '+  7 AS "_col_0"\n'
+        ' CREATE TABLE IF NOT EXISTS "foo2" AS\n'
+        " (\n"
+        "   SELECT\n"
+        "-    TRUE AND FALSE\n"
+        "+    TRUE\n"
+        " )\n"
+        " ON_VIRTUAL_UPDATE_BEGIN;\n"
+        '-DROP VIEW "test";\n'
+        '+DROP VIEW IF EXISTS "test";\n'
+        " ON_VIRTUAL_UPDATE_END;"
+    )
 
 
 def test_plan_enable_preview_default(sushi_context: Context, sushi_dbt_context: Context):

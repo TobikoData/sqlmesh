@@ -1674,7 +1674,7 @@ def test_render_definition_with_virtual_update_statements():
     assert (
         model.render_definition()[-1].sql(pretty=True)
         == """ON_VIRTUAL_UPDATE_BEGIN;
-GRANT SELECT ON VIEW @this_model TO ROLE role_name
+GRANT SELECT ON VIEW @this_model TO ROLE role_name;
 ON_VIRTUAL_UPDATE_END;"""
     )
 
