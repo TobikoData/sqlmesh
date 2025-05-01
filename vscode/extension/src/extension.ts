@@ -18,8 +18,8 @@ import {
   handleSqlmeshLspNotFoundError,
   handleSqlmeshLspDependenciesMissingError,
 } from './utilities/errors'
-import { completionProvider } from './completion/completion'
-import { selector } from './completion/completion'
+import { selector, completionProvider } from './completion/completion'
+import { LineagePanel } from './webviews/lineagePanel'
 
 let lspClient: LSPClient | undefined
 
@@ -88,6 +88,15 @@ export async function activate(context: vscode.ExtensionContext) {
     vscode.languages.registerCompletionItemProvider(
       selector,
       completionProvider(lspClient),
+    ),
+  )
+
+  // Register the webview
+  const lineagePanel = new LineagePanel(context.extensionUri, lspClient)
+  context.subscriptions.push(
+    vscode.window.registerWebviewViewProvider(
+      LineagePanel.viewType,
+      lineagePanel,
     ),
   )
 

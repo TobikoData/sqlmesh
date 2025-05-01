@@ -5,7 +5,7 @@ import {
   LanguageClient,
   TransportKind,
 } from 'vscode-languageclient/node'
-import { sqlmesh_lsp_exec } from '../utilities/sqlmesh/sqlmesh'
+import { sqlmeshLspExec } from '../utilities/sqlmesh/sqlmesh'
 import { err, isErr, ok, Result } from '@bus/result'
 import { getWorkspaceFolders } from '../utilities/common/vscodeapi'
 import { traceError } from '../utilities/common/log'
@@ -26,7 +26,7 @@ export class LSPClient implements Disposable {
       outputChannel = window.createOutputChannel('sqlmesh-lsp')
     }
 
-    const sqlmesh = await sqlmesh_lsp_exec()
+    const sqlmesh = await sqlmeshLspExec()
     if (isErr(sqlmesh)) {
       traceError(
         `Failed to get sqlmesh_lsp_exec, ${JSON.stringify(sqlmesh.error)}`,
@@ -69,9 +69,6 @@ export class LSPClient implements Disposable {
       workspaceFolder: folder,
       diagnosticCollectionName: 'sqlmesh',
       outputChannel: outputChannel,
-      // synchronize: {
-      // fileEvents: workspace.createFileSystemWatcher('**/*.{sql,py}'),
-      // }
     }
 
     this.client = new LanguageClient(

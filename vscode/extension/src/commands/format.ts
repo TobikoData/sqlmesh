@@ -1,6 +1,6 @@
 import { traceLog } from '../utilities/common/log'
 import { execSync } from 'child_process'
-import { sqlmesh_exec } from '../utilities/sqlmesh/sqlmesh'
+import { sqlmeshExec } from '../utilities/sqlmesh/sqlmesh'
 import { err, isErr, ok, Result } from '@bus/result'
 import * as vscode from 'vscode'
 import {
@@ -39,7 +39,7 @@ export const format =
 
 const internalFormat = async (): Promise<Result<number, ErrorType>> => {
   try {
-    const exec = await sqlmesh_exec()
+    const exec = await sqlmeshExec()
     if (isErr(exec)) {
       return exec
     }

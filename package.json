@@ -1,6 +1,8 @@
 {
   "workspaces": [
+    "vscode/bus",
     "vscode/extension",
+    "vscode/react",
     "web/client"
   ],
   "scripts": {
