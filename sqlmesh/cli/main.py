@@ -29,6 +29,7 @@ SKIP_LOAD_COMMANDS = (
     "run",
     "environments",
     "invalidate",
+    "table_name",
 )
 SKIP_CONTEXT_COMMANDS = ("init", "ui")
 
@@ -988,17 +989,24 @@ def clean(obj: Context) -> None:
 @cli.command("table_name")
 @click.argument("model_name", required=True)
 @click.option(
-    "--dev",
+    "--environment",
+    "--env",
+    help="The environment to source the model version from.",
+)
+@click.option(
+    "--prod",
     is_flag=True,
-    help="Print the name of the snapshot table used for previews in development environments.",
     default=False,
+    help="If set, return the name of the physical table that will be used in production for the model version promoted in the target environment.",
 )
 @click.pass_obj
 @error_handler
 @cli_analytics
-def table_name(obj: Context, model_name: str, dev: bool) -> None:
+def table_name(
+    obj: Context, model_name: str, environment: t.Optional[str] = None, prod: bool = False
+) -> None:
     """Prints the name of the physical table for the given model."""
-    print(obj.table_name(model_name, dev))
+    print(obj.table_name(model_name, environment, prod))
 
 
 @cli.command("dlt_refresh")

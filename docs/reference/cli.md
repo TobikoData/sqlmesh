@@ -559,9 +559,11 @@ Usage: sqlmesh table_name [OPTIONS] MODEL_NAME
   Prints the name of the physical table for the given model.
 
 Options:
-  --dev   Print the name of the snapshot table used for previews in
-          development environments.
-  --help  Show this message and exit.
+  --environment, --env TEXT  The environment to source the model version from.
+  --prod                     If set, return the name of the physical table
+                             that will be used in production for the model
+                             version promoted in the target environment.
+  --help                     Show this message and exit.
 ```
 
 ## test

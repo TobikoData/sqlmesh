@@ -2135,25 +2135,45 @@ class GenericContext(BaseContext, t.Generic[C]):
         )
 
     @python_api_analytics
-    def table_name(self, model_name: str, dev: bool) -> str:
-        """Returns the name of the pysical table for the given model name.
+    def table_name(
+        self, model_name: str, environment: t.Optional[str] = None, prod: bool = False
+    ) -> str:
+        """Returns the name of the pysical table for the given model name in the target environment.
 
         Args:
             model_name: The name of the model.
-            dev: Whether to use the deployability index for the table name.
+            environment: The environment to source the model version from.
+            prod: If True, return the name of the physical table that will be used in production for the model version
+                promoted in the target environment.
 
         Returns:
             The name of the physical table.
         """
-        deployability_index = (
-            DeployabilityIndex.create(self.snapshots.values())
-            if dev
-            else DeployabilityIndex.all_deployable()
+        environment = environment or self.config.default_target_environment
+        fqn = self._node_or_snapshot_to_fqn(model_name)
+        target_env = self.state_reader.get_environment(environment)
+        if not target_env:
+            raise SQLMeshError(f"Environment '{environment}' was not found.")
+
+        snapshot_info = None
+        for s in target_env.snapshots:
+            if s.name == fqn:
+                snapshot_info = s
+                break
+        if not snapshot_info:
+            raise SQLMeshError(
+                f"Model '{model_name}' was not found in environment '{environment}'."
+            )
+
+        if target_env.name == c.PROD or prod:
+            return snapshot_info.table_name()
+
+        snapshots = self.state_reader.get_snapshots(target_env.snapshots)
+        deployability_index = DeployabilityIndex.create(snapshots)
+
+        return snapshot_info.table_name(
+            is_deployable=deployability_index.is_deployable(snapshot_info.snapshot_id)
         )
-        snapshot = self.get_snapshot(model_name)
-        if not snapshot:
-            raise SQLMeshError(f"Model '{model_name}' was not found.")
-        return snapshot.table_name(is_deployable=deployability_index.is_deployable(snapshot))
 
     def clear_caches(self) -> None:
         for path in self.configs:
