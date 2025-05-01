@@ -1288,7 +1288,7 @@ def test_rendered_diff():
 
     plan = ctx.plan("dev", auto_apply=True, no_prompts=True, diff_rendered=True)
 
-    assert """@@ -4,13 +4,13 @@
+    assert """@@ -4,15 +4,15 @@
 
  CREATE TABLE IF NOT EXISTS "foo" AS
  (
