@@ -199,7 +199,7 @@ class _Node(PydanticModel):
     interval_unit_: t.Optional[IntervalUnit] = Field(alias="interval_unit", default=None)
     tags: t.List[str] = []
     stamp: t.Optional[str] = None
-    _path: Path = Path()
+    _path: t.Optional[Path] = None
     _data_hash: t.Optional[str] = None
     _metadata_hash: t.Optional[str] = None
 
