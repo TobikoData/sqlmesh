@@ -80,7 +80,7 @@ def _get_loaded_context(path: str | Path, config: str, gateway: str) -> Context:
 
 @lru_cache()
 def _get_path_to_model_mapping(context: Context) -> dict[Path, Model]:
-    return {model._path: model for model in context._models.values()}
+    return {model._path: model for model in context._models.values() if model._path}
 
 
 def get_path_to_model_mapping(
