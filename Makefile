@@ -109,7 +109,7 @@ guard-%:
 	fi
 
 engine-%-install:
-	pip3 install -e ".[dev,web,slack,${*}]" ./examples/custom_materializations
+	pip3 install -e ".[dev,web,slack,lsp,${*}]" ./examples/custom_materializations
 
 engine-docker-%-up:
 	docker compose -f ./tests/core/engine_adapter/integration/docker/compose.${*}.yaml up -d

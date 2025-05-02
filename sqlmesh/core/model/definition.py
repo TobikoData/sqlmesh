@@ -1626,6 +1626,8 @@ class SeedModel(_Model):
     def seed_path(self) -> Path:
         seed_path = Path(self.kind.path)
         if not seed_path.is_absolute():
+            if self._path is None:
+                raise SQLMeshError(f"Seed model '{self.name}' has no path")
             return self._path.parent / seed_path
         return seed_path
 
@@ -1985,7 +1987,7 @@ def load_sql_based_model(
     expressions: t.List[exp.Expression],
     *,
     defaults: t.Optional[t.Dict[str, t.Any]] = None,
-    path: Path = Path(),
+    path: t.Optional[Path] = None,
     module_path: Path = Path(),
     time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT,
     macros: t.Optional[MacroRegistry] = None,
@@ -2128,6 +2130,8 @@ def load_sql_based_model(
     # The name of the model will be inferred from its path relative to `models/`, if it's not explicitly specified
     name = meta_fields.pop("name", "")
     if not name and infer_names:
+        if path is None:
+            raise ValueError("Model must have a name", path)
         name = get_model_name(path)
 
     if not name:
@@ -2517,7 +2521,7 @@ INSERT_SEED_MACRO_CALL = d.parse_one("@INSERT_SEED()")
 
 def _split_sql_model_statements(
     expressions: t.List[exp.Expression],
-    path: Path,
+    path: t.Optional[Path],
     dialect: t.Optional[str] = None,
 ) -> t.Tuple[
     t.Optional[exp.Expression],
@@ -2651,7 +2655,7 @@ def _refs_to_sql(values: t.Any) -> exp.Expression:
 def render_meta_fields(
     fields: t.Dict[str, t.Any],
     module_path: Path,
-    path: Path,
+    path: t.Optional[Path],
     jinja_macros: t.Optional[JinjaMacroRegistry],
     macros: t.Optional[MacroRegistry],
     dialect: DialectType,
@@ -2735,7 +2739,7 @@ def render_meta_fields(
 def render_model_defaults(
     defaults: t.Dict[str, t.Any],
     module_path: Path,
-    path: Path,
+    path: t.Optional[Path],
     jinja_macros: t.Optional[JinjaMacroRegistry],
     macros: t.Optional[MacroRegistry],
     dialect: DialectType,
@@ -2785,7 +2789,7 @@ def parse_defaults_properties(
 def render_expression(
     expression: exp.Expression,
     module_path: Path,
-    path: Path,
+    path: t.Optional[Path],
     jinja_macros: t.Optional[JinjaMacroRegistry] = None,
     macros: t.Optional[MacroRegistry] = None,
     dialect: DialectType = None,

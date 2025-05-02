@@ -171,7 +171,7 @@ class Column(PydanticModel):
 class Model(PydanticModel):
     name: str
     fqn: str
-    path: str
+    path: t.Optional[str] = None
     dialect: str
     type: ModelType
     columns: t.List[Column]
