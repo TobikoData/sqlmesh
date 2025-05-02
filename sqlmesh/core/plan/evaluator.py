@@ -36,6 +36,7 @@ from sqlmesh.core.snapshot import (
     SnapshotId,
     SnapshotInfoLike,
     SnapshotTableInfo,
+    SnapshotCreationFailedError,
 )
 from sqlmesh.core.state_sync import StateSync
 from sqlmesh.core.state_sync.base import PromotionResult
@@ -282,12 +283,14 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                 on_complete=self.console.update_creation_progress,
             )
             completed = True
-        except NodeExecutionFailedError as ex:
+        except SnapshotCreationFailedError as ex:
             self.console.stop_creation_progress(success=False)
             progress_stopped = True
 
-            logger.info(str(ex), exc_info=ex)
-            self.console.log_failed_models([ex])
+            for error in ex.errors:
+                logger.info(str(error), exc_info=error)
+
+            self.console.log_failed_models(ex.errors)
 
             raise PlanError("Plan application failed.")
         finally:

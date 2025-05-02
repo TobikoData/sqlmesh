@@ -66,6 +66,7 @@ from sqlmesh.utils import random_id
 from sqlmesh.utils.concurrency import (
     concurrent_apply_to_snapshots,
     concurrent_apply_to_values,
+    NodeExecutionFailedError,
 )
 from sqlmesh.utils.date import TimeLike, now, time_like_to_str
 from sqlmesh.utils.errors import (
@@ -85,6 +86,13 @@ if t.TYPE_CHECKING:
     from sqlmesh.core.environment import EnvironmentNamingInfo
 
 logger = logging.getLogger(__name__)
+
+
+class SnapshotCreationFailedError(SQLMeshError):
+    def __init__(self, errors: t.List[NodeExecutionFailedError[SnapshotId]]):
+        messages = "\n\n".join(f"{error}\n  {error.__cause__}" for error in errors)
+        super().__init__(f"Physical table creation failed:\n\n{messages}")
+        self.errors = errors
 
 
 class SnapshotEvaluator:
@@ -372,7 +380,7 @@ class SnapshotEvaluator:
     ) -> None:
         """Internal method to create tables in parallel."""
         with self.concurrent_context():
-            concurrent_apply_to_snapshots(
+            errors, _ = concurrent_apply_to_snapshots(
                 snapshots_to_create,
                 lambda s: self._create_snapshot(
                     s,
@@ -383,7 +391,10 @@ class SnapshotEvaluator:
                     allow_destructive_snapshots=allow_destructive_snapshots,
                 ),
                 self.ddl_concurrent_tasks,
+                raise_on_error=False,
             )
+            if errors:
+                raise SnapshotCreationFailedError(errors)
 
     def migrate(
         self,
