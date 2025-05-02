@@ -132,6 +132,8 @@ def get_model_definitions_for_a_path(
     if len(tables) == 0:
         return []
 
+    if file_path is None:
+        return []
     with open(file_path, "r", encoding="utf-8") as file:
         read_file = file.readlines()
 
@@ -161,7 +163,7 @@ def get_model_definitions_for_a_path(
             continue
         referenced_model_path = referenced_model._path
         # Check whether the path exists
-        if not referenced_model_path.is_file():
+        if not referenced_model_path or not referenced_model_path.is_file():
             continue
         referenced_model_uri = f"file://{referenced_model_path}"
 
