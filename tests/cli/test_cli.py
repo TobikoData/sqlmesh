@@ -8,7 +8,8 @@ import pytest
 from click.testing import CliRunner
 import time_machine
 import json
-
+from unittest.mock import MagicMock
+from sqlmesh import RuntimeEnv
 from sqlmesh.cli.example_project import ProjectTemplate, init_example_project
 from sqlmesh.cli.main import cli
 from sqlmesh.core.context import Context
@@ -18,6 +19,11 @@ from sqlmesh.utils.date import now_ds, time_like_to_str, timedelta, to_datetime,
 FREEZE_TIME = "2023-01-01 00:00:00 UTC"
 
 pytestmark = pytest.mark.slow
+
+
+@pytest.fixture(autouse=True)
+def mock_runtime_env(monkeypatch):
+    monkeypatch.setattr("sqlmesh.RuntimeEnv.get", MagicMock(return_value=RuntimeEnv.TERMINAL))
 
 
 @pytest.fixture(scope="session")

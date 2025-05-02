@@ -33,6 +33,7 @@ from sqlmesh.core.model.kind import CustomKind as CustomKind
 from sqlmesh.utils import (
     debug_mode_enabled as debug_mode_enabled,
     enable_debug_mode as enable_debug_mode,
+    str_to_bool,
 )
 from sqlmesh.utils.date import DatetimeRanges as DatetimeRanges
 
@@ -54,6 +55,7 @@ class RuntimeEnv(str, Enum):
     GOOGLE_COLAB = "google_colab"  # Not currently officially supported
     JUPYTER = "jupyter"
     DEBUGGER = "debugger"
+    NON_INTERACTIVE = "non_interactive"  # CI or other envs that shouldn't use emojis
 
     @classmethod
     def get(cls) -> RuntimeEnv:
@@ -75,6 +77,14 @@ class RuntimeEnv(str, Enum):
 
         if debug_mode_enabled():
             return RuntimeEnv.DEBUGGER
+
+        if (
+            is_cicd_environment()
+            or not is_interactive_environment()
+            or str_to_bool(os.environ.get("SQLMESH_NON_INTERACTIVE_TERMINAL", "false"))
+        ):
+            return RuntimeEnv.NON_INTERACTIVE
+
         return RuntimeEnv.TERMINAL
 
     @property
@@ -94,8 +104,23 @@ class RuntimeEnv(str, Enum):
         return self == RuntimeEnv.GOOGLE_COLAB
 
     @property
+    def is_non_interactive(self) -> bool:
+        return self == RuntimeEnv.NON_INTERACTIVE
+
+    @property
     def is_notebook(self) -> bool:
-        return not self.is_terminal
+        return not self.is_terminal and not self.is_non_interactive
+
+
+def is_cicd_environment() -> bool:
+    for key in ("CI", "GITHUB_ACTIONS", "TRAVIS", "CIRCLECI", "GITLAB_CI", "BUILDKITE"):
+        if str_to_bool(os.environ.get(key, "false")):
+            return True
+    return False
+
+
+def is_interactive_environment() -> bool:
+    return sys.stdin.isatty() and sys.stdout.isatty()
 
 
 if RuntimeEnv.get().is_notebook:
