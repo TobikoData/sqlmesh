@@ -894,6 +894,7 @@ def create_external_models(obj: Context, **kwargs: t.Any) -> None:
 )
 @click.option(
     "--select-model",
+    "-m",
     type=str,
     multiple=True,
     help="Select specific model that should be diffed.",

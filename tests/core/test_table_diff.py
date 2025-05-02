@@ -111,7 +111,7 @@ def test_data_diff(sushi_context_fixed_date, capsys, caplog):
         target="target_dev",
         on=exp.condition("s.customer_id = t.customer_id AND s.event_date = t.event_date"),
         select_models={"sushi.customer_revenue_by_day"},
-    )
+    )[0]
 
     # verify queries were actually logged to the log file, this helps immensely with debugging
     console_output = capsys.readouterr()
@@ -169,7 +169,7 @@ def test_data_diff_decimals(sushi_context_fixed_date):
         source="table_diff_source",
         target="table_diff_target",
         on=["key"],
-    )
+    )[0]
     assert diff.row_diff().full_match_count == 3
     assert diff.row_diff().partial_match_count == 0
 
@@ -178,7 +178,7 @@ def test_data_diff_decimals(sushi_context_fixed_date):
         target="table_diff_target",
         on=["key"],
         decimals=4,
-    )
+    )[0]
 
     row_diff = diff.row_diff()
     joined_sample_columns = row_diff.joined_sample.columns
@@ -293,7 +293,7 @@ def test_grain_check(sushi_context_fixed_date):
         on=["'key_1'", "key_2"],
         select_models={"memory.sushi*"},
         skip_grain_check=False,
-    )
+    )[0]
 
     row_diff = diff.row_diff()
     assert row_diff.full_match_count == 7
@@ -421,7 +421,7 @@ def test_tables_and_grain_inferred_from_model(sushi_context_fixed_date: Context)
 
     table_diff = sushi_context_fixed_date.table_diff(
         source="unit_test", target="prod", select_models={"sushi.waiter_revenue_by_day"}
-    )
+    )[0]
     assert isinstance(table_diff, TableDiff)
     assert table_diff.source == "memory.sushi__unit_test.waiter_revenue_by_day"
     assert table_diff.target == "memory.sushi.waiter_revenue_by_day"

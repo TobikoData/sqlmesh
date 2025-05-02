@@ -1569,8 +1569,8 @@ class GenericContext(BaseContext, t.Generic[C]):
         self,
         source: str,
         target: str,
-        on: t.List[str] | exp.Condition | None = None,
-        skip_columns: t.List[str] | None = None,
+        on: t.Optional[t.List[str] | exp.Condition] = None,
+        skip_columns: t.Optional[t.List[str]] = None,
         select_models: t.Optional[t.Collection[str]] = None,
         where: t.Optional[str | exp.Condition] = None,
         limit: int = 20,
@@ -1579,7 +1579,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         decimals: int = 3,
         skip_grain_check: bool = False,
         temp_schema: t.Optional[str] = None,
-    ) -> t.Union[TableDiff, t.List[TableDiff]]:
+    ) -> t.List[TableDiff]:
         """Show a diff between two tables.
 
         Args:
@@ -1613,26 +1613,30 @@ class GenericContext(BaseContext, t.Generic[C]):
                 raise SQLMeshError(f"Could not find environment '{target}'")
 
             selected_models = self._new_selector().expand_model_selections(select_models)
-            models_to_diff: t.List[t.Tuple[Model, EngineAdapter, str, str]] = []
+            models_to_diff: t.List[
+                t.Tuple[Model, EngineAdapter, str, str, t.Optional[t.List[str] | exp.Condition]]
+            ] = []
             models_in_source: t.List[str] = []
             models_in_target: t.List[str] = []
             models_no_diff: t.List[str] = []
+            models_without_grain: t.List[Model] = []
+            source_snapshots_to_name = {
+                snapshot.name: snapshot for snapshot in source_env.snapshots
+            }
+            target_snapshots_to_name = {
+                snapshot.name: snapshot for snapshot in target_env.snapshots
+            }
 
-            for model_or_snapshot in selected_models:
-                model = self.get_model(model_or_snapshot, raise_if_missing=True)
+            for model_fqn in selected_models:
+                model = self._models[model_fqn]
                 adapter = self._get_engine_adapter(model.gateway)
-                source_snapshot = next(
-                    (snapshot for snapshot in source_env.snapshots if snapshot.name == model.fqn),
-                    None,
-                )
-                target_snapshot = next(
-                    (snapshot for snapshot in target_env.snapshots if snapshot.name == model.fqn),
-                    None,
-                )
+                source_snapshot = source_snapshots_to_name.get(model.fqn)
+                target_snapshot = target_snapshots_to_name.get(model.fqn)
+
                 if source_snapshot is None and target_snapshot:
-                    models_in_source.append(model_or_snapshot)
+                    models_in_source.append(model_fqn)
                 elif target_snapshot is None and source_snapshot:
-                    models_in_target.append(model_or_snapshot)
+                    models_in_target.append(model_fqn)
                 elif target_snapshot and source_snapshot:
                     if source_snapshot.fingerprint != target_snapshot.fingerprint:
                         # Compare the virtual layer instead of the physical layer because the virtual layer is guaranteed to point
@@ -1644,9 +1648,27 @@ class GenericContext(BaseContext, t.Generic[C]):
                             target_env.naming_info, adapter.dialect
                         )
 
-                        models_to_diff.append((model, adapter, source, target))
+                        model_on = []
+                        if not on:
+                            for expr in [
+                                ref.expression for ref in model.all_references if ref.unique
+                            ]:
+                                if isinstance(expr, exp.Tuple):
+                                    model_on.extend(
+                                        [
+                                            key.this.sql(dialect=adapter.dialect)
+                                            for key in expr.expressions
+                                        ]
+                                    )
+                                else:
+                                    # Handle a single Column or Paren expression
+                                    model_on.append(expr.this.sql(dialect=adapter.dialect))
+
+                        models_to_diff.append((model, adapter, source, target, on or model_on))
+                        if not (on or model_on):
+                            models_without_grain.append(model)
                     else:
-                        models_no_diff.append(model_or_snapshot)
+                        models_no_diff.append(model_fqn)
 
             self.console.show_table_diff_details(
                 models_in_source,
@@ -1656,6 +1678,15 @@ class GenericContext(BaseContext, t.Generic[C]):
             )
 
             if models_to_diff:
+                if models_without_grain:
+                    model_names = "\n".join(
+                        f"─ {model.name} \n  at '{model._path}'" for model in models_without_grain
+                    )
+                    raise SQLMeshError(
+                        f"SQLMesh doesn't know how to join the tables for the following models:\n{model_names}\n"
+                        "\nPlease specify the `grains` in each model definition."
+                    )
+
                 self.console.start_table_diff_progress(len(models_to_diff))
                 tasks_num = min(len(models_to_diff), self.concurrent_tasks)
                 table_diffs = concurrent_apply_to_values(
@@ -1665,11 +1696,11 @@ class GenericContext(BaseContext, t.Generic[C]):
                         adapter=model_info[1],
                         source=model_info[2],
                         target=model_info[3],
+                        on=model_info[4],
                         source_alias=source_env.name,
                         target_alias=target_env.name,
                         limit=limit,
                         decimals=decimals,
-                        on=on,
                         skip_columns=skip_columns,
                         where=where,
                         show=show,
@@ -1698,7 +1729,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         if show:
             self.console.show_table_diff(table_diffs, show_sample, skip_grain_check, temp_schema)
 
-        return table_diffs[0] if len(table_diffs) == 1 else table_diffs
+        return table_diffs
 
     def _model_diff(
         self,
@@ -1717,15 +1748,6 @@ class GenericContext(BaseContext, t.Generic[C]):
         temp_schema: t.Optional[str] = None,
         skip_grain_check: bool = False,
     ) -> TableDiff:
-        if not on:
-            on = []
-            for expr in [ref.expression for ref in model.all_references if ref.unique]:
-                if isinstance(expr, exp.Tuple):
-                    on.extend([key.this.sql(dialect=adapter.dialect) for key in expr.expressions])
-                else:
-                    # Handle a single Column or Paren expression
-                    on.append(expr.this.sql(dialect=adapter.dialect))
-
         self.console.start_table_diff_model_progress(model.name)
 
         table_diff = self._table_diff(
