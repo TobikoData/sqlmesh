@@ -43,7 +43,7 @@ class BaseExpressionRenderer:
         expression: exp.Expression,
         dialect: DialectType,
         macro_definitions: t.List[d.MacroDef],
-        path: Path = Path(),
+        path: t.Optional[Path] = None,
         jinja_macro_registry: t.Optional[JinjaMacroRegistry] = None,
         python_env: t.Optional[t.Dict[str, Executable]] = None,
         only_execution_time: bool = False,
