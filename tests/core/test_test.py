@@ -21,7 +21,7 @@ from sqlmesh.core.config import (
     GatewayConfig,
     ModelDefaultsConfig,
 )
-from sqlmesh.core.context import Context
+from sqlmesh.core.context import Context, ExecutionContext
 from sqlmesh.core.console import get_console
 from sqlmesh.core.dialect import parse
 from sqlmesh.core.engine_adapter import EngineAdapter
@@ -2470,3 +2470,53 @@ def test_sqlglot_expr(evaluator):
 
     results = ctx.test()
     assert len(results.successes) == 30
+
+
+def test_python_model_upstream_table(sushi_context) -> None:
+    @model(
+        "test_upstream_table_python",
+        columns={"customer_id": "int", "zip": "str"},
+    )
+    def upstream_table_python(context, **kwargs):
+        demographics_external_table = context.resolve_table("memory.raw.demographics")
+        return context.fetchdf(
+            exp.select("customer_id", "zip").from_(demographics_external_table),
+        )
+
+    python_model = model.get_registry()["test_upstream_table_python"].model(
+        module_path=Path("."),
+        path=Path("."),
+    )
+
+    context = ExecutionContext(sushi_context.engine_adapter, sushi_context.snapshots, None, None)
+    df = list(python_model.render(context=context))[0]
+
+    # Verify the actual model output matches the expected actual external table's values
+    assert df.to_dict(orient="records") == [{"customer_id": 1, "zip": "00000"}]
+
+    # Use different input values for the test and verify the outputs
+    _check_successful_or_raise(
+        _create_test(
+            body=load_yaml("""
+test_test_upstream_table_python:
+  model: test_upstream_table_python
+  inputs:
+    memory.raw.demographics:
+      - customer_id: 12
+        zip: "S11HA"
+      - customer_id: 555
+        zip: "94401"
+  outputs:
+    query:
+      - customer_id: 12
+        zip: "S11HA"
+      - customer_id: 555
+        zip: "94401"
+"""),
+            test_name="test_test_upstream_table_python",
+            model=model.get_registry()["test_upstream_table_python"].model(
+                module_path=Path("."), path=Path(".")
+            ),
+            context=sushi_context,
+        ).run()
+    )
