@@ -1647,25 +1647,9 @@ class GenericContext(BaseContext, t.Generic[C]):
                         target = target_snapshot.qualified_view_name.for_environment(
                             target_env.naming_info, adapter.dialect
                         )
-
-                        model_on = []
-                        if not on:
-                            for expr in [
-                                ref.expression for ref in model.all_references if ref.unique
-                            ]:
-                                if isinstance(expr, exp.Tuple):
-                                    model_on.extend(
-                                        [
-                                            key.this.sql(dialect=adapter.dialect)
-                                            for key in expr.expressions
-                                        ]
-                                    )
-                                else:
-                                    # Handle a single Column or Paren expression
-                                    model_on.append(expr.this.sql(dialect=adapter.dialect))
-
-                        models_to_diff.append((model, adapter, source, target, on or model_on))
-                        if not (on or model_on):
+                        model_on = on or model.on
+                        models_to_diff.append((model, adapter, source, target, model_on))
+                        if not model_on:
                             models_without_grain.append(model)
                     else:
                         models_no_diff.append(model_fqn)
