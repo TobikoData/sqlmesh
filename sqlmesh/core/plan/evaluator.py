@@ -299,6 +299,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             for error in ex.errors:
                 logger.info(str(error), exc_info=error)
 
+            self.console.log_skipped_models({s.name for s in ex.skipped})
             self.console.log_failed_models(ex.errors)
 
             raise PlanError("Plan application failed.")
