@@ -89,10 +89,13 @@ logger = logging.getLogger(__name__)
 
 
 class SnapshotCreationFailedError(SQLMeshError):
-    def __init__(self, errors: t.List[NodeExecutionFailedError[SnapshotId]]):
+    def __init__(
+        self, errors: t.List[NodeExecutionFailedError[SnapshotId]], skipped: t.List[SnapshotId]
+    ):
         messages = "\n\n".join(f"{error}\n  {error.__cause__}" for error in errors)
         super().__init__(f"Physical table creation failed:\n\n{messages}")
         self.errors = errors
+        self.skipped = skipped
 
 
 class SnapshotEvaluator:
@@ -380,7 +383,7 @@ class SnapshotEvaluator:
     ) -> None:
         """Internal method to create tables in parallel."""
         with self.concurrent_context():
-            errors, _ = concurrent_apply_to_snapshots(
+            errors, skipped = concurrent_apply_to_snapshots(
                 snapshots_to_create,
                 lambda s: self._create_snapshot(
                     s,
@@ -394,7 +397,7 @@ class SnapshotEvaluator:
                 raise_on_error=False,
             )
             if errors:
-                raise SnapshotCreationFailedError(errors)
+                raise SnapshotCreationFailedError(errors, skipped)
 
     def migrate(
         self,
