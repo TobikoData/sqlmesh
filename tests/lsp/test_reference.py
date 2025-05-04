@@ -46,3 +46,20 @@ def test_reference() -> None:
             referenced_text += read_file[line_num]
         referenced_text += read_file[end_line][:end_character]  # Last line up to end_character
     assert referenced_text == "sushi.customers"
+
+
+@pytest.mark.fast
+def test_reference_with_alias() -> None:
+    context = Context(paths=["examples/sushi"])
+    lsp_context = LSPContext(context)
+
+    waiter_revenue_by_day_uri = next(
+        uri for uri, models in lsp_context.map.items() if "sushi.waiter_revenue_by_day" in models
+    )
+
+    references = get_model_definitions_for_a_path(lsp_context, waiter_revenue_by_day_uri)
+    assert len(references) == 3
+
+    assert references[0].uri.endswith("orders.py")
+    assert references[1].uri.endswith("order_items.py")
+    assert references[2].uri.endswith("items.py")
