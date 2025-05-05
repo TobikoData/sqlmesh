@@ -260,7 +260,6 @@ def test_information_schema_view_external_model(ctx: TestContext, tmp_path: Path
         "  `tables`.`table_type` AS `table_type`,\n"
         "  `tables`.`is_insertable_into` AS `is_insertable_into`,\n"
         "  `tables`.`is_typed` AS `is_typed`,\n"
-        "  `tables`.`managed_table_type` AS `managed_table_type`,\n"
         "  `tables`.`creation_time` AS `creation_time`,\n"
         "  `tables`.`base_table_catalog` AS `base_table_catalog`,\n"
         "  `tables`.`base_table_schema` AS `base_table_schema`,\n"
@@ -275,7 +274,8 @@ def test_information_schema_view_external_model(ctx: TestContext, tmp_path: Path
         "  `tables`.`replication_status` AS `replication_status`,\n"
         "  `tables`.`replication_error` AS `replication_error`,\n"
         "  `tables`.`is_change_history_enabled` AS `is_change_history_enabled`,\n"
-        "  `tables`.`sync_status` AS `sync_status`\n"
+        "  `tables`.`sync_status` AS `sync_status`,\n"
+        "  `tables`.`managed_table_type` AS `managed_table_type`\n"
         f"FROM {dependency} AS `tables`"
     )
 
