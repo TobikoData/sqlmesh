@@ -140,8 +140,10 @@ When diffing multiple models, SQLMesh will:
 
 The `--select-model` option supports a powerful selection syntax that lets you choose models using patterns, tags, dependencies and git status. For complete details, see the [model selection guide](./model_selection.md).
 
-Here are some common patterns you can use:
+> Note: models will only be data diffed if there's a breaking change that impacts them.
 
+Here are some common patterns you can use:
+> Note: Surround your selection pattern in single or double quotes. Ex: '*', "sqlmesh_example.*"
 ### Wildcard Patterns
 - `*` - All models in the project
 - `sqlmesh_example.*` - All models in the sqlmesh_example schema
@@ -187,9 +189,9 @@ sqlmesh table_diff prod:dev -m "tag:finance" -m "metrics.*_daily"
 
 When multiple selectors are provided, they are combined with OR logic, meaning a model matching any of the selectors will be included.
 
-All the standard table diff options like `--show-sample` work with multiple model diffing. The comparisons are executed concurrently for better performance when dealing with a large of project or many models.
+All the standard table diff options like `--show-sample` work with multiple model diffing. The comparisons are executed concurrently for better performance when dealing with a large project or many models.
 
-> Note: All models being compared must have their `grain` defined, as this is used to perform the join between the tables in the two environments.
+> Note: All models being compared must have their `grain` defined that is unique and not null, as this is used to perform the join between the tables in the two environments.
 
 ## Diffing tables or views
 
