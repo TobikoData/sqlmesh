@@ -9,7 +9,7 @@ from io import StringIO
 from rich.console import Console
 from sqlmesh.core.console import TerminalConsole
 from sqlmesh.core.context import Context
-from sqlmesh.core.config import AutoCategorizationMode, CategorizerConfig
+from sqlmesh.core.config import AutoCategorizationMode, CategorizerConfig, DuckDBConnectionConfig
 from sqlmesh.core.model import SqlModel, load_sql_based_model
 from sqlmesh.core.table_diff import TableDiff
 import numpy as np
@@ -511,3 +511,54 @@ Column: dict
     stripped_output = strip_ansi_codes(output)
     stripped_expected = expected_output.strip()
     assert stripped_output == stripped_expected
+
+
+def test_data_diff_nullable_booleans():
+    engine_adapter = DuckDBConnectionConfig().create_engine_adapter()
+
+    columns_to_types = {"key": exp.DataType.build("int"), "value": exp.DataType.build("boolean")}
+
+    engine_adapter.create_table("table_diff_source", columns_to_types)
+    engine_adapter.create_table("table_diff_target", columns_to_types)
+
+    engine_adapter.execute(
+        "insert into table_diff_source (key, value) values (1, true), (2, false), (3, null)"
+    )
+    engine_adapter.execute(
+        "insert into table_diff_target (key, value) values (1, false), (2, null), (3, true)"
+    )
+
+    table_diff = TableDiff(
+        adapter=engine_adapter,
+        source="table_diff_source",
+        target="table_diff_target",
+        source_alias="dev",
+        target_alias="prod",
+        on=["key"],
+    )
+
+    diff = table_diff.row_diff()
+
+    output = capture_console_output("show_row_diff", row_diff=diff)
+
+    expected_output = """
+Row Counts:
+└──  PARTIAL MATCH: 3 rows (100.0%)
+
+COMMON ROWS column comparison stats:
+       pct_match
+value        0.0
+
+
+COMMON ROWS sample data differences:
+Column: value
+┏━━━━━┳━━━━━━━┳━━━━━━━┓
+┃ key ┃ DEV   ┃ PROD  ┃
+┡━━━━━╇━━━━━━━╇━━━━━━━┩
+│ 1   │ True  │ False │
+│ 2   │ False │ <NA>  │
+│ 3   │ <NA>  │ True  │
+└─────┴───────┴───────┘
+"""
+
+    assert strip_ansi_codes(output) == expected_output.strip()
