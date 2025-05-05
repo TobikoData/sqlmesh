@@ -35,6 +35,7 @@ from sqlmesh.core.snapshot import (
     SnapshotTableInfo,
     SnapshotCreationFailedError,
 )
+from sqlmesh.core.snapshot.definition import SnapshotChangeCategory, parent_snapshots_by_name
 from sqlmesh.utils import CompletionStatus
 from sqlmesh.core.state_sync import StateSync
 from sqlmesh.core.state_sync.base import PromotionResult
@@ -42,6 +43,7 @@ from sqlmesh.utils.concurrency import NodeExecutionFailedError
 from sqlmesh.utils.errors import PlanError
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import now
+from sqlmesh.utils.hashing import hash_data
 
 logger = logging.getLogger(__name__)
 
@@ -115,6 +117,10 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                 }
                 after_promote_snapshots = all_names - before_promote_snapshots
                 deployability_index_for_evaluation = DeployabilityIndex.all_deployable()
+
+            self._run_audits_for_metadata_snapshots(
+                new_snapshots, plan, deployability_index_for_evaluation
+            )
 
             execute_environment_statements(
                 adapter=self.snapshot_evaluator.adapter,
@@ -544,6 +550,72 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                 snapshots_to_restate[full_snapshot_id] = (full_snapshot.table_info, new_intervals)
 
         return set(snapshots_to_restate.values())
+
+    def _run_audits_for_metadata_snapshots(
+        self,
+        new_snapshots: t.Dict[SnapshotId, Snapshot],
+        plan: EvaluatablePlan,
+        deployability_index: DeployabilityIndex,
+    ) -> None:
+        to_be_audited_snapshots = []
+
+        for snapshot in new_snapshots.values():
+            if (
+                snapshot.change_category != SnapshotChangeCategory.METADATA
+                or not snapshot.previous_version
+                or not snapshot.is_model
+            ):
+                continue
+
+            previous_snapshot_id = snapshot.previous_version.snapshot_id(snapshot.name)
+            previous_snapshot = self.state_sync.get_snapshots([previous_snapshot_id])[
+                previous_snapshot_id
+            ]
+
+            new_audits = snapshot.model._audit_metadata()
+
+            # Compare the audit metadata hashes to determine if there was a change
+            previous_audit_hash = hash_data(previous_snapshot.model._audit_metadata())
+            current_audit_hash = hash_data(new_audits)
+
+            if previous_audit_hash != current_audit_hash and new_audits:
+                to_be_audited_snapshots.append((snapshot, previous_snapshot))
+
+        if not to_be_audited_snapshots:
+            return
+
+        scheduler = self.create_scheduler(new_snapshots.values())
+        raise_plan_error = False
+        for to_be_audited_snapshot, previous_snapshot in to_be_audited_snapshots:
+            parent_snapshots = parent_snapshots_by_name(to_be_audited_snapshot, new_snapshots)
+
+            # The previous snapshot is the snapshot before the metadata change
+            # and contains the latest intervals that we should use for the new audit
+            for interval in previous_snapshot.intervals:
+                start, end = interval
+
+                try:
+                    scheduler._audit_snapshot(
+                        to_be_audited_snapshot,
+                        environment_naming_info=plan.environment.naming_info,
+                        snapshots=parent_snapshots,
+                        start=start,
+                        end=end,
+                        execution_time=plan.execution_time,
+                        deployability_index=deployability_index,
+                    )
+                except Exception as e:
+                    # Simulate a node execution failure with the audit error passed as the
+                    # cause in order to reuse log_failed_models
+                    error = NodeExecutionFailedError(
+                        (to_be_audited_snapshot.name, ((start, end), -1))
+                    )
+                    error.__cause__ = e
+                    self.console.log_failed_models([error])
+                    raise_plan_error = True
+
+            if raise_plan_error:
+                raise PlanError("Plan application failed.")
 
 
 def update_intervals_for_new_snapshots(
