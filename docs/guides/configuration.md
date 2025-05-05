@@ -1019,7 +1019,6 @@ For example, rather than using an `on_virtual_update` statement in each model to
 
 ```python linenums="1"
 from sqlmesh.core.macros import macro
-from sqlmesh.core.snapshot.definition import to_view_mapping
 
 @macro()
 def grant_select_privileges(evaluator):
