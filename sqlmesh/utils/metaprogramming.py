@@ -338,42 +338,42 @@ def build_env(
             ):
                 env[name] = (obj, is_metadata)
                 return
+
+            if inspect.isclass(obj):
+                for var in decorator_vars(obj):
+                    if obj_module and var in obj_module.__dict__:
+                        walk(obj_module.__dict__[var], var, is_metadata)
+
+                for base in obj.__bases__:
+                    walk(base, base.__qualname__, is_metadata)
+
+                for k, v in obj.__dict__.items():
+                    if k.startswith("__"):
+                        continue
+
+                    # Traverse methods in a class to find global references
+                    if isinstance(v, (classmethod, staticmethod)):
+                        v = v.__func__
+
+                    if callable(v):
+                        # Walk the method if it's part of the object, else it's a global function and we just store it
+                        if v.__qualname__.startswith(obj.__qualname__):
+                            for k, v in func_globals(v).items():
+                                walk(v, k, is_metadata)
+                        else:
+                            walk(v, v.__name__, is_metadata)
+            elif callable(obj):
+                for k, v in func_globals(obj).items():
+                    walk(v, k, is_metadata)
+
+            # We store the object in the environment after its dependencies, because otherwise we
+            # could crash at environment hydration time, since dicts are ordered and the top-level
+            # objects would be loaded before their dependencies.
+            env[name] = (obj, is_metadata)
         elif not _globals_match(env[name][0], obj):
             raise SQLMeshError(
                 f"Cannot store {obj} in environment, duplicate definitions found for '{name}'"
             )
-
-        if inspect.isclass(obj):
-            for var in decorator_vars(obj):
-                if obj_module and var in obj_module.__dict__:
-                    walk(obj_module.__dict__[var], var, is_metadata)
-
-            for base in obj.__bases__:
-                walk(base, base.__qualname__, is_metadata)
-
-            for k, v in obj.__dict__.items():
-                if k.startswith("__"):
-                    continue
-
-                # Traverse methods in a class to find global references
-                if isinstance(v, (classmethod, staticmethod)):
-                    v = v.__func__
-
-                if callable(v):
-                    # Walk the method if it's part of the object, else it's a global function and we just store it
-                    if v.__qualname__.startswith(obj.__qualname__):
-                        for k, v in func_globals(v).items():
-                            walk(v, k, is_metadata)
-                    else:
-                        walk(v, v.__name__, is_metadata)
-        elif callable(obj):
-            for k, v in func_globals(obj).items():
-                walk(v, k, is_metadata)
-
-        # We store the object in the environment after its dependencies, because otherwise we
-        # could crash at environment hydration time, since dicts are ordered and the top-level
-        # objects would be loaded before their dependencies.
-        env[name] = (obj, is_metadata)
 
     # The "metadata only" annotation of the object is transitive
     walk(obj, name, is_metadata_obj or getattr(obj, c.SQLMESH_METADATA, None))
