@@ -135,10 +135,8 @@ sqlmesh table_diff prod:dev --select-model "sqlmesh_example.*"
 
 When diffing multiple models, SQLMesh will:
 
-1. Show which models exist only in the source environment
-2. Show which models exist only in the target environment
-3. Show which models exist in both environments but have no differences
-4. Compare the models that have differences and display them
+1. Show the models returnes by the selector that exist in both environments, but have no differences
+2. Compare the models that have differences and display the table diff of each model
 
 The `--select-model` option supports a powerful selection syntax that lets you choose models using patterns, tags, dependencies and git status. For complete details, see the [model selection guide](./model_selection.md).
 

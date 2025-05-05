@@ -250,8 +250,6 @@ class TableDiffConsole(abc.ABC):
     @abc.abstractmethod
     def show_table_diff_details(
         self,
-        models_in_source: t.List[str],
-        models_in_target: t.List[str],
         models_no_diff: t.List[str],
         models_to_diff: t.List[str],
     ) -> None:
@@ -719,8 +717,6 @@ class NoopConsole(Console):
 
     def show_table_diff_details(
         self,
-        models_in_source: t.List[str],
-        models_in_target: t.List[str],
         models_no_diff: t.List[str],
         models_to_diff: t.List[str],
     ) -> None:
@@ -1987,24 +1983,10 @@ class TerminalConsole(Console):
 
     def show_table_diff_details(
         self,
-        models_in_source: t.List[str],
-        models_in_target: t.List[str],
         models_no_diff: t.List[str],
         models_to_diff: t.List[str],
     ) -> None:
         """Display information about which tables are identical and which are diffed"""
-
-        if models_in_source:
-            m_tree = Tree("\n[b]Models only in source environment:")
-            for m in models_in_source:
-                m_tree.add(f"[{self.TABLE_DIFF_SOURCE_BLUE}]{m}[/{self.TABLE_DIFF_SOURCE_BLUE}]")
-            self._print(m_tree)
-
-        if models_in_target:
-            m_tree = Tree("\n[b]Models only in target environment:")
-            for m in models_in_target:
-                m_tree.add(f"[{self.TABLE_DIFF_TARGET_GREEN}]{m}[/{self.TABLE_DIFF_TARGET_GREEN}]")
-            self._print(m_tree)
 
         if models_no_diff:
             m_tree = Tree("\n[b]Models without changes:")

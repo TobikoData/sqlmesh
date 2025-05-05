@@ -1625,8 +1625,6 @@ class GenericContext(BaseContext, t.Generic[C]):
             models_to_diff: t.List[
                 t.Tuple[Model, EngineAdapter, str, str, t.Optional[t.List[str] | exp.Condition]]
             ] = []
-            models_in_source: t.List[str] = []
-            models_in_target: t.List[str] = []
             models_no_diff: t.List[str] = []
             models_without_grain: t.List[Model] = []
             source_snapshots_to_name = {
@@ -1642,11 +1640,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                 source_snapshot = source_snapshots_to_name.get(model.fqn)
                 target_snapshot = target_snapshots_to_name.get(model.fqn)
 
-                if source_snapshot is None and target_snapshot:
-                    models_in_source.append(model_fqn)
-                elif target_snapshot is None and source_snapshot:
-                    models_in_target.append(model_fqn)
-                elif target_snapshot and source_snapshot:
+                if target_snapshot and source_snapshot:
                     if (
                         source_snapshot.fingerprint.data_hash
                         != target_snapshot.fingerprint.data_hash
@@ -1667,8 +1661,6 @@ class GenericContext(BaseContext, t.Generic[C]):
                         models_no_diff.append(model_fqn)
 
             self.console.show_table_diff_details(
-                models_in_source,
-                models_in_target,
                 models_no_diff,
                 [model[0].name for model in models_to_diff],
             )
