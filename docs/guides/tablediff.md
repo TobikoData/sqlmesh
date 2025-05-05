@@ -140,24 +140,30 @@ When diffing multiple models, SQLMesh will:
 
 The `--select-model` option supports a powerful selection syntax that lets you choose models using patterns, tags, dependencies and git status. For complete details, see the [model selection guide](./model_selection.md).
 
-> Note: models will only be data diffed if there's a breaking change that impacts them.
+> Note: Models will only be data diffed if there's a breaking change that impacts them.
 
 Here are some common patterns you can use:
-> Note: Surround your selection pattern in single or double quotes. Ex: '*', "sqlmesh_example.*"
+
+> Note: Surround your selection pattern in single or double quotes. Ex: `'*'`, `"sqlmesh_example.*"`
+
 ### Wildcard Patterns
+
 - `*` - All models in the project
 - `sqlmesh_example.*` - All models in the sqlmesh_example schema
 
 ### Upstream/Downstream Selection
+
 - `+model_name` - Select the model and its upstream dependencies
 - `model_name+` - Select the model and its downstream dependencies
 - `+model_name+` - Select the model and both its upstream and downstream dependencies
 
 ### Tag-based Selection
+
 - `tag:finance` - All models with the "finance" tag
 - `tag:reporting*` - All models with tags starting with "reporting"
 
 ### Git-based Selection
+
 - `git:feature` - Select models whose files have changed compared to main branch, including:
   - Untracked files (new files not in git)
   - Uncommitted changes in working directory
@@ -168,12 +174,14 @@ Here are some common patterns you can use:
 > Note: Git-based selection excludes deleted files and respects your `.gitignore` settings.
 
 ### Logical Operators
+
 You can combine multiple selectors using logical operators:
 - `&` (AND): Both conditions must be true
 - `|` (OR): Either condition must be true
 - `^` (NOT): Negates a condition
 
 #### Complex Selection Examples
+
 - `(tag:finance & ^tag:deprecated)` - Models with finance tag that don't have deprecated tag
 - `(+model_a | model_b+)` - Model A and its upstream deps OR model B and its downstream deps
 - `(tag:finance & git:main)` - Changed models that also have the finance tag
