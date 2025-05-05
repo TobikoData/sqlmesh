@@ -767,11 +767,11 @@ class TerminalConsole(Console):
 
     TABLE_DIFF_SOURCE_BLUE = "#0248ff"
     TABLE_DIFF_TARGET_GREEN = "green"
-    CHECK_MARK = "\u2714"
-    AUDIT_PASS_MARK = CHECK_MARK
+    AUDIT_PASS_MARK = "\u2714"
     GREEN_AUDIT_PASS_MARK = f"[green]{AUDIT_PASS_MARK}[/green]"
     AUDIT_FAIL_MARK = "\u274c"
     AUDIT_PADDING = 0
+    CHECK_MARK = f"{AUDIT_PASS_MARK} "
 
     def __init__(
         self,
@@ -996,7 +996,7 @@ class TerminalConsole(Console):
         if self.evaluation_progress_live:
             self.evaluation_progress_live.stop()
             if success:
-                self.log_success(f"{self.CHECK_MARK} Model batches executed")
+                self.log_success(f"{self.CHECK_MARK}Model batches executed")
 
         self.evaluation_progress_live = None
         self.evaluation_total_progress = None
@@ -1060,7 +1060,7 @@ class TerminalConsole(Console):
             self.creation_progress.stop()
             self.creation_progress = None
             if success:
-                self.log_success(f"\n{self.CHECK_MARK} Physical layer updated")
+                self.log_success(f"\n{self.CHECK_MARK}Physical layer updated")
 
         self.environment_naming_info = EnvironmentNamingInfo()
         self.default_catalog = None
@@ -1161,7 +1161,7 @@ class TerminalConsole(Console):
             self.promotion_progress.stop()
             self.promotion_progress = None
             if success:
-                self.log_success(f"\n{self.CHECK_MARK} Virtual layer updated")
+                self.log_success(f"\n{self.CHECK_MARK}Virtual layer updated")
 
         self.environment_naming_info = EnvironmentNamingInfo()
         self.default_catalog = None
