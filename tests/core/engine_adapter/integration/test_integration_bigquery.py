@@ -229,6 +229,7 @@ def test_information_schema_view_external_model(ctx: TestContext, tmp_path: Path
         "table_type": exp.DataType.build("TEXT"),
         "is_insertable_into": exp.DataType.build("TEXT"),
         "is_typed": exp.DataType.build("TEXT"),
+        "managed_table_type": exp.DataType.build("TEXT"),
         "creation_time": exp.DataType.build("TIMESTAMPTZ"),
         "base_table_catalog": exp.DataType.build("TEXT"),
         "base_table_schema": exp.DataType.build("TEXT"),
@@ -259,6 +260,7 @@ def test_information_schema_view_external_model(ctx: TestContext, tmp_path: Path
         "  `tables`.`table_type` AS `table_type`,\n"
         "  `tables`.`is_insertable_into` AS `is_insertable_into`,\n"
         "  `tables`.`is_typed` AS `is_typed`,\n"
+        "  `tables`.`managed_table_type` AS `managed_table_type`,\n"
         "  `tables`.`creation_time` AS `creation_time`,\n"
         "  `tables`.`base_table_catalog` AS `base_table_catalog`,\n"
         "  `tables`.`base_table_schema` AS `base_table_schema`,\n"
