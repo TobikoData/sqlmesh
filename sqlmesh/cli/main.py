@@ -897,7 +897,7 @@ def create_external_models(obj: Context, **kwargs: t.Any) -> None:
     "-m",
     type=str,
     multiple=True,
-    help="Select specific model that should be diffed.",
+    help="Specify one or more models to data diff. Use wildcards to diff multiple models. Ex: '*' (all models with applied plan diffs), 'demo.model+' (this and downstream models), 'git:feature_branch' (models with direct modifications in this branch only)",
 )
 @click.pass_obj
 @error_handler

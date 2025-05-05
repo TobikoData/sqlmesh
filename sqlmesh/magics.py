@@ -690,7 +690,7 @@ class SQLMeshMagics(Magics):
         "--select-model",
         type=str,
         nargs="*",
-        help="Select specific model changes that should be included in the plan.",
+        help="Specify one or more models to data diff. Use wildcards to diff multiple models. Ex: '*' (all models with applied plan diffs), 'demo.model+' (this and downstream models), 'git:feature_branch' (models with direct modifications in this branch only)",
     )
     @argument(
         "--skip-grain-check",

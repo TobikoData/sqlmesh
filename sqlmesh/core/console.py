@@ -244,7 +244,7 @@ class TableDiffConsole(abc.ABC):
         """Start table diff model progress"""
 
     @abc.abstractmethod
-    def stop_table_diff_progress(self) -> None:
+    def stop_table_diff_progress(self, success: bool) -> None:
         """Stop table diff progress bar"""
 
     @abc.abstractmethod
@@ -714,7 +714,7 @@ class NoopConsole(Console):
     def start_table_diff_model_progress(self, model: str) -> None:
         pass
 
-    def stop_table_diff_progress(self) -> None:
+    def stop_table_diff_progress(self, success: bool) -> None:
         pass
 
     def show_table_diff_details(
@@ -2056,12 +2056,17 @@ class TerminalConsole(Console):
             model_task_id = self.table_diff_model_tasks[model]
             self.table_diff_model_progress.remove_task(model_task_id)
 
-    def stop_table_diff_progress(self) -> None:
+    def stop_table_diff_progress(self, success: bool) -> None:
         if self.table_diff_progress_live:
             self.table_diff_progress_live.stop()
             self.table_diff_progress_live = None
             self.log_status_update("")
-            self.log_success(f"{GREEN_CHECK_MARK} Table diff completed")
+
+            if success:
+                self.log_success(f"Table diff completed successfully!")
+            else:
+                self.log_error("Table diff failed!")
+
         self.table_diff_progress = None
         self.table_diff_model_progress = None
         self.table_diff_model_tasks = {}
@@ -2292,6 +2297,8 @@ class TerminalConsole(Console):
             fully_matched = []
             for table_diff in table_diffs:
                 if (
+                    table_diff.schema_diff().source_schema == table_diff.schema_diff().target_schema
+                ) and (
                     table_diff.row_diff(
                         temp_schema=temp_schema, skip_grain_check=skip_grain_check
                     ).full_match_pct

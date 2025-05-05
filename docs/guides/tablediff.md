@@ -122,6 +122,77 @@ Under the hood, SQLMesh stores temporary data in the database to perform the com
 The default schema for these temporary tables is `sqlmesh_temp` but can be changed with the `--temp-schema` option.
 The schema can be specified as a `CATALOG.SCHEMA` or `SCHEMA`.
 
+
+## Diffing multiple models across environments
+
+SQLMesh allows you to compare multiple models across environments at once using model selection expressions. This is useful when you want to validate changes across a set of related models or the entire project.
+
+To diff multiple models, use the `--select-model` (or `-m` for short) option with the table diff command:
+
+```bash
+sqlmesh table_diff prod:dev --select-model "sqlmesh_example.*"
+```
+
+When diffing multiple models, SQLMesh will:
+
+1. Show which models exist only in the source environment
+2. Show which models exist only in the target environment
+3. Show which models exist in both environments but have no differences
+4. Compare the models that have differences and display them
+
+The `--select-model` option supports a powerful selection syntax that lets you choose models using patterns, tags, dependencies and git status. For complete details, see the [model selection guide](./model_selection.md).
+
+Here are some common patterns you can use:
+
+### Wildcard Patterns
+- `*` - All models in the project
+- `sqlmesh_example.*` - All models in the sqlmesh_example schema
+
+### Upstream/Downstream Selection
+- `+model_name` - Select the model and its upstream dependencies
+- `model_name+` - Select the model and its downstream dependencies
+- `+model_name+` - Select the model and both its upstream and downstream dependencies
+
+### Tag-based Selection
+- `tag:finance` - All models with the "finance" tag
+- `tag:reporting*` - All models with tags starting with "reporting"
+
+### Git-based Selection
+- `git:feature` - Select models whose files have changed compared to main branch, including:
+  - Untracked files (new files not in git)
+  - Uncommitted changes in working directory
+  - Committed changes different from main branch
+- `+git:feature` - Select changed models and their upstream dependencies
+- `git:feature+` - Select changed models and their downstream dependencies
+
+> Note: Git-based selection excludes deleted files and respects your `.gitignore` settings.
+
+### Logical Operators
+You can combine multiple selectors using logical operators:
+- `&` (AND): Both conditions must be true
+- `|` (OR): Either condition must be true
+- `^` (NOT): Negates a condition
+
+#### Complex Selection Examples
+- `(tag:finance & ^tag:deprecated)` - Models with finance tag that don't have deprecated tag
+- `(+model_a | model_b+)` - Model A and its upstream deps OR model B and its downstream deps
+- `(tag:finance & git:main)` - Changed models that also have the finance tag
+- `^(tag:test) & metrics.*` - Models in metrics schema that don't have the test tag
+
+### Multiple selectors
+
+You can also combine multiple selectors in a single command:
+
+```bash
+sqlmesh table_diff prod:dev -m "tag:finance" -m "metrics.*_daily"
+```
+
+When multiple selectors are provided, they are combined with OR logic, meaning a model matching any of the selectors will be included.
+
+All the standard table diff options like `--show-sample` work with multiple model diffing. The comparisons are executed concurrently for better performance when dealing with a large of project or many models.
+
+> Note: All models being compared must have their `grain` defined, as this is used to perform the join between the tables in the two environments.
+
 ## Diffing tables or views
 
 Compare specific tables or views with the SQLMesh CLI interface by using the command `sqlmesh table_diff [source table]:[target table]`.

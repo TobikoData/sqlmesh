@@ -1612,7 +1612,16 @@ class GenericContext(BaseContext, t.Generic[C]):
             if not target_env:
                 raise SQLMeshError(f"Could not find environment '{target}'")
 
-            selected_models = self._new_selector().expand_model_selections(select_models)
+            try:
+                selected_models = self._new_selector().expand_model_selections(select_models)
+                if not selected_models:
+                    criteria = ", ".join(f"'{c}'" for c in select_models)
+                    self.console.log_status_update(
+                        f"No models matched the selection criteria: {criteria}"
+                    )
+            except Exception as e:
+                raise SQLMeshError(e)
+
             models_to_diff: t.List[
                 t.Tuple[Model, EngineAdapter, str, str, t.Optional[t.List[str] | exp.Condition]]
             ] = []
@@ -1638,7 +1647,10 @@ class GenericContext(BaseContext, t.Generic[C]):
                 elif target_snapshot is None and source_snapshot:
                     models_in_target.append(model_fqn)
                 elif target_snapshot and source_snapshot:
-                    if source_snapshot.fingerprint != target_snapshot.fingerprint:
+                    if (
+                        source_snapshot.fingerprint.data_hash
+                        != target_snapshot.fingerprint.data_hash
+                    ):
                         # Compare the virtual layer instead of the physical layer because the virtual layer is guaranteed to point
                         # to the correct/active snapshot for the model in the specified environment, taking into account things like dev previews
                         source = source_snapshot.qualified_view_name.for_environment(
@@ -1668,32 +1680,37 @@ class GenericContext(BaseContext, t.Generic[C]):
                     )
                     raise SQLMeshError(
                         f"SQLMesh doesn't know how to join the tables for the following models:\n{model_names}\n"
-                        "\nPlease specify the `grains` in each model definition."
+                        "\nPlease specify the `grain` in each model definition. Must be unique and not null."
                     )
 
                 self.console.start_table_diff_progress(len(models_to_diff))
-                tasks_num = min(len(models_to_diff), self.concurrent_tasks)
-                table_diffs = concurrent_apply_to_values(
-                    list(models_to_diff),
-                    lambda model_info: self._model_diff(
-                        model=model_info[0],
-                        adapter=model_info[1],
-                        source=model_info[2],
-                        target=model_info[3],
-                        on=model_info[4],
-                        source_alias=source_env.name,
-                        target_alias=target_env.name,
-                        limit=limit,
-                        decimals=decimals,
-                        skip_columns=skip_columns,
-                        where=where,
-                        show=show,
-                        temp_schema=temp_schema,
-                        skip_grain_check=skip_grain_check,
-                    ),
-                    tasks_num=tasks_num,
-                )
-                self.console.stop_table_diff_progress()
+                try:
+                    tasks_num = min(len(models_to_diff), self.concurrent_tasks)
+                    table_diffs = concurrent_apply_to_values(
+                        list(models_to_diff),
+                        lambda model_info: self._model_diff(
+                            model=model_info[0],
+                            adapter=model_info[1],
+                            source=model_info[2],
+                            target=model_info[3],
+                            on=model_info[4],
+                            source_alias=source_env.name,
+                            target_alias=target_env.name,
+                            limit=limit,
+                            decimals=decimals,
+                            skip_columns=skip_columns,
+                            where=where,
+                            show=show,
+                            temp_schema=temp_schema,
+                            skip_grain_check=skip_grain_check,
+                        ),
+                        tasks_num=tasks_num,
+                    )
+                    self.console.stop_table_diff_progress(success=True)
+                except:
+                    self.console.stop_table_diff_progress(success=False)
+                    raise
+
         else:
             table_diffs = [
                 self._table_diff(
