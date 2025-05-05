@@ -5,6 +5,7 @@ import re
 from datetime import date, timedelta
 from tempfile import TemporaryDirectory
 from unittest.mock import PropertyMock, call, patch
+from IPython.utils.capture import capture_output
 
 import time_machine
 import pytest
@@ -1929,7 +1930,7 @@ def create_log_view(evaluator, view_name):
     assert log_schema["my_schema"][0] == "db__dev"
 
 
-def test_plan_audit_intervals(tmp_path: pathlib.Path, capsys, caplog):
+def test_plan_audit_intervals(tmp_path: pathlib.Path, caplog):
     ctx = Context(
         paths=tmp_path, config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))
     )
@@ -2071,3 +2072,42 @@ def test_audit():
     context.plan(no_prompts=True, auto_apply=True)
 
     assert context.audit(models=["dummy"], start="2020-01-01", end="2020-01-01") is True
+
+
+@use_terminal_console
+def test_audits_running_on_metadata_changes(tmp_path: pathlib.Path):
+    def setup_senario(model_before: str, model_after: str):
+        models_dir = pathlib.Path("models")
+        create_temp_file(tmp_path, pathlib.Path(models_dir, "test.sql"), model_before)
+
+        # Create first snapshot
+        context = Context(paths=tmp_path, config=Config())
+        context.plan("prod", no_prompts=True, auto_apply=True)
+
+        # Create second (metadata) snapshot
+        create_temp_file(tmp_path, pathlib.Path(models_dir, "test.sql"), model_after)
+        context.load()
+
+        with capture_output() as output:
+            with pytest.raises(PlanError):
+                context.plan("prod", no_prompts=True, auto_apply=True)
+
+        assert 'Failed models\n\n  "model"' in output.stdout
+
+        return output
+
+    # Ensure incorrect audits (bad data, incorrect definition etc) are evaluated immediately
+    output = setup_senario(
+        "MODEL (name model); SELECT NULL AS col",
+        "MODEL (name model, audits (not_null(columns=[col]))); SELECT NULL AS col",
+    )
+    assert "'not_null' audit error: 1 row failed" in output.stdout
+
+    output = setup_senario(
+        "MODEL (name model); SELECT NULL AS col",
+        "MODEL (name model, audits (not_null(columns=[this_col_does_not_exist]))); SELECT NULL AS col",
+    )
+    assert (
+        'Binder Error: Referenced column "this_col_does_not_exist" not found in \nFROM clause!'
+        in output.stdout
+    )
