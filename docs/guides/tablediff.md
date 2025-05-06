@@ -135,69 +135,39 @@ sqlmesh table_diff prod:dev --select-model "sqlmesh_example.*"
 
 When diffing multiple models, SQLMesh will:
 
-1. Show the models returnes by the selector that exist in both environments, but have no differences
-2. Compare the models that have differences and display the table diff of each model
-
-The `--select-model` option supports a powerful selection syntax that lets you choose models using patterns, tags, dependencies and git status. For complete details, see the [model selection guide](./model_selection.md).
+1. Show the models returned by the selector that exist in both environments, but have no differences
+2. Compare the models that have differences and display the data diff of each model
 
 > Note: Models will only be data diffed if there's a breaking change that impacts them.
 
-Here are some common patterns you can use:
+The `--select-model` option supports a powerful selection syntax that lets you choose models using patterns, tags, dependencies and git status. For complete details, see the [model selection guide](./model_selection.md).
 
 > Note: Surround your selection pattern in single or double quotes. Ex: `'*'`, `"sqlmesh_example.*"`
 
-### Wildcard Patterns
-
-- `*` - All models in the project
-- `sqlmesh_example.*` - All models in the sqlmesh_example schema
-
-### Upstream/Downstream Selection
-
-- `+model_name` - Select the model and its upstream dependencies
-- `model_name+` - Select the model and its downstream dependencies
-- `+model_name+` - Select the model and both its upstream and downstream dependencies
-
-### Tag-based Selection
-
-- `tag:finance` - All models with the "finance" tag
-- `tag:reporting*` - All models with tags starting with "reporting"
-
-### Git-based Selection
-
-- `git:feature` - Select models whose files have changed compared to main branch, including:
-  - Untracked files (new files not in git)
-  - Uncommitted changes in working directory
-  - Committed changes different from main branch
-- `+git:feature` - Select changed models and their upstream dependencies
-- `git:feature+` - Select changed models and their downstream dependencies
-
-> Note: Git-based selection excludes deleted files and respects your `.gitignore` settings.
-
-### Logical Operators
-
-You can combine multiple selectors using logical operators:
-- `&` (AND): Both conditions must be true
-- `|` (OR): Either condition must be true
-- `^` (NOT): Negates a condition
-
-#### Complex Selection Examples
-
-- `(tag:finance & ^tag:deprecated)` - Models with finance tag that don't have deprecated tag
-- `(+model_a | model_b+)` - Model A and its upstream deps OR model B and its downstream deps
-- `(tag:finance & git:main)` - Changed models that also have the finance tag
-- `^(tag:test) & metrics.*` - Models in metrics schema that don't have the test tag
-
-### Multiple selectors
-
-You can also combine multiple selectors in a single command:
+Here are some common examples:
 
 ```bash
+# Select all models in a schema
+sqlmesh table_diff prod:dev -m "sqlmesh_example.*"
+
+# Select a model and its dependencies
+sqlmesh table_diff prod:dev -m "+model_name"  # include upstream deps
+sqlmesh table_diff prod:dev -m "model_name+"  # include downstream deps
+
+# Select models by tag
+sqlmesh table_diff prod:dev -m "tag:finance"
+
+# Select models with git changes
+sqlmesh table_diff prod:dev -m "git:feature"
+
+# Use logical operators for complex selections
+sqlmesh table_diff prod:dev -m "(metrics.* & ^tag:deprecated)"  # finance models that aren't deprecated
+
+# Combine multiple selectors
 sqlmesh table_diff prod:dev -m "tag:finance" -m "metrics.*_daily"
 ```
 
 When multiple selectors are provided, they are combined with OR logic, meaning a model matching any of the selectors will be included.
-
-All the standard table diff options like `--show-sample` work with multiple model diffing. The comparisons are executed concurrently for better performance when dealing with a large project or many models.
 
 > Note: All models being compared must have their `grain` defined that is unique and not null, as this is used to perform the join between the tables in the two environments.
 

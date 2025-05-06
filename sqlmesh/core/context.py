@@ -1588,7 +1588,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             on: The join condition, table aliases must be "s" and "t" for source and target.
                 If omitted, the table's grain will be used.
             skip_columns: The columns to skip when computing the table diff.
-            select_models: The modelσ or snapshotσ to use when environments are passed in.
+            select_models: The models or snapshots to use when environments are passed in.
             where: An optional where statement to filter results.
             limit: The limit of the sample dataframe.
             show: Show the table diff output in the console.
