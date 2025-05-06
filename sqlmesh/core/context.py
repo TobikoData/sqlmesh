@@ -1696,7 +1696,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                 except:
                     self.console.stop_table_diff_progress(success=False)
                     raise
-            else:
+            elif selected_models:
                 self.console.log_status_update(
                     f"No models contain differences with the selection criteria: {criteria}"
                 )
