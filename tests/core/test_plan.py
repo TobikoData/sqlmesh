@@ -3105,3 +3105,10 @@ def test_set_choice_for_forward_only_model(make_snapshot):
         plan.snapshots[updated_snapshot.snapshot_id].change_category
         == SnapshotChangeCategory.FORWARD_ONLY
     )
+
+
+def test_flags(sushi_context: Context):
+    plan = sushi_context.plan(no_prompts=True, run=True, execution_time="2025-01-01")
+    sushi_context.apply(plan)
+
+    assert plan.flags == {"no_prompts": True, "run": True, "execution_time": "2025-01-01"}

@@ -63,6 +63,8 @@ class Plan(PydanticModel, frozen=True):
     effective_from: t.Optional[TimeLike] = None
     execution_time: t.Optional[TimeLike] = None
 
+    flags: t.Optional[t.Dict[str, t.Any]] = None
+
     @cached_property
     def start(self) -> TimeLike:
         if self.provided_start is not None:

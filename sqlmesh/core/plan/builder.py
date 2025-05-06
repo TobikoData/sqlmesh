@@ -107,6 +107,7 @@ class PlanBuilder:
         ensure_finalized_snapshots: bool = False,
         interval_end_per_model: t.Optional[t.Dict[str, int]] = None,
         console: t.Optional[PlanBuilderConsole] = None,
+        flags: t.Optional[t.Dict[str, t.Any]] = None,
     ):
         self._context_diff = context_diff
         self._no_gaps = no_gaps
@@ -134,6 +135,7 @@ class PlanBuilder:
         self._engine_schema_differ = engine_schema_differ
         self._console = console or get_console()
         self._choices: t.Dict[SnapshotId, SnapshotChangeCategory] = {}
+        self._flags = flags
 
         self._start = start
         if not self._start and (
@@ -280,6 +282,7 @@ class PlanBuilder:
             execution_time=self._execution_time,
             end_bounded=self._end_bounded,
             ensure_finalized_snapshots=self._ensure_finalized_snapshots,
+            flags=self._flags,
         )
         self._latest_plan = plan
         return plan
