@@ -562,3 +562,136 @@ Column: value
 """
 
     assert strip_ansi_codes(output) == expected_output.strip()
+
+
+@pytest.mark.slow
+def test_data_diff_multiple_models(sushi_context_fixed_date, capsys, caplog):
+    # Create first analytics model
+    expressions = d.parse(
+        """
+        MODEL (name memory.sushi.analytics_1, kind full, grain(key), tags (finance),);
+        SELECT
+            key,
+            value,
+        FROM
+            (VALUES
+                (1, 3),
+                (2, 4),
+            ) AS t (key, value)
+    """
+    )
+    model_s = load_sql_based_model(expressions, dialect="snowflake")
+    sushi_context_fixed_date.upsert_model(model_s)
+
+    # Create second analytics model from analytics_1
+    expressions_2 = d.parse(
+        """
+        MODEL (name memory.sushi.analytics_2, kind full, grain(key), tags (finance),);
+        SELECT
+            key,
+            value as amount,
+        FROM
+            memory.sushi.analytics_1
+    """
+    )
+    model_s2 = load_sql_based_model(expressions_2, dialect="snowflake")
+    sushi_context_fixed_date.upsert_model(model_s2)
+
+    sushi_context_fixed_date.plan(
+        "source_dev",
+        no_prompts=True,
+        auto_apply=True,
+        skip_tests=True,
+        start="2023-01-31",
+        end="2023-01-31",
+    )
+
+    # Modify first model
+    model = sushi_context_fixed_date.models['"MEMORY"."SUSHI"."ANALYTICS_1"']
+    modified_model = model.dict()
+    modified_model["query"] = (
+        exp.select("*")
+        .from_(model.query.subquery())
+        .union("SELECT key, value FROM (VALUES (1, 6),(2,3),) AS t (key, value)")
+    )
+    modified_sqlmodel = SqlModel(**modified_model)
+    sushi_context_fixed_date.upsert_model(modified_sqlmodel)
+
+    # Modify second model
+    model2 = sushi_context_fixed_date.models['"MEMORY"."SUSHI"."ANALYTICS_2"']
+    modified_model2 = model2.dict()
+    modified_model2["query"] = (
+        exp.select("*")
+        .from_(model2.query.subquery())
+        .union("SELECT key, amount FROM (VALUES (5, 150.2),(6,250.2),) AS t (key, amount)")
+    )
+    modified_sqlmodel2 = SqlModel(**modified_model2)
+    sushi_context_fixed_date.upsert_model(modified_sqlmodel2)
+
+    sushi_context_fixed_date.auto_categorize_changes = CategorizerConfig(
+        sql=AutoCategorizationMode.FULL
+    )
+    sushi_context_fixed_date.plan(
+        "target_dev",
+        create_from="source_dev",
+        no_prompts=True,
+        auto_apply=True,
+        skip_tests=True,
+        start="2023-01-31",
+        end="2023-01-31",
+    )
+
+    # Get diffs for both models
+    selector = {"tag:finance & memory.sushi.analytics*"}
+    diffs = sushi_context_fixed_date.table_diff(
+        source="source_dev",
+        target="target_dev",
+        on=["key"],
+        select_models=selector,
+        skip_grain_check=False,
+    )
+
+    assert len(diffs) == 2
+
+    # Check analytics_1 diff
+    diff1 = next(d for d in diffs if "ANALYTICS_1" in d.source)
+    row_diff1 = diff1.row_diff()
+    assert row_diff1.full_match_count == 2
+    assert row_diff1.full_match_pct == 50.0
+    assert row_diff1.s_only_count == 0
+    assert row_diff1.t_only_count == 0
+    assert row_diff1.stats["join_count"] == 4
+    assert row_diff1.stats["null_grain_count"] == 0
+    assert row_diff1.stats["s_count"] == 4
+    assert row_diff1.stats["distinct_count_s"] == 2
+    assert row_diff1.stats["t_count"] == 4
+    assert row_diff1.stats["distinct_count_t"] == 2
+    assert row_diff1.s_sample.shape == (0, 2)
+    assert row_diff1.t_sample.shape == (0, 2)
+
+    # Check analytics_2 diff
+    diff2 = next(d for d in diffs if "ANALYTICS_2" in d.source)
+    row_diff2 = diff2.row_diff()
+    assert row_diff2.full_match_count == 2
+    assert row_diff2.full_match_pct == 40.0
+    assert row_diff2.s_only_count == 0
+    assert row_diff2.t_only_count == 2
+    assert row_diff2.stats["join_count"] == 4
+    assert row_diff2.stats["null_grain_count"] == 0
+    assert row_diff2.stats["s_count"] == 4
+    assert row_diff2.stats["distinct_count_s"] == 2
+    assert row_diff2.stats["t_count"] == 6
+    assert row_diff2.stats["distinct_count_t"] == 4
+    assert row_diff2.s_sample.shape == (0, 2)
+    assert row_diff2.t_sample.shape == (2, 2)
+
+    # This selector shouldn't return any diffs since both models have this tag
+    selector = {"^tag:finance"}
+    diffs = sushi_context_fixed_date.table_diff(
+        source="source_dev",
+        target="target_dev",
+        on=["key"],
+        select_models=selector,
+        skip_grain_check=False,
+    )
+    assert len(diffs) == 0
