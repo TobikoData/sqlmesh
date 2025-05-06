@@ -324,7 +324,7 @@ def test_run_dag(
         "'Evaluating models ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 18/18"
     )
     assert not output.stderr
-    assert len(output.outputs) == 2
+    assert len(output.outputs) == 6
     assert convert_all_html_output_to_text(output) == [
         "✔ Model batches executed",
         "Run finished for environment 'prod'",

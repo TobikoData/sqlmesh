@@ -2850,13 +2850,13 @@ class MarkdownConsole(CaptureTerminalConsole):
             )
             return
 
-        self._print(f"**Summary of differences from `{context_diff.environment}`:**\n")
+        self._print(f"\n**Summary of differences from `{context_diff.environment}`:**")
 
         if context_diff.has_requirement_changes:
-            self._print(f"Requirements:\n{context_diff.requirements_diff()}")
+            self._print(f"\nRequirements:\n{context_diff.requirements_diff()}")
 
         if context_diff.has_environment_statements_changes and not no_diff:
-            self._print("[bold]Environment statements:\n")
+            self._print("\nEnvironment statements:\n")
             for _, diff in context_diff.environment_statements_diff(
                 include_python_env=not context_diff.is_new_environment
             ):

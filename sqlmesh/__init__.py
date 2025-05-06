@@ -64,6 +64,19 @@ class RuntimeEnv(str, Enum):
 
         Unlike the rich implementation we try to split out by notebook type instead of treating it all as Jupyter.
         """
+        runtime_env_var = os.getenv("SQLMESH_RUNTIME_ENVIRONMENT")
+        if runtime_env_var:
+            runtime_env_var = runtime_env_var.lower().strip().replace(" ", "").replace("-", "_")
+            runtime_env_var = "non_interactive" if runtime_env_var == "ci" else runtime_env_var
+            runtime_env_var = "debugger" if "debug" in runtime_env_var else runtime_env_var
+            try:
+                return RuntimeEnv(runtime_env_var)
+            except ValueError:
+                valid_values = [f'"{member.value}"' for member in RuntimeEnv] + ['"ci"']
+                raise ValueError(
+                    f"Invalid SQLMESH_RUNTIME_ENVIRONMENT value: {runtime_env_var}. Must be one of {', '.join(valid_values)}."
+                )
+
         try:
             shell = get_ipython()  # type: ignore
             if os.getenv("DATABRICKS_RUNTIME_VERSION"):
@@ -78,11 +91,7 @@ class RuntimeEnv(str, Enum):
         if debug_mode_enabled():
             return RuntimeEnv.DEBUGGER
 
-        if (
-            is_cicd_environment()
-            or not is_interactive_environment()
-            or str_to_bool(os.environ.get("SQLMESH_NON_INTERACTIVE_TERMINAL", "false"))
-        ):
+        if is_cicd_environment() or not is_interactive_environment():
             return RuntimeEnv.NON_INTERACTIVE
 
         return RuntimeEnv.TERMINAL
