@@ -1966,7 +1966,13 @@ def load_sql_based_models(
         if not rendered_blueprints:
             raise_config_error("Failed to render blueprints property", path)
 
-        blueprints = t.cast(t.List, rendered_blueprints)[0]
+        # Help mypy see that rendered_blueprints can't be None
+        assert rendered_blueprints
+
+        if len(rendered_blueprints) > 1:
+            rendered_blueprints = [exp.Tuple(expressions=rendered_blueprints)]
+
+        blueprints = rendered_blueprints[0]
 
     return create_models_from_blueprints(
         gateway=gateway,
