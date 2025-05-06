@@ -18,6 +18,8 @@ import {
   handleSqlmeshLspNotFoundError,
   handleSqlmeshLspDependenciesMissingError,
 } from './utilities/errors'
+import { completionProvider } from './completion/completion'
+import { selector } from './completion/completion'
 
 let lspClient: LSPClient | undefined
 
@@ -81,6 +83,13 @@ export async function activate(context: vscode.ExtensionContext) {
   } else {
     context.subscriptions.push(lspClient)
   }
+
+  context.subscriptions.push(
+    vscode.languages.registerCompletionItemProvider(
+      selector,
+      completionProvider(lspClient),
+    ),
+  )
 
   const restart = async () => {
     if (lspClient) {

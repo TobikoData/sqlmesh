@@ -11,7 +11,9 @@ from pygls.server import LanguageServer
 from sqlmesh._version import __version__
 from sqlmesh.core.context import Context
 from sqlmesh.core.linter.definition import AnnotatedRuleViolation
+from sqlmesh.lsp.completions import get_sql_completions
 from sqlmesh.lsp.context import LSPContext
+from sqlmesh.lsp.custom import ALL_MODELS_FEATURE, AllModelsRequest, AllModelsResponse
 from sqlmesh.lsp.reference import get_model_definitions_for_a_path
 
 
@@ -37,6 +39,14 @@ class SQLMeshLanguageServer:
 
     def _register_features(self) -> None:
         """Register LSP features on the internal LanguageServer instance."""
+
+        @self.server.feature(ALL_MODELS_FEATURE)
+        def all_models(ls: LanguageServer, params: AllModelsRequest) -> AllModelsResponse:
+            try:
+                context = self._context_get_or_load(params.textDocument.uri)
+                return get_sql_completions(context, params.textDocument.uri)
+            except Exception as e:
+                return get_sql_completions(None, params.textDocument.uri)
 
         @self.server.feature(types.TEXT_DOCUMENT_DID_OPEN)
         def did_open(ls: LanguageServer, params: types.DidOpenTextDocumentParams) -> None:
