@@ -47,8 +47,10 @@ def get_keywords(context: t.Optional[LSPContext], file_uri: t.Optional[str]) -> 
         models = context.map[file_uri]
         if models:
             model = models[0]
-            if context.context.get_model(model) is not None:
-                return get_keywords_from_tokenizer(context.context.get_model(model).dialect)
+            model_from_context = context.context.get_model(model)
+            if model_from_context is not None:
+                if model_from_context.dialect:
+                    return get_keywords_from_tokenizer(model_from_context.dialect)
     if context is not None:
         return get_keywords_from_tokenizer(context.context.default_dialect)
     return get_keywords_from_tokenizer(None)
