@@ -317,7 +317,6 @@ class Console(
     with them when their input is needed."""
 
     INDIRECTLY_MODIFIED_DISPLAY_THRESHOLD = 10
-    TABLE_DIFF_MODELS_DISPLAY_THRESHOLD = 5
 
     @abc.abstractmethod
     def start_plan_evaluation(self, plan: EvaluatablePlan) -> None:
