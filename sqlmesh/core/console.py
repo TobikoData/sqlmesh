@@ -2845,8 +2845,12 @@ class MarkdownConsole(CaptureTerminalConsole):
                 return
 
         if not context_diff.has_changes:
-            self._print(f"**No differences when compared to `{context_diff.environment}`**\n")
+            self._print(
+                f"\n**No changes to plan: project files match the `{context_diff.environment}` environment**\n"
+            )
             return
+
+        self._print(f"**Summary of differences from `{context_diff.environment}`:**\n")
 
         if context_diff.has_requirement_changes:
             self._print(f"Requirements:\n{context_diff.requirements_diff()}")

@@ -287,15 +287,15 @@ def test_merge_pr_has_non_breaking_change(
     assert GithubCheckStatus(prod_plan_preview_checks_runs[1]["status"]).is_in_progress
     assert GithubCheckStatus(prod_plan_preview_checks_runs[2]["status"]).is_completed
     assert GithubCheckConclusion(prod_plan_preview_checks_runs[2]["conclusion"]).is_success
-    expected_prod_plan_summary = """**Summary of differences against `prod`:**
+    expected_prod_plan_summary = """**Summary of differences from `prod`:**
 
 
 **Directly Modified:**
 - `sushi.waiter_revenue_by_day`
 ```diff
---- 
+---
 
-+++ 
++++
 
 @@ -16,7 +16,8 @@
 
@@ -484,15 +484,15 @@ def test_merge_pr_has_non_breaking_change_diff_start(
     assert GithubCheckStatus(prod_plan_preview_checks_runs[2]["status"]).is_completed
     assert GithubCheckConclusion(prod_plan_preview_checks_runs[2]["conclusion"]).is_success
     assert prod_plan_preview_checks_runs[2]["output"]["title"] == "Prod Plan Preview"
-    expected_prod_plan = """**Summary of differences against `prod`:**
+    expected_prod_plan = """**Summary of differences from `prod`:**
 
 
 **Directly Modified:**
 - `sushi.waiter_revenue_by_day`
 ```diff
---- 
+---
 
-+++ 
++++
 
 @@ -16,7 +16,8 @@
 
@@ -827,7 +827,9 @@ def test_merge_pr_has_no_changes(
     assert GithubCheckStatus(prod_plan_preview_checks_runs[1]["status"]).is_in_progress
     assert GithubCheckStatus(prod_plan_preview_checks_runs[2]["status"]).is_completed
     assert GithubCheckConclusion(prod_plan_preview_checks_runs[2]["conclusion"]).is_success
-    expected_prod_plan_summary = "**No differences when compared to `prod`**\n\n\n"
+    expected_prod_plan_summary = (
+        "\n**No changes to plan: project files match the `prod` environment**\n\n\n"
+    )
     assert prod_plan_preview_checks_runs[2]["output"]["title"] == "Prod Plan Preview"
     assert prod_plan_preview_checks_runs[2]["output"]["summary"] == expected_prod_plan_summary
 
@@ -990,15 +992,15 @@ def test_no_merge_since_no_deploy_signal(
     assert GithubCheckStatus(prod_plan_preview_checks_runs[1]["status"]).is_in_progress
     assert GithubCheckStatus(prod_plan_preview_checks_runs[2]["status"]).is_completed
     assert GithubCheckConclusion(prod_plan_preview_checks_runs[2]["conclusion"]).is_success
-    expected_prod_plan = """**Summary of differences against `prod`:**
+    expected_prod_plan = """**Summary of differences from `prod`:**
 
 
 **Directly Modified:**
 - `sushi.waiter_revenue_by_day`
 ```diff
---- 
+---
 
-+++ 
++++
 
 @@ -16,7 +16,8 @@
 
@@ -1171,15 +1173,15 @@ def test_no_merge_since_no_deploy_signal_no_approvers_defined(
     assert GithubCheckStatus(prod_plan_preview_checks_runs[1]["status"]).is_in_progress
     assert GithubCheckStatus(prod_plan_preview_checks_runs[2]["status"]).is_completed
     assert GithubCheckConclusion(prod_plan_preview_checks_runs[2]["conclusion"]).is_success
-    expected_prod_plan = """**Summary of differences against `prod`:**
+    expected_prod_plan = """**Summary of differences from `prod`:**
 
 
 **Directly Modified:**
 - `sushi.waiter_revenue_by_day`
 ```diff
---- 
+---
 
-+++ 
++++
 
 @@ -16,7 +16,8 @@
 
@@ -1341,15 +1343,15 @@ def test_deploy_comment_pre_categorized(
     assert GithubCheckStatus(prod_plan_preview_checks_runs[1]["status"]).is_in_progress
     assert GithubCheckStatus(prod_plan_preview_checks_runs[2]["status"]).is_completed
     assert GithubCheckConclusion(prod_plan_preview_checks_runs[2]["conclusion"]).is_success
-    expected_prod_plan = """**Summary of differences against `prod`:**
+    expected_prod_plan = """**Summary of differences from `prod`:**
 
 
 **Directly Modified:**
 - `sushi.waiter_revenue_by_day`
 ```diff
---- 
+---
 
-+++ 
++++
 
 @@ -16,7 +16,8 @@
 
@@ -1680,15 +1682,15 @@ def test_overlapping_changes_models(
     assert GithubCheckStatus(prod_plan_preview_checks_runs[1]["status"]).is_in_progress
     assert GithubCheckStatus(prod_plan_preview_checks_runs[2]["status"]).is_completed
     assert GithubCheckConclusion(prod_plan_preview_checks_runs[2]["conclusion"]).is_success
-    expected_prod_plan_summary = """**Summary of differences against `prod`:**
+    expected_prod_plan_summary = """**Summary of differences from `prod`:**
 
 
 **Directly Modified:**
 - `sushi.customers`
 ```diff
---- 
+---
 
-+++ 
++++
 
 @@ -25,7 +25,8 @@
 
@@ -1875,7 +1877,7 @@ def test_pr_delete_model(
         == """<table><thead><tr><th colspan="3">PR Environment Summary</th></tr><tr><th>Model</th><th>Change Type</th><th>Dates Loaded</th></tr></thead><tbody><tr><td>"memory"."sushi"."top_waiters"</td><td>Breaking</td><td>REMOVED</td></tr></tbody></table>"""
     )
 
-    expected_prod_plan_summary = """**Summary of differences against `prod`:**
+    expected_prod_plan_summary = """**Summary of differences from `prod`:**
 
 
 **Removed Models:**
