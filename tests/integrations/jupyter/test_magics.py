@@ -644,7 +644,7 @@ def test_table_diff(notebook, loaded_sushi_context, convert_all_html_output_to_t
 
     assert len(output.outputs) == 1
     assert convert_all_html_output_to_text(output) == [
-        'Models without changes:\n└── "memory"."sushi"."top_waiters"'
+        "No models contain differences with the selection criteria: 'sushi.top_waiters'"
     ]
 
 

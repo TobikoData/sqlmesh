@@ -1611,11 +1611,10 @@ class GenericContext(BaseContext, t.Generic[C]):
                 raise SQLMeshError(f"Could not find environment '{source}'")
             if not target_env:
                 raise SQLMeshError(f"Could not find environment '{target}'")
-
+            criteria = ", ".join(f"'{c}'" for c in select_models)
             try:
                 selected_models = self._new_selector().expand_model_selections(select_models)
                 if not selected_models:
-                    criteria = ", ".join(f"'{c}'" for c in select_models)
                     self.console.log_status_update(
                         f"No models matched the selection criteria: {criteria}"
                     )
@@ -1701,6 +1700,10 @@ class GenericContext(BaseContext, t.Generic[C]):
                 except:
                     self.console.stop_table_diff_progress(success=False)
                     raise
+            else:
+                self.console.log_status_update(
+                    f"No models contain differences with the selection criteria: {criteria}"
+                )
 
         else:
             table_diffs = [
