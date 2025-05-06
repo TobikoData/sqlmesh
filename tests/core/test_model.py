@@ -9662,3 +9662,43 @@ def test_invalid_audit_reference():
 
     with pytest.raises(ConfigError, match="Audit 'not_nulll' is undefined"):
         load_sql_based_model(expressions)
+
+
+def test_scd_time_data_type_does_not_cause_diff_after_deserialization() -> None:
+    for dialect in (
+        "athena",
+        "bigquery",
+        "clickhouse",
+        "databricks",
+        "duckdb",
+        "dune",
+        "hive",
+        "mysql",
+        "postgres",
+        "presto",
+        "redshift",
+        "snowflake",
+        "spark",
+        "trino",
+        "tsql",
+    ):
+        sql = f"""
+        MODEL (
+          name test_schema.test_model,
+          kind SCD_TYPE_2_BY_COLUMN (
+            unique_key ARRAY(col),
+            columns ARRAY(col),
+            invalidate_hard_deletes TRUE,
+            on_destructive_change error
+          ),
+          dialect {dialect}
+        );
+
+        SELECT
+          1 AS col
+        """
+
+        model = load_sql_based_model(d.parse(sql))
+        deserialized_model = SqlModel.parse_raw(model.json())
+
+        assert model.data_hash == deserialized_model.data_hash
