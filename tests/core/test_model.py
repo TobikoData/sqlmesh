@@ -9332,6 +9332,7 @@ def test_python_env_references_are_unequal_but_point_to_same_definition(tmp_path
 
     db_path = str(tmp_path / "db.db")
     db_connection = DuckDBConnectionConfig(database=db_path)
+
     config = Config(
         gateways={"duckdb": GatewayConfig(connection=db_connection)},
         model_defaults=ModelDefaultsConfig(dialect="duckdb"),
@@ -9447,3 +9448,95 @@ def f():
 
     with pytest.raises(SQLMeshError, match=r"duplicate definitions found"):
         Context(paths=tmp_path, config=config)
+
+
+def test_semicolon_is_not_included_in_model_state(tmp_path, assert_exp_eq):
+    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+
+    db_connection = DuckDBConnectionConfig(database=str(tmp_path / "db.db"))
+    config = Config(
+        gateways={"duckdb": GatewayConfig(connection=db_connection)},
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+    )
+
+    model_file = tmp_path / "models" / "model_with_semicolon.sql"
+    model_file.write_text(
+        """
+        MODEL (
+          name sqlmesh_example.incremental_model_with_semicolon,
+          kind INCREMENTAL_BY_TIME_RANGE (
+            time_column event_date
+          ),
+          start '2020-01-01',
+          cron '@daily',
+          grain (id, event_date)
+        );
+
+        SELECT
+          1 AS id,
+          1 AS item_id,
+          CAST('2020-01-01' AS DATE) AS event_date
+        ;
+
+        --Just a comment
+        """
+    )
+
+    ctx = Context(paths=tmp_path, config=config)
+    model = ctx.get_model("sqlmesh_example.incremental_model_with_semicolon")
+
+    assert not model.pre_statements
+    assert not model.post_statements
+
+    assert_exp_eq(
+        model.render_query(),
+        'SELECT 1 AS "id", 1 AS "item_id", CAST(\'2020-01-01\' AS DATE) AS "event_date"',
+    )
+    ctx.format()
+
+    assert (
+        model_file.read_text()
+        == """MODEL (
+  name sqlmesh_example.incremental_model_with_semicolon,
+  kind INCREMENTAL_BY_TIME_RANGE (
+    time_column event_date
+  ),
+  start '2020-01-01',
+  cron '@daily',
+  grain (id, event_date)
+);
+
+SELECT
+  1 AS id,
+  1 AS item_id,
+  '2020-01-01'::DATE AS event_date;
+
+/* Just a comment */"""
+    )
+
+    ctx.plan(no_prompts=True, auto_apply=True)
+
+    model_file = tmp_path / "models" / "model_with_semicolon.sql"
+    model_file.write_text(
+        """
+        MODEL (
+          name sqlmesh_example.incremental_model_with_semicolon,
+          kind INCREMENTAL_BY_TIME_RANGE (
+            time_column event_date
+          ),
+          start '2020-01-01',
+          cron '@daily',
+          grain (id, event_date)
+        );
+
+        SELECT
+          1 AS id,
+          1 AS item_id,
+          CAST('2020-01-01' AS DATE) AS event_date
+        """
+    )
+
+    ctx.load()
+    plan = ctx.plan(no_prompts=True, auto_apply=True)
+
+    assert not plan.context_diff.modified_snapshots
