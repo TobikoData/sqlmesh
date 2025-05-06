@@ -318,6 +318,7 @@ class Console(
     with them when their input is needed."""
 
     INDIRECTLY_MODIFIED_DISPLAY_THRESHOLD = 10
+    TABLE_DIFF_MODELS_DISPLAY_THRESHOLD = 5
 
     @abc.abstractmethod
     def start_plan_evaluation(self, plan: EvaluatablePlan) -> None:
@@ -1988,7 +1989,10 @@ class TerminalConsole(Console):
     ) -> None:
         """Display information about which tables are identical and which are diffed"""
 
-        if models_no_diff:
+        if (
+            len(models_no_diff) < self.TABLE_DIFF_MODELS_DISPLAY_THRESHOLD
+            or self.verbosity == Verbosity.VERY_VERBOSE
+        ):
             m_tree = Tree("\n[b]Models without changes:")
             for m in models_no_diff:
                 m_tree.add(f"[{self.TABLE_DIFF_SOURCE_BLUE}]{m}[/{self.TABLE_DIFF_SOURCE_BLUE}]")

@@ -135,8 +135,8 @@ sqlmesh table_diff prod:dev --select-model "sqlmesh_example.*"
 
 When diffing multiple models, SQLMesh will:
 
-1. Show the models returned by the selector that exist in both environments, but have no differences
-2. Compare the models that have differences and display the data diff of each model
+1. Show the models returned by the selector that exist in both environments and have differences
+2. Compare these models and display the data diff of each model
 
 > Note: Models will only be data diffed if there's a breaking change that impacts them.
 
