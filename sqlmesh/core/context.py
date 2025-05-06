@@ -1660,12 +1660,11 @@ class GenericContext(BaseContext, t.Generic[C]):
                     else:
                         models_no_diff.append(model_fqn)
 
-            self.console.show_table_diff_details(
-                models_no_diff,
-                [model[0].name for model in models_to_diff],
-            )
-
             if models_to_diff:
+                self.console.show_table_diff_details(
+                    models_no_diff,
+                    [model[0].name for model in models_to_diff],
+                )
                 if models_without_grain:
                     model_names = "\n".join(
                         f"─ {model.name} \n  at '{model._path}'" for model in models_without_grain

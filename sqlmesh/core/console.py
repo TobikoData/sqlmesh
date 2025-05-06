@@ -1990,7 +1990,8 @@ class TerminalConsole(Console):
         """Display information about which tables are identical and which are diffed"""
 
         if (
-            len(models_no_diff) < self.TABLE_DIFF_MODELS_DISPLAY_THRESHOLD
+            models_no_diff
+            and len(models_no_diff) < self.TABLE_DIFF_MODELS_DISPLAY_THRESHOLD
             or self.verbosity == Verbosity.VERY_VERBOSE
         ):
             m_tree = Tree("\n[b]Models without changes:")
