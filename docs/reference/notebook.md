@@ -293,7 +293,7 @@ Create a schema file containing external model schemas.
 %table_diff [--on [ON ...]] [--skip-columns [SKIP_COLUMNS ...]]
                 [--model MODEL] [--where WHERE] [--limit LIMIT]
                 [--show-sample] [--decimals DECIMALS] [--skip-grain-check]
-                [--temp-schema SCHEMA]
+                [--temp-schema SCHEMA] [--select-model [SELECT_MODEL ...]]
                 SOURCE:TARGET
 
 Show the diff between two tables.
@@ -320,6 +320,8 @@ options:
   --skip-grain-check    Disable the check for a primary key (grain) that is
                         missing or is not unique.
   --temp-schema SCHEMA  The schema to use for temporary tables.
+  --select-model <[SELECT_MODEL ...]>
+                        Select specific models to diff using a pattern.
 ```
 
 #### model

@@ -892,18 +892,26 @@ def create_external_models(obj: Context, **kwargs: t.Any) -> None:
     type=str,
     help="Schema used for temporary tables. It can be `CATALOG.SCHEMA` or `SCHEMA`. Default: `sqlmesh_temp`",
 )
+@click.option(
+    "--select-model",
+    "-m",
+    type=str,
+    multiple=True,
+    help="Specify one or more models to data diff. Use wildcards to diff multiple models. Ex: '*' (all models with applied plan diffs), 'demo.model+' (this and downstream models), 'git:feature_branch' (models with direct modifications in this branch only)",
+)
 @click.pass_obj
 @error_handler
 @cli_analytics
 def table_diff(
     obj: Context, source_to_target: str, model: t.Optional[str], **kwargs: t.Any
 ) -> None:
-    """Show the diff between two tables."""
+    """Show the diff between two tables or a selection of models when they are specified."""
     source, target = source_to_target.split(":")
+    select_models = {model} if model else kwargs.pop("select_model", None)
     obj.table_diff(
         source=source,
         target=target,
-        model_or_snapshot=model,
+        select_models=select_models,
         **kwargs,
     )
 
