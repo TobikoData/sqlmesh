@@ -59,12 +59,16 @@ def get_model_definitions_for_a_path(
         if unaliased.args.get("alias") is not None:
             unaliased.set("alias", None)
         reference_name = unaliased.sql(dialect=model.dialect)
-        normalized_reference_name = normalize_model_name(
-            reference_name,
-            default_catalog=lint_context.context.default_catalog,
-            dialect=model.dialect,
-        )
-        if normalized_reference_name not in depends_on:
+        try:
+            normalized_reference_name = normalize_model_name(
+                reference_name,
+                default_catalog=lint_context.context.default_catalog,
+                dialect=model.dialect,
+            )
+            if normalized_reference_name not in depends_on:
+                continue
+        except Exception:
+            # Skip references that cannot be normalized
             continue
 
         # Get the referenced model uri
