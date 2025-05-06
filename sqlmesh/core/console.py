@@ -250,9 +250,10 @@ class TableDiffConsole(abc.ABC):
     @abc.abstractmethod
     def show_table_diff_details(
         self,
+        models_no_diff: t.List[str],
         models_to_diff: t.List[str],
     ) -> None:
-        """Display information about which tables are going to be diffed"""
+        """Display information about which tables are identical and which are diffed"""
 
     @abc.abstractmethod
     def show_table_diff_summary(self, table_diff: TableDiff) -> None:
@@ -716,6 +717,7 @@ class NoopConsole(Console):
 
     def show_table_diff_details(
         self,
+        models_no_diff: t.List[str],
         models_to_diff: t.List[str],
     ) -> None:
         pass
@@ -1981,9 +1983,16 @@ class TerminalConsole(Console):
 
     def show_table_diff_details(
         self,
+        models_no_diff: t.List[str],
         models_to_diff: t.List[str],
     ) -> None:
-        """Display information about which tables are going to be diffed"""
+        """Display information about which tables are identical and which are diffed"""
+
+        if models_no_diff:
+            m_tree = Tree("\n[b]Models without changes:")
+            for m in models_no_diff:
+                m_tree.add(f"[{self.TABLE_DIFF_SOURCE_BLUE}]{m}[/{self.TABLE_DIFF_SOURCE_BLUE}]")
+            self._print(m_tree)
 
         if models_to_diff:
             m_tree = Tree("\n[b]Models to compare:")
