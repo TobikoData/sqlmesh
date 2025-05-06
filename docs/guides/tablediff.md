@@ -161,7 +161,7 @@ sqlmesh table_diff prod:dev -m "tag:finance"
 sqlmesh table_diff prod:dev -m "git:feature"
 
 # Use logical operators for complex selections
-sqlmesh table_diff prod:dev -m "(metrics.* & ^tag:deprecated)"  # finance models that aren't deprecated
+sqlmesh table_diff prod:dev -m "(metrics.* & ^tag:deprecated)"  # models in the metrics schema that aren't deprecated
 
 # Combine multiple selectors
 sqlmesh table_diff prod:dev -m "tag:finance" -m "metrics.*_daily"
