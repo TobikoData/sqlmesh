@@ -367,9 +367,32 @@ def entrypoint(
     )
 ```
 
-!!! note
+Blueprint variable mappings can also be constructed dynamically, e.g., by using a macro: `blueprints="@gen_blueprints()"`. This is useful in cases where the `blueprints` list needs to be sourced from external sources, such as CSV files.
 
-    Blueprint variable mappings can also be evaluated dynamically, by using a macro (i.e. `blueprints="@gen_blueprints()"`). This is useful in cases where the `blueprints` list needs to be sourced from external sources, e.g. CSV files.
+For example, the definition of the `gen_blueprints` may look like this:
+
+```python linenums="1"
+from sqlmesh import macro
+
+@macro()
+def gen_blueprints(evaluator):
+    return (
+        "((customer := customer1, field_a := x, field_b := y),"
+        " (customer := customer2, field_a := z, field_b := w))"
+    )
+```
+
+It's also possible to use the `@EACH` macro, combined with a global list variable (`@values`):
+
+```python linenums="1"
+
+@model(
+    "@{customer}.some_table",
+    blueprints="@EACH(@values, x -> (customer := schema_@x))",
+    ...
+)
+...
+```
 
 ## Examples
 ### Basic

@@ -8493,10 +8493,10 @@ def entrypoint(evaluator):
     )
 
 
-def test_dynamic_blueprinting(tmp_path: Path) -> None:
+def test_dynamic_blueprinting_using_custom_macro(tmp_path: Path) -> None:
     init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
 
-    dynamic_template_sql = tmp_path / "models/dynamic_template.sql"
+    dynamic_template_sql = tmp_path / "models/dynamic_template_custom_macro.sql"
     dynamic_template_sql.parent.mkdir(parents=True, exist_ok=True)
     dynamic_template_sql.write_text(
         """
@@ -8514,7 +8514,7 @@ def test_dynamic_blueprinting(tmp_path: Path) -> None:
         """
     )
 
-    dynamic_template_py = tmp_path / "models/dynamic_template.py"
+    dynamic_template_py = tmp_path / "models/dynamic_template_custom_macro.py"
     dynamic_template_py.parent.mkdir(parents=True, exist_ok=True)
     dynamic_template_py.write_text(
         """
@@ -8554,6 +8554,53 @@ def gen_blueprints(evaluator):
     assert '"memory"."customer2"."some_table"' in ctx.models
     assert '"memory"."customer1"."some_other_table"' in ctx.models
     assert '"memory"."customer2"."some_other_table"' in ctx.models
+
+
+def test_dynamic_blueprinting_using_each(tmp_path: Path) -> None:
+    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+
+    dynamic_template_sql = tmp_path / "models/dynamic_template_each.sql"
+    dynamic_template_sql.parent.mkdir(parents=True, exist_ok=True)
+    dynamic_template_sql.write_text(
+        """
+        MODEL (
+          name @customer.some_table,
+          kind FULL,
+          blueprints @EACH(@values, x -> (customer := schema_@x)),
+        );
+
+        SELECT
+          1 AS c
+        """
+    )
+
+    dynamic_template_py = tmp_path / "models/dynamic_template_each.py"
+    dynamic_template_py.parent.mkdir(parents=True, exist_ok=True)
+    dynamic_template_py.write_text(
+        """
+from sqlmesh import model
+
+@model(
+    "@{customer}.some_other_table",
+    kind="FULL",
+    blueprints="@EACH(@values, x -> (customer := schema_@x))",
+    is_sql=True,
+)
+def entrypoint(evaluator):
+    return "SELECT 1 AS c"
+"""
+    )
+
+    model_defaults = ModelDefaultsConfig(dialect="duckdb")
+    variables = {"values": ["customer1", "customer2"]}
+    config = Config(model_defaults=model_defaults, variables=variables)
+    ctx = Context(config=config, paths=tmp_path)
+
+    assert len(ctx.models) == 4
+    assert '"memory"."schema_customer1"."some_table"' in ctx.models
+    assert '"memory"."schema_customer2"."some_table"' in ctx.models
+    assert '"memory"."schema_customer1"."some_other_table"' in ctx.models
+    assert '"memory"."schema_customer2"."some_other_table"' in ctx.models
 
 
 def test_single_blueprint(tmp_path: Path) -> None:
