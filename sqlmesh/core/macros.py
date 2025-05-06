@@ -500,21 +500,21 @@ class MacroEvaluator:
     def this_env(self) -> str:
         """Returns the name of the current environment in before after all."""
         if "this_env" not in self.locals:
-            raise SQLMeshError("Environment name is not available in this context")
+            raise SQLMeshError("Environment name is only available in before_all and after_all")
         return self.locals["this_env"]
 
     @property
     def schemas(self) -> t.List[str]:
         """Returns the schemas of the current environment in before after all macros."""
         if "schemas" not in self.locals:
-            raise SQLMeshError("Schemas are not available in this context")
+            raise SQLMeshError("Schemas are only available in before_all and after_all")
         return self.locals["schemas"]
 
     @property
     def views(self) -> t.List[str]:
         """Returns the views of the current environment in before after all macros."""
         if "views" not in self.locals:
-            raise SQLMeshError("Views are not available in this context")
+            raise SQLMeshError("Views are only available in before_all and after_all")
         return self.locals["views"]
 
     def var(self, var_name: str, default: t.Optional[t.Any] = None) -> t.Optional[t.Any]:
