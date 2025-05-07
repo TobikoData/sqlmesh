@@ -1342,7 +1342,18 @@ def test_audits():
     """
     )
 
-    model = load_sql_based_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
+    audit_definitions = {
+        audit_name: load_audit(
+            d.parse(f"AUDIT (name {audit_name}); SELECT 1 WHERE FALSE"), dialect="duckdb"
+        )
+        for audit_name in ("audit_a", "audit_b", "audit_c")
+    }
+
+    model = load_sql_based_model(
+        expressions,
+        path=Path("./examples/sushi/models/test_model.sql"),
+        audit_definitions=audit_definitions,
+    )
     assert model.audits == [
         ("audit_a", {}),
         ("audit_b", {"key": exp.Literal.string("value")}),
@@ -9587,3 +9598,19 @@ SELECT
     plan = ctx.plan(no_prompts=True, auto_apply=True)
 
     assert not plan.context_diff.modified_snapshots
+
+
+def test_invalid_audit_reference():
+    sql = """
+    MODEL (
+      name test,
+      audits (not_nulll (columns := (id)))
+    );
+
+    SELECT
+      1 AS id
+    """
+    expressions = d.parse(sql)
+
+    with pytest.raises(ConfigError, match="Audit 'not_nulll' is undefined"):
+        load_sql_based_model(expressions)
