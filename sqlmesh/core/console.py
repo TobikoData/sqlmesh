@@ -78,9 +78,6 @@ SNAPSHOT_CHANGE_CATEGORY_STR = {
 
 PROGRESS_BAR_WIDTH = 40
 LINE_WRAP_WIDTH = 100
-CHECK_MARK = "\u2714"
-GREEN_CHECK_MARK = f"[green]{CHECK_MARK}[/green]"
-RED_X_MARK = "\u274c"
 
 
 class LinterConsole(abc.ABC):
@@ -770,6 +767,11 @@ class TerminalConsole(Console):
 
     TABLE_DIFF_SOURCE_BLUE = "#0248ff"
     TABLE_DIFF_TARGET_GREEN = "green"
+    AUDIT_PASS_MARK = "\u2714"
+    GREEN_AUDIT_PASS_MARK = f"[green]{AUDIT_PASS_MARK}[/green]"
+    AUDIT_FAIL_MARK = "\u274c"
+    AUDIT_PADDING = 0
+    CHECK_MARK = f"{AUDIT_PASS_MARK} "
 
     def __init__(
         self,
@@ -879,7 +881,9 @@ class TerminalConsole(Console):
             progress_table.add_row(self.evaluation_total_progress)
             progress_table.add_row(self.evaluation_model_progress)
 
-            self.evaluation_progress_live = Live(progress_table, refresh_per_second=10)
+            self.evaluation_progress_live = Live(
+                progress_table, console=self.console, refresh_per_second=10
+            )
             self.evaluation_progress_live.start()
 
             batch_sizes = {
@@ -891,7 +895,7 @@ class TerminalConsole(Console):
 
             # determine column widths
             self.evaluation_column_widths["annotation"] = (
-                _calculate_annotation_str_len(batched_intervals)
+                _calculate_annotation_str_len(batched_intervals, self.AUDIT_PADDING)
                 + 3  # brackets and opening escape backslash
             )
             self.evaluation_column_widths["name"] = max(
@@ -956,13 +960,16 @@ class TerminalConsole(Console):
                 )
                 audits_str = ""
                 if num_audits_passed:
-                    audits_str += f" {CHECK_MARK}{num_audits_passed}"
+                    audits_str += f" {self.AUDIT_PASS_MARK}{num_audits_passed}"
                 if num_audits_failed:
-                    audits_str += f" {RED_X_MARK}{num_audits_failed}"
+                    audits_str += f" {self.AUDIT_FAIL_MARK}{num_audits_failed}"
                 audits_str = f", audits{audits_str}" if audits_str else ""
                 annotation_len = self.evaluation_column_widths["annotation"]
+                # don't adjust the annotation_len if we're using AUDIT_PADDING
                 annotation = f"\\[{annotation + audits_str}]".ljust(
-                    annotation_len - 1 if num_audits_failed else annotation_len
+                    annotation_len - 1
+                    if num_audits_failed and self.AUDIT_PADDING == 0
+                    else annotation_len
                 )
 
                 duration = f"{(duration_ms / 1000.0):.2f}s".ljust(
@@ -970,7 +977,7 @@ class TerminalConsole(Console):
                 )
 
                 msg = f"{batch} {display_name}   {annotation}   {duration}".replace(
-                    CHECK_MARK, GREEN_CHECK_MARK
+                    self.AUDIT_PASS_MARK, self.GREEN_AUDIT_PASS_MARK
                 )
 
                 self.evaluation_progress_live.console.print(msg)
@@ -989,7 +996,7 @@ class TerminalConsole(Console):
         if self.evaluation_progress_live:
             self.evaluation_progress_live.stop()
             if success:
-                self.log_success(f"{GREEN_CHECK_MARK} Model batches executed")
+                self.log_success(f"{self.CHECK_MARK}Model batches executed")
 
         self.evaluation_progress_live = None
         self.evaluation_total_progress = None
@@ -1053,7 +1060,7 @@ class TerminalConsole(Console):
             self.creation_progress.stop()
             self.creation_progress = None
             if success:
-                self.log_success(f"\n{GREEN_CHECK_MARK} Physical layer updated")
+                self.log_success(f"\n{self.CHECK_MARK}Physical layer updated")
 
         self.environment_naming_info = EnvironmentNamingInfo()
         self.default_catalog = None
@@ -1154,7 +1161,7 @@ class TerminalConsole(Console):
             self.promotion_progress.stop()
             self.promotion_progress = None
             if success:
-                self.log_success(f"\n{GREEN_CHECK_MARK} Virtual layer updated")
+                self.log_success(f"\n{self.CHECK_MARK}Virtual layer updated")
 
         self.environment_naming_info = EnvironmentNamingInfo()
         self.default_catalog = None
@@ -2807,6 +2814,12 @@ class MarkdownConsole(CaptureTerminalConsole):
     where you want to display a plan or test results in markdown.
     """
 
+    CHECK_MARK = ""
+    AUDIT_PASS_MARK = "passed "
+    GREEN_AUDIT_PASS_MARK = AUDIT_PASS_MARK
+    AUDIT_FAIL_MARK = "failed "
+    AUDIT_PADDING = 7
+
     def __init__(self, **kwargs: t.Any) -> None:
         super().__init__(**{**kwargs, "console": RichConsole(no_color=True)})
 
@@ -2822,23 +2835,28 @@ class MarkdownConsole(CaptureTerminalConsole):
             no_diff: Hide the actual environment statements differences.
         """
         if context_diff.is_new_environment:
-            self._print(
-                f"**New environment `{context_diff.environment}` will be created from `{context_diff.create_from}`**\n"
+            msg = (
+                f"\n**`{context_diff.environment}` environment will be initialized**"
+                if not context_diff.create_from_env_exists
+                else f"\n**New environment `{context_diff.environment}` will be created from `{context_diff.create_from}`**"
             )
+            self._print(msg)
             if not context_diff.has_snapshot_changes:
                 return
 
         if not context_diff.has_changes:
-            self._print(f"**No differences when compared to `{context_diff.environment}`**\n")
+            self._print(
+                f"\n**No changes to plan: project files match the `{context_diff.environment}` environment**\n"
+            )
             return
 
-        self._print(f"**Summary of differences against `{context_diff.environment}`:**\n")
+        self._print(f"\n**Summary of differences from `{context_diff.environment}`:**")
 
         if context_diff.has_requirement_changes:
-            self._print(f"Requirements:\n{context_diff.requirements_diff()}")
+            self._print(f"\nRequirements:\n{context_diff.requirements_diff()}")
 
         if context_diff.has_environment_statements_changes and not no_diff:
-            self._print("[bold]Environment statements:\n")
+            self._print("\nEnvironment statements:\n")
             for _, diff in context_diff.environment_statements_diff(
                 include_python_env=not context_diff.is_new_environment
             ):
@@ -2984,7 +3002,7 @@ class MarkdownConsole(CaptureTerminalConsole):
                 dialect=self.dialect,
             )
             snapshots.append(
-                f"* `{display_name}`: [{_format_missing_intervals(snapshot, missing)}]{preview_modifier}"
+                f"* `{display_name}`: \\[{_format_missing_intervals(snapshot, missing)}]{preview_modifier}"
             )
 
         length = len(snapshots)
@@ -3032,6 +3050,21 @@ class MarkdownConsole(CaptureTerminalConsole):
             self._print("```\n")
             self._print(tree)
             self._print("\n```")
+
+    def stop_evaluation_progress(self, success: bool = True) -> None:
+        super().stop_evaluation_progress(success)
+        self._print("\n")
+
+    def stop_creation_progress(self, success: bool = True) -> None:
+        super().stop_creation_progress(success)
+        self._print("\n")
+
+    def stop_promotion_progress(self, success: bool = True) -> None:
+        super().stop_promotion_progress(success)
+        self._print("\n")
+
+    def log_success(self, message: str) -> None:
+        self._print(message)
 
     def log_test_results(
         self, result: unittest.result.TestResult, output: t.Optional[str], target_dialect: str
@@ -3081,6 +3114,12 @@ class MarkdownConsole(CaptureTerminalConsole):
     def log_warning(self, short_message: str, long_message: t.Optional[str] = None) -> None:
         logger.warning(long_message or short_message)
         self._print(f"```\n\\[WARNING] {short_message}```\n\n")
+
+    def _print(self, value: t.Any, **kwargs: t.Any) -> None:
+        self.console.print(value, **kwargs)
+        with self.console.capture() as capture:
+            self.console.print(value, **kwargs)
+        self._captured_outputs.append(capture.get())
 
 
 class DatabricksMagicConsole(CaptureTerminalConsole):
@@ -3473,6 +3512,7 @@ def create_console(
         RuntimeEnv.TERMINAL: TerminalConsole,
         RuntimeEnv.GOOGLE_COLAB: NotebookMagicConsole,
         RuntimeEnv.DEBUGGER: DebuggerTerminalConsole,
+        RuntimeEnv.CI: MarkdownConsole,
     }
     rich_console_kwargs: t.Dict[str, t.Any] = {"theme": srich.theme}
     if runtime_env.is_jupyter or runtime_env.is_google_colab:
@@ -3598,7 +3638,7 @@ def _calculate_interval_str_len(snapshot: Snapshot, intervals: t.List[Interval])
     return interval_str_len
 
 
-def _calculate_audit_str_len(snapshot: Snapshot) -> int:
+def _calculate_audit_str_len(snapshot: Snapshot, audit_padding: int = 0) -> int:
     # The annotation includes audit results. We cannot build the audits result string
     # until after evaluation occurs, but we must determine the annotation column width here.
     # Therefore, we add enough padding for the longest possible audits result string.
@@ -3619,21 +3659,38 @@ def _calculate_audit_str_len(snapshot: Snapshot) -> int:
         )
         if num_audits == 1:
             # +1 for "1" audit count, +1 for red X
-            audit_len = audit_base_str_len + (2 if num_nonblocking_audits else 1)
+            # if audit_padding is > 0 we're using "failed" instead of red X
+            audit_len = (
+                audit_base_str_len
+                + (2 if num_nonblocking_audits else 1)
+                + (
+                    audit_padding - 1
+                    if num_nonblocking_audits and audit_padding > 0
+                    else audit_padding
+                )
+            )
         else:
-            audit_len = audit_base_str_len + len(str(num_audits))
+            audit_len = audit_base_str_len + len(str(num_audits)) + audit_padding
             if num_nonblocking_audits:
                 # +1 for space, +1 for red X
-                audit_len += len(str(num_nonblocking_audits)) + 2
+                # if audit_padding is > 0 we're using "failed" instead of red X
+                audit_len += (
+                    len(str(num_nonblocking_audits))
+                    + 2
+                    + (audit_padding - 1 if audit_padding > 0 else audit_padding)
+                )
         audit_str_len = max(audit_str_len, audit_len)
     return audit_str_len
 
 
-def _calculate_annotation_str_len(batched_intervals: t.Dict[Snapshot, t.List[Interval]]) -> int:
+def _calculate_annotation_str_len(
+    batched_intervals: t.Dict[Snapshot, t.List[Interval]], audit_padding: int = 0
+) -> int:
     annotation_str_len = 0
     for snapshot, intervals in batched_intervals.items():
         annotation_str_len = max(
             annotation_str_len,
-            _calculate_interval_str_len(snapshot, intervals) + _calculate_audit_str_len(snapshot),
+            _calculate_interval_str_len(snapshot, intervals)
+            + _calculate_audit_str_len(snapshot, audit_padding),
         )
     return annotation_str_len
