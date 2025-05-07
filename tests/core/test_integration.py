@@ -18,6 +18,7 @@ import time_machine
 from pytest_mock.plugin import MockerFixture
 from sqlglot import exp
 from sqlglot.expressions import DataType
+import re
 
 from sqlmesh import CustomMaterialization
 from sqlmesh.cli.example_project import init_example_project
@@ -5499,6 +5500,46 @@ def test_plan_production_environment_statements(tmp_path: Path):
         Exception, match=r"Catalog Error: Table with name not_create does not exist!"
     ):
         ctx.fetchdf("select * from not_create")
+
+
+def test_environment_statements_error_handling(tmp_path: Path):
+    model_a = """
+    MODEL (
+        name test_schema.a,
+        kind FULL,
+    );
+
+    SELECT 1 AS account_id
+    """
+
+    models_dir = tmp_path / "models"
+    models_dir.mkdir()
+
+    for path, defn in {"a.sql": model_a}.items():
+        with open(models_dir / path, "w") as f:
+            f.write(defn)
+
+    before_all = [
+        "CREATE TABLE identical_table (physical_schema_name VARCHAR)",
+        "CREATE TABLE identical_table (physical_schema_name VARCHAR)",
+    ]
+
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        before_all=before_all,
+    )
+    ctx = Context(paths=[tmp_path], config=config)
+
+    expected_error_message = re.escape(
+        """An error occurred during execution of:
+
+CREATE TABLE identical_table (physical_schema_name TEXT)
+
+Catalog Error: Table with name "identical_table" already exists!"""
+    )
+
+    with pytest.raises(SQLMeshError, match=expected_error_message):
+        ctx.plan(auto_apply=True, no_prompts=True)
 
 
 @time_machine.travel("2025-03-08 00:00:00 UTC")

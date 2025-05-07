@@ -14,6 +14,7 @@ from sqlmesh.core.renderer import render_statements
 from sqlmesh.core.snapshot import SnapshotId, SnapshotTableInfo, Snapshot
 from sqlmesh.utils import word_characters_only
 from sqlmesh.utils.date import TimeLike, now_timestamp
+from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.jinja import JinjaMacroRegistry
 from sqlmesh.utils.metaprogramming import Executable
 from sqlmesh.utils.pydantic import PydanticModel, field_validator, ValidationInfo
@@ -282,4 +283,7 @@ def execute_environment_statements(
     if rendered_expressions:
         with adapter.transaction():
             for expr in rendered_expressions:
-                adapter.execute(expr)
+                try:
+                    adapter.execute(expr)
+                except Exception as e:
+                    raise SQLMeshError(f"An error occurred during execution of:\n\n{expr}\n\n{e}")
