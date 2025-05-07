@@ -19,3 +19,10 @@ airflow_config = sqlmesh_config(
     default_scheduler=AirflowSchedulerConfig(),
     variables=variables,
 )
+
+
+test_config_with_normalization_strategy = sqlmesh_config(
+    Path(__file__).parent,
+    variables=variables,
+    model_defaults=ModelDefaultsConfig(dialect="duckdb,normalization_strategy=LOWERCASE"),
+)

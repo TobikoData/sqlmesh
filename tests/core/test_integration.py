@@ -3945,6 +3945,14 @@ def test_dbt_requirements(sushi_dbt_context: Context):
     assert sushi_dbt_context.requirements["dbt-duckdb"].startswith("1.")
 
 
+@time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_dbt_dialect_with_normalization_strategy(init_and_plan_context: t.Callable):
+    context, _ = init_and_plan_context(
+        "tests/fixtures/dbt/sushi_test", config="test_config_with_normalization_strategy"
+    )
+    assert context.default_dialect == "duckdb,normalization_strategy=LOWERCASE"
+
+
 @pytest.mark.parametrize(
     "context_fixture",
     ["sushi_context", "sushi_dbt_context", "sushi_test_dbt_context", "sushi_no_default_catalog"],
