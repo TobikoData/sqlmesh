@@ -1,7 +1,7 @@
 import path from 'path'
 import { traceInfo, traceLog, traceVerbose } from '../common/log'
 import { getInterpreterDetails } from '../common/python'
-import { Result, err, isErr, ok } from '../functional/result'
+import { Result, err, isErr, ok } from '@bus/result'
 import { getProjectRoot } from '../common/utilities'
 import { isPythonModuleInstalled } from '../python'
 import fs from 'fs'

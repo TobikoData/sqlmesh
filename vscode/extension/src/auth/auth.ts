@@ -9,7 +9,7 @@ import {
   window,
 } from 'vscode'
 import { get_tcloud_bin } from '../utilities/sqlmesh/sqlmesh'
-import { err, isErr, ok, Result } from '../utilities/functional/result'
+import { err, isErr, ok, Result } from '@bus/result'
 import { execAsync } from '../utilities/exec'
 import { getProjectRoot } from '../utilities/common/utilities'
 import z from 'zod'

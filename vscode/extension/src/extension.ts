@@ -12,7 +12,7 @@ import { AuthenticationProviderTobikoCloud } from './auth/auth'
 import { signOut } from './commands/signout'
 import { signIn } from './commands/signin'
 import { signInSpecifyFlow } from './commands/signinSpecifyFlow'
-import { isErr } from './utilities/functional/result'
+import { isErr } from '@bus/result'
 import {
   handleNotSginedInError,
   handleSqlmeshLspNotFoundError,
