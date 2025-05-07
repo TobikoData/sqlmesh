@@ -2248,6 +2248,114 @@ def test_indirect_non_breaking_view_model_non_representative_snapshot_migration(
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
+@pytest.mark.parametrize(
+    "parent_a_category,parent_b_category,expected_child_category",
+    [
+        (
+            SnapshotChangeCategory.BREAKING,
+            SnapshotChangeCategory.BREAKING,
+            SnapshotChangeCategory.INDIRECT_BREAKING,
+        ),
+        (
+            SnapshotChangeCategory.NON_BREAKING,
+            SnapshotChangeCategory.NON_BREAKING,
+            SnapshotChangeCategory.INDIRECT_NON_BREAKING,
+        ),
+        (
+            SnapshotChangeCategory.BREAKING,
+            SnapshotChangeCategory.NON_BREAKING,
+            SnapshotChangeCategory.INDIRECT_NON_BREAKING,
+        ),
+        (
+            SnapshotChangeCategory.NON_BREAKING,
+            SnapshotChangeCategory.BREAKING,
+            SnapshotChangeCategory.INDIRECT_BREAKING,
+        ),
+        (
+            SnapshotChangeCategory.NON_BREAKING,
+            SnapshotChangeCategory.METADATA,
+            SnapshotChangeCategory.METADATA,
+        ),
+        (
+            SnapshotChangeCategory.BREAKING,
+            SnapshotChangeCategory.METADATA,
+            SnapshotChangeCategory.METADATA,
+        ),
+        (
+            SnapshotChangeCategory.METADATA,
+            SnapshotChangeCategory.BREAKING,
+            SnapshotChangeCategory.INDIRECT_BREAKING,
+        ),
+        (
+            SnapshotChangeCategory.METADATA,
+            SnapshotChangeCategory.NON_BREAKING,
+            SnapshotChangeCategory.INDIRECT_NON_BREAKING,
+        ),
+        (
+            SnapshotChangeCategory.METADATA,
+            SnapshotChangeCategory.METADATA,
+            SnapshotChangeCategory.METADATA,
+        ),
+        (
+            SnapshotChangeCategory.FORWARD_ONLY,
+            SnapshotChangeCategory.BREAKING,
+            SnapshotChangeCategory.INDIRECT_BREAKING,
+        ),
+        (
+            SnapshotChangeCategory.BREAKING,
+            SnapshotChangeCategory.FORWARD_ONLY,
+            SnapshotChangeCategory.FORWARD_ONLY,
+        ),
+        (
+            SnapshotChangeCategory.FORWARD_ONLY,
+            SnapshotChangeCategory.FORWARD_ONLY,
+            SnapshotChangeCategory.FORWARD_ONLY,
+        ),
+    ],
+)
+def test_rebase_two_changed_parents(
+    init_and_plan_context: t.Callable,
+    parent_a_category: SnapshotChangeCategory,  # This change is deployed to prod first
+    parent_b_category: SnapshotChangeCategory,  # This change is deployed to prod second
+    expected_child_category: SnapshotChangeCategory,
+):
+    context, plan = init_and_plan_context("examples/sushi")
+    context.apply(plan)
+
+    initial_model_a = context.get_model("sushi.orders")
+    initial_model_b = context.get_model("sushi.items")
+
+    # Make change A and deploy it to dev_a
+    context.upsert_model(initial_model_a.name, stamp="1")
+    plan_builder = context.plan_builder("dev_a", skip_tests=True)
+    plan_builder.set_choice(context.get_snapshot(initial_model_a.name), parent_a_category)
+    context.apply(plan_builder.build())
+
+    # Make change B and deploy it to dev_b
+    context.upsert_model(initial_model_a)
+    context.upsert_model(initial_model_b.name, stamp="1")
+    plan_builder = context.plan_builder("dev_b", skip_tests=True)
+    plan_builder.set_choice(context.get_snapshot(initial_model_b.name), parent_b_category)
+    context.apply(plan_builder.build())
+
+    # Deploy change A to prod
+    context.upsert_model(initial_model_a.name, stamp="1")
+    context.upsert_model(initial_model_b)
+    context.plan("prod", auto_apply=True, no_prompts=True, skip_tests=True)
+
+    # Apply change B in addition to A and plan against prod
+    context.upsert_model(initial_model_b.name, stamp="1")
+    plan = context.plan_builder("prod", skip_tests=True).build()
+
+    # Validate the category of child snapshots
+    direct_child_snapshot = plan.snapshots[context.get_snapshot("sushi.order_items").snapshot_id]
+    assert direct_child_snapshot.change_category == expected_child_category
+
+    indirect_child_snapshot = plan.snapshots[context.get_snapshot("sushi.top_waiters").snapshot_id]
+    assert indirect_child_snapshot.change_category == expected_child_category
+
+
+@time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_unaligned_start_snapshot_with_non_deployable_downstream(init_and_plan_context: t.Callable):
     context, _ = init_and_plan_context("examples/sushi")
 
