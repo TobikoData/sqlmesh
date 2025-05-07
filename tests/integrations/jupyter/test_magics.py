@@ -22,6 +22,9 @@ logger = logging.getLogger(__name__)
 SUSHI_EXAMPLE_PATH = pathlib.Path("./examples/sushi")
 SUCCESS_STYLE = "color: #008000; text-decoration-color: #008000"
 NEUTRAL_STYLE = "color: #008080; text-decoration-color: #008080"
+BOLD_ONLY = "font-weight: bold"
+BOLD_NEUTRAL_STYLE = f"{NEUTRAL_STYLE}; {BOLD_ONLY}"
+BOLD_SUCCESS_STYLE = f"{SUCCESS_STYLE}; {BOLD_ONLY}"
 RICH_PRE_STYLE = "white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace"
 FREEZE_TIME = "2023-01-01 00:00:00 UTC"
 
@@ -289,9 +292,6 @@ def test_plan(
     with capture_output() as output:
         notebook.run_line_magic(magic_name="plan", line="--no-prompts --auto-apply")
 
-    # TODO: Should this be going to stdout? This is printing the status updates for when each batch finishes for
-    # the models and how long it took
-    assert len(output.stdout.strip().split("\n")) == 46
     assert not output.stderr
     assert len(output.outputs) == 4
     text_output = convert_all_html_output_to_text(output)
@@ -321,15 +321,215 @@ def test_run_dag(
         notebook.run_line_magic(magic_name="run_dag", line="")
 
     assert not output.stdout.startswith(
-        "'Evaluating models ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 18/18"
+        "'Executing model batches ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 18/18"
     )
     assert not output.stderr
     assert len(output.outputs) == 6
-    assert convert_all_html_output_to_text(output) == [
+    html_text_actual = convert_all_html_output_to_text(output)
+    html_text_expected = [
+        "[2K",
+        "Executing model batches ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╸━━ 93.8% • 15/16 • 0:00:",
+        "[1/1] sushi.waiter_as_customer_by_day   [insert 2023-01-01 - 2023-01-02, audits ✔2]",
+        "",
         "✔ Model batches executed",
         "Run finished for environment 'prod'",
     ]
-    assert get_all_html_output(output) == [
+    for txt_actual, txt_expected in zip(html_text_actual, html_text_expected):
+        assert txt_actual.startswith(txt_expected)
+    actual_html_output = get_all_html_output(output)
+    # Replace dynamic elapsed time with 00
+    for i, chunk in enumerate(actual_html_output):
+        pattern = 'font\-weight: bold">0\.</span>\\d{2}s   </pre>'
+        import re
+
+        actual_html_output[i] = re.sub(pattern, 'font-weight: bold">0.</span>00s   </pre>', chunk)
+    expected_html_output = [
+        str(
+            h(
+                "pre",
+                {"style": RICH_PRE_STYLE},
+                "\x1b",
+                h(
+                    "span",
+                    {"style": BOLD_ONLY},
+                    "[",
+                    autoescape=False,
+                ),
+                "2K",
+                autoescape=False,
+            )
+        ),
+        str(
+            h(
+                "pre",
+                {"style": RICH_PRE_STYLE},
+                h(
+                    "span",
+                    {"style": "color: #000080; text-decoration-color: #000080; font-weight: bold"},
+                    "Executing model batches",
+                    autoescape=False,
+                ),
+                " ",
+                h(
+                    "span",
+                    {"style": "color: #f92672; text-decoration-color: #f92672"},
+                    "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╸",
+                    autoescape=False,
+                ),
+                h(
+                    "span",
+                    {"style": "color: #3a3a3a; text-decoration-color: #3a3a3a"},
+                    "━━",
+                    autoescape=False,
+                ),
+                " ",
+                h(
+                    "span",
+                    {"style": "color: #800080; text-decoration-color: #800080"},
+                    "93.8%",
+                    autoescape=False,
+                ),
+                " • ",
+                h(
+                    "span",
+                    {"style": SUCCESS_STYLE},
+                    "15/16",
+                    autoescape=False,
+                ),
+                " • ",
+                h(
+                    "span",
+                    {"style": "color: #808000; text-decoration-color: #808000"},
+                    "0:00:00",
+                    autoescape=False,
+                ),
+                "sushi.waiter_as_customer_by_day ",
+                h(
+                    "span",
+                    {"style": SUCCESS_STYLE},
+                    ".. ",
+                    autoescape=False,
+                ),
+                "                                                     ",
+                autoescape=False,
+            )
+        ),
+        str(
+            h(
+                "pre",
+                {"style": RICH_PRE_STYLE},
+                h(
+                    "span",
+                    {"style": BOLD_ONLY},
+                    "[",
+                    autoescape=False,
+                ),
+                h(
+                    "span",
+                    {"style": BOLD_NEUTRAL_STYLE},
+                    "1",
+                    autoescape=False,
+                ),
+                "/",
+                h(
+                    "span",
+                    {"style": BOLD_NEUTRAL_STYLE},
+                    "1",
+                    autoescape=False,
+                ),
+                h(
+                    "span",
+                    {"style": BOLD_ONLY},
+                    "]",
+                    autoescape=False,
+                ),
+                " sushi.waiter_as_customer_by_day   ",
+                h(
+                    "span",
+                    {"style": BOLD_ONLY},
+                    "[",
+                    autoescape=False,
+                ),
+                "insert ",
+                h(
+                    "span",
+                    {"style": BOLD_NEUTRAL_STYLE},
+                    "2023",
+                    autoescape=False,
+                ),
+                "-",
+                h(
+                    "span",
+                    {"style": BOLD_NEUTRAL_STYLE},
+                    "01",
+                    autoescape=False,
+                ),
+                "-",
+                h(
+                    "span",
+                    {"style": BOLD_NEUTRAL_STYLE},
+                    "01",
+                    autoescape=False,
+                ),
+                " - ",
+                h(
+                    "span",
+                    {"style": BOLD_NEUTRAL_STYLE},
+                    "2023",
+                    autoescape=False,
+                ),
+                "-",
+                h(
+                    "span",
+                    {"style": BOLD_NEUTRAL_STYLE},
+                    "01",
+                    autoescape=False,
+                ),
+                "-",
+                h(
+                    "span",
+                    {"style": BOLD_NEUTRAL_STYLE},
+                    "02",
+                    autoescape=False,
+                ),
+                ", audits ",
+                h(
+                    "span",
+                    {"style": SUCCESS_STYLE},
+                    "✔",
+                    autoescape=False,
+                ),
+                h(
+                    "span",
+                    {"style": BOLD_NEUTRAL_STYLE},
+                    "2",
+                    autoescape=False,
+                ),
+                h(
+                    "span",
+                    {"style": BOLD_ONLY},
+                    "]",
+                    autoescape=False,
+                ),
+                "   ",
+                h(
+                    "span",
+                    {"style": BOLD_NEUTRAL_STYLE},
+                    "0.",
+                    autoescape=False,
+                ),
+                "00s   ",
+                autoescape=False,
+            )
+        ),
+        str(
+            h(
+                "pre",
+                {"style": RICH_PRE_STYLE},
+                "",
+                autoescape=False,
+            )
+        ),
         str(
             h(
                 "pre",
