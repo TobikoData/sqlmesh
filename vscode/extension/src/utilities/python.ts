@@ -1,5 +1,5 @@
 import { getInterpreterDetails } from './common/python'
-import { err, ok, Result } from './functional/result'
+import { err, ok, Result } from '@bus/result'
 import { traceInfo } from './common/log'
 import { promisify } from 'util'
 import { execFile } from 'child_process'

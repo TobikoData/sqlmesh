@@ -1,6 +1,6 @@
 import * as vscode from 'vscode'
 import { LSPClient } from '../lsp/lsp'
-import { isErr } from '../utilities/functional/result'
+import { isErr } from '@bus/result'
 
 export const selector: vscode.DocumentSelector = {
   pattern: '**/*.sql',

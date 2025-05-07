@@ -6,7 +6,7 @@ import {
   TransportKind,
 } from 'vscode-languageclient/node'
 import { sqlmesh_lsp_exec } from '../utilities/sqlmesh/sqlmesh'
-import { err, isErr, ok, Result } from '../utilities/functional/result'
+import { err, isErr, ok, Result } from '@bus/result'
 import { getWorkspaceFolders } from '../utilities/common/vscodeapi'
 import { traceError } from '../utilities/common/log'
 import { ErrorType } from '../utilities/errors'

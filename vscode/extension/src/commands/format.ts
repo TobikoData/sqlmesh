@@ -1,7 +1,7 @@
 import { traceLog } from '../utilities/common/log'
 import { execSync } from 'child_process'
 import { sqlmesh_exec } from '../utilities/sqlmesh/sqlmesh'
-import { err, isErr, ok, Result } from '../utilities/functional/result'
+import { err, isErr, ok, Result } from '@bus/result'
 import * as vscode from 'vscode'
 import {
   ErrorType,

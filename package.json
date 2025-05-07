@@ -4,6 +4,7 @@
     "web/client"
   ],
   "scripts": {
+    "ci": "npm run ci --workspaces",
     "fmt": "prettier --write .",
     "fmt:check": "prettier --check .",
     "lint": "npm run fmt:check && npm run lint --workspaces",
