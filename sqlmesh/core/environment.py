@@ -286,4 +286,6 @@ def execute_environment_statements(
                 try:
                     adapter.execute(expr)
                 except Exception as e:
-                    raise SQLMeshError(f"An error occurred during execution of:\n\n{expr}\n\n{e}")
+                    raise SQLMeshError(
+                        f"An error occurred during execution of the following `{runtime_stage.value}` statement:\n\n{expr}\n\n{e}"
+                    )

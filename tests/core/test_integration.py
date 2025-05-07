@@ -5531,7 +5531,7 @@ def test_environment_statements_error_handling(tmp_path: Path):
     ctx = Context(paths=[tmp_path], config=config)
 
     expected_error_message = re.escape(
-        """An error occurred during execution of:
+        """An error occurred during execution of the following `before_all` statement:
 
 CREATE TABLE identical_table (physical_schema_name TEXT)
 
