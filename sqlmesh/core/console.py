@@ -3512,7 +3512,7 @@ def create_console(
         RuntimeEnv.TERMINAL: TerminalConsole,
         RuntimeEnv.GOOGLE_COLAB: NotebookMagicConsole,
         RuntimeEnv.DEBUGGER: DebuggerTerminalConsole,
-        RuntimeEnv.NON_INTERACTIVE: MarkdownConsole,
+        RuntimeEnv.CI: MarkdownConsole,
     }
     rich_console_kwargs: t.Dict[str, t.Any] = {"theme": srich.theme}
     if runtime_env.is_jupyter or runtime_env.is_google_colab:

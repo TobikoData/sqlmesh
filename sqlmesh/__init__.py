@@ -55,7 +55,7 @@ class RuntimeEnv(str, Enum):
     GOOGLE_COLAB = "google_colab"  # Not currently officially supported
     JUPYTER = "jupyter"
     DEBUGGER = "debugger"
-    NON_INTERACTIVE = "non_interactive"  # CI or other envs that shouldn't use emojis
+    CI = "ci"  # CI or other envs that shouldn't use emojis
 
     @classmethod
     def get(cls) -> RuntimeEnv:
@@ -66,13 +66,10 @@ class RuntimeEnv(str, Enum):
         """
         runtime_env_var = os.getenv("SQLMESH_RUNTIME_ENVIRONMENT")
         if runtime_env_var:
-            runtime_env_var = runtime_env_var.lower().strip().replace(" ", "").replace("-", "_")
-            runtime_env_var = "non_interactive" if runtime_env_var == "ci" else runtime_env_var
-            runtime_env_var = "debugger" if "debug" in runtime_env_var else runtime_env_var
             try:
                 return RuntimeEnv(runtime_env_var)
             except ValueError:
-                valid_values = [f'"{member.value}"' for member in RuntimeEnv] + ['"ci"']
+                valid_values = [f'"{member.value}"' for member in RuntimeEnv]
                 raise ValueError(
                     f"Invalid SQLMESH_RUNTIME_ENVIRONMENT value: {runtime_env_var}. Must be one of {', '.join(valid_values)}."
                 )
@@ -92,7 +89,7 @@ class RuntimeEnv(str, Enum):
             return RuntimeEnv.DEBUGGER
 
         if is_cicd_environment() or not is_interactive_environment():
-            return RuntimeEnv.NON_INTERACTIVE
+            return RuntimeEnv.CI
 
         return RuntimeEnv.TERMINAL
 
@@ -113,12 +110,12 @@ class RuntimeEnv(str, Enum):
         return self == RuntimeEnv.GOOGLE_COLAB
 
     @property
-    def is_non_interactive(self) -> bool:
-        return self == RuntimeEnv.NON_INTERACTIVE
+    def is_ci(self) -> bool:
+        return self == RuntimeEnv.CI
 
     @property
     def is_notebook(self) -> bool:
-        return not self.is_terminal and not self.is_non_interactive
+        return not self.is_terminal and not self.is_ci
 
 
 def is_cicd_environment() -> bool:

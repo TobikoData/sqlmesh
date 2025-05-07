@@ -304,9 +304,7 @@ It accepts the following values, which will cause SQLMesh to behave as if it wer
 - `google_colab` (Google Colab notebook)
 - `jupyter` (Jupyter notebook)
 - `debugger` (Debugging output)
-- `non_interactive` (environment without real-time interactivity, such as CI/CD)
-- `ci` (CI/CD environment, equivalent to `non_interactive`)
-
+- `ci` (CI/CD or other non-interactive environment)
 
 ## Anonymized usage information
 
