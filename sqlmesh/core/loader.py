@@ -601,7 +601,7 @@ class SqlMeshLoader(Loader):
                 out[model.fqn] = model
 
         return out
-        
+
     def load_materializations(self) -> None:
         with sys_path(self.config_path):
             self._load_materializations()
