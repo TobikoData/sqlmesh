@@ -16,5 +16,5 @@ test_config = config
 test_config_with_normalization_strategy = sqlmesh_config(
     Path(__file__).parent,
     variables=variables,
-    model_defaults=ModelDefaultsConfig(dialect="duckdb,normalization_strategy=UPPERCASE"),
+    model_defaults=ModelDefaultsConfig(dialect="duckdb,normalization_strategy=LOWERCASE"),
 )

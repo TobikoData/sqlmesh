@@ -4268,7 +4268,7 @@ def test_dbt_dialect_with_normalization_strategy(init_and_plan_context: t.Callab
     context, _ = init_and_plan_context(
         "tests/fixtures/dbt/sushi_test", config="test_config_with_normalization_strategy"
     )
-    assert context.default_dialect == "duckdb,normalization_strategy=UPPERCASE"
+    assert context.default_dialect == "duckdb,normalization_strategy=LOWERCASE"
 
 
 @pytest.mark.parametrize(
