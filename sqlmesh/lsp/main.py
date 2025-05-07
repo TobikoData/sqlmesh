@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 """A Language Server Protocol (LSP) server for SQL with SQLMesh integration, refactored without globals."""
 
-from collections import defaultdict
 import logging
 import typing as t
 from pathlib import Path
@@ -12,21 +11,10 @@ from pygls.server import LanguageServer
 from sqlmesh._version import __version__
 from sqlmesh.core.context import Context
 from sqlmesh.core.linter.definition import AnnotatedRuleViolation
-
-
-class LSPContext:
-    """
-    A context that is used for linting. It contains the context and a reverse map of file uri to model names .
-    """
-
-    def __init__(self, context: Context) -> None:
-        self.context = context
-        map: t.Dict[str, t.List[str]] = defaultdict(list)
-        for model in context.models.values():
-            if model._path is not None:
-                path = Path(model._path).resolve()
-                map[f"file://{path.as_posix()}"].append(model.name)
-        self.map = map
+from sqlmesh.lsp.completions import get_sql_completions
+from sqlmesh.lsp.context import LSPContext
+from sqlmesh.lsp.custom import ALL_MODELS_FEATURE, AllModelsRequest, AllModelsResponse
+from sqlmesh.lsp.reference import get_model_definitions_for_a_path
 
 
 class SQLMeshLanguageServer:
@@ -51,6 +39,14 @@ class SQLMeshLanguageServer:
 
     def _register_features(self) -> None:
         """Register LSP features on the internal LanguageServer instance."""
+
+        @self.server.feature(ALL_MODELS_FEATURE)
+        def all_models(ls: LanguageServer, params: AllModelsRequest) -> AllModelsResponse:
+            try:
+                context = self._context_get_or_load(params.textDocument.uri)
+                return get_sql_completions(context, params.textDocument.uri)
+            except Exception as e:
+                return get_sql_completions(None, params.textDocument.uri)
 
         @self.server.feature(types.TEXT_DOCUMENT_DID_OPEN)
         def did_open(ls: LanguageServer, params: types.DidOpenTextDocumentParams) -> None:
@@ -142,6 +138,43 @@ class SQLMeshLanguageServer:
                 ]
             except Exception as e:
                 ls.show_message(f"Error formatting SQL: {e}", types.MessageType.Error)
+                return []
+
+        @self.server.feature(types.TEXT_DOCUMENT_DEFINITION)
+        def goto_definition(
+            ls: LanguageServer, params: types.DefinitionParams
+        ) -> t.List[types.LocationLink]:
+            """Jump to an object's definition."""
+            try:
+                self._ensure_context_for_document(params.text_document.uri)
+                document = ls.workspace.get_document(params.text_document.uri)
+                if self.lsp_context is None:
+                    raise RuntimeError(f"No context found for document: {document.path}")
+
+                references = get_model_definitions_for_a_path(
+                    self.lsp_context, params.text_document.uri
+                )
+                if not references:
+                    return []
+
+                return [
+                    types.LocationLink(
+                        target_uri=reference.uri,
+                        target_selection_range=types.Range(
+                            start=types.Position(line=0, character=0),
+                            end=types.Position(line=0, character=0),
+                        ),
+                        target_range=types.Range(
+                            start=types.Position(line=0, character=0),
+                            end=types.Position(line=0, character=0),
+                        ),
+                        origin_selection_range=reference.range,
+                    )
+                    for reference in references
+                ]
+
+            except Exception as e:
+                ls.show_message(f"Error getting references: {e}", types.MessageType.Error)
                 return []
 
     def _context_get_or_load(self, document_uri: str) -> LSPContext:

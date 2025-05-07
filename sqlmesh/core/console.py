@@ -218,6 +218,57 @@ class DifferenceConsole(abc.ABC):
         """Displays a summary of differences for the given models."""
 
 
+class TableDiffConsole(abc.ABC):
+    """Console for displaying table differences"""
+
+    @abc.abstractmethod
+    def show_table_diff(
+        self,
+        table_diffs: t.List[TableDiff],
+        show_sample: bool = True,
+        skip_grain_check: bool = False,
+        temp_schema: t.Optional[str] = None,
+    ) -> None:
+        """Display the table diff between two or multiple tables."""
+
+    @abc.abstractmethod
+    def update_table_diff_progress(self, model: str) -> None:
+        """Update table diff progress bar"""
+
+    @abc.abstractmethod
+    def start_table_diff_progress(self, models_to_diff: int) -> None:
+        """Start table diff progress bar"""
+
+    @abc.abstractmethod
+    def start_table_diff_model_progress(self, model: str) -> None:
+        """Start table diff model progress"""
+
+    @abc.abstractmethod
+    def stop_table_diff_progress(self, success: bool) -> None:
+        """Stop table diff progress bar"""
+
+    @abc.abstractmethod
+    def show_table_diff_details(
+        self,
+        models_to_diff: t.List[str],
+    ) -> None:
+        """Display information about which tables are going to be diffed"""
+
+    @abc.abstractmethod
+    def show_table_diff_summary(self, table_diff: TableDiff) -> None:
+        """Display information about the tables being diffed and how they are being joined"""
+
+    @abc.abstractmethod
+    def show_schema_diff(self, schema_diff: SchemaDiff) -> None:
+        """Show table schema diff."""
+
+    @abc.abstractmethod
+    def show_row_diff(
+        self, row_diff: RowDiff, show_sample: bool = True, skip_grain_check: bool = False
+    ) -> None:
+        """Show table summary diff."""
+
+
 class BaseConsole(abc.ABC):
     @abc.abstractmethod
     def log_error(self, message: str) -> None:
@@ -258,6 +309,7 @@ class Console(
     JanitorConsole,
     EnvironmentsConsole,
     DifferenceConsole,
+    TableDiffConsole,
     BaseConsole,
     abc.ABC,
 ):
@@ -423,20 +475,6 @@ class Console(
     @abc.abstractmethod
     def loading_stop(self, id: uuid.UUID) -> None:
         """Stop loading for the given id."""
-
-    @abc.abstractmethod
-    def show_table_diff_summary(self, table_diff: TableDiff) -> None:
-        """Display information about the tables being diffed and how they are being joined"""
-
-    @abc.abstractmethod
-    def show_schema_diff(self, schema_diff: SchemaDiff) -> None:
-        """Show table schema diff."""
-
-    @abc.abstractmethod
-    def show_row_diff(
-        self, row_diff: RowDiff, show_sample: bool = True, skip_grain_check: bool = False
-    ) -> None:
-        """Show table summary diff."""
 
 
 class NoopConsole(Console):
@@ -648,6 +686,40 @@ class NoopConsole(Console):
     def loading_stop(self, id: uuid.UUID) -> None:
         pass
 
+    def show_table_diff(
+        self,
+        table_diffs: t.List[TableDiff],
+        show_sample: bool = True,
+        skip_grain_check: bool = False,
+        temp_schema: t.Optional[str] = None,
+    ) -> None:
+        for table_diff in table_diffs:
+            self.show_table_diff_summary(table_diff)
+            self.show_schema_diff(table_diff.schema_diff())
+            self.show_row_diff(
+                table_diff.row_diff(temp_schema=temp_schema, skip_grain_check=skip_grain_check),
+                show_sample=show_sample,
+                skip_grain_check=skip_grain_check,
+            )
+
+    def update_table_diff_progress(self, model: str) -> None:
+        pass
+
+    def start_table_diff_progress(self, models_to_diff: int) -> None:
+        pass
+
+    def start_table_diff_model_progress(self, model: str) -> None:
+        pass
+
+    def stop_table_diff_progress(self, success: bool) -> None:
+        pass
+
+    def show_table_diff_details(
+        self,
+        models_to_diff: t.List[str],
+    ) -> None:
+        pass
+
     def show_table_diff_summary(self, table_diff: TableDiff) -> None:
         pass
 
@@ -697,6 +769,7 @@ class TerminalConsole(Console):
     """A rich based implementation of the console."""
 
     TABLE_DIFF_SOURCE_BLUE = "#0248ff"
+    TABLE_DIFF_TARGET_GREEN = "green"
 
     def __init__(
         self,
@@ -745,6 +818,11 @@ class TerminalConsole(Console):
         self.state_import_version_task: t.Optional[TaskID] = None
         self.state_import_snapshot_task: t.Optional[TaskID] = None
         self.state_import_environment_task: t.Optional[TaskID] = None
+
+        self.table_diff_progress: t.Optional[Progress] = None
+        self.table_diff_model_progress: t.Optional[Progress] = None
+        self.table_diff_model_tasks: t.Dict[str, TaskID] = {}
+        self.table_diff_progress_live: t.Optional[Live] = None
 
         self.verbosity = verbosity
         self.dialect = dialect
@@ -1544,38 +1622,57 @@ class TerminalConsole(Console):
                 )
             tree.add(self._limit_model_names(removed_tree, self.verbosity))
         if modified_snapshot_ids:
-            direct = Tree("[bold][direct]Directly Modified:")
-            indirect = Tree("[bold][indirect]Indirectly Modified:")
-            metadata = Tree("[bold][metadata]Metadata Updated:")
-            for s_id in modified_snapshot_ids:
-                name = s_id.name
-                display_name = context_diff.snapshots[s_id].display_name(
-                    environment_naming_info,
-                    default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None,
-                    dialect=self.dialect,
-                )
-                if context_diff.directly_modified(name):
-                    direct.add(
-                        f"[direct]{display_name}"
-                        if no_diff
-                        else Syntax(f"{display_name}\n{context_diff.text_diff(name)}", "sql")
-                    )
-                elif context_diff.indirectly_modified(name):
-                    indirect.add(f"[indirect]{display_name}")
-                elif context_diff.metadata_updated(name):
-                    metadata.add(
-                        f"[metadata]{display_name}"
-                        if no_diff
-                        else Syntax(f"{display_name}\n{context_diff.text_diff(name)}", "sql")
-                    )
+            tree = self._add_modified_models(
+                context_diff,
+                modified_snapshot_ids,
+                tree,
+                environment_naming_info,
+                default_catalog,
+                no_diff,
+            )
 
-            if direct.children:
-                tree.add(direct)
-            if indirect.children:
-                tree.add(self._limit_model_names(indirect, self.verbosity))
-            if metadata.children:
-                tree.add(metadata)
         self._print(tree)
+
+    def _add_modified_models(
+        self,
+        context_diff: ContextDiff,
+        modified_snapshot_ids: t.Set[SnapshotId],
+        tree: Tree,
+        environment_naming_info: EnvironmentNamingInfo,
+        default_catalog: t.Optional[str] = None,
+        no_diff: bool = True,
+    ) -> Tree:
+        direct = Tree("[bold][direct]Directly Modified:")
+        indirect = Tree("[bold][indirect]Indirectly Modified:")
+        metadata = Tree("[bold][metadata]Metadata Updated:")
+        for s_id in modified_snapshot_ids:
+            name = s_id.name
+            display_name = context_diff.snapshots[s_id].display_name(
+                environment_naming_info,
+                default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None,
+                dialect=self.dialect,
+            )
+            if context_diff.directly_modified(name):
+                direct.add(
+                    f"[direct]{display_name}"
+                    if no_diff
+                    else Syntax(f"{display_name}\n{context_diff.text_diff(name)}", "sql")
+                )
+            elif context_diff.indirectly_modified(name):
+                indirect.add(f"[indirect]{display_name}")
+            elif context_diff.metadata_updated(name):
+                metadata.add(
+                    f"[metadata]{display_name}"
+                    if no_diff
+                    else Syntax(f"{display_name}\n{context_diff.text_diff(name)}", "sql")
+                )
+        if direct.children:
+            tree.add(direct)
+        if indirect.children:
+            tree.add(self._limit_model_names(indirect, self.verbosity))
+        if metadata.children:
+            tree.add(metadata)
+        return tree
 
     def _show_options_after_categorization(
         self,
@@ -1882,6 +1979,71 @@ class TerminalConsole(Console):
         self.loading_status[id].stop()
         del self.loading_status[id]
 
+    def show_table_diff_details(
+        self,
+        models_to_diff: t.List[str],
+    ) -> None:
+        """Display information about which tables are going to be diffed"""
+
+        if models_to_diff:
+            m_tree = Tree("\n[b]Models to compare:")
+            for m in models_to_diff:
+                m_tree.add(f"[{self.TABLE_DIFF_SOURCE_BLUE}]{m}[/{self.TABLE_DIFF_SOURCE_BLUE}]")
+            self._print(m_tree)
+            self._print("")
+
+    def start_table_diff_progress(self, models_to_diff: int) -> None:
+        if not self.table_diff_progress:
+            self.table_diff_progress = make_progress_bar(
+                "Calculating model differences", self.console
+            )
+            self.table_diff_model_progress = Progress(
+                TextColumn("{task.fields[view_name]}", justify="right"),
+                SpinnerColumn(spinner_name="simpleDots"),
+                console=self.console,
+            )
+
+            progress_table = Table.grid()
+            progress_table.add_row(self.table_diff_progress)
+            progress_table.add_row(self.table_diff_model_progress)
+
+            self.table_diff_progress_live = Live(progress_table, refresh_per_second=10)
+            self.table_diff_progress_live.start()
+
+            self.table_diff_model_task = self.table_diff_progress.add_task(
+                "Diffing", total=models_to_diff
+            )
+
+    def start_table_diff_model_progress(self, model: str) -> None:
+        if self.table_diff_model_progress and model not in self.table_diff_model_tasks:
+            self.table_diff_model_tasks[model] = self.table_diff_model_progress.add_task(
+                f"Diffing {model}...",
+                view_name=model,
+                total=1,
+            )
+
+    def update_table_diff_progress(self, model: str) -> None:
+        if self.table_diff_progress:
+            self.table_diff_progress.update(self.table_diff_model_task, refresh=True, advance=1)
+        if self.table_diff_model_progress and model in self.table_diff_model_tasks:
+            model_task_id = self.table_diff_model_tasks[model]
+            self.table_diff_model_progress.remove_task(model_task_id)
+
+    def stop_table_diff_progress(self, success: bool) -> None:
+        if self.table_diff_progress_live:
+            self.table_diff_progress_live.stop()
+            self.table_diff_progress_live = None
+            self.log_status_update("")
+
+            if success:
+                self.log_success(f"Table diff completed successfully!")
+            else:
+                self.log_error("Table diff failed!")
+
+        self.table_diff_progress = None
+        self.table_diff_model_progress = None
+        self.table_diff_model_tasks = {}
+
     def show_table_diff_summary(self, table_diff: TableDiff) -> None:
         tree = Tree("\n[b]Table Diff")
 
@@ -1897,7 +2059,9 @@ class TerminalConsole(Console):
             )
             envs.add(source)
 
-            target = Tree(f"Target: [green]{table_diff.target_alias}[/green]")
+            target = Tree(
+                f"Target: [{self.TABLE_DIFF_TARGET_GREEN}]{table_diff.target_alias}[/{self.TABLE_DIFF_TARGET_GREEN}]"
+            )
             envs.add(target)
 
             tree.add(envs)
@@ -1907,7 +2071,9 @@ class TerminalConsole(Console):
         tables.add(
             f"Source: [{self.TABLE_DIFF_SOURCE_BLUE}]{table_diff.source}[/{self.TABLE_DIFF_SOURCE_BLUE}]"
         )
-        tables.add(f"Target: [green]{table_diff.target}[/green]")
+        tables.add(
+            f"Target: [{self.TABLE_DIFF_TARGET_GREEN}]{table_diff.target}[/{self.TABLE_DIFF_TARGET_GREEN}]"
+        )
 
         tree.add(tables)
 
@@ -1928,7 +2094,7 @@ class TerminalConsole(Console):
         if schema_diff.target_alias:
             target_name = schema_diff.target_alias.upper()
 
-        first_line = f"\n[b]Schema Diff Between '[{self.TABLE_DIFF_SOURCE_BLUE}]{source_name}[/{self.TABLE_DIFF_SOURCE_BLUE}]' and '[green]{target_name}[/green]'"
+        first_line = f"\n[b]Schema Diff Between '[{self.TABLE_DIFF_SOURCE_BLUE}]{source_name}[/{self.TABLE_DIFF_SOURCE_BLUE}]' and '[{self.TABLE_DIFF_TARGET_GREEN}]{target_name}[/{self.TABLE_DIFF_TARGET_GREEN}]'"
         if schema_diff.model_name:
             first_line = (
                 first_line + f" environments for model '[blue]{schema_diff.model_name}[/blue]'"
@@ -2032,7 +2198,7 @@ class TerminalConsole(Console):
 
                 column_styles = {
                     source_name: self.TABLE_DIFF_SOURCE_BLUE,
-                    target_name: "green",
+                    target_name: self.TABLE_DIFF_TARGET_GREEN,
                 }
 
                 for column, [source_column, target_column] in columns.items():
@@ -2088,6 +2254,57 @@ class TerminalConsole(Console):
             if row_diff.t_sample.shape[0] > 0:
                 self.console.print(f"\n[b][green]{target_name} ONLY[/green] sample rows:[/b]")
                 self.console.print(row_diff.t_sample.to_string(index=False), end="\n\n")
+
+    def show_table_diff(
+        self,
+        table_diffs: t.List[TableDiff],
+        show_sample: bool = True,
+        skip_grain_check: bool = False,
+        temp_schema: t.Optional[str] = None,
+    ) -> None:
+        """
+        Display the table diff between all mismatched tables.
+        """
+        if len(table_diffs) > 1:
+            mismatched_tables = []
+            fully_matched = []
+            for table_diff in table_diffs:
+                if (
+                    table_diff.schema_diff().source_schema == table_diff.schema_diff().target_schema
+                ) and (
+                    table_diff.row_diff(
+                        temp_schema=temp_schema, skip_grain_check=skip_grain_check
+                    ).full_match_pct
+                    == 100
+                ):
+                    fully_matched.append(table_diff)
+                else:
+                    mismatched_tables.append(table_diff)
+            table_diffs = mismatched_tables if mismatched_tables else []
+            if fully_matched:
+                m_tree = Tree("\n[b]Identical Tables")
+                for m in fully_matched:
+                    m_tree.add(
+                        f"[{self.TABLE_DIFF_SOURCE_BLUE}]{m.source}[/{self.TABLE_DIFF_SOURCE_BLUE}] - [{self.TABLE_DIFF_TARGET_GREEN}]{m.target}[/{self.TABLE_DIFF_TARGET_GREEN}]"
+                    )
+                self._print(m_tree)
+
+            if mismatched_tables:
+                m_tree = Tree("\n[b]Mismatched Tables")
+                for m in mismatched_tables:
+                    m_tree.add(
+                        f"[{self.TABLE_DIFF_SOURCE_BLUE}]{m.source}[/{self.TABLE_DIFF_SOURCE_BLUE}] - [{self.TABLE_DIFF_TARGET_GREEN}]{m.target}[/{self.TABLE_DIFF_TARGET_GREEN}]"
+                    )
+                self._print(m_tree)
+
+        for table_diff in table_diffs:
+            self.show_table_diff_summary(table_diff)
+            self.show_schema_diff(table_diff.schema_diff())
+            self.show_row_diff(
+                table_diff.row_diff(temp_schema=temp_schema, skip_grain_check=skip_grain_check),
+                show_sample=show_sample,
+                skip_grain_check=skip_grain_check,
+            )
 
     def print_environments(self, environments_summary: t.List[EnvironmentSummary]) -> None:
         """Prints all environment names along with expiry datetime."""
@@ -2205,6 +2422,10 @@ def _cells_match(x: t.Any, y: t.Any) -> bool:
 
     # Convert array-like objects to list for consistent comparison
     def _normalize(val: t.Any) -> t.Any:
+        # Convert Pandas null to Python null for the purposes of comparison to prevent errors like the following on boolean fields:
+        # - TypeError: boolean value of NA is ambiguous
+        if pd.isnull(val):
+            val = None
         return list(val) if isinstance(val, (pd.Series, np.ndarray)) else val
 
     return _normalize(x) == _normalize(y)
@@ -2639,23 +2860,11 @@ class MarkdownConsole(CaptureTerminalConsole):
             no_diff: Hide the actual SQL differences.
         """
         added_snapshots = {context_diff.snapshots[s_id] for s_id in context_diff.added}
-        added_snapshot_models = {s for s in added_snapshots if s.is_model}
-        if added_snapshot_models:
+        if added_snapshots:
             self._print("\n**Added Models:**")
-            added_models = sorted(added_snapshot_models)
-            list_length = len(added_models)
-            if (
-                self.verbosity < Verbosity.VERY_VERBOSE
-                and list_length > self.INDIRECTLY_MODIFIED_DISPLAY_THRESHOLD
-            ):
-                self._print(added_models[0])
-                self._print(f"- `.... {list_length - 2} more ....`\n")
-                self._print(added_models[-1])
-            else:
-                for snapshot in added_models:
-                    self._print(
-                        f"- `{snapshot.display_name(environment_naming_info, default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect)}`"
-                    )
+            self._print_models_with_threshold(
+                environment_naming_info, {s for s in added_snapshots if s.is_model}, default_catalog
+            )
 
         added_snapshot_audits = {s for s in added_snapshots if s.is_audit}
         if added_snapshot_audits:
@@ -2666,23 +2875,13 @@ class MarkdownConsole(CaptureTerminalConsole):
                 )
 
         removed_snapshot_table_infos = set(context_diff.removed_snapshots.values())
-        removed_model_snapshot_table_infos = {s for s in removed_snapshot_table_infos if s.is_model}
-        if removed_model_snapshot_table_infos:
+        if removed_snapshot_table_infos:
             self._print("\n**Removed Models:**")
-            removed_models = sorted(removed_model_snapshot_table_infos)
-            list_length = len(removed_models)
-            if (
-                self.verbosity < Verbosity.VERY_VERBOSE
-                and list_length > self.INDIRECTLY_MODIFIED_DISPLAY_THRESHOLD
-            ):
-                self._print(removed_models[0])
-                self._print(f"- `.... {list_length - 2} more ....`\n")
-                self._print(removed_models[-1])
-            else:
-                for snapshot_table_info in removed_models:
-                    self._print(
-                        f"- `{snapshot_table_info.display_name(environment_naming_info, default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect)}`"
-                    )
+            self._print_models_with_threshold(
+                environment_naming_info,
+                {s for s in removed_snapshot_table_infos if s.is_model},
+                default_catalog,
+            )
 
         removed_audit_snapshot_table_infos = {s for s in removed_snapshot_table_infos if s.is_audit}
         if removed_audit_snapshot_table_infos:
@@ -2696,48 +2895,72 @@ class MarkdownConsole(CaptureTerminalConsole):
             current_snapshot for current_snapshot, _ in context_diff.modified_snapshots.values()
         }
         if modified_snapshots:
-            directly_modified = []
-            indirectly_modified = []
-            metadata_modified = []
-            for snapshot in modified_snapshots:
-                if context_diff.directly_modified(snapshot.name):
-                    directly_modified.append(snapshot)
-                elif context_diff.indirectly_modified(snapshot.name):
-                    indirectly_modified.append(snapshot)
-                elif context_diff.metadata_updated(snapshot.name):
-                    metadata_modified.append(snapshot)
-            if directly_modified:
-                self._print("\n**Directly Modified:**")
-                for snapshot in sorted(directly_modified):
-                    self._print(
-                        f"- `{snapshot.display_name(environment_naming_info, default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect)}`"
-                    )
-                    if not no_diff:
-                        self._print(f"```diff\n{context_diff.text_diff(snapshot.name)}\n```")
-            if indirectly_modified:
-                self._print("\n**Indirectly Modified:**")
-                indirectly_modified = sorted(indirectly_modified)
-                modified_length = len(indirectly_modified)
-                if (
-                    self.verbosity < Verbosity.VERY_VERBOSE
-                    and modified_length > self.INDIRECTLY_MODIFIED_DISPLAY_THRESHOLD
-                ):
-                    self._print(
-                        f"- `{indirectly_modified[0].display_name(environment_naming_info, default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect)}`\n"
-                        f"- `.... {modified_length - 2} more ....`\n"
-                        f"- `{indirectly_modified[-1].display_name(environment_naming_info, default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect)}`"
-                    )
-                else:
-                    for snapshot in indirectly_modified:
-                        self._print(
-                            f"- `{snapshot.display_name(environment_naming_info, default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect)}`"
-                        )
-            if metadata_modified:
-                self._print("\n**Metadata Updated:**")
-                for snapshot in sorted(metadata_modified):
-                    self._print(
-                        f"- `{snapshot.display_name(environment_naming_info, default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect)}`"
-                    )
+            self._print_modified_models(
+                context_diff, modified_snapshots, environment_naming_info, default_catalog, no_diff
+            )
+
+    def _print_models_with_threshold(
+        self,
+        environment_naming_info: EnvironmentNamingInfo,
+        snapshot_table_infos: t.Set[SnapshotInfoLike],
+        default_catalog: t.Optional[str] = None,
+    ) -> None:
+        models = sorted(snapshot_table_infos)
+        list_length = len(models)
+        if (
+            self.verbosity < Verbosity.VERY_VERBOSE
+            and list_length > self.INDIRECTLY_MODIFIED_DISPLAY_THRESHOLD
+        ):
+            self._print(
+                f"- `{models[0].display_name(environment_naming_info, default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect)}`"
+            )
+            self._print(f"- `.... {list_length - 2} more ....`\n")
+            self._print(
+                f"- `{models[-1].display_name(environment_naming_info, default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect)}`"
+            )
+        else:
+            for snapshot_table_info in models:
+                self._print(
+                    f"- `{snapshot_table_info.display_name(environment_naming_info, default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect)}`"
+                )
+
+    def _print_modified_models(
+        self,
+        context_diff: ContextDiff,
+        modified_snapshots: t.Set[Snapshot],
+        environment_naming_info: EnvironmentNamingInfo,
+        default_catalog: t.Optional[str] = None,
+        no_diff: bool = True,
+    ) -> None:
+        directly_modified = []
+        indirectly_modified = []
+        metadata_modified = []
+        for snapshot in modified_snapshots:
+            if context_diff.directly_modified(snapshot.name):
+                directly_modified.append(snapshot)
+            elif context_diff.indirectly_modified(snapshot.name):
+                indirectly_modified.append(snapshot)
+            elif context_diff.metadata_updated(snapshot.name):
+                metadata_modified.append(snapshot)
+        if directly_modified:
+            self._print("\n**Directly Modified:**")
+            for snapshot in sorted(directly_modified):
+                self._print(
+                    f"- `{snapshot.display_name(environment_naming_info, default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect)}`"
+                )
+                if not no_diff:
+                    self._print(f"```diff\n{context_diff.text_diff(snapshot.name)}\n```")
+        if indirectly_modified:
+            self._print("\n**Indirectly Modified:**")
+            self._print_models_with_threshold(
+                environment_naming_info, set(indirectly_modified), default_catalog
+            )
+        if metadata_modified:
+            self._print("\n**Metadata Updated:**")
+            for snapshot in sorted(metadata_modified):
+                self._print(
+                    f"- `{snapshot.display_name(environment_naming_info, default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect)}`"
+                )
 
     def _show_missing_dates(self, plan: Plan, default_catalog: t.Optional[str]) -> None:
         """Displays the models with missing dates."""

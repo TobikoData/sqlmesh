@@ -122,6 +122,55 @@ Under the hood, SQLMesh stores temporary data in the database to perform the com
 The default schema for these temporary tables is `sqlmesh_temp` but can be changed with the `--temp-schema` option.
 The schema can be specified as a `CATALOG.SCHEMA` or `SCHEMA`.
 
+
+## Diffing multiple models across environments
+
+SQLMesh allows you to compare multiple models across environments at once using model selection expressions. This is useful when you want to validate changes across a set of related models or the entire project.
+
+To diff multiple models, use the `--select-model` (or `-m` for short) option with the table diff command:
+
+```bash
+sqlmesh table_diff prod:dev --select-model "sqlmesh_example.*"
+```
+
+When diffing multiple models, SQLMesh will:
+
+1. Show the models returned by the selector that exist in both environments and have differences
+2. Compare these models and display the data diff of each model
+
+> Note: Models will only be data diffed if there's a breaking change that impacts them.
+
+The `--select-model` option supports a powerful selection syntax that lets you choose models using patterns, tags, dependencies and git status. For complete details, see the [model selection guide](./model_selection.md).
+
+> Note: Surround your selection pattern in single or double quotes. Ex: `'*'`, `"sqlmesh_example.*"`
+
+Here are some common examples:
+
+```bash
+# Select all models in a schema
+sqlmesh table_diff prod:dev -m "sqlmesh_example.*"
+
+# Select a model and its dependencies
+sqlmesh table_diff prod:dev -m "+model_name"  # include upstream deps
+sqlmesh table_diff prod:dev -m "model_name+"  # include downstream deps
+
+# Select models by tag
+sqlmesh table_diff prod:dev -m "tag:finance"
+
+# Select models with git changes
+sqlmesh table_diff prod:dev -m "git:feature"
+
+# Use logical operators for complex selections
+sqlmesh table_diff prod:dev -m "(metrics.* & ^tag:deprecated)"  # models in the metrics schema that aren't deprecated
+
+# Combine multiple selectors
+sqlmesh table_diff prod:dev -m "tag:finance" -m "metrics.*_daily"
+```
+
+When multiple selectors are provided, they are combined with OR logic, meaning a model matching any of the selectors will be included.
+
+> Note: All models being compared must have their `grain` defined that is unique and not null, as this is used to perform the join between the tables in the two environments.
+
 ## Diffing tables or views
 
 Compare specific tables or views with the SQLMesh CLI interface by using the command `sqlmesh table_diff [source table]:[target table]`.

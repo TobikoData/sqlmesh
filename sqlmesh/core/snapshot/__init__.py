@@ -26,4 +26,7 @@ from sqlmesh.core.snapshot.definition import (
     table_name as table_name,
     to_table_mapping as to_table_mapping,
 )
-from sqlmesh.core.snapshot.evaluator import SnapshotEvaluator as SnapshotEvaluator
+from sqlmesh.core.snapshot.evaluator import (
+    SnapshotEvaluator as SnapshotEvaluator,
+    SnapshotCreationFailedError as SnapshotCreationFailedError,
+)

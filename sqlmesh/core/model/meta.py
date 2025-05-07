@@ -451,6 +451,20 @@ class ModelMeta(_Node):
         ]
 
     @property
+    def on(self) -> t.List[str]:
+        """The grains to be used as join condition in table_diff."""
+
+        on: t.List[str] = []
+        for expr in [ref.expression for ref in self.all_references if ref.unique]:
+            if isinstance(expr, exp.Tuple):
+                on.extend([key.this.sql(dialect=self.dialect) for key in expr.expressions])
+            else:
+                # Handle a single Column or Paren expression
+                on.append(expr.this.sql(dialect=self.dialect))
+
+        return on
+
+    @property
     def managed_columns(self) -> t.Dict[str, exp.DataType]:
         return getattr(self.kind, "managed_columns", {})
 

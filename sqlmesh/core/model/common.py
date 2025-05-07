@@ -262,7 +262,9 @@ def parse_expression(
 
     if isinstance(v, list):
         return [
-            d.parse_one(e, dialect=dialect) if not isinstance(e, exp.Expression) else e for e in v
+            e if isinstance(e, exp.Expression) else d.parse_one(e, dialect=dialect)
+            for e in v
+            if not isinstance(e, exp.Semicolon)
         ]
 
     if isinstance(v, str):

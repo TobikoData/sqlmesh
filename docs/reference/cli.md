@@ -529,7 +529,7 @@ Options:
 ```
 Usage: sqlmesh table_diff [OPTIONS] SOURCE:TARGET [MODEL]
 
-  Show the diff between two tables.
+  Show the diff between two tables or multiple models across two environments.
 
 Options:
   -o, --on TEXT            The column to join on. Can be specified multiple
@@ -548,6 +548,7 @@ Options:
   --temp-schema TEXT       Schema used for temporary tables. It can be
                            `CATALOG.SCHEMA` or `SCHEMA`. Default:
                            `sqlmesh_temp`
+  -m, --select-model TEXT  Select specific models to table diff.
   --help                   Show this message and exit.
 ```
 
