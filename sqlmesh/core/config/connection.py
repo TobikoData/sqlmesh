@@ -1278,6 +1278,33 @@ class MySQLConnectionConfig(ConnectionConfig):
 
 
 class MSSQLConnectionConfig(ConnectionConfig):
+    """Configuration for the MSSQL connection.
+
+    Args:
+        host: The hostname of the MSSQL server (required).
+        user: The username for authentication (optional when using alternative authentication methods).
+        password: The password for authentication (optional when using alternative authentication methods).
+        database: The target database (optional).
+        port: The server port (default: 1433).
+        timeout: Query timeout in seconds (default: 0, meaning no timeout).
+        login_timeout: Connection and login timeout (default: 60 seconds).
+        charset: Character set (default: "UTF-8").
+        appname: Application name.
+        conn_properties: Connection properties.
+        autocommit: Autocommit mode (default: False).
+        tds_version: TDS protocol version.
+        driver: Connection driver to use, either "pymssql" or "pyodbc" (default: "pymssql").
+        driver_name: ODBC driver name when using pyodbc (e.g., "ODBC Driver 18 for SQL Server").
+        trust_server_certificate: Whether to trust the server certificate (for pyodbc).
+        encrypt: Whether to encrypt the connection (for pyodbc).
+        odbc_properties: Dictionary of arbitrary ODBC connection properties that will be passed directly to the connection string.
+            See: https://learn.microsoft.com/en-us/sql/connect/odbc/dsn-connection-string-attribute for available options.
+            This can be used for authentication methods like Microsoft Entra ID (formerly Azure AD).
+        concurrent_tasks: The maximum number of tasks that can use this connection concurrently.
+        register_comments: Whether or not to register model comments with the SQL engine.
+        pre_ping: Whether or not to pre-ping the connection before starting a new transaction to ensure it is still alive.
+    """
+
     host: str
     user: t.Optional[str] = None
     password: t.Optional[str] = None
@@ -1290,6 +1317,15 @@ class MSSQLConnectionConfig(ConnectionConfig):
     conn_properties: t.Optional[t.Union[t.List[str], str]] = None
     autocommit: t.Optional[bool] = False
     tds_version: t.Optional[str] = None
+    # Driver options
+    driver: t.Literal["pymssql", "pyodbc"] = "pymssql"
+    # PyODBC specific options
+    driver_name: t.Optional[str] = None  # e.g. "ODBC Driver 18 for SQL Server"
+    trust_server_certificate: t.Optional[bool] = None
+    encrypt: t.Optional[bool] = None
+    # Dictionary of arbitrary ODBC connection properties
+    # See: https://learn.microsoft.com/en-us/sql/connect/odbc/dsn-connection-string-attribute
+    odbc_properties: t.Optional[t.Dict[str, t.Any]] = None
 
     concurrent_tasks: int = 4
     register_comments: bool = True
@@ -1297,9 +1333,30 @@ class MSSQLConnectionConfig(ConnectionConfig):
 
     type_: t.Literal["mssql"] = Field(alias="type", default="mssql")
 
+    @model_validator(mode="before")
+    def _validate_auth_configuration(cls, data: t.Any) -> t.Any:
+        if not isinstance(data, dict):
+            return data
+
+        driver = data.get("driver", "pymssql")
+        auth_type = data.get("auth_type")
+
+        # Validate requirements for Entra ID authentication methods when using PyODBC
+        if driver == "pyodbc" and auth_type and auth_type != "default":
+            if auth_type == "service_principal":
+                if not data.get("tenant_id") or not data.get("client_id"):
+                    raise ConfigError("Service principal authentication requires tenant_id and client_id")
+                if not data.get("client_secret") and not data.get("certificate_path"):
+                    raise ConfigError("Service principal authentication requires either client_secret or certificate_path")
+            elif auth_type == "msi" and data.get("msi_client_id") and not data.get("client_id"):
+                # If msi_client_id is provided, copy it to client_id for consistency
+                data["client_id"] = data["msi_client_id"]
+
+        return data
+
     @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
-        return {
+        base_keys = {
             "host",
             "user",
             "password",
@@ -1313,6 +1370,19 @@ class MSSQLConnectionConfig(ConnectionConfig):
             "autocommit",
             "tds_version",
         }
+        
+        if self.driver == "pyodbc":
+            base_keys.update({
+                "driver_name",
+                "trust_server_certificate",
+                "encrypt",
+                "odbc_properties",
+            })
+            # Remove pymssql-specific parameters
+            base_keys.discard("tds_version")
+            base_keys.discard("conn_properties")
+            
+        return base_keys
 
     @property
     def _engine_adapter(self) -> t.Type[EngineAdapter]:
@@ -1320,9 +1390,66 @@ class MSSQLConnectionConfig(ConnectionConfig):
 
     @property
     def _connection_factory(self) -> t.Callable:
-        import pymssql
-
-        return pymssql.connect
+        if self.driver == "pymssql":
+            import pymssql
+            return pymssql.connect
+        else:  # pyodbc
+            import pyodbc
+            
+            def connect(**kwargs):
+                # Extract parameters for connection string
+                host = kwargs.pop("host")
+                port = kwargs.pop("port", 1433)
+                database = kwargs.pop("database", "")
+                user = kwargs.pop("user", None)
+                password = kwargs.pop("password", None)
+                driver_name = kwargs.pop("driver_name", "ODBC Driver 18 for SQL Server")
+                trust_server_certificate = kwargs.pop("trust_server_certificate", False)
+                encrypt = kwargs.pop("encrypt", True)
+                login_timeout = kwargs.pop("login_timeout", 60)
+                
+                # Build connection string
+                conn_str_parts = [
+                    f"DRIVER={{{driver_name}}}",
+                    f"SERVER={host},{port}",
+                ]
+                
+                if database:
+                    conn_str_parts.append(f"DATABASE={database}")
+                
+                # Add security options
+                conn_str_parts.append(f"Encrypt={'YES' if encrypt else 'NO'}")
+                if trust_server_certificate:
+                    conn_str_parts.append("TrustServerCertificate=YES")
+                    
+                conn_str_parts.append(f"Connection Timeout={login_timeout}")
+                
+                # Standard SQL Server authentication
+                if user:
+                    conn_str_parts.append(f"UID={user}")
+                if password:
+                    conn_str_parts.append(f"PWD={password}")
+                
+                # Add any additional ODBC properties from the odbc_properties dictionary
+                if self.odbc_properties:
+                    for key, value in self.odbc_properties.items():
+                        # Skip properties that we've already set above
+                        if key.lower() in ('driver', 'server', 'database', 'uid', 'pwd', 
+                                          'encrypt', 'trustservercertificate', 'connection timeout'):
+                            continue
+                        
+                        # Handle boolean values properly
+                        if isinstance(value, bool):
+                            conn_str_parts.append(f"{key}={'YES' if value else 'NO'}")
+                        else:
+                            conn_str_parts.append(f"{key}={value}")
+                
+                # Create the connection string
+                conn_str = ";".join(conn_str_parts)
+                
+                return pyodbc.connect(conn_str, autocommit=kwargs.get("autocommit", False))
+            
+            return connect
 
     @property
     def _extra_engine_config(self) -> t.Dict[str, t.Any]:

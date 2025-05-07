@@ -37,7 +37,7 @@ classifiers = [
 
 [project.optional-dependencies]
 athena = ["PyAthena[Pandas]"]
-azuresql = ["pymssql"]
+azuresql = ["pymssql", "pyodbc"]
 bigquery = [
     "google-cloud-bigquery[pandas]",
     "google-cloud-bigquery-storage"
@@ -98,7 +98,7 @@ dlt = ["dlt"]
 gcppostgres = ["cloud-sql-python-connector[pg8000]>=1.8.0"]
 github = ["PyGithub~=2.5.0"]
 llm = ["langchain", "openai"]
-mssql = ["pymssql"]
+mssql = ["pymssql", "pyodbc"]
 mysql = ["pymysql"]
 mwaa = ["boto3"]
 postgres = ["psycopg2"]
