@@ -908,13 +908,19 @@ def table_diff(
     """Show the diff between two tables or a selection of models when they are specified."""
     source, target = source_to_target.split(":")
     select_model = kwargs.pop("select_model", None)
-    select_models = {model} if model else select_model
-    obj.table_diff(
-        source=source,
-        target=target,
-        select_models=select_models,
-        **kwargs,
-    )
+
+    if model and select_model:
+        obj.console.log_error(
+            "The --select-model option cannot be used together with a model argument. Please choose one of them."
+        )
+    else:
+        select_models = {model} if model else select_model
+        obj.table_diff(
+            source=source,
+            target=target,
+            select_models=select_models,
+            **kwargs,
+        )
 
 
 @cli.command("rewrite")
