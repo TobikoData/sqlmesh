@@ -2295,7 +2295,7 @@ def create_python_model(
     else:
         depends_on_rendered = render_expression(
             expression=exp.Array(
-                expressions=[d.parse_one(dep, dialect=dialect) for dep in depends_on or []]
+                expressions=[exp.maybe_parse(dep, dialect=dialect) for dep in depends_on or []]
             ),
             module_path=module_path,
             macros=macros,
