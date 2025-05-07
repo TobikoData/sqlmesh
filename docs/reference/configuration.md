@@ -248,7 +248,10 @@ For example, you might have a specific connection where your tests should run re
 
 ## Debug mode
 
-To enable debug mode set the `SQLMESH_DEBUG` environment variable to one of the following values: "1", "true", "t", "yes" or "y".
+Enable debug mode in one of two ways:
+
+- Pass the `--debug` flag between the CLI command and the subcommand. For example, `sqlmesh --debug plan`.
+- Set the `SQLMESH_DEBUG` environment variable to one of the following values: "1", "true", "t", "yes" or "y".
 
 Enabling this mode ensures that full backtraces are printed when using CLI. The default log level is set to `DEBUG` when this mode is enabled.
 
@@ -257,10 +260,18 @@ Example enabling debug mode for the CLI command `sqlmesh plan`:
 === "Bash"
 
     ```bash
+    $ sqlmesh --debug plan
+    ```
+
+    ```bash
     $ SQLMESH_DEBUG=1 sqlmesh plan
     ```
 
 === "MS Powershell"
+
+    ```powershell
+    PS> sqlmesh --debug plan
+    ```
 
     ```powershell
     PS> $env:SQLMESH_DEBUG=1
@@ -270,9 +281,32 @@ Example enabling debug mode for the CLI command `sqlmesh plan`:
 === "MS CMD"
 
     ```cmd
+    C:\> sqlmesh --debug plan
+    ```
+
+    ```cmd
     C:\> set SQLMESH_DEBUG=1
     C:\> sqlmesh plan
     ```
+
+## Runtime Environment
+
+SQLMesh can run in different runtime environments. For example, you might run it in a regular command-line terminal, in a Jupyter notebook, or in Github's CI/CD platform.
+
+When it starts up, SQLMesh automatically detects the runtime environment and adjusts its behavior accordingly. For example, it registers `%magic` commands if in a Jupyter notebook and adjusts logging behavior if in a CI/CD environment.
+
+If necessary, you may force SQLMesh to use a specific runtime environment by setting the `SQLMESH_RUNTIME_ENVIRONMENT` environment variable.
+
+It accepts the following values, which will cause SQLMesh to behave as if it were in the runtime environment in parentheses:
+
+- `terminal` (CLI console)
+- `databricks` (Databricks notebook)
+- `google_colab` (Google Colab notebook)
+- `jupyter` (Jupyter notebook)
+- `debugger` (Debugging output)
+- `non_interactive` (environment without real-time interactivity, such as CI/CD)
+- `ci` (CI/CD environment, equivalent to `non_interactive`)
+
 
 ## Anonymized usage information
 
