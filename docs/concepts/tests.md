@@ -605,7 +605,7 @@ An optional dictionary that maps columns to their types:
 ```yaml linenums="1"
     <upstream_model>:
       columns:
-        - <column_name>: <column_type>
+        <column_name>: <column_type>
         ...
 ```
 
