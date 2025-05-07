@@ -832,6 +832,19 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         return success
 
+    @python_api_analytics
+    def destroy(self) -> bool:
+        success = False
+
+        if self.console.start_destroy():
+            try:
+                self._destroy()
+                success = True
+            finally:
+                self.console.stop_destroy(success=success)
+
+        return success
+
     @t.overload
     def get_model(
         self, model_or_snapshot: ModelOrSnapshot, raise_if_missing: Literal[True] = True
@@ -1554,16 +1567,19 @@ class GenericContext(BaseContext, t.Generic[C]):
         )
 
     @python_api_analytics
-    def invalidate_environment(self, name: str, sync: bool = False) -> None:
+    def invalidate_environment(
+        self, name: str, sync: bool = False, protect_prod: t.Optional[bool] = True
+    ) -> None:
         """Invalidates the target environment by setting its expiration timestamp to now.
 
         Args:
             name: The name of the environment to invalidate.
             sync: If True, the call blocks until the environment is deleted. Otherwise, the environment will
                 be deleted asynchronously by the janitor process.
+            protect_prod: If True, prevents invalidation of the production environment.
         """
         name = Environment.sanitize_name(name)
-        self.state_sync.invalidate_environment(name)
+        self.state_sync.invalidate_environment(name, protect_prod)
         if sync:
             self._cleanup_environments()
             self.console.log_success(f"Environment '{name}' deleted.")
@@ -2536,6 +2552,21 @@ class GenericContext(BaseContext, t.Generic[C]):
             environment_statements=self._environment_statements,
             gateway_managed_virtual_layer=self.gateway_managed_virtual_layer,
         )
+
+    def _destroy(self) -> None:
+        # Invalidate all environments, including prod
+        for environment in self.state_reader.get_environments():
+            self.invalidate_environment(name=environment.name, protect_prod=False)
+
+        # Run janitor to clean up all objects
+        self._run_janitor(ignore_ttl=True)
+
+        # Remove state tables
+        self.state_sync.remove_state()
+        self.console.log_status_update("State tables removed.")
+
+        # Finally clear caches
+        self.clear_caches()
 
     def _run_janitor(self, ignore_ttl: bool = False) -> None:
         current_ts = now_timestamp()

@@ -232,6 +232,13 @@ options:
   --file FILE, -f FILE  An optional file path to write the HTML output to.
 ```
 
+#### destroy
+```
+%destroy
+
+Removes all project resources, including warehouse objects, state tables, the SQLMesh cache and any build artifacts.
+```
+
 #### dlt_refresh
 ```
 %dlt_refresh PIPELINE [--table] TABLE [--force]

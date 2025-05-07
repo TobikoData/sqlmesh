@@ -546,6 +546,19 @@ def janitor(ctx: click.Context, ignore_ttl: bool, **kwargs: t.Any) -> None:
     ctx.obj.run_janitor(ignore_ttl, **kwargs)
 
 
+@cli.command("destroy")
+@click.pass_context
+@error_handler
+@cli_analytics
+def destroy(ctx: click.Context, **kwargs: t.Any) -> None:
+    """
+    The destroy command removes all project resources.
+
+    This includes engine-managed objects, state tables, the SQLMesh cache and any build artifacts.
+    """
+    ctx.obj.destroy(**kwargs)
+
+
 @cli.command("dag")
 @click.argument("file", required=True)
 @click.option(

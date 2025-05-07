@@ -437,7 +437,7 @@ def test_try_invalidate_pr_environment(github_client, make_controller, mocker: M
     invalidate_controller._context._state_sync = mocker.MagicMock()
     invalidate_controller.try_invalidate_pr_environment()
     invalidate_controller._context._state_sync.invalidate_environment.assert_called_once_with(
-        "hello_world_2"
+        "hello_world_2", True
     )
 
     no_invalidate_controller = make_controller(
