@@ -17,7 +17,7 @@ from sqlmesh.utils import Verbosity
 from sqlmesh.core.config import load_configs
 from sqlmesh.core.context import Context
 from sqlmesh.utils.date import TimeLike
-from sqlmesh.utils.errors import MissingDependencyError
+from sqlmesh.utils.errors import MissingDependencyError, SQLMeshError
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -907,7 +907,14 @@ def table_diff(
 ) -> None:
     """Show the diff between two tables or a selection of models when they are specified."""
     source, target = source_to_target.split(":")
-    select_models = {model} if model else kwargs.pop("select_model", None)
+    select_model = kwargs.pop("select_model", None)
+
+    if model and select_model:
+        raise SQLMeshError(
+            "The --select-model option cannot be used together with a model argument. Please choose one of them."
+        )
+
+    select_models = {model} if model else select_model
     obj.table_diff(
         source=source,
         target=target,
