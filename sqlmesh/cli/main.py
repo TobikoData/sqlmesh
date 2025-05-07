@@ -17,7 +17,7 @@ from sqlmesh.utils import Verbosity
 from sqlmesh.core.config import load_configs
 from sqlmesh.core.context import Context
 from sqlmesh.utils.date import TimeLike
-from sqlmesh.utils.errors import MissingDependencyError
+from sqlmesh.utils.errors import MissingDependencyError, SQLMeshError
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -910,17 +910,17 @@ def table_diff(
     select_model = kwargs.pop("select_model", None)
 
     if model and select_model:
-        obj.console.log_error(
+        raise SQLMeshError(
             "The --select-model option cannot be used together with a model argument. Please choose one of them."
         )
-    else:
-        select_models = {model} if model else select_model
-        obj.table_diff(
-            source=source,
-            target=target,
-            select_models=select_models,
-            **kwargs,
-        )
+
+    select_models = {model} if model else select_model
+    obj.table_diff(
+        source=source,
+        target=target,
+        select_models=select_models,
+        **kwargs,
+    )
 
 
 @cli.command("rewrite")
