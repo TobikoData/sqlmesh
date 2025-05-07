@@ -3107,8 +3107,48 @@ def test_set_choice_for_forward_only_model(make_snapshot):
     )
 
 
-def test_flags(sushi_context: Context):
-    plan = sushi_context.plan(no_prompts=True, run=True, execution_time="2025-01-01")
-    sushi_context.apply(plan)
+def test_user_defined_flags(sushi_context: Context):
+    expected_flags = {
+        "run": True,
+        "execution_time": "2025-01-01",
+    }
+    plan_a = sushi_context.plan(no_prompts=True, run=True, execution_time="2025-01-01")
+    assert plan_a.user_defined_flags == expected_flags
+    evaluatable_plan = plan_a.to_evaluatable()
+    assert evaluatable_plan.user_defined_flags == expected_flags
 
-    assert plan.flags == {"no_prompts": True, "run": True, "execution_time": "2025-01-01"}
+    plan_b = sushi_context.plan()
+    assert plan_b.user_defined_flags == {}
+    evaluatable_plan_b = plan_b.to_evaluatable()
+    assert evaluatable_plan_b.user_defined_flags == {}
+
+    context_diff = ContextDiff(
+        environment="test_environment",
+        is_new_environment=True,
+        is_unfinalized_environment=False,
+        normalize_environment_name=True,
+        create_from="prod",
+        create_from_env_exists=True,
+        added=set(),
+        removed_snapshots={},
+        modified_snapshots={},
+        snapshots={},
+        new_snapshots={},
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
+        previous_gateway_managed_virtual_layer=False,
+        gateway_managed_virtual_layer=False,
+    )
+    plan_builder = PlanBuilder(
+        context_diff,
+        DuckDBEngineAdapter.SCHEMA_DIFFER,
+        forward_only=True,
+        user_defined_flags={"forward_only": True},
+    ).build()
+    assert plan_builder.user_defined_flags == {"forward_only": True}
+    plan_builder = PlanBuilder(
+        context_diff,
+        DuckDBEngineAdapter.SCHEMA_DIFFER,
+    ).build()
+    assert plan_builder.user_defined_flags == None

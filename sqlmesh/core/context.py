@@ -1230,18 +1230,6 @@ class GenericContext(BaseContext, t.Generic[C]):
         Returns:
             The populated Plan object.
         """
-
-        flags = {
-            k: v for k, v in locals().items() if k not in {"self", "environment"} if v is not None
-        }
-        skip_tests = skip_tests or False
-        no_gaps = no_gaps or False
-        skip_backfill = skip_backfill or False
-        empty_backfill = empty_backfill or False
-        run = run or False
-        diff_rendered = diff_rendered or False
-        skip_linter = skip_linter or False
-
         plan_builder = self.plan_builder(
             environment,
             start=start,
@@ -1265,7 +1253,6 @@ class GenericContext(BaseContext, t.Generic[C]):
             run=run,
             diff_rendered=diff_rendered,
             skip_linter=skip_linter,
-            flags=flags,
         )
 
         if no_auto_categorization:
@@ -1291,11 +1278,11 @@ class GenericContext(BaseContext, t.Generic[C]):
         end: t.Optional[TimeLike] = None,
         execution_time: t.Optional[TimeLike] = None,
         create_from: t.Optional[str] = None,
-        skip_tests: bool = False,
+        skip_tests: t.Optional[bool] = None,
         restate_models: t.Optional[t.Iterable[str]] = None,
-        no_gaps: bool = False,
-        skip_backfill: bool = False,
-        empty_backfill: bool = False,
+        no_gaps: t.Optional[bool] = None,
+        skip_backfill: t.Optional[bool] = None,
+        empty_backfill: t.Optional[bool] = None,
         forward_only: t.Optional[bool] = None,
         allow_destructive_models: t.Optional[t.Collection[str]] = None,
         no_auto_categorization: t.Optional[bool] = None,
@@ -1305,10 +1292,9 @@ class GenericContext(BaseContext, t.Generic[C]):
         backfill_models: t.Optional[t.Collection[str]] = None,
         categorizer_config: t.Optional[CategorizerConfig] = None,
         enable_preview: t.Optional[bool] = None,
-        run: bool = False,
-        diff_rendered: bool = False,
-        skip_linter: bool = False,
-        flags: t.Optional[t.Dict[str, t.Any]] = None,
+        run: t.Optional[bool] = None,
+        diff_rendered: t.Optional[bool] = None,
+        skip_linter: t.Optional[bool] = None,
     ) -> PlanBuilder:
         """Creates a plan builder.
 
@@ -1349,6 +1335,56 @@ class GenericContext(BaseContext, t.Generic[C]):
         Returns:
             The plan builder.
         """
+        kwargs: t.Dict[
+            str,
+            t.Union[
+                t.Optional[TimeLike],
+                t.Optional[str],
+                t.Optional[bool],
+                t.Optional[t.Iterable[str]],
+                t.Optional[t.Collection[str]],
+            ],
+        ] = {
+            "start": start,
+            "end": end,
+            "execution_time": execution_time,
+            "create_from": create_from,
+            "skip_tests": skip_tests,
+            "restate_models": restate_models,
+            "no_gaps": no_gaps,
+            "skip_backfill": skip_backfill,
+            "empty_backfill": empty_backfill,
+            "forward_only": forward_only,
+            "allow_destructive_models": allow_destructive_models,
+            "no_auto_categorization": no_auto_categorization,
+            "effective_from": effective_from,
+            "include_unmodified": include_unmodified,
+            "select_models": select_models,
+            "backfill_models": backfill_models,
+            "enable_preview": enable_preview,
+            "run": run,
+            "diff_rendered": diff_rendered,
+            "skip_linter": skip_linter,
+        }
+        user_defined_flags: t.Dict[
+            str,
+            t.Union[
+                t.Optional[TimeLike],
+                t.Optional[str],
+                t.Optional[bool],
+                t.Optional[t.Iterable[str]],
+                t.Optional[t.Collection[str]],
+            ],
+        ] = {k: v for k, v in kwargs.items() if v is not None}
+
+        skip_tests = skip_tests or False
+        no_gaps = no_gaps or False
+        skip_backfill = skip_backfill or False
+        empty_backfill = empty_backfill or False
+        run = run or False
+        diff_rendered = diff_rendered or False
+        skip_linter = skip_linter or False
+
         environment = environment or self.config.default_target_environment
         environment = Environment.sanitize_name(environment)
         is_dev = environment != c.PROD
@@ -1483,7 +1519,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             engine_schema_differ=self.engine_adapter.SCHEMA_DIFFER,
             interval_end_per_model=max_interval_end_per_model,
             console=self.console,
-            flags=flags,
+            user_defined_flags=user_defined_flags,
         )
 
     def apply(

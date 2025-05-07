@@ -63,7 +63,18 @@ class Plan(PydanticModel, frozen=True):
     effective_from: t.Optional[TimeLike] = None
     execution_time: t.Optional[TimeLike] = None
 
-    flags: t.Optional[t.Dict[str, t.Any]] = None
+    user_defined_flags: t.Optional[
+        t.Dict[
+            str,
+            t.Union[
+                t.Optional[TimeLike],
+                t.Optional[str],
+                t.Optional[bool],
+                t.Optional[t.Iterable[str]],
+                t.Optional[t.Collection[str]],
+            ],
+        ]
+    ] = None
 
     @cached_property
     def start(self) -> TimeLike:
@@ -264,6 +275,7 @@ class Plan(PydanticModel, frozen=True):
                 if s.is_model and s.model.disable_restatement
             },
             environment_statements=self.context_diff.environment_statements,
+            user_defined_flags=self.user_defined_flags,
         )
 
     @cached_property
@@ -296,6 +308,18 @@ class EvaluatablePlan(PydanticModel):
     execution_time: t.Optional[TimeLike] = None
     disabled_restatement_models: t.Set[str]
     environment_statements: t.Optional[t.List[EnvironmentStatements]] = None
+    user_defined_flags: t.Optional[
+        t.Dict[
+            str,
+            t.Union[
+                t.Optional[TimeLike],
+                t.Optional[str],
+                t.Optional[bool],
+                t.Optional[t.Iterable[str]],
+                t.Optional[t.Collection[str]],
+            ],
+        ]
+    ] = None
 
     def is_selected_for_backfill(self, model_fqn: str) -> bool:
         return self.models_to_backfill is None or model_fqn in self.models_to_backfill
