@@ -289,7 +289,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
                 and bq_table.time_partitioning
                 and not bq_table.time_partitioning.field
             ):
-                columns["_PARTITIONTIME"] = exp.DataType.build("TIMESTAMP")
+                columns["_PARTITIONTIME"] = exp.DataType.build("TIMESTAMP", dialect="bigquery")
                 if bq_table.time_partitioning.type_ == "DAY":
                     columns["_PARTITIONDATE"] = exp.DataType.build("DATE")
 
