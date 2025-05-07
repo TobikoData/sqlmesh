@@ -8845,6 +8845,54 @@ def entrypoint(context, *args, **kwargs):
     assert t.cast(pd.DataFrame, list(m.render(context=context))[0]).to_dict() == {"x": {0: 1}}
 
 
+def test_python_model_depends_on_blueprints(tmp_path: Path) -> None:
+    sql_model = tmp_path / "models" / "base_blueprints.sql"
+    sql_model.parent.mkdir(parents=True, exist_ok=True)
+    sql_model.write_text(
+        """
+        MODEL (
+          name test_schema1.@{model_name},
+          blueprints ((model_name := foo), (model_name := bar)),
+          kind FULL
+        );
+
+        SELECT 1 AS id
+        """
+    )
+
+    py_model = tmp_path / "models" / "depends_on_with_blueprint_vars.py"
+    py_model.parent.mkdir(parents=True, exist_ok=True)
+    py_model.write_text(
+        """
+import pandas as pd
+from sqlmesh import model
+
+@model(
+    "test_schema2.@model_name",
+    columns={
+        "id": "int",
+    },
+    blueprints=[
+        {"model_name": "foo"},
+        {"model_name": "bar"},
+    ],
+    depends_on=["test_schema1.@{model_name}"],
+)
+def entrypoint(context, *args, **kwargs):
+    table = context.resolve_table(f"test_schema1.{context.blueprint_var('model_name')}")
+    return context.fetchdf(f"SELECT * FROM {table}")"""
+    )
+
+    ctx = Context(
+        config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb")),
+        paths=tmp_path,
+    )
+    assert len(ctx.models) == 4
+
+    ctx.plan(no_prompts=True, auto_apply=True)
+    assert ctx.fetchdf("SELECT * FROM test_schema2.foo").to_dict() == {"id": {0: 1}}
+
+
 @time_machine.travel("2020-01-01 00:00:00 UTC")
 def test_dynamic_date_spine_model(assert_exp_eq):
     @macro()
