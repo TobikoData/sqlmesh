@@ -2478,6 +2478,14 @@ def _create_model(
 
     model.audit_definitions.update(audit_definitions)
 
+    from sqlmesh.core.audit.builtin import BUILT_IN_AUDITS
+
+    # Ensure that all audits referenced in the model are defined
+    available_audits = BUILT_IN_AUDITS.keys() | model.audit_definitions.keys()
+    for referenced_audit, *_ in model.audits:
+        if referenced_audit not in available_audits:
+            raise_config_error(f"Audit '{referenced_audit}' is undefined", location=path)
+
     # Any macro referenced in audits or signals needs to be treated as metadata-only
     statements.extend((audit.query, True) for audit in audit_definitions.values())
     for _, audit_args in model.audits:
