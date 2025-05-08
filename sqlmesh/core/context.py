@@ -88,6 +88,7 @@ from sqlmesh.core.notification_target import (
     NotificationTargetManager,
 )
 from sqlmesh.core.plan import Plan, PlanBuilder, SnapshotIntervals
+from sqlmesh.core.plan.definition import UserProvidedFlags
 from sqlmesh.core.reference import ReferenceGraph
 from sqlmesh.core.scheduler import Scheduler, CompletionStatus
 from sqlmesh.core.schema_loader import create_external_models_file
@@ -1335,47 +1336,33 @@ class GenericContext(BaseContext, t.Generic[C]):
         Returns:
             The plan builder.
         """
-        kwargs: t.Dict[
-            str,
-            t.Union[
-                t.Optional[TimeLike],
-                t.Optional[str],
-                t.Optional[bool],
-                t.Optional[t.Iterable[str]],
-                t.Optional[t.Collection[str]],
-            ],
-        ] = {
+        kwargs: t.Dict[str, t.Optional[UserProvidedFlags]] = {
             "start": start,
             "end": end,
             "execution_time": execution_time,
             "create_from": create_from,
             "skip_tests": skip_tests,
-            "restate_models": restate_models,
+            "restate_models": list(restate_models) if restate_models else None,
             "no_gaps": no_gaps,
             "skip_backfill": skip_backfill,
             "empty_backfill": empty_backfill,
             "forward_only": forward_only,
-            "allow_destructive_models": allow_destructive_models,
+            "allow_destructive_models": list(allow_destructive_models)
+            if allow_destructive_models
+            else None,
             "no_auto_categorization": no_auto_categorization,
             "effective_from": effective_from,
             "include_unmodified": include_unmodified,
-            "select_models": select_models,
-            "backfill_models": backfill_models,
+            "select_models": list(select_models) if select_models else None,
+            "backfill_models": list(backfill_models) if backfill_models else None,
             "enable_preview": enable_preview,
             "run": run,
             "diff_rendered": diff_rendered,
             "skip_linter": skip_linter,
         }
-        user_defined_flags: t.Dict[
-            str,
-            t.Union[
-                t.Optional[TimeLike],
-                t.Optional[str],
-                t.Optional[bool],
-                t.Optional[t.Iterable[str]],
-                t.Optional[t.Collection[str]],
-            ],
-        ] = {k: v for k, v in kwargs.items() if v is not None}
+        user_provided_flags: t.Dict[str, UserProvidedFlags] = {
+            k: v for k, v in kwargs.items() if v is not None
+        }
 
         skip_tests = skip_tests or False
         no_gaps = no_gaps or False
@@ -1519,7 +1506,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             engine_schema_differ=self.engine_adapter.SCHEMA_DIFFER,
             interval_end_per_model=max_interval_end_per_model,
             console=self.console,
-            user_defined_flags=user_defined_flags,
+            user_provided_flags=user_provided_flags,
         )
 
     def apply(

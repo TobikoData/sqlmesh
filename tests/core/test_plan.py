@@ -3107,20 +3107,20 @@ def test_set_choice_for_forward_only_model(make_snapshot):
     )
 
 
-def test_user_defined_flags(sushi_context: Context):
+def test_user_provided_flags(sushi_context: Context):
     expected_flags = {
         "run": True,
         "execution_time": "2025-01-01",
     }
     plan_a = sushi_context.plan(no_prompts=True, run=True, execution_time="2025-01-01")
-    assert plan_a.user_defined_flags == expected_flags
+    assert plan_a.user_provided_flags == expected_flags
     evaluatable_plan = plan_a.to_evaluatable()
-    assert evaluatable_plan.user_defined_flags == expected_flags
+    assert evaluatable_plan.user_provided_flags == expected_flags
 
     plan_b = sushi_context.plan()
-    assert plan_b.user_defined_flags == {}
+    assert plan_b.user_provided_flags == {}
     evaluatable_plan_b = plan_b.to_evaluatable()
-    assert evaluatable_plan_b.user_defined_flags == {}
+    assert evaluatable_plan_b.user_provided_flags == {}
 
     context_diff = ContextDiff(
         environment="test_environment",
@@ -3144,11 +3144,11 @@ def test_user_defined_flags(sushi_context: Context):
         context_diff,
         DuckDBEngineAdapter.SCHEMA_DIFFER,
         forward_only=True,
-        user_defined_flags={"forward_only": True},
+        user_provided_flags={"forward_only": True},
     ).build()
-    assert plan_builder.user_defined_flags == {"forward_only": True}
+    assert plan_builder.user_provided_flags == {"forward_only": True}
     plan_builder = PlanBuilder(
         context_diff,
         DuckDBEngineAdapter.SCHEMA_DIFFER,
     ).build()
-    assert plan_builder.user_defined_flags == None
+    assert plan_builder.user_provided_flags == None
