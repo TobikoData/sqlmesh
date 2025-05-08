@@ -1021,7 +1021,7 @@ def union_if(
         >>> from sqlglot import parse_one
         >>> from sqlglot.schema import MappingSchema
         >>> from sqlmesh.core.macros import MacroEvaluator
-        >>> sql = "@UNION_IF(@start_ts = '2025-01-01 00:00:00', 'distinct', foo, bar)"
+        >>> sql = "@UNION_IF(True, 'distinct', foo, bar)"
         >>> MacroEvaluator(schema=MappingSchema({"foo": {"a": "int", "b": "string", "c": "string"}, "bar": {"c": "string", "a": "int", "b": "int"}})).transform(parse_one(sql)).sql()
         'SELECT CAST(a AS INT) AS a, CAST(c AS TEXT) AS c FROM foo UNION SELECT CAST(a AS INT) AS a, CAST(c AS TEXT) AS c FROM bar'
     """
