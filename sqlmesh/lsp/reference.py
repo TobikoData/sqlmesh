@@ -3,7 +3,7 @@ import typing as t
 
 from sqlmesh.core.dialect import normalize_model_name
 from sqlmesh.core.model.definition import SqlModel
-from sqlmesh.lsp.context import LSPContext
+from sqlmesh.lsp.context import LSPContext, ModelTarget, AuditTarget
 from sqlglot import exp
 
 from sqlmesh.utils.pydantic import PydanticModel
@@ -20,7 +20,7 @@ def get_model_definitions_for_a_path(
     """
     Get the model references for a given path.
 
-    Works for models and audits.
+    Works for models and standalone audits.
     Works for targeting sql and python models.
 
     Steps:
@@ -31,39 +31,63 @@ def get_model_definitions_for_a_path(
     - Try get_model before normalization
     - Match to models that the model refers to
     """
-    # Ensure the path is a sql model
+    # Ensure the path is a sql file
     if not document_uri.endswith(".sql"):
         return []
 
-    # Get the model
-    models = lint_context.map[document_uri]
-    if not models:
+    # Get the file info from the context map
+    if document_uri not in lint_context.map:
         return []
-    model = lint_context.context.get_model(model_or_snapshot=models[0], raise_if_missing=False)
-    if model is None or not isinstance(model, SqlModel):
+
+    file_info = lint_context.map[document_uri]
+
+    # Process based on whether it's a model or standalone audit
+    if isinstance(file_info, ModelTarget):
+        # It's a model
+        model = lint_context.context.get_model(
+            model_or_snapshot=file_info.names[0], raise_if_missing=False
+        )
+        if model is None or not isinstance(model, SqlModel):
+            return []
+
+        query = model.query
+        dialect = model.dialect
+        depends_on = model.depends_on
+        file_path = model._path
+    elif isinstance(file_info, AuditTarget):
+        # It's a standalone audit
+        audit = lint_context.context.standalone_audits.get(file_info.name)
+        if audit is None:
+            return []
+
+        query = audit.query
+        dialect = audit.dialect
+        depends_on = audit.depends_on
+        file_path = audit._path
+    else:
         return []
 
     # Find all possible references
     references = []
-    tables = list(model.query.find_all(exp.Table))
+
+    # Get SQL query and find all table references
+    tables = list(query.find_all(exp.Table))
     if len(tables) == 0:
         return []
 
-    read_file = open(model._path, "r").readlines()
+    read_file = open(file_path, "r").readlines()
 
     for table in tables:
-        depends_on = model.depends_on
-
         # Normalize the table reference
         unaliased = table.copy()
         if unaliased.args.get("alias") is not None:
             unaliased.set("alias", None)
-        reference_name = unaliased.sql(dialect=model.dialect)
+        reference_name = unaliased.sql(dialect=dialect)
         try:
             normalized_reference_name = normalize_model_name(
                 reference_name,
                 default_catalog=lint_context.context.default_catalog,
-                dialect=model.dialect,
+                dialect=dialect,
             )
             if normalized_reference_name not in depends_on:
                 continue

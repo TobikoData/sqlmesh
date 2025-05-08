@@ -12,7 +12,7 @@ from sqlmesh._version import __version__
 from sqlmesh.core.context import Context
 from sqlmesh.core.linter.definition import AnnotatedRuleViolation
 from sqlmesh.lsp.completions import get_sql_completions
-from sqlmesh.lsp.context import LSPContext
+from sqlmesh.lsp.context import LSPContext, ModelTarget
 from sqlmesh.lsp.custom import ALL_MODELS_FEATURE, AllModelsRequest, AllModelsResponse
 from sqlmesh.lsp.reference import get_model_definitions_for_a_path
 
@@ -91,8 +91,10 @@ class SQLMeshLanguageServer:
             models = context.map[params.text_document.uri]
             if models is None:
                 return
+            if not isinstance(models, ModelTarget):
+                return
             self.lint_cache[params.text_document.uri] = context.context.lint_models(
-                models,
+                models.names,
                 raise_on_error=False,
             )
             ls.publish_diagnostics(
@@ -108,8 +110,10 @@ class SQLMeshLanguageServer:
             models = context.map[params.text_document.uri]
             if models is None:
                 return
+            if not isinstance(models, ModelTarget):
+                return
             self.lint_cache[params.text_document.uri] = context.context.lint_models(
-                models,
+                models.names,
                 raise_on_error=False,
             )
             ls.publish_diagnostics(
@@ -125,8 +129,10 @@ class SQLMeshLanguageServer:
             models = context.map[params.text_document.uri]
             if models is None:
                 return
+            if not isinstance(models, ModelTarget):
+                return
             self.lint_cache[params.text_document.uri] = context.context.lint_models(
-                models,
+                models.names,
                 raise_on_error=False,
             )
             ls.publish_diagnostics(

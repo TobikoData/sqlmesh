@@ -1,6 +1,6 @@
 import pytest
 from sqlmesh.core.context import Context
-from sqlmesh.lsp.context import LSPContext
+from sqlmesh.lsp.context import LSPContext, ModelTarget, AuditTarget
 from sqlmesh.lsp.reference import get_model_definitions_for_a_path
 
 
@@ -9,11 +9,16 @@ def test_reference() -> None:
     context = Context(paths=["examples/sushi"])
     lsp_context = LSPContext(context)
 
+    # Find model URIs
     active_customers_uri = next(
-        uri for uri, models in lsp_context.map.items() if "sushi.active_customers" in models
+        uri
+        for uri, info in lsp_context.map.items()
+        if isinstance(info, ModelTarget) and "sushi.active_customers" in info.names
     )
     sushi_customers_uri = next(
-        uri for uri, models in lsp_context.map.items() if "sushi.customers" in models
+        uri
+        for uri, info in lsp_context.map.items()
+        if isinstance(info, ModelTarget) and "sushi.customers" in info.names
     )
 
     references = get_model_definitions_for_a_path(lsp_context, active_customers_uri)
@@ -35,7 +40,9 @@ def test_reference_with_alias() -> None:
     lsp_context = LSPContext(context)
 
     waiter_revenue_by_day_uri = next(
-        uri for uri, models in lsp_context.map.items() if "sushi.waiter_revenue_by_day" in models
+        uri
+        for uri, info in lsp_context.map.items()
+        if isinstance(info, ModelTarget) and "sushi.waiter_revenue_by_day" in info.names
     )
 
     references = get_model_definitions_for_a_path(lsp_context, waiter_revenue_by_day_uri)
@@ -50,6 +57,37 @@ def test_reference_with_alias() -> None:
     assert get_string_from_range(read_file, references[1].range) == "sushi.order_items"
     assert references[2].uri.endswith("items.py")
     assert get_string_from_range(read_file, references[2].range) == "sushi.items"
+
+
+@pytest.mark.fast
+def test_standalone_audit_reference() -> None:
+    context = Context(paths=["examples/sushi"])
+    lsp_context = LSPContext(context)
+
+    # Find the standalone audit URI
+    audit_uri = next(
+        uri
+        for uri, info in lsp_context.map.items()
+        if isinstance(info, AuditTarget) and info.name == "assert_item_price_above_zero"
+    )
+
+    # Find the items model URI
+    items_uri = next(
+        uri
+        for uri, info in lsp_context.map.items()
+        if isinstance(info, ModelTarget) and "sushi.items" in info.names
+    )
+
+    references = get_model_definitions_for_a_path(lsp_context, audit_uri)
+
+    assert len(references) == 1
+    assert references[0].uri == items_uri
+
+    # Check that the reference in the correct range is sushi.items
+    path = audit_uri.removeprefix("file://")
+    read_file = open(path, "r").readlines()
+    referenced_text = get_string_from_range(read_file, references[0].range)
+    assert referenced_text == "sushi.items"
 
 
 def get_string_from_range(file_lines, range_obj) -> str:

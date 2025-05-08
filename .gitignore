@@ -155,3 +155,6 @@ tests/_version.py
 # spark
 metastore_db/
 spark-warehouse/
+
+# claude
+.claude/
