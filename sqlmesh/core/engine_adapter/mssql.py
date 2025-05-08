@@ -220,11 +220,28 @@ class MSSQLEngineAdapter(
                 columns_to_types_create = columns_to_types.copy()
                 self._convert_df_datetime(df, columns_to_types_create)
                 self.create_table(temp_table, columns_to_types_create)
-                rows: t.List[t.Tuple[t.Any, ...]] = list(
-                    df.replace({np.nan: None}).itertuples(index=False, name=None)  # type: ignore
-                )
                 conn = self._connection_pool.get()
-                conn.bulk_copy(temp_table.sql(dialect=self.dialect), rows)
+
+                if self._connection_pool.driver == "pyodbc":
+                    cursor = conn.cursor()
+
+                    # Prepare the insert query
+                    column_names = ', '.join([col for col in columns_to_types.keys()])
+                    placeholders = ', '.join(['?' for _ in columns_to_types.keys()])
+                    insert_query = f"INSERT INTO {temp_table.sql(dialect=self.dialect)} ({column_names}) VALUES ({placeholders})"
+
+                    # Replace NaN with None and prepare rows
+                    rows = [tuple(row) for row in df.replace({np.nan: None}).itertuples(index=False, name=None)]
+
+                    # Execute the query with multiple rows
+                    cursor.executemany(insert_query, rows)
+                    conn.commit()
+                    cursor.close()
+                else:  # Use bulk_copy for pymssql
+                    rows: t.List[t.Tuple[t.Any, ...]] = list(
+                        df.replace({np.nan: None}).itertuples(index=False, name=None)  # type: ignore
+                    )
+                    conn.bulk_copy(temp_table.sql(dialect=self.dialect), rows)
             return exp.select(*self._casted_columns(columns_to_types)).from_(temp_table)  # type: ignore
 
         return [
