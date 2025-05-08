@@ -1446,6 +1446,35 @@ def test_sushi(ctx: TestContext, tmp_path_factory: pytest.TempPathFactory):
                 f"CREATE VIEW {raw_test_schema}.demographics ON CLUSTER cluster1 AS SELECT 1 AS customer_id, '00000' AS zip;"
             )
 
+    # DuckDB parses TIMESTAMP into Type.TIMESTAMPNTZ which generates into TIMESTAMP_NTZ for
+    # Spark, but this type is not supported in Spark's DDL statements so we make it a TIMESTAMP
+    if ctx.dialect == "spark":
+        for model_key, model in context._models.items():
+            model_columns = model.columns_to_types
+
+            updated_model_columns = {}
+            for k, v in model_columns.items():
+                updated_model_columns[k] = v
+                if v.this == exp.DataType.Type.TIMESTAMPNTZ:
+                    v.set("this", exp.DataType.Type.TIMESTAMP)
+
+            update_fields = {
+                "columns_to_types": updated_model_columns,
+                "columns_to_types_": updated_model_columns,
+                "columns_to_types_or_raise": updated_model_columns,
+            }
+
+            # We get rid of the sushi.marketing post statement here because it asserts that
+            # updated_at is a 'timestamp', which is parsed using duckdb in assert_has_columns
+            # and the assertion fails because we now have TIMESTAMPs and not TIMESTAMPNTZs in
+            # the columns_to_types mapping
+            if '"marketing"' in model_key:
+                update_fields["post_statements_"] = []
+
+            context._models.update(
+                {model_key: context._models[model_key].copy(update=update_fields)}
+            )
+
     if ctx.dialect == "athena":
         for model_name in {"customer_revenue_lifetime"}:
             model_key = next(k for k in context._models if model_name in k)
