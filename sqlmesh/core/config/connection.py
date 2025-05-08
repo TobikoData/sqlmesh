@@ -1396,7 +1396,7 @@ class MSSQLConnectionConfig(ConnectionConfig):
         else:  # pyodbc
             import pyodbc
             
-            def connect(**kwargs) -> t.Any:
+            def connect(**kwargs: t.Any) -> t.Callable:
                 # Extract parameters for connection string
                 host = kwargs.pop("host")
                 port = kwargs.pop("port", 1433)
