@@ -130,7 +130,8 @@ def test_filter_references_by_position() -> None:
 
     # Get file contents to locate positions for testing
     path = waiter_revenue_by_day_uri.removeprefix("file://")
-    read_file = open(path, "r").readlines()
+    with open(path, "r") as file:
+        read_file = file.readlines()
 
     # Test positions for each reference
     for i, reference in enumerate(all_references):
