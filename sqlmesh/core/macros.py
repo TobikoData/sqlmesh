@@ -1012,10 +1012,9 @@ def union_if(
     evaluator: MacroEvaluator,
     condition: exp.Expression,
     type_: exp.Literal = exp.Literal.string("ALL"),
-    *tables: exp.Table,
+    *tables: exp.Table | exp.Query,
 ) -> exp.Query:
-    """Returns a UNION of the given tables if the condition is true, otherwise returns just the first table.
-       The behaviour remains of only choosing columns that have the same name and type.
+    """Returns a UNION of the given tables or queries if the condition is true, otherwise returns just the first.
 
     Example:
         >>> from sqlglot import parse_one
@@ -1029,11 +1028,23 @@ def union_if(
     if kind not in ("ALL", "DISTINCT"):
         raise SQLMeshError(f"Invalid type '{type_}'. Expected 'ALL' or 'DISTINCT'.")
 
+    result = evaluator.eval_expression(condition)
+
+    if isinstance(tables[0], exp.Query):
+        if not result:
+            # If condition is false, return just the first query
+            return tables[0]
+        return tables[0].union(*tables[1:], distinct=kind == "DISTINCT")
+
     columns = {
         column
         for column, _ in reduce(
             lambda a, b: a & b,  # type: ignore
-            (evaluator.columns_to_types(table).items() for table in tables),
+            (
+                evaluator.columns_to_types(table).items()
+                for table in tables
+                if isinstance(table, exp.Table)  # for mypy
+            ),
         )
     }
 

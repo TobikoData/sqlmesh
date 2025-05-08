@@ -267,7 +267,7 @@ FROM "memory"."sushi"."marketing" AS "marketing"
 
 
 @time_machine.travel("1996-02-10 00:00:00 UTC")
-def test_model_union_if_query(sushi_context, assert_exp_eq):
+def test_model_union_if_table(sushi_context, assert_exp_eq):
     @macro()
     def get_date(evaluator):
         from sqlmesh.utils.date import now
@@ -327,6 +327,43 @@ SELECT
   CAST("marketing"."valid_to" AS TIMESTAMP) AS "valid_to"
 FROM "memory"."sushi"."marketing" AS "marketing"
         """,
+    )
+
+
+def test_model_union_if_query(sushi_context, assert_exp_eq):
+    expressions = d.parse(
+        """
+        MODEL (
+            name sushi.test_query,
+            kind FULL,
+        );
+
+        @union_if(True, 'all', 'select 1 as c', 'select 2 as c', 'select 3 as c')
+        """
+    )
+    sushi_context.upsert_model(load_sql_based_model(expressions, default_catalog="memory"))
+
+    assert_exp_eq(
+        sushi_context.get_model("sushi.test_query").render_query(),
+        """SELECT 1 AS "c" UNION ALL SELECT 2 AS "c" UNION ALL SELECT 3 AS "c"
+        """,
+    )
+
+    expressions = d.parse(
+        """
+        MODEL (
+            name sushi.test_query,
+            kind FULL,
+        );
+
+        @union_if(False, 'all', 'select 1 as c', 'select 2 as c', 'select 3 as c')
+        """
+    )
+    sushi_context.upsert_model(load_sql_based_model(expressions, default_catalog="memory"))
+
+    assert_exp_eq(
+        sushi_context.get_model("sushi.test_query").render_query(),
+        'SELECT 1 AS "c"',
     )
 
 
