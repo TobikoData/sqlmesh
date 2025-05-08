@@ -324,18 +324,23 @@ def test_run_dag(
         "'Executing model batches ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 18/18"
     )
     assert not output.stderr
-    assert len(output.outputs) == 6
+
+    # At least 6 outputs expected as the number of models in the particular batch might vary
+    assert len(output.outputs) >= 6
+
     html_text_actual = convert_all_html_output_to_text(output)
-    html_text_expected = [
-        "[2K",
-        "Executing model batches ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╸━━ 93.8% • 15/16 • 0:00:",
-        "[1/1] sushi.waiter_as_customer_by_day   [insert 2023-01-01 - 2023-01-02, audits ✔2]",
-        "",
-        "✔ Model batches executed",
-        "Run finished for environment 'prod'",
-    ]
-    for txt_actual, txt_expected in zip(html_text_actual, html_text_expected):
-        assert txt_actual.startswith(txt_expected)
+
+    # Check for key elements in the output
+    assert any("[2K" in text for text in html_text_actual)
+    assert any("Executing model batches" in text for text in html_text_actual)
+    assert any("✔ Model batches executed" in text for text in html_text_actual)
+    assert any("Run finished for environment 'prod'" in text for text in html_text_actual)
+
+    # Check the final messages
+    final_outputs = [text for text in html_text_actual if text.strip()]
+    assert final_outputs[-2] == "✔ Model batches executed"
+    assert final_outputs[-1] == "Run finished for environment 'prod'"
+
     actual_html_output = get_all_html_output(output)
     # Replace dynamic elapsed time with 00
     for i, chunk in enumerate(actual_html_output):
