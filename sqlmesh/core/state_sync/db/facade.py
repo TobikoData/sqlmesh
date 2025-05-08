@@ -59,7 +59,7 @@ from sqlmesh.core.state_sync.db.interval import IntervalState
 from sqlmesh.core.state_sync.db.environment import EnvironmentState
 from sqlmesh.core.state_sync.db.snapshot import SnapshotState
 from sqlmesh.core.state_sync.db.version import VersionState
-from sqlmesh.core.state_sync.db.migrator import StateMigrator
+from sqlmesh.core.state_sync.db.migrator import StateMigrator, _backup_table_name
 from sqlmesh.utils.date import TimeLike, to_timestamp, time_like_to_str, now_timestamp
 from sqlmesh.utils.errors import ConflictingPlanError, SQLMeshError
 
@@ -270,7 +270,7 @@ class EngineAdapterStateSync(StateSync):
     ) -> None:
         self.snapshot_state.unpause_snapshots(snapshots, unpaused_dt, self.interval_state)
 
-    def invalidate_environment(self, name: str, protect_prod: t.Optional[bool] = True) -> None:
+    def invalidate_environment(self, name: str, protect_prod: bool = True) -> None:
         self.environment_state.invalidate_environment(name, protect_prod)
 
     def get_expired_snapshots(
@@ -313,7 +313,7 @@ class EngineAdapterStateSync(StateSync):
     def nodes_exist(self, names: t.Iterable[str], exclude_external: bool = False) -> t.Set[str]:
         return self.snapshot_state.nodes_exist(names, exclude_external)
 
-    def remove_state(self) -> None:
+    def remove_state(self, including_backup: bool = False) -> None:
         """Removes the state store objects."""
         for table in (
             self.snapshot_state.snapshots_table,
@@ -325,6 +325,9 @@ class EngineAdapterStateSync(StateSync):
             self.version_state.versions_table,
         ):
             self.engine_adapter.drop_table(table)
+            if including_backup:
+                self.engine_adapter.drop_table(_backup_table_name(table))
+
         self.snapshot_state.clear_cache()
 
     def reset(self, default_catalog: t.Optional[str]) -> None:

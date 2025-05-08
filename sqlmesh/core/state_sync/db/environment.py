@@ -108,7 +108,7 @@ class EnvironmentState:
                 columns_to_types=self._environment_statements_columns_to_types,
             )
 
-    def invalidate_environment(self, name: str, protect_prod: t.Optional[bool] = True) -> None:
+    def invalidate_environment(self, name: str, protect_prod: bool = True) -> None:
         """Invalidates the environment.
 
         Args:

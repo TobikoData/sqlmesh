@@ -347,7 +347,7 @@ class StateSync(StateReader, abc.ABC):
         """
 
     @abc.abstractmethod
-    def invalidate_environment(self, name: str, protect_prod: t.Optional[bool] = True) -> None:
+    def invalidate_environment(self, name: str, protect_prod: bool = True) -> None:
         """Invalidates the target environment by setting its expiration timestamp to now.
 
         Args:
@@ -356,7 +356,7 @@ class StateSync(StateReader, abc.ABC):
         """
 
     @abc.abstractmethod
-    def remove_state(self) -> None:
+    def remove_state(self, including_backup: bool = False) -> None:
         """Removes the state store objects."""
 
     @abc.abstractmethod

@@ -1567,9 +1567,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         )
 
     @python_api_analytics
-    def invalidate_environment(
-        self, name: str, sync: bool = False, protect_prod: t.Optional[bool] = True
-    ) -> None:
+    def invalidate_environment(self, name: str, sync: bool = False) -> None:
         """Invalidates the target environment by setting its expiration timestamp to now.
 
         Args:
@@ -1579,7 +1577,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             protect_prod: If True, prevents invalidation of the production environment.
         """
         name = Environment.sanitize_name(name)
-        self.state_sync.invalidate_environment(name, protect_prod)
+        self.state_sync.invalidate_environment(name)
         if sync:
             self._cleanup_environments()
             self.console.log_success(f"Environment '{name}' deleted.")
@@ -2556,13 +2554,14 @@ class GenericContext(BaseContext, t.Generic[C]):
     def _destroy(self) -> None:
         # Invalidate all environments, including prod
         for environment in self.state_reader.get_environments():
-            self.invalidate_environment(name=environment.name, protect_prod=False)
+            self.state_sync.invalidate_environment(name=environment.name, protect_prod=False)
+            self.console.log_success(f"Environment '{environment.name}' invalidated.")
 
         # Run janitor to clean up all objects
         self._run_janitor(ignore_ttl=True)
 
-        # Remove state tables
-        self.state_sync.remove_state()
+        # Remove state tables, including backup tables
+        self.state_sync.remove_state(including_backup=True)
         self.console.log_status_update("State tables removed.")
 
         # Finally clear caches
