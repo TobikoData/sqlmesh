@@ -266,6 +266,70 @@ FROM "memory"."sushi"."marketing" AS "marketing"
     )
 
 
+@time_machine.travel("1996-02-10 00:00:00 UTC")
+def test_model_union_if_query(sushi_context, assert_exp_eq):
+    @macro()
+    def get_date(evaluator):
+        from sqlmesh.utils.date import now
+
+        return f"'{now().date()}'"
+
+    expressions = d.parse(
+        """
+        MODEL (
+            name sushi.test_1,
+            kind FULL,
+        );
+
+        @union_if(@get_date() == '1996-02-10', 'all', sushi.marketing, sushi.marketing)
+        """
+    )
+    sushi_context.upsert_model(load_sql_based_model(expressions, default_catalog="memory"))
+    assert_exp_eq(
+        sushi_context.get_model("sushi.test_1").render_query(),
+        """SELECT
+  CAST("marketing"."customer_id" AS INT) AS "customer_id",
+  CAST("marketing"."status" AS TEXT) AS "status",
+  CAST("marketing"."updated_at" AS TIMESTAMP) AS "updated_at",
+  CAST("marketing"."valid_from" AS TIMESTAMP) AS "valid_from",
+  CAST("marketing"."valid_to" AS TIMESTAMP) AS "valid_to"
+FROM "memory"."sushi"."marketing" AS "marketing"
+UNION ALL
+SELECT
+  CAST("marketing"."customer_id" AS INT) AS "customer_id",
+  CAST("marketing"."status" AS TEXT) AS "status",
+  CAST("marketing"."updated_at" AS TIMESTAMP) AS "updated_at",
+  CAST("marketing"."valid_from" AS TIMESTAMP) AS "valid_from",
+  CAST("marketing"."valid_to" AS TIMESTAMP) AS "valid_to"
+FROM "memory"."sushi"."marketing" AS "marketing"
+        """,
+    )
+
+    expressions = d.parse(
+        """
+        MODEL (
+            name sushi.test_2,
+            kind FULL,
+        );
+
+        @union_if(@get_date() > '1996-02-10', 'all', sushi.marketing, sushi.marketing)
+        """
+    )
+    sushi_context.upsert_model(load_sql_based_model(expressions, default_catalog="memory"))
+    assert_exp_eq(
+        sushi_context.get_model("sushi.test_2").render_query(),
+        """
+SELECT
+  CAST("marketing"."customer_id" AS INT) AS "customer_id",
+  CAST("marketing"."status" AS TEXT) AS "status",
+  CAST("marketing"."updated_at" AS TIMESTAMP) AS "updated_at",
+  CAST("marketing"."valid_from" AS TIMESTAMP) AS "valid_from",
+  CAST("marketing"."valid_to" AS TIMESTAMP) AS "valid_to"
+FROM "memory"."sushi"."marketing" AS "marketing"
+        """,
+    )
+
+
 def test_model_validation_union_query():
     expressions = d.parse(
         """
