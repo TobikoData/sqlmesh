@@ -222,7 +222,14 @@ class MSSQLEngineAdapter(
                 self.create_table(temp_table, columns_to_types_create)
                 conn = self._connection_pool.get()
 
-                if self._connection_pool.driver == "pyodbc":
+                if hasattr(conn, 'bulk_copy'):
+                    # Use bulk_copy if available
+                    rows: t.List[t.Tuple[t.Any, ...]] = list(
+                        df.replace({np.nan: None}).itertuples(index=False, name=None)  # type: ignore
+                    )
+                    conn.bulk_copy(temp_table.sql(dialect=self.dialect), rows)
+                else:
+                    # Fallback to executemany if bulk_copy is not available
                     cursor = conn.cursor()
 
                     # Prepare the insert query
@@ -237,11 +244,6 @@ class MSSQLEngineAdapter(
                     cursor.executemany(insert_query, rows)
                     conn.commit()
                     cursor.close()
-                else:  # Use bulk_copy for pymssql
-                    rows: t.List[t.Tuple[t.Any, ...]] = list(
-                        df.replace({np.nan: None}).itertuples(index=False, name=None)  # type: ignore
-                    )
-                    conn.bulk_copy(temp_table.sql(dialect=self.dialect), rows)
             return exp.select(*self._casted_columns(columns_to_types)).from_(temp_table)  # type: ignore
 
         return [
