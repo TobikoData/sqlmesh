@@ -40,6 +40,35 @@ class SQLMeshLanguageServer:
     def _register_features(self) -> None:
         """Register LSP features on the internal LanguageServer instance."""
 
+        @self.server.feature(types.INITIALIZE)
+        def initialize(ls: LanguageServer, params: types.InitializeParams) -> None:
+            """Initialize the server when the client connects."""
+            try:
+                if params.workspace_folders:
+                    # Try to find a SQLMesh config file in any workspace folder (only at the root level)
+                    for folder in params.workspace_folders:
+                        folder_path = Path(self._uri_to_path(folder.uri))
+                        # Only check for config files directly in the workspace directory
+                        for ext in ("py", "yml", "yaml"):
+                            config_path = folder_path / f"config.{ext}"
+                            if config_path.exists():
+                                try:
+                                    # Use user-provided instantiator to build the context
+                                    created_context = self.context_class(paths=[folder_path])
+                                    self.lsp_context = LSPContext(created_context)
+                                    ls.show_message(
+                                        f"Loaded SQLMesh context from {config_path}",
+                                        types.MessageType.Info,
+                                    )
+                                    return  # Exit after successfully loading any config
+                                except Exception as e:
+                                    ls.show_message(
+                                        f"Error loading context from {config_path}: {e}",
+                                        types.MessageType.Warning,
+                                    )
+            except Exception as e:
+                ls.show_message(f"Error initializing SQLMesh context: {e}", types.MessageType.Error)
+
         @self.server.feature(ALL_MODELS_FEATURE)
         def all_models(ls: LanguageServer, params: AllModelsRequest) -> AllModelsResponse:
             try:
