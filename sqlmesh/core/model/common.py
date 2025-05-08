@@ -361,10 +361,16 @@ def sort_python_env(python_env: t.Dict[str, Executable]) -> t.List[t.Tuple[str, 
 
 def sorted_python_env_payloads(python_env: t.Dict[str, Executable]) -> t.List[str]:
     """Returns the payloads of the sorted python env."""
-    return [
-        v.payload if v.is_import or v.is_definition else f"{k} = {v.payload}"
-        for k, v in sort_python_env(python_env)
-    ]
+
+    def _executable_to_str(k: str, v: Executable) -> str:
+        result = f"# {v.path}\n" if v.path is not None else ""
+        if v.is_import or v.is_definition:
+            result += v.payload
+        else:
+            result += f"{k} = {v.payload}"
+        return result
+
+    return [_executable_to_str(k, v) for k, v in sort_python_env(python_env)]
 
 
 expression_validator: t.Callable = field_validator(

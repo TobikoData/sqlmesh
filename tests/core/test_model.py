@@ -9702,3 +9702,26 @@ def test_scd_time_data_type_does_not_cause_diff_after_deserialization() -> None:
         deserialized_model = SqlModel.parse_raw(model.json())
 
         assert model.data_hash == deserialized_model.data_hash
+
+
+def test_python_env_includes_file_path_in_render_definition():
+    @model(
+        "db.test_model_path",
+        kind=dict(
+            name=ModelKindName.SCD_TYPE_2_BY_TIME,
+            unique_key=["id"],
+            disable_restatement=False,
+        ),
+        columns={"id": "string", "name": "string"},
+        optimize_query=False,
+    )
+    def test_model(context, **kwargs):
+        return pd.DataFrame([{"id": context.var("1")}])
+
+    python_model = model.get_registry()["db.test_model_path"].model(
+        module_path=Path("."), path=Path("."), dialect="duckdb"
+    )
+
+    model_executable_str = python_model.render_definition()[1].sql()
+    # Make sure the file path is included in the render definition
+    assert "# tests/core/test_model.py" in model_executable_str
