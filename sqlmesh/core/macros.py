@@ -1008,6 +1008,53 @@ def union(
 
 
 @macro()
+def union_if(
+    evaluator: MacroEvaluator,
+    condition: exp.Expression,
+    type_: exp.Literal = exp.Literal.string("ALL"),
+    *tables: exp.Table,
+) -> exp.Query:
+    """Returns a UNION of the given tables if the condition is true, otherwise returns just the first table.
+       The behaviour remains of only choosing columns that have the same name and type.
+
+    Example:
+        >>> from sqlglot import parse_one
+        >>> from sqlglot.schema import MappingSchema
+        >>> from sqlmesh.core.macros import MacroEvaluator
+        >>> sql = "@UNION_IF(@start_ts = '2025-01-01 00:00:00', 'distinct', foo, bar)"
+        >>> MacroEvaluator(schema=MappingSchema({"foo": {"a": "int", "b": "string", "c": "string"}, "bar": {"c": "string", "a": "int", "b": "int"}})).transform(parse_one(sql)).sql()
+        'SELECT CAST(a AS INT) AS a, CAST(c AS TEXT) AS c FROM foo UNION SELECT CAST(a AS INT) AS a, CAST(c AS TEXT) AS c FROM bar'
+    """
+    kind = type_.name.upper()
+    if kind not in ("ALL", "DISTINCT"):
+        raise SQLMeshError(f"Invalid type '{type_}'. Expected 'ALL' or 'DISTINCT'.")
+
+    columns = {
+        column
+        for column, _ in reduce(
+            lambda a, b: a & b,  # type: ignore
+            (evaluator.columns_to_types(table).items() for table in tables),
+        )
+    }
+
+    projections = [
+        exp.cast(column, type_, dialect=evaluator.dialect).as_(column)
+        for column, type_ in evaluator.columns_to_types(tables[0]).items()
+        if column in columns
+    ]
+
+    result = evaluator.eval_expression(condition)
+    if not result:
+        # If condition is false, return just the first table with proper column casting
+        return exp.select(*projections).from_(tables[0])
+
+    return reduce(
+        lambda a, b: a.union(b, distinct=kind == "DISTINCT"),  # type: ignore
+        [exp.select(*projections).from_(t) for t in tables],
+    )
+
+
+@macro()
 def haversine_distance(
     _: MacroEvaluator,
     lat1: exp.Expression,
