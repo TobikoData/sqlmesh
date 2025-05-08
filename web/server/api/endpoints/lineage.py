@@ -126,7 +126,7 @@ def create_models_only_lineage_adjacency_list(
 
 
 @router.get("/{model_name:str}/{column_name:str}")
-async def column_lineage(
+def column_lineage(
     model_name: str,
     column_name: str,
     models_only: bool = False,
@@ -146,7 +146,7 @@ async def column_lineage(
 
 
 @router.get("/{model_name:str}")
-async def model_lineage(
+def model_lineage(
     model_name: str,
     context: Context = Depends(get_loaded_context),
 ) -> t.Dict[str, t.Set[str]]:

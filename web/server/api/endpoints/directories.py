@@ -14,7 +14,7 @@ router = APIRouter()
 
 
 @router.post("/{path:path}", response_model=models.Directory)
-async def write_directory(
+def write_directory(
     path: str = Depends(validate_path),
     new_path: t.Optional[str] = Body(None, embed=True),
     settings: Settings = Depends(get_settings),
@@ -36,7 +36,7 @@ async def write_directory(
 
 
 @router.delete("/{path:path}")
-async def delete_directory(
+def delete_directory(
     response: Response,
     path: str = Depends(validate_path),
     settings: Settings = Depends(get_settings),

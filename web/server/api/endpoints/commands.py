@@ -60,7 +60,7 @@ async def initiate_apply(
 
 
 @router.post("/evaluate")
-async def evaluate(
+def evaluate(
     options: models.EvaluateInput,
     context: Context = Depends(get_loaded_context),
 ) -> ArrowStreamingResponse:
@@ -85,7 +85,7 @@ async def evaluate(
 
 
 @router.post("/fetchdf")
-async def fetchdf(
+def fetchdf(
     options: models.FetchdfInput,
     context: Context = Depends(get_loaded_context),
 ) -> ArrowStreamingResponse:
@@ -101,7 +101,7 @@ async def fetchdf(
 
 
 @router.post("/render", response_model=models.Query)
-async def render(
+def render(
     options: models.RenderInput,
     context: Context = Depends(get_loaded_context),
 ) -> models.Query:
@@ -134,7 +134,7 @@ async def render(
 
 
 @router.get("/test")
-async def test(
+def test(
     test: t.Optional[str] = None,
     verbosity: Verbosity = Verbosity.DEFAULT,
     context: Context = Depends(get_loaded_context),

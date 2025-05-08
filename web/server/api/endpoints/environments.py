@@ -12,7 +12,7 @@ router = APIRouter()
 
 
 @router.get("", response_model=Environments)
-async def get_environments(
+def get_environments(
     context: Context = Depends(get_loaded_context),
 ) -> Environments:
     """Get the environments"""
@@ -46,7 +46,7 @@ async def get_environments(
 
 
 @router.delete("/{environment:str}")
-async def delete_environment(
+def delete_environment(
     response: Response,
     environment: str,
     context: Context = Depends(get_loaded_context),

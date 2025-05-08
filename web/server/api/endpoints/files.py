@@ -45,7 +45,7 @@ def get_file(
 
 
 @router.post("/{path:path}", response_model=t.Optional[models.File])
-async def write_file(
+def write_file(
     response: Response,
     path: str = Depends(validate_path),
     content: str = Body("", embed=True),
@@ -100,7 +100,7 @@ async def write_file(
 
 
 @router.delete("/{path:path}")
-async def delete_file(
+def delete_file(
     response: Response,
     path: str = Depends(validate_path),
     settings: Settings = Depends(get_settings),

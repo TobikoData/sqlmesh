@@ -20,7 +20,7 @@ router = APIRouter()
 
 
 @router.post("", response_model=t.Optional[models.PlanOverviewStageTracker])
-async def initiate_plan(
+def initiate_plan(
     request: Request,
     response: Response,
     context: Context = Depends(get_loaded_context),
