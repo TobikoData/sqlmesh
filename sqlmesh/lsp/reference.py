@@ -14,6 +14,39 @@ class Reference(PydanticModel):
     uri: str
 
 
+def filter_references_by_position(
+    references: t.List[Reference], position: Position
+) -> t.List[Reference]:
+    """
+    Filter references to only include those that contain the given position.
+
+    Args:
+        references: List of Reference objects
+        position: The cursor position to check
+
+    Returns:
+        List of Reference objects that contain the position
+    """
+    filtered_references = []
+
+    for reference in references:
+        # Check if position is within the reference range
+        range_start = reference.range.start
+        range_end = reference.range.end
+
+        # Position is within range if it's after or at start and before or at end
+        if (
+            range_start.line < position.line
+            or (range_start.line == position.line and range_start.character <= position.character)
+        ) and (
+            range_end.line > position.line
+            or (range_end.line == position.line and range_end.character >= position.character)
+        ):
+            filtered_references.append(reference)
+
+    return filtered_references
+
+
 def get_model_definitions_for_a_path(
     lint_context: LSPContext, document_uri: str
 ) -> t.List[Reference]:

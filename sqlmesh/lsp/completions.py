@@ -2,11 +2,7 @@ from functools import lru_cache
 from sqlglot import Dialect, Tokenizer
 from sqlmesh.lsp.custom import AllModelsResponse
 import typing as t
-<<<<<<< HEAD
 from sqlmesh.lsp.context import AuditTarget, LSPContext, ModelTarget
-=======
-from sqlmesh.lsp.context import LSPContext, ModelTarget
->>>>>>> f70b3d9b (feat(vscode): go to definition for standalone audits)
 
 
 def get_sql_completions(context: t.Optional[LSPContext], file_uri: str) -> AllModelsResponse:

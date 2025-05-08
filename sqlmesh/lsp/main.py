@@ -14,7 +14,7 @@ from sqlmesh.core.linter.definition import AnnotatedRuleViolation
 from sqlmesh.lsp.completions import get_sql_completions
 from sqlmesh.lsp.context import LSPContext, ModelTarget
 from sqlmesh.lsp.custom import ALL_MODELS_FEATURE, AllModelsRequest, AllModelsResponse
-from sqlmesh.lsp.reference import get_model_definitions_for_a_path
+from sqlmesh.lsp.reference import get_model_definitions_for_a_path, filter_references_by_position
 
 
 class SQLMeshLanguageServer:
@@ -186,10 +186,16 @@ class SQLMeshLanguageServer:
                 if self.lsp_context is None:
                     raise RuntimeError(f"No context found for document: {document.path}")
 
+                # Get all possible references
                 references = get_model_definitions_for_a_path(
                     self.lsp_context, params.text_document.uri
                 )
                 if not references:
+                    return []
+
+                # Filter references by cursor position
+                filtered_references = filter_references_by_position(references, params.position)
+                if not filtered_references:
                     return []
 
                 return [
@@ -205,7 +211,7 @@ class SQLMeshLanguageServer:
                         ),
                         origin_selection_range=reference.range,
                     )
-                    for reference in references
+                    for reference in filtered_references
                 ]
 
             except Exception as e:
