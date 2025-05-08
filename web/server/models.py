@@ -172,6 +172,10 @@ class Model(PydanticModel):
     name: str
     fqn: str
     path: str
+    full_path: str
+    """
+    As opposed to path, which is relative to the project root, full_path is the absolute path to the model file.
+    """
     dialect: str
     type: ModelType
     columns: t.List[Column]
