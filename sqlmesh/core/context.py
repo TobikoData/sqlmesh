@@ -1342,19 +1342,19 @@ class GenericContext(BaseContext, t.Generic[C]):
             "execution_time": execution_time,
             "create_from": create_from,
             "skip_tests": skip_tests,
-            "restate_models": list(restate_models) if restate_models else None,
+            "restate_models": list(restate_models) if restate_models is not None else None,
             "no_gaps": no_gaps,
             "skip_backfill": skip_backfill,
             "empty_backfill": empty_backfill,
             "forward_only": forward_only,
             "allow_destructive_models": list(allow_destructive_models)
-            if allow_destructive_models
+            if allow_destructive_models is not None
             else None,
             "no_auto_categorization": no_auto_categorization,
             "effective_from": effective_from,
             "include_unmodified": include_unmodified,
-            "select_models": list(select_models) if select_models else None,
-            "backfill_models": list(backfill_models) if backfill_models else None,
+            "select_models": list(select_models) if select_models is not None else None,
+            "backfill_models": list(backfill_models) if backfill_models is not None else None,
             "enable_preview": enable_preview,
             "run": run,
             "diff_rendered": diff_rendered,
