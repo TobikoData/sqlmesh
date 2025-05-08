@@ -1574,7 +1574,6 @@ class GenericContext(BaseContext, t.Generic[C]):
             name: The name of the environment to invalidate.
             sync: If True, the call blocks until the environment is deleted. Otherwise, the environment will
                 be deleted asynchronously by the janitor process.
-            protect_prod: If True, prevents invalidation of the production environment.
         """
         name = Environment.sanitize_name(name)
         self.state_sync.invalidate_environment(name)
