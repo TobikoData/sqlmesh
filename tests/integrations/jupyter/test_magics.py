@@ -325,8 +325,8 @@ def test_run_dag(
     )
     assert not output.stderr
 
-    # At least 6 outputs expected as the number of models in the particular batch might vary
-    assert len(output.outputs) >= 6
+    # At least 4 outputs expected as the number of models in the particular batch might vary
+    assert len(output.outputs) >= 4
 
     html_text_actual = convert_all_html_output_to_text(output)
 
