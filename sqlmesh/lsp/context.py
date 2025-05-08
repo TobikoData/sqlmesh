@@ -16,4 +16,5 @@ class LSPContext:
             if model._path is not None:
                 path = Path(model._path).resolve()
                 map[f"file://{path.as_posix()}"].append(model.name)
+
         self.map = map
