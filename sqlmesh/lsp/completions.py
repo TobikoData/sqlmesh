@@ -2,7 +2,7 @@ from functools import lru_cache
 from sqlglot import Dialect, Tokenizer
 from sqlmesh.lsp.custom import AllModelsResponse
 import typing as t
-from sqlmesh.lsp.context import LSPContext
+from sqlmesh.lsp.context import AuditTarget, LSPContext, ModelTarget
 
 
 def get_sql_completions(context: t.Optional[LSPContext], file_uri: str) -> AllModelsResponse:
@@ -24,11 +24,20 @@ def get_models(context: t.Optional[LSPContext], file_uri: t.Optional[str]) -> t.
     """
     if context is None:
         return set()
-    all_models = set(model for models in context.map.values() for model in models)
-    if file_uri is not None:
-        models_file_refers_to = context.map[file_uri]
-        for model in models_file_refers_to:
-            all_models.discard(model)
+
+    all_models = set()
+    # Extract model names from ModelInfo objects
+    for file_info in context.map.values():
+        if isinstance(file_info, ModelTarget):
+            all_models.update(file_info.names)
+
+    # Remove models from the current file
+    if file_uri is not None and file_uri in context.map:
+        file_info = context.map[file_uri]
+        if isinstance(file_info, ModelTarget):
+            for model in file_info.names:
+                all_models.discard(model)
+
     return all_models
 
 
@@ -43,16 +52,25 @@ def get_keywords(context: t.Optional[LSPContext], file_uri: t.Optional[str]) -> 
     If both a context and a file_uri are provided, returns the keywords
     for the dialect of the model that the file belongs to.
     """
-    if file_uri is not None and context is not None:
-        models = context.map[file_uri]
-        if models:
-            model = models[0]
-            model_from_context = context.context.get_model(model)
-            if model_from_context is not None:
-                if model_from_context.dialect:
-                    return get_keywords_from_tokenizer(model_from_context.dialect)
+    if file_uri is not None and context is not None and file_uri in context.map:
+        file_info = context.map[file_uri]
+
+        # Handle ModelInfo objects
+        if isinstance(file_info, ModelTarget) and file_info.names:
+            model_name = file_info.names[0]
+            model_from_context = context.context.get_model(model_name)
+            if model_from_context is not None and model_from_context.dialect:
+                return get_keywords_from_tokenizer(model_from_context.dialect)
+
+        # Handle AuditInfo objects
+        elif isinstance(file_info, AuditTarget) and file_info.name:
+            audit = context.context.standalone_audits.get(file_info.name)
+            if audit is not None and audit.dialect:
+                return get_keywords_from_tokenizer(audit.dialect)
+
     if context is not None:
         return get_keywords_from_tokenizer(context.context.default_dialect)
+
     return get_keywords_from_tokenizer(None)
 
 
