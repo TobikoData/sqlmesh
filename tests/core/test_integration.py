@@ -5531,11 +5531,34 @@ def test_environment_statements_error_handling(tmp_path: Path):
     ctx = Context(paths=[tmp_path], config=config)
 
     expected_error_message = re.escape(
-        """An error occurred during execution of the following `before_all` statement:
+        """An error occurred during execution of the following 'before_all' statement:
 
 CREATE TABLE identical_table (physical_schema_name TEXT)
 
 Catalog Error: Table with name "identical_table" already exists!"""
+    )
+
+    with pytest.raises(SQLMeshError, match=expected_error_message):
+        ctx.plan(auto_apply=True, no_prompts=True)
+
+    after_all = [
+        "@bad_macro()",
+    ]
+
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        after_all=after_all,
+    )
+    ctx = Context(paths=[tmp_path], config=config)
+
+    expected_error_message = re.escape(
+        """An error occurred during rendering of the 'after_all' statements:
+
+Failed to resolve macros for
+
+@bad_macro()
+
+Macro 'bad_macro' does not exist."""
     )
 
     with pytest.raises(SQLMeshError, match=expected_error_message):
