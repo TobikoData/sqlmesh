@@ -194,4 +194,4 @@ The SQLMesh `plan` [`--forward-only` option](../concepts/plans.md#forward-only-p
 
 SQLMesh determines what to do for each model based on this setting hierarchy: the model's `on_destructive_change` value (if present), the `on_destructive_change` [model defaults](../reference/model_configuration.md#model-defaults) value (if present), and the SQLMesh global default of `error`.
 
-If you want to temporarily allow destructive changes to models that don't allow them, use the `plan` command's [`--allow-destructive-change` selector](../concepts/plans.md#destructive-changes) to specify which models. Learn more about model selectors [here](../guides/model_selection.md).
+If you want to temporarily allow destructive changes to models that don't allow them, use the `plan` command's [`--allow-destructive-model` selector](../concepts/plans.md#destructive-changes) to specify which models. Learn more about model selectors [here](../guides/model_selection.md).

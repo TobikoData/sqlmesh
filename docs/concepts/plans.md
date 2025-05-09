@@ -299,7 +299,7 @@ Forward-only plans treats all of the plan's model changes as forward-only. In th
 
 SQLMesh determines what to do for each model based on this setting hierarchy: the [model's `on_destructive_change` value](../guides/incremental_time.md#destructive-changes) (if present), the `on_destructive_change` [model defaults](../reference/model_configuration.md#model-defaults) value (if present), and the SQLMesh global default of `error`.
 
-If you want to temporarily allow destructive changes to models that don't allow them, use the `plan` command's `--allow-destructive-change` selector to specify which models. Learn more about model selectors [here](../guides/model_selection.md).
+If you want to temporarily allow destructive changes to models that don't allow them, use the `plan` command's `--allow-destructive-model` selector to specify which models. Learn more about model selectors [here](../guides/model_selection.md).
 
 ### Effective date
 Changes that are part of the forward-only plan can also be applied retroactively to the production environment by specifying the effective date:
