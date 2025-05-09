@@ -218,10 +218,13 @@ class MSSQLEngineAdapter(
             # as later calls.
             if not self.table_exists(temp_table):
                 columns_to_types_create = columns_to_types.copy()
-                self._convert_df_datetime(df, columns_to_types_create)
+                ordered_df = df[
+                    list(columns_to_types_create.keys())
+                ]  # reorder DataFrame so it matches columns_to_types
+                self._convert_df_datetime(ordered_df, columns_to_types_create)
                 self.create_table(temp_table, columns_to_types_create)
                 rows: t.List[t.Tuple[t.Any, ...]] = list(
-                    df.replace({np.nan: None}).itertuples(index=False, name=None)  # type: ignore
+                    ordered_df.replace({np.nan: None}).itertuples(index=False, name=None)  # type: ignore
                 )
                 conn = self._connection_pool.get()
                 conn.bulk_copy(temp_table.sql(dialect=self.dialect), rows)

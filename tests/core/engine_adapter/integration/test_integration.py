@@ -2732,3 +2732,50 @@ def test_state_migrate_from_scratch(ctx: TestContext):
 
     # will throw if one of the migrations produces an error, which can happen if we forget to take quoting or normalization into account
     sqlmesh_context.migrate()
+
+
+def test_python_model_column_order(ctx: TestContext, tmp_path: pathlib.Path):
+    if ctx.test_type != "df":
+        pytest.skip("python model column order test only needs to be run once per db")
+
+    test_schema = ctx.add_test_suffix("column_order")
+
+    (tmp_path / "models").mkdir()
+
+    # note: this model deliberately defines the columns in the @model definition to be in a different order than what
+    # is returned by the DataFrame within the model
+    (tmp_path / "models" / "python_model.py").write_text(
+        """
+import pandas as pd
+import typing as t
+from sqlmesh import ExecutionContext, model
+
+@model(
+    "TEST_SCHEMA.model",
+    columns={
+        "id": "int",
+        "name": "varchar"
+    }
+)
+def execute(
+    context: ExecutionContext,
+    **kwargs: t.Any,
+) -> pd.DataFrame:
+    return pd.DataFrame([
+        {"name": "foo", "id": 1}
+    ])
+""".replace("TEST_SCHEMA", test_schema)
+    )
+
+    sqlmesh_ctx = ctx.create_context(path=tmp_path)
+
+    assert len(sqlmesh_ctx.models) == 1
+
+    plan = sqlmesh_ctx.plan(auto_apply=True)
+    assert len(plan.new_snapshots) == 1
+
+    engine_adapter = sqlmesh_ctx.engine_adapter
+
+    df = engine_adapter.fetchdf(f"select * from {test_schema}.model")
+    assert len(df) == 1
+    assert df.iloc[0].to_dict() == {"id": 1, "name": "foo"}
