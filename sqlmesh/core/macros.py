@@ -970,10 +970,16 @@ def safe_div(_: MacroEvaluator, numerator: exp.Expression, denominator: exp.Expr
 @macro()
 def union(
     evaluator: MacroEvaluator,
-    type_: exp.Literal = exp.Literal.string("ALL"),
-    *tables: exp.Table,
+    *args: exp.Expression,
 ) -> exp.Query:
     """Returns a UNION of the given tables. Only choosing columns that have the same name and type.
+
+    Args:
+        evaluator: MacroEvaluator that invoked the macro
+        args: Variable arguments that can be:
+            - First argument can be a condition (exp.Condition)
+            - A union type ('ALL' or 'DISTINCT') as exp.Literal
+            - Tables (exp.Table)
 
     Example:
         >>> from sqlglot import parse_one
@@ -982,81 +988,50 @@ def union(
         >>> sql = "@UNION('distinct', foo, bar)"
         >>> MacroEvaluator(schema=MappingSchema({"foo": {"a": "int", "b": "string", "c": "string"}, "bar": {"c": "string", "a": "int", "b": "int"}})).transform(parse_one(sql)).sql()
         'SELECT CAST(a AS INT) AS a, CAST(c AS TEXT) AS c FROM foo UNION SELECT CAST(a AS INT) AS a, CAST(c AS TEXT) AS c FROM bar'
-    """
-    kind = type_.name.upper()
-    if kind not in ("ALL", "DISTINCT"):
-        raise SQLMeshError(f"Invalid type '{type_}'. Expected 'ALL' or 'DISTINCT'.")
-
-    columns = {
-        column
-        for column, _ in reduce(
-            lambda a, b: a & b,  # type: ignore
-            (evaluator.columns_to_types(table).items() for table in tables),
-        )
-    }
-
-    projections = [
-        exp.cast(column, type_, dialect=evaluator.dialect).as_(column)
-        for column, type_ in evaluator.columns_to_types(tables[0]).items()
-        if column in columns
-    ]
-
-    return reduce(
-        lambda a, b: a.union(b, distinct=kind == "DISTINCT"),  # type: ignore
-        [exp.select(*projections).from_(t) for t in tables],
-    )
-
-
-@macro()
-def union_if(
-    evaluator: MacroEvaluator,
-    condition: exp.Expression,
-    type_: exp.Literal = exp.Literal.string("ALL"),
-    *tables: exp.Table | exp.Query,
-) -> exp.Query:
-    """Returns a UNION of the given tables or queries if the condition is true, otherwise returns just the first.
-
-    Example:
-        >>> from sqlglot import parse_one
-        >>> from sqlglot.schema import MappingSchema
-        >>> from sqlmesh.core.macros import MacroEvaluator
-        >>> sql = "@UNION_IF(True, 'distinct', foo, bar)"
+        >>> sql = "@UNION(True, 'distinct', foo, bar)"
         >>> MacroEvaluator(schema=MappingSchema({"foo": {"a": "int", "b": "string", "c": "string"}, "bar": {"c": "string", "a": "int", "b": "int"}})).transform(parse_one(sql)).sql()
         'SELECT CAST(a AS INT) AS a, CAST(c AS TEXT) AS c FROM foo UNION SELECT CAST(a AS INT) AS a, CAST(c AS TEXT) AS c FROM bar'
     """
+
+    if not args:
+        raise SQLMeshError("At least one table is required for UNION.")
+
+    arg_idx = 0
+    # Check for condition
+    condition = evaluator.eval_expression(args[arg_idx])
+    if isinstance(condition, bool):
+        arg_idx += 1
+        if arg_idx >= len(args):
+            raise SQLMeshError("Expected more arguments after condition.")
+
+    # Check for union type
+    type_ = exp.Literal.string("ALL")
+    if arg_idx < len(args) and isinstance(args[arg_idx], exp.Literal):
+        type_ = args[arg_idx]  # type: ignore
+        arg_idx += 1
     kind = type_.name.upper()
     if kind not in ("ALL", "DISTINCT"):
         raise SQLMeshError(f"Invalid type '{type_}'. Expected 'ALL' or 'DISTINCT'.")
 
-    result = evaluator.eval_expression(condition)
-
-    if isinstance(tables[0], exp.Query):
-        if not result:
-            # If condition is false, return just the first query
-            return tables[0]
-        return tables[0].union(*tables[1:], distinct=kind == "DISTINCT")
+    # Remaining args should be tables
+    tables = args[arg_idx:]
 
     columns = {
         column
         for column, _ in reduce(
             lambda a, b: a & b,  # type: ignore
-            (
-                evaluator.columns_to_types(table).items()
-                for table in tables
-                if isinstance(table, exp.Table)  # for mypy
-            ),
+            (evaluator.columns_to_types(table).items() for table in tables),  # type: ignore
         )
     }
 
     projections = [
         exp.cast(column, type_, dialect=evaluator.dialect).as_(column)
-        for column, type_ in evaluator.columns_to_types(tables[0]).items()
+        for column, type_ in evaluator.columns_to_types(tables[0]).items()  # type: ignore
         if column in columns
     ]
 
-    result = evaluator.eval_expression(condition)
-    if not result:
-        # If condition is false, return just the first table with proper column casting
+    # Skip the union if condition is False
+    if condition == False:
         return exp.select(*projections).from_(tables[0])
 
     return reduce(
