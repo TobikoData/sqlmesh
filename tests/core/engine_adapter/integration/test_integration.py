@@ -2721,7 +2721,9 @@ def test_state_migrate_from_scratch(ctx: TestContext):
 
         config.gateways[gateway_name].state_schema = test_schema
 
-    sqlmesh_context = ctx.create_context(config_mutator=_use_warehouse_as_state_connection)
+    sqlmesh_context = ctx.create_context(
+        config_mutator=_use_warehouse_as_state_connection, ephemeral_state_connection=False
+    )
     assert sqlmesh_context.config.get_state_schema(ctx.gateway) == test_schema
 
     state_sync = (
@@ -2742,8 +2744,7 @@ def test_python_model_column_order(ctx: TestContext, tmp_path_factory: pytest.Te
         pytest.skip("python model column order test only needs to be run once per db")
 
     tmp_path = tmp_path_factory.mktemp(f"column_order_{ctx.test_id}")
-
-    test_schema = ctx.add_test_suffix("column_order")
+    schema = ctx.add_test_suffix(TEST_SCHEMA)
 
     (tmp_path / "models").mkdir()
 
@@ -2772,7 +2773,7 @@ def execute(
     return context.spark.createDataFrame([
         Row(name="foo", id=1)
     ])
-    """.replace("TEST_SCHEMA", test_schema)
+    """.replace("TEST_SCHEMA", schema)
         )
     else:
         # python model that emits a Pandas DataFrame
@@ -2796,7 +2797,7 @@ def execute(
     return pd.DataFrame([
         {"name": "foo", "id": 1}
     ])
-    """.replace("TEST_SCHEMA", test_schema)
+    """.replace("TEST_SCHEMA", schema)
         )
 
     sqlmesh_ctx = ctx.create_context(path=tmp_path)
@@ -2808,6 +2809,9 @@ def execute(
 
     engine_adapter = sqlmesh_ctx.engine_adapter
 
-    df = engine_adapter.fetchdf(f"select * from {test_schema}.model")
+    query = exp.select("*").from_(
+        exp.to_table(f"{schema}.model", dialect=ctx.dialect), dialect=ctx.dialect
+    )
+    df = engine_adapter.fetchdf(query, quote_identifiers=True)
     assert len(df) == 1
     assert df.iloc[0].to_dict() == {"id": 1, "name": "foo"}

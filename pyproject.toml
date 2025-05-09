@@ -40,9 +40,9 @@ athena = ["PyAthena[Pandas]"]
 azuresql = ["pymssql"]
 bigquery = [
     "google-cloud-bigquery[pandas]",
-    "google-cloud-bigquery-storage"
+    "google-cloud-bigquery-storage",
+    "bigframes>=1.32.0"
 ]
-bigframes = ["bigframes>=1.32.0"]
 clickhouse = ["clickhouse-connect"]
 databricks = ["databricks-sql-connector[pyarrow]"]
 dev = [
@@ -107,8 +107,7 @@ slack = ["slack_sdk"]
 snowflake = [
     "cryptography",
     "snowflake-connector-python[pandas,secure-local-storage]",
-    # as at 2024-08-05, snowflake-snowpark-python is only available up to Python 3.11
-    "snowflake-snowpark-python; python_version<'3.12'",
+    "snowflake-snowpark-python",
 ]
 trino = ["trino"]
 web = [
