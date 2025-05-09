@@ -31,6 +31,6 @@ pip install "sqlmesh[azuresql-odbc]"
 | `appname`         | The application name to use for the connection                   |    string    |    N     |
 | `conn_properties` | The list of connection properties                                | list[string] |    N     |
 | `autocommit`      | Is autocommit mode enabled. Default: false                       |     bool     |    N     |
-| `driver`         | The driver to use for the connection. Default: pymsql            |    string    |    N     |
+| `driver`         | The driver to use for the connection. Default: pymssql            |    string    |    N     |
 | `driver_name`     | The driver name to use for the connection. E.g., *ODBC Driver 18 for SQL Server* |    string    |    N     |
 | `odbc_properties` | The dict of ODBC connection properties. E.g., authentication: ActiveDirectoryServicePrincipal. See more [here](https://learn.microsoft.com/en-us/sql/connect/odbc/dsn-connection-string-attribute?view=sql-server-ver16). | dict |    N     |
