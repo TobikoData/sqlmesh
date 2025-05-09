@@ -229,21 +229,8 @@ class MSSQLEngineAdapter(
                     )
                     conn.bulk_copy(temp_table.sql(dialect=self.dialect), rows)
                 else:
-                    # Fallback to executemany if bulk_copy is not available
-                    cursor = conn.cursor()
-
-                    # Prepare the insert query
-                    column_names = ', '.join([col for col in columns_to_types.keys()])
-                    placeholders = ', '.join(['?' for _ in columns_to_types.keys()])
-                    insert_query = f"INSERT INTO {temp_table.sql(dialect=self.dialect)} ({column_names}) VALUES ({placeholders})"
-
-                    # Replace NaN with None and prepare rows
-                    rows = [tuple(row) for row in df.replace({np.nan: None}).itertuples(index=False, name=None)]
-
-                    # Execute the query with multiple rows
-                    cursor.executemany(insert_query, rows)
-                    conn.commit()
-                    cursor.close()
+                    # Fallback to the superclass implementation of _df_to_source_queries if bulk_copy is not available
+                    return super()._df_to_source_queries(df, columns_to_types, batch_size, target_table)
             return exp.select(*self._casted_columns(columns_to_types)).from_(temp_table)  # type: ignore
 
         return [
