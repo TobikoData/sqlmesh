@@ -149,8 +149,9 @@ class Scheduler:
         execution_time: TimeLike,
         deployability_index: DeployabilityIndex,
         batch_index: int,
+        environment_naming_info: t.Optional[EnvironmentNamingInfo] = None,
         **kwargs: t.Any,
-    ) -> t.Tuple[t.List[AuditResult], t.List[AuditError]]:
+    ) -> t.List[AuditResult]:
         """Evaluate a snapshot and add the processed interval to the state sync.
 
         Args:
@@ -182,8 +183,9 @@ class Scheduler:
             batch_index=batch_index,
             **kwargs,
         )
-        audit_results = self.snapshot_evaluator.audit(
+        audit_results = self._audit_snapshot(
             snapshot=snapshot,
+            environment_naming_info=environment_naming_info,
             start=start,
             end=end,
             execution_time=execution_time,
@@ -193,32 +195,8 @@ class Scheduler:
             **kwargs,
         )
 
-        audit_errors_to_raise: t.List[AuditError] = []
-        audit_errors_to_warn: t.List[AuditError] = []
-        for audit_result in (result for result in audit_results if result.count):
-            error = AuditError(
-                audit_name=audit_result.audit.name,
-                audit_args=audit_result.audit_args,
-                model=snapshot.model_or_none,
-                count=t.cast(int, audit_result.count),
-                query=t.cast(exp.Query, audit_result.query),
-                adapter_dialect=self.snapshot_evaluator.adapter.dialect,
-            )
-            self.notification_target_manager.notify(NotificationEvent.AUDIT_FAILURE, error)
-            if is_deployable and snapshot.node.owner:
-                self.notification_target_manager.notify_user(
-                    NotificationEvent.AUDIT_FAILURE, snapshot.node.owner, error
-                )
-            if audit_result.blocking:
-                audit_errors_to_raise.append(error)
-            else:
-                audit_errors_to_warn.append(error)
-
-        if audit_errors_to_raise:
-            raise NodeAuditsErrors(audit_errors_to_raise)
-
         self.state_sync.add_interval(snapshot, start, end, is_dev=not is_deployable)
-        return audit_results, audit_errors_to_warn
+        return audit_results
 
     def run(
         self,
@@ -465,29 +443,18 @@ class Scheduler:
             evaluation_duration_ms: t.Optional[int] = None
 
             audit_results: t.List[AuditResult] = []
-            audit_errors_to_warn: t.List[AuditError] = []
             try:
                 assert execution_time  # mypy
                 assert deployability_index  # mypy
-                audit_results, audit_errors_to_warn = self.evaluate(
+                audit_results = self.evaluate(
                     snapshot=snapshot,
+                    environment_naming_info=environment_naming_info,
                     start=start,
                     end=end,
                     execution_time=execution_time,
                     deployability_index=deployability_index,
                     batch_index=batch_idx,
                 )
-
-                for audit_error in audit_errors_to_warn:
-                    display_name = snapshot.display_name(
-                        environment_naming_info,
-                        self.default_catalog,
-                        self.snapshot_evaluator.adapter.dialect,
-                    )
-                    self.console.log_warning(
-                        f"\n{display_name}: {audit_error}.",
-                        f"{audit_error}. Audit query:\n{audit_error.query.sql(audit_error.adapter_dialect)}",
-                    )
 
                 evaluation_duration_ms = now_timestamp() - execution_start_ts
             finally:
@@ -582,6 +549,69 @@ class Scheduler:
                         ],
                     )
         return dag
+
+    def _audit_snapshot(
+        self,
+        snapshot: Snapshot,
+        deployability_index: DeployabilityIndex,
+        snapshots: t.Dict[str, Snapshot],
+        start: t.Optional[TimeLike] = None,
+        end: t.Optional[TimeLike] = None,
+        execution_time: t.Optional[TimeLike] = None,
+        wap_id: t.Optional[str] = None,
+        environment_naming_info: t.Optional[EnvironmentNamingInfo] = None,
+        **kwargs: t.Any,
+    ) -> t.List[AuditResult]:
+        is_deployable = deployability_index.is_deployable(snapshot)
+
+        audit_results = self.snapshot_evaluator.audit(
+            snapshot=snapshot,
+            start=start,
+            end=end,
+            execution_time=execution_time,
+            snapshots=snapshots,
+            deployability_index=deployability_index,
+            wap_id=wap_id,
+            **kwargs,
+        )
+
+        audit_errors_to_raise: t.List[AuditError] = []
+        audit_errors_to_warn: t.List[AuditError] = []
+        for audit_result in (result for result in audit_results if result.count):
+            error = AuditError(
+                audit_name=audit_result.audit.name,
+                audit_args=audit_result.audit_args,
+                model=snapshot.model_or_none,
+                count=t.cast(int, audit_result.count),
+                query=t.cast(exp.Query, audit_result.query),
+                adapter_dialect=self.snapshot_evaluator.adapter.dialect,
+            )
+            self.notification_target_manager.notify(NotificationEvent.AUDIT_FAILURE, error)
+            if is_deployable and snapshot.node.owner:
+                self.notification_target_manager.notify_user(
+                    NotificationEvent.AUDIT_FAILURE, snapshot.node.owner, error
+                )
+            if audit_result.blocking:
+                audit_errors_to_raise.append(error)
+            else:
+                audit_errors_to_warn.append(error)
+
+        if audit_errors_to_raise:
+            raise NodeAuditsErrors(audit_errors_to_raise)
+
+        if environment_naming_info:
+            for audit_error in audit_errors_to_warn:
+                display_name = snapshot.display_name(
+                    environment_naming_info,
+                    self.default_catalog,
+                    self.snapshot_evaluator.adapter.dialect,
+                )
+                self.console.log_warning(
+                    f"\n{display_name}: {audit_error}.",
+                    f"{audit_error}. Audit query:\n{audit_error.query.sql(audit_error.adapter_dialect)}",
+                )
+
+        return audit_results
 
 
 def compute_interval_params(
