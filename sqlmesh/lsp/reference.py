@@ -34,13 +34,20 @@ def by_position(position: Position) -> t.Callable[[Reference], bool]:
     Returns:
         A function that returns True if the reference contains the position, False otherwise
     """
-    return lambda r: (
-        r.range.start.line < position.line
-        or (r.range.start.line == position.line and r.range.start.character <= position.character)
-    ) and (
-        r.range.end.line > position.line
-        or (r.range.end.line == position.line and r.range.end.character >= position.character)
-    )
+
+    def contains_position(r: Reference) -> bool:
+        return (
+            r.range.start.line < position.line
+            or (
+                r.range.start.line == position.line
+                and r.range.start.character <= position.character
+            )
+        ) and (
+            r.range.end.line > position.line
+            or (r.range.end.line == position.line and r.range.end.character >= position.character)
+        )
+
+    return contains_position
 
 
 def get_references(
