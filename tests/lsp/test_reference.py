@@ -2,7 +2,7 @@ import pytest
 from lsprotocol.types import Position
 from sqlmesh.core.context import Context
 from sqlmesh.lsp.context import LSPContext, ModelTarget, AuditTarget
-from sqlmesh.lsp.reference import get_model_definitions_for_a_path, filter_references_by_position
+from sqlmesh.lsp.reference import get_model_definitions_for_a_path, by_position
 
 
 @pytest.mark.fast
@@ -54,6 +54,7 @@ def test_reference_with_alias() -> None:
 
     assert references[0].uri.endswith("orders.py")
     assert get_string_from_range(read_file, references[0].range) == "sushi.orders"
+    assert references[0].description == "Table of sushi orders."
     assert references[1].uri.endswith("order_items.py")
     assert get_string_from_range(read_file, references[1].range) == "sushi.order_items"
     assert references[2].uri.endswith("items.py")
@@ -139,7 +140,7 @@ def test_filter_references_by_position() -> None:
         middle_line = (reference.range.start.line + reference.range.end.line) // 2
         middle_char = (reference.range.start.character + reference.range.end.character) // 2
         position_inside = Position(line=middle_line, character=middle_char)
-        filtered = filter_references_by_position(all_references, position_inside)
+        filtered = list(filter(by_position(position_inside), all_references))
         assert len(filtered) == 1
         assert filtered[0].uri == reference.uri
         assert filtered[0].range == reference.range
@@ -155,14 +156,14 @@ def test_filter_references_by_position() -> None:
             outside_char = prev_ref.range.end.character + 5
 
         position_outside = Position(line=outside_line, character=outside_char)
-        filtered_outside = filter_references_by_position(all_references, position_outside)
+        filtered_outside = list(filter(by_position(position_outside), all_references))
         assert reference not in filtered_outside, (
             f"Reference {i} should not match position outside its range"
         )
 
     # Test case: cursor at beginning of file - no references should match
     position_start = Position(line=0, character=0)
-    filtered_start = filter_references_by_position(all_references, position_start)
+    filtered_start = list(filter(by_position(position_start), all_references))
     assert len(filtered_start) == 0 or all(
         ref.range.start.line == 0 and ref.range.start.character <= 0 for ref in filtered_start
     )
@@ -171,7 +172,7 @@ def test_filter_references_by_position() -> None:
     last_line = len(read_file) - 1
     last_char = len(read_file[last_line]) - 1
     position_end = Position(line=last_line, character=last_char)
-    filtered_end = filter_references_by_position(all_references, position_end)
+    filtered_end = list(filter(by_position(position_end), all_references))
     assert len(filtered_end) == 0 or all(
         ref.range.end.line >= last_line and ref.range.end.character >= last_char
         for ref in filtered_end

@@ -10,40 +10,64 @@ from sqlmesh.utils.pydantic import PydanticModel
 
 
 class Reference(PydanticModel):
+    """
+    A reference to a model.
+
+    Attributes:
+        range: The range of the reference in the source file
+        uri: The uri of the referenced model
+        description: The description of the referenced model
+    """
+
     range: Range
     uri: str
+    description: t.Optional[str] = None
 
 
-def filter_references_by_position(
-    references: t.List[Reference], position: Position
-) -> t.List[Reference]:
+def by_position(position: Position) -> t.Callable[[Reference], bool]:
     """
-    Filter references to only include those that contain the given position.
+    Filter reference to only filter references that contain the given position.
 
     Args:
-        references: List of Reference objects
         position: The cursor position to check
 
     Returns:
-        List of Reference objects that contain the position
+        A function that returns True if the reference contains the position, False otherwise
     """
-    filtered_references = []
 
-    for reference in references:
-        # Check if position is within the reference range
-        range_start = reference.range.start
-        range_end = reference.range.end
-
-        # Position is within range if it's after or at start and before or at end
-        if (
-            range_start.line < position.line
-            or (range_start.line == position.line and range_start.character <= position.character)
+    def contains_position(r: Reference) -> bool:
+        return (
+            r.range.start.line < position.line
+            or (
+                r.range.start.line == position.line
+                and r.range.start.character <= position.character
+            )
         ) and (
-            range_end.line > position.line
-            or (range_end.line == position.line and range_end.character >= position.character)
-        ):
-            filtered_references.append(reference)
+            r.range.end.line > position.line
+            or (r.range.end.line == position.line and r.range.end.character >= position.character)
+        )
 
+    return contains_position
+
+
+def get_references(
+    lint_context: LSPContext, document_uri: str, position: Position
+) -> t.List[Reference]:
+    """
+    Get references at a specific position in a document.
+
+    Used for hover information.
+
+    Args:
+        lint_context: The LSP context
+        document_uri: The URI of the document
+        position: The position to check for references
+
+    Returns:
+        A list of references at the given position
+    """
+    references = get_model_definitions_for_a_path(lint_context, document_uri)
+    filtered_references = list(filter(by_position(position), references))
     return filtered_references
 
 
@@ -154,7 +178,11 @@ def get_model_definitions_for_a_path(
             start_pos = catalog_or_db_range.start
 
         references.append(
-            Reference(uri=referenced_model_uri, range=Range(start=start_pos, end=end_pos))
+            Reference(
+                uri=referenced_model_uri,
+                range=Range(start=start_pos, end=end_pos),
+                description=referenced_model.description,
+            )
         )
 
     return references
