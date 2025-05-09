@@ -246,7 +246,12 @@ class EngineAdapter:
         assert isinstance(df, pd.DataFrame)
         num_rows = len(df.index)
         batch_size = sys.maxsize if batch_size == 0 else batch_size
+
+        # we need to ensure that the order of the columns in columns_to_types columns matches the order of the values
+        # they can differ if a user specifies columns() on a python model in a different order than what's in the DataFrame's emitted by that model
+        df = df[list(columns_to_types.keys())]
         values = list(df.itertuples(index=False, name=None))
+
         return [
             SourceQuery(
                 query_factory=partial(
