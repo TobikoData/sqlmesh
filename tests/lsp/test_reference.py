@@ -1,7 +1,8 @@
 import pytest
+from lsprotocol.types import Position
 from sqlmesh.core.context import Context
 from sqlmesh.lsp.context import LSPContext, ModelTarget, AuditTarget
-from sqlmesh.lsp.reference import get_model_definitions_for_a_path
+from sqlmesh.lsp.reference import get_model_definitions_for_a_path, filter_references_by_position
 
 
 @pytest.mark.fast
@@ -108,3 +109,70 @@ def get_string_from_range(file_lines, range_obj) -> str:
         result += file_lines[line_num]
     result += file_lines[end_line][:end_character]  # Last line up to end_character
     return result
+
+
+@pytest.mark.fast
+def test_filter_references_by_position() -> None:
+    """Test that we can filter references correctly based on cursor position."""
+    context = Context(paths=["examples/sushi"])
+    lsp_context = LSPContext(context)
+
+    # Use a file with multiple references (waiter_revenue_by_day)
+    waiter_revenue_by_day_uri = next(
+        uri
+        for uri, info in lsp_context.map.items()
+        if isinstance(info, ModelTarget) and "sushi.waiter_revenue_by_day" in info.names
+    )
+
+    # Get all references in the file
+    all_references = get_model_definitions_for_a_path(lsp_context, waiter_revenue_by_day_uri)
+    assert len(all_references) == 3
+
+    # Get file contents to locate positions for testing
+    path = waiter_revenue_by_day_uri.removeprefix("file://")
+    with open(path, "r") as file:
+        read_file = file.readlines()
+
+    # Test positions for each reference
+    for i, reference in enumerate(all_references):
+        # Position inside the reference - should return exactly one reference
+        middle_line = (reference.range.start.line + reference.range.end.line) // 2
+        middle_char = (reference.range.start.character + reference.range.end.character) // 2
+        position_inside = Position(line=middle_line, character=middle_char)
+        filtered = filter_references_by_position(all_references, position_inside)
+        assert len(filtered) == 1
+        assert filtered[0].uri == reference.uri
+        assert filtered[0].range == reference.range
+
+        # For testing outside position, use a position before the current reference
+        # or after the last reference for the last one
+        if i == 0:
+            outside_line = reference.range.start.line
+            outside_char = max(0, reference.range.start.character - 5)
+        else:
+            prev_ref = all_references[i - 1]
+            outside_line = prev_ref.range.end.line
+            outside_char = prev_ref.range.end.character + 5
+
+        position_outside = Position(line=outside_line, character=outside_char)
+        filtered_outside = filter_references_by_position(all_references, position_outside)
+        assert reference not in filtered_outside, (
+            f"Reference {i} should not match position outside its range"
+        )
+
+    # Test case: cursor at beginning of file - no references should match
+    position_start = Position(line=0, character=0)
+    filtered_start = filter_references_by_position(all_references, position_start)
+    assert len(filtered_start) == 0 or all(
+        ref.range.start.line == 0 and ref.range.start.character <= 0 for ref in filtered_start
+    )
+
+    # Test case: cursor at end of file - no references should match (unless there's a reference at the end)
+    last_line = len(read_file) - 1
+    last_char = len(read_file[last_line]) - 1
+    position_end = Position(line=last_line, character=last_char)
+    filtered_end = filter_references_by_position(all_references, position_end)
+    assert len(filtered_end) == 0 or all(
+        ref.range.end.line >= last_line and ref.range.end.character >= last_char
+        for ref in filtered_end
+    )
