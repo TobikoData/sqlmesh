@@ -105,6 +105,7 @@ class SparkEngineAdapter(
             exp.DataType.Type.BINARY: spark_types.BinaryType,
             exp.DataType.Type.BOOLEAN: spark_types.BooleanType,
             exp.DataType.Type.DATE: spark_types.DateType,
+            exp.DataType.Type.TIMESTAMPNTZ: spark_types.TimestampNTZType,
             exp.DataType.Type.DATETIME: spark_types.TimestampNTZType,
             exp.DataType.Type.TIMESTAMPLTZ: spark_types.TimestampType,
             exp.DataType.Type.TIMESTAMP: spark_types.TimestampType,
