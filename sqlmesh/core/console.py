@@ -181,6 +181,26 @@ class JanitorConsole(abc.ABC):
         """
 
 
+class DestroyConsole(abc.ABC):
+    """Console for describing a destroy operation"""
+
+    @abc.abstractmethod
+    def start_destroy(self) -> bool:
+        """Start a destroy operation.
+
+        Returns:
+            Whether or not the destroy operation should proceed
+        """
+
+    @abc.abstractmethod
+    def stop_destroy(self, success: bool = True) -> None:
+        """Indicates the destroy operation has ended
+
+        Args:
+            success: Whether or not the cleanup completed successfully
+        """
+
+
 class EnvironmentsConsole(abc.ABC):
     """Console for displaying environments"""
 
@@ -304,6 +324,7 @@ class Console(
     StateExporterConsole,
     StateImporterConsole,
     JanitorConsole,
+    DestroyConsole,
     EnvironmentsConsole,
     DifferenceConsole,
     TableDiffConsole,
@@ -744,6 +765,12 @@ class NoopConsole(Console):
     ) -> None:
         pass
 
+    def start_destroy(self) -> bool:
+        return True
+
+    def stop_destroy(self, success: bool = True) -> None:
+        pass
+
 
 def make_progress_bar(
     message: str,
@@ -1091,6 +1118,25 @@ class TerminalConsole(Console):
             self.log_success("Cleanup complete.")
         else:
             self.log_error("Cleanup failed!")
+
+    def start_destroy(self) -> bool:
+        self.log_warning(
+            (
+                "This will permanently delete all engine-managed objects, state tables and SQLMesh cache.\n"
+                "The operation is irreversible and may disrupt any currently running or scheduled plans.\n"
+                "Use this command only when you intend to fully reset the project."
+            )
+        )
+        if not self._confirm("Proceed?"):
+            self.log_error("Destroy aborted!")
+            return False
+        return True
+
+    def stop_destroy(self, success: bool = False) -> None:
+        if success:
+            self.log_success("Destroy completed successfully.")
+        else:
+            self.log_error("Destroy failed!")
 
     def start_promotion_progress(
         self,

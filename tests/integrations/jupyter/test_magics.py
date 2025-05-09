@@ -890,3 +890,39 @@ def test_lint(notebook, sushi_context):
 
     assert len(output.outputs) == 2
     assert "Linter warnings for" in output.outputs[0].data["text/plain"]
+
+
+@pytest.mark.slow
+def test_destroy(
+    notebook,
+    loaded_sushi_context,
+    convert_all_html_output_to_text,
+    get_all_html_output,
+    monkeypatch,
+):
+    # Mock input to return 'y' for the confirmation prompt
+    monkeypatch.setattr("builtins.input", lambda: "y")
+
+    with capture_output() as output:
+        notebook.run_line_magic(magic_name="destroy", line="")
+
+    assert not output.stdout
+    assert not output.stderr
+    text_output = convert_all_html_output_to_text(output)
+    expected_messages = [
+        "[WARNING] This will permanently delete all engine-managed objects, state tables and SQLMesh cache.\n"
+        "The operation is irreversible and may disrupt any currently running or scheduled plans.\n"
+        "Use this command only when you intend to fully reset the project.",
+        "Environment 'prod' invalidated.",
+        "Deleted object memory.sushi",
+        'Deleted object "memory"."raw"."model1"',
+        'Deleted object "memory"."raw"."model1"',
+        'Deleted object "memory"."raw"."model2"',
+        'Deleted object "memory"."raw"."model2"',
+        'Deleted object "memory"."raw"."demographics"',
+        'Deleted object "memory"."raw"."demographics"',
+        "State tables removed.",
+        "Destroy completed successfully.",
+    ]
+    for message in expected_messages:
+        assert message in text_output

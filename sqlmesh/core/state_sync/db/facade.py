@@ -59,7 +59,7 @@ from sqlmesh.core.state_sync.db.interval import IntervalState
 from sqlmesh.core.state_sync.db.environment import EnvironmentState
 from sqlmesh.core.state_sync.db.snapshot import SnapshotState
 from sqlmesh.core.state_sync.db.version import VersionState
-from sqlmesh.core.state_sync.db.migrator import StateMigrator
+from sqlmesh.core.state_sync.db.migrator import StateMigrator, _backup_table_name
 from sqlmesh.utils.date import TimeLike, to_timestamp, time_like_to_str, now_timestamp
 from sqlmesh.utils.errors import ConflictingPlanError, SQLMeshError
 
@@ -270,8 +270,8 @@ class EngineAdapterStateSync(StateSync):
     ) -> None:
         self.snapshot_state.unpause_snapshots(snapshots, unpaused_dt, self.interval_state)
 
-    def invalidate_environment(self, name: str) -> None:
-        self.environment_state.invalidate_environment(name)
+    def invalidate_environment(self, name: str, protect_prod: bool = True) -> None:
+        self.environment_state.invalidate_environment(name, protect_prod)
 
     def get_expired_snapshots(
         self, current_ts: int, ignore_ttl: bool = False
@@ -313,18 +313,26 @@ class EngineAdapterStateSync(StateSync):
     def nodes_exist(self, names: t.Iterable[str], exclude_external: bool = False) -> t.Set[str]:
         return self.snapshot_state.nodes_exist(names, exclude_external)
 
-    def reset(self, default_catalog: t.Optional[str]) -> None:
-        """Resets the state store to the state when it was first initialized."""
+    def remove_state(self, including_backup: bool = False) -> None:
+        """Removes the state store objects."""
         for table in (
             self.snapshot_state.snapshots_table,
             self.snapshot_state.auto_restatements_table,
             self.environment_state.environments_table,
+            self.environment_state.environment_statements_table,
             self.interval_state.intervals_table,
             self.plan_dags_table,
             self.version_state.versions_table,
         ):
             self.engine_adapter.drop_table(table)
+            if including_backup:
+                self.engine_adapter.drop_table(_backup_table_name(table))
+
         self.snapshot_state.clear_cache()
+
+    def reset(self, default_catalog: t.Optional[str]) -> None:
+        """Resets the state store to the state when it was first initialized."""
+        self.remove_state()
         self.migrate(default_catalog)
 
     @transactional()

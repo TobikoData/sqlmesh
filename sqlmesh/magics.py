@@ -1111,6 +1111,13 @@ class SQLMeshMagics(Magics):
         args = parse_argstring(self.lint, line)
         context.lint_models(args.models)
 
+    @magic_arguments()
+    @line_magic
+    @pass_sqlmesh_context
+    def destroy(self, context: Context, line: str) -> None:
+        """Removes all project resources, engine-managed objects, state tables and clears the SQLMesh cache."""
+        context.destroy()
+
 
 def register_magics() -> None:
     try:

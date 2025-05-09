@@ -832,6 +832,19 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         return success
 
+    @python_api_analytics
+    def destroy(self) -> bool:
+        success = False
+
+        if self.console.start_destroy():
+            try:
+                self._destroy()
+                success = True
+            finally:
+                self.console.stop_destroy(success=success)
+
+        return success
+
     @t.overload
     def get_model(
         self, model_or_snapshot: ModelOrSnapshot, raise_if_missing: Literal[True] = True
@@ -2536,6 +2549,22 @@ class GenericContext(BaseContext, t.Generic[C]):
             environment_statements=self._environment_statements,
             gateway_managed_virtual_layer=self.gateway_managed_virtual_layer,
         )
+
+    def _destroy(self) -> None:
+        # Invalidate all environments, including prod
+        for environment in self.state_reader.get_environments():
+            self.state_sync.invalidate_environment(name=environment.name, protect_prod=False)
+            self.console.log_success(f"Environment '{environment.name}' invalidated.")
+
+        # Run janitor to clean up all objects
+        self._run_janitor(ignore_ttl=True)
+
+        # Remove state tables, including backup tables
+        self.state_sync.remove_state(including_backup=True)
+        self.console.log_status_update("State tables removed.")
+
+        # Finally clear caches
+        self.clear_caches()
 
     def _run_janitor(self, ignore_ttl: bool = False) -> None:
         current_ts = now_timestamp()

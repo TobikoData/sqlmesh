@@ -23,6 +23,7 @@ Commands:
   create_external_models  Create a schema file containing external model...
   create_test             Generate a unit test fixture for a given model.
   dag                     Render the DAG as an html file.
+  destroy                 The destroy command removes all project resources.
   diff                    Show the diff between the local state and the...
   dlt_refresh             Attaches to a DLT pipeline with the option to...
   environments            Prints the list of SQLMesh environments with...
@@ -140,6 +141,17 @@ Usage: sqlmesh dag [OPTIONS] FILE
 
 Options:
   --select-model TEXT  Select specific models to include in the dag.
+  --help               Show this message and exit.
+```
+
+## destroy
+
+```
+Usage: sqlmesh destroy
+
+  Removes all project resources, including warehouse objects, state tables, the SQLMesh cache and any build artifacts.
+
+Options:
   --help               Show this message and exit.
 ```
 

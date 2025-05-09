@@ -5922,3 +5922,122 @@ def test_janitor_cleanup_order(mocker: MockerFixture, tmp_path: Path):
 
     # - Check that the environment record does not exist in the state sync anymore
     assert not ctx.state_sync.get_environment("dev")
+
+
+@use_terminal_console
+def test_destroy(copy_to_temp_path):
+    # Testing project with two gateways to verify cleanup is performed across engines
+    paths = copy_to_temp_path("tests/fixtures/multi_virtual_layer")
+    path = Path(paths[0])
+    first_db_path = str(path / "db_1.db")
+    second_db_path = str(path / "db_2.db")
+
+    config = Config(
+        gateways={
+            "first": GatewayConfig(
+                connection=DuckDBConnectionConfig(database=first_db_path),
+                variables={"overriden_var": "gateway_1"},
+            ),
+            "second": GatewayConfig(
+                connection=DuckDBConnectionConfig(database=second_db_path),
+                variables={"overriden_var": "gateway_2"},
+            ),
+        },
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        model_naming=NameInferenceConfig(infer_names=True),
+        default_gateway="first",
+        gateway_managed_virtual_layer=True,
+        variables={"overriden_var": "global", "global_one": 88},
+    )
+
+    context = Context(paths=paths, config=config)
+    plan = context.plan_builder().build()
+    assert len(plan.new_snapshots) == 4
+    context.apply(plan)
+
+    # Confirm cache exists
+    cache_path = Path(path) / ".cache"
+    assert cache_path.exists()
+    assert len(list(cache_path.iterdir())) > 0
+
+    model = context.get_model("db_1.first_schema.model_one")
+
+    context.upsert_model(model.copy(update={"query": model.query.select("'c' AS extra")}))
+    plan = context.plan_builder().build()
+    context.apply(plan)
+
+    state_environments = context.state_reader.get_environments()
+    state_snapshots = context.state_reader.get_snapshots(context.snapshots.values())
+
+    assert len(state_snapshots) == len(state_environments[0].snapshots)
+
+    # Create dev environment with changed models
+    model = context.get_model("db_2.second_schema.model_one")
+    context.upsert_model(model.copy(update={"query": model.query.select("'d' AS extra")}))
+    model = context.get_model("first_schema.model_two")
+    context.upsert_model(model.copy(update={"query": model.query.select("'d2' AS col")}))
+    plan = context.plan_builder("dev").build()
+    context.apply(plan)
+
+    dev_environment = context.state_sync.get_environment("dev")
+    assert dev_environment is not None
+
+    state_environments = context.state_reader.get_environments()
+    state_snapshots = context.state_reader.get_snapshots(context.snapshots.values())
+    assert (
+        len(state_snapshots)
+        == len(state_environments[0].snapshots)
+        == len(state_environments[1].snapshots)
+    )
+
+    # The state tables at this point should be able to be retrieved
+    state_tables = {
+        "_environments",
+        "_snapshots",
+        "_intervals",
+        "_auto_restatements",
+        "_environment_statements",
+        "_intervals",
+        "_plan_dags",
+        "_versions",
+    }
+    for table_name in state_tables:
+        context.fetchdf(f"SELECT * FROM db_1.sqlmesh.{table_name}")
+
+    # The actual tables as well
+    context.engine_adapters["second"].fetchdf(f"SELECT * FROM db_2.second_schema.model_one")
+    context.engine_adapters["second"].fetchdf(f"SELECT * FROM db_2.second_schema.model_two")
+    context.fetchdf(f"SELECT * FROM db_1.first_schema.model_one")
+    context.fetchdf(f"SELECT * FROM db_1.first_schema.model_two")
+
+    # Use the destroy command to remove all data objects and state
+    context._destroy()
+
+    # Ensure all tables have been removed
+    for table_name in state_tables:
+        with pytest.raises(
+            Exception, match=f"Catalog Error: Table with name {table_name} does not exist!"
+        ):
+            context.fetchdf(f"SELECT * FROM db_1.sqlmesh.{table_name}")
+
+    # Validate tables have been deleted as well
+    with pytest.raises(
+        Exception, match=r"Catalog Error: Table with name model_two does not exist!"
+    ):
+        context.fetchdf("SELECT * FROM db_1.first_schema.model_two")
+    with pytest.raises(
+        Exception, match=r"Catalog Error: Table with name model_one does not exist!"
+    ):
+        context.fetchdf("SELECT * FROM db_1.first_schema.model_one")
+
+    with pytest.raises(
+        Exception, match=r"Catalog Error: Table with name model_two does not exist!"
+    ):
+        context.engine_adapters["second"].fetchdf("SELECT * FROM db_2.second_schema.model_two")
+    with pytest.raises(
+        Exception, match=r"Catalog Error: Table with name model_one does not exist!"
+    ):
+        context.engine_adapters["second"].fetchdf("SELECT * FROM db_2.second_schema.model_one")
+
+    # Ensure the cache has been removed
+    assert not cache_path.exists()
