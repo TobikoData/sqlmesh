@@ -12,5 +12,8 @@ vsc-extension-quickstart.md
 **/*.map
 **/*.ts
 **/.vscode-test.*
+<<<<<<< HEAD
 assets/logo.svg
 esbuild.js
+=======
+>>>>>>> c5ee2535 (progress)

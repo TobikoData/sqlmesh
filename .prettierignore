@@ -17,6 +17,7 @@ node_modules/
 vscode/extension/node_modules/
 vscode/extension/dist
 vscode/extension/out
+vscode/extension/src_react
 vscode/extension/tsconfig.tsbuildinfo
 vscode/extension/.vscode-test/
 
