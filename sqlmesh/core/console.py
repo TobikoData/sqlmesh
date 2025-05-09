@@ -3472,6 +3472,53 @@ class DebuggerTerminalConsole(TerminalConsole):
     ) -> None:
         self._write(row_diff)
 
+    def show_table_diff(
+        self,
+        table_diffs: t.List[TableDiff],
+        show_sample: bool = True,
+        skip_grain_check: bool = False,
+        temp_schema: t.Optional[str] = None,
+    ) -> None:
+        for table_diff in table_diffs:
+            self.show_table_diff_summary(table_diff)
+            self.show_schema_diff(table_diff.schema_diff())
+            self.show_row_diff(
+                table_diff.row_diff(temp_schema=temp_schema, skip_grain_check=skip_grain_check),
+                show_sample=show_sample,
+                skip_grain_check=skip_grain_check,
+            )
+
+    def update_table_diff_progress(self, model: str) -> None:
+        self._write(f"Finished table diff for: {model}")
+
+    def start_table_diff_progress(self, models_to_diff: int) -> None:
+        self._write("Table diff started")
+
+    def start_table_diff_model_progress(self, model: str) -> None:
+        self._write(f"Calculating differences for: {model}")
+
+    def stop_table_diff_progress(self, success: bool) -> None:
+        self._write(f"Table diff finished with success={success}")
+
+    def show_table_diff_details(
+        self,
+        models_to_diff: t.List[str],
+    ) -> None:
+        if models_to_diff:
+            models = "\n".join(models_to_diff)
+            self._write(f"Models to compare: {models}")
+
+    def show_table_diff_summary(self, table_diff: TableDiff) -> None:
+        if table_diff.model_name:
+            self._write(f"Model: {table_diff.model_name}")
+            self._write(f"Source env: {table_diff.source_alias}")
+            self._write(f"Target env: {table_diff.target_alias}")
+        self._write(f"Source table: {table_diff.source}")
+        self._write(f"Target table: {table_diff.target}")
+        _, _, key_column_names = table_diff.key_columns
+        keys = ", ".join(key_column_names)
+        self._write(f"Join On: {keys}")
+
 
 _CONSOLE: Console = NoopConsole()
 
