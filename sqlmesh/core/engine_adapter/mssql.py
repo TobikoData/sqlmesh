@@ -219,7 +219,7 @@ class MSSQLEngineAdapter(
             if not self.table_exists(temp_table):
                 columns_to_types_create = columns_to_types.copy()
                 ordered_df = df[
-                    list(columns_to_types_create.keys())
+                    list(columns_to_types_create)
                 ]  # reorder DataFrame so it matches columns_to_types
                 self._convert_df_datetime(ordered_df, columns_to_types_create)
                 self.create_table(temp_table, columns_to_types_create)

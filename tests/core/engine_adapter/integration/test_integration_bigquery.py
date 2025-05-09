@@ -13,7 +13,7 @@ import sqlmesh.core.dialect as d
 from sqlmesh.core.model import SqlModel, load_sql_based_model
 from sqlmesh.core.plan import Plan
 from sqlmesh.core.table_diff import TableDiff
-from tests.core.engine_adapter.integration import TestContext
+from tests.core.engine_adapter.integration import TestContext, TEST_SCHEMA
 
 pytestmark = [pytest.mark.engine, pytest.mark.remote, pytest.mark.bigquery]
 
@@ -433,3 +433,51 @@ def test_table_diff_table_name_matches_column_name(ctx: TestContext):
 
     assert row_diff.stats["join_count"] == 1
     assert row_diff.full_match_count == 1
+
+
+def test_bigframe_python_model_column_order(ctx: TestContext, tmp_path: Path):
+    schema = ctx.add_test_suffix(TEST_SCHEMA)
+
+    (tmp_path / "models").mkdir()
+
+    # note: this model deliberately defines the columns in the @model definition to be in a different order than what
+    # is returned by the DataFrame within the model
+    model_path = tmp_path / "models" / "python_model.py"
+
+    # python model that emits a BigFrame dataframe
+    model_path.write_text(
+        """
+from bigframes.pandas import DataFrame
+import typing as t
+from sqlmesh import ExecutionContext, model
+
+@model(
+    "TEST_SCHEMA.model",
+    columns={
+        "id": "int",
+        "name": "varchar"
+    }
+)
+def execute(
+    context: ExecutionContext,
+    **kwargs: t.Any,
+) -> DataFrame:
+    return DataFrame({'name': ['foo'], 'id': [1]})
+""".replace("TEST_SCHEMA", schema)
+    )
+
+    sqlmesh_ctx = ctx.create_context(path=tmp_path)
+
+    assert len(sqlmesh_ctx.models) == 1
+
+    plan = sqlmesh_ctx.plan(auto_apply=True)
+    assert len(plan.new_snapshots) == 1
+
+    engine_adapter = sqlmesh_ctx.engine_adapter
+
+    query = exp.select("*").from_(
+        exp.to_table(f"{schema}.model", dialect=ctx.dialect), dialect=ctx.dialect
+    )
+    df = engine_adapter.fetchdf(query, quote_identifiers=True)
+    assert len(df) == 1
+    assert df.iloc[0].to_dict() == {"id": 1, "name": "foo"}
