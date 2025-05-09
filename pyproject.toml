@@ -194,6 +194,7 @@ module = [
     "databricks_cli.*",
     "mysql.*",
     "pymssql.*",
+    "pyodbc.*",
     "psycopg2.*",
     "langchain.*",
     "pytest_lazyfixture.*",

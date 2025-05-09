@@ -1345,9 +1345,13 @@ class MSSQLConnectionConfig(ConnectionConfig):
         if driver == "pyodbc" and auth_type and auth_type != "default":
             if auth_type == "service_principal":
                 if not data.get("tenant_id") or not data.get("client_id"):
-                    raise ConfigError("Service principal authentication requires tenant_id and client_id")
+                    raise ConfigError(
+                        "Service principal authentication requires tenant_id and client_id"
+                    )
                 if not data.get("client_secret") and not data.get("certificate_path"):
-                    raise ConfigError("Service principal authentication requires either client_secret or certificate_path")
+                    raise ConfigError(
+                        "Service principal authentication requires either client_secret or certificate_path"
+                    )
             elif auth_type == "msi" and data.get("msi_client_id") and not data.get("client_id"):
                 # If msi_client_id is provided, copy it to client_id for consistency
                 data["client_id"] = data["msi_client_id"]
@@ -1370,18 +1374,20 @@ class MSSQLConnectionConfig(ConnectionConfig):
             "autocommit",
             "tds_version",
         }
-        
+
         if self.driver == "pyodbc":
-            base_keys.update({
-                "driver_name",
-                "trust_server_certificate",
-                "encrypt",
-                "odbc_properties",
-            })
+            base_keys.update(
+                {
+                    "driver_name",
+                    "trust_server_certificate",
+                    "encrypt",
+                    "odbc_properties",
+                }
+            )
             # Remove pymssql-specific parameters
             base_keys.discard("tds_version")
             base_keys.discard("conn_properties")
-            
+
         return base_keys
 
     @property
@@ -1392,64 +1398,73 @@ class MSSQLConnectionConfig(ConnectionConfig):
     def _connection_factory(self) -> t.Callable:
         if self.driver == "pymssql":
             import pymssql
+
             return pymssql.connect
-        else:  # pyodbc
-            import pyodbc
-            
-            def connect(**kwargs: t.Any) -> t.Callable:
-                # Extract parameters for connection string
-                host = kwargs.pop("host")
-                port = kwargs.pop("port", 1433)
-                database = kwargs.pop("database", "")
-                user = kwargs.pop("user", None)
-                password = kwargs.pop("password", None)
-                driver_name = kwargs.pop("driver_name", "ODBC Driver 18 for SQL Server")
-                trust_server_certificate = kwargs.pop("trust_server_certificate", False)
-                encrypt = kwargs.pop("encrypt", True)
-                login_timeout = kwargs.pop("login_timeout", 60)
-                
-                # Build connection string
-                conn_str_parts = [
-                    f"DRIVER={{{driver_name}}}",
-                    f"SERVER={host},{port}",
-                ]
-                
-                if database:
-                    conn_str_parts.append(f"DATABASE={database}")
-                
-                # Add security options
-                conn_str_parts.append(f"Encrypt={'YES' if encrypt else 'NO'}")
-                if trust_server_certificate:
-                    conn_str_parts.append("TrustServerCertificate=YES")
-                    
-                conn_str_parts.append(f"Connection Timeout={login_timeout}")
-                
-                # Standard SQL Server authentication
-                if user:
-                    conn_str_parts.append(f"UID={user}")
-                if password:
-                    conn_str_parts.append(f"PWD={password}")
-                
-                # Add any additional ODBC properties from the odbc_properties dictionary
-                if self.odbc_properties:
-                    for key, value in self.odbc_properties.items():
-                        # Skip properties that we've already set above
-                        if key.lower() in ('driver', 'server', 'database', 'uid', 'pwd', 
-                                          'encrypt', 'trustservercertificate', 'connection timeout'):
-                            continue
-                        
-                        # Handle boolean values properly
-                        if isinstance(value, bool):
-                            conn_str_parts.append(f"{key}={'YES' if value else 'NO'}")
-                        else:
-                            conn_str_parts.append(f"{key}={value}")
-                
-                # Create the connection string
-                conn_str = ";".join(conn_str_parts)
-                
-                return pyodbc.connect(conn_str, autocommit=kwargs.get("autocommit", False))
-            
-            return connect
+        # pyodbc
+        import pyodbc
+
+        def connect(**kwargs: t.Any) -> t.Callable:
+            # Extract parameters for connection string
+            host = kwargs.pop("host")
+            port = kwargs.pop("port", 1433)
+            database = kwargs.pop("database", "")
+            user = kwargs.pop("user", None)
+            password = kwargs.pop("password", None)
+            driver_name = kwargs.pop("driver_name", "ODBC Driver 18 for SQL Server")
+            trust_server_certificate = kwargs.pop("trust_server_certificate", False)
+            encrypt = kwargs.pop("encrypt", True)
+            login_timeout = kwargs.pop("login_timeout", 60)
+
+            # Build connection string
+            conn_str_parts = [
+                f"DRIVER={{{driver_name}}}",
+                f"SERVER={host},{port}",
+            ]
+
+            if database:
+                conn_str_parts.append(f"DATABASE={database}")
+
+            # Add security options
+            conn_str_parts.append(f"Encrypt={'YES' if encrypt else 'NO'}")
+            if trust_server_certificate:
+                conn_str_parts.append("TrustServerCertificate=YES")
+
+            conn_str_parts.append(f"Connection Timeout={login_timeout}")
+
+            # Standard SQL Server authentication
+            if user:
+                conn_str_parts.append(f"UID={user}")
+            if password:
+                conn_str_parts.append(f"PWD={password}")
+
+            # Add any additional ODBC properties from the odbc_properties dictionary
+            if self.odbc_properties:
+                for key, value in self.odbc_properties.items():
+                    # Skip properties that we've already set above
+                    if key.lower() in (
+                        "driver",
+                        "server",
+                        "database",
+                        "uid",
+                        "pwd",
+                        "encrypt",
+                        "trustservercertificate",
+                        "connection timeout",
+                    ):
+                        continue
+
+                    # Handle boolean values properly
+                    if isinstance(value, bool):
+                        conn_str_parts.append(f"{key}={'YES' if value else 'NO'}")
+                    else:
+                        conn_str_parts.append(f"{key}={value}")
+
+            # Create the connection string
+            conn_str = ";".join(conn_str_parts)
+
+            return pyodbc.connect(conn_str, autocommit=kwargs.get("autocommit", False))
+
+        return connect
 
     @property
     def _extra_engine_config(self) -> t.Dict[str, t.Any]:
