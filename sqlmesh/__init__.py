@@ -172,6 +172,7 @@ def configure_logging(
     write_to_file: bool = True,
     log_limit: int = c.DEFAULT_LOG_LIMIT,
     log_file_dir: t.Optional[t.Union[str, Path]] = None,
+    ignore_warnings: bool = False,
 ) -> None:
     # Remove noisy grpc logs that are not useful for users
     os.environ["GRPC_VERBOSITY"] = os.environ.get("GRPC_VERBOSITY", "NONE")
@@ -186,7 +187,7 @@ def configure_logging(
     if write_to_stdout:
         stdout_handler = logging.StreamHandler(sys.stdout)
         stdout_handler.setFormatter(CustomFormatter())
-        stdout_handler.setLevel(level)
+        stdout_handler.setLevel(logging.ERROR if ignore_warnings else level)
         logger.addHandler(stdout_handler)
 
     log_file_dir = log_file_dir or c.DEFAULT_LOG_FILE_DIR
