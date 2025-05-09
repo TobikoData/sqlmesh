@@ -572,10 +572,10 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                 previous_snapshot_id
             ]
 
-            new_audits = snapshot.model._audit_metadata()
+            new_audits = snapshot.model._audit_metadata_hash_values()
 
             # Compare the audit metadata hashes to determine if there was a change
-            previous_audit_hash = hash_data(previous_snapshot.model._audit_metadata())
+            previous_audit_hash = hash_data(previous_snapshot.model._audit_metadata_hash_values())
             current_audit_hash = hash_data(new_audits)
 
             if previous_audit_hash != current_audit_hash and new_audits:

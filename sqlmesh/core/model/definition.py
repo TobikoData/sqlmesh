@@ -1069,7 +1069,7 @@ class _Model(ModelMeta, frozen=True):
 
         return data  # type: ignore
 
-    def _audit_metadata(self) -> t.List[str]:
+    def _audit_metadata_hash_values(self) -> t.List[str]:
         from sqlmesh.core.audit.builtin import BUILT_IN_AUDITS
 
         metadata = []
@@ -1126,7 +1126,7 @@ class _Model(ModelMeta, frozen=True):
                 str(self.allow_partials),
                 gen(self.session_properties_) if self.session_properties_ else None,
                 *[gen(g) for g in self.grains],
-                *self._audit_metadata(),
+                *self._audit_metadata_hash_values(),
             ]
 
             for key, value in (self.virtual_properties or {}).items():
