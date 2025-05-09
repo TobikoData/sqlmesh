@@ -40,6 +40,34 @@ class Rule(abc.ABC, metaclass=_Rule):
         """Create a RuleViolation instance for this rule"""
         return RuleViolation(rule=self, violation_msg=violation_msg or self.summary)
 
+    def get_definition_location(self) -> t.Dict[str, t.Any]:
+        """Return the file path and position information for this rule.
+
+        This method returns information about where this rule is defined,
+        which can be used in diagnostics to link to the rule's documentation.
+
+        Returns:
+            A dictionary containing file path and position information.
+        """
+        import inspect
+
+        # Get the file where the rule class is defined
+        file_path = inspect.getfile(self.__class__)
+
+        try:
+            # Get the source code and line number
+            source_lines, start_line = inspect.getsourcelines(self.__class__)
+            end_line = start_line + len(source_lines) - 1
+
+            return {
+                "file_path": file_path,
+                "start_line": start_line,
+                "end_line": end_line,
+            }
+        except (IOError, TypeError):
+            # Fall back to just returning the file path if we can't get source lines
+            return {"file_path": file_path}
+
     def __repr__(self) -> str:
         return self.name
 
