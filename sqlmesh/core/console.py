@@ -2181,6 +2181,12 @@ class TerminalConsole(Console):
     def show_row_diff(
         self, row_diff: RowDiff, show_sample: bool = True, skip_grain_check: bool = False
     ) -> None:
+        if row_diff.empty:
+            self.console.print(
+                "\n[b][red]Neither the source nor the target table contained any records[/red][/b]"
+            )
+            return
+
         source_name = row_diff.source
         if row_diff.source_alias:
             source_name = row_diff.source_alias.upper()
