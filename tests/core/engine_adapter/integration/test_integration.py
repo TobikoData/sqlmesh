@@ -2735,7 +2735,10 @@ def test_state_migrate_from_scratch(ctx: TestContext):
 
 
 def test_python_model_column_order(ctx: TestContext, tmp_path_factory: pytest.TempPathFactory):
-    if ctx.test_type != "df":
+    if ctx.test_type == "pyspark" and ctx.dialect in ("spark", "databricks"):
+        # dont skip
+        pass
+    elif ctx.test_type != "df":
         pytest.skip("python model column order test only needs to be run once per db")
 
     tmp_path = tmp_path_factory.mktemp(f"column_order_{ctx.test_id}")
@@ -2746,8 +2749,35 @@ def test_python_model_column_order(ctx: TestContext, tmp_path_factory: pytest.Te
 
     # note: this model deliberately defines the columns in the @model definition to be in a different order than what
     # is returned by the DataFrame within the model
-    (tmp_path / "models" / "python_model.py").write_text(
-        """
+    model_path = tmp_path / "models" / "python_model.py"
+    if ctx.test_type == "pyspark":
+        # python model that emits a PySpark dataframe
+        model_path.write_text(
+            """
+from pyspark.sql import DataFrame, Row
+import typing as t
+from sqlmesh import ExecutionContext, model
+
+@model(
+    "TEST_SCHEMA.model",
+    columns={
+        "id": "int",
+        "name": "varchar"
+    }
+)
+def execute(
+    context: ExecutionContext,
+    **kwargs: t.Any,
+) -> DataFrame:
+    return context.spark.createDataFrame([
+        Row(name="foo", id=1)
+    ])
+    """.replace("TEST_SCHEMA", test_schema)
+        )
+    else:
+        # python model that emits a Pandas DataFrame
+        model_path.write_text(
+            """
 import pandas as pd
 import typing as t
 from sqlmesh import ExecutionContext, model
@@ -2766,8 +2796,8 @@ def execute(
     return pd.DataFrame([
         {"name": "foo", "id": 1}
     ])
-""".replace("TEST_SCHEMA", test_schema)
-    )
+    """.replace("TEST_SCHEMA", test_schema)
+        )
 
     sqlmesh_ctx = ctx.create_context(path=tmp_path)
 
