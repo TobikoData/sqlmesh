@@ -2734,9 +2734,11 @@ def test_state_migrate_from_scratch(ctx: TestContext):
     sqlmesh_context.migrate()
 
 
-def test_python_model_column_order(ctx: TestContext, tmp_path: pathlib.Path):
+def test_python_model_column_order(ctx: TestContext, tmp_path_factory: pytest.TempPathFactory):
     if ctx.test_type != "df":
         pytest.skip("python model column order test only needs to be run once per db")
+
+    tmp_path = tmp_path_factory.mktemp(f"column_order_{ctx.test_id}")
 
     test_schema = ctx.add_test_suffix("column_order")
 
