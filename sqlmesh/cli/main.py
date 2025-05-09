@@ -102,7 +102,13 @@ def cli(
 
     configs = load_configs(config, Context.CONFIG_TYPE, paths)
     log_limit = list(configs.values())[0].log_limit
-    configure_logging(debug, log_to_stdout, log_limit=log_limit, log_file_dir=log_file_dir)
+    configure_logging(
+        debug,
+        log_to_stdout,
+        log_limit=log_limit,
+        log_file_dir=log_file_dir,
+        ignore_warnings=ignore_warnings,
+    )
     configure_console(ignore_warnings=ignore_warnings)
 
     try:
