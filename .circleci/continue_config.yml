@@ -285,10 +285,10 @@ workflows:
                 - bigquery
                 - clickhouse-cloud
                 - athena
-          filters:
-            branches:
-              only:
-                - main
+          #filters:
+          #  branches:
+          #    only:
+          #      - main
       - trigger_private_tests:
           requires:
             - style_and_cicd_tests
