@@ -182,7 +182,32 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
     def _begin_session(self, properties: SessionProperties) -> None:
         from google.cloud.bigquery import QueryJobConfig
 
-        job = self.client.query("SELECT 1;", job_config=QueryJobConfig(create_session=True))
+        query_label = []
+        if "query_label" in properties and isinstance(properties["query_label"], exp.Array):
+            for label_tuple in properties["query_label"].expressions:
+                if (
+                    isinstance(label_tuple, exp.Tuple)
+                    and len(label_tuple.expressions) == 2
+                    and all(isinstance(label, exp.Literal) for label in label_tuple.expressions)
+                ):
+                    query_label.append(
+                        (label_tuple.expressions[0].this, label_tuple.expressions[1].this)
+                    )
+                else:
+                    raise SQLMeshError(
+                        "Invalid query label format. Expected a tuple of two string literals."
+                    )
+
+        if query_label:
+            query_label_str = ",".join([":".join(label) for label in query_label])
+            query = f'SET @@query_label = "{query_label_str}";SELECT 1;'
+        else:
+            query = "SELECT 1;"
+
+        job = self.client.query(
+            query,
+            job_config=QueryJobConfig(create_session=True),
+        )
         session_info = job.session_info
         session_id = session_info.session_id if session_info else None
         self._session_id = session_id
