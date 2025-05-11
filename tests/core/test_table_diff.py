@@ -788,3 +788,44 @@ def test_data_diff_forward_only(sushi_context_fixed_date, capsys, caplog):
         assert row_diff.stats["distinct_count_t"] == 2
         assert row_diff.s_sample.shape == (2, 2)
         assert row_diff.t_sample.shape == (2, 2)
+
+
+def test_data_diff_empty_tables():
+    engine_adapter = DuckDBConnectionConfig().create_engine_adapter()
+
+    columns_to_types_src = {
+        "key": exp.DataType.build("int"),
+        "value": exp.DataType.build("varchar"),
+    }
+    columns_to_types_target = {
+        "key": exp.DataType.build("int"),
+        "value2": exp.DataType.build("varchar"),
+    }
+
+    engine_adapter.create_table("table_diff_source", columns_to_types_src)
+    engine_adapter.create_table("table_diff_target", columns_to_types_target)
+
+    table_diff = TableDiff(
+        adapter=engine_adapter,
+        source="table_diff_source",
+        target="table_diff_target",
+        source_alias="dev",
+        target_alias="prod",
+        on=["key"],
+    )
+
+    # should show the schema diff
+    schema_diff = table_diff.schema_diff()
+    assert len(schema_diff.added) == 1
+    assert schema_diff.added[0][0] == "value2"
+    assert len(schema_diff.removed) == 1
+    assert schema_diff.removed[0][0] == "value"
+
+    # should not error on the row diff
+    row_diff = table_diff.row_diff()
+    assert row_diff.empty
+
+    output = capture_console_output("show_row_diff", row_diff=row_diff)
+    assert (
+        strip_ansi_codes(output) == "Neither the source nor the target table contained any records"
+    )
