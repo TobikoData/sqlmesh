@@ -1014,19 +1014,25 @@ def union(
         raise SQLMeshError(f"Invalid type '{type_}'. Expected 'ALL' or 'DISTINCT'.")
 
     # Remaining args should be tables
-    tables = args[arg_idx:]
+    tables = []
+    for table in args[arg_idx:]:
+        if isinstance(table, exp.Column):
+            table = exp.table_(table.this, db=table.args.get("table"), catalog=table.args.get("db"))
+        else:
+            table = exp.to_table(table, dialect=evaluator.dialect)  # type: ignore
+        tables.append(table)
 
     columns = {
         column
         for column, _ in reduce(
             lambda a, b: a & b,  # type: ignore
-            (evaluator.columns_to_types(table).items() for table in tables),  # type: ignore
+            (evaluator.columns_to_types(table).items() for table in tables),
         )
     }
 
     projections = [
         exp.cast(column, type_, dialect=evaluator.dialect).as_(column)
-        for column, type_ in evaluator.columns_to_types(tables[0]).items()  # type: ignore
+        for column, type_ in evaluator.columns_to_types(tables[0]).items()
         if column in columns
     ]
 
