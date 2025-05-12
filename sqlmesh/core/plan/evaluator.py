@@ -35,7 +35,6 @@ from sqlmesh.core.snapshot import (
     SnapshotTableInfo,
     SnapshotCreationFailedError,
 )
-from sqlmesh.core.snapshot.definition import SnapshotChangeCategory, parent_snapshots_by_name
 from sqlmesh.utils import CompletionStatus
 from sqlmesh.core.state_sync import StateSync
 from sqlmesh.core.state_sync.base import PromotionResult
@@ -43,7 +42,6 @@ from sqlmesh.utils.concurrency import NodeExecutionFailedError
 from sqlmesh.utils.errors import PlanError
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import now
-from sqlmesh.utils.hashing import hash_data
 
 logger = logging.getLogger(__name__)
 
@@ -118,10 +116,6 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                 after_promote_snapshots = all_names - before_promote_snapshots
                 deployability_index_for_evaluation = DeployabilityIndex.all_deployable()
 
-            self._run_audits_for_metadata_snapshots(
-                new_snapshots, plan, deployability_index_for_evaluation
-            )
-
             execute_environment_statements(
                 adapter=self.snapshot_evaluator.adapter,
                 environment_statements=plan.environment_statements or [],
@@ -133,6 +127,8 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                 end=plan.end,
                 execution_time=plan.execution_time,
             )
+
+            self._run_audits_for_metadata_snapshots(plan, snapshots, new_snapshots)
 
             push_completion_status = self._push(plan, snapshots, deployability_index_for_creation)
             if push_completion_status.is_nothing_to_do:
@@ -553,69 +549,56 @@ class BuiltInPlanEvaluator(PlanEvaluator):
 
     def _run_audits_for_metadata_snapshots(
         self,
-        new_snapshots: t.Dict[SnapshotId, Snapshot],
         plan: EvaluatablePlan,
-        deployability_index: DeployabilityIndex,
+        snapshots: t.Dict[SnapshotId, Snapshot],
+        new_snapshots: t.Dict[SnapshotId, Snapshot],
     ) -> None:
-        to_be_audited_snapshots = []
-
+        # Step 1: Filter out snapshots that are not categorized as metadata changes on models
+        metadata_snapshots = []
         for snapshot in new_snapshots.values():
-            if (
-                snapshot.change_category != SnapshotChangeCategory.METADATA
-                or not snapshot.previous_version
-                or not snapshot.is_model
-            ):
+            if not snapshot.is_metadata or not snapshot.is_model or not snapshot.evaluatable:
                 continue
 
-            previous_snapshot_id = snapshot.previous_version.snapshot_id(snapshot.name)
-            previous_snapshot = self.state_sync.get_snapshots([previous_snapshot_id])[
-                previous_snapshot_id
+            metadata_snapshots.append(snapshot)
+
+        # Step 2: Bulk load their previous snapshots from state
+        previous_snapshots = self.state_sync.get_snapshots(
+            [
+                s.previous_version.snapshot_id(s.name)
+                for s in metadata_snapshots
+                if s.previous_version
             ]
+        ).values()
 
-            new_audits = snapshot.model._audit_metadata_hash_values()
+        # Step 3: Compare the audit metadata hashes to determine if there was a change in the audits field
+        to_be_audited_snapshots = {}
+        for snapshot, previous_snapshot in zip(metadata_snapshots, previous_snapshots):
+            new_audits, new_audits_hash = snapshot.model.audit_metadata_hash()
+            _, previous_audit_hash = previous_snapshot.model.audit_metadata_hash()
 
-            # Compare the audit metadata hashes to determine if there was a change
-            previous_audit_hash = hash_data(previous_snapshot.model._audit_metadata_hash_values())
-            current_audit_hash = hash_data(new_audits)
-
-            if previous_audit_hash != current_audit_hash and new_audits:
-                to_be_audited_snapshots.append((snapshot, previous_snapshot))
+            if previous_audit_hash != new_audits_hash and new_audits:
+                snapshot_start = min(i[0] for i in snapshot.intervals)
+                snapshot_end = max(i[1] for i in snapshot.intervals)
+                to_be_audited_snapshots[snapshot.snapshot_id] = (snapshot_start, snapshot_end)
 
         if not to_be_audited_snapshots:
             return
 
-        scheduler = self.create_scheduler(new_snapshots.values())
-        raise_plan_error = False
-        for to_be_audited_snapshot, previous_snapshot in to_be_audited_snapshots:
-            parent_snapshots = parent_snapshots_by_name(to_be_audited_snapshot, new_snapshots)
+        # Step 4: If there are any snapshots to be audited, we'll reuse the scheduler's
+        # internals to audit them by utilizing the restatement logic
+        scheduler = self.create_scheduler(snapshots.values())
+        completion_status = scheduler.audit(
+            plan.environment,
+            plan.start,
+            plan.end,
+            execution_time=plan.execution_time,
+            restatements=to_be_audited_snapshots,
+            end_bounded=plan.end_bounded,
+            interval_end_per_model=plan.interval_end_per_model,
+        )
 
-            # The previous snapshot is the snapshot before the metadata change
-            # and contains the latest intervals that we should use for the new audit
-            for interval in previous_snapshot.intervals:
-                start, end = interval
-
-                try:
-                    scheduler._audit_snapshot(
-                        to_be_audited_snapshot,
-                        environment_naming_info=plan.environment.naming_info,
-                        snapshots=parent_snapshots,
-                        start=start,
-                        end=end,
-                        execution_time=plan.execution_time,
-                        deployability_index=deployability_index,
-                    )
-                except Exception as e:
-                    # Simulate a node execution failure with the audit error passed as the
-                    # cause in order to reuse log_failed_models
-                    error = NodeExecutionFailedError(
-                        (to_be_audited_snapshot.name, ((start, end), -1))
-                    )
-                    error.__cause__ = e
-                    self.console.log_failed_models([error])
-                    raise_plan_error = True
-
-            if raise_plan_error:
-                raise PlanError("Plan application failed.")
+        if completion_status.is_failure:
+            raise PlanError("Plan application failed.")
 
 
 def update_intervals_for_new_snapshots(
