@@ -132,7 +132,8 @@ def get_model_definitions_for_a_path(
     if len(tables) == 0:
         return []
 
-    read_file = open(file_path, "r").readlines()
+    with open(file_path, "r", encoding="utf-8") as file:
+        read_file = file.readlines()
 
     for table in tables:
         # Normalize the table reference
