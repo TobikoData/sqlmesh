@@ -34,7 +34,7 @@
     "@tanstack/react-virtual": "^3.0.0-beta.56",
     "@uidotdev/usehooks": "^2.2.0",
     "@uiw/react-codemirror": "^4.21.12",
-    "apache-arrow": "^13.0.0",
+    "apache-arrow": "^19.0.0",
     "clsx": "^2.0.0",
     "diff": "^5.2.0",
     "elkjs": "^0.8.2",
