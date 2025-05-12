@@ -130,7 +130,7 @@ This example stops all notifications other than those for `User1`:
 
 SQLMesh notifications are triggered by events. The events that should trigger a notification are specified in the notification target's `notify_on` field.
 
-Notifications are support for [`plan` application](../concepts/plans.md) start/end/failure, [`run`](../reference/cli.md#run) start/end/failure, and [`audit`](../concepts/audits.md) failures.
+Notifications are supported for [`plan` application](../concepts/plans.md) start/end/failure, [`run`](../reference/cli.md#run) start/end/failure, and [`audit`](../concepts/audits.md) failures.
 
 For `plan` and `run` start/end, the target environment name is included in the notification message. For failures, the Python exception or error text is included in the notification message.
 

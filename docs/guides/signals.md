@@ -28,7 +28,7 @@ Signal checking functions examines a batch of time intervals. The function is al
 
 To define a signal, create a `signals` directory in your project folder. Define your signal in a file named `__init__.py` in that directory (you can have additional python file names as well).
 
-A signal is a function that accepts a batch (DateTimeRanges: t.List[t.Tuple[datetime, datetime]]) and returns a batch or a boolean. It needs use the @signal decorator.
+A signal is a function that accepts a batch (`DateTimeRanges: t.List[t.Tuple[datetime, datetime]]`) and returns a batch or a boolean. It needs to use the `@signal` decorator.
 
 We now demonstrate signals of varying complexity.
 
