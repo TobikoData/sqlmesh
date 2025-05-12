@@ -55,7 +55,7 @@
     "@playwright/test": "^1.37.1",
     "@swc/core": "^1.11.24",
     "@testing-library/jest-dom": "^6.1.2",
-    "@testing-library/react": "^14.0.0",
+    "@testing-library/react": "^16.0.0",
     "@testing-library/user-event": "^14.4.3",
     "@types/diff": "^5.2.1",
     "@types/pluralize": "^0.0.30",
