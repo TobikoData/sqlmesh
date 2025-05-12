@@ -48,7 +48,7 @@
     "react-split": "^2.0.14",
     "reactflow": "^11.8.3",
     "thememirror": "^2.0.1",
-    "zustand": "^4.4.1"
+    "zustand": "^5.0.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.25.1",
