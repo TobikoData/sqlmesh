@@ -151,7 +151,7 @@ class SQLMeshLanguageServer:
             """Format the document using SQLMesh `format_model_expressions`."""
             try:
                 self._ensure_context_for_document(params.text_document.uri)
-                document = ls.workspace.get_document(params.text_document.uri)
+                document = ls.workspace.get_text_document(params.text_document.uri)
                 if self.lsp_context is None:
                     raise RuntimeError(f"No context found for document: {document.path}")
 
@@ -182,7 +182,7 @@ class SQLMeshLanguageServer:
             """Provide hover information for an object."""
             try:
                 self._ensure_context_for_document(params.text_document.uri)
-                document = ls.workspace.get_document(params.text_document.uri)
+                document = ls.workspace.get_text_document(params.text_document.uri)
                 if self.lsp_context is None:
                     raise RuntimeError(f"No context found for document: {document.path}")
 
@@ -212,7 +212,7 @@ class SQLMeshLanguageServer:
             """Jump to an object's definition."""
             try:
                 self._ensure_context_for_document(params.text_document.uri)
-                document = ls.workspace.get_document(params.text_document.uri)
+                document = ls.workspace.get_text_document(params.text_document.uri)
                 if self.lsp_context is None:
                     raise RuntimeError(f"No context found for document: {document.path}")
 
