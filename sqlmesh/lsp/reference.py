@@ -24,6 +24,16 @@ class Reference(PydanticModel):
     description: t.Optional[str] = None
 
 
+def is_position_in_range(range: Range, position: Position) -> bool:
+    return (
+        range.start.line < position.line
+        or (range.start.line == position.line and range.start.character <= position.character)
+    ) and (
+        range.end.line > position.line
+        or (range.end.line == position.line and range.end.character >= position.character)
+    )
+
+
 def by_position(position: Position) -> t.Callable[[Reference], bool]:
     """
     Filter reference to only filter references that contain the given position.
@@ -35,17 +45,8 @@ def by_position(position: Position) -> t.Callable[[Reference], bool]:
         A function that returns True if the reference contains the position, False otherwise
     """
 
-    def contains_position(r: Reference) -> bool:
-        return (
-            r.range.start.line < position.line
-            or (
-                r.range.start.line == position.line
-                and r.range.start.character <= position.character
-            )
-        ) and (
-            r.range.end.line > position.line
-            or (r.range.end.line == position.line and r.range.end.character >= position.character)
-        )
+    def contains_position(reference: Reference) -> bool:
+        return is_position_in_range(reference.range, position)
 
     return contains_position
 
@@ -167,7 +168,7 @@ def get_model_definitions_for_a_path(
 
         # Extract metadata for positioning
         table_meta = TokenPositionDetails.from_meta(table.this.meta)
-        table_range = _range_from_token_position_details(table_meta, read_file)
+        table_range = range_from_token_position_details(table_meta, read_file)
         start_pos = table_range.start
         end_pos = table_range.end
 
@@ -175,7 +176,7 @@ def get_model_definitions_for_a_path(
         catalog_or_db = table.args.get("catalog") or table.args.get("db")
         if catalog_or_db is not None:
             catalog_or_db_meta = TokenPositionDetails.from_meta(catalog_or_db.meta)
-            catalog_or_db_range = _range_from_token_position_details(catalog_or_db_meta, read_file)
+            catalog_or_db_range = range_from_token_position_details(catalog_or_db_meta, read_file)
             start_pos = catalog_or_db_range.start
 
         references.append(
@@ -215,7 +216,7 @@ class TokenPositionDetails(PydanticModel):
         )
 
 
-def _range_from_token_position_details(
+def range_from_token_position_details(
     token_position_details: TokenPositionDetails, read_file: t.List[str]
 ) -> Range:
     """
