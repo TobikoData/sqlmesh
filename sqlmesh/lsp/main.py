@@ -293,6 +293,12 @@ class SQLMeshLanguageServer:
             return None
         with open(diagnostic.model._path, "r", encoding="utf-8") as file:
             lines = file.readlines()
+
+        # Get rule definition location for diagnostics link
+        rule_location = diagnostic.rule.get_definition_location()
+        rule_uri = f"file://{rule_location.file_path}#L{rule_location.start_line}"
+
+        # Use URI format to create a link for "related information"
         return types.Diagnostic(
             range=types.Range(
                 start=types.Position(line=0, character=0),
@@ -302,6 +308,9 @@ class SQLMeshLanguageServer:
             severity=types.DiagnosticSeverity.Error
             if diagnostic.violation_type == "error"
             else types.DiagnosticSeverity.Warning,
+            source="sqlmesh",
+            code=diagnostic.rule.name,
+            code_description=types.CodeDescription(href=rule_uri),
         )
 
     @staticmethod
