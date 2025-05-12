@@ -7,7 +7,8 @@ MODEL (
   grain customer_id,
   description 'Sushi customer data',
   column_descriptions (
-    customer_id = 'customer_id uniquely identifies customers'
+    customer_id = 'customer_id uniquely identifies customers',
+    status = 'status of the customer'
   )
 );
 

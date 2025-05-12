@@ -11,11 +11,14 @@ from pygls.server import LanguageServer
 from sqlmesh._version import __version__
 from sqlmesh.core.context import Context
 from sqlmesh.core.linter.definition import AnnotatedRuleViolation
+from sqlmesh.core.model import SqlModel
+from sqlmesh.lsp.columns import get_columns_and_ranges_for_model
 from sqlmesh.lsp.completions import get_sql_completions
 from sqlmesh.lsp.context import LSPContext, ModelTarget
 from sqlmesh.lsp.custom import ALL_MODELS_FEATURE, AllModelsRequest, AllModelsResponse
 from sqlmesh.lsp.reference import (
     get_references,
+    is_position_in_range,
 )
 
 
@@ -189,17 +192,39 @@ class SQLMeshLanguageServer:
                 references = get_references(
                     self.lsp_context, params.text_document.uri, params.position
                 )
-                if not references:
+                if references:
+                    reference = references[0]
+                    if reference.description:
+                        return types.Hover(
+                            contents=types.MarkupContent(
+                                kind=types.MarkupKind.Markdown, value=reference.description
+                            ),
+                            range=reference.range,
+                        )
+
+                # Try columns if no description is found
+                models = self.lsp_context.map[params.text_document.uri]
+                if not models:
                     return None
-                reference = references[0]
-                if not reference.description:
+                if not isinstance(models, ModelTarget):
                     return None
-                return types.Hover(
-                    contents=types.MarkupContent(
-                        kind=types.MarkupKind.Markdown, value=reference.description
-                    ),
-                    range=reference.range,
-                )
+                model = self.lsp_context.context.get_model(models.names[0])
+                if not isinstance(model, SqlModel):
+                    return None
+                columns = get_columns_and_ranges_for_model(model)
+                if not columns:
+                    return None
+
+                for column in columns:
+                    if column.description and is_position_in_range(column.range, params.position):
+                        return types.Hover(
+                            contents=types.MarkupContent(
+                                kind=types.MarkupKind.Markdown,
+                                value=column.description,
+                            ),
+                            range=column.range,
+                        )
+                return None
 
             except Exception as e:
                 ls.show_message(f"Error getting hover information: {e}", types.MessageType.Error)
