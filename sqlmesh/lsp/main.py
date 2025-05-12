@@ -14,7 +14,6 @@ from sqlmesh.core.linter.definition import AnnotatedRuleViolation
 from sqlmesh.lsp.api import (
     API_FEATURE,
     ApiRequest,
-    ApiResponse,
     ApiResponseGetLineage,
     ApiResponseGetModels,
 )
@@ -89,10 +88,12 @@ class SQLMeshLanguageServer:
                 return get_sql_completions(None, params.textDocument.uri)
 
         @self.server.feature(API_FEATURE)
-        def api(ls: LanguageServer, request: ApiRequest) -> ApiResponse:
+        def api(
+            ls: LanguageServer, request: ApiRequest
+        ) -> t.Union[ApiResponseGetModels, ApiResponseGetLineage]:
             ls.log_trace(f"API request: {request}")
             if self.lsp_context is None:
-                return ApiResponse(data={})
+                raise RuntimeError("No context found")
             if request.url == "/api/models":
                 response = ApiResponseGetModels(data=get_models(self.lsp_context.context))
                 return response
