@@ -300,7 +300,7 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
                 temp_table.set("catalog", database)
                 df_renamed = df.rename(
                     {
-                        col: exp.to_identifier(col, quoted=True).sql(dialect=self.dialect)
+                        col: exp.to_identifier(col).sql(dialect=self.dialect, identify=True)
                         for col in columns_to_types
                     }
                 )  # type: ignore

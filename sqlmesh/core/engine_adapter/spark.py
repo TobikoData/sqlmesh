@@ -281,7 +281,7 @@ class SparkEngineAdapter(
         if pyspark_df:
             if columns_to_types:
                 # ensure Spark dataframe column order matches columns_to_types
-                pyspark_df = pyspark_df.select(*list(columns_to_types))
+                pyspark_df = pyspark_df.select(*columns_to_types)
             return pyspark_df
         df = self.try_get_pandas_df(generic_df)
         if df is None:
