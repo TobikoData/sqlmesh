@@ -11,12 +11,20 @@ from pygls.server import LanguageServer
 from sqlmesh._version import __version__
 from sqlmesh.core.context import Context
 from sqlmesh.core.linter.definition import AnnotatedRuleViolation
+from sqlmesh.lsp.api import (
+    API_FEATURE,
+    ApiRequest,
+    ApiResponseGetLineage,
+    ApiResponseGetModels,
+)
 from sqlmesh.lsp.completions import get_sql_completions
 from sqlmesh.lsp.context import LSPContext, ModelTarget
 from sqlmesh.lsp.custom import ALL_MODELS_FEATURE, AllModelsRequest, AllModelsResponse
 from sqlmesh.lsp.reference import (
     get_references,
 )
+from web.server.api.endpoints.lineage import model_lineage
+from web.server.api.endpoints.models import get_models
 
 
 class SQLMeshLanguageServer:
@@ -78,6 +86,23 @@ class SQLMeshLanguageServer:
                 return get_sql_completions(context, params.textDocument.uri)
             except Exception as e:
                 return get_sql_completions(None, params.textDocument.uri)
+
+        @self.server.feature(API_FEATURE)
+        def api(
+            ls: LanguageServer, request: ApiRequest
+        ) -> t.Union[ApiResponseGetModels, ApiResponseGetLineage]:
+            ls.log_trace(f"API request: {request}")
+            if self.lsp_context is None:
+                raise RuntimeError("No context found")
+            if request.url == "/api/models":
+                response = ApiResponseGetModels(data=get_models(self.lsp_context.context))
+                return response
+            if request.url.startswith("/api/lineage"):
+                name = request.url.split("/")[-1]
+                lineage = model_lineage(name, self.lsp_context.context)
+                non_set_lineage = {k: v for k, v in lineage.items() if v is not None}
+                return ApiResponseGetLineage(data=non_set_lineage)
+            raise NotImplementedError(f"API request not implemented: {request.url}")
 
         @self.server.feature(types.TEXT_DOCUMENT_DID_OPEN)
         def did_open(ls: LanguageServer, params: types.DidOpenTextDocumentParams) -> None:
