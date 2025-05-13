@@ -169,6 +169,7 @@ function TasksDetails({
         leaveFrom="opacity-100 scale-100"
         leaveTo="opacity-0 scale-95"
         className="trasition-all duration-300 ease-in-out"
+        as="div"
       >
         <div className="px-4 pt-3 pb-2 mt-4 shadow-lg rounded-lg">
           <Title text="Currently in proccess" />

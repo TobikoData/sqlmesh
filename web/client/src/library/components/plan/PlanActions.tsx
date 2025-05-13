@@ -163,6 +163,7 @@ export default function PlanActions({
             leaveFrom="opacity-100 scale-100"
             leaveTo="opacity-0 scale-95"
             className="trasition-all duration-300 ease-in-out"
+            as="div"
           >
             {showPlanActionButton && (
               <Button
