@@ -117,7 +117,8 @@ The `order_ship_date` model specifies the DuckDB engine, which will perform the 
 
 This allows you to efficiently scan data from an Iceberg table, or even query tables directly from S3 when used with the [HTTPFS](https://duckdb.org/docs/stable/extensions/httpfs/overview.html) extension.
 
-![PostgreSQL + DuckDB](./multi_engine/postgres_duckdb.png)
+![Figure 1: PostgreSQL + DuckDB](./multi_engine/postgres_duckdb.png)
+*Figure 1: The gateways denote the execution engine, while both the virtual layer’s views and the physical layer's tables reside in Postgres*
 
 In models where no gateway is specified, such as the `customer_orders` model, the default PostgreSQL engine will  both create the physical table and the views in the virtual layer.
 
@@ -284,7 +285,8 @@ FROM
 ```
 
 
-![Athena + Redshift + Snowflake](./multi_engine/athena_redshift_snowflake.png)
+![Figure 2: Athena + Redshift + Snowflake](./multi_engine/athena_redshift_snowflake.png)
+*Figure 2: The gateways represent the execution engine and indicate where the virtual layer’s views and the physical layer's tables reside*
 
 When you run the plan, the catalogs for each model will be set automatically based on the gateway’s connection and each corresponding model will be executed by the specified engine:
 
