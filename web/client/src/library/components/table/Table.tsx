@@ -21,7 +21,7 @@ import Input from '@components/input/Input'
 import { EnumSize } from '~/types/enum'
 import { isArrayNotEmpty, isNotNil } from '@utils/index'
 
-declare module '@tanstack/table-core' {
+declare module '@tanstack/react-table' {
   interface ColumnMeta<TData extends RowData, TValue> {
     type: string
   }

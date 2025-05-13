@@ -59,11 +59,12 @@ jobs:
     steps:
       - checkout
       - run:
-          name: Install packages
-          command: npm ci
+          name: Install Dependencies
+          command: |
+            pnpm install
       - run:
           name: Build UI
-          command: npm --prefix web/client run build
+          command: pnpm --prefix web/client run build
       - persist_to_workspace:
           root: web/client
           paths:
