@@ -3,7 +3,7 @@ import { useStoreContext } from '@context/context'
 import ModuleNavigation from '@components/moduleNavigation/ModuleNavigation'
 import Navigation from './Navigation'
 import Container from '@components/container/Container'
-import { Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { Outlet, useLocation, useNavigate } from 'react-router'
 import {
   EnumErrorKey,
   type ErrorIDE,

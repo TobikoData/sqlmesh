@@ -1,7 +1,7 @@
 import Page from '../root/Page'
 import { useStoreContext } from '@context/context'
 import { EnumRoutes } from '~/routes'
-import { Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { Outlet, useLocation, useNavigate } from 'react-router'
 import { useEffect } from 'react'
 import { useStorePlan } from '@context/plan'
 import { isNotNil } from '@utils/index'

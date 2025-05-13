@@ -1,4 +1,4 @@
-import { Outlet, useLocation } from 'react-router-dom'
+import { Outlet, useLocation } from 'react-router'
 import Page from '../root/Page'
 import { useStoreProject } from '@context/project'
 import SourceList from '@components/sourceList/SourceList'

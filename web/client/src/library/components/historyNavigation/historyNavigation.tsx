@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router'
 import { ChevronRightIcon, ChevronLeftIcon } from '@heroicons/react/20/solid'
 
 export default function HistoryNavigation(): JSX.Element {

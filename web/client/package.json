@@ -44,7 +44,7 @@
     "react-dnd-html5-backend": "^16.0.1",
     "react-dom": "^18.2.0",
     "react-markdown": "^10.1.0",
-    "react-router-dom": "^6.15.0",
+    "react-router": "^7.0.0",
     "react-split": "^2.0.14",
     "reactflow": "^11.8.3",
     "thememirror": "^2.0.1",

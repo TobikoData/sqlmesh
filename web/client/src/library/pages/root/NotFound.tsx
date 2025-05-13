@@ -1,5 +1,5 @@
 import Container from '@components/container/Container'
-import { Link } from 'react-router-dom'
+import { Link } from 'react-router'
 import { ButtonLink } from '@components/button/Button'
 import { EnumVariant } from '~/types/enum'
 import { isNotNil } from '@utils/index'

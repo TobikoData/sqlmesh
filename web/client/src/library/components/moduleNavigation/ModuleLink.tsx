@@ -1,5 +1,5 @@
 import clsx from 'clsx'
-import { NavLink } from 'react-router-dom'
+import { NavLink } from 'react-router'
 import { isFalse } from '@utils/index'
 
 export default function ModuleLink({
