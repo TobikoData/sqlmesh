@@ -9725,3 +9725,56 @@ def test_python_env_includes_file_path_in_render_definition():
     model_executable_str = python_model.render_definition()[1].sql()
     # Make sure the file path is included in the render definition
     assert "# tests/core/test_model.py" in model_executable_str
+
+
+def test_resolve_interpolated_variables_when_parsing_python_deps():
+    @model(
+        name="bla.test_interpolate_var_in_dep_py",
+        kind="full",
+        columns={'"col"': "int"},
+    )
+    def unimportant_testing_model(context, **kwargs):
+        table1 = context.resolve_table(f"{context.var('schema_name')}.table_name")
+        table2 = context.resolve_table(f"{context.blueprint_var('schema_name')}.table_name")
+
+        return context.fetchdf(exp.select("*").from_(table))
+
+    m = model.get_registry()["bla.test_interpolate_var_in_dep_py"].model(
+        module_path=Path("."),
+        path=Path("."),
+        variables={"schema_name": "foo"},
+        blueprint_variables={"schema_name": "baz"},
+    )
+
+    assert m.depends_on == {'"foo"."table_name"', '"baz"."table_name"'}
+    assert m.python_env.get(c.SQLMESH_VARS) == Executable.value({"schema_name": "foo"})
+    assert m.python_env.get(c.SQLMESH_BLUEPRINT_VARS) == Executable.value({"schema_name": "baz"})
+
+    @macro()
+    def unimportant_testing_macro(evaluator, *projections):
+        evaluator.var(f"{evaluator.var('selector')}_variable")
+        evaluator.var(f"{evaluator.blueprint_var('selector')}_variable")
+
+        return exp.select(*[f'{p} AS "{p}"' for p in projections])
+
+    m = load_sql_based_model(
+        d.parse(
+            """
+            MODEL (
+                name bla.test_interpolate_var_in_dep_sql
+            );
+
+            @unimportant_testing_macro();
+
+            SELECT
+              1 AS c
+            """,
+        ),
+        variables={"selector": "bla", "bla_variable": 1, "baz_variable": 2},
+        blueprint_variables={"selector": "baz"},
+    )
+
+    assert m.python_env.get(c.SQLMESH_VARS) == Executable.value(
+        {"selector": "bla", "bla_variable": 1, "baz_variable": 2}
+    )
+    assert m.python_env.get(c.SQLMESH_BLUEPRINT_VARS) == Executable.value({"selector": "baz"})
