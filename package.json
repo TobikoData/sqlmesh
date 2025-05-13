@@ -8,9 +8,11 @@
     "fmt": "prettier --write .",
     "fmt:check": "prettier --check .",
     "lint": "npm run fmt:check && npm run lint --workspaces",
-    "lint:fix": "npm run fmt && npm run lint:fix --workspaces"
+    "lint:fix": "npm run fmt && npm run lint:fix --workspaces",
+    "generate:api": "orval --config ./web/client/orval.config.ts"
   },
   "devDependencies": {
-    "prettier": "^3.5.2"
+    "prettier": "^3.5.2",
+    "orval": "^7.9.0"
   }
 }

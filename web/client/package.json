@@ -2,17 +2,16 @@
   "name": "tobiko",
   "version": "0.0.0",
   "scripts": {
-    "dev": "npm run generate:api && vite",
-    "build": "npm run generate:api && tsc && vite build",
+    "dev": "vite",
+    "build": "tsc && vite build",
     "preview": "vite preview --no-open",
     "lint": "eslint",
     "lint:fix": "eslint --fix",
-    "test": "npm run generate:api && npm run test:unit && npm run test:e2e",
+    "test": "npm run test:unit && npm run test:e2e",
     "test:unit:watch": "NODE_ENV=development vitest --watch=true",
     "test:unit": "NODE_ENV=testing vitest --watch=false",
     "test:e2e": "NODE_ENV=testing playwright test",
-    "playwright:install": "playwright install --with-deps",
-    "generate:api": "orval --config ./orval.config.ts"
+    "playwright:install": "playwright install --with-deps"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.16.2",
@@ -61,10 +60,8 @@
     "@types/react": "^18.2.21",
     "@types/react-dom": "^18.2.7",
     "@vitejs/plugin-react-swc": "^3.9.0",
-    "ajv": "^8.17.1",
     "autoprefixer": "^10.4.15",
     "jsdom": "^26.1.0",
-    "orval": "^7.9.0",
     "postcss": "^8.4.29",
     "tailwindcss": "^3.3.3",
     "typescript": "^5.8.3",
