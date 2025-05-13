@@ -1966,7 +1966,13 @@ def load_sql_based_models(
         if not rendered_blueprints:
             raise_config_error("Failed to render blueprints property", path)
 
-        blueprints = t.cast(t.List, rendered_blueprints)[0]
+        # Help mypy see that rendered_blueprints can't be None
+        assert rendered_blueprints
+
+        if len(rendered_blueprints) > 1:
+            rendered_blueprints = [exp.Tuple(expressions=rendered_blueprints)]
+
+        blueprints = rendered_blueprints[0]
 
     return create_models_from_blueprints(
         gateway=gateway,
@@ -2289,7 +2295,7 @@ def create_python_model(
     else:
         depends_on_rendered = render_expression(
             expression=exp.Array(
-                expressions=[d.parse_one(dep, dialect=dialect) for dep in depends_on or []]
+                expressions=[exp.maybe_parse(dep, dialect=dialect) for dep in depends_on or []]
             ),
             module_path=module_path,
             macros=macros,
@@ -2471,6 +2477,14 @@ def _create_model(
     }
 
     model.audit_definitions.update(audit_definitions)
+
+    from sqlmesh.core.audit.builtin import BUILT_IN_AUDITS
+
+    # Ensure that all audits referenced in the model are defined
+    available_audits = BUILT_IN_AUDITS.keys() | model.audit_definitions.keys()
+    for referenced_audit, *_ in model.audits:
+        if referenced_audit not in available_audits:
+            raise_config_error(f"Audit '{referenced_audit}' is undefined", location=path)
 
     # Any macro referenced in audits or signals needs to be treated as metadata-only
     statements.extend((audit.query, True) for audit in audit_definitions.values())

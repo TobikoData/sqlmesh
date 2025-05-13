@@ -17,7 +17,7 @@ from sqlmesh.utils import Verbosity
 from sqlmesh.core.config import load_configs
 from sqlmesh.core.context import Context
 from sqlmesh.utils.date import TimeLike
-from sqlmesh.utils.errors import MissingDependencyError
+from sqlmesh.utils.errors import MissingDependencyError, SQLMeshError
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -102,7 +102,13 @@ def cli(
 
     configs = load_configs(config, Context.CONFIG_TYPE, paths)
     log_limit = list(configs.values())[0].log_limit
-    configure_logging(debug, log_to_stdout, log_limit=log_limit, log_file_dir=log_file_dir)
+    configure_logging(
+        debug,
+        log_to_stdout,
+        log_limit=log_limit,
+        log_file_dir=log_file_dir,
+        ignore_warnings=ignore_warnings,
+    )
     configure_console(ignore_warnings=ignore_warnings)
 
     try:
@@ -546,6 +552,19 @@ def janitor(ctx: click.Context, ignore_ttl: bool, **kwargs: t.Any) -> None:
     ctx.obj.run_janitor(ignore_ttl, **kwargs)
 
 
+@cli.command("destroy")
+@click.pass_context
+@error_handler
+@cli_analytics
+def destroy(ctx: click.Context, **kwargs: t.Any) -> None:
+    """
+    The destroy command removes all project resources.
+
+    This includes engine-managed objects, state tables, the SQLMesh cache and any build artifacts.
+    """
+    ctx.obj.destroy(**kwargs)
+
+
 @cli.command("dag")
 @click.argument("file", required=True)
 @click.option(
@@ -892,18 +911,33 @@ def create_external_models(obj: Context, **kwargs: t.Any) -> None:
     type=str,
     help="Schema used for temporary tables. It can be `CATALOG.SCHEMA` or `SCHEMA`. Default: `sqlmesh_temp`",
 )
+@click.option(
+    "--select-model",
+    "-m",
+    type=str,
+    multiple=True,
+    help="Specify one or more models to data diff. Use wildcards to diff multiple models. Ex: '*' (all models with applied plan diffs), 'demo.model+' (this and downstream models), 'git:feature_branch' (models with direct modifications in this branch only)",
+)
 @click.pass_obj
 @error_handler
 @cli_analytics
 def table_diff(
     obj: Context, source_to_target: str, model: t.Optional[str], **kwargs: t.Any
 ) -> None:
-    """Show the diff between two tables."""
+    """Show the diff between two tables or a selection of models when they are specified."""
     source, target = source_to_target.split(":")
+    select_model = kwargs.pop("select_model", None)
+
+    if model and select_model:
+        raise SQLMeshError(
+            "The --select-model option cannot be used together with a model argument. Please choose one of them."
+        )
+
+    select_models = {model} if model else select_model
     obj.table_diff(
         source=source,
         target=target,
-        model_or_snapshot=model,
+        select_models=select_models,
         **kwargs,
     )
 

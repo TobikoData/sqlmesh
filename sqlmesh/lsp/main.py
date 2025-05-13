@@ -11,8 +11,20 @@ from pygls.server import LanguageServer
 from sqlmesh._version import __version__
 from sqlmesh.core.context import Context
 from sqlmesh.core.linter.definition import AnnotatedRuleViolation
-from sqlmesh.lsp.context import LSPContext
-from sqlmesh.lsp.reference import get_model_definitions_for_a_path
+from sqlmesh.lsp.api import (
+    API_FEATURE,
+    ApiRequest,
+    ApiResponseGetLineage,
+    ApiResponseGetModels,
+)
+from sqlmesh.lsp.completions import get_sql_completions
+from sqlmesh.lsp.context import LSPContext, ModelTarget
+from sqlmesh.lsp.custom import ALL_MODELS_FEATURE, AllModelsRequest, AllModelsResponse
+from sqlmesh.lsp.reference import (
+    get_references,
+)
+from web.server.api.endpoints.lineage import model_lineage
+from web.server.api.endpoints.models import get_models
 
 
 class SQLMeshLanguageServer:
@@ -38,6 +50,60 @@ class SQLMeshLanguageServer:
     def _register_features(self) -> None:
         """Register LSP features on the internal LanguageServer instance."""
 
+        @self.server.feature(types.INITIALIZE)
+        def initialize(ls: LanguageServer, params: types.InitializeParams) -> None:
+            """Initialize the server when the client connects."""
+            try:
+                if params.workspace_folders:
+                    # Try to find a SQLMesh config file in any workspace folder (only at the root level)
+                    for folder in params.workspace_folders:
+                        folder_path = Path(self._uri_to_path(folder.uri))
+                        # Only check for config files directly in the workspace directory
+                        for ext in ("py", "yml", "yaml"):
+                            config_path = folder_path / f"config.{ext}"
+                            if config_path.exists():
+                                try:
+                                    # Use user-provided instantiator to build the context
+                                    created_context = self.context_class(paths=[folder_path])
+                                    self.lsp_context = LSPContext(created_context)
+                                    ls.show_message(
+                                        f"Loaded SQLMesh context from {config_path}",
+                                        types.MessageType.Info,
+                                    )
+                                    return  # Exit after successfully loading any config
+                                except Exception as e:
+                                    ls.show_message(
+                                        f"Error loading context from {config_path}: {e}",
+                                        types.MessageType.Warning,
+                                    )
+            except Exception as e:
+                ls.show_message(f"Error initializing SQLMesh context: {e}", types.MessageType.Error)
+
+        @self.server.feature(ALL_MODELS_FEATURE)
+        def all_models(ls: LanguageServer, params: AllModelsRequest) -> AllModelsResponse:
+            try:
+                context = self._context_get_or_load(params.textDocument.uri)
+                return get_sql_completions(context, params.textDocument.uri)
+            except Exception as e:
+                return get_sql_completions(None, params.textDocument.uri)
+
+        @self.server.feature(API_FEATURE)
+        def api(
+            ls: LanguageServer, request: ApiRequest
+        ) -> t.Union[ApiResponseGetModels, ApiResponseGetLineage]:
+            ls.log_trace(f"API request: {request}")
+            if self.lsp_context is None:
+                raise RuntimeError("No context found")
+            if request.url == "/api/models":
+                response = ApiResponseGetModels(data=get_models(self.lsp_context.context))
+                return response
+            if request.url.startswith("/api/lineage"):
+                name = request.url.split("/")[-1]
+                lineage = model_lineage(name, self.lsp_context.context)
+                non_set_lineage = {k: v for k, v in lineage.items() if v is not None}
+                return ApiResponseGetLineage(data=non_set_lineage)
+            raise NotImplementedError(f"API request not implemented: {request.url}")
+
         @self.server.feature(types.TEXT_DOCUMENT_DID_OPEN)
         def did_open(ls: LanguageServer, params: types.DidOpenTextDocumentParams) -> None:
             context = self._context_get_or_load(params.text_document.uri)
@@ -52,8 +118,10 @@ class SQLMeshLanguageServer:
             models = context.map[params.text_document.uri]
             if models is None:
                 return
+            if not isinstance(models, ModelTarget):
+                return
             self.lint_cache[params.text_document.uri] = context.context.lint_models(
-                models,
+                models.names,
                 raise_on_error=False,
             )
             ls.publish_diagnostics(
@@ -69,8 +137,10 @@ class SQLMeshLanguageServer:
             models = context.map[params.text_document.uri]
             if models is None:
                 return
+            if not isinstance(models, ModelTarget):
+                return
             self.lint_cache[params.text_document.uri] = context.context.lint_models(
-                models,
+                models.names,
                 raise_on_error=False,
             )
             ls.publish_diagnostics(
@@ -86,8 +156,10 @@ class SQLMeshLanguageServer:
             models = context.map[params.text_document.uri]
             if models is None:
                 return
+            if not isinstance(models, ModelTarget):
+                return
             self.lint_cache[params.text_document.uri] = context.context.lint_models(
-                models,
+                models.names,
                 raise_on_error=False,
             )
             ls.publish_diagnostics(
@@ -104,7 +176,7 @@ class SQLMeshLanguageServer:
             """Format the document using SQLMesh `format_model_expressions`."""
             try:
                 self._ensure_context_for_document(params.text_document.uri)
-                document = ls.workspace.get_document(params.text_document.uri)
+                document = ls.workspace.get_text_document(params.text_document.uri)
                 if self.lsp_context is None:
                     raise RuntimeError(f"No context found for document: {document.path}")
 
@@ -130,6 +202,34 @@ class SQLMeshLanguageServer:
                 ls.show_message(f"Error formatting SQL: {e}", types.MessageType.Error)
                 return []
 
+        @self.server.feature(types.TEXT_DOCUMENT_HOVER)
+        def hover(ls: LanguageServer, params: types.HoverParams) -> t.Optional[types.Hover]:
+            """Provide hover information for an object."""
+            try:
+                self._ensure_context_for_document(params.text_document.uri)
+                document = ls.workspace.get_text_document(params.text_document.uri)
+                if self.lsp_context is None:
+                    raise RuntimeError(f"No context found for document: {document.path}")
+
+                references = get_references(
+                    self.lsp_context, params.text_document.uri, params.position
+                )
+                if not references:
+                    return None
+                reference = references[0]
+                if not reference.description:
+                    return None
+                return types.Hover(
+                    contents=types.MarkupContent(
+                        kind=types.MarkupKind.Markdown, value=reference.description
+                    ),
+                    range=reference.range,
+                )
+
+            except Exception as e:
+                ls.show_message(f"Error getting hover information: {e}", types.MessageType.Error)
+                return None
+
         @self.server.feature(types.TEXT_DOCUMENT_DEFINITION)
         def goto_definition(
             ls: LanguageServer, params: types.DefinitionParams
@@ -137,16 +237,13 @@ class SQLMeshLanguageServer:
             """Jump to an object's definition."""
             try:
                 self._ensure_context_for_document(params.text_document.uri)
-                document = ls.workspace.get_document(params.text_document.uri)
+                document = ls.workspace.get_text_document(params.text_document.uri)
                 if self.lsp_context is None:
                     raise RuntimeError(f"No context found for document: {document.path}")
 
-                references = get_model_definitions_for_a_path(
-                    self.lsp_context, params.text_document.uri
+                references = get_references(
+                    self.lsp_context, params.text_document.uri, params.position
                 )
-                if not references:
-                    return []
-
                 return [
                     types.LocationLink(
                         target_uri=reference.uri,
@@ -162,7 +259,6 @@ class SQLMeshLanguageServer:
                     )
                     for reference in references
                 ]
-
             except Exception as e:
                 ls.show_message(f"Error getting references: {e}", types.MessageType.Error)
                 return []
@@ -222,6 +318,12 @@ class SQLMeshLanguageServer:
             return None
         with open(diagnostic.model._path, "r", encoding="utf-8") as file:
             lines = file.readlines()
+
+        # Get rule definition location for diagnostics link
+        rule_location = diagnostic.rule.get_definition_location()
+        rule_uri = f"file://{rule_location.file_path}#L{rule_location.start_line}"
+
+        # Use URI format to create a link for "related information"
         return types.Diagnostic(
             range=types.Range(
                 start=types.Position(line=0, character=0),
@@ -231,6 +333,9 @@ class SQLMeshLanguageServer:
             severity=types.DiagnosticSeverity.Error
             if diagnostic.violation_type == "error"
             else types.DiagnosticSeverity.Warning,
+            source="sqlmesh",
+            code=diagnostic.rule.name,
+            code_description=types.CodeDescription(href=rule_uri),
         )
 
     @staticmethod

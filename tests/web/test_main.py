@@ -520,8 +520,7 @@ def test_table_diff(client: TestClient, web_sushi_context: Context) -> None:
         },
     )
     assert response.status_code == 200
-    assert "schema_diff" in response.json()
-    assert "row_diff" in response.json()
+    assert response.json() == None
 
 
 def test_test(client: TestClient, web_sushi_context: Context) -> None:

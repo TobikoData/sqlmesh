@@ -14,6 +14,7 @@ from sqlmesh.core.renderer import render_statements
 from sqlmesh.core.snapshot import SnapshotId, SnapshotTableInfo, Snapshot
 from sqlmesh.utils import word_characters_only
 from sqlmesh.utils.date import TimeLike, now_timestamp
+from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.jinja import JinjaMacroRegistry
 from sqlmesh.utils.metaprogramming import Executable
 from sqlmesh.utils.pydantic import PydanticModel, field_validator, ValidationInfo
@@ -261,25 +262,35 @@ def execute_environment_statements(
     end: t.Optional[TimeLike] = None,
     execution_time: t.Optional[TimeLike] = None,
 ) -> None:
-    rendered_expressions = [
-        expr
-        for statements in environment_statements
-        for expr in render_statements(
-            statements=getattr(statements, runtime_stage.value),
-            dialect=adapter.dialect,
-            default_catalog=default_catalog,
-            python_env=statements.python_env,
-            jinja_macros=statements.jinja_macros,
-            snapshots=snapshots,
-            start=start,
-            end=end,
-            execution_time=execution_time,
-            environment_naming_info=environment_naming_info,
-            runtime_stage=runtime_stage,
-            engine_adapter=adapter,
+    try:
+        rendered_expressions = [
+            expr
+            for statements in environment_statements
+            for expr in render_statements(
+                statements=getattr(statements, runtime_stage.value),
+                dialect=adapter.dialect,
+                default_catalog=default_catalog,
+                python_env=statements.python_env,
+                jinja_macros=statements.jinja_macros,
+                snapshots=snapshots,
+                start=start,
+                end=end,
+                execution_time=execution_time,
+                environment_naming_info=environment_naming_info,
+                runtime_stage=runtime_stage,
+                engine_adapter=adapter,
+            )
+        ]
+    except Exception as e:
+        raise SQLMeshError(
+            f"An error occurred during rendering of the '{runtime_stage.value}' statements:\n\n{e}"
         )
-    ]
     if rendered_expressions:
         with adapter.transaction():
             for expr in rendered_expressions:
-                adapter.execute(expr)
+                try:
+                    adapter.execute(expr)
+                except Exception as e:
+                    raise SQLMeshError(
+                        f"An error occurred during execution of the following '{runtime_stage.value}' statement:\n\n{expr}\n\n{e}"
+                    )

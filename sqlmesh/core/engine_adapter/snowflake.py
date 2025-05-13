@@ -288,8 +288,25 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
         is_snowpark_dataframe = snowpark and isinstance(df, snowpark.dataframe.DataFrame)
 
         def query_factory() -> Query:
+            # The catalog needs to be normalized before being passed to Snowflake's library functions because they
+            # just wrap whatever they are given in quotes without checking if its already quoted
+            database = (
+                normalize_identifiers(temp_table.catalog, dialect=self.dialect)
+                if temp_table.catalog
+                else None
+            )
+
             if is_snowpark_dataframe:
-                df.createOrReplaceTempView(temp_table.sql(dialect=self.dialect, identify=True))  # type: ignore
+                temp_table.set("catalog", database)
+                df_renamed = df.rename(
+                    {
+                        col: exp.to_identifier(col).sql(dialect=self.dialect, identify=True)
+                        for col in columns_to_types
+                    }
+                )  # type: ignore
+                df_renamed.createOrReplaceTempView(
+                    temp_table.sql(dialect=self.dialect, identify=True)
+                )  # type: ignore
             elif isinstance(df, pd.DataFrame):
                 from snowflake.connector.pandas_tools import write_pandas
 
@@ -325,11 +342,7 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
                     df,
                     temp_table.name,
                     schema=temp_table.db or None,
-                    database=normalize_identifiers(temp_table.catalog, dialect=self.dialect).sql(
-                        dialect=self.dialect
-                    )
-                    if temp_table.catalog
-                    else None,
+                    database=database.sql(dialect=self.dialect) if database else None,
                     chunk_size=self.DEFAULT_BATCH_SIZE,
                     overwrite=True,
                     table_type="temp",

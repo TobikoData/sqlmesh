@@ -110,8 +110,8 @@ def test_data_diff(sushi_context_fixed_date, capsys, caplog):
         source="source_dev",
         target="target_dev",
         on=exp.condition("s.customer_id = t.customer_id AND s.event_date = t.event_date"),
-        model_or_snapshot="sushi.customer_revenue_by_day",
-    )
+        select_models={"sushi.customer_revenue_by_day"},
+    )[0]
 
     # verify queries were actually logged to the log file, this helps immensely with debugging
     console_output = capsys.readouterr()
@@ -169,7 +169,7 @@ def test_data_diff_decimals(sushi_context_fixed_date):
         source="table_diff_source",
         target="table_diff_target",
         on=["key"],
-    )
+    )[0]
     assert diff.row_diff().full_match_count == 3
     assert diff.row_diff().partial_match_count == 0
 
@@ -178,7 +178,7 @@ def test_data_diff_decimals(sushi_context_fixed_date):
         target="table_diff_target",
         on=["key"],
         decimals=4,
-    )
+    )[0]
 
     row_diff = diff.row_diff()
     joined_sample_columns = row_diff.joined_sample.columns
@@ -291,9 +291,9 @@ def test_grain_check(sushi_context_fixed_date):
         source="source_dev",
         target="target_dev",
         on=["'key_1'", "key_2"],
-        model_or_snapshot="SUSHI.GRAIN_ITEMS",
+        select_models={"memory.sushi*"},
         skip_grain_check=False,
-    )
+    )[0]
 
     row_diff = diff.row_diff()
     assert row_diff.full_match_count == 7
@@ -420,9 +420,9 @@ def test_tables_and_grain_inferred_from_model(sushi_context_fixed_date: Context)
     sushi_context_fixed_date.plan(environment="unit_test", auto_apply=True, include_unmodified=True)
 
     table_diff = sushi_context_fixed_date.table_diff(
-        source="unit_test", target="prod", model_or_snapshot="sushi.waiter_revenue_by_day"
-    )
-
+        source="unit_test", target="prod", select_models={"sushi.waiter_revenue_by_day"}
+    )[0]
+    assert isinstance(table_diff, TableDiff)
     assert table_diff.source == "memory.sushi__unit_test.waiter_revenue_by_day"
     assert table_diff.target == "memory.sushi.waiter_revenue_by_day"
 
@@ -562,3 +562,270 @@ Column: value
 """
 
     assert strip_ansi_codes(output) == expected_output.strip()
+
+
+@pytest.mark.slow
+def test_data_diff_multiple_models(sushi_context_fixed_date, capsys, caplog):
+    # Create first analytics model
+    expressions = d.parse(
+        """
+        MODEL (name memory.sushi.analytics_1, kind full, grain(key), tags (finance),);
+        SELECT
+            key,
+            value,
+        FROM
+            (VALUES
+                (1, 3),
+                (2, 4),
+            ) AS t (key, value)
+    """
+    )
+    model_s = load_sql_based_model(expressions, dialect="snowflake")
+    sushi_context_fixed_date.upsert_model(model_s)
+
+    # Create second analytics model from analytics_1
+    expressions_2 = d.parse(
+        """
+        MODEL (name memory.sushi.analytics_2, kind full, grain(key), tags (finance),);
+        SELECT
+            key,
+            value as amount,
+        FROM
+            memory.sushi.analytics_1
+    """
+    )
+    model_s2 = load_sql_based_model(expressions_2, dialect="snowflake")
+    sushi_context_fixed_date.upsert_model(model_s2)
+
+    sushi_context_fixed_date.plan(
+        "source_dev",
+        no_prompts=True,
+        auto_apply=True,
+        skip_tests=True,
+        start="2023-01-31",
+        end="2023-01-31",
+    )
+
+    # Modify first model
+    model = sushi_context_fixed_date.models['"MEMORY"."SUSHI"."ANALYTICS_1"']
+    modified_model = model.dict()
+    modified_model["query"] = (
+        exp.select("*")
+        .from_(model.query.subquery())
+        .union("SELECT key, value FROM (VALUES (1, 6),(2,3),) AS t (key, value)")
+    )
+    modified_sqlmodel = SqlModel(**modified_model)
+    sushi_context_fixed_date.upsert_model(modified_sqlmodel)
+
+    # Modify second model
+    model2 = sushi_context_fixed_date.models['"MEMORY"."SUSHI"."ANALYTICS_2"']
+    modified_model2 = model2.dict()
+    modified_model2["query"] = (
+        exp.select("*")
+        .from_(model2.query.subquery())
+        .union("SELECT key, amount FROM (VALUES (5, 150.2),(6,250.2),) AS t (key, amount)")
+    )
+    modified_sqlmodel2 = SqlModel(**modified_model2)
+    sushi_context_fixed_date.upsert_model(modified_sqlmodel2)
+
+    sushi_context_fixed_date.auto_categorize_changes = CategorizerConfig(
+        sql=AutoCategorizationMode.FULL
+    )
+    sushi_context_fixed_date.plan(
+        "target_dev",
+        create_from="source_dev",
+        no_prompts=True,
+        auto_apply=True,
+        skip_tests=True,
+        start="2023-01-31",
+        end="2023-01-31",
+    )
+
+    # Get diffs for both models
+    selector = {"tag:finance & memory.sushi.analytics*"}
+    diffs = sushi_context_fixed_date.table_diff(
+        source="source_dev",
+        target="target_dev",
+        on=["key"],
+        select_models=selector,
+        skip_grain_check=False,
+    )
+
+    assert len(diffs) == 2
+
+    # Check analytics_1 diff
+    diff1 = next(d for d in diffs if "ANALYTICS_1" in d.source)
+    row_diff1 = diff1.row_diff()
+    assert row_diff1.full_match_count == 2
+    assert row_diff1.full_match_pct == 50.0
+    assert row_diff1.s_only_count == 0
+    assert row_diff1.t_only_count == 0
+    assert row_diff1.stats["join_count"] == 4
+    assert row_diff1.stats["null_grain_count"] == 0
+    assert row_diff1.stats["s_count"] == 4
+    assert row_diff1.stats["distinct_count_s"] == 2
+    assert row_diff1.stats["t_count"] == 4
+    assert row_diff1.stats["distinct_count_t"] == 2
+    assert row_diff1.s_sample.shape == (0, 2)
+    assert row_diff1.t_sample.shape == (0, 2)
+
+    # Check analytics_2 diff
+    diff2 = next(d for d in diffs if "ANALYTICS_2" in d.source)
+    row_diff2 = diff2.row_diff()
+    assert row_diff2.full_match_count == 2
+    assert row_diff2.full_match_pct == 40.0
+    assert row_diff2.s_only_count == 0
+    assert row_diff2.t_only_count == 2
+    assert row_diff2.stats["join_count"] == 4
+    assert row_diff2.stats["null_grain_count"] == 0
+    assert row_diff2.stats["s_count"] == 4
+    assert row_diff2.stats["distinct_count_s"] == 2
+    assert row_diff2.stats["t_count"] == 6
+    assert row_diff2.stats["distinct_count_t"] == 4
+    assert row_diff2.s_sample.shape == (0, 2)
+    assert row_diff2.t_sample.shape == (2, 2)
+
+    # This selector shouldn't return any diffs since both models have this tag
+    selector = {"^tag:finance"}
+    diffs = sushi_context_fixed_date.table_diff(
+        source="source_dev",
+        target="target_dev",
+        on=["key"],
+        select_models=selector,
+        skip_grain_check=False,
+    )
+    assert len(diffs) == 0
+
+
+@pytest.mark.slow
+def test_data_diff_forward_only(sushi_context_fixed_date, capsys, caplog):
+    expressions = d.parse(
+        """
+        MODEL (name memory.sushi.full_1, kind full, grain(key),);
+        SELECT
+            key,
+            value,
+        FROM
+            (VALUES
+                (1, 3),
+                (2, 4),
+            ) AS t (key, value)
+    """
+    )
+    model_s = load_sql_based_model(expressions, dialect="snowflake")
+    sushi_context_fixed_date.upsert_model(model_s)
+
+    # Create second analytics model sourcing from first
+    expressions_2 = d.parse(
+        """
+        MODEL (name memory.sushi.full_2, kind full, grain(key),);
+        SELECT
+            key,
+            value as amount,
+        FROM
+            memory.sushi.full_1
+    """
+    )
+    model_s2 = load_sql_based_model(expressions_2, dialect="snowflake")
+    sushi_context_fixed_date.upsert_model(model_s2)
+
+    sushi_context_fixed_date.plan(
+        "target_dev",
+        no_prompts=True,
+        auto_apply=True,
+        skip_tests=True,
+        start="2023-01-31",
+        end="2023-01-31",
+    )
+
+    model = sushi_context_fixed_date.models['"MEMORY"."SUSHI"."FULL_1"']
+    modified_model = model.dict()
+    modified_model["query"] = exp.select("*").from_("(VALUES (12, 6),(5,3),) AS t (key, value)")
+    modified_sqlmodel = SqlModel(**modified_model)
+    sushi_context_fixed_date.upsert_model(modified_sqlmodel)
+
+    sushi_context_fixed_date.auto_categorize_changes = CategorizerConfig(
+        sql=AutoCategorizationMode.FULL
+    )
+
+    plan_builder = sushi_context_fixed_date.plan_builder(
+        "source_dev", skip_tests=True, forward_only=True
+    )
+    plan = plan_builder.build()
+
+    sushi_context_fixed_date.apply(plan)
+
+    # Get diffs for both models
+    selector = {"*full*"}
+    diffs = sushi_context_fixed_date.table_diff(
+        source="source_dev",
+        target="target_dev",
+        on=["key"],
+        select_models=selector,
+        skip_grain_check=False,
+    )
+
+    # Both models should be diffed
+    assert len(diffs) == 2
+
+    # Check full_1 diff
+    diff1 = next(d for d in diffs if "FULL_1" in d.source)
+    row_diff1 = diff1.row_diff()
+    diff2 = next(d for d in diffs if "FULL_2" in d.source)
+    row_diff2 = diff2.row_diff()
+
+    # Both diffs should show the same matches
+    for row_diff in [row_diff1, row_diff2]:
+        assert row_diff.full_match_count == 0
+        assert row_diff.full_match_pct == 0.0
+        assert row_diff.s_only_count == 2
+        assert row_diff.t_only_count == 2
+        assert row_diff.stats["join_count"] == 0
+        assert row_diff.stats["null_grain_count"] == 0
+        assert row_diff.stats["s_count"] == 2
+        assert row_diff.stats["distinct_count_s"] == 2
+        assert row_diff.stats["t_count"] == 2
+        assert row_diff.stats["distinct_count_t"] == 2
+        assert row_diff.s_sample.shape == (2, 2)
+        assert row_diff.t_sample.shape == (2, 2)
+
+
+def test_data_diff_empty_tables():
+    engine_adapter = DuckDBConnectionConfig().create_engine_adapter()
+
+    columns_to_types_src = {
+        "key": exp.DataType.build("int"),
+        "value": exp.DataType.build("varchar"),
+    }
+    columns_to_types_target = {
+        "key": exp.DataType.build("int"),
+        "value2": exp.DataType.build("varchar"),
+    }
+
+    engine_adapter.create_table("table_diff_source", columns_to_types_src)
+    engine_adapter.create_table("table_diff_target", columns_to_types_target)
+
+    table_diff = TableDiff(
+        adapter=engine_adapter,
+        source="table_diff_source",
+        target="table_diff_target",
+        source_alias="dev",
+        target_alias="prod",
+        on=["key"],
+    )
+
+    # should show the schema diff
+    schema_diff = table_diff.schema_diff()
+    assert len(schema_diff.added) == 1
+    assert schema_diff.added[0][0] == "value2"
+    assert len(schema_diff.removed) == 1
+    assert schema_diff.removed[0][0] == "value"
+
+    # should not error on the row diff
+    row_diff = table_diff.row_diff()
+    assert row_diff.empty
+
+    output = capture_console_output("show_row_diff", row_diff=row_diff)
+    assert (
+        strip_ansi_codes(output) == "Neither the source nor the target table contained any records"
+    )

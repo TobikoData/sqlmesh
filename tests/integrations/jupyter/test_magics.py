@@ -22,6 +22,9 @@ logger = logging.getLogger(__name__)
 SUSHI_EXAMPLE_PATH = pathlib.Path("./examples/sushi")
 SUCCESS_STYLE = "color: #008000; text-decoration-color: #008000"
 NEUTRAL_STYLE = "color: #008080; text-decoration-color: #008080"
+BOLD_ONLY = "font-weight: bold"
+BOLD_NEUTRAL_STYLE = f"{NEUTRAL_STYLE}; {BOLD_ONLY}"
+BOLD_SUCCESS_STYLE = f"{SUCCESS_STYLE}; {BOLD_ONLY}"
 RICH_PRE_STYLE = "white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace"
 FREEZE_TIME = "2023-01-01 00:00:00 UTC"
 
@@ -289,9 +292,6 @@ def test_plan(
     with capture_output() as output:
         notebook.run_line_magic(magic_name="plan", line="--no-prompts --auto-apply")
 
-    # TODO: Should this be going to stdout? This is printing the status updates for when each batch finishes for
-    # the models and how long it took
-    assert len(output.stdout.strip().split("\n")) == 46
     assert not output.stderr
     assert len(output.outputs) == 4
     text_output = convert_all_html_output_to_text(output)
@@ -321,15 +321,220 @@ def test_run_dag(
         notebook.run_line_magic(magic_name="run_dag", line="")
 
     assert not output.stdout.startswith(
-        "'Evaluating models ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 18/18"
+        "'Executing model batches ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 18/18"
     )
     assert not output.stderr
-    assert len(output.outputs) == 2
-    assert convert_all_html_output_to_text(output) == [
-        "✔ Model batches executed",
-        "Run finished for environment 'prod'",
-    ]
-    assert get_all_html_output(output) == [
+
+    # At least 4 outputs expected as the number of models in the particular batch might vary
+    assert len(output.outputs) >= 4
+
+    html_text_actual = convert_all_html_output_to_text(output)
+
+    # Check for key elements in the output
+    assert any("[2K" in text for text in html_text_actual)
+    assert any("Executing model batches" in text for text in html_text_actual)
+    assert any("✔ Model batches executed" in text for text in html_text_actual)
+    assert any("Run finished for environment 'prod'" in text for text in html_text_actual)
+
+    # Check the final messages
+    final_outputs = [text for text in html_text_actual if text.strip()]
+    assert final_outputs[-2] == "✔ Model batches executed"
+    assert final_outputs[-1] == "Run finished for environment 'prod'"
+
+    actual_html_output = get_all_html_output(output)
+    # Replace dynamic elapsed time with 00
+    for i, chunk in enumerate(actual_html_output):
+        pattern = 'font\-weight: bold">0\.</span>\\d{2}s   </pre>'
+        import re
+
+        actual_html_output[i] = re.sub(pattern, 'font-weight: bold">0.</span>00s   </pre>', chunk)
+    expected_html_output = [
+        str(
+            h(
+                "pre",
+                {"style": RICH_PRE_STYLE},
+                "\x1b",
+                h(
+                    "span",
+                    {"style": BOLD_ONLY},
+                    "[",
+                    autoescape=False,
+                ),
+                "2K",
+                autoescape=False,
+            )
+        ),
+        str(
+            h(
+                "pre",
+                {"style": RICH_PRE_STYLE},
+                h(
+                    "span",
+                    {"style": "color: #000080; text-decoration-color: #000080; font-weight: bold"},
+                    "Executing model batches",
+                    autoescape=False,
+                ),
+                " ",
+                h(
+                    "span",
+                    {"style": "color: #f92672; text-decoration-color: #f92672"},
+                    "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╸",
+                    autoescape=False,
+                ),
+                h(
+                    "span",
+                    {"style": "color: #3a3a3a; text-decoration-color: #3a3a3a"},
+                    "━━",
+                    autoescape=False,
+                ),
+                " ",
+                h(
+                    "span",
+                    {"style": "color: #800080; text-decoration-color: #800080"},
+                    "93.8%",
+                    autoescape=False,
+                ),
+                " • ",
+                h(
+                    "span",
+                    {"style": SUCCESS_STYLE},
+                    "15/16",
+                    autoescape=False,
+                ),
+                " • ",
+                h(
+                    "span",
+                    {"style": "color: #808000; text-decoration-color: #808000"},
+                    "0:00:00",
+                    autoescape=False,
+                ),
+                "sushi.waiter_as_customer_by_day ",
+                h(
+                    "span",
+                    {"style": SUCCESS_STYLE},
+                    ".. ",
+                    autoescape=False,
+                ),
+                "                                                     ",
+                autoescape=False,
+            )
+        ),
+        str(
+            h(
+                "pre",
+                {"style": RICH_PRE_STYLE},
+                h(
+                    "span",
+                    {"style": BOLD_ONLY},
+                    "[",
+                    autoescape=False,
+                ),
+                h(
+                    "span",
+                    {"style": BOLD_NEUTRAL_STYLE},
+                    "1",
+                    autoescape=False,
+                ),
+                "/",
+                h(
+                    "span",
+                    {"style": BOLD_NEUTRAL_STYLE},
+                    "1",
+                    autoescape=False,
+                ),
+                h(
+                    "span",
+                    {"style": BOLD_ONLY},
+                    "]",
+                    autoescape=False,
+                ),
+                " sushi.waiter_as_customer_by_day   ",
+                h(
+                    "span",
+                    {"style": BOLD_ONLY},
+                    "[",
+                    autoescape=False,
+                ),
+                "insert ",
+                h(
+                    "span",
+                    {"style": BOLD_NEUTRAL_STYLE},
+                    "2023",
+                    autoescape=False,
+                ),
+                "-",
+                h(
+                    "span",
+                    {"style": BOLD_NEUTRAL_STYLE},
+                    "01",
+                    autoescape=False,
+                ),
+                "-",
+                h(
+                    "span",
+                    {"style": BOLD_NEUTRAL_STYLE},
+                    "01",
+                    autoescape=False,
+                ),
+                " - ",
+                h(
+                    "span",
+                    {"style": BOLD_NEUTRAL_STYLE},
+                    "2023",
+                    autoescape=False,
+                ),
+                "-",
+                h(
+                    "span",
+                    {"style": BOLD_NEUTRAL_STYLE},
+                    "01",
+                    autoescape=False,
+                ),
+                "-",
+                h(
+                    "span",
+                    {"style": BOLD_NEUTRAL_STYLE},
+                    "02",
+                    autoescape=False,
+                ),
+                ", audits ",
+                h(
+                    "span",
+                    {"style": SUCCESS_STYLE},
+                    "✔",
+                    autoescape=False,
+                ),
+                h(
+                    "span",
+                    {"style": BOLD_NEUTRAL_STYLE},
+                    "2",
+                    autoescape=False,
+                ),
+                h(
+                    "span",
+                    {"style": BOLD_ONLY},
+                    "]",
+                    autoescape=False,
+                ),
+                "   ",
+                h(
+                    "span",
+                    {"style": BOLD_NEUTRAL_STYLE},
+                    "0.",
+                    autoescape=False,
+                ),
+                "00s   ",
+                autoescape=False,
+            )
+        ),
+        str(
+            h(
+                "pre",
+                {"style": RICH_PRE_STYLE},
+                "",
+                autoescape=False,
+            )
+        ),
         str(
             h(
                 "pre",
@@ -641,26 +846,10 @@ def test_table_diff(notebook, loaded_sushi_context, convert_all_html_output_to_t
 
     assert not output.stdout
     assert not output.stderr
-    assert len(output.outputs) == 5
+
+    assert len(output.outputs) == 1
     assert convert_all_html_output_to_text(output) == [
-        """Table Diff
-├── Model:
-│   └── sushi.top_waiters
-├── Environment:
-│   ├── Source: dev
-│   └── Target: prod
-├── Tables:
-│   ├── Source: memory.sushi__dev.top_waiters
-│   └── Target: memory.sushi.top_waiters
-└── Join On:
-    └── waiter_id""",
-        """Schema Diff Between 'DEV' and 'PROD' environments for model 'sushi.top_waiters':
-└── Schemas match""",
-        """Row Counts:
-└──  FULL MATCH: 8 rows (100.0%)""",
-        """COMMON ROWS column comparison stats:""",
-        """pct_match
-revenue      100.0""",
+        "No models contain differences with the selection criteria: 'sushi.top_waiters'"
     ]
 
 
@@ -701,3 +890,39 @@ def test_lint(notebook, sushi_context):
 
     assert len(output.outputs) == 2
     assert "Linter warnings for" in output.outputs[0].data["text/plain"]
+
+
+@pytest.mark.slow
+def test_destroy(
+    notebook,
+    loaded_sushi_context,
+    convert_all_html_output_to_text,
+    get_all_html_output,
+    monkeypatch,
+):
+    # Mock input to return 'y' for the confirmation prompt
+    monkeypatch.setattr("builtins.input", lambda: "y")
+
+    with capture_output() as output:
+        notebook.run_line_magic(magic_name="destroy", line="")
+
+    assert not output.stdout
+    assert not output.stderr
+    text_output = convert_all_html_output_to_text(output)
+    expected_messages = [
+        "[WARNING] This will permanently delete all engine-managed objects, state tables and SQLMesh cache.\n"
+        "The operation is irreversible and may disrupt any currently running or scheduled plans.\n"
+        "Use this command only when you intend to fully reset the project.",
+        "Environment 'prod' invalidated.",
+        "Deleted object memory.sushi",
+        'Deleted object "memory"."raw"."model1"',
+        'Deleted object "memory"."raw"."model1"',
+        'Deleted object "memory"."raw"."model2"',
+        'Deleted object "memory"."raw"."model2"',
+        'Deleted object "memory"."raw"."demographics"',
+        'Deleted object "memory"."raw"."demographics"',
+        "State tables removed.",
+        "Destroy completed successfully.",
+    ]
+    for message in expected_messages:
+        assert message in text_output

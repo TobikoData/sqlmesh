@@ -146,7 +146,7 @@ async def column_lineage(
 
 
 @router.get("/{model_name:str}")
-async def model_lineage(
+def model_lineage(
     model_name: str,
     context: Context = Depends(get_loaded_context),
 ) -> t.Dict[str, t.Set[str]]:

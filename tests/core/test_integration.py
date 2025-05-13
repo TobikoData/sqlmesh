@@ -18,6 +18,7 @@ import time_machine
 from pytest_mock.plugin import MockerFixture
 from sqlglot import exp
 from sqlglot.expressions import DataType
+import re
 
 from sqlmesh import CustomMaterialization
 from sqlmesh.cli.example_project import init_example_project
@@ -2248,6 +2249,114 @@ def test_indirect_non_breaking_view_model_non_representative_snapshot_migration(
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
+@pytest.mark.parametrize(
+    "parent_a_category,parent_b_category,expected_child_category",
+    [
+        (
+            SnapshotChangeCategory.BREAKING,
+            SnapshotChangeCategory.BREAKING,
+            SnapshotChangeCategory.INDIRECT_BREAKING,
+        ),
+        (
+            SnapshotChangeCategory.NON_BREAKING,
+            SnapshotChangeCategory.NON_BREAKING,
+            SnapshotChangeCategory.INDIRECT_NON_BREAKING,
+        ),
+        (
+            SnapshotChangeCategory.BREAKING,
+            SnapshotChangeCategory.NON_BREAKING,
+            SnapshotChangeCategory.INDIRECT_NON_BREAKING,
+        ),
+        (
+            SnapshotChangeCategory.NON_BREAKING,
+            SnapshotChangeCategory.BREAKING,
+            SnapshotChangeCategory.INDIRECT_BREAKING,
+        ),
+        (
+            SnapshotChangeCategory.NON_BREAKING,
+            SnapshotChangeCategory.METADATA,
+            SnapshotChangeCategory.METADATA,
+        ),
+        (
+            SnapshotChangeCategory.BREAKING,
+            SnapshotChangeCategory.METADATA,
+            SnapshotChangeCategory.METADATA,
+        ),
+        (
+            SnapshotChangeCategory.METADATA,
+            SnapshotChangeCategory.BREAKING,
+            SnapshotChangeCategory.INDIRECT_BREAKING,
+        ),
+        (
+            SnapshotChangeCategory.METADATA,
+            SnapshotChangeCategory.NON_BREAKING,
+            SnapshotChangeCategory.INDIRECT_NON_BREAKING,
+        ),
+        (
+            SnapshotChangeCategory.METADATA,
+            SnapshotChangeCategory.METADATA,
+            SnapshotChangeCategory.METADATA,
+        ),
+        (
+            SnapshotChangeCategory.FORWARD_ONLY,
+            SnapshotChangeCategory.BREAKING,
+            SnapshotChangeCategory.INDIRECT_BREAKING,
+        ),
+        (
+            SnapshotChangeCategory.BREAKING,
+            SnapshotChangeCategory.FORWARD_ONLY,
+            SnapshotChangeCategory.FORWARD_ONLY,
+        ),
+        (
+            SnapshotChangeCategory.FORWARD_ONLY,
+            SnapshotChangeCategory.FORWARD_ONLY,
+            SnapshotChangeCategory.FORWARD_ONLY,
+        ),
+    ],
+)
+def test_rebase_two_changed_parents(
+    init_and_plan_context: t.Callable,
+    parent_a_category: SnapshotChangeCategory,  # This change is deployed to prod first
+    parent_b_category: SnapshotChangeCategory,  # This change is deployed to prod second
+    expected_child_category: SnapshotChangeCategory,
+):
+    context, plan = init_and_plan_context("examples/sushi")
+    context.apply(plan)
+
+    initial_model_a = context.get_model("sushi.orders")
+    initial_model_b = context.get_model("sushi.items")
+
+    # Make change A and deploy it to dev_a
+    context.upsert_model(initial_model_a.name, stamp="1")
+    plan_builder = context.plan_builder("dev_a", skip_tests=True)
+    plan_builder.set_choice(context.get_snapshot(initial_model_a.name), parent_a_category)
+    context.apply(plan_builder.build())
+
+    # Make change B and deploy it to dev_b
+    context.upsert_model(initial_model_a)
+    context.upsert_model(initial_model_b.name, stamp="1")
+    plan_builder = context.plan_builder("dev_b", skip_tests=True)
+    plan_builder.set_choice(context.get_snapshot(initial_model_b.name), parent_b_category)
+    context.apply(plan_builder.build())
+
+    # Deploy change A to prod
+    context.upsert_model(initial_model_a.name, stamp="1")
+    context.upsert_model(initial_model_b)
+    context.plan("prod", auto_apply=True, no_prompts=True, skip_tests=True)
+
+    # Apply change B in addition to A and plan against prod
+    context.upsert_model(initial_model_b.name, stamp="1")
+    plan = context.plan_builder("prod", skip_tests=True).build()
+
+    # Validate the category of child snapshots
+    direct_child_snapshot = plan.snapshots[context.get_snapshot("sushi.order_items").snapshot_id]
+    assert direct_child_snapshot.change_category == expected_child_category
+
+    indirect_child_snapshot = plan.snapshots[context.get_snapshot("sushi.top_waiters").snapshot_id]
+    assert indirect_child_snapshot.change_category == expected_child_category
+
+
+@time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_unaligned_start_snapshot_with_non_deployable_downstream(init_and_plan_context: t.Callable):
     context, _ = init_and_plan_context("examples/sushi")
 
@@ -4155,6 +4264,14 @@ def test_dbt_requirements(sushi_dbt_context: Context):
     assert sushi_dbt_context.requirements["dbt-duckdb"].startswith("1.")
 
 
+@time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_dbt_dialect_with_normalization_strategy(init_and_plan_context: t.Callable):
+    context, _ = init_and_plan_context(
+        "tests/fixtures/dbt/sushi_test", config="test_config_with_normalization_strategy"
+    )
+    assert context.default_dialect == "duckdb,normalization_strategy=LOWERCASE"
+
+
 @pytest.mark.parametrize(
     "context_fixture",
     ["sushi_context", "sushi_dbt_context", "sushi_test_dbt_context", "sushi_no_default_catalog"],
@@ -5385,6 +5502,69 @@ def test_plan_production_environment_statements(tmp_path: Path):
         ctx.fetchdf("select * from not_create")
 
 
+def test_environment_statements_error_handling(tmp_path: Path):
+    model_a = """
+    MODEL (
+        name test_schema.a,
+        kind FULL,
+    );
+
+    SELECT 1 AS account_id
+    """
+
+    models_dir = tmp_path / "models"
+    models_dir.mkdir()
+
+    for path, defn in {"a.sql": model_a}.items():
+        with open(models_dir / path, "w") as f:
+            f.write(defn)
+
+    before_all = [
+        "CREATE TABLE identical_table (physical_schema_name VARCHAR)",
+        "CREATE TABLE identical_table (physical_schema_name VARCHAR)",
+    ]
+
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        before_all=before_all,
+    )
+    ctx = Context(paths=[tmp_path], config=config)
+
+    expected_error_message = re.escape(
+        """An error occurred during execution of the following 'before_all' statement:
+
+CREATE TABLE identical_table (physical_schema_name TEXT)
+
+Catalog Error: Table with name "identical_table" already exists!"""
+    )
+
+    with pytest.raises(SQLMeshError, match=expected_error_message):
+        ctx.plan(auto_apply=True, no_prompts=True)
+
+    after_all = [
+        "@bad_macro()",
+    ]
+
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        after_all=after_all,
+    )
+    ctx = Context(paths=[tmp_path], config=config)
+
+    expected_error_message = re.escape(
+        """An error occurred during rendering of the 'after_all' statements:
+
+Failed to resolve macros for
+
+@bad_macro()
+
+Macro 'bad_macro' does not exist."""
+    )
+
+    with pytest.raises(SQLMeshError, match=expected_error_message):
+        ctx.plan(auto_apply=True, no_prompts=True)
+
+
 @time_machine.travel("2025-03-08 00:00:00 UTC")
 def test_tz(init_and_plan_context):
     context, _ = init_and_plan_context("examples/sushi")
@@ -5742,3 +5922,122 @@ def test_janitor_cleanup_order(mocker: MockerFixture, tmp_path: Path):
 
     # - Check that the environment record does not exist in the state sync anymore
     assert not ctx.state_sync.get_environment("dev")
+
+
+@use_terminal_console
+def test_destroy(copy_to_temp_path):
+    # Testing project with two gateways to verify cleanup is performed across engines
+    paths = copy_to_temp_path("tests/fixtures/multi_virtual_layer")
+    path = Path(paths[0])
+    first_db_path = str(path / "db_1.db")
+    second_db_path = str(path / "db_2.db")
+
+    config = Config(
+        gateways={
+            "first": GatewayConfig(
+                connection=DuckDBConnectionConfig(database=first_db_path),
+                variables={"overriden_var": "gateway_1"},
+            ),
+            "second": GatewayConfig(
+                connection=DuckDBConnectionConfig(database=second_db_path),
+                variables={"overriden_var": "gateway_2"},
+            ),
+        },
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        model_naming=NameInferenceConfig(infer_names=True),
+        default_gateway="first",
+        gateway_managed_virtual_layer=True,
+        variables={"overriden_var": "global", "global_one": 88},
+    )
+
+    context = Context(paths=paths, config=config)
+    plan = context.plan_builder().build()
+    assert len(plan.new_snapshots) == 4
+    context.apply(plan)
+
+    # Confirm cache exists
+    cache_path = Path(path) / ".cache"
+    assert cache_path.exists()
+    assert len(list(cache_path.iterdir())) > 0
+
+    model = context.get_model("db_1.first_schema.model_one")
+
+    context.upsert_model(model.copy(update={"query": model.query.select("'c' AS extra")}))
+    plan = context.plan_builder().build()
+    context.apply(plan)
+
+    state_environments = context.state_reader.get_environments()
+    state_snapshots = context.state_reader.get_snapshots(context.snapshots.values())
+
+    assert len(state_snapshots) == len(state_environments[0].snapshots)
+
+    # Create dev environment with changed models
+    model = context.get_model("db_2.second_schema.model_one")
+    context.upsert_model(model.copy(update={"query": model.query.select("'d' AS extra")}))
+    model = context.get_model("first_schema.model_two")
+    context.upsert_model(model.copy(update={"query": model.query.select("'d2' AS col")}))
+    plan = context.plan_builder("dev").build()
+    context.apply(plan)
+
+    dev_environment = context.state_sync.get_environment("dev")
+    assert dev_environment is not None
+
+    state_environments = context.state_reader.get_environments()
+    state_snapshots = context.state_reader.get_snapshots(context.snapshots.values())
+    assert (
+        len(state_snapshots)
+        == len(state_environments[0].snapshots)
+        == len(state_environments[1].snapshots)
+    )
+
+    # The state tables at this point should be able to be retrieved
+    state_tables = {
+        "_environments",
+        "_snapshots",
+        "_intervals",
+        "_auto_restatements",
+        "_environment_statements",
+        "_intervals",
+        "_plan_dags",
+        "_versions",
+    }
+    for table_name in state_tables:
+        context.fetchdf(f"SELECT * FROM db_1.sqlmesh.{table_name}")
+
+    # The actual tables as well
+    context.engine_adapters["second"].fetchdf(f"SELECT * FROM db_2.second_schema.model_one")
+    context.engine_adapters["second"].fetchdf(f"SELECT * FROM db_2.second_schema.model_two")
+    context.fetchdf(f"SELECT * FROM db_1.first_schema.model_one")
+    context.fetchdf(f"SELECT * FROM db_1.first_schema.model_two")
+
+    # Use the destroy command to remove all data objects and state
+    context._destroy()
+
+    # Ensure all tables have been removed
+    for table_name in state_tables:
+        with pytest.raises(
+            Exception, match=f"Catalog Error: Table with name {table_name} does not exist!"
+        ):
+            context.fetchdf(f"SELECT * FROM db_1.sqlmesh.{table_name}")
+
+    # Validate tables have been deleted as well
+    with pytest.raises(
+        Exception, match=r"Catalog Error: Table with name model_two does not exist!"
+    ):
+        context.fetchdf("SELECT * FROM db_1.first_schema.model_two")
+    with pytest.raises(
+        Exception, match=r"Catalog Error: Table with name model_one does not exist!"
+    ):
+        context.fetchdf("SELECT * FROM db_1.first_schema.model_one")
+
+    with pytest.raises(
+        Exception, match=r"Catalog Error: Table with name model_two does not exist!"
+    ):
+        context.engine_adapters["second"].fetchdf("SELECT * FROM db_2.second_schema.model_two")
+    with pytest.raises(
+        Exception, match=r"Catalog Error: Table with name model_one does not exist!"
+    ):
+        context.engine_adapters["second"].fetchdf("SELECT * FROM db_2.second_schema.model_one")
+
+    # Ensure the cache has been removed
+    assert not cache_path.exists()

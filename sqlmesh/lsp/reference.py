@@ -3,15 +3,72 @@ import typing as t
 
 from sqlmesh.core.dialect import normalize_model_name
 from sqlmesh.core.model.definition import SqlModel
-from sqlmesh.lsp.context import LSPContext
+from sqlmesh.lsp.context import LSPContext, ModelTarget, AuditTarget
 from sqlglot import exp
 
 from sqlmesh.utils.pydantic import PydanticModel
 
 
 class Reference(PydanticModel):
+    """
+    A reference to a model.
+
+    Attributes:
+        range: The range of the reference in the source file
+        uri: The uri of the referenced model
+        description: The description of the referenced model
+    """
+
     range: Range
     uri: str
+    description: t.Optional[str] = None
+
+
+def by_position(position: Position) -> t.Callable[[Reference], bool]:
+    """
+    Filter reference to only filter references that contain the given position.
+
+    Args:
+        position: The cursor position to check
+
+    Returns:
+        A function that returns True if the reference contains the position, False otherwise
+    """
+
+    def contains_position(r: Reference) -> bool:
+        return (
+            r.range.start.line < position.line
+            or (
+                r.range.start.line == position.line
+                and r.range.start.character <= position.character
+            )
+        ) and (
+            r.range.end.line > position.line
+            or (r.range.end.line == position.line and r.range.end.character >= position.character)
+        )
+
+    return contains_position
+
+
+def get_references(
+    lint_context: LSPContext, document_uri: str, position: Position
+) -> t.List[Reference]:
+    """
+    Get references at a specific position in a document.
+
+    Used for hover information.
+
+    Args:
+        lint_context: The LSP context
+        document_uri: The URI of the document
+        position: The position to check for references
+
+    Returns:
+        A list of references at the given position
+    """
+    references = get_model_definitions_for_a_path(lint_context, document_uri)
+    filtered_references = list(filter(by_position(position), references))
+    return filtered_references
 
 
 def get_model_definitions_for_a_path(
@@ -20,7 +77,7 @@ def get_model_definitions_for_a_path(
     """
     Get the model references for a given path.
 
-    Works for models and audits.
+    Works for models and standalone audits.
     Works for targeting sql and python models.
 
     Steps:
@@ -31,37 +88,69 @@ def get_model_definitions_for_a_path(
     - Try get_model before normalization
     - Match to models that the model refers to
     """
-    # Ensure the path is a sql model
+    # Ensure the path is a sql file
     if not document_uri.endswith(".sql"):
         return []
 
-    # Get the model
-    models = lint_context.map[document_uri]
-    if not models:
+    # Get the file info from the context map
+    if document_uri not in lint_context.map:
         return []
-    model = lint_context.context.get_model(model_or_snapshot=models[0], raise_if_missing=False)
-    if model is None or not isinstance(model, SqlModel):
+
+    file_info = lint_context.map[document_uri]
+
+    # Process based on whether it's a model or standalone audit
+    if isinstance(file_info, ModelTarget):
+        # It's a model
+        model = lint_context.context.get_model(
+            model_or_snapshot=file_info.names[0], raise_if_missing=False
+        )
+        if model is None or not isinstance(model, SqlModel):
+            return []
+
+        query = model.query
+        dialect = model.dialect
+        depends_on = model.depends_on
+        file_path = model._path
+    elif isinstance(file_info, AuditTarget):
+        # It's a standalone audit
+        audit = lint_context.context.standalone_audits.get(file_info.name)
+        if audit is None:
+            return []
+
+        query = audit.query
+        dialect = audit.dialect
+        depends_on = audit.depends_on
+        file_path = audit._path
+    else:
         return []
 
     # Find all possible references
     references = []
-    tables = list(model.query.find_all(exp.Table))
+
+    # Get SQL query and find all table references
+    tables = list(query.find_all(exp.Table))
     if len(tables) == 0:
         return []
 
-    read_file = open(model._path, "r").readlines()
+    with open(file_path, "r", encoding="utf-8") as file:
+        read_file = file.readlines()
 
     for table in tables:
-        depends_on = model.depends_on
-
         # Normalize the table reference
-        reference_name = table.sql(dialect=model.dialect)
-        normalized_reference_name = normalize_model_name(
-            reference_name,
-            default_catalog=lint_context.context.default_catalog,
-            dialect=model.dialect,
-        )
-        if normalized_reference_name not in depends_on:
+        unaliased = table.copy()
+        if unaliased.args.get("alias") is not None:
+            unaliased.set("alias", None)
+        reference_name = unaliased.sql(dialect=dialect)
+        try:
+            normalized_reference_name = normalize_model_name(
+                reference_name,
+                default_catalog=lint_context.context.default_catalog,
+                dialect=dialect,
+            )
+            if normalized_reference_name not in depends_on:
+                continue
+        except Exception:
+            # Skip references that cannot be normalized
             continue
 
         # Get the referenced model uri
@@ -90,7 +179,11 @@ def get_model_definitions_for_a_path(
             start_pos = catalog_or_db_range.start
 
         references.append(
-            Reference(uri=referenced_model_uri, range=Range(start=start_pos, end=end_pos))
+            Reference(
+                uri=referenced_model_uri,
+                range=Range(start=start_pos, end=end_pos),
+                description=referenced_model.description,
+            )
         )
 
     return references

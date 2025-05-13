@@ -34,7 +34,7 @@
     "@tanstack/react-virtual": "^3.0.0-beta.56",
     "@uidotdev/usehooks": "^2.2.0",
     "@uiw/react-codemirror": "^4.21.12",
-    "apache-arrow": "^13.0.0",
+    "apache-arrow": "^19.0.0",
     "clsx": "^2.0.0",
     "diff": "^5.2.0",
     "elkjs": "^0.8.2",
@@ -48,14 +48,14 @@
     "react-split": "^2.0.14",
     "reactflow": "^11.8.3",
     "thememirror": "^2.0.1",
-    "zustand": "^4.4.1"
+    "zustand": "^5.0.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.25.1",
     "@playwright/test": "^1.37.1",
     "@swc/core": "^1.11.24",
     "@testing-library/jest-dom": "^6.1.2",
-    "@testing-library/react": "^14.0.0",
+    "@testing-library/react": "^16.0.0",
     "@testing-library/user-event": "^14.4.3",
     "@types/diff": "^5.2.1",
     "@types/pluralize": "^0.0.30",

@@ -8,7 +8,8 @@ import pytest
 from click.testing import CliRunner
 import time_machine
 import json
-
+from unittest.mock import MagicMock
+from sqlmesh import RuntimeEnv
 from sqlmesh.cli.example_project import ProjectTemplate, init_example_project
 from sqlmesh.cli.main import cli
 from sqlmesh.core.context import Context
@@ -18,6 +19,11 @@ from sqlmesh.utils.date import now_ds, time_like_to_str, timedelta, to_datetime,
 FREEZE_TIME = "2023-01-01 00:00:00 UTC"
 
 pytestmark = pytest.mark.slow
+
+
+@pytest.fixture(autouse=True)
+def mock_runtime_env(monkeypatch):
+    monkeypatch.setattr("sqlmesh.RuntimeEnv.get", MagicMock(return_value=RuntimeEnv.TERMINAL))
 
 
 @pytest.fixture(scope="session")
@@ -1700,3 +1706,56 @@ from sqlmesh.dbt.loader import sqlmesh_config
 config = sqlmesh_config(Path(__file__).parent)
 """
     )
+
+
+def test_ignore_warnings(runner: CliRunner, tmp_path: Path) -> None:
+    create_example_project(tmp_path)
+
+    # Add non-blocking audit to generate WARNING
+    with open(tmp_path / "models" / "full_model.sql", "w", encoding="utf-8") as f:
+        f.write("""
+MODEL (
+  name sqlmesh_example.full_model,
+  kind FULL,
+  cron '@daily',
+  grain item_id,
+  audits (full_nonblocking_audit),
+);
+
+SELECT
+  item_id,
+  COUNT(DISTINCT id) AS num_orders,
+FROM
+  sqlmesh_example.incremental_model
+GROUP BY item_id;
+
+AUDIT (
+    name full_nonblocking_audit,
+    blocking false,
+);
+select 1 as a;
+""")
+
+    audit_warning = "[WARNING] sqlmesh_example.full_model: 'full_nonblocking_audit' audit error: "
+
+    result = runner.invoke(
+        cli,
+        ["--paths", str(tmp_path), "plan", "--no-prompts", "--auto-apply", "--skip-tests"],
+    )
+    assert result.exit_code == 0
+    assert audit_warning in result.output
+
+    result = runner.invoke(
+        cli,
+        [
+            "--ignore-warnings",
+            "--paths",
+            str(tmp_path),
+            "plan",
+            "--no-prompts",
+            "--auto-apply",
+            "--skip-tests",
+        ],
+    )
+    assert result.exit_code == 0
+    assert audit_warning not in result.output

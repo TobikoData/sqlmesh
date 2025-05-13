@@ -1446,6 +1446,35 @@ def test_sushi(ctx: TestContext, tmp_path_factory: pytest.TempPathFactory):
                 f"CREATE VIEW {raw_test_schema}.demographics ON CLUSTER cluster1 AS SELECT 1 AS customer_id, '00000' AS zip;"
             )
 
+    # DuckDB parses TIMESTAMP into Type.TIMESTAMPNTZ which generates into TIMESTAMP_NTZ for
+    # Spark, but this type is not supported in Spark's DDL statements so we make it a TIMESTAMP
+    if ctx.dialect == "spark":
+        for model_key, model in context._models.items():
+            model_columns = model.columns_to_types
+
+            updated_model_columns = {}
+            for k, v in model_columns.items():
+                updated_model_columns[k] = v
+                if v.this == exp.DataType.Type.TIMESTAMPNTZ:
+                    v.set("this", exp.DataType.Type.TIMESTAMP)
+
+            update_fields = {
+                "columns_to_types": updated_model_columns,
+                "columns_to_types_": updated_model_columns,
+                "columns_to_types_or_raise": updated_model_columns,
+            }
+
+            # We get rid of the sushi.marketing post statement here because it asserts that
+            # updated_at is a 'timestamp', which is parsed using duckdb in assert_has_columns
+            # and the assertion fails because we now have TIMESTAMPs and not TIMESTAMPNTZs in
+            # the columns_to_types mapping
+            if '"marketing"' in model_key:
+                update_fields["post_statements_"] = []
+
+            context._models.update(
+                {model_key: context._models[model_key].copy(update=update_fields)}
+            )
+
     if ctx.dialect == "athena":
         for model_name in {"customer_revenue_lifetime"}:
             model_key = next(k for k in context._models if model_name in k)
@@ -2692,7 +2721,9 @@ def test_state_migrate_from_scratch(ctx: TestContext):
 
         config.gateways[gateway_name].state_schema = test_schema
 
-    sqlmesh_context = ctx.create_context(config_mutator=_use_warehouse_as_state_connection)
+    sqlmesh_context = ctx.create_context(
+        config_mutator=_use_warehouse_as_state_connection, ephemeral_state_connection=False
+    )
     assert sqlmesh_context.config.get_state_schema(ctx.gateway) == test_schema
 
     state_sync = (
@@ -2703,3 +2734,83 @@ def test_state_migrate_from_scratch(ctx: TestContext):
 
     # will throw if one of the migrations produces an error, which can happen if we forget to take quoting or normalization into account
     sqlmesh_context.migrate()
+
+
+def test_python_model_column_order(ctx: TestContext, tmp_path: pathlib.Path):
+    if ctx.test_type == "pyspark" and ctx.dialect in ("spark", "databricks"):
+        # dont skip
+        pass
+    elif ctx.test_type != "df":
+        pytest.skip("python model column order test only needs to be run once per db")
+
+    schema = ctx.add_test_suffix(TEST_SCHEMA)
+
+    (tmp_path / "models").mkdir()
+
+    # note: this model deliberately defines the columns in the @model definition to be in a different order than what
+    # is returned by the DataFrame within the model
+    model_path = tmp_path / "models" / "python_model.py"
+    if ctx.test_type == "pyspark":
+        # python model that emits a PySpark dataframe
+        model_path.write_text(
+            """
+from pyspark.sql import DataFrame, Row
+import typing as t
+from sqlmesh import ExecutionContext, model
+
+@model(
+    "TEST_SCHEMA.model",
+    columns={
+        "id": "int",
+        "name": "varchar"
+    }
+)
+def execute(
+    context: ExecutionContext,
+    **kwargs: t.Any,
+) -> DataFrame:
+    return context.spark.createDataFrame([
+        Row(name="foo", id=1)
+    ])
+    """.replace("TEST_SCHEMA", schema)
+        )
+    else:
+        # python model that emits a Pandas DataFrame
+        model_path.write_text(
+            """
+import pandas as pd
+import typing as t
+from sqlmesh import ExecutionContext, model
+
+@model(
+    "TEST_SCHEMA.model",
+    columns={
+        "id": "int",
+        "name": "varchar"
+    }
+)
+def execute(
+    context: ExecutionContext,
+    **kwargs: t.Any,
+) -> pd.DataFrame:
+    return pd.DataFrame([
+        {"name": "foo", "id": 1}
+    ])
+    """.replace("TEST_SCHEMA", schema)
+        )
+
+    sqlmesh_ctx = ctx.create_context(path=tmp_path)
+
+    assert len(sqlmesh_ctx.models) == 1
+
+    plan = sqlmesh_ctx.plan(auto_apply=True)
+    assert len(plan.new_snapshots) == 1
+
+    engine_adapter = sqlmesh_ctx.engine_adapter
+
+    query = exp.select("*").from_(
+        exp.to_table(f"{schema}.model", dialect=ctx.dialect), dialect=ctx.dialect
+    )
+    df = engine_adapter.fetchdf(query, quote_identifiers=True)
+    assert len(df) == 1
+    assert df.iloc[0].to_dict() == {"id": 1, "name": "foo"}

@@ -84,6 +84,15 @@ class RowDiff(PydanticModel, frozen=True):
         return int(self.stats["t_count"])
 
     @property
+    def empty(self) -> bool:
+        return (
+            self.source_count == 0
+            and self.target_count == 0
+            and self.s_only_count == 0
+            and self.t_only_count == 0
+        )
+
+    @property
     def count_pct_change(self) -> float:
         """The percentage change of the counts."""
         if self.source_count == 0:
@@ -446,7 +455,7 @@ class TableDiff:
 
                 summary_query = exp.select(*summary_sums).from_(table)
 
-                stats_df = self.adapter.fetchdf(summary_query, quote_identifiers=True)
+                stats_df = self.adapter.fetchdf(summary_query, quote_identifiers=True).fillna(0)
                 stats_df["s_only_count"] = stats_df["s_count"] - stats_df["join_count"]
                 stats_df["t_only_count"] = stats_df["t_count"] - stats_df["join_count"]
                 stats = stats_df.iloc[0].to_dict()

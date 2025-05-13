@@ -250,7 +250,7 @@ def test_model_union_query(sushi_context, assert_exp_eq):
         """SELECT
   CAST("marketing"."customer_id" AS INT) AS "customer_id",
   CAST("marketing"."status" AS TEXT) AS "status",
-  CAST("marketing"."updated_at" AS TIMESTAMP) AS "updated_at",
+  CAST("marketing"."updated_at" AS TIMESTAMPNTZ) AS "updated_at",
   CAST("marketing"."valid_from" AS TIMESTAMP) AS "valid_from",
   CAST("marketing"."valid_to" AS TIMESTAMP) AS "valid_to"
 FROM "memory"."sushi"."marketing" AS "marketing"
@@ -258,7 +258,7 @@ UNION ALL
 SELECT
   CAST("marketing"."customer_id" AS INT) AS "customer_id",
   CAST("marketing"."status" AS TEXT) AS "status",
-  CAST("marketing"."updated_at" AS TIMESTAMP) AS "updated_at",
+  CAST("marketing"."updated_at" AS TIMESTAMPNTZ) AS "updated_at",
   CAST("marketing"."valid_from" AS TIMESTAMP) AS "valid_from",
   CAST("marketing"."valid_to" AS TIMESTAMP) AS "valid_to"
 FROM "memory"."sushi"."marketing" AS "marketing"
@@ -1342,7 +1342,18 @@ def test_audits():
     """
     )
 
-    model = load_sql_based_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
+    audit_definitions = {
+        audit_name: load_audit(
+            d.parse(f"AUDIT (name {audit_name}); SELECT 1 WHERE FALSE"), dialect="duckdb"
+        )
+        for audit_name in ("audit_a", "audit_b", "audit_c")
+    }
+
+    model = load_sql_based_model(
+        expressions,
+        path=Path("./examples/sushi/models/test_model.sql"),
+        audit_definitions=audit_definitions,
+    )
     assert model.audits == [
         ("audit_a", {}),
         ("audit_b", {"key": exp.Literal.string("value")}),
@@ -2210,7 +2221,7 @@ def test_python_model(assert_exp_eq) -> None:
     m = model.get_registry()["my_model"].model(
         module_path=Path("."),
         path=Path("."),
-        dialect="duckdb",
+        dialect="duckdb,normalization_strategy=LOWERCASE",
     )
 
     assert list(m.pre_statements) == [
@@ -2220,14 +2231,14 @@ def test_python_model(assert_exp_eq) -> None:
         d.parse_one("DROP TABLE x"),
     ]
     assert m.enabled
-    assert m.dialect == "duckdb"
+    assert m.dialect == "duckdb,normalization_strategy=lowercase"
     assert m.depends_on == {'"foo"', '"bar"."baz"'}
-    assert m.columns_to_types == {"col": exp.DataType.build("int")}
+    assert m.columns_to_types == {"COL": exp.DataType.build("int")}
     assert_exp_eq(
         m.ctas_query(),
         """
 SELECT
-  CAST(NULL AS INT) AS "col"
+  CAST(NULL AS INT) AS "COL"
 FROM (VALUES
   (1)) AS t(dummy)
 WHERE
@@ -8493,10 +8504,10 @@ def entrypoint(evaluator):
     )
 
 
-def test_dynamic_blueprinting(tmp_path: Path) -> None:
+def test_dynamic_blueprinting_using_custom_macro(tmp_path: Path) -> None:
     init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
 
-    dynamic_template_sql = tmp_path / "models/dynamic_template.sql"
+    dynamic_template_sql = tmp_path / "models/dynamic_template_custom_macro.sql"
     dynamic_template_sql.parent.mkdir(parents=True, exist_ok=True)
     dynamic_template_sql.write_text(
         """
@@ -8514,7 +8525,7 @@ def test_dynamic_blueprinting(tmp_path: Path) -> None:
         """
     )
 
-    dynamic_template_py = tmp_path / "models/dynamic_template.py"
+    dynamic_template_py = tmp_path / "models/dynamic_template_custom_macro.py"
     dynamic_template_py.parent.mkdir(parents=True, exist_ok=True)
     dynamic_template_py.write_text(
         """
@@ -8554,6 +8565,53 @@ def gen_blueprints(evaluator):
     assert '"memory"."customer2"."some_table"' in ctx.models
     assert '"memory"."customer1"."some_other_table"' in ctx.models
     assert '"memory"."customer2"."some_other_table"' in ctx.models
+
+
+def test_dynamic_blueprinting_using_each(tmp_path: Path) -> None:
+    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+
+    dynamic_template_sql = tmp_path / "models/dynamic_template_each.sql"
+    dynamic_template_sql.parent.mkdir(parents=True, exist_ok=True)
+    dynamic_template_sql.write_text(
+        """
+        MODEL (
+          name @customer.some_table,
+          kind FULL,
+          blueprints @EACH(@values, x -> (customer := schema_@x)),
+        );
+
+        SELECT
+          1 AS c
+        """
+    )
+
+    dynamic_template_py = tmp_path / "models/dynamic_template_each.py"
+    dynamic_template_py.parent.mkdir(parents=True, exist_ok=True)
+    dynamic_template_py.write_text(
+        """
+from sqlmesh import model
+
+@model(
+    "@{customer}.some_other_table",
+    kind="FULL",
+    blueprints="@EACH(@values, x -> (customer := schema_@x))",
+    is_sql=True,
+)
+def entrypoint(evaluator):
+    return "SELECT 1 AS c"
+"""
+    )
+
+    model_defaults = ModelDefaultsConfig(dialect="duckdb")
+    variables = {"values": ["customer1", "customer2"]}
+    config = Config(model_defaults=model_defaults, variables=variables)
+    ctx = Context(config=config, paths=tmp_path)
+
+    assert len(ctx.models) == 4
+    assert '"memory"."schema_customer1"."some_table"' in ctx.models
+    assert '"memory"."schema_customer2"."some_table"' in ctx.models
+    assert '"memory"."schema_customer1"."some_other_table"' in ctx.models
+    assert '"memory"."schema_customer2"."some_other_table"' in ctx.models
 
 
 def test_single_blueprint(tmp_path: Path) -> None:
@@ -8796,6 +8854,54 @@ def entrypoint(context, *args, **kwargs):
     context = ExecutionContext(mocker.Mock(), {}, None, None)
 
     assert t.cast(pd.DataFrame, list(m.render(context=context))[0]).to_dict() == {"x": {0: 1}}
+
+
+def test_python_model_depends_on_blueprints(tmp_path: Path) -> None:
+    sql_model = tmp_path / "models" / "base_blueprints.sql"
+    sql_model.parent.mkdir(parents=True, exist_ok=True)
+    sql_model.write_text(
+        """
+        MODEL (
+          name test_schema1.@{model_name},
+          blueprints ((model_name := foo), (model_name := bar)),
+          kind FULL
+        );
+
+        SELECT 1 AS id
+        """
+    )
+
+    py_model = tmp_path / "models" / "depends_on_with_blueprint_vars.py"
+    py_model.parent.mkdir(parents=True, exist_ok=True)
+    py_model.write_text(
+        """
+import pandas as pd
+from sqlmesh import model
+
+@model(
+    "test_schema2.@model_name",
+    columns={
+        "id": "int",
+    },
+    blueprints=[
+        {"model_name": "foo"},
+        {"model_name": "bar"},
+    ],
+    depends_on=["test_schema1.@{model_name}"],
+)
+def entrypoint(context, *args, **kwargs):
+    table = context.resolve_table(f"test_schema1.{context.blueprint_var('model_name')}")
+    return context.fetchdf(f"SELECT * FROM {table}")"""
+    )
+
+    ctx = Context(
+        config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb")),
+        paths=tmp_path,
+    )
+    assert len(ctx.models) == 4
+
+    ctx.plan(no_prompts=True, auto_apply=True)
+    assert ctx.fetchdf("SELECT * FROM test_schema2.foo").to_dict() == {"id": {0: 1}}
 
 
 @time_machine.travel("2020-01-01 00:00:00 UTC")
@@ -9332,6 +9438,7 @@ def test_python_env_references_are_unequal_but_point_to_same_definition(tmp_path
 
     db_path = str(tmp_path / "db.db")
     db_connection = DuckDBConnectionConfig(database=db_path)
+
     config = Config(
         gateways={"duckdb": GatewayConfig(connection=db_connection)},
         model_defaults=ModelDefaultsConfig(dialect="duckdb"),
@@ -9447,3 +9554,174 @@ def f():
 
     with pytest.raises(SQLMeshError, match=r"duplicate definitions found"):
         Context(paths=tmp_path, config=config)
+
+
+def test_semicolon_is_not_included_in_model_state(tmp_path, assert_exp_eq):
+    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+
+    db_connection = DuckDBConnectionConfig(database=str(tmp_path / "db.db"))
+    config = Config(
+        gateways={"duckdb": GatewayConfig(connection=db_connection)},
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+    )
+
+    model_file = tmp_path / "models" / "model_with_semicolon.sql"
+    model_file.write_text(
+        """
+        MODEL (
+          name sqlmesh_example.incremental_model_with_semicolon,
+          kind INCREMENTAL_BY_TIME_RANGE (
+            time_column event_date
+          ),
+          start '2020-01-01',
+          cron '@daily',
+          grain (id, event_date)
+        );
+
+        SELECT
+          1 AS id,
+          1 AS item_id,
+          CAST('2020-01-01' AS DATE) AS event_date
+        ;
+
+        --Just a comment
+        """
+    )
+
+    ctx = Context(paths=tmp_path, config=config)
+    model = ctx.get_model("sqlmesh_example.incremental_model_with_semicolon")
+
+    assert not model.pre_statements
+    assert not model.post_statements
+
+    assert_exp_eq(
+        model.render_query(),
+        'SELECT 1 AS "id", 1 AS "item_id", CAST(\'2020-01-01\' AS DATE) AS "event_date"',
+    )
+    ctx.format()
+
+    assert (
+        model_file.read_text()
+        == """MODEL (
+  name sqlmesh_example.incremental_model_with_semicolon,
+  kind INCREMENTAL_BY_TIME_RANGE (
+    time_column event_date
+  ),
+  start '2020-01-01',
+  cron '@daily',
+  grain (id, event_date)
+);
+
+SELECT
+  1 AS id,
+  1 AS item_id,
+  '2020-01-01'::DATE AS event_date;
+
+/* Just a comment */"""
+    )
+
+    ctx.plan(no_prompts=True, auto_apply=True)
+
+    model_file = tmp_path / "models" / "model_with_semicolon.sql"
+    model_file.write_text(
+        """
+        MODEL (
+          name sqlmesh_example.incremental_model_with_semicolon,
+          kind INCREMENTAL_BY_TIME_RANGE (
+            time_column event_date
+          ),
+          start '2020-01-01',
+          cron '@daily',
+          grain (id, event_date)
+        );
+
+        SELECT
+          1 AS id,
+          1 AS item_id,
+          CAST('2020-01-01' AS DATE) AS event_date
+        """
+    )
+
+    ctx.load()
+    plan = ctx.plan(no_prompts=True, auto_apply=True)
+
+    assert not plan.context_diff.modified_snapshots
+
+
+def test_invalid_audit_reference():
+    sql = """
+    MODEL (
+      name test,
+      audits (not_nulll (columns := (id)))
+    );
+
+    SELECT
+      1 AS id
+    """
+    expressions = d.parse(sql)
+
+    with pytest.raises(ConfigError, match="Audit 'not_nulll' is undefined"):
+        load_sql_based_model(expressions)
+
+
+def test_scd_time_data_type_does_not_cause_diff_after_deserialization() -> None:
+    for dialect in (
+        "athena",
+        "bigquery",
+        "clickhouse",
+        "databricks",
+        "duckdb",
+        "dune",
+        "hive",
+        "mysql",
+        "postgres",
+        "presto",
+        "redshift",
+        "snowflake",
+        "spark",
+        "trino",
+        "tsql",
+    ):
+        sql = f"""
+        MODEL (
+          name test_schema.test_model,
+          kind SCD_TYPE_2_BY_COLUMN (
+            unique_key ARRAY(col),
+            columns ARRAY(col),
+            invalidate_hard_deletes TRUE,
+            on_destructive_change error
+          ),
+          dialect {dialect}
+        );
+
+        SELECT
+          1 AS col
+        """
+
+        model = load_sql_based_model(d.parse(sql))
+        deserialized_model = SqlModel.parse_raw(model.json())
+
+        assert model.data_hash == deserialized_model.data_hash
+
+
+def test_python_env_includes_file_path_in_render_definition():
+    @model(
+        "db.test_model_path",
+        kind=dict(
+            name=ModelKindName.SCD_TYPE_2_BY_TIME,
+            unique_key=["id"],
+            disable_restatement=False,
+        ),
+        columns={"id": "string", "name": "string"},
+        optimize_query=False,
+    )
+    def test_model(context, **kwargs):
+        return pd.DataFrame([{"id": context.var("1")}])
+
+    python_model = model.get_registry()["db.test_model_path"].model(
+        module_path=Path("."), path=Path("."), dialect="duckdb"
+    )
+
+    model_executable_str = python_model.render_definition()[1].sql()
+    # Make sure the file path is included in the render definition
+    assert "# tests/core/test_model.py" in model_executable_str

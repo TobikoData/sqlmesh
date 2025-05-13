@@ -12,6 +12,7 @@ import jinja2
 from dbt import version
 from dbt.adapters.base import BaseRelation, Column
 from ruamel.yaml import YAMLError
+from sqlglot import Dialect
 
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.snapshot.definition import DeployabilityIndex
@@ -49,7 +50,9 @@ class Exceptions:
 class Api:
     def __init__(self, dialect: t.Optional[str]) -> None:
         if dialect:
-            config_class = TARGET_TYPE_TO_CONFIG_CLASS[dialect]
+            config_class = TARGET_TYPE_TO_CONFIG_CLASS[
+                Dialect.get_or_raise(dialect).__class__.__name__.lower()
+            ]
             self.Relation = config_class.relation_class
             self.Column = config_class.column_class
             self.quote_policy = config_class.quote_policy

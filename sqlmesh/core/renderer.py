@@ -110,17 +110,23 @@ class BaseExpressionRenderer:
         if environment_naming_info is not None:
             kwargs["this_env"] = getattr(environment_naming_info, "name")
             if snapshots:
-                schemas = set(
-                    [
-                        s.qualified_view_name.schema_for_environment(
-                            environment_naming_info, dialect=self._dialect
+                schemas, views = set(), []
+                for snapshot in snapshots.values():
+                    if snapshot.is_model and not snapshot.is_symbolic:
+                        schemas.add(
+                            snapshot.qualified_view_name.schema_for_environment(
+                                environment_naming_info, dialect=self._dialect
+                            )
                         )
-                        for s in snapshots.values()
-                        if s.is_model and not s.is_symbolic
-                    ]
-                )
+                        views.append(
+                            snapshot.display_name(
+                                environment_naming_info, self._default_catalog, self._dialect
+                            )
+                        )
                 if schemas:
                     kwargs["schemas"] = list(schemas)
+                if views:
+                    kwargs["views"] = views
 
         this_model = kwargs.pop("this_model", None)
 

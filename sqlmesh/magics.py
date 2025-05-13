@@ -134,7 +134,12 @@ class SQLMeshMagics(Magics):
         args = parse_argstring(self.context, line)
         configs = load_configs(args.config, Context.CONFIG_TYPE, args.paths)
         log_limit = list(configs.values())[0].log_limit
-        configure_logging(args.debug, log_limit=log_limit, log_file_dir=args.log_file_dir)
+        configure_logging(
+            args.debug,
+            log_limit=log_limit,
+            log_file_dir=args.log_file_dir,
+            ignore_warnings=args.ignore_warnings,
+        )
         configure_console(ignore_warnings=args.ignore_warnings)
         try:
             context = Context(paths=args.paths, config=configs, gateway=args.gateway)
@@ -687,6 +692,12 @@ class SQLMeshMagics(Magics):
         help="The number of decimal places to keep when comparing floating point columns. Default: 3",
     )
     @argument(
+        "--select-model",
+        type=str,
+        nargs="*",
+        help="Specify one or more models to data diff. Use wildcards to diff multiple models. Ex: '*' (all models with applied plan diffs), 'demo.model+' (this and downstream models), 'git:feature_branch' (models with direct modifications in this branch only)",
+    )
+    @argument(
         "--skip-grain-check",
         action="store_true",
         help="Disable the check for a primary key (grain) that is missing or is not unique.",
@@ -700,12 +711,13 @@ class SQLMeshMagics(Magics):
         """
         args = parse_argstring(self.table_diff, line)
         source, target = args.source_to_target.split(":")
+        select_models = {args.model} if args.model else args.select_model or None
         context.table_diff(
             source=source,
             target=target,
             on=args.on,
             skip_columns=args.skip_columns,
-            model_or_snapshot=args.model,
+            select_models=select_models,
             where=args.where,
             limit=args.limit,
             show_sample=args.show_sample,
@@ -1103,6 +1115,13 @@ class SQLMeshMagics(Magics):
         """Run linter for target model(s)"""
         args = parse_argstring(self.lint, line)
         context.lint_models(args.models)
+
+    @magic_arguments()
+    @line_magic
+    @pass_sqlmesh_context
+    def destroy(self, context: Context, line: str) -> None:
+        """Removes all project resources, engine-managed objects, state tables and clears the SQLMesh cache."""
+        context.destroy()
 
 
 def register_magics() -> None:

@@ -2,7 +2,7 @@
 
 This guide describes how to select specific models to include in a SQLMesh plan, which can be useful when modifying a subset of the models in a SQLMesh project.
 
-Note: the selector syntax described below is also used for the SQLMesh `plan` [`--allow-destructive-model` selector](../concepts/plans.md#destructive-changes).
+Note: the selector syntax described below is also used for the SQLMesh `plan` [`--allow-destructive-model` selector](../concepts/plans.md#destructive-changes) and for the `table_diff` command to [diff a selection of models](./tablediff.md#diffing-multiple-models-across-environments).
 
 ## Background
 
@@ -219,6 +219,81 @@ Models:
     ├── sushi.top_waiters
     ├── sushi.customer_revenue_by_day
     └── sushi.customer_revenue_lifetime
+```
+
+#### Select with tags
+
+If we specify the `--select-model` option with a tag selector like `"tag:reporting"`, all models with the "reporting" tag will be selected. Tags are case-insensitive and support wildcards:
+
+```bash
+❯ sqlmesh plan dev --select-model "tag:reporting*"
+New environment `dev` will be created from `prod`
+
+Differences from the `prod` environment:
+
+Models:
+├── Directly Modified:
+│   ├── sushi.daily_revenue
+│   └── sushi.monthly_revenue
+└── Indirectly Modified:
+    └── sushi.revenue_dashboard
+```
+
+#### Select with git changes
+
+The git-based selector allows you to select models whose files have changed compared to a target branch (default: main). This includes:
+- Untracked files (new files not in git)
+- Uncommitted changes in working directory
+- Committed changes different from the target branch
+
+For example:
+
+```bash
+❯ sqlmesh plan dev --select-model "git:feature"
+New environment `dev` will be created from `prod`
+
+Differences from the `prod` environment:
+
+Models:
+├── Directly Modified:
+│   └── sushi.items # Changed in feature branch
+└── Indirectly Modified:
+    ├── sushi.order_items
+    └── sushi.daily_revenue
+```
+
+You can also combine git selection with upstream/downstream indicators:
+
+```bash
+❯ sqlmesh plan dev --select-model "git:feature+"
+# Selects changed models and their downstream dependencies
+
+❯ sqlmesh plan dev --select-model "+git:feature"
+# Selects changed models and their upstream dependencies
+```
+
+#### Complex selections with logical operators
+
+The model selector supports combining multiple conditions using logical operators:
+
+- `&` (AND): Both conditions must be true
+- `|` (OR): Either condition must be true
+- `^` (NOT): Negates a condition
+
+For example:
+
+```bash
+❯ sqlmesh plan dev --select-model "(tag:finance & ^tag:deprecated)"
+# Selects models with finance tag that don't have deprecated tag
+
+❯ sqlmesh plan dev --select-model "(+model_a | model_b+)"
+# Selects model_a and its upstream deps OR model_b and its downstream deps
+
+❯ sqlmesh plan dev --select-model "(tag:finance & git:main)"
+# Selects changed models that also have the finance tag
+
+❯ sqlmesh plan dev --select-model "^(tag:test) & metrics.*"
+# Selects models in metrics schema that don't have the test tag
 ```
 
 ### Backfill examples

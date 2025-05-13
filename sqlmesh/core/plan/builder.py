@@ -15,7 +15,12 @@ from sqlmesh.core.config import (
 )
 from sqlmesh.core.context_diff import ContextDiff
 from sqlmesh.core.environment import EnvironmentNamingInfo
-from sqlmesh.core.plan.definition import Plan, SnapshotMapping, earliest_interval_start
+from sqlmesh.core.plan.definition import (
+    Plan,
+    SnapshotMapping,
+    UserProvidedFlags,
+    earliest_interval_start,
+)
 from sqlmesh.core.schema_diff import SchemaDiffer, has_drop_alteration, get_dropped_column_names
 from sqlmesh.core.snapshot import (
     DeployabilityIndex,
@@ -107,6 +112,7 @@ class PlanBuilder:
         ensure_finalized_snapshots: bool = False,
         interval_end_per_model: t.Optional[t.Dict[str, int]] = None,
         console: t.Optional[PlanBuilderConsole] = None,
+        user_provided_flags: t.Optional[t.Dict[str, UserProvidedFlags]] = None,
     ):
         self._context_diff = context_diff
         self._no_gaps = no_gaps
@@ -134,6 +140,7 @@ class PlanBuilder:
         self._engine_schema_differ = engine_schema_differ
         self._console = console or get_console()
         self._choices: t.Dict[SnapshotId, SnapshotChangeCategory] = {}
+        self._user_provided_flags = user_provided_flags
 
         self._start = start
         if not self._start and (
@@ -280,6 +287,7 @@ class PlanBuilder:
             execution_time=self._execution_time,
             end_bounded=self._end_bounded,
             ensure_finalized_snapshots=self._ensure_finalized_snapshots,
+            user_provided_flags=self._user_provided_flags,
         )
         self._latest_plan = plan
         return plan
@@ -592,18 +600,96 @@ class PlanBuilder:
 
             if snapshot.is_model and snapshot.model.forward_only:
                 snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
-            elif not direct_parent_categories or direct_parent_categories.intersection(
+            elif direct_parent_categories.intersection(
                 {SnapshotChangeCategory.BREAKING, SnapshotChangeCategory.INDIRECT_BREAKING}
             ):
                 snapshot.categorize_as(SnapshotChangeCategory.INDIRECT_BREAKING)
+            elif not direct_parent_categories:
+                snapshot.categorize_as(self._get_orphaned_indirect_change_category(snapshot))
             elif SnapshotChangeCategory.FORWARD_ONLY in all_upstream_categories:
                 # FORWARD_ONLY must take precedence over INDIRECT_NON_BREAKING
                 snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+            elif all_upstream_categories == {SnapshotChangeCategory.METADATA}:
+                snapshot.categorize_as(SnapshotChangeCategory.METADATA)
             else:
                 snapshot.categorize_as(SnapshotChangeCategory.INDIRECT_NON_BREAKING)
         else:
             # Metadata updated.
             snapshot.categorize_as(SnapshotChangeCategory.METADATA)
+
+    def _get_orphaned_indirect_change_category(
+        self, indirect_snapshot: Snapshot
+    ) -> SnapshotChangeCategory:
+        """Sometimes an indirectly changed downstream snapshot ends up with no directly changed parents introduced in the same plan.
+        This may happen when 2 or more parent models were changed independently in different plans and then the changes were
+        merged together and applied in a single plan. As a result, a combination of 2 or more previously changed parents produces
+        a new downstream snapshot not previously seen.
+
+        This function is used to infer the correct change category for such downstream snapshots based on change categories of their parents.
+        """
+        previous_snapshot = self._context_diff.modified_snapshots[indirect_snapshot.name][1]
+        previous_parent_snapshot_ids = {p.name: p for p in previous_snapshot.parents}
+
+        current_parent_snapshots = [
+            self._context_diff.snapshots[p_id]
+            for p_id in indirect_snapshot.parents
+            if p_id in self._context_diff.snapshots
+        ]
+
+        indirect_category: t.Optional[SnapshotChangeCategory] = None
+        for current_parent_snapshot in current_parent_snapshots:
+            if current_parent_snapshot.name not in previous_parent_snapshot_ids:
+                # This is a new parent so falling back to INDIRECT_BREAKING
+                return SnapshotChangeCategory.INDIRECT_BREAKING
+            pevious_parent_snapshot_id = previous_parent_snapshot_ids[current_parent_snapshot.name]
+
+            if current_parent_snapshot.snapshot_id == pevious_parent_snapshot_id:
+                # There were no new versions of this parent since the previous version of this snapshot,
+                # so we can skip it
+                continue
+
+            # Find the previous snapshot ID of the same parent in the historical chain
+            previous_parent_found = False
+            previous_parent_categories = set()
+            for pv in reversed(current_parent_snapshot.all_versions):
+                pv_snapshot_id = pv.snapshot_id(current_parent_snapshot.name)
+                if pv_snapshot_id == pevious_parent_snapshot_id:
+                    previous_parent_found = True
+                    break
+                previous_parent_categories.add(pv.change_category)
+
+            if not previous_parent_found:
+                # The previous parent is not in the historical chain so falling back to INDIRECT_BREAKING
+                return SnapshotChangeCategory.INDIRECT_BREAKING
+
+            if previous_parent_categories.intersection(
+                {SnapshotChangeCategory.BREAKING, SnapshotChangeCategory.INDIRECT_BREAKING}
+            ):
+                # One of the new parents in the chain was breaking so this indirect snapshot is breaking
+                return SnapshotChangeCategory.INDIRECT_BREAKING
+
+            if SnapshotChangeCategory.FORWARD_ONLY in previous_parent_categories:
+                # One of the new parents in the chain was forward-only so this indirect snapshot is forward-only
+                indirect_category = SnapshotChangeCategory.FORWARD_ONLY
+            elif (
+                previous_parent_categories.intersection(
+                    {
+                        SnapshotChangeCategory.NON_BREAKING,
+                        SnapshotChangeCategory.INDIRECT_NON_BREAKING,
+                    }
+                )
+                and indirect_category != SnapshotChangeCategory.FORWARD_ONLY
+            ):
+                # All changes in the chain were non-breaking so this indirect snapshot can be non-breaking too
+                indirect_category = SnapshotChangeCategory.INDIRECT_NON_BREAKING
+            elif (
+                previous_parent_categories == {SnapshotChangeCategory.METADATA}
+                and indirect_category is None
+            ):
+                # All changes in the chain were metadata so this indirect snapshot can be metadata too
+                indirect_category = SnapshotChangeCategory.METADATA
+
+        return indirect_category or SnapshotChangeCategory.INDIRECT_BREAKING
 
     def _apply_effective_from(self) -> None:
         if self._effective_from:

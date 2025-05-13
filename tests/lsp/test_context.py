@@ -1,6 +1,6 @@
 import pytest
 from sqlmesh.core.context import Context
-from sqlmesh.lsp.context import LSPContext
+from sqlmesh.lsp.context import LSPContext, ModelTarget
 
 
 @pytest.mark.fast
@@ -16,4 +16,7 @@ def test_lsp_context():
     active_customers_key = next(
         key for key in lsp_context.map.keys() if key.endswith("models/active_customers.sql")
     )
-    assert lsp_context.map[active_customers_key] == ["sushi.active_customers"]
+
+    # Check that the value is a ModelInfo with the expected model name
+    assert isinstance(lsp_context.map[active_customers_key], ModelTarget)
+    assert "sushi.active_customers" in lsp_context.map[active_customers_key].names

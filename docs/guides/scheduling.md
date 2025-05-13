@@ -1,6 +1,6 @@
 # Scheduling guide
 
-SQLMesh currently offers three ways of scheduling model evaluation:
+SQLMesh currently offers two ways of scheduling model evaluation:
 
 * Using [SQLMesh's built-in scheduler](#built-in-scheduler)
 * Using [Tobiko Cloud](../cloud/features/scheduler/scheduler.md)

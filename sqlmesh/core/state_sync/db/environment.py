@@ -108,14 +108,15 @@ class EnvironmentState:
                 columns_to_types=self._environment_statements_columns_to_types,
             )
 
-    def invalidate_environment(self, name: str) -> None:
+    def invalidate_environment(self, name: str, protect_prod: bool = True) -> None:
         """Invalidates the environment.
 
         Args:
             name: The name of the environment
+            protect_prod: If True, prevents invalidation of the production environment.
         """
         name = name.lower()
-        if name == c.PROD:
+        if protect_prod and name == c.PROD:
             raise SQLMeshError("Cannot invalidate the production environment.")
 
         filter_expr = exp.column("name").eq(name)
