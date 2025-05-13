@@ -542,7 +542,7 @@ function useQueryWithTimeout<
   }
 
   const q = useQuery<TQueryFnData, TError, TData, TQueryKey>({
-    cacheTime: 0,
+    gcTime: 0,
     enabled: false,
     queryKey: options.queryKey,
     queryFn,
