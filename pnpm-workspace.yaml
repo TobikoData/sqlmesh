@@ -1,0 +1,4 @@
+packages:
+  - vscode/bus
+  - vscode/extension
+  - web/client

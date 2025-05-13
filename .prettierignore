@@ -37,3 +37,4 @@ package-lock.json
 .venv
 .vscode
 build
+pnpm-lock.yaml

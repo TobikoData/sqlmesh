@@ -3,7 +3,7 @@
   "displayName": "SQLMesh",
   "description": "Official SQLMesh extension for VSCode",
   "publisher": "tobikodata",
-  "version": "0.0.1",
+  "version": "0.0.7",
   "repository": {
     "type": "git",
     "url": "https://github.com/tobikodata/sqlmesh"
@@ -27,6 +27,24 @@
     "ms-python.python"
   ],
   "contributes": {
+    "viewsContainers": {
+      "panel": [
+        {
+          "id": "lineage_view",
+          "title": "Lineage",
+          "icon": "./assets/images/dag.svg"
+        }
+      ]
+    },
+    "views": {
+      "lineage_view": [
+        {
+          "id": "sqlmesh.lineage",
+          "name": "",
+          "type": "webview"
+        }
+      ]
+    },
     "authentication": [
       {
         "id": "tobikodata",
@@ -75,16 +93,18 @@
     "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
     "vscode:package": "vsce package --no-dependencies",
     "vscode:prepublish": "cp ../../LICENSE . && npm run package",
-    "package": "npm run check-types && node esbuild.js --production"
+    "package": "rm -rf ./src_react && mkdir -p ./src_react && cd ../react && npm run build && cd ../extension && cp -r ../react/dist/* ./src_react && npm run check-types && node esbuild.js --production"
   },
   "dependencies": {
     "@types/fs-extra": "^11.0.4",
     "@vscode/python-extension": "^1.0.5",
     "fs-extra": "^11.3.0",
+    "vscode-jsonrpc": "^8.2.1",
     "vscode-languageclient": "^9.0.1",
     "zod": "^3.24.3"
   },
   "devDependencies": {
+    "@eslint/js": "^9.25.1",
     "@types/mocha": "^10.0.10",
     "@types/node": "20.11.25",
     "@types/vscode": "1.96.0",
