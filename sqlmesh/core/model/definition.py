@@ -1097,9 +1097,8 @@ class _Model(ModelMeta, frozen=True):
 
         return metadata
 
-    def audit_metadata_hash(self) -> t.Tuple[t.List[str], str]:
-        hash_values = self._audit_metadata_hash_values()
-        return hash_values, hash_data(hash_values)
+    def audit_metadata_hash(self) -> str:
+        return hash_data(self._audit_metadata_hash_values())
 
     @property
     def metadata_hash(self) -> str:

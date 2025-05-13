@@ -128,7 +128,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                 execution_time=plan.execution_time,
             )
 
-            self._run_audits_for_metadata_snapshots(plan, snapshots, new_snapshots)
+            self._run_audits_for_metadata_snapshots(plan, new_snapshots)
 
             push_completion_status = self._push(plan, snapshots, deployability_index_for_creation)
             if push_completion_status.is_nothing_to_do:
@@ -550,10 +550,9 @@ class BuiltInPlanEvaluator(PlanEvaluator):
     def _run_audits_for_metadata_snapshots(
         self,
         plan: EvaluatablePlan,
-        snapshots: t.Dict[SnapshotId, Snapshot],
         new_snapshots: t.Dict[SnapshotId, Snapshot],
     ) -> None:
-        # Step 1: Filter out snapshots that are not categorized as metadata changes on models
+        # Filter out snapshots that are not categorized as metadata changes on models
         metadata_snapshots = []
         for snapshot in new_snapshots.values():
             if not snapshot.is_metadata or not snapshot.is_model or not snapshot.evaluatable:
@@ -561,7 +560,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
 
             metadata_snapshots.append(snapshot)
 
-        # Step 2: Bulk load their previous snapshots from state
+        # Bulk load all the previous snapshots
         previous_snapshots = self.state_sync.get_snapshots(
             [
                 s.previous_version.snapshot_id(s.name)
@@ -570,29 +569,25 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             ]
         ).values()
 
-        # Step 3: Compare the audit metadata hashes to determine if there was a change in the audits field
-        to_be_audited_snapshots = {}
+        # Check if any of the snapshots have modifications to the audits field by comparing the hashes
+        audit_snapshots = {}
         for snapshot, previous_snapshot in zip(metadata_snapshots, previous_snapshots):
-            new_audits, new_audits_hash = snapshot.model.audit_metadata_hash()
-            _, previous_audit_hash = previous_snapshot.model.audit_metadata_hash()
+            new_audits_hash = snapshot.model.audit_metadata_hash()
+            previous_audit_hash = previous_snapshot.model.audit_metadata_hash()
 
-            if previous_audit_hash != new_audits_hash and new_audits:
-                snapshot_start = min(i[0] for i in snapshot.intervals)
-                snapshot_end = max(i[1] for i in snapshot.intervals)
-                to_be_audited_snapshots[snapshot.snapshot_id] = (snapshot_start, snapshot_end)
+            if snapshot.model.audits and previous_audit_hash != new_audits_hash:
+                audit_snapshots[snapshot.snapshot_id] = snapshot
 
-        if not to_be_audited_snapshots:
+        if not audit_snapshots:
             return
 
-        # Step 4: If there are any snapshots to be audited, we'll reuse the scheduler's
-        # internals to audit them by utilizing the restatement logic
-        scheduler = self.create_scheduler(snapshots.values())
+        # If there are any snapshots to be audited, we'll reuse the scheduler's internals to audit them
+        scheduler = self.create_scheduler(audit_snapshots.values())
         completion_status = scheduler.audit(
             plan.environment,
             plan.start,
             plan.end,
             execution_time=plan.execution_time,
-            restatements=to_be_audited_snapshots,
             end_bounded=plan.end_bounded,
             interval_end_per_model=plan.interval_end_per_model,
         )

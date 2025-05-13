@@ -219,7 +219,7 @@ class Scheduler:
             start=start,
             end=end,
             execution_time=execution_time,
-            restatements=restatements,
+            remove_intervals=restatements,
             interval_end_per_model=interval_end_per_model,
             ignore_cron=ignore_cron,
             end_bounded=end_bounded,
@@ -233,32 +233,38 @@ class Scheduler:
     def audit(
         self,
         environment: str | EnvironmentNamingInfo,
-        start: t.Optional[TimeLike] = None,
-        end: t.Optional[TimeLike] = None,
+        start: TimeLike,
+        end: TimeLike,
         execution_time: t.Optional[TimeLike] = None,
-        restatements: t.Optional[t.Dict[SnapshotId, Interval]] = None,
         interval_end_per_model: t.Optional[t.Dict[str, int]] = None,
         ignore_cron: bool = False,
         end_bounded: bool = False,
         selected_snapshots: t.Optional[t.Set[str]] = None,
         circuit_breaker: t.Optional[t.Callable[[], bool]] = None,
         deployability_index: t.Optional[DeployabilityIndex] = None,
-        auto_restatement_enabled: bool = False,
         run_environment_statements: bool = False,
     ) -> CompletionStatus:
+        # Remove the intervals from the snapshots that will be audited so that they can be recomputed
+        # by _run_or_audit as "missing intervals" to reuse the rest of it's logic
+        remove_intervals = {}
+        for snapshot in self.snapshots.values():
+            removal_intervals = snapshot.get_removal_interval(
+                start, end, execution_time, is_preview=True
+            )
+            remove_intervals[snapshot.snapshot_id] = removal_intervals
+
         return self._run_or_audit(
             environment=environment,
             start=start,
             end=end,
             execution_time=execution_time,
-            restatements=restatements,
+            remove_intervals=remove_intervals,
             interval_end_per_model=interval_end_per_model,
             ignore_cron=ignore_cron,
             end_bounded=end_bounded,
             selected_snapshots=selected_snapshots,
             circuit_breaker=circuit_breaker,
             deployability_index=deployability_index,
-            auto_restatement_enabled=auto_restatement_enabled,
             run_environment_statements=run_environment_statements,
             audit_only=True,
         )
@@ -359,12 +365,12 @@ class Scheduler:
 
         batched_intervals = self.batch_intervals(merged_intervals, deployability_index)
 
-        if not audit_only:
-            self.console.start_evaluation_progress(
-                batched_intervals,
-                environment_naming_info,
-                self.default_catalog,
-            )
+        self.console.start_evaluation_progress(
+            batched_intervals,
+            environment_naming_info,
+            self.default_catalog,
+            audit_only=audit_only,
+        )
 
         dag = self._dag(batched_intervals)
 
@@ -524,7 +530,7 @@ class Scheduler:
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         execution_time: t.Optional[TimeLike] = None,
-        restatements: t.Optional[t.Dict[SnapshotId, Interval]] = None,
+        remove_intervals: t.Optional[t.Dict[SnapshotId, Interval]] = None,
         interval_end_per_model: t.Optional[t.Dict[str, int]] = None,
         ignore_cron: bool = False,
         end_bounded: bool = False,
@@ -544,7 +550,8 @@ class Scheduler:
             start: The start of the run. Defaults to the min node start date.
             end: The end of the run. Defaults to now.
             execution_time: The date/time time reference to use for execution time. Defaults to now.
-            restatements: A dict of snapshots to restate and their intervals.
+            remove_intervals: A dict of snapshots to their intervals. For evaluation, these are the intervals that will be restated. For audits,
+                              these are the intervals that will be reaudited
             interval_end_per_model: The mapping from model FQNs to target end dates.
             ignore_cron: Whether to ignore the node's cron schedule.
             end_bounded: If set to true, the evaluated intervals will be bounded by the target end date, disregarding lookback,
@@ -557,7 +564,6 @@ class Scheduler:
         Returns:
             True if the execution was successful and False otherwise.
         """
-        restatements = restatements or {}
         validate_date_range(start, end)
         if isinstance(environment, str):
             env = self.state_sync.get_environment(environment)
@@ -578,7 +584,7 @@ class Scheduler:
         execution_time = execution_time or now_timestamp()
 
         self.state_sync.refresh_snapshot_intervals(self.snapshots.values())
-        for s_id, interval in (restatements or {}).items():
+        for s_id, interval in (remove_intervals or {}).items():
             self.snapshots[s_id].remove_interval(interval)
 
         if auto_restatement_enabled:
@@ -593,7 +599,7 @@ class Scheduler:
             end,
             execution_time,
             deployability_index=deployability_index,
-            restatements=restatements,
+            restatements=remove_intervals,
             interval_end_per_model=interval_end_per_model,
             ignore_cron=ignore_cron,
             end_bounded=end_bounded,
@@ -614,8 +620,7 @@ class Scheduler:
             audit_only=audit_only,
         )
 
-        if not audit_only:
-            self.console.stop_evaluation_progress(success=not errors)
+        self.console.stop_evaluation_progress(success=not errors)
 
         skipped_snapshots = {i[0] for i in skipped_intervals}
         self.console.log_skipped_models(skipped_snapshots)
