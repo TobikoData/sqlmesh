@@ -318,6 +318,46 @@ FROM "memory"."sushi"."marketing" AS "marketing"
             2,
             lambda expected_select: f"{expected_select}\nUNION ALL\n{expected_select}\n",
         ),
+        # Test case 7: Missing union type AND condition
+        (
+            "test_7",
+            "",
+            "",
+            2,
+            lambda expected_select: f"{expected_select}\nUNION ALL\n{expected_select}\n",
+        ),
+        # Test case 8: Missing union type AND condition multiple tables
+        (
+            "test_8",
+            "",
+            "",
+            3,
+            lambda expected_select: f"{expected_select}\nUNION ALL\n{expected_select}\n\nUNION ALL\n{expected_select}\n",
+        ),
+        # Test case 9: Missing union type AND condition one table
+        (
+            "test_9",
+            "",
+            "",
+            1,
+            lambda expected_select: f"{expected_select}",
+        ),
+        # Test case 10: Union type with one table
+        (
+            "test_10",
+            "",
+            "'distinct'",
+            1,
+            lambda expected_select: f"{expected_select}",
+        ),
+        # Test case 11: Condition with one table
+        (
+            "test_9",
+            "True",
+            "",
+            1,
+            lambda expected_select: f"{expected_select}",
+        ),
     ],
 )
 def test_model_union_conditional(

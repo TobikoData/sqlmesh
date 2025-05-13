@@ -994,7 +994,7 @@ def union(
     """
 
     if not args:
-        raise SQLMeshError("At least one table is required for UNION.")
+        raise SQLMeshError("At least one table is required for the @UNION macro.")
 
     arg_idx = 0
     # Check for condition
@@ -1002,11 +1002,11 @@ def union(
     if isinstance(condition, bool):
         arg_idx += 1
         if arg_idx >= len(args):
-            raise SQLMeshError("Expected more arguments after condition.")
+            raise SQLMeshError("Expected more arguments after the condition of the `@UNION` macro.")
 
     # Check for union type
     type_ = exp.Literal.string("ALL")
-    if arg_idx < len(args) and isinstance(args[arg_idx], exp.Literal):
+    if isinstance(args[arg_idx], exp.Literal):
         type_ = args[arg_idx]  # type: ignore
         arg_idx += 1
     kind = type_.name.upper()
@@ -1014,13 +1014,9 @@ def union(
         raise SQLMeshError(f"Invalid type '{type_}'. Expected 'ALL' or 'DISTINCT'.")
 
     # Remaining args should be tables
-    tables = []
-    for table in args[arg_idx:]:
-        if isinstance(table, exp.Column):
-            table = exp.table_(table.this, db=table.args.get("table"), catalog=table.args.get("db"))
-        else:
-            table = exp.to_table(table, dialect=evaluator.dialect)  # type: ignore
-        tables.append(table)
+    tables = [
+        exp.to_table(e.sql(evaluator.dialect), dialect=evaluator.dialect) for e in args[arg_idx:]
+    ]
 
     columns = {
         column
