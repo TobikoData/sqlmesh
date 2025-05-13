@@ -46,11 +46,8 @@ class CachingStateSync(DelegatingStateSync):
         return snapshot
 
     def get_snapshots(
-        self, snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]]
+        self, snapshot_ids: t.Iterable[SnapshotIdLike]
     ) -> t.Dict[SnapshotId, Snapshot]:
-        if snapshot_ids is None:
-            return self.state_sync.get_snapshots(snapshot_ids)
-
         existing = {}
         missing = set()
         now = now_timestamp()

@@ -35,7 +35,6 @@ from sqlmesh.core.snapshot import (
 )
 from sqlmesh.utils.migration import index_text_type, blob_text_type
 from sqlmesh.utils.date import now_timestamp, TimeLike, now, to_timestamp
-from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
 from sqlmesh.utils import unique
 
@@ -309,7 +308,7 @@ class SnapshotState:
 
     def get_snapshots(
         self,
-        snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]],
+        snapshot_ids: t.Iterable[SnapshotIdLike],
     ) -> t.Dict[SnapshotId, Snapshot]:
         """Fetches snapshots.
 
@@ -319,8 +318,6 @@ class SnapshotState:
         Returns:
             A dictionary of snapshot IDs to snapshots.
         """
-        if snapshot_ids is None:
-            raise SQLMeshError("Must provide snapshot IDs to fetch snapshots.")
         return self._get_snapshots(snapshot_ids)
 
     def snapshots_exist(self, snapshot_ids: t.Iterable[SnapshotIdLike]) -> t.Set[SnapshotId]:
