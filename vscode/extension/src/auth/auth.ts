@@ -8,7 +8,7 @@ import {
   EventEmitter,
   window,
 } from 'vscode'
-import { get_tcloud_bin } from '../utilities/sqlmesh/sqlmesh'
+import { getTcloudBin } from '../utilities/sqlmesh/sqlmesh'
 import { err, isErr, ok, Result } from '@bus/result'
 import { execAsync } from '../utilities/exec'
 import { getProjectRoot } from '../utilities/common/utilities'
@@ -66,7 +66,7 @@ export class AuthenticationProviderTobikoCloud
    */
   private async get_status(): Promise<Result<StatusResponse, string>> {
     const workspacePath = await getProjectRoot()
-    const tcloudBin = await get_tcloud_bin()
+    const tcloudBin = await getTcloudBin()
     if (isErr(tcloudBin)) {
       return err(tcloudBin.error)
     }
@@ -146,7 +146,7 @@ export class AuthenticationProviderTobikoCloud
   async removeSession(): Promise<void> {
     // Get current sessions before logging out
     const currentSessions = await this.getSessions()
-    const tcloudBin = await get_tcloud_bin()
+    const tcloudBin = await getTcloudBin()
     const workspacePath = await getProjectRoot()
     if (isErr(tcloudBin)) {
       throw new Error('Failed to get tcloud bin')
@@ -171,7 +171,7 @@ export class AuthenticationProviderTobikoCloud
 
   async sign_in_oauth_flow(): Promise<void> {
     const workspacePath = await getProjectRoot()
-    const tcloudBin = await get_tcloud_bin()
+    const tcloudBin = await getTcloudBin()
     if (isErr(tcloudBin)) {
       throw new Error('Failed to get tcloud bin')
     }
@@ -267,7 +267,7 @@ export class AuthenticationProviderTobikoCloud
 
   async sign_in_device_flow(): Promise<void> {
     const workspacePath = await getProjectRoot()
-    const tcloudBin = await get_tcloud_bin()
+    const tcloudBin = await getTcloudBin()
     if (isErr(tcloudBin)) {
       throw new Error('Failed to get tcloud bin')
     }

@@ -25,4 +25,3 @@ The extension allows you to:
 ### Linting
 
 The extension allows you to see linting errors and warnings inline.
-

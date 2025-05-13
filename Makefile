@@ -16,7 +16,7 @@ py-style:
 	SKIP=prettier,eslint pre-commit run --all-files
 
 ui-style:
-	npm run lint
+	pnpm run lint
 
 doc-test:
 	python -m pytest --doctest-modules sqlmesh/core sqlmesh/utils
@@ -178,3 +178,7 @@ athena-test: guard-AWS_ACCESS_KEY_ID guard-AWS_SECRET_ACCESS_KEY guard-ATHENA_S3
 vscode_settings:
 	mkdir -p .vscode
 	cp -r ./tooling/vscode/*.json .vscode/
+
+vscode-generate-openapi:
+	python3 web/server/openapi.py --output vscode/extension/openapi.json
+	cd vscode/react && pnpm run generate:api
