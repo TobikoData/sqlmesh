@@ -36,7 +36,7 @@
     "@uiw/react-codemirror": "^4.21.12",
     "apache-arrow": "^19.0.0",
     "clsx": "^2.0.0",
-    "diff": "^5.2.0",
+    "diff": "^8.0.0",
     "elkjs": "^0.8.2",
     "pluralize": "^8.0.0",
     "react": "^18.2.0",
