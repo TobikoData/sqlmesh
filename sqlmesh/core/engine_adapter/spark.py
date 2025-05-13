@@ -279,10 +279,16 @@ class SparkEngineAdapter(
     ) -> PySparkDataFrame:
         pyspark_df = self.try_get_pyspark_df(generic_df)
         if pyspark_df:
+            if columns_to_types:
+                # ensure Spark dataframe column order matches columns_to_types
+                pyspark_df = pyspark_df.select(*columns_to_types)
             return pyspark_df
         df = self.try_get_pandas_df(generic_df)
         if df is None:
             raise SQLMeshError("Ensure PySpark DF can only be run on a PySpark or Pandas DataFrame")
+        if columns_to_types:
+            # ensure Pandas dataframe column order matches columns_to_types
+            df = df[list(columns_to_types)]
         kwargs = (
             dict(schema=self.sqlglot_to_spark_types(columns_to_types)) if columns_to_types else {}
         )

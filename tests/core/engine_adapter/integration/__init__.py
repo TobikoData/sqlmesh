@@ -359,7 +359,7 @@ class TestContext:
                 FROM pg_class c
                 INNER JOIN pg_description d ON c.oid = d.objoid AND d.objsubid = 0
                 INNER JOIN pg_namespace n ON c.relnamespace = n.oid
-                WHERE 
+                WHERE
                     c.relname = '{table_name}'
                     AND n.nspname= '{schema_name}'
                     AND c.relkind = '{"v" if table_kind == "VIEW" else "r"}'
@@ -465,12 +465,12 @@ class TestContext:
                 INNER JOIN pg_namespace n ON c.relnamespace = n.oid
                 INNER JOIN pg_attribute a ON c.oid = a.attrelid
                 INNER JOIN pg_description d
-                ON 
+                ON
                     a.attnum = d.objsubid
                     AND d.objoid = c.oid
                 WHERE
                     n.nspname = '{schema_name}'
-                    AND c.relname = '{table_name}' 
+                    AND c.relname = '{table_name}'
                     AND c.relkind = '{"v" if table_kind == "VIEW" else "r"}'
                 ;
             """
@@ -494,6 +494,7 @@ class TestContext:
         self,
         config_mutator: t.Optional[t.Callable[[str, Config], None]] = None,
         path: t.Optional[pathlib.Path] = None,
+        ephemeral_state_connection: bool = True,
     ) -> Context:
         private_sqlmesh_dir = pathlib.Path(pathlib.Path().home(), ".sqlmesh")
         config = load_config_from_paths(
@@ -509,14 +510,12 @@ class TestContext:
         config.gateways = {self.gateway: config.gateways[self.gateway]}
 
         gateway_config = config.gateways[self.gateway]
-        if (
-            (sc := gateway_config.state_connection)
-            and (conn := gateway_config.connection)
-            and sc.type_ == "duckdb"
-        ):
-            # if duckdb is being used as the state connection, set concurrent_tasks=1 on the main connection
-            # to prevent duckdb from being accessed from multiple threads and getting deadlocked
-            conn.concurrent_tasks = 1
+        if ephemeral_state_connection:
+            # Override whatever state connection has been configured on the integration test config to use in-memory DuckDB instead
+            # This is so tests that initialize a SQLMesh context can run concurrently without clobbering each others state
+            from sqlmesh.core.config.connection import DuckDBConnectionConfig
+
+            gateway_config.state_connection = DuckDBConnectionConfig()
 
         if "athena" in self.gateway:
             conn = gateway_config.connection

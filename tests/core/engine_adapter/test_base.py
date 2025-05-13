@@ -966,7 +966,7 @@ MERGE INTO "target" AS "__MERGE_TARGET__" USING (
 def test_merge_upsert_pandas(make_mocked_engine_adapter: t.Callable):
     adapter = make_mocked_engine_adapter(EngineAdapter)
 
-    df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+    df = pd.DataFrame({"id": [1, 2, 3], "ts": [4, 5, 6], "val": [1, 2, 3]})
     adapter.merge(
         target_table="target",
         source_table=df,
@@ -978,7 +978,7 @@ def test_merge_upsert_pandas(make_mocked_engine_adapter: t.Callable):
         unique_key=[exp.to_identifier("id")],
     )
     adapter.cursor.execute.assert_called_once_with(
-        'MERGE INTO "target" AS "__MERGE_TARGET__" USING (SELECT CAST("id" AS INT) AS "id", CAST("ts" AS TIMESTAMP) AS "ts", CAST("val" AS INT) AS "val" FROM (VALUES (1, 4), (2, 5), (3, 6)) AS "t"("id", "ts", "val")) AS "__MERGE_SOURCE__" ON "__MERGE_TARGET__"."id" = "__MERGE_SOURCE__"."id" '
+        'MERGE INTO "target" AS "__MERGE_TARGET__" USING (SELECT CAST("id" AS INT) AS "id", CAST("ts" AS TIMESTAMP) AS "ts", CAST("val" AS INT) AS "val" FROM (VALUES (1, 4, 1), (2, 5, 2), (3, 6, 3)) AS "t"("id", "ts", "val")) AS "__MERGE_SOURCE__" ON "__MERGE_TARGET__"."id" = "__MERGE_SOURCE__"."id" '
         'WHEN MATCHED THEN UPDATE SET "__MERGE_TARGET__"."id" = "__MERGE_SOURCE__"."id", "__MERGE_TARGET__"."ts" = "__MERGE_SOURCE__"."ts", "__MERGE_TARGET__"."val" = "__MERGE_SOURCE__"."val" '
         'WHEN NOT MATCHED THEN INSERT ("id", "ts", "val") VALUES ("__MERGE_SOURCE__"."id", "__MERGE_SOURCE__"."ts", "__MERGE_SOURCE__"."val")'
     )
@@ -995,7 +995,7 @@ def test_merge_upsert_pandas(make_mocked_engine_adapter: t.Callable):
         unique_key=[exp.to_identifier("id"), exp.to_identifier("ts")],
     )
     adapter.cursor.execute.assert_called_once_with(
-        'MERGE INTO "target" AS "__MERGE_TARGET__" USING (SELECT CAST("id" AS INT) AS "id", CAST("ts" AS TIMESTAMP) AS "ts", CAST("val" AS INT) AS "val" FROM (VALUES (1, 4), (2, 5), (3, 6)) AS "t"("id", "ts", "val")) AS "__MERGE_SOURCE__" ON "__MERGE_TARGET__"."id" = "__MERGE_SOURCE__"."id" AND "__MERGE_TARGET__"."ts" = "__MERGE_SOURCE__"."ts" '
+        'MERGE INTO "target" AS "__MERGE_TARGET__" USING (SELECT CAST("id" AS INT) AS "id", CAST("ts" AS TIMESTAMP) AS "ts", CAST("val" AS INT) AS "val" FROM (VALUES (1, 4, 1), (2, 5, 2), (3, 6, 3)) AS "t"("id", "ts", "val")) AS "__MERGE_SOURCE__" ON "__MERGE_TARGET__"."id" = "__MERGE_SOURCE__"."id" AND "__MERGE_TARGET__"."ts" = "__MERGE_SOURCE__"."ts" '
         'WHEN MATCHED THEN UPDATE SET "__MERGE_TARGET__"."id" = "__MERGE_SOURCE__"."id", "__MERGE_TARGET__"."ts" = "__MERGE_SOURCE__"."ts", "__MERGE_TARGET__"."val" = "__MERGE_SOURCE__"."val" '
         'WHEN NOT MATCHED THEN INSERT ("id", "ts", "val") VALUES ("__MERGE_SOURCE__"."id", "__MERGE_SOURCE__"."ts", "__MERGE_SOURCE__"."val")'
     )
@@ -1175,23 +1175,23 @@ def test_merge_filter(make_mocked_engine_adapter: t.Callable, assert_exp_eq):
         """
 MERGE INTO "target" AS "__MERGE_TARGET__"
 USING (
-    SELECT "ID", "ts", "val" 
+    SELECT "ID", "ts", "val"
     FROM "source"
 ) AS "__MERGE_SOURCE__"
 ON (
-    "__MERGE_SOURCE__"."ID" > 0 
+    "__MERGE_SOURCE__"."ID" > 0
     AND "__MERGE_TARGET__"."ts" < TIMESTAMP("2020-02-05")
 )
 AND "__MERGE_TARGET__"."ID" = "__MERGE_SOURCE__"."ID"
-WHEN MATCHED THEN 
-    UPDATE SET 
+WHEN MATCHED THEN
+    UPDATE SET
         "__MERGE_TARGET__"."val" = "__MERGE_SOURCE__"."val",
         "__MERGE_TARGET__"."ts" = COALESCE("__MERGE_SOURCE__"."ts", "__MERGE_TARGET__"."ts")
-WHEN NOT MATCHED THEN 
-    INSERT ("ID", "ts", "val") 
+WHEN NOT MATCHED THEN
+    INSERT ("ID", "ts", "val")
     VALUES (
-        "__MERGE_SOURCE__"."ID", 
-        "__MERGE_SOURCE__"."ts", 
+        "__MERGE_SOURCE__"."ID",
+        "__MERGE_SOURCE__"."ts",
         "__MERGE_SOURCE__"."val"
     );
 """,
@@ -1585,7 +1585,11 @@ def test_merge_scd_type_2_pandas(make_mocked_engine_adapter: t.Callable):
             "id2": [4, 5, 6],
             "name": ["muffins", "chips", "soda"],
             "price": [4.0, 5.0, 6.0],
-            "updated_at": ["2020-01-01 10:00:00", "2020-01-02 15:00:00", "2020-01-03 12:00:00"],
+            "test_updated_at": [
+                "2020-01-01 10:00:00",
+                "2020-01-02 15:00:00",
+                "2020-01-03 12:00:00",
+            ],
         }
     )
     adapter.scd_type_2_by_time(

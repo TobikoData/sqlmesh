@@ -433,3 +433,50 @@ def test_table_diff_table_name_matches_column_name(ctx: TestContext):
 
     assert row_diff.stats["join_count"] == 1
     assert row_diff.full_match_count == 1
+
+
+def test_bigframe_python_model_column_order(ctx: TestContext, tmp_path: Path):
+    model_name = ctx.table("TEST")
+
+    (tmp_path / "models").mkdir()
+
+    # note: this model deliberately defines the columns in the @model definition to be in a different order than what
+    # is returned by the DataFrame within the model
+    model_path = tmp_path / "models" / "python_model.py"
+
+    # python model that emits a BigFrame dataframe
+    model_path.write_text(
+        """
+from bigframes.pandas import DataFrame
+import typing as t
+from sqlmesh import ExecutionContext, model
+
+@model(
+    'MODEL_NAME',
+    columns={
+        "id": "int",
+        "name": "varchar"
+    },
+    dialect="bigquery"
+)
+def execute(
+    context: ExecutionContext,
+    **kwargs: t.Any,
+) -> DataFrame:
+    return DataFrame({'name': ['foo'], 'id': [1]}, session=context.bigframe)
+""".replace("MODEL_NAME", model_name.sql(dialect="bigquery"))
+    )
+
+    sqlmesh_ctx = ctx.create_context(path=tmp_path)
+
+    assert len(sqlmesh_ctx.models) == 1
+
+    plan = sqlmesh_ctx.plan(auto_apply=True)
+    assert len(plan.new_snapshots) == 1
+
+    engine_adapter = sqlmesh_ctx.engine_adapter
+
+    query = exp.select("*").from_(model_name)
+    df = engine_adapter.fetchdf(query, quote_identifiers=True)
+    assert len(df) == 1
+    assert df.iloc[0].to_dict() == {"id": 1, "name": "foo"}
