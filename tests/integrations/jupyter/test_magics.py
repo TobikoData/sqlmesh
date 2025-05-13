@@ -344,7 +344,7 @@ def test_run_dag(
     actual_html_output = get_all_html_output(output)
     # Replace dynamic elapsed time with 00
     for i, chunk in enumerate(actual_html_output):
-        pattern = 'font\-weight: bold">0\.</span>\\d{2}s   </pre>'
+        pattern = r'font-weight: bold">0.</span>\d{2}s   </pre>'
         import re
 
         actual_html_output[i] = re.sub(pattern, 'font-weight: bold">0.</span>00s   </pre>', chunk)
