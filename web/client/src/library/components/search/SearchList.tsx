@@ -9,7 +9,7 @@ import {
 } from '@utils/index'
 import { EnumSize, type Size } from '~/types/enum'
 import { EMPTY_STRING, filterListBy, highlightMatch } from './help'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router'
 import clsx from 'clsx'
 import { Popover, Transition } from '@headlessui/react'
 import { useClickAway } from '@uidotdev/usehooks'

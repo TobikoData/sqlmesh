@@ -1,4 +1,4 @@
-import { type RouteObject, createBrowserRouter } from 'react-router-dom'
+import { type RouteObject, createBrowserRouter } from 'react-router'
 import { Suspense, lazy } from 'react'
 import NotFound from './library/pages/root/NotFound'
 import Loading from '@components/loading/Loading'

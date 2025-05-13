@@ -1,6 +1,6 @@
 import { isNotNil } from '@utils/index'
 import clsx from 'clsx'
-import { NavLink } from 'react-router-dom'
+import { NavLink } from 'react-router'
 import { EnumVariant, type Variant } from '~/types/enum'
 
 export default function SourceListItem({

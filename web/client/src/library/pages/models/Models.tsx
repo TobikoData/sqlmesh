@@ -1,4 +1,4 @@
-import { Outlet, useLocation, useNavigate, useParams } from 'react-router-dom'
+import { Outlet, useLocation, useNavigate, useParams } from 'react-router'
 import { useEffect, useMemo } from 'react'
 import {
   isArrayEmpty,
