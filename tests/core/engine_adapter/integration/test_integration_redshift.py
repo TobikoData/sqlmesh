@@ -1,19 +1,30 @@
 import typing as t
 import pytest
+from pytest import FixtureRequest
 from tests.core.engine_adapter.integration import TestContext
+from sqlmesh.core.engine_adapter.redshift import RedshiftEngineAdapter
 from sqlglot import exp
 
-pytestmark = [pytest.mark.remote, pytest.mark.engine, pytest.mark.redshift]
+from tests.core.engine_adapter.integration import (
+    TestContext,
+    generate_pytest_params,
+    ENGINES_BY_NAME,
+    IntegrationTestEngine,
+)
+
+
+@pytest.fixture(params=list(generate_pytest_params(ENGINES_BY_NAME["redshift"])))
+def ctx(
+    request: FixtureRequest,
+    create_test_context: t.Callable[[IntegrationTestEngine, str, str], t.Iterable[TestContext]],
+) -> t.Iterable[TestContext]:
+    yield from create_test_context(*request.param)
 
 
 @pytest.fixture
-def mark_gateway() -> t.Tuple[str, str]:
-    return "redshift", "inttest_redshift"
-
-
-@pytest.fixture
-def test_type() -> str:
-    return "query"
+def engine_adapter(ctx: TestContext) -> RedshiftEngineAdapter:
+    assert isinstance(ctx.engine_adapter, RedshiftEngineAdapter)
+    return ctx.engine_adapter
 
 
 def test_columns(ctx: TestContext):

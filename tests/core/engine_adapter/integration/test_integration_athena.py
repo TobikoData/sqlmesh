@@ -1,25 +1,33 @@
 import typing as t
 import pytest
+from pytest import FixtureRequest
 import pandas as pd
 import datetime
 from sqlmesh.core.engine_adapter import AthenaEngineAdapter
 from sqlmesh.utils.aws import parse_s3_uri
 from sqlmesh.utils.pandas import columns_to_types_from_df
 from sqlmesh.utils.date import to_ds, to_ts, TimeLike
-from tests.core.engine_adapter.integration import TestContext
+from tests.core.engine_adapter.integration import (
+    TestContext,
+    generate_pytest_params,
+    ENGINES_BY_NAME,
+    IntegrationTestEngine,
+)
 from sqlglot import exp
 
-pytestmark = [pytest.mark.remote, pytest.mark.engine, pytest.mark.athena]
+
+@pytest.fixture(params=list(generate_pytest_params(ENGINES_BY_NAME["athena"])))
+def ctx(
+    request: FixtureRequest,
+    create_test_context: t.Callable[[IntegrationTestEngine, str, str], t.Iterable[TestContext]],
+) -> t.Iterable[TestContext]:
+    yield from create_test_context(*request.param)
 
 
 @pytest.fixture
-def mark_gateway() -> t.Tuple[str, str]:
-    return "athena", "inttest_athena"
-
-
-@pytest.fixture
-def test_type() -> str:
-    return "query"
+def engine_adapter(ctx: TestContext) -> AthenaEngineAdapter:
+    assert isinstance(ctx.engine_adapter, AthenaEngineAdapter)
+    return ctx.engine_adapter
 
 
 @pytest.fixture

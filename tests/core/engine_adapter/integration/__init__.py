@@ -22,12 +22,129 @@ from sqlmesh.utils import random_id
 from sqlmesh.utils.date import to_ds
 from sqlmesh.utils.pydantic import PydanticModel
 from tests.utils.pandas import compare_dataframes
+from dataclasses import dataclass
+from _pytest.mark import MarkDecorator
+from _pytest.mark.structures import ParameterSet
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import TableName
     from sqlmesh.core.engine_adapter._typing import Query
 
 TEST_SCHEMA = "test_schema"
+
+
+@dataclass
+class IntegrationTestEngine:
+    engine: str
+    catalog_types: t.Optional[t.List[str]] = None
+    native_dataframe_type: t.Optional[str] = None
+    cloud: bool = False
+
+    @property
+    def dialect(self) -> str:
+        return self.engine.split("_", maxsplit=1)[0]
+
+    @property
+    def pytest_marks(self) -> t.List[MarkDecorator]:
+        marks = [getattr(pytest.mark, self.engine), pytest.mark.engine]
+        if self.cloud:
+            marks.append(pytest.mark.remote)
+        else:
+            marks.append(pytest.mark.docker)
+        if self.engine == "duckdb":
+            marks.extend(
+                [
+                    # run the duckdb tests in `make cicd-test` as well
+                    pytest.mark.slow,
+                    # the duckdb tests cannot run concurrently because many of them point at the same files
+                    # and duckdb does not support multi process read/write on the same files
+                    # ref: https://duckdb.org/docs/connect/concurrency.html#writing-to-duckdb-from-multiple-processes
+                    pytest.mark.xdist_group("engine_integration_duckdb"),
+                ]
+            )
+        return marks
+
+
+ENGINES = [
+    # Docker engines that can be locally tested
+    IntegrationTestEngine("duckdb"),
+    IntegrationTestEngine("postgres"),
+    IntegrationTestEngine("mysql"),
+    IntegrationTestEngine("mssql"),
+    IntegrationTestEngine("trino", catalog_types=["hive", "iceberg", "delta", "nessie"]),
+    IntegrationTestEngine("spark", native_dataframe_type="pyspark"),
+    IntegrationTestEngine("clickhouse", catalog_types=["standalone", "cluster"]),
+    IntegrationTestEngine("risingwave"),
+    # Cloud engines that need paid accounts / special credentials
+    IntegrationTestEngine("clickhouse_cloud", cloud=True),
+    IntegrationTestEngine("redshift", cloud=True),
+    IntegrationTestEngine("athena", catalog_types=["hive", "iceberg"], cloud=True),
+    IntegrationTestEngine("bigquery", native_dataframe_type="bigframe", cloud=True),
+    IntegrationTestEngine("databricks", native_dataframe_type="pyspark", cloud=True),
+    IntegrationTestEngine("snowflake", native_dataframe_type="snowpark", cloud=True),
+]
+
+ENGINES_BY_NAME = {e.engine: e for e in ENGINES}
+
+
+def generate_pytest_params(
+    engines: t.Union[IntegrationTestEngine, t.List[IntegrationTestEngine]],
+    query: bool = True,
+    df: bool = False,
+    show_variant_in_test_id: bool = True,
+) -> t.Iterable[ParameterSet]:
+    """
+    The engine adapter tests have a bunch of variants:
+     - Per engine for engines that dont have pluggable catalogs
+     - Per engine per catalog type for engines that have pluggable catalogs
+
+    In addition, many engine adapter functions take either a SQL Query or a DataFrame so we need to test both combinations.
+    For the methods that take a DataFrame:
+     - Every engine takes a Pandas DataFrame
+     - A small subset of engines also take their own engine-specific DataFrame (eg Bigframe, Snowpark, Pyspark)
+
+    This function controls the parameter generation so that:
+     - Tests that only need to test SQL queries only get called once per engine/catalog
+     - Tests that only need to test DataFrame's get called once for Pandas Dataframe's and once for each engine-specific DataFrame
+     - Tests that need to test both SQL Queries and DataFrame's get called once for every combination of (engine, catalog, *(query, pandas df, native df))
+
+    The goal is to prevent needing to code this kind of logic into tests:
+
+    > if test_type == "df":
+    >    pytest.skip("Test only needs to run for query")
+
+    As well as make it easier to generate the right combinations for new databases / catalogs / DataFrame implementations
+    """
+    if not isinstance(engines, list):
+        engines = [engines]
+
+    for engine in engines:
+        catalogs = engine.catalog_types if engine.catalog_types else [""]
+        for catalog in catalogs:
+            gateway = (
+                f"inttest_{engine.engine}_{catalog}" if catalog else f"inttest_{engine.engine}"
+            )
+            if engine.engine == "athena":
+                # athena only has a single gateway defined, not a gateway per catalog
+                gateway = f"inttest_athena"
+
+            variants = []
+            if query:
+                variants.append("query")
+            if df:
+                variants.append("df-pandas")
+                if engine.native_dataframe_type:
+                    variants.append(f"df-{engine.native_dataframe_type}")
+
+            test_id = f"{engine.engine}_{catalog}" if catalog else f"{engine.engine}"
+            default_table_format = catalog
+
+            for variant in variants:
+                yield pytest.param(
+                    (engine, gateway, variant, default_table_format),
+                    marks=engine.pytest_marks,
+                    id=f"[{variant}]{test_id}" if show_variant_in_test_id else test_id,
+                )
 
 
 class MetadataResults(PydanticModel):
@@ -77,7 +194,7 @@ class TestContext:
         is_remote: bool = False,
         columns_to_types: t.Optional[t.Dict[str, t.Union[str, exp.DataType]]] = None,
     ):
-        self.test_type = test_type
+        self._test_type = test_type
         self.engine_adapter = engine_adapter
         self.mark = mark
         self.gateway = gateway
@@ -88,6 +205,17 @@ class TestContext:
         self._schemas: t.List[
             str
         ] = []  # keep track of any schemas returned from self.schema() / self.table() so we can drop them at the end
+
+    @property
+    def test_type(self) -> str:
+        return "df" if self._test_type.startswith("df") else "query"
+
+    @property
+    def df_type(self) -> t.Optional[str]:
+        if self.test_type == "df":
+            # the 'pandas' part of 'df-pandas'
+            return self._test_type.split("-", maxsplit=1)[1]
+        return None
 
     @property
     def columns_to_types(self):
@@ -176,7 +304,13 @@ class TestContext:
 
     def get_metadata_results(self, schema: t.Optional[str] = None) -> MetadataResults:
         schema = schema if schema else self.schema(TEST_SCHEMA)
-        return MetadataResults.from_data_objects(self.engine_adapter.get_data_objects(schema))
+        results = MetadataResults.from_data_objects(self.engine_adapter.get_data_objects(schema))
+        if self.dialect == "snowflake" and self.test_type == "df":
+            # The Snowpark library manages the lifecycle of the SNOWPARK_TEMP_TABLE_* tables and drops them at the end of the session
+            # Our paramterized tests are just checking for tables *we* manage so including the Snowpark tables gives off-by-one errors
+            # when asserting table counts
+            results.tables = [t for t in results.tables if not t.startswith("SNOWPARK_TEMP_TABLE")]
+        return results
 
     def _init_engine_adapter(self) -> None:
         schema = self.schema(TEST_SCHEMA)
@@ -193,7 +327,7 @@ class TestContext:
         return data
 
     def init(self):
-        if self.test_type == "pyspark" and not hasattr(self.engine_adapter, "is_pyspark_df"):
+        if self.df_type == "pyspark" and not hasattr(self.engine_adapter, "is_pyspark_df"):
             pytest.skip(f"Engine adapter {self.engine_adapter} doesn't support pyspark")
         self._init_engine_adapter()
 
@@ -210,9 +344,20 @@ class TestContext:
                 batch_end=sys.maxsize,
                 columns_to_types=columns_to_types,
             )
-        if self.test_type == "pyspark":
-            return self.engine_adapter.spark.createDataFrame(data)  # type: ignore
-        return self._format_df(data, to_datetime=self.dialect != "trino")
+        if self.test_type == "df":
+            formatted_df = self._format_df(data, to_datetime=self.dialect != "trino")
+            if self.df_type == "pandas":
+                return formatted_df
+            if self.df_type == "pyspark":
+                return self.engine_adapter.spark.createDataFrame(formatted_df)  # type: ignore
+            if self.df_type == "bigframe":
+                return self.engine_adapter.bigframe.read_pandas(formatted_df)  # type: ignore
+            if self.df_type == "snowpark":
+                return self.engine_adapter.snowpark.create_dataframe(formatted_df)  # type: ignore
+
+            raise ValueError(f"Unknown DF type: {self.df_type}")
+
+        raise ValueError(f"Unknown test type: {self.test_type}")
 
     def output_data(self, data: pd.DataFrame) -> pd.DataFrame:
         return self._format_df(data)

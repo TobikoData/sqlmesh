@@ -27,13 +27,20 @@ PANDAS_TYPE_MAPPINGS = {
     pd.Float32Dtype(): exp.DataType.build("float"),
     pd.Float64Dtype(): exp.DataType.build("double"),
     pd.StringDtype(): exp.DataType.build("text"),  # type: ignore
+    pd.StringDtype("pyarrow"): exp.DataType.build("text"),
     pd.BooleanDtype(): exp.DataType.build("boolean"),
 }
 
 
 def columns_to_types_from_df(df: pd.DataFrame) -> t.Dict[str, exp.DataType]:
+    return columns_to_types_from_dtypes(df.dtypes.items())
+
+
+def columns_to_types_from_dtypes(
+    dtypes: t.Iterable[t.Tuple[t.Hashable, t.Any]],
+) -> t.Dict[str, exp.DataType]:
     result = {}
-    for column_name, column_type in df.dtypes.items():
+    for column_name, column_type in dtypes:
         exp_type: t.Optional[exp.DataType] = None
         if hasattr(pd, "DatetimeTZDtype") and isinstance(column_type, pd.DatetimeTZDtype):
             exp_type = exp.DataType.build("timestamptz")
