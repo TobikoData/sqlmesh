@@ -241,18 +241,16 @@ def execute(
     context.resolve_table("docs_example.another_dependency")
 ```
 
-User-defined [global variables](global-variables) can also be used in `resolve_table` calls, as long as the `depends_on` keyword argument is present and contains the required dependencies. This is shown in the following example:
+User-defined [global variables](global-variables) or [blueprint variables](#python-model-blueprinting) can also be used in `resolve_table` calls, as shown in the following example (similarly for `blueprint_var()`):
 
 ```python linenums="1"
 @model(
     "@schema_name.test_model2",
     kind="FULL",
     columns={"id": "INT"},
-    depends_on=["@schema_name.test_model1"],
 )
 def execute(context, **kwargs):
-    schema_name = context.var("schema_name")
-    table = context.resolve_table(f"{schema_name}.test_model1")
+    table = context.resolve_table(f"{context.var('schema_name')}.test_model1")
     select_query = exp.select("*").from_(table)
     return context.fetchdf(select_query)
 ```

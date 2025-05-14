@@ -2286,7 +2286,13 @@ def create_python_model(
     dependencies_unspecified = depends_on is None
 
     parsed_depends_on, referenced_variables = (
-        parse_dependencies(python_env, entrypoint, strict_resolution=dependencies_unspecified)
+        parse_dependencies(
+            python_env,
+            entrypoint,
+            strict_resolution=dependencies_unspecified,
+            variables=variables,
+            blueprint_variables=blueprint_variables,
+        )
         if python_env is not None
         else (set(), set())
     )

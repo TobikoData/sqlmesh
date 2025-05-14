@@ -145,6 +145,8 @@ def _add_variables_to_python_env(
         python_env,
         None,
         strict_resolution=strict_resolution,
+        variables=variables,
+        blueprint_variables=blueprint_variables,
     )
     used_variables = (used_variables or set()) | python_used_variables
 
@@ -163,7 +165,11 @@ def _add_variables_to_python_env(
 
 
 def parse_dependencies(
-    python_env: t.Dict[str, Executable], entrypoint: t.Optional[str], strict_resolution: bool = True
+    python_env: t.Dict[str, Executable],
+    entrypoint: t.Optional[str],
+    strict_resolution: bool = True,
+    variables: t.Optional[t.Dict[str, t.Any]] = None,
+    blueprint_variables: t.Optional[t.Dict[str, t.Any]] = None,
 ) -> t.Tuple[t.Set[str], t.Set[str]]:
     """
     Parses the source of a model function and finds upstream table dependencies
@@ -174,13 +180,29 @@ def parse_dependencies(
         entrypoint: The name of the function.
         strict_resolution: If true, the arguments of `table` and `resolve_table` calls must
             be resolvable at parse time, otherwise an exception will be raised.
+        variables: The variables available to the python environment.
+        blueprint_variables: The blueprint variables available to the python environment.
 
     Returns:
         A tuple containing the set of upstream table dependencies and the set of referenced variables.
     """
+
+    class VariableResolutionContext:
+        """This enables calls like `resolve_table` to reference `var()` and `blueprint_var()`."""
+
+        @staticmethod
+        def var(var_name: str, default: t.Optional[t.Any] = None) -> t.Optional[t.Any]:
+            return (variables or {}).get(var_name.lower(), default)
+
+        @staticmethod
+        def blueprint_var(var_name: str, default: t.Optional[t.Any] = None) -> t.Optional[t.Any]:
+            return (blueprint_variables or {}).get(var_name.lower(), default)
+
     env = prepare_env(python_env)
+    local_env = dict.fromkeys(("context", "evaluator"), VariableResolutionContext)
+
     depends_on = set()
-    variables = set()
+    used_variables = set()
 
     for executable in python_env.values():
         if not executable.is_definition:
@@ -206,7 +228,7 @@ def parse_dependencies(
 
                     try:
                         expression = to_source(first_arg)
-                        return eval(expression, env)
+                        return eval(expression, env, local_env)
                     except Exception:
                         if strict_resolution:
                             raise ConfigError(
@@ -217,7 +239,7 @@ def parse_dependencies(
                 if func.value.id == "context" and func.attr in ("table", "resolve_table"):
                     depends_on.add(get_first_arg("model_name"))
                 elif func.value.id in ("context", "evaluator") and func.attr == c.VAR:
-                    variables.add(get_first_arg("var_name").lower())
+                    used_variables.add(get_first_arg("var_name").lower())
             elif (
                 isinstance(node, ast.Attribute)
                 and isinstance(node.value, ast.Name)
@@ -225,9 +247,9 @@ def parse_dependencies(
                 and node.attr == c.GATEWAY
             ):
                 # Check whether the gateway attribute is referenced.
-                variables.add(c.GATEWAY)
+                used_variables.add(c.GATEWAY)
             elif isinstance(node, ast.FunctionDef) and node.name == entrypoint:
-                variables.update(
+                used_variables.update(
                     [
                         arg.arg
                         for arg in [*node.args.args, *node.args.kwonlyargs]
@@ -235,7 +257,7 @@ def parse_dependencies(
                     ]
                 )
 
-    return depends_on, variables
+    return depends_on, used_variables
 
 
 def single_value_or_tuple(values: t.Sequence) -> exp.Identifier | exp.Tuple:
