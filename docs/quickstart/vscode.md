@@ -1,6 +1,6 @@
 # Visual Studio Code Extension
 
-> The extension is currently in **preview** and as such is subject to change. You may also encoutnter bugs and api incompatibilities with the SQLMesh version you are running.  We encourage you to try it and raise any issues [here](https://github.com/tobikodata/sqlmesh/issues).
+> The extension is currently in **preview** and as such is subject to change. You may also encounter bugs and api incompatibilities with the SQLMesh version you are running.  We encourage you to try it and raise any issues [here](https://github.com/tobikodata/sqlmesh/issues).
 
 In this quickstart guide, you'll set up the SQLMesh extension in Visual Studio Code, we'll show you the capabilities of the extension and how to troubleshoot common issues. 
 
@@ -10,11 +10,11 @@ Installation is done through the VSCode extension marketplace, search for `SQLMe
 
 ### Recommended setup
 
-While installing the extension is simple, setting up a python environmnt correctly is a bit more involved. We do recommend using a dedicated *python virtual environment* to install SQLMesh. For a complete guide visit the [python documentation](https://docs.python.org/3/library/venv.html) but the following steps will create the virtual environment, activate it and install SQLMesh for both a SQLMesh core setup and a Tobiko Cloud setup.
+While installing the extension is simple, setting up a python environment correctly is a bit more involved. We do recommend using a dedicated *python virtual environment* to install SQLMesh. For a complete guide visit the [python documentation](https://docs.python.org/3/library/venv.html) but the following steps will create the virtual environment, activate it and install SQLMesh for both a SQLMesh core setup and a Tobiko Cloud setup.
 
 #### SQLMesh Core
 
- but as a summary you can do the following, which will create the virtual environment, activate it and install SQLMesh:
+For SQLMesh core, you can create a virtual environment, activate it and install SQLMesh as follows:
 
 ```bash
 python -m venv .venv
@@ -44,7 +44,7 @@ Once you have the virtual environment, you can make sure that Visual Studio Code
 
 ![Select interpreter](./vscode/select_interpreter.png)
 
-You can use the `tcloud` commands in your terminal to do the operations as usual or the extension exposes the same commands through the command pallette under the following commands: 
+You can use the `tcloud` commands in your terminal to do the operations as usual, or the extension exposes the same commands through the command palette under the following commands:
 - `Sign in to Tobiko Cloud`
 - `Sign out of Tobiko Cloud`
 
