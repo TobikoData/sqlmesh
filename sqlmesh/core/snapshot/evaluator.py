@@ -902,7 +902,7 @@ class SnapshotEvaluator:
         if (
             not snapshot.is_paused
             or not snapshot.is_model
-            or deployability_index.is_representative(snapshot)
+            or (deployability_index.is_representative(snapshot) and not snapshot.is_view)
         ):
             return
 
