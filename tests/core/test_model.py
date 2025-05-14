@@ -266,6 +266,142 @@ FROM "memory"."sushi"."marketing" AS "marketing"
     )
 
 
+@time_machine.travel("1996-02-10 00:00:00 UTC")
+@pytest.mark.parametrize(
+    "test_id, condition, union_type, table_count, expected_result",
+    [
+        # Test case 1: Basic conditional union - True condition
+        (
+            "test_1",
+            "@get_date() == '1996-02-10'",
+            "'all'",
+            2,
+            lambda expected_select: f"{expected_select}\nUNION ALL\n{expected_select}\n",
+        ),
+        # Test case 2: False condition - should return just first table
+        (
+            "test_2",
+            "@get_date() > '1996-02-10'",
+            "'all'",
+            2,
+            lambda expected_select: f"{expected_select}\n",
+        ),
+        # Test case 3: Multiple tables in union
+        (
+            "test_3",
+            "@get_date() == '1996-02-10'",
+            "'all'",
+            3,
+            lambda expected_select: f"{expected_select}\nUNION ALL\n{expected_select}\nUNION ALL\n{expected_select}\n",
+        ),
+        # Test case 4: DISTINCT type
+        (
+            "test_4",
+            "@get_date() == '1996-02-10'",
+            "'distinct'",
+            2,
+            lambda expected_select: f"{expected_select}\nUNION\n{expected_select}\n",
+        ),
+        # Test case 5: Complex condition
+        (
+            "test_5",
+            "@get_date() = '1996-02-10' and 1=1 or @get_date() > '1996-02-10'",
+            "'distinct'",
+            2,
+            lambda expected_select: f"{expected_select}\nUNION\n{expected_select}\n",
+        ),
+        # Test case 6: Missing union type (defaults to ALL)
+        (
+            "test_6",
+            "@get_date() == '1996-02-10'",
+            "",
+            2,
+            lambda expected_select: f"{expected_select}\nUNION ALL\n{expected_select}\n",
+        ),
+        # Test case 7: Missing union type AND condition
+        (
+            "test_7",
+            "",
+            "",
+            2,
+            lambda expected_select: f"{expected_select}\nUNION ALL\n{expected_select}\n",
+        ),
+        # Test case 8: Missing union type AND condition multiple tables
+        (
+            "test_8",
+            "",
+            "",
+            3,
+            lambda expected_select: f"{expected_select}\nUNION ALL\n{expected_select}\n\nUNION ALL\n{expected_select}\n",
+        ),
+        # Test case 9: Missing union type AND condition one table
+        (
+            "test_9",
+            "",
+            "",
+            1,
+            lambda expected_select: f"{expected_select}",
+        ),
+        # Test case 10: Union type with one table
+        (
+            "test_10",
+            "",
+            "'distinct'",
+            1,
+            lambda expected_select: f"{expected_select}",
+        ),
+        # Test case 11: Condition with one table
+        (
+            "test_9",
+            "True",
+            "",
+            1,
+            lambda expected_select: f"{expected_select}",
+        ),
+    ],
+)
+def test_model_union_conditional(
+    sushi_context, assert_exp_eq, test_id, condition, union_type, table_count, expected_result
+):
+    @macro()
+    def get_date(evaluator):
+        from sqlmesh.utils.date import now
+
+        return f"'{now().date()}'"
+
+    expected_select = """SELECT
+  CAST("marketing"."customer_id" AS INT) AS "customer_id",
+  CAST("marketing"."status" AS TEXT) AS "status",
+  CAST("marketing"."updated_at" AS TIMESTAMPNTZ) AS "updated_at",
+  CAST("marketing"."valid_from" AS TIMESTAMP) AS "valid_from",
+  CAST("marketing"."valid_to" AS TIMESTAMP) AS "valid_to"
+FROM "memory"."sushi"."marketing" AS "marketing"
+"""
+
+    # Create tables argument list based on table_count
+    tables = ", ".join(["sushi.marketing"] * table_count)
+
+    # Handle the missing union_type case
+    union_type_arg = f", {union_type}" if union_type else ""
+
+    expressions = d.parse(
+        f"""
+        MODEL (
+            name sushi.{test_id},
+            kind FULL,
+        );
+
+        @union({condition}{union_type_arg}, {tables})
+        """
+    )
+    sushi_context.upsert_model(load_sql_based_model(expressions, default_catalog="memory"))
+
+    assert_exp_eq(
+        sushi_context.get_model(f"sushi.{test_id}").render_query(),
+        expected_result(expected_select),
+    )
+
+
 def test_model_validation_union_query():
     expressions = d.parse(
         """

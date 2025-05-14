@@ -970,10 +970,16 @@ def safe_div(_: MacroEvaluator, numerator: exp.Expression, denominator: exp.Expr
 @macro()
 def union(
     evaluator: MacroEvaluator,
-    type_: exp.Literal = exp.Literal.string("ALL"),
-    *tables: exp.Table,
+    *args: exp.Expression,
 ) -> exp.Query:
     """Returns a UNION of the given tables. Only choosing columns that have the same name and type.
+
+    Args:
+        evaluator: MacroEvaluator that invoked the macro
+        args: Variable arguments that can be:
+            - First argument can be a condition (exp.Condition)
+            - A union type ('ALL' or 'DISTINCT') as exp.Literal
+            - Tables (exp.Table)
 
     Example:
         >>> from sqlglot import parse_one
@@ -982,10 +988,35 @@ def union(
         >>> sql = "@UNION('distinct', foo, bar)"
         >>> MacroEvaluator(schema=MappingSchema({"foo": {"a": "int", "b": "string", "c": "string"}, "bar": {"c": "string", "a": "int", "b": "int"}})).transform(parse_one(sql)).sql()
         'SELECT CAST(a AS INT) AS a, CAST(c AS TEXT) AS c FROM foo UNION SELECT CAST(a AS INT) AS a, CAST(c AS TEXT) AS c FROM bar'
+        >>> sql = "@UNION(True, 'distinct', foo, bar)"
+        >>> MacroEvaluator(schema=MappingSchema({"foo": {"a": "int", "b": "string", "c": "string"}, "bar": {"c": "string", "a": "int", "b": "int"}})).transform(parse_one(sql)).sql()
+        'SELECT CAST(a AS INT) AS a, CAST(c AS TEXT) AS c FROM foo UNION SELECT CAST(a AS INT) AS a, CAST(c AS TEXT) AS c FROM bar'
     """
+
+    if not args:
+        raise SQLMeshError("At least one table is required for the @UNION macro.")
+
+    arg_idx = 0
+    # Check for condition
+    condition = evaluator.eval_expression(args[arg_idx])
+    if isinstance(condition, bool):
+        arg_idx += 1
+        if arg_idx >= len(args):
+            raise SQLMeshError("Expected more arguments after the condition of the `@UNION` macro.")
+
+    # Check for union type
+    type_ = exp.Literal.string("ALL")
+    if isinstance(args[arg_idx], exp.Literal):
+        type_ = args[arg_idx]  # type: ignore
+        arg_idx += 1
     kind = type_.name.upper()
     if kind not in ("ALL", "DISTINCT"):
         raise SQLMeshError(f"Invalid type '{type_}'. Expected 'ALL' or 'DISTINCT'.")
+
+    # Remaining args should be tables
+    tables = [
+        exp.to_table(e.sql(evaluator.dialect), dialect=evaluator.dialect) for e in args[arg_idx:]
+    ]
 
     columns = {
         column
@@ -1000,6 +1031,10 @@ def union(
         for column, type_ in evaluator.columns_to_types(tables[0]).items()
         if column in columns
     ]
+
+    # Skip the union if condition is False
+    if condition == False:
+        return exp.select(*projections).from_(tables[0])
 
     return reduce(
         lambda a, b: a.union(b, distinct=kind == "DISTINCT"),  # type: ignore
