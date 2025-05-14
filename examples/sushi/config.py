@@ -41,7 +41,7 @@ config = Config(
     default_gateway="duckdb",
     model_defaults=model_defaults,
     linter=LinterConfig(
-        enabled=True,
+        enabled=False,
         rules=[
             "ambiguousorinvalidcolumn",
             "invalidselectstarexpansion",
