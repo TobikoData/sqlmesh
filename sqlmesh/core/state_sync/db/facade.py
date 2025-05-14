@@ -365,7 +365,7 @@ class EngineAdapterStateSync(StateSync):
 
     def get_snapshots(
         self,
-        snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]],
+        snapshot_ids: t.Iterable[SnapshotIdLike],
     ) -> t.Dict[SnapshotId, Snapshot]:
         """Fetches snapshots from the state.
 
