@@ -183,20 +183,12 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
         from google.cloud.bigquery import QueryJobConfig
 
         query_label = []
-        if "query_label" in properties and isinstance(properties["query_label"], exp.Array):
+        if "query_label" in properties and isinstance(properties["query_label"], exp.Expression):
+            # query_label is a sequence of 2-tuples and validated at load time
             for label_tuple in properties["query_label"].expressions:
-                if (
-                    isinstance(label_tuple, exp.Tuple)
-                    and len(label_tuple.expressions) == 2
-                    and all(isinstance(label, exp.Literal) for label in label_tuple.expressions)
-                ):
-                    query_label.append(
-                        (label_tuple.expressions[0].this, label_tuple.expressions[1].this)
-                    )
-                else:
-                    raise SQLMeshError(
-                        "Invalid query label format. Expected a tuple of two string literals."
-                    )
+                query_label.append(
+                    (label_tuple.expressions[0].this, label_tuple.expressions[1].this)
+                )
 
         if query_label:
             query_label_str = ",".join([":".join(label) for label in query_label])

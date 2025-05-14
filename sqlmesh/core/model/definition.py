@@ -2144,6 +2144,9 @@ def load_sql_based_model(
             path,
         )
 
+    # Validate virtual, physical and session properties
+    _validate_model_properties(meta_fields, path)
+
     common_kwargs = dict(
         pre_statements=pre_statements,
         post_statements=post_statements,
@@ -2632,6 +2635,64 @@ def _validate_model_fields(klass: t.Type[_Model], provided_fields: t.Set[str], p
     extra_fields = klass.extra_fields(provided_fields)
     if extra_fields:
         raise_config_error(f"Invalid extra fields {extra_fields} in the model definition", path)
+
+
+def _validate_model_properties(meta_fields: dict[str, t.Any], path: Path) -> None:
+    # store for later validation of specific properties
+    model_properties: dict[str, t.Any] = {}
+
+    # validate that all properties kinds are key-value mappings
+    for kind in PROPERTIES:
+        if kind in meta_fields:
+            kind_properties = meta_fields[kind]
+            model_properties[kind] = {}
+
+            if not isinstance(kind_properties, (exp.Array, exp.Paren, exp.Tuple)):
+                raise_config_error(
+                    f"Invalid MODEL statement: `{kind}` must be a tuple or array of key-value mappings.",
+                    path,
+                )
+
+            key_value_mappings: t.List[exp.Expression] = (
+                [kind_properties.unnest()]
+                if isinstance(kind_properties, exp.Paren)
+                else kind_properties.expressions
+            )
+
+            for expression in key_value_mappings:
+                if isinstance(expression, exp.EQ):
+                    model_properties[kind][expression.left.name] = expression.right
+                else:
+                    raise_config_error(
+                        f"Invalid MODEL statement: all expressions in `{kind}` must be key-value pairs.",
+                        path,
+                    )
+
+    # The query_label can be attached to the actual queries at execution time and is expected to be a sequence of 2-tuples
+    if (
+        "session_properties" in model_properties
+        and "query_label" in model_properties["session_properties"]
+    ):
+        query_label_property = model_properties["session_properties"]["query_label"]
+        if not (
+            isinstance(query_label_property, exp.Array)
+            or isinstance(query_label_property, exp.Tuple)
+            or isinstance(query_label_property, exp.Paren)
+        ):
+            raise_config_error(
+                "Invalid MODEL statement: `session_properties.query_label` must be an array or tuple.",
+                path,
+            )
+        for label_tuple in query_label_property.expressions:
+            if not (
+                isinstance(label_tuple, exp.Tuple)
+                and len(label_tuple.expressions) == 2
+                and all(isinstance(label, exp.Literal) for label in label_tuple.expressions)
+            ):
+                raise_config_error(
+                    "Invalid MODEL statement: expressions inside `session_properties.query_label` must be tuples of string literals with length 2.",
+                    path,
+                )
 
 
 def _list_of_calls_to_exp(value: t.List[t.Tuple[str, t.Dict[str, t.Any]]]) -> exp.Expression:
