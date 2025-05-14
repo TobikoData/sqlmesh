@@ -383,7 +383,7 @@ def load_audit(
     dialect: t.Optional[str] = None,
     default_catalog: t.Optional[str] = None,
     variables: t.Optional[t.Dict[str, t.Any]] = None,
-    project: str = None,
+    project: t.Optional[str] = None,
 ) -> Audit:
     """Load an audit from a parsed SQLMesh audit file.
 
@@ -484,7 +484,7 @@ def load_multiple_audits(
     dialect: t.Optional[str] = None,
     default_catalog: t.Optional[str] = None,
     variables: t.Optional[t.Dict[str, t.Any]] = None,
-    project: str = None,
+    project: t.Optional[str] = None,
 ) -> t.Generator[Audit, None, None]:
     audit_block: t.List[exp.Expression] = []
     for expression in expressions:
