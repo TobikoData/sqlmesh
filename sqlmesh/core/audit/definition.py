@@ -456,7 +456,8 @@ def load_audit(
             used_variables=used_variables,
         )
         extra_kwargs["default_catalog"] = default_catalog
-        extra_kwargs["project"] = project
+        if project is not None:
+            extra_kwargs["project"] = project
 
     dialect = meta_fields.pop("dialect", dialect)
     try:
