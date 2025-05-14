@@ -28,10 +28,16 @@ const tokenSchema = z.object({
   email: z.string(),
 })
 
-const statusResponseSchema = z.object({
-  is_logged_in: z.boolean(),
-  id_token: tokenSchema.optional().nullable(),
-})
+const statusResponseSchema = z.discriminatedUnion('is_logged_in', [
+  z.object({
+    is_logged_in: z.literal(true),
+    id_token: tokenSchema,
+  }),
+  z.object({
+    is_logged_in: z.literal(false),
+    id_token: z.object({}),
+  }),
+])
 
 type StatusResponse = z.infer<typeof statusResponseSchema>
 
