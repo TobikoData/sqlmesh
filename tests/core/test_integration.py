@@ -4280,6 +4280,28 @@ def test_full_model_change_with_plan_start_not_matching_model_start(
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_indirect_non_breaking_view_is_updated_with_new_table_references(
+    init_and_plan_context: t.Callable,
+):
+    context, plan = init_and_plan_context("examples/sushi")
+    context.apply(plan)
+
+    # Add a new projection to the base model
+    model = context.get_model("sushi.waiter_revenue_by_day")
+    context.upsert_model(add_projection_to_model(t.cast(SqlModel, model)))
+
+    context.plan("prod", auto_apply=True, no_prompts=True, skip_tests=True)
+
+    # Run the janitor to delete the old snapshot record
+    context.run_janitor(ignore_ttl=True)
+
+    # Check the downstream view and make sure it's still queryable
+    assert context.get_model("sushi.top_waiters").kind.is_view
+    row_num = context.engine_adapter.fetchone(f"SELECT COUNT(*) FROM sushi.top_waiters")[0]
+    assert row_num > 0
+
+
+@time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_dbt_requirements(sushi_dbt_context: Context):
     assert set(sushi_dbt_context.requirements) == {"dbt-core", "dbt-duckdb"}
     assert sushi_dbt_context.requirements["dbt-core"].startswith("1.")
