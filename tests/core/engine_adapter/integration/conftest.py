@@ -19,7 +19,6 @@ from sqlmesh.core.config import load_config_from_paths
 
 from tests.core.engine_adapter.integration import (
     TestContext,
-    TEST_SCHEMA,
     generate_pytest_params,
     ENGINES,
     IntegrationTestEngine,
@@ -72,7 +71,7 @@ def create_engine_adapter(
         # table and then immediately after trying to insert rows into it. There seems to be a delay between when the
         # metastore is made aware of the table and when it responds that it exists. I'm hoping this is not an issue
         # in practice on production machines.
-        if engine_name == "trino":
+        if not engine_name == "trino":
             engine_adapter.DEFAULT_BATCH_SIZE = 1
 
         # Clear our any local db files that may have been left over from previous runs
@@ -145,13 +144,3 @@ def ctx_query_and_df(
     create_test_context: t.Callable[[IntegrationTestEngine, str], t.Iterable[TestContext]],
 ) -> t.Iterable[TestContext]:
     yield from create_test_context(*request.param)
-
-
-# @pytest.fixture
-# todo: is anything using this fixture?
-def schema(ctx: TestContext) -> str:
-    schema_name = ctx.schema(TEST_SCHEMA)
-    ctx.engine_adapter.create_schema(
-        schema_name
-    )  # note: gets cleaned up when the TestContext fixture gets cleaned up
-    return schema_name

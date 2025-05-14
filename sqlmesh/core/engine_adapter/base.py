@@ -2011,7 +2011,7 @@ class EngineAdapter:
         """
         Take a "native" DataFrame (eg Pyspark, Bigframe, Snowpark etc) and convert it to Pandas
         """
-        if isinstance(query_or_df, (exp.Expression, pd.DataFrame)):
+        if isinstance(query_or_df, (exp.Query, exp.DerivedTable, pd.DataFrame)):
             return query_or_df
 
         # EngineAdapter subclasses that have native DataFrame types should override this
