@@ -3256,10 +3256,12 @@ class DatabricksMagicConsole(CaptureTerminalConsole):
         num_audits_failed: int,
         audit_only: bool = False,
     ) -> None:
+        view_name, loaded_batches = self.evaluation_batch_progress[snapshot.snapshot_id]
+
         if audit_only:
+            print(f"Completed Auditing {view_name}")
             return
 
-        view_name, loaded_batches = self.evaluation_batch_progress[snapshot.snapshot_id]
         total_batches = self.evaluation_model_batch_sizes[snapshot]
 
         loaded_batches += 1
