@@ -7,6 +7,7 @@ from sqlmesh.core.engine_adapter import AthenaEngineAdapter
 from sqlmesh.utils.aws import parse_s3_uri
 from sqlmesh.utils.pandas import columns_to_types_from_df
 from sqlmesh.utils.date import to_ds, to_ts, TimeLike
+import dataclasses
 from tests.core.engine_adapter.integration import (
     TestContext,
     generate_pytest_params,
@@ -15,8 +16,12 @@ from tests.core.engine_adapter.integration import (
 )
 from sqlglot import exp
 
+# The tests in this file dont need to be called twice, so we create a single instance of Athena
+ENGINE_ATHENA = dataclasses.replace(ENGINES_BY_NAME["athena"], catalog_types=None)
+assert isinstance(ENGINE_ATHENA, IntegrationTestEngine)
 
-@pytest.fixture(params=list(generate_pytest_params(ENGINES_BY_NAME["athena"])))
+
+@pytest.fixture(params=list(generate_pytest_params(ENGINE_ATHENA)))
 def ctx(
     request: FixtureRequest,
     create_test_context: t.Callable[[IntegrationTestEngine, str, str], t.Iterable[TestContext]],

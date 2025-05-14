@@ -105,17 +105,26 @@ def create_test_context(
             gateway,
             is_remote=is_remote,
         )
-        ctx.init()
 
-        with ctx.engine_adapter.session({}):
-            yield ctx
-
+        skip = False
         try:
-            ctx.cleanup()
+            ctx.init()
         except Exception:
-            # We need to catch this exception because if there is an error during teardown, pytest-retry aborts immediately
+            # We need to catch this exception because if there is an error during setup, pytest-retry aborts immediately
             # instead of retrying
-            logger.exception("Context cleanup failed")
+            logger.exception("Context init failed")
+            skip = True
+
+        if not skip:
+            with ctx.engine_adapter.session({}):
+                yield ctx
+
+            try:
+                ctx.cleanup()
+            except Exception:
+                # We need to catch this exception because if there is an error during teardown, pytest-retry aborts immediately
+                # instead of retrying
+                logger.exception("Context cleanup failed")
 
     return _create
 
