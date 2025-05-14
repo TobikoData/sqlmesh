@@ -383,6 +383,7 @@ def load_audit(
     dialect: t.Optional[str] = None,
     default_catalog: t.Optional[str] = None,
     variables: t.Optional[t.Dict[str, t.Any]] = None,
+    project: str = None,
 ) -> Audit:
     """Load an audit from a parsed SQLMesh audit file.
 
@@ -455,6 +456,7 @@ def load_audit(
             used_variables=used_variables,
         )
         extra_kwargs["default_catalog"] = default_catalog
+        extra_kwargs["project"] = project
 
     dialect = meta_fields.pop("dialect", dialect)
     try:
@@ -482,6 +484,7 @@ def load_multiple_audits(
     dialect: t.Optional[str] = None,
     default_catalog: t.Optional[str] = None,
     variables: t.Optional[t.Dict[str, t.Any]] = None,
+    project: str = None,
 ) -> t.Generator[Audit, None, None]:
     audit_block: t.List[exp.Expression] = []
     for expression in expressions:
@@ -496,6 +499,7 @@ def load_multiple_audits(
                     dialect=dialect,
                     default_catalog=default_catalog,
                     variables=variables,
+                    project=project,
                 )
                 audit_block.clear()
         audit_block.append(expression)
@@ -505,6 +509,7 @@ def load_multiple_audits(
         dialect=dialect,
         default_catalog=default_catalog,
         variables=variables,
+        project=project,
     )
 
 
