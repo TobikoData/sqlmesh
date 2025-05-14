@@ -229,7 +229,6 @@ def test_information_schema_view_external_model(ctx: TestContext, tmp_path: Path
         "table_type": exp.DataType.build("TEXT"),
         "is_insertable_into": exp.DataType.build("TEXT"),
         "is_typed": exp.DataType.build("TEXT"),
-        "managed_table_type": exp.DataType.build("TEXT"),
         "creation_time": exp.DataType.build("TIMESTAMPTZ"),
         "base_table_catalog": exp.DataType.build("TEXT"),
         "base_table_schema": exp.DataType.build("TEXT"),
@@ -274,8 +273,7 @@ def test_information_schema_view_external_model(ctx: TestContext, tmp_path: Path
         "  `tables`.`replication_status` AS `replication_status`,\n"
         "  `tables`.`replication_error` AS `replication_error`,\n"
         "  `tables`.`is_change_history_enabled` AS `is_change_history_enabled`,\n"
-        "  `tables`.`sync_status` AS `sync_status`,\n"
-        "  `tables`.`managed_table_type` AS `managed_table_type`\n"
+        "  `tables`.`sync_status` AS `sync_status`\n"
         f"FROM {dependency} AS `tables`"
     )
 
