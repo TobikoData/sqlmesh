@@ -182,16 +182,25 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
     def _begin_session(self, properties: SessionProperties) -> None:
         from google.cloud.bigquery import QueryJobConfig
 
-        query_label = []
-        if "query_label" in properties and isinstance(properties["query_label"], exp.Expression):
-            # query_label is a sequence of 2-tuples and validated at load time
-            for label_tuple in properties["query_label"].expressions:
-                query_label.append(
+        query_label_property = properties.get("query_label")
+        parsed_query_label = []
+        if query_label_property and isinstance(
+            query_label_property, (exp.Array, exp.Paren, exp.Tuple)
+        ):
+            label_tuples = (
+                [query_label_property.unnest()]
+                if isinstance(query_label_property, exp.Paren)
+                else query_label_property.expressions
+            )
+
+            # query_label is a Paren, Array or Tuple of 2-tuples and validated at load time
+            for label_tuple in label_tuples:
+                parsed_query_label.append(
                     (label_tuple.expressions[0].this, label_tuple.expressions[1].this)
                 )
 
-        if query_label:
-            query_label_str = ",".join([":".join(label) for label in query_label])
+        if parsed_query_label:
+            query_label_str = ",".join([":".join(label) for label in parsed_query_label])
             query = f'SET @@query_label = "{query_label_str}";SELECT 1;'
         else:
             query = "SELECT 1;"
