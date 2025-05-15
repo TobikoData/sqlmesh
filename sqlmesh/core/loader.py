@@ -619,6 +619,7 @@ class SqlMeshLoader(Loader):
                     dialect=self.config.model_defaults.dialect,
                     default_catalog=self.context.default_catalog,
                     variables=variables,
+                    project=self.config.project,
                 )
                 for audit in audits:
                     audits_by_name[audit.name] = audit

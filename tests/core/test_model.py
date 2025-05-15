@@ -472,6 +472,40 @@ def test_model_missing_audits(tmp_path: Path):
         )
 
 
+def test_project_is_set_in_standalone_audit(tmp_path: Path) -> None:
+    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+
+    db_path = str(tmp_path / "db.db")
+    db_connection = DuckDBConnectionConfig(database=db_path)
+
+    config = Config(
+        project="test",
+        gateways={"gw": GatewayConfig(connection=db_connection)},
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+    )
+
+    model = tmp_path / "models" / "some_model.sql"
+    model.parent.mkdir(parents=True, exist_ok=True)
+    model.write_text("MODEL (name m); SELECT 1 AS c")
+
+    audit = tmp_path / "audits" / "a_standalone_audit.sql"
+    audit.parent.mkdir(parents=True, exist_ok=True)
+    audit.write_text("AUDIT (name a, standalone true); SELECT * FROM m WHERE c <= 0")
+
+    context = Context(paths=tmp_path, config=config)
+    context.plan(no_prompts=True, auto_apply=True)
+
+    model = tmp_path / "models" / "some_model.sql"
+    model.parent.mkdir(parents=True, exist_ok=True)
+    model.write_text("MODEL (name m); SELECT 2 AS c")
+
+    assert context.fetchdf(
+        "select snapshot -> 'node' -> 'project' AS standalone_audit_project "
+        """from sqlmesh._snapshots where (snapshot -> 'node' -> 'source_type')::text = '"audit"'"""
+    ).to_dict()["standalone_audit_project"] == {0: '"test"'}
+    assert context.load().standalone_audits["a"].project == "test"
+
+
 @pytest.mark.parametrize(
     "partition_by_input, partition_by_output, output_dialect, expected_exception",
     [
