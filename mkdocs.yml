@@ -30,9 +30,10 @@ nav:
       - guides/testing.md
       - guides/model_selection.md
     - SQLMesh tools:
-      - guides/ui.md
+      - quickstart/vscode.md
       - guides/tablediff.md
       - guides/linter.md
+      - guides/ui.md
       - guides/observer.md
     - Advanced usage:
       - guides/customizing_sqlmesh.md
