@@ -10,7 +10,7 @@ export type ErrorType =
   | { type: 'generic'; message: string }
   | { type: 'not_signed_in' }
   | { type: 'sqlmesh_lsp_not_found' }
-  // tcloud_bin_not_found is used when the tcloud executable is not found. This is likely to happen if the user 
+  // tcloud_bin_not_found is used when the tcloud executable is not found. This is likely to happen if the user
   // opens a project that has a `tcloud.yaml` file but doesn't have tcloud installed.
   | { type: 'tcloud_bin_not_found' }
   // sqlmesh_lsp_dependencies_missing is used when the sqlmesh_lsp is found but the lsp extras are missing.
@@ -91,6 +91,6 @@ export const handleTcloudBinNotFoundError = async (): Promise<void> => {
       hideFromUser: false,
     })
     terminal.show()
-    terminal.sendText("pip install tcloud", false)
+    terminal.sendText('pip install tcloud', false)
   }
 }

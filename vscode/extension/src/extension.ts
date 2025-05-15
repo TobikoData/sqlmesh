@@ -97,7 +97,7 @@ export async function activate(context: vscode.ExtensionContext) {
             return
           case 'tcloud_bin_not_found':
             await handleTcloudBinNotFoundError()
-            return 
+            return
           case 'generic':
             await vscode.window.showErrorMessage(
               `Failed to restart LSP: ${restartResult.error.message}`,
