@@ -304,13 +304,7 @@ class TestContext:
 
     def get_metadata_results(self, schema: t.Optional[str] = None) -> MetadataResults:
         schema = schema if schema else self.schema(TEST_SCHEMA)
-        results = MetadataResults.from_data_objects(self.engine_adapter.get_data_objects(schema))
-        if self.dialect == "snowflake" and self.test_type == "df":
-            # The Snowpark library manages the lifecycle of the SNOWPARK_TEMP_TABLE_* tables and drops them at the end of the session
-            # Our paramterized tests are just checking for tables *we* manage so including the Snowpark tables gives off-by-one errors
-            # when asserting table counts
-            results.tables = [t for t in results.tables if not t.startswith("SNOWPARK_TEMP_TABLE")]
-        return results
+        return MetadataResults.from_data_objects(self.engine_adapter.get_data_objects(schema))
 
     def _init_engine_adapter(self) -> None:
         schema = self.schema(TEST_SCHEMA)
