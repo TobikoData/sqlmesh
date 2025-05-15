@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import abc
+import concurrent.futures
 import glob
 import itertools
 import linecache
@@ -8,11 +9,11 @@ import multiprocessing as mp
 import os
 import re
 import typing as t
+import concurrent
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 from pydantic import ValidationError
-from concurrent.futures import ProcessPoolExecutor, as_completed
 
 from sqlglot.errors import SqlglotError
 from sqlglot import exp
@@ -478,20 +479,15 @@ class SqlMeshLoader(Loader):
         audits into a Dict and creates the dag
         """
         cache = SqlMeshLoader._Cache(self, self.config_path)
-        import time
 
-        now = time.time()
         sql_models = self._load_sql_models(macros, jinja_macros, audits, signals, cache, gateway)
-        print("sql models", time.time() - now)
-        now = time.time()
         external_models = self._load_external_models(audits, cache, gateway)
-        print("external models", time.time() - now)
         python_models = self._load_python_models(macros, jinja_macros, audits, signals)
 
         all_model_names = list(sql_models) + list(external_models) + list(python_models)
         duplicates = [name for name, count in Counter(all_model_names).items() if count > 1]
         if duplicates:
-            raise ValueError(f"Duplicate model name(s) found: {', '.join(duplicates)}.")
+            raise ConfigError(f"Duplicate model name(s) found: {', '.join(duplicates)}.")
 
         return UniqueKeyDict("models", **sql_models, **external_models, **python_models)
 
@@ -506,8 +502,7 @@ class SqlMeshLoader(Loader):
     ) -> UniqueKeyDict[str, Model]:
         """Loads the sql models into a Dict"""
         models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
-
-        paths = set()
+        paths: t.Set[Path] = set()
 
         for path in self._glob_paths(
             self.config_path / c.MODELS,
@@ -522,14 +517,11 @@ class SqlMeshLoader(Loader):
 
         for path in paths.copy():
             cached_models = cache.get(path)
-
             if cached_models:
                 paths.remove(path)
-
                 for model in cached_models:
-                    models[model.fqn] = model
-
-        error = False
+                    if model.enabled:
+                        models[model.fqn] = model
 
         if paths:
             defaults = dict(
@@ -550,31 +542,31 @@ class SqlMeshLoader(Loader):
                 default_catalog_per_gateway=self.context.default_catalog_per_gateway,
             )
 
-            with ProcessPoolExecutor(
+            errors: t.List[str] = []
+            with concurrent.futures.ProcessPoolExecutor(
                 mp_context=mp.get_context("fork"),
                 initializer=_init_model_defaults,
                 initargs=(self.config, gateway, defaults, cache),
                 max_workers=c.MAX_FORK_WORKERS,
             ) as pool:
-                for fut in as_completed(pool.submit(load_sql_models, path) for path in paths):
+                futures_to_paths = {pool.submit(load_sql_models, path): path for path in paths}
+                for fut, path in futures_to_paths.items():
                     try:
-                        path, loaded = fut.result()
-
+                        _, loaded = fut.result()
                         if loaded:
                             for model in loaded:
-                                model._path = path
-                                models[model.fqn] = model
+                                if model.enabled:
+                                    model._path = path
+                                    models[model.fqn] = model
                         else:
                             for model in cache.get(path):
-                                models[model.fqn] = model
+                                if model.enabled:
+                                    models[model.fqn] = model
                     except Exception as ex:
-                        self._console.log_error(
-                            f"Failed to load model definition at '{path}'.\n{ex}"
-                        )
-                        error = True
+                        errors.append(f"Failed to load model definition at '{path}'.\n\n{ex}")
 
-        if error:
-            raise ConfigError("Failed to load models")
+            if errors:
+                raise ConfigError(f"Failed to load models\n\n{'\n'.join(errors)}")
 
         return models
 
