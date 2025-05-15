@@ -15,6 +15,9 @@ export type EventMap = {
   changeFocusedFile: {
     fileUri: string
   }
+  savedFile: {
+    fileUri: string
+  }
 }
 
 /**
