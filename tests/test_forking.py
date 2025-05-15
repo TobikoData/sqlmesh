@@ -3,13 +3,16 @@ import pytest
 
 from sqlmesh import Context
 from sqlmesh.core.model import schema
+import multiprocessing as mp
 
 
 pytestmark = pytest.mark.isolated
 
 
 def test_parallel_load(assert_exp_eq, mocker):
-    mocker.patch("sqlmesh.core.constants.MAX_FORK_WORKERS", 2)
+    if hasattr(os, "fork") and not mp.current_process().daemon:
+        mocker.patch("sqlmesh.core.constants.MAX_FORK_WORKERS", 2)
+
     spy = mocker.spy(schema, "_update_model_schemas")
     context = Context(paths="examples/sushi")
 
