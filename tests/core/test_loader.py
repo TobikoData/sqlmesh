@@ -109,8 +109,8 @@ def test_duplicate_model_names_same_kind(tmp_path: Path, sample_models):
     duplicate_fpath.write_text(model["contents"])
 
     with pytest.raises(
-        ValueError,
-        match=r'Duplicate key \'"memory"."test_schema"."test_model"\' found in UniqueKeyDict<models>. Call dict.update\(\.\.\.\) if this is intentional.',
+        ConfigError,
+        match=r".*Duplicate .* model name: 'test_schema.test_model'",
     ):
         Context(paths=tmp_path, config=config)
 
