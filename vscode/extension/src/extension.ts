@@ -17,6 +17,7 @@ import {
   handleNotSginedInError,
   handleSqlmeshLspNotFoundError,
   handleSqlmeshLspDependenciesMissingError,
+  handleTcloudBinNotFoundError,
 } from './utilities/errors'
 import { selector, completionProvider } from './completion/completion'
 import { LineagePanel } from './webviews/lineagePanel'
@@ -94,6 +95,9 @@ export async function activate(context: vscode.ExtensionContext) {
           case 'sqlmesh_lsp_dependencies_missing':
             await handleSqlmeshLspDependenciesMissingError(restartResult.error)
             return
+          case 'tcloud_bin_not_found':
+            await handleTcloudBinNotFoundError()
+            return 
           case 'generic':
             await vscode.window.showErrorMessage(
               `Failed to restart LSP: ${restartResult.error.message}`,
@@ -128,6 +132,9 @@ export async function activate(context: vscode.ExtensionContext) {
         break
       case 'sqlmesh_lsp_dependencies_missing':
         await handleSqlmeshLspDependenciesMissingError(result.error)
+        break
+      case 'tcloud_bin_not_found':
+        await handleTcloudBinNotFoundError()
         break
       case 'generic':
         await vscode.window.showErrorMessage(

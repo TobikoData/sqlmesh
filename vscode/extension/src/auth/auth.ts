@@ -14,6 +14,7 @@ import { execAsync } from '../utilities/exec'
 import { getProjectRoot } from '../utilities/common/utilities'
 import z from 'zod'
 import { traceError } from '../utilities/common/log'
+import { ErrorType } from '../utilities/errors'
 
 export const AUTH_TYPE = 'tobikodata'
 export const AUTH_NAME = 'Tobiko'
@@ -70,11 +71,11 @@ export class AuthenticationProviderTobikoCloud
    * Get the status of the authentication provider from the cli
    * @returns true if the user is logged in with the id token, false otherwise
    */
-  private async get_status(): Promise<Result<StatusResponse, string>> {
+  private async get_status(): Promise<Result<StatusResponse, ErrorType>> {
     const workspacePath = await getProjectRoot()
     const tcloudBin = await getTcloudBin()
     if (isErr(tcloudBin)) {
-      return err(tcloudBin.error)
+      return tcloudBin
     }
     const tcloudBinPath = tcloudBin.value
     const result = await execAsync(
@@ -85,7 +86,10 @@ export class AuthenticationProviderTobikoCloud
       },
     )
     if (result.exitCode !== 0) {
-      return err('Failed to get tcloud auth status')
+      return err({
+        type: 'generic',
+        message: 'Failed to get tcloud auth status',
+      })
     }
     const status = result.stdout
     const statusToJson: any = JSON.parse(status)

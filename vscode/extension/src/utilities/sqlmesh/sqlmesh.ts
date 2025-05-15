@@ -28,10 +28,17 @@ export interface SqlmeshExecInfo {
 export const isTcloudProject = async (): Promise<Result<boolean, string>> => {
   const projectRoot = await getProjectRoot()
   const tcloudYamlPath = path.join(projectRoot.uri.fsPath, 'tcloud.yaml')
-  if (fs.existsSync(tcloudYamlPath)) {
+  const isTcloudYamlFilePresent = fs.existsSync(tcloudYamlPath)
+  if (isTcloudYamlFilePresent) {
+    traceVerbose(`tcloud yaml file present at : ${tcloudYamlPath}`)
     return ok(true)
   }
-  return isPythonModuleInstalled('tcloud')
+  const isTcloudInstalled = await isPythonModuleInstalled('tcloud')
+  if (isErr(isTcloudInstalled)) {
+    return isTcloudInstalled
+  }
+  traceVerbose(`tcloud is installed: ${isTcloudInstalled.value}`)
+  return ok(isTcloudInstalled.value)
 }
 
 /**
@@ -39,13 +46,18 @@ export const isTcloudProject = async (): Promise<Result<boolean, string>> => {
  *
  * @returns The tcloud executable for the current Python environment.
  */
-export const getTcloudBin = async (): Promise<Result<string, string>> => {
+export const getTcloudBin = async (): Promise<Result<string, ErrorType>> => {
   const interpreterDetails = await getInterpreterDetails()
   if (!interpreterDetails.path) {
-    return err('No Python interpreter found')
+    return err({
+      type: 'tcloud_bin_not_found',
+    })
   }
   const pythonPath = interpreterDetails.path[0]
   const binPath = path.join(path.dirname(pythonPath), 'tcloud')
+  if (!fs.existsSync(binPath)) {
+    return err({type: 'tcloud_bin_not_found'})
+  }
   return ok(binPath)
 }
 
@@ -59,24 +71,26 @@ const isSqlmeshInstalledSchema = z.object({
  * @returns A Result indicating whether sqlmesh enterprise is installed and updated.
  */
 export const isSqlmeshEnterpriseInstalled = async (): Promise<
-  Result<boolean, string>
+  Result<boolean, ErrorType>
 > => {
   traceInfo('Checking if sqlmesh enterprise is installed')
   const tcloudBin = await getTcloudBin()
   if (isErr(tcloudBin)) {
-    return err(tcloudBin.error)
+    return tcloudBin
   }
   const called = await execAsync(tcloudBin.value, ['is_sqlmesh_installed'])
   if (called.exitCode !== 0) {
-    return err(
-      `Failed to check if sqlmesh enterprise is installed: ${called.stderr}`,
-    )
+    return err({
+      type: 'generic',
+      message: `Failed to check if sqlmesh enterprise is installed: ${called.stderr}`,
+    })
   }
   const parsed = isSqlmeshInstalledSchema.safeParse(JSON.parse(called.stdout))
   if (!parsed.success) {
-    return err(
-      `Failed to parse sqlmesh enterprise installation status: ${parsed.error.message}`,
-    )
+    return err({
+      type: 'generic',
+      message: `Failed to parse sqlmesh enterprise installation status: ${parsed.error.message}`,
+    })
   }
   return ok(parsed.data.is_installed)
 }
@@ -88,16 +102,19 @@ export const isSqlmeshEnterpriseInstalled = async (): Promise<
  */
 export const installSqlmeshEnterprise = async (
   abortController: AbortController,
-): Promise<Result<boolean, string>> => {
+): Promise<Result<boolean, ErrorType>> => {
   const tcloudBin = await getTcloudBin()
   if (isErr(tcloudBin)) {
-    return err(tcloudBin.error)
+    return tcloudBin
   }
   const called = await execAsync(tcloudBin.value, ['install_sqlmesh'], {
     signal: abortController.signal,
   })
   if (called.exitCode !== 0) {
-    return err(`Failed to install sqlmesh enterprise: ${called.stderr}`)
+    return err({
+      type: 'generic',
+      message: `Failed to install sqlmesh enterprise: ${called.stderr}`,
+    })
   }
   return ok(true)
 }
@@ -109,12 +126,12 @@ export const installSqlmeshEnterprise = async (
  * @returns A Result indicating whether sqlmesh enterprise was installed in the call.
  */
 export const ensureSqlmeshEnterpriseInstalled = async (): Promise<
-  Result<boolean, string>
+  Result<boolean, ErrorType>
 > => {
   traceInfo('Ensuring sqlmesh enterprise is installed')
   const isInstalled = await isSqlmeshEnterpriseInstalled()
   if (isErr(isInstalled)) {
-    return err(isInstalled.error)
+    return isInstalled
   }
   if (isInstalled.value) {
     traceInfo('Sqlmesh enterprise is installed')
@@ -180,10 +197,7 @@ export const sqlmeshExec = async (): Promise<
     if (isTcloudInstalled.value) {
       const tcloudBin = await getTcloudBin()
       if (isErr(tcloudBin)) {
-        return err({
-          type: 'generic',
-          message: tcloudBin.error,
-        })
+        return tcloudBin
       }
       const isSignedIn = await isSignedIntoTobikoCloud()
       if (!isSignedIn) {
@@ -193,10 +207,7 @@ export const sqlmeshExec = async (): Promise<
       }
       const ensured = await ensureSqlmeshEnterpriseInstalled()
       if (isErr(ensured)) {
-        return err({
-          type: 'generic',
-          message: ensured.error,
-        })
+        return ensured
       }
       return ok({
         bin: `${tcloudBin.value} sqlmesh`,
@@ -303,10 +314,7 @@ export const sqlmeshLspExec = async (): Promise<
       traceLog('Tcloud installed, installing sqlmesh')
       const tcloudBin = await getTcloudBin()
       if (isErr(tcloudBin)) {
-        return err({
-          type: 'generic',
-          message: tcloudBin.error,
-        })
+        return tcloudBin
       }
       const isSignedIn = await isSignedIntoTobikoCloud()
       if (!isSignedIn) {
@@ -316,10 +324,7 @@ export const sqlmeshLspExec = async (): Promise<
       }
       const ensured = await ensureSqlmeshEnterpriseInstalled()
       if (isErr(ensured)) {
-        return err({
-          type: 'generic',
-          message: ensured.error,
-        })
+        return ensured
       }
     }
     const ensuredDependencies = await ensureSqlmeshLspDependenciesInstalled()
