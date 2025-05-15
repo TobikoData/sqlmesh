@@ -128,6 +128,8 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                 execution_time=plan.execution_time,
             )
 
+            self._run_audits_for_metadata_snapshots(plan, new_snapshots)
+
             push_completion_status = self._push(plan, snapshots, deployability_index_for_creation)
             if push_completion_status.is_nothing_to_do:
                 self.console.log_status_update(
@@ -544,6 +546,54 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                 snapshots_to_restate[full_snapshot_id] = (full_snapshot.table_info, new_intervals)
 
         return set(snapshots_to_restate.values())
+
+    def _run_audits_for_metadata_snapshots(
+        self,
+        plan: EvaluatablePlan,
+        new_snapshots: t.Dict[SnapshotId, Snapshot],
+    ) -> None:
+        # Filter out snapshots that are not categorized as metadata changes on models
+        metadata_snapshots = []
+        for snapshot in new_snapshots.values():
+            if not snapshot.is_metadata or not snapshot.is_model or not snapshot.evaluatable:
+                continue
+
+            metadata_snapshots.append(snapshot)
+
+        # Bulk load all the previous snapshots
+        previous_snapshots = self.state_sync.get_snapshots(
+            [
+                s.previous_version.snapshot_id(s.name)
+                for s in metadata_snapshots
+                if s.previous_version
+            ]
+        ).values()
+
+        # Check if any of the snapshots have modifications to the audits field by comparing the hashes
+        audit_snapshots = {}
+        for snapshot, previous_snapshot in zip(metadata_snapshots, previous_snapshots):
+            new_audits_hash = snapshot.model.audit_metadata_hash()
+            previous_audit_hash = previous_snapshot.model.audit_metadata_hash()
+
+            if snapshot.model.audits and previous_audit_hash != new_audits_hash:
+                audit_snapshots[snapshot.snapshot_id] = snapshot
+
+        if not audit_snapshots:
+            return
+
+        # If there are any snapshots to be audited, we'll reuse the scheduler's internals to audit them
+        scheduler = self.create_scheduler(audit_snapshots.values())
+        completion_status = scheduler.audit(
+            plan.environment,
+            plan.start,
+            plan.end,
+            execution_time=plan.execution_time,
+            end_bounded=plan.end_bounded,
+            interval_end_per_model=plan.interval_end_per_model,
+        )
+
+        if completion_status.is_failure:
+            raise PlanError("Plan application failed.")
 
 
 def update_intervals_for_new_snapshots(

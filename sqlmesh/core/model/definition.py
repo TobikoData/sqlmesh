@@ -1069,6 +1069,37 @@ class _Model(ModelMeta, frozen=True):
 
         return data  # type: ignore
 
+    def _audit_metadata_hash_values(self) -> t.List[str]:
+        from sqlmesh.core.audit.builtin import BUILT_IN_AUDITS
+
+        metadata = []
+
+        for audit_name, audit_args in sorted(self.audits, key=lambda a: a[0]):
+            metadata.append(audit_name)
+            if audit_name in BUILT_IN_AUDITS:
+                for arg_name, arg_value in audit_args.items():
+                    metadata.append(arg_name)
+                    metadata.append(gen(arg_value))
+            else:
+                audit = self.audit_definitions[audit_name]
+                query = (
+                    self.render_audit_query(audit, **t.cast(t.Dict[str, t.Any], audit_args))
+                    or audit.query
+                )
+                metadata.extend(
+                    [
+                        gen(query),
+                        audit.dialect,
+                        str(audit.skip),
+                        str(audit.blocking),
+                    ]
+                )
+
+        return metadata
+
+    def audit_metadata_hash(self) -> str:
+        return hash_data(self._audit_metadata_hash_values())
+
     @property
     def metadata_hash(self) -> str:
         """
@@ -1078,8 +1109,6 @@ class _Model(ModelMeta, frozen=True):
             The metadata hash for the node.
         """
         if self._metadata_hash is None:
-            from sqlmesh.core.audit.builtin import BUILT_IN_AUDITS
-
             metadata = [
                 self.dialect,
                 self.owner,
@@ -1100,28 +1129,8 @@ class _Model(ModelMeta, frozen=True):
                 str(self.allow_partials),
                 gen(self.session_properties_) if self.session_properties_ else None,
                 *[gen(g) for g in self.grains],
+                *self._audit_metadata_hash_values(),
             ]
-
-            for audit_name, audit_args in sorted(self.audits, key=lambda a: a[0]):
-                metadata.append(audit_name)
-                if audit_name in BUILT_IN_AUDITS:
-                    for arg_name, arg_value in audit_args.items():
-                        metadata.append(arg_name)
-                        metadata.append(gen(arg_value))
-                else:
-                    audit = self.audit_definitions[audit_name]
-                    query = (
-                        self.render_audit_query(audit, **t.cast(t.Dict[str, t.Any], audit_args))
-                        or audit.query
-                    )
-                    metadata.extend(
-                        [
-                            gen(query),
-                            audit.dialect,
-                            str(audit.skip),
-                            str(audit.blocking),
-                        ]
-                    )
 
             for key, value in (self.virtual_properties or {}).items():
                 metadata.append(key)

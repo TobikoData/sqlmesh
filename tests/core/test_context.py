@@ -1929,7 +1929,7 @@ def create_log_view(evaluator, view_name):
     assert log_schema["my_schema"][0] == "db__dev"
 
 
-def test_plan_audit_intervals(tmp_path: pathlib.Path, capsys, caplog):
+def test_plan_audit_intervals(tmp_path: pathlib.Path, caplog):
     ctx = Context(
         paths=tmp_path, config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))
     )

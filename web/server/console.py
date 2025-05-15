@@ -93,7 +93,11 @@ class ApiConsole(TerminalConsole):
         batched_intervals: t.Dict[Snapshot, Intervals],
         environment_naming_info: EnvironmentNamingInfo,
         default_catalog: t.Optional[str],
+        audit_only: bool = False,
     ) -> None:
+        if audit_only:
+            return
+
         if self.plan_apply_stage_tracker:
             batch_sizes = {
                 snapshot: len(intervals) for snapshot, intervals in batched_intervals.items()
@@ -118,7 +122,12 @@ class ApiConsole(TerminalConsole):
 
         self.log_event_plan_apply()
 
-    def start_snapshot_evaluation_progress(self, snapshot: Snapshot) -> None:
+    def start_snapshot_evaluation_progress(
+        self, snapshot: Snapshot, audit_only: bool = False
+    ) -> None:
+        if audit_only:
+            return
+
         if self.plan_apply_stage_tracker and self.plan_apply_stage_tracker.backfill:
             self.plan_apply_stage_tracker.backfill.queue.add(snapshot.name)
 
@@ -132,7 +141,11 @@ class ApiConsole(TerminalConsole):
         duration_ms: t.Optional[int],
         num_audits_passed: int,
         num_audits_failed: int,
+        audit_only: bool = False,
     ) -> None:
+        if audit_only:
+            return
+
         if self.plan_apply_stage_tracker and self.plan_apply_stage_tracker.backfill:
             task = self.plan_apply_stage_tracker.backfill.tasks[snapshot.name]
             task.completed += 1

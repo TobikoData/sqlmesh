@@ -350,11 +350,14 @@ class Console(
         batched_intervals: t.Dict[Snapshot, Intervals],
         environment_naming_info: EnvironmentNamingInfo,
         default_catalog: t.Optional[str],
+        audit_only: bool = False,
     ) -> None:
-        """Indicates that a new snapshot evaluation progress has begun."""
+        """Indicates that a new snapshot evaluation/auditing progress has begun."""
 
     @abc.abstractmethod
-    def start_snapshot_evaluation_progress(self, snapshot: Snapshot) -> None:
+    def start_snapshot_evaluation_progress(
+        self, snapshot: Snapshot, audit_only: bool = False
+    ) -> None:
         """Starts the snapshot evaluation progress."""
 
     @abc.abstractmethod
@@ -366,6 +369,7 @@ class Console(
         duration_ms: t.Optional[int],
         num_audits_passed: int,
         num_audits_failed: int,
+        audit_only: bool = False,
     ) -> None:
         """Updates the snapshot evaluation progress."""
 
@@ -507,10 +511,13 @@ class NoopConsole(Console):
         batched_intervals: t.Dict[Snapshot, Intervals],
         environment_naming_info: EnvironmentNamingInfo,
         default_catalog: t.Optional[str],
+        audit_only: bool = False,
     ) -> None:
         pass
 
-    def start_snapshot_evaluation_progress(self, snapshot: Snapshot) -> None:
+    def start_snapshot_evaluation_progress(
+        self, snapshot: Snapshot, audit_only: bool = False
+    ) -> None:
         pass
 
     def update_snapshot_evaluation_progress(
@@ -521,6 +528,7 @@ class NoopConsole(Console):
         duration_ms: t.Optional[int],
         num_audits_passed: int,
         num_audits_failed: int,
+        audit_only: bool = False,
     ) -> None:
         pass
 
@@ -891,11 +899,12 @@ class TerminalConsole(Console):
         batched_intervals: t.Dict[Snapshot, Intervals],
         environment_naming_info: EnvironmentNamingInfo,
         default_catalog: t.Optional[str],
+        audit_only: bool = False,
     ) -> None:
-        """Indicates that a new snapshot evaluation progress has begun."""
+        """Indicates that a new snapshot evaluation/auditing progress has begun."""
         if not self.evaluation_progress_live:
             self.evaluation_total_progress = make_progress_bar(
-                "Executing model batches", self.console
+                "Executing model batches" if not audit_only else "Auditing models", self.console
             )
 
             self.evaluation_model_progress = Progress(
@@ -916,8 +925,9 @@ class TerminalConsole(Console):
             batch_sizes = {
                 snapshot: len(intervals) for snapshot, intervals in batched_intervals.items()
             }
+            message = "Executing" if not audit_only else "Auditing"
             self.evaluation_total_task = self.evaluation_total_progress.add_task(
-                "Executing models...", total=sum(batch_sizes.values())
+                f"{message} models...", total=sum(batch_sizes.values())
             )
 
             # determine column widths
@@ -943,7 +953,9 @@ class TerminalConsole(Console):
             self.environment_naming_info = environment_naming_info
             self.default_catalog = default_catalog
 
-    def start_snapshot_evaluation_progress(self, snapshot: Snapshot) -> None:
+    def start_snapshot_evaluation_progress(
+        self, snapshot: Snapshot, audit_only: bool = False
+    ) -> None:
         if self.evaluation_model_progress and snapshot.name not in self.evaluation_model_tasks:
             display_name = snapshot.display_name(
                 self.environment_naming_info,
@@ -951,7 +963,7 @@ class TerminalConsole(Console):
                 dialect=self.dialect,
             )
             self.evaluation_model_tasks[snapshot.name] = self.evaluation_model_progress.add_task(
-                f"Evaluating {display_name}...",
+                f"{'Evaluating' if not audit_only else 'Auditing'} {display_name}...",
                 view_name=display_name,
                 total=self.evaluation_model_batch_sizes[snapshot],
             )
@@ -964,6 +976,7 @@ class TerminalConsole(Console):
         duration_ms: t.Optional[int],
         num_audits_passed: int,
         num_audits_failed: int,
+        audit_only: bool = False,
     ) -> None:
         """Update the snapshot evaluation progress."""
         if (
@@ -1003,7 +1016,7 @@ class TerminalConsole(Console):
                     self.evaluation_column_widths["duration"]
                 )
 
-                msg = f"{batch} {display_name}   {annotation}   {duration}".replace(
+                msg = f"{f'{batch} ' if not audit_only else ''}{display_name}   {annotation}   {duration}".replace(
                     self.AUDIT_PASS_MARK, self.GREEN_AUDIT_PASS_MARK
                 )
 
@@ -1015,7 +1028,10 @@ class TerminalConsole(Console):
 
             model_task_id = self.evaluation_model_tasks[snapshot.name]
             self.evaluation_model_progress.update(model_task_id, refresh=True, advance=1)
-            if self.evaluation_model_progress._tasks[model_task_id].completed >= total_batches:
+            if (
+                self.evaluation_model_progress._tasks[model_task_id].completed >= total_batches
+                or audit_only
+            ):
                 self.evaluation_model_progress.remove_task(model_task_id)
 
     def stop_evaluation_progress(self, success: bool = True) -> None:
@@ -3208,6 +3224,7 @@ class DatabricksMagicConsole(CaptureTerminalConsole):
         batched_intervals: t.Dict[Snapshot, Intervals],
         environment_naming_info: EnvironmentNamingInfo,
         default_catalog: t.Optional[str],
+        audit_only: bool = False,
     ) -> None:
         self.evaluation_model_batch_sizes = {
             snapshot: len(intervals) for snapshot, intervals in batched_intervals.items()
@@ -3215,7 +3232,9 @@ class DatabricksMagicConsole(CaptureTerminalConsole):
         self.evaluation_environment_naming_info = environment_naming_info
         self.default_catalog = default_catalog
 
-    def start_snapshot_evaluation_progress(self, snapshot: Snapshot) -> None:
+    def start_snapshot_evaluation_progress(
+        self, snapshot: Snapshot, audit_only: bool = False
+    ) -> None:
         if not self.evaluation_batch_progress.get(snapshot.snapshot_id):
             display_name = snapshot.display_name(
                 self.evaluation_environment_naming_info,
@@ -3235,8 +3254,14 @@ class DatabricksMagicConsole(CaptureTerminalConsole):
         duration_ms: t.Optional[int],
         num_audits_passed: int,
         num_audits_failed: int,
+        audit_only: bool = False,
     ) -> None:
         view_name, loaded_batches = self.evaluation_batch_progress[snapshot.snapshot_id]
+
+        if audit_only:
+            print(f"Completed Auditing {view_name}")
+            return
+
         total_batches = self.evaluation_model_batch_sizes[snapshot]
 
         loaded_batches += 1
@@ -3378,13 +3403,17 @@ class DebuggerTerminalConsole(TerminalConsole):
         batched_intervals: t.Dict[Snapshot, Intervals],
         environment_naming_info: EnvironmentNamingInfo,
         default_catalog: t.Optional[str],
+        audit_only: bool = False,
     ) -> None:
+        message = "evaluation" if not audit_only else "auditing"
         self._write(
-            f"Starting evaluation for {sum(len(intervals) for intervals in batched_intervals.values())} snapshots"
+            f"Starting {message} for {sum(len(intervals) for intervals in batched_intervals.values())} snapshots"
         )
 
-    def start_snapshot_evaluation_progress(self, snapshot: Snapshot) -> None:
-        self._write(f"Evaluating {snapshot.name}")
+    def start_snapshot_evaluation_progress(
+        self, snapshot: Snapshot, audit_only: bool = False
+    ) -> None:
+        self._write(f"{'Evaluating' if not audit_only else 'Auditing'} {snapshot.name}")
 
     def update_snapshot_evaluation_progress(
         self,
@@ -3394,10 +3423,14 @@ class DebuggerTerminalConsole(TerminalConsole):
         duration_ms: t.Optional[int],
         num_audits_passed: int,
         num_audits_failed: int,
+        audit_only: bool = False,
     ) -> None:
-        self._write(
-            f"Evaluating {snapshot.name} | batch={batch_idx} | duration={duration_ms}ms | num_audits_passed={num_audits_passed} | num_audits_failed={num_audits_failed}"
-        )
+        message = f"Evaluating {snapshot.name} | batch={batch_idx} | duration={duration_ms}ms | num_audits_passed={num_audits_passed} | num_audits_failed={num_audits_failed}"
+
+        if audit_only:
+            message = f"Auditing {snapshot.name} duration={duration_ms}ms | num_audits_passed={num_audits_passed} | num_audits_failed={num_audits_failed}"
+
+        self._write(message)
 
     def stop_evaluation_progress(self, success: bool = True) -> None:
         self._write(f"Stopping evaluation with success={success}")
