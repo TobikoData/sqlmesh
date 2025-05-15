@@ -2,6 +2,7 @@ import typing as t
 import pytest
 from pytest import FixtureRequest
 from sqlglot import exp
+from pathlib import Path
 from sqlglot.optimizer.qualify_columns import quote_identifiers
 from sqlglot.helper import seq_get
 from sqlmesh.core.engine_adapter import SnowflakeEngineAdapter
@@ -10,6 +11,9 @@ import sqlmesh.core.dialect as d
 from sqlmesh.core.model import SqlModel, load_sql_based_model
 from sqlmesh.core.plan import Plan
 from tests.core.engine_adapter.integration import TestContext
+from sqlmesh import model, ExecutionContext
+from sqlmesh.core.model import ModelKindName
+from datetime import datetime
 
 from tests.core.engine_adapter.integration import (
     TestContext,
@@ -19,7 +23,9 @@ from tests.core.engine_adapter.integration import (
 )
 
 
-@pytest.fixture(params=list(generate_pytest_params(ENGINES_BY_NAME["snowflake"])))
+@pytest.fixture(
+    params=list(generate_pytest_params(ENGINES_BY_NAME["snowflake"], show_variant_in_test_id=False))
+)
 def ctx(
     request: FixtureRequest,
     create_test_context: t.Callable[[IntegrationTestEngine, str, str], t.Iterable[TestContext]],
@@ -220,3 +226,43 @@ def test_create_iceberg_table(ctx: TestContext, engine_adapter: SnowflakeEngineA
     result = sqlmesh.plan(auto_apply=True)
 
     assert len(result.new_snapshots) == 2
+
+
+def test_snowpark_concurrency(ctx: TestContext) -> None:
+    from snowflake.snowpark import DataFrame
+
+    @model(
+        name="my_model",
+        kind=dict(
+            name=ModelKindName.INCREMENTAL_BY_TIME_RANGE,
+            time_column="ds",
+            batch_size=1,
+            batch_concurrency=4,
+        ),
+        columns={"id": "int", "ds": "date"},
+        start="2020-01-01",
+        end="2020-01-10",
+    )
+    def execute(context: ExecutionContext, start: datetime, **kwargs) -> DataFrame:
+        if snowpark := context.snowpark:
+            return snowpark.create_dataframe([(start.day, start.date())], schema=["id", "ds"])
+
+        raise ValueError("Snowpark not present!")
+
+    m = model.get_registry()["my_model"].model(
+        module_path=Path("."), path=Path("."), dialect="snowflake"
+    )
+
+    sqlmesh = ctx.create_context()
+
+    # verify that we are actually running in multithreaded mode
+    assert sqlmesh.concurrent_tasks > 1
+    assert ctx.engine_adapter._multithreaded
+
+    sqlmesh.upsert_model(m)
+
+    plan = sqlmesh.plan(auto_apply=True)
+
+    assert len(plan.new_snapshots) == 1
+
+    # todo: read table result

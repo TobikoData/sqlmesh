@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib
 import logging
 import typing as t
+import threading
 
 import pandas as pd
 from pandas.api.types import is_datetime64_any_dtype  # type: ignore
@@ -69,6 +70,10 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
     )
     MANAGED_TABLE_KIND = "DYNAMIC TABLE"
 
+    def __init__(self, *args: t.Any, **kwargs: t.Any):
+        super().__init__(*args, **kwargs)
+        self._snowpark_threadlocal = threading.local()
+
     @contextlib.contextmanager
     def session(self, properties: SessionProperties) -> t.Iterator[None]:
         warehouse = properties.get("warehouse")
@@ -104,9 +109,15 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
     @property
     def snowpark(self) -> t.Optional[SnowparkSession]:
         if snowpark:
-            return snowpark.Session.builder.configs(
-                {"connection": self._connection_pool.get()}
-            ).getOrCreate()
+            # Snowpark sessions are not thread safe so we create a session per thread to prevent them from interfering with each other
+            # The sessions are cleaned up when close() is called
+            if not hasattr(self._snowpark_threadlocal, "session"):
+                new_session = snowpark.Session.builder.configs(
+                    {"connection": self._connection_pool.get()}
+                ).create()
+                self._snowpark_threadlocal.session = new_session
+
+            return self._snowpark_threadlocal.session
         return None
 
     @property
@@ -584,3 +595,15 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
             return columns_to_types_from_dtypes(query_or_df.sample(n=1).to_pandas().dtypes.items())
 
         return super()._columns_to_types(query_or_df, columns_to_types)
+
+    def _cleanup_snowpark(self) -> None:
+        if hasattr(self._snowpark_threadlocal, "session") and (
+            session := self._snowpark_threadlocal.session
+        ):
+            session.close()
+            delattr(self._snowpark_threadlocal, "session")
+
+    def close(self) -> t.Any:
+        self._cleanup_snowpark()
+
+        return super().close()
