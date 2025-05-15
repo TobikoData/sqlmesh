@@ -3,6 +3,7 @@ import {
   QueryCache,
   QueryClient,
   QueryClientProvider,
+  useQueryClient,
 } from '@tanstack/react-query'
 import { useApiModels } from '@/api'
 import LineageFlowProvider from '@/components/graph/context'
@@ -24,8 +25,10 @@ export function LineagePage() {
         const payload: VSCodeEvent = event.data.payload
         switch (payload.key) {
           case 'changeFocusOnFile':
-            console.log('emitted focus to file:', payload.payload.path)
             emit('changeFocusedFile', { fileUri: payload.payload.path })
+            break
+          case 'savedFile':
+            emit('savedFile', { fileUri: payload.payload.fileUri })
             break
           default:
             console.error(
@@ -65,6 +68,7 @@ function Lineage() {
     undefined,
   )
   const { on } = useEventBus()
+  const queryClient = useQueryClient()
 
   const { data: models, isLoading: isLoadingModels } = useApiModels()
   React.useEffect(() => {
@@ -104,6 +108,10 @@ function Lineage() {
       setSelectedModelSet(model.name)
     }
   })
+  on('savedFile', () => {
+    queryClient.invalidateQueries()
+  })
+
   return (
     <LineageComponentFromWeb
       selectedModel={selectedModel}

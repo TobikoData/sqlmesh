@@ -34,6 +34,9 @@ export type VSCodeCallback = {
     requestId: string
     response: any
   }
+  savedFile: {
+    fileUri: string
+  }
 }
 
 export type VSCodeEvent = {

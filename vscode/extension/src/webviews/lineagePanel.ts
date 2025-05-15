@@ -26,6 +26,16 @@ export class LineagePanel implements WebviewViewProvider, Disposable {
       this.panel.webview.html = this.getHTML(this.panel.webview)
     }
 
+    workspace.onDidSaveTextDocument(document => {
+      this.panel?.webview.postMessage({
+        key: 'vscode_send',
+        payload: {
+          key: 'savedFile',
+          payload: { fileUri: document.uri.fsPath },
+        },
+      })
+    })
+
     window.onDidChangeActiveTextEditor(editor => {
       if (editor) {
         this.panel?.webview.postMessage({
