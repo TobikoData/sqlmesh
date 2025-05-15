@@ -1094,8 +1094,8 @@ def pivot(
     cmp: exp.Literal = exp.Literal.string("="),
     prefix: exp.Literal = exp.Literal.string(""),
     suffix: exp.Literal = exp.Literal.string(""),
-    then_value: exp.Literal = exp.Literal.number(1),
-    else_value: exp.Literal = exp.Literal.number(0),
+    then_value: t.Union[exp.Literal, exp.Expression] = exp.Literal.number(1),
+    else_value: t.Union[exp.Literal, exp.Expression] = exp.Literal.number(0),
     quote: exp.Boolean = exp.true(),
     distinct: exp.Boolean = exp.false(),
 ) -> t.List[exp.Expression]:
