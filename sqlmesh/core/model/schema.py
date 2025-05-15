@@ -101,4 +101,5 @@ def _update_model_schemas(
                     errors.append(f"{ex}")
 
     if errors:
-        raise SchemaError(f"Failed to update model schemas\n\n{'\n'.join(errors)}")
+        error_string = "\n".join(errors)
+        raise SchemaError(f"Failed to update model schemas\n\n{error_string}")
