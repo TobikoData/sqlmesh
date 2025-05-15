@@ -565,7 +565,8 @@ class SqlMeshLoader(Loader):
                         errors.append(f"Failed to load model definition at '{path}'.\n\n{ex}")
 
             if errors:
-                raise ConfigError(f"Failed to load models\n\n{'\n'.join(errors)}")
+                error_string = "\n".join(errors)
+                raise ConfigError(f"Failed to load models\n\n{error_string}")
 
         return models
 
