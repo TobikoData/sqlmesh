@@ -1,4 +1,4 @@
-import { exec, ExecOptions } from 'child_process'
+import { exec, ExecOptions } from 'node:child_process'
 import { traceInfo } from './common/log'
 
 export interface ExecResult {
@@ -7,29 +7,51 @@ export interface ExecResult {
   stderr: string
 }
 
-export interface CancellableExecOptions extends ExecOptions {
-  /** When `abort()` is called on this signal the child process is killed. */
-  signal?: AbortSignal
+export async function execAsync(
+  command: string,
+  args: string[] = [],
+  options: ExecOptions & { signal?: AbortSignal } = {},
+): Promise<ExecResult> {
+  const fullCmd = `${command} ${args.join(' ')}`
+  traceInfo(`Executing command: ${fullCmd}`)
+
+  try {
+    const result = await execAsyncCore(command, args, options)
+    traceInfo(
+      `Command ${fullCmd} exited with code ${result.exitCode}; stdout: ${result.stdout}; stderr: ${result.stderr}`,
+    )
+    return result
+  } catch (err) {
+    if ((err as any)?.name === 'AbortError') {
+      traceInfo(`Command ${fullCmd} was cancelled by AbortController`)
+    } else {
+      traceInfo(`Command ${fullCmd} failed: ${(err as Error).message}`)
+    }
+    throw err // keep original error semantics
+  }
 }
 
-export function execAsync(
+function execAsyncCore(
   command: string,
   args: string[],
-  options: CancellableExecOptions = {},
+  options: ExecOptions & { signal?: AbortSignal } = {},
 ): Promise<ExecResult> {
-  return new Promise((resolve, reject) => {
-    // Pass the signal straight through to `exec`
-    traceInfo(`Executing command: ${command} ${args.join(' ')}`)
+  return new Promise<ExecResult>((resolve, reject) => {
     const child = exec(
       `${command} ${args.join(' ')}`,
       options,
       (error, stdout, stderr) => {
         if (error) {
-          resolve({
-            exitCode: typeof error.code === 'number' ? error.code : 1,
-            stdout,
-            stderr,
-          })
+          // Forward AbortError unchanged so callers can detect cancellation
+          if ((error as NodeJS.ErrnoException).name === 'AbortError') {
+            reject(error)
+          } else {
+            resolve({
+              exitCode: typeof error.code === 'number' ? error.code : 1,
+              stdout,
+              stderr,
+            })
+          }
           return
         }
 
@@ -41,28 +63,7 @@ export function execAsync(
       },
     )
 
-    /* ----------  Tie the Promise life‑cycle to the AbortSignal ---------- */
-
-    if (options.signal) {
-      // If the caller aborts: kill the child and reject the promise
-      const onAbort = () => {
-        // `SIGTERM` is the default; use `SIGKILL` if you need something stronger
-        child.kill()
-        reject(new Error('Process cancelled'))
-      }
-
-      if (options.signal.aborted) {
-        onAbort()
-        return
-      }
-      options.signal.addEventListener('abort', onAbort, { once: true })
-
-      // Clean‑up the event listener when the promise settles
-      const cleanup = () => {
-        options.signal!.removeEventListener('abort', onAbort)
-      }
-      child.once('exit', cleanup)
-      child.once('error', cleanup)
-    }
+    // surface “spawn failed” errors that occur before the callback
+    child.once('error', reject)
   })
 }
