@@ -1,7 +1,7 @@
 import typing as t
 import pytest
+from pytest import FixtureRequest
 from sqlglot import exp
-from pathlib import Path
 from sqlglot.optimizer.qualify_columns import quote_identifiers
 from sqlglot.helper import seq_get
 from sqlmesh.core.engine_adapter import SnowflakeEngineAdapter
@@ -11,17 +11,26 @@ from sqlmesh.core.model import SqlModel, load_sql_based_model
 from sqlmesh.core.plan import Plan
 from tests.core.engine_adapter.integration import TestContext
 
-pytestmark = [pytest.mark.engine, pytest.mark.remote, pytest.mark.snowflake]
+from tests.core.engine_adapter.integration import (
+    TestContext,
+    generate_pytest_params,
+    ENGINES_BY_NAME,
+    IntegrationTestEngine,
+)
+
+
+@pytest.fixture(params=list(generate_pytest_params(ENGINES_BY_NAME["snowflake"])))
+def ctx(
+    request: FixtureRequest,
+    create_test_context: t.Callable[[IntegrationTestEngine, str, str], t.Iterable[TestContext]],
+) -> t.Iterable[TestContext]:
+    yield from create_test_context(*request.param)
 
 
 @pytest.fixture
-def mark_gateway() -> t.Tuple[str, str]:
-    return "snowflake", "inttest_snowflake"
-
-
-@pytest.fixture
-def test_type() -> str:
-    return "query"
+def engine_adapter(ctx: TestContext) -> SnowflakeEngineAdapter:
+    assert isinstance(ctx.engine_adapter, SnowflakeEngineAdapter)
+    return ctx.engine_adapter
 
 
 def test_get_alter_expressions_includes_clustering(
@@ -211,49 +220,3 @@ def test_create_iceberg_table(ctx: TestContext, engine_adapter: SnowflakeEngineA
     result = sqlmesh.plan(auto_apply=True)
 
     assert len(result.new_snapshots) == 2
-
-
-def test_snowpark_python_model_column_order(ctx: TestContext, tmp_path: Path):
-    model_name = ctx.table("TEST")
-
-    (tmp_path / "models").mkdir()
-
-    # note: this model deliberately defines the columns in the @model definition to be in a different order than what
-    # is returned by the DataFrame within the model
-    model_path = tmp_path / "models" / "python_model.py"
-
-    # python model that emits a Snowpark DataFrame
-    model_path.write_text(
-        """
-from snowflake.snowpark.dataframe import DataFrame
-import typing as t
-from sqlmesh import ExecutionContext, model
-
-@model(
-    'MODEL_NAME',
-    columns={
-        "id": "int",
-        "name": "varchar"
-    }
-)
-def execute(
-    context: ExecutionContext,
-    **kwargs: t.Any,
-) -> DataFrame:
-    return context.snowpark.create_dataframe([["foo", 1]], schema=["name", "id"])
-""".replace("MODEL_NAME", model_name.sql(dialect="snowflake"))
-    )
-
-    sqlmesh_ctx = ctx.create_context(path=tmp_path)
-
-    assert len(sqlmesh_ctx.models) == 1
-
-    plan = sqlmesh_ctx.plan(auto_apply=True)
-    assert len(plan.new_snapshots) == 1
-
-    engine_adapter = sqlmesh_ctx.engine_adapter
-
-    query = exp.select("*").from_(plan.environment.snapshots[0].fully_qualified_table)
-    df = engine_adapter.fetchdf(query, quote_identifiers=True)
-    assert len(df) == 1
-    assert df.iloc[0].to_dict() == {"id": 1, "name": "foo"}

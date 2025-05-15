@@ -1975,6 +1975,8 @@ def test_custom_materialization(init_and_plan_context: t.Callable):
 # needs to be defined at the top level. If its defined within the test body,
 # adding to the snapshot cache fails with: AttributeError: Can't pickle local object
 class TestCustomKind(CustomKind):
+    __test__ = False  # prevent pytest warning since this isnt a class containing tests
+
     @property
     def custom_property(self) -> str:
         return validate_string(self.materialization_properties.get("custom_property"))

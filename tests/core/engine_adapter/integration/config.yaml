@@ -8,7 +8,7 @@ gateways:
         testing: 'testing.duckdb'
 
   # Databases with docker images available
-  inttest_trino:
+  inttest_trino_hive:
     connection:
       type: trino
       host: {{ env_var('DOCKER_HOSTNAME', 'localhost') }}
@@ -81,7 +81,7 @@ gateways:
       password: mysql
       port: 3306
       charset: utf8
-  inttest_clickhouse:
+  inttest_clickhouse_standalone:
     connection:
       type: clickhouse
       host: {{ env_var('DOCKER_HOSTNAME', 'localhost') }}

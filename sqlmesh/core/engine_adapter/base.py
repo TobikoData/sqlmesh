@@ -1008,6 +1008,8 @@ class EngineAdapter:
         if materialized_properties and not materialized:
             raise SQLMeshError("Materialized properties are only supported for materialized views")
 
+        query_or_df = self._native_df_to_pandas_df(query_or_df)
+
         if isinstance(query_or_df, pd.DataFrame):
             values: t.List[t.Tuple[t.Any, ...]] = list(
                 query_or_df.itertuples(index=False, name=None)
@@ -2001,6 +2003,19 @@ class EngineAdapter:
         with self.transaction():
             self.execute(query, quote_identifiers=quote_identifiers)
             return self.cursor.fetchdf()
+
+    def _native_df_to_pandas_df(
+        self,
+        query_or_df: QueryOrDF,
+    ) -> t.Union[Query, pd.DataFrame]:
+        """
+        Take a "native" DataFrame (eg Pyspark, Bigframe, Snowpark etc) and convert it to Pandas
+        """
+        if isinstance(query_or_df, (exp.Query, exp.DerivedTable, pd.DataFrame)):
+            return query_or_df
+
+        # EngineAdapter subclasses that have native DataFrame types should override this
+        raise NotImplementedError(f"Unable to convert {type(query_or_df)} to Pandas")
 
     def fetchdf(
         self, query: t.Union[exp.Expression, str], quote_identifiers: bool = False
