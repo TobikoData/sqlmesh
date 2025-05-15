@@ -28,10 +28,7 @@ def update_model_schemas(
     schema = MappingSchema(normalize=False)
     optimized_query_cache: OptimizedQueryCache = OptimizedQueryCache(context_path / c.CACHE)
 
-    if c.MAX_FORK_WORKERS == 1:
-        _update_model_schemas_sequential(dag, models, schema, optimized_query_cache)
-    else:
-        _update_model_schemas_parallel(dag, models, schema, optimized_query_cache)
+    _update_model_schemas(dag, models, schema, optimized_query_cache)
 
 
 def _update_schema_with_model(schema: MappingSchema, model: Model) -> None:
@@ -49,25 +46,7 @@ def _update_schema_with_model(schema: MappingSchema, model: Model) -> None:
             raise
 
 
-def _update_model_schemas_sequential(
-    dag: DAG[str],
-    models: UniqueKeyDict[str, Model],
-    schema: MappingSchema,
-    optimized_query_cache: OptimizedQueryCache,
-) -> None:
-    for name in dag.sorted:
-        model = models.get(name)
-
-        # External models don't exist in the context, so we need to skip them
-        if not model:
-            continue
-
-        model.update_schema(schema)
-        optimized_query_cache.with_optimized_query(model)
-        _update_schema_with_model(schema, model)
-
-
-def _update_model_schemas_parallel(
+def _update_model_schemas(
     dag: DAG[str],
     models: UniqueKeyDict[str, Model],
     schema: MappingSchema,
@@ -102,17 +81,24 @@ def _update_model_schemas_parallel(
                     )
                 )
 
+    errors: t.List[str] = []
     with optimized_query_cache_pool(optimized_query_cache) as executor:
         process_models()
 
-        while futures:
+        while futures and not errors:
             for future in as_completed(futures):
-                futures.remove(future)
-                fqn, entry_name, data_hash, metadata_hash, mapping_schema = future.result()
-                model = models[fqn]
-                model._data_hash = data_hash
-                model._metadata_hash = metadata_hash
-                model.set_mapping_schema(mapping_schema)
-                optimized_query_cache.with_optimized_query(model, entry_name)
-                _update_schema_with_model(schema, model)
-                process_models(completed_model=model)
+                try:
+                    futures.remove(future)
+                    fqn, entry_name, data_hash, metadata_hash, mapping_schema = future.result()
+                    model = models[fqn]
+                    model._data_hash = data_hash
+                    model._metadata_hash = metadata_hash
+                    model.set_mapping_schema(mapping_schema)
+                    optimized_query_cache.with_optimized_query(model, entry_name)
+                    _update_schema_with_model(schema, model)
+                    process_models(completed_model=model)
+                except Exception as ex:
+                    errors.append(f"{ex}")
+
+    if errors:
+        raise SchemaError(f"Failed to update model schemas\n\n{'\n'.join(errors)}")

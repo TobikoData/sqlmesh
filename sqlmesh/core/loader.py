@@ -1,15 +1,12 @@
 from __future__ import annotations
 
 import abc
-import concurrent.futures
 import glob
 import itertools
 import linecache
-import multiprocessing as mp
 import os
 import re
 import typing as t
-import concurrent
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import Path
@@ -42,6 +39,7 @@ from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroExtractor
 from sqlmesh.utils.metaprogramming import import_python_file
 from sqlmesh.utils.pydantic import validation_error_message
+from sqlmesh.utils.process import create_process_pool_executor
 from sqlmesh.utils.yaml import YAML, load as yaml_load
 
 
@@ -543,8 +541,7 @@ class SqlMeshLoader(Loader):
             )
 
             errors: t.List[str] = []
-            with concurrent.futures.ProcessPoolExecutor(
-                mp_context=mp.get_context("fork"),
+            with create_process_pool_executor(
                 initializer=_init_model_defaults,
                 initargs=(self.config, gateway, defaults, cache),
                 max_workers=c.MAX_FORK_WORKERS,

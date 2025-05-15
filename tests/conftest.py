@@ -526,15 +526,3 @@ def make_temp_table_name(mocker: MockerFixture) -> t.Callable:
         return temp_table
 
     return _make_function
-
-
-@pytest.fixture(autouse=True)
-def patch_process_pool_executor(mocker: MockerFixture, request):
-    """Patch ProcessPoolExecutor with MockProcessPoolExecutor in all tests except test_forking.py."""
-    # Skip mocking for test_forking.py
-    if request.node.fspath.basename == "test_forking.py":
-        return
-
-    from tests.mock_executor import MockProcessPoolExecutor
-
-    mocker.patch("concurrent.futures.ProcessPoolExecutor", MockProcessPoolExecutor)
