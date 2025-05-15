@@ -31,6 +31,7 @@ from sqlmesh.core.model.common import (
     parse_dependencies,
     single_value_or_tuple,
     sorted_python_env_payloads,
+    validate_extra_and_required_fields,
 )
 from sqlmesh.core.model.meta import ModelMeta, FunctionCall
 from sqlmesh.core.model.kind import (
@@ -2190,15 +2191,11 @@ def load_sql_based_model(
     seed_properties = {
         p.name.lower(): p.args.get("value") for p in common_kwargs.pop("kind").expressions
     }
-    try:
-        return create_seed_model(
-            name,
-            SeedKind(**seed_properties),
-            **common_kwargs,
-        )
-    except Exception as ex:
-        raise_config_error(str(ex), path)
-        raise
+    return create_seed_model(
+        name,
+        SeedKind(**seed_properties),
+        **common_kwargs,
+    )
 
 
 def create_sql_model(
@@ -2398,7 +2395,9 @@ def _create_model(
     blueprint_variables: t.Optional[t.Dict[str, t.Any]] = None,
     **kwargs: t.Any,
 ) -> Model:
-    _validate_model_fields(klass, {"name", *kwargs} - {"grain", "table_properties"}, path)
+    validate_extra_and_required_fields(
+        klass, {"name", *kwargs} - {"grain", "table_properties"}, "model definition"
+    )
 
     for prop in PROPERTIES:
         kwargs[prop] = _resolve_properties((defaults or {}).get(prop), kwargs.get(prop))
@@ -2457,21 +2456,17 @@ def _create_model(
     for jinja_macro in jinja_macros.root_macros.values():
         used_variables.update(extract_macro_references_and_variables(jinja_macro.definition)[1])
 
-    try:
-        model = klass(
-            name=name,
-            **{
-                **(defaults or {}),
-                "jinja_macros": jinja_macros or JinjaMacroRegistry(),
-                "dialect": dialect,
-                "depends_on": depends_on,
-                "physical_schema_override": physical_schema_override,
-                **kwargs,
-            },
-        )
-    except Exception as ex:
-        raise_config_error(str(ex), location=path)
-        raise
+    model = klass(
+        name=name,
+        **{
+            **(defaults or {}),
+            "jinja_macros": jinja_macros or JinjaMacroRegistry(),
+            "dialect": dialect,
+            "depends_on": depends_on,
+            "physical_schema_override": physical_schema_override,
+            **kwargs,
+        },
+    )
 
     audit_definitions = {
         **(audit_definitions or {}),
@@ -2634,19 +2629,6 @@ def _resolve_properties(
         return exp.Tuple(expressions=list(properties.values()))
 
     return None
-
-
-def _validate_model_fields(klass: t.Type[_Model], provided_fields: t.Set[str], path: Path) -> None:
-    missing_required_fields = klass.missing_required_fields(provided_fields)
-    if missing_required_fields:
-        raise_config_error(
-            f"Missing required fields {missing_required_fields} in the model definition",
-            path,
-        )
-
-    extra_fields = klass.extra_fields(provided_fields)
-    if extra_fields:
-        raise_config_error(f"Invalid extra fields {extra_fields} in the model definition", path)
 
 
 def _list_of_calls_to_exp(value: t.List[t.Tuple[str, t.Dict[str, t.Any]]]) -> exp.Expression:

@@ -355,7 +355,7 @@ class ModelMeta(_Node):
                 and not (kind.is_view and kind.materialized)
             ):
                 name = field[:-1] if field.endswith("_") else field
-                raise ValueError(f"{name} field cannot be set for {kind} models")
+                raise ValueError(f"{name} field cannot be set for {kind.name} models")
         if kind.is_incremental_by_partition and not getattr(self, "partitioned_by_", None):
             raise ValueError(f"partitioned_by field is required for {kind.name} models")
 

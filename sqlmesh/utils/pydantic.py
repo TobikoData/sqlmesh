@@ -211,6 +211,20 @@ def positive_int_validator(v: t.Any) -> int:
     return v
 
 
+def validation_error_message(error: pydantic.ValidationError, base: str) -> str:
+    errors = "\n  ".join(_formatted_validation_errors(error))
+    return f"{base}\n  {errors}"
+
+
+def _formatted_validation_errors(error: pydantic.ValidationError) -> t.List[str]:
+    result = []
+    for e in error.errors():
+        msg = e["msg"]
+        loc: t.Optional[t.Tuple] = e.get("loc")
+        result.append(f"Invalid field '{loc[0]}':\n    {msg}" if loc else msg)
+    return result
+
+
 def _get_field(
     v: t.Any,
     values: t.Any,
@@ -280,6 +294,9 @@ def cron_validator(v: t.Any) -> str:
         v = v.name
 
     from croniter import CroniterBadCronError, croniter
+
+    if not isinstance(v, str):
+        raise ValueError(f"Invalid cron expression '{v}'. Value must be a string.")
 
     try:
         croniter(v)

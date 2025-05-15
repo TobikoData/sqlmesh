@@ -973,13 +973,13 @@ def test_databricks(make_config):
     assert oauth_u2m_config.oauth_client_secret is None
 
     # auth_type must match the AuthType enum if specified
-    with pytest.raises(ValueError, match=r".*nonexist does not match a valid option.*"):
+    with pytest.raises(ConfigError, match=r".*nonexist does not match a valid option.*"):
         make_config(
             type="databricks", server_hostname="dbc-test.cloud.databricks.com", auth_type="nonexist"
         )
 
     # if client_secret is specified, client_id must also be specified
-    with pytest.raises(ValueError, match=r"`oauth_client_id` is required.*"):
+    with pytest.raises(ConfigError, match=r"`oauth_client_id` is required.*"):
         make_config(
             type="databricks",
             server_hostname="dbc-test.cloud.databricks.com",
@@ -988,7 +988,7 @@ def test_databricks(make_config):
         )
 
     # http_path is still required when auth_type is specified
-    with pytest.raises(ValueError, match=r"`http_path` is still required.*"):
+    with pytest.raises(ConfigError, match=r"`http_path` is still required.*"):
         make_config(
             type="databricks",
             server_hostname="dbc-test.cloud.databricks.com",
