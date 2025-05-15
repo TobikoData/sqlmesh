@@ -11,6 +11,7 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 from pydantic import ValidationError
+import concurrent.futures
 
 from sqlglot.errors import SqlglotError
 from sqlglot import exp
@@ -547,9 +548,10 @@ class SqlMeshLoader(Loader):
                 max_workers=c.MAX_FORK_WORKERS,
             ) as pool:
                 futures_to_paths = {pool.submit(load_sql_models, path): path for path in paths}
-                for fut, path in futures_to_paths.items():
+                for future in concurrent.futures.as_completed(futures_to_paths):
+                    path = futures_to_paths[future]
                     try:
-                        _, loaded = fut.result()
+                        _, loaded = future.result()
                         if loaded:
                             for model in loaded:
                                 if model.enabled:
