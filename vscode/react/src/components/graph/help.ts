@@ -15,10 +15,10 @@ import {
   EnumLineageNodeModelType,
   type LineageNodeModelType,
 } from './ModelNode'
+import type { Lineage } from '@/domain/lineage'
+import type { ConnectedNode } from '@/workers/lineage'
 
-type Lineage = any
 type ModelSQLMeshModel = any
-type ConnectedNode = any
 
 export interface GraphNodeData {
   label: string
