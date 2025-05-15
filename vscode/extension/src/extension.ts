@@ -62,27 +62,6 @@ export async function activate(context: vscode.ExtensionContext) {
   )
 
   lspClient = new LSPClient()
-  const result = await lspClient.start()
-  if (isErr(result)) {
-    switch (result.error.type) {
-      case 'not_signed_in':
-        await handleNotSginedInError(authProvider)
-        break
-      case 'sqlmesh_lsp_not_found':
-        await handleSqlmeshLspNotFoundError()
-        break
-      case 'sqlmesh_lsp_dependencies_missing':
-        await handleSqlmeshLspDependenciesMissingError(result.error)
-        break
-      case 'generic':
-        await vscode.window.showErrorMessage(
-          `Failed to start LSP: ${result.error.message}`,
-        )
-        break
-    }
-  } else {
-    context.subscriptions.push(lspClient)
-  }
 
   context.subscriptions.push(
     vscode.languages.registerCompletionItemProvider(
@@ -137,6 +116,28 @@ export async function activate(context: vscode.ExtensionContext) {
       await restart()
     }),
   )
+
+  const result = await lspClient.start()
+  if (isErr(result)) {
+    switch (result.error.type) {
+      case 'not_signed_in':
+        await handleNotSginedInError(authProvider)
+        break
+      case 'sqlmesh_lsp_not_found':
+        await handleSqlmeshLspNotFoundError()
+        break
+      case 'sqlmesh_lsp_dependencies_missing':
+        await handleSqlmeshLspDependenciesMissingError(result.error)
+        break
+      case 'generic':
+        await vscode.window.showErrorMessage(
+          `Failed to start LSP: ${result.error.message}`,
+        )
+        break
+    }
+  } else {
+    context.subscriptions.push(lspClient)
+  }
 
   traceInfo('Extension activated')
 }
