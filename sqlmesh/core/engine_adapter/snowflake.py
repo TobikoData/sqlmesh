@@ -451,6 +451,10 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
         if object_names:
             query = query.where(exp.column("TABLE_NAME").isin(*object_names))
 
+        # exclude SNOWPARK_TEMP_TABLE tables that are managed by the Snowpark library and are an implementation
+        # detail of dealing with DataFrame's
+        query = query.where(exp.column("TABLE_NAME").like("SNOWPARK_TEMP_TABLE%").not_())
+
         df = self.fetchdf(query, quote_identifiers=True)
         if df.empty:
             return []

@@ -713,6 +713,10 @@ class TestContext:
                 schema_name=schema_name, ignore_if_not_exists=True, cascade=True
             )
 
+        if snowpark := self.engine_adapter.snowpark:
+            # ensure that the next test gets a fresh Snowpark session
+            snowpark.close()
+
     def upsert_sql_model(self, model_definition: str) -> t.Tuple[Context, SqlModel]:
         if not self._context:
             self._context = self.create_context()
