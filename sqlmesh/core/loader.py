@@ -223,7 +223,7 @@ class Loader(abc.ABC):
         if external_models_path.exists() and external_models_path.is_dir():
             paths_to_load.extend(self._glob_paths(external_models_path, extension=".yaml"))
 
-        def _load() -> t.List[Model]:
+        def _load(path: Path) -> t.List[Model]:
             try:
                 with open(path, "r", encoding="utf-8") as file:
                     return [
@@ -241,21 +241,30 @@ class Loader(abc.ABC):
                         for row in YAML().load(file.read())
                     ]
             except Exception as ex:
-                raise ConfigError(f"Failed to load model definition at '{path}'.\n{ex}")
+                self._raise_failed_to_load_model_error(path, str(ex))
+                raise
 
         for path in paths_to_load:
             self._track_file(path)
 
-            external_models = cache.get_or_load_models(path, _load)
+            external_models = cache.get_or_load_models(path, lambda: _load(path))
             # external models with no explicit gateway defined form the base set
             for model in external_models:
                 if model.gateway is None:
+                    if model.fqn in models:
+                        self._raise_failed_to_load_model_error(
+                            path, f"Duplicate external model name: '{model.name}'."
+                        )
                     models[model.fqn] = model
 
             # however, if there is a gateway defined, gateway-specific models take precedence
             if gateway:
                 for model in external_models:
                     if model.gateway == gateway:
+                        if model.fqn in models and models[model.fqn].gateway == gateway:
+                            self._raise_failed_to_load_model_error(
+                                path, f"Duplicate external model name: '{model.name}'."
+                            )
                         models.update({model.fqn: model})
 
         return models
@@ -362,6 +371,9 @@ class Loader(abc.ABC):
             }
 
         return self._variables_by_gateway[gateway_name]
+
+    def _raise_failed_to_load_model_error(self, path: Path, message: str) -> None:
+        raise ConfigError(f"Failed to load model definition at '{path}'.\n{message}")
 
 
 class SqlMeshLoader(Loader):
@@ -484,9 +496,14 @@ class SqlMeshLoader(Loader):
                         default_catalog_per_gateway=self.context.default_catalog_per_gateway,
                     )
                 except Exception as ex:
-                    raise ConfigError(f"Failed to load model definition at '{path}'.\n{ex}")
+                    self._raise_failed_to_load_model_error(path, str(ex))
+                    raise
 
             for model in cache.get_or_load_models(path, _load):
+                if model.fqn in models:
+                    self._raise_failed_to_load_model_error(
+                        path, f"Duplicate SQL model name: '{model.name}'."
+                    )
                 if model.enabled:
                     models[model.fqn] = model
 
@@ -544,7 +561,7 @@ class SqlMeshLoader(Loader):
                             if model.enabled:
                                 models[model.fqn] = model
                 except Exception as ex:
-                    raise ConfigError(f"Failed to load model definition at '{path}'.\n{ex}")
+                    self._raise_failed_to_load_model_error(path, str(ex))
 
         finally:
             model_registry._dialect = None
