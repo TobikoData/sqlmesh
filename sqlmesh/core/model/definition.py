@@ -812,8 +812,10 @@ class _Model(ModelMeta, frozen=True):
         return exp.convert(time)
 
     def set_mapping_schema(self, schema: t.Dict) -> None:
+        # Make a shallow copy to avoid modifying the original in case they're the same
+        temp_schema = schema.copy()
         self.mapping_schema.clear()
-        self.mapping_schema.update(schema)
+        self.mapping_schema.update(temp_schema)
 
     def update_schema(self, schema: MappingSchema) -> None:
         """Updates the schema for this model's dependencies based on the given mapping schema."""

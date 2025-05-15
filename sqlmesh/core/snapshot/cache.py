@@ -55,20 +55,19 @@ class SnapshotCache:
             for snapshot in loaded_snapshots:
                 snapshots[snapshot.snapshot_id] = snapshot
 
-        if c.MAX_FORK_WORKERS != 1:
-            with optimized_query_cache_pool(self._optimized_query_cache) as executor:
-                for key, entry_name in executor.map(
-                    load_optimized_query,
-                    (
-                        (snapshot.model, s_id)
-                        for s_id, snapshot in snapshots.items()
-                        if snapshot.is_model
-                    ),
-                ):
-                    if entry_name:
-                        self._optimized_query_cache.with_optimized_query(
-                            snapshots[key].model, entry_name
-                        )
+        with optimized_query_cache_pool(self._optimized_query_cache) as executor:
+            for key, entry_name in executor.map(
+                load_optimized_query,
+                (
+                    (snapshot.model, s_id)
+                    for s_id, snapshot in snapshots.items()
+                    if snapshot.is_model
+                ),
+            ):
+                if entry_name:
+                    self._optimized_query_cache.with_optimized_query(
+                        snapshots[key].model, entry_name
+                    )
 
         for snapshot in snapshots.values():
             self._update_node_hash_cache(snapshot)

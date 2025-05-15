@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import logging
-import multiprocessing as mp
 import typing as t
-from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 from sqlglot import exp
@@ -16,6 +14,7 @@ from sqlmesh.core.model.definition import ExternalModel, Model, SqlModel
 from sqlmesh.utils.cache import FileCache
 from sqlmesh.utils.hashing import crc32
 from sqlmesh.utils.windows import IS_WINDOWS
+from sqlmesh.utils.process import PoolExecutor, create_process_pool_executor
 
 from dataclasses import dataclass
 
@@ -136,11 +135,8 @@ class OptimizedQueryCache:
         return f"{model.name}_{crc32(hash_data)}"
 
 
-def optimized_query_cache_pool(optimized_query_cache: OptimizedQueryCache) -> ProcessPoolExecutor:
-    # fork doesnt work on Windows. ref: https://docs.python.org/3/library/multiprocessing.html#multiprocessing-start-methods
-    context_type = "spawn" if IS_WINDOWS else "fork"
-    return ProcessPoolExecutor(
-        mp_context=mp.get_context(context_type),
+def optimized_query_cache_pool(optimized_query_cache: OptimizedQueryCache) -> PoolExecutor:
+    return create_process_pool_executor(
         initializer=_init_optimized_query_cache,
         initargs=(optimized_query_cache,),
         max_workers=c.MAX_FORK_WORKERS,

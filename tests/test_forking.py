@@ -10,7 +10,7 @@ pytestmark = pytest.mark.isolated
 
 def test_parallel_load(assert_exp_eq, mocker):
     mocker.patch("sqlmesh.core.constants.MAX_FORK_WORKERS", 2)
-    spy = mocker.spy(schema, "_update_model_schemas_parallel")
+    spy = mocker.spy(schema, "_update_model_schemas")
     context = Context(paths="examples/sushi")
 
     if hasattr(os, "fork"):
