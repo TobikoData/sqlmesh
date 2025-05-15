@@ -85,14 +85,14 @@ def test_duplicate_model_names_different_kind(tmp_path: Path, sample_models):
         path_3.write_text(model_3["contents"])
 
     with pytest.raises(
-        ValueError, match=r'Duplicate model name\(s\) found: "memory"."test_schema"."test_model".'
+        ConfigError, match=r'Duplicate model name\(s\) found: "memory"."test_schema"."test_model".'
     ):
         Context(paths=tmp_path, config=config)
 
 
 @pytest.mark.parametrize("sample_models", ["sql", "external"], indirect=True)
 def test_duplicate_model_names_same_kind(tmp_path: Path, sample_models):
-    """Test same (SQL and external) models with duplicate model names raises ValueError."""
+    """Test same (SQL and external) models with duplicate model names raises ConfigError."""
 
     def duplicate_model_path(fpath):
         return Path(fpath).parent / ("duplicate" + Path(fpath).suffix)

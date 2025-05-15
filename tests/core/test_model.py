@@ -2941,7 +2941,7 @@ def test_model_cache(tmp_path: Path, mocker: MockerFixture):
     expressions = d.parse(
         """
         MODEL (
-            name db.seed,
+            name db.model_sql,
         );
         SELECT 1, ds;
     """
@@ -2949,18 +2949,25 @@ def test_model_cache(tmp_path: Path, mocker: MockerFixture):
 
     model = load_sql_based_model([e for e in expressions if e])
 
-    loader = mocker.Mock(return_value=[model])
+    assert cache.put([model], "test_model", "test_entry_a")
+    assert cache.get("test_model", "test_entry_a")[0].dict() == model.dict()
 
-    assert cache.get_or_load("test_model", "test_entry_a", loader=loader)[0].dict() == model.dict()
-    assert cache.get_or_load("test_model", "test_entry_a", loader=loader)[0].dict() == model.dict()
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.model_seed,
+            kind SEED (
+              path '../seeds/waiter_names.csv',
+            ),
+        );
+    """
+    )
 
-    assert cache.get_or_load("test_model", "test_entry_b", loader=loader)[0].dict() == model.dict()
-    assert cache.get_or_load("test_model", "test_entry_b", loader=loader)[0].dict() == model.dict()
+    seed_model = load_sql_based_model(
+        expressions, path=Path("./examples/sushi/models/test_model.sql")
+    )
 
-    assert cache.get_or_load("test_model", "test_entry_a", loader=loader)[0].dict() == model.dict()
-    assert cache.get_or_load("test_model", "test_entry_a", loader=loader)[0].dict() == model.dict()
-
-    assert loader.call_count == 2
+    assert not cache.put([seed_model], "test_model", "test_entry_b")
 
 
 @pytest.mark.slow
@@ -2983,7 +2990,7 @@ def test_model_cache_gateway(tmp_path: Path, mocker: MockerFixture):
     assert patched_cache_put.call_count == 0
 
     Context(paths=tmp_path, config=config, gateway="secondary")
-    assert patched_cache_put.call_count == 4
+    assert patched_cache_put.call_count == 2
 
 
 @pytest.mark.slow
@@ -3001,7 +3008,7 @@ def test_model_cache_default_catalog(tmp_path: Path, mocker: MockerFixture):
         PropertyMock(return_value=None),
     ):
         Context(paths=tmp_path)
-        assert patched_cache_put.call_count == 4
+        assert patched_cache_put.call_count == 2
 
 
 def test_model_ctas_query():
