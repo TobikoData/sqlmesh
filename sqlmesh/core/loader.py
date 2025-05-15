@@ -253,7 +253,7 @@ class Loader(abc.ABC):
                 if model.gateway is None:
                     if model.fqn in models:
                         self._raise_failed_to_load_model_error(
-                            path, f"Duplicate external model name: '{model.name}'"
+                            path, f"Duplicate external model name: '{model.name}'."
                         )
                     models[model.fqn] = model
 
@@ -263,7 +263,7 @@ class Loader(abc.ABC):
                     if model.gateway == gateway:
                         if model.fqn in models and models[model.fqn].gateway == gateway:
                             self._raise_failed_to_load_model_error(
-                                path, f"Duplicate external model name: '{model.name}'"
+                                path, f"Duplicate external model name: '{model.name}'."
                             )
                         models.update({model.fqn: model})
 
@@ -502,7 +502,7 @@ class SqlMeshLoader(Loader):
             for model in cache.get_or_load_models(path, _load):
                 if model.fqn in models:
                     self._raise_failed_to_load_model_error(
-                        path, f"Duplicate SQL model name: '{model.name}'"
+                        path, f"Duplicate SQL model name: '{model.name}'."
                     )
                 if model.enabled:
                     models[model.fqn] = model

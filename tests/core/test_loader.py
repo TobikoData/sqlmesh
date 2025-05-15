@@ -159,7 +159,7 @@ def execute(
 
     with pytest.raises(
         ConfigError,
-        match=r"Failed to load model definition at '.*'.\nDuplicate key 'test_schema.test_model' found in UniqueKeyDict<python_models>.",
+        match=r"Failed to load model definition at '.*'.\nDuplicate name: 'test_schema.test_model'.",
     ):
         Context(paths=tmp_path, config=config)
 
