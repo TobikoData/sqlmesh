@@ -1,12 +1,16 @@
 # Visual Studio Code Extension
 
-> The extension is currently in **preview** and as such is subject to change. You may also encounter bugs and API incompatibilities with the SQLMesh version you are running. We encourage you to try it and raise any issues [here](https://github.com/tobikodata/sqlmesh/issues).
+!!! danger "Preview"
+
+    The extension is currently in preview and as such is subject to change. You may encounter bugs and API incompatibilities with the SQLMesh version you are running. We encourage you to try it and raise any issues [here](https://github.com/tobikodata/sqlmesh/issues).
 
 In this quickstart guide, you'll set up the SQLMesh extension in Visual Studio Code. We'll show you the capabilities of the extension and how to troubleshoot common issues.
 
 ## Installation
 
-Installation is done through the VSCode extension marketplace, search for `SQLMesh` and install the extension from the [marketplace](https://marketplace.visualstudio.com/items?itemName=tobikodata.sqlmesh). For a more in depth guide on how to install extensions, see the [VSCode documentation](https://code.visualstudio.com/docs/configure/extensions/extension-marketplace#_install-an-extension).
+Installation is done through the official [marketplace](https://marketplace.visualstudio.com/items?itemName=tobikodata.sqlmesh) or by searching for `SQLMesh` in the "Extensions" tab of Visual Studio Code. 
+
+For further guidance on how to install extensions, see the [relevant Visual Studio Code documentation](https://code.visualstudio.com/docs/configure/extensions/extension-marketplace#_install-an-extension).  
 
 ### Recommended setup
 
@@ -86,7 +90,7 @@ The SQLMesh LSP adds a diagnostic provider for your SQLMesh project. If you have
 
 **Formatting**
 
-The SQLMesh LSP also adds a formatting provider for SQLMesh models. When you write SQL models, you can use formatter to foramt models consistently.
+The SQLMesh LSP also adds a formatting provider for SQLMesh models. When you write SQL models, you can use the formatter to format models consistently.
 
 ## Troubleshooting
 
