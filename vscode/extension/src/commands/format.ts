@@ -7,6 +7,7 @@ import {
   handleNotSginedInError,
   handleSqlmeshLspNotFoundError,
   handleSqlmeshLspDependenciesMissingError,
+  handleTcloudBinNotFoundError,
 } from '../utilities/errors'
 import { AuthenticationProviderTobikoCloud } from '../auth/auth'
 import { execAsync } from '../utilities/exec'
@@ -26,6 +27,9 @@ export const format =
           return
         case 'sqlmesh_lsp_dependencies_missing':
           await handleSqlmeshLspDependenciesMissingError(out.error)
+          return
+        case 'tcloud_bin_not_found':
+          await handleTcloudBinNotFoundError()
           return
         case 'generic':
           await vscode.window.showErrorMessage(
