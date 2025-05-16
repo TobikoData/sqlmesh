@@ -231,8 +231,11 @@ def test_create_iceberg_table(ctx: TestContext, engine_adapter: SnowflakeEngineA
 def test_snowpark_concurrency(ctx: TestContext) -> None:
     from snowflake.snowpark import DataFrame
 
+    table = ctx.table("my_model")
+
+    # this model will insert 10 records in batches of 1, with 4 batches at a time running concurrently
     @model(
-        name="my_model",
+        name=table.sql(),
         kind=dict(
             name=ModelKindName.INCREMENTAL_BY_TIME_RANGE,
             time_column="ds",
@@ -249,7 +252,7 @@ def test_snowpark_concurrency(ctx: TestContext) -> None:
 
         raise ValueError("Snowpark not present!")
 
-    m = model.get_registry()["my_model"].model(
+    m = model.get_registry()[table.sql().lower()].model(
         module_path=Path("."), path=Path("."), dialect="snowflake"
     )
 
@@ -265,4 +268,6 @@ def test_snowpark_concurrency(ctx: TestContext) -> None:
 
     assert len(plan.new_snapshots) == 1
 
-    # todo: read table result
+    query = exp.select("*").from_(table)
+    df = ctx.engine_adapter.fetchdf(query, quote_identifiers=True)
+    assert len(df) == 10
