@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 import pathlib
+import re
 import sys
 import typing as t
 import shutil
@@ -1571,7 +1572,6 @@ def test_init_project(ctx: TestContext, tmp_path_factory: pytest.TempPathFactory
 
     # normalize object names for snowflake
     if ctx.dialect == "snowflake":
-        import re
 
         def _normalize_snowflake(name: str, prefix_regex: str = "(sqlmesh__)(.*)"):
             match = re.search(prefix_regex, name)
@@ -1789,7 +1789,6 @@ def test_to_time_column(
         # Clickhouse does not have natively timezone-aware types and does not accept timestrings
         #   with UTC offset "+XX:XX". Therefore, we remove the timezone offset and set a timezone-
         #   specific data type to validate what is returned.
-        import re
 
         time_column = re.match(r"^(.*?)\+", time_column).group(1)
         time_column_type = exp.DataType.build("TIMESTAMP('UTC')", dialect="clickhouse")
@@ -2661,8 +2660,9 @@ def test_identifier_length_limit(ctx: TestContext):
 
     long_table_name = "a" * (adapter.MAX_IDENTIFIER_LENGTH + 1)
 
+    match = f"Identifier name '{long_table_name}' (length {len(long_table_name)}) exceeds {adapter.dialect.capitalize()}'s max identifier limit of {adapter.MAX_IDENTIFIER_LENGTH} characters"
     with pytest.raises(
         SQLMeshError,
-        match=f"Identifier name {long_table_name} (length {len(long_table_name)}) exceeds {adapter.dialect.capitalize()}'s max identifier limit of {adapter.MAX_IDENTIFIER_LENGTH} characters",
+        match=re.escape(match),
     ):
         adapter.create_table(long_table_name, {"col": exp.DataType.build("int")})

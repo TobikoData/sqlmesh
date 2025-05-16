@@ -2140,7 +2140,7 @@ class EngineAdapter:
         with self.transaction():
             for e in ensure_list(expressions):
                 if isinstance(e, exp.Expression):
-                    self._check_identifier_length(e, check_only_ddl=True)
+                    self._check_identifier_length(e)
                     sql = self._to_sql(e, quote=quote_identifiers, **to_sql_kwargs)
                 else:
                     sql = t.cast(str, e)
@@ -2515,12 +2515,8 @@ class EngineAdapter:
     def _select_columns(cls, columns: t.Iterable[str]) -> exp.Select:
         return exp.select(*(exp.column(c, quoted=True) for c in columns))
 
-    def _check_identifier_length(
-        self, expression: exp.Expression, check_only_ddl: bool = True
-    ) -> None:
-        if self.MAX_IDENTIFIER_LENGTH is None or (
-            check_only_ddl and not isinstance(expression, exp.DDL)
-        ):
+    def _check_identifier_length(self, expression: exp.Expression) -> None:
+        if self.MAX_IDENTIFIER_LENGTH is None or not isinstance(expression, exp.DDL):
             return
 
         for identifier in expression.find_all(exp.Identifier):
@@ -2528,7 +2524,7 @@ class EngineAdapter:
             name_length = len(name)
             if name_length > self.MAX_IDENTIFIER_LENGTH:
                 raise SQLMeshError(
-                    f"Identifier name {name} (length {name_length}) exceeds {self.dialect.capitalize()}'s max identifier limit of {self.MAX_IDENTIFIER_LENGTH} characters"
+                    f"Identifier name '{name}' (length {name_length}) exceeds {self.dialect.capitalize()}'s max identifier limit of {self.MAX_IDENTIFIER_LENGTH} characters"
                 )
 
 
