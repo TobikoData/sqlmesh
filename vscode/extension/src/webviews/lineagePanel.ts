@@ -31,7 +31,7 @@ export class LineagePanel implements WebviewViewProvider, Disposable {
         key: 'vscode_send',
         payload: {
           key: 'savedFile',
-          payload: { fileUri: document.uri.fsPath },
+          payload: { fileUri: document.uri.toString() },
         },
       })
     })
@@ -42,7 +42,7 @@ export class LineagePanel implements WebviewViewProvider, Disposable {
           key: 'vscode_send',
           payload: {
             key: 'changeFocusOnFile',
-            payload: { path: editor.document.uri.fsPath },
+            payload: { path: editor.document.uri.toString() },
           },
         })
       }

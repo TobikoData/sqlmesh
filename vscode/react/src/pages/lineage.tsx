@@ -13,6 +13,7 @@ import React, { useState } from 'react'
 import { ModelSQLMeshModel } from '@/domain/sqlmesh-model'
 import { useEventBus } from '@/hooks/eventBus'
 import type { VSCodeEvent } from '@bus/callbacks'
+import { URI } from 'vscode-uri'
 
 export function LineagePage() {
   const { emit } = useEventBus()
@@ -97,10 +98,7 @@ function Lineage() {
   )
   const selectedModel = selectedModelSet
   on('changeFocusedFile', fileUri => {
-    console.log('on changeFocusedFile', fileUri)
-    const full_path = fileUri.fileUri.startsWith('file://')
-      ? fileUri.fileUri.substring(7)
-      : fileUri.fileUri
+    const full_path = URI.parse(fileUri.fileUri).fsPath
     const model = Object.values(modelsRecord).find(
       (m: Model) => m.full_path === full_path,
     )
@@ -135,7 +133,7 @@ export function LineageComponentFromWeb({
     if (!model) {
       throw new Error('Model not found')
     }
-    vscode('openFile', { uri: 'file://' + model.full_path })
+    vscode('openFile', { uri: URI.file(model.full_path).toString() })
   }
 
   function handleError(error: any): void {
