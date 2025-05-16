@@ -1087,17 +1087,17 @@ def haversine_distance(
 @macro()
 def pivot(
     evaluator: MacroEvaluator,
-    column: exp.Column,
-    values: t.Union[exp.Array, exp.Tuple],
-    alias: exp.Boolean = exp.true(),
-    agg: exp.Literal = exp.Literal.string("SUM"),
-    cmp: exp.Literal = exp.Literal.string("="),
-    prefix: exp.Literal = exp.Literal.string(""),
-    suffix: exp.Literal = exp.Literal.string(""),
-    then_value: exp.Literal = exp.Literal.number(1),
-    else_value: exp.Literal = exp.Literal.number(0),
-    quote: exp.Boolean = exp.true(),
-    distinct: exp.Boolean = exp.false(),
+    column: SQL,
+    values: t.List[SQL],
+    alias: bool = True,
+    agg: SQL = SQL("SUM"),
+    cmp: SQL = SQL("="),
+    prefix: SQL = SQL(""),
+    suffix: SQL = SQL(""),
+    then_value: SQL = SQL("1"),
+    else_value: SQL = SQL("0"),
+    quote: bool = True,
+    distinct: bool = False,
 ) -> t.List[exp.Expression]:
     """Returns a list of projections as a result of pivoting the given column on the given values.
 
@@ -1109,15 +1109,19 @@ def pivot(
         'SELECT date_day, SUM(CASE WHEN status = \\'cancelled\\' THEN 1 ELSE 0 END) AS "\\'cancelled\\'", SUM(CASE WHEN status = \\'completed\\' THEN 1 ELSE 0 END) AS "\\'completed\\'" FROM rides GROUP BY 1'
     """
     aggregates: t.List[exp.Expression] = []
-    for value in values.expressions:
-        proj = f"{agg.this}("
-        if distinct.this:
+    for value in values:
+        proj = f"{agg}("
+        if distinct:
             proj += "DISTINCT "
-        proj += f"CASE WHEN {column} {cmp.this} {value} THEN {then_value} ELSE {else_value} END) "
+
+        proj += f"CASE WHEN {column} {cmp} {value} THEN {then_value} ELSE {else_value} END) "
         node = evaluator.parse_one(proj)
-        if alias.this:
-            node = node.as_(f"{prefix.this}{value}{suffix.this}", quoted=quote.this, copy=False)
+
+        if alias:
+            node = node.as_(f"{prefix}{value}{suffix}", quoted=quote, copy=False)
+
         aggregates.append(node)
+
     return aggregates
 
 
