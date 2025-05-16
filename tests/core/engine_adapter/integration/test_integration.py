@@ -2652,3 +2652,17 @@ def execute(
         {"id": 1, "name": "foo"} if ctx.dialect != "snowflake" else {"ID": 1, "NAME": "foo"}
     )
     assert df.iloc[0].to_dict() == expected_result
+
+
+def test_identifier_length_limit(ctx: TestContext):
+    adapter = ctx.engine_adapter
+    if adapter.MAX_IDENTIFIER_LENGTH is None:
+        pytest.skip(f"Engine {adapter.dialect} does not have identifier length limits set.")
+
+    long_table_name = "a" * (adapter.MAX_IDENTIFIER_LENGTH + 1)
+
+    with pytest.raises(
+        SQLMeshError,
+        match=f"Identifier name {long_table_name} (length {len(long_table_name)}) exceeds {adapter.dialect.capitalize()}'s max identifier limit of {adapter.MAX_IDENTIFIER_LENGTH} characters",
+    ):
+        adapter.create_table(long_table_name, {"col": exp.DataType.build("int")})
