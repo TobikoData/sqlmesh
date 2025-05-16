@@ -11,6 +11,7 @@ import typing as t
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import Path
+from pydantic import ValidationError
 
 from sqlglot.errors import SqlglotError
 from sqlglot import exp
@@ -39,6 +40,7 @@ from sqlmesh.utils import UniqueKeyDict, sys_path
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroExtractor
 from sqlmesh.utils.metaprogramming import import_python_file
+from sqlmesh.utils.pydantic import validation_error_message
 from sqlmesh.utils.yaml import YAML, load as yaml_load
 
 
@@ -241,7 +243,7 @@ class Loader(abc.ABC):
                         for row in YAML().load(file.read())
                     ]
             except Exception as ex:
-                self._raise_failed_to_load_model_error(path, str(ex))
+                self._raise_failed_to_load_model_error(path, ex)
                 raise
 
         for path in paths_to_load:
@@ -372,8 +374,11 @@ class Loader(abc.ABC):
 
         return self._variables_by_gateway[gateway_name]
 
-    def _raise_failed_to_load_model_error(self, path: Path, message: str) -> None:
-        raise ConfigError(f"Failed to load model definition at '{path}'.\n{message}")
+    def _raise_failed_to_load_model_error(self, path: Path, error: t.Union[str, Exception]) -> None:
+        base_message = f"Failed to load model definition at '{path}':"
+        if isinstance(error, ValidationError):
+            raise ConfigError(validation_error_message(error, base_message))
+        raise ConfigError(f"{base_message}\n  {error}")
 
 
 class SqlMeshLoader(Loader):
@@ -496,7 +501,7 @@ class SqlMeshLoader(Loader):
                         default_catalog_per_gateway=self.context.default_catalog_per_gateway,
                     )
                 except Exception as ex:
-                    self._raise_failed_to_load_model_error(path, str(ex))
+                    self._raise_failed_to_load_model_error(path, ex)
                     raise
 
             for model in cache.get_or_load_models(path, _load):
@@ -561,7 +566,7 @@ class SqlMeshLoader(Loader):
                             if model.enabled:
                                 models[model.fqn] = model
                 except Exception as ex:
-                    self._raise_failed_to_load_model_error(path, str(ex))
+                    self._raise_failed_to_load_model_error(path, ex)
 
         finally:
             model_registry._dialect = None

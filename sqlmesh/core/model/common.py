@@ -20,7 +20,7 @@ from sqlmesh.utils.metaprogramming import (
     prepare_env,
     serialize_env,
 )
-from sqlmesh.utils.pydantic import ValidationInfo, field_validator
+from sqlmesh.utils.pydantic import PydanticModel, ValidationInfo, field_validator
 
 if t.TYPE_CHECKING:
     from sqlglot.dialects.dialect import DialectType
@@ -258,6 +258,22 @@ def parse_dependencies(
                 )
 
     return depends_on, used_variables
+
+
+def validate_extra_and_required_fields(
+    klass: t.Type[PydanticModel],
+    provided_fields: t.Set[str],
+    entity_name: str,
+) -> None:
+    missing_required_fields = klass.missing_required_fields(provided_fields)
+    if missing_required_fields:
+        raise_config_error(
+            f"Missing required fields {missing_required_fields} in the {entity_name}"
+        )
+
+    extra_fields = klass.extra_fields(provided_fields)
+    if extra_fields:
+        raise_config_error(f"Invalid extra fields {extra_fields} in the {entity_name}")
 
 
 def single_value_or_tuple(values: t.Sequence) -> exp.Identifier | exp.Tuple:

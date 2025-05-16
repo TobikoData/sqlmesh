@@ -12,7 +12,11 @@ from sqlglot.optimizer.simplify import gen
 from sqlglot.time import format_time
 
 from sqlmesh.core import dialect as d
-from sqlmesh.core.model.common import parse_properties, properties_validator
+from sqlmesh.core.model.common import (
+    parse_properties,
+    properties_validator,
+    validate_extra_and_required_fields,
+)
 from sqlmesh.core.model.seed import CsvSettings
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import (
@@ -1011,6 +1015,7 @@ def create_model_kind(v: t.Any, dialect: str, defaults: t.Dict[str, t.Any]) -> M
                 actual_kind_type, _ = custom_materialization
                 return actual_kind_type(**props)
 
+        validate_extra_and_required_fields(kind_type, set(props), f"model kind '{name}'")
         return kind_type(**props)
 
     name = (v.name if isinstance(v, exp.Expression) else str(v)).upper()

@@ -5,6 +5,7 @@ import os
 import typing as t
 from pathlib import Path
 
+from pydantic import ValidationError
 from sqlglot.helper import ensure_list
 
 from sqlmesh.core import constants as c
@@ -13,6 +14,7 @@ from sqlmesh.core.config.root import Config
 from sqlmesh.utils import env_vars, merge_dicts, sys_path
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.metaprogramming import import_python_file
+from sqlmesh.utils.pydantic import validation_error_message
 from sqlmesh.utils.yaml import load as yaml_load
 
 C = t.TypeVar("C", bound=Config)
@@ -99,9 +101,15 @@ def load_config_from_paths(
                 )
             non_python_configs.append(load_config_from_yaml(path))
         elif extension == "py":
-            python_config = load_config_from_python_module(
-                config_type, path, config_name=config_name
-            )
+            try:
+                python_config = load_config_from_python_module(
+                    config_type, path, config_name=config_name
+                )
+            except ValidationError as e:
+                raise ConfigError(
+                    validation_error_message(e, f"Invalid project config '{config_name}':")
+                    + "\n\nVerify your config.py."
+                )
         else:
             raise ConfigError(
                 f"Unsupported config file extension '{extension}' in config file '{path}'."
@@ -126,7 +134,13 @@ def load_config_from_paths(
                 f"'{default}' is not a valid model default configuration key. Please remove it from the `model_defaults` specification in your config file."
             )
 
-    non_python_config = config_type.parse_obj(non_python_config_dict)
+    try:
+        non_python_config = config_type.parse_obj(non_python_config_dict)
+    except ValidationError as e:
+        raise ConfigError(
+            validation_error_message(e, "Invalid project config:")
+            + "\n\nVerify your config.yaml and environment variables."
+        )
 
     no_dialect_err_msg = "Default model SQL dialect is a required configuration parameter. Set it in the `model_defaults` `dialect` key in your config file."
     if python_config:

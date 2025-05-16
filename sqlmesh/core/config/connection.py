@@ -25,7 +25,12 @@ from sqlmesh.core.config.common import (
 from sqlmesh.core.engine_adapter.shared import CatalogSupport
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.utils.errors import ConfigError
-from sqlmesh.utils.pydantic import ValidationInfo, field_validator, model_validator
+from sqlmesh.utils.pydantic import (
+    ValidationInfo,
+    field_validator,
+    model_validator,
+    validation_error_message,
+)
 from sqlmesh.utils.aws import validate_s3_uri
 
 if t.TYPE_CHECKING:
@@ -1846,7 +1851,13 @@ def _connection_config_validator(
 ) -> ConnectionConfig | None:
     if v is None or isinstance(v, ConnectionConfig):
         return v
-    return parse_connection_config(v)
+    try:
+        return parse_connection_config(v)
+    except pydantic.ValidationError as e:
+        raise ConfigError(
+            validation_error_message(e, f"Invalid '{v['type']}' connection config:")
+            + "\n\nVerify your config.yaml and environment variables."
+        )
 
 
 connection_config_validator: t.Callable = field_validator(

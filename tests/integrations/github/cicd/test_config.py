@@ -8,6 +8,7 @@ from sqlmesh.core.config import (
     Config,
     load_config_from_paths,
 )
+from sqlmesh.utils.errors import ConfigError
 from sqlmesh.integrations.github.cicd.config import MergeMethod
 from tests.utils.test_filesystem import create_temp_file
 
@@ -181,7 +182,7 @@ model_defaults:
 """,
     )
     with pytest.raises(
-        ValueError, match="enable_deploy_command must be set if command_namespace is set"
+        ConfigError, match=r".*enable_deploy_command must be set if command_namespace is set.*"
     ):
         load_config_from_paths(Config, project_paths=[tmp_path / "config.yaml"])
 
@@ -197,7 +198,7 @@ model_defaults:
 """,
     )
     with pytest.raises(
-        ValueError, match="merge_method must be set if enable_deploy_command is True"
+        ConfigError, match=r".*merge_method must be set if enable_deploy_command is True.*"
     ):
         load_config_from_paths(Config, project_paths=[tmp_path / "config.yaml"])
 
@@ -226,8 +227,8 @@ model_defaults:
 """,
     )
     with pytest.raises(
-        ValueError,
-        match="TTL '1 week' is in the past. Please specify a relative time in the future. Ex: `in 1 week` instead of `1 week`.",
+        ConfigError,
+        match=r".*TTL '1 week' is in the past. Please specify a relative time in the future. Ex: `in 1 week` instead of `1 week`.*",
     ):
         load_config_from_paths(Config, project_paths=[tmp_path / "config.yaml"])
 

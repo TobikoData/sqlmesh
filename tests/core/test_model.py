@@ -17,7 +17,7 @@ from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.model.kind import TimeColumn, ModelKindName
 
 from sqlmesh import CustomMaterialization, CustomKind
-from pydantic import model_validator
+from pydantic import model_validator, ValidationError
 from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
 from sqlmesh.core.console import get_console
@@ -1065,7 +1065,7 @@ def test_seed_model_creation_error():
         );
     """
     )
-    with pytest.raises(ConfigError, match="No such file or directory"):
+    with pytest.raises(FileNotFoundError, match="No such file or directory"):
         load_sql_based_model(expressions)
 
 
@@ -4512,7 +4512,7 @@ def test_view_non_materialized_partition_by():
         SELECT 1;
         """
     )
-    with pytest.raises(ConfigError, match=r".*partitioned_by field cannot be set for ViewKind.*"):
+    with pytest.raises(ValidationError, match=r".*partitioned_by field cannot be set for VIEW.*"):
         load_sql_based_model(view_model_expressions)
 
 
@@ -4527,7 +4527,7 @@ def test_view_non_materialized_clustered_by():
         SELECT 1;
         """
     )
-    with pytest.raises(ConfigError, match=r".*clustered_by field cannot be set for ViewKind.*"):
+    with pytest.raises(ValidationError, match=r".*clustered_by field cannot be set for VIEW.*"):
         load_sql_based_model(view_model_expressions)
 
 
@@ -5578,7 +5578,7 @@ def test_end_date():
     assert model.end == "2023-06-01"
     assert model.interval_unit == IntervalUnit.DAY
 
-    with pytest.raises(ConfigError, match=".*Start date.+can't be greater than end date.*"):
+    with pytest.raises(ValidationError, match=".*Start date.+can't be greater than end date.*"):
         load_sql_based_model(
             d.parse(
                 """
@@ -6829,7 +6829,7 @@ def test_incremental_by_partition(sushi_context, assert_exp_eq):
     assert not model.kind.disable_restatement
 
     with pytest.raises(
-        ConfigError,
+        ValidationError,
         match=r".*partitioned_by field is required for INCREMENTAL_BY_PARTITION models.*",
     ):
         expressions = d.parse(
