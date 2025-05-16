@@ -3,9 +3,10 @@ from sqlglot import Dialect, Tokenizer
 from sqlmesh.lsp.custom import AllModelsResponse
 import typing as t
 from sqlmesh.lsp.context import AuditTarget, LSPContext, ModelTarget
+from sqlmesh.lsp.uri import URI
 
 
-def get_sql_completions(context: t.Optional[LSPContext], file_uri: str) -> AllModelsResponse:
+def get_sql_completions(context: t.Optional[LSPContext], file_uri: URI) -> AllModelsResponse:
     """
     Return a list of completions for a given file.
     """
@@ -15,7 +16,7 @@ def get_sql_completions(context: t.Optional[LSPContext], file_uri: str) -> AllMo
     )
 
 
-def get_models(context: t.Optional[LSPContext], file_uri: t.Optional[str]) -> t.Set[str]:
+def get_models(context: t.Optional[LSPContext], file_uri: t.Optional[URI]) -> t.Set[str]:
     """
     Return a list of models for a given file.
 
@@ -41,7 +42,7 @@ def get_models(context: t.Optional[LSPContext], file_uri: t.Optional[str]) -> t.
     return all_models
 
 
-def get_keywords(context: t.Optional[LSPContext], file_uri: t.Optional[str]) -> t.Set[str]:
+def get_keywords(context: t.Optional[LSPContext], file_uri: t.Optional[URI]) -> t.Set[str]:
     """
     Return a list of sql keywords for a given file.
     If no context is provided, return ANSI SQL keywords.
