@@ -313,8 +313,10 @@ class Loader(abc.ABC):
             for model in external_models:
                 if model.gateway is None:
                     if model.fqn in models:
-                        self._raise_failed_to_load_model_error(
-                            path, f"Duplicate external model name: '{model.name}'."
+                        raise ConfigError(
+                            self._failed_to_load_model_error(
+                                path, f"Duplicate external model name: '{model.name}'."
+                            )
                         )
                     models[model.fqn] = model
 
@@ -323,8 +325,10 @@ class Loader(abc.ABC):
                 for model in external_models:
                     if model.gateway == gateway:
                         if model.fqn in models and models[model.fqn].gateway == gateway:
-                            self._raise_failed_to_load_model_error(
-                                path, f"Duplicate external model name: '{model.name}'."
+                            raise ConfigError(
+                                self._failed_to_load_model_error(
+                                    path, f"Duplicate external model name: '{model.name}'."
+                                )
                             )
                         models.update({model.fqn: model})
 
@@ -411,11 +415,12 @@ class Loader(abc.ABC):
         """Project file to track for modifications"""
         self._path_mtimes[path] = path.stat().st_mtime
 
-    def _raise_failed_to_load_model_error(self, path: Path, error: t.Union[str, Exception]) -> None:
+    def _failed_to_load_model_error(self, path: Path, error: t.Union[str, Exception]) -> str:
         base_message = f"Failed to load model definition at '{path}':"
         if isinstance(error, ValidationError):
-            raise ConfigError(validation_error_message(error, base_message))
-        raise ConfigError(f"{base_message}\n  {error}")
+            return validation_error_message(error, base_message)
+        return f"{base_message}\n  {error}"
+
 
 class SqlMeshLoader(Loader):
     """Loads macros and models for a context using the SQLMesh file formats"""
@@ -552,17 +557,18 @@ class SqlMeshLoader(Loader):
                     path = futures_to_paths[future]
                     try:
                         _, loaded = future.result()
-                        if loaded:
-                            for model in loaded:
-                                if model.enabled:
-                                    model._path = path
-                                    models[model.fqn] = model
-                        else:
-                            for model in cache.get(path):
-                                if model.enabled:
-                                    models[model.fqn] = model
+                        for model in loaded or cache.get(path):
+                            if model.fqn in models:
+                                errors.append(
+                                    self._failed_to_load_model_error(
+                                        path, f"Duplicate SQL model name: '{model.name}'."
+                                    )
+                                )
+                            elif model.enabled:
+                                model._path = path
+                                models[model.fqn] = model
                     except Exception as ex:
-                        errors.append(f"Failed to load model definition at '{path}'.\n\n{ex}")
+                        errors.append(self._failed_to_load_model_error(path, str(ex)))
 
             if errors:
                 error_string = "\n".join(errors)
@@ -618,7 +624,7 @@ class SqlMeshLoader(Loader):
                             if model.enabled:
                                 models[model.fqn] = model
                 except Exception as ex:
-                    self._raise_failed_to_load_model_error(path, ex)
+                    raise ConfigError(self._failed_to_load_model_error(path, ex))
 
         finally:
             model_registry._dialect = None
