@@ -189,7 +189,7 @@ class SushiDataValidator:
 
 
 def pytest_collection_modifyitems(items, *args, **kwargs):
-    test_type_markers = {"fast", "slow", "docker", "remote", "isolated"}
+    test_type_markers = {"fast", "slow", "docker", "remote", "isolated", "isolated2"}
     for item in items:
         for marker in item.iter_markers():
             if marker.name in test_type_markers:

@@ -115,7 +115,7 @@ def test_duplicate_model_names_same_kind(tmp_path: Path, sample_models):
         Context(paths=tmp_path, config=config)
 
 
-@pytest.mark.isolated
+@pytest.mark.isolated2
 def test_duplicate_python_model_names_raise_error(tmp_path: Path) -> None:
     """Test python models with duplicate model names raises ConfigError if the functions are not identical."""
     init_example_project(tmp_path, dialect="duckdb")

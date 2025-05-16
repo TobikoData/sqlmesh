@@ -64,7 +64,7 @@ engine-up: engine-clickhouse-up engine-mssql-up engine-mysql-up engine-postgres-
 engine-down: engine-clickhouse-down engine-mssql-down engine-mysql-down engine-postgres-down engine-spark-down engine-trino-down
 
 fast-test:
-	pytest -n auto -m "fast and not cicdonly" --junitxml=test-results/junit-fast-test.xml && pytest -m "isolated"
+	pytest -n auto -m "fast and not cicdonly" --junitxml=test-results/junit-fast-test.xml && pytest -m "isolated" && pytest -m "isolated2"
 
 slow-test:
 	pytest -n auto -m "(fast or slow) and not cicdonly" && pytest -m "isolated"
