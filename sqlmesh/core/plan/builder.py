@@ -717,6 +717,8 @@ class PlanBuilder:
             # If the model kind has changed, then we should not consider this to be a forward-only change.
             if snapshot.is_model and old.model.kind.name != snapshot.model.kind.name:
                 return False
+            if snapshot.is_model and old.model.partitioned_by != snapshot.model.partitioned_by:
+                return False
         return (
             snapshot.is_model
             and snapshot.model.forward_only
