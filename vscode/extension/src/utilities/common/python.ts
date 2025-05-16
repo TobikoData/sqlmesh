@@ -5,6 +5,7 @@ import { commands, Disposable, Event, EventEmitter, Uri } from 'vscode'
 import { traceError, traceLog } from './log'
 import { PythonExtension, ResolvedEnvironment } from '@vscode/python-extension'
 import path from 'path'
+import { IS_WINDOWS } from '../isWindows'
 
 export interface IInterpreterDetails {
   path?: string[]
@@ -83,7 +84,7 @@ export async function getInterpreterDetails(
       path: [environment?.executable.uri.fsPath],
       resource,
       isVirtualEnvironment: isVirtualEnv,
-      binPath: binPath ? path.join(binPath, 'bin') : undefined,
+      binPath: binPath ? path.join(binPath, IS_WINDOWS ? 'Scripts' : 'bin') : undefined,
     }
   }
   return { path: undefined, resource }
