@@ -10,6 +10,7 @@ import { isSignedIntoTobikoCloud } from '../../auth/auth'
 import { execAsync } from '../exec'
 import z from 'zod'
 import { ProgressLocation, window } from 'vscode'
+import { IS_WINDOWS } from '../isWindows'
 
 export interface SqlmeshExecInfo {
   workspacePath: string
@@ -47,6 +48,7 @@ export const isTcloudProject = async (): Promise<Result<boolean, string>> => {
  * @returns The tcloud executable for the current Python environment.
  */
 export const getTcloudBin = async (): Promise<Result<string, ErrorType>> => {
+  const tcloud = IS_WINDOWS ? 'tcloud.exe' : 'tcloud'
   const interpreterDetails = await getInterpreterDetails()
   if (!interpreterDetails.path) {
     return err({
@@ -54,7 +56,7 @@ export const getTcloudBin = async (): Promise<Result<string, ErrorType>> => {
     })
   }
   const pythonPath = interpreterDetails.path[0]
-  const binPath = path.join(path.dirname(pythonPath), 'tcloud')
+  const binPath = path.join(path.dirname(pythonPath), tcloud)
   if (!fs.existsSync(binPath)) {
     return err({type: 'tcloud_bin_not_found'})
   }
@@ -174,6 +176,7 @@ export const ensureSqlmeshEnterpriseInstalled = async (): Promise<
 export const sqlmeshExec = async (): Promise<
   Result<SqlmeshExecInfo, ErrorType>
 > => {
+  const sqlmesh = IS_WINDOWS ? 'sqlmesh.exe' : 'sqlmesh'
   const projectRoot = await getProjectRoot()
   const workspacePath = projectRoot.uri.fsPath
   const interpreterDetails = await getInterpreterDetails()
@@ -220,7 +223,7 @@ export const sqlmeshExec = async (): Promise<
         args: [],
       })
     }
-    const binPath = path.join(interpreterDetails.binPath!, 'sqlmesh')
+    const binPath = path.join(interpreterDetails.binPath!, sqlmesh)
     traceLog(`Bin path: ${binPath}`)
     return ok({
       bin: binPath,
@@ -234,7 +237,7 @@ export const sqlmeshExec = async (): Promise<
     })
   } else {
     return ok({
-      bin: 'sqlmesh',
+      bin: sqlmesh,
       workspacePath,
       env: {},
       args: [],
@@ -290,6 +293,7 @@ export const ensureSqlmeshLspDependenciesInstalled = async (): Promise<
 export const sqlmeshLspExec = async (): Promise<
   Result<SqlmeshExecInfo, ErrorType>
 > => {
+  const sqlmeshLSP = IS_WINDOWS ? 'sqlmesh_lsp.exe' : 'sqlmesh_lsp'
   const projectRoot = await getProjectRoot()
   const workspacePath = projectRoot.uri.fsPath
   const interpreterDetails = await getInterpreterDetails()
@@ -331,7 +335,7 @@ export const sqlmeshLspExec = async (): Promise<
     if (isErr(ensuredDependencies)) {
       return ensuredDependencies
     }
-    const binPath = path.join(interpreterDetails.binPath!, 'sqlmesh_lsp')
+    const binPath = path.join(interpreterDetails.binPath!, sqlmeshLSP)
     traceLog(`Bin path: ${binPath}`)
     if (!fs.existsSync(binPath)) {
       return err({
@@ -350,7 +354,7 @@ export const sqlmeshLspExec = async (): Promise<
     })
   } else {
     return ok({
-      bin: 'sqlmesh_lsp',
+      bin: sqlmeshLSP,
       workspacePath,
       env: {},
       args: [],
