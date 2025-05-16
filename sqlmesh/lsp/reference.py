@@ -5,7 +5,7 @@ from sqlmesh.core.dialect import normalize_model_name
 from sqlmesh.core.model.definition import SqlModel
 from sqlmesh.lsp.context import LSPContext, ModelTarget, AuditTarget
 from sqlglot import exp
-
+from sqlmesh.lsp.uri import URI
 from sqlmesh.utils.pydantic import PydanticModel
 
 
@@ -51,7 +51,7 @@ def by_position(position: Position) -> t.Callable[[Reference], bool]:
 
 
 def get_references(
-    lint_context: LSPContext, document_uri: str, position: Position
+    lint_context: LSPContext, document_uri: URI, position: Position
 ) -> t.List[Reference]:
     """
     Get references at a specific position in a document.
@@ -72,7 +72,7 @@ def get_references(
 
 
 def get_model_definitions_for_a_path(
-    lint_context: LSPContext, document_uri: str
+    lint_context: LSPContext, document_uri: URI
 ) -> t.List[Reference]:
     """
     Get the model references for a given path.
@@ -89,9 +89,8 @@ def get_model_definitions_for_a_path(
     - Match to models that the model refers to
     """
     # Ensure the path is a sql file
-    if not document_uri.endswith(".sql"):
+    if document_uri.to_path().suffix != ".sql":
         return []
-
     # Get the file info from the context map
     if document_uri not in lint_context.map:
         return []
@@ -163,7 +162,7 @@ def get_model_definitions_for_a_path(
         # Check whether the path exists
         if not referenced_model_path.is_file():
             continue
-        referenced_model_uri = f"file://{referenced_model_path}"
+        referenced_model_uri = URI.from_path(referenced_model_path)
 
         # Extract metadata for positioning
         table_meta = TokenPositionDetails.from_meta(table.this.meta)
@@ -180,7 +179,7 @@ def get_model_definitions_for_a_path(
 
         references.append(
             Reference(
-                uri=referenced_model_uri,
+                uri=referenced_model_uri.value,
                 range=Range(start=start_pos, end=end_pos),
                 description=referenced_model.description,
             )

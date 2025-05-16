@@ -37,7 +37,7 @@ def test_get_sql_completions_with_context_and_file_uri():
     lsp_context = LSPContext(context)
 
     file_uri = next(
-        key for key in lsp_context.map.keys() if key.endswith("models/active_customers.sql")
+        key for key in lsp_context.map.keys() if str(key.to_path()).endswith("active_customers.sql")
     )
     completions = get_sql_completions(lsp_context, file_uri)
     assert len(completions.keywords) > len(TOKENIZER_KEYWORDS)

@@ -25,11 +25,13 @@ def test_reference() -> None:
     references = get_model_definitions_for_a_path(lsp_context, active_customers_uri)
 
     assert len(references) == 1
-    assert references[0].uri == sushi_customers_uri
+    assert references[0].uri == sushi_customers_uri.value
 
     # Check that the reference in the correct range is sushi.customers
-    path = active_customers_uri.removeprefix("file://")
-    read_file = open(path, "r").readlines()
+    path = active_customers_uri.to_path()
+    with open(path, "r") as file:
+        read_file = file.readlines()
+
     # Get the string range in the read file
     referenced_text = get_string_from_range(read_file, references[0].range)
     assert referenced_text == "sushi.customers"
@@ -49,8 +51,9 @@ def test_reference_with_alias() -> None:
     references = get_model_definitions_for_a_path(lsp_context, waiter_revenue_by_day_uri)
     assert len(references) == 3
 
-    path = waiter_revenue_by_day_uri.removeprefix("file://")
-    read_file = open(path, "r").readlines()
+    path = waiter_revenue_by_day_uri.to_path()
+    with open(path, "r") as file:
+        read_file = file.readlines()
 
     assert references[0].uri.endswith("orders.py")
     assert get_string_from_range(read_file, references[0].range) == "sushi.orders"
@@ -83,11 +86,12 @@ def test_standalone_audit_reference() -> None:
     references = get_model_definitions_for_a_path(lsp_context, audit_uri)
 
     assert len(references) == 1
-    assert references[0].uri == items_uri
+    assert references[0].uri == items_uri.value
 
     # Check that the reference in the correct range is sushi.items
-    path = audit_uri.removeprefix("file://")
-    read_file = open(path, "r").readlines()
+    path = audit_uri.to_path()
+    with open(path, "r") as file:
+        read_file = file.readlines()
     referenced_text = get_string_from_range(read_file, references[0].range)
     assert referenced_text == "sushi.items"
 
@@ -130,7 +134,7 @@ def test_filter_references_by_position() -> None:
     assert len(all_references) == 3
 
     # Get file contents to locate positions for testing
-    path = waiter_revenue_by_day_uri.removeprefix("file://")
+    path = waiter_revenue_by_day_uri.to_path()
     with open(path, "r") as file:
         read_file = file.readlines()
 
