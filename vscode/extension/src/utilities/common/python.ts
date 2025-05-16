@@ -84,7 +84,9 @@ export async function getInterpreterDetails(
       path: [environment?.executable.uri.fsPath],
       resource,
       isVirtualEnvironment: isVirtualEnv,
-      binPath: binPath ? path.join(binPath, IS_WINDOWS ? 'Scripts' : 'bin') : undefined,
+      binPath: binPath
+        ? path.join(binPath, IS_WINDOWS ? 'Scripts' : 'bin')
+        : undefined,
     }
   }
   return { path: undefined, resource }

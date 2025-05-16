@@ -25,7 +25,7 @@ function_exists() {
 # Snowflake
 snowflake_init() {
     echo "Installing Snowflake CLI"
-    pip install snowflake-cli-labs
+    pip install "snowflake-cli-labs<3.8.0"
 }
 
 snowflake_up() {
