@@ -3,6 +3,7 @@ import pytest
 
 from sqlmesh import Context
 from sqlmesh.core.model import schema
+import concurrent.futures
 
 
 pytestmark = pytest.mark.isolated
@@ -11,12 +12,20 @@ pytestmark = pytest.mark.isolated
 def test_parallel_load(assert_exp_eq, mocker):
     mocker.patch("sqlmesh.core.constants.MAX_FORK_WORKERS", 2)
 
-    spy = mocker.spy(schema, "_update_model_schemas")
+    spy_update_schemas = mocker.spy(schema, "_update_model_schemas")
+    process_pool_executor = mocker.spy(concurrent.futures.ProcessPoolExecutor, "__init__")
+    as_completed = mocker.spy(concurrent.futures, "as_completed")
+
     context = Context(paths="examples/sushi")
 
     if hasattr(os, "fork"):
-        spy.assert_called()
+        process_pool_executor.assert_called()
+        as_completed.assert_called()
+        executor_args = process_pool_executor.call_args
+        assert executor_args[1]["max_workers"] == 2
 
+    assert len(context.models) == 18
+    spy_update_schemas.assert_called()
     assert_exp_eq(
         context.render("sushi.customers"),
         """
@@ -38,6 +47,25 @@ LEFT JOIN "current_marketing" AS "m"
 LEFT JOIN "memory"."raw"."demographics" AS "d"
   ON "d"."customer_id" = "o"."customer_id"
         """,
+    )
+
+    context.plan(no_prompts=True, auto_apply=True)
+
+
+def test_parallel_load_multi_repo(assert_exp_eq, mocker):
+    mocker.patch("sqlmesh.core.constants.MAX_FORK_WORKERS", 2)
+
+    process_pool_executor = mocker.spy(concurrent.futures.ProcessPoolExecutor, "__init__")
+    context = Context(paths=["examples/multi/repo_1", "examples/multi/repo_2"], gateway="memory")
+
+    if hasattr(os, "fork"):
+        executor_args = process_pool_executor.call_args
+        assert executor_args[1]["max_workers"] == 2
+    assert len(context.models) == 5
+
+    assert_exp_eq(
+        context.render("memory.bronze.a"),
+        'SELECT 1 AS "col_a", \'b\' AS "col_b", 1 AS "one", \'repo_1\' AS "dup"',
     )
 
     context.plan(no_prompts=True, auto_apply=True)
