@@ -106,6 +106,7 @@ class EngineAdapter:
     SUPPORTS_REPLACE_TABLE = True
     DEFAULT_CATALOG_TYPE = DIALECT
     QUOTE_IDENTIFIERS_IN_VIEWS = True
+    MAX_IDENTIFIER_LENGTH: t.Optional[int] = None
 
     def __init__(
         self,
@@ -2138,14 +2139,12 @@ class EngineAdapter:
         )
         with self.transaction():
             for e in ensure_list(expressions):
-                sql = t.cast(
-                    str,
-                    (
-                        self._to_sql(e, quote=quote_identifiers, **to_sql_kwargs)
-                        if isinstance(e, exp.Expression)
-                        else e
-                    ),
-                )
+                if isinstance(e, exp.Expression):
+                    self._check_identifier_length(e)
+                    sql = self._to_sql(e, quote=quote_identifiers, **to_sql_kwargs)
+                else:
+                    sql = t.cast(str, e)
+
                 self._log_sql(
                     sql,
                     expression=e if isinstance(e, exp.Expression) else None,
@@ -2515,6 +2514,18 @@ class EngineAdapter:
     @classmethod
     def _select_columns(cls, columns: t.Iterable[str]) -> exp.Select:
         return exp.select(*(exp.column(c, quoted=True) for c in columns))
+
+    def _check_identifier_length(self, expression: exp.Expression) -> None:
+        if self.MAX_IDENTIFIER_LENGTH is None or not isinstance(expression, exp.DDL):
+            return
+
+        for identifier in expression.find_all(exp.Identifier):
+            name = identifier.name
+            name_length = len(name)
+            if name_length > self.MAX_IDENTIFIER_LENGTH:
+                raise SQLMeshError(
+                    f"Identifier name '{name}' (length {name_length}) exceeds {self.dialect.capitalize()}'s max identifier limit of {self.MAX_IDENTIFIER_LENGTH} characters"
+                )
 
 
 class EngineAdapterWithIndexSupport(EngineAdapter):
