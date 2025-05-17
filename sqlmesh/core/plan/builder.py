@@ -547,10 +547,13 @@ class PlanBuilder:
                     if snapshot.is_seed
                     else SnapshotChangeCategory.FORWARD_ONLY
                 )
-                # If the model kind changes mark as breaking
+                # If the model kind or partitioning changes mark as breaking
                 if snapshot.is_model and snapshot.name in self._context_diff.modified_snapshots:
                     _, old = self._context_diff.modified_snapshots[snapshot.name]
-                    if old.model.kind.name != snapshot.model.kind.name:
+                    if (
+                        old.model.kind.name != snapshot.model.kind.name
+                        or old.model.partitioned_by != snapshot.model.partitioned_by
+                    ):
                         category = SnapshotChangeCategory.BREAKING
 
                 snapshot.categorize_as(category)
@@ -714,8 +717,11 @@ class PlanBuilder:
         snapshot = self._context_diff.snapshots[s_id]
         if snapshot.name in self._context_diff.modified_snapshots:
             _, old = self._context_diff.modified_snapshots[snapshot.name]
-            # If the model kind has changed, then we should not consider this to be a forward-only change.
-            if snapshot.is_model and old.model.kind.name != snapshot.model.kind.name:
+            # If the model kind or partitioning has changed, then we should not consider this to be a forward-only change.
+            if snapshot.is_model and (
+                old.model.kind.name != snapshot.model.kind.name
+                or old.model.partitioned_by != snapshot.model.partitioned_by
+            ):
                 return False
         return (
             snapshot.is_model

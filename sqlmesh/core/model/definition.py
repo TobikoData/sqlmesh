@@ -1447,6 +1447,9 @@ class SqlModel(_Model):
         if self.lookback != previous.lookback:
             return None
 
+        if self.partitioned_by != previous.partitioned_by:
+            return None
+
         try:
             # the previous model which comes from disk could be unrenderable
             previous_query = previous.render_query()

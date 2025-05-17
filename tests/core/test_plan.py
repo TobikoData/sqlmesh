@@ -1724,6 +1724,54 @@ def test_forward_only_models_model_kind_changed(make_snapshot, mocker: MockerFix
     assert updated_snapshot.change_category == SnapshotChangeCategory.BREAKING
 
 
+def test_forward_only_models_partition_changed(make_snapshot, mocker: MockerFixture):
+    snapshot = make_snapshot(
+        SqlModel(
+            name="a",
+            query=parse_one("select 3, ds, ds2"),
+            kind=IncrementalByTimeRangeKind(time_column="ds", forward_only=True),
+            partitioned_by=[parse_one("ds")],
+        )
+    )
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    updated_snapshot = make_snapshot(
+        SqlModel(
+            name="a",
+            query=parse_one("select 3, ds, ds2"),
+            kind=IncrementalByTimeRangeKind(time_column="ds", forward_only=True),
+            partitioned_by=[parse_one("ds2")],
+        )
+    )
+    updated_snapshot.previous_versions = snapshot.all_versions
+
+    context_diff = ContextDiff(
+        environment="test_environment",
+        is_new_environment=True,
+        is_unfinalized_environment=False,
+        normalize_environment_name=True,
+        create_from="prod",
+        create_from_env_exists=True,
+        added=set(),
+        removed_snapshots={},
+        modified_snapshots={updated_snapshot.name: (updated_snapshot, snapshot)},
+        snapshots={updated_snapshot.snapshot_id: updated_snapshot},
+        new_snapshots={updated_snapshot.snapshot_id: updated_snapshot},
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
+        previous_gateway_managed_virtual_layer=False,
+        gateway_managed_virtual_layer=False,
+    )
+
+    PlanBuilder(context_diff, DuckDBEngineAdapter.SCHEMA_DIFFER, is_dev=True).build()
+    assert updated_snapshot.change_category == SnapshotChangeCategory.BREAKING
+
+    PlanBuilder(
+        context_diff, DuckDBEngineAdapter.SCHEMA_DIFFER, is_dev=True, forward_only=True
+    ).build()
+    assert updated_snapshot.change_category == SnapshotChangeCategory.BREAKING
+
+
 def test_indirectly_modified_forward_only_model(make_snapshot, mocker: MockerFixture):
     snapshot_a = make_snapshot(SqlModel(name="a", query=parse_one("select 1 as a, ds")))
     snapshot_a.categorize_as(SnapshotChangeCategory.BREAKING)
