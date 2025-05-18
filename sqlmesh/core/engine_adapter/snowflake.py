@@ -3,7 +3,6 @@ from __future__ import annotations
 import contextlib
 import logging
 import typing as t
-import threading
 
 import pandas as pd
 from pandas.api.types import is_datetime64_any_dtype  # type: ignore
@@ -69,10 +68,7 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
         },
     )
     MANAGED_TABLE_KIND = "DYNAMIC TABLE"
-
-    def __init__(self, *args: t.Any, **kwargs: t.Any):
-        super().__init__(*args, **kwargs)
-        self._snowpark_threadlocal = threading.local()
+    SNOWPARK = "snowpark"
 
     @contextlib.contextmanager
     def session(self, properties: SessionProperties) -> t.Iterator[None]:
@@ -109,15 +105,16 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
     @property
     def snowpark(self) -> t.Optional[SnowparkSession]:
         if snowpark:
-            # Snowpark sessions are not thread safe so we create a session per thread to prevent them from interfering with each other
-            # The sessions are cleaned up when close() is called
-            if not hasattr(self._snowpark_threadlocal, "session"):
+            if not self._connection_pool.get_attribute(self.SNOWPARK):
+                # Snowpark sessions are not thread safe so we create a session per thread to prevent them from interfering with each other
+                # The sessions are cleaned up when close() is called
                 new_session = snowpark.Session.builder.configs(
                     {"connection": self._connection_pool.get()}
                 ).create()
-                self._snowpark_threadlocal.session = new_session
+                self._connection_pool.set_attribute(self.SNOWPARK, new_session)
 
-            return self._snowpark_threadlocal.session
+            return self._connection_pool.get_attribute(self.SNOWPARK)
+
         return None
 
     @property
@@ -596,14 +593,9 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
 
         return super()._columns_to_types(query_or_df, columns_to_types)
 
-    def _cleanup_snowpark(self) -> None:
-        if hasattr(self._snowpark_threadlocal, "session") and (
-            session := self._snowpark_threadlocal.session
-        ):
-            session.close()
-            delattr(self._snowpark_threadlocal, "session")
-
     def close(self) -> t.Any:
-        self._cleanup_snowpark()
+        if snowpark_session := self._connection_pool.get_attribute(self.SNOWPARK):
+            snowpark_session.close()  # type: ignore
+            self._connection_pool.set_attribute(self.SNOWPARK, None)
 
         return super().close()
