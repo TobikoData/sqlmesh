@@ -24,10 +24,12 @@ class URI:
 
     def to_path(self) -> Path:
         p = to_fs_path(self.value)
-        return Path(p)
+        unencoded_path = p.replace("%3A", ":")
+        return Path(unencoded_path)
 
     @staticmethod
     def from_path(path: t.Union[str, Path]) -> "URI":
         if isinstance(path, Path):
-            path = path.as_posix()
-        return URI(from_fs_path(path))
+            path = str(path)
+        encoded_path = path.replace(":", "%3A")
+        return URI(from_fs_path(encoded_path))

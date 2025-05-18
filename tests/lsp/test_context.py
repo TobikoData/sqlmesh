@@ -20,3 +20,10 @@ def test_lsp_context():
     # Check that the value is a ModelInfo with the expected model name
     assert isinstance(lsp_context.map[active_customers_key], ModelTarget)
     assert "sushi.active_customers" in lsp_context.map[active_customers_key].names
+
+    # Check that all the values in the map are normalised
+    keys = lsp_context.map.keys()
+    for key in keys:
+        stripped_key_from_prefix = str(key).split("file://")[1]
+        assert ":" not in stripped_key_from_prefix
+        assert "\\" not in stripped_key_from_prefix
