@@ -343,6 +343,7 @@ model_defaults:
         os.environ,
         {
             "SQLMESH__GATEWAYS__TESTING__STATE_CONNECTION__TYPE": "bigquery",
+            "SQLMESH__GATEWAYS__TESTING__STATE_CONNECTION__CHECK_IMPORT": "false",
             "SQLMESH__DEFAULT_GATEWAY": "testing",
         },
     ):
@@ -353,7 +354,7 @@ model_defaults:
             gateways={
                 "testing": GatewayConfig(
                     connection=MotherDuckConnectionConfig(database="blah"),
-                    state_connection=BigQueryConnectionConfig(),
+                    state_connection=BigQueryConnectionConfig(check_import=False),
                 ),
             },
             model_defaults=ModelDefaultsConfig(dialect="bigquery"),
@@ -373,6 +374,7 @@ config = Config(gateways={"duckdb_gateway": GatewayConfig(connection=DuckDBConne
         os.environ,
         {
             "SQLMESH__GATEWAYS__DUCKDB_GATEWAY__STATE_CONNECTION__TYPE": "bigquery",
+            "SQLMESH__GATEWAYS__DUCKDB_GATEWAY__STATE_CONNECTION__CHECK_IMPORT": "false",
             "SQLMESH__DEFAULT_GATEWAY": "duckdb_gateway",
         },
     ):
@@ -384,7 +386,7 @@ config = Config(gateways={"duckdb_gateway": GatewayConfig(connection=DuckDBConne
             gateways={  # type: ignore
                 "duckdb_gateway": GatewayConfig(
                     connection=DuckDBConnectionConfig(),
-                    state_connection=BigQueryConnectionConfig(),
+                    state_connection=BigQueryConnectionConfig(check_import=False),
                 ),
             },
             model_defaults=ModelDefaultsConfig(dialect=""),
@@ -823,6 +825,7 @@ def test_gcp_postgres_ip_and_scopes(tmp_path):
       gcp_postgres:
         connection:
           type: gcp_postgres
+          check_import: false
           instance_connection_string: something
           user: user
           password: password
