@@ -15,6 +15,7 @@ from rich.console import Console as RichConsole
 
 from sqlmesh import Context, RuntimeEnv
 from sqlmesh.magics import register_magics
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -109,8 +110,9 @@ def test_context(notebook, convert_all_html_output_to_text, get_all_html_output,
     assert output.stdout == ""
     assert output.stderr == ""
     assert len(output.outputs) == 1
+    sushi_path = str(Path("examples/sushi"))
     assert convert_all_html_output_to_text(output) == [
-        "SQLMesh project context set to: examples/sushi"
+        f"SQLMesh project context set to: {sushi_path}"
     ]
     assert get_all_html_output(output) == [
         str(
@@ -120,7 +122,7 @@ def test_context(notebook, convert_all_html_output_to_text, get_all_html_output,
                 h(
                     "span",
                     {"style": SUCCESS_STYLE},
-                    "SQLMesh project context set to: examples/sushi",
+                    f"SQLMesh project context set to: {sushi_path}",
                     autoescape=False,
                 ),
                 autoescape=False,

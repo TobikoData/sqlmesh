@@ -1238,7 +1238,7 @@ def test_seed_marker_substitution():
     )
 
     assert isinstance(model.kind, SeedKind)
-    assert model.kind.path == "examples/sushi/seeds/waiter_names.csv"
+    assert model.kind.path == str(Path("examples/sushi/seeds/waiter_names.csv"))
     assert model.seed is not None
     assert len(model.seed.content) > 0
 

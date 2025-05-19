@@ -22,6 +22,7 @@ from web.server.utils import (
     df_to_pyarrow_bytes,
     run_in_executor,
 )
+from pathlib import Path
 
 router = APIRouter()
 
@@ -143,7 +144,7 @@ async def test(
     test_output = io.StringIO()
     try:
         result = context.test(
-            tests=[str(context.path / test)] if test else None,
+            tests=[str(context.path / Path(test))] if test else None,
             verbosity=verbosity,
             stream=test_output,
         )
@@ -160,11 +161,17 @@ async def test(
         test_output.getvalue(),
         context._test_connection_config._engine_adapter.DIALECT,
     )
+
+    def _test_path(test: ModelTest) -> t.Optional[str]:
+        if path := test.path_relative_to(context.path):
+            return path.as_posix()
+        return None
+
     return models.TestResult(
         errors=[
             models.TestErrorOrFailure(
                 name=test.test_name,
-                path=test.path_relative_to(context.path),
+                path=_test_path(test),
                 tb=tb,
             )
             for test, tb in ((t.cast(ModelTest, test), tb) for test, tb in result.errors)
@@ -172,7 +179,7 @@ async def test(
         failures=[
             models.TestErrorOrFailure(
                 name=test.test_name,
-                path=test.path_relative_to(context.path),
+                path=_test_path(test),
                 tb=tb,
             )
             for test, tb in ((t.cast(ModelTest, test), tb) for test, tb in result.failures)
@@ -180,7 +187,7 @@ async def test(
         skipped=[
             models.TestSkipped(
                 name=test.test_name,
-                path=test.path_relative_to(context.path),
+                path=_test_path(test),
                 reason=reason,
             )
             for test, reason in (
@@ -190,7 +197,7 @@ async def test(
         successes=[
             models.TestCase(
                 name=test.test_name,
-                path=test.path_relative_to(context.path),
+                path=_test_path(test),
             )
             for test in (t.cast(ModelTest, test) for test in result.successes)
         ],

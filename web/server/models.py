@@ -420,7 +420,7 @@ class TableDiff(PydanticModel):
 
 class TestCase(PydanticModel):
     name: str
-    path: pathlib.Path
+    path: str
 
 
 class TestErrorOrFailure(TestCase):
