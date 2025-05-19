@@ -126,7 +126,7 @@ def create_models_only_lineage_adjacency_list(
 
 
 @router.get("/{model_name:str}/{column_name:str}")
-async def column_lineage(
+def column_lineage(
     model_name: str,
     column_name: str,
     models_only: bool = False,
