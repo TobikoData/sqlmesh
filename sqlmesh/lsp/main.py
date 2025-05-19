@@ -4,6 +4,7 @@
 import logging
 import typing as t
 from pathlib import Path
+import urllib.parse
 
 from lsprotocol import types
 from pygls.server import LanguageServer
@@ -14,6 +15,7 @@ from sqlmesh.core.linter.definition import AnnotatedRuleViolation
 from sqlmesh.lsp.api import (
     API_FEATURE,
     ApiRequest,
+    ApiResponseGetColumnLineage,
     ApiResponseGetLineage,
     ApiResponseGetModels,
 )
@@ -24,7 +26,7 @@ from sqlmesh.lsp.reference import (
     get_references,
 )
 from sqlmesh.lsp.uri import URI
-from web.server.api.endpoints.lineage import model_lineage
+from web.server.api.endpoints.lineage import column_lineage, model_lineage
 from web.server.api.endpoints.models import get_models
 
 
@@ -92,18 +94,37 @@ class SQLMeshLanguageServer:
         @self.server.feature(API_FEATURE)
         def api(
             ls: LanguageServer, request: ApiRequest
-        ) -> t.Union[ApiResponseGetModels, ApiResponseGetLineage]:
+        ) -> t.Union[ApiResponseGetModels, ApiResponseGetLineage, ApiResponseGetColumnLineage]:
             ls.log_trace(f"API request: {request}")
             if self.lsp_context is None:
                 raise RuntimeError("No context found")
-            if request.url == "/api/models":
-                response = ApiResponseGetModels(data=get_models(self.lsp_context.context))
-                return response
-            if request.url.startswith("/api/lineage"):
-                name = request.url.split("/")[-1]
-                lineage = model_lineage(name, self.lsp_context.context)
-                non_set_lineage = {k: v for k, v in lineage.items() if v is not None}
-                return ApiResponseGetLineage(data=non_set_lineage)
+
+            parsed_url = urllib.parse.urlparse(request.url)
+            path_parts = parsed_url.path.strip("/").split("/")
+
+            if request.method == "GET":
+                if path_parts == ["api", "models"]:
+                    # /api/models
+                    return ApiResponseGetModels(data=get_models(self.lsp_context.context))
+
+                if path_parts[:2] == ["api", "lineage"]:
+                    if len(path_parts) == 3:
+                        # /api/lineage/{model}
+                        model_name = urllib.parse.unquote(path_parts[2])
+                        lineage = model_lineage(model_name, self.lsp_context.context)
+                        non_set_lineage = {k: v for k, v in lineage.items() if v is not None}
+                        return ApiResponseGetLineage(data=non_set_lineage)
+
+                    if len(path_parts) == 4:
+                        # /api/lineage/{model}/{column}
+                        model_name = urllib.parse.unquote(path_parts[2])
+                        column = urllib.parse.unquote(path_parts[3])
+                        logging.info(f"Column lineage request: {model_name} {column}")
+                        column_lineage_response = column_lineage(
+                            model_name, column, False, self.lsp_context.context
+                        )
+                        return ApiResponseGetColumnLineage(data=column_lineage_response)
+
             raise NotImplementedError(f"API request not implemented: {request.url}")
 
         @self.server.feature(types.TEXT_DOCUMENT_DID_OPEN)

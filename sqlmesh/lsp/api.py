@@ -10,7 +10,7 @@ separate process for the web api.
 import typing as t
 from pydantic import field_validator
 from sqlmesh.utils.pydantic import PydanticModel
-from web.server.models import Model
+from web.server.models import LineageColumn, Model
 
 API_FEATURE = "sqlmesh/api"
 
@@ -59,3 +59,11 @@ class ApiResponseGetLineage(PydanticModel):
     """
 
     data: t.Dict[str, t.List[str]]
+
+
+class ApiResponseGetColumnLineage(PydanticModel):
+    """
+    Response from the SQLMesh API for the get_column_lineage endpoint.
+    """
+
+    data: t.Dict[str, t.Dict[str, LineageColumn]]
