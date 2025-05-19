@@ -51,8 +51,12 @@ PoolExecutor = t.Union[SynchronousPoolExecutor, ProcessPoolExecutor]
 def create_process_pool_executor(
     initializer: t.Callable, initargs: t.Tuple, max_workers: t.Optional[int] = c.MAX_FORK_WORKERS
 ) -> PoolExecutor:
-    executor = SynchronousPoolExecutor if max_workers == 1 else ProcessPoolExecutor
-    return executor(
+    if max_workers == 1:
+        return SynchronousPoolExecutor(
+            initializer=initializer,
+            initargs=initargs,
+        )
+    return ProcessPoolExecutor(
         mp_context=mp.get_context("fork"),
         initializer=initializer,
         initargs=initargs,
