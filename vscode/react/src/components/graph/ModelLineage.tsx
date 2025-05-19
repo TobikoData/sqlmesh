@@ -152,6 +152,7 @@ export function ModelLineage({
     if (e.data.topic === 'lineage') {
       setIsMergingModels(false)
       setNodeConnections(e.data.payload.nodesConnections)
+      console.log("setting lineage", e.data.payload.lineage)
       setLineage(e.data.payload.lineage)
 
       if (

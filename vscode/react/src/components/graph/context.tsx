@@ -9,6 +9,7 @@ import {
 import { getNodeMap, hasActiveEdge, hasActiveEdgeConnector } from './help'
 import { EnumSide } from './types'
 import { type Node } from 'reactflow'
+import type { Lineage } from '@/domain/lineage'
 export interface Connections {
   left: string[]
   right: string[]
@@ -19,7 +20,6 @@ export type ActiveNodes = Set<string>
 export type SelectedNodes = Set<string>
 export type HighlightedNodes = Record<string, string[]>
 
-type Lineage = any
 type ModelSQLMeshModel = any
 type Model = any
 
