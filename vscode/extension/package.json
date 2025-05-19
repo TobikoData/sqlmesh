@@ -80,20 +80,20 @@
     ]
   },
   "scripts": {
-    "ci": "npm run lint && npm run compile && npm run test",
+    "ci": "pnpm run lint && pnpm run compile && pnpm run test",
     "compile-tests": "tsc -p . --outDir out",
     "watch-tests": "tsc -p . -w --outDir out",
-    "pretest": "npm run compile-tests && npm run compile && npm run lint",
+    "pretest": "pnpm run compile-tests && pnpm run compile && pnpm run lint",
     "lint": "eslint src",
     "lint:fix": "eslint src --fix",
     "test": "vscode-test",
-    "compile": "npm run check-types && node esbuild.js",
+    "compile": "pnpm run check-types && node esbuild.js",
     "check-types": "tsc --noEmit",
     "watch": "node esbuild.js --watch",
     "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
     "vscode:package": "vsce package --no-dependencies",
-    "vscode:prepublish": "cp ../../LICENSE . && npm run package",
-    "package": "rm -rf ./src_react && mkdir -p ./src_react && cd ../react && npm run build && cd ../extension && cp -r ../react/dist/* ./src_react && npm run check-types && node esbuild.js --production"
+    "vscode:prepublish": "cp ../../LICENSE . && pnpm run package",
+    "package": "rm -rf ./src_react && mkdir -p ./src_react && cd ../react && pnpm run build && cd ../extension && cp -r ../react/dist/* ./src_react && pnpm run check-types && node esbuild.js --production"
   },
   "dependencies": {
     "@types/fs-extra": "^11.0.4",
