@@ -1,4 +1,4 @@
-import { type Column } from '@/api/client'
+import { type Column, type Model } from '@/api/client'
 import {
   createContext,
   useState,
@@ -9,6 +9,7 @@ import {
 import { getNodeMap, hasActiveEdge, hasActiveEdgeConnector } from './help'
 import { EnumSide } from './types'
 import { type Node } from 'reactflow'
+import type { Lineage } from '@/domain/lineage'
 export interface Connections {
   left: string[]
   right: string[]
@@ -19,9 +20,7 @@ export type ActiveNodes = Set<string>
 export type SelectedNodes = Set<string>
 export type HighlightedNodes = Record<string, string[]>
 
-type Lineage = any
 type ModelSQLMeshModel = any
-type Model = any
 
 interface LineageFlow {
   lineage: Record<string, Lineage>
@@ -33,7 +32,7 @@ interface LineageFlow {
   selectedNodes: SelectedNodes
   selectedEdges: any[]
   models: Record<string, Model>
-  unknownModels: Record<string, Model>
+  unknownModels: Set<string>
   connections: Map<string, Connections>
   withConnected: boolean
   withColumns: boolean
@@ -84,7 +83,7 @@ export const LineageFlowContext = createContext<LineageFlow>({
   mainNode: undefined,
   activeEdges: new Map(),
   activeNodes: new Set(),
-  models: new Map(),
+  models: {},
   unknownModels: new Set(),
   manuallySelectedColumn: undefined,
   connections: new Map(),

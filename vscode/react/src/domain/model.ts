@@ -1,4 +1,4 @@
-interface Model {
+export interface Model {
   name: string
   fqn: string
   path: string
