@@ -105,24 +105,29 @@ jobs:
       size: large
     steps:
       - halt_unless_core
+      - run:
+          name: Enable symlinks in git config
+          command: git config --global core.symlinks true
       - checkout
       - run:
-          name: Install Python 3.9
+          name: Install System Dependencies
           command: |
-            choco install python --version=3.9 -y
+            choco install make which -y
             refreshenv
-      - run: 
-          name: Install make
-          command: choco install make -y
       - run:
           name: Install SQLMesh dev dependencies
-          command: make install-dev
-      - run:
-          name: Fix Git URL override
-          command: git config --global --unset url."ssh://git@github.com".insteadOf      
+          command: |
+            python -m venv venv
+            . ./venv/Scripts/activate
+            python.exe -m pip install --upgrade pip
+            make install-dev
       - run:
           name: Run fast unit tests
-          command: make fast-test
+          command: |
+            . ./venv/Scripts/activate
+            which python
+            python --version
+            make fast-test
       - store_test_results:
           path: test-results
 
