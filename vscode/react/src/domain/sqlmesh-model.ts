@@ -10,7 +10,8 @@ import {
 } from '@/api/client'
 import { isArrayNotEmpty } from '@/utils/index'
 import { ModelInitial } from './initial'
-import type { Lineage } from './lineage'
+
+type Lineage = any
 
 export interface InitialSQLMeshModel extends Model {
   lineage?: Record<string, Lineage>
