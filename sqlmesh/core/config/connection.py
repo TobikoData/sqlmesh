@@ -4,6 +4,7 @@ import abc
 import base64
 import logging
 import os
+import importlib
 import pathlib
 import re
 import typing as t
@@ -24,6 +25,7 @@ from sqlmesh.core.config.common import (
 )
 from sqlmesh.core.engine_adapter.shared import CatalogSupport
 from sqlmesh.core.engine_adapter import EngineAdapter
+from sqlmesh.utils import str_to_bool
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import (
     ValidationInfo,
@@ -47,6 +49,30 @@ FORBIDDEN_STATE_SYNC_ENGINES = {
     "clickhouse",
 }
 MOTHERDUCK_TOKEN_REGEX = re.compile(r"(\?|\&)(motherduck_token=)(\S*)")
+
+
+def _get_engine_import_validator(
+    import_name: str, engine_type: str, extra_name: t.Optional[str] = None
+) -> t.Callable:
+    extra_name = extra_name or engine_type
+
+    @model_validator(mode="before")
+    def validate(cls: t.Any, data: t.Any) -> t.Any:
+        check_import = (
+            str_to_bool(str(data.pop("check_import", True))) if isinstance(data, dict) else True
+        )
+        if not check_import:
+            return data
+        try:
+            importlib.import_module(import_name)
+        except ImportError:
+            raise ConfigError(
+                f"Failed to import the '{engine_type}' engine library. Please run `pip install \"sqlmesh[{extra_name}]\"`."
+            )
+
+        return data
+
+    return validate
 
 
 class ConnectionConfig(abc.ABC, BaseConfig):
@@ -428,6 +454,7 @@ class SnowflakeConnectionConfig(ConnectionConfig):
     type_: t.Literal["snowflake"] = Field(alias="type", default="snowflake")
 
     _concurrent_tasks_validator = concurrent_tasks_validator
+    _engine_import_validator = _get_engine_import_validator("snowflake", "snowflake")
 
     @model_validator(mode="before")
     def _validate_authenticator(cls, data: t.Any) -> t.Any:
@@ -621,6 +648,7 @@ class DatabricksConnectionConfig(ConnectionConfig):
 
     _concurrent_tasks_validator = concurrent_tasks_validator
     _http_headers_validator = http_headers_validator
+    _engine_import_validator = _get_engine_import_validator("databricks", "databricks")
 
     @model_validator(mode="before")
     def _databricks_connect_validator(cls, data: t.Any) -> t.Any:
@@ -873,6 +901,8 @@ class BigQueryConnectionConfig(ConnectionConfig):
 
     type_: t.Literal["bigquery"] = Field(alias="type", default="bigquery")
 
+    _engine_import_validator = _get_engine_import_validator("google.cloud.bigquery", "bigquery")
+
     @field_validator("execution_project")
     def validate_execution_project(
         cls,
@@ -1015,6 +1045,10 @@ class GCPPostgresConnectionConfig(ConnectionConfig):
     register_comments: bool = True
     pre_ping: bool = True
 
+    _engine_import_validator = _get_engine_import_validator(
+        "google.cloud.sql", "gcp_postgres", "gcppostgres"
+    )
+
     @model_validator(mode="before")
     def _validate_auth_method(cls, data: t.Any) -> t.Any:
         if not isinstance(data, dict):
@@ -1142,6 +1176,8 @@ class RedshiftConnectionConfig(ConnectionConfig):
 
     type_: t.Literal["redshift"] = Field(alias="type", default="redshift")
 
+    _engine_import_validator = _get_engine_import_validator("redshift_connector", "redshift")
+
     @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
         return {
@@ -1201,6 +1237,8 @@ class PostgresConnectionConfig(ConnectionConfig):
 
     type_: t.Literal["postgres"] = Field(alias="type", default="postgres")
 
+    _engine_import_validator = _get_engine_import_validator("psycopg2", "postgres")
+
     @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
         return {
@@ -1252,6 +1290,8 @@ class MySQLConnectionConfig(ConnectionConfig):
 
     type_: t.Literal["mysql"] = Field(alias="type", default="mysql")
 
+    _engine_import_validator = _get_engine_import_validator("pymysql", "mysql")
+
     @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
         connection_keys = {
@@ -1301,6 +1341,8 @@ class MSSQLConnectionConfig(ConnectionConfig):
     pre_ping: bool = True
 
     type_: t.Literal["mssql"] = Field(alias="type", default="mssql")
+
+    _engine_import_validator = _get_engine_import_validator("pymssql", "mssql")
 
     @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
@@ -1356,6 +1398,8 @@ class SparkConnectionConfig(ConnectionConfig):
     pre_ping: t.Literal[False] = False
 
     type_: t.Literal["spark"] = Field(alias="type", default="spark")
+
+    _engine_import_validator = _get_engine_import_validator("pyspark", "spark")
 
     @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
@@ -1472,6 +1516,8 @@ class TrinoConnectionConfig(ConnectionConfig):
     pre_ping: t.Literal[False] = False
 
     type_: t.Literal["trino"] = Field(alias="type", default="trino")
+
+    _engine_import_validator = _get_engine_import_validator("trino", "trino")
 
     @field_validator("schema_location_mapping", mode="before")
     @classmethod
@@ -1623,6 +1669,8 @@ class ClickhouseConnectionConfig(ConnectionConfig):
 
     type_: t.Literal["clickhouse"] = Field(alias="type", default="clickhouse")
 
+    _engine_import_validator = _get_engine_import_validator("clickhouse_connect", "clickhouse")
+
     @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
         kwargs = {
@@ -1727,6 +1775,8 @@ class AthenaConnectionConfig(ConnectionConfig):
 
     type_: t.Literal["athena"] = Field(alias="type", default="athena")
 
+    _engine_import_validator = _get_engine_import_validator("pyathena", "athena")
+
     @model_validator(mode="after")
     def _root_validator(self) -> Self:
         work_group = self.work_group
@@ -1792,6 +1842,8 @@ class RisingwaveConnectionConfig(ConnectionConfig):
     pre_ping: bool = True
 
     type_: t.Literal["risingwave"] = Field(alias="type", default="risingwave")
+
+    _engine_import_validator = _get_engine_import_validator("psycopg2", "risingwave")
 
     @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
