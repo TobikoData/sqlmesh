@@ -45,8 +45,7 @@ import { useLineageFlow } from './context'
 import { Popover, Transition } from '@headlessui/react'
 import { useApiColumnLineage } from '@/api/index'
 import SourceList from '@/components/sourceList/SourceList'
-
-type Lineage = any
+import type { Lineage } from '@/domain/lineage'
 
 export default function ModelColumns({
   nodeId,
