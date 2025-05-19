@@ -14,6 +14,8 @@ from sqlmesh.core.model import SqlModel, load_sql_based_model
 from sqlmesh.core.table_diff import TableDiff
 import numpy as np
 
+from sqlmesh.utils.errors import SQLMeshError
+
 
 def create_test_console() -> t.Tuple[StringIO, TerminalConsole]:
     """Creates a console and buffer for validating console output."""
@@ -829,3 +831,123 @@ def test_data_diff_empty_tables():
     assert (
         strip_ansi_codes(output) == "Neither the source nor the target table contained any records"
     )
+
+
+@pytest.mark.slow
+def test_data_diff_multiple_models_lacking_grain(sushi_context_fixed_date, capsys, caplog):
+    # Create first model with grain
+    expressions = d.parse(
+        """
+        MODEL (name memory.sushi.grain_model, kind full, grain(key),);
+        SELECT
+            key,
+            value,
+        FROM
+            (VALUES
+                (1, 3),
+                (2, 4),
+            ) AS t (key, value)
+    """
+    )
+    model_s = load_sql_based_model(expressions, dialect="snowflake")
+    sushi_context_fixed_date.upsert_model(model_s)
+
+    # Create second model without grain
+    expressions_2 = d.parse(
+        """
+        MODEL (name memory.sushi.no_grain_model, kind full,);
+        SELECT
+            key,
+            value as amount,
+        FROM
+            memory.sushi.grain_model
+    """
+    )
+    model_s2 = load_sql_based_model(expressions_2, dialect="snowflake")
+    sushi_context_fixed_date.upsert_model(model_s2)
+
+    sushi_context_fixed_date.plan(
+        "source_dev",
+        no_prompts=True,
+        auto_apply=True,
+        skip_tests=True,
+        start="2023-01-31",
+        end="2023-01-31",
+    )
+
+    # Modify first model
+    model = sushi_context_fixed_date.models['"MEMORY"."SUSHI"."GRAIN_MODEL"']
+    modified_model = model.dict()
+    modified_model["query"] = (
+        exp.select("*")
+        .from_(model.query.subquery())
+        .union("SELECT key, value FROM (VALUES (1, 6),(2,3),) AS t (key, value)")
+    )
+    modified_sqlmodel = SqlModel(**modified_model)
+    sushi_context_fixed_date.upsert_model(modified_sqlmodel)
+
+    # Modify second model
+    model2 = sushi_context_fixed_date.models['"MEMORY"."SUSHI"."NO_GRAIN_MODEL"']
+    modified_model2 = model2.dict()
+    modified_model2["query"] = (
+        exp.select("*")
+        .from_(model2.query.subquery())
+        .union("SELECT key, amount FROM (VALUES (5, 150.2),(6,250.2),) AS t (key, amount)")
+    )
+    modified_sqlmodel2 = SqlModel(**modified_model2)
+    sushi_context_fixed_date.upsert_model(modified_sqlmodel2)
+
+    sushi_context_fixed_date.auto_categorize_changes = CategorizerConfig(
+        sql=AutoCategorizationMode.FULL
+    )
+    sushi_context_fixed_date.plan(
+        "target_dev",
+        create_from="source_dev",
+        no_prompts=True,
+        auto_apply=True,
+        skip_tests=True,
+        start="2023-01-31",
+        end="2023-01-31",
+    )
+
+    # By default erroring out when even one model lacks a grain
+    with pytest.raises(
+        SQLMeshError,
+        match=r"SQLMesh doesn't know how to join the tables for the following models:*",
+    ):
+        sushi_context_fixed_date.table_diff(
+            source="source_dev",
+            target="target_dev",
+            select_models={"*"},
+            skip_grain_check=False,
+        )
+
+    # With warn_grain_check flag the diff will go ahead by warning
+    diffs = sushi_context_fixed_date.table_diff(
+        source="source_dev",
+        target="target_dev",
+        select_models={"*"},
+        skip_grain_check=False,
+        warn_grain_check=True,
+    )
+
+    # Check that the diff was performed only for the model with a grain
+    assert len(diffs) == 1
+    diff1 = diffs[0]
+
+    # Check the table diff corresponds to the grain model
+    row_diff1 = diff1.row_diff()
+    assert row_diff1.full_match_count == 2.0
+    assert row_diff1.full_match_pct == 50.0
+    assert row_diff1.s_only_count == 0.0
+    assert row_diff1.t_only_count == 0.0
+    assert row_diff1.stats["join_count"] == 4.0
+    assert row_diff1.stats["null_grain_count"] == 0.0
+    assert row_diff1.stats["s_count"] == 4.0
+    assert row_diff1.stats["distinct_count_s"] == 2.0
+    assert row_diff1.stats["t_count"] == 4.0
+    assert row_diff1.stats["distinct_count_t"] == 2.0
+    assert row_diff1.s_sample.shape == (0, 2)
+    assert row_diff1.t_sample.shape == (0, 2)
+    assert row_diff1.joined_sample.shape == (2, 3)
+    assert row_diff1.sample.shape == (2, 4)

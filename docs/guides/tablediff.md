@@ -169,7 +169,10 @@ sqlmesh table_diff prod:dev -m "tag:finance" -m "metrics.*_daily"
 
 When multiple selectors are provided, they are combined with OR logic, meaning a model matching any of the selectors will be included.
 
-> Note: All models being compared must have their `grain` defined that is unique and not null, as this is used to perform the join between the tables in the two environments.
+!!! note
+    All models being compared must have their `grain` defined that is unique and not null, as this is used to perform the join between the tables in the two environments.
+
+    If the `--warn-grain-check` option is used, this requirement is not enforced. Instead of raising an error, a warning is displayed for the models without a defined grain and diffs are computed for the remaining models.
 
 ## Diffing tables or views
 
