@@ -17,8 +17,7 @@ import {
 } from './ModelNode'
 import type { Lineage } from '@/domain/lineage'
 import type { ConnectedNode } from '@/workers/lineage'
-
-type ModelSQLMeshModel = any
+import type { ModelSQLMeshModel } from '@/domain/sqlmesh-model'
 
 export interface GraphNodeData {
   label: string
