@@ -1,6 +1,6 @@
 {
   "scripts": {
-    "ci": "pnpm run -r ci",
+    "ci": "pnpm run lint && pnpm run -r ci",
     "fmt": "prettier --write .",
     "fmt:check": "prettier --check .",
     "lint": "pnpm run fmt:check && pnpm run -r lint",
