@@ -3,6 +3,7 @@ from lsprotocol.types import Position
 from sqlmesh.core.context import Context
 from sqlmesh.lsp.context import LSPContext, ModelTarget, AuditTarget
 from sqlmesh.lsp.reference import get_model_definitions_for_a_path, by_position
+from sqlmesh.lsp.uri import URI
 
 
 @pytest.mark.fast
@@ -11,21 +12,22 @@ def test_reference() -> None:
     lsp_context = LSPContext(context)
 
     # Find model URIs
-    active_customers_uri = next(
-        uri
-        for uri, info in lsp_context.map.items()
+    active_customers_path = next(
+        path
+        for path, info in lsp_context.map.items()
         if isinstance(info, ModelTarget) and "sushi.active_customers" in info.names
     )
-    sushi_customers_uri = next(
-        uri
-        for uri, info in lsp_context.map.items()
+    sushi_customers_path = next(
+        path
+        for path, info in lsp_context.map.items()
         if isinstance(info, ModelTarget) and "sushi.customers" in info.names
     )
 
+    active_customers_uri = URI.from_path(active_customers_path)
     references = get_model_definitions_for_a_path(lsp_context, active_customers_uri)
 
     assert len(references) == 1
-    assert references[0].uri == sushi_customers_uri.value
+    assert URI(references[0].uri) == URI.from_path(sushi_customers_path)
 
     # Check that the reference in the correct range is sushi.customers
     path = active_customers_uri.to_path()
@@ -42,17 +44,18 @@ def test_reference_with_alias() -> None:
     context = Context(paths=["examples/sushi"])
     lsp_context = LSPContext(context)
 
-    waiter_revenue_by_day_uri = next(
+    waiter_revenue_by_day_path = next(
         uri
         for uri, info in lsp_context.map.items()
         if isinstance(info, ModelTarget) and "sushi.waiter_revenue_by_day" in info.names
     )
 
-    references = get_model_definitions_for_a_path(lsp_context, waiter_revenue_by_day_uri)
+    references = get_model_definitions_for_a_path(
+        lsp_context, URI.from_path(waiter_revenue_by_day_path)
+    )
     assert len(references) == 3
 
-    path = waiter_revenue_by_day_uri.to_path()
-    with open(path, "r") as file:
+    with open(waiter_revenue_by_day_path, "r") as file:
         read_file = file.readlines()
 
     assert references[0].uri.endswith("orders.py")
@@ -70,27 +73,25 @@ def test_standalone_audit_reference() -> None:
     lsp_context = LSPContext(context)
 
     # Find the standalone audit URI
-    audit_uri = next(
+    audit_path = next(
         uri
         for uri, info in lsp_context.map.items()
         if isinstance(info, AuditTarget) and info.name == "assert_item_price_above_zero"
     )
-
     # Find the items model URI
-    items_uri = next(
+    items_path = next(
         uri
         for uri, info in lsp_context.map.items()
         if isinstance(info, ModelTarget) and "sushi.items" in info.names
     )
 
-    references = get_model_definitions_for_a_path(lsp_context, audit_uri)
+    references = get_model_definitions_for_a_path(lsp_context, URI.from_path(audit_path))
 
     assert len(references) == 1
-    assert references[0].uri == items_uri.value
+    assert references[0].uri == URI.from_path(items_path).value
 
     # Check that the reference in the correct range is sushi.items
-    path = audit_uri.to_path()
-    with open(path, "r") as file:
+    with open(audit_path, "r") as file:
         read_file = file.readlines()
     referenced_text = get_string_from_range(read_file, references[0].range)
     assert referenced_text == "sushi.items"
@@ -123,19 +124,20 @@ def test_filter_references_by_position() -> None:
     lsp_context = LSPContext(context)
 
     # Use a file with multiple references (waiter_revenue_by_day)
-    waiter_revenue_by_day_uri = next(
-        uri
-        for uri, info in lsp_context.map.items()
+    waiter_revenue_by_day_path = next(
+        path
+        for path, info in lsp_context.map.items()
         if isinstance(info, ModelTarget) and "sushi.waiter_revenue_by_day" in info.names
     )
 
     # Get all references in the file
-    all_references = get_model_definitions_for_a_path(lsp_context, waiter_revenue_by_day_uri)
+    all_references = get_model_definitions_for_a_path(
+        lsp_context, URI.from_path(waiter_revenue_by_day_path)
+    )
     assert len(all_references) == 3
 
     # Get file contents to locate positions for testing
-    path = waiter_revenue_by_day_uri.to_path()
-    with open(path, "r") as file:
+    with open(waiter_revenue_by_day_path, "r") as file:
         read_file = file.readlines()
 
     # Test positions for each reference
