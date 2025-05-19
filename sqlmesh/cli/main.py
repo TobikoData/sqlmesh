@@ -907,6 +907,11 @@ def create_external_models(obj: Context, **kwargs: t.Any) -> None:
     help="Disable the check for a primary key (grain) that is missing or is not unique.",
 )
 @click.option(
+    "--warn-grain-check",
+    is_flag=True,
+    help="Warn if any selected model is missing a grain, and compute diffs for the remaining models.",
+)
+@click.option(
     "--temp-schema",
     type=str,
     help="Schema used for temporary tables. It can be `CATALOG.SCHEMA` or `SCHEMA`. Default: `sqlmesh_temp`",
