@@ -46,6 +46,8 @@ import { Popover, Transition } from '@headlessui/react'
 import { useApiColumnLineage } from '@/api/index'
 import SourceList from '@/components/sourceList/SourceList'
 
+type Lineage = any
+
 export default function ModelColumns({
   nodeId,
   columns,
