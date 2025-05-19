@@ -758,7 +758,13 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/TableDiff" }
+                "schema": {
+                  "anyOf": [
+                    { "$ref": "#/components/schemas/TableDiff" },
+                    { "type": "null" }
+                  ],
+                  "title": "Response Get Table Diff Api Table Diff Get"
+                }
               }
             }
           },
@@ -1133,20 +1139,6 @@
       "Environment": {
         "properties": {
           "name": { "type": "string", "title": "Name", "default": "prod" },
-          "suffix_target": {
-            "$ref": "#/components/schemas/EnvironmentSuffixTarget",
-            "default": "schema"
-          },
-          "catalog_name_override": {
-            "anyOf": [{ "type": "string" }, { "type": "null" }],
-            "title": "Catalog Name Override"
-          },
-          "normalize_name": {
-            "type": "boolean",
-            "title": "Normalize Name",
-            "default": true
-          },
-          "snapshots": { "items": {}, "type": "array", "title": "Snapshots" },
           "start_at": {
             "anyOf": [
               { "type": "string", "format": "date" },
@@ -1181,6 +1173,25 @@
             "anyOf": [{ "type": "integer" }, { "type": "null" }],
             "title": "Finalized Ts"
           },
+          "suffix_target": {
+            "$ref": "#/components/schemas/EnvironmentSuffixTarget",
+            "default": "schema"
+          },
+          "catalog_name_override": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Catalog Name Override"
+          },
+          "normalize_name": {
+            "type": "boolean",
+            "title": "Normalize Name",
+            "default": true
+          },
+          "gateway_managed": {
+            "type": "boolean",
+            "title": "Gateway Managed",
+            "default": false
+          },
+          "snapshots": { "items": {}, "type": "array", "title": "Snapshots" },
           "promoted_snapshot_ids": {
             "anyOf": [{ "items": {}, "type": "array" }, { "type": "null" }],
             "title": "Promoted Snapshot Ids"
@@ -1198,9 +1209,9 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": ["snapshots", "start_at", "plan_id"],
+        "required": ["start_at", "plan_id", "snapshots"],
         "title": "Environment",
-        "description": "Represents an isolated environment.\n\nEnvironments are isolated workspaces that hold pointers to physical tables.\n\nArgs:\n    snapshots: The snapshots that are part of this environment.\n    start_at: The start time of the environment.\n    end_at: The end time of the environment.\n    plan_id: The ID of the plan that last updated this environment.\n    previous_plan_id: The ID of the previous plan that updated this environment.\n    expiration_ts: The timestamp when this environment will expire.\n    finalized_ts: The timestamp when this environment was finalized.\n    promoted_snapshot_ids: The IDs of the snapshots that are promoted in this environment\n        (i.e. for which the views are created). If not specified, all snapshots are promoted.\n    previous_finalized_snapshots: Snapshots that were part of this environment last time it was finalized.\n    requirements: A mapping of library versions for all the snapshots in this environment."
+        "description": "Represents an isolated environment.\n\nEnvironments are isolated workspaces that hold pointers to physical tables.\n\nArgs:\n    snapshots: The snapshots that are part of this environment.\n    promoted_snapshot_ids: The IDs of the snapshots that are promoted in this environment\n        (i.e. for which the views are created). If not specified, all snapshots are promoted.\n    previous_finalized_snapshots: Snapshots that were part of this environment last time it was finalized.\n    requirements: A mapping of library versions for all the snapshots in this environment."
       },
       "EnvironmentSuffixTarget": {
         "type": "string",
@@ -1372,6 +1383,7 @@
           "name": { "type": "string", "title": "Name" },
           "fqn": { "type": "string", "title": "Fqn" },
           "path": { "type": "string", "title": "Path" },
+          "full_path": { "type": "string", "title": "Full Path" },
           "dialect": { "type": "string", "title": "Dialect" },
           "type": { "$ref": "#/components/schemas/ModelType" },
           "columns": {
@@ -1409,6 +1421,7 @@
           "name",
           "fqn",
           "path",
+          "full_path",
           "dialect",
           "type",
           "columns",
