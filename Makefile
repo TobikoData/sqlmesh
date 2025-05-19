@@ -177,5 +177,6 @@ vscode_settings:
 	cp -r ./tooling/vscode/*.json .vscode/
 
 vscode-generate-openapi:
-	python3 web/server/openapi.py --output vscode/extension/openapi.json
+	python3 web/server/openapi.py --output vscode/openapi.json
+	pnpm run fmt
 	cd vscode/react && pnpm run generate:api
