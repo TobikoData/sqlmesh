@@ -47,7 +47,6 @@ export default function ListboxShow({
           />
         </Listbox.Button>
         <Transition
-          // @ts-ignore
           as={Fragment}
           leave="transition ease-in duration-100"
           leaveFrom="opacity-100"

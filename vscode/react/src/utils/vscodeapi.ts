@@ -23,9 +23,10 @@ interface VSCodeAPI {
   postMessage: (message: any) => void
 }
 
+declare function acquireVsCodeApi(): VSCodeAPI
+
 function getVSCodeAPI(): VSCodeAPI {
   if (!VSCODE_API) {
-    // @ts-ignore
     VSCODE_API = acquireVsCodeApi()
   }
   if (!VSCODE_API) {
