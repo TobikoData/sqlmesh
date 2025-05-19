@@ -106,7 +106,7 @@
   "devDependencies": {
     "@eslint/js": "^9.25.1",
     "@types/mocha": "^10.0.10",
-    "@types/node": "20.11.25",
+    "@types/node": "22.15.19",
     "@types/vscode": "1.96.0",
     "@vscode/test-cli": "^0.0.10",
     "@vscode/test-electron": "^2.4.1",
