@@ -17,6 +17,7 @@
 | `catalogs`         | Mapping to define multiple catalogs. Can [attach DuckDB catalogs](#duckdb-catalogs-example) or [catalogs for other connections](#other-connection-catalogs-example). First entry is the default catalog. Cannot be defined if using `database`. |  dict  |    N     |
 | `extensions`       | Extension to load into duckdb. Only autoloadable extensions are supported.                                                                                                                                                                      |  list  |    N     |
 | `connector_config` | Configuration to pass into the duckdb connector.                                                                                                                                                                                                |  dict  |    N     |
+| `secrets_config`   | Configuration for authenticating external sources (e.g., S3) using DuckDB secrets.                                                                                                                                                                                                |  dict  |    N     |
 
 #### DuckDB Catalogs Example
 
@@ -141,6 +142,69 @@ If a connector, like Postgres, requires sensitive information in the path, it mi
 
 DuckDB can read data directly from cloud services via extensions (e.g., [httpfs](https://duckdb.org/docs/extensions/httpfs/s3api), [azure](https://duckdb.org/docs/extensions/azure)).
 
-Loading credentials at runtime using `load_aws_credentials()` or similar functions may fail when using SQLMesh.
+The `secrets_config` option allows you to configure DuckDB's [Secrets Manager](https://duckdb.org/docs/configuration/secrets_manager.html) to authenticate with external services like S3. This is the recommended approach for cloud storage authentication in DuckDB v0.10.0 and newer, replacing the [legacy authentication method](https://duckdb.org/docs/stable/extensions/httpfs/s3api_legacy_authentication.html) via variables.
 
-Instead, create persistent and automatically used authentication credentials with the [DuckDB secrets manager](https://duckdb.org/docs/configuration/secrets_manager.html) (available in DuckDB v0.10.0 or greater).
+##### Secrets Configuration Example for S3
+
+The `secrets_config` accepts a list of secret configurations, each defining the necessary authentication parameters for the specific service:
+
+=== "YAML"
+
+    ```yaml linenums="1"
+    gateways:
+      duckdb:
+        connection:
+          type: duckdb
+          catalogs:
+            local: local.db
+            remote: "s3://bucket/data/remote.duckdb"
+          extensions:
+            - name: httpfs
+          secrets_config:
+            - type: s3
+              region: "YOUR_AWS_REGION"
+              key_id: "YOUR_AWS_ACCESS_KEY"
+              secret: "YOUR_AWS_SECRET_KEY"
+    ```
+
+=== "Python"
+
+    ```python linenums="1"
+    from sqlmesh.core.config import (
+        Config,
+        ModelDefaultsConfig,
+        GatewayConfig,
+        DuckDBConnectionConfig
+    )
+
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        gateways={
+            "duckdb": GatewayConfig(
+                connection=DuckDBConnectionConfig(
+                    catalogs={
+                        "local": "local.db",
+                        "remote": "s3://bucket/data/remote.duckdb"
+                    },
+                    extensions=[
+                        {"name": "httpfs"},
+                    ],
+                    secrets_config=[
+                        {
+                            "type": "s3",
+                            "region": "YOUR_AWS_REGION",
+                            "key_id": "YOUR_AWS_ACCESS_KEY",
+                            "secret": "YOUR_AWS_SECRET_KEY"
+                        }
+                    ]
+                )
+            ),
+        }
+    )
+    ```
+
+After configuring the secrets, you can directly reference S3 paths in your catalogs or in SQL queries without additional authentication steps.
+
+Refer to the official DuckDB documentation for the full list of [supported S3 secret parameters](https://duckdb.org/docs/stable/extensions/httpfs/s3api.html#overview-of-s3-secret-parameters) and for more information on the [Secrets Manager configuration](https://duckdb.org/docs/configuration/secrets_manager.html).
+
+> Note: Loading credentials at runtime using `load_aws_credentials()` or similar deprecated functions may fail when using SQLMesh.

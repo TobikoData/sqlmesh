@@ -550,6 +550,7 @@ def test_connection_config_serialization():
         "pre_ping": False,
         "pretty_sql": False,
         "connector_config": {},
+        "secrets_config": [],
         "database": "my_db",
     }
     assert serialized["default_test_connection"] == {
@@ -560,6 +561,7 @@ def test_connection_config_serialization():
         "pre_ping": False,
         "pretty_sql": False,
         "connector_config": {},
+        "secrets_config": [],
         "database": "my_test_db",
     }
 
