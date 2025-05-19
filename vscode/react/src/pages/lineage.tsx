@@ -14,6 +14,7 @@ import { ModelSQLMeshModel } from '@/domain/sqlmesh-model'
 import { useEventBus } from '@/hooks/eventBus'
 import type { VSCodeEvent } from '@bus/callbacks'
 import { URI } from 'vscode-uri'
+import type { Model } from '@/domain/model'
 
 export function LineagePage() {
   const { emit } = useEventBus()
