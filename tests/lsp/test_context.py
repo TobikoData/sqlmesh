@@ -14,7 +14,7 @@ def test_lsp_context():
 
     # find one model in the map
     active_customers_key = next(
-        key for key in lsp_context.map.keys() if str(key.to_path()).endswith("active_customers.sql")
+        key for key in lsp_context.map.keys() if key.name == "active_customers.sql"
     )
 
     # Check that the value is a ModelInfo with the expected model name

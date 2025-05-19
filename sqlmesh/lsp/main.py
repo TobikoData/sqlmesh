@@ -116,7 +116,7 @@ class SQLMeshLanguageServer:
                     SQLMeshLanguageServer._diagnostics_to_lsp_diagnostics(self.lint_cache[uri]),
                 )
                 return
-            models = context.map[uri]
+            models = context.map[uri.to_path()]
             if models is None:
                 return
             if not isinstance(models, ModelTarget):
@@ -134,7 +134,7 @@ class SQLMeshLanguageServer:
         def did_change(ls: LanguageServer, params: types.DidChangeTextDocumentParams) -> None:
             uri = URI(params.text_document.uri)
             context = self._context_get_or_load(uri)
-            models = context.map[uri]
+            models = context.map[uri.to_path()]
             if models is None:
                 return
             if not isinstance(models, ModelTarget):
@@ -152,7 +152,7 @@ class SQLMeshLanguageServer:
         def did_save(ls: LanguageServer, params: types.DidSaveTextDocumentParams) -> None:
             uri = URI(params.text_document.uri)
             context = self._context_get_or_load(uri)
-            models = context.map[uri]
+            models = context.map[uri.to_path()]
             if models is None:
                 return
             if not isinstance(models, ModelTarget):

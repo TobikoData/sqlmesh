@@ -88,15 +88,14 @@ def get_model_definitions_for_a_path(
     - Try get_model before normalization
     - Match to models that the model refers to
     """
-    # Ensure the path is a sql file
-    if document_uri.to_path().suffix != ".sql":
+    path = document_uri.to_path()
+    if path.suffix != ".sql":
         return []
     # Get the file info from the context map
-    if document_uri not in lint_context.map:
+    if path not in lint_context.map:
         return []
 
-    file_info = lint_context.map[document_uri]
-
+    file_info = lint_context.map[path]
     # Process based on whether it's a model or standalone audit
     if isinstance(file_info, ModelTarget):
         # It's a model
