@@ -76,7 +76,7 @@ class PullRequestInfo(PydanticModel):
         return cls(
             owner=owner,
             repo=repo,
-            pr_number=pr_number,
+            pr_number=int(pr_number),
         )
 
 
@@ -443,6 +443,10 @@ class GithubController:
     @property
     def removed_snapshots(self) -> t.Set[SnapshotId]:
         return set(self.prod_plan_with_gaps.context_diff.removed_snapshots)
+
+    @property
+    def pr_targets_prod_branch(self) -> bool:
+        return self._pull_request.base.ref in self.bot_config.prod_branch_names
 
     @classmethod
     def _append_output(cls, key: str, value: str) -> None:

@@ -28,6 +28,7 @@ class GithubCICDBotConfig(BaseConfig):
     pr_include_unmodified: t.Optional[bool] = None
     run_on_deploy_to_prod: bool = False
     pr_environment_name: t.Optional[str] = None
+    prod_branch_names_: t.Optional[str] = Field(default=None, alias="prod_branch_name")
 
     @model_validator(mode="before")
     @classmethod
@@ -41,6 +42,12 @@ class GithubCICDBotConfig(BaseConfig):
             raise ValueError("enable_deploy_command must be set if command_namespace is set")
 
         return data
+
+    @property
+    def prod_branch_names(self) -> t.List[str]:
+        if self.prod_branch_names_:
+            return [self.prod_branch_names_]
+        return ["main", "master"]
 
     FIELDS_FOR_ANALYTICS: t.ClassVar[t.Set[str]] = {
         "invalidate_environment_after_deploy",
