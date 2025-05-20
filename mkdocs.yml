@@ -30,7 +30,7 @@ nav:
       - guides/testing.md
       - guides/model_selection.md
     - SQLMesh tools:
-      - quickstart/vscode.md
+      - guides/vscode.md
       - guides/tablediff.md
       - guides/linter.md
       - guides/ui.md

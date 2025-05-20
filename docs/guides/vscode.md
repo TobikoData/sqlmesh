@@ -24,7 +24,7 @@ While installing the extension is simple, setting up and configuring a Python en
 
 We recommend using a dedicated *Python virtual environment* to install SQLMesh. Visit the [Python documentation](https://docs.python.org/3/library/venv.html) for more information about virtual environments.
 
-We describe the steps to create and activate a virtual environment below, but additional information is available on the [SQLMesh installation page](installation.md).
+We describe the steps to create and activate a virtual environment below, but additional information is available on the [SQLMesh installation page](../installation.md).
 
 We first install the SQLMesh library, which is required by the extension.
 
@@ -42,7 +42,7 @@ source .venv/bin/activate
 
 #### Open-source SQLMesh
 
-If you are using open-source SQLMesh, install SQLMesh with the `lsp` extra that enables the VSCode extension (learn more about SQLMesh extras [here](installation.md#install-extras)):
+If you are using open-source SQLMesh, install SQLMesh with the `lsp` extra that enables the VSCode extension (learn more about SQLMesh extras [here](../installation.md#install-extras)):
 
 ```bash
 pip install 'sqlmesh[lsp]'
@@ -62,7 +62,9 @@ Finally, add the `lsp` extra to your `tcloud.yml` configuration file, as describ
 
 ### VSCode Python interpreter
 
-A Python virtual environment contains its own copy of Python (the "Python interpreter"). We need to make sure VSCode is using your virtual environment's interpreter rather than a system-wide or other interpreter that does not have access to the SQLMesh library we just installed.
+A Python virtual environment contains its own copy of Python (the "Python interpreter").
+
+We need to make sure VSCode is using your virtual environment's interpreter rather than a system-wide or other interpreter that does not have access to the SQLMesh library we just installed.
 
 Confirm that VSCode is using the correct interpreter by going to the [command palette](https://code.visualstudio.com/docs/getstarted/userinterface#_command-palette) and clicking `Python: Select Interpreter`. Select the Python executable that's in the virtual environment's directory `.venv`.
 
