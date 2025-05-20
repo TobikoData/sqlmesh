@@ -349,18 +349,21 @@ class ModelTest(unittest.TestCase):
         else:
             _raise_error(f"Model '{name}' is an unsupported model type for testing", path)
 
-        return test_type(
-            body,
-            test_name,
-            t.cast(Model, model),
-            models,
-            engine_adapter,
-            dialect,
-            path,
-            preserve_fixtures,
-            default_catalog,
-            concurrency,
-        )
+        try:
+            return test_type(
+                body,
+                test_name,
+                t.cast(Model, model),
+                models,
+                engine_adapter,
+                dialect,
+                path,
+                preserve_fixtures,
+                default_catalog,
+                concurrency,
+            )
+        except Exception as e:
+            raise TestError(f"Failed to create test {test_name} ({path})\n{str(e)}")
 
     def __str__(self) -> str:
         return f"{self.test_name} ({self.path})"
@@ -905,8 +908,8 @@ def _row_difference(left: pd.DataFrame, right: pd.DataFrame) -> pd.DataFrame:
 
 def _raise_error(msg: str, path: Path | None = None) -> None:
     if path:
-        raise TestError(f"{msg} at {path}")
-    raise TestError(msg)
+        raise TestError(f"Failed to run test at {path}:\n{msg}")
+    raise TestError(f"Failed to run test:\n{msg}")
 
 
 def _normalize_df_value(value: t.Any) -> t.Any:
