@@ -13,7 +13,6 @@ from sqlmesh.core import constants as c
 from sqlmesh.core.model.definition import ExternalModel, Model, SqlModel, _Model
 from sqlmesh.utils.cache import FileCache
 from sqlmesh.utils.hashing import crc32
-from sqlmesh.utils.windows import IS_WINDOWS
 from sqlmesh.utils.process import PoolExecutor, create_process_pool_executor
 
 from dataclasses import dataclass

@@ -4,6 +4,7 @@ from concurrent.futures import Future, ProcessPoolExecutor
 import typing as t
 import multiprocessing as mp
 from sqlmesh.core import constants as c
+from sqlmesh.utils.windows import IS_WINDOWS
 
 
 class SynchronousPoolExecutor:
@@ -65,8 +66,10 @@ def create_process_pool_executor(
             initializer=initializer,
             initargs=initargs,
         )
+    # fork doesnt work on Windows. ref: https://docs.python.org/3/library/multiprocessing.html#multiprocessing-start-methods
+    context_type = "spawn" if IS_WINDOWS else "fork"
     return ProcessPoolExecutor(
-        mp_context=mp.get_context("fork"),
+        mp_context=mp.get_context(context_type),
         initializer=initializer,
         initargs=initargs,
         max_workers=max_workers,
