@@ -28,8 +28,12 @@ export default function ModelNode({
   data,
   sourcePosition,
   targetPosition,
-}: NodeProps): JSX.Element {
-  const nodeData: GraphNodeData = data ?? {}
+}: NodeProps<GraphNodeData>): JSX.Element {
+  const nodeData: GraphNodeData = data ?? {
+    label: '',
+    type: EnumLineageNodeModelType.unknown,
+    withColumns: false,
+  }
   const {
     // connections,
     models,
@@ -128,11 +132,18 @@ export default function ModelNode({
   const isMainNode = mainNode === id
   const isHighlightedNode = highlightedNodeModels.includes(id)
   const isSelected = selectedNodes.has(id)
-  const isModelSQL = nodeData.type === EnumLineageNodeModelType.sql
-  const isCTE = nodeData.type === EnumLineageNodeModelType.cte
-  const isModelExternal = nodeData.type === EnumLineageNodeModelType.external
-  const isModelSeed = nodeData.type === EnumLineageNodeModelType.seed
-  const isModelUnknown = nodeData.type === EnumLineageNodeModelType.unknown
+  // Ensure nodeData.type is a valid LineageNodeModelType
+  const nodeType: LineageNodeModelType = Object.values(
+    EnumLineageNodeModelType,
+  ).includes(nodeData.type as any)
+    ? (nodeData.type as LineageNodeModelType)
+    : EnumLineageNodeModelType.unknown
+
+  const isModelSQL = nodeType === EnumLineageNodeModelType.sql
+  const isCTE = nodeType === EnumLineageNodeModelType.cte
+  const isModelExternal = nodeType === EnumLineageNodeModelType.external
+  const isModelSeed = nodeType === EnumLineageNodeModelType.seed
+  const isModelUnknown = nodeType === EnumLineageNodeModelType.unknown
   const showColumns = isArrayNotEmpty(columns) && isFalse(hasHighlightedNodes)
   const isActiveNode =
     selectedNodes.size > 0 || activeNodes.size > 0 || withConnected
@@ -188,7 +199,7 @@ export default function ModelNode({
     >
       <ModelNodeHeaderHandles
         id={id}
-        // type={nodeData.type}
+        type={nodeType}
         label={nodeData.label}
         isSelected={isSelected}
         isDraggable={true}
