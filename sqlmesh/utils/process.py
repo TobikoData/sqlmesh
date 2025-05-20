@@ -24,7 +24,16 @@ class SynchronousPoolExecutor:
         return self
 
     def __exit__(self, *args):
+        self.shutdown(wait=True)
         return True
+
+    def shutdown(self, wait=True, cancel_futures=False):
+        """No-op method to match ProcessPoolExecutor API.
+
+        Since this executor runs synchronously, there are no background processes
+        or resources to shut down and all futures will have completed already.
+        """
+        pass
 
     def submit(self, fn, *args, **kwargs):
         """Execute the function synchronously and return a Future with the result."""
