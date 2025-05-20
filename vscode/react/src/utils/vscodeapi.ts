@@ -13,7 +13,6 @@ export const sendVSCodeMessage = <K extends keyof Callback>(
     key: callbackName,
     payload: payload,
   }
-  console.log('sending message to self', eventPayload)
   getVSCodeAPI().postMessage(eventPayload)
 }
 
