@@ -69,6 +69,13 @@ class LoadedProject:
 
 class CacheBase(abc.ABC):
     @abc.abstractmethod
+    def get_or_load_models(
+        self, target_path: Path, loader: t.Callable[[], t.List[Model]]
+    ) -> t.List[Model]:
+        """Get or load all models from cache."""
+        pass
+
+    @abc.abstractmethod
     def put(self, models: t.List[Model], path: Path) -> bool:
         pass
 
@@ -291,31 +298,30 @@ class Loader(abc.ABC):
         if external_models_path.exists() and external_models_path.is_dir():
             paths_to_load.extend(self._glob_paths(external_models_path, extension=".yaml"))
 
+        def _load(path: Path) -> t.List[Model]:
+            try:
+                with open(path, "r", encoding="utf-8") as file:
+                    return [
+                        create_external_model(
+                            defaults=self.config.model_defaults.dict(),
+                            path=path,
+                            project=self.config.project,
+                            audit_definitions=audits,
+                            **{
+                                "dialect": self.config.model_defaults.dialect,
+                                "default_catalog": self.context.default_catalog,
+                                **row,
+                            },
+                        )
+                        for row in YAML().load(file.read())
+                    ]
+            except Exception as ex:
+                raise ConfigError(self._failed_to_load_model_error(path, ex))
+
         for path in paths_to_load:
             self._track_file(path)
-            external_models = cache.get(path)
 
-            if not external_models:
-                try:
-                    with open(path, "r", encoding="utf-8") as file:
-                        external_models = [
-                            create_external_model(
-                                defaults=self.config.model_defaults.dict(),
-                                path=path,
-                                project=self.config.project,
-                                audit_definitions=audits,
-                                **{
-                                    "dialect": self.config.model_defaults.dialect,
-                                    "default_catalog": self.context.default_catalog,
-                                    **row,
-                                },
-                            )
-                            for row in YAML().load(file.read())
-                        ]
-
-                    cache.put(external_models, path)
-                except Exception as ex:
-                    raise ConfigError(f"Failed to load model definition at '{path}'.\n{ex}")
+            external_models = cache.get_or_load_models(path, lambda: _load(path))
 
             # external models with no explicit gateway defined form the base set
             for model in external_models:
@@ -842,6 +848,20 @@ class SqlMeshLoader(Loader):
             self._loader = loader
             self.config_path = config_path
             self._model_cache = ModelCache(self.config_path / c.CACHE)
+
+        def get_or_load_models(
+            self, target_path: Path, loader: t.Callable[[], t.List[Model]]
+        ) -> t.List[Model]:
+            models = self._model_cache.get_or_load(
+                self._cache_entry_name(target_path),
+                self._model_cache_entry_id(target_path),
+                loader=loader,
+            )
+
+            for model in models:
+                model._path = target_path
+
+            return models
 
         def put(self, models: t.List[Model], path: Path) -> bool:
             return self._model_cache.put(

@@ -10,7 +10,7 @@ from sqlglot.optimizer.simplify import gen
 from sqlglot.schema import MappingSchema
 
 from sqlmesh.core import constants as c
-from sqlmesh.core.model.definition import ExternalModel, Model, SqlModel
+from sqlmesh.core.model.definition import ExternalModel, Model, SqlModel, _Model
 from sqlmesh.utils.cache import FileCache
 from sqlmesh.utils.hashing import crc32
 from sqlmesh.utils.windows import IS_WINDOWS
@@ -40,6 +40,30 @@ class ModelCache:
             path,
             prefix="model_definition",
         )
+
+    def get_or_load(
+        self, name: str, entry_id: str = "", *, loader: t.Callable[[], t.List[Model]]
+    ) -> t.List[Model]:
+        """Returns an existing cached model definition or loads and caches a new one.
+        Args:
+            name: The name of the entry.
+            entry_id: The unique entry identifier. Used for cache invalidation.
+            loader: Used to load a new model definition when no cached instance was found.
+        Returns:
+            The model definition.
+        """
+        cache_entry = self._file_cache.get(name, entry_id)
+        if isinstance(cache_entry, list) and isinstance(seq_get(cache_entry, 0), _Model):
+            return cache_entry
+
+        models = loader()
+        if isinstance(models, list) and isinstance(seq_get(models, 0), (SqlModel, ExternalModel)):
+            # make sure we preload full_depends_on
+            for model in models:
+                model.full_depends_on
+
+            self._file_cache.put(name, entry_id, value=models)
+        return models
 
     def put(self, models: t.List[Model], name: str, entry_id: str = "") -> bool:
         if isinstance(models, list) and isinstance(seq_get(models, 0), (SqlModel, ExternalModel)):
