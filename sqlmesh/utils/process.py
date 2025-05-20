@@ -61,15 +61,13 @@ PoolExecutor = t.Union[SynchronousPoolExecutor, ProcessPoolExecutor]
 def create_process_pool_executor(
     initializer: t.Callable, initargs: t.Tuple, max_workers: t.Optional[int] = c.MAX_FORK_WORKERS
 ) -> PoolExecutor:
-    if max_workers == 1:
+    if max_workers == 1 or IS_WINDOWS:
         return SynchronousPoolExecutor(
             initializer=initializer,
             initargs=initargs,
         )
-    # fork doesnt work on Windows. ref: https://docs.python.org/3/library/multiprocessing.html#multiprocessing-start-methods
-    context_type = "spawn" if IS_WINDOWS else "fork"
     return ProcessPoolExecutor(
-        mp_context=mp.get_context(context_type),
+        mp_context=mp.get_context("fork"),
         initializer=initializer,
         initargs=initargs,
         max_workers=max_workers,
