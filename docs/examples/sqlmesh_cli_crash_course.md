@@ -161,7 +161,11 @@ Note: If you run this without making any changes, SQLMesh will prompt you to mak
 
 ### Run Data Diff Against Prod
 
+<div style="position: relative; padding-bottom: 56.25%; height: 0;"><iframe src="https://www.loom.com/embed/a3c8beffe46840f38487180f401f0a1c?sid=941a7283-38c8-4527-b5b9-49e68c5b9f0c" frameborder="0" webkitallowfullscreen mozallowfullscreen allowfullscreen style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"></iframe></div>
+
 Run data diff against prod. This is a good way to verify the changes are behaving as expected **after** applying them to `dev`.
+
+To make this easier and faster, you can run data diff against all models in the environment impacted by plan changes applied using the `-m '*'` flag example below. No need to specify the model name! Read more about options [here](../guides/tablediff.md).
 
 === "SQLMesh"
 
@@ -173,6 +177,10 @@ Run data diff against prod. This is a good way to verify the changes are behavin
     sqlmesh table_diff <environment>:<environment> <model_name> --show-sample
     ```
 
+    ```bash
+    sqlmesh table_diff prod:dev -m '*' --show-sample
+    ```
+
 === "Tobiko Cloud"
 
     ```bash
@@ -181,6 +189,10 @@ Run data diff against prod. This is a good way to verify the changes are behavin
 
     ```bash
     tcloud sqlmesh table_diff <environment>:<environment> <model_name> --show-sample
+    ```
+
+    ```bash
+    tcloud sqlmesh table_diff prod:dev -m '*' --show-sample
     ```
 
 ??? "Example Output"
