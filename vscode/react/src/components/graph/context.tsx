@@ -1,4 +1,4 @@
-import { type Column } from '@/api/client'
+import { type Column, type Model } from '@/api/client'
 import {
   createContext,
   useState,
@@ -11,7 +11,7 @@ import { EnumSide } from './types'
 import { type Node } from 'reactflow'
 import type { Lineage } from '@/domain/lineage'
 import type { ModelSQLMeshModel } from '@/domain/sqlmesh-model'
-import type { Model } from '@/domain/model'
+
 export interface Connections {
   left: string[]
   right: string[]

@@ -14,7 +14,7 @@ import { ModelSQLMeshModel } from '@/domain/sqlmesh-model'
 import { useEventBus } from '@/hooks/eventBus'
 import type { VSCodeEvent } from '@bus/callbacks'
 import { URI } from 'vscode-uri'
-import type { Model } from '@/domain/model'
+import type { Model } from '@/api/client'
 
 export function LineagePage() {
   const { emit } = useEventBus()
@@ -91,7 +91,6 @@ function Lineage() {
   }
   const modelsRecord = models.reduce(
     (acc, model) => {
-      // @ts-ignore
       acc[model.name] = model
       return acc
     },
@@ -130,7 +129,7 @@ export function LineageComponentFromWeb({
   function handleClickModel(id: string): void {
     console.log('handling click', id)
     const decodedId = decodeURIComponent(id)
-    const model = Object.values(models).find((m: Model) => m.fqn === decodedId)
+    const model = Object.values(models).find(m => m.fqn === decodedId)
     if (!model) {
       throw new Error('Model not found')
     }
