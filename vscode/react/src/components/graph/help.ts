@@ -22,6 +22,8 @@ export interface GraphNodeData {
   label: string
   type: LineageNodeModelType
   withColumns: boolean
+  width?: number
+  height?: number
   [key: string]: any
 }
 
@@ -170,20 +172,25 @@ function getNodeMap({
   const modelNames = Object.keys(lineage)
 
   return modelNames.reduce((acc: Record<string, Node>, modelName: string) => {
-    const model = models[modelName]
+    const decodedModelName = modelName.includes('%')
+      ? decodeURI(modelName)
+      : modelName
+    const model = Object.values(models).find(m => m.fqn === decodedModelName)
+    console.log('model', model)
+    const nodeType: LineageNodeModelType = isNotNil(model)
+      ? (model.type as LineageNodeModelType)
+      : // If model name present in lineage but not in global models
+        // it means either this is a CTE or model is UNKNOWN
+        // CTEs only have connections between columns
+        // where UNKNOWN model has connection only from another model
+        unknownModels.has(modelName)
+        ? EnumLineageNodeModelType.unknown
+        : EnumLineageNodeModelType.cte
+
     const node = createGraphNode(modelName, {
-      // @ts-ignore
-      label: model?.displayName ?? modelName,
+      label: model?.name ?? modelName,
       withColumns,
-      type: isNotNil(model)
-        ? (model.type as LineageNodeModelType)
-        : // If model name present in lineage but not in global models
-          // it means either this is a CTE or model is UNKNOWN
-          // CTEs only have connections between columns
-          // where UNKNOWN model has connection only from another model
-          unknownModels.has(modelName)
-          ? EnumLineageNodeModelType.unknown
-          : EnumLineageNodeModelType.cte,
+      type: nodeType,
     })
     const columnsCount = withColumns
       ? (models[modelName]?.columns?.length ?? 0)
@@ -267,7 +274,7 @@ function createGraphNode(
   data: GraphNodeData,
   position: XYPosition = { x: 0, y: 0 },
   hidden: boolean = false,
-): Node {
+): Node<GraphNodeData> {
   return {
     id,
     dragHandle: '.drag-handle',
