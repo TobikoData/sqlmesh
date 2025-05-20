@@ -426,7 +426,17 @@ def test_duckdb(make_config):
         type="duckdb",
         database="test",
         connector_config={"foo": "bar"},
+        secrets=[
+            {
+                "type": "s3",
+                "region": "aws_region",
+                "key_id": "aws_access_key",
+                "secret": "aws_secret",
+            }
+        ],
     )
+    assert config.connector_config
+    assert config.secrets
     assert isinstance(config, DuckDBConnectionConfig)
     assert not config.is_recommended_for_state_sync
 
