@@ -104,4 +104,4 @@ Congratulations \- your SQLMesh project is up and running on MotherDuck\!
 | `token`            | The optional MotherDuck token. If not specified, the user will be prompted to login with their web browser. | string | N        |
 | `extensions`       | Extension to load into duckdb. Only autoloadable extensions are supported.                                  | list   | N        |
 | `connector_config` | Configuration to pass into the duckdb connector.                                                            | dict   | N        |
-| `secrets_config`   | Configuration for authenticating external sources (e.g. S3) using DuckDB secrets.                           | dict   | N        |
+| `secrets`   | Configuration for authenticating external sources (e.g. S3) using DuckDB secrets.                           | dict   | N        |

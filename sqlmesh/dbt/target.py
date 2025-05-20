@@ -195,7 +195,7 @@ class DuckDbConfig(TargetConfig):
         if self.settings is not None:
             kwargs["connector_config"] = self.settings
         if self.secrets is not None:
-            kwargs["secrets_config"] = self.secrets
+            kwargs["secrets"] = self.secrets
         return DuckDBConnectionConfig(
             database=self.path,
             concurrent_tasks=1,

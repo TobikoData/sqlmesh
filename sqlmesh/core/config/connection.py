@@ -202,7 +202,7 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
         catalogs: Key is the name of the catalog and value is the path.
         extensions: A list of autoloadable extensions to load.
         connector_config: A dictionary of configuration to pass into the duckdb connector.
-        secrets_config: A list of dictionaries used to generate DuckDB secrets for authenticating with external services (e.g. S3).
+        secrets: A list of dictionaries used to generate DuckDB secrets for authenticating with external services (e.g. S3).
         concurrent_tasks: The maximum number of tasks that can use this connection concurrently.
         register_comments: Whether or not to register model comments with the SQL engine.
         pre_ping: Whether or not to pre-ping the connection before starting a new transaction to ensure it is still alive.
@@ -213,7 +213,7 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
     catalogs: t.Optional[t.Dict[str, t.Union[str, DuckDBAttachOptions]]] = None
     extensions: t.List[t.Union[str, t.Dict[str, t.Any]]] = []
     connector_config: t.Dict[str, t.Any] = {}
-    secrets_config: t.List[t.Dict[str, t.Any]] = []
+    secrets: t.List[t.Dict[str, t.Any]] = []
 
     concurrent_tasks: int = 1
     register_comments: bool = True
@@ -286,21 +286,27 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
                 except Exception as e:
                     raise ConfigError(f"Failed to set connector config {field} to {setting}: {e}")
 
-            if self.secrets_config and version.parse(duckdb.__version__) >= version.parse("0.10.0"):
-                # For older versions, legacy authentication is used by setting through the connector_config
-                # https://duckdb.org/docs/stable/extensions/httpfs/s3api_legacy_authentication.html
+            if self.secrets:
+                duckdb_version = duckdb.__version__
+                if version.parse(duckdb_version) < version.parse("0.10.0"):
+                    from sqlmesh.core.console import get_console
 
-                for secrets in self.secrets_config:
-                    secret_settings: t.List[str] = []
-                    for field, setting in secrets.items():
-                        secret_settings.append(f"{field} '{setting}'")
-
-                    if secret_settings:
-                        secret_clause = ", ".join(secret_settings)
-                        try:
-                            cursor.execute(f"CREATE SECRET ({secret_clause});")
-                        except Exception as e:
-                            raise ConfigError(f"Failed to create secret: {e}")
+                    get_console().log_warning(
+                        f"DuckDB version {duckdb_version} does not support secrets-based authentication (requires 0.10.0 or later).\n"
+                        "To use secrets, please upgrade DuckDB. For older versions, configure legacy authentication via `connector_config`.\n"
+                        "More info: https://duckdb.org/docs/stable/extensions/httpfs/s3api_legacy_authentication.html"
+                    )
+                else:
+                    for secrets in self.secrets:
+                        secret_settings: t.List[str] = []
+                        for field, setting in secrets.items():
+                            secret_settings.append(f"{field} '{setting}'")
+                        if secret_settings:
+                            secret_clause = ", ".join(secret_settings)
+                            try:
+                                cursor.execute(f"CREATE SECRET ({secret_clause});")
+                            except Exception as e:
+                                raise ConfigError(f"Failed to create secret: {e}")
 
             for i, (alias, path_options) in enumerate(
                 (getattr(self, "catalogs", None) or {}).items()

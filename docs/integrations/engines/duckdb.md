@@ -17,7 +17,7 @@
 | `catalogs`         | Mapping to define multiple catalogs. Can [attach DuckDB catalogs](#duckdb-catalogs-example) or [catalogs for other connections](#other-connection-catalogs-example). First entry is the default catalog. Cannot be defined if using `database`. |  dict  |    N     |
 | `extensions`       | Extension to load into duckdb. Only autoloadable extensions are supported.                                                                                                                                                                      |  list  |    N     |
 | `connector_config` | Configuration to pass into the duckdb connector.                                                                                                                                                                                                |  dict  |    N     |
-| `secrets_config`   | Configuration for authenticating external sources (e.g., S3) using DuckDB secrets.                                                                                                                                                                                                |  dict  |    N     |
+| `secrets`   | Configuration for authenticating external sources (e.g., S3) using DuckDB secrets.                                                                                                                                                                                                |  dict  |    N     |
 
 #### DuckDB Catalogs Example
 
@@ -142,11 +142,11 @@ If a connector, like Postgres, requires sensitive information in the path, it mi
 
 DuckDB can read data directly from cloud services via extensions (e.g., [httpfs](https://duckdb.org/docs/extensions/httpfs/s3api), [azure](https://duckdb.org/docs/extensions/azure)).
 
-The `secrets_config` option allows you to configure DuckDB's [Secrets Manager](https://duckdb.org/docs/configuration/secrets_manager.html) to authenticate with external services like S3. This is the recommended approach for cloud storage authentication in DuckDB v0.10.0 and newer, replacing the [legacy authentication method](https://duckdb.org/docs/stable/extensions/httpfs/s3api_legacy_authentication.html) via variables.
+The `secrets` option allows you to configure DuckDB's [Secrets Manager](https://duckdb.org/docs/configuration/secrets_manager.html) to authenticate with external services like S3. This is the recommended approach for cloud storage authentication in DuckDB v0.10.0 and newer, replacing the [legacy authentication method](https://duckdb.org/docs/stable/extensions/httpfs/s3api_legacy_authentication.html) via variables.
 
 ##### Secrets Configuration Example for S3
 
-The `secrets_config` accepts a list of secret configurations, each defining the necessary authentication parameters for the specific service:
+The `secrets` accepts a list of secret configurations, each defining the necessary authentication parameters for the specific service:
 
 === "YAML"
 
@@ -160,7 +160,7 @@ The `secrets_config` accepts a list of secret configurations, each defining the 
             remote: "s3://bucket/data/remote.duckdb"
           extensions:
             - name: httpfs
-          secrets_config:
+          secrets:
             - type: s3
               region: "YOUR_AWS_REGION"
               key_id: "YOUR_AWS_ACCESS_KEY"
@@ -189,7 +189,7 @@ The `secrets_config` accepts a list of secret configurations, each defining the 
                     extensions=[
                         {"name": "httpfs"},
                     ],
-                    secrets_config=[
+                    secrets=[
                         {
                             "type": "s3",
                             "region": "YOUR_AWS_REGION",
