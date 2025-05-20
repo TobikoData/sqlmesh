@@ -13,8 +13,9 @@ from sqlmesh.core.config import AutoCategorizationMode, CategorizerConfig, DuckD
 from sqlmesh.core.model import SqlModel, load_sql_based_model
 from sqlmesh.core.table_diff import TableDiff
 import numpy as np
-
 from sqlmesh.utils.errors import SQLMeshError
+
+pytestmark = pytest.mark.slow
 
 
 def create_test_console() -> t.Tuple[StringIO, TerminalConsole]:
@@ -50,7 +51,6 @@ def strip_ansi_codes(text: str) -> str:
     return ansi_escape.sub("", text).strip()
 
 
-@pytest.mark.slow
 def test_data_diff(sushi_context_fixed_date, capsys, caplog):
     model = sushi_context_fixed_date.models['"memory"."sushi"."customer_revenue_by_day"']
 
@@ -143,7 +143,6 @@ def test_data_diff(sushi_context_fixed_date, capsys, caplog):
     assert row_diff.t_sample.shape == (1, 6)
 
 
-@pytest.mark.slow
 def test_data_diff_decimals(sushi_context_fixed_date):
     engine_adapter = sushi_context_fixed_date.engine_adapter
 
@@ -230,7 +229,6 @@ Column: value
     assert stripped_output == stripped_expected
 
 
-@pytest.mark.slow
 def test_grain_check(sushi_context_fixed_date):
     expressions = d.parse(
         """
@@ -312,7 +310,6 @@ def test_grain_check(sushi_context_fixed_date):
     assert row_diff.t_sample.shape == (3, 3)
 
 
-@pytest.mark.slow
 def test_generated_sql(sushi_context_fixed_date: Context, mocker: MockerFixture):
     engine_adapter = sushi_context_fixed_date.engine_adapter
 
@@ -382,7 +379,6 @@ def test_generated_sql(sushi_context_fixed_date: Context, mocker: MockerFixture)
     spy_execute.assert_any_call(query_sql_where)
 
 
-@pytest.mark.slow
 def test_tables_and_grain_inferred_from_model(sushi_context_fixed_date: Context):
     (sushi_context_fixed_date.path / "models" / "waiter_revenue_by_day.sql").write_text("""
     MODEL (
@@ -432,7 +428,6 @@ def test_tables_and_grain_inferred_from_model(sushi_context_fixed_date: Context)
     assert col_names == ["waiter_id", "event_date"]
 
 
-@pytest.mark.slow
 def test_data_diff_array_dict(sushi_context_fixed_date):
     engine_adapter = sushi_context_fixed_date.engine_adapter
 
@@ -566,7 +561,6 @@ Column: value
     assert strip_ansi_codes(output) == expected_output.strip()
 
 
-@pytest.mark.slow
 def test_data_diff_multiple_models(sushi_context_fixed_date, capsys, caplog):
     # Create first analytics model
     expressions = d.parse(
@@ -699,7 +693,6 @@ def test_data_diff_multiple_models(sushi_context_fixed_date, capsys, caplog):
     assert len(diffs) == 0
 
 
-@pytest.mark.slow
 def test_data_diff_forward_only(sushi_context_fixed_date, capsys, caplog):
     expressions = d.parse(
         """

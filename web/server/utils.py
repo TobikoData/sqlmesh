@@ -16,6 +16,7 @@ from sqlmesh.core import constants as c
 from web.server.console import api_console
 from web.server.exceptions import ApiException
 from web.server.settings import Settings, get_context, get_settings
+from sqlmesh.utils.windows import IS_WINDOWS
 
 R = t.TypeVar("R")
 
@@ -75,6 +76,16 @@ def replace_file(src: Path, dst: Path) -> None:
     """Move a file or directory at src to dst."""
     if src != dst:
         try:
+            if IS_WINDOWS:
+                # os.replace() behaves differently on Windows so we have to do some extra checks
+                if dst.exists():
+                    if src.exists() and src.is_dir() and dst.is_file():
+                        raise OSError("Cant rename directory to existing file")
+                    elif src.exists() and src.is_file() and dst.is_dir():
+                        raise OSError("Cant rename file to existing directory")
+                    elif dst.is_dir() and not any(dst.iterdir()):
+                        # target dir exists but is empty, delete it so replace() succeeds
+                        dst.rmdir()
             src.replace(dst)
         except FileNotFoundError:
             raise HTTPException(status_code=HTTP_404_NOT_FOUND)

@@ -9,6 +9,8 @@ from shutil import copytree, rmtree
 from tempfile import TemporaryDirectory
 from unittest import mock
 from unittest.mock import PropertyMock
+import os
+import shutil
 
 import duckdb
 import pandas as pd
@@ -39,6 +41,7 @@ from sqlmesh.core.snapshot import (
 )
 from sqlmesh.utils import random_id
 from sqlmesh.utils.date import TimeLike, to_date
+from sqlmesh.utils.windows import IS_WINDOWS, fix_windows_path
 from sqlmesh.core.engine_adapter.shared import CatalogSupport
 
 T = t.TypeVar("T", bound=EngineAdapter)
@@ -480,10 +483,27 @@ def copy_to_temp_path(tmp_path: Path) -> t.Callable:
         paths: t.Union[t.Union[str, Path], t.Collection[t.Union[str, Path]]],
     ) -> t.List[Path]:
         paths = ensure_list(paths)
+        all_paths = [Path(p) for p in paths]
         temp_dirs = []
-        for path in paths:
+        for path in all_paths:
             temp_dir = Path(tmp_path) / uuid.uuid4().hex
-            copytree(path, temp_dir, symlinks=True, ignore=ignore)
+
+            if IS_WINDOWS:
+                # shutil.copytree just doesnt work properly with the symlinks on Windows, regardless of the `symlinks` setting
+                src = str(path.absolute())
+                dst = str(temp_dir.absolute())
+                os.system(f"robocopy {src} {dst} /E /COPYALL")
+
+                # after copying, delete the files that would have been ignored
+                for root, dirs, _ in os.walk(temp_dir):
+                    for dir in dirs:
+                        full_dir = fix_windows_path(Path(root) / dir)
+                        for ignored in ignore(full_dir, [full_dir]):
+                            shutil.rmtree(ignored)
+
+            else:
+                copytree(path, temp_dir, symlinks=True, ignore=ignore)
+
             temp_dirs.append(temp_dir)
         return temp_dirs
 

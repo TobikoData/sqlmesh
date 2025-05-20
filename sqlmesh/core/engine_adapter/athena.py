@@ -8,7 +8,7 @@ from sqlmesh.utils.aws import validate_s3_uri, parse_s3_uri
 from sqlmesh.core.engine_adapter.mixins import PandasNativeFetchDFSupportMixin, RowDiffMixin
 from sqlmesh.core.engine_adapter.trino import TrinoEngineAdapter
 from sqlmesh.core.node import IntervalUnit
-import os
+import posixpath
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.core.engine_adapter.shared import (
     CatalogSupport,
@@ -403,11 +403,13 @@ class AthenaEngineAdapter(PandasNativeFetchDFSupportMixin, RowDiffMixin):
 
         elif self.s3_warehouse_location:
             # If the user has set `s3_warehouse_location` in the connection config, the base URI is <s3_warehouse_location>/<catalog>/<schema>/
-            base_uri = os.path.join(self.s3_warehouse_location, table.catalog or "", table.db or "")
+            base_uri = posixpath.join(
+                self.s3_warehouse_location, table.catalog or "", table.db or ""
+            )
         else:
             return None
 
-        full_uri = validate_s3_uri(os.path.join(base_uri, table.text("this") or ""), base=True)
+        full_uri = validate_s3_uri(posixpath.join(base_uri, table.text("this") or ""), base=True)
         return exp.LocationProperty(this=exp.Literal.string(full_uri))
 
     def _find_matching_columns(

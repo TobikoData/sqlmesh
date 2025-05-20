@@ -99,35 +99,35 @@ jobs:
       - store_test_results:
           path: test-results
 
-  style_and_cicd_tests_windows:
+  cicd_tests_windows:
     executor:
       name: windows/default
       size: large
-    environment:
-      PYTEST_XDIST_AUTO_NUM_WORKERS: 4
     steps:
       - halt_unless_core
+      - run:
+          name: Enable symlinks in git config
+          command: git config --global core.symlinks true
       - checkout
       - run:
-          name: Install Python 3.9
+          name: Install System Dependencies
           command: |
-            choco install python --version=3.9 -y
+            choco install make which -y
             refreshenv
-      - run: 
-          name: Install make
-          command: choco install make -y
       - run:
           name: Install SQLMesh dev dependencies
-          command: make install-dev
+          command: |
+            python -m venv venv
+            . ./venv/Scripts/activate
+            python.exe -m pip install --upgrade pip
+            make install-dev
       - run:
-          name: Fix Git URL override
-          command: git config --global --unset url."ssh://git@github.com".insteadOf
-      # - run:
-      #     name: Run linters and code style checks
-      #     command: make py-style
-      - run:
-          name: Run cicd tests
-          command: pytest -n auto -m "fast" --junitxml=test-results/junit-cicd.xml tests/lsp
+          name: Run fast unit tests
+          command: |
+            . ./venv/Scripts/activate
+            which python
+            python --version
+            make fast-test
       - store_test_results:
           path: test-results
 
@@ -304,7 +304,7 @@ workflows:
                 - "3.10"
                 - "3.11"
                 - "3.12"
-      - style_and_cicd_tests_windows
+      - cicd_tests_windows
       - engine_tests_docker:
           name: engine_<< matrix.engine >>
           matrix:
