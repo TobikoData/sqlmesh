@@ -132,10 +132,8 @@ class BuiltInPlanEvaluator(PlanEvaluator):
 
             push_completion_status = self._push(plan, snapshots, deployability_index_for_creation)
             if push_completion_status.is_nothing_to_do:
-                self.console.log_status_update(
-                    ""
-                    if plan.restatements
-                    else "\n[green]SKIP: No physical layer updates to perform[/green]\n"
+                self.console.log_success(
+                    "" if plan.restatements else "\nSKIP: No physical layer updates to perform"
                 )
             update_intervals_for_new_snapshots(plan.new_snapshots, self.state_sync)
             self._restate(plan, snapshots_by_name)
@@ -160,7 +158,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                 first_bf_completion_status.is_nothing_to_do
                 and second_bf_completion_status.is_nothing_to_do
             ):
-                self.console.log_status_update("[green]SKIP: No model batches to execute[/green]\n")
+                self.console.log_success("SKIP: No model batches to execute")
             self._update_views(
                 plan, snapshots, promotion_result, deployability_index_for_evaluation
             )
