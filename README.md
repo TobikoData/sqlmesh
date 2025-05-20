@@ -11,9 +11,10 @@ It is more than just a [dbt alternative](https://tobikodata.com/reduce_costs_wit
 </p>
 
 ## Core Features
-<img src="https://github.com/TobikoData/sqlmesh-public-assets/blob/main/sqlmesh_plan_mode.gif?raw=true" alt="SQLMesh Plan Mode">
+<!-- <img src="https://github.com/TobikoData/sqlmesh-public-assets/blob/main/sqlmesh_plan_mode.gif?raw=true" alt="SQLMesh Plan Mode"> -->
+TODO: replace with vscode gif in a separate repo link 
 
-> Get instant SQL impact analysis of your changes, whether in the CLI or in [SQLMesh Plan Mode](https://sqlmesh.readthedocs.io/en/stable/guides/ui/?h=modes#working-with-an-ide)
+> Get instant SQL impact analysis of your changes, whether in the CLI or in the [SQLMesh VSCode Extension](https://sqlmesh.readthedocs.io/en/latest/guides/vscode/?h=vs+cod)
 
   <details>
   <summary><b>Virtual Data Environments</b></summary>
@@ -120,6 +121,7 @@ outputs:
 * Never build a table [more than once](https://tobikodata.com/simplicity-or-efficiency-how-dbt-makes-you-choose.html)
 * Track what data’s been modified and run only the necessary transformations for [incremental models](https://tobikodata.com/correctly-loading-incremental-data-at-scale.html)
 * Run [unit tests](https://tobikodata.com/we-need-even-greater-expectations.html) for free and configure automated audits
+* Run [table diffs](https://sqlmesh.readthedocs.io/en/stable/guides/tablediff/?h=data+diff#diffing-multiple-models-across-environments) based on tables/views impacted by a change 
 
 <details>
 <summary><b>Level Up Your SQL</b></summary>
@@ -141,15 +143,34 @@ mkdir sqlmesh-example
 cd sqlmesh-example
 python -m venv .venv
 source .venv/bin/activate
-pip install sqlmesh
+pip install 'sqlmesh[lsp,web]' # install the sqlmesh package with extensions to work with VS Code
 source .venv/bin/activate # reactivate the venv to ensure you're using the right installation
 sqlmesh init duckdb # get started right away with a local duckdb instance
 sqlmesh plan # see the plan for the changes you're making
 ```
 
+</details>
+<details>
+<summary><b>Windows Powershell Installation</b></summary>
+
+```bash
+mkdir sqlmesh-example
+cd sqlmesh-example
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install 'sqlmesh[lsp,web]' # install the sqlmesh package with extensions to work with VS Code
+.\.venv\Scripts\Activate.ps1 # reactivate the venv to ensure you're using the right installation
+sqlmesh init duckdb # get started right away with a local duckdb instance
+sqlmesh plan # see the plan for the changes you're making
+```
+</details>
+
+
 > Note: You may need to run `python3` or `pip3` instead of `python` or `pip`, depending on your python installation.
 
 Follow the [quickstart guide](https://sqlmesh.readthedocs.io/en/stable/quickstart/cli/#1-create-the-sqlmesh-project) to learn how to use SQLMesh. You already have a head start!
+
+Follow the [crash course](https://sqlmesh.readthedocs.io/en/stable/examples/sqlmesh_cli_crash_course/) to learn the core movesets and and easy to reference cheat sheet. 
 
 Follow this [example](https://sqlmesh.readthedocs.io/en/stable/examples/incremental_time_full_walkthrough/) to learn how to use SQLMesh in a full walkthrough.
 
