@@ -702,7 +702,6 @@ function ColumnSource({
       />
       <Transition
         show={isShowing}
-        // @ts-ignore
         as={Fragment}
         enter="transition ease-out duration-200"
         enterFrom="opacity-0 -translate-y-[40%]"

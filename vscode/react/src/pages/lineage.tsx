@@ -100,7 +100,7 @@ function Lineage() {
   on('changeFocusedFile', fileUri => {
     const full_path = URI.parse(fileUri.fileUri).fsPath
     const model = Object.values(modelsRecord).find(
-      (m: Model) => m.full_path === full_path,
+      m => m.full_path === full_path,
     )
     if (model) {
       setSelectedModelSet(model.name)

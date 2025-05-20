@@ -84,8 +84,7 @@ export function ModelLineage({
   >(undefined)
 
   useEffect(() => {
-    // @ts-ignore
-    const lineageWorker = createLineageWorker()
+    const lineageWorker = new createLineageWorker()
 
     lineageWorker.addEventListener('message', handleLineageWorkerMessage)
 
@@ -119,8 +118,6 @@ export function ModelLineage({
       })
 
     return () => {
-      // void cancel?.()
-
       lineageWorker.removeEventListener('message', handleLineageWorkerMessage)
       lineageWorker.terminate()
 
@@ -140,7 +137,6 @@ export function ModelLineage({
       }
     })
 
-    // @ts-ignore
     setUnknownModels(new Set(unknownModels))
   }, [modelLineage, models])
 

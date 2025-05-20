@@ -161,7 +161,6 @@ export default function LineageFlowProvider({
     () =>
       getNodeMap({
         lineage,
-        // @ts-ignore
         models,
         unknownModels,
         withColumns,
