@@ -133,7 +133,9 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             push_completion_status = self._push(plan, snapshots, deployability_index_for_creation)
             if push_completion_status.is_nothing_to_do:
                 self.console.log_status_update(
-                    "\n[green]SKIP: No physical layer updates to perform[/green]\n"
+                    ""
+                    if plan.restatements
+                    else "\n[green]SKIP: No physical layer updates to perform[/green]\n"
                 )
             update_intervals_for_new_snapshots(plan.new_snapshots, self.state_sync)
             self._restate(plan, snapshots_by_name)

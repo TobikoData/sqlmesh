@@ -457,10 +457,13 @@ class GithubController:
         try:
             # Clear out any output that might exist from prior steps
             self._console.clear_captured_outputs()
-            self._console.show_environment_difference_summary(
-                context_diff=plan.context_diff,
-                no_diff=False,
-            )
+            if plan.restatements:
+                self._console._print("\n**Restating models**\n")
+            else:
+                self._console.show_environment_difference_summary(
+                    context_diff=plan.context_diff,
+                    no_diff=False,
+                )
             if plan.context_diff.has_changes:
                 self._console.show_model_difference_summary(
                     context_diff=plan.context_diff,
