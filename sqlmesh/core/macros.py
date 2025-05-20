@@ -1090,10 +1090,10 @@ def pivot(
     column: SQL,
     values: t.List[SQL],
     alias: bool = True,
-    agg: SQL = SQL("SUM"),
-    cmp: SQL = SQL("="),
-    prefix: SQL = SQL(""),
-    suffix: SQL = SQL(""),
+    agg: exp.Expression = exp.Literal.string("SUM"),
+    cmp: exp.Expression = exp.Literal.string("="),
+    prefix: exp.Expression = exp.Literal.string(""),
+    suffix: exp.Expression = exp.Literal.string(""),
     then_value: SQL = SQL("1"),
     else_value: SQL = SQL("0"),
     quote: bool = True,
@@ -1107,18 +1107,26 @@ def pivot(
         >>> sql = "SELECT date_day, @PIVOT(status, ['cancelled', 'completed']) FROM rides GROUP BY 1"
         >>> MacroEvaluator().transform(parse_one(sql)).sql()
         'SELECT date_day, SUM(CASE WHEN status = \\'cancelled\\' THEN 1 ELSE 0 END) AS "\\'cancelled\\'", SUM(CASE WHEN status = \\'completed\\' THEN 1 ELSE 0 END) AS "\\'completed\\'" FROM rides GROUP BY 1'
+        >>> sql = "SELECT @PIVOT(a, ['v'], then_value := tv, suffix := '_sfx', quote := FALSE)"
+        >>> MacroEvaluator(dialect="bigquery").transform(parse_one(sql)).sql("bigquery")
+        "SELECT SUM(CASE WHEN a = 'v' THEN tv ELSE 0 END) AS `v_sfx`"
     """
     aggregates: t.List[exp.Expression] = []
     for value in values:
-        proj = f"{agg}("
+        proj = f"{agg.name}("
         if distinct:
             proj += "DISTINCT "
 
-        proj += f"CASE WHEN {column} {cmp} {value} THEN {then_value} ELSE {else_value} END) "
+        proj += f"CASE WHEN {column} {cmp.name} {value} THEN {then_value} ELSE {else_value} END) "
         node = evaluator.parse_one(proj)
 
         if alias:
-            node = node.as_(f"{prefix}{value}{suffix}", quoted=quote, copy=False)
+            node = node.as_(
+                f"{prefix.name}{value}{suffix.name}",
+                quoted=quote,
+                copy=False,
+                dialect=evaluator.dialect,
+            )
 
         aggregates.append(node)
 
