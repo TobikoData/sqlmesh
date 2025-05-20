@@ -1,14 +1,13 @@
 import { isNil, isArrayNotEmpty, isNotNil, isFalse } from '@/utils/index'
 import clsx from 'clsx'
 import { useMemo, useCallback, useState } from 'react'
-import { ModelType } from '@/api/client'
+import { ModelType, type Model } from '@/api/client'
 import { useLineageFlow } from './context'
 import { type GraphNodeData } from './help'
 import { Position, type NodeProps } from 'reactflow'
 import { type Column } from '@/api/client'
 import ModelNodeHeaderHandles from './ModelNodeHeaderHandles'
 import ModelColumns from './ModelColumns'
-import type { Model } from '@/domain/model'
 
 export const EnumLineageNodeModelType = {
   ...ModelType,
