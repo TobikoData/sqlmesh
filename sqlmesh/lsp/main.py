@@ -92,9 +92,7 @@ class SQLMeshLanguageServer:
                 return get_sql_completions(None, uri)
 
         @self.server.feature(API_FEATURE)
-        def api(
-            ls: LanguageServer, request: ApiRequest
-        ) -> t.Union[ApiResponseGetModels, ApiResponseGetLineage, ApiResponseGetColumnLineage]:
+        def api(ls: LanguageServer, request: ApiRequest) -> t.Dict[str, t.Any]:
             ls.log_trace(f"API request: {request}")
             if self.lsp_context is None:
                 raise RuntimeError("No context found")
@@ -105,7 +103,9 @@ class SQLMeshLanguageServer:
             if request.method == "GET":
                 if path_parts == ["api", "models"]:
                     # /api/models
-                    return ApiResponseGetModels(data=get_models(self.lsp_context.context))
+                    return ApiResponseGetModels(
+                        data=get_models(self.lsp_context.context)
+                    ).model_dump(mode="json")
 
                 if path_parts[:2] == ["api", "lineage"]:
                     if len(path_parts) == 3:
@@ -113,7 +113,7 @@ class SQLMeshLanguageServer:
                         model_name = urllib.parse.unquote(path_parts[2])
                         lineage = model_lineage(model_name, self.lsp_context.context)
                         non_set_lineage = {k: v for k, v in lineage.items() if v is not None}
-                        return ApiResponseGetLineage(data=non_set_lineage)
+                        return ApiResponseGetLineage(data=non_set_lineage).model_dump(mode="json")
 
                     if len(path_parts) == 4:
                         # /api/lineage/{model}/{column}
@@ -123,7 +123,9 @@ class SQLMeshLanguageServer:
                         column_lineage_response = column_lineage(
                             model_name, column, False, self.lsp_context.context
                         )
-                        return ApiResponseGetColumnLineage(data=column_lineage_response)
+                        return ApiResponseGetColumnLineage(data=column_lineage_response).model_dump(
+                            mode="json"
+                        )
 
             raise NotImplementedError(f"API request not implemented: {request.url}")
 
