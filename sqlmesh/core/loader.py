@@ -19,6 +19,7 @@ from sqlglot.helper import subclasses
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.audit import Audit, ModelAudit, StandaloneAudit, load_multiple_audits
+from sqlmesh.core.console import Console
 from sqlmesh.core.dialect import parse
 from sqlmesh.core.environment import EnvironmentStatements
 from sqlmesh.core.linter.rule import Rule
@@ -85,17 +86,24 @@ _selected_gateway: t.Optional[str] = None
 def _init_model_defaults(
     config: Config,
     selected_gateway: t.Optional[str],
-    defaults: t.Optional[t.Dict[str, t.Any]] = None,
+    model_loading_defaults: t.Optional[t.Dict[str, t.Any]] = None,
     cache: t.Optional[CacheBase] = None,
+    console: t.Optional[Console] = None,
 ) -> None:
     global _defaults, _cache, _config, _selected_gateway
-    _defaults = defaults
+    _defaults = model_loading_defaults
     _cache = cache
     _config = config
     _selected_gateway = selected_gateway
 
+    # Set the console passed from the parent process
+    if console is not None:
+        from sqlmesh.core.console import set_console
 
-def load_sql_models(path: Path) -> t.Tuple[Path, list[Model]]:
+        set_console(console)
+
+
+def load_sql_models(path: Path) -> t.List[Model]:
     assert _defaults
     assert _cache
 
@@ -103,7 +111,7 @@ def load_sql_models(path: Path) -> t.Tuple[Path, list[Model]]:
         expressions = parse(file.read(), default_dialect=_defaults["dialect"])
     models = load_sql_based_models(expressions, path=Path(path).absolute(), **_defaults)
 
-    return (path, [] if _cache.put(models, path) else models)
+    return [] if _cache.put(models, path) else models
 
 
 def get_variables(gateway_name: t.Optional[str] = None) -> t.Dict[str, t.Any]:
@@ -528,7 +536,7 @@ class SqlMeshLoader(Loader):
                         models[model.fqn] = model
 
         if paths:
-            defaults = dict(
+            model_loading_defaults = dict(
                 get_variables=get_variables,
                 defaults=self.config.model_defaults.dict(),
                 macros=macros,
@@ -549,14 +557,14 @@ class SqlMeshLoader(Loader):
             errors: t.List[str] = []
             with create_process_pool_executor(
                 initializer=_init_model_defaults,
-                initargs=(self.config, gateway, defaults, cache),
+                initargs=(self.config, gateway, model_loading_defaults, cache, self._console),
                 max_workers=c.MAX_FORK_WORKERS,
             ) as pool:
                 futures_to_paths = {pool.submit(load_sql_models, path): path for path in paths}
                 for future in concurrent.futures.as_completed(futures_to_paths):
                     path = futures_to_paths[future]
                     try:
-                        _, loaded = future.result()
+                        loaded = future.result()
                         for model in loaded or cache.get(path):
                             if model.fqn in models:
                                 errors.append(
@@ -572,7 +580,7 @@ class SqlMeshLoader(Loader):
 
             if errors:
                 error_string = "\n".join(errors)
-                raise ConfigError(f"Failed to load models\n\n{error_string}")
+                raise ConfigError(error_string)
 
         return models
 
