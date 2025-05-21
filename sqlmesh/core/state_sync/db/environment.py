@@ -152,8 +152,8 @@ class EnvironmentState:
         stored_plan_id = stored_plan_id_row[0]
         if stored_plan_id != environment.plan_id:
             raise SQLMeshError(
-                f"Plan '{environment.plan_id}' is no longer valid for the target environment '{environment.name}'. "
-                f"Stored plan ID: '{stored_plan_id}'. Please recreate the plan and try again"
+                f"Another plan ({stored_plan_id}) was applied to the target environment '{environment.name}' while your current plan "
+                f"({environment.plan_id}) was still in progress, interrupting it. Please re-apply your plan to resolve this error."
             )
 
         environment.finalized_ts = now_timestamp()
