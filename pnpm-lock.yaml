@@ -42,6 +42,9 @@ importers:
       '@eslint/js':
         specifier: ^9.25.1
         version: 9.26.0
+      '@playwright/test':
+        specifier: ^1.48.2
+        version: 1.52.0
       '@types/mocha':
         specifier: ^10.0.10
         version: 10.0.10
@@ -69,6 +72,9 @@ importers:
       ts-loader:
         specifier: ^9.5.2
         version: 9.5.2(typescript@5.8.3)(webpack@5.99.8(esbuild@0.25.4))
+      tsx:
+        specifier: ^4.19.2
+        version: 4.19.4
       typescript:
         specifier: ^5.8.2
         version: 5.8.3
@@ -274,10 +280,6 @@ importers:
       zustand:
         specifier: ^5.0.0
         version: 5.0.4(@types/react@18.3.21)(immer@9.0.21)(react@18.3.1)(use-sync-external-store@1.5.0(react@18.3.1))
-    optionalDependencies:
-      '@swc/core-linux-x64-gnu':
-        specifier: ^1.11.24
-        version: 1.11.24
     devDependencies:
       '@eslint/js':
         specifier: ^9.25.1
@@ -345,6 +347,10 @@ importers:
       vitest:
         specifier: ^3.1.2
         version: 3.1.3(@types/debug@4.1.12)(@types/node@20.17.46)(jiti@2.4.2)(jsdom@26.1.0)(lightningcss@1.29.2)(terser@5.39.2)(tsx@4.19.4)(yaml@2.7.1)
+    optionalDependencies:
+      '@swc/core-linux-x64-gnu':
+        specifier: ^1.11.24
+        version: 1.11.24
 
 packages:
 

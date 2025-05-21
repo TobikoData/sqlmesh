@@ -80,13 +80,15 @@
     ]
   },
   "scripts": {
-    "ci": "pnpm run lint && pnpm run compile && pnpm run test",
+    "ci": "pnpm run lint && pnpm run compile",
     "compile-tests": "tsc -p . --outDir out",
     "watch-tests": "tsc -p . -w --outDir out",
-    "pretest": "pnpm run compile-tests && pnpm run compile && pnpm run lint",
     "lint": "eslint src",
     "lint:fix": "eslint src --fix",
-    "test": "vscode-test",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:headed": "playwright test --headed",
+    "fetch-vscode": "tsx scripts/fetch-vscode.ts",
     "compile": "pnpm run check-types && node esbuild.js",
     "check-types": "tsc --noEmit",
     "watch": "node esbuild.js --watch",
@@ -105,6 +107,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.25.1",
+    "@playwright/test": "^1.48.2",
     "@types/mocha": "^10.0.10",
     "@types/node": "20.11.25",
     "@types/vscode": "1.96.0",
@@ -114,6 +117,7 @@
     "esbuild": "^0.25.2",
     "eslint": "^9.23.0",
     "ts-loader": "^9.5.2",
+    "tsx": "^4.19.2",
     "typescript": "^5.8.2",
     "typescript-eslint": "^8.31.1"
   }
