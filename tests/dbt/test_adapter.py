@@ -379,3 +379,35 @@ def test_on_run_start_end(copy_to_temp_path):
             "CREATE OR REPLACE TABLE schema_table_sushi__dev_nested_package AS SELECT 'sushi__dev' AS schema",
         ]
     )
+
+
+def test_adapter_get_relation_normalization(
+    sushi_test_project: Project, runtime_renderer: t.Callable
+):
+    # Simulate that the quote policy is set to quote everything to make
+    # sure that we normalize correctly even if quotes are applied
+    with mock.patch.object(
+        SnowflakeConfig,
+        "quote_policy",
+        Policy(identifier=True, schema=True, database=True),
+    ):
+        context = sushi_test_project.context
+        assert context.target
+        engine_adapter = context.target.to_sqlmesh().create_engine_adapter()
+        engine_adapter._default_catalog = '"memory"'
+        renderer = runtime_renderer(context, engine_adapter=engine_adapter, dialect="snowflake")
+
+        engine_adapter.create_schema('"FOO"')
+        engine_adapter.create_table(
+            table_name='"FOO"."BAR"', columns_to_types={"baz": exp.DataType.build("int")}
+        )
+
+        assert (
+            renderer("{{ adapter.get_relation(database=None, schema='foo', identifier='bar') }}")
+            == '"memory"."FOO"."BAR"'
+        )
+
+        assert (
+            renderer("{{ adapter.list_relations(database=None, schema='foo') }}")
+            == '[<SnowflakeRelation "memory"."FOO"."BAR">]'
+        )

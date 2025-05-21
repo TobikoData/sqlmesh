@@ -7,7 +7,7 @@ import typing as t
 import pandas as pd
 from sqlglot import exp, parse_one
 
-from sqlmesh.core.dialect import normalize_and_quote, normalize_model_name
+from sqlmesh.core.dialect import normalize_and_quote, normalize_model_name, schema_
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.snapshot import DeployabilityIndex, Snapshot, to_table_mapping
 from sqlmesh.utils.errors import ConfigError, ParsetimeAdapterCallError
@@ -245,14 +245,11 @@ class RuntimeAdapter(BaseAdapter):
     def get_relation(
         self, database: t.Optional[str], schema: str, identifier: str
     ) -> t.Optional[BaseRelation]:
-        return self.load_relation(
-            self.relation_type.create(
-                database=database,
-                schema=schema,
-                identifier=identifier,
-                quote_policy=self.quote_policy,
-            )
-        )
+        target_table = exp.table_(identifier, db=schema, catalog=database)
+        # Normalize before converting to a relation; otherwise, it will be too late,
+        # as quotes will have already been applied.
+        target_table = self._normalize(target_table)
+        return self.load_relation(self._table_to_relation(target_table))
 
     def load_relation(self, relation: BaseRelation) -> t.Optional[BaseRelation]:
         mapped_table = self._map_table_name(self._normalize(self._relation_to_table(relation)))
@@ -262,10 +259,11 @@ class RuntimeAdapter(BaseAdapter):
         return self._table_to_relation(mapped_table)
 
     def list_relations(self, database: t.Optional[str], schema: str) -> t.List[BaseRelation]:
-        reference_relation = self.relation_type.create(
-            database=database, schema=schema, quote_policy=self.quote_policy
-        )
-        return self.list_relations_without_caching(reference_relation)
+        target_schema = schema_(schema, catalog=database)
+        # Normalize before converting to a relation; otherwise, it will be too late,
+        # as quotes will have already been applied.
+        target_schema = self._normalize(target_schema)
+        return self.list_relations_without_caching(self._table_to_relation(target_schema))
 
     def list_relations_without_caching(self, schema_relation: BaseRelation) -> t.List[BaseRelation]:
         from sqlmesh.dbt.relation import RelationType
