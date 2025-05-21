@@ -29,9 +29,11 @@ export interface SqlmeshExecInfo {
 export const isTcloudProject = async (): Promise<Result<boolean, string>> => {
   const projectRoot = await getProjectRoot()
   const tcloudYamlPath = path.join(projectRoot.uri.fsPath, 'tcloud.yaml')
+  const tcloudYmlPath = path.join(projectRoot.uri.fsPath, 'tcloud.yml')
   const isTcloudYamlFilePresent = fs.existsSync(tcloudYamlPath)
-  if (isTcloudYamlFilePresent) {
-    traceVerbose(`tcloud yaml file present at : ${tcloudYamlPath}`)
+  const isTcloudYmlFilePresent = fs.existsSync(tcloudYmlPath)
+  if (isTcloudYamlFilePresent || isTcloudYmlFilePresent) {
+    traceVerbose(`tcloud yaml or yml file present at : ${tcloudYamlPath}`)
     return ok(true)
   }
   const isTcloudInstalled = await isPythonModuleInstalled('tcloud')
