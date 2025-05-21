@@ -42,7 +42,7 @@ This directory contains end-to-end tests for the SQLMesh VS Code extension using
 
 - `scripts/fetch-vscode.ts` - Downloads and caches VS Code executable
 - `playwright.config.ts` - Playwright configuration for Electron testing
-- `tests/webview.e2e.spec.ts` - E2E tests for webview panels
+- `tests/lineage.spec.ts` - E2E tests for lineage functionality
 
 ## How It Works
 
