@@ -9948,3 +9948,40 @@ def test_resolve_interpolated_variables_when_parsing_python_deps():
         {"selector": "bla", "bla_variable": 1, "baz_variable": 2}
     )
     assert m.python_env.get(c.SQLMESH_BLUEPRINT_VARS) == Executable.value({"selector": "baz"})
+
+
+def test_extract_schema_in_post_statement(tmp_path: Path) -> None:
+    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+
+    config = Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))
+
+    model1 = tmp_path / "models" / "parent_model.sql"
+    model1.parent.mkdir(parents=True, exist_ok=True)
+    model1.write_text("MODEL (name x); SELECT 1 AS c")
+
+    model2 = tmp_path / "models" / "child_model.sql"
+    model2.parent.mkdir(parents=True, exist_ok=True)
+    model2.write_text(
+        """
+        MODEL (name y);
+        SELECT c FROM x;
+        ON_VIRTUAL_UPDATE_BEGIN;
+        @check_schema('y');
+        ON_VIRTUAL_UPDATE_END;
+        """
+    )
+
+    check_schema = tmp_path / "macros/check_schema.py"
+    check_schema.parent.mkdir(parents=True, exist_ok=True)
+    check_schema.write_text("""
+from sqlglot import exp
+from sqlmesh import macro
+
+@macro()
+def check_schema(evaluator, model_name: str):
+    if evaluator.runtime_stage != 'loading':
+        assert evaluator.columns_to_types(model_name) == {"c": exp.DataType.build("INT")}
+""")
+
+    context = Context(paths=tmp_path, config=config)
+    context.plan(no_prompts=True, auto_apply=True)
