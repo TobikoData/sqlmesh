@@ -210,7 +210,7 @@ def _run_all(controller: GithubController) -> None:
     has_required_approval = False
     is_auto_deploying_prod = (
         controller.deploy_command_enabled or controller.do_required_approval_check
-    )
+    ) and controller.pr_targets_prod_branch
     if controller.is_comment_added:
         if not controller.deploy_command_enabled:
             # We aren't using commands so we can just return
@@ -267,7 +267,7 @@ def _run_all(controller: GithubController) -> None:
             status=GithubCheckStatus.COMPLETED, conclusion=GithubCheckConclusion.SKIPPED
         )
     deployed_to_prod = False
-    if has_required_approval and prod_plan_generated:
+    if has_required_approval and prod_plan_generated and controller.pr_targets_prod_branch:
         deployed_to_prod = _deploy_production(controller)
     elif is_auto_deploying_prod:
         if not has_required_approval:
@@ -292,7 +292,7 @@ def _run_all(controller: GithubController) -> None:
     if (
         not pr_environment_updated
         or not prod_plan_generated
-        or (has_required_approval and not deployed_to_prod)
+        or (has_required_approval and controller.pr_targets_prod_branch and not deployed_to_prod)
     ):
         raise CICDBotError(
             "A step of the run-all check failed. See check status for more information."
