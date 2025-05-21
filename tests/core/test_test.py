@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import datetime
 import typing as t
+import io
 from pathlib import Path
+import unittest
 from unittest.mock import call, patch
 from shutil import copyfile
 
@@ -28,6 +30,7 @@ from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.macros import MacroEvaluator, macro
 from sqlmesh.core.model import Model, SqlModel, load_sql_based_model, model
 from sqlmesh.core.test.definition import ModelTest, PythonModelTest, SqlModelTest
+from sqlmesh.core.test.result import ModelTextTestResult
 from sqlmesh.utils.errors import ConfigError, SQLMeshError, TestError
 from sqlmesh.utils.yaml import dump as dump_yaml
 from sqlmesh.utils.yaml import load as load_yaml
@@ -1039,7 +1042,8 @@ test_foo:
             context=Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))),
         ).run(),
         expected_msg=(
-            "sqlmesh.utils.errors.TestError: Detected unknown column(s)\n\n"
+            "sqlmesh.utils.errors.TestError: Failed to run test:\n"
+            "Detected unknown column(s)\n\n"
             "Expected column(s): id, value\n"
             "Unknown column(s): foo\n"
         ),
@@ -2520,3 +2524,61 @@ test_test_upstream_table_python:
             context=sushi_context,
         ).run()
     )
+
+
+@pytest.mark.parametrize("is_error", [True, False])
+def test_model_test_text_result_reporting_no_traceback(
+    sushi_context: Context, full_model_with_two_ctes: SqlModel, is_error: bool
+) -> None:
+    test = _create_test(
+        body=load_yaml(
+            """
+test_foo:
+  model: sushi.foo
+  inputs:
+    raw:
+      - id: 1
+  outputs:
+    ctes:
+      source:
+        - id: 1
+      renamed:
+        - fid: 1
+  vars:
+    start: 2022-01-01
+    end: 2022-01-01
+                """
+        ),
+        test_name="test_foo",
+        model=sushi_context.upsert_model(full_model_with_two_ctes),
+        context=sushi_context,
+    )
+    stream = io.StringIO()
+    result = ModelTextTestResult(
+        stream=unittest.runner._WritelnDecorator(stream),  # type: ignore
+        verbosity=1,
+        descriptions=True,
+    )
+
+    try:
+        raise Exception("failure")
+    except Exception as e:
+        assert e.__traceback__ is not None
+        if is_error:
+            result.addError(test, (e.__class__, e, e.__traceback__))
+        else:
+            result.addFailure(test, (e.__class__, e, e.__traceback__))
+
+    result.log_test_report(0)
+
+    stream.seek(0)
+    output = stream.read()
+
+    # Make sure that the traceback is not printed
+    assert "Traceback" not in output
+    assert "File" not in output
+    assert "line" not in output
+
+    prefix = "ERROR" if is_error else "FAIL"
+    assert f"{prefix}: test_foo (None)" in output
+    assert "Exception: failure" in output
