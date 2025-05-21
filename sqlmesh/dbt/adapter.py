@@ -7,7 +7,7 @@ import typing as t
 import pandas as pd
 from sqlglot import exp, parse_one
 
-from sqlmesh.core.dialect import normalize_and_quote, normalize_model_name
+from sqlmesh.core.dialect import normalize_and_quote, normalize_model_name, schema_
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.snapshot import DeployabilityIndex, Snapshot, to_table_mapping
 from sqlmesh.utils.errors import ConfigError, ParsetimeAdapterCallError
@@ -259,11 +259,7 @@ class RuntimeAdapter(BaseAdapter):
         return self._table_to_relation(mapped_table)
 
     def list_relations(self, database: t.Optional[str], schema: str) -> t.List[BaseRelation]:
-        target_schema = exp.Table(
-            this=None,
-            db=exp.to_identifier(schema),
-            catalog=exp.to_identifier(database) if database else None,
-        )
+        target_schema = schema_(schema, catalog=database)
         # Normalize before converting to a relation; otherwise, it will be too late,
         # as quotes will have already been applied.
         target_schema = self._normalize(target_schema)
