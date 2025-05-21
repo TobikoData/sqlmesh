@@ -346,11 +346,13 @@ def diff(ctx: click.Context, environment: t.Optional[str] = None) -> None:
     "--skip-tests",
     is_flag=True,
     help="Skip tests prior to generating the plan if they are defined.",
+    default=None,
 )
 @click.option(
     "--skip-linter",
     is_flag=True,
     help="Skip linting prior to generating the plan if the linter is enabled.",
+    default=None,
 )
 @click.option(
     "--restate-model",
@@ -363,17 +365,20 @@ def diff(ctx: click.Context, environment: t.Optional[str] = None) -> None:
     "--no-gaps",
     is_flag=True,
     help="Ensure that new snapshots have no data gaps when comparing to existing snapshots for matching models in the target environment.",
+    default=None,
 )
 @click.option(
     "--skip-backfill",
     "--dry-run",
     is_flag=True,
     help="Skip the backfill step and only create a virtual update for the plan.",
+    default=None,
 )
 @click.option(
     "--empty-backfill",
     is_flag=True,
     help="Produce empty backfill. Like --skip-backfill no models will be backfilled, unlike --skip-backfill missing intervals will be recorded as if they were backfilled.",
+    default=None,
 )
 @click.option(
     "--forward-only",
@@ -439,6 +444,7 @@ def diff(ctx: click.Context, environment: t.Optional[str] = None) -> None:
     "--run",
     is_flag=True,
     help="Run latest intervals as part of the plan application (prod environment only).",
+    default=None,
 )
 @click.option(
     "--enable-preview",
@@ -450,6 +456,7 @@ def diff(ctx: click.Context, environment: t.Optional[str] = None) -> None:
     "--diff-rendered",
     is_flag=True,
     help="Output text differences for the rendered versions of the models and standalone audits",
+    default=None,
 )
 @opt.verbose
 @click.pass_context
