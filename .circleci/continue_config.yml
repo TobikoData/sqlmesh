@@ -37,6 +37,42 @@ commands:
             - run: circleci-agent step halt
 
 jobs:
+  vscode_e2e_test:
+    docker:
+      - image: cimg/node:20.19.1-browsers
+    resource_class: medium
+    steps:
+      - checkout
+      - run: 
+          name: Install python
+          command: |
+            sudo apt-get update
+            sudo apt-get install -y python3.10-venv python3-pip
+            python3.10 -m pip install --upgrade pip
+      - run:
+          name: Create Python venv
+          command: |
+            python3 -m venv venv
+            . ./venv/bin/activate
+      - run:
+          name: Install Python dependencies
+          command: |
+            python -m pip install --upgrade pip
+            make install-dev
+      - run:
+          name: Install Dependencies
+          command: |
+            pnpm install
+      - run:
+          name: Install VSCode 
+          command: |
+            cd vscode/extension
+            pnpm run fetch-vscode
+      - run:
+          name: Run VSCode extension tests
+          command: |
+            cd vscode/extension
+            pnpm run test:e2e:ci
   vscode_test:
     docker:
       - image: cimg/node:20.19.1-browsers
@@ -350,4 +386,5 @@ workflows:
       - ui_style
       - ui_test
       - vscode_test
+      - vscode_e2e_test
       - migration_test
