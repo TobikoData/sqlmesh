@@ -860,7 +860,9 @@ def test_promote_snapshots_parent_plan_id_mismatch(
 
     with pytest.raises(
         SQLMeshError,
-        match=r".*is no longer valid.*",
+        match=re.escape(
+            "Another plan (new_plan_id) was applied to the target environment 'prod' while the current plan (stale_new_plan_id) was still in progress. Please re-apply your plan to resolve this error."
+        ),
     ):
         state_sync.promote(stale_new_environment)
 
@@ -1023,7 +1025,9 @@ def test_finalize(state_sync: EngineAdapterStateSync, make_snapshot: t.Callable)
     env.plan_id = "different_plan_id"
     with pytest.raises(
         SQLMeshError,
-        match=r"Plan 'different_plan_id' is no longer valid for the target environment 'prod'.*",
+        match=re.escape(
+            "Another plan (test_plan_id) was applied to the target environment 'prod' while the current plan (different_plan_id) was still in progress. Please re-apply your plan to resolve this error."
+        ),
     ):
         state_sync.finalize(env)
 
