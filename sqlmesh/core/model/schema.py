@@ -93,7 +93,8 @@ def _update_model_schemas(
                     model = models[fqn]
                     model._data_hash = data_hash
                     model._metadata_hash = metadata_hash
-                    model.set_mapping_schema(mapping_schema)
+                    if model.mapping_schema != mapping_schema:
+                        model.set_mapping_schema(mapping_schema)
                     optimized_query_cache.with_optimized_query(model, entry_name)
                     _update_schema_with_model(schema, model)
                     process_models(completed_model=model)

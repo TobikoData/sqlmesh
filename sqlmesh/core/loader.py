@@ -77,10 +77,28 @@ class CacheBase(abc.ABC):
 
     @abc.abstractmethod
     def put(self, models: t.List[Model], path: Path) -> bool:
+        """Store models in the cache associated with the given path.
+
+        Args:
+            models: List of models to cache
+            path: File path to associate with the cached models
+
+        Returns:
+            True if the models were successfully cached,
+            False otherwise (empty list, not a list, unsupported model types)
+        """
         pass
 
     @abc.abstractmethod
     def get(self, path: Path) -> t.List[Model]:
+        """Retrieve models from the cache for a given path.
+
+        Args:
+            path: File path to look up in the cache
+
+        Returns:
+            List of cached models associated with the path, an empty list if no cache entry exists
+        """
         pass
 
 
