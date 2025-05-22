@@ -35,7 +35,6 @@ from __future__ import annotations
 
 import abc
 import collections
-from itertools import chain
 import logging
 import sys
 import time
@@ -44,6 +43,7 @@ import typing as t
 import unittest.result
 from functools import cached_property
 from io import StringIO
+from itertools import chain
 from pathlib import Path
 from shutil import rmtree
 from types import MappingProxyType

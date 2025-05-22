@@ -26,7 +26,7 @@ from sqlmesh.core.config.common import (
 )
 from sqlmesh.core.engine_adapter.shared import CatalogSupport
 from sqlmesh.core.engine_adapter import EngineAdapter
-from sqlmesh.utils import str_to_bool
+from sqlmesh.utils import debug_mode_enabled, str_to_bool
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import (
     ValidationInfo,
@@ -67,8 +67,16 @@ def _get_engine_import_validator(
         try:
             importlib.import_module(import_name)
         except ImportError:
+            if debug_mode_enabled():
+                raise
+
+            logger.exception("Failed to import the engine library")
+
             raise ConfigError(
-                f"Failed to import the '{engine_type}' engine library. Please run `pip install \"sqlmesh[{extra_name}]\"`."
+                f"Failed to import the '{engine_type}' engine library. This may be due to a missing "
+                "or incompatible installation. Please ensure the required dependency is installed by "
+                f'running: `pip install "sqlmesh[{extra_name}]"`. For more details, check the logs '
+                "in the 'logs/' folder, or rerun the command with the '--debug' flag."
             )
 
         return data
