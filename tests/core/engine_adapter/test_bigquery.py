@@ -553,43 +553,13 @@ def test_begin_end_session(mocker: MockerFixture):
     assert not execute_b_call[1]["job_config"].connection_properties
 
     # starting a new session with session property query_label and array value
-    with adapter.session(
-        {
-            "query_label": exp.Array(
-                expressions=[
-                    exp.Tuple(
-                        expressions=[
-                            exp.Literal.string("key1"),
-                            exp.Literal.string("value1"),
-                        ]
-                    ),
-                    exp.Tuple(
-                        expressions=[
-                            exp.Literal.string("key2"),
-                            exp.Literal.string("value2"),
-                        ]
-                    ),
-                ]
-            )
-        }
-    ):
+    with adapter.session({"query_label": parse_one("[('key1', 'value1'), ('key2', 'value2')]")}):
         adapter.execute("SELECT 4;")
     begin_new_session_call = connection_mock._client.query.call_args_list[3]
     assert begin_new_session_call[0][0] == 'SET @@query_label = "key1:value1,key2:value2";SELECT 1;'
 
     # starting a new session with session property query_label and Paren value
-    with adapter.session(
-        {
-            "query_label": exp.Paren(
-                this=exp.Tuple(
-                    expressions=[
-                        exp.Literal.string("key1"),
-                        exp.Literal.string("value1"),
-                    ]
-                )
-            )
-        }
-    ):
+    with adapter.session({"query_label": parse_one("(('key1', 'value1'))")}):
         adapter.execute("SELECT 5;")
     begin_new_session_call = connection_mock._client.query.call_args_list[5]
     assert begin_new_session_call[0][0] == 'SET @@query_label = "key1:value1";SELECT 1;'

@@ -4439,22 +4439,7 @@ def test_model_session_properties(sushi_context):
         )
     )
     assert model.session_properties == {
-        "query_label": exp.Array(
-            expressions=[
-                exp.Tuple(
-                    expressions=[
-                        exp.Literal.string("key1"),
-                        exp.Literal.string("value1"),
-                    ]
-                ),
-                exp.Tuple(
-                    expressions=[
-                        exp.Literal.string("key2"),
-                        exp.Literal.string("value2"),
-                    ]
-                ),
-            ]
-        )
+        "query_label": parse_one("[('key1', 'value1'), ('key2', 'value2')]")
     }
 
     model = load_sql_based_model(
@@ -4473,11 +4458,7 @@ def test_model_session_properties(sushi_context):
             default_dialect="bigquery",
         )
     )
-    assert model.session_properties == {
-        "query_label": exp.Paren(
-            this=exp.Tuple(expressions=[exp.Literal.string("key1"), exp.Literal.string("value1")])
-        )
-    }
+    assert model.session_properties == {"query_label": parse_one("(('key1', 'value1'))")}
 
     with pytest.raises(
         ConfigError,

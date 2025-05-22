@@ -184,10 +184,8 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
         from google.cloud.bigquery import QueryJobConfig
 
         query_label_property = properties.get("query_label")
-        parsed_query_label = []
-        if query_label_property and isinstance(
-            query_label_property, (exp.Array, exp.Paren, exp.Tuple)
-        ):
+        parsed_query_label: list[tuple[str, str]] = []
+        if isinstance(query_label_property, (exp.Array, exp.Paren, exp.Tuple)):
             label_tuples = (
                 [query_label_property.unnest()]
                 if isinstance(query_label_property, exp.Paren)
@@ -195,10 +193,10 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
             )
 
             # query_label is a Paren, Array or Tuple of 2-tuples and validated at load time
-            for label_tuple in label_tuples:
-                parsed_query_label.append(
-                    (label_tuple.expressions[0].this, label_tuple.expressions[1].this)
-                )
+            parsed_query_label.extend(
+                (label_tuple.expressions[0].name, label_tuple.expressions[1].name)
+                for label_tuple in label_tuples
+            )
 
         if parsed_query_label:
             query_label_str = ",".join([":".join(label) for label in parsed_query_label])
