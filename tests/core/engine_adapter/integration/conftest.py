@@ -106,25 +106,23 @@ def create_test_context(
             is_remote=is_remote,
         )
 
-        skip = False
         try:
             ctx.init()
-        except Exception:
-            # We need to catch this exception because if there is an error during setup, pytest-retry aborts immediately
-            # instead of retrying
+        except:
+            # pytest-retry doesnt work if there are errors in fixture setup (ref: https://github.com/str0zzapreti/pytest-retry/issues/33 )
+            # we can do is log the exception and return a partially-initialized context to the test, which should
+            # throw an exception when it tries to access something that didnt init properly and thus trigger pytest-retry to retry
             logger.exception("Context init failed")
-            skip = True
 
-        if not skip:
-            with ctx.engine_adapter.session({}):
-                yield ctx
+        with ctx.engine_adapter.session({}):
+            yield ctx
 
-            try:
-                ctx.cleanup()
-            except Exception:
-                # We need to catch this exception because if there is an error during teardown, pytest-retry aborts immediately
-                # instead of retrying
-                logger.exception("Context cleanup failed")
+        try:
+            ctx.cleanup()
+        except:
+            # We need to catch this exception because if there is an error during teardown, pytest-retry aborts immediately
+            # instead of retrying
+            logger.exception("Context cleanup failed")
 
     return _create
 
