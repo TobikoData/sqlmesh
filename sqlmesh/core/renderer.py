@@ -169,6 +169,7 @@ class BaseExpressionRenderer:
             default_catalog=self._default_catalog,
             path=self._path,
             environment_naming_info=environment_naming_info,
+            model_fqn=self._model_fqn,
         )
 
         start_time, end_time = (

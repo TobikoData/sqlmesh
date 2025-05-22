@@ -173,6 +173,7 @@ class MacroEvaluator:
         default_catalog: t.Optional[str] = None,
         path: Path = Path(),
         environment_naming_info: t.Optional[EnvironmentNamingInfo] = None,
+        model_fqn: t.Optional[str] = None,
     ):
         self.dialect = dialect
         self.generator = MacroDialect().generator()
@@ -198,6 +199,7 @@ class MacroEvaluator:
         self._snapshots = snapshots if snapshots is not None else {}
         self._path = path
         self._environment_naming_info = environment_naming_info
+        self._model_fqn = model_fqn
 
         prepare_env(self.python_env, self.env)
         for k, v in self.python_env.items():
@@ -475,6 +477,12 @@ class MacroEvaluator:
         if not this_model:
             raise SQLMeshError("Model name is not available in the macro evaluator.")
         return this_model.sql(dialect=self.dialect, identify=True, comments=False)
+
+    @property
+    def this_model_fqn(self) -> str:
+        if self._model_fqn is None:
+            raise SQLMeshError("Model name is not available in the macro evaluator.")
+        return self._model_fqn
 
     @property
     def engine_adapter(self) -> EngineAdapter:
