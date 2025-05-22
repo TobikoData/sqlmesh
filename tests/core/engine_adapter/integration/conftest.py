@@ -110,7 +110,7 @@ def create_test_context(
             ctx.init()
         except:
             # pytest-retry doesnt work if there are errors in fixture setup (ref: https://github.com/str0zzapreti/pytest-retry/issues/33 )
-            # we can do is log the exception and return a partially-initialized context to the test, which should
+            # what we can do is log the exception and return a partially-initialized context to the test, which should
             # throw an exception when it tries to access something that didnt init properly and thus trigger pytest-retry to retry
             logger.exception("Context init failed")
 
