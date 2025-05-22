@@ -16,6 +16,7 @@ dependencies = [
     "importlib-metadata; python_version<'3.12'",
     "ipywidgets",
     "jinja2",
+    "packaging",
     "pandas",
     "pydantic>=2.0.0",
     "requests",
