@@ -178,6 +178,7 @@ class BaseExpressionRenderer:
         )
 
         render_kwargs = {
+            "dialect": self._dialect,
             **date_dict(
                 to_datetime(execution_time or c.EPOCH),
                 start_time,
