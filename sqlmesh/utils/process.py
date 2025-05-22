@@ -3,7 +3,6 @@
 from concurrent.futures import Future, ProcessPoolExecutor
 import typing as t
 import multiprocessing as mp
-from sqlmesh.core import constants as c
 from sqlmesh.utils.windows import IS_WINDOWS
 
 
@@ -26,7 +25,7 @@ class SynchronousPoolExecutor:
 
     def __exit__(self, *args):
         self.shutdown(wait=True)
-        return True
+        return False
 
     def shutdown(self, wait=True, cancel_futures=False):
         """No-op method to match ProcessPoolExecutor API.
@@ -59,7 +58,7 @@ PoolExecutor = t.Union[SynchronousPoolExecutor, ProcessPoolExecutor]
 
 
 def create_process_pool_executor(
-    initializer: t.Callable, initargs: t.Tuple, max_workers: t.Optional[int] = c.MAX_FORK_WORKERS
+    initializer: t.Callable, initargs: t.Tuple, max_workers: t.Optional[int]
 ) -> PoolExecutor:
     if max_workers == 1 or IS_WINDOWS:
         return SynchronousPoolExecutor(

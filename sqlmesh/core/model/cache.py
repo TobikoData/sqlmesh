@@ -65,7 +65,7 @@ class ModelCache:
         return models
 
     def put(self, models: t.List[Model], name: str, entry_id: str = "") -> bool:
-        if isinstance(models, list) and isinstance(seq_get(models, 0), (SqlModel, ExternalModel)):
+        if models and isinstance(seq_get(models, 0), (SqlModel, ExternalModel)):
             # make sure we preload full_depends_on
             for model in models:
                 model.full_depends_on
