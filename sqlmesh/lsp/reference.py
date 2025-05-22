@@ -6,23 +6,26 @@ from sqlmesh.core.model.definition import SqlModel
 from sqlmesh.lsp.context import LSPContext, ModelTarget, AuditTarget
 from sqlglot import exp
 from sqlmesh.lsp.description import generate_markdown_description
+from sqlglot.optimizer.scope import build_scope
 from sqlmesh.lsp.uri import URI
 from sqlmesh.utils.pydantic import PydanticModel
 
 
 class Reference(PydanticModel):
     """
-    A reference to a model.
+    A reference to a model or CTE.
 
     Attributes:
         range: The range of the reference in the source file
         uri: The uri of the referenced model
         markdown_description: The markdown description of the referenced model
+        target_range: The range of the definition for go-to-definition (optional, used for CTEs)
     """
 
     range: Range
     uri: str
     markdown_description: t.Optional[str] = None
+    target_range: t.Optional[Range] = None
 
 
 def by_position(position: Position) -> t.Callable[[Reference], bool]:
@@ -88,6 +91,7 @@ def get_model_definitions_for_a_path(
     - Need to normalize it before matching
     - Try get_model before normalization
     - Match to models that the model refers to
+    - Also find CTE references within the query
     """
     path = document_uri.to_path()
     if path.suffix != ".sql":
@@ -126,66 +130,112 @@ def get_model_definitions_for_a_path(
     # Find all possible references
     references = []
 
-    # Get SQL query and find all table references
-    tables = list(query.find_all(exp.Table))
-    if len(tables) == 0:
-        return []
-
     with open(file_path, "r", encoding="utf-8") as file:
         read_file = file.readlines()
 
-    for table in tables:
-        # Normalize the table reference
-        unaliased = table.copy()
-        if unaliased.args.get("alias") is not None:
-            unaliased.set("alias", None)
-        reference_name = unaliased.sql(dialect=dialect)
-        try:
-            normalized_reference_name = normalize_model_name(
-                reference_name,
-                default_catalog=lint_context.context.default_catalog,
-                dialect=dialect,
-            )
-            if normalized_reference_name not in depends_on:
-                continue
-        except Exception:
-            # Skip references that cannot be normalized
-            continue
+    # Build scope tree to properly handle nested CTEs
+    root_scope = build_scope(query)
 
-        # Get the referenced model uri
-        referenced_model = lint_context.context.get_model(
-            model_or_snapshot=normalized_reference_name, raise_if_missing=False
-        )
-        if referenced_model is None:
-            continue
-        referenced_model_path = referenced_model._path
-        # Check whether the path exists
-        if not referenced_model_path.is_file():
-            continue
-        referenced_model_uri = URI.from_path(referenced_model_path)
+    if root_scope:
+        # Traverse all scopes to find CTE definitions and table references
+        for scope in root_scope.traverse():
+            # Build a map of CTE names to their definitions within this scope
+            cte_definitions = {}
 
-        # Extract metadata for positioning
-        table_meta = TokenPositionDetails.from_meta(table.this.meta)
-        table_range = _range_from_token_position_details(table_meta, read_file)
-        start_pos = table_range.start
-        end_pos = table_range.end
+            # For CTEs defined in this scope
+            for cte in scope.ctes:
+                if cte.alias:
+                    cte_definitions[cte.alias] = cte
 
-        # If there's a catalog or database qualifier, adjust the start position
-        catalog_or_db = table.args.get("catalog") or table.args.get("db")
-        if catalog_or_db is not None:
-            catalog_or_db_meta = TokenPositionDetails.from_meta(catalog_or_db.meta)
-            catalog_or_db_range = _range_from_token_position_details(catalog_or_db_meta, read_file)
-            start_pos = catalog_or_db_range.start
+            # Also include CTEs from parent scopes (for references inside nested CTEs)
+            parent = scope.parent
+            while parent:
+                for cte in parent.ctes:
+                    if cte.alias and cte.alias not in cte_definitions:
+                        cte_definitions[cte.alias] = cte
+                parent = parent.parent
 
-        description = generate_markdown_description(referenced_model)
+            # Get all table references in this scope
+            tables = list(scope.find_all(exp.Table))
 
-        references.append(
-            Reference(
-                uri=referenced_model_uri.value,
-                range=Range(start=start_pos, end=end_pos),
-                markdown_description=description,
-            )
-        )
+            for table in tables:
+                table_name = table.name
+
+                # Check if this table reference is a CTE in the current scope
+                if cte_def := cte_definitions.get(table_name):
+                    # This is a CTE reference - create a reference to the CTE definition
+                    alias = cte_def.args["alias"]
+                    if isinstance(alias, exp.TableAlias):
+                        identifier = alias.this
+                        if isinstance(identifier, exp.Identifier):
+                            target_range = _range_from_token_position_details(
+                                TokenPositionDetails.from_meta(identifier.meta), read_file
+                            )
+                            table_range = _range_from_token_position_details(
+                                TokenPositionDetails.from_meta(table.this.meta), read_file
+                            )
+                            references.append(
+                                Reference(
+                                    uri=document_uri.value,  # Same file
+                                    range=table_range,
+                                    target_range=target_range,
+                                )
+                            )
+
+                # For non-CTE tables, process as before (external model references)
+                # Normalize the table reference
+                unaliased = table.copy()
+                if unaliased.args.get("alias") is not None:
+                    unaliased.set("alias", None)
+                reference_name = unaliased.sql(dialect=dialect)
+                try:
+                    normalized_reference_name = normalize_model_name(
+                        reference_name,
+                        default_catalog=lint_context.context.default_catalog,
+                        dialect=dialect,
+                    )
+                    if normalized_reference_name not in depends_on:
+                        continue
+                except Exception:
+                    # Skip references that cannot be normalized
+                    continue
+
+                # Get the referenced model uri
+                referenced_model = lint_context.context.get_model(
+                    model_or_snapshot=normalized_reference_name, raise_if_missing=False
+                )
+                if referenced_model is None:
+                    continue
+                referenced_model_path = referenced_model._path
+                # Check whether the path exists
+                if not referenced_model_path.is_file():
+                    continue
+                referenced_model_uri = URI.from_path(referenced_model_path)
+
+                # Extract metadata for positioning
+                table_meta = TokenPositionDetails.from_meta(table.this.meta)
+                table_range = _range_from_token_position_details(table_meta, read_file)
+                start_pos = table_range.start
+                end_pos = table_range.end
+
+                # If there's a catalog or database qualifier, adjust the start position
+                catalog_or_db = table.args.get("catalog") or table.args.get("db")
+                if catalog_or_db is not None:
+                    catalog_or_db_meta = TokenPositionDetails.from_meta(catalog_or_db.meta)
+                    catalog_or_db_range = _range_from_token_position_details(
+                        catalog_or_db_meta, read_file
+                    )
+                    start_pos = catalog_or_db_range.start
+
+                description = generate_markdown_description(referenced_model)
+
+                references.append(
+                    Reference(
+                        uri=referenced_model_uri.value,
+                        range=Range(start=start_pos, end=end_pos),
+                        markdown_description=description,
+                    )
+                )
 
     return references
 
