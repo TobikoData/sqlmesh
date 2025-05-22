@@ -702,6 +702,11 @@ class SQLMeshMagics(Magics):
         action="store_true",
         help="Disable the check for a primary key (grain) that is missing or is not unique.",
     )
+    @argument(
+        "--warn-grain-check",
+        action="store_true",
+        help="Warn if any selected model is missing a grain, and compute diffs for the remaining models.",
+    )
     @line_magic
     @pass_sqlmesh_context
     def table_diff(self, context: Context, line: str) -> None:
@@ -723,6 +728,7 @@ class SQLMeshMagics(Magics):
             show_sample=args.show_sample,
             decimals=args.decimals,
             skip_grain_check=args.skip_grain_check,
+            warn_grain_check=args.warn_grain_check,
         )
 
     @magic_arguments()

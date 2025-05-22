@@ -26,6 +26,7 @@ from sqlmesh.core.schema_diff import SchemaDiffer
 from sqlmesh.utils import optional_import
 from sqlmesh.utils.date import to_datetime
 from sqlmesh.utils.errors import SQLMeshError
+from sqlmesh.utils.pandas import columns_to_types_from_dtypes
 
 if t.TYPE_CHECKING:
     from google.api_core.retry import Retry
@@ -1132,6 +1133,39 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
 
     def _normalize_nested_value(self, col: exp.Expression) -> exp.Expression:
         return exp.func("TO_JSON_STRING", col, dialect=self.dialect)
+
+    @t.overload
+    def _columns_to_types(
+        self, query_or_df: DF, columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
+    ) -> t.Dict[str, exp.DataType]: ...
+
+    @t.overload
+    def _columns_to_types(
+        self, query_or_df: Query, columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
+    ) -> t.Optional[t.Dict[str, exp.DataType]]: ...
+
+    def _columns_to_types(
+        self, query_or_df: QueryOrDF, columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
+    ) -> t.Optional[t.Dict[str, exp.DataType]]:
+        if (
+            not columns_to_types
+            and bigframes
+            and isinstance(query_or_df, bigframes.dataframe.DataFrame)
+        ):
+            # using dry_run=True attempts to prevent the DataFrame from being materialized just to read the column types from it
+            dtypes = query_or_df.to_pandas(dry_run=True).columnDtypes
+            return columns_to_types_from_dtypes(dtypes.items())
+
+        return super()._columns_to_types(query_or_df, columns_to_types)
+
+    def _native_df_to_pandas_df(
+        self,
+        query_or_df: QueryOrDF,
+    ) -> t.Union[Query, pd.DataFrame]:
+        if bigframes and isinstance(query_or_df, bigframes.dataframe.DataFrame):
+            return query_or_df.to_pandas()
+
+        return super()._native_df_to_pandas_df(query_or_df)
 
     @property
     def _query_data(self) -> t.Any:

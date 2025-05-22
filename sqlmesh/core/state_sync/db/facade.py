@@ -24,6 +24,7 @@ from datetime import datetime
 
 from sqlglot import exp
 
+from sqlmesh.core import constants as c
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.environment import Environment, EnvironmentStatements, EnvironmentSummary
@@ -204,9 +205,8 @@ class EngineAdapterStateSync(StateSync):
             if not existing_environment.expired:
                 if environment.previous_plan_id != existing_environment.plan_id:
                     raise ConflictingPlanError(
-                        f"Plan '{environment.plan_id}' is no longer valid for the target environment '{environment.name}'. "
-                        f"Expected previous plan ID: '{environment.previous_plan_id}', actual previous plan ID: '{existing_environment.plan_id}'. "
-                        "Please recreate the plan and try again"
+                        f"Another plan ({existing_environment.plan_id}) was applied to the target environment '{environment.name}' while your current plan "
+                        f"({environment.plan_id}) was still in progress, interrupting it. Please re-apply your plan to resolve this error."
                     )
                 if no_gaps_snapshot_names != set():
                     snapshots = self.get_snapshots(environment.snapshots).values()
@@ -229,6 +229,7 @@ class EngineAdapterStateSync(StateSync):
             and existing_environment.finalized_ts
             and not existing_environment.expired
             and existing_environment.gateway_managed == environment.gateway_managed
+            and existing_environment.name == c.PROD
         ):
             # Only promote new snapshots.
             added_table_infos -= set(existing_environment.promoted_snapshots)
@@ -365,7 +366,7 @@ class EngineAdapterStateSync(StateSync):
 
     def get_snapshots(
         self,
-        snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]],
+        snapshot_ids: t.Iterable[SnapshotIdLike],
     ) -> t.Dict[SnapshotId, Snapshot]:
         """Fetches snapshots from the state.
 
@@ -612,7 +613,8 @@ class EngineAdapterStateSync(StateSync):
 
                     if missing_intervals:
                         raise SQLMeshError(
-                            f"Detected gaps in snapshot {target_snapshot.snapshot_id}: {missing_intervals}"
+                            f"Detected missing intervals for model {target_snapshot.name}, interrupting your current plan. "
+                            "Please re-apply your plan to resolve this error."
                         )
 
     @contextlib.contextmanager

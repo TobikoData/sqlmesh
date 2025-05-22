@@ -49,8 +49,6 @@ def test_set_current_catalog(trino_mocked_engine_adapter: TrinoEngineAdapter):
     ]
 
 
-@pytest.mark.trino_iceberg
-@pytest.mark.trino_delta
 @pytest.mark.parametrize("storage_type", ["iceberg", "delta"])
 def test_get_catalog_type(
     trino_mocked_engine_adapter: TrinoEngineAdapter, mocker: MockerFixture, storage_type: str
@@ -104,7 +102,6 @@ def test_get_catalog_type_cached(
     assert fetchone_mock.call_count == 2
 
 
-@pytest.mark.trino_delta
 @pytest.mark.parametrize("storage_type", ["hive", "delta"])
 def test_partitioned_by_hive_delta(
     trino_mocked_engine_adapter: TrinoEngineAdapter, mocker: MockerFixture, storage_type: str
@@ -132,7 +129,6 @@ def test_partitioned_by_hive_delta(
     ]
 
 
-@pytest.mark.trino_iceberg
 def test_partitioned_by_iceberg(
     trino_mocked_engine_adapter: TrinoEngineAdapter, mocker: MockerFixture
 ):
@@ -159,7 +155,6 @@ def test_partitioned_by_iceberg(
     ]
 
 
-@pytest.mark.trino_iceberg
 def test_partitioned_by_iceberg_transforms(
     trino_mocked_engine_adapter: TrinoEngineAdapter, mocker: MockerFixture
 ):
@@ -203,7 +198,6 @@ def test_partitioned_by_iceberg_transforms(
     ]
 
 
-@pytest.mark.trino_iceberg
 def test_partitioned_by_with_multiple_catalogs_same_server(
     trino_mocked_engine_adapter: TrinoEngineAdapter, mocker: MockerFixture
 ):
@@ -319,8 +313,6 @@ def test_comments_hive(mocker: MockerFixture, make_mocked_engine_adapter: t.Call
     ]
 
 
-@pytest.mark.trino_iceberg
-@pytest.mark.trino_delta
 @pytest.mark.parametrize("storage_type", ["iceberg", "delta"])
 def test_comments_iceberg_delta(
     mocker: MockerFixture, make_mocked_engine_adapter: t.Callable, storage_type: str
@@ -387,7 +379,6 @@ def test_comments_iceberg_delta(
     ]
 
 
-@pytest.mark.trino_delta
 def test_delta_timestamps(make_mocked_engine_adapter: t.Callable):
     adapter = make_mocked_engine_adapter(TrinoEngineAdapter)
 

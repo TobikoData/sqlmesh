@@ -16,7 +16,7 @@ py-style:
 	SKIP=prettier,eslint pre-commit run --all-files
 
 ui-style:
-	npm run lint
+	pnpm run lint
 
 doc-test:
 	python -m pytest --doctest-modules sqlmesh/core sqlmesh/utils
@@ -64,7 +64,7 @@ engine-up: engine-clickhouse-up engine-mssql-up engine-mysql-up engine-postgres-
 engine-down: engine-clickhouse-down engine-mssql-down engine-mysql-down engine-postgres-down engine-spark-down engine-trino-down
 
 fast-test:
-	pytest -n auto -m "fast and not cicdonly" && pytest -m "isolated"
+	pytest -n auto -m "fast and not cicdonly" --junitxml=test-results/junit-fast-test.xml && pytest -m "isolated"
 
 slow-test:
 	pytest -n auto -m "(fast or slow) and not cicdonly" && pytest -m "isolated"
@@ -126,55 +126,57 @@ engine-%-down:
 ##################
 
 clickhouse-test: engine-clickhouse-up
-	pytest -n auto -x -m "clickhouse" --retries 3 --junitxml=test-results/junit-clickhouse.xml
-
-clickhouse-cluster-test: engine-clickhouse-up
-	pytest -n auto -x -m "clickhouse_cluster" --retries 3 --junitxml=test-results/junit-clickhouse-cluster.xml
+	pytest -n auto -m "clickhouse" --retries 3 --junitxml=test-results/junit-clickhouse.xml
 
 duckdb-test: engine-duckdb-install
-	pytest -n auto -x -m "duckdb" --retries 3 --junitxml=test-results/junit-duckdb.xml
+	pytest -n auto -m "duckdb" --retries 3 --junitxml=test-results/junit-duckdb.xml
 
 mssql-test: engine-mssql-up
-	pytest -n auto -x -m "mssql" --retries 3 --junitxml=test-results/junit-mssql.xml
+	pytest -n auto -m "mssql" --retries 3 --junitxml=test-results/junit-mssql.xml
 
 mysql-test: engine-mysql-up
-	pytest -n auto -x -m "mysql" --retries 3 --junitxml=test-results/junit-mysql.xml
+	pytest -n auto -m "mysql" --retries 3 --junitxml=test-results/junit-mysql.xml
 
 postgres-test: engine-postgres-up
-	pytest -n auto -x -m "postgres" --retries 3 --junitxml=test-results/junit-postgres.xml
+	pytest -n auto -m "postgres" --retries 3 --junitxml=test-results/junit-postgres.xml
 
 spark-test: engine-spark-up
-	pytest -n auto -x -m "spark or pyspark" --retries 3 --junitxml=test-results/junit-spark.xml
+	pytest -n auto -m "spark" --retries 3 --junitxml=test-results/junit-spark.xml
 
 trino-test: engine-trino-up
-	pytest -n auto -x -m "trino or trino_iceberg or trino_delta or trino_nessie" --retries 3 --junitxml=test-results/junit-trino.xml
+	pytest -n auto -m "trino" --retries 3 --junitxml=test-results/junit-trino.xml
 
 risingwave-test: engine-risingwave-up
-	pytest -n auto -x -m "risingwave" --retries 3 --junitxml=test-results/junit-risingwave.xml
+	pytest -n auto -m "risingwave" --retries 3 --junitxml=test-results/junit-risingwave.xml
 
 #################
 # Cloud Engines #
 #################
 
 snowflake-test: guard-SNOWFLAKE_ACCOUNT guard-SNOWFLAKE_WAREHOUSE guard-SNOWFLAKE_DATABASE guard-SNOWFLAKE_USER guard-SNOWFLAKE_PASSWORD engine-snowflake-install
-	pytest -n auto -x -m "snowflake" --retries 3 --junitxml=test-results/junit-snowflake.xml
+	pytest -n auto -m "snowflake" --retries 3 --junitxml=test-results/junit-snowflake.xml
 
 bigquery-test: guard-BIGQUERY_KEYFILE engine-bigquery-install
-	pytest -n auto -x -m "bigquery" --retries 3 --junitxml=test-results/junit-bigquery.xml
+	pytest -n auto -m "bigquery" --retries 3 --junitxml=test-results/junit-bigquery.xml
 
 databricks-test: guard-DATABRICKS_CATALOG guard-DATABRICKS_SERVER_HOSTNAME guard-DATABRICKS_HTTP_PATH guard-DATABRICKS_ACCESS_TOKEN guard-DATABRICKS_CONNECT_VERSION engine-databricks-install
 	pip install 'databricks-connect==${DATABRICKS_CONNECT_VERSION}'
-	pytest -n auto -x -m "databricks" --retries 3 --junitxml=test-results/junit-databricks.xml
+	pytest -n auto -m "databricks" --retries 3 --junitxml=test-results/junit-databricks.xml
 
 redshift-test: guard-REDSHIFT_HOST guard-REDSHIFT_USER guard-REDSHIFT_PASSWORD guard-REDSHIFT_DATABASE engine-redshift-install
-	pytest -n auto -x -m "redshift" --retries 3 --junitxml=test-results/junit-redshift.xml
+	pytest -n auto -m "redshift" --retries 3 --junitxml=test-results/junit-redshift.xml
 
 clickhouse-cloud-test: guard-CLICKHOUSE_CLOUD_HOST guard-CLICKHOUSE_CLOUD_USERNAME guard-CLICKHOUSE_CLOUD_PASSWORD engine-clickhouse-install
 	pytest -n 1 -m "clickhouse_cloud" --retries 3 --junitxml=test-results/junit-clickhouse-cloud.xml
 
 athena-test: guard-AWS_ACCESS_KEY_ID guard-AWS_SECRET_ACCESS_KEY guard-ATHENA_S3_WAREHOUSE_LOCATION engine-athena-install
-	pytest -n auto -x -m "athena" --retries 3 --retry-delay 10 --junitxml=test-results/junit-athena.xml
+	pytest -n auto -m "athena" --retries 3 --retry-delay 10 --junitxml=test-results/junit-athena.xml
 
 vscode_settings:
 	mkdir -p .vscode
 	cp -r ./tooling/vscode/*.json .vscode/
+
+vscode-generate-openapi:
+	python3 web/server/openapi.py --output vscode/openapi.json
+	pnpm run fmt
+	cd vscode/react && pnpm run generate:api

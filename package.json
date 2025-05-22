@@ -1,14 +1,10 @@
 {
-  "workspaces": [
-    "vscode/extension",
-    "web/client"
-  ],
   "scripts": {
-    "ci": "npm run ci --workspaces",
+    "ci": "pnpm run lint && pnpm run -r ci",
     "fmt": "prettier --write .",
     "fmt:check": "prettier --check .",
-    "lint": "npm run fmt:check && npm run lint --workspaces",
-    "lint:fix": "npm run fmt && npm run lint:fix --workspaces"
+    "lint": "pnpm run fmt:check && pnpm run -r lint",
+    "lint:fix": "pnpm run fmt && pnpm run -r lint:fix"
   },
   "devDependencies": {
     "prettier": "^3.5.2"

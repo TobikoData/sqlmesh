@@ -3,7 +3,7 @@ from __future__ import annotations
 import abc
 import typing as t
 
-from pydantic import Field
+from pydantic import Field, ValidationError
 
 from sqlglot.helper import subclasses
 from sqlmesh.core.config.base import BaseConfig
@@ -16,7 +16,7 @@ from sqlmesh.core.config import DuckDBConnectionConfig
 from sqlmesh.core.state_sync import EngineAdapterStateSync, StateSync
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.hashing import md5
-from sqlmesh.utils.pydantic import field_validator
+from sqlmesh.utils.pydantic import field_validator, validation_error_message
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.context import GenericContext
@@ -159,7 +159,13 @@ def _scheduler_config_validator(
     if scheduler_type not in SCHEDULER_CONFIG_TO_TYPE:
         raise ConfigError(f"Unknown scheduler type '{scheduler_type}'.")
 
-    return SCHEDULER_CONFIG_TO_TYPE[scheduler_type](**v)
+    try:
+        return SCHEDULER_CONFIG_TO_TYPE[scheduler_type](**v)
+    except ValidationError as e:
+        raise ConfigError(
+            validation_error_message(e, f"Invalid '{scheduler_type}' scheduler config:")
+            + "\n\nVerify your config.yaml and environment variables."
+        )
 
 
 scheduler_config_validator = field_validator(

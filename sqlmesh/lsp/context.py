@@ -28,26 +28,24 @@ class LSPContext:
         self.context = context
 
         # Add models to the map
-        model_map: t.Dict[str, ModelTarget] = {}
+        model_map: t.Dict[Path, ModelTarget] = {}
         for model in context.models.values():
             if model._path is not None:
-                path = Path(model._path).resolve()
-                uri = f"file://{path.as_posix()}"
+                uri = model._path
                 if uri in model_map:
                     model_map[uri].names.append(model.name)
                 else:
                     model_map[uri] = ModelTarget(names=[model.name])
 
         # Add standalone audits to the map
-        audit_map: t.Dict[str, AuditTarget] = {}
+        audit_map: t.Dict[Path, AuditTarget] = {}
         for audit in context.standalone_audits.values():
             if audit._path is not None:
-                path = Path(audit._path).resolve()
-                uri = f"file://{path.as_posix()}"
+                uri = audit._path
                 if uri not in audit_map:
                     audit_map[uri] = AuditTarget(name=audit.name)
 
-        self.map: t.Dict[str, t.Union[ModelTarget, AuditTarget]] = {
+        self.map: t.Dict[Path, t.Union[ModelTarget, AuditTarget]] = {
             **model_map,
             **audit_map,
         }

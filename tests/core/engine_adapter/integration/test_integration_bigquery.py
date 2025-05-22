@@ -14,18 +14,27 @@ from sqlmesh.core.model import SqlModel, load_sql_based_model
 from sqlmesh.core.plan import Plan
 from sqlmesh.core.table_diff import TableDiff
 from tests.core.engine_adapter.integration import TestContext
+from pytest import FixtureRequest
+from tests.core.engine_adapter.integration import (
+    TestContext,
+    generate_pytest_params,
+    ENGINES_BY_NAME,
+    IntegrationTestEngine,
+)
 
-pytestmark = [pytest.mark.engine, pytest.mark.remote, pytest.mark.bigquery]
+
+@pytest.fixture(params=list(generate_pytest_params(ENGINES_BY_NAME["bigquery"])))
+def ctx(
+    request: FixtureRequest,
+    create_test_context: t.Callable[[IntegrationTestEngine, str, str], t.Iterable[TestContext]],
+) -> t.Iterable[TestContext]:
+    yield from create_test_context(*request.param)
 
 
 @pytest.fixture
-def mark_gateway() -> t.Tuple[str, str]:
-    return "bigquery", "inttest_bigquery"
-
-
-@pytest.fixture
-def test_type() -> str:
-    return "query"
+def engine_adapter(ctx: TestContext) -> BigQueryEngineAdapter:
+    assert isinstance(ctx.engine_adapter, BigQueryEngineAdapter)
+    return ctx.engine_adapter
 
 
 def test_get_alter_expressions_includes_clustering(
@@ -229,7 +238,6 @@ def test_information_schema_view_external_model(ctx: TestContext, tmp_path: Path
         "table_type": exp.DataType.build("TEXT"),
         "is_insertable_into": exp.DataType.build("TEXT"),
         "is_typed": exp.DataType.build("TEXT"),
-        "managed_table_type": exp.DataType.build("TEXT"),
         "creation_time": exp.DataType.build("TIMESTAMPTZ"),
         "base_table_catalog": exp.DataType.build("TEXT"),
         "base_table_schema": exp.DataType.build("TEXT"),
@@ -274,8 +282,7 @@ def test_information_schema_view_external_model(ctx: TestContext, tmp_path: Path
         "  `tables`.`replication_status` AS `replication_status`,\n"
         "  `tables`.`replication_error` AS `replication_error`,\n"
         "  `tables`.`is_change_history_enabled` AS `is_change_history_enabled`,\n"
-        "  `tables`.`sync_status` AS `sync_status`,\n"
-        "  `tables`.`managed_table_type` AS `managed_table_type`\n"
+        "  `tables`.`sync_status` AS `sync_status`\n"
         f"FROM {dependency} AS `tables`"
     )
 
@@ -433,50 +440,3 @@ def test_table_diff_table_name_matches_column_name(ctx: TestContext):
 
     assert row_diff.stats["join_count"] == 1
     assert row_diff.full_match_count == 1
-
-
-def test_bigframe_python_model_column_order(ctx: TestContext, tmp_path: Path):
-    model_name = ctx.table("TEST")
-
-    (tmp_path / "models").mkdir()
-
-    # note: this model deliberately defines the columns in the @model definition to be in a different order than what
-    # is returned by the DataFrame within the model
-    model_path = tmp_path / "models" / "python_model.py"
-
-    # python model that emits a BigFrame dataframe
-    model_path.write_text(
-        """
-from bigframes.pandas import DataFrame
-import typing as t
-from sqlmesh import ExecutionContext, model
-
-@model(
-    'MODEL_NAME',
-    columns={
-        "id": "int",
-        "name": "varchar"
-    },
-    dialect="bigquery"
-)
-def execute(
-    context: ExecutionContext,
-    **kwargs: t.Any,
-) -> DataFrame:
-    return DataFrame({'name': ['foo'], 'id': [1]}, session=context.bigframe)
-""".replace("MODEL_NAME", model_name.sql(dialect="bigquery"))
-    )
-
-    sqlmesh_ctx = ctx.create_context(path=tmp_path)
-
-    assert len(sqlmesh_ctx.models) == 1
-
-    plan = sqlmesh_ctx.plan(auto_apply=True)
-    assert len(plan.new_snapshots) == 1
-
-    engine_adapter = sqlmesh_ctx.engine_adapter
-
-    query = exp.select("*").from_(model_name)
-    df = engine_adapter.fetchdf(query, quote_identifiers=True)
-    assert len(df) == 1
-    assert df.iloc[0].to_dict() == {"id": 1, "name": "foo"}

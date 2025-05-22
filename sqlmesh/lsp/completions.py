@@ -3,9 +3,10 @@ from sqlglot import Dialect, Tokenizer
 from sqlmesh.lsp.custom import AllModelsResponse
 import typing as t
 from sqlmesh.lsp.context import AuditTarget, LSPContext, ModelTarget
+from sqlmesh.lsp.uri import URI
 
 
-def get_sql_completions(context: t.Optional[LSPContext], file_uri: str) -> AllModelsResponse:
+def get_sql_completions(context: t.Optional[LSPContext], file_uri: URI) -> AllModelsResponse:
     """
     Return a list of completions for a given file.
     """
@@ -15,7 +16,7 @@ def get_sql_completions(context: t.Optional[LSPContext], file_uri: str) -> AllMo
     )
 
 
-def get_models(context: t.Optional[LSPContext], file_uri: t.Optional[str]) -> t.Set[str]:
+def get_models(context: t.Optional[LSPContext], file_uri: t.Optional[URI]) -> t.Set[str]:
     """
     Return a list of models for a given file.
 
@@ -32,8 +33,9 @@ def get_models(context: t.Optional[LSPContext], file_uri: t.Optional[str]) -> t.
             all_models.update(file_info.names)
 
     # Remove models from the current file
-    if file_uri is not None and file_uri in context.map:
-        file_info = context.map[file_uri]
+    path = file_uri.to_path() if file_uri is not None else None
+    if path is not None and path in context.map:
+        file_info = context.map[path]
         if isinstance(file_info, ModelTarget):
             for model in file_info.names:
                 all_models.discard(model)
@@ -41,7 +43,7 @@ def get_models(context: t.Optional[LSPContext], file_uri: t.Optional[str]) -> t.
     return all_models
 
 
-def get_keywords(context: t.Optional[LSPContext], file_uri: t.Optional[str]) -> t.Set[str]:
+def get_keywords(context: t.Optional[LSPContext], file_uri: t.Optional[URI]) -> t.Set[str]:
     """
     Return a list of sql keywords for a given file.
     If no context is provided, return ANSI SQL keywords.
@@ -52,8 +54,8 @@ def get_keywords(context: t.Optional[LSPContext], file_uri: t.Optional[str]) -> 
     If both a context and a file_uri are provided, returns the keywords
     for the dialect of the model that the file belongs to.
     """
-    if file_uri is not None and context is not None and file_uri in context.map:
-        file_info = context.map[file_uri]
+    if file_uri is not None and context is not None and file_uri.to_path() in context.map:
+        file_info = context.map[file_uri.to_path()]
 
         # Handle ModelInfo objects
         if isinstance(file_info, ModelTarget) and file_info.names:

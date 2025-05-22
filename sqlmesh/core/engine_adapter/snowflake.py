@@ -27,6 +27,7 @@ from sqlmesh.core.engine_adapter.shared import (
 from sqlmesh.core.schema_diff import SchemaDiffer
 from sqlmesh.utils import optional_import
 from sqlmesh.utils.errors import SQLMeshError
+from sqlmesh.utils.pandas import columns_to_types_from_dtypes
 
 logger = logging.getLogger(__name__)
 snowpark = optional_import("snowflake.snowpark")
@@ -67,6 +68,7 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
         },
     )
     MANAGED_TABLE_KIND = "DYNAMIC TABLE"
+    SNOWPARK = "snowpark"
 
     @contextlib.contextmanager
     def session(self, properties: SessionProperties) -> t.Iterator[None]:
@@ -103,9 +105,16 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
     @property
     def snowpark(self) -> t.Optional[SnowparkSession]:
         if snowpark:
-            return snowpark.Session.builder.configs(
-                {"connection": self._connection_pool.get()}
-            ).getOrCreate()
+            if not self._connection_pool.get_attribute(self.SNOWPARK):
+                # Snowpark sessions are not thread safe so we create a session per thread to prevent them from interfering with each other
+                # The sessions are cleaned up when close() is called
+                new_session = snowpark.Session.builder.configs(
+                    {"connection": self._connection_pool.get()}
+                ).create()
+                self._connection_pool.set_attribute(self.SNOWPARK, new_session)
+
+            return self._connection_pool.get_attribute(self.SNOWPARK)
+
         return None
 
     @property
@@ -298,13 +307,23 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
 
             if is_snowpark_dataframe:
                 temp_table.set("catalog", database)
-                df_renamed = df.rename(
-                    {
-                        col: exp.to_identifier(col).sql(dialect=self.dialect, identify=True)
-                        for col in columns_to_types
-                    }
-                )  # type: ignore
-                df_renamed.createOrReplaceTempView(
+
+                # only quote columns if they arent already quoted
+                # if the Snowpark dataframe was created from a Pandas dataframe via snowpark.create_dataframe(pandas_df),
+                # then they will be quoted already. But if the Snowpark dataframe was created manually by the user, then the
+                # columns may not be quoted
+                columns_already_quoted = all(
+                    col.startswith('"') and col.endswith('"') for col in df.columns
+                )
+                local_df = df
+                if not columns_already_quoted:
+                    local_df = df.rename(
+                        {
+                            col: exp.to_identifier(col).sql(dialect=self.dialect, identify=True)
+                            for col in columns_to_types
+                        }
+                    )  # type: ignore
+                local_df.createOrReplaceTempView(
                     temp_table.sql(dialect=self.dialect, identify=True)
                 )  # type: ignore
             elif isinstance(df, pd.DataFrame):
@@ -356,6 +375,11 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
 
         def cleanup() -> None:
             if is_snowpark_dataframe:
+                if hasattr(df, "table_name"):
+                    if isinstance(df.table_name, str):
+                        # created by the Snowpark library if the Snowpark DataFrame was created from a Pandas DataFrame
+                        # (if the Snowpark DataFrame was created via native means then there is no 'table_name' property and no temp table)
+                        self.drop_table(df.table_name)
                 self.drop_view(temp_table)
             else:
                 self.drop_table(temp_table)
@@ -380,6 +404,15 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
             rows = self.cursor.fetchall()
             columns = self.cursor._result_set.batches[0].column_names
             return pd.DataFrame([dict(zip(columns, row)) for row in rows])
+
+    def _native_df_to_pandas_df(
+        self,
+        query_or_df: QueryOrDF,
+    ) -> t.Union[Query, pd.DataFrame]:
+        if snowpark and isinstance(query_or_df, snowpark.DataFrame):
+            return query_or_df.to_pandas()
+
+        return super()._native_df_to_pandas_df(query_or_df)
 
     def _get_data_objects(
         self, schema_name: SchemaName, object_names: t.Optional[t.Set[str]] = None
@@ -425,6 +458,10 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
         )
         if object_names:
             query = query.where(exp.column("TABLE_NAME").isin(*object_names))
+
+        # exclude SNOWPARK_TEMP_TABLE tables that are managed by the Snowpark library and are an implementation
+        # detail of dealing with DataFrame's
+        query = query.where(exp.column("TABLE_NAME").like("SNOWPARK_TEMP_TABLE%").not_())
 
         df = self.fetchdf(query, quote_identifiers=True)
         if df.empty:
@@ -537,3 +574,28 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
             clone_kwargs=clone_kwargs,
             **kwargs,
         )
+
+    @t.overload
+    def _columns_to_types(
+        self, query_or_df: DF, columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
+    ) -> t.Dict[str, exp.DataType]: ...
+
+    @t.overload
+    def _columns_to_types(
+        self, query_or_df: Query, columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
+    ) -> t.Optional[t.Dict[str, exp.DataType]]: ...
+
+    def _columns_to_types(
+        self, query_or_df: QueryOrDF, columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
+    ) -> t.Optional[t.Dict[str, exp.DataType]]:
+        if not columns_to_types and snowpark and isinstance(query_or_df, snowpark.DataFrame):
+            return columns_to_types_from_dtypes(query_or_df.sample(n=1).to_pandas().dtypes.items())
+
+        return super()._columns_to_types(query_or_df, columns_to_types)
+
+    def close(self) -> t.Any:
+        if snowpark_session := self._connection_pool.get_attribute(self.SNOWPARK):
+            snowpark_session.close()  # type: ignore
+            self._connection_pool.set_attribute(self.SNOWPARK, None)
+
+        return super().close()

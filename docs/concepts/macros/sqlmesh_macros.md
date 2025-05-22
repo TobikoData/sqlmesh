@@ -855,7 +855,9 @@ FROM foo
 
 `@UNION` returns a `UNION` query that selects all columns with matching names and data types from the tables.
 
-Its first argument is the `UNION` "type", `'DISTINCT'` (removing duplicated rows) or `'ALL'` (returning all rows). Subsequent arguments are the tables to be combined.
+Its first argument can be either a condition or the `UNION` "type". If the first argument evaluates to a boolean (`TRUE` or `FALSE`), it's treated as a condition. If the condition is `FALSE`, only the first table is returned. If it's `TRUE`, the union operation is performed.
+
+If the first argument is not a boolean condition, it's treated as the `UNION` "type": either `'DISTINCT'` (removing duplicated rows) or `'ALL'` (returning all rows). Subsequent arguments are the tables to be combined.
 
 Let's assume that:
 
@@ -880,6 +882,47 @@ SELECT
   CAST(a AS INT) AS a,
   CAST(c AS TEXT) AS c
 FROM bar
+```
+
+If the union type is omitted, `'ALL'` is used as the default. So the following expression:
+
+```sql linenums="1"
+@UNION(foo, bar)
+```
+
+would be rendered as:
+
+```sql linenums="1"
+SELECT
+  CAST(a AS INT) AS a,
+  CAST(c AS TEXT) AS c
+FROM foo
+UNION ALL
+SELECT
+  CAST(a AS INT) AS a,
+  CAST(c AS TEXT) AS c
+FROM bar
+```
+
+You can also use a condition to control whether the union happens:
+
+```sql linenums="1"
+@UNION(1 > 0, 'all', foo, bar)
+```
+
+This would render the same as above. However, if the condition is `FALSE`:
+
+```sql linenums="1"
+@UNION(1 > 2, 'all', foo, bar)
+```
+
+Only the first table would be selected:
+
+```sql linenums="1"
+SELECT
+  CAST(a AS INT) AS a,
+  CAST(c AS TEXT) AS c
+FROM foo
 ```
 
 ### @HAVERSINE_DISTANCE

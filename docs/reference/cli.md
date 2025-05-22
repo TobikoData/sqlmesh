@@ -557,6 +557,8 @@ Options:
                            floating point columns. Default: 3
   --skip-grain-check       Disable the check for a primary key (grain) that is
                            missing or is not unique.
+  --warn-grain-check       Warn if any selected model is missing a grain,
+                           and compute diffs for the remaining models.
   --temp-schema TEXT       Schema used for temporary tables. It can be
                            `CATALOG.SCHEMA` or `SCHEMA`. Default:
                            `sqlmesh_temp`

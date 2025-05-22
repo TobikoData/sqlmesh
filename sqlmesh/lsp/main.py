@@ -4,6 +4,7 @@
 import logging
 import typing as t
 from pathlib import Path
+import urllib.parse
 
 from lsprotocol import types
 from pygls.server import LanguageServer
@@ -14,6 +15,7 @@ from sqlmesh.core.linter.definition import AnnotatedRuleViolation
 from sqlmesh.lsp.api import (
     API_FEATURE,
     ApiRequest,
+    ApiResponseGetColumnLineage,
     ApiResponseGetLineage,
     ApiResponseGetModels,
 )
@@ -23,7 +25,8 @@ from sqlmesh.lsp.custom import ALL_MODELS_FEATURE, AllModelsRequest, AllModelsRe
 from sqlmesh.lsp.reference import (
     get_references,
 )
-from web.server.api.endpoints.lineage import model_lineage
+from sqlmesh.lsp.uri import URI
+from web.server.api.endpoints.lineage import column_lineage, model_lineage
 from web.server.api.endpoints.models import get_models
 
 
@@ -42,7 +45,7 @@ class SQLMeshLanguageServer:
         self.server = LanguageServer(server_name, version)
         self.context_class = context_class
         self.lsp_context: t.Optional[LSPContext] = None
-        self.lint_cache: t.Dict[str, t.List[AnnotatedRuleViolation]] = {}
+        self.lint_cache: t.Dict[URI, t.List[AnnotatedRuleViolation]] = {}
 
         # Register LSP features (e.g., formatting, hover, etc.)
         self._register_features()
@@ -82,91 +85,110 @@ class SQLMeshLanguageServer:
         @self.server.feature(ALL_MODELS_FEATURE)
         def all_models(ls: LanguageServer, params: AllModelsRequest) -> AllModelsResponse:
             try:
-                context = self._context_get_or_load(params.textDocument.uri)
-                return get_sql_completions(context, params.textDocument.uri)
+                uri = URI(params.textDocument.uri)
+                context = self._context_get_or_load(uri)
+                return get_sql_completions(context, uri)
             except Exception as e:
-                return get_sql_completions(None, params.textDocument.uri)
+                return get_sql_completions(None, uri)
 
         @self.server.feature(API_FEATURE)
-        def api(
-            ls: LanguageServer, request: ApiRequest
-        ) -> t.Union[ApiResponseGetModels, ApiResponseGetLineage]:
+        def api(ls: LanguageServer, request: ApiRequest) -> t.Dict[str, t.Any]:
             ls.log_trace(f"API request: {request}")
             if self.lsp_context is None:
                 raise RuntimeError("No context found")
-            if request.url == "/api/models":
-                response = ApiResponseGetModels(data=get_models(self.lsp_context.context))
-                return response
-            if request.url.startswith("/api/lineage"):
-                name = request.url.split("/")[-1]
-                lineage = model_lineage(name, self.lsp_context.context)
-                non_set_lineage = {k: v for k, v in lineage.items() if v is not None}
-                return ApiResponseGetLineage(data=non_set_lineage)
+
+            parsed_url = urllib.parse.urlparse(request.url)
+            path_parts = parsed_url.path.strip("/").split("/")
+
+            if request.method == "GET":
+                if path_parts == ["api", "models"]:
+                    # /api/models
+                    return ApiResponseGetModels(
+                        data=get_models(self.lsp_context.context)
+                    ).model_dump(mode="json")
+
+                if path_parts[:2] == ["api", "lineage"]:
+                    if len(path_parts) == 3:
+                        # /api/lineage/{model}
+                        model_name = urllib.parse.unquote(path_parts[2])
+                        lineage = model_lineage(model_name, self.lsp_context.context)
+                        non_set_lineage = {k: v for k, v in lineage.items() if v is not None}
+                        return ApiResponseGetLineage(data=non_set_lineage).model_dump(mode="json")
+
+                    if len(path_parts) == 4:
+                        # /api/lineage/{model}/{column}
+                        model_name = urllib.parse.unquote(path_parts[2])
+                        column = urllib.parse.unquote(path_parts[3])
+                        models_only = False
+                        if hasattr(request, "params"):
+                            models_only = bool(getattr(request.params, "models_only", False))
+                        column_lineage_response = column_lineage(
+                            model_name, column, models_only, self.lsp_context.context
+                        )
+                        return ApiResponseGetColumnLineage(data=column_lineage_response).model_dump(
+                            mode="json"
+                        )
+
             raise NotImplementedError(f"API request not implemented: {request.url}")
 
         @self.server.feature(types.TEXT_DOCUMENT_DID_OPEN)
         def did_open(ls: LanguageServer, params: types.DidOpenTextDocumentParams) -> None:
-            context = self._context_get_or_load(params.text_document.uri)
-            if self.lint_cache.get(params.text_document.uri) is not None:
+            uri = URI(params.text_document.uri)
+            context = self._context_get_or_load(uri)
+            if self.lint_cache.get(uri) is not None:
                 ls.publish_diagnostics(
                     params.text_document.uri,
-                    SQLMeshLanguageServer._diagnostics_to_lsp_diagnostics(
-                        self.lint_cache[params.text_document.uri]
-                    ),
+                    SQLMeshLanguageServer._diagnostics_to_lsp_diagnostics(self.lint_cache[uri]),
                 )
                 return
-            models = context.map[params.text_document.uri]
+            models = context.map[uri.to_path()]
             if models is None:
                 return
             if not isinstance(models, ModelTarget):
                 return
-            self.lint_cache[params.text_document.uri] = context.context.lint_models(
+            self.lint_cache[uri] = context.context.lint_models(
                 models.names,
                 raise_on_error=False,
             )
             ls.publish_diagnostics(
                 params.text_document.uri,
-                SQLMeshLanguageServer._diagnostics_to_lsp_diagnostics(
-                    self.lint_cache[params.text_document.uri]
-                ),
+                SQLMeshLanguageServer._diagnostics_to_lsp_diagnostics(self.lint_cache[uri]),
             )
 
         @self.server.feature(types.TEXT_DOCUMENT_DID_CHANGE)
         def did_change(ls: LanguageServer, params: types.DidChangeTextDocumentParams) -> None:
-            context = self._context_get_or_load(params.text_document.uri)
-            models = context.map[params.text_document.uri]
+            uri = URI(params.text_document.uri)
+            context = self._context_get_or_load(uri)
+            models = context.map[uri.to_path()]
             if models is None:
                 return
             if not isinstance(models, ModelTarget):
                 return
-            self.lint_cache[params.text_document.uri] = context.context.lint_models(
+            self.lint_cache[uri] = context.context.lint_models(
                 models.names,
                 raise_on_error=False,
             )
             ls.publish_diagnostics(
                 params.text_document.uri,
-                SQLMeshLanguageServer._diagnostics_to_lsp_diagnostics(
-                    self.lint_cache[params.text_document.uri]
-                ),
+                SQLMeshLanguageServer._diagnostics_to_lsp_diagnostics(self.lint_cache[uri]),
             )
 
         @self.server.feature(types.TEXT_DOCUMENT_DID_SAVE)
         def did_save(ls: LanguageServer, params: types.DidSaveTextDocumentParams) -> None:
-            context = self._context_get_or_load(params.text_document.uri)
-            models = context.map[params.text_document.uri]
+            uri = URI(params.text_document.uri)
+            context = self._context_get_or_load(uri)
+            models = context.map[uri.to_path()]
             if models is None:
                 return
             if not isinstance(models, ModelTarget):
                 return
-            self.lint_cache[params.text_document.uri] = context.context.lint_models(
+            self.lint_cache[uri] = context.context.lint_models(
                 models.names,
                 raise_on_error=False,
             )
             ls.publish_diagnostics(
                 params.text_document.uri,
-                SQLMeshLanguageServer._diagnostics_to_lsp_diagnostics(
-                    self.lint_cache[params.text_document.uri]
-                ),
+                SQLMeshLanguageServer._diagnostics_to_lsp_diagnostics(self.lint_cache[uri]),
             )
 
         @self.server.feature(types.TEXT_DOCUMENT_FORMATTING)
@@ -175,14 +197,15 @@ class SQLMeshLanguageServer:
         ) -> t.List[types.TextEdit]:
             """Format the document using SQLMesh `format_model_expressions`."""
             try:
-                self._ensure_context_for_document(params.text_document.uri)
+                uri = URI(params.text_document.uri)
+                self._ensure_context_for_document(uri)
                 document = ls.workspace.get_text_document(params.text_document.uri)
                 if self.lsp_context is None:
                     raise RuntimeError(f"No context found for document: {document.path}")
 
                 # Perform formatting using the loaded context
-                self.lsp_context.context.format(paths=(Path(document.path),))
-                with open(document.path, "r+", encoding="utf-8") as file:
+                self.lsp_context.context.format(paths=(str(uri.to_path()),))
+                with open(uri.to_path(), "r+", encoding="utf-8") as file:
                     new_text = file.read()
 
                 # Return a single edit that replaces the entire file.
@@ -206,14 +229,13 @@ class SQLMeshLanguageServer:
         def hover(ls: LanguageServer, params: types.HoverParams) -> t.Optional[types.Hover]:
             """Provide hover information for an object."""
             try:
-                self._ensure_context_for_document(params.text_document.uri)
+                uri = URI(params.text_document.uri)
+                self._ensure_context_for_document(uri)
                 document = ls.workspace.get_text_document(params.text_document.uri)
                 if self.lsp_context is None:
                     raise RuntimeError(f"No context found for document: {document.path}")
 
-                references = get_references(
-                    self.lsp_context, params.text_document.uri, params.position
-                )
+                references = get_references(self.lsp_context, uri, params.position)
                 if not references:
                     return None
                 reference = references[0]
@@ -236,14 +258,13 @@ class SQLMeshLanguageServer:
         ) -> t.List[types.LocationLink]:
             """Jump to an object's definition."""
             try:
-                self._ensure_context_for_document(params.text_document.uri)
+                uri = URI(params.text_document.uri)
+                self._ensure_context_for_document(uri)
                 document = ls.workspace.get_text_document(params.text_document.uri)
                 if self.lsp_context is None:
                     raise RuntimeError(f"No context found for document: {document.path}")
 
-                references = get_references(
-                    self.lsp_context, params.text_document.uri, params.position
-                )
+                references = get_references(self.lsp_context, uri, params.position)
                 return [
                     types.LocationLink(
                         target_uri=reference.uri,
@@ -263,7 +284,7 @@ class SQLMeshLanguageServer:
                 ls.show_message(f"Error getting references: {e}", types.MessageType.Error)
                 return []
 
-    def _context_get_or_load(self, document_uri: str) -> LSPContext:
+    def _context_get_or_load(self, document_uri: URI) -> LSPContext:
         if self.lsp_context is None:
             self._ensure_context_for_document(document_uri)
         if self.lsp_context is None:
@@ -272,7 +293,7 @@ class SQLMeshLanguageServer:
 
     def _ensure_context_for_document(
         self,
-        document_uri: str,
+        document_uri: URI,
     ) -> None:
         """
         Ensure that a context exists for the given document if applicable by searching
@@ -285,7 +306,7 @@ class SQLMeshLanguageServer:
             return
 
         # No context yet: try to find config and load it
-        path = Path(self._uri_to_path(document_uri)).resolve()
+        path = document_uri.to_path()
         if path.suffix not in (".sql", ".py"):
             return
 
@@ -321,7 +342,8 @@ class SQLMeshLanguageServer:
 
         # Get rule definition location for diagnostics link
         rule_location = diagnostic.rule.get_definition_location()
-        rule_uri = f"file://{rule_location.file_path}#L{rule_location.start_line}"
+        rule_uri_wihout_extension = URI.from_path(rule_location.file_path)
+        rule_uri = f"{rule_uri_wihout_extension.value}#L{rule_location.start_line}"
 
         # Use URI format to create a link for "related information"
         return types.Diagnostic(
@@ -350,11 +372,9 @@ class SQLMeshLanguageServer:
         return lsp_diagnostics
 
     @staticmethod
-    def _uri_to_path(uri: str) -> str:
+    def _uri_to_path(uri: str) -> Path:
         """Convert a URI to a path."""
-        if uri.startswith("file://"):
-            return Path(uri[7:]).resolve().as_posix()
-        return Path(uri).resolve().as_posix()
+        return URI(uri).to_path()
 
     def start(self) -> None:
         """Start the server with I/O transport."""

@@ -4,6 +4,7 @@ import abc
 import base64
 import logging
 import os
+import importlib
 import pathlib
 import re
 import typing as t
@@ -12,6 +13,7 @@ from functools import partial
 
 import pydantic
 from pydantic import Field
+from packaging import version
 from sqlglot import exp
 from sqlglot.helper import subclasses
 
@@ -24,8 +26,14 @@ from sqlmesh.core.config.common import (
 )
 from sqlmesh.core.engine_adapter.shared import CatalogSupport
 from sqlmesh.core.engine_adapter import EngineAdapter
+from sqlmesh.utils import str_to_bool
 from sqlmesh.utils.errors import ConfigError
-from sqlmesh.utils.pydantic import ValidationInfo, field_validator, model_validator
+from sqlmesh.utils.pydantic import (
+    ValidationInfo,
+    field_validator,
+    model_validator,
+    validation_error_message,
+)
 from sqlmesh.utils.aws import validate_s3_uri
 
 if t.TYPE_CHECKING:
@@ -42,6 +50,30 @@ FORBIDDEN_STATE_SYNC_ENGINES = {
     "clickhouse",
 }
 MOTHERDUCK_TOKEN_REGEX = re.compile(r"(\?|\&)(motherduck_token=)(\S*)")
+
+
+def _get_engine_import_validator(
+    import_name: str, engine_type: str, extra_name: t.Optional[str] = None
+) -> t.Callable:
+    extra_name = extra_name or engine_type
+
+    @model_validator(mode="before")
+    def validate(cls: t.Any, data: t.Any) -> t.Any:
+        check_import = (
+            str_to_bool(str(data.pop("check_import", True))) if isinstance(data, dict) else True
+        )
+        if not check_import:
+            return data
+        try:
+            importlib.import_module(import_name)
+        except ImportError:
+            raise ConfigError(
+                f"Failed to import the '{engine_type}' engine library. Please run `pip install \"sqlmesh[{extra_name}]\"`."
+            )
+
+        return data
+
+    return validate
 
 
 class ConnectionConfig(abc.ABC, BaseConfig):
@@ -170,6 +202,7 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
         catalogs: Key is the name of the catalog and value is the path.
         extensions: A list of autoloadable extensions to load.
         connector_config: A dictionary of configuration to pass into the duckdb connector.
+        secrets: A list of dictionaries used to generate DuckDB secrets for authenticating with external services (e.g. S3).
         concurrent_tasks: The maximum number of tasks that can use this connection concurrently.
         register_comments: Whether or not to register model comments with the SQL engine.
         pre_ping: Whether or not to pre-ping the connection before starting a new transaction to ensure it is still alive.
@@ -180,6 +213,7 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
     catalogs: t.Optional[t.Dict[str, t.Union[str, DuckDBAttachOptions]]] = None
     extensions: t.List[t.Union[str, t.Dict[str, t.Any]]] = []
     connector_config: t.Dict[str, t.Any] = {}
+    secrets: t.List[t.Dict[str, t.Any]] = []
 
     concurrent_tasks: int = 1
     register_comments: bool = True
@@ -251,6 +285,28 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
                     cursor.execute(f"SET {field} = '{setting}'")
                 except Exception as e:
                     raise ConfigError(f"Failed to set connector config {field} to {setting}: {e}")
+
+            if self.secrets:
+                duckdb_version = duckdb.__version__
+                if version.parse(duckdb_version) < version.parse("0.10.0"):
+                    from sqlmesh.core.console import get_console
+
+                    get_console().log_warning(
+                        f"DuckDB version {duckdb_version} does not support secrets-based authentication (requires 0.10.0 or later).\n"
+                        "To use secrets, please upgrade DuckDB. For older versions, configure legacy authentication via `connector_config`.\n"
+                        "More info: https://duckdb.org/docs/stable/extensions/httpfs/s3api_legacy_authentication.html"
+                    )
+                else:
+                    for secrets in self.secrets:
+                        secret_settings: t.List[str] = []
+                        for field, setting in secrets.items():
+                            secret_settings.append(f"{field} '{setting}'")
+                        if secret_settings:
+                            secret_clause = ", ".join(secret_settings)
+                            try:
+                                cursor.execute(f"CREATE SECRET ({secret_clause});")
+                            except Exception as e:
+                                raise ConfigError(f"Failed to create secret: {e}")
 
             for i, (alias, path_options) in enumerate(
                 (getattr(self, "catalogs", None) or {}).items()
@@ -423,6 +479,7 @@ class SnowflakeConnectionConfig(ConnectionConfig):
     type_: t.Literal["snowflake"] = Field(alias="type", default="snowflake")
 
     _concurrent_tasks_validator = concurrent_tasks_validator
+    _engine_import_validator = _get_engine_import_validator("snowflake", "snowflake")
 
     @model_validator(mode="before")
     def _validate_authenticator(cls, data: t.Any) -> t.Any:
@@ -616,6 +673,7 @@ class DatabricksConnectionConfig(ConnectionConfig):
 
     _concurrent_tasks_validator = concurrent_tasks_validator
     _http_headers_validator = http_headers_validator
+    _engine_import_validator = _get_engine_import_validator("databricks", "databricks")
 
     @model_validator(mode="before")
     def _databricks_connect_validator(cls, data: t.Any) -> t.Any:
@@ -868,6 +926,8 @@ class BigQueryConnectionConfig(ConnectionConfig):
 
     type_: t.Literal["bigquery"] = Field(alias="type", default="bigquery")
 
+    _engine_import_validator = _get_engine_import_validator("google.cloud.bigquery", "bigquery")
+
     @field_validator("execution_project")
     def validate_execution_project(
         cls,
@@ -1010,6 +1070,10 @@ class GCPPostgresConnectionConfig(ConnectionConfig):
     register_comments: bool = True
     pre_ping: bool = True
 
+    _engine_import_validator = _get_engine_import_validator(
+        "google.cloud.sql", "gcp_postgres", "gcppostgres"
+    )
+
     @model_validator(mode="before")
     def _validate_auth_method(cls, data: t.Any) -> t.Any:
         if not isinstance(data, dict):
@@ -1137,6 +1201,8 @@ class RedshiftConnectionConfig(ConnectionConfig):
 
     type_: t.Literal["redshift"] = Field(alias="type", default="redshift")
 
+    _engine_import_validator = _get_engine_import_validator("redshift_connector", "redshift")
+
     @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
         return {
@@ -1196,6 +1262,8 @@ class PostgresConnectionConfig(ConnectionConfig):
 
     type_: t.Literal["postgres"] = Field(alias="type", default="postgres")
 
+    _engine_import_validator = _get_engine_import_validator("psycopg2", "postgres")
+
     @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
         return {
@@ -1247,6 +1315,8 @@ class MySQLConnectionConfig(ConnectionConfig):
 
     type_: t.Literal["mysql"] = Field(alias="type", default="mysql")
 
+    _engine_import_validator = _get_engine_import_validator("pymysql", "mysql")
+
     @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
         connection_keys = {
@@ -1296,6 +1366,8 @@ class MSSQLConnectionConfig(ConnectionConfig):
     pre_ping: bool = True
 
     type_: t.Literal["mssql"] = Field(alias="type", default="mssql")
+
+    _engine_import_validator = _get_engine_import_validator("pymssql", "mssql")
 
     @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
@@ -1351,6 +1423,8 @@ class SparkConnectionConfig(ConnectionConfig):
     pre_ping: t.Literal[False] = False
 
     type_: t.Literal["spark"] = Field(alias="type", default="spark")
+
+    _engine_import_validator = _get_engine_import_validator("pyspark", "spark")
 
     @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
@@ -1467,6 +1541,8 @@ class TrinoConnectionConfig(ConnectionConfig):
     pre_ping: t.Literal[False] = False
 
     type_: t.Literal["trino"] = Field(alias="type", default="trino")
+
+    _engine_import_validator = _get_engine_import_validator("trino", "trino")
 
     @field_validator("schema_location_mapping", mode="before")
     @classmethod
@@ -1618,6 +1694,8 @@ class ClickhouseConnectionConfig(ConnectionConfig):
 
     type_: t.Literal["clickhouse"] = Field(alias="type", default="clickhouse")
 
+    _engine_import_validator = _get_engine_import_validator("clickhouse_connect", "clickhouse")
+
     @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
         kwargs = {
@@ -1722,6 +1800,8 @@ class AthenaConnectionConfig(ConnectionConfig):
 
     type_: t.Literal["athena"] = Field(alias="type", default="athena")
 
+    _engine_import_validator = _get_engine_import_validator("pyathena", "athena")
+
     @model_validator(mode="after")
     def _root_validator(self) -> Self:
         work_group = self.work_group
@@ -1788,6 +1868,8 @@ class RisingwaveConnectionConfig(ConnectionConfig):
 
     type_: t.Literal["risingwave"] = Field(alias="type", default="risingwave")
 
+    _engine_import_validator = _get_engine_import_validator("psycopg2", "risingwave")
+
     @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
         return {
@@ -1846,7 +1928,13 @@ def _connection_config_validator(
 ) -> ConnectionConfig | None:
     if v is None or isinstance(v, ConnectionConfig):
         return v
-    return parse_connection_config(v)
+    try:
+        return parse_connection_config(v)
+    except pydantic.ValidationError as e:
+        raise ConfigError(
+            validation_error_message(e, f"Invalid '{v['type']}' connection config:")
+            + "\n\nVerify your config.yaml and environment variables."
+        )
 
 
 connection_config_validator: t.Callable = field_validator(

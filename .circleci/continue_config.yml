@@ -11,6 +11,9 @@ parameters:
     type: boolean
     default: false
 
+orbs:
+  windows: circleci/windows@5.0
+
 commands:
   halt_unless_core:
     steps:
@@ -41,14 +44,14 @@ jobs:
     steps:
       - checkout
       - run:
-          name: Install VSCode extension dependencies
+          name: Install Dependencies
           command: |
-            npm ci
+            pnpm install
       - run:
           name: Run VSCode extension CI
           command: |
             cd vscode/extension
-            npm run ci
+            pnpm run ci
   doc_tests:
     docker:
       - image: cimg/python:3.10
@@ -96,6 +99,38 @@ jobs:
       - store_test_results:
           path: test-results
 
+  cicd_tests_windows:
+    executor:
+      name: windows/default
+      size: large
+    steps:
+      - halt_unless_core
+      - run:
+          name: Enable symlinks in git config
+          command: git config --global core.symlinks true
+      - checkout
+      - run:
+          name: Install System Dependencies
+          command: |
+            choco install make which -y
+            refreshenv
+      - run:
+          name: Install SQLMesh dev dependencies
+          command: |
+            python -m venv venv
+            . ./venv/Scripts/activate
+            python.exe -m pip install --upgrade pip
+            make install-dev
+      - run:
+          name: Run fast unit tests
+          command: |
+            . ./venv/Scripts/activate
+            which python
+            python --version
+            make fast-test
+      - store_test_results:
+          path: test-results
+
   migration_test:
     docker:
       - image: cimg/python:3.10
@@ -117,18 +152,21 @@ jobs:
       - halt_unless_client
       - checkout
       - restore_cache:
+          name: Restore pnpm Package Cache
           keys:
-            - v1-nm-cache-{{ checksum "package-lock.json" }}
+            - pnpm-packages-{{ checksum "pnpm-lock.yaml" }}
       - run:
-          name: Install packages
-          command: npm ci
+          name: Install Dependencies
+          command: |
+            pnpm install
       - save_cache:
-          key: v1-nm-cache-{{ checksum "package-lock.json" }}
+          name: Save pnpm Package Cache
+          key: pnpm-packages-{{ checksum "pnpm-lock.yaml" }}
           paths:
-            - /root/.npm
+            - .pnpm-store
       - run:
           name: Run linters and code style checks
-          command: npm run lint
+          command: pnpm run lint
 
   ui_test:
     docker:
@@ -138,15 +176,25 @@ jobs:
       - halt_unless_client
       - checkout
       - restore_cache:
+          name: Restore pnpm Package Cache
           keys:
-            - v1-nm-cache-{{ checksum "package-lock.json" }}
+            - pnpm-packages-{{ checksum "pnpm-lock.yaml" }}
       - run:
-          name: Install packages
-          command: npm ci
+          name: Install pnpm package manager
+          command: |
+            npm install --global corepack@latest
+            corepack enable
+            corepack prepare pnpm@latest-10 --activate
+            pnpm config set store-dir .pnpm-store
+      - run:
+          name: Install Dependencies
+          command: |
+            pnpm install
       - save_cache:
-          key: v1-nm-cache-{{ checksum "package-lock.json" }}
+          name: Save pnpm Package Cache
+          key: pnpm-packages-{{ checksum "pnpm-lock.yaml" }}
           paths:
-            - /root/.npm
+            - .pnpm-store
       - run:
           name: Run tests
           command: npm --prefix web/client run test
@@ -256,6 +304,7 @@ workflows:
                 - "3.10"
                 - "3.11"
                 - "3.12"
+      - cicd_tests_windows
       - engine_tests_docker:
           name: engine_<< matrix.engine >>
           matrix:
@@ -268,7 +317,6 @@ workflows:
                 - trino
                 - spark
                 - clickhouse
-                - clickhouse-cluster
                 - risingwave
       - engine_tests_cloud:
           name: cloud_engine_<< matrix.engine >>

@@ -20,8 +20,10 @@ from sqlmesh.core.config.connection import (
     TrinoAuthenticationMethod,
     AthenaConnectionConfig,
     _connection_config_validator,
+    _get_engine_import_validator,
 )
 from sqlmesh.utils.errors import ConfigError
+from sqlmesh.utils.pydantic import PydanticModel
 
 
 @pytest.fixture
@@ -424,7 +426,17 @@ def test_duckdb(make_config):
         type="duckdb",
         database="test",
         connector_config={"foo": "bar"},
+        secrets=[
+            {
+                "type": "s3",
+                "region": "aws_region",
+                "key_id": "aws_access_key",
+                "secret": "aws_secret",
+            }
+        ],
     )
+    assert config.connector_config
+    assert config.secrets
     assert isinstance(config, DuckDBConnectionConfig)
     assert not config.is_recommended_for_state_sync
 
@@ -750,6 +762,7 @@ def test_bigquery(make_config):
         project="project",
         execution_project="execution_project",
         quota_project="quota_project",
+        check_import=False,
     )
 
     assert isinstance(config, BigQueryConnectionConfig)
@@ -760,10 +773,10 @@ def test_bigquery(make_config):
     assert config.is_recommended_for_state_sync is False
 
     with pytest.raises(ConfigError, match="you must also specify the `project` field"):
-        make_config(type="bigquery", execution_project="execution_project")
+        make_config(type="bigquery", execution_project="execution_project", check_import=False)
 
     with pytest.raises(ConfigError, match="you must also specify the `project` field"):
-        make_config(type="bigquery", quota_project="quota_project")
+        make_config(type="bigquery", quota_project="quota_project", check_import=False)
 
 
 def test_postgres(make_config):
@@ -786,6 +799,7 @@ def test_gcp_postgres(make_config):
         user="user",
         password="password",
         db="database",
+        check_import=False,
     )
     assert isinstance(config, GCPPostgresConnectionConfig)
     assert config.is_recommended_for_state_sync is True
@@ -797,6 +811,7 @@ def test_gcp_postgres(make_config):
         password="password",
         db="database",
         ip_type="private",
+        check_import=False,
     )
     assert config.ip_type == "private"
 
@@ -807,6 +822,7 @@ def test_mysql(make_config):
         host="host",
         user="user",
         password="password",
+        check_import=False,
     )
     assert isinstance(config, MySQLConnectionConfig)
     assert config.is_recommended_for_state_sync is True
@@ -973,13 +989,13 @@ def test_databricks(make_config):
     assert oauth_u2m_config.oauth_client_secret is None
 
     # auth_type must match the AuthType enum if specified
-    with pytest.raises(ValueError, match=r".*nonexist does not match a valid option.*"):
+    with pytest.raises(ConfigError, match=r".*nonexist does not match a valid option.*"):
         make_config(
             type="databricks", server_hostname="dbc-test.cloud.databricks.com", auth_type="nonexist"
         )
 
     # if client_secret is specified, client_id must also be specified
-    with pytest.raises(ValueError, match=r"`oauth_client_id` is required.*"):
+    with pytest.raises(ConfigError, match=r"`oauth_client_id` is required.*"):
         make_config(
             type="databricks",
             server_hostname="dbc-test.cloud.databricks.com",
@@ -988,9 +1004,42 @@ def test_databricks(make_config):
         )
 
     # http_path is still required when auth_type is specified
-    with pytest.raises(ValueError, match=r"`http_path` is still required.*"):
+    with pytest.raises(ConfigError, match=r"`http_path` is still required.*"):
         make_config(
             type="databricks",
             server_hostname="dbc-test.cloud.databricks.com",
             auth_type="databricks-oauth",
         )
+
+
+def test_engine_import_validator():
+    with pytest.raises(
+        ConfigError,
+        match=re.escape(
+            """Failed to import the 'bigquery' engine library. Please run `pip install "sqlmesh[bigquery]"`."""
+        ),
+    ):
+
+        class TestConfigA(PydanticModel):
+            _engine_import_validator = _get_engine_import_validator("missing", "bigquery")
+
+        TestConfigA()
+
+    with pytest.raises(
+        ConfigError,
+        match=re.escape(
+            """Failed to import the 'bigquery' engine library. Please run `pip install "sqlmesh[bigquery_extra]"`."""
+        ),
+    ):
+
+        class TestConfigB(PydanticModel):
+            _engine_import_validator = _get_engine_import_validator(
+                "missing", "bigquery", "bigquery_extra"
+            )
+
+        TestConfigB()
+
+    class TestConfigC(PydanticModel):
+        _engine_import_validator = _get_engine_import_validator("sqlmesh", "bigquery")
+
+    TestConfigC()

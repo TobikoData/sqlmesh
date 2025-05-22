@@ -8,6 +8,7 @@ from sqlmesh.core.config import (
     Config,
     load_config_from_paths,
 )
+from sqlmesh.utils.errors import ConfigError
 from sqlmesh.integrations.github.cicd.config import MergeMethod
 from tests.utils.test_filesystem import create_temp_file
 
@@ -39,6 +40,7 @@ model_defaults:
     assert config.cicd_bot.skip_pr_backfill
     assert config.cicd_bot.pr_include_unmodified is None
     assert config.cicd_bot.pr_environment_name is None
+    assert config.cicd_bot.prod_branch_names == ["main", "master"]
 
 
 def test_load_yaml_config(tmp_path):
@@ -61,6 +63,7 @@ cicd_bot:
     skip_pr_backfill: false
     pr_include_unmodified: true
     pr_environment_name: "MyOverride"
+    prod_branch_name: testing
 model_defaults:
     dialect: duckdb
 """,
@@ -84,6 +87,7 @@ model_defaults:
     assert not config.cicd_bot.skip_pr_backfill
     assert config.cicd_bot.pr_include_unmodified
     assert config.cicd_bot.pr_environment_name == "MyOverride"
+    assert config.cicd_bot.prod_branch_names == ["testing"]
 
 
 def test_load_python_config_defaults(tmp_path):
@@ -114,6 +118,7 @@ config = Config(
     assert config.cicd_bot.skip_pr_backfill
     assert config.cicd_bot.pr_include_unmodified is None
     assert config.cicd_bot.pr_environment_name is None
+    assert config.cicd_bot.prod_branch_names == ["main", "master"]
 
 
 def test_load_python_config(tmp_path):
@@ -140,6 +145,7 @@ config = Config(
         skip_pr_backfill=False,
         pr_include_unmodified=True,
         pr_environment_name="MyOverride",
+        prod_branch_name="testing",
     ),
     model_defaults=ModelDefaultsConfig(dialect="duckdb"),
 )
@@ -165,6 +171,7 @@ config = Config(
     assert not config.cicd_bot.skip_pr_backfill
     assert config.cicd_bot.pr_include_unmodified
     assert config.cicd_bot.pr_environment_name == "MyOverride"
+    assert config.cicd_bot.prod_branch_names == ["testing"]
 
 
 def test_validation(tmp_path):
@@ -181,7 +188,7 @@ model_defaults:
 """,
     )
     with pytest.raises(
-        ValueError, match="enable_deploy_command must be set if command_namespace is set"
+        ConfigError, match=r".*enable_deploy_command must be set if command_namespace is set.*"
     ):
         load_config_from_paths(Config, project_paths=[tmp_path / "config.yaml"])
 
@@ -197,7 +204,7 @@ model_defaults:
 """,
     )
     with pytest.raises(
-        ValueError, match="merge_method must be set if enable_deploy_command is True"
+        ConfigError, match=r".*merge_method must be set if enable_deploy_command is True.*"
     ):
         load_config_from_paths(Config, project_paths=[tmp_path / "config.yaml"])
 
@@ -226,8 +233,8 @@ model_defaults:
 """,
     )
     with pytest.raises(
-        ValueError,
-        match="TTL '1 week' is in the past. Please specify a relative time in the future. Ex: `in 1 week` instead of `1 week`.",
+        ConfigError,
+        match=r".*TTL '1 week' is in the past. Please specify a relative time in the future. Ex: `in 1 week` instead of `1 week`.*",
     ):
         load_config_from_paths(Config, project_paths=[tmp_path / "config.yaml"])
 

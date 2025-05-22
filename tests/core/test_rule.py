@@ -12,6 +12,8 @@ from sqlmesh.core.linter.rule import Rule, RuleViolation
 class TestRule(Rule):
     """A test rule for testing the get_definition_location method."""
 
+    __test__ = False  # prevent pytest warning since this isnt a class containing tests
+
     def check_model(self, model: Model) -> t.Optional[RuleViolation]:
         """The evaluation function that'll check for a violation of this rule."""
         return None

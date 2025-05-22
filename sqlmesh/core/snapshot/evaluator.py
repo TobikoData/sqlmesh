@@ -902,7 +902,7 @@ class SnapshotEvaluator:
         if (
             not snapshot.is_paused
             or not snapshot.is_model
-            or deployability_index.is_representative(snapshot)
+            or (deployability_index.is_representative(snapshot) and not snapshot.is_view)
         ):
             return
 
@@ -978,7 +978,6 @@ class SnapshotEvaluator:
                 end=end,
                 execution_time=execution_time,
                 engine_adapter=adapter,
-                snapshots=snapshots,
                 deployability_index=deployability_index,
                 table_mapping=table_mapping,
                 runtime_stage=RuntimeStage.PROMOTING,
@@ -988,8 +987,12 @@ class SnapshotEvaluator:
                 view_name=view_name,
                 model=snapshot.model,
                 environment=environment_naming_info.name,
+                snapshots=snapshots,
                 **render_kwargs,
             )
+
+            snapshot_by_name = {s.name: s for s in (snapshots or {}).values()}
+            render_kwargs["snapshots"] = snapshot_by_name
             adapter.execute(snapshot.model.render_on_virtual_update(**render_kwargs))
 
         if on_complete is not None:

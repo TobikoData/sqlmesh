@@ -136,7 +136,7 @@ class registry_decorator:
         except ValueError:
             # No need to raise due to duplicate key if the functions are identical
             if func.__code__.co_code != registry[func_name].func.__code__.co_code:
-                raise
+                raise ValueError(f"Duplicate name: '{func_name}'.")
 
         @wraps(func)
         def wrapper(*args: t.Any, **kwargs: t.Any) -> DECORATOR_RETURN_TYPE:

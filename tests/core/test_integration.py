@@ -19,6 +19,8 @@ from pytest_mock.plugin import MockerFixture
 from sqlglot import exp
 from sqlglot.expressions import DataType
 import re
+from IPython.utils.capture import capture_output
+
 
 from sqlmesh import CustomMaterialization
 from sqlmesh.cli.example_project import init_example_project
@@ -62,10 +64,11 @@ from sqlmesh.core.snapshot import (
     SnapshotTableInfo,
 )
 from sqlmesh.utils.date import TimeLike, now, to_date, to_datetime, to_timestamp
-from sqlmesh.utils.errors import NoChangesPlanError, SQLMeshError
+from sqlmesh.utils.errors import NoChangesPlanError, SQLMeshError, PlanError
 from sqlmesh.utils.pydantic import validate_string
 from tests.conftest import DuckDBMetadata, SushiDataValidator
 from tests.utils.test_helpers import use_terminal_console
+from tests.utils.test_filesystem import create_temp_file
 
 if t.TYPE_CHECKING:
     from sqlmesh import QueryOrDF
@@ -1972,6 +1975,8 @@ def test_custom_materialization(init_and_plan_context: t.Callable):
 # needs to be defined at the top level. If its defined within the test body,
 # adding to the snapshot cache fails with: AttributeError: Can't pickle local object
 class TestCustomKind(CustomKind):
+    __test__ = False  # prevent pytest warning since this isnt a class containing tests
+
     @property
     def custom_property(self) -> str:
         return validate_string(self.materialization_properties.get("custom_property"))
@@ -4258,6 +4263,50 @@ def test_table_name(init_and_plan_context: t.Callable):
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_full_model_change_with_plan_start_not_matching_model_start(
+    init_and_plan_context: t.Callable,
+):
+    context, plan = init_and_plan_context("examples/sushi")
+    context.apply(plan)
+
+    model = context.get_model("sushi.top_waiters")
+    context.upsert_model(model, kind=model_kind_type_from_name("FULL")())  # type: ignore
+
+    # Apply the change with --skip-backfill first and no plan start
+    context.plan("dev", skip_tests=True, skip_backfill=True, no_prompts=True, auto_apply=True)
+
+    # Apply the plan again but this time don't skip backfill and set start
+    # to be later than the model start
+    context.plan("dev", skip_tests=True, no_prompts=True, auto_apply=True, start="1 day ago")
+
+    # Check that the number of rows is not 0
+    row_num = context.engine_adapter.fetchone(f"SELECT COUNT(*) FROM sushi__dev.top_waiters")[0]
+    assert row_num > 0
+
+
+@time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_indirect_non_breaking_view_is_updated_with_new_table_references(
+    init_and_plan_context: t.Callable,
+):
+    context, plan = init_and_plan_context("examples/sushi")
+    context.apply(plan)
+
+    # Add a new projection to the base model
+    model = context.get_model("sushi.waiter_revenue_by_day")
+    context.upsert_model(add_projection_to_model(t.cast(SqlModel, model)))
+
+    context.plan("prod", auto_apply=True, no_prompts=True, skip_tests=True)
+
+    # Run the janitor to delete the old snapshot record
+    context.run_janitor(ignore_ttl=True)
+
+    # Check the downstream view and make sure it's still queryable
+    assert context.get_model("sushi.top_waiters").kind.is_view
+    row_num = context.engine_adapter.fetchone(f"SELECT COUNT(*) FROM sushi.top_waiters")[0]
+    assert row_num > 0
+
+
+@time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_dbt_requirements(sushi_dbt_context: Context):
     assert set(sushi_dbt_context.requirements) == {"dbt-core", "dbt-duckdb"}
     assert sushi_dbt_context.requirements["dbt-core"].startswith("1.")
@@ -6041,3 +6090,42 @@ def test_destroy(copy_to_temp_path):
 
     # Ensure the cache has been removed
     assert not cache_path.exists()
+
+
+@use_terminal_console
+def test_audits_running_on_metadata_changes(tmp_path: Path):
+    def setup_senario(model_before: str, model_after: str):
+        models_dir = Path("models")
+        create_temp_file(tmp_path, models_dir / "test.sql", model_before)
+
+        # Create first snapshot
+        context = Context(paths=tmp_path, config=Config())
+        context.plan("prod", no_prompts=True, auto_apply=True)
+
+        # Create second (metadata) snapshot
+        create_temp_file(tmp_path, models_dir / "test.sql", model_after)
+        context.load()
+
+        with capture_output() as output:
+            with pytest.raises(PlanError):
+                context.plan("prod", no_prompts=True, auto_apply=True)
+
+        assert 'Failed models\n\n  "model"' in output.stdout
+
+        return output
+
+    # Ensure incorrect audits (bad data, incorrect definition etc) are evaluated immediately
+    output = setup_senario(
+        "MODEL (name model); SELECT NULL AS col",
+        "MODEL (name model, audits (not_null(columns=[col]))); SELECT NULL AS col",
+    )
+    assert "'not_null' audit error: 1 row failed" in output.stdout
+
+    output = setup_senario(
+        "MODEL (name model); SELECT NULL AS col",
+        "MODEL (name model, audits (not_null(columns=[this_col_does_not_exist]))); SELECT NULL AS col",
+    )
+    assert (
+        'Binder Error: Referenced column "this_col_does_not_exist" not found in \nFROM clause!'
+        in output.stdout
+    )

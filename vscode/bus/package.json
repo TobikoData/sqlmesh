@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.1",
   "scripts": {
-    "ci": "npm run lint",
+    "ci": "pnpm run lint",
     "build": "tsc",
     "dev": "tsc -w",
     "lint": "tsc --noEmit"

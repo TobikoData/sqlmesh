@@ -8,12 +8,13 @@ import {
   EventEmitter,
   window,
 } from 'vscode'
-import { get_tcloud_bin } from '../utilities/sqlmesh/sqlmesh'
+import { getTcloudBin } from '../utilities/sqlmesh/sqlmesh'
 import { err, isErr, ok, Result } from '@bus/result'
 import { execAsync } from '../utilities/exec'
 import { getProjectRoot } from '../utilities/common/utilities'
 import z from 'zod'
 import { traceError } from '../utilities/common/log'
+import { ErrorType } from '../utilities/errors'
 
 export const AUTH_TYPE = 'tobikodata'
 export const AUTH_NAME = 'Tobiko'
@@ -28,10 +29,16 @@ const tokenSchema = z.object({
   email: z.string(),
 })
 
-const statusResponseSchema = z.object({
-  is_logged_in: z.boolean(),
-  id_token: tokenSchema.optional().nullable(),
-})
+const statusResponseSchema = z.discriminatedUnion('is_logged_in', [
+  z.object({
+    is_logged_in: z.literal(true),
+    id_token: tokenSchema,
+  }),
+  z.object({
+    is_logged_in: z.literal(false),
+    id_token: z.object({}),
+  }),
+])
 
 type StatusResponse = z.infer<typeof statusResponseSchema>
 
@@ -64,11 +71,11 @@ export class AuthenticationProviderTobikoCloud
    * Get the status of the authentication provider from the cli
    * @returns true if the user is logged in with the id token, false otherwise
    */
-  private async get_status(): Promise<Result<StatusResponse, string>> {
+  private async get_status(): Promise<Result<StatusResponse, ErrorType>> {
     const workspacePath = await getProjectRoot()
-    const tcloudBin = await get_tcloud_bin()
+    const tcloudBin = await getTcloudBin()
     if (isErr(tcloudBin)) {
-      return err(tcloudBin.error)
+      return tcloudBin
     }
     const tcloudBinPath = tcloudBin.value
     const result = await execAsync(
@@ -79,7 +86,10 @@ export class AuthenticationProviderTobikoCloud
       },
     )
     if (result.exitCode !== 0) {
-      return err('Failed to get tcloud auth status')
+      return err({
+        type: 'generic',
+        message: 'Failed to get tcloud auth status',
+      })
     }
     const status = result.stdout
     const statusToJson: any = JSON.parse(status)
@@ -146,7 +156,7 @@ export class AuthenticationProviderTobikoCloud
   async removeSession(): Promise<void> {
     // Get current sessions before logging out
     const currentSessions = await this.getSessions()
-    const tcloudBin = await get_tcloud_bin()
+    const tcloudBin = await getTcloudBin()
     const workspacePath = await getProjectRoot()
     if (isErr(tcloudBin)) {
       throw new Error('Failed to get tcloud bin')
@@ -171,7 +181,7 @@ export class AuthenticationProviderTobikoCloud
 
   async sign_in_oauth_flow(): Promise<void> {
     const workspacePath = await getProjectRoot()
-    const tcloudBin = await get_tcloud_bin()
+    const tcloudBin = await getTcloudBin()
     if (isErr(tcloudBin)) {
       throw new Error('Failed to get tcloud bin')
     }
@@ -267,7 +277,7 @@ export class AuthenticationProviderTobikoCloud
 
   async sign_in_device_flow(): Promise<void> {
     const workspacePath = await getProjectRoot()
-    const tcloudBin = await get_tcloud_bin()
+    const tcloudBin = await getTcloudBin()
     if (isErr(tcloudBin)) {
       throw new Error('Failed to get tcloud bin')
     }

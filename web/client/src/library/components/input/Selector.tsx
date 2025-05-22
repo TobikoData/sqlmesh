@@ -65,7 +65,7 @@ export default React.forwardRef<HTMLButtonElement, PropsSelector>(
             />
           </Select.Icon>
         </Select.Trigger>
-        <Select.Portal className="z-50">
+        <Select.Portal>
           <Select.Content
             className={clsx(
               'overflow-auto rounded-md bg-theme p-1 shadow-2xl border-2 border-neutral-200 dark:border-neutral-700 ring-opacity-5 focus:outline-none',

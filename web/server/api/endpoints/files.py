@@ -145,13 +145,13 @@ def _get_directory(path: str | Path, settings: Settings) -> models.Directory:
                     directories.append(
                         models.Directory(
                             name=entry.name,
-                            path=str(relative_path),
+                            path=str(relative_path.as_posix()),
                             directories=_directories,
                             files=_files,
                         )
                     )
                 elif entry.is_file(follow_symlinks=False):
-                    files.append(models.File(name=entry.name, path=str(relative_path)))
+                    files.append(models.File(name=entry.name, path=str(relative_path.as_posix())))
         return sorted(directories, key=lambda x: x.name), sorted(files, key=lambda x: x.name)
 
     directories, files = walk_path(path)

@@ -38,15 +38,16 @@ export async function initializePython(
         api.environments.onDidChangeActiveEnvironmentPath(async e => {
           const environment = await api.environments.resolveEnvironment(e.path)
           const isVirtualEnv = environment?.environment !== undefined
-          const binPath = isVirtualEnv
-            ? environment?.environment?.folderUri.fsPath
+          // Get the directory of the Python executable for virtual environments
+          const pythonDir = environment?.executable.uri
+            ? path.dirname(environment.executable.uri.fsPath)
             : undefined
 
           onDidChangePythonInterpreterEvent.fire({
             path: [e.path],
             resource: e.resource?.uri,
             isVirtualEnvironment: isVirtualEnv,
-            binPath,
+            binPath: isVirtualEnv ? pythonDir : undefined,
           })
         }),
       )
@@ -75,15 +76,16 @@ export async function getInterpreterDetails(
   )
   if (environment?.executable.uri && checkVersion(environment)) {
     const isVirtualEnv = environment.environment !== undefined
-    const binPath = isVirtualEnv
-      ? environment.environment?.folderUri.fsPath
-      : undefined
+    // Get the directory of the Python executable
+    const pythonDir = path.dirname(environment?.executable.uri.fsPath)
 
     return {
       path: [environment?.executable.uri.fsPath],
       resource,
       isVirtualEnvironment: isVirtualEnv,
-      binPath: binPath ? path.join(binPath, 'bin') : undefined,
+      // For virtual environments, we need to point directly to the bin directory
+      // rather than constructing it from the environment folder
+      binPath: isVirtualEnv ? pythonDir : undefined,
     }
   }
   return { path: undefined, resource }

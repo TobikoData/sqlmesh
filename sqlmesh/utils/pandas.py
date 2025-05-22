@@ -30,10 +30,24 @@ PANDAS_TYPE_MAPPINGS = {
     pd.BooleanDtype(): exp.DataType.build("boolean"),
 }
 
+try:
+    import pyarrow  # type: ignore  # noqa
+
+    # Only add this if pyarrow is installed
+    PANDAS_TYPE_MAPPINGS[pd.StringDtype("pyarrow")] = exp.DataType.build("text")
+except ImportError:
+    pass
+
 
 def columns_to_types_from_df(df: pd.DataFrame) -> t.Dict[str, exp.DataType]:
+    return columns_to_types_from_dtypes(df.dtypes.items())
+
+
+def columns_to_types_from_dtypes(
+    dtypes: t.Iterable[t.Tuple[t.Hashable, t.Any]],
+) -> t.Dict[str, exp.DataType]:
     result = {}
-    for column_name, column_type in df.dtypes.items():
+    for column_name, column_type in dtypes:
         exp_type: t.Optional[exp.DataType] = None
         if hasattr(pd, "DatetimeTZDtype") and isinstance(column_type, pd.DatetimeTZDtype):
             exp_type = exp.DataType.build("timestamptz")

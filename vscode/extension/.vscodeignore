@@ -14,3 +14,6 @@ vsc-extension-quickstart.md
 **/.vscode-test.*
 assets/logo.svg
 esbuild.js
+openapi.json
+test-results/**
+E2E_TESTING.md

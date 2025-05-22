@@ -860,12 +860,17 @@ def test_promote_snapshots_parent_plan_id_mismatch(
 
     with pytest.raises(
         SQLMeshError,
-        match=r".*is no longer valid.*",
+        match=re.escape(
+            "Another plan (new_plan_id) was applied to the target environment 'prod' while your current plan (stale_new_plan_id) was still in progress, interrupting it. Please re-apply your plan to resolve this error."
+        ),
     ):
         state_sync.promote(stale_new_environment)
 
 
-def test_promote_environment_expired(state_sync: EngineAdapterStateSync, make_snapshot: t.Callable):
+@pytest.mark.parametrize("environment_name", ["dev", "prod"])
+def test_promote_environment_expired(
+    state_sync: EngineAdapterStateSync, make_snapshot: t.Callable, environment_name: str
+):
     snapshot = make_snapshot(
         SqlModel(
             name="a",
@@ -880,7 +885,7 @@ def test_promote_environment_expired(state_sync: EngineAdapterStateSync, make_sn
     state_sync.invalidate_environment("dev")
 
     new_environment = Environment(
-        name="dev",
+        name=environment_name,
         snapshots=[snapshot.table_info],
         start_at="2022-01-01",
         end_at="2022-01-01",
@@ -901,10 +906,15 @@ def test_promote_environment_expired(state_sync: EngineAdapterStateSync, make_sn
     new_environment.previous_plan_id = new_environment.plan_id
     new_environment.plan_id = "another_plan_id"
     promotion_result = state_sync.promote(new_environment)
+
     #  Should be empty since the environment is no longer expired and nothing has changed
-    assert promotion_result.added == []
     assert promotion_result.removed == []
     assert promotion_result.removed_environment_naming_info is None
+    if environment_name == "prod":
+        assert promotion_result.added == []
+    else:
+        # We should always recreate views in dev environments
+        assert promotion_result.added == [snapshot.table_info]
 
 
 def test_promote_snapshots_no_gaps(state_sync: EngineAdapterStateSync, make_snapshot: t.Callable):
@@ -939,7 +949,7 @@ def test_promote_snapshots_no_gaps(state_sync: EngineAdapterStateSync, make_snap
     state_sync.add_interval(new_snapshot_missing_interval, "2022-01-01", "2022-01-02")
     with pytest.raises(
         SQLMeshError,
-        match=r"Detected gaps in snapshot.*",
+        match=r'Detected missing intervals for model "a", interrupting your current plan. Please re-apply your plan to resolve this error.',
     ):
         promote_snapshots(state_sync, [new_snapshot_missing_interval], "prod", no_gaps=True)
 
@@ -1015,7 +1025,9 @@ def test_finalize(state_sync: EngineAdapterStateSync, make_snapshot: t.Callable)
     env.plan_id = "different_plan_id"
     with pytest.raises(
         SQLMeshError,
-        match=r"Plan 'different_plan_id' is no longer valid for the target environment 'prod'.*",
+        match=re.escape(
+            "Another plan (test_plan_id) was applied to the target environment 'prod' while your current plan (different_plan_id) was still in progress, interrupting it. Please re-apply your plan to resolve this error."
+        ),
     ):
         state_sync.finalize(env)
 
@@ -1049,7 +1061,7 @@ def test_start_date_gap(state_sync: EngineAdapterStateSync, make_snapshot: t.Cal
     state_sync.add_interval(snapshot, "2022-01-03", "2022-01-04")
     with pytest.raises(
         SQLMeshError,
-        match=r"Detected gaps in snapshot.*",
+        match=r'Detected missing intervals for model "a", interrupting your current plan. Please re-apply your plan to resolve this error.',
     ):
         promote_snapshots(state_sync, [snapshot], "prod", no_gaps=True)
 

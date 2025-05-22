@@ -382,51 +382,14 @@ class SparkEngineAdapter(
             partitioned_by=[exp.column(x) for x in primary_key] if primary_key else None,
         )
 
-    def create_view(
+    def _native_df_to_pandas_df(
         self,
-        view_name: TableName,
         query_or_df: QueryOrDF,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
-        replace: bool = True,
-        materialized: bool = False,
-        materialized_properties: t.Optional[t.Dict[str, t.Any]] = None,
-        table_description: t.Optional[str] = None,
-        column_descriptions: t.Optional[t.Dict[str, str]] = None,
-        view_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
-        **create_kwargs: t.Any,
-    ) -> None:
-        """Create a view with a query or dataframe.
+    ) -> t.Union[Query, pd.DataFrame]:
+        if pyspark_df := self.try_get_pyspark_df(query_or_df):
+            return pyspark_df.toPandas()
 
-        If a dataframe is passed in, it will be converted into a literal values statement.
-        This should only be done if the dataframe is very small!
-
-        Args:
-            view_name: The view name.
-            query_or_df: A query or dataframe.
-            columns_to_types: Columns to use in the view statement.
-            replace: Whether or not to replace an existing view - defaults to True.
-            materialized: Whether or not the view should be materialized - defaults to False.
-            materialized_properties: Optional materialized view properties to add to the view.
-            table_description: Optional table description from MODEL DDL.
-            column_descriptions: Optional column descriptions from model query.
-            create_kwargs: Additional kwargs to pass into the Create expression
-            view_properties: Optional view properties to add to the view.
-        """
-        pyspark_df = self.try_get_pyspark_df(query_or_df)
-        if pyspark_df:
-            query_or_df = pyspark_df.toPandas()
-        super().create_view(
-            view_name,
-            query_or_df,
-            columns_to_types,
-            replace,
-            materialized,
-            materialized_properties,
-            table_description,
-            column_descriptions,
-            view_properties=view_properties,
-            **create_kwargs,
-        )
+        return super()._native_df_to_pandas_df(query_or_df)
 
     def _create_table(
         self,

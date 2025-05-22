@@ -31,6 +31,7 @@ from sqlmesh.core.model.common import (
     parse_dependencies,
     single_value_or_tuple,
     sorted_python_env_payloads,
+    validate_extra_and_required_fields,
 )
 from sqlmesh.core.model.meta import ModelMeta, FunctionCall
 from sqlmesh.core.model.kind import (
@@ -1069,6 +1070,37 @@ class _Model(ModelMeta, frozen=True):
 
         return data  # type: ignore
 
+    def _audit_metadata_hash_values(self) -> t.List[str]:
+        from sqlmesh.core.audit.builtin import BUILT_IN_AUDITS
+
+        metadata = []
+
+        for audit_name, audit_args in sorted(self.audits, key=lambda a: a[0]):
+            metadata.append(audit_name)
+            if audit_name in BUILT_IN_AUDITS:
+                for arg_name, arg_value in audit_args.items():
+                    metadata.append(arg_name)
+                    metadata.append(gen(arg_value))
+            else:
+                audit = self.audit_definitions[audit_name]
+                query = (
+                    self.render_audit_query(audit, **t.cast(t.Dict[str, t.Any], audit_args))
+                    or audit.query
+                )
+                metadata.extend(
+                    [
+                        gen(query),
+                        audit.dialect,
+                        str(audit.skip),
+                        str(audit.blocking),
+                    ]
+                )
+
+        return metadata
+
+    def audit_metadata_hash(self) -> str:
+        return hash_data(self._audit_metadata_hash_values())
+
     @property
     def metadata_hash(self) -> str:
         """
@@ -1078,8 +1110,6 @@ class _Model(ModelMeta, frozen=True):
             The metadata hash for the node.
         """
         if self._metadata_hash is None:
-            from sqlmesh.core.audit.builtin import BUILT_IN_AUDITS
-
             metadata = [
                 self.dialect,
                 self.owner,
@@ -1100,28 +1130,8 @@ class _Model(ModelMeta, frozen=True):
                 str(self.allow_partials),
                 gen(self.session_properties_) if self.session_properties_ else None,
                 *[gen(g) for g in self.grains],
+                *self._audit_metadata_hash_values(),
             ]
-
-            for audit_name, audit_args in sorted(self.audits, key=lambda a: a[0]):
-                metadata.append(audit_name)
-                if audit_name in BUILT_IN_AUDITS:
-                    for arg_name, arg_value in audit_args.items():
-                        metadata.append(arg_name)
-                        metadata.append(gen(arg_value))
-                else:
-                    audit = self.audit_definitions[audit_name]
-                    query = (
-                        self.render_audit_query(audit, **t.cast(t.Dict[str, t.Any], audit_args))
-                        or audit.query
-                    )
-                    metadata.extend(
-                        [
-                            gen(query),
-                            audit.dialect,
-                            str(audit.skip),
-                            str(audit.blocking),
-                        ]
-                    )
 
             for key, value in (self.virtual_properties or {}).items():
                 metadata.append(key)
@@ -2144,9 +2154,6 @@ def load_sql_based_model(
             path,
         )
 
-    # Validate virtual, physical and session properties
-    _validate_model_properties(meta_fields, path)
-
     common_kwargs = dict(
         pre_statements=pre_statements,
         post_statements=post_statements,
@@ -2184,15 +2191,11 @@ def load_sql_based_model(
     seed_properties = {
         p.name.lower(): p.args.get("value") for p in common_kwargs.pop("kind").expressions
     }
-    try:
-        return create_seed_model(
-            name,
-            SeedKind(**seed_properties),
-            **common_kwargs,
-        )
-    except Exception as ex:
-        raise_config_error(str(ex), path)
-        raise
+    return create_seed_model(
+        name,
+        SeedKind(**seed_properties),
+        **common_kwargs,
+    )
 
 
 def create_sql_model(
@@ -2289,7 +2292,13 @@ def create_python_model(
     dependencies_unspecified = depends_on is None
 
     parsed_depends_on, referenced_variables = (
-        parse_dependencies(python_env, entrypoint, strict_resolution=dependencies_unspecified)
+        parse_dependencies(
+            python_env,
+            entrypoint,
+            strict_resolution=dependencies_unspecified,
+            variables=variables,
+            blueprint_variables=blueprint_variables,
+        )
         if python_env is not None
         else (set(), set())
     )
@@ -2386,7 +2395,9 @@ def _create_model(
     blueprint_variables: t.Optional[t.Dict[str, t.Any]] = None,
     **kwargs: t.Any,
 ) -> Model:
-    _validate_model_fields(klass, {"name", *kwargs} - {"grain", "table_properties"}, path)
+    validate_extra_and_required_fields(
+        klass, {"name", *kwargs} - {"grain", "table_properties"}, "model definition"
+    )
 
     for prop in PROPERTIES:
         kwargs[prop] = _resolve_properties((defaults or {}).get(prop), kwargs.get(prop))
@@ -2445,21 +2456,17 @@ def _create_model(
     for jinja_macro in jinja_macros.root_macros.values():
         used_variables.update(extract_macro_references_and_variables(jinja_macro.definition)[1])
 
-    try:
-        model = klass(
-            name=name,
-            **{
-                **(defaults or {}),
-                "jinja_macros": jinja_macros or JinjaMacroRegistry(),
-                "dialect": dialect,
-                "depends_on": depends_on,
-                "physical_schema_override": physical_schema_override,
-                **kwargs,
-            },
-        )
-    except Exception as ex:
-        raise_config_error(str(ex), location=path)
-        raise
+    model = klass(
+        name=name,
+        **{
+            **(defaults or {}),
+            "jinja_macros": jinja_macros or JinjaMacroRegistry(),
+            "dialect": dialect,
+            "depends_on": depends_on,
+            "physical_schema_override": physical_schema_override,
+            **kwargs,
+        },
+    )
 
     audit_definitions = {
         **(audit_definitions or {}),
@@ -2622,77 +2629,6 @@ def _resolve_properties(
         return exp.Tuple(expressions=list(properties.values()))
 
     return None
-
-
-def _validate_model_fields(klass: t.Type[_Model], provided_fields: t.Set[str], path: Path) -> None:
-    missing_required_fields = klass.missing_required_fields(provided_fields)
-    if missing_required_fields:
-        raise_config_error(
-            f"Missing required fields {missing_required_fields} in the model definition",
-            path,
-        )
-
-    extra_fields = klass.extra_fields(provided_fields)
-    if extra_fields:
-        raise_config_error(f"Invalid extra fields {extra_fields} in the model definition", path)
-
-
-def _validate_model_properties(meta_fields: dict[str, t.Any], path: Path) -> None:
-    # store for later validation of specific properties
-    model_properties: dict[str, t.Any] = {}
-
-    # validate that all properties kinds are key-value mappings
-    for kind in PROPERTIES:
-        if kind in meta_fields:
-            kind_properties = meta_fields[kind]
-            model_properties[kind] = {}
-
-            if not isinstance(kind_properties, (exp.Array, exp.Paren, exp.Tuple)):
-                raise_config_error(
-                    f"Invalid MODEL statement: `{kind}` must be a tuple or array of key-value mappings.",
-                    path,
-                )
-
-            key_value_mappings: t.List[exp.Expression] = (
-                [kind_properties.unnest()]
-                if isinstance(kind_properties, exp.Paren)
-                else kind_properties.expressions
-            )
-
-            for expression in key_value_mappings:
-                if isinstance(expression, exp.EQ):
-                    model_properties[kind][expression.left.name] = expression.right
-                else:
-                    raise_config_error(
-                        f"Invalid MODEL statement: all expressions in `{kind}` must be key-value pairs.",
-                        path,
-                    )
-
-    # The query_label can be attached to the actual queries at execution time and is expected to be a sequence of 2-tuples
-    if (
-        "session_properties" in model_properties
-        and "query_label" in model_properties["session_properties"]
-    ):
-        query_label_property = model_properties["session_properties"]["query_label"]
-        if not (
-            isinstance(query_label_property, exp.Array)
-            or isinstance(query_label_property, exp.Tuple)
-            or isinstance(query_label_property, exp.Paren)
-        ):
-            raise_config_error(
-                "Invalid MODEL statement: `session_properties.query_label` must be an array or tuple.",
-                path,
-            )
-        for label_tuple in query_label_property.expressions:
-            if not (
-                isinstance(label_tuple, exp.Tuple)
-                and len(label_tuple.expressions) == 2
-                and all(isinstance(label, exp.Literal) for label in label_tuple.expressions)
-            ):
-                raise_config_error(
-                    "Invalid MODEL statement: expressions inside `session_properties.query_label` must be tuples of string literals with length 2.",
-                    path,
-                )
 
 
 def _list_of_calls_to_exp(value: t.List[t.Tuple[str, t.Dict[str, t.Any]]]) -> exp.Expression:

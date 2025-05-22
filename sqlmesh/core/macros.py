@@ -970,10 +970,16 @@ def safe_div(_: MacroEvaluator, numerator: exp.Expression, denominator: exp.Expr
 @macro()
 def union(
     evaluator: MacroEvaluator,
-    type_: exp.Literal = exp.Literal.string("ALL"),
-    *tables: exp.Table,
+    *args: exp.Expression,
 ) -> exp.Query:
     """Returns a UNION of the given tables. Only choosing columns that have the same name and type.
+
+    Args:
+        evaluator: MacroEvaluator that invoked the macro
+        args: Variable arguments that can be:
+            - First argument can be a condition (exp.Condition)
+            - A union type ('ALL' or 'DISTINCT') as exp.Literal
+            - Tables (exp.Table)
 
     Example:
         >>> from sqlglot import parse_one
@@ -982,10 +988,35 @@ def union(
         >>> sql = "@UNION('distinct', foo, bar)"
         >>> MacroEvaluator(schema=MappingSchema({"foo": {"a": "int", "b": "string", "c": "string"}, "bar": {"c": "string", "a": "int", "b": "int"}})).transform(parse_one(sql)).sql()
         'SELECT CAST(a AS INT) AS a, CAST(c AS TEXT) AS c FROM foo UNION SELECT CAST(a AS INT) AS a, CAST(c AS TEXT) AS c FROM bar'
+        >>> sql = "@UNION(True, 'distinct', foo, bar)"
+        >>> MacroEvaluator(schema=MappingSchema({"foo": {"a": "int", "b": "string", "c": "string"}, "bar": {"c": "string", "a": "int", "b": "int"}})).transform(parse_one(sql)).sql()
+        'SELECT CAST(a AS INT) AS a, CAST(c AS TEXT) AS c FROM foo UNION SELECT CAST(a AS INT) AS a, CAST(c AS TEXT) AS c FROM bar'
     """
+
+    if not args:
+        raise SQLMeshError("At least one table is required for the @UNION macro.")
+
+    arg_idx = 0
+    # Check for condition
+    condition = evaluator.eval_expression(args[arg_idx])
+    if isinstance(condition, bool):
+        arg_idx += 1
+        if arg_idx >= len(args):
+            raise SQLMeshError("Expected more arguments after the condition of the `@UNION` macro.")
+
+    # Check for union type
+    type_ = exp.Literal.string("ALL")
+    if isinstance(args[arg_idx], exp.Literal):
+        type_ = args[arg_idx]  # type: ignore
+        arg_idx += 1
     kind = type_.name.upper()
     if kind not in ("ALL", "DISTINCT"):
         raise SQLMeshError(f"Invalid type '{type_}'. Expected 'ALL' or 'DISTINCT'.")
+
+    # Remaining args should be tables
+    tables = [
+        exp.to_table(e.sql(evaluator.dialect), dialect=evaluator.dialect) for e in args[arg_idx:]
+    ]
 
     columns = {
         column
@@ -1000,6 +1031,10 @@ def union(
         for column, type_ in evaluator.columns_to_types(tables[0]).items()
         if column in columns
     ]
+
+    # Skip the union if condition is False
+    if condition == False:
+        return exp.select(*projections).from_(tables[0])
 
     return reduce(
         lambda a, b: a.union(b, distinct=kind == "DISTINCT"),  # type: ignore
@@ -1052,17 +1087,17 @@ def haversine_distance(
 @macro()
 def pivot(
     evaluator: MacroEvaluator,
-    column: exp.Column,
-    values: t.Union[exp.Array, exp.Tuple],
-    alias: exp.Boolean = exp.true(),
-    agg: exp.Literal = exp.Literal.string("SUM"),
-    cmp: exp.Literal = exp.Literal.string("="),
-    prefix: exp.Literal = exp.Literal.string(""),
-    suffix: exp.Literal = exp.Literal.string(""),
-    then_value: exp.Literal = exp.Literal.number(1),
-    else_value: exp.Literal = exp.Literal.number(0),
-    quote: exp.Boolean = exp.true(),
-    distinct: exp.Boolean = exp.false(),
+    column: SQL,
+    values: t.List[SQL],
+    alias: bool = True,
+    agg: exp.Expression = exp.Literal.string("SUM"),
+    cmp: exp.Expression = exp.Literal.string("="),
+    prefix: exp.Expression = exp.Literal.string(""),
+    suffix: exp.Expression = exp.Literal.string(""),
+    then_value: SQL = SQL("1"),
+    else_value: SQL = SQL("0"),
+    quote: bool = True,
+    distinct: bool = False,
 ) -> t.List[exp.Expression]:
     """Returns a list of projections as a result of pivoting the given column on the given values.
 
@@ -1072,17 +1107,29 @@ def pivot(
         >>> sql = "SELECT date_day, @PIVOT(status, ['cancelled', 'completed']) FROM rides GROUP BY 1"
         >>> MacroEvaluator().transform(parse_one(sql)).sql()
         'SELECT date_day, SUM(CASE WHEN status = \\'cancelled\\' THEN 1 ELSE 0 END) AS "\\'cancelled\\'", SUM(CASE WHEN status = \\'completed\\' THEN 1 ELSE 0 END) AS "\\'completed\\'" FROM rides GROUP BY 1'
+        >>> sql = "SELECT @PIVOT(a, ['v'], then_value := tv, suffix := '_sfx', quote := FALSE)"
+        >>> MacroEvaluator(dialect="bigquery").transform(parse_one(sql)).sql("bigquery")
+        "SELECT SUM(CASE WHEN a = 'v' THEN tv ELSE 0 END) AS `v_sfx`"
     """
     aggregates: t.List[exp.Expression] = []
-    for value in values.expressions:
-        proj = f"{agg.this}("
-        if distinct.this:
+    for value in values:
+        proj = f"{agg.name}("
+        if distinct:
             proj += "DISTINCT "
-        proj += f"CASE WHEN {column} {cmp.this} {value} THEN {then_value} ELSE {else_value} END) "
+
+        proj += f"CASE WHEN {column} {cmp.name} {value} THEN {then_value} ELSE {else_value} END) "
         node = evaluator.parse_one(proj)
-        if alias.this:
-            node = node.as_(f"{prefix.this}{value}{suffix.this}", quoted=quote.this, copy=False)
+
+        if alias:
+            node = node.as_(
+                f"{prefix.name}{value}{suffix.name}",
+                quoted=quote,
+                copy=False,
+                dialect=evaluator.dialect,
+            )
+
         aggregates.append(node)
+
     return aggregates
 
 

@@ -17,9 +17,10 @@ import {
   handleNotSginedInError,
   handleSqlmeshLspNotFoundError,
   handleSqlmeshLspDependenciesMissingError,
+  handleTcloudBinNotFoundError,
 } from './utilities/errors'
-import { completionProvider } from './completion/completion'
-import { selector } from './completion/completion'
+import { selector, completionProvider } from './completion/completion'
+import { LineagePanel } from './webviews/lineagePanel'
 
 let lspClient: LSPClient | undefined
 
@@ -62,32 +63,20 @@ export async function activate(context: vscode.ExtensionContext) {
   )
 
   lspClient = new LSPClient()
-  const result = await lspClient.start()
-  if (isErr(result)) {
-    switch (result.error.type) {
-      case 'not_signed_in':
-        await handleNotSginedInError(authProvider)
-        break
-      case 'sqlmesh_lsp_not_found':
-        await handleSqlmeshLspNotFoundError()
-        break
-      case 'sqlmesh_lsp_dependencies_missing':
-        await handleSqlmeshLspDependenciesMissingError(result.error)
-        break
-      case 'generic':
-        await vscode.window.showErrorMessage(
-          `Failed to start LSP: ${result.error.message}`,
-        )
-        break
-    }
-  } else {
-    context.subscriptions.push(lspClient)
-  }
 
   context.subscriptions.push(
     vscode.languages.registerCompletionItemProvider(
       selector,
       completionProvider(lspClient),
+    ),
+  )
+
+  // Register the webview
+  const lineagePanel = new LineagePanel(context.extensionUri, lspClient)
+  context.subscriptions.push(
+    vscode.window.registerWebviewViewProvider(
+      LineagePanel.viewType,
+      lineagePanel,
     ),
   )
 
@@ -105,6 +94,9 @@ export async function activate(context: vscode.ExtensionContext) {
             return
           case 'sqlmesh_lsp_dependencies_missing':
             await handleSqlmeshLspDependenciesMissingError(restartResult.error)
+            return
+          case 'tcloud_bin_not_found':
+            await handleTcloudBinNotFoundError()
             return
           case 'generic':
             await vscode.window.showErrorMessage(
@@ -128,6 +120,31 @@ export async function activate(context: vscode.ExtensionContext) {
       await restart()
     }),
   )
+
+  const result = await lspClient.start()
+  if (isErr(result)) {
+    switch (result.error.type) {
+      case 'not_signed_in':
+        await handleNotSginedInError(authProvider)
+        break
+      case 'sqlmesh_lsp_not_found':
+        await handleSqlmeshLspNotFoundError()
+        break
+      case 'sqlmesh_lsp_dependencies_missing':
+        await handleSqlmeshLspDependenciesMissingError(result.error)
+        break
+      case 'tcloud_bin_not_found':
+        await handleTcloudBinNotFoundError()
+        break
+      case 'generic':
+        await vscode.window.showErrorMessage(
+          `Failed to start LSP: ${result.error.message}`,
+        )
+        break
+    }
+  } else {
+    context.subscriptions.push(lspClient)
+  }
 
   traceInfo('Extension activated')
 }

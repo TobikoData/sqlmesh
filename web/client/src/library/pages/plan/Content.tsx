@@ -1,4 +1,4 @@
-import { useParams } from 'react-router-dom'
+import { useParams } from 'react-router'
 import { isNil } from '@utils/index'
 import PlanProvider from '@components/plan/context'
 import { useStoreContext } from '@context/context'

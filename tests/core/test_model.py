@@ -17,7 +17,7 @@ from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.model.kind import TimeColumn, ModelKindName
 
 from sqlmesh import CustomMaterialization, CustomKind
-from pydantic import model_validator
+from pydantic import model_validator, ValidationError
 from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
 from sqlmesh.core.console import get_console
@@ -266,6 +266,142 @@ FROM "memory"."sushi"."marketing" AS "marketing"
     )
 
 
+@time_machine.travel("1996-02-10 00:00:00 UTC")
+@pytest.mark.parametrize(
+    "test_id, condition, union_type, table_count, expected_result",
+    [
+        # Test case 1: Basic conditional union - True condition
+        (
+            "test_1",
+            "@get_date() == '1996-02-10'",
+            "'all'",
+            2,
+            lambda expected_select: f"{expected_select}\nUNION ALL\n{expected_select}\n",
+        ),
+        # Test case 2: False condition - should return just first table
+        (
+            "test_2",
+            "@get_date() > '1996-02-10'",
+            "'all'",
+            2,
+            lambda expected_select: f"{expected_select}\n",
+        ),
+        # Test case 3: Multiple tables in union
+        (
+            "test_3",
+            "@get_date() == '1996-02-10'",
+            "'all'",
+            3,
+            lambda expected_select: f"{expected_select}\nUNION ALL\n{expected_select}\nUNION ALL\n{expected_select}\n",
+        ),
+        # Test case 4: DISTINCT type
+        (
+            "test_4",
+            "@get_date() == '1996-02-10'",
+            "'distinct'",
+            2,
+            lambda expected_select: f"{expected_select}\nUNION\n{expected_select}\n",
+        ),
+        # Test case 5: Complex condition
+        (
+            "test_5",
+            "@get_date() = '1996-02-10' and 1=1 or @get_date() > '1996-02-10'",
+            "'distinct'",
+            2,
+            lambda expected_select: f"{expected_select}\nUNION\n{expected_select}\n",
+        ),
+        # Test case 6: Missing union type (defaults to ALL)
+        (
+            "test_6",
+            "@get_date() == '1996-02-10'",
+            "",
+            2,
+            lambda expected_select: f"{expected_select}\nUNION ALL\n{expected_select}\n",
+        ),
+        # Test case 7: Missing union type AND condition
+        (
+            "test_7",
+            "",
+            "",
+            2,
+            lambda expected_select: f"{expected_select}\nUNION ALL\n{expected_select}\n",
+        ),
+        # Test case 8: Missing union type AND condition multiple tables
+        (
+            "test_8",
+            "",
+            "",
+            3,
+            lambda expected_select: f"{expected_select}\nUNION ALL\n{expected_select}\n\nUNION ALL\n{expected_select}\n",
+        ),
+        # Test case 9: Missing union type AND condition one table
+        (
+            "test_9",
+            "",
+            "",
+            1,
+            lambda expected_select: f"{expected_select}",
+        ),
+        # Test case 10: Union type with one table
+        (
+            "test_10",
+            "",
+            "'distinct'",
+            1,
+            lambda expected_select: f"{expected_select}",
+        ),
+        # Test case 11: Condition with one table
+        (
+            "test_9",
+            "True",
+            "",
+            1,
+            lambda expected_select: f"{expected_select}",
+        ),
+    ],
+)
+def test_model_union_conditional(
+    sushi_context, assert_exp_eq, test_id, condition, union_type, table_count, expected_result
+):
+    @macro()
+    def get_date(evaluator):
+        from sqlmesh.utils.date import now
+
+        return f"'{now().date()}'"
+
+    expected_select = """SELECT
+  CAST("marketing"."customer_id" AS INT) AS "customer_id",
+  CAST("marketing"."status" AS TEXT) AS "status",
+  CAST("marketing"."updated_at" AS TIMESTAMPNTZ) AS "updated_at",
+  CAST("marketing"."valid_from" AS TIMESTAMP) AS "valid_from",
+  CAST("marketing"."valid_to" AS TIMESTAMP) AS "valid_to"
+FROM "memory"."sushi"."marketing" AS "marketing"
+"""
+
+    # Create tables argument list based on table_count
+    tables = ", ".join(["sushi.marketing"] * table_count)
+
+    # Handle the missing union_type case
+    union_type_arg = f", {union_type}" if union_type else ""
+
+    expressions = d.parse(
+        f"""
+        MODEL (
+            name sushi.{test_id},
+            kind FULL,
+        );
+
+        @union({condition}{union_type_arg}, {tables})
+        """
+    )
+    sushi_context.upsert_model(load_sql_based_model(expressions, default_catalog="memory"))
+
+    assert_exp_eq(
+        sushi_context.get_model(f"sushi.{test_id}").render_query(),
+        expected_result(expected_select),
+    )
+
+
 def test_model_validation_union_query():
     expressions = d.parse(
         """
@@ -334,6 +470,40 @@ def test_model_missing_audits(tmp_path: Path):
             """Model `audits` must be configured to test data quality."""
             in mock_logger.call_args[0][0]
         )
+
+
+def test_project_is_set_in_standalone_audit(tmp_path: Path) -> None:
+    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+
+    db_path = str(tmp_path / "db.db")
+    db_connection = DuckDBConnectionConfig(database=db_path)
+
+    config = Config(
+        project="test",
+        gateways={"gw": GatewayConfig(connection=db_connection)},
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+    )
+
+    model = tmp_path / "models" / "some_model.sql"
+    model.parent.mkdir(parents=True, exist_ok=True)
+    model.write_text("MODEL (name m); SELECT 1 AS c")
+
+    audit = tmp_path / "audits" / "a_standalone_audit.sql"
+    audit.parent.mkdir(parents=True, exist_ok=True)
+    audit.write_text("AUDIT (name a, standalone true); SELECT * FROM m WHERE c <= 0")
+
+    context = Context(paths=tmp_path, config=config)
+    context.plan(no_prompts=True, auto_apply=True)
+
+    model = tmp_path / "models" / "some_model.sql"
+    model.parent.mkdir(parents=True, exist_ok=True)
+    model.write_text("MODEL (name m); SELECT 2 AS c")
+
+    assert context.fetchdf(
+        "select snapshot -> 'node' -> 'project' AS standalone_audit_project "
+        """from sqlmesh._snapshots where (snapshot -> 'node' -> 'source_type')::text = '"audit"'"""
+    ).to_dict()["standalone_audit_project"] == {0: '"test"'}
+    assert context.load().standalone_audits["a"].project == "test"
 
 
 @pytest.mark.parametrize(
@@ -895,7 +1065,7 @@ def test_seed_model_creation_error():
         );
     """
     )
-    with pytest.raises(ConfigError, match="No such file or directory"):
+    with pytest.raises(FileNotFoundError, match="No such file or directory"):
         load_sql_based_model(expressions)
 
 
@@ -1068,7 +1238,7 @@ def test_seed_marker_substitution():
     )
 
     assert isinstance(model.kind, SeedKind)
-    assert model.kind.path == "examples/sushi/seeds/waiter_names.csv"
+    assert model.kind.path == str(Path("examples/sushi/seeds/waiter_names.csv"))
     assert model.seed is not None
     assert len(model.seed.content) > 0
 
@@ -4402,7 +4572,7 @@ def test_view_non_materialized_partition_by():
         SELECT 1;
         """
     )
-    with pytest.raises(ConfigError, match=r".*partitioned_by field cannot be set for ViewKind.*"):
+    with pytest.raises(ValidationError, match=r".*partitioned_by field cannot be set for VIEW.*"):
         load_sql_based_model(view_model_expressions)
 
 
@@ -4417,7 +4587,7 @@ def test_view_non_materialized_clustered_by():
         SELECT 1;
         """
     )
-    with pytest.raises(ConfigError, match=r".*clustered_by field cannot be set for ViewKind.*"):
+    with pytest.raises(ValidationError, match=r".*clustered_by field cannot be set for VIEW.*"):
         load_sql_based_model(view_model_expressions)
 
 
@@ -5468,7 +5638,7 @@ def test_end_date():
     assert model.end == "2023-06-01"
     assert model.interval_unit == IntervalUnit.DAY
 
-    with pytest.raises(ConfigError, match=".*Start date.+can't be greater than end date.*"):
+    with pytest.raises(ValidationError, match=".*Start date.+can't be greater than end date.*"):
         load_sql_based_model(
             d.parse(
                 """
@@ -6719,7 +6889,7 @@ def test_incremental_by_partition(sushi_context, assert_exp_eq):
     assert not model.kind.disable_restatement
 
     with pytest.raises(
-        ConfigError,
+        ValidationError,
         match=r".*partitioned_by field is required for INCREMENTAL_BY_PARTITION models.*",
     ):
         expressions = d.parse(
@@ -9785,3 +9955,93 @@ def test_python_env_includes_file_path_in_render_definition():
     model_executable_str = python_model.render_definition()[1].sql()
     # Make sure the file path is included in the render definition
     assert "# tests/core/test_model.py" in model_executable_str
+
+
+def test_resolve_interpolated_variables_when_parsing_python_deps():
+    @model(
+        name="bla.test_interpolate_var_in_dep_py",
+        kind="full",
+        columns={'"col"': "int"},
+    )
+    def unimportant_testing_model(context, **kwargs):
+        table1 = context.resolve_table(f"{context.var('schema_name')}.table_name")
+        table2 = context.resolve_table(f"{context.blueprint_var('schema_name')}.table_name")
+
+        return context.fetchdf(exp.select("*").from_(table))
+
+    m = model.get_registry()["bla.test_interpolate_var_in_dep_py"].model(
+        module_path=Path("."),
+        path=Path("."),
+        variables={"schema_name": "foo"},
+        blueprint_variables={"schema_name": "baz"},
+    )
+
+    assert m.depends_on == {'"foo"."table_name"', '"baz"."table_name"'}
+    assert m.python_env.get(c.SQLMESH_VARS) == Executable.value({"schema_name": "foo"})
+    assert m.python_env.get(c.SQLMESH_BLUEPRINT_VARS) == Executable.value({"schema_name": "baz"})
+
+    @macro()
+    def unimportant_testing_macro(evaluator, *projections):
+        evaluator.var(f"{evaluator.var('selector')}_variable")
+        evaluator.var(f"{evaluator.blueprint_var('selector')}_variable")
+
+        return exp.select(*[f'{p} AS "{p}"' for p in projections])
+
+    m = load_sql_based_model(
+        d.parse(
+            """
+            MODEL (
+                name bla.test_interpolate_var_in_dep_sql
+            );
+
+            @unimportant_testing_macro();
+
+            SELECT
+              1 AS c
+            """,
+        ),
+        variables={"selector": "bla", "bla_variable": 1, "baz_variable": 2},
+        blueprint_variables={"selector": "baz"},
+    )
+
+    assert m.python_env.get(c.SQLMESH_VARS) == Executable.value(
+        {"selector": "bla", "bla_variable": 1, "baz_variable": 2}
+    )
+    assert m.python_env.get(c.SQLMESH_BLUEPRINT_VARS) == Executable.value({"selector": "baz"})
+
+
+def test_extract_schema_in_post_statement(tmp_path: Path) -> None:
+    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+
+    config = Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))
+
+    model1 = tmp_path / "models" / "parent_model.sql"
+    model1.parent.mkdir(parents=True, exist_ok=True)
+    model1.write_text("MODEL (name x); SELECT 1 AS c")
+
+    model2 = tmp_path / "models" / "child_model.sql"
+    model2.parent.mkdir(parents=True, exist_ok=True)
+    model2.write_text(
+        """
+        MODEL (name y);
+        SELECT c FROM x;
+        ON_VIRTUAL_UPDATE_BEGIN;
+        @check_schema('y');
+        ON_VIRTUAL_UPDATE_END;
+        """
+    )
+
+    check_schema = tmp_path / "macros/check_schema.py"
+    check_schema.parent.mkdir(parents=True, exist_ok=True)
+    check_schema.write_text("""
+from sqlglot import exp
+from sqlmesh import macro
+
+@macro()
+def check_schema(evaluator, model_name: str):
+    if evaluator.runtime_stage != 'loading':
+        assert evaluator.columns_to_types(model_name) == {"c": exp.DataType.build("INT")}
+""")
+
+    context = Context(paths=tmp_path, config=config)
+    context.plan(no_prompts=True, auto_apply=True)

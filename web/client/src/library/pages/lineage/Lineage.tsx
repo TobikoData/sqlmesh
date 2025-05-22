@@ -1,5 +1,5 @@
 import { useStoreContext } from '@context/context'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router'
 import { isNil } from '@utils/index'
 import LineageFlowProvider from '@components/graph/context'
 import ModelLineage from '@components/graph/ModelLineage'

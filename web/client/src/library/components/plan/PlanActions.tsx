@@ -7,7 +7,7 @@ import { EnumPlanAction, ModelPlanAction } from '@models/plan-action'
 import { useStorePlan } from '@context/plan'
 import { useStoreContext } from '@context/context'
 import { Transition } from '@headlessui/react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router'
 import { SelectEnvironment } from '@components/environmentDetails/SelectEnvironment'
 import { AddEnvironment } from '@components/environmentDetails/AddEnvironment'
 import { usePlan } from './context'
@@ -163,6 +163,7 @@ export default function PlanActions({
             leaveFrom="opacity-100 scale-100"
             leaveTo="opacity-0 scale-95"
             className="trasition-all duration-300 ease-in-out"
+            as="div"
           >
             {showPlanActionButton && (
               <Button

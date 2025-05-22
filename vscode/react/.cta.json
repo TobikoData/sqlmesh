@@ -1,0 +1,13 @@
+{
+  "framework": "react",
+  "projectName": "react",
+  "typescript": true,
+  "tailwind": false,
+  "packageManager": "npm",
+  "toolchain": "none",
+  "mode": "file-router",
+  "git": true,
+  "variableValues": {},
+  "version": 1,
+  "existingAddOns": []
+}
