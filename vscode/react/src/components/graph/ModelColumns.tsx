@@ -402,7 +402,7 @@ function ModelColumn({
     refetch: getColumnLineage,
     isFetching,
     isError,
-  } = useApiColumnLineage(nodeId, column.name)
+  } = useApiColumnLineage(nodeId, column.name, { models_only: true })
 
   useEffect(() => {
     if (isNil(selectManually)) return
