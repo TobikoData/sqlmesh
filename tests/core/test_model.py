@@ -4919,6 +4919,10 @@ def test_signals():
     model = load_sql_based_model(expressions)
     assert model.signals[0][1] == {"arg": exp.Literal.number(1)}
 
+    @signal()
+    def my_signal(batch):
+        return True
+
     expressions = d.parse(
         """
         MODEL (
@@ -4946,7 +4950,10 @@ def test_signals():
         """
     )
 
-    model = load_sql_based_model(expressions)
+    model = load_sql_based_model(
+        expressions,
+        signal_definitions={"my_signal": signal.get_registry()["my_signal"]},
+    )
     assert model.signals == [
         (
             "my_signal",
@@ -9834,6 +9841,22 @@ def test_invalid_audit_reference():
     expressions = d.parse(sql)
 
     with pytest.raises(ConfigError, match="Audit 'not_nulll' is undefined"):
+        load_sql_based_model(expressions)
+
+
+def test_invalid_signal_reference():
+    sql = """
+    MODEL (
+      name test,
+      signals (s())
+    );
+
+    SELECT
+      1 AS id
+    """
+    expressions = d.parse(sql)
+
+    with pytest.raises(ConfigError, match="Signal 's' is undefined"):
         load_sql_based_model(expressions)
 
 
