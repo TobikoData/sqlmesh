@@ -4157,12 +4157,12 @@ def test_plan_repairs_unrenderable_snapshot_state(
         f"name = '{target_snapshot.name}' AND identifier = '{target_snapshot.identifier}'",
     )
 
-    context.clear_caches()
-
-    target_snapshot_in_state = context.state_sync.get_snapshots([target_snapshot.snapshot_id])[
-        target_snapshot.snapshot_id
-    ]
     with pytest.raises(Exception):
+        context_copy = context.copy()
+        context_copy.clear_caches()
+        target_snapshot_in_state = context_copy.state_sync.get_snapshots(
+            [target_snapshot.snapshot_id]
+        )[target_snapshot.snapshot_id]
         target_snapshot_in_state.model.render_query_or_raise()
 
     # Repair the snapshot by creating a new version of it

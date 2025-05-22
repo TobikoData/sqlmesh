@@ -81,11 +81,10 @@ def _update_model_schemas(
                     )
                 )
 
-    errors: t.List[str] = []
     with optimized_query_cache_pool(optimized_query_cache) as executor:
         process_models()
 
-        while futures and not errors:
+        while futures:
             for future in as_completed(futures):
                 try:
                     futures.remove(future)
@@ -99,8 +98,4 @@ def _update_model_schemas(
                     _update_schema_with_model(schema, model)
                     process_models(completed_model=model)
                 except Exception as ex:
-                    errors.append(f"{ex}")
-
-    if errors:
-        error_string = "\n".join(errors)
-        raise SchemaError(f"Failed to update model schemas\n\n{error_string}")
+                    raise SchemaError(f"Failed to update model schemas\n\n{ex}")

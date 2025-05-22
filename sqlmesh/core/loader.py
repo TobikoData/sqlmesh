@@ -46,7 +46,6 @@ from sqlmesh.utils.yaml import YAML, load as yaml_load
 
 
 if t.TYPE_CHECKING:
-    from sqlmesh.core.config import Config
     from sqlmesh.core.context import GenericContext
 
 
@@ -104,21 +103,21 @@ class CacheBase(abc.ABC):
 
 _defaults: t.Optional[t.Dict[str, t.Any]] = None
 _cache: t.Optional[CacheBase] = None
-_config: t.Optional[Config] = None
+_config_essentials: t.Optional[t.Dict[str, t.Any]] = None
 _selected_gateway: t.Optional[str] = None
 
 
 def _init_model_defaults(
-    config: Config,
+    config_essentials: t.Dict[str, t.Any],
     selected_gateway: t.Optional[str],
     model_loading_defaults: t.Optional[t.Dict[str, t.Any]] = None,
     cache: t.Optional[CacheBase] = None,
     console: t.Optional[Console] = None,
 ) -> None:
-    global _defaults, _cache, _config, _selected_gateway
+    global _defaults, _cache, _config_essentials, _selected_gateway
     _defaults = model_loading_defaults
     _cache = cache
-    _config = config
+    _config_essentials = config_essentials
     _selected_gateway = selected_gateway
 
     # Set the console passed from the parent process
@@ -140,22 +139,22 @@ def load_sql_models(path: Path) -> t.List[Model]:
 
 
 def get_variables(gateway_name: t.Optional[str] = None) -> t.Dict[str, t.Any]:
-    assert _config
+    assert _config_essentials
 
     gateway_name = gateway_name or _selected_gateway
 
     try:
-        gateway = _config.get_gateway(gateway_name)
+        gateway = _config_essentials["gateways"].get(gateway_name)
     except ConfigError:
         from sqlmesh.core.console import get_console
 
         get_console().log_warning(
-            f"Gateway '{gateway_name}' not found in project '{_config.project}'."
+            f"Gateway '{gateway_name}' not found in project '{_config_essentials['project']}'."
         )
         gateway = None
 
     return {
-        **_config.variables,
+        **_config_essentials["variables"],
         **(gateway.variables if gateway else {}),
         c.GATEWAY: gateway_name,
     }
@@ -174,7 +173,12 @@ class Loader(abc.ABC):
         self._variables_by_gateway: t.Dict[str, t.Dict[str, t.Any]] = {}
         self._console = get_console()
 
-        _init_model_defaults(self.config, self.context.selected_gateway)
+        self.config_essentials = {
+            "project": self.config.project,
+            "variables": self.config.variables,
+            "gateways": self.config.gateways,
+        }
+        _init_model_defaults(self.config_essentials, self.context.selected_gateway)
 
     def load(self) -> LoadedProject:
         """
@@ -539,6 +543,7 @@ class SqlMeshLoader(Loader):
         """Loads the sql models into a Dict"""
         models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
         paths: t.Set[Path] = set()
+        cached_paths: UniqueKeyDict[Path, t.List[Model]] = UniqueKeyDict("cached_paths")
 
         for path in self._glob_paths(
             self.config_path / c.MODELS,
@@ -550,14 +555,14 @@ class SqlMeshLoader(Loader):
 
             self._track_file(path)
             paths.add(path)
+            if cached_models := cache.get(path):
+                cached_paths[path] = cached_models
 
-        for path in paths.copy():
-            cached_models = cache.get(path)
-            if cached_models:
-                paths.remove(path)
-                for model in cached_models:
-                    if model.enabled:
-                        models[model.fqn] = model
+        for path, cached_models in cached_paths.items():
+            paths.remove(path)
+            for model in cached_models:
+                if model.enabled:
+                    models[model.fqn] = model
 
         if paths:
             model_loading_defaults = dict(
@@ -578,10 +583,18 @@ class SqlMeshLoader(Loader):
                 default_catalog_per_gateway=self.context.default_catalog_per_gateway,
             )
 
-            errors: t.List[str] = []
+            # if not c.MAX_FORK_WORKERS:
+            #     breakpoint()
+
             with create_process_pool_executor(
                 initializer=_init_model_defaults,
-                initargs=(self.config, gateway, model_loading_defaults, cache, self._console),
+                initargs=(
+                    self.config_essentials,
+                    gateway,
+                    model_loading_defaults,
+                    cache,
+                    self._console,
+                ),
                 max_workers=c.MAX_FORK_WORKERS,
             ) as pool:
                 futures_to_paths = {pool.submit(load_sql_models, path): path for path in paths}
@@ -591,7 +604,7 @@ class SqlMeshLoader(Loader):
                         loaded = future.result()
                         for model in loaded or cache.get(path):
                             if model.fqn in models:
-                                errors.append(
+                                raise ConfigError(
                                     self._failed_to_load_model_error(
                                         path, f"Duplicate SQL model name: '{model.name}'."
                                     )
@@ -600,11 +613,7 @@ class SqlMeshLoader(Loader):
                                 model._path = path
                                 models[model.fqn] = model
                     except Exception as ex:
-                        errors.append(self._failed_to_load_model_error(path, str(ex)))
-
-            if errors:
-                error_string = "\n".join(errors)
-                raise ConfigError(error_string)
+                        raise ConfigError(self._failed_to_load_model_error(path, ex))
 
         return models
 
