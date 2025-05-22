@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import sys
 import typing as t
+import logging
+
 from difflib import ndiff, unified_diff
 from functools import cached_property
 from sqlmesh.core import constants as c
@@ -37,6 +39,8 @@ from sqlmesh.utils.metaprogramming import Executable  # noqa
 from sqlmesh.core.environment import EnvironmentStatements
 
 IGNORED_PACKAGES = {"sqlmesh", "sqlglot"}
+
+logger = logging.getLogger(__name__)
 
 
 class ContextDiff(PydanticModel):
@@ -88,6 +92,8 @@ class ContextDiff(PydanticModel):
     """Environment statements."""
     diff_rendered: bool = False
     """Whether the diff should compare raw vs rendered models"""
+    initial_environment: str = ""
+    """The initial target environment (e.g 'dev'), if the plan option `always_compare_to_prod` is set"""
 
     @classmethod
     def create(
@@ -103,6 +109,8 @@ class ContextDiff(PydanticModel):
         environment_statements: t.Optional[t.List[EnvironmentStatements]] = [],
         gateway_managed_virtual_layer: bool = False,
         infer_python_dependencies: bool = True,
+        initial_environment: t.Optional[str] = None,
+        always_compare_against_prod: bool = False,
     ) -> ContextDiff:
         """Create a ContextDiff object.
 
@@ -127,8 +135,17 @@ class ContextDiff(PydanticModel):
         Returns:
             The ContextDiff object.
         """
-        environment = environment.lower()
+        initial_environment = environment
+        environment = _get_target_environment(
+            environment, state_reader, always_compare_against_prod
+        )
+
         env = state_reader.get_environment(environment)
+        initial_env = (
+            env
+            if initial_environment == environment
+            else state_reader.get_environment(initial_environment)
+        )
 
         create_from_env_exists = False
         if env is None or env.expired:
@@ -222,6 +239,7 @@ class ContextDiff(PydanticModel):
 
         return ContextDiff(
             environment=environment,
+            initial_environment=initial_environment,
             is_new_environment=is_new_environment,
             is_unfinalized_environment=bool(env and not env.finalized_ts),
             normalize_environment_name=is_new_environment or bool(env and env.normalize_name),
@@ -232,7 +250,9 @@ class ContextDiff(PydanticModel):
             modified_snapshots=modified_snapshots,
             snapshots=merged_snapshots,
             new_snapshots=new_snapshots,
-            previous_plan_id=env.plan_id if env and not is_new_environment else None,
+            previous_plan_id=initial_env.plan_id
+            if initial_env and not is_new_environment
+            else None,
             previously_promoted_snapshot_ids=previously_promoted_snapshot_ids,
             previous_finalized_snapshots=env.previous_finalized_snapshots if env else None,
             previous_requirements=env.requirements if env else {},
@@ -261,8 +281,9 @@ class ContextDiff(PydanticModel):
 
         snapshots = state_reader.get_snapshots(env.snapshots)
 
+        environment = env.name
         return ContextDiff(
-            environment=env.name,
+            environment=environment,
             is_new_environment=False,
             is_unfinalized_environment=False,
             normalize_environment_name=env.normalize_name,
@@ -281,6 +302,7 @@ class ContextDiff(PydanticModel):
             previous_environment_statements=[],
             previous_gateway_managed_virtual_layer=env.gateway_managed,
             gateway_managed_virtual_layer=env.gateway_managed,
+            initial_environment=environment,
         )
 
     @property
@@ -477,6 +499,23 @@ class ContextDiff(PydanticModel):
         except SQLMeshError as e:
             get_console().log_warning(f"Failed to diff model '{name}': {str(e)}.")
             return ""
+
+
+def _get_target_environment(
+    environment: str, state_reader: StateReader, always_compare_against_prod: bool = False
+) -> str:
+    if always_compare_against_prod:
+        prod = state_reader.get_environment(c.PROD)
+        if prod:
+            logger.warning(
+                f"Comparing against production environment instead of {environment}. Note that this may lead to "
+                "additional backfills as accumulated changes are still pushed to the target environment."
+            )
+            environment = c.PROD
+    else:
+        environment = environment or c.PROD
+
+    return environment.lower()
 
 
 def _build_requirements(

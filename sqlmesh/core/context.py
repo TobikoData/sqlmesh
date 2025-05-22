@@ -1480,7 +1480,7 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         snapshots = self._snapshots(models_override)
         context_diff = self._context_diff(
-            environment or c.PROD,
+            environment=environment,
             snapshots=snapshots,
             create_from=create_from,
             force_no_diff=restate_models is not None
@@ -2630,11 +2630,12 @@ class GenericContext(BaseContext, t.Generic[C]):
         diff_rendered: bool = False,
     ) -> ContextDiff:
         environment = Environment.sanitize_name(environment)
+
         if force_no_diff:
             return ContextDiff.create_no_diff(environment, self.state_reader)
 
         return ContextDiff.create(
-            environment,
+            environment=environment,
             snapshots=snapshots or self.snapshots,
             create_from=create_from or c.PROD,
             state_reader=self.state_reader,
@@ -2645,6 +2646,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             environment_statements=self._environment_statements,
             gateway_managed_virtual_layer=self.config.gateway_managed_virtual_layer,
             infer_python_dependencies=self.config.infer_python_dependencies,
+            always_compare_against_prod=self.config.plan.always_compare_against_prod,
         )
 
     def _destroy(self) -> None:
