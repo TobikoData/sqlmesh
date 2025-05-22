@@ -583,9 +583,6 @@ class SqlMeshLoader(Loader):
                 default_catalog_per_gateway=self.context.default_catalog_per_gateway,
             )
 
-            # if not c.MAX_FORK_WORKERS:
-            #     breakpoint()
-
             with create_process_pool_executor(
                 initializer=_init_model_defaults,
                 initargs=(
