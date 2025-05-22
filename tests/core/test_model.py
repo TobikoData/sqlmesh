@@ -3758,7 +3758,8 @@ def test_model_physical_properties() -> None:
     )
 
     with pytest.raises(
-        ConfigError, match=r"Invalid MODEL statement: all expressions in `physical_properties`.*"
+        ConfigError,
+        match=r"Invalid property 'invalid'. Properties must be specified as key-value pairs <key> = <value>. ",
     ):
         load_sql_based_model(
             d.parse(
@@ -4477,6 +4478,69 @@ def test_model_session_properties(sushi_context):
             this=exp.Tuple(expressions=[exp.Literal.string("key1"), exp.Literal.string("value1")])
         )
     }
+
+    with pytest.raises(
+        ConfigError,
+        match=r"Invalid value for `session_properties.query_label`. Must be an array or tuple.",
+    ):
+        load_sql_based_model(
+            d.parse(
+                """
+            MODEL (
+                name test_schema.test_model,
+                session_properties (
+                    'query_label' = 'invalid value'
+                )
+            );
+            SELECT a FROM tbl;
+            """,
+                default_dialect="bigquery",
+            )
+        )
+
+    with pytest.raises(
+        ConfigError,
+        match=r"Invalid entry in `session_properties.query_label`. Must be tuples of string literals with length 2.",
+    ):
+        load_sql_based_model(
+            d.parse(
+                """
+            MODEL (
+                name test_schema.test_model,
+                session_properties (
+                    'query_label' = (
+                        ('key1', 'value1', 'another_value')
+                    )
+                )
+            );
+            SELECT a FROM tbl;
+            """,
+                default_dialect="bigquery",
+            )
+        )
+
+    with pytest.raises(
+        ConfigError,
+        match=r"Invalid entry in `session_properties.query_label`. Must be tuples of string literals with length 2.",
+    ):
+        load_sql_based_model(
+            d.parse(
+                """
+            MODEL (
+                name test_schema.test_model,
+                session_properties (
+                    'query_label' = (
+                        'some value', 
+                        'another value',
+                        'yet another value',
+                    )
+                )
+            );
+            SELECT a FROM tbl;
+            """,
+                default_dialect="bigquery",
+            )
+        )
 
 
 def test_model_jinja_macro_rendering():
