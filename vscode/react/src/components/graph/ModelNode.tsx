@@ -53,10 +53,9 @@ export default function ModelNode({
     const modelsArray = Object.values(models)
     const decodedId = decodeURIComponent(id)
     const model = modelsArray.find((m: Model) => m.fqn === decodedId)
-    if (!model) {
-      throw new Error(`Model not found: ${id}`)
-    }
     const modelColumns = model?.columns ?? []
+
+    console.log('lineage', lineage)
 
     Object.keys(lineage[decodedId]?.columns ?? {}).forEach((column: string) => {
       const found = modelColumns.find(({ name }: any) => {
@@ -158,6 +157,20 @@ export default function ModelNode({
   // isFalse(isModelUnknown)
   const shouldDisableColumns = isFalse(isModelSQL)
 
+  const nodeLabel: string = nodeData.label.includes(':')
+    ? (nodeData.label.split(':').pop() ?? nodeData.label)
+    : nodeData.label
+  console.log(
+    'id',
+    id,
+    isCTE,
+    columns,
+    nodeData.label,
+    'does node label include :',
+    nodeData.label.includes(':'),
+    nodeLabel,
+  )
+
   return (
     <div
       onMouseEnter={() => setIsMouseOver(true)}
@@ -200,7 +213,7 @@ export default function ModelNode({
       <ModelNodeHeaderHandles
         id={id}
         type={nodeType}
-        label={nodeData.label}
+        label={nodeLabel}
         isSelected={isSelected}
         isDraggable={true}
         className={clsx(

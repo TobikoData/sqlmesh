@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import typing as t
 from collections import defaultdict
 
@@ -18,6 +19,8 @@ if t.TYPE_CHECKING:
 
 
 router = APIRouter()
+
+logger = logging.getLogger(__name__)
 
 
 def quote_column(column: str, dialect: str) -> str:
@@ -134,6 +137,9 @@ def column_lineage(
 ) -> t.Dict[str, t.Dict[str, LineageColumn]]:
     """Get a column's lineage"""
     try:
+        logger.info(
+            f"Getting column lineage for {model_name}.{column_name}, models only: {models_only}"
+        )
         model_name = context.get_model(model_name).fqn
         if models_only:
             return create_models_only_lineage_adjacency_list(model_name, column_name, context)
