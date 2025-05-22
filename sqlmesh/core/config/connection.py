@@ -66,13 +66,17 @@ def _get_engine_import_validator(
             return data
         try:
             importlib.import_module(import_name)
-        except ImportError as e:
+        except ImportError:
             if debug_mode_enabled():
                 raise
 
-            logger.error(str(e))
+            logger.exception("Failed to import the engine library")
+
             raise ConfigError(
-                f"Failed to import the '{engine_type}' engine library. Please run `pip install \"sqlmesh[{extra_name}]\"`."
+                f"Failed to import the '{engine_type}' engine library. This may be due to a missing "
+                "or incompatible installation. Please ensure the required dependency is installed by "
+                f'running: pip install "sqlmesh[{extra_name}]". For more details, check the logs '
+                "in the 'logs/' folder, or rerun the command with the '--debug' flag."
             )
 
         return data
