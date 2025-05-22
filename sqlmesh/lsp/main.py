@@ -119,9 +119,11 @@ class SQLMeshLanguageServer:
                         # /api/lineage/{model}/{column}
                         model_name = urllib.parse.unquote(path_parts[2])
                         column = urllib.parse.unquote(path_parts[3])
-                        logging.info(f"Column lineage request: {model_name} {column}")
+                        models_only = False
+                        if hasattr(request, "params"):
+                            models_only = bool(getattr(request.params, "models_only", False))
                         column_lineage_response = column_lineage(
-                            model_name, column, False, self.lsp_context.context
+                            model_name, column, models_only, self.lsp_context.context
                         )
                         return ApiResponseGetColumnLineage(data=column_lineage_response).model_dump(
                             mode="json"
