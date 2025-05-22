@@ -5067,7 +5067,8 @@ def test_when_matched():
     unique_key ("purchase_order_id"),
     when_matched (
       WHEN MATCHED AND __MERGE_SOURCE__._operation = 1 THEN DELETE
-      WHEN MATCHED AND __MERGE_SOURCE__._operation <> 1 THEN UPDATE SET __MERGE_TARGET__.purchase_order_id = 1
+      WHEN MATCHED AND __MERGE_SOURCE__._operation <> 1 THEN UPDATE SET
+        __MERGE_TARGET__.purchase_order_id = 1
     ),
     batch_concurrency 1,
     forward_only FALSE,
@@ -5118,7 +5119,8 @@ FROM @{macro_val}.upstream"""
   kind INCREMENTAL_BY_UNIQUE_KEY (
     unique_key ("purchase_order_id"),
     when_matched (
-      WHEN MATCHED AND __MERGE_SOURCE__.salary <> __MERGE_TARGET__.salary THEN UPDATE SET ARRAY('target.update_datetime = source.update_datetime', 'target.salary = source.salary')
+      WHEN MATCHED AND __MERGE_SOURCE__.salary <> __MERGE_TARGET__.salary THEN UPDATE SET
+        ARRAY('target.update_datetime = source.update_datetime', 'target.salary = source.salary')
     ),
     batch_concurrency 1,
     forward_only FALSE,
@@ -7495,7 +7497,8 @@ def test_merge_filter():
     unique_key ("purchase_order_id"),
     when_matched (
       WHEN MATCHED AND {MERGE_SOURCE_ALIAS}._operation = 1 THEN DELETE
-      WHEN MATCHED AND {MERGE_SOURCE_ALIAS}._operation <> 1 THEN UPDATE SET {MERGE_TARGET_ALIAS}.purchase_order_id = 1
+      WHEN MATCHED AND {MERGE_SOURCE_ALIAS}._operation <> 1 THEN UPDATE SET
+        {MERGE_TARGET_ALIAS}.purchase_order_id = 1
     ),
     merge_filter (
       {MERGE_SOURCE_ALIAS}.ds > (
