@@ -53,9 +53,6 @@ export default function ModelNode({
     const modelsArray = Object.values(models)
     const decodedId = decodeURIComponent(id)
     const model = modelsArray.find((m: Model) => m.fqn === decodedId)
-    if (!model) {
-      throw new Error(`Model not found: ${id}`)
-    }
     const modelColumns = model?.columns ?? []
 
     Object.keys(lineage[decodedId]?.columns ?? {}).forEach((column: string) => {
