@@ -1016,7 +1016,10 @@ def test_engine_import_validator():
     with pytest.raises(
         ConfigError,
         match=re.escape(
-            """Failed to import the 'bigquery' engine library. Please run `pip install "sqlmesh[bigquery]"`."""
+            "Failed to import the 'bigquery' engine library. This may be due to a missing "
+            "or incompatible installation. Please ensure the required dependency is installed by "
+            'running: pip install "sqlmesh[bigquery]". For more details, check the logs '
+            "in the 'logs/' folder, or rerun the command with the '--debug' flag."
         ),
     ):
 
@@ -1028,7 +1031,10 @@ def test_engine_import_validator():
     with pytest.raises(
         ConfigError,
         match=re.escape(
-            """Failed to import the 'bigquery' engine library. Please run `pip install "sqlmesh[bigquery_extra]"`."""
+            "Failed to import the 'bigquery' engine library. This may be due to a missing "
+            "or incompatible installation. Please ensure the required dependency is installed by "
+            'running: pip install "sqlmesh[bigquery_extra]". For more details, check the logs '
+            "in the 'logs/' folder, or rerun the command with the '--debug' flag."
         ),
     ):
 
