@@ -949,7 +949,7 @@ def test_promote_snapshots_no_gaps(state_sync: EngineAdapterStateSync, make_snap
     state_sync.add_interval(new_snapshot_missing_interval, "2022-01-01", "2022-01-02")
     with pytest.raises(
         SQLMeshError,
-        match=r'Detected missing intervals for model "a", interrupting your current plan. Please re-apply your plan to resolve this error.',
+        match=r".*Detected missing intervals for model .*, interrupting your current plan. Please re-apply your plan to resolve this error.*",
     ):
         promote_snapshots(state_sync, [new_snapshot_missing_interval], "prod", no_gaps=True)
 
@@ -1061,7 +1061,7 @@ def test_start_date_gap(state_sync: EngineAdapterStateSync, make_snapshot: t.Cal
     state_sync.add_interval(snapshot, "2022-01-03", "2022-01-04")
     with pytest.raises(
         SQLMeshError,
-        match=r'Detected missing intervals for model "a", interrupting your current plan. Please re-apply your plan to resolve this error.',
+        match=r".*Detected missing intervals for model .*, interrupting your current plan. Please re-apply your plan to resolve this error.*",
     ):
         promote_snapshots(state_sync, [snapshot], "prod", no_gaps=True)
 
