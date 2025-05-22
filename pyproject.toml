@@ -215,6 +215,53 @@ module = [
 ]
 ignore_missing_imports = true
 
+[tool.pytest.ini_options]
+markers = [
+    # Test Type Markers
+    # Tests are ordered from fastest to slowest
+    "fast: fast tests (automatically applied if no type markers)",
+    "slow: slow tests that typically involve interacting with a local DB (like DuckDB)",
+    "docker: test that involves interacting with a Docker container",
+    "remote: test that involves interacting with a remote DB",
+    "cicdonly: test that only runs on CI/CD",
+    "isolated: tests that need to run sequentially usually because they use fork",
+
+    # Test Domain Markers
+    # default: core functionality
+    "cli: test for CLI",
+    "dbt: test for dbt adapter",
+    "github: test for Github CI/CD bot",
+    "jupyter: tests for Jupyter integration",
+    "web: tests for web UI",
+
+    # Engine Adapters
+    "engine: test all engine adapters",
+    "athena: test for Athena",
+    "bigquery: test for BigQuery",
+    "clickhouse: test for Clickhouse (standalone mode / cluster mode)",
+    "clickhouse_cloud: test for Clickhouse (cloud mode)",
+    "databricks: test for Databricks",
+    "duckdb: test for DuckDB",
+    "motherduck: test for MotherDuck",
+    "mssql: test for MSSQL",
+    "mysql: test for MySQL",
+    "postgres: test for Postgres",
+    "redshift: test for Redshift",
+    "snowflake: test for Snowflake",
+    "spark: test for Spark",
+    "trino: test for Trino (all connectors)",
+    "risingwave: test for Risingwave"
+]
+addopts = "-n 0 --dist=loadgroup"
+asyncio_default_fixture_loop_scope = "session"
+log_cli = false # Set this to true to enable logging during tests
+log_cli_format = "%(asctime)s.%(msecs)03d %(filename)s:%(lineno)d %(levelname)s %(message)s"
+log_cli_level = "INFO"
+filterwarnings = [
+    "ignore:The localize method is no longer necessary, as this time zone supports the fold attribute"
+]
+retry_delay = 10
+
 [tool.ruff.lint]
 select = [
     "F401",
