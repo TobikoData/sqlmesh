@@ -166,11 +166,24 @@ class CustomFormatter(logging.Formatter):
         return formatter.format(record)
 
 
+def remove_excess_logs(
+    log_file_dir: t.Optional[t.Union[str, Path]] = None,
+    log_limit: int = c.DEFAULT_LOG_LIMIT,
+) -> None:
+    if log_limit <= 0:
+        return
+
+    log_file_dir = log_file_dir or c.DEFAULT_LOG_FILE_DIR
+    log_path_prefix = Path(log_file_dir) / LOG_FILENAME_PREFIX
+
+    for path in list(sorted(glob.glob(f"{log_path_prefix}*.log"), reverse=True))[log_limit:]:
+        os.remove(path)
+
+
 def configure_logging(
     force_debug: bool = False,
     write_to_stdout: bool = False,
     write_to_file: bool = True,
-    log_limit: int = c.DEFAULT_LOG_LIMIT,
     log_file_dir: t.Optional[t.Union[str, Path]] = None,
     ignore_warnings: bool = False,
 ) -> None:
@@ -192,19 +205,17 @@ def configure_logging(
 
     log_file_dir = log_file_dir or c.DEFAULT_LOG_FILE_DIR
     log_path_prefix = Path(log_file_dir) / LOG_FILENAME_PREFIX
+
     if write_to_file:
         os.makedirs(str(log_file_dir), exist_ok=True)
         filename = f"{log_path_prefix}{datetime.now().strftime('%Y_%m_%d_%H_%M_%S')}.log"
         file_handler = logging.FileHandler(filename, mode="w", encoding="utf-8")
+
         # the log files should always log at least info so that users will always have
         # minimal info for debugging even if they specify "ignore_warnings"
         file_handler.setLevel(level)
         file_handler.setFormatter(logging.Formatter(LOG_FORMAT))
         logger.addHandler(file_handler)
-
-    if log_limit > 0:
-        for path in list(sorted(glob.glob(f"{log_path_prefix}*.log"), reverse=True))[log_limit:]:
-            os.remove(path)
 
     if debug:
         import faulthandler
