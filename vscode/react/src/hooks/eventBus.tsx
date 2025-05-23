@@ -84,20 +84,3 @@ export function useEvent<K extends keyof EventMap>(
     return unsub // unsubscribe on unmount
   }, [bus, type])
 }
-
-/**
- * 5️⃣ Example usage:
- *
- * // index.tsx
- * <EventBusProvider>
- *   <App />
- * </EventBusProvider>
- *
- * // Any deep component
- * const bus = useEventBus();
- * bus.emit('cart:add', { productId: 'sku123', qty: 2 });
- *
- * useEvent('user:login', ({ id }) => {
- *   console.log('Logged in', id);
- * });
- */

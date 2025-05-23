@@ -7,7 +7,7 @@ import typing as t
 
 import click
 
-from sqlmesh import configure_logging
+from sqlmesh import configure_logging, remove_excess_logs
 from sqlmesh.cli import error_handler
 from sqlmesh.cli import options as opt
 from sqlmesh.cli.example_project import ProjectTemplate, init_example_project
@@ -100,16 +100,18 @@ def cli(
         if ctx.invoked_subcommand in SKIP_LOAD_COMMANDS:
             load = False
 
-    configs = load_configs(config, Context.CONFIG_TYPE, paths)
-    log_limit = list(configs.values())[0].log_limit
     configure_logging(
         debug,
         log_to_stdout,
-        log_limit=log_limit,
         log_file_dir=log_file_dir,
         ignore_warnings=ignore_warnings,
     )
     configure_console(ignore_warnings=ignore_warnings)
+
+    configs = load_configs(config, Context.CONFIG_TYPE, paths)
+    log_limit = list(configs.values())[0].log_limit
+
+    remove_excess_logs(log_file_dir, log_limit)
 
     try:
         context = Context(
@@ -346,11 +348,13 @@ def diff(ctx: click.Context, environment: t.Optional[str] = None) -> None:
     "--skip-tests",
     is_flag=True,
     help="Skip tests prior to generating the plan if they are defined.",
+    default=None,
 )
 @click.option(
     "--skip-linter",
     is_flag=True,
     help="Skip linting prior to generating the plan if the linter is enabled.",
+    default=None,
 )
 @click.option(
     "--restate-model",
@@ -363,17 +367,20 @@ def diff(ctx: click.Context, environment: t.Optional[str] = None) -> None:
     "--no-gaps",
     is_flag=True,
     help="Ensure that new snapshots have no data gaps when comparing to existing snapshots for matching models in the target environment.",
+    default=None,
 )
 @click.option(
     "--skip-backfill",
     "--dry-run",
     is_flag=True,
     help="Skip the backfill step and only create a virtual update for the plan.",
+    default=None,
 )
 @click.option(
     "--empty-backfill",
     is_flag=True,
     help="Produce empty backfill. Like --skip-backfill no models will be backfilled, unlike --skip-backfill missing intervals will be recorded as if they were backfilled.",
+    default=None,
 )
 @click.option(
     "--forward-only",
@@ -439,6 +446,7 @@ def diff(ctx: click.Context, environment: t.Optional[str] = None) -> None:
     "--run",
     is_flag=True,
     help="Run latest intervals as part of the plan application (prod environment only).",
+    default=None,
 )
 @click.option(
     "--enable-preview",
@@ -450,6 +458,7 @@ def diff(ctx: click.Context, environment: t.Optional[str] = None) -> None:
     "--diff-rendered",
     is_flag=True,
     help="Output text differences for the rendered versions of the models and standalone audits",
+    default=None,
 )
 @opt.verbose
 @click.pass_context
@@ -905,6 +914,11 @@ def create_external_models(obj: Context, **kwargs: t.Any) -> None:
     "--skip-grain-check",
     is_flag=True,
     help="Disable the check for a primary key (grain) that is missing or is not unique.",
+)
+@click.option(
+    "--warn-grain-check",
+    is_flag=True,
+    help="Warn if any selected model is missing a grain, and compute diffs for the remaining models.",
 )
 @click.option(
     "--temp-schema",

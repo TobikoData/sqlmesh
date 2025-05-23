@@ -13,7 +13,6 @@ export const sendVSCodeMessage = <K extends keyof Callback>(
     key: callbackName,
     payload: payload,
   }
-  console.log('sending message to self', eventPayload)
   getVSCodeAPI().postMessage(eventPayload)
 }
 
@@ -23,9 +22,10 @@ interface VSCodeAPI {
   postMessage: (message: any) => void
 }
 
+declare function acquireVsCodeApi(): VSCodeAPI
+
 function getVSCodeAPI(): VSCodeAPI {
   if (!VSCODE_API) {
-    // @ts-ignore
     VSCODE_API = acquireVsCodeApi()
   }
   if (!VSCODE_API) {

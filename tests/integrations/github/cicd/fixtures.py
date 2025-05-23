@@ -25,14 +25,15 @@ def github_client(mocker: MockerFixture):
 
     client_mock = mocker.MagicMock(spec=Github)
     mocker.patch("github.Github", client_mock)
+
     mock_repository = mocker.MagicMock(spec=Repository)
+    client_mock.get_repo.return_value = mock_repository
+
     mock_pull_request = mocker.MagicMock(spec=PullRequest)
-    mock_pull_request.get_reviews = mocker.MagicMock(
-        side_effect=[mocker.MagicMock(spec=PullRequestReview)]
-    )
-    mock_repository.get_pull = mocker.MagicMock(side_effect=mock_pull_request)
-    mock_repository.get_issue = mocker.MagicMock(side_effect=mocker.MagicMock(spec=Issue))
-    client_mock.get_repo = mocker.MagicMock(side_effect=mock_repository)
+    mock_pull_request.base.ref = "main"
+    mock_pull_request.get_reviews.return_value = [mocker.MagicMock(spec=PullRequestReview)]
+    mock_repository.get_pull.return_value = mock_pull_request
+    mock_repository.get_issue.return_value = mocker.MagicMock(spec=Issue)
 
     return client_mock
 

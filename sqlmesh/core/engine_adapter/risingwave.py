@@ -30,6 +30,7 @@ class RisingwaveEngineAdapter(PostgresEngineAdapter):
     COMMENT_CREATION_VIEW = CommentCreationView.UNSUPPORTED
     SUPPORTS_MATERIALIZED_VIEWS = True
     SUPPORTS_TRANSACTIONS = False
+    MAX_IDENTIFIER_LENGTH = None
 
     def _truncate_table(self, table_name: TableName) -> None:
         return self.execute(exp.Delete(this=exp.to_table(table_name)))

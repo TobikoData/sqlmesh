@@ -68,6 +68,7 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
         },
     )
     MANAGED_TABLE_KIND = "DYNAMIC TABLE"
+    SNOWPARK = "snowpark"
 
     @contextlib.contextmanager
     def session(self, properties: SessionProperties) -> t.Iterator[None]:
@@ -104,9 +105,16 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
     @property
     def snowpark(self) -> t.Optional[SnowparkSession]:
         if snowpark:
-            return snowpark.Session.builder.configs(
-                {"connection": self._connection_pool.get()}
-            ).getOrCreate()
+            if not self._connection_pool.get_attribute(self.SNOWPARK):
+                # Snowpark sessions are not thread safe so we create a session per thread to prevent them from interfering with each other
+                # The sessions are cleaned up when close() is called
+                new_session = snowpark.Session.builder.configs(
+                    {"connection": self._connection_pool.get()}
+                ).create()
+                self._connection_pool.set_attribute(self.SNOWPARK, new_session)
+
+            return self._connection_pool.get_attribute(self.SNOWPARK)
+
         return None
 
     @property
@@ -584,3 +592,10 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
             return columns_to_types_from_dtypes(query_or_df.sample(n=1).to_pandas().dtypes.items())
 
         return super()._columns_to_types(query_or_df, columns_to_types)
+
+    def close(self) -> t.Any:
+        if snowpark_session := self._connection_pool.get_attribute(self.SNOWPARK):
+            snowpark_session.close()  # type: ignore
+            self._connection_pool.set_attribute(self.SNOWPARK, None)
+
+        return super().close()

@@ -7,7 +7,7 @@ import {
   isObjectEmpty,
   toID,
 } from '@/utils/index'
-import { type LineageColumn, type Column } from '@/api/client'
+import { type LineageColumn, type Column, type Model } from '@/api/client'
 import { Position, type Edge, type Node, type XYPosition } from 'reactflow'
 import { type ActiveEdges, type Connections } from './context'
 import { EnumSide } from './types'
@@ -18,12 +18,12 @@ import {
 import type { Lineage } from '@/domain/lineage'
 import type { ConnectedNode } from '@/workers/lineage'
 
-type ModelSQLMeshModel = any
-
 export interface GraphNodeData {
   label: string
   type: LineageNodeModelType
   withColumns: boolean
+  width?: number
+  height?: number
   [key: string]: any
 }
 
@@ -103,7 +103,6 @@ function getEdges(lineage: Record<string, Lineage> = {}): Edge[] {
   for (const targetModelName of modelNames) {
     const targetModel = lineage[targetModelName]!
 
-    // @ts-ignore
     targetModel.models.forEach(sourceModelName => {
       outputEdges.push(createGraphEdge(sourceModelName, targetModelName))
     })
@@ -157,7 +156,7 @@ function getNodeMap({
   unknownModels,
   withColumns,
 }: {
-  models: Map<string, ModelSQLMeshModel>
+  models: Record<string, Model>
   withColumns: boolean
   unknownModels: Set<string>
   lineage?: Record<string, Lineage>
@@ -173,24 +172,28 @@ function getNodeMap({
   const modelNames = Object.keys(lineage)
 
   return modelNames.reduce((acc: Record<string, Node>, modelName: string) => {
-    // @ts-ignore
-    const model = models[modelName]
+    const decodedModelName = modelName.includes('%')
+      ? decodeURI(modelName)
+      : modelName
+    const model = Object.values(models).find(m => m.fqn === decodedModelName)
+    console.log('model', model)
+    const nodeType: LineageNodeModelType = isNotNil(model)
+      ? (model.type as LineageNodeModelType)
+      : // If model name present in lineage but not in global models
+        // it means either this is a CTE or model is UNKNOWN
+        // CTEs only have connections between columns
+        // where UNKNOWN model has connection only from another model
+        unknownModels.has(modelName)
+        ? EnumLineageNodeModelType.unknown
+        : EnumLineageNodeModelType.cte
+
     const node = createGraphNode(modelName, {
-      label: model?.displayName ?? modelName,
+      label: model?.name ?? modelName,
       withColumns,
-      type: isNotNil(model)
-        ? (model.type as LineageNodeModelType)
-        : // If model name present in lineage but not in global models
-          // it means either this is a CTE or model is UNKNOWN
-          // CTEs only have connections between columns
-          // where UNKNOWN model has connection only from another model
-          unknownModels.has(modelName)
-          ? EnumLineageNodeModelType.unknown
-          : EnumLineageNodeModelType.cte,
+      type: nodeType,
     })
     const columnsCount = withColumns
-      ? // @ts-ignore
-        (models[modelName]?.columns?.length ?? 0)
+      ? (models[modelName]?.columns?.length ?? 0)
       : 0
 
     const maxWidth = Math.min(
@@ -219,7 +222,6 @@ function getNodeMap({
 
   function getNodeMaxWidth(label: string, hasColumns: boolean = false): number {
     const defaultWidth = label.length * CHAR_WIDTH
-    // @ts-ignore
     const columns = models[label]?.columns ?? []
 
     return hasColumns
@@ -272,7 +274,7 @@ function createGraphNode(
   data: GraphNodeData,
   position: XYPosition = { x: 0, y: 0 },
   hidden: boolean = false,
-): Node {
+): Node<GraphNodeData> {
   return {
     id,
     dragHandle: '.drag-handle',
@@ -370,7 +372,6 @@ function mergeLineageWithColumns(
                   newLineageModelColumnModel,
                 ),
           ),
-          // @ts-ignore
         ).map(encodeURI)
       }
     }
@@ -477,7 +478,6 @@ function getLineageIndex(lineage: Record<string, Lineage> = {}): string {
       const { models = [], columns = {} } = lineage[key]!
       const allModels = new Set<string>()
 
-      // @ts-ignore
       models.forEach(m => allModels.add(m))
 
       if (isNotNil(columns)) {

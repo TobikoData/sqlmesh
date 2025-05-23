@@ -116,6 +116,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                 after_promote_snapshots = all_names - before_promote_snapshots
                 deployability_index_for_evaluation = DeployabilityIndex.all_deployable()
 
+            # Step 1: Run before_all environment statements before doing anything else
             execute_environment_statements(
                 adapter=self.snapshot_evaluator.adapter,
                 environment_statements=plan.environment_statements or [],
@@ -128,15 +129,24 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                 execution_time=plan.execution_time,
             )
 
-            self._run_audits_for_metadata_snapshots(plan, new_snapshots)
-
+            # Step 2:Store new snapshot records in the state and create physical tables for them
             push_completion_status = self._push(plan, snapshots, deployability_index_for_creation)
             if push_completion_status.is_nothing_to_do:
-                self.console.log_status_update(
-                    "\n[green]SKIP: No physical layer updates to perform[/green]\n"
+                self.console.log_success(
+                    "" if plan.restatements else "\nSKIP: No physical layer updates to perform"
                 )
+
+            # Step 3: Update the intervals for the new forward-only snapshots
             update_intervals_for_new_snapshots(plan.new_snapshots, self.state_sync)
+
+            # Step 4: Run audits without evaluations for snapshots that capture audit metadata changes
+            self._run_audits_for_metadata_snapshots(plan, new_snapshots)
+
+            # Step 5: Remove intervals for snapshots that need to be restated
             self._restate(plan, snapshots_by_name)
+
+            # Step 6: Backfill missing intervals for snapshots that can be backfilled before updating
+            # the schema of production tables
             first_bf_completion_status = self._backfill(
                 plan,
                 snapshots_by_name,
@@ -144,9 +154,15 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                 deployability_index_for_evaluation,
                 circuit_breaker=circuit_breaker,
             )
+
+            # Step 7: Update the target environment record in the state and migrate table schemas for forward-only
+            # snapshots if deploying to production
             promotion_result = self._promote(
                 plan, snapshots, before_promote_snapshots, deployability_index_for_creation
             )
+
+            # Step 8: Backfill missing intervals for snapshots that can be backfilled only after updating
+            # the schema of production tables
             second_bf_completion_status = self._backfill(
                 plan,
                 snapshots_by_name,
@@ -154,15 +170,20 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                 deployability_index_for_evaluation,
                 circuit_breaker=circuit_breaker,
             )
+
             if (
                 first_bf_completion_status.is_nothing_to_do
                 and second_bf_completion_status.is_nothing_to_do
             ):
-                self.console.log_status_update("[green]SKIP: No model batches to execute[/green]\n")
+                self.console.log_success("SKIP: No model batches to execute")
+
+            # Step 9: Update environment views to point at new physical tables and finalize the environment
+            # record in the state
             self._update_views(
                 plan, snapshots, promotion_result, deployability_index_for_evaluation
             )
 
+            # Step 10: Run after_all environment statements
             execute_environment_statements(
                 adapter=self.snapshot_evaluator.adapter,
                 environment_statements=plan.environment_statements or [],

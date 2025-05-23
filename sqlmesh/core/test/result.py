@@ -17,6 +17,8 @@ class ModelTextTestResult(unittest.TextTestResult):
     def __init__(self, *args: t.Any, **kwargs: t.Any):
         super().__init__(*args, **kwargs)
         self.successes = []
+        self.original_failures: t.List[t.Tuple[unittest.TestCase, ErrorType]] = []
+        self.original_errors: t.List[t.Tuple[unittest.TestCase, ErrorType]] = []
 
     def addSubTest(
         self,
@@ -48,8 +50,9 @@ class ModelTextTestResult(unittest.TextTestResult):
             test: The test case.
             err: A tuple of the form returned by sys.exc_info(), i.e., (type, value, traceback).
         """
-        exctype, value, tb = err
-        self.original_err = (test, err)
+        exctype, value, _ = err
+        self.original_failures.append((test, err))
+        # Intentionally ignore the traceback to hide it from the user
         return super().addFailure(test, (exctype, value, None))  # type: ignore
 
     def addError(self, test: unittest.TestCase, err: ErrorType) -> None:
@@ -59,8 +62,10 @@ class ModelTextTestResult(unittest.TextTestResult):
             test: The test case.
             err: A tuple of the form returned by sys.exc_info(), i.e., (type, value, traceback).
         """
-        self.original_err = (test, err)
-        return super().addError(test, err)  # type: ignore
+        exctype, value, _ = err
+        self.original_errors.append((test, err))
+        # Intentionally ignore the traceback to hide it from the user
+        return super().addError(test, (exctype, value, None))  # type: ignore
 
     def addSuccess(self, test: unittest.TestCase) -> None:
         """Called when the test case test succeeds.
@@ -105,9 +110,10 @@ class ModelTextTestResult(unittest.TextTestResult):
             stream.writeln(unittest.TextTestResult.separator2)
             stream.writeln(failure)
 
-        for _, error in errors:
+        for test_case, error in errors:
             stream.writeln(unittest.TextTestResult.separator1)
-            stream.writeln(f"ERROR: {error}")
+            stream.writeln(f"ERROR: {test_case}")
+            stream.writeln(error)
 
         # Output final report
         stream.writeln(unittest.TextTestResult.separator2)

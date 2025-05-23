@@ -1238,7 +1238,7 @@ def test_seed_marker_substitution():
     )
 
     assert isinstance(model.kind, SeedKind)
-    assert model.kind.path == "examples/sushi/seeds/waiter_names.csv"
+    assert model.kind.path == str(Path("examples/sushi/seeds/waiter_names.csv"))
     assert model.seed is not None
     assert len(model.seed.content) > 0
 
@@ -4919,6 +4919,10 @@ def test_signals():
     model = load_sql_based_model(expressions)
     assert model.signals[0][1] == {"arg": exp.Literal.number(1)}
 
+    @signal()
+    def my_signal(batch):
+        return True
+
     expressions = d.parse(
         """
         MODEL (
@@ -4946,7 +4950,10 @@ def test_signals():
         """
     )
 
-    model = load_sql_based_model(expressions)
+    model = load_sql_based_model(
+        expressions,
+        signal_definitions={"my_signal": signal.get_registry()["my_signal"]},
+    )
     assert model.signals == [
         (
             "my_signal",
@@ -5067,7 +5074,8 @@ def test_when_matched():
     unique_key ("purchase_order_id"),
     when_matched (
       WHEN MATCHED AND __MERGE_SOURCE__._operation = 1 THEN DELETE
-      WHEN MATCHED AND __MERGE_SOURCE__._operation <> 1 THEN UPDATE SET __MERGE_TARGET__.purchase_order_id = 1
+      WHEN MATCHED AND __MERGE_SOURCE__._operation <> 1 THEN UPDATE SET
+        __MERGE_TARGET__.purchase_order_id = 1
     ),
     batch_concurrency 1,
     forward_only FALSE,
@@ -5118,7 +5126,8 @@ FROM @{macro_val}.upstream"""
   kind INCREMENTAL_BY_UNIQUE_KEY (
     unique_key ("purchase_order_id"),
     when_matched (
-      WHEN MATCHED AND __MERGE_SOURCE__.salary <> __MERGE_TARGET__.salary THEN UPDATE SET ARRAY('target.update_datetime = source.update_datetime', 'target.salary = source.salary')
+      WHEN MATCHED AND __MERGE_SOURCE__.salary <> __MERGE_TARGET__.salary THEN UPDATE SET
+        ARRAY('target.update_datetime = source.update_datetime', 'target.salary = source.salary')
     ),
     batch_concurrency 1,
     forward_only FALSE,
@@ -7495,7 +7504,8 @@ def test_merge_filter():
     unique_key ("purchase_order_id"),
     when_matched (
       WHEN MATCHED AND {MERGE_SOURCE_ALIAS}._operation = 1 THEN DELETE
-      WHEN MATCHED AND {MERGE_SOURCE_ALIAS}._operation <> 1 THEN UPDATE SET {MERGE_TARGET_ALIAS}.purchase_order_id = 1
+      WHEN MATCHED AND {MERGE_SOURCE_ALIAS}._operation <> 1 THEN UPDATE SET
+        {MERGE_TARGET_ALIAS}.purchase_order_id = 1
     ),
     merge_filter (
       {MERGE_SOURCE_ALIAS}.ds > (
@@ -9834,6 +9844,22 @@ def test_invalid_audit_reference():
         load_sql_based_model(expressions)
 
 
+def test_invalid_signal_reference():
+    sql = """
+    MODEL (
+      name test,
+      signals (s())
+    );
+
+    SELECT
+      1 AS id
+    """
+    expressions = d.parse(sql)
+
+    with pytest.raises(ConfigError, match="Signal 's' is undefined"):
+        load_sql_based_model(expressions)
+
+
 def test_scd_time_data_type_does_not_cause_diff_after_deserialization() -> None:
     for dialect in (
         "athena",
@@ -9948,3 +9974,40 @@ def test_resolve_interpolated_variables_when_parsing_python_deps():
         {"selector": "bla", "bla_variable": 1, "baz_variable": 2}
     )
     assert m.python_env.get(c.SQLMESH_BLUEPRINT_VARS) == Executable.value({"selector": "baz"})
+
+
+def test_extract_schema_in_post_statement(tmp_path: Path) -> None:
+    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+
+    config = Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))
+
+    model1 = tmp_path / "models" / "parent_model.sql"
+    model1.parent.mkdir(parents=True, exist_ok=True)
+    model1.write_text("MODEL (name x); SELECT 1 AS c")
+
+    model2 = tmp_path / "models" / "child_model.sql"
+    model2.parent.mkdir(parents=True, exist_ok=True)
+    model2.write_text(
+        """
+        MODEL (name y);
+        SELECT c FROM x;
+        ON_VIRTUAL_UPDATE_BEGIN;
+        @check_schema('y');
+        ON_VIRTUAL_UPDATE_END;
+        """
+    )
+
+    check_schema = tmp_path / "macros/check_schema.py"
+    check_schema.parent.mkdir(parents=True, exist_ok=True)
+    check_schema.write_text("""
+from sqlglot import exp
+from sqlmesh import macro
+
+@macro()
+def check_schema(evaluator, model_name: str):
+    if evaluator.runtime_stage != 'loading':
+        assert evaluator.columns_to_types(model_name) == {"c": exp.DataType.build("INT")}
+""")
+
+    context = Context(paths=tmp_path, config=config)
+    context.plan(no_prompts=True, auto_apply=True)

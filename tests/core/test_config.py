@@ -343,6 +343,7 @@ model_defaults:
         os.environ,
         {
             "SQLMESH__GATEWAYS__TESTING__STATE_CONNECTION__TYPE": "bigquery",
+            "SQLMESH__GATEWAYS__TESTING__STATE_CONNECTION__CHECK_IMPORT": "false",
             "SQLMESH__DEFAULT_GATEWAY": "testing",
         },
     ):
@@ -353,7 +354,7 @@ model_defaults:
             gateways={
                 "testing": GatewayConfig(
                     connection=MotherDuckConnectionConfig(database="blah"),
-                    state_connection=BigQueryConnectionConfig(),
+                    state_connection=BigQueryConnectionConfig(check_import=False),
                 ),
             },
             model_defaults=ModelDefaultsConfig(dialect="bigquery"),
@@ -373,6 +374,7 @@ config = Config(gateways={"duckdb_gateway": GatewayConfig(connection=DuckDBConne
         os.environ,
         {
             "SQLMESH__GATEWAYS__DUCKDB_GATEWAY__STATE_CONNECTION__TYPE": "bigquery",
+            "SQLMESH__GATEWAYS__DUCKDB_GATEWAY__STATE_CONNECTION__CHECK_IMPORT": "false",
             "SQLMESH__DEFAULT_GATEWAY": "duckdb_gateway",
         },
     ):
@@ -384,7 +386,7 @@ config = Config(gateways={"duckdb_gateway": GatewayConfig(connection=DuckDBConne
             gateways={  # type: ignore
                 "duckdb_gateway": GatewayConfig(
                     connection=DuckDBConnectionConfig(),
-                    state_connection=BigQueryConnectionConfig(),
+                    state_connection=BigQueryConnectionConfig(check_import=False),
                 ),
             },
             model_defaults=ModelDefaultsConfig(dialect=""),
@@ -548,6 +550,7 @@ def test_connection_config_serialization():
         "pre_ping": False,
         "pretty_sql": False,
         "connector_config": {},
+        "secrets": [],
         "database": "my_db",
     }
     assert serialized["default_test_connection"] == {
@@ -558,6 +561,7 @@ def test_connection_config_serialization():
         "pre_ping": False,
         "pretty_sql": False,
         "connector_config": {},
+        "secrets": [],
         "database": "my_test_db",
     }
 
@@ -823,6 +827,7 @@ def test_gcp_postgres_ip_and_scopes(tmp_path):
       gcp_postgres:
         connection:
           type: gcp_postgres
+          check_import: false
           instance_connection_string: something
           user: user
           password: password
@@ -980,3 +985,37 @@ def test_config_subclassing() -> None:
     class ConfigSubclass(Config): ...
 
     ConfigSubclass()
+
+
+def test_config_complex_types_supplied_as_json_strings_from_env(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text("""
+    gateways:
+      bigquery:
+        connection:
+          type: bigquery
+          project: unit-test
+
+    default_gateway: bigquery
+
+    model_defaults:
+      dialect: bigquery
+""")
+    with mock.patch.dict(
+        os.environ,
+        {
+            "SQLMESH__GATEWAYS__BIGQUERY__CONNECTION__SCOPES": '     ["a","b","c"]',  # note: leading whitespace is deliberate
+            "SQLMESH__GATEWAYS__BIGQUERY__CONNECTION__KEYFILE_JSON": '{ "foo": "bar" }',
+        },
+    ):
+        config = load_config_from_paths(
+            Config,
+            project_paths=[config_path],
+        )
+
+        conn = config.gateways["bigquery"].connection
+        assert isinstance(conn, BigQueryConnectionConfig)
+
+        assert conn.project == "unit-test"
+        assert conn.scopes == ("a", "b", "c")
+        assert conn.keyfile_json == {"foo": "bar"}

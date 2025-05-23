@@ -150,9 +150,11 @@ def run_tests(
             if result.successes:
                 combined_results.addSuccess(result.successes[0])
             elif result.errors:
-                combined_results.addError(result.original_err[0], result.original_err[1])
+                for error_test, error in result.original_errors:
+                    combined_results.addError(error_test, error)
             elif result.failures:
-                combined_results.addFailure(result.original_err[0], result.original_err[1])
+                for failure_test, failure in result.original_failures:
+                    combined_results.addFailure(failure_test, failure)
             elif result.skipped:
                 skipped_args = result.skipped[0]
                 combined_results.addSkip(skipped_args[0], skipped_args[1])

@@ -129,18 +129,23 @@ class SQLMeshMagics(Magics):
     @line_magic
     def context(self, line: str) -> None:
         """Sets the context in the user namespace."""
-        from sqlmesh import configure_logging
+        from sqlmesh import configure_logging, remove_excess_logs
 
         args = parse_argstring(self.context, line)
-        configs = load_configs(args.config, Context.CONFIG_TYPE, args.paths)
-        log_limit = list(configs.values())[0].log_limit
+        log_file_dir = args.log_file_dir
+
         configure_logging(
             args.debug,
-            log_limit=log_limit,
-            log_file_dir=args.log_file_dir,
+            log_file_dir=log_file_dir,
             ignore_warnings=args.ignore_warnings,
         )
         configure_console(ignore_warnings=args.ignore_warnings)
+
+        configs = load_configs(args.config, Context.CONFIG_TYPE, args.paths)
+        log_limit = list(configs.values())[0].log_limit
+
+        remove_excess_logs(log_file_dir, log_limit)
+
         try:
             context = Context(paths=args.paths, config=configs, gateway=args.gateway)
             self._shell.user_ns["context"] = context
@@ -148,6 +153,7 @@ class SQLMeshMagics(Magics):
             if args.debug:
                 logger.exception("Failed to initialize SQLMesh context")
             raise
+
         context.console.log_success(f"SQLMesh project context set to: {', '.join(args.paths)}")
 
     @magic_arguments()
@@ -702,6 +708,11 @@ class SQLMeshMagics(Magics):
         action="store_true",
         help="Disable the check for a primary key (grain) that is missing or is not unique.",
     )
+    @argument(
+        "--warn-grain-check",
+        action="store_true",
+        help="Warn if any selected model is missing a grain, and compute diffs for the remaining models.",
+    )
     @line_magic
     @pass_sqlmesh_context
     def table_diff(self, context: Context, line: str) -> None:
@@ -723,6 +734,7 @@ class SQLMeshMagics(Magics):
             show_sample=args.show_sample,
             decimals=args.decimals,
             skip_grain_check=args.skip_grain_check,
+            warn_grain_check=args.warn_grain_check,
         )
 
     @magic_arguments()

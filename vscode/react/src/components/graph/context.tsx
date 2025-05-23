@@ -10,6 +10,8 @@ import { getNodeMap, hasActiveEdge, hasActiveEdgeConnector } from './help'
 import { EnumSide } from './types'
 import { type Node } from 'reactflow'
 import type { Lineage } from '@/domain/lineage'
+import type { ModelSQLMeshModel } from '@/domain/sqlmesh-model'
+
 export interface Connections {
   left: string[]
   right: string[]
@@ -19,8 +21,6 @@ export type ActiveEdges = Map<string, Array<[string, string]>>
 export type ActiveNodes = Set<string>
 export type SelectedNodes = Set<string>
 export type HighlightedNodes = Record<string, string[]>
-
-type ModelSQLMeshModel = any
 
 interface LineageFlow {
   lineage: Record<string, Lineage>
@@ -161,7 +161,6 @@ export default function LineageFlowProvider({
     () =>
       getNodeMap({
         lineage,
-        // @ts-ignore
         models,
         unknownModels,
         withColumns,

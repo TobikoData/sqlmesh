@@ -64,7 +64,7 @@ engine-up: engine-clickhouse-up engine-mssql-up engine-mysql-up engine-postgres-
 engine-down: engine-clickhouse-down engine-mssql-down engine-mysql-down engine-postgres-down engine-spark-down engine-trino-down
 
 fast-test:
-	pytest -n auto -m "fast and not cicdonly" && pytest -m "isolated"
+	pytest -n auto -m "fast and not cicdonly" --junitxml=test-results/junit-fast-test.xml && pytest -m "isolated"
 
 slow-test:
 	pytest -n auto -m "(fast or slow) and not cicdonly" && pytest -m "isolated"
@@ -170,12 +170,13 @@ clickhouse-cloud-test: guard-CLICKHOUSE_CLOUD_HOST guard-CLICKHOUSE_CLOUD_USERNA
 	pytest -n 1 -m "clickhouse_cloud" --retries 3 --junitxml=test-results/junit-clickhouse-cloud.xml
 
 athena-test: guard-AWS_ACCESS_KEY_ID guard-AWS_SECRET_ACCESS_KEY guard-ATHENA_S3_WAREHOUSE_LOCATION engine-athena-install
-	pytest -n auto -m "athena" --retries 3 --retry-delay 10 --junitxml=test-results/junit-athena.xml
+	pytest -n auto -m "athena" --retries 3 --junitxml=test-results/junit-athena.xml
 
 vscode_settings:
 	mkdir -p .vscode
 	cp -r ./tooling/vscode/*.json .vscode/
 
 vscode-generate-openapi:
-	python3 web/server/openapi.py --output vscode/extension/openapi.json
+	python3 web/server/openapi.py --output vscode/openapi.json
+	pnpm run fmt
 	cd vscode/react && pnpm run generate:api

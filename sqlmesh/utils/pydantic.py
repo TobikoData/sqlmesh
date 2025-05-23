@@ -221,7 +221,8 @@ def _formatted_validation_errors(error: pydantic.ValidationError) -> t.List[str]
     for e in error.errors():
         msg = e["msg"]
         loc: t.Optional[t.Tuple] = e.get("loc")
-        result.append(f"Invalid field '{loc[0]}':\n    {msg}" if loc else msg)
+        loc_str = ".".join(loc) if loc else None
+        result.append(f"Invalid field '{loc_str}':\n    {msg}" if loc_str else msg)
     return result
 
 
@@ -303,6 +304,24 @@ def cron_validator(v: t.Any) -> str:
     except CroniterBadCronError:
         raise ValueError(f"Invalid cron expression '{v}'")
     return v
+
+
+def get_concrete_types_from_typehint(typehint: type[t.Any]) -> set[type[t.Any]]:
+    concrete_types = set()
+    unpacked = t.get_origin(typehint)
+    if unpacked is None:
+        if type(typehint) == type(type):
+            return {typehint}
+    elif unpacked is t.Union:
+        for item in t.get_args(typehint):
+            if str(item).startswith("typing."):
+                concrete_types |= get_concrete_types_from_typehint(item)
+            else:
+                concrete_types.add(item)
+    else:
+        concrete_types.add(unpacked)
+
+    return concrete_types
 
 
 if t.TYPE_CHECKING:
