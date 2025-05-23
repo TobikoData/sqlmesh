@@ -45,7 +45,8 @@ export class LSPClient implements Disposable {
     }
 
     const folder = workspaceFolders[0]
-    const workspacePath = workspaceFolders[0].uri.fsPath
+    // Use the workspace path from sqlmesh config, which respects the projectPath setting
+    const workspacePath = sqlmesh.value.workspacePath
     const serverOptions: ServerOptions = {
       run: {
         command: sqlmesh.value.bin,

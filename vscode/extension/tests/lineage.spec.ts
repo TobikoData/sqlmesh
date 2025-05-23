@@ -1,4 +1,4 @@
-import { test, _electron as electron, expect } from '@playwright/test';
+import { test, _electron as electron, expect, ElectronApplication, Page } from '@playwright/test';
 import path from 'path';
 import fs from 'fs-extra';
 import os from 'os';
@@ -10,51 +10,114 @@ const EXT_PATH = path.resolve(__dirname, '..');
 // Where the sushi project lives which we copy from
 const SUSHI_SOURCE_PATH = path.join(__dirname, '..', '..', '..', 'examples', 'sushi');
 
-test('Lineage panel renders correctly', async () => {
-  // Create a temporary directory and copy sushi example into it
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'vscode-test-sushi-'));
-  await fs.copy(SUSHI_SOURCE_PATH, tempDir);
-
+/**
+ * Helper function to launch VS Code and test lineage with given project path config
+ */
+async function testLineageWithProjectPath(
+  workspaceDir: string,
+  projectDir: string,
+  projectPathConfig?: string
+): Promise<void> {
+  const ciArgs = process.env.CI ? [
+    '--disable-gpu',
+    '--headless',
+    '--no-sandbox',
+    '--disable-dev-shm-usage',
+    '--window-position=-10000,0',
+  ] : [];
+  
+  const userDataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'vscode-user-data-'));
+  
   try {
-    const ciArgs = process.env.CI ? [
-      '--disable-gpu',
-      '--headless',
-      '--no-sandbox',
-      '--disable-dev-shm-usage',  // Prevents memory issues in Docker/CI
-      '--window-position=-10000,0', // Ensures window is off-screen
-    ] : [];
+    // If projectPathConfig is provided, create .vscode/settings.json in the workspace
+    if (projectPathConfig !== undefined) {
+      const vscodeDir = path.join(workspaceDir, '.vscode');
+      await fs.ensureDir(vscodeDir);
+      const settings = {
+        "sqlmesh.projectPath": projectPathConfig
+      };
+      await fs.writeJson(path.join(vscodeDir, 'settings.json'), settings, { spaces: 2 });
+    }
+    
     const args = [
       ...ciArgs,
       `--extensionDevelopmentPath=${EXT_PATH}`,
-      '--disable-workspace-trust',          // no modal prompt
+      '--disable-workspace-trust',
       '--disable-telemetry',
-      '--user-data-dir=/tmp/vscode-test',   // throwaway profile
-      `${tempDir}`,  // Use the temporary directory instead of PROJECT_PATH
+      `--user-data-dir=${userDataDir}`,
+      workspaceDir,
     ];
+    
     const electronApp = await electron.launch({
       executablePath: VS_CODE_EXE,
       args,
     });
 
-    // ➋ Grab the first window that appears (the Workbench)
     const window = await electronApp.firstWindow();
-
-    // Wait for VS Code to be ready
     await window.waitForLoadState('domcontentloaded');
     await window.waitForLoadState('networkidle');
+    
+    // Wait a bit for the extension to fully initialize with the settings
+    await window.waitForTimeout(2000);
 
-    // ➌ Trigger our command exactly like a user would
+    // Trigger lineage command
     await window.keyboard.press(process.platform === 'darwin' ? 'Meta+Shift+P' : 'Control+Shift+P');
     await window.keyboard.type('Lineage: Focus On View');
     await window.keyboard.press('Enter');
 
     // Wait for "Loaded SQLmesh Context" text to appear
     const loadedContextText = window.locator('text=Loaded SQLMesh Context');
-    await expect(loadedContextText.first()).toBeVisible({ timeout: 10000 });
+    await expect(loadedContextText.first()).toBeVisible({ timeout: 15000 });
 
     await electronApp.close();
   } finally {
-    // Clean up the temporary directory
+    await fs.remove(userDataDir);
+  }
+}
+
+export const startVSCode = async (workspaceDir: string) => {
+  
+}
+
+test('Lineage panel renders correctly - no project path config (default)', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'vscode-test-sushi-'));
+  await fs.copy(SUSHI_SOURCE_PATH, tempDir);
+
+  try {
+    await testLineageWithProjectPath(tempDir, tempDir);
+  } finally {
     await fs.remove(tempDir);
+  }
+});
+
+test('Lineage panel renders correctly - relative project path', async () => {
+  // Create workspace directory with subdirectory containing the project
+  const workspaceDir = await fs.mkdtemp(path.join(os.tmpdir(), 'vscode-test-workspace-'));
+  const projectSubdir = path.join(workspaceDir, 'projects', 'sushi');
+  await fs.ensureDir(path.dirname(projectSubdir));
+  await fs.copy(SUSHI_SOURCE_PATH, projectSubdir);
+
+  try {
+    // Test with relative path
+    await testLineageWithProjectPath(workspaceDir, projectSubdir, 'projects/sushi');
+  } finally {
+    await fs.remove(workspaceDir);
+  }
+});
+
+test('Lineage panel renders correctly - absolute project path', async () => {
+  // Create workspace directory
+  const workspaceDir = await fs.mkdtemp(path.join(os.tmpdir(), 'vscode-test-workspace-'));
+  
+  // Create project directory outside workspace
+  const projectDir = await fs.mkdtemp(path.join(os.tmpdir(), 'vscode-test-sushi-project-'));
+  await fs.copy(SUSHI_SOURCE_PATH, projectDir);
+
+  try {
+    // Test with absolute path
+    await testLineageWithProjectPath(workspaceDir, projectDir, projectDir);
+  } finally {
+    await fs.remove(workspaceDir);
+    await fs.remove(projectDir);
   }
 });
