@@ -8,7 +8,7 @@ import {
 import { sqlmeshLspExec } from '../utilities/sqlmesh/sqlmesh'
 import { err, isErr, ok, Result } from '@bus/result'
 import { getWorkspaceFolders } from '../utilities/common/vscodeapi'
-import { traceError } from '../utilities/common/log'
+import { traceError, traceInfo } from '../utilities/common/log'
 import { ErrorType } from '../utilities/errors'
 import { CustomLSPMethods } from './custom'
 
@@ -43,9 +43,6 @@ export class LSPClient implements Disposable {
         message: 'Invalid number of workspace folders',
       })
     }
-
-    const folder = workspaceFolders[0]
-    // Use the workspace path from sqlmesh config, which respects the projectPath setting
     const workspacePath = sqlmesh.value.workspacePath
     const serverOptions: ServerOptions = {
       run: {
@@ -67,11 +64,13 @@ export class LSPClient implements Disposable {
     }
     const clientOptions: LanguageClientOptions = {
       documentSelector: [{ scheme: 'file', pattern: `**/*.sql` }],
-      workspaceFolder: folder,
       diagnosticCollectionName: 'sqlmesh',
       outputChannel: outputChannel,
     }
 
+    traceInfo(
+      `Starting SQLMesh Language Server with workspace path: ${workspacePath} with server options ${JSON.stringify(serverOptions)} and client options ${JSON.stringify(clientOptions)}`,
+    )
     this.client = new LanguageClient(
       'sqlmesh-lsp',
       'SQLMesh Language Server',

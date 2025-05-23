@@ -69,10 +69,7 @@ class SQLMeshLanguageServer:
                                     # Use user-provided instantiator to build the context
                                     created_context = self.context_class(paths=[folder_path])
                                     self.lsp_context = LSPContext(created_context)
-                                    ls.show_message(
-                                        f"Loaded SQLMesh context from {config_path}",
-                                        types.MessageType.Info,
-                                    )
+                                    loaded_sqlmesh_message(ls, folder_path)
                                     return  # Exit after successfully loading any config
                                 except Exception as e:
                                     ls.show_message(
@@ -94,6 +91,9 @@ class SQLMeshLanguageServer:
         @self.server.feature(API_FEATURE)
         def api(ls: LanguageServer, request: ApiRequest) -> t.Dict[str, t.Any]:
             ls.log_trace(f"API request: {request}")
+            if self.lsp_context is None:
+                current_path = Path.cwd()
+                self._ensure_context_in_folder(current_path)
             if self.lsp_context is None:
                 raise RuntimeError("No context found")
 
@@ -291,6 +291,20 @@ class SQLMeshLanguageServer:
             raise RuntimeError("No context found")
         return self.lsp_context
 
+    def _ensure_context_in_folder(self, folder_uri: Path) -> None:
+        if self.lsp_context is not None:
+            return
+        for ext in ("py", "yml", "yaml"):
+            config_path = folder_uri / f"config.{ext}"
+            if config_path.exists():
+                try:
+                    created_context = self.context_class(paths=[folder_uri])
+                    self.lsp_context = LSPContext(created_context)
+                    loaded_sqlmesh_message(self.server, folder_uri)
+                    return
+                except Exception as e:
+                    self.server.show_message(f"Error loading context: {e}", types.MessageType.Error)
+
     def _ensure_context_for_document(
         self,
         document_uri: URI,
@@ -380,6 +394,13 @@ class SQLMeshLanguageServer:
         """Start the server with I/O transport."""
         logging.basicConfig(level=logging.DEBUG)
         self.server.start_io()
+
+
+def loaded_sqlmesh_message(ls: LanguageServer, folder: Path) -> None:
+    ls.show_message(
+        f"Loaded SQLMesh context from {folder}",
+        types.MessageType.Info,
+    )
 
 
 def main() -> None:

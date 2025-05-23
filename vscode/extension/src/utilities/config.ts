@@ -16,7 +16,6 @@ export interface SqlmeshConfiguration {
 export function getSqlmeshConfiguration(): SqlmeshConfiguration {
   const config = workspace.getConfiguration('sqlmesh')
   const projectPath = config.get<string>('projectPath', '')
-
   return {
     projectPath,
   }

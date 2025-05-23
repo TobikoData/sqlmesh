@@ -34,7 +34,7 @@
         "sqlmesh.projectPath": {
           "type": "string",
           "default": "",
-          "markdownDescription": "The path to the SQLMesh project. If not set, the extension will try to find the project root automatically. If set, the extension will use the project root as the workspace path, e.g. it will run `sqlmesh` and `sqlmesh_lsp` in the project root. The path can be absolute or relative to the workspace root."
+          "markdownDescription": "The path to the SQLMesh project. If not set, the extension will try to find the project root automatically. If set, the extension will use the project root as the workspace path, e.g. it will run `sqlmesh` and `sqlmesh_lsp` in the project root. The path can be absolute `/Users/sqlmesh_user/sqlmesh_project/sushi` or relative `./project_folder/sushi` to the workspace root."
         }
       }
     },
