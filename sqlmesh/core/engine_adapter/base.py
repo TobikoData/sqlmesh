@@ -2203,19 +2203,6 @@ class EngineAdapter:
             query_or_df, columns_to_types=columns_to_types, target_table=name
         )
 
-        if hasattr(self, "_query_table_type_or_raise") and hasattr(self, "source_table"):
-            if getattr(self, "source_table", None):
-                try:
-                    table_for_format_query = exp.to_table(self.source_table)
-                    calculated_table_format = self._query_table_type_or_raise(
-                        table_for_format_query
-                    )
-                    kwargs |= {"table_format": calculated_table_format}
-                except Exception as e:
-                    logger.warning(
-                        f"Failed to determine table_format using _query_table_type_or_raise for {self.source_table}: {e}"
-                    )
-
         with self.transaction():
             table = self._get_temp_table(name)
             if table.db:

@@ -8,6 +8,7 @@ import pandas as pd
 
 from sqlmesh.core.dialect import to_schema
 from sqlmesh.core.engine_adapter.mixins import RowDiffMixin
+from sqlmesh.core.engine_adapter.athena import AthenaEngineAdapter
 from sqlglot import exp, parse_one
 from sqlglot.helper import ensure_list
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
@@ -431,7 +432,13 @@ class TableDiff:
             schema = to_schema(temp_schema, dialect=self.dialect)
             temp_table = exp.table_("diff", db=schema.db, catalog=schema.catalog, quoted=True)
 
-            with self.adapter.temp_table(query, name=temp_table) as table:
+            temp_table_kwargs = {}
+            if isinstance(self.adapter, AthenaEngineAdapter):
+                source_table_type = self.adapter._query_table_type_or_raise(self.source_table)
+                if source_table_type == "iceberg":
+                    temp_table_kwargs["table_format"] = "iceberg"
+
+            with self.adapter.temp_table(query, name=temp_table, **temp_table_kwargs) as table:
                 summary_sums = [
                     exp.func("SUM", "s_exists").as_("s_count"),
                     exp.func("SUM", "t_exists").as_("t_count"),
