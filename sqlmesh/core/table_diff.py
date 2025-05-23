@@ -433,13 +433,17 @@ class TableDiff:
             schema = to_schema(temp_schema, dialect=self.dialect)
             temp_table = exp.table_("diff", db=schema.db, catalog=schema.catalog, quoted=True)
 
-            temp_kwargs = {}
+            temp_table_kwargs = {}
             if isinstance(self.adapter, AthenaEngineAdapter):
+                # Athena has two table formats: Hive (the default) and Iceberg. TableDiff requires that
+                # the formats be the same for the source, target, and temp tables.
                 source_table_type = self.adapter._query_table_type(self.source_table)
                 target_table_type = self.adapter._query_table_type(self.target_table)
 
                 if source_table_type == "iceberg" and target_table_type == "iceberg":
-                    temp_kwargs["table_format"] = "iceberg"
+                    temp_table_kwargs["table_format"] = "iceberg"
+                # Sets the temp table's format to Iceberg.
+                # If neither source nor target table is Iceberg, it defaults to Hive (Athena's default).
                 elif source_table_type == "iceberg" or target_table_type == "iceberg":
                     raise SQLMeshError(
                         f"Source table '{self.source}' format '{source_table_type}' and target table '{self.target}' format '{target_table_type}' "
@@ -447,7 +451,7 @@ class TableDiff:
                     )
 
             with self.adapter.temp_table(
-                query, name=temp_table, columns_to_types=None, **temp_kwargs
+                query, name=temp_table, columns_to_types=None, **temp_table_kwargs
             ) as table:
                 summary_sums = [
                     exp.func("SUM", "s_exists").as_("s_count"),
