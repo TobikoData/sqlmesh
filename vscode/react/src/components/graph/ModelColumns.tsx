@@ -45,6 +45,7 @@ import { useLineageFlow } from './context'
 import { Popover, Transition } from '@headlessui/react'
 import { useApiColumnLineage } from '@/api/index'
 import SourceList from '@/components/sourceList/SourceList'
+import type { Lineage } from '@/domain/lineage'
 
 export default function ModelColumns({
   nodeId,
@@ -401,7 +402,7 @@ function ModelColumn({
     refetch: getColumnLineage,
     isFetching,
     isError,
-  } = useApiColumnLineage(nodeId, column.name)
+  } = useApiColumnLineage(nodeId, column.name, { models_only: true })
 
   useEffect(() => {
     if (isNil(selectManually)) return
@@ -701,7 +702,6 @@ function ColumnSource({
       />
       <Transition
         show={isShowing}
-        // @ts-ignore
         as={Fragment}
         enter="transition ease-out duration-200"
         enterFrom="opacity-0 -translate-y-[40%]"

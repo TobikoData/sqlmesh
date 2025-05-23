@@ -29,9 +29,11 @@ export interface SqlmeshExecInfo {
 export const isTcloudProject = async (): Promise<Result<boolean, string>> => {
   const projectRoot = await getProjectRoot()
   const tcloudYamlPath = path.join(projectRoot.uri.fsPath, 'tcloud.yaml')
+  const tcloudYmlPath = path.join(projectRoot.uri.fsPath, 'tcloud.yml')
   const isTcloudYamlFilePresent = fs.existsSync(tcloudYamlPath)
-  if (isTcloudYamlFilePresent) {
-    traceVerbose(`tcloud yaml file present at : ${tcloudYamlPath}`)
+  const isTcloudYmlFilePresent = fs.existsSync(tcloudYmlPath)
+  if (isTcloudYamlFilePresent || isTcloudYmlFilePresent) {
+    traceVerbose(`tcloud yaml or yml file present at : ${tcloudYamlPath}`)
     return ok(true)
   }
   const isTcloudInstalled = await isPythonModuleInstalled('tcloud')
@@ -80,7 +82,10 @@ export const isSqlmeshEnterpriseInstalled = async (): Promise<
   if (isErr(tcloudBin)) {
     return tcloudBin
   }
-  const called = await execAsync(tcloudBin.value, ['is_sqlmesh_installed'])
+  const projectRoot = await getProjectRoot()
+  const called = await execAsync(tcloudBin.value, ['is_sqlmesh_installed'], {
+    cwd: projectRoot.uri.fsPath,
+  })
   if (called.exitCode !== 0) {
     return err({
       type: 'generic',
@@ -230,7 +235,7 @@ export const sqlmeshExec = async (): Promise<
       workspacePath,
       env: {
         PYTHONPATH: interpreterDetails.path?.[0],
-        VIRTUAL_ENV: path.dirname(interpreterDetails.binPath!),
+        VIRTUAL_ENV: path.dirname(path.dirname(interpreterDetails.binPath!)), // binPath now points to bin dir
         PATH: interpreterDetails.binPath!,
       },
       args: [],
@@ -347,8 +352,8 @@ export const sqlmeshLspExec = async (): Promise<
       workspacePath,
       env: {
         PYTHONPATH: interpreterDetails.path?.[0],
-        VIRTUAL_ENV: path.dirname(interpreterDetails.binPath!),
-        PATH: path.join(path.dirname(interpreterDetails.binPath!), 'bin'),
+        VIRTUAL_ENV: path.dirname(path.dirname(interpreterDetails.binPath!)), // binPath now points to bin dir
+        PATH: interpreterDetails.binPath!, // binPath already points to the bin directory
       },
       args: [],
     })

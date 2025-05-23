@@ -1,7 +1,9 @@
+import typing as t
+import pytest
 from functools import cached_property
 
 from sqlmesh.utils.date import TimeLike, to_date, to_datetime
-from sqlmesh.utils.pydantic import PydanticModel
+from sqlmesh.utils.pydantic import PydanticModel, get_concrete_types_from_typehint
 
 
 def test_datetime_date_serialization() -> None:
@@ -62,3 +64,26 @@ def test_pydantic_dict_default_args_override() -> None:
         name: str
 
     assert TestModel(name="foo").dict(by_alias=True)
+
+
+@pytest.mark.parametrize(
+    "input,output",
+    [
+        (t.Dict[str, t.Any], {dict}),
+        (dict, {dict}),
+        (t.List[str], {list}),
+        (list, {list}),
+        (t.Tuple[str, ...], {tuple}),
+        (tuple, {tuple}),
+        (t.Set[str], {set}),
+        (set, {set}),
+        (t.Optional[t.Dict[str, t.Any]], {dict, type(None)}),
+        (t.Optional[t.List[str]], {list, type(None)}),
+        (
+            t.Union[str, t.List[str], t.Dict[str, t.Any], t.Optional[t.Set[str]]],
+            {str, list, dict, set, type(None)},
+        ),
+    ],
+)
+def test_get_concrete_types_from_typehint(input: t.Any, output: set[type]) -> None:
+    assert get_concrete_types_from_typehint(input) == output

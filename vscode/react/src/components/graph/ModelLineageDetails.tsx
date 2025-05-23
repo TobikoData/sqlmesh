@@ -67,7 +67,7 @@ export default function ModelLineageDetails({
           className="mr-2 w-full whitespace-nowrap text-ellipsis overflow-hidden @lg:block font-bold text-neutral-600 dark:text-neutral-400 cursor-pointer hover:underline"
           onClick={handleCenter}
         >
-          {truncate(model.displayName, 50, 25)}
+          {truncate(model.name, 50, 25)}
         </a>
       )}
       <span className="bg-neutral-5 px-2 py-0.5 flex rounded-full mr-2">

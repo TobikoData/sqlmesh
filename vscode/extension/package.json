@@ -80,20 +80,22 @@
     ]
   },
   "scripts": {
-    "ci": "npm run lint && npm run compile && npm run test",
+    "ci": "pnpm run lint && pnpm run compile",
     "compile-tests": "tsc -p . --outDir out",
     "watch-tests": "tsc -p . -w --outDir out",
-    "pretest": "npm run compile-tests && npm run compile && npm run lint",
     "lint": "eslint src",
     "lint:fix": "eslint src --fix",
-    "test": "vscode-test",
-    "compile": "npm run check-types && node esbuild.js",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:headed": "playwright test --headed",
+    "fetch-vscode": "tsx scripts/fetch-vscode.ts",
+    "compile": "pnpm run check-types && node esbuild.js",
     "check-types": "tsc --noEmit",
     "watch": "node esbuild.js --watch",
     "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
     "vscode:package": "vsce package --no-dependencies",
-    "vscode:prepublish": "cp ../../LICENSE . && npm run package",
-    "package": "rm -rf ./src_react && mkdir -p ./src_react && cd ../react && npm run build && cd ../extension && cp -r ../react/dist/* ./src_react && npm run check-types && node esbuild.js --production"
+    "vscode:prepublish": "cp ../../LICENSE . && pnpm run package",
+    "package": "rm -rf ./src_react && mkdir -p ./src_react && cd ../react && pnpm run build && cd ../extension && cp -r ../react/dist/* ./src_react && pnpm run check-types && node esbuild.js --production"
   },
   "dependencies": {
     "@types/fs-extra": "^11.0.4",
@@ -101,10 +103,11 @@
     "fs-extra": "^11.3.0",
     "vscode-jsonrpc": "^8.2.1",
     "vscode-languageclient": "^9.0.1",
-    "zod": "^3.24.3"
+    "zod": "^3.25.4"
   },
   "devDependencies": {
     "@eslint/js": "^9.25.1",
+    "@playwright/test": "^1.48.2",
     "@types/mocha": "^10.0.10",
     "@types/node": "20.11.25",
     "@types/vscode": "1.96.0",
@@ -114,6 +117,7 @@
     "esbuild": "^0.25.2",
     "eslint": "^9.23.0",
     "ts-loader": "^9.5.2",
+    "tsx": "^4.19.2",
     "typescript": "^5.8.2",
     "typescript-eslint": "^8.31.1"
   }

@@ -1161,7 +1161,7 @@ class TerminalConsole(Console):
         default_catalog: t.Optional[str],
     ) -> None:
         """Indicates that a new snapshot promotion progress has begun."""
-        if self.promotion_progress is None:
+        if snapshots and self.promotion_progress is None:
             self.promotion_progress = make_progress_bar(
                 "Updating virtual layer ", self.console, justify="left"
             )
@@ -1782,10 +1782,13 @@ class TerminalConsole(Console):
         """Get the user's change category for the directly modified models."""
         plan = plan_builder.build()
 
-        self.show_environment_difference_summary(
-            plan.context_diff,
-            no_diff=no_diff,
-        )
+        if plan.restatements:
+            self._print("\n[bold]Restating models\n")
+        else:
+            self.show_environment_difference_summary(
+                plan.context_diff,
+                no_diff=no_diff,
+            )
 
         if plan.context_diff.has_changes:
             self.show_model_difference_summary(
@@ -3458,7 +3461,8 @@ class DebuggerTerminalConsole(TerminalConsole):
         environment_naming_info: EnvironmentNamingInfo,
         default_catalog: t.Optional[str],
     ) -> None:
-        self._write(f"Starting promotion for {len(snapshots)} snapshots")
+        if snapshots:
+            self._write(f"Starting promotion for {len(snapshots)} snapshots")
 
     def update_promotion_progress(self, snapshot: SnapshotInfoLike, promoted: bool) -> None:
         self._write(f"Promoting {snapshot.name}")

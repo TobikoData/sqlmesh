@@ -35,7 +35,6 @@ from __future__ import annotations
 
 import abc
 import collections
-from itertools import chain
 import logging
 import sys
 import time
@@ -44,6 +43,7 @@ import typing as t
 import unittest.result
 from functools import cached_property
 from io import StringIO
+from itertools import chain
 from pathlib import Path
 from shutil import rmtree
 from types import MappingProxyType
@@ -1269,8 +1269,11 @@ class GenericContext(BaseContext, t.Generic[C]):
             skip_linter=skip_linter,
         )
 
-        if no_auto_categorization:
+        plan = plan_builder.build()
+
+        if no_auto_categorization or plan.uncategorized:
             # Prompts are required if the auto categorization is disabled
+            # or if there are any uncategorized snapshots in the plan
             no_prompts = False
 
         self.console.plan(
@@ -1281,7 +1284,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             no_prompts=no_prompts if no_prompts is not None else self.config.plan.no_prompts,
         )
 
-        return plan_builder.build()
+        return plan
 
     @python_api_analytics
     def plan_builder(
@@ -1629,6 +1632,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         show_sample: bool = True,
         decimals: int = 3,
         skip_grain_check: bool = False,
+        warn_grain_check: bool = False,
         temp_schema: t.Optional[str] = None,
     ) -> t.List[TableDiff]:
         """Show a diff between two tables.
@@ -1703,22 +1707,29 @@ class GenericContext(BaseContext, t.Generic[C]):
                             target_env.naming_info, adapter.dialect
                         )
                         model_on = on or model.on
-                        models_to_diff.append((model, adapter, source, target, model_on))
                         if not model_on:
                             models_without_grain.append(model)
+                        else:
+                            models_to_diff.append((model, adapter, source, target, model_on))
+
+            if models_without_grain:
+                model_names = "\n".join(
+                    f"─ {model.name} \n  at '{model._path}'" for model in models_without_grain
+                )
+                message = (
+                    "SQLMesh doesn't know how to join the tables for the following models:\n"
+                    f"{model_names}\n\n"
+                    "Please specify a `grain` in each model definition. It must be unique and not null."
+                )
+                if warn_grain_check:
+                    self.console.log_warning(message)
+                else:
+                    raise SQLMeshError(message)
 
             if models_to_diff:
                 self.console.show_table_diff_details(
                     [model[0].name for model in models_to_diff],
                 )
-                if models_without_grain:
-                    model_names = "\n".join(
-                        f"─ {model.name} \n  at '{model._path}'" for model in models_without_grain
-                    )
-                    raise SQLMeshError(
-                        f"SQLMesh doesn't know how to join the tables for the following models:\n{model_names}\n"
-                        "\nPlease specify the `grain` in each model definition. Must be unique and not null."
-                    )
 
                 self.console.start_table_diff_progress(len(models_to_diff))
                 try:

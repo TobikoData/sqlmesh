@@ -97,7 +97,7 @@ First, open a terminal within your terminal/IDE (ex: VSCode). Then follow the fo
 
     > Note: your Tobiko Solutions Architect will provide you a pinned version of `tcloud`
 
-3. Create a Python virtual environment in the project directory and install `tcloud` (example is using [uv](https://docs.astral.sh/uv/pip/environments/#creating-a-virtual-environment)):
+3. Create a Python virtual environment in the project directory and install `tcloud`. The following demonstrates how to do this using [uv](https://docs.astral.sh/uv/pip/environments/#creating-a-virtual-environment) ([installation instructions](#prerequisites)):
 
     ```bash linenums="1"
     uv venv --python 3.12 --seed  # create a virtual environment inside the project directory

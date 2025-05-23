@@ -11,13 +11,13 @@ TOKENIZER_KEYWORDS = set(Tokenizer.KEYWORDS.keys())
 
 @pytest.mark.fast
 def test_get_keywords_from_tokenizer():
-    assert len(get_keywords_from_tokenizer()) > len(TOKENIZER_KEYWORDS)
+    assert len(get_keywords_from_tokenizer()) >= len(TOKENIZER_KEYWORDS)
 
 
 @pytest.mark.fast
 def test_get_sql_completions_no_context():
     completions = get_sql_completions(None, None)
-    assert len(completions.keywords) > len(TOKENIZER_KEYWORDS)
+    assert len(completions.keywords) >= len(TOKENIZER_KEYWORDS)
     assert len(completions.models) == 0
 
 

@@ -13,7 +13,7 @@ export async function execAsync(
   options: ExecOptions & { signal?: AbortSignal } = {},
 ): Promise<ExecResult> {
   const fullCmd = `${command} ${args.join(' ')}`
-  traceInfo(`Executing command: ${fullCmd}`)
+  traceInfo(`Executing command: ${fullCmd} in ${options.cwd}`)
 
   try {
     const result = await execAsyncCore(command, args, options)

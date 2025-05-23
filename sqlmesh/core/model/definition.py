@@ -2488,22 +2488,27 @@ def _create_model(
 
     model.audit_definitions.update(audit_definitions)
 
-    from sqlmesh.core.audit.builtin import BUILT_IN_AUDITS
+    # Any macro referenced in audits or signals needs to be treated as metadata-only
+    statements.extend((audit.query, True) for audit in audit_definitions.values())
 
     # Ensure that all audits referenced in the model are defined
+    from sqlmesh.core.audit.builtin import BUILT_IN_AUDITS
+
     available_audits = BUILT_IN_AUDITS.keys() | model.audit_definitions.keys()
-    for referenced_audit, *_ in model.audits:
+    for referenced_audit, audit_args in model.audits:
         if referenced_audit not in available_audits:
             raise_config_error(f"Audit '{referenced_audit}' is undefined", location=path)
 
-    # Any macro referenced in audits or signals needs to be treated as metadata-only
-    statements.extend((audit.query, True) for audit in audit_definitions.values())
-    for _, audit_args in model.audits:
         statements.extend(
             (audit_arg_expression, True) for audit_arg_expression in audit_args.values()
         )
 
-    for _, kwargs in model.signals:
+    signal_definitions = signal_definitions or UniqueKeyDict("signals")
+
+    for referenced_signal, kwargs in model.signals:
+        if referenced_signal and referenced_signal not in signal_definitions:
+            raise_config_error(f"Signal '{referenced_signal}' is undefined", location=path)
+
         statements.extend((signal_kwarg, True) for signal_kwarg in kwargs.values())
 
     python_env = make_python_env(
@@ -2523,7 +2528,7 @@ def _create_model(
     env: t.Dict[str, t.Tuple[t.Any, t.Optional[bool]]] = {}
 
     for signal_name, _ in model.signals:
-        if signal_definitions and signal_name in signal_definitions:
+        if signal_name and signal_name in signal_definitions:
             func = signal_definitions[signal_name].func
             setattr(func, c.SQLMESH_METADATA, True)
             build_env(func, env=env, name=signal_name, path=module_path)

@@ -205,9 +205,8 @@ class EngineAdapterStateSync(StateSync):
             if not existing_environment.expired:
                 if environment.previous_plan_id != existing_environment.plan_id:
                     raise ConflictingPlanError(
-                        f"Plan '{environment.plan_id}' is no longer valid for the target environment '{environment.name}'. "
-                        f"Expected previous plan ID: '{environment.previous_plan_id}', actual previous plan ID: '{existing_environment.plan_id}'. "
-                        "Please recreate the plan and try again"
+                        f"Another plan ({existing_environment.plan_id}) was applied to the target environment '{environment.name}' while your current plan "
+                        f"({environment.plan_id}) was still in progress, interrupting it. Please re-apply your plan to resolve this error."
                     )
                 if no_gaps_snapshot_names != set():
                     snapshots = self.get_snapshots(environment.snapshots).values()
@@ -614,7 +613,8 @@ class EngineAdapterStateSync(StateSync):
 
                     if missing_intervals:
                         raise SQLMeshError(
-                            f"Detected gaps in snapshot {target_snapshot.snapshot_id}: {missing_intervals}"
+                            f"Detected missing intervals for model {target_snapshot.name}, interrupting your current plan. "
+                            "Please re-apply your plan to resolve this error."
                         )
 
     @contextlib.contextmanager

@@ -61,10 +61,10 @@ def test_format_files(tmp_path: pathlib.Path, mocker: MockerFixture):
     assert all(
         c in context.console.log_status_update.mock_calls  # type: ignore
         for c in [
-            call(f"{tmp_path}/models/model_3.sql needs reformatting."),
-            call(f"{tmp_path}/models/model_2.sql needs reformatting."),
-            call(f"{tmp_path}/models/model_1.sql needs reformatting."),
-            call(f"{tmp_path}/audits/audit_1.sql needs reformatting."),
+            call(f"{tmp_path / 'models/model_3.sql'} needs reformatting."),
+            call(f"{tmp_path / 'models/model_2.sql'} needs reformatting."),
+            call(f"{tmp_path / 'models/model_1.sql'} needs reformatting."),
+            call(f"{tmp_path / 'audits/audit_1.sql'} needs reformatting."),
             call("\n4 file(s) need reformatting."),
         ]
     )

@@ -40,6 +40,7 @@ model_defaults:
     assert config.cicd_bot.skip_pr_backfill
     assert config.cicd_bot.pr_include_unmodified is None
     assert config.cicd_bot.pr_environment_name is None
+    assert config.cicd_bot.prod_branch_names == ["main", "master"]
 
 
 def test_load_yaml_config(tmp_path):
@@ -62,6 +63,7 @@ cicd_bot:
     skip_pr_backfill: false
     pr_include_unmodified: true
     pr_environment_name: "MyOverride"
+    prod_branch_name: testing
 model_defaults:
     dialect: duckdb
 """,
@@ -85,6 +87,7 @@ model_defaults:
     assert not config.cicd_bot.skip_pr_backfill
     assert config.cicd_bot.pr_include_unmodified
     assert config.cicd_bot.pr_environment_name == "MyOverride"
+    assert config.cicd_bot.prod_branch_names == ["testing"]
 
 
 def test_load_python_config_defaults(tmp_path):
@@ -115,6 +118,7 @@ config = Config(
     assert config.cicd_bot.skip_pr_backfill
     assert config.cicd_bot.pr_include_unmodified is None
     assert config.cicd_bot.pr_environment_name is None
+    assert config.cicd_bot.prod_branch_names == ["main", "master"]
 
 
 def test_load_python_config(tmp_path):
@@ -141,6 +145,7 @@ config = Config(
         skip_pr_backfill=False,
         pr_include_unmodified=True,
         pr_environment_name="MyOverride",
+        prod_branch_name="testing",
     ),
     model_defaults=ModelDefaultsConfig(dialect="duckdb"),
 )
@@ -166,6 +171,7 @@ config = Config(
     assert not config.cicd_bot.skip_pr_backfill
     assert config.cicd_bot.pr_include_unmodified
     assert config.cicd_bot.pr_environment_name == "MyOverride"
+    assert config.cicd_bot.prod_branch_names == ["testing"]
 
 
 def test_validation(tmp_path):

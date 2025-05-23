@@ -150,8 +150,6 @@ export interface Directory {
   files?: File[]
 }
 
-export type EnvironmentCatalogNameOverride = string | null
-
 export type EnvironmentStartAt = string | string | string | number | number
 
 export type EnvironmentEndAt = string | string | string | number | number | null
@@ -161,6 +159,8 @@ export type EnvironmentPreviousPlanId = string | null
 export type EnvironmentExpirationTs = number | null
 
 export type EnvironmentFinalizedTs = number | null
+
+export type EnvironmentCatalogNameOverride = string | null
 
 export type EnvironmentPromotedSnapshotIds = unknown[] | null
 
@@ -175,12 +175,6 @@ Environments are isolated workspaces that hold pointers to physical tables.
 
 Args:
     snapshots: The snapshots that are part of this environment.
-    start_at: The start time of the environment.
-    end_at: The end time of the environment.
-    plan_id: The ID of the plan that last updated this environment.
-    previous_plan_id: The ID of the previous plan that updated this environment.
-    expiration_ts: The timestamp when this environment will expire.
-    finalized_ts: The timestamp when this environment was finalized.
     promoted_snapshot_ids: The IDs of the snapshots that are promoted in this environment
         (i.e. for which the views are created). If not specified, all snapshots are promoted.
     previous_finalized_snapshots: Snapshots that were part of this environment last time it was finalized.
@@ -188,16 +182,17 @@ Args:
  */
 export interface Environment {
   name?: string
-  suffix_target?: EnvironmentSuffixTarget
-  catalog_name_override?: EnvironmentCatalogNameOverride
-  normalize_name?: boolean
-  snapshots: unknown[]
   start_at: EnvironmentStartAt
   end_at?: EnvironmentEndAt
   plan_id: string
   previous_plan_id?: EnvironmentPreviousPlanId
   expiration_ts?: EnvironmentExpirationTs
   finalized_ts?: EnvironmentFinalizedTs
+  suffix_target?: EnvironmentSuffixTarget
+  catalog_name_override?: EnvironmentCatalogNameOverride
+  normalize_name?: boolean
+  gateway_managed?: boolean
+  snapshots: unknown[]
   promoted_snapshot_ids?: EnvironmentPromotedSnapshotIds
   previous_finalized_snapshots?: EnvironmentPreviousFinalizedSnapshots
   requirements?: EnvironmentRequirements
@@ -308,6 +303,7 @@ export interface Model {
   name: string
   fqn: string
   path: string
+  full_path: string
   dialect: string
   type: ModelType
   columns: Column[]
@@ -827,6 +823,8 @@ export type GetTableDiffApiTableDiffGetParams = {
   limit?: number
 }
 
+export type GetTableDiffApiTableDiffGet200 = TableDiff | null
+
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1]
 
 /**
@@ -1159,7 +1157,7 @@ export const getTableDiffApiTableDiffGet = (
   params: GetTableDiffApiTableDiffGetParams,
   options?: SecondParameter<typeof fetchAPI>,
 ) => {
-  return fetchAPI<TableDiff>(
+  return fetchAPI<GetTableDiffApiTableDiffGet200>(
     { url: `/api/table_diff`, method: 'GET', params },
     options,
   )

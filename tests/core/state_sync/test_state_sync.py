@@ -860,7 +860,9 @@ def test_promote_snapshots_parent_plan_id_mismatch(
 
     with pytest.raises(
         SQLMeshError,
-        match=r".*is no longer valid.*",
+        match=re.escape(
+            "Another plan (new_plan_id) was applied to the target environment 'prod' while your current plan (stale_new_plan_id) was still in progress, interrupting it. Please re-apply your plan to resolve this error."
+        ),
     ):
         state_sync.promote(stale_new_environment)
 
@@ -947,7 +949,7 @@ def test_promote_snapshots_no_gaps(state_sync: EngineAdapterStateSync, make_snap
     state_sync.add_interval(new_snapshot_missing_interval, "2022-01-01", "2022-01-02")
     with pytest.raises(
         SQLMeshError,
-        match=r"Detected gaps in snapshot.*",
+        match=r".*Detected missing intervals for model .*, interrupting your current plan. Please re-apply your plan to resolve this error.*",
     ):
         promote_snapshots(state_sync, [new_snapshot_missing_interval], "prod", no_gaps=True)
 
@@ -1023,7 +1025,9 @@ def test_finalize(state_sync: EngineAdapterStateSync, make_snapshot: t.Callable)
     env.plan_id = "different_plan_id"
     with pytest.raises(
         SQLMeshError,
-        match=r"Plan 'different_plan_id' is no longer valid for the target environment 'prod'.*",
+        match=re.escape(
+            "Another plan (test_plan_id) was applied to the target environment 'prod' while your current plan (different_plan_id) was still in progress, interrupting it. Please re-apply your plan to resolve this error."
+        ),
     ):
         state_sync.finalize(env)
 
@@ -1057,7 +1061,7 @@ def test_start_date_gap(state_sync: EngineAdapterStateSync, make_snapshot: t.Cal
     state_sync.add_interval(snapshot, "2022-01-03", "2022-01-04")
     with pytest.raises(
         SQLMeshError,
-        match=r"Detected gaps in snapshot.*",
+        match=r".*Detected missing intervals for model .*, interrupting your current plan. Please re-apply your plan to resolve this error.*",
     ):
         promote_snapshots(state_sync, [snapshot], "prod", no_gaps=True)
 

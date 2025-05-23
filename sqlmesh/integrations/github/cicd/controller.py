@@ -76,7 +76,7 @@ class PullRequestInfo(PydanticModel):
         return cls(
             owner=owner,
             repo=repo,
-            pr_number=pr_number,
+            pr_number=int(pr_number),
         )
 
 
@@ -444,6 +444,10 @@ class GithubController:
     def removed_snapshots(self) -> t.Set[SnapshotId]:
         return set(self.prod_plan_with_gaps.context_diff.removed_snapshots)
 
+    @property
+    def pr_targets_prod_branch(self) -> bool:
+        return self._pull_request.base.ref in self.bot_config.prod_branch_names
+
     @classmethod
     def _append_output(cls, key: str, value: str) -> None:
         """
@@ -457,10 +461,13 @@ class GithubController:
         try:
             # Clear out any output that might exist from prior steps
             self._console.clear_captured_outputs()
-            self._console.show_environment_difference_summary(
-                context_diff=plan.context_diff,
-                no_diff=False,
-            )
+            if plan.restatements:
+                self._console._print("\n**Restating models**\n")
+            else:
+                self._console.show_environment_difference_summary(
+                    context_diff=plan.context_diff,
+                    no_diff=False,
+                )
             if plan.context_diff.has_changes:
                 self._console.show_model_difference_summary(
                     context_diff=plan.context_diff,

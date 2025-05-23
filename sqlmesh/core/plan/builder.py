@@ -344,6 +344,15 @@ class PlanBuilder:
         for s_id in dag:
             snapshot = self._context_diff.snapshots[s_id]
 
+            # Since we are traversing the graph in topological order and the largest interval range is pushed down
+            # the graph we just have to check our immediate parents in the graph and not the whole upstream graph.
+            restating_parents = [
+                self._context_diff.snapshots[s] for s in snapshot.parents if s in restatements
+            ]
+
+            if not restating_parents and snapshot.name not in restate_models:
+                continue
+
             if not forward_only_preview_needed:
                 if self._is_dev and not snapshot.is_paused:
                     self._console.log_warning(
@@ -361,15 +370,6 @@ class PlanBuilder:
                 elif snapshot.is_seed:
                     logger.info("Skipping restatement for model '%s'", snapshot.name)
                     continue
-
-            # Since we are traversing the graph in topological order and the largest interval range is pushed down
-            # the graph we just have to check our immediate parents in the graph and not the whole upstream graph.
-            restating_parents = [
-                self._context_diff.snapshots[s] for s in snapshot.parents if s in restatements
-            ]
-
-            if not restating_parents and snapshot.name not in restate_models:
-                continue
 
             possible_intervals = {
                 restatements[p.snapshot_id] for p in restating_parents if p.is_incremental

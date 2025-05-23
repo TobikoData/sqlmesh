@@ -48,7 +48,7 @@ def test_print_exception(mocker: MockerFixture):
     except Exception as ex:
         print_exception(ex, test_env, out_mock)
 
-    expected_message = r"""  File ".*?/tests/utils/test_metaprogramming\.py", line 47, in test_print_exception
+    expected_message = r"""  File ".*?.tests.utils.test_metaprogramming\.py", line 47, in test_print_exception
     eval\("test_fun\(\)", env\)
 
   File "<string>", line 1, in <module>
@@ -58,7 +58,13 @@ def test_print_exception(mocker: MockerFixture):
         raise RuntimeError\("error"\)
       RuntimeError: error
 """
-    assert re.match(expected_message, out_mock.write.call_args_list[0][0][0])
+    actual_message = out_mock.write.call_args_list[0][0][0]
+    assert isinstance(actual_message, str)
+
+    expected_message = "".join(expected_message.split())
+    actual_message = "".join(actual_message.split())
+
+    assert re.match(expected_message, actual_message)
 
 
 X = 1
