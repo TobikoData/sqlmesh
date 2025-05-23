@@ -1681,6 +1681,35 @@ def some_macro(evaluator):
     ...
 ```
 
+#### Accessing the invoking model's resolved name
+
+The physical table name of the invoking model can be accessed within a Python macro function through its evaluation context's `this_model` property.
+
+```python linenums="1"
+from sqlmesh.core.macros import macro
+
+@macro()
+def some_macro(evaluator):
+    resolved_model = evaluator.this_model  # e.g., '"datalake"."sqlmesh__landing"."landing__customers__2517971505"'
+    ...
+```
+
+!!! note
+    During the "promotion" runtime stage, the model name resolution occurs for the virtual layer. This means that `this_model` resolve to the qualified view name of the invoking model. For instance, when running the plan in an environment named `dev`, `db.test_model` and `this_model` would resolve to `'"db__dev"."test_model"'` and not to the physical table name.
+
+#### Accessing the invoking model's unresolved name
+
+The unresolved, fully-qualified name of the invoking model can be accessed within a Python macro function through its evaluation context's `this_model_fqn` property.
+
+```python linenums="1"
+from sqlmesh.core.macros import macro
+
+@macro()
+def some_macro(evaluator):
+    resolved_model = evaluator.this_model_fqn  # e.g., '"datalake"."landing"."customers"'
+    ...
+```
+
 #### Accessing model schemas
 
 Model schemas can be accessed within a Python macro function through its evaluation context's `column_to_types()` method, if the column types can be statically determined. For instance, a schema of an [external model](../models/external_models.md) can be accessed only after the `sqlmesh create_external_models` command has been executed.
