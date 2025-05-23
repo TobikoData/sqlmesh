@@ -1004,7 +1004,7 @@ def test_config_complex_types_supplied_as_json_strings_from_env(tmp_path: Path) 
     with mock.patch.dict(
         os.environ,
         {
-            "SQLMESH__GATEWAYS__BIGQUERY__CONNECTION__SCOPES": '["a","b","c"]',
+            "SQLMESH__GATEWAYS__BIGQUERY__CONNECTION__SCOPES": '     ["a","b","c"]',  # note: leading whitespace is deliberate
             "SQLMESH__GATEWAYS__BIGQUERY__CONNECTION__KEYFILE_JSON": '{ "foo": "bar" }',
         },
     ):

@@ -196,6 +196,7 @@ class ConnectionConfig(abc.ABC, BaseConfig):
             for maybe_json_field_name in cls._get_list_and_dict_field_names():
                 if (value := data.get(maybe_json_field_name)) and isinstance(value, str):
                     # crude JSON check as we dont want to try and parse every string we get
+                    value = value.strip()
                     if value.startswith("{") or value.startswith("["):
                         data[maybe_json_field_name] = from_json(value)
 
