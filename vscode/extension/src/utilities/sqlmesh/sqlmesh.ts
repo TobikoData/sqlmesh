@@ -11,6 +11,7 @@ import { execAsync } from '../exec'
 import z from 'zod'
 import { ProgressLocation, window } from 'vscode'
 import { IS_WINDOWS } from '../isWindows'
+import { resolveProjectPath } from '../config'
 
 export interface SqlmeshExecInfo {
   workspacePath: string
@@ -28,8 +29,12 @@ export interface SqlmeshExecInfo {
  */
 export const isTcloudProject = async (): Promise<Result<boolean, string>> => {
   const projectRoot = await getProjectRoot()
-  const tcloudYamlPath = path.join(projectRoot.uri.fsPath, 'tcloud.yaml')
-  const tcloudYmlPath = path.join(projectRoot.uri.fsPath, 'tcloud.yml')
+  const resolvedPath = resolveProjectPath(projectRoot)
+  if (isErr(resolvedPath)) {
+    return err(resolvedPath.error)
+  }
+  const tcloudYamlPath = path.join(resolvedPath.value, 'tcloud.yaml')
+  const tcloudYmlPath = path.join(resolvedPath.value, 'tcloud.yml')
   const isTcloudYamlFilePresent = fs.existsSync(tcloudYamlPath)
   const isTcloudYmlFilePresent = fs.existsSync(tcloudYmlPath)
   if (isTcloudYamlFilePresent || isTcloudYmlFilePresent) {
@@ -83,8 +88,15 @@ export const isSqlmeshEnterpriseInstalled = async (): Promise<
     return tcloudBin
   }
   const projectRoot = await getProjectRoot()
+  const resolvedPath = resolveProjectPath(projectRoot)
+  if (isErr(resolvedPath)) {
+    return err({
+      type: 'generic',
+      message: resolvedPath.error,
+    })
+  }
   const called = await execAsync(tcloudBin.value, ['is_sqlmesh_installed'], {
-    cwd: projectRoot.uri.fsPath,
+    cwd: resolvedPath.value,
   })
   if (called.exitCode !== 0) {
     return err({
@@ -183,7 +195,14 @@ export const sqlmeshExec = async (): Promise<
 > => {
   const sqlmesh = IS_WINDOWS ? 'sqlmesh.exe' : 'sqlmesh'
   const projectRoot = await getProjectRoot()
-  const workspacePath = projectRoot.uri.fsPath
+  const resolvedPath = resolveProjectPath(projectRoot)
+  if (isErr(resolvedPath)) {
+    return err({
+      type: 'generic',
+      message: resolvedPath.error,
+    })
+  }
+  const workspacePath = resolvedPath.value
   const interpreterDetails = await getInterpreterDetails()
   traceLog(`Interpreter details: ${JSON.stringify(interpreterDetails)}`)
   if (interpreterDetails.path) {
@@ -300,7 +319,14 @@ export const sqlmeshLspExec = async (): Promise<
 > => {
   const sqlmeshLSP = IS_WINDOWS ? 'sqlmesh_lsp.exe' : 'sqlmesh_lsp'
   const projectRoot = await getProjectRoot()
-  const workspacePath = projectRoot.uri.fsPath
+  const resolvedPath = resolveProjectPath(projectRoot)
+  if (isErr(resolvedPath)) {
+    return err({
+      type: 'generic',
+      message: resolvedPath.error,
+    })
+  }
+  const workspacePath = resolvedPath.value
   const interpreterDetails = await getInterpreterDetails()
   traceLog(`Interpreter details: ${JSON.stringify(interpreterDetails)}`)
   if (interpreterDetails.path) {
