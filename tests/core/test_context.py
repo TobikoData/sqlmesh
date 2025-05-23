@@ -14,17 +14,21 @@ from pytest_mock.plugin import MockerFixture
 from sqlglot import ParseError, exp, parse_one, Dialect
 from sqlglot.errors import SchemaError
 
-from sqlmesh.core.config.gateway import GatewayConfig
 import sqlmesh.core.constants
+from sqlmesh.cli.example_project import init_example_project
 from sqlmesh.core import dialect as d, constants as c
 from sqlmesh.core.config import (
+    load_configs,
+    AutoCategorizationMode,
+    CategorizerConfig,
     Config,
     DuckDBConnectionConfig,
     EnvironmentSuffixTarget,
-    ModelDefaultsConfig,
-    SnowflakeConnectionConfig,
+    GatewayConfig,
     LinterConfig,
-    load_configs,
+    ModelDefaultsConfig,
+    PlanConfig,
+    SnowflakeConnectionConfig,
 )
 from sqlmesh.core.context import Context
 from sqlmesh.core.console import create_console, get_console
@@ -2071,3 +2075,40 @@ def test_audit():
     context.plan(no_prompts=True, auto_apply=True)
 
     assert context.audit(models=["dummy"], start="2020-01-01", end="2020-01-01") is True
+
+
+def test_prompt_if_uncategorized_snapshot(mocker: MockerFixture, tmp_path: Path) -> None:
+    init_example_project(tmp_path, dialect="duckdb")
+
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        plan=PlanConfig(
+            auto_categorize_changes=CategorizerConfig(
+                external=AutoCategorizationMode.OFF,
+                python=AutoCategorizationMode.OFF,
+                sql=AutoCategorizationMode.OFF,
+                seed=AutoCategorizationMode.OFF,
+            ),
+        ),
+    )
+    context = Context(paths=tmp_path, config=config)
+    context.plan(no_prompts=True, auto_apply=True)
+
+    incremental_model = context.get_model("sqlmesh_example.incremental_model")
+    incremental_model_query = incremental_model.render_query()
+    new_incremental_model_query = t.cast(exp.Select, incremental_model_query).select("1 AS z")
+    context.upsert_model("sqlmesh_example.incremental_model", query=new_incremental_model_query)
+
+    mock_console = mocker.Mock()
+    spy_plan = mocker.spy(mock_console, "plan")
+    context.console = mock_console
+
+    context.plan()
+
+    calls = spy_plan.mock_calls
+    assert len(calls) == 1
+
+    # Show that the presence of uncategorized snapshots forces no_prompts to
+    # False instead of respecting the default plan config value, which is True
+    assert calls[0].kwargs["no_prompts"] == False
+    assert context.config.plan.no_prompts == True

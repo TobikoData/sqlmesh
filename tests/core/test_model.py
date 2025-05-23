@@ -5024,6 +5024,10 @@ def test_signals():
     model = load_sql_based_model(expressions)
     assert model.signals[0][1] == {"arg": exp.Literal.number(1)}
 
+    @signal()
+    def my_signal(batch):
+        return True
+
     expressions = d.parse(
         """
         MODEL (
@@ -5051,7 +5055,10 @@ def test_signals():
         """
     )
 
-    model = load_sql_based_model(expressions)
+    model = load_sql_based_model(
+        expressions,
+        signal_definitions={"my_signal": signal.get_registry()["my_signal"]},
+    )
     assert model.signals == [
         (
             "my_signal",
@@ -5172,7 +5179,8 @@ def test_when_matched():
     unique_key ("purchase_order_id"),
     when_matched (
       WHEN MATCHED AND __MERGE_SOURCE__._operation = 1 THEN DELETE
-      WHEN MATCHED AND __MERGE_SOURCE__._operation <> 1 THEN UPDATE SET __MERGE_TARGET__.purchase_order_id = 1
+      WHEN MATCHED AND __MERGE_SOURCE__._operation <> 1 THEN UPDATE SET
+        __MERGE_TARGET__.purchase_order_id = 1
     ),
     batch_concurrency 1,
     forward_only FALSE,
@@ -5223,7 +5231,8 @@ FROM @{macro_val}.upstream"""
   kind INCREMENTAL_BY_UNIQUE_KEY (
     unique_key ("purchase_order_id"),
     when_matched (
-      WHEN MATCHED AND __MERGE_SOURCE__.salary <> __MERGE_TARGET__.salary THEN UPDATE SET ARRAY('target.update_datetime = source.update_datetime', 'target.salary = source.salary')
+      WHEN MATCHED AND __MERGE_SOURCE__.salary <> __MERGE_TARGET__.salary THEN UPDATE SET
+        ARRAY('target.update_datetime = source.update_datetime', 'target.salary = source.salary')
     ),
     batch_concurrency 1,
     forward_only FALSE,
@@ -7600,7 +7609,8 @@ def test_merge_filter():
     unique_key ("purchase_order_id"),
     when_matched (
       WHEN MATCHED AND {MERGE_SOURCE_ALIAS}._operation = 1 THEN DELETE
-      WHEN MATCHED AND {MERGE_SOURCE_ALIAS}._operation <> 1 THEN UPDATE SET {MERGE_TARGET_ALIAS}.purchase_order_id = 1
+      WHEN MATCHED AND {MERGE_SOURCE_ALIAS}._operation <> 1 THEN UPDATE SET
+        {MERGE_TARGET_ALIAS}.purchase_order_id = 1
     ),
     merge_filter (
       {MERGE_SOURCE_ALIAS}.ds > (
@@ -9936,6 +9946,22 @@ def test_invalid_audit_reference():
     expressions = d.parse(sql)
 
     with pytest.raises(ConfigError, match="Audit 'not_nulll' is undefined"):
+        load_sql_based_model(expressions)
+
+
+def test_invalid_signal_reference():
+    sql = """
+    MODEL (
+      name test,
+      signals (s())
+    );
+
+    SELECT
+      1 AS id
+    """
+    expressions = d.parse(sql)
+
+    with pytest.raises(ConfigError, match="Signal 's' is undefined"):
         load_sql_based_model(expressions)
 
 

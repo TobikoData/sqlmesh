@@ -97,7 +97,7 @@ workflows:
           mapping: |
             web/client/.* client true
             (sqlmesh|tests|examples|web/server)/.* python true
-            pytest.ini|setup.cfg|setup.py python true
+            pytest.ini|setup.cfg|setup.py|pyproject.toml python true
             \.circleci/.*|Makefile|\.pre-commit-config\.yaml common true
             vscode/extensions/.* vscode true
           tag: "3.9"

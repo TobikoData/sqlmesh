@@ -35,7 +35,6 @@ from __future__ import annotations
 
 import abc
 import collections
-from itertools import chain
 import logging
 import sys
 import time
@@ -44,6 +43,7 @@ import typing as t
 import unittest.result
 from functools import cached_property
 from io import StringIO
+from itertools import chain
 from pathlib import Path
 from shutil import rmtree
 from types import MappingProxyType
@@ -1269,8 +1269,11 @@ class GenericContext(BaseContext, t.Generic[C]):
             skip_linter=skip_linter,
         )
 
-        if no_auto_categorization:
+        plan = plan_builder.build()
+
+        if no_auto_categorization or plan.uncategorized:
             # Prompts are required if the auto categorization is disabled
+            # or if there are any uncategorized snapshots in the plan
             no_prompts = False
 
         self.console.plan(
@@ -1281,7 +1284,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             no_prompts=no_prompts if no_prompts is not None else self.config.plan.no_prompts,
         )
 
-        return plan_builder.build()
+        return plan
 
     @python_api_analytics
     def plan_builder(

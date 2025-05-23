@@ -617,6 +617,27 @@ def test_duckdb_attach_options():
     assert options.to_sql(alias="db") == "ATTACH IF NOT EXISTS 'test.db' AS db"
 
 
+def test_duckdb_config_json_strings(make_config):
+    config = make_config(
+        type="duckdb",
+        extensions='["foo","bar"]',
+        catalogs="""{
+            "test1": "test1.duckdb",
+            "test2": {
+                "type": "duckdb",
+                "path": "test2.duckdb"
+            }
+        }""",
+    )
+    assert isinstance(config, DuckDBConnectionConfig)
+
+    assert config.extensions == ["foo", "bar"]
+
+    assert config.get_catalog() == "test1"
+    assert config.catalogs.get("test1") == "test1.duckdb"
+    assert config.catalogs.get("test2").path == "test2.duckdb"
+
+
 def test_motherduck_attach_catalog(make_config):
     config = make_config(
         type="motherduck",
@@ -777,6 +798,21 @@ def test_bigquery(make_config):
 
     with pytest.raises(ConfigError, match="you must also specify the `project` field"):
         make_config(type="bigquery", quota_project="quota_project", check_import=False)
+
+
+def test_bigquery_config_json_string(make_config):
+    config = make_config(
+        type="bigquery",
+        project="project",
+        # these can be present as strings if they came from env vars
+        scopes='["a","b","c"]',
+        keyfile_json='{"foo":"bar"}',
+    )
+
+    assert isinstance(config, BigQueryConnectionConfig)
+
+    assert config.scopes == ("a", "b", "c")
+    assert config.keyfile_json == {"foo": "bar"}
 
 
 def test_postgres(make_config):
@@ -1016,7 +1052,10 @@ def test_engine_import_validator():
     with pytest.raises(
         ConfigError,
         match=re.escape(
-            """Failed to import the 'bigquery' engine library. Please run `pip install "sqlmesh[bigquery]"`."""
+            "Failed to import the 'bigquery' engine library. This may be due to a missing "
+            "or incompatible installation. Please ensure the required dependency is installed by "
+            'running: `pip install "sqlmesh[bigquery]"`. For more details, check the logs '
+            "in the 'logs/' folder, or rerun the command with the '--debug' flag."
         ),
     ):
 
@@ -1028,7 +1067,10 @@ def test_engine_import_validator():
     with pytest.raises(
         ConfigError,
         match=re.escape(
-            """Failed to import the 'bigquery' engine library. Please run `pip install "sqlmesh[bigquery_extra]"`."""
+            "Failed to import the 'bigquery' engine library. This may be due to a missing "
+            "or incompatible installation. Please ensure the required dependency is installed by "
+            'running: `pip install "sqlmesh[bigquery_extra]"`. For more details, check the logs '
+            "in the 'logs/' folder, or rerun the command with the '--debug' flag."
         ),
     ):
 
