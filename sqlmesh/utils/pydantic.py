@@ -306,6 +306,24 @@ def cron_validator(v: t.Any) -> str:
     return v
 
 
+def get_concrete_types_from_typehint(typehint: type[t.Any]) -> set[type[t.Any]]:
+    concrete_types = set()
+    unpacked = t.get_origin(typehint)
+    if unpacked is None:
+        if type(typehint) == type(type):
+            return {typehint}
+    elif unpacked is t.Union:
+        for item in t.get_args(typehint):
+            if str(item).startswith("typing."):
+                concrete_types |= get_concrete_types_from_typehint(item)
+            else:
+                concrete_types.add(item)
+    else:
+        concrete_types.add(unpacked)
+
+    return concrete_types
+
+
 if t.TYPE_CHECKING:
     SQLGlotListOfStrings = t.List[str]
     SQLGlotString = str

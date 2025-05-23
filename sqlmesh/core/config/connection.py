@@ -13,6 +13,7 @@ from functools import partial
 
 import pydantic
 from pydantic import Field
+from pydantic_core import from_json
 from packaging import version
 from sqlglot import exp
 from sqlglot.helper import subclasses
@@ -33,6 +34,7 @@ from sqlmesh.utils.pydantic import (
     field_validator,
     model_validator,
     validation_error_message,
+    get_concrete_types_from_typehint,
 )
 from sqlmesh.utils.aws import validate_s3_uri
 
@@ -176,6 +178,41 @@ class ConnectionConfig(abc.ABC, BaseConfig):
         if hasattr(self, "db"):
             return self.db
         return None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _expand_json_strings_to_concrete_types(cls, data: t.Any) -> t.Any:
+        """
+        There are situations where a connection config class has a field that is some kind of complex type
+        (eg a list of strings or a dict) but the value is being supplied from a source such as an environment variable
+
+        When this happens, the value is supplied as a string rather than a Python object. We need some way
+        of turning this string into the corresponding Python list or dict.
+
+        Rather than doing this piecemeal on every config subclass, this provides a generic implementatation
+        to identify fields that may be be supplied as JSON strings and handle them transparently
+        """
+        if data and isinstance(data, dict):
+            for maybe_json_field_name in cls._get_list_and_dict_field_names():
+                if (value := data.get(maybe_json_field_name)) and isinstance(value, str):
+                    # crude JSON check as we dont want to try and parse every string we get
+                    if value.startswith("{") or value.startswith("["):
+                        data[maybe_json_field_name] = from_json(value)
+
+        return data
+
+    @classmethod
+    def _get_list_and_dict_field_names(cls) -> t.Set[str]:
+        field_names = set()
+        for name, field in cls.model_fields.items():
+            if field.annotation:
+                field_types = get_concrete_types_from_typehint(field.annotation)
+
+                # check if the field type is something that could concievably be supplied as a json string
+                if any(ft is t for t in (list, tuple, set, dict) for ft in field_types):
+                    field_names.add(name)
+
+        return field_names
 
 
 class DuckDBAttachOptions(BaseConfig):

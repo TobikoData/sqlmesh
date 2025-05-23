@@ -985,3 +985,37 @@ def test_config_subclassing() -> None:
     class ConfigSubclass(Config): ...
 
     ConfigSubclass()
+
+
+def test_config_complex_types_supplied_as_json_strings_from_env(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text("""
+    gateways:
+      bigquery:
+        connection:
+          type: bigquery
+          project: unit-test
+
+    default_gateway: bigquery
+
+    model_defaults:
+      dialect: bigquery
+""")
+    with mock.patch.dict(
+        os.environ,
+        {
+            "SQLMESH__GATEWAYS__BIGQUERY__CONNECTION__SCOPES": '["a","b","c"]',
+            "SQLMESH__GATEWAYS__BIGQUERY__CONNECTION__KEYFILE_JSON": '{ "foo": "bar" }',
+        },
+    ):
+        config = load_config_from_paths(
+            Config,
+            project_paths=[config_path],
+        )
+
+        conn = config.gateways["bigquery"].connection
+        assert isinstance(conn, BigQueryConnectionConfig)
+
+        assert conn.project == "unit-test"
+        assert conn.scopes == ("a", "b", "c")
+        assert conn.keyfile_json == {"foo": "bar"}
