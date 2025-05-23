@@ -1681,32 +1681,70 @@ def some_macro(evaluator):
     ...
 ```
 
-#### Accessing the invoking model's resolved name
+#### Accessing model, physical table, and virtual layer view names
 
-The physical table name of the invoking model can be accessed within a Python macro function through its evaluation context's `this_model` property.
+All SQLMesh models have a name in their `MODEL` specification. We refer to that as the model's "unqualified" and "unresolved" name because it may not correspond to any specific object in the SQL engine.
+
+When SQLMesh renders and executes a model, it converts the model name into three forms at different stages:
+
+1. The *fully qualified* name
+
+    - If the model name is of the form `schema.table`, SQLMesh determines the correct catalog and adds it, like `catalog.schema.table`
+    - SQLMesh quotes each component of the name using the SQL engine's quoting and case-sensitivity rules, like `"catalog"."schema"."table"`
+
+2. The *resolved* physical table name
+
+    - The qualified name of the model's underlying physical table
+
+3. The *resolved* virtual layer view name
+
+    - The qualified name of the model's virtual layer view in the environment where the model is being executed
+
+You can access any of these three forms in a Python macro through properties of the `evaluation` context object.
+
+Access the unresolved, fully-qualified name through the `this_model_fqn` property.
 
 ```python linenums="1"
 from sqlmesh.core.macros import macro
 
 @macro()
 def some_macro(evaluator):
-    resolved_model = evaluator.this_model  # e.g., '"datalake"."sqlmesh__landing"."landing__customers__2517971505"'
+    # Example:
+    # Name in model definition: landing.customers
+    # Value returned here: '"datalake"."landing"."customers"'
+    unresolved_model_fqn = evaluator.this_model_fqn
     ...
 ```
 
-!!! note
-    During the "promotion" runtime stage, the model name resolution occurs for the virtual layer. This means that `this_model` resolve to the qualified view name of the invoking model. For instance, when running the plan in an environment named `dev`, `db.test_model` and `this_model` would resolve to `'"db__dev"."test_model"'` and not to the physical table name.
+Access the resolved physical table and virtual layerview names through the `this_model` property.
 
-#### Accessing the invoking model's unresolved name
+The `this_model` property returns different names depending on the runtime stage:
 
-The unresolved, fully-qualified name of the invoking model can be accessed within a Python macro function through its evaluation context's `this_model_fqn` property.
+- `promoting` runtime stage: `this_model` resolves to the virtual layer view name
+
+    - Example
+        - Model name is `db.test_model`
+        - `plan` is running in the `dev` environment
+        - `this_model` resolves to `"catalog"."db__dev"."test_model"` (note the `__dev` suffix in the schema name)
+
+- All other runtime stages: `this_model` resolves to the physical table name
+
+    - Example
+        - Model name is `db.test_model`
+        - `plan` is running in any environment
+        - `this_model` resolves to `"catalog"."sqlmesh__project"."project__test_model__684351896"`
 
 ```python linenums="1"
 from sqlmesh.core.macros import macro
 
 @macro()
 def some_macro(evaluator):
-    resolved_model = evaluator.this_model_fqn  # e.g., '"datalake"."landing"."customers"'
+    if evaluator.runtime_stage == "promoting":
+        # virtual layer view name '"catalog"."db__dev"."test_model"'
+        resolved_name = evaluator.this_model
+    else:
+        # physical table name '"catalog"."sqlmesh__project"."project__test_model__684351896"'
+        resolved_name = evaluator.this_model
     ...
 ```
 
