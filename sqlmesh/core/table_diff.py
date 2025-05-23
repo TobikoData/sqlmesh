@@ -16,6 +16,7 @@ from sqlglot.optimizer.qualify_columns import quote_identifiers
 from sqlglot.optimizer.scope import find_all_in_scope
 
 from sqlmesh.utils.pydantic import PydanticModel
+from sqlmesh.utils.errors import SQLMeshError
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import TableName
@@ -432,13 +433,22 @@ class TableDiff:
             schema = to_schema(temp_schema, dialect=self.dialect)
             temp_table = exp.table_("diff", db=schema.db, catalog=schema.catalog, quoted=True)
 
-            temp_table_kwargs = {}
+            temp_kwargs = {}
             if isinstance(self.adapter, AthenaEngineAdapter):
-                source_table_type = self.adapter._query_table_type_or_raise(self.source_table)
-                if source_table_type == "iceberg":
-                    temp_table_kwargs["table_format"] = "iceberg"
+                source_table_type = self.adapter._query_table_type(self.source_table)
+                target_table_type = self.adapter._query_table_type(self.target_table)
 
-            with self.adapter.temp_table(query, name=temp_table, **temp_table_kwargs) as table:
+                if source_table_type == "iceberg" and target_table_type == "iceberg":
+                    temp_kwargs["table_format"] = "iceberg"
+                elif source_table_type == "iceberg" or target_table_type == "iceberg":
+                    raise SQLMeshError(
+                        f"Source table '{self.source}' format '{source_table_type}' and target table '{self.target}' format '{target_table_type}' "
+                        f"do not match for Athena. Diffing between different table formats is not supported."
+                    )
+
+            with self.adapter.temp_table(
+                query, name=temp_table, columns_to_types=None, **temp_kwargs
+            ) as table:
                 summary_sums = [
                     exp.func("SUM", "s_exists").as_("s_count"),
                     exp.func("SUM", "t_exists").as_("t_count"),
