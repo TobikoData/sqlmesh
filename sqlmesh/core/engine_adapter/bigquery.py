@@ -183,7 +183,31 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
     def _begin_session(self, properties: SessionProperties) -> None:
         from google.cloud.bigquery import QueryJobConfig
 
-        job = self.client.query("SELECT 1;", job_config=QueryJobConfig(create_session=True))
+        query_label_property = properties.get("query_label")
+        parsed_query_label: list[tuple[str, str]] = []
+        if isinstance(query_label_property, (exp.Array, exp.Paren, exp.Tuple)):
+            label_tuples = (
+                [query_label_property.unnest()]
+                if isinstance(query_label_property, exp.Paren)
+                else query_label_property.expressions
+            )
+
+            # query_label is a Paren, Array or Tuple of 2-tuples and validated at load time
+            parsed_query_label.extend(
+                (label_tuple.expressions[0].name, label_tuple.expressions[1].name)
+                for label_tuple in label_tuples
+            )
+
+        if parsed_query_label:
+            query_label_str = ",".join([":".join(label) for label in parsed_query_label])
+            query = f'SET @@query_label = "{query_label_str}";SELECT 1;'
+        else:
+            query = "SELECT 1;"
+
+        job = self.client.query(
+            query,
+            job_config=QueryJobConfig(create_session=True),
+        )
         session_info = job.session_info
         session_id = session_info.session_id if session_info else None
         self._session_id = session_id

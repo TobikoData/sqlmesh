@@ -17,6 +17,7 @@ from sqlmesh.core.model.common import (
     default_catalog_validator,
     depends_on_validator,
     properties_validator,
+    parse_properties,
 )
 from sqlmesh.core.model.kind import (
     CustomKind,
@@ -309,6 +310,43 @@ class ModelMeta(_Node):
     @field_validator("ignored_rules_", mode="before")
     def ignored_rules_validator(cls, vs: t.Any) -> t.Any:
         return LinterConfig._validate_rules(vs)
+
+    @field_validator("session_properties_", mode="before")
+    def session_properties_validator(cls, v: t.Any, info: ValidationInfo) -> t.Any:
+        # use the generic properties validator to parse the session properties
+        parsed_session_properties = parse_properties(type(cls), v, info)
+        if not parsed_session_properties:
+            return parsed_session_properties
+
+        for eq in parsed_session_properties:
+            if eq.name == "query_label":
+                query_label = eq.right
+                if not (
+                    isinstance(query_label, exp.Array)
+                    or isinstance(query_label, exp.Tuple)
+                    or isinstance(query_label, exp.Paren)
+                ):
+                    raise ConfigError(
+                        "Invalid value for `session_properties.query_label`. Must be an array or tuple."
+                    )
+
+                label_tuples: t.List[exp.Expression] = (
+                    [query_label.unnest()]
+                    if isinstance(query_label, exp.Paren)
+                    else query_label.expressions
+                )
+
+                for label_tuple in label_tuples:
+                    if not (
+                        isinstance(label_tuple, exp.Tuple)
+                        and len(label_tuple.expressions) == 2
+                        and all(isinstance(label, exp.Literal) for label in label_tuple.expressions)
+                    ):
+                        raise ConfigError(
+                            "Invalid entry in `session_properties.query_label`. Must be tuples of string literals with length 2."
+                        )
+
+        return parsed_session_properties
 
     @model_validator(mode="before")
     def _pre_root_validator(cls, data: t.Any) -> t.Any:

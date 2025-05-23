@@ -531,6 +531,7 @@ def test_begin_end_session(mocker: MockerFixture):
 
     adapter = BigQueryEngineAdapter(lambda: connection_mock, job_retries=0)
 
+    # starting a session without session properties
     with adapter.session({}):
         assert adapter._connection_pool.get_attribute("session_id") is not None
         adapter.execute("SELECT 2;")
@@ -550,6 +551,18 @@ def test_begin_end_session(mocker: MockerFixture):
     execute_b_call = connection_mock._client.query.call_args_list[2]
     assert execute_b_call[1]["query"] == "SELECT 3;"
     assert not execute_b_call[1]["job_config"].connection_properties
+
+    # starting a new session with session property query_label and array value
+    with adapter.session({"query_label": parse_one("[('key1', 'value1'), ('key2', 'value2')]")}):
+        adapter.execute("SELECT 4;")
+    begin_new_session_call = connection_mock._client.query.call_args_list[3]
+    assert begin_new_session_call[0][0] == 'SET @@query_label = "key1:value1,key2:value2";SELECT 1;'
+
+    # starting a new session with session property query_label and Paren value
+    with adapter.session({"query_label": parse_one("(('key1', 'value1'))")}):
+        adapter.execute("SELECT 5;")
+    begin_new_session_call = connection_mock._client.query.call_args_list[5]
+    assert begin_new_session_call[0][0] == 'SET @@query_label = "key1:value1";SELECT 1;'
 
 
 def _to_sql_calls(execute_mock: t.Any, identify: bool = True) -> t.List[str]:
