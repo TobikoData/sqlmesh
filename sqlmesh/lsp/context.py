@@ -1,8 +1,7 @@
 from dataclasses import dataclass
+from pathlib import Path
 from sqlmesh.core.context import Context
 import typing as t
-
-from sqlmesh.lsp.uri import URI
 
 
 @dataclass
@@ -29,24 +28,24 @@ class LSPContext:
         self.context = context
 
         # Add models to the map
-        model_map: t.Dict[URI, ModelTarget] = {}
+        model_map: t.Dict[Path, ModelTarget] = {}
         for model in context.models.values():
             if model._path is not None:
-                uri = URI.from_path(model._path)
+                uri = model._path
                 if uri in model_map:
                     model_map[uri].names.append(model.name)
                 else:
                     model_map[uri] = ModelTarget(names=[model.name])
 
         # Add standalone audits to the map
-        audit_map: t.Dict[URI, AuditTarget] = {}
+        audit_map: t.Dict[Path, AuditTarget] = {}
         for audit in context.standalone_audits.values():
             if audit._path is not None:
-                uri = URI.from_path(audit._path)
+                uri = audit._path
                 if uri not in audit_map:
                     audit_map[uri] = AuditTarget(name=audit.name)
 
-        self.map: t.Dict[URI, t.Union[ModelTarget, AuditTarget]] = {
+        self.map: t.Dict[Path, t.Union[ModelTarget, AuditTarget]] = {
             **model_map,
             **audit_map,
         }

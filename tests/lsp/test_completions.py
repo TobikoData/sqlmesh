@@ -3,6 +3,7 @@ from sqlglot import Tokenizer
 from sqlmesh.core.context import Context
 from sqlmesh.lsp.completions import get_keywords_from_tokenizer, get_sql_completions
 from sqlmesh.lsp.context import LSPContext
+from sqlmesh.lsp.uri import URI
 
 
 TOKENIZER_KEYWORDS = set(Tokenizer.KEYWORDS.keys())
@@ -36,9 +37,7 @@ def test_get_sql_completions_with_context_and_file_uri():
     context = Context(paths=["examples/sushi"])
     lsp_context = LSPContext(context)
 
-    file_uri = next(
-        key for key in lsp_context.map.keys() if str(key.to_path()).endswith("active_customers.sql")
-    )
-    completions = get_sql_completions(lsp_context, file_uri)
+    file_uri = next(key for key in lsp_context.map.keys() if key.name == "active_customers.sql")
+    completions = get_sql_completions(lsp_context, URI.from_path(file_uri))
     assert len(completions.keywords) > len(TOKENIZER_KEYWORDS)
     assert "sushi.active_customers" not in completions.models

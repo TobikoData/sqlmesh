@@ -27,9 +27,16 @@ PANDAS_TYPE_MAPPINGS = {
     pd.Float32Dtype(): exp.DataType.build("float"),
     pd.Float64Dtype(): exp.DataType.build("double"),
     pd.StringDtype(): exp.DataType.build("text"),  # type: ignore
-    pd.StringDtype("pyarrow"): exp.DataType.build("text"),
     pd.BooleanDtype(): exp.DataType.build("boolean"),
 }
+
+try:
+    import pyarrow  # type: ignore  # noqa
+
+    # Only add this if pyarrow is installed
+    PANDAS_TYPE_MAPPINGS[pd.StringDtype("pyarrow")] = exp.DataType.build("text")
+except ImportError:
+    pass
 
 
 def columns_to_types_from_df(df: pd.DataFrame) -> t.Dict[str, exp.DataType]:
