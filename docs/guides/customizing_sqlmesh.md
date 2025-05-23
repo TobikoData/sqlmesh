@@ -50,7 +50,7 @@ class CustomLoader(SqlMeshLoader):
         # Call SqlMeshLoader's normal `_load_models` method to ingest models from file and parse model SQL
         models = super()._load_models(macros, jinja_macros, gateway, audits, signals)
 
-        new_models = {}
+        new_models: UniqueKeyDict[str, Model] = {}
         # Loop through the existing model names/objects
         for model_name, model in models.items():
             # Create list of existing and new post-statements
@@ -64,7 +64,15 @@ class CustomLoader(SqlMeshLoader):
             # Create a copy of the model with the `post_statements_` field updated
             new_models[model_name] = model.copy(update={"post_statements_": new_post_statements})
 
-        return new_models
+        # Load the new models to ensure that the modified models are correctly serialized 
+        return self._load_models_from_definitions(
+            models=new_models,
+            macros=macros,
+            jinja_macros=jinja_macros,
+            audits=audits,
+            signals=signals,
+        )
+            
 
 # Pass the CustomLoader class to the SQLMesh configuration object
 config = Config(
