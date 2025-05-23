@@ -15,6 +15,7 @@ from sqlmesh.core.node import IntervalUnit
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils import optional_import
 from tests.core.engine_adapter import to_sql_calls
+from sqlmesh.core.model.kind import ViewKind
 
 pytestmark = [pytest.mark.engine, pytest.mark.snowflake]
 
@@ -726,4 +727,68 @@ def test_table_format_iceberg(snowflake_mocked_engine_adapter: SnowflakeEngineAd
     assert to_sql_calls(adapter) == [
         'CREATE ICEBERG TABLE IF NOT EXISTS "test"."table" ("a" INT) CATALOG=\'snowflake\' EXTERNAL_VOLUME=\'test\'',
         'CREATE ICEBERG TABLE IF NOT EXISTS "test"."table" CATALOG=\'snowflake\' EXTERNAL_VOLUME=\'test\' AS SELECT CAST("a" AS INT) AS "a" FROM (SELECT CAST("a" AS INT) AS "a") AS "_subquery"',
+    ]
+
+
+def test_create_view_with_schema_and_grants(
+    snowflake_mocked_engine_adapter: SnowflakeEngineAdapter,
+):
+    adapter = snowflake_mocked_engine_adapter
+
+    model_v = load_sql_based_model(
+        d.parse(f"""
+                MODEL (
+                    name test.v,
+                    kind VIEW,
+                    description 'normal **view** from integration test',
+                    dialect 'snowflake'
+                );
+
+                select 1 as "ID", 'foo' as "NAME";
+                """)
+    )
+
+    model_mv = load_sql_based_model(
+        d.parse(f"""
+            MODEL (
+                name test.mv,
+                kind VIEW (
+                    materialized true
+                ),
+                description 'materialized **view** from integration test',
+                dialect 'snowflake'
+            );
+
+            select 1 as "ID", 'foo' as "NAME";
+            """)
+    )
+
+    assert isinstance(model_v.kind, ViewKind)
+    assert isinstance(model_mv.kind, ViewKind)
+
+    adapter.create_view(
+        "target_view",
+        model_v.render_query_or_raise(),
+        model_v.columns_to_types,
+        materialized=model_v.kind.materialized,
+        view_properties=model_v.render_physical_properties(),
+        table_description=model_v.description,
+        column_descriptions=model_v.column_descriptions,
+    )
+
+    adapter.create_view(
+        "target_materialized_view",
+        model_mv.render_query_or_raise(),
+        model_mv.columns_to_types,
+        materialized=model_mv.kind.materialized,
+        view_properties=model_mv.render_physical_properties(),
+        table_description=model_mv.description,
+        column_descriptions=model_mv.column_descriptions,
+    )
+
+    assert to_sql_calls(adapter) == [
+        # normal view - COPY GRANTS goes after the column list
+        """CREATE OR REPLACE VIEW "target_view" ("ID", "NAME") COPY GRANTS COMMENT='normal **view** from integration test' AS SELECT 1 AS "ID", 'foo' AS "NAME\"""",
+        # materialized view - COPY GRANTS goes before the column list
+        """CREATE OR REPLACE MATERIALIZED VIEW "target_materialized_view" COPY GRANTS ("ID", "NAME") COMMENT='materialized **view** from integration test' AS SELECT 1 AS "ID", 'foo' AS "NAME\"""",
     ]
