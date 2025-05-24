@@ -161,36 +161,25 @@ def get_model_definitions_for_a_path(
                 table_name = table.name
 
                 # Check if this table reference is a CTE in the current scope
-                if table_name in cte_definitions:
-                    try:
-                        # This is a CTE reference - create a reference to the CTE definition
-                        cte_def = cte_definitions[table_name]
-                        args = cte_def.args["alias"]
-                        if args and isinstance(args, exp.TableAlias):
-                            identifier = args.this
-                            if isinstance(identifier, exp.Identifier):
-                                meta = identifier.meta
-
-                                table_meta_obj = TokenPositionDetails.from_meta(meta)
-                                target_range = _range_from_token_position_details(
-                                    table_meta_obj, read_file
+                if cte_def := cte_definitions.get(table_name):
+                    # This is a CTE reference - create a reference to the CTE definition
+                    alias = cte_def.args["alias"]
+                    if isinstance(alias, exp.TableAlias):
+                        identifier = alias.this
+                        if isinstance(identifier, exp.Identifier):
+                            target_range = _range_from_token_position_details(
+                                TokenPositionDetails.from_meta(identifier.meta), read_file
+                            )
+                            table_range = _range_from_token_position_details(
+                                TokenPositionDetails.from_meta(table.this.meta), read_file
+                            )
+                            references.append(
+                                Reference(
+                                    uri=document_uri.value,  # Same file
+                                    range=table_range,
+                                    target_range=target_range,
                                 )
-
-                                table_meta_obj = TokenPositionDetails.from_meta(table.this.meta)
-                                table_range = _range_from_token_position_details(
-                                    table_meta_obj, read_file
-                                )
-
-                                references.append(
-                                    Reference(
-                                        uri=document_uri.value,  # Same file
-                                        range=table_range,
-                                        target_range=target_range,
-                                    )
-                                )
-                    except Exception:
-                        pass
-                    continue
+                            )
 
                 # For non-CTE tables, process as before (external model references)
                 # Normalize the table reference
