@@ -126,8 +126,17 @@ export const installSqlmeshEnterprise = async (
   if (isErr(tcloudBin)) {
     return tcloudBin
   }
+  const projectRoot = await getProjectRoot()
+  const resolvedPath = resolveProjectPath(projectRoot)
+  if (isErr(resolvedPath)) {
+    return err({
+      type: 'generic',
+      message: resolvedPath.error,
+    })
+  }
   const called = await execAsync(tcloudBin.value, ['install_sqlmesh'], {
     signal: abortController.signal,
+    cwd: resolvedPath.value,
   })
   if (called.exitCode !== 0) {
     return err({
