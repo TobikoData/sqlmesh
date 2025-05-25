@@ -20,8 +20,15 @@ from sqlmesh.lsp.api import (
     ApiResponseGetModels,
 )
 from sqlmesh.lsp.completions import get_sql_completions
-from sqlmesh.lsp.context import LSPContext, ModelTarget
-from sqlmesh.lsp.custom import ALL_MODELS_FEATURE, AllModelsRequest, AllModelsResponse
+from sqlmesh.lsp.context import LSPContext, ModelTarget, render_model as render_model_context
+from sqlmesh.lsp.custom import (
+    ALL_MODELS_FEATURE,
+    RENDER_MODEL_FEATURE,
+    AllModelsRequest,
+    AllModelsResponse,
+    RenderModelRequest,
+    RenderModelResponse,
+)
 from sqlmesh.lsp.reference import (
     get_references,
 )
@@ -87,6 +94,12 @@ class SQLMeshLanguageServer:
                 return get_sql_completions(context, uri)
             except Exception as e:
                 return get_sql_completions(None, uri)
+
+        @self.server.feature(RENDER_MODEL_FEATURE)
+        def render_model(ls: LanguageServer, params: RenderModelRequest) -> RenderModelResponse:
+            uri = URI(params.textDocumentUri)
+            context = self._context_get_or_load(uri)
+            return RenderModelResponse(models=list(render_model_context(context, uri)))
 
         @self.server.feature(API_FEATURE)
         def api(ls: LanguageServer, request: ApiRequest) -> t.Dict[str, t.Any]:

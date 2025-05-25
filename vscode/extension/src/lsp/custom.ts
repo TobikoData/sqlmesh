@@ -4,8 +4,32 @@ export interface AllModelsMethod {
   response: AllModelsResponse
 }
 
+export interface RenderModelMethod {
+  method: 'sqlmesh/render_model'
+  request: RenderModelRequest
+  response: RenderModelResponse
+}
+
+interface RenderModelRequest {
+  textDocumentUri: string
+}
+
+interface RenderModelResponse {
+  models: RenderModelEntry[]
+}
+
+export interface RenderModelEntry {
+  name: string
+  fqn: string
+  description: string
+  rendered_query: string
+}
+
 // @eslint-disable-next-line  @typescript-eslint/consistent-type-definition
-export type CustomLSPMethods = AllModelsMethod | AbstractAPICall
+export type CustomLSPMethods =
+  | AllModelsMethod
+  | AbstractAPICall
+  | RenderModelMethod
 
 interface AllModelsRequest {
   textDocument: {

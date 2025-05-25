@@ -12,6 +12,7 @@ import { AuthenticationProviderTobikoCloud } from './auth/auth'
 import { signOut } from './commands/signout'
 import { signIn } from './commands/signin'
 import { signInSpecifyFlow } from './commands/signinSpecifyFlow'
+import { renderModel } from './commands/renderModel'
 import { isErr } from '@bus/result'
 import {
   handleNotSginedInError,
@@ -63,6 +64,13 @@ export async function activate(context: vscode.ExtensionContext) {
   )
 
   lspClient = new LSPClient()
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      'sqlmesh.renderModel',
+      renderModel(lspClient),
+    ),
+  )
 
   context.subscriptions.push(
     vscode.languages.registerCompletionItemProvider(
