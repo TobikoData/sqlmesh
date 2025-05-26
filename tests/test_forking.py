@@ -29,7 +29,7 @@ def test_parallel_load(assert_exp_eq, mocker):
     assert_exp_eq(
         context.render("sushi.customers"),
         """
-WITH "current_marketing" AS (
+WITH "current_marketing_outer" AS (
   SELECT
     "marketing"."customer_id" AS "customer_id",
     "marketing"."status" AS "status"
@@ -42,7 +42,18 @@ SELECT DISTINCT
   "m"."status" AS "status",
   "d"."zip" AS "zip"
 FROM "memory"."sushi"."orders" AS "o"
-LEFT JOIN "current_marketing" AS "m"
+LEFT JOIN (
+  WITH "current_marketing" AS (
+    SELECT
+      "current_marketing_outer"."customer_id" AS "customer_id",
+      "current_marketing_outer"."status" AS "status"
+    FROM "current_marketing_outer" AS "current_marketing_outer"
+  )
+  SELECT
+    "current_marketing"."customer_id" AS "customer_id",
+    "current_marketing"."status" AS "status"
+  FROM "current_marketing" AS "current_marketing"
+) AS "m"
   ON "m"."customer_id" = "o"."customer_id"
 LEFT JOIN "memory"."raw"."demographics" AS "d"
   ON "d"."customer_id" = "o"."customer_id"

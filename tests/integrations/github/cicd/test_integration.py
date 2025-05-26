@@ -1695,8 +1695,8 @@ def test_overlapping_changes_models(
 +  d.zip,
 +  1 AS new_col
  FROM sushi.orders AS o
- LEFT JOIN current_marketing AS m
-   ON o.customer_id = m.customer_id
+ LEFT JOIN (
+   WITH current_marketing AS (
 ```
 - `sushi.waiter_names`
 ```diff
