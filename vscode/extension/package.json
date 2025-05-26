@@ -129,22 +129,22 @@
     "fs-extra": "^11.3.0",
     "vscode-jsonrpc": "^8.2.1",
     "vscode-languageclient": "^9.0.1",
-    "zod": "^3.25.4"
+    "zod": "^3.25.28"
   },
   "devDependencies": {
-    "@eslint/js": "^9.25.1",
-    "@playwright/test": "^1.48.2",
+    "@eslint/js": "^9.27.0",
+    "@playwright/test": "^1.52.0",
     "@types/mocha": "^10.0.10",
     "@types/node": "20.11.25",
     "@types/vscode": "1.96.0",
     "@vscode/test-cli": "^0.0.10",
-    "@vscode/test-electron": "^2.4.1",
-    "@vscode/vsce": "^3.3.2",
-    "esbuild": "^0.25.2",
-    "eslint": "^9.23.0",
+    "@vscode/test-electron": "^2.5.2",
+    "@vscode/vsce": "^3.4.2",
+    "esbuild": "^0.25.4",
+    "eslint": "^9.27.0",
     "ts-loader": "^9.5.2",
-    "tsx": "^4.19.2",
-    "typescript": "^5.8.2",
-    "typescript-eslint": "^8.31.1"
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.32.1"
   }
 }
