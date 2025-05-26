@@ -105,16 +105,23 @@ class ConcurrentDAGExecutor(t.Generic[H]):
             self._finished_future.set_result(None)
             return
 
-        skipped_nodes = [node for node, deps in self._unprocessed_nodes.items() if parent in deps]
+        skipped_nodes = {node for node, deps in self._unprocessed_nodes.items() if parent in deps}
 
-        self._skipped_nodes.extend(skipped_nodes)
+        while skipped_nodes:
+            self._skipped_nodes.extend(skipped_nodes)
 
-        for skipped_node in skipped_nodes:
-            self._unprocessed_nodes_num -= 1
-            self._unprocessed_nodes.pop(skipped_node)
+            for skipped_node in skipped_nodes:
+                self._unprocessed_nodes_num -= 1
+                self._unprocessed_nodes.pop(skipped_node)
 
-        for skipped_node in skipped_nodes:
-            self._skip_next_nodes(skipped_node)
+            skipped_nodes = {
+                node
+                for node, deps in self._unprocessed_nodes.items()
+                if skipped_nodes.intersection(deps)
+            }
+
+        if not self._unprocessed_nodes_num:
+            self._finished_future.set_result(None)
 
     def _init_state(self) -> None:
         self._unprocessed_nodes = self.dag.graph
