@@ -41,9 +41,12 @@ athena = ["PyAthena[Pandas]"]
 azuresql = ["pymssql"]
 bigquery = [
     "google-cloud-bigquery[pandas]",
-    "google-cloud-bigquery-storage",
-    "bigframes"
+    "google-cloud-bigquery-storage"
 ]
+# bigframes has to be separate to support environments with an older google-cloud-bigquery pin
+# this is because that pin pulls in an older bigframes and the bigframes team
+# pinned an older SQLGlot which is incompatible with SQLMesh
+bigframes = ["bigframes>=1.32.0"]
 clickhouse = ["clickhouse-connect"]
 databricks = ["databricks-sql-connector[pyarrow]"]
 dev = [
