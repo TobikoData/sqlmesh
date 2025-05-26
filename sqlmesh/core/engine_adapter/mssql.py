@@ -10,7 +10,11 @@ from pandas.api.types import is_datetime64_any_dtype  # type: ignore
 from sqlglot import exp
 
 from sqlmesh.core.dialect import to_schema
-from sqlmesh.core.engine_adapter.base import EngineAdapterWithIndexSupport
+from sqlmesh.core.engine_adapter.base import (
+    EngineAdapterWithIndexSupport,
+    EngineAdapter,
+    InsertOverwriteStrategy,
+)
 from sqlmesh.core.engine_adapter.mixins import (
     GetCurrentCatalogFromFunctionMixin,
     InsertOverwriteWithMergeMixin,
@@ -281,3 +285,45 @@ class MSSQLEngineAdapter(
         # The function that renames tables in MSSQL takes string literals as arguments instead of identifiers,
         # so we shouldn't quote the identifiers.
         self.execute(exp.rename_table(old_table_name, new_table_name), quote_identifiers=False)
+
+    def _insert_overwrite_by_condition(
+        self,
+        table_name: TableName,
+        source_queries: t.List[SourceQuery],
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        where: t.Optional[exp.Condition] = None,
+        insert_overwrite_strategy_override: t.Optional[InsertOverwriteStrategy] = None,
+        **kwargs: t.Any,
+    ) -> None:
+        if not where or where == exp.true():
+            # this is a full table replacement, call the base strategy to do DELETE+INSERT
+            # which will result in TRUNCATE+INSERT due to how we have overridden self.delete_from()
+            return EngineAdapter._insert_overwrite_by_condition(
+                self,
+                table_name=table_name,
+                source_queries=source_queries,
+                columns_to_types=columns_to_types,
+                where=where,
+                insert_overwrite_strategy_override=InsertOverwriteStrategy.DELETE_INSERT,
+                **kwargs,
+            )
+
+        # For actual conditional overwrites, use MERGE from InsertOverwriteWithMergeMixin
+        return super()._insert_overwrite_by_condition(
+            table_name=table_name,
+            source_queries=source_queries,
+            columns_to_types=columns_to_types,
+            where=where,
+            insert_overwrite_strategy_override=insert_overwrite_strategy_override,
+            **kwargs,
+        )
+
+    def delete_from(self, table_name: TableName, where: t.Union[str, exp.Expression]) -> None:
+        if where == exp.true():
+            # "A TRUNCATE TABLE operation can be rolled back within a transaction."
+            # ref: https://learn.microsoft.com/en-us/sql/t-sql/statements/truncate-table-transact-sql?view=sql-server-ver15#remarks
+            return self.execute(
+                exp.TruncateTable(expressions=[exp.to_table(table_name, dialect=self.dialect)])
+            )
+
+        return super().delete_from(table_name, where)
