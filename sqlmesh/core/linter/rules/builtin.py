@@ -9,6 +9,7 @@ from sqlglot.helper import subclasses
 from sqlmesh.core.linter.rule import Rule, RuleViolation
 from sqlmesh.core.linter.definition import RuleSet
 from sqlmesh.core.model import Model, SqlModel
+from pathlib import Path
 
 
 class NoSelectStar(Rule):
@@ -55,5 +56,19 @@ class NoMissingAudits(Rule):
     def check_model(self, model: Model) -> t.Optional[RuleViolation]:
         return self.violation() if not model.audits and not model.kind.is_symbolic else None
 
+
+class FilenameEqualsModelname(Rule):
+    """The filename should equal the model name"""
+
+    def check_model(self, model: Model) -> t.Optional[RuleViolation]:
+        # Rule violated if the model's name (schema.table_name) does not match the file name (foo/bar/table_name.sql).
+        full_model_name = model.name
+        table_name = full_model_name.split(".", 1)[1]
+        path = Path(model._path)
+        return (
+            self.violation()
+            if (table_name != path.stem) and not model.kind.is_symbolic
+            else None
+        )
 
 BUILTIN_RULES = RuleSet(subclasses(__name__, Rule, (Rule,)))
