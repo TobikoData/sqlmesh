@@ -1716,7 +1716,7 @@ def some_macro(evaluator):
     ...
 ```
 
-Access the resolved physical table and virtual layerview names through the `this_model` property.
+Access the resolved physical table and virtual layer view names through the `this_model` property.
 
 The `this_model` property returns different names depending on the runtime stage:
 
