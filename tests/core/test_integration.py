@@ -6148,3 +6148,24 @@ def test_missing_connection_config():
     ctx = Context(
         config=Config(gateways={"default": GatewayConfig(connection=DuckDBConnectionConfig())})
     )
+
+
+@use_terminal_console
+def test_render_path_instead_of_model(tmp_path: Path):
+    create_temp_file(tmp_path, Path("models/test.sql"), "MODEL (name test_model); SELECT 1 AS col")
+    ctx = Context(paths=tmp_path, config=Config())
+
+    # Case 1: Fail gracefully when the user is passing in a path instead of a model name
+    for test_model in ["models/test.sql", "models/test.py"]:
+        with pytest.raises(
+            SQLMeshError,
+            match="Resolving models by path is not supported, please pass in the model name instead.",
+        ):
+            ctx.render(test_model)
+
+    # Case 2: Fail gracefully when the model name is not found
+    with pytest.raises(SQLMeshError, match="Cannot find model with name 'incorrect_model'"):
+        ctx.render("incorrect_model")
+
+    # Case 3: Render the model successfully
+    assert ctx.render("test_model").sql() == 'SELECT 1 AS "col"'

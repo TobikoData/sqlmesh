@@ -869,7 +869,12 @@ class GenericContext(BaseContext, t.Generic[C]):
         Returns:
             The expected model.
         """
-        if isinstance(model_or_snapshot, str):
+        if isinstance(model_or_snapshot, Snapshot):
+            return model_or_snapshot.model
+        if not isinstance(model_or_snapshot, str):
+            return model_or_snapshot
+
+        try:
             # We should try all dialects referenced in the project for cases when models use mixed dialects.
             for dialect in self._all_dialects:
                 normalized_name = normalize_model_name(
@@ -879,13 +884,16 @@ class GenericContext(BaseContext, t.Generic[C]):
                 )
                 if normalized_name in self._models:
                     return self._models[normalized_name]
-        elif isinstance(model_or_snapshot, Snapshot):
-            return model_or_snapshot.model
-        else:
-            return model_or_snapshot
+        except:
+            pass
 
         if raise_if_missing:
-            raise SQLMeshError(f"Cannot find model for '{model_or_snapshot}'")
+            if model_or_snapshot.endswith((".sql", ".py")):
+                msg = "Resolving models by path is not supported, please pass in the model name instead."
+            else:
+                msg = f"Cannot find model with name '{model_or_snapshot}'"
+
+            raise SQLMeshError(msg)
 
         return None
 
