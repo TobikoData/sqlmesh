@@ -4,6 +4,9 @@ from sqlmesh.cli.example_project import init_example_project
 from sqlmesh.core.config import Config, ModelDefaultsConfig
 from sqlmesh.core.context import Context
 from sqlmesh.utils.errors import ConfigError
+import sqlmesh.core.constants as c
+from sqlmesh.core.config import load_config_from_yaml
+from sqlmesh.utils.yaml import dump
 
 
 @pytest.fixture
@@ -201,3 +204,129 @@ def my_model(context, **kwargs):
     assert model.description == "model_payload_a"
     path_b.write_text(model_payload_b)
     context.load()  # raise no error to duplicate key if the functions are identical (by registry class_method)
+
+
+def test_load_migrated_dbt_adapter_dispatch_macros(tmp_path: Path):
+    init_example_project(tmp_path, dialect="duckdb")
+
+    migrated_package_path = tmp_path / "macros" / c.MIGRATED_DBT_PACKAGES / "dbt_utils"
+    migrated_package_path.mkdir(parents=True)
+
+    (migrated_package_path / "deduplicate.sql").write_text("""
+    {%- macro deduplicate(relation) -%}
+        {{ return(adapter.dispatch('deduplicate', 'dbt_utils')(relation)) }}
+    {% endmacro %}
+    """)
+
+    (migrated_package_path / "default__deduplicate.sql").write_text("""
+    {%- macro default__deduplicate(relation) -%}
+         select 'default impl' from {{ relation }}
+    {% endmacro %}
+    """)
+
+    (migrated_package_path / "duckdb__deduplicate.sql").write_text("""
+    {%- macro duckdb__deduplicate(relation) -%}
+        select 'duckdb impl' from {{ relation }}
+    {% endmacro %}
+    """)
+
+    # this should be pruned from the JinjaMacroRegistry because the target is duckdb, not bigquery
+    (migrated_package_path / "bigquery__deduplicate.sql").write_text("""
+    {%- macro bigquery__deduplicate(relation) -%}
+        select 'bigquery impl' from {{ relation }}
+    {% endmacro %}
+    """)
+
+    (tmp_path / "models" / "test_model.sql").write_text("""
+    MODEL (
+        name sqlmesh_example.test,
+        kind FULL,
+    );
+JINJA_QUERY_BEGIN;
+{{ dbt_utils.deduplicate(__migrated_ref(schema='sqlmesh_example', identifier='full_model')) }}
+JINJA_END;
+    """)
+
+    config_path = tmp_path / "config.yaml"
+    assert config_path.exists()
+    config = load_config_from_yaml(config_path)
+    config["variables"] = {}
+    config["variables"][c.MIGRATED_DBT_PROJECT_NAME] = "test"
+
+    config_path.write_text(dump(config))
+
+    ctx = Context(paths=tmp_path)
+
+    model = ctx.models['"db"."sqlmesh_example"."test"']
+    assert model.dialect == "duckdb"
+    assert {(package, name) for package, name, _ in model.jinja_macros.all_macros} == {
+        ("dbt_utils", "deduplicate"),
+        ("dbt_utils", "default__deduplicate"),
+        ("dbt_utils", "duckdb__deduplicate"),
+    }
+
+    assert (
+        model.render_query_or_raise().sql(dialect="duckdb")
+        == """SELECT \'duckdb impl\' AS "duckdb impl" FROM "db"."sqlmesh_example"."full_model" AS "full_model\""""
+    )
+
+
+def test_load_migrated_dbt_adapter_dispatch_macros_in_different_packages(tmp_path: Path):
+    # some things like dbt.current_timestamp() dispatch to macros in a different package
+    init_example_project(tmp_path, dialect="duckdb")
+
+    migrated_package_path_dbt = tmp_path / "macros" / c.MIGRATED_DBT_PACKAGES / "dbt"
+    migrated_package_path_dbt_duckdb = tmp_path / "macros" / c.MIGRATED_DBT_PACKAGES / "dbt_duckdb"
+    migrated_package_path_dbt.mkdir(parents=True)
+    migrated_package_path_dbt_duckdb.mkdir(parents=True)
+
+    (migrated_package_path_dbt / "current_timestamp.sql").write_text("""
+    {%- macro current_timestamp(relation) -%}
+        {{ return(adapter.dispatch('current_timestamp', 'dbt')()) }}
+    {% endmacro %}
+    """)
+
+    (migrated_package_path_dbt / "default__current_timestamp.sql").write_text("""
+    {% macro default__current_timestamp() -%}
+        {{ exceptions.raise_not_implemented('current_timestamp macro not implemented') }}
+    {%- endmacro %}
+    """)
+
+    (migrated_package_path_dbt_duckdb / "duckdb__current_timestamp.sql").write_text("""
+    {%- macro duckdb__current_timestamp() -%}
+        'duckdb current_timestamp impl'
+    {% endmacro %}
+    """)
+
+    (tmp_path / "models" / "test_model.sql").write_text("""
+    MODEL (
+        name sqlmesh_example.test,
+        kind FULL,
+    );
+JINJA_QUERY_BEGIN;
+select {{ dbt.current_timestamp() }} as a
+JINJA_END;
+    """)
+
+    config_path = tmp_path / "config.yaml"
+    assert config_path.exists()
+    config = load_config_from_yaml(config_path)
+    config["variables"] = {}
+    config["variables"][c.MIGRATED_DBT_PROJECT_NAME] = "test"
+
+    config_path.write_text(dump(config))
+
+    ctx = Context(paths=tmp_path)
+
+    model = ctx.models['"db"."sqlmesh_example"."test"']
+    assert model.dialect == "duckdb"
+    assert {(package, name) for package, name, _ in model.jinja_macros.all_macros} == {
+        ("dbt", "current_timestamp"),
+        ("dbt", "default__current_timestamp"),
+        ("dbt_duckdb", "duckdb__current_timestamp"),
+    }
+
+    assert (
+        model.render_query_or_raise().sql(dialect="duckdb")
+        == "SELECT 'duckdb current_timestamp impl' AS \"a\""
+    )
