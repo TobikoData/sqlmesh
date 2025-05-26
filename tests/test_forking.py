@@ -24,7 +24,7 @@ def test_parallel_load(assert_exp_eq, mocker):
         executor_args = process_pool_executor.call_args
         assert executor_args[1]["max_workers"] == 2
 
-    assert len(context.models) == 18
+    assert len(context.models) == 20
     spy_update_schemas.assert_called()
     assert_exp_eq(
         context.render("sushi.customers"),
