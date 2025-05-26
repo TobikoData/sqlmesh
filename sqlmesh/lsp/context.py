@@ -3,6 +3,10 @@ from pathlib import Path
 from sqlmesh.core.context import Context
 import typing as t
 
+from sqlmesh.core.model.definition import SqlModel
+from sqlmesh.lsp.custom import RenderModelEntry
+from sqlmesh.lsp.uri import URI
+
 
 @dataclass
 class ModelTarget:
@@ -49,3 +53,37 @@ class LSPContext:
             **model_map,
             **audit_map,
         }
+
+
+def render_model(context: LSPContext, uri: URI) -> t.Iterator[RenderModelEntry]:
+    target = context.map[uri.to_path()]
+    if isinstance(target, AuditTarget):
+        audit = context.context.standalone_audits[target.name]
+        definition = audit.render_definition(
+            include_python=False,
+            render_query=True,
+        )
+        rendered_query = [render.sql(dialect=audit.dialect, pretty=True) for render in definition]
+        yield RenderModelEntry(
+            name=audit.name,
+            fqn=audit.fqn,
+            description=audit.description,
+            rendered_query="\n\n".join(rendered_query),
+        )
+    if isinstance(target, ModelTarget):
+        for name in target.names:
+            model = context.context.get_model(name)
+            if isinstance(model, SqlModel):
+                rendered_query = [
+                    render.sql(dialect=model.dialect, pretty=True)
+                    for render in model.render_definition(
+                        include_python=False,
+                        render_query=True,
+                    )
+                ]
+                yield RenderModelEntry(
+                    name=model.name,
+                    fqn=model.fqn,
+                    description=model.description,
+                    rendered_query="\n\n".join(rendered_query),
+                )

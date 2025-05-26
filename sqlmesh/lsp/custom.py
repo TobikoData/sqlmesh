@@ -20,3 +20,29 @@ class AllModelsResponse(PydanticModel):
 
     models: t.List[str]
     keywords: t.List[str]
+
+
+RENDER_MODEL_FEATURE = "sqlmesh/render_model"
+
+
+class RenderModelRequest(PydanticModel):
+    textDocumentUri: str
+
+
+class RenderModelEntry(PydanticModel):
+    """
+    An entry in the rendered model.
+    """
+
+    name: str
+    fqn: str
+    description: str
+    rendered_query: str
+
+
+class RenderModelResponse(PydanticModel):
+    """
+    Response to render a model.
+    """
+
+    models: t.List[RenderModelEntry]

@@ -87,8 +87,23 @@
         "command": "sqlmesh.signout",
         "title": "Sign out from Tobiko Cloud",
         "description": "SQLMesh"
+      },
+      {
+        "command": "sqlmesh.renderModel",
+        "title": "Render Model",
+        "description": "Render the model in the current editor",
+        "icon": "$(open-preview)"
       }
-    ]
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "sqlmesh.renderModel",
+          "when": "resourceExtname == .sql",
+          "group": "navigation"
+        }
+      ]
+    }
   },
   "scripts": {
     "ci": "pnpm run lint && pnpm run compile",
