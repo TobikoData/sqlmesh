@@ -6131,22 +6131,20 @@ def test_audits_running_on_metadata_changes(tmp_path: Path):
     )
 
 
-@pytest.mark.isolated
+@pytest.mark.set_default_connection(disable=True)
 def test_missing_connection_config():
-    # This is the actual implementation of Config._get_connection which would be used in a real project
-    # To make testing easier, it's mocked at tests/__init__.py
+    # This is testing the actual implementation of Config.get_connection
+    # To make writing tests easier, it's patched by the autouse fixture provide_sqlmesh_default_connection
+    # Case 1: No default_connection or gateways specified should raise a ConfigError
+    with pytest.raises(ConfigError):
+        ctx = Context(config=Config())
 
-    with mock.patch.object(Config, "get_connection", Config.original_get_connection):
-        # Case 1: No default_connection or gateways specified should raise a ConfigError
-        with pytest.raises(ConfigError):
-            ctx = Context(config=Config())
+    # Case 2: No connection specified in the gateway should raise a ConfigError
+    with pytest.raises(ConfigError):
+        ctx = Context(config=Config(gateways={"incorrect": GatewayConfig()}))
 
-        # Case 2: No connection specified in the gateway should raise a ConfigError
-        with pytest.raises(ConfigError):
-            ctx = Context(config=Config(gateways={"default": GatewayConfig()}))
-
-        # Case 3: Specifying a default_connection or connection in the gateway should work
-        ctx = Context(config=Config(default_connection=DuckDBConnectionConfig()))
-        ctx = Context(
-            config=Config(gateways={"default": GatewayConfig(connection=DuckDBConnectionConfig())})
-        )
+    # Case 3: Specifying a default_connection or connection in the gateway should work
+    ctx = Context(config=Config(default_connection=DuckDBConnectionConfig()))
+    ctx = Context(
+        config=Config(gateways={"default": GatewayConfig(connection=DuckDBConnectionConfig())})
+    )

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+
 import datetime
 import logging
 import typing as t
 import uuid
+from contextlib import nullcontext
 from pathlib import Path
 from shutil import copytree, rmtree
 from tempfile import TemporaryDirectory
@@ -21,7 +23,8 @@ from sqlglot.dialects.dialect import DialectType
 from sqlglot.helper import ensure_list
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
-from sqlmesh.core.config import BaseDuckDBConnectionConfig
+from sqlmesh.core.config import Config, BaseDuckDBConnectionConfig, DuckDBConnectionConfig
+from sqlmesh.core.config.connection import ConnectionConfig
 from sqlmesh.core.context import Context
 from sqlmesh.core.engine_adapter import MSSQLEngineAdapter, SparkEngineAdapter
 from sqlmesh.core.engine_adapter.base import EngineAdapter
@@ -526,3 +529,26 @@ def make_temp_table_name(mocker: MockerFixture) -> t.Callable:
         return temp_table
 
     return _make_function
+
+
+@pytest.fixture(scope="function", autouse=True)
+def set_default_connection(request):
+    request = request.node.get_closest_marker("set_default_connection")
+    disable = request and request.kwargs.get("disable")
+
+    if disable:
+        ctx = nullcontext()
+    else:
+        original_get_connection = Config.get_connection
+
+        def _lax_get_connection(self, gateway_name: t.Optional[str] = None) -> ConnectionConfig:
+            try:
+                connection = original_get_connection(self, gateway_name)
+            except:
+                connection = DuckDBConnectionConfig()
+            return connection
+
+        ctx = mock.patch("sqlmesh.core.config.Config.get_connection", _lax_get_connection)
+
+    with ctx:
+        yield
