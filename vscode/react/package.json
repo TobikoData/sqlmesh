@@ -21,7 +21,7 @@
     "@tanstack/react-query": "^5.76.1",
     "@tanstack/react-router": "^1.114.3",
     "@tanstack/react-router-devtools": "^1.114.3",
-    "@tanstack/react-virtual": "^3.13.6",
+    "@tanstack/react-virtual": "^3.13.9",
     "@tanstack/router-plugin": "^1.114.3",
     "apache-arrow": "^19.0.1",
     "clsx": "^2.0.0",
