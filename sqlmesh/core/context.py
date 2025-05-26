@@ -1129,33 +1129,15 @@ class GenericContext(BaseContext, t.Generic[C]):
 
             with open(target._path, "r+", encoding="utf-8") as file:
                 before = file.read()
-                expressions = parse(before, default_dialect=self.config_for_node(target).dialect)
-                if transpile and is_meta_expression(expressions[0]):
-                    for prop in expressions[0].expressions:
-                        if prop.name.lower() == "dialect":
-                            prop.replace(
-                                exp.Property(
-                                    this="dialect",
-                                    value=exp.Literal.string(transpile or target.dialect),
-                                )
-                            )
 
-                format_config = self.config_for_node(target).format
-                after = format_model_expressions(
-                    expressions,
-                    transpile or target.dialect,
-                    rewrite_casts=(
-                        rewrite_casts
-                        if rewrite_casts is not None
-                        else not format_config.no_rewrite_casts
-                    ),
-                    **{**format_config.generator_options, **kwargs},
+                after = self._format(
+                    target,
+                    before,
+                    transpile=transpile,
+                    rewrite_casts=rewrite_casts,
+                    append_newline=append_newline,
+                    **kwargs,
                 )
-
-                if append_newline is None:
-                    append_newline = format_config.append_newline
-                if append_newline:
-                    after += "\n"
 
                 if not check:
                     file.seek(0)
@@ -1173,6 +1155,44 @@ class GenericContext(BaseContext, t.Generic[C]):
             return False
 
         return True
+
+    def _format(
+        self,
+        target: Model | Audit,
+        before: str,
+        *,
+        transpile: t.Optional[str] = None,
+        rewrite_casts: t.Optional[bool] = None,
+        append_newline: t.Optional[bool] = None,
+        **kwargs: t.Any,
+    ) -> str:
+        expressions = parse(before, default_dialect=self.config_for_node(target).dialect)
+        if transpile and is_meta_expression(expressions[0]):
+            for prop in expressions[0].expressions:
+                if prop.name.lower() == "dialect":
+                    prop.replace(
+                        exp.Property(
+                            this="dialect",
+                            value=exp.Literal.string(transpile or target.dialect),
+                        )
+                    )
+
+        format_config = self.config_for_node(target).format
+        after = format_model_expressions(
+            expressions,
+            transpile or target.dialect,
+            rewrite_casts=(
+                rewrite_casts if rewrite_casts is not None else not format_config.no_rewrite_casts
+            ),
+            **{**format_config.generator_options, **kwargs},
+        )
+
+        if append_newline is None:
+            append_newline = format_config.append_newline
+        if append_newline:
+            after += "\n"
+
+        return after
 
     @python_api_analytics
     def plan(

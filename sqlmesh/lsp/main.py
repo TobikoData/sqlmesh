@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 """A Language Server Protocol (LSP) server for SQL with SQLMesh integration, refactored without globals."""
 
+from itertools import chain
 import logging
 import typing as t
 from pathlib import Path
@@ -20,7 +21,11 @@ from sqlmesh.lsp.api import (
     ApiResponseGetModels,
 )
 from sqlmesh.lsp.completions import get_sql_completions
-from sqlmesh.lsp.context import LSPContext, ModelTarget, render_model as render_model_context
+from sqlmesh.lsp.context import (
+    LSPContext,
+    ModelTarget,
+    render_model as render_model_context,
+)
 from sqlmesh.lsp.custom import (
     ALL_MODELS_FEATURE,
     RENDER_MODEL_FEATURE,
@@ -213,15 +218,29 @@ class SQLMeshLanguageServer:
                 uri = URI(params.text_document.uri)
                 self._ensure_context_for_document(uri)
                 document = ls.workspace.get_text_document(params.text_document.uri)
+                before = document.source
                 if self.lsp_context is None:
                     raise RuntimeError(f"No context found for document: {document.path}")
 
-                # Perform formatting using the loaded context
-                self.lsp_context.context.format(paths=(str(uri.to_path()),))
-                with open(uri.to_path(), "r+", encoding="utf-8") as file:
-                    new_text = file.read()
-
-                # Return a single edit that replaces the entire file.
+                target = next(
+                    (
+                        target
+                        for target in chain(
+                            self.lsp_context.context._models.values(),
+                            self.lsp_context.context._audits.values(),
+                        )
+                        if target._path is not None
+                        and target._path.suffix == ".sql"
+                        and (target._path.samefile(uri.to_path()))
+                    ),
+                    None,
+                )
+                if target is None:
+                    return []
+                after = self.lsp_context.context._format(
+                    target=target,
+                    before=before,
+                )
                 return [
                     types.TextEdit(
                         range=types.Range(
@@ -231,7 +250,7 @@ class SQLMeshLanguageServer:
                                 character=len(document.lines[-1]) if document.lines else 0,
                             ),
                         ),
-                        new_text=new_text,
+                        new_text=after,
                     )
                 ]
             except Exception as e:
