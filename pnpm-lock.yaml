@@ -133,8 +133,8 @@ importers:
         specifier: ^18.2.0
         version: 18.3.1(react@18.3.1)
       react-router:
-        specifier: ^7.0.0
-        version: 7.6.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+        specifier: ^7.6.1
+        version: 7.6.1(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       reactflow:
         specifier: ^11.8.3
         version: 11.11.4(@types/react@18.3.21)(immer@9.0.21)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -266,8 +266,8 @@ importers:
         specifier: ^10.1.0
         version: 10.1.0(@types/react@18.3.21)(react@18.3.1)
       react-router:
-        specifier: ^7.0.0
-        version: 7.6.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+        specifier: ^7.6.1
+        version: 7.6.1(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       react-split:
         specifier: ^2.0.14
         version: 2.0.14(react@18.3.1)
@@ -280,6 +280,10 @@ importers:
       zustand:
         specifier: ^5.0.0
         version: 5.0.4(@types/react@18.3.21)(immer@9.0.21)(react@18.3.1)(use-sync-external-store@1.5.0(react@18.3.1))
+    optionalDependencies:
+      '@swc/core-linux-x64-gnu':
+        specifier: ^1.11.24
+        version: 1.11.24
     devDependencies:
       '@eslint/js':
         specifier: ^9.25.1
@@ -347,10 +351,6 @@ importers:
       vitest:
         specifier: ^3.1.2
         version: 3.1.3(@types/debug@4.1.12)(@types/node@20.17.46)(jiti@2.4.2)(jsdom@26.1.0)(lightningcss@1.29.2)(terser@5.39.2)(tsx@4.19.4)(yaml@2.7.1)
-    optionalDependencies:
-      '@swc/core-linux-x64-gnu':
-        specifier: ^1.11.24
-        version: 1.11.24
 
 packages:
 
@@ -4636,8 +4636,8 @@ packages:
       '@types/react':
         optional: true
 
-  react-router@7.6.0:
-    resolution: {integrity: sha512-GGufuHIVCJDbnIAXP3P9Sxzq3UUsddG3rrI3ut1q6m0FI6vxVBF3JoPQ38+W/blslLH4a5Yutp8drkEpXoddGQ==}
+  react-router@7.6.1:
+    resolution: {integrity: sha512-hPJXXxHJZEsPFNVbtATH7+MMX43UDeOauz+EAU4cgqTn7ojdI9qQORqS8Z0qmDlL1TclO/6jLRYUEtbWidtdHQ==}
     engines: {node: '>=20.0.0'}
     peerDependencies:
       react: '>=18'
@@ -5082,6 +5082,10 @@ packages:
     resolution: {integrity: sha512-GNzQvQTOIP6RyTfE2Qxb8ZVlNmw0n88vp1szwWRimP02mnTsx3Wtn5qRdqY9w2XduFNUgvOwhNnQsjwCp+kqaQ==}
     engines: {node: '>=6'}
 
+  tapable@2.2.2:
+    resolution: {integrity: sha512-Re10+NauLTMCudc7T5WLFLAwDhQ0JWdrMK+9B2M8zR5hRExKmsRDCBA7/aV/pNJFltmBFO5BAMlQFi/vq3nKOg==}
+    engines: {node: '>=6'}
+
   tar-fs@2.1.2:
     resolution: {integrity: sha512-EsaAXwxmx8UB7FRKqeozqEPop69DXcmYwTQwXvyAPF352HJsPdkVhvTaDPYqfNgruveJIJy3TA2l+2zj8LJIJA==}
 
@@ -5521,8 +5525,8 @@ packages:
     resolution: {integrity: sha512-o8qghlI8NZHU1lLPrpi2+Uq7abh4GGPpYANlalzWxyWteJOCsr/P+oPBA49TOLu5FTZO4d3F9MnWJfiMo4BkmA==}
     engines: {node: '>=18'}
 
-  watchpack@2.4.3:
-    resolution: {integrity: sha512-adBYQLivcg1jbdKEJeqScJJFvgm4qY9+3tXw+jdG6lkVeqRJEtiQmSWjmth8GKmDZuX7sYM4YFxQsf0AzMfGGw==}
+  watchpack@2.4.4:
+    resolution: {integrity: sha512-c5EGNOiyxxV5qmTtAB7rbiXxi1ooX1pQKMLX/MIabJjRA0SJBQOjKF+KSVfHkr9U1cADPon0mRiVe/riyaiDUA==}
     engines: {node: '>=10.13.0'}
 
   web-vitals@4.2.4:
@@ -5535,8 +5539,8 @@ packages:
     resolution: {integrity: sha512-VwddBukDzu71offAQR975unBIGqfKZpM+8ZX6ySk8nYhVoo5CYaZyzt3YBvYtRtO+aoGlqxPg/B87NGVZ/fu6g==}
     engines: {node: '>=12'}
 
-  webpack-sources@3.2.3:
-    resolution: {integrity: sha512-/DyMEOrDgLKKIG0fmvtz+4dUX/3Ghozwgm6iPp8KRhvn+eQf9+Q7GWxVNMk3+uCPWfdXYC4ExGBckIXdFEfH1w==}
+  webpack-sources@3.3.0:
+    resolution: {integrity: sha512-77R0RDmJfj9dyv5p3bM5pOHa+X8/ZkO9c7kpDstigkC4nIDobadsfSGCwB4bKhMVxqAok8tajaoR8rirM7+VFQ==}
     engines: {node: '>=10.13.0'}
 
   webpack-virtual-modules@0.6.2:
@@ -10642,7 +10646,7 @@ snapshots:
     optionalDependencies:
       '@types/react': 18.3.21
 
-  react-router@7.6.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1):
+  react-router@7.6.1(react-dom@18.3.1(react@18.3.1))(react@18.3.1):
     dependencies:
       cookie: 1.0.2
       react: 18.3.1
@@ -11218,6 +11222,8 @@ snapshots:
 
   tapable@2.2.1: {}
 
+  tapable@2.2.2: {}
+
   tar-fs@2.1.2:
     dependencies:
       chownr: 1.1.4
@@ -11680,7 +11686,7 @@ snapshots:
     dependencies:
       xml-name-validator: 5.0.0
 
-  watchpack@2.4.3:
+  watchpack@2.4.4:
     dependencies:
       glob-to-regexp: 0.4.1
       graceful-fs: 4.2.11
@@ -11691,7 +11697,7 @@ snapshots:
 
   webidl-conversions@7.0.0: {}
 
-  webpack-sources@3.2.3: {}
+  webpack-sources@3.3.0: {}
 
   webpack-virtual-modules@0.6.2: {}
 
@@ -11717,10 +11723,10 @@ snapshots:
       mime-types: 2.1.35
       neo-async: 2.6.2
       schema-utils: 4.3.2
-      tapable: 2.2.1
+      tapable: 2.2.2
       terser-webpack-plugin: 5.3.14(webpack@5.99.8)
-      watchpack: 2.4.3
-      webpack-sources: 3.2.3
+      watchpack: 2.4.4
+      webpack-sources: 3.3.0
     transitivePeerDependencies:
       - '@swc/core'
       - esbuild
@@ -11749,10 +11755,10 @@ snapshots:
       mime-types: 2.1.35
       neo-async: 2.6.2
       schema-utils: 4.3.2
-      tapable: 2.2.1
+      tapable: 2.2.2
       terser-webpack-plugin: 5.3.14(esbuild@0.25.4)(webpack@5.99.8(esbuild@0.25.4))
-      watchpack: 2.4.3
-      webpack-sources: 3.2.3
+      watchpack: 2.4.4
+      webpack-sources: 3.3.0
     transitivePeerDependencies:
       - '@swc/core'
       - esbuild
