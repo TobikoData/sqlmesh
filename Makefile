@@ -157,6 +157,7 @@ snowflake-test: guard-SNOWFLAKE_ACCOUNT guard-SNOWFLAKE_WAREHOUSE guard-SNOWFLAK
 	pytest -n auto -m "snowflake" --retries 3 --junitxml=test-results/junit-snowflake.xml
 
 bigquery-test: guard-BIGQUERY_KEYFILE engine-bigquery-install
+	pip install -e ".[bigframes]"
 	pytest -n auto -m "bigquery" --retries 3 --junitxml=test-results/junit-bigquery.xml
 
 databricks-test: guard-DATABRICKS_CATALOG guard-DATABRICKS_SERVER_HOSTNAME guard-DATABRICKS_HTTP_PATH guard-DATABRICKS_ACCESS_TOKEN guard-DATABRICKS_CONNECT_VERSION engine-databricks-install
