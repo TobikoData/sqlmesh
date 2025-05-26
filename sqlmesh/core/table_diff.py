@@ -8,6 +8,7 @@ import pandas as pd
 
 from sqlmesh.core.dialect import to_schema
 from sqlmesh.core.engine_adapter.mixins import RowDiffMixin
+from sqlmesh.core.engine_adapter.athena import AthenaEngineAdapter
 from sqlglot import exp, parse_one
 from sqlglot.helper import ensure_list
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
@@ -15,6 +16,7 @@ from sqlglot.optimizer.qualify_columns import quote_identifiers
 from sqlglot.optimizer.scope import find_all_in_scope
 
 from sqlmesh.utils.pydantic import PydanticModel
+from sqlmesh.utils.errors import SQLMeshError
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import TableName
@@ -431,7 +433,26 @@ class TableDiff:
             schema = to_schema(temp_schema, dialect=self.dialect)
             temp_table = exp.table_("diff", db=schema.db, catalog=schema.catalog, quoted=True)
 
-            with self.adapter.temp_table(query, name=temp_table) as table:
+            temp_table_kwargs = {}
+            if isinstance(self.adapter, AthenaEngineAdapter):
+                # Athena has two table formats: Hive (the default) and Iceberg. TableDiff requires that
+                # the formats be the same for the source, target, and temp tables.
+                source_table_type = self.adapter._query_table_type(self.source_table)
+                target_table_type = self.adapter._query_table_type(self.target_table)
+
+                if source_table_type == "iceberg" and target_table_type == "iceberg":
+                    temp_table_kwargs["table_format"] = "iceberg"
+                # Sets the temp table's format to Iceberg.
+                # If neither source nor target table is Iceberg, it defaults to Hive (Athena's default).
+                elif source_table_type == "iceberg" or target_table_type == "iceberg":
+                    raise SQLMeshError(
+                        f"Source table '{self.source}' format '{source_table_type}' and target table '{self.target}' format '{target_table_type}' "
+                        f"do not match for Athena. Diffing between different table formats is not supported."
+                    )
+
+            with self.adapter.temp_table(
+                query, name=temp_table, columns_to_types=None, **temp_table_kwargs
+            ) as table:
                 summary_sums = [
                     exp.func("SUM", "s_exists").as_("s_count"),
                     exp.func("SUM", "t_exists").as_("t_count"),
