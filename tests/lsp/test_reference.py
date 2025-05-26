@@ -60,7 +60,19 @@ def test_reference_with_alias() -> None:
 
     assert references[0].uri.endswith("orders.py")
     assert get_string_from_range(read_file, references[0].range) == "sushi.orders"
-    assert references[0].description == "Table of sushi orders."
+    assert (
+        references[0].markdown_description
+        == """Table of sushi orders.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| id | INT |  |
+| customer_id | INT |  |
+| waiter_id | INT |  |
+| start_ts | INT |  |
+| end_ts | INT |  |
+| event_date | DATE |  |"""
+    )
     assert references[1].uri.endswith("order_items.py")
     assert get_string_from_range(read_file, references[1].range) == "sushi.order_items"
     assert references[2].uri.endswith("items.py")

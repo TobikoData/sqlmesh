@@ -5,6 +5,7 @@ from sqlmesh.core.dialect import normalize_model_name
 from sqlmesh.core.model.definition import SqlModel
 from sqlmesh.lsp.context import LSPContext, ModelTarget, AuditTarget
 from sqlglot import exp
+from sqlmesh.lsp.description import generate_markdown_description
 from sqlmesh.lsp.uri import URI
 from sqlmesh.utils.pydantic import PydanticModel
 
@@ -16,12 +17,12 @@ class Reference(PydanticModel):
     Attributes:
         range: The range of the reference in the source file
         uri: The uri of the referenced model
-        description: The description of the referenced model
+        markdown_description: The markdown description of the referenced model
     """
 
     range: Range
     uri: str
-    description: t.Optional[str] = None
+    markdown_description: t.Optional[str] = None
 
 
 def by_position(position: Position) -> t.Callable[[Reference], bool]:
@@ -176,11 +177,13 @@ def get_model_definitions_for_a_path(
             catalog_or_db_range = _range_from_token_position_details(catalog_or_db_meta, read_file)
             start_pos = catalog_or_db_range.start
 
+        description = generate_markdown_description(referenced_model)
+
         references.append(
             Reference(
                 uri=referenced_model_uri.value,
                 range=Range(start=start_pos, end=end_pos),
-                description=referenced_model.description,
+                markdown_description=description,
             )
         )
 

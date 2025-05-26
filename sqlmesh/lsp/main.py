@@ -239,11 +239,12 @@ class SQLMeshLanguageServer:
                 if not references:
                     return None
                 reference = references[0]
-                if not reference.description:
+                if not reference.markdown_description:
                     return None
                 return types.Hover(
                     contents=types.MarkupContent(
-                        kind=types.MarkupKind.Markdown, value=reference.description
+                        kind=types.MarkupKind.Markdown,
+                        value=reference.markdown_description,
                     ),
                     range=reference.range,
                 )
