@@ -832,6 +832,8 @@ def test_restate_models(sushi_context_pre_scheduling: Context):
         '"memory"."sushi"."waiter_as_customer_by_day"',
         '"memory"."sushi"."waiter_names"',
         '"memory"."sushi"."waiters"',
+        '"memory"."sushi"."count_customers_active"',
+        '"memory"."sushi"."count_customers_inactive"',
     }
 
 

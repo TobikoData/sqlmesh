@@ -476,10 +476,16 @@ def test_full_history_restatement_model_regular_plan_preview_enabled(
     waiter_as_customer_snapshot = context.get_snapshot(
         "sushi.waiter_as_customer_by_day", raise_if_missing=True
     )
+    count_customers_active_snapshot = context.get_snapshot(
+        "sushi.count_customers_active", raise_if_missing=True
+    )
+    count_customers_inactive_snapshot = context.get_snapshot(
+        "sushi.count_customers_inactive", raise_if_missing=True
+    )
 
     plan = context.plan_builder("dev", skip_tests=True, enable_preview=True).build()
 
-    assert len(plan.new_snapshots) == 4
+    assert len(plan.new_snapshots) == 6
     assert (
         plan.context_diff.snapshots[snapshot.snapshot_id].change_category
         == SnapshotChangeCategory.FORWARD_ONLY
@@ -501,6 +507,18 @@ def test_full_history_restatement_model_regular_plan_preview_enabled(
     assert plan.missing_intervals == [
         SnapshotIntervals(
             snapshot_id=active_customers_snapshot.snapshot_id,
+            intervals=[
+                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
+            ],
+        ),
+        SnapshotIntervals(
+            snapshot_id=count_customers_active_snapshot.snapshot_id,
+            intervals=[
+                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
+            ],
+        ),
+        SnapshotIntervals(
+            snapshot_id=count_customers_inactive_snapshot.snapshot_id,
             intervals=[
                 (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
             ],
@@ -1517,6 +1535,8 @@ def test_run_with_select_models(
             "assert_item_price_above_zero": to_timestamp("2023-01-08"),
             '"memory"."sushi"."active_customers"': to_timestamp("2023-01-08"),
             '"memory"."sushi"."customers"': to_timestamp("2023-01-08"),
+            '"memory"."sushi"."count_customers_active"': to_timestamp("2023-01-08"),
+            '"memory"."sushi"."count_customers_inactive"': to_timestamp("2023-01-08"),
         }
 
 
@@ -1555,6 +1575,8 @@ def test_plan_with_run(
             "assert_item_price_above_zero": to_timestamp("2023-01-09"),
             '"memory"."sushi"."active_customers"': to_timestamp("2023-01-09"),
             '"memory"."sushi"."customers"': to_timestamp("2023-01-09"),
+            '"memory"."sushi"."count_customers_active"': to_timestamp("2023-01-09"),
+            '"memory"."sushi"."count_customers_inactive"': to_timestamp("2023-01-09"),
         }
 
 
@@ -1592,6 +1614,8 @@ def test_run_with_select_models_no_auto_upstream(
             "assert_item_price_above_zero": to_timestamp("2023-01-08"),
             '"memory"."sushi"."active_customers"': to_timestamp("2023-01-08"),
             '"memory"."sushi"."customers"': to_timestamp("2023-01-08"),
+            '"memory"."sushi"."count_customers_active"': to_timestamp("2023-01-08"),
+            '"memory"."sushi"."count_customers_inactive"': to_timestamp("2023-01-08"),
         }
 
 
@@ -5185,7 +5209,7 @@ def test_environment_suffix_target_table(init_and_plan_context: t.Callable):
     assert set(metadata.schemas) - starting_schemas == {"raw"}
     prod_views = {x for x in metadata.qualified_views if x.db in environments_schemas}
     # Make sure that all models are present
-    assert len(prod_views) == 14
+    assert len(prod_views) == 16
     apply_to_environment(context, "dev")
     # Make sure no new schemas are created
     assert set(metadata.schemas) - starting_schemas == {"raw"}
@@ -5243,9 +5267,9 @@ def test_environment_catalog_mapping(init_and_plan_context: t.Callable):
         user_default_tables,
         non_default_tables,
     ) = get_default_catalog_and_non_tables(metadata, context.default_catalog)
-    assert len(prod_views) == 14
+    assert len(prod_views) == 16
     assert len(dev_views) == 0
-    assert len(user_default_tables) == 17
+    assert len(user_default_tables) == 21
     assert state_metadata.schemas == ["sqlmesh"]
     assert {x.sql() for x in state_metadata.qualified_tables}.issuperset(
         {
@@ -5262,9 +5286,9 @@ def test_environment_catalog_mapping(init_and_plan_context: t.Callable):
         user_default_tables,
         non_default_tables,
     ) = get_default_catalog_and_non_tables(metadata, context.default_catalog)
-    assert len(prod_views) == 14
-    assert len(dev_views) == 14
-    assert len(user_default_tables) == 17
+    assert len(prod_views) == 16
+    assert len(dev_views) == 16
+    assert len(user_default_tables) == 21
     assert len(non_default_tables) == 0
     assert state_metadata.schemas == ["sqlmesh"]
     assert {x.sql() for x in state_metadata.qualified_tables}.issuperset(
@@ -5282,9 +5306,9 @@ def test_environment_catalog_mapping(init_and_plan_context: t.Callable):
         user_default_tables,
         non_default_tables,
     ) = get_default_catalog_and_non_tables(metadata, context.default_catalog)
-    assert len(prod_views) == 14
-    assert len(dev_views) == 28
-    assert len(user_default_tables) == 17
+    assert len(prod_views) == 16
+    assert len(dev_views) == 32
+    assert len(user_default_tables) == 21
     assert len(non_default_tables) == 0
     assert state_metadata.schemas == ["sqlmesh"]
     assert {x.sql() for x in state_metadata.qualified_tables}.issuperset(
@@ -5303,9 +5327,9 @@ def test_environment_catalog_mapping(init_and_plan_context: t.Callable):
         user_default_tables,
         non_default_tables,
     ) = get_default_catalog_and_non_tables(metadata, context.default_catalog)
-    assert len(prod_views) == 14
-    assert len(dev_views) == 14
-    assert len(user_default_tables) == 17
+    assert len(prod_views) == 16
+    assert len(dev_views) == 16
+    assert len(user_default_tables) == 21
     assert len(non_default_tables) == 0
     assert state_metadata.schemas == ["sqlmesh"]
     assert {x.sql() for x in state_metadata.qualified_tables}.issuperset(
