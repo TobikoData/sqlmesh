@@ -42,7 +42,7 @@ azuresql = ["pymssql"]
 bigquery = [
     "google-cloud-bigquery[pandas]",
     "google-cloud-bigquery-storage",
-    "bigframes>=1.32.0"
+    "bigframes"
 ]
 clickhouse = ["clickhouse-connect"]
 databricks = ["databricks-sql-connector[pyarrow]"]
