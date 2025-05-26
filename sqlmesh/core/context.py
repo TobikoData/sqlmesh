@@ -885,8 +885,15 @@ class GenericContext(BaseContext, t.Generic[C]):
                 if normalized_name in self._models:
                     return self._models[normalized_name]
         except:
-            if raise_if_missing:
-                raise SQLMeshError(f"Cannot find model with name '{model_or_snapshot}'")
+            pass
+
+        if raise_if_missing:
+            if model_or_snapshot.endswith((".sql", ".py")):
+                msg = "Resolving models by path is not supported, please pass in the model name instead."
+            else:
+                msg = f"Cannot find model with name '{model_or_snapshot}'"
+
+            raise SQLMeshError(msg)
 
         return None
 
