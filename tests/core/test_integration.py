@@ -64,7 +64,7 @@ from sqlmesh.core.snapshot import (
     SnapshotTableInfo,
 )
 from sqlmesh.utils.date import TimeLike, now, to_date, to_datetime, to_timestamp
-from sqlmesh.utils.errors import NoChangesPlanError, SQLMeshError, PlanError
+from sqlmesh.utils.errors import NoChangesPlanError, SQLMeshError, PlanError, ConfigError
 from sqlmesh.utils.pydantic import validate_string
 from tests.conftest import DuckDBMetadata, SushiDataValidator
 from tests.utils.test_helpers import use_terminal_console
@@ -6128,4 +6128,23 @@ def test_audits_running_on_metadata_changes(tmp_path: Path):
     assert (
         'Binder Error: Referenced column "this_col_does_not_exist" not found in \nFROM clause!'
         in output.stdout
+    )
+
+
+@pytest.mark.set_default_connection(disable=True)
+def test_missing_connection_config():
+    # This is testing the actual implementation of Config.get_connection
+    # To make writing tests easier, it's patched by the autouse fixture provide_sqlmesh_default_connection
+    # Case 1: No default_connection or gateways specified should raise a ConfigError
+    with pytest.raises(ConfigError):
+        ctx = Context(config=Config())
+
+    # Case 2: No connection specified in the gateway should raise a ConfigError
+    with pytest.raises(ConfigError):
+        ctx = Context(config=Config(gateways={"incorrect": GatewayConfig()}))
+
+    # Case 3: Specifying a default_connection or connection in the gateway should work
+    ctx = Context(config=Config(default_connection=DuckDBConnectionConfig()))
+    ctx = Context(
+        config=Config(gateways={"default": GatewayConfig(connection=DuckDBConnectionConfig())})
     )

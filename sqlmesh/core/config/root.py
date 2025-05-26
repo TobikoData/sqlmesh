@@ -122,7 +122,7 @@ class Config(BaseConfig):
     """
 
     gateways: GatewayDict = {"": GatewayConfig()}
-    default_connection: SerializableConnectionConfig = DuckDBConnectionConfig()
+    default_connection: t.Optional[SerializableConnectionConfig] = None
     default_test_connection_: t.Optional[SerializableConnectionConfig] = Field(
         default=None, alias="default_test_connection"
     )
@@ -280,7 +280,11 @@ class Config(BaseConfig):
         return self.gateways
 
     def get_connection(self, gateway_name: t.Optional[str] = None) -> ConnectionConfig:
-        return self.get_gateway(gateway_name).connection or self.default_connection
+        connection = self.get_gateway(gateway_name).connection or self.default_connection
+        if connection is None:
+            msg = f" for gateway '{gateway_name}'" if gateway_name else ""
+            raise ConfigError(f"No connection configured{msg}.")
+        return connection
 
     def get_state_connection(
         self, gateway_name: t.Optional[str] = None
