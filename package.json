@@ -7,6 +7,6 @@
     "lint:fix": "pnpm run fmt && pnpm run -r lint:fix"
   },
   "devDependencies": {
-    "prettier": "^3.5.2"
+    "prettier": "^3.5.3"
   }
 }
