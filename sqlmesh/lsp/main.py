@@ -279,21 +279,31 @@ class SQLMeshLanguageServer:
                     raise RuntimeError(f"No context found for document: {document.path}")
 
                 references = get_references(self.lsp_context, uri, params.position)
-                return [
-                    types.LocationLink(
-                        target_uri=reference.uri,
-                        target_selection_range=types.Range(
+                location_links = []
+                for reference in references:
+                    # Use target_range if available (for CTEs), otherwise default to start of file
+                    if reference.target_range:
+                        target_range = reference.target_range
+                        target_selection_range = reference.target_range
+                    else:
+                        target_range = types.Range(
                             start=types.Position(line=0, character=0),
                             end=types.Position(line=0, character=0),
-                        ),
-                        target_range=types.Range(
+                        )
+                        target_selection_range = types.Range(
                             start=types.Position(line=0, character=0),
                             end=types.Position(line=0, character=0),
-                        ),
-                        origin_selection_range=reference.range,
+                        )
+
+                    location_links.append(
+                        types.LocationLink(
+                            target_uri=reference.uri,
+                            target_selection_range=target_selection_range,
+                            target_range=target_range,
+                            origin_selection_range=reference.range,
+                        )
                     )
-                    for reference in references
-                ]
+                return location_links
             except Exception as e:
                 ls.show_message(f"Error getting references: {e}", types.MessageType.Error)
                 return []
