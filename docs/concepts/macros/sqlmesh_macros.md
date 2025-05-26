@@ -1683,7 +1683,7 @@ def some_macro(evaluator):
 
 #### Accessing model, physical table, and virtual layer view names
 
-All SQLMesh models have a name in their `MODEL` specification. We refer to that as the model's "unqualified" and "unresolved" name because it may not correspond to any specific object in the SQL engine.
+All SQLMesh models have a name in their `MODEL` specification. We refer to that as the model's "unresolved" name because it may not correspond to any specific object in the SQL engine.
 
 When SQLMesh renders and executes a model, it converts the model name into three forms at different stages:
 
