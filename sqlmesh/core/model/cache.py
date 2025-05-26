@@ -141,12 +141,18 @@ class OptimizedQueryCache:
         return name
 
     def _put(self, name: str, model: SqlModel) -> None:
-        optimized_query = model.render_query()
-        new_entry = OptimizedQueryCacheEntry(
-            optimized_rendered_query=optimized_query,
-            renderer_violations=model.violated_rules_for_query,
-        )
-        self._file_cache.put(name, value=new_entry)
+        try:
+            optimized_query = model.render_query()
+
+            new_entry = OptimizedQueryCacheEntry(
+                optimized_rendered_query=optimized_query,
+                renderer_violations=model.violated_rules_for_query,
+            )
+            self._file_cache.put(name, value=new_entry)
+        except:
+            # this can happen if the model query references some python library or function that was available
+            # at the time the model was created but has since been removed locally
+            logger.exception(f"Failed to cache optimized query for model '{model.name}'")
 
     @staticmethod
     def _entry_name(model: SqlModel) -> str:
