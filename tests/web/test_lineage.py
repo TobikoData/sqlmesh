@@ -47,7 +47,7 @@ WHERE
             "customer_id": {
                 "expression": 'CAST("o"."customer_id" AS INT) AS "customer_id" /* this comment should not be registered */',
                 "models": {'"memory"."sushi"."orders"': ["customer_id"]},
-                "source": '''WITH "current_marketing" AS (
+                "source": '''WITH "current_marketing_outer" AS (
   SELECT
     "marketing"."customer_id" AS "customer_id",
     "marketing"."status" AS "status"
@@ -58,7 +58,18 @@ WHERE
 SELECT DISTINCT
   CAST("o"."customer_id" AS INT) AS "customer_id" /* this comment should not be registered */
 FROM "memory"."sushi"."orders" AS "o"
-LEFT JOIN "current_marketing" AS "m"
+LEFT JOIN (
+  WITH "current_marketing" AS (
+    SELECT
+      "current_marketing_outer"."customer_id" AS "customer_id",
+      "current_marketing_outer"."status" AS "status"
+    FROM "current_marketing_outer" AS "current_marketing_outer"
+  )
+  SELECT
+    "current_marketing"."customer_id" AS "customer_id",
+    "current_marketing"."status" AS "status"
+  FROM "current_marketing" AS "current_marketing"
+) AS "m"
   ON "m"."customer_id" = "o"."customer_id"
 LEFT JOIN "memory"."raw"."demographics" AS "d"
   ON "d"."customer_id" = "o"."customer_id"''',
