@@ -6148,3 +6148,13 @@ def test_missing_connection_config():
     ctx = Context(
         config=Config(gateways={"default": GatewayConfig(connection=DuckDBConnectionConfig())})
     )
+
+@use_terminal_console
+def test_render_path_instead_of_model(tmp_path: Path):
+    create_temp_file(tmp_path, Path("models/test.sql"), "MODEL (name test_model); SELECT 1 AS col")
+    ctx = Context(paths=tmp_path, config=Config())
+
+    with pytest.raises(SQLMeshError, match="Cannot find model with name 'models/test.sql'"):
+        ctx.render("models/test.sql")
+
+    assert ctx.render("test_model").sql() == 'SELECT 1 AS "col"'
