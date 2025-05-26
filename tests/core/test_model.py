@@ -10129,3 +10129,24 @@ def check_self_schema(evaluator):
 
     context = Context(paths=tmp_path, config=config)
     context.plan(no_prompts=True, auto_apply=True)
+
+
+def test_model_relies_on_os_getenv(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+
+    (tmp_path / "macros" / "getenv_macro.py").write_text(
+        """
+from os import getenv
+from sqlmesh import macro
+
+@macro()
+def getenv_macro(evaluator):
+    getenv("foo", None)
+    return 1"""
+    )
+    (tmp_path / "models" / "model.sql").write_text(
+        "MODEL (name test); SELECT @getenv_macro() AS foo"
+    )
+
+    monkeypatch.chdir(tmp_path)
+    ctx = Context(paths=tmp_path)
