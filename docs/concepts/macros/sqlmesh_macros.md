@@ -1681,6 +1681,73 @@ def some_macro(evaluator):
     ...
 ```
 
+#### Accessing model, physical table, and virtual layer view names
+
+All SQLMesh models have a name in their `MODEL` specification. We refer to that as the model's "unresolved" name because it may not correspond to any specific object in the SQL engine.
+
+When SQLMesh renders and executes a model, it converts the model name into three forms at different stages:
+
+1. The *fully qualified* name
+
+    - If the model name is of the form `schema.table`, SQLMesh determines the correct catalog and adds it, like `catalog.schema.table`
+    - SQLMesh quotes each component of the name using the SQL engine's quoting and case-sensitivity rules, like `"catalog"."schema"."table"`
+
+2. The *resolved* physical table name
+
+    - The qualified name of the model's underlying physical table
+
+3. The *resolved* virtual layer view name
+
+    - The qualified name of the model's virtual layer view in the environment where the model is being executed
+
+You can access any of these three forms in a Python macro through properties of the `evaluation` context object.
+
+Access the unresolved, fully-qualified name through the `this_model_fqn` property.
+
+```python linenums="1"
+from sqlmesh.core.macros import macro
+
+@macro()
+def some_macro(evaluator):
+    # Example:
+    # Name in model definition: landing.customers
+    # Value returned here: '"datalake"."landing"."customers"'
+    unresolved_model_fqn = evaluator.this_model_fqn
+    ...
+```
+
+Access the resolved physical table and virtual layer view names through the `this_model` property.
+
+The `this_model` property returns different names depending on the runtime stage:
+
+- `promoting` runtime stage: `this_model` resolves to the virtual layer view name
+
+    - Example
+        - Model name is `db.test_model`
+        - `plan` is running in the `dev` environment
+        - `this_model` resolves to `"catalog"."db__dev"."test_model"` (note the `__dev` suffix in the schema name)
+
+- All other runtime stages: `this_model` resolves to the physical table name
+
+    - Example
+        - Model name is `db.test_model`
+        - `plan` is running in any environment
+        - `this_model` resolves to `"catalog"."sqlmesh__project"."project__test_model__684351896"`
+
+```python linenums="1"
+from sqlmesh.core.macros import macro
+
+@macro()
+def some_macro(evaluator):
+    if evaluator.runtime_stage == "promoting":
+        # virtual layer view name '"catalog"."db__dev"."test_model"'
+        resolved_name = evaluator.this_model
+    else:
+        # physical table name '"catalog"."sqlmesh__project"."project__test_model__684351896"'
+        resolved_name = evaluator.this_model
+    ...
+```
+
 #### Accessing model schemas
 
 Model schemas can be accessed within a Python macro function through its evaluation context's `column_to_types()` method, if the column types can be statically determined. For instance, a schema of an [external model](../models/external_models.md) can be accessed only after the `sqlmesh create_external_models` command has been executed.
