@@ -355,6 +355,19 @@ class DbtLoader(Loader):
 
             return models
 
+        def put(self, models: t.List[Model], path: Path) -> bool:
+            return self._model_cache.put(
+                models,
+                self._cache_entry_name(path),
+                self._cache_entry_id(path),
+            )
+
+        def get(self, path: Path) -> t.List[Model]:
+            return self._model_cache.get(
+                self._cache_entry_name(path),
+                self._cache_entry_id(path),
+            )
+
         def _cache_entry_name(self, target_path: Path) -> str:
             try:
                 path_for_name = target_path.absolute().relative_to(

@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import logging
-import multiprocessing as mp
 import typing as t
-from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 from sqlglot import exp
@@ -15,7 +13,7 @@ from sqlmesh.core import constants as c
 from sqlmesh.core.model.definition import ExternalModel, Model, SqlModel, _Model
 from sqlmesh.utils.cache import FileCache
 from sqlmesh.utils.hashing import crc32
-from sqlmesh.utils.windows import IS_WINDOWS
+from sqlmesh.utils.process import PoolExecutor, create_process_pool_executor
 
 from dataclasses import dataclass
 
@@ -46,12 +44,10 @@ class ModelCache:
         self, name: str, entry_id: str = "", *, loader: t.Callable[[], t.List[Model]]
     ) -> t.List[Model]:
         """Returns an existing cached model definition or loads and caches a new one.
-
         Args:
             name: The name of the entry.
             entry_id: The unique entry identifier. Used for cache invalidation.
             loader: Used to load a new model definition when no cached instance was found.
-
         Returns:
             The model definition.
         """
@@ -66,8 +62,21 @@ class ModelCache:
                 model.full_depends_on
 
             self._file_cache.put(name, entry_id, value=models)
-
         return models
+
+    def put(self, models: t.List[Model], name: str, entry_id: str = "") -> bool:
+        if models and isinstance(seq_get(models, 0), (SqlModel, ExternalModel)):
+            # make sure we preload full_depends_on
+            for model in models:
+                model.full_depends_on
+
+            self._file_cache.put(name, entry_id, value=models)
+            return True
+
+        return False
+
+    def get(self, name: str, entry_id: str = "") -> t.List[Model]:
+        return self._file_cache.get(name, entry_id) or []
 
 
 @dataclass
@@ -149,11 +158,8 @@ class OptimizedQueryCache:
         return f"{model.name}_{crc32(hash_data)}"
 
 
-def optimized_query_cache_pool(optimized_query_cache: OptimizedQueryCache) -> ProcessPoolExecutor:
-    # fork doesnt work on Windows. ref: https://docs.python.org/3/library/multiprocessing.html#multiprocessing-start-methods
-    context_type = "spawn" if IS_WINDOWS else "fork"
-    return ProcessPoolExecutor(
-        mp_context=mp.get_context(context_type),
+def optimized_query_cache_pool(optimized_query_cache: OptimizedQueryCache) -> PoolExecutor:
+    return create_process_pool_executor(
         initializer=_init_optimized_query_cache,
         initargs=(optimized_query_cache,),
         max_workers=c.MAX_FORK_WORKERS,
