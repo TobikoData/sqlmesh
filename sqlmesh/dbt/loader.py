@@ -4,7 +4,6 @@ import logging
 import sys
 import typing as t
 import sqlmesh.core.dialect as d
-from sqlglot.optimizer.simplify import gen
 from pathlib import Path
 from sqlmesh.core import constants as c
 from sqlmesh.core.config import (
@@ -17,9 +16,9 @@ from sqlmesh.core.environment import EnvironmentStatements
 from sqlmesh.core.loader import CacheBase, LoadedProject, Loader
 from sqlmesh.core.macros import MacroRegistry, macro
 from sqlmesh.core.model import Model, ModelCache
-from sqlmesh.core.model.common import make_python_env
 from sqlmesh.core.signal import signal
 from sqlmesh.dbt.basemodel import BMC, BaseModelConfig
+from sqlmesh.dbt.common import Dependencies
 from sqlmesh.dbt.context import DbtContext
 from sqlmesh.dbt.model import ModelConfig
 from sqlmesh.dbt.profile import Profile
@@ -259,22 +258,18 @@ class DbtLoader(Loader):
 
                 if statements := on_run_start + on_run_end:
                     jinja_references, used_variables = extract_macro_references_and_variables(
-                        *(gen(stmt) for stmt in statements)
+                        *statements
                     )
 
+                    statements_context = context.context_for_dependencies(
+                        Dependencies(
+                            variables=used_variables,
+                        )
+                    )
                     jinja_registry = make_jinja_registry(
-                        context.jinja_macros, package_name, jinja_references
+                        statements_context.jinja_macros, package_name, jinja_references
                     )
-
-                    python_env = make_python_env(
-                        [s for stmt in statements for s in d.parse(stmt, default_dialect=dialect)],
-                        jinja_macro_references=jinja_references,
-                        module_path=self.config_path,
-                        macros=macros,
-                        variables=context.variables,
-                        used_variables=used_variables,
-                        path=self.config_path,
-                    )
+                    jinja_registry.add_globals(statements_context.jinja_globals)
 
                     hooks_by_package_name[package_name] = EnvironmentStatements(
                         before_all=[
@@ -285,7 +280,7 @@ class DbtLoader(Loader):
                             d.jinja_statement(stmt).sql(dialect=dialect)
                             for stmt in on_run_end or []
                         ],
-                        python_env=python_env,
+                        python_env={},
                         jinja_macros=jinja_registry,
                     )
                 # Project hooks should be executed first and then rest of the packages
