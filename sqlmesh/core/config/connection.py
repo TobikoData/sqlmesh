@@ -1985,7 +1985,7 @@ def _connection_config_validator(
             + check_config_and_vars_msg
         )
     except ConfigError as e:
-        raise ConfigError(f"Invalid connection config: {e}" + check_config_and_vars_msg)
+        raise ConfigError(str(e) + check_config_and_vars_msg)
 
 
 connection_config_validator: t.Callable = field_validator(
