@@ -141,18 +141,13 @@ class OptimizedQueryCache:
         return name
 
     def _put(self, name: str, model: SqlModel) -> None:
-        try:
-            optimized_query = model.render_query()
+        optimized_query = model.render_query()
 
-            new_entry = OptimizedQueryCacheEntry(
-                optimized_rendered_query=optimized_query,
-                renderer_violations=model.violated_rules_for_query,
-            )
-            self._file_cache.put(name, value=new_entry)
-        except:
-            # this can happen if the model query references some python library or function that was available
-            # at the time the model was created but has since been removed locally
-            logger.exception(f"Failed to cache optimized query for model '{model.name}'")
+        new_entry = OptimizedQueryCacheEntry(
+            optimized_rendered_query=optimized_query,
+            renderer_violations=model.violated_rules_for_query,
+        )
+        self._file_cache.put(name, value=new_entry)
 
     @staticmethod
     def _entry_name(model: SqlModel) -> str:
@@ -186,10 +181,17 @@ def load_optimized_query(
     assert _optimized_query_cache
     model, snapshot_id = model_snapshot_id
 
+    entry_name = None
+
     if isinstance(model, SqlModel):
-        entry_name = _optimized_query_cache.put(model)
-    else:
-        entry_name = None
+        try:
+            entry_name = _optimized_query_cache.put(model)
+        except:
+            # this can happen if there is a query rendering error.
+            # for example, the model query references some python library or function that was available
+            # at the time the model was created but has since been removed locally
+            logger.exception(f"Failed to cache optimized query for model '{model.name}'")
+
     return snapshot_id, entry_name
 
 
