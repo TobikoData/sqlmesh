@@ -70,7 +70,15 @@ export function useApiModelLineage(
   return useQuery({
     queryKey: ['/api/lineage', modelName],
     queryFn: async ({ signal }) => {
-      return await modelLineageApiLineageModelNameGet(modelName, { signal })
+      try {
+        const response = await modelLineageApiLineageModelNameGet(modelName, {
+          signal,
+        })
+        return response
+      } catch (error) {
+        console.error('error fetching lineage', error)
+        throw error
+      }
     },
   })
 }

@@ -15,6 +15,7 @@ import { useEventBus } from '@/hooks/eventBus'
 import type { VSCodeEvent } from '@bus/callbacks'
 import { URI } from 'vscode-uri'
 import type { Model } from '@/api/client'
+import { useRpc } from '@/utils/rpc'
 
 export function LineagePage() {
   const { emit } = useEventBus()
@@ -66,49 +67,93 @@ export function LineagePage() {
 }
 
 function Lineage() {
-  const [selectedModelSet, setSelectedModelSet] = useState<string | undefined>(
+  const [selectedModel, setSelectedModel] = useState<string | undefined>(
     undefined,
   )
   const { on } = useEventBus()
   const queryClient = useQueryClient()
 
   const { data: models, isLoading: isLoadingModels } = useApiModels()
+  const rpc = useRpc()
   React.useEffect(() => {
-    if (selectedModelSet === undefined && models && Array.isArray(models)) {
-      setSelectedModelSet(models[0].name)
+    const fetchFirstTimeModelIfNotSet = async (
+      models: Model[],
+    ): Promise<string | undefined> => {
+      if (!Array.isArray(models)) {
+        return undefined
+      }
+      const activeFile = await rpc('get_active_file', {})
+      // @ts-ignore
+      if (!activeFile.fileUri) {
+        return models[0].name
+      }
+      // @ts-ignore
+      const fileUri: string = activeFile.fileUri
+      const filePath = URI.parse(fileUri).fsPath
+      const model = models.find((m: Model) => m.full_path === filePath)
+      if (model) {
+        return model.name
+      }
+      return undefined
     }
-  }, [models, selectedModelSet])
+    if (selectedModel === undefined && Array.isArray(models)) {
+      fetchFirstTimeModelIfNotSet(models).then(modelName => {
+        if (modelName && selectedModel === undefined) {
+          setSelectedModel(modelName)
+        }
+      })
+    }
+  }, [models, selectedModel])
+
+  const modelsRecord =
+    Array.isArray(models) &&
+    models.reduce(
+      (acc, model) => {
+        acc[model.name] = model
+        return acc
+      },
+      {} as Record<string, Model>,
+    )
+
+  React.useEffect(() => {
+    const handleChangeFocusedFile = (fileUri: { fileUri: string }) => {
+      const full_path = URI.parse(fileUri.fileUri).fsPath
+      const model = Object.values(modelsRecord).find(
+        m => m.full_path === full_path,
+      )
+      if (model) {
+        setSelectedModel(model.name)
+      }
+    }
+
+    const handleSavedFile = () => {
+      queryClient.invalidateQueries()
+    }
+
+    const offChangeFocusedFile = on(
+      'changeFocusedFile',
+      handleChangeFocusedFile,
+    )
+    const offSavedFile = on('savedFile', handleSavedFile)
+
+    // If your event bus returns an "off" function, call it on cleanup
+    return () => {
+      if (offChangeFocusedFile) offChangeFocusedFile()
+      if (offSavedFile) offSavedFile()
+    }
+  }, [on, queryClient, modelsRecord])
 
   if (
     isLoadingModels ||
     models === undefined ||
-    selectedModelSet === undefined
+    modelsRecord === false ||
+    selectedModel === undefined
   ) {
     return <div>Loading models...</div>
   }
   if (!Array.isArray(models)) {
     return <div>Error: Models data is not in the expected format</div>
   }
-  const modelsRecord = models.reduce(
-    (acc, model) => {
-      acc[model.name] = model
-      return acc
-    },
-    {} as Record<string, Model>,
-  )
-  const selectedModel = selectedModelSet
-  on('changeFocusedFile', fileUri => {
-    const full_path = URI.parse(fileUri.fileUri).fsPath
-    const model = Object.values(modelsRecord).find(
-      m => m.full_path === full_path,
-    )
-    if (model) {
-      setSelectedModelSet(model.name)
-    }
-  })
-  on('savedFile', () => {
-    queryClient.invalidateQueries()
-  })
 
   return (
     <LineageComponentFromWeb
@@ -127,7 +172,6 @@ export function LineageComponentFromWeb({
 }): JSX.Element {
   const vscode = useVSCode()
   function handleClickModel(id: string): void {
-    console.log('handling click', id)
     const decodedId = decodeURIComponent(id)
     const model = Object.values(models).find(m => m.fqn === decodedId)
     if (!model) {
@@ -137,7 +181,7 @@ export function LineageComponentFromWeb({
   }
 
   function handleError(error: any): void {
-    console.log(error)
+    console.error(error)
   }
 
   const model = models[selectedModel]

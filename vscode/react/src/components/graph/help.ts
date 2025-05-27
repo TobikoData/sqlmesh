@@ -176,7 +176,6 @@ function getNodeMap({
       ? decodeURI(modelName)
       : modelName
     const model = Object.values(models).find(m => m.fqn === decodedModelName)
-    console.log('model', model)
     const nodeType: LineageNodeModelType = isNotNil(model)
       ? (model.type as LineageNodeModelType)
       : // If model name present in lineage but not in global models
