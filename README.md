@@ -2,7 +2,7 @@
   <img src="docs/readme/sqlmesh.png" alt="SQLMesh logo" width="50%" height="50%">
 </p>
 
-SQLMesh is a next-generation data transformation framework designed to ship data quickly, efficiently, and without error. Data teams can efficiently run and deploy data transformations written in SQL or Python with visibility and control at any size.
+SQLMesh is a next-generation data transformation framework designed to ship data quickly, efficiently, and without error. Data teams can run and deploy data transformations written in SQL or Python with visibility and control at any size.
 
 It is more than just a [dbt alternative](https://tobikodata.com/reduce_costs_with_cron_and_partitions.html).
 
@@ -133,7 +133,7 @@ Write SQL in any dialect and SQLMesh will transpile it to your target SQL dialec
 * Definitions using [simply SQL](https://sqlmesh.readthedocs.io/en/stable/concepts/models/sql_models/#sql-based-definition) (no need for redundant and confusing `Jinja` + `YAML`)
 * See impact of changes before you run them in your warehouse with column-level lineage
 
-For more information, check out the [website](https://sqlmesh.com) and [documentation](https://sqlmesh.readthedocs.io/en/stable/).
+For more information, check out the [website](https://www.tobikodata.com/sqlmesh) and [documentation](https://sqlmesh.readthedocs.io/en/stable/).
 
 ## Getting Started
 Install SQLMesh through [pypi](https://pypi.org/project/sqlmesh/) by running:
@@ -143,7 +143,7 @@ mkdir sqlmesh-example
 cd sqlmesh-example
 python -m venv .venv
 source .venv/bin/activate
-pip install 'sqlmesh[lsp]' # install the sqlmesh package with extensions to work with VS Code
+pip install 'sqlmesh[lsp]' # install the sqlmesh package with extensions to work with VSCode
 source .venv/bin/activate # reactivate the venv to ensure you're using the right installation
 sqlmesh init duckdb # get started right away with a local duckdb instance
 sqlmesh plan # see the plan for the changes you're making
@@ -161,7 +161,7 @@ mkdir sqlmesh-example
 cd sqlmesh-example
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-pip install 'sqlmesh[lsp]' # install the sqlmesh package with extensions to work with VS Code
+pip install 'sqlmesh[lsp]' # install the sqlmesh package with extensions to work with VSCode
 .\.venv\Scripts\Activate.ps1 # reactivate the venv to ensure you're using the right installation
 sqlmesh init duckdb # get started right away with a local duckdb instance
 sqlmesh plan # see the plan for the changes you're making
