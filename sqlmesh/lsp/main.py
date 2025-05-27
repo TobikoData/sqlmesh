@@ -57,8 +57,12 @@ class SQLMeshLanguageServer:
         self.server = LanguageServer(server_name, version)
         self.context_class = context_class
         self.lsp_context: t.Optional[LSPContext] = None
-        self.lint_cache: t.Dict[URI, t.List[AnnotatedRuleViolation]] = {}
 
+        # Cache stores tuples of (diagnostics, diagnostic_version)
+        self.lint_cache: t.Dict[URI, t.Tuple[t.List[AnnotatedRuleViolation], int]] = {}
+        self._diagnostic_version_counter: int = 0
+
+        self.client_supports_pull_diagnostics = False
         # Register LSP features (e.g., formatting, hover, etc.)
         self._register_features()
 
@@ -69,6 +73,18 @@ class SQLMeshLanguageServer:
         def initialize(ls: LanguageServer, params: types.InitializeParams) -> None:
             """Initialize the server when the client connects."""
             try:
+                # Check if client supports pull diagnostics
+                if params.capabilities and params.capabilities.text_document:
+                    diagnostics = getattr(params.capabilities.text_document, "diagnostic", None)
+                    if diagnostics:
+                        self.client_supports_pull_diagnostics = True
+                        ls.log_trace("Client supports pull diagnostics")
+                    else:
+                        self.client_supports_pull_diagnostics = False
+                        ls.log_trace("Client does not support pull diagnostics")
+                else:
+                    self.client_supports_pull_diagnostics = False
+
                 if params.workspace_folders:
                     # Try to find a SQLMesh config file in any workspace folder (only at the root level)
                     for folder in params.workspace_folders:
@@ -153,61 +169,71 @@ class SQLMeshLanguageServer:
         def did_open(ls: LanguageServer, params: types.DidOpenTextDocumentParams) -> None:
             uri = URI(params.text_document.uri)
             context = self._context_get_or_load(uri)
-            if self.lint_cache.get(uri) is not None:
+            models = context.map[uri.to_path()]
+            if models is None or not isinstance(models, ModelTarget):
+                return
+
+            if self.lint_cache.get(uri) is None:
+                diagnostics = context.context.lint_models(
+                    models.names,
+                    raise_on_error=False,
+                )
+                self._diagnostic_version_counter += 1
+                self.lint_cache[uri] = (diagnostics, self._diagnostic_version_counter)
+
+            # Only publish diagnostics if client doesn't support pull diagnostics
+            if not self.client_supports_pull_diagnostics:
+                diagnostics, _ = self.lint_cache[uri]
                 ls.publish_diagnostics(
                     params.text_document.uri,
-                    SQLMeshLanguageServer._diagnostics_to_lsp_diagnostics(self.lint_cache[uri]),
+                    SQLMeshLanguageServer._diagnostics_to_lsp_diagnostics(diagnostics),
                 )
-                return
-            models = context.map[uri.to_path()]
-            if models is None:
-                return
-            if not isinstance(models, ModelTarget):
-                return
-            self.lint_cache[uri] = context.context.lint_models(
-                models.names,
-                raise_on_error=False,
-            )
-            ls.publish_diagnostics(
-                params.text_document.uri,
-                SQLMeshLanguageServer._diagnostics_to_lsp_diagnostics(self.lint_cache[uri]),
-            )
 
         @self.server.feature(types.TEXT_DOCUMENT_DID_CHANGE)
         def did_change(ls: LanguageServer, params: types.DidChangeTextDocumentParams) -> None:
             uri = URI(params.text_document.uri)
             context = self._context_get_or_load(uri)
             models = context.map[uri.to_path()]
-            if models is None:
+            if models is None or not isinstance(models, ModelTarget):
                 return
-            if not isinstance(models, ModelTarget):
-                return
-            self.lint_cache[uri] = context.context.lint_models(
+
+            # Always update the cache
+            diagnostics = context.context.lint_models(
                 models.names,
                 raise_on_error=False,
             )
-            ls.publish_diagnostics(
-                params.text_document.uri,
-                SQLMeshLanguageServer._diagnostics_to_lsp_diagnostics(self.lint_cache[uri]),
-            )
+            self._diagnostic_version_counter += 1
+            self.lint_cache[uri] = (diagnostics, self._diagnostic_version_counter)
+
+            # Only publish diagnostics if client doesn't support pull diagnostics
+            if not self.client_supports_pull_diagnostics:
+                ls.publish_diagnostics(
+                    params.text_document.uri,
+                    SQLMeshLanguageServer._diagnostics_to_lsp_diagnostics(diagnostics),
+                )
 
         @self.server.feature(types.TEXT_DOCUMENT_DID_SAVE)
         def did_save(ls: LanguageServer, params: types.DidSaveTextDocumentParams) -> None:
             uri = URI(params.text_document.uri)
             context = self._context_get_or_load(uri)
             models = context.map[uri.to_path()]
-            if models is None:
+            if models is None or not isinstance(models, ModelTarget):
                 return
-            if not isinstance(models, ModelTarget):
-                return
-            self.lint_cache[uri] = context.context.lint_models(
+
+            # Always update the cache
+            diagnostics = context.context.lint_models(
                 models.names,
                 raise_on_error=False,
             )
-            ls.publish_diagnostics(
-                params.text_document.uri,
-                SQLMeshLanguageServer._diagnostics_to_lsp_diagnostics(self.lint_cache[uri]),
-            )
+            self._diagnostic_version_counter += 1
+            self.lint_cache[uri] = (diagnostics, self._diagnostic_version_counter)
+
+            # Only publish diagnostics if client doesn't support pull diagnostics
+            if not self.client_supports_pull_diagnostics:
+                ls.publish_diagnostics(
+                    params.text_document.uri,
+                    SQLMeshLanguageServer._diagnostics_to_lsp_diagnostics(diagnostics),
+                )
 
         @self.server.feature(types.TEXT_DOCUMENT_FORMATTING)
         def formatting(
@@ -326,6 +352,125 @@ class SQLMeshLanguageServer:
             except Exception as e:
                 ls.show_message(f"Error getting references: {e}", types.MessageType.Error)
                 return []
+
+        @self.server.feature(types.TEXT_DOCUMENT_DIAGNOSTIC)
+        def diagnostic(
+            ls: LanguageServer, params: types.DocumentDiagnosticParams
+        ) -> types.DocumentDiagnosticReport:
+            """Handle diagnostic pull requests from the client."""
+            try:
+                uri = URI(params.text_document.uri)
+                diagnostics, result_id = self._get_diagnostics_for_uri(uri)
+
+                # Check if client provided a previous result ID
+                if hasattr(params, "previous_result_id") and params.previous_result_id == result_id:
+                    # Return unchanged report if diagnostics haven't changed
+                    return types.RelatedUnchangedDocumentDiagnosticReport(
+                        kind=types.DocumentDiagnosticReportKind.Unchanged,
+                        result_id=str(result_id),
+                    )
+
+                return types.RelatedFullDocumentDiagnosticReport(
+                    kind=types.DocumentDiagnosticReportKind.Full,
+                    items=diagnostics,
+                    result_id=str(result_id),
+                )
+            except Exception as e:
+                ls.show_message(f"Error getting diagnostics: {e}", types.MessageType.Error)
+                return types.RelatedFullDocumentDiagnosticReport(
+                    kind=types.DocumentDiagnosticReportKind.Full,
+                    items=[],
+                )
+
+        @self.server.feature(types.WORKSPACE_DIAGNOSTIC)
+        def workspace_diagnostic(
+            ls: LanguageServer, params: types.WorkspaceDiagnosticParams
+        ) -> types.WorkspaceDiagnosticReport:
+            """Handle workspace-wide diagnostic pull requests from the client."""
+            try:
+                if self.lsp_context is None:
+                    current_path = Path.cwd()
+                    self._ensure_context_in_folder(current_path)
+
+                if self.lsp_context is None:
+                    return types.WorkspaceDiagnosticReport(items=[])
+
+                items: t.List[
+                    t.Union[
+                        types.WorkspaceFullDocumentDiagnosticReport,
+                        types.WorkspaceUnchangedDocumentDiagnosticReport,
+                    ]
+                ] = []
+
+                # Get all SQL and Python model files from the context
+                for path, target in self.lsp_context.map.items():
+                    if isinstance(target, ModelTarget):
+                        uri = URI.from_path(path)
+                        diagnostics, result_id = self._get_diagnostics_for_uri(uri)
+
+                        # Check if we have a previous result ID for this file
+                        previous_result_id = None
+                        if hasattr(params, "previous_result_ids") and params.previous_result_ids:
+                            for prev in params.previous_result_ids:
+                                if prev.uri == uri.value:
+                                    previous_result_id = prev.value
+                                    break
+
+                        if previous_result_id and previous_result_id == result_id:
+                            # File hasn't changed
+                            items.append(
+                                types.WorkspaceUnchangedDocumentDiagnosticReport(
+                                    kind=types.DocumentDiagnosticReportKind.Unchanged,
+                                    result_id=str(result_id),
+                                    uri=uri.value,
+                                )
+                            )
+                        else:
+                            # File has changed or is new
+                            items.append(
+                                types.WorkspaceFullDocumentDiagnosticReport(
+                                    kind=types.DocumentDiagnosticReportKind.Full,
+                                    result_id=str(result_id),
+                                    uri=uri.value,
+                                    items=diagnostics,
+                                )
+                            )
+
+                return types.WorkspaceDiagnosticReport(items=items)
+
+            except Exception as e:
+                ls.show_message(
+                    f"Error getting workspace diagnostics: {e}", types.MessageType.Error
+                )
+                return types.WorkspaceDiagnosticReport(items=[])
+
+    def _get_diagnostics_for_uri(self, uri: URI) -> t.Tuple[t.List[types.Diagnostic], int]:
+        """Get diagnostics for a specific URI, returning (diagnostics, result_id)."""
+        # Check if we have cached diagnostics
+        if uri in self.lint_cache:
+            diagnostics, result_id = self.lint_cache[uri]
+            return SQLMeshLanguageServer._diagnostics_to_lsp_diagnostics(diagnostics), result_id
+
+        # Try to get diagnostics by loading context and linting
+        try:
+            context = self._context_get_or_load(uri)
+            models = context.map[uri.to_path()]
+            if models is None or not isinstance(models, ModelTarget):
+                return [], 0
+
+            # Lint the models and cache the results
+            diagnostics = context.context.lint_models(
+                models.names,
+                raise_on_error=False,
+            )
+            self._diagnostic_version_counter += 1
+            self.lint_cache[uri] = (diagnostics, self._diagnostic_version_counter)
+            return SQLMeshLanguageServer._diagnostics_to_lsp_diagnostics(
+                diagnostics
+            ), self._diagnostic_version_counter
+        except Exception:
+            # If we can't get diagnostics, return empty list with no result ID
+            return [], 0
 
     def _context_get_or_load(self, document_uri: URI) -> LSPContext:
         if self.lsp_context is None:
