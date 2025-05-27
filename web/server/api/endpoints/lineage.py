@@ -109,6 +109,9 @@ def create_models_only_lineage_adjacency_list(
     """Create an adjacency list representation of a column's lineage graph only with models"""
     graph: t.Dict[str, t.Dict[str, LineageColumn]] = defaultdict(dict)
     nodes = [(model_name, column_name)]
+    # visited is a set of tuples of (model_name, column_name) to prevent infinite recursion
+    visited = set()
+    visited.add((model_name, column_name))
     while nodes:
         model_name, column = nodes.pop(0)
         model = context.get_model(model_name)
@@ -118,8 +121,10 @@ def create_models_only_lineage_adjacency_list(
                 context, model_name, quote_column(column, model.dialect)
             ).items():
                 for column_name in column_names:
-                    dependencies[table].add(column_name)
-                    nodes.append((table, column_name))
+                    if (table, column_name) not in visited:
+                        dependencies[table].add(column_name)
+                        nodes.append((table, column_name))
+                        visited.add((table, column_name))
 
         graph[model_name][column] = LineageColumn(models=dependencies)
     return graph
