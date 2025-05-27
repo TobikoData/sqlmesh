@@ -1,4 +1,4 @@
-import { CallbackEvent } from '@bus/callbacks'
+import { CallbackEvent, RPCRequest } from '@bus/callbacks'
 import {
   Disposable,
   Uri,
@@ -83,18 +83,43 @@ export class LineagePanel implements WebviewViewProvider, Disposable {
             await window.showTextDocument(document)
             break
           }
-          case 'queryRequest': {
-            const payload = message.payload
-            const requestId = message.payload.requestId
-            const response = await this.lsp.call_custom_method(
-              'sqlmesh/api',
-              payload as any,
-            )
-            webviewView.webview.postMessage({
-              key: 'query_response',
-              payload: response,
-              requestId,
-            })
+          case 'rpcRequest': {
+            const payload: RPCRequest = message.payload
+            const requestId = payload.requestId
+            switch (payload.method) {
+              case 'api_query': {
+                const response = await this.lsp.call_custom_method(
+                  'sqlmesh/api',
+                  payload.params,
+                )
+                const responseCallback: CallbackEvent = {
+                  key: 'rpcResponse',
+                  payload: {
+                    requestId,
+                    result: response,
+                  },
+                }
+                webviewView.webview.postMessage(responseCallback)
+                break
+              }
+              case 'get_active_file': {
+                const active_file = window.activeTextEditor?.document.uri.fsPath
+                const responseCallback: CallbackEvent = {
+                  key: 'rpcResponse',
+                  payload: {
+                    requestId,
+                    result: {
+                      fileUri: active_file,
+                    },
+                  },
+                }
+                webviewView.webview.postMessage(responseCallback)
+                break
+              }
+              default: {
+                throw new Error(`Unhandled RPC method: ${payload.method}`)
+              }
+            }
             break
           }
           default:

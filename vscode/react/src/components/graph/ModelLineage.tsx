@@ -78,7 +78,7 @@ export function ModelLineage({
     useApiModelLineage(model.name)
   const { isFetching: isFetchingModels } = useApiModels()
 
-  const [isMegringModels, setIsMergingModels] = useState(false)
+  const [isMergingModels, setIsMergingModels] = useState(false)
   const [modelLineage, setModelLineage] = useState<
     ModelLineageApiLineageModelNameGet200 | undefined
   >(undefined)
@@ -91,7 +91,6 @@ export function ModelLineage({
     getModelLineage()
       .then(({ data }) => {
         setModelLineage(data)
-
         if (isNil(data)) return
 
         setIsMergingModels(true)
@@ -164,7 +163,7 @@ export function ModelLineage({
   }
 
   const isFetching =
-    isFetchingModelLineage || isFetchingModels || isMegringModels
+    isFetchingModelLineage || isFetchingModels || isMergingModels
 
   return (
     <div className="relative h-full w-full overflow-hidden">
