@@ -168,3 +168,57 @@ Tobiko Cloud automatically manages Python dependencies of your Python macros and
 SQLMesh automatically infers which Python libraries are used by statically analyzing the code of your models and macros.
 
 For fine-grained control, dependencies can be specified, pinned, or excluded using the `sqlmesh-requirements.lock` file. See the [Python library dependencies](../../../guides/configuration.md#python-library-dependencies) section in the SQLMesh configuration guide for more information.
+
+## Secrets
+
+Tobiko Cloud provides a way for you to provide environment variables that will
+be injected into the environment when running your python models.
+
+In your cloud instance you can find Secrets under the Settings section and will
+look like this:
+
+![secrets_panel](./scheduler/secrets.png)
+
+In this example, only one secret has been defined: `MY_SECRET`. From this panel
+you can create a new secret, edit the value of your secrets, or remove them. You
+can not view the value of any previously created secret.
+
+Secret names must start with a letter or an underscore. They may only include
+letters, numbers and underscores (no spaces or other symbols). There are no
+limits or restrictions on the value of secrets. We recommend base64 encoding
+secrets if they contain binary data.
+
+### Example Secret Use
+
+```python
+import os
+import typing as t
+from datetime import datetime
+
+from sqlmesh import ExecutionContext, model
+
+@model(
+    "my_model.name",
+    columns={
+        "column_name": "int",
+    },
+)
+def execute(
+    context: ExecutionContext,
+    start: datetime,
+    end: datetime,
+    execution_time: datetime,
+    **kwargs: t.Any,
+) -> pd.DataFrame:
+
+    # Read a secret from the MY_SECRET environment variable
+    my_secret = os.environ["MY_SECRET"]
+```
+
+!!! warning "Protecting Secrets"
+
+    It's very important that you read environment variables from inside the models
+    `execute` function and not in the global scope. If the variable is loaded in the
+    global scope than the value will be read from your local system and saved
+    into the rendered version of this model, instead of loaded at runtime on our
+    executors.
