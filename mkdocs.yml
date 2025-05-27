@@ -123,6 +123,8 @@ nav:
           - "Docker Compose example": cloud/features/scheduler/hybrid_executors_docker_compose.md
         - cloud/features/scheduler/airflow.md
         - cloud/features/scheduler/dagster.md
+      - Security:
+        - "Security Overview": cloud/features/security/security.md
 #      - Observability:
 #        - cloud/features/observability/overview.md
 #        - cloud/features/observability/model_freshness.md
