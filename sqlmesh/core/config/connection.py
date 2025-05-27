@@ -1974,13 +1974,18 @@ def _connection_config_validator(
 ) -> ConnectionConfig | None:
     if v is None or isinstance(v, ConnectionConfig):
         return v
+
+    check_config_and_vars_msg = "\n\nVerify your config.yaml and environment variables."
+
     try:
         return parse_connection_config(v)
     except pydantic.ValidationError as e:
         raise ConfigError(
             validation_error_message(e, f"Invalid '{v['type']}' connection config:")
-            + "\n\nVerify your config.yaml and environment variables."
+            + check_config_and_vars_msg
         )
+    except ConfigError as e:
+        raise ConfigError(str(e) + check_config_and_vars_msg)
 
 
 connection_config_validator: t.Callable = field_validator(

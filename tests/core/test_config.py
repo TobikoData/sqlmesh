@@ -301,6 +301,15 @@ def test_load_config_from_env():
         )
 
 
+def test_load_config_from_env_fails():
+    with mock.patch.dict(os.environ, {"SQLMESH__GATEWAYS__ABCDEF__CONNECTION__PASSWORD": "..."}):
+        with pytest.raises(
+            ConfigError,
+            match="Missing connection type.\n\nVerify your config.yaml and environment variables.",
+        ):
+            Config.parse_obj(load_config_from_env())
+
+
 def test_load_config_from_env_no_config_vars():
     with mock.patch.dict(
         os.environ,
