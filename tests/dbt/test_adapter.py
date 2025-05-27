@@ -288,6 +288,7 @@ def test_on_run_start_end(copy_to_temp_path):
     assert root_environment_statements.before_all == [
         "JINJA_STATEMENT_BEGIN;\nCREATE TABLE IF NOT EXISTS analytic_stats (physical_table VARCHAR, evaluation_time VARCHAR);\nJINJA_END;",
         "JINJA_STATEMENT_BEGIN;\nCREATE TABLE IF NOT EXISTS to_be_executed_last (col VARCHAR);\nJINJA_END;",
+        'JINJA_STATEMENT_BEGIN;\nSELECT {{ var("yet_another_var") }}\nJINJA_END;',
     ]
     assert root_environment_statements.after_all == [
         "JINJA_STATEMENT_BEGIN;\n{{ create_tables(schemas) }}\nJINJA_END;",
@@ -317,6 +318,7 @@ def test_on_run_start_end(copy_to_temp_path):
     assert rendered_before_all == [
         "CREATE TABLE IF NOT EXISTS analytic_stats (physical_table TEXT, evaluation_time TEXT)",
         "CREATE TABLE IF NOT EXISTS to_be_executed_last (col TEXT)",
+        'SELECT 1 AS "1"',
     ]
 
     # The jinja macro should have resolved the schemas for this environment and generated corresponding statements

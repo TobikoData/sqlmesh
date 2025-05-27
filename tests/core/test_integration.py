@@ -4345,6 +4345,21 @@ def test_dbt_dialect_with_normalization_strategy(init_and_plan_context: t.Callab
     assert context.default_dialect == "duckdb,normalization_strategy=LOWERCASE"
 
 
+@time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_dbt_before_all_with_var(init_and_plan_context: t.Callable):
+    _, plan = init_and_plan_context(
+        "tests/fixtures/dbt/sushi_test", config="test_config_with_normalization_strategy"
+    )
+    environment_statements = plan.to_evaluatable().environment_statements
+    assert environment_statements
+    rendered_statements = [e.render_before_all(dialect="duckdb") for e in environment_statements]
+    assert rendered_statements[0] == [
+        "CREATE TABLE IF NOT EXISTS analytic_stats (physical_table TEXT, evaluation_time TEXT)",
+        "CREATE TABLE IF NOT EXISTS to_be_executed_last (col TEXT)",
+        'SELECT 1 AS "1"',
+    ]
+
+
 @pytest.mark.parametrize(
     "context_fixture",
     ["sushi_context", "sushi_dbt_context", "sushi_test_dbt_context", "sushi_no_default_catalog"],

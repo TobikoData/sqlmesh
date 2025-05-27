@@ -250,6 +250,39 @@ class EnvironmentStatements(PydanticModel):
     python_env: t.Dict[str, Executable]
     jinja_macros: t.Optional[JinjaMacroRegistry] = None
 
+    def render_before_all(
+        self,
+        dialect: str,
+        default_catalog: t.Optional[str] = None,
+        **render_kwargs: t.Any,
+    ) -> t.List[str]:
+        return self.render(RuntimeStage.BEFORE_ALL, dialect, default_catalog, **render_kwargs)
+
+    def render_after_all(
+        self,
+        dialect: str,
+        default_catalog: t.Optional[str] = None,
+        **render_kwargs: t.Any,
+    ) -> t.List[str]:
+        return self.render(RuntimeStage.AFTER_ALL, dialect, default_catalog, **render_kwargs)
+
+    def render(
+        self,
+        runtime_stage: RuntimeStage,
+        dialect: str,
+        default_catalog: t.Optional[str] = None,
+        **render_kwargs: t.Any,
+    ) -> t.List[str]:
+        return render_statements(
+            statements=getattr(self, runtime_stage.value),
+            dialect=dialect,
+            default_catalog=default_catalog,
+            python_env=self.python_env,
+            jinja_macros=self.jinja_macros,
+            runtime_stage=runtime_stage,
+            **render_kwargs,
+        )
+
 
 def execute_environment_statements(
     adapter: EngineAdapter,
@@ -266,18 +299,15 @@ def execute_environment_statements(
         rendered_expressions = [
             expr
             for statements in environment_statements
-            for expr in render_statements(
-                statements=getattr(statements, runtime_stage.value),
+            for expr in statements.render(
+                runtime_stage=runtime_stage,
                 dialect=adapter.dialect,
                 default_catalog=default_catalog,
-                python_env=statements.python_env,
-                jinja_macros=statements.jinja_macros,
                 snapshots=snapshots,
                 start=start,
                 end=end,
                 execution_time=execution_time,
                 environment_naming_info=environment_naming_info,
-                runtime_stage=runtime_stage,
                 engine_adapter=adapter,
             )
         ]
