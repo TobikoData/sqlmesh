@@ -5,7 +5,7 @@ At Tobiko, we treat security as a first class citizen because we know how valuab
 
 ## Tobiko Cloud Standard Deployment
 
-Our standard Tobiko Cloud deployment consists of several componenets that are each responbisble for different parts of the product. 
+Our standard Tobiko Cloud deployment consists of several components that are each responsible for different parts of the product. 
 
 Below is a diagram of the components along with their description. 
 
@@ -15,6 +15,23 @@ Below is a diagram of the components along with their description.
 - **Executor**: Applies code changes and runs SQL queries (actual data processing in SQL Engine) and python models in proper DAG order.
 - **Gateway**: Stores authentication to SQL Engine. Secured through encryption.
 - **SQL Engine**: Processes and stores data based on the above instructions within the **customer’s** environment.
+
+## Tobiko Cloud Hybrid Deployment
+
+For some customers, our hybrid deployment option is a great fit. It provides a seamless experience with Tobiko Cloud but in your own VPC and infrastructure.  
+
+In a hybrid deployment, Tobiko Cloud does not execute tasks directly with the engine. Instead, it passes tasks to the executors hosted in your environment, which then execute the tasks with the engine. 
+
+Executors are Docker containers that connect to both Tobiko Cloud and your SQL engine. They pull work tasks from the Tobiko Cloud scheduler and execute them with your SQL engine.
+
+Below is a diagram of the components along with their description. 
+
+![tobiko_cloud_hybrid_deployment](./tcloud_hybrid_deployment.png){ width=80% height=60% style="display: block; margin: 0 auto" }
+
+
+- **Helm Chart**: For production environements, we provide a [Helm chart](./hybrid_executors_helm.md) that includes robust configurability, secret management, and scaling options.
+- **Docker Compose**: For simpler environments or testing, we offer a [Docker Compose setup](./hybrid_executors_docker_compose) to quickly deploy executors on any machine with Docker.
+
 
 ## Internal Code Practices
 
