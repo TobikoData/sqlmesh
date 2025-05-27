@@ -424,7 +424,6 @@ class SQLMeshLanguageServer:
         """
         Converts a list of AnnotatedRuleViolations to a list of LSP diagnostics. It will remove duplicates based on the message and range.
         """
-        # Use a set to track unique diagnostics based on their message and range
         lsp_diagnostics = {}
         for diagnostic in diagnostics:
             lsp_diagnostic = SQLMeshLanguageServer._diagnostic_to_lsp_diagnostic(diagnostic)
