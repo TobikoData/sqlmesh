@@ -169,10 +169,17 @@ SQLMesh automatically infers which Python libraries are used by statically analy
 
 For fine-grained control, dependencies can be specified, pinned, or excluded using the `sqlmesh-requirements.lock` file. See the [Python library dependencies](../../../guides/configuration.md#python-library-dependencies) section in the SQLMesh configuration guide for more information.
 
-## Secrets
+## Secret Manager
 
 Tobiko Cloud provides a way for you to provide environment variables that will
-be injected into the environment when running your python models.
+be injected into the environment when running your python models. The values
+of these variables are encrypted at rest and only available in the environment
+of your running models.
+
+!!! note "Cloud Scheduler Only"
+
+    Secrets from the secret manager do not load into hybrid executors. They are
+    only used for cloud scheduler executors.
 
 In your cloud instance you can find Secrets under the Settings section and will
 look like this:
@@ -188,7 +195,7 @@ letters, numbers and underscores (no spaces or other symbols). There are no
 limits or restrictions on the value of secrets. We recommend base64 encoding
 secrets if they contain binary data.
 
-### Example Secret Use
+### Python Model Example
 
 ```python
 import os
