@@ -10150,3 +10150,22 @@ def getenv_macro(evaluator):
 
     monkeypatch.chdir(tmp_path)
     ctx = Context(paths=tmp_path)
+
+
+def test_invalid_sql_model_query() -> None:
+    for kind in ("", ", KIND FULL"):
+        expressions = d.parse(
+            f"""
+            MODEL (name db.table{kind});
+
+            JINJA_STATEMENT_BEGIN;
+            SELECT 1 AS c;
+            JINJA_END;
+            """
+        )
+
+        with pytest.raises(
+            ConfigError,
+            match=r"^A query is required and must be a SELECT statement, a UNION statement, or a JINJA_QUERY block.*",
+        ):
+            load_sql_based_model(expressions)

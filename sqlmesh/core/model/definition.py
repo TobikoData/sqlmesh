@@ -2173,24 +2173,18 @@ def load_sql_based_model(
         **meta_fields,
     )
 
-    if query_or_seed_insert is not None and (
-        isinstance(query_or_seed_insert, (exp.Query, d.JinjaQuery))
-        or (
-            # Macro functions are allowed in place of model queries only when there are no
-            # other statements in the model definition, otherwise they would be ambiguous
-            isinstance(query_or_seed_insert, d.MacroFunc)
-            and (query_or_seed_insert.this.name.lower() == "union" or len(expressions) == 2)
-        )
-    ):
+    kind = common_kwargs.pop("kind", ModelMeta.all_field_infos()["kind"].default)
+
+    if kind.name != ModelKindName.SEED:
         return create_sql_model(
             name,
             query_or_seed_insert,
+            kind=kind,
             time_column_format=time_column_format,
             **common_kwargs,
         )
-    seed_properties = {
-        p.name.lower(): p.args.get("value") for p in common_kwargs.pop("kind").expressions
-    }
+
+    seed_properties = {p.name.lower(): p.args.get("value") for p in kind.expressions}
     return create_seed_model(
         name,
         SeedKind(**seed_properties),
@@ -2200,7 +2194,7 @@ def load_sql_based_model(
 
 def create_sql_model(
     name: TableName,
-    query: exp.Expression,
+    query: t.Optional[exp.Expression],
     **kwargs: t.Any,
 ) -> Model:
     """Creates a SQL model.
@@ -2215,6 +2209,7 @@ def create_sql_model(
             "A query is required and must be a SELECT statement, a UNION statement, or a JINJA_QUERY block",
             kwargs.get("path"),
         )
+        assert isinstance(query, (exp.Query, d.JinjaQuery, d.MacroFunc))
 
     return _create_model(SqlModel, name, query=query, **kwargs)
 
