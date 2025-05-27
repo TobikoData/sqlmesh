@@ -121,7 +121,7 @@ outputs:
 * Never build a table [more than once](https://tobikodata.com/simplicity-or-efficiency-how-dbt-makes-you-choose.html)
 * Track what data’s been modified and run only the necessary transformations for [incremental models](https://tobikodata.com/correctly-loading-incremental-data-at-scale.html)
 * Run [unit tests](https://tobikodata.com/we-need-even-greater-expectations.html) for free and configure automated audits
-* Run [table diffs](https://sqlmesh.readthedocs.io/en/stable/examples/sqlmesh_cli_crash_course/?h=crash#run-data-diff-against-prod) based on tables/views impacted by a change 
+* Run [table diffs](https://sqlmesh.readthedocs.io/en/stable/examples/sqlmesh_cli_crash_course/?h=crash#run-data-diff-against-prod) between prod and dev based on tables/views impacted by a change 
 
 <details>
 <summary><b>Level Up Your SQL</b></summary>
