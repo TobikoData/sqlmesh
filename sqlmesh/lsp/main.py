@@ -421,12 +421,24 @@ class SQLMeshLanguageServer:
     def _diagnostics_to_lsp_diagnostics(
         diagnostics: t.List[AnnotatedRuleViolation],
     ) -> t.List[types.Diagnostic]:
-        lsp_diagnostics: t.List[types.Diagnostic] = []
+        """
+        Converts a list of AnnotatedRuleViolations to a list of LSP diagnostics. It will remove duplicates based on the message and range.
+        """
+        lsp_diagnostics = {}
         for diagnostic in diagnostics:
             lsp_diagnostic = SQLMeshLanguageServer._diagnostic_to_lsp_diagnostic(diagnostic)
             if lsp_diagnostic is not None:
-                lsp_diagnostics.append(lsp_diagnostic)
-        return lsp_diagnostics
+                # Create a unique key combining message and range
+                diagnostic_key = (
+                    lsp_diagnostic.message,
+                    lsp_diagnostic.range.start.line,
+                    lsp_diagnostic.range.start.character,
+                    lsp_diagnostic.range.end.line,
+                    lsp_diagnostic.range.end.character,
+                )
+                if diagnostic_key not in lsp_diagnostics:
+                    lsp_diagnostics[diagnostic_key] = lsp_diagnostic
+        return list(lsp_diagnostics.values())
 
     @staticmethod
     def _uri_to_path(uri: str) -> Path:
