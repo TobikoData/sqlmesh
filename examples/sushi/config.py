@@ -47,6 +47,7 @@ config = Config(
             "invalidselectstarexpansion",
             "noselectstar",
             "nomissingaudits",
+            "nomissingowner",
         ],
     ),
 )
