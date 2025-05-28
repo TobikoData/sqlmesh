@@ -62,7 +62,8 @@ vars:
 on-run-start:
   - 'CREATE TABLE IF NOT EXISTS analytic_stats (physical_table VARCHAR, evaluation_time VARCHAR);'
   - 'CREATE TABLE IF NOT EXISTS to_be_executed_last (col VARCHAR);'
-  - 'SELECT {{ var("yet_another_var") }}'
+  - SELECT {{ var("yet_another_var") }} AS var, '{{ source("raw", "items").identifier }}' AS src, '{{ ref("waiters").identifier }}' AS ref;
+  - "{{ log_value('on-run-start') }}"
 on-run-end:
   - '{{ create_tables(schemas) }}'
   - 'DROP TABLE to_be_executed_last;'

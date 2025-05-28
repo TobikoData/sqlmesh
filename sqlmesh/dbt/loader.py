@@ -28,7 +28,6 @@ from sqlmesh.utils import UniqueKeyDict
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.jinja import (
     JinjaMacroRegistry,
-    extract_macro_references_and_variables,
     make_jinja_registry,
 )
 
@@ -256,18 +255,14 @@ class DbtLoader(Loader):
                     for on_run_hook in sorted(package.on_run_end.values(), key=lambda h: h.index)
                 ]
 
-                if statements := on_run_start + on_run_end:
-                    jinja_references, used_variables = extract_macro_references_and_variables(
-                        *statements
-                    )
+                if on_run_start or on_run_end:
+                    dependencies = Dependencies()
+                    for hook in [*package.on_run_start.values(), *package.on_run_end.values()]:
+                        dependencies = dependencies.union(hook.dependencies)
 
-                    statements_context = context.context_for_dependencies(
-                        Dependencies(
-                            variables=used_variables,
-                        )
-                    )
+                    statements_context = context.context_for_dependencies(dependencies)
                     jinja_registry = make_jinja_registry(
-                        statements_context.jinja_macros, package_name, jinja_references
+                        statements_context.jinja_macros, package_name, set(dependencies.macros)
                     )
                     jinja_registry.add_globals(statements_context.jinja_globals)
 
