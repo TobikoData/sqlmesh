@@ -80,6 +80,7 @@ class PlanBuilder:
             the environment is not finalized.
         engine_schema_differ: Schema differ from the context engine adapter.
         interval_end_per_model: The mapping from model FQNs to target end dates.
+        explain: Whether to explain the plan instead of applying it.
     """
 
     def __init__(
@@ -110,6 +111,7 @@ class PlanBuilder:
         enable_preview: bool = False,
         end_bounded: bool = False,
         ensure_finalized_snapshots: bool = False,
+        explain: bool = False,
         interval_end_per_model: t.Optional[t.Dict[str, int]] = None,
         console: t.Optional[PlanBuilderConsole] = None,
         user_provided_flags: t.Optional[t.Dict[str, UserProvidedFlags]] = None,
@@ -141,6 +143,7 @@ class PlanBuilder:
         self._console = console or get_console()
         self._choices: t.Dict[SnapshotId, SnapshotChangeCategory] = {}
         self._user_provided_flags = user_provided_flags
+        self._explain = explain
 
         self._start = start
         if not self._start and (
@@ -272,6 +275,7 @@ class PlanBuilder:
             empty_backfill=self._empty_backfill,
             no_gaps=self._no_gaps,
             forward_only=self._forward_only,
+            explain=self._explain,
             allow_destructive_models=t.cast(t.Set, self._allow_destructive_models),
             include_unmodified=self._include_unmodified,
             environment_ttl=self._environment_ttl,

@@ -87,7 +87,7 @@ from sqlmesh.core.notification_target import (
     NotificationTarget,
     NotificationTargetManager,
 )
-from sqlmesh.core.plan import Plan, PlanBuilder, SnapshotIntervals
+from sqlmesh.core.plan import Plan, PlanBuilder, SnapshotIntervals, PlanExplainer
 from sqlmesh.core.plan.definition import UserProvidedFlags
 from sqlmesh.core.reference import ReferenceGraph
 from sqlmesh.core.scheduler import Scheduler, CompletionStatus
@@ -1223,6 +1223,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         run: t.Optional[bool] = None,
         diff_rendered: t.Optional[bool] = None,
         skip_linter: t.Optional[bool] = None,
+        explain: t.Optional[bool] = None,
     ) -> Plan:
         """Interactively creates a plan.
 
@@ -1268,6 +1269,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             run: Whether to run latest intervals as part of the plan application.
             diff_rendered: Whether the diff should compare raw vs rendered models
             skip_linter: Linter runs by default so this will skip it if enabled
+            explain: Whether to explain the plan instead of applying it.
 
         Returns:
             The populated Plan object.
@@ -1295,6 +1297,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             run=run,
             diff_rendered=diff_rendered,
             skip_linter=skip_linter,
+            explain=explain,
         )
 
         plan = plan_builder.build()
@@ -1303,6 +1306,9 @@ class GenericContext(BaseContext, t.Generic[C]):
             # Prompts are required if the auto categorization is disabled
             # or if there are any uncategorized snapshots in the plan
             no_prompts = False
+
+        if explain:
+            auto_apply = True
 
         self.console.plan(
             plan_builder,
@@ -1340,6 +1346,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         run: t.Optional[bool] = None,
         diff_rendered: t.Optional[bool] = None,
         skip_linter: t.Optional[bool] = None,
+        explain: t.Optional[bool] = None,
     ) -> PlanBuilder:
         """Creates a plan builder.
 
@@ -1551,6 +1558,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             interval_end_per_model=max_interval_end_per_model,
             console=self.console,
             user_provided_flags=user_provided_flags,
+            explain=explain or False,
         )
 
     def apply(
@@ -1575,6 +1583,16 @@ class GenericContext(BaseContext, t.Generic[C]):
             return
         if plan.uncategorized:
             raise UncategorizedPlanError("Can't apply a plan with uncategorized changes.")
+
+        if plan.explain:
+            explainer = PlanExplainer(
+                state_reader=self.state_reader,
+                default_catalog=self.default_catalog,
+                console=self.console,
+            )
+            explainer.evaluate(plan.to_evaluatable())
+            return
+
         self.notification_target_manager.notify(
             NotificationEvent.APPLY_START,
             environment=plan.environment_naming_info.name,
