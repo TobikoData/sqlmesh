@@ -239,11 +239,11 @@ class DbtLoader(Loader):
     def _load_environment_statements(self, macros: MacroRegistry) -> t.List[EnvironmentStatements]:
         """Loads dbt's on_run_start, on_run_end hooks into sqlmesh's before_all, after_all statements respectively."""
 
-        environment_statements: t.List[EnvironmentStatements] = []
+        hooks_by_package_name: t.Dict[str, EnvironmentStatements] = {}
+        project_names: t.Set[str] = set()
         dialect = self.config.dialect
         for project in self._load_projects():
             context = project.context
-            hooks_by_package_name: t.Dict[str, EnvironmentStatements] = {}
             for package_name, package in project.packages.items():
                 context.set_and_render_variables(package.variables, package_name)
                 on_run_start: t.List[str] = [
@@ -278,15 +278,15 @@ class DbtLoader(Loader):
                         python_env={},
                         jinja_macros=jinja_registry,
                     )
-                # Project hooks should be executed first and then rest of the packages
-                environment_statements = [
-                    statements
-                    for _, statements in sorted(
-                        hooks_by_package_name.items(),
-                        key=lambda item: 0 if item[0] == context.project_name else 1,
-                    )
-                ]
-        return environment_statements
+                    project_names.add(package_name)
+
+        return [
+            statements
+            for _, statements in sorted(
+                hooks_by_package_name.items(),
+                key=lambda item: 0 if item[0] in project_names else 1,
+            )
+        ]
 
     def _compute_yaml_max_mtime_per_subfolder(self, root: Path) -> t.Dict[Path, float]:
         if not root.is_dir():
