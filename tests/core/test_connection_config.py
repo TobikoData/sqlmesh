@@ -902,6 +902,13 @@ def test_clickhouse(make_config):
         cluster="default",
         use_compression=True,
         connection_settings={"this_setting": "1"},
+        server_host_name="server_host_name",
+        verify=True,
+        ca_cert="ca_cert",
+        client_cert="client_cert",
+        client_cert_key="client_cert_key",
+        https_proxy="https://proxy",
+        connection_pool_options={"pool_option": "value"},
     )
     assert isinstance(config, ClickhouseConnectionConfig)
     assert config.cluster == "default"
@@ -911,6 +918,14 @@ def test_clickhouse(make_config):
     assert config._static_connection_kwargs["this_setting"] == "1"
     assert config.is_recommended_for_state_sync is False
     assert config.is_forbidden_for_state_sync
+
+    pool = config._connection_factory.keywords["pool_mgr"]
+    assert pool.connection_pool_kw["server_hostname"] == "server_host_name"
+    assert pool.connection_pool_kw["assert_hostname"] == "server_host_name"  # because verify=True
+    assert pool.connection_pool_kw["ca_certs"] == "ca_cert"
+    assert pool.connection_pool_kw["cert_file"] == "client_cert"
+    assert pool.connection_pool_kw["key_file"] == "client_cert_key"
+    assert pool.connection_pool_kw["pool_option"] == "value"
 
     config2 = make_config(
         type="clickhouse",
