@@ -168,7 +168,7 @@ def _get_directory(path: str | Path, settings: Settings) -> models.Directory:
 def _get_file_with_content(file_path: Path, relative_path: str) -> models.File:
     """Get a file, including its contents."""
     try:
-        content = file_path.read_text()
+        content = file_path.read_text(encoding="utf-8")
     except FileNotFoundError as e:
         raise e
     except Exception:
