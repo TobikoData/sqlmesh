@@ -36,7 +36,7 @@ from sqlmesh.core.snapshot import (
     SnapshotCreationFailedError,
 )
 from sqlmesh.utils import CompletionStatus
-from sqlmesh.core.state_sync import StateSync
+from sqlmesh.core.state_sync import StateSync, StateReader
 from sqlmesh.core.state_sync.base import PromotionResult
 from sqlmesh.utils.concurrency import NodeExecutionFailedError
 from sqlmesh.utils.errors import PlanError
@@ -284,23 +284,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             new_snapshots=plan.new_snapshots, plan_id=plan.plan_id
         )
 
-        promoted_snapshot_ids = (
-            set(plan.environment.promoted_snapshot_ids)
-            if plan.environment.promoted_snapshot_ids is not None
-            else None
-        )
-
-        def _should_create(s: Snapshot) -> bool:
-            if not s.is_model or s.is_symbolic:
-                return False
-            # Only create tables for snapshots that we're planning to promote or that were selected for backfill
-            return (
-                plan.is_selected_for_backfill(s.name)
-                or promoted_snapshot_ids is None
-                or s.snapshot_id in promoted_snapshot_ids
-            )
-
-        snapshots_to_create = [s for s in snapshots.values() if _should_create(s)]
+        snapshots_to_create = get_snapshots_to_create(plan, snapshots)
 
         completion_status = None
         progress_stopped = False
@@ -573,32 +557,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         plan: EvaluatablePlan,
         new_snapshots: t.Dict[SnapshotId, Snapshot],
     ) -> None:
-        # Filter out snapshots that are not categorized as metadata changes on models
-        metadata_snapshots = []
-        for snapshot in new_snapshots.values():
-            if not snapshot.is_metadata or not snapshot.is_model or not snapshot.evaluatable:
-                continue
-
-            metadata_snapshots.append(snapshot)
-
-        # Bulk load all the previous snapshots
-        previous_snapshots = self.state_sync.get_snapshots(
-            [
-                s.previous_version.snapshot_id(s.name)
-                for s in metadata_snapshots
-                if s.previous_version
-            ]
-        ).values()
-
-        # Check if any of the snapshots have modifications to the audits field by comparing the hashes
-        audit_snapshots = {}
-        for snapshot, previous_snapshot in zip(metadata_snapshots, previous_snapshots):
-            new_audits_hash = snapshot.model.audit_metadata_hash()
-            previous_audit_hash = previous_snapshot.model.audit_metadata_hash()
-
-            if snapshot.model.audits and previous_audit_hash != new_audits_hash:
-                audit_snapshots[snapshot.snapshot_id] = snapshot
-
+        audit_snapshots = get_audit_only_snapshots(new_snapshots, self.state_sync)
         if not audit_snapshots:
             return
 
@@ -636,3 +595,52 @@ def update_intervals_for_new_snapshots(
 
     if snapshots_intervals:
         state_sync.add_snapshots_intervals(snapshots_intervals)
+
+
+def get_audit_only_snapshots(
+    new_snapshots: t.Dict[SnapshotId, Snapshot], state_reader: StateReader
+) -> t.Dict[SnapshotId, Snapshot]:
+    metadata_snapshots = []
+    for snapshot in new_snapshots.values():
+        if not snapshot.is_metadata or not snapshot.is_model or not snapshot.evaluatable:
+            continue
+
+        metadata_snapshots.append(snapshot)
+
+    # Bulk load all the previous snapshots
+    previous_snapshots = state_reader.get_snapshots(
+        [s.previous_version.snapshot_id(s.name) for s in metadata_snapshots if s.previous_version]
+    ).values()
+
+    # Check if any of the snapshots have modifications to the audits field by comparing the hashes
+    audit_snapshots = {}
+    for snapshot, previous_snapshot in zip(metadata_snapshots, previous_snapshots):
+        new_audits_hash = snapshot.model.audit_metadata_hash()
+        previous_audit_hash = previous_snapshot.model.audit_metadata_hash()
+
+        if snapshot.model.audits and previous_audit_hash != new_audits_hash:
+            audit_snapshots[snapshot.snapshot_id] = snapshot
+
+    return audit_snapshots
+
+
+def get_snapshots_to_create(
+    plan: EvaluatablePlan, snapshots: t.Dict[SnapshotId, Snapshot]
+) -> t.List[Snapshot]:
+    promoted_snapshot_ids = (
+        set(plan.environment.promoted_snapshot_ids)
+        if plan.environment.promoted_snapshot_ids is not None
+        else None
+    )
+
+    def _should_create(s: Snapshot) -> bool:
+        if not s.is_model or s.is_symbolic:
+            return False
+        # Only create tables for snapshots that we're planning to promote or that were selected for backfill
+        return (
+            plan.is_selected_for_backfill(s.name)
+            or promoted_snapshot_ids is None
+            or s.snapshot_id in promoted_snapshot_ids
+        )
+
+    return [s for s in snapshots.values() if _should_create(s)]

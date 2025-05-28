@@ -229,6 +229,19 @@ class Environment(EnvironmentNamingInfo, EnvironmentSummary):
             finalized_ts=self.finalized_ts,
         )
 
+    def can_partially_promote(self, existing_environment: Environment) -> bool:
+        """Returns True if the existing environment can be partially promoted to the current environment.
+
+        Partial promotion means that we don't need to re-create views for snapshots that are already promoted in the
+        target environment.
+        """
+        return (
+            bool(existing_environment.finalized_ts)
+            and not existing_environment.expired
+            and existing_environment.gateway_managed == self.gateway_managed
+            and existing_environment.name == c.PROD
+        )
+
     def _convert_list_to_models_and_store(
         self, field: str, type_: t.Type[PydanticType]
     ) -> t.Optional[t.List[PydanticType]]:

@@ -743,6 +743,7 @@ def test_missing_intervals_lookback(make_snapshot, mocker: MockerFixture):
         end_bounded=False,
         ensure_finalized_snapshots=False,
         interval_end_per_model=None,
+        explain=False,
     )
 
     assert not plan.missing_intervals

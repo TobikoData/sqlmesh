@@ -24,7 +24,6 @@ from datetime import datetime
 
 from sqlglot import exp
 
-from sqlmesh.core import constants as c
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.environment import Environment, EnvironmentStatements, EnvironmentSummary
@@ -224,13 +223,7 @@ class EngineAdapterStateSync(StateSync):
         }
 
         added_table_infos = set(table_infos.values())
-        if (
-            existing_environment
-            and existing_environment.finalized_ts
-            and not existing_environment.expired
-            and existing_environment.gateway_managed == environment.gateway_managed
-            and existing_environment.name == c.PROD
-        ):
+        if existing_environment and environment.can_partially_promote(existing_environment):
             # Only promote new snapshots.
             added_table_infos -= set(existing_environment.promoted_snapshots)
 
