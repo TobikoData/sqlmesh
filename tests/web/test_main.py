@@ -106,6 +106,19 @@ def test_write_file(client: TestClient, project_tmp_path: Path) -> None:
     }
 
 
+def test_write_file_non_ascii(client: TestClient, project_tmp_path: Path) -> None:
+    response = client.post("/api/files/foo.txt", json={"content": "何か良いこと"})
+    file = _get_file_with_content(project_tmp_path / "foo.txt", "foo.txt")
+    assert response.status_code == 204
+    assert file.dict() == {
+        "name": "foo.txt",
+        "path": "foo.txt",
+        "extension": ".txt",
+        "content": "何か良いこと",
+    }
+
+
+
 def test_update_file(client: TestClient, project_tmp_path: Path) -> None:
     txt_file = project_tmp_path / "foo.txt"
     txt_file.write_text("bar")
