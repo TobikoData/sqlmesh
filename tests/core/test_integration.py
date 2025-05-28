@@ -4346,7 +4346,7 @@ def test_dbt_dialect_with_normalization_strategy(init_and_plan_context: t.Callab
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
-def test_dbt_before_all_with_var(init_and_plan_context: t.Callable):
+def test_dbt_before_all_with_var_ref_source(init_and_plan_context: t.Callable):
     _, plan = init_and_plan_context(
         "tests/fixtures/dbt/sushi_test", config="test_config_with_normalization_strategy"
     )
@@ -4356,7 +4356,7 @@ def test_dbt_before_all_with_var(init_and_plan_context: t.Callable):
     assert rendered_statements[0] == [
         "CREATE TABLE IF NOT EXISTS analytic_stats (physical_table TEXT, evaluation_time TEXT)",
         "CREATE TABLE IF NOT EXISTS to_be_executed_last (col TEXT)",
-        'SELECT 1 AS "1"',
+        "SELECT 1 AS var, 'items' AS src, 'waiters' AS ref",
     ]
 
 
