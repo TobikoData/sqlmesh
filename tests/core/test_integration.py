@@ -4872,13 +4872,11 @@ def test_multi(mocker):
     assert context.fetchdf("select * from after_1").to_dict()["repo_1"][0] == "repo_1"
     assert context.fetchdf("select * from after_2").to_dict()["repo_2"][0] == "repo_2"
 
-    adapter = context.engine_adapter
     context = Context(
         paths=["examples/multi/repo_1"],
         state_sync=context.state_sync,
         gateway="memory",
     )
-    context._engine_adapter = adapter
 
     model = context.get_model("bronze.a")
     assert model.project == "repo_1"
@@ -4935,6 +4933,8 @@ def test_multi_virtual_layer(copy_to_temp_path):
     )
 
     context = Context(paths=paths, config=config)
+    assert context.default_catalog_per_gateway == {"first": "db_1", "second": "db_2"}
+    assert len(context.engine_adapters) == 2
 
     # For the model without gateway the default should be used and the gateway variable should overide the global
     assert (
@@ -5062,39 +5062,6 @@ def test_multi_virtual_layer(copy_to_temp_path):
     # This should error since the default_gateway won't have access to create the view on a non-shared catalog
     with pytest.raises(NodeExecutionFailedError, match=r"Execution failed for node SnapshotId*"):
         context.apply(plan)
-
-
-def test_multi_virtual_layer_catalogs(copy_to_temp_path):
-    paths = copy_to_temp_path("tests/fixtures/multi_virtual_layer")
-    path = Path(paths[0])
-    first_db_path = str(path / "db_1.db")
-    second_db_path = str(path / "db_2.db")
-
-    config = Config(
-        gateways={
-            "first": GatewayConfig(
-                connection=DuckDBConnectionConfig(database=first_db_path),
-                variables={"overriden_var": "gateway_1"},
-            ),
-            "second": GatewayConfig(
-                connection=DuckDBConnectionConfig(database=second_db_path),
-                variables={"overriden_var": "gateway_2"},
-            ),
-        },
-        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
-        model_naming=NameInferenceConfig(infer_names=True),
-        default_gateway="first",
-        variables={"overriden_var": "global", "global_one": 88},
-    )
-
-    # With gateway_managed_virtual_layer to False the catalogs won't be retrieved
-    context = Context(paths=paths, config=config)
-    assert context.default_catalog_per_gateway == {}
-
-    config.gateway_managed_virtual_layer = True
-    context = Context(paths=paths, config=config)
-    assert context.default_catalog_per_gateway == {"first": "db_1", "second": "db_2"}
-    assert len(context.engine_adapters) == 2
 
 
 def test_multi_dbt(mocker):

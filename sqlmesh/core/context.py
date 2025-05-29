@@ -369,7 +369,10 @@ class GenericContext(BaseContext, t.Generic[C]):
         self._environment_statements: t.List[EnvironmentStatements] = []
         self._excluded_requirements: t.Set[str] = set()
         self._default_catalog: t.Optional[str] = None
+        self._default_catalog_per_gateway: t.Optional[t.Dict[str, str]] = None
         self._engine_adapter: t.Optional[EngineAdapter] = None
+        self._connection_config: t.Optional[ConnectionConfig] = None
+        self._test_connection_config: t.Optional[ConnectionConfig] = None
         self._linters: t.Dict[str, Linter] = {}
         self._loaded: bool = False
 
@@ -412,7 +415,7 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         self._concurrent_tasks = concurrent_tasks
         self._state_connection_config = (
-            self.config.get_state_connection(self.gateway) or self._connection_config
+            self.config.get_state_connection(self.gateway) or self.connection_config
         )
 
         self._snapshot_evaluator: t.Optional[SnapshotEvaluator] = None
@@ -440,7 +443,7 @@ class GenericContext(BaseContext, t.Generic[C]):
     def engine_adapter(self) -> EngineAdapter:
         """Returns the default engine adapter."""
         if self._engine_adapter is None:
-            self._engine_adapter = self._connection_config.create_engine_adapter()
+            self._engine_adapter = self.connection_config.create_engine_adapter()
         return self._engine_adapter
 
     @property
@@ -965,8 +968,8 @@ class GenericContext(BaseContext, t.Generic[C]):
 
     @property
     def default_catalog(self) -> t.Optional[str]:
-        if self._default_catalog is None:
-            self._default_catalog = self._scheduler.get_default_catalog(self)
+        if self._default_catalog is None and self.default_catalog_per_gateway:
+            self._default_catalog = self.default_catalog_per_gateway[self.selected_gateway]
         return self._default_catalog
 
     @python_api_analytics
@@ -1978,7 +1981,7 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         try:
             model_to_test = self.get_model(model, raise_if_missing=True)
-            test_adapter = self._test_connection_config.create_engine_adapter(
+            test_adapter = self.test_connection_config.create_engine_adapter(
                 register_comments_override=False
             )
 
@@ -2463,7 +2466,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                 self.console.log_test_results(
                     result,
                     test_output,
-                    self._test_connection_config._engine_adapter.DIALECT,
+                    self.test_connection_config._engine_adapter.DIALECT,
                 )
             if not result.wasSuccessful():
                 raise PlanError(
@@ -2507,30 +2510,45 @@ class GenericContext(BaseContext, t.Generic[C]):
     @cached_property
     def default_catalog_per_gateway(self) -> t.Dict[str, str]:
         """Returns the default catalogs for each engine adapter."""
-        if self.gateway_managed_virtual_layer:
-            return self._scheduler.get_default_catalog_per_gateway(self)
-        return {}
+        if self._default_catalog_per_gateway is None:
+            self._default_catalog_per_gateway = self._scheduler.get_default_catalog_per_gateway(
+                self
+            )
+        return self._default_catalog_per_gateway
 
     @cached_property
     def concurrent_tasks(self) -> int:
         if self._concurrent_tasks is None:
-            self._concurrent_tasks = self._connection_config.concurrent_tasks
+            self._concurrent_tasks = self.connection_config.concurrent_tasks
         return self._concurrent_tasks
 
     @cached_property
-    def _connection_config(self) -> ConnectionConfig:
-        return self.config.get_connection(self.gateway)
+    def connection_config(self) -> ConnectionConfig:
+        if self._connection_config is None:
+            self._connection_config = self.config.get_connection(self.selected_gateway)
+        return self._connection_config
 
     @cached_property
-    def _test_connection_config(self) -> ConnectionConfig:
-        return self.config.get_test_connection(
-            self.gateway, self.default_catalog, default_catalog_dialect=self.engine_adapter.DIALECT
-        )
+    def test_connection_config(self) -> ConnectionConfig:
+        if self._test_connection_config is None:
+            self._test_connection_config = self.config.get_test_connection(
+                self.gateway,
+                self.default_catalog,
+                default_catalog_dialect=self.engine_adapter.DIALECT,
+            )
+        return self._test_connection_config
 
     @cached_property
     def environment_catalog_mapping(self) -> RegexKeyDict:
+        engine_adapter = None
+        try:
+            engine_adapter = self.engine_adapter
+        except Exception:
+            pass
+
         if (
             self.config.environment_catalog_mapping
+            and engine_adapter
             and not self.engine_adapter.catalog_support.is_multi_catalog_supported
         ):
             raise SQLMeshError(

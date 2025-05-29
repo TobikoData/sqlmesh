@@ -47,14 +47,6 @@ class SchedulerConfig(abc.ABC):
         """
 
     @abc.abstractmethod
-    def get_default_catalog(self, context: GenericContext) -> t.Optional[str]:
-        """Returns the default catalog for the Scheduler.
-
-        Args:
-            context: The SQLMesh Context.
-        """
-
-    @abc.abstractmethod
     def get_default_catalog_per_gateway(self, context: GenericContext) -> t.Dict[str, str]:
         """Returns the default catalog for each gateway.
 
@@ -74,7 +66,7 @@ class SchedulerConfig(abc.ABC):
 class _EngineAdapterStateSyncSchedulerConfig(SchedulerConfig):
     def create_state_sync(self, context: GenericContext) -> StateSync:
         state_connection = (
-            context.config.get_state_connection(context.gateway) or context._connection_config
+            context.config.get_state_connection(context.gateway) or context.connection_config
         )
 
         warehouse_connection = context.config.get_connection(context.gateway)
@@ -118,7 +110,7 @@ class _EngineAdapterStateSyncSchedulerConfig(SchedulerConfig):
 
     def state_sync_fingerprint(self, context: GenericContext) -> str:
         state_connection = (
-            context.config.get_state_connection(context.gateway) or context._connection_config
+            context.config.get_state_connection(context.gateway) or context.connection_config
         )
         return md5(
             [
@@ -140,19 +132,16 @@ class BuiltInSchedulerConfig(_EngineAdapterStateSyncSchedulerConfig, BaseConfig)
             state_sync=context.state_sync,
             snapshot_evaluator=context.snapshot_evaluator,
             create_scheduler=context.create_scheduler,
-            default_catalog=self.get_default_catalog(context),
+            default_catalog=context.default_catalog,
             console=context.console,
         )
 
-    def get_default_catalog(self, context: GenericContext) -> t.Optional[str]:
-        return context.engine_adapter.default_catalog
-
     def get_default_catalog_per_gateway(self, context: GenericContext) -> t.Dict[str, str]:
-        return {
-            name: adapter.default_catalog
-            for name, adapter in context.engine_adapters.items()
-            if adapter.default_catalog
-        }
+        default_catalogs_per_gateway: t.Dict[str, str] = {}
+        for gateway, adapter in context.engine_adapters.items():
+            if catalog := adapter.default_catalog:
+                default_catalogs_per_gateway[gateway] = catalog
+        return default_catalogs_per_gateway
 
 
 SCHEDULER_CONFIG_TO_TYPE = {
