@@ -55,6 +55,14 @@ class SchedulerConfig(abc.ABC):
         """
 
     @abc.abstractmethod
+    def get_default_catalog_per_gateway(self, context: GenericContext) -> t.Dict[str, str]:
+        """Returns the default catalog for each gateway.
+
+        Args:
+            context: The SQLMesh Context.
+        """
+
+    @abc.abstractmethod
     def state_sync_fingerprint(self, context: GenericContext) -> str:
         """Returns the fingerprint of the State Sync configuration.
 
@@ -138,6 +146,13 @@ class BuiltInSchedulerConfig(_EngineAdapterStateSyncSchedulerConfig, BaseConfig)
 
     def get_default_catalog(self, context: GenericContext) -> t.Optional[str]:
         return context.engine_adapter.default_catalog
+
+    def get_default_catalog_per_gateway(self, context: GenericContext) -> t.Dict[str, str]:
+        return {
+            name: adapter.default_catalog
+            for name, adapter in context.engine_adapters.items()
+            if adapter.default_catalog
+        }
 
 
 SCHEDULER_CONFIG_TO_TYPE = {
