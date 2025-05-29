@@ -159,7 +159,7 @@ async def test(
     context.console.log_test_results(
         result,
         test_output.getvalue(),
-        context._test_connection_config._engine_adapter.DIALECT,
+        context.test_connection_config._engine_adapter.DIALECT,
     )
 
     def _test_path(test: ModelTest) -> t.Optional[str]:

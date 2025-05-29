@@ -64,11 +64,10 @@ def validate_path(path: str, settings: Settings = Depends(get_settings)) -> str:
     if any(
         full_path.match(pattern)
         for pattern in (
-            context.config_for_path(Path(path)).ignore_patterns if context else c.IGNORE_PATTERNS
+            context.config_for_path(Path(path))[0].ignore_patterns if context else c.IGNORE_PATTERNS
         )
     ):
         raise HTTPException(status_code=HTTP_404_NOT_FOUND)
-
     return path
 
 

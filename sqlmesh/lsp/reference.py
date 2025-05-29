@@ -1,6 +1,8 @@
 from lsprotocol.types import Range, Position
 import typing as t
+from pathlib import Path
 
+from sqlmesh.core.audit import StandaloneAudit
 from sqlmesh.core.dialect import normalize_model_name
 from sqlmesh.core.model.definition import SqlModel
 from sqlmesh.lsp.context import LSPContext, ModelTarget, AuditTarget
@@ -10,6 +12,10 @@ from sqlglot.optimizer.scope import build_scope
 from sqlmesh.lsp.uri import URI
 from sqlmesh.utils.pydantic import PydanticModel
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
+import ast
+from sqlmesh.core.model import Model
+from sqlmesh import macro
+import inspect
 
 
 class Reference(PydanticModel):
@@ -72,6 +78,11 @@ def get_references(
         A list of references at the given position
     """
     references = get_model_definitions_for_a_path(lint_context, document_uri)
+
+    # Get macro references before filtering by position
+    macro_references = get_macro_definitions_for_a_path(lint_context, document_uri)
+    references.extend(macro_references)
+
     filtered_references = list(filter(by_position(position), references))
     return filtered_references
 
@@ -289,4 +300,181 @@ def _range_from_token_position_details(
     return Range(
         start=Position(line=start_line_0, character=start_col_0),
         end=Position(line=end_line_0, character=end_col_0),
+    )
+
+
+def get_macro_definitions_for_a_path(
+    lsp_context: LSPContext, document_uri: URI
+) -> t.List[Reference]:
+    """
+    Get macro references for a given path.
+
+    This function finds all macro invocations (e.g., @ADD_ONE, @MULTIPLY) in a SQL file
+    and creates references to their definitions in the Python macro files.
+
+    Args:
+        lsp_context: The LSP context containing macro definitions
+        document_uri: The URI of the document to search for macro invocations
+
+    Returns:
+        A list of Reference objects for each macro invocation found
+    """
+    path = document_uri.to_path()
+    if path.suffix != ".sql":
+        return []
+
+    # Get the file info from the context map
+    if path not in lsp_context.map:
+        return []
+
+    file_info = lsp_context.map[path]
+    # Process based on whether it's a model or standalone audit
+    if isinstance(file_info, ModelTarget):
+        # It's a model
+        target: t.Optional[t.Union[Model, StandaloneAudit]] = lsp_context.context.get_model(
+            model_or_snapshot=file_info.names[0], raise_if_missing=False
+        )
+        if target is None or not isinstance(target, SqlModel):
+            return []
+        query = target.query
+        file_path = target._path
+    elif isinstance(file_info, AuditTarget):
+        # It's a standalone audit
+        target = lsp_context.context.standalone_audits.get(file_info.name)
+        if target is None:
+            return []
+        query = target.query
+        file_path = target._path
+    else:
+        return []
+
+    references = []
+    config_for_model, config_path = lsp_context.context.config_for_path(
+        file_path,
+    )
+
+    with open(file_path, "r", encoding="utf-8") as file:
+        read_file = file.readlines()
+
+    for node in query.find_all(exp.Anonymous):
+        macro_name = node.name.lower()
+        reference = get_macro_reference(
+            node=node,
+            target=target,
+            read_file=read_file,
+            config_path=config_path,
+            macro_name=macro_name,
+        )
+        if reference is not None:
+            references.append(reference)
+
+    return references
+
+
+def get_macro_reference(
+    target: t.Union[Model, StandaloneAudit],
+    read_file: t.List[str],
+    config_path: t.Optional[Path],
+    node: exp.Expression,
+    macro_name: str,
+) -> t.Optional[Reference]:
+    # Get the file path where the macro is defined
+    try:
+        # Get the position of the macro invocation in the source file first
+        if hasattr(node, "meta") and node.meta:
+            token_details = TokenPositionDetails.from_meta(node.meta)
+            macro_range = _range_from_token_position_details(token_details, read_file)
+
+            # Check if it's a built-in method
+            if builtin := get_built_in_macro_reference(macro_name, macro_range):
+                return builtin
+        else:
+            # Skip if we can't get the position
+            return None
+
+        # Find the macro definition information
+        macro_def = target.python_env.get(macro_name)
+        if macro_def is None:
+            return None
+
+        function_name = macro_def.name
+        if not function_name:
+            return None
+        if not macro_def.path:
+            return None
+        if not config_path:
+            return None
+        path = Path(config_path).joinpath(macro_def.path)
+
+        # Parse the Python file to find the function definition
+        with open(path, "r") as f:
+            tree = ast.parse(f.read())
+        with open(path, "r") as f:
+            output_read_line = f.readlines()
+
+        # Find the function definition by name
+        start_line = None
+        end_line = None
+        get_length_of_end_line = None
+        docstring = None
+        for ast_node in ast.walk(tree):
+            if isinstance(ast_node, ast.FunctionDef) and ast_node.name == function_name:
+                start_line = ast_node.lineno
+                end_line = ast_node.end_lineno
+                get_length_of_end_line = (
+                    len(output_read_line[end_line - 1])
+                    if end_line is not None and end_line - 1 < len(read_file)
+                    else 0
+                )
+                # Extract docstring if present
+                docstring = ast.get_docstring(ast_node)
+                break
+
+        if start_line is None or end_line is None or get_length_of_end_line is None:
+            return None
+
+        # Create a reference to the macro definition
+        macro_uri = URI.from_path(path)
+
+        return Reference(
+            uri=macro_uri.value,
+            range=macro_range,
+            target_range=Range(
+                start=Position(line=start_line - 1, character=0),
+                end=Position(line=end_line - 1, character=get_length_of_end_line),
+            ),
+            markdown_description=docstring,
+        )
+    except Exception:
+        return None
+
+
+def get_built_in_macro_reference(macro_name: str, macro_range: Range) -> t.Optional[Reference]:
+    """
+    Get a reference to a built-in macro by its name.
+
+    Args:
+        macro_name: The name of the built-in macro (e.g., 'each', 'sql_literal')
+        macro_range: The range of the macro invocation in the source file
+    """
+    built_in_macros = macro.get_registry()
+    built_in_macro = built_in_macros.get(macro_name)
+    if built_in_macro is None:
+        return None
+
+    func = built_in_macro.func
+    filename = inspect.getfile(func)
+    source_lines, line_number = inspect.getsourcelines(func)
+
+    # Calculate the end line number by counting the number of source lines
+    end_line_number = line_number + len(source_lines) - 1
+
+    return Reference(
+        uri=URI.from_path(Path(filename)).value,
+        range=macro_range,
+        target_range=Range(
+            start=Position(line=line_number - 1, character=0),
+            end=Position(line=end_line_number - 1, character=0),
+        ),
+        markdown_description=func.__doc__ if func.__doc__ else None,
     )

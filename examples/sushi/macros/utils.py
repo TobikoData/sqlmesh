@@ -26,6 +26,7 @@ def sql_literal(
     column_str: str,
     column_quoted: str,
 ):
+    """A macro that accepts various types of SQL literals and returns the column."""
     assert isinstance(column, str)
     assert isinstance(str_lit, str)
     assert str_lit == "'x'"

@@ -4518,7 +4518,7 @@ def test_model_session_properties(sushi_context):
                 name test_schema.test_model,
                 session_properties (
                     'query_label' = (
-                        'some value', 
+                        'some value',
                         'another value',
                         'yet another value',
                     )
@@ -8350,7 +8350,7 @@ def test_gateway_specific_render(assert_exp_eq) -> None:
         default_gateway="main",
     )
     context = Context(config=config)
-    assert context.engine_adapter == context._engine_adapters["main"]
+    assert context.engine_adapter == context.engine_adapters["main"]
 
     @model(
         name="dummy_model",
@@ -8376,7 +8376,7 @@ def test_gateway_specific_render(assert_exp_eq) -> None:
         """,
     )
     assert isinstance(context._get_engine_adapter("duckdb"), DuckDBEngineAdapter)
-    assert len(context._engine_adapters) == 2
+    assert len(context.engine_adapters) == 2
 
 
 def test_model_on_virtual_update(make_snapshot: t.Callable):

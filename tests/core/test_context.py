@@ -332,18 +332,18 @@ def test_evaluate_limit():
 def test_gateway_specific_adapters(copy_to_temp_path, mocker):
     path = copy_to_temp_path("examples/sushi")
     ctx = Context(paths=path, config="isolated_systems_config", gateway="prod")
-    assert len(ctx._engine_adapters) == 3
-    assert ctx.engine_adapter == ctx._engine_adapters["prod"]
-    assert ctx._get_engine_adapter("dev") == ctx._engine_adapters["dev"]
+    assert len(ctx.engine_adapters) == 3
+    assert ctx.engine_adapter == ctx.engine_adapters["prod"]
+    assert ctx._get_engine_adapter("dev") == ctx.engine_adapters["dev"]
 
     ctx = Context(paths=path, config="isolated_systems_config")
-    assert len(ctx._engine_adapters) == 3
-    assert ctx.engine_adapter == ctx._engine_adapters["dev"]
+    assert len(ctx.engine_adapters) == 3
+    assert ctx.engine_adapter == ctx.engine_adapters["dev"]
 
     ctx = Context(paths=path, config="isolated_systems_config")
     assert len(ctx.engine_adapters) == 3
     assert ctx.engine_adapter == ctx._get_engine_adapter()
-    assert ctx._get_engine_adapter("test") == ctx._engine_adapters["test"]
+    assert ctx._get_engine_adapter("test") == ctx.engine_adapters["test"]
 
 
 def test_multiple_gateways(tmp_path: Path):
@@ -800,7 +800,8 @@ def test_janitor(sushi_context, mocker: MockerFixture) -> None:
         ),
     ]
 
-    sushi_context._engine_adapters = {sushi_context.config.default_gateway: adapter_mock}
+    sushi_context._engine_adapter = adapter_mock
+    sushi_context.engine_adapters = {sushi_context.config.default_gateway: adapter_mock}
     sushi_context._state_sync = state_sync_mock
     state_sync_mock.get_expired_snapshots.return_value = []
 
