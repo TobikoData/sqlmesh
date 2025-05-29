@@ -95,3 +95,8 @@ def get_keywords_from_tokenizer(dialect: t.Optional[str] = None) -> t.Set[str]:
         parts = keyword.split(" ")
         expanded_keywords.update(parts)
     return expanded_keywords
+
+
+def get_macros_completions(context: t.Optional[LSPContext]) -> t.Set[str]:
+    macros = context.context._macros
+

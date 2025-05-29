@@ -1,7 +1,7 @@
 import pytest
 from sqlglot import Tokenizer
 from sqlmesh.core.context import Context
-from sqlmesh.lsp.completions import get_keywords_from_tokenizer, get_sql_completions
+from sqlmesh.lsp.completions import get_keywords_from_tokenizer, get_sql_completions, get_macros_completions
 from sqlmesh.lsp.context import LSPContext
 from sqlmesh.lsp.uri import URI
 
@@ -41,3 +41,11 @@ def test_get_sql_completions_with_context_and_file_uri():
     completions = get_sql_completions(lsp_context, URI.from_path(file_uri))
     assert len(completions.keywords) > len(TOKENIZER_KEYWORDS)
     assert "sushi.active_customers" not in completions.models
+
+@pytest.mark.fast
+def test_macros_completions():
+    context = Context(paths=["examples/sushi"])
+    lsp_context = LSPContext(context)
+
+    completions = get_macros_completions(lsp_context)
+
