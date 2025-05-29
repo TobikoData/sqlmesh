@@ -664,16 +664,9 @@ def test_select_models_local_tags_take_precedence_over_remote(
         name="db.existing",
         query=d.parse_one("SELECT 1 AS a"),
     )
-    new_model = SqlModel(
-        name="db.new",
-        tags=["a"],
-        query=d.parse_one("SELECT 1 as a"),
-    )
 
     existing_snapshot = make_snapshot(existing_model)
     existing_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
-    new_snapshot = make_snapshot(new_model)
-    new_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
     env_name = "test_env"
 
@@ -690,9 +683,13 @@ def test_select_models_local_tags_take_precedence_over_remote(
     }
 
     local_models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
+    local_new = SqlModel(
+        name="db.new",
+        tags=["a"],
+        query=d.parse_one("SELECT 1 as a"),
+    )
     local_existing = existing_model.copy(update={"tags": ["a"]})  # type: ignore
     local_models[local_existing.fqn] = local_existing
-    local_new = new_model.copy()
     local_models[local_new.fqn] = local_new
 
     selector = Selector(state_reader_mock, local_models)
