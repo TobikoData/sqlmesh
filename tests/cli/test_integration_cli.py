@@ -6,6 +6,7 @@ from sqlmesh.cli.example_project import init_example_project
 from sqlmesh.utils import yaml
 import shutil
 import site
+import uuid
 
 pytestmark = pytest.mark.slow
 
@@ -14,6 +15,10 @@ class InvokeCliType(t.Protocol):
     def __call__(
         self, sqlmesh_args: t.List[str], **kwargs: t.Any
     ) -> subprocess.CompletedProcess: ...
+
+
+class CreateSitePackageType(t.Protocol):
+    def __call__(self, name: str) -> t.Tuple[str, Path]: ...
 
 
 @pytest.fixture
@@ -65,10 +70,36 @@ def last_log_file_contents(tmp_path: Path) -> t.Callable[[], str]:
     return _fetch
 
 
+@pytest.fixture
+def create_site_package() -> t.Iterator[CreateSitePackageType]:
+    created_package_path = None
+
+    def _create(name: str) -> t.Tuple[str, Path]:
+        nonlocal created_package_path
+
+        unique_id = str(uuid.uuid4())[0:8]
+        package_name = f"{name}_{unique_id}"  # so that multiple tests using the same name dont clobber each other
+
+        site_packages = site.getsitepackages()[0]
+        package_path = Path(site_packages) / package_name
+        package_path.mkdir()
+
+        created_package_path = package_path
+
+        return package_name, package_path
+
+    yield _create
+
+    if created_package_path:
+        # cleanup
+        shutil.rmtree(created_package_path, ignore_errors=True)
+
+
 def test_load_snapshots_that_reference_nonexistent_python_libraries(
     invoke_cli: InvokeCliType,
     duckdb_example_project: Path,
     last_log_file_contents: t.Callable[[], str],
+    create_site_package: CreateSitePackageType,
 ) -> None:
     """
     Scenario:
@@ -84,10 +115,8 @@ def test_load_snapshots_that_reference_nonexistent_python_libraries(
     project_path = duckdb_example_project
 
     # simulate a 3rd party library that provides a macro
-    site_packages = site.getsitepackages()[0]
-    sqlmesh_test_macros_package_path = Path(site_packages) / "sqlmesh_test_macros"
-    sqlmesh_test_macros_package_path.mkdir()
-    (sqlmesh_test_macros_package_path / "macros.py").write_text("""
+    package_name, package_path = create_site_package("sqlmesh_test_macros")
+    (package_path / "macros.py").write_text("""
 from sqlmesh import macro
 
 @macro()
@@ -96,8 +125,8 @@ def do_something(evaluator):
 """)
 
     # reference the macro from site-packages
-    (project_path / "macros" / "__init__.py").write_text("""
-from sqlmesh_test_macros.macros import do_something
+    (project_path / "macros" / "__init__.py").write_text(f"""
+from {package_name}.macros import do_something
 """)
 
     (project_path / "models" / "example.sql").write_text("""
@@ -125,7 +154,7 @@ select @do_something() as a
 
     # deleting this removes the 'do_something()' macro used by the version of the snapshot stored in state
     # when loading the old snapshot from state in the local python env, this will create an ImportError
-    shutil.rmtree(sqlmesh_test_macros_package_path)
+    shutil.rmtree(package_path)
 
     # Move the macro inline so its no longer being loaded from a library but still exists with the same signature
     (project_path / "macros" / "__init__.py").write_text("""
@@ -150,7 +179,7 @@ def do_something(evaluator):
     assert "Virtual layer updated" in result.stdout
 
     log_file_contents = last_log_file_contents()
-    assert "ModuleNotFoundError: No module named 'sqlmesh_test_macros'" in log_file_contents
+    assert f"ModuleNotFoundError: No module named '{package_name}'" in log_file_contents
     assert (
         "ERROR - Failed to cache optimized query for model 'example.test_model'"
         in log_file_contents
@@ -165,6 +194,7 @@ def test_model_selector_snapshot_references_nonexistent_python_libraries(
     invoke_cli: InvokeCliType,
     duckdb_example_project: Path,
     last_log_file_contents: t.Callable[[], str],
+    create_site_package: CreateSitePackageType,
 ) -> None:
     """
     Scenario:
@@ -180,10 +210,8 @@ def test_model_selector_snapshot_references_nonexistent_python_libraries(
     project_path = duckdb_example_project
 
     # simulate a 3rd party library that provides a macro
-    site_packages = site.getsitepackages()[0]
-    sqlmesh_test_macros_package_path = Path(site_packages) / "sqlmesh_test_macros"
-    sqlmesh_test_macros_package_path.mkdir()
-    (sqlmesh_test_macros_package_path / "macros.py").write_text("""
+    package_name, package_path = create_site_package("sqlmesh_test_macros")
+    (package_path / "macros.py").write_text("""
 from sqlmesh import macro
 
 @macro()
@@ -192,8 +220,8 @@ def do_something(evaluator):
 """)
 
     # reference the macro from site-packages
-    (project_path / "macros" / "__init__.py").write_text("""
-from sqlmesh_test_macros.macros import do_something
+    (project_path / "macros" / "__init__.py").write_text(f"""
+from {package_name}.macros import do_something
 """)
 
     (project_path / "models" / "example.sql").write_text("""
@@ -216,7 +244,7 @@ select @do_something() as a
 
     # deleting this removes the 'do_something()' macro used by the version of the snapshot stored in state
     # when loading the old snapshot from state in the local python env, this will create an ImportError
-    shutil.rmtree(sqlmesh_test_macros_package_path)
+    shutil.rmtree(package_path)
 
     # Move the macro inline so its no longer being loaded from a library but still exists with the same signature
     (project_path / "macros" / "__init__.py").write_text("""
@@ -267,7 +295,7 @@ def do_something(evaluator):
         "Model 'sqlmesh_example.test_model' sourced from state cannot be rendered in the local environment"
         in result.stdout
     )
-    assert "No module named 'sqlmesh_test_macros'" in result.stdout
+    assert f"No module named '{package_name}'" in result.stdout
     assert (
         "If the model has been fixed locally, please ensure that the --select-model expression includes it"
         in result.stdout
@@ -275,7 +303,7 @@ def do_something(evaluator):
 
     # verify the full stack trace was logged
     log_file_contents = last_log_file_contents()
-    assert "ModuleNotFoundError: No module named 'sqlmesh_test_macros'" in log_file_contents
+    assert f"ModuleNotFoundError: No module named '{package_name}'" in log_file_contents
     assert (
         "The above exception was the direct cause of the following exception:" in log_file_contents
     )
