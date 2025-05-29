@@ -11,6 +11,7 @@ import typing as t
 import unittest
 from enum import Enum
 from typing import List
+from pathlib import Path
 
 import requests
 from hyperscript import Element, h
@@ -32,7 +33,6 @@ from sqlmesh.core.user import User
 from sqlmesh.core.config import Config
 from sqlmesh.integrations.github.cicd.config import GithubCICDBotConfig
 from sqlmesh.utils import word_characters_only, Verbosity
-from sqlmesh.utils.concurrency import NodeExecutionFailedError
 from sqlmesh.utils.date import now
 from sqlmesh.utils.errors import (
     CICDBotError,
@@ -283,7 +283,7 @@ class GithubController:
 
     def __init__(
         self,
-        paths: t.Union[str, t.Iterable[str]],
+        paths: t.Union[Path, t.Iterable[Path]],
         token: str,
         config: t.Optional[t.Union[Config, str]] = None,
         event: t.Optional[GithubEvent] = None,
@@ -894,11 +894,9 @@ class GithubController:
                 if captured_errors:
                     logger.debug(f"Captured errors: {captured_errors}")
                     failure_msg = f"**Errors:**\n{captured_errors}\n"
-                elif isinstance(exception, NodeExecutionFailedError):
-                    logger.debug(
-                        "Got Node Execution Failed Error. Stack trace: " + traceback.format_exc()
-                    )
-                    failure_msg = f"Node `{exception.node.name}` failed to apply.\n\n**Stack Trace:**\n```\n{traceback.format_exc()}\n```"
+                elif isinstance(exception, PlanError):
+                    logger.debug("Got PlanError Stack trace: " + traceback.format_exc())
+                    failure_msg = f"Plan application failed.\n\n{self._console.captured_output}"
                 else:
                     logger.debug(
                         "Got unexpected error. Error Type: "

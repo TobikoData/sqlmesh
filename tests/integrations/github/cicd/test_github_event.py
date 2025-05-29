@@ -1,6 +1,5 @@
 import pytest
 
-pytest_plugins = ["tests.integrations.github.cicd.fixtures"]
 pytestmark = pytest.mark.github
 
 

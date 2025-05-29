@@ -24,9 +24,9 @@ from sqlmesh.integrations.github.cicd.controller import (
     GithubController,
 )
 from sqlmesh.utils.errors import CICDBotError
-from tests.integrations.github.cicd.fixtures import MockIssueComment
+from tests.integrations.github.cicd.conftest import MockIssueComment
+from sqlmesh.cli.example_project import init_example_project
 
-pytest_plugins = ["tests.integrations.github.cicd.fixtures"]
 pytestmark = [
     pytest.mark.slow,
     pytest.mark.github,
@@ -292,9 +292,9 @@ def test_merge_pr_has_non_breaking_change(
 **Directly Modified:**
 - `sushi.waiter_revenue_by_day`
 ```diff
---- 
+---
 
-+++ 
++++
 
 @@ -16,7 +16,8 @@
 
@@ -488,9 +488,9 @@ def test_merge_pr_has_non_breaking_change_diff_start(
 **Directly Modified:**
 - `sushi.waiter_revenue_by_day`
 ```diff
---- 
+---
 
-+++ 
++++
 
 @@ -16,7 +16,8 @@
 
@@ -995,9 +995,9 @@ def test_no_merge_since_no_deploy_signal(
 **Directly Modified:**
 - `sushi.waiter_revenue_by_day`
 ```diff
---- 
+---
 
-+++ 
++++
 
 @@ -16,7 +16,8 @@
 
@@ -1175,9 +1175,9 @@ def test_no_merge_since_no_deploy_signal_no_approvers_defined(
 **Directly Modified:**
 - `sushi.waiter_revenue_by_day`
 ```diff
---- 
+---
 
-+++ 
++++
 
 @@ -16,7 +16,8 @@
 
@@ -1344,9 +1344,9 @@ def test_deploy_comment_pre_categorized(
 **Directly Modified:**
 - `sushi.waiter_revenue_by_day`
 ```diff
---- 
+---
 
-+++ 
++++
 
 @@ -16,7 +16,8 @@
 
@@ -1682,9 +1682,9 @@ def test_overlapping_changes_models(
 **Directly Modified:**
 - `sushi.customers`
 ```diff
---- 
+---
 
-+++ 
++++
 
 @@ -25,7 +25,8 @@
 
@@ -2062,9 +2062,9 @@ def test_has_required_approval_but_not_base_branch(
 **Directly Modified:**
 - `sushi.waiter_revenue_by_day`
 ```diff
---- 
+---
 
-+++ 
++++
 
 @@ -16,7 +16,8 @@
 
@@ -2129,3 +2129,77 @@ def test_has_required_approval_but_not_base_branch(
             output
             == "run_unit_tests=success\nhas_required_approval=success\ncreated_pr_environment=true\npr_environment_name=hello_world_2\npr_environment_synced=success\nprod_plan_preview=success\n"
         )
+
+
+def test_node_execution_errors_are_propagated(
+    github_client,
+    make_controller,
+    make_mock_check_run,
+    make_mock_issue_comment,
+    make_pull_request_review,
+    tmp_path: pathlib.Path,
+    mocker: MockerFixture,
+):
+    # mock out PR and SQLMesh comment
+    mock_repo = github_client.get_repo()
+    mock_repo.create_check_run = mocker.MagicMock(
+        side_effect=lambda **kwargs: make_mock_check_run(**kwargs)
+    )
+
+    created_comments: t.List[MockIssueComment] = []
+    mock_issue = mock_repo.get_issue()
+    mock_issue.create_comment = mocker.MagicMock(
+        side_effect=lambda comment: make_mock_issue_comment(
+            comment=comment, created_comments=created_comments
+        )
+    )
+    mock_issue.get_comments = mocker.MagicMock(side_effect=lambda: created_comments)
+
+    init_example_project(tmp_path, dialect="duckdb")
+
+    controller = make_controller(
+        "tests/fixtures/github/pull_request_synchronized.json",
+        github_client,
+        bot_config=GithubCICDBotConfig(
+            merge_method=MergeMethod.MERGE,
+            invalidate_environment_after_deploy=False,
+            auto_categorize_changes=CategorizerConfig.all_full(),
+            default_pr_start=None,
+            skip_pr_backfill=False,
+        ),
+        mock_out_context=False,
+        paths=tmp_path,
+    )
+    assert isinstance(controller, GithubController)
+
+    github_output_file = tmp_path / "github_output.txt"
+
+    with mock.patch.dict(os.environ, {"GITHUB_OUTPUT": str(github_output_file)}):
+        pr_environment_updated = command._update_pr_environment(controller)
+        assert pr_environment_updated
+
+        assert "pr_environment_synced=success" in github_output_file.read_text()
+
+    (tmp_path / "models" / "new_model.sql").write_text("""
+MODEL (
+    name sqlmesh_example.new_model,
+    kind FULL
+);
+
+select invalid as a
+""")
+    controller._context.load()
+    controller._pr_plan_builder = None  # trigger new plan
+
+    github_output_file.write_text("")  # clear output
+    with mock.patch.dict(os.environ, {"GITHUB_OUTPUT": str(github_output_file)}):
+        pr_environment_updated = command._update_pr_environment(controller)
+        assert not pr_environment_updated
+        assert "pr_environment_synced=failure" in github_output_file.read_text()
+
+    check = controller._check_run_mapping["SQLMesh - PR Environment Synced"].kwargs["output"]  # type: ignore
+    assert check["title"] == "PR Virtual Data Environment: hello_world_2"
+    assert (
+        """Failed models\n\n  **"db"."sqlmesh_example"."new_model"**\n\n    BinderException:\n      Binder Error: Referenced column "invalid" not found in FROM clause!"""
+        in check["summary"]
+    )

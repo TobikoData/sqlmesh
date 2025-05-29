@@ -2,6 +2,7 @@ import typing as t
 
 import pytest
 from pytest_mock.plugin import MockerFixture
+from pathlib import Path
 
 from sqlmesh.core.config import Config
 from sqlmesh.core.console import set_console, get_console, MarkdownConsole
@@ -13,6 +14,7 @@ from sqlmesh.integrations.github.cicd.controller import (
     PullRequestInfo,
 )
 from sqlmesh.utils import AttributeDict
+from sqlglot.helper import ensure_list
 
 
 @pytest.fixture
@@ -70,6 +72,7 @@ def make_controller(mocker: MockerFixture, copy_to_temp_path: t.Callable) -> t.C
         bot_config: t.Optional[GithubCICDBotConfig] = None,
         mock_out_context: bool = True,
         config: t.Optional[t.Union[Config, str]] = None,
+        paths: t.Optional[t.Union[Path, t.List[Path]]] = None,
     ) -> GithubController:
         if mock_out_context:
             mocker.patch("sqlmesh.core.context.Context.apply", mocker.MagicMock())
@@ -85,7 +88,10 @@ def make_controller(mocker: MockerFixture, copy_to_temp_path: t.Callable) -> t.C
                 bot_config,
             )
 
-        paths = copy_to_temp_path("examples/sushi")
+        if paths is None:
+            paths = copy_to_temp_path("examples/sushi")
+
+        paths = ensure_list(paths)
 
         orig_console = get_console()
         try:
@@ -102,6 +108,7 @@ def make_controller(mocker: MockerFixture, copy_to_temp_path: t.Callable) -> t.C
                 client=client,
                 config=config,
             )
+
         finally:
             set_console(orig_console)
 
