@@ -93,7 +93,7 @@ class Selector:
             }
 
         all_selected_models = self.expand_model_selections(
-            model_selections, models={**self._models, **env_models}
+            model_selections, models={**env_models, **self._models}
         )
 
         dag: DAG[str] = DAG()

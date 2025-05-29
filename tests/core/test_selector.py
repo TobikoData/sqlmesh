@@ -657,6 +657,58 @@ def test_select_models_with_external_parent(mocker: MockerFixture):
     assert expanded_selections == {added_model.fqn}
 
 
+def test_select_models_local_tags_take_precedence_over_remote(
+    mocker: MockerFixture, make_snapshot: t.Callable
+) -> None:
+    existing_model = SqlModel(
+        name="db.existing",
+        query=d.parse_one("SELECT 1 AS a"),
+    )
+    new_model = SqlModel(
+        name="db.new",
+        tags=["a"],
+        query=d.parse_one("SELECT 1 as a"),
+    )
+
+    existing_snapshot = make_snapshot(existing_model)
+    existing_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    new_snapshot = make_snapshot(new_model)
+    new_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    env_name = "test_env"
+
+    state_reader_mock = mocker.Mock()
+    state_reader_mock.get_environment.return_value = Environment(
+        name=env_name,
+        snapshots=[existing_snapshot.table_info],
+        start_at="2023-01-01",
+        end_at="2023-02-01",
+        plan_id="test_plan_id",
+    )
+    state_reader_mock.get_snapshots.return_value = {
+        existing_snapshot.snapshot_id: existing_snapshot
+    }
+
+    local_models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
+    local_existing = existing_model.copy(update={"tags": ["a"]})  # type: ignore
+    local_models[local_existing.fqn] = local_existing
+    local_new = new_model.copy()
+    local_models[local_new.fqn] = local_new
+
+    selector = Selector(state_reader_mock, local_models)
+
+    selected = selector.select_models(["tag:a"], env_name)
+
+    # both should get selected because they both now have the 'a' tag locally, even though one exists in remote state without the 'a' tag
+    _assert_models_equal(
+        selected,
+        {
+            local_existing.fqn: local_existing,
+            local_new.fqn: local_new,
+        },
+    )
+
+
 def _assert_models_equal(actual: t.Dict[str, Model], expected: t.Dict[str, Model]) -> None:
     assert set(actual) == set(expected)
     for name, model in actual.items():
