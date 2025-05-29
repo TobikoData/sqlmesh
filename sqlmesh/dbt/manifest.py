@@ -21,6 +21,7 @@ from dbt.config import Profile, Project, RuntimeConfig
 from dbt.config.profile import read_profile
 from dbt.config.renderer import DbtProjectYamlRenderer, ProfileRenderer
 from dbt.parser.manifest import ManifestLoader
+from dbt.parser.sources import merge_freshness
 from dbt.tracking import do_not_track
 
 from sqlmesh.core import constants as c
@@ -152,9 +153,18 @@ class ManifestHelper:
 
     def _load_sources(self) -> None:
         for source in self._manifest.sources.values():
+            config_source = _config(source)
+            source_dict = source.to_dict()
+
+            # starting in dbt-core 1.9.5, freshness can be set in both source and source config
+            config_source_freshness = config_source.pop("freshness", None)
+            source_dict_freshness = source_dict.pop("freshness", None)
+            freshness = merge_freshness(source_dict_freshness, config_source_freshness)
+
             source_config = SourceConfig(
-                **_config(source),
-                **source.to_dict(),
+                **config_source,
+                **source_dict,
+                freshness=freshness,
             )
             self._sources_per_package[source.package_name][source_config.config_name] = (
                 source_config
