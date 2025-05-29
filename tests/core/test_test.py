@@ -1474,6 +1474,33 @@ test_example_full_model_partial:
         ).run()
     )
 
+    _check_successful_or_raise(
+        _create_test(
+            body=load_yaml(
+                """
+test_example_full_model_partial:
+  model: sqlmesh_example.full_model
+  inputs:
+    sqlmesh_example.incremental_model:
+      rows:
+      - id: 1
+        item_id: 1
+      - id: 2
+        item_id: 1
+      - id: 3
+        item_id: 2
+  outputs:
+    query:
+      partial: true
+      query: "SELECT 2 AS num_orders UNION ALL SELECT 1 AS num_orders"
+                """
+            ),
+            test_name="test_example_full_model_partial",
+            model=context.get_model("sqlmesh_example.full_model"),
+            context=context,
+        ).run()
+    )
+
     mocker.patch("sqlmesh.core.test.definition.random_id", return_value="jzngz56a")
     test = _create_test(
         body=load_yaml(
