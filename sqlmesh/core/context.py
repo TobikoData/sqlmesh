@@ -932,19 +932,22 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         return snapshot
 
-    def config_for_path(self, path: Path) -> Config:
+    def config_for_path(self, path: Path) -> t.Tuple[Config, Path]:
+        """Returns the config and path of the said project for a given file path."""
         for config_path, config in self.configs.items():
             try:
                 path.relative_to(config_path)
-                return config
+                return config, config_path
             except ValueError:
                 pass
-        return self.config
+        return self.config, self.path
 
     def config_for_node(self, node: str | Model | Audit) -> Config:
         if isinstance(node, str):
-            return self.config_for_path(self.get_snapshot(node, raise_if_missing=True).node._path)  # type: ignore
-        return self.config_for_path(node._path)  # type: ignore
+            return self.config_for_path(self.get_snapshot(node, raise_if_missing=True).node._path)[
+                0
+            ]  # type: ignore
+        return self.config_for_path(node._path)[0]  # type: ignore
 
     @property
     def models(self) -> MappingProxyType[str, Model]:
