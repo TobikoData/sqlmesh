@@ -59,6 +59,35 @@ ClickHouse Cloud automates ClickHouse's cluster controls, which sometimes constr
 
 Aside from those constraints, ClickHouse Cloud mode is similar to single server mode - you run standard SQL commands/queries, and ClickHouse Cloud executes them.
 
+## Permissions
+
+In the default SQLMesh configuration, users must have sufficient permissions to create new ClickHouse databases.
+
+Alternatively, you can configure specific databases where SQLMesh should create table and view objects.
+
+### Environment views
+
+Use the [`environment_suffix_target` key in your project configuration](../../guides/configuration.md#disable-environment-specific-schemas) to specify that environment views should be created within the model's database instead of in a new database:
+
+``` yaml
+environment_suffix_target: table
+```
+
+### Physical tables
+
+Use the [`physical_schema_mapping` key in your project configuration](../../guides/configuration.md#physical-table-schemas) to specify the databases where physical tables should be created.
+
+The key accepts a dictionary of regular expressions that map model database names to the corresponding databases where physical tables should be created.
+
+SQLMesh will compare a model's database name to each regular expression and use the first match to determine which database a physical table should be created in.
+
+For example, this configuration places every model's physical table in the `model_physical_tables` database because the regular expression `.*` matches any database name:
+
+``` yaml
+physical_schema_mapping:
+  '.*': model_physical_tables
+```
+
 ## Cluster specification
 
 A ClickHouse cluster allows multiple networked ClickHouse servers to operate on the same data object. Every cluster must be named in the ClickHouse configuration files, and that name is passed to a table's DDL statements in the `ON CLUSTER` clause.
