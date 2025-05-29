@@ -13,6 +13,9 @@ import time_machine
 from pytest_mock.plugin import MockerFixture
 from sqlglot import exp, parse_one
 from sqlmesh.core import dialect as d
+from sqlmesh.core.environment import EnvironmentNamingInfo
+from sqlmesh.core.macros import RuntimeStage
+from sqlmesh.core.renderer import render_statements
 from sqlmesh.core.audit import StandaloneAudit
 from sqlmesh.core.context import Context
 from sqlmesh.core.console import get_console
@@ -1551,3 +1554,112 @@ def test_grain():
 
     model.grain = "id_a"
     assert model.to_sqlmesh(context).grains == [exp.to_column("id_a")]
+
+
+def test_on_run_start_end(copy_to_temp_path):
+    project_root = "tests/fixtures/dbt/sushi_test"
+    sushi_context = Context(paths=copy_to_temp_path(project_root))
+    assert len(sushi_context._environment_statements) == 2
+
+    # Root project's on run start / on run end should be first by checking the macros
+    root_environment_statements = sushi_context._environment_statements[0]
+    assert "create_tables" in root_environment_statements.jinja_macros.root_macros
+
+    # Validate order of execution to be correct
+    assert root_environment_statements.before_all == [
+        "JINJA_STATEMENT_BEGIN;\nCREATE TABLE IF NOT EXISTS analytic_stats (physical_table VARCHAR, evaluation_time VARCHAR);\nJINJA_END;",
+        "JINJA_STATEMENT_BEGIN;\nCREATE TABLE IF NOT EXISTS to_be_executed_last (col VARCHAR);\nJINJA_END;",
+        """JINJA_STATEMENT_BEGIN;\nSELECT {{ var("yet_another_var") }} AS var, '{{ source("raw", "items").identifier }}' AS src, '{{ ref("waiters").identifier }}' AS ref;\nJINJA_END;""",
+        "JINJA_STATEMENT_BEGIN;\n{{ log_value('on-run-start') }}\nJINJA_END;",
+    ]
+    assert root_environment_statements.after_all == [
+        "JINJA_STATEMENT_BEGIN;\n{{ create_tables(schemas) }}\nJINJA_END;",
+        "JINJA_STATEMENT_BEGIN;\nDROP TABLE to_be_executed_last;\nJINJA_END;",
+    ]
+
+    assert root_environment_statements.jinja_macros.root_package_name == "sushi"
+
+    rendered_before_all = render_statements(
+        root_environment_statements.before_all,
+        dialect=sushi_context.default_dialect,
+        python_env=root_environment_statements.python_env,
+        jinja_macros=root_environment_statements.jinja_macros,
+        runtime_stage=RuntimeStage.BEFORE_ALL,
+    )
+
+    rendered_after_all = render_statements(
+        root_environment_statements.after_all,
+        dialect=sushi_context.default_dialect,
+        python_env=root_environment_statements.python_env,
+        jinja_macros=root_environment_statements.jinja_macros,
+        snapshots=sushi_context.snapshots,
+        runtime_stage=RuntimeStage.AFTER_ALL,
+        environment_naming_info=EnvironmentNamingInfo(name="dev"),
+    )
+
+    assert rendered_before_all == [
+        "CREATE TABLE IF NOT EXISTS analytic_stats (physical_table TEXT, evaluation_time TEXT)",
+        "CREATE TABLE IF NOT EXISTS to_be_executed_last (col TEXT)",
+        "SELECT 1 AS var, 'items' AS src, 'waiters' AS ref",
+    ]
+
+    # The jinja macro should have resolved the schemas for this environment and generated corresponding statements
+    assert sorted(rendered_after_all) == sorted(
+        [
+            "CREATE OR REPLACE TABLE schema_table_snapshots__dev AS SELECT 'snapshots__dev' AS schema",
+            "CREATE OR REPLACE TABLE schema_table_sushi__dev AS SELECT 'sushi__dev' AS schema",
+            "DROP TABLE to_be_executed_last",
+        ]
+    )
+
+    # Nested dbt_packages on run start / on run end
+    packaged_environment_statements = sushi_context._environment_statements[1]
+
+    # Validate order of execution to be correct
+    assert packaged_environment_statements.before_all == [
+        "JINJA_STATEMENT_BEGIN;\nCREATE TABLE IF NOT EXISTS to_be_executed_first (col VARCHAR);\nJINJA_END;",
+        "JINJA_STATEMENT_BEGIN;\nCREATE TABLE IF NOT EXISTS analytic_stats_packaged_project (physical_table VARCHAR, evaluation_time VARCHAR);\nJINJA_END;",
+    ]
+    assert packaged_environment_statements.after_all == [
+        "JINJA_STATEMENT_BEGIN;\nDROP TABLE to_be_executed_first\nJINJA_END;",
+        "JINJA_STATEMENT_BEGIN;\n{{ packaged_tables(schemas) }}\nJINJA_END;",
+    ]
+
+    assert "packaged_tables" in packaged_environment_statements.jinja_macros.root_macros
+    assert packaged_environment_statements.jinja_macros.root_package_name == "sushi"
+
+    rendered_before_all = render_statements(
+        packaged_environment_statements.before_all,
+        dialect=sushi_context.default_dialect,
+        python_env=packaged_environment_statements.python_env,
+        jinja_macros=packaged_environment_statements.jinja_macros,
+        runtime_stage=RuntimeStage.BEFORE_ALL,
+    )
+
+    rendered_after_all = render_statements(
+        packaged_environment_statements.after_all,
+        dialect=sushi_context.default_dialect,
+        python_env=packaged_environment_statements.python_env,
+        jinja_macros=packaged_environment_statements.jinja_macros,
+        snapshots=sushi_context.snapshots,
+        runtime_stage=RuntimeStage.AFTER_ALL,
+        environment_naming_info=EnvironmentNamingInfo(name="dev"),
+    )
+
+    # Validate order of execution to match dbt's
+    assert rendered_before_all == [
+        "CREATE TABLE IF NOT EXISTS to_be_executed_first (col TEXT)",
+        "CREATE TABLE IF NOT EXISTS analytic_stats_packaged_project (physical_table TEXT, evaluation_time TEXT)",
+    ]
+
+    # This on run end statement should be executed first
+    assert rendered_after_all[0] == "DROP TABLE to_be_executed_first"
+
+    # The table names is an indication of the rendering of the dbt_packages statements
+    assert sorted(rendered_after_all) == sorted(
+        [
+            "DROP TABLE to_be_executed_first",
+            "CREATE OR REPLACE TABLE schema_table_snapshots__dev_nested_package AS SELECT 'snapshots__dev' AS schema",
+            "CREATE OR REPLACE TABLE schema_table_sushi__dev_nested_package AS SELECT 'sushi__dev' AS schema",
+        ]
+    )

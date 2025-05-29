@@ -34,6 +34,7 @@ class HookConfig(PydanticModel):
     sql: str
     index: int
     path: Path
+    dependencies: Dependencies
 
 
 class Package(PydanticModel):

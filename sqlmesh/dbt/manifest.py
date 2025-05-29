@@ -292,13 +292,24 @@ class ManifestHelper:
                 sql = node.raw_code if DBT_VERSION >= (1, 3) else node.raw_sql  # type: ignore
                 node_name = node.name
                 node_path = Path(node.original_file_path)
+
+                dependencies = Dependencies(
+                    macros=_macro_references(self._manifest, node),
+                    refs=_refs(node),
+                    sources=_sources(node),
+                )
+                dependencies = dependencies.union(self._extra_dependencies(sql, node.package_name))
+                dependencies = dependencies.union(
+                    self._flatten_dependencies_from_macros(dependencies.macros, node.package_name)
+                )
+
                 if "on-run-start" in node.tags:
                     self._on_run_start_per_package[node.package_name][node_name] = HookConfig(
-                        sql=sql, index=node.index or 0, path=node_path
+                        sql=sql, index=node.index or 0, path=node_path, dependencies=dependencies
                     )
                 else:
                     self._on_run_end_per_package[node.package_name][node_name] = HookConfig(
-                        sql=sql, index=node.index or 0, path=node_path
+                        sql=sql, index=node.index or 0, path=node_path, dependencies=dependencies
                     )
 
     @property
