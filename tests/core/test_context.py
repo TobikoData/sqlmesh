@@ -1244,7 +1244,7 @@ def test_deactivate_automatic_requirement_inference(copy_to_temp_path: t.Callabl
     context_path = copy_to_temp_path("examples/sushi")[0]
     config = next(iter(load_configs("config", Config, paths=context_path).values()))
 
-    config.infer_python_package_requirements = False
+    config.infer_python_dependencies = False
     context = Context(paths=context_path, config=config)
     environment = context.plan(
         "dev", no_prompts=True, skip_tests=True, skip_backfill=True, auto_apply=True

@@ -102,7 +102,7 @@ class ContextDiff(PydanticModel):
         diff_rendered: bool = False,
         environment_statements: t.Optional[t.List[EnvironmentStatements]] = [],
         gateway_managed_virtual_layer: bool = False,
-        infer_python_package_requirements: bool = True,
+        infer_python_dependencies: bool = True,
     ) -> ContextDiff:
         """Create a ContextDiff object.
 
@@ -121,7 +121,7 @@ class ContextDiff(PydanticModel):
             environment_statements: A list of `before_all` or `after_all` statements associated with the environment.
             gateway_managed_virtual_layer: Whether the models' views in the virtual layer are created by the
                 model-specific gateway rather than the default gateway.
-            infer_python_package_requirements: Whether to statically analyze Python code to automatically infer Python
+            infer_python_dependencies: Whether to statically analyze Python code to automatically infer Python
                 package requirements.
 
         Returns:
@@ -215,7 +215,7 @@ class ContextDiff(PydanticModel):
             provided_requirements or {},
             excluded_requirements or set(),
             snapshots.values(),
-            infer_python_package_requirements=infer_python_package_requirements,
+            infer_python_dependencies=infer_python_dependencies,
         )
 
         previous_environment_statements = state_reader.get_environment_statements(environment)
@@ -483,39 +483,41 @@ def _build_requirements(
     provided_requirements: t.Dict[str, str],
     excluded_requirements: t.Set[str],
     snapshots: t.Collection[Snapshot],
-    infer_python_package_requirements: bool = True,
+    infer_python_dependencies: bool = True,
 ) -> t.Dict[str, str]:
     requirements = {
         k: v for k, v in provided_requirements.items() if k not in excluded_requirements
     }
 
-    if infer_python_package_requirements:
-        distributions = metadata.packages_distributions()
+    if not infer_python_dependencies:
+        return requirements
 
-        for snapshot in snapshots:
-            if not snapshot.is_model:
+    distributions = metadata.packages_distributions()
+
+    for snapshot in snapshots:
+        if not snapshot.is_model:
+            continue
+
+        for executable in snapshot.model.python_env.values():
+            if executable.kind != "import":
                 continue
 
-            for executable in snapshot.model.python_env.values():
-                if executable.kind != "import":
+            try:
+                start = "from " if executable.payload.startswith("from ") else "import "
+                lib = executable.payload.split(start)[1].split()[0].split(".")[0]
+                if lib not in distributions:
                     continue
 
-                try:
-                    start = "from " if executable.payload.startswith("from ") else "import "
-                    lib = executable.payload.split(start)[1].split()[0].split(".")[0]
-                    if lib not in distributions:
-                        continue
+                for dist in distributions[lib]:
+                    if (
+                        dist not in requirements
+                        and dist not in IGNORED_PACKAGES
+                        and dist not in excluded_requirements
+                    ):
+                        requirements[dist] = metadata.version(dist)
+            except metadata.PackageNotFoundError:
+                from sqlmesh.core.console import get_console
 
-                    for dist in distributions[lib]:
-                        if (
-                            dist not in requirements
-                            and dist not in IGNORED_PACKAGES
-                            and dist not in excluded_requirements
-                        ):
-                            requirements[dist] = metadata.version(dist)
-                except metadata.PackageNotFoundError:
-                    from sqlmesh.core.console import get_console
-
-                    get_console().log_warning(f"Failed to find package for {lib}.")
+                get_console().log_warning(f"Failed to find package for {lib}.")
 
     return requirements

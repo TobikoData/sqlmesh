@@ -5050,7 +5050,7 @@ def test_multi_virtual_layer(copy_to_temp_path):
     assert len(prod_environment.snapshots_) == 3
 
     # Changing the flag should show a diff
-    context.gateway_managed_virtual_layer = False
+    context.config.gateway_managed_virtual_layer = False
     plan = context.plan_builder().build()
     assert not plan.requires_backfill
     assert (
