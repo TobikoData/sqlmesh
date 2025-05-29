@@ -134,9 +134,12 @@ def get_model_definitions_for_a_path(
     with open(file_path, "r", encoding="utf-8") as file:
         read_file = file.readlines()
 
-    # Build scope tree to properly handle nested CTEs
-    query = normalize_identifiers(query.copy(), dialect=dialect)
-    root_scope = build_scope(query)
+    # Build a scope tree to properly handle nested CTEs
+    try:
+        query = normalize_identifiers(query.copy(), dialect=dialect)
+        root_scope = build_scope(query)
+    except Exception:
+        root_scope = None
 
     if root_scope:
         # Traverse all scopes to find CTE definitions and table references
