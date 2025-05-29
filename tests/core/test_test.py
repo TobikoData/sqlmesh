@@ -54,7 +54,7 @@ def _create_test(
         test_name=test_name,
         model=model,
         models=context._models,
-        engine_adapter=context._test_connection_config.create_engine_adapter(
+        engine_adapter=context.test_connection_config.create_engine_adapter(
             register_comments_override=False
         ),
         dialect=context.config.dialect,
@@ -2128,7 +2128,7 @@ def test_test_with_gateway_specific_model(tmp_path: Path, mocker: MockerFixture)
         return_value=pd.DataFrame({"c": [5]}),
     )
 
-    assert context.engine_adapter == context._engine_adapters["main"]
+    assert context.engine_adapter == context.engine_adapters["main"]
     with pytest.raises(
         SQLMeshError, match=r"Gateway 'wrong' not found in the available engine adapters."
     ):
@@ -2136,8 +2136,8 @@ def test_test_with_gateway_specific_model(tmp_path: Path, mocker: MockerFixture)
 
     # Create test should use the gateway specific engine adapter
     context.create_test("sqlmesh_example.gw_model", input_queries=input_queries, overwrite=True)
-    assert context._get_engine_adapter("second") == context._engine_adapters["second"]
-    assert len(context._engine_adapters) == 2
+    assert context._get_engine_adapter("second") == context.engine_adapters["second"]
+    assert len(context.engine_adapters) == 2
 
     test = load_yaml(context.path / c.TESTS / "test_gw_model.yaml")
 
