@@ -107,6 +107,7 @@ class Config(BaseConfig):
         physical_schema_mapping: A mapping from regular expressions to names of schemas in which physical tables for corresponding models will be placed.
         environment_suffix_target: Indicates whether to append the environment name to the schema or table name.
         gateway_managed_virtual_layer: Whether the models' views in the virtual layer are created by the model-specific gateway rather than the default gateway.
+        infer_python_package_requirements: Whether to statically analyze Python code to automatically infer Python package requirements.
         environment_catalog_mapping: A mapping from regular expressions to catalog names. The catalog name is used to determine the target catalog for a given environment.
         default_target_environment: The name of the environment that will be the default target for the `sqlmesh plan` and `sqlmesh run` commands.
         log_limit: The default number of logs to keep.
@@ -146,6 +147,7 @@ class Config(BaseConfig):
         default=EnvironmentSuffixTarget.default
     )
     gateway_managed_virtual_layer: bool = False
+    infer_python_package_requirements: bool = True
     environment_catalog_mapping: RegexKeyDict = {}
     default_target_environment: str = c.PROD
     log_limit: int = c.DEFAULT_LOG_LIMIT

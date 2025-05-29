@@ -1240,6 +1240,19 @@ def test_requirements(copy_to_temp_path: t.Callable):
     assert set(diff.requirements) == {"numpy", "pandas"}
 
 
+def test_deactivate_automatic_requirement_inference(copy_to_temp_path: t.Callable):
+    context_path = copy_to_temp_path("examples/sushi")[0]
+    config = next(iter(load_configs("config", Config, paths=context_path).values()))
+
+    config.infer_python_package_requirements = False
+    context = Context(paths=context_path, config=config)
+    environment = context.plan(
+        "dev", no_prompts=True, skip_tests=True, skip_backfill=True, auto_apply=True
+    ).environment
+
+    assert environment.requirements == {"pandas": "2.2.2"}
+
+
 @pytest.mark.slow
 def test_rendered_diff():
     ctx = Context(config=Config())

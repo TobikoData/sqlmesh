@@ -102,6 +102,7 @@ class ContextDiff(PydanticModel):
         diff_rendered: bool = False,
         environment_statements: t.Optional[t.List[EnvironmentStatements]] = [],
         gateway_managed_virtual_layer: bool = False,
+        infer_python_package_requirements: bool = True,
     ) -> ContextDiff:
         """Create a ContextDiff object.
 
@@ -116,6 +117,12 @@ class ContextDiff(PydanticModel):
                 the environment is not finalized.
             provided_requirements: Python dependencies sourced from the lock file.
             excluded_requirements: Python dependencies to exclude.
+            diff_rendered: Whether to compute the diff of the rendered version of the compared expressions.
+            environment_statements: A list of `before_all` or `after_all` statements associated with the environment.
+            gateway_managed_virtual_layer: Whether the models' views in the virtual layer are created by the
+                model-specific gateway rather than the default gateway.
+            infer_python_package_requirements: Whether to statically analyze Python code to automatically infer Python
+                package requirements.
 
         Returns:
             The ContextDiff object.
@@ -208,6 +215,7 @@ class ContextDiff(PydanticModel):
             provided_requirements or {},
             excluded_requirements or set(),
             snapshots.values(),
+            infer_python_package_requirements=infer_python_package_requirements,
         )
 
         previous_environment_statements = state_reader.get_environment_statements(environment)
@@ -475,29 +483,39 @@ def _build_requirements(
     provided_requirements: t.Dict[str, str],
     excluded_requirements: t.Set[str],
     snapshots: t.Collection[Snapshot],
+    infer_python_package_requirements: bool = True,
 ) -> t.Dict[str, str]:
     requirements = {
         k: v for k, v in provided_requirements.items() if k not in excluded_requirements
     }
-    distributions = metadata.packages_distributions()
 
-    for snapshot in snapshots:
-        if snapshot.is_model:
+    if infer_python_package_requirements:
+        distributions = metadata.packages_distributions()
+
+        for snapshot in snapshots:
+            if not snapshot.is_model:
+                continue
+
             for executable in snapshot.model.python_env.values():
-                if executable.kind == "import":
-                    try:
-                        start = "from " if executable.payload.startswith("from ") else "import "
-                        lib = executable.payload.split(start)[1].split()[0].split(".")[0]
-                        if lib in distributions:
-                            for dist in distributions[lib]:
-                                if (
-                                    dist not in requirements
-                                    and dist not in IGNORED_PACKAGES
-                                    and dist not in excluded_requirements
-                                ):
-                                    requirements[dist] = metadata.version(dist)
-                    except metadata.PackageNotFoundError:
-                        from sqlmesh.core.console import get_console
+                if executable.kind != "import":
+                    continue
 
-                        get_console().log_warning(f"Failed to find package for {lib}.")
+                try:
+                    start = "from " if executable.payload.startswith("from ") else "import "
+                    lib = executable.payload.split(start)[1].split()[0].split(".")[0]
+                    if lib not in distributions:
+                        continue
+
+                    for dist in distributions[lib]:
+                        if (
+                            dist not in requirements
+                            and dist not in IGNORED_PACKAGES
+                            and dist not in excluded_requirements
+                        ):
+                            requirements[dist] = metadata.version(dist)
+                except metadata.PackageNotFoundError:
+                    from sqlmesh.core.console import get_console
+
+                    get_console().log_warning(f"Failed to find package for {lib}.")
+
     return requirements
