@@ -559,7 +559,10 @@ class ModelTest(unittest.TestCase):
     ) -> pd.DataFrame:
         query = values.get("query")
         if query:
-            return self._execute(self._add_missing_columns(query, columns))
+            if not partial:
+                query = self._add_missing_columns(query, columns)
+
+            return self._execute(query)
 
         rows = values["rows"]
         if columns:
