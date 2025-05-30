@@ -113,6 +113,11 @@ def test_manifest_helper(caplog):
     assert sources["streaming.orders"].schema_ == "raw"
     assert sources["streaming.order_items"].table_name == "order_items"
     assert sources["streaming.order_items"].schema_ == "raw"
+    assert sources["streaming.order_items"].freshness == {
+        "error_after": {"count": 13, "period": "hour"},
+        "filter": None,
+        "warn_after": {"count": 12, "period": "hour"},
+    }
 
 
 @pytest.mark.xdist_group("dbt_manifest")
