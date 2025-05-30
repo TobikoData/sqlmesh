@@ -452,10 +452,12 @@ class Loader(abc.ABC):
         self._path_mtimes[path] = path.stat().st_mtime
 
     def _failed_to_load_model_error(self, path: Path, error: t.Union[str, Exception]) -> str:
-        base_message = f"Failed to load model definition at '{path}':"
+        base_message = f"Failed to load model from file '{path}':"
         if isinstance(error, ValidationError):
             return validation_error_message(error, base_message)
-        return f"{base_message}\n  {error}"
+        # indent all lines of error message
+        error_message = str(error).replace("\n", "\n  ")
+        return f"{base_message}\n\n  {error_message}"
 
 
 class SqlMeshLoader(Loader):
