@@ -22,6 +22,7 @@ import {
 } from './utilities/errors'
 import { selector, completionProvider } from './completion/completion'
 import { LineagePanel } from './webviews/lineagePanel'
+import { RenderedModelProvider } from './providers/renderedModelProvider'
 
 let lspClient: LSPClient | undefined
 
@@ -65,10 +66,20 @@ export async function activate(context: vscode.ExtensionContext) {
 
   lspClient = new LSPClient()
 
+  // Create and register the rendered model provider
+  const renderedModelProvider = new RenderedModelProvider()
+  context.subscriptions.push(
+    vscode.workspace.registerTextDocumentContentProvider(
+      RenderedModelProvider.getScheme(),
+      renderedModelProvider,
+    ),
+    renderedModelProvider,
+  )
+
   context.subscriptions.push(
     vscode.commands.registerCommand(
       'sqlmesh.renderModel',
-      renderModel(lspClient),
+      renderModel(lspClient, renderedModelProvider),
     ),
   )
 
