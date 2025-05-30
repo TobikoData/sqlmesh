@@ -51,6 +51,10 @@ Below you will find a few examples of our internal code requirements.
 - Attestations are created to certify an image. We use GCP Binary Authorization to enforce this. [Attestation docs](https://cloud.google.com/binary-authorization/docs/key-concepts#attestations)
 - Encryption is a key feature of our security posture and is enforced at each stage of access. For example, the state database automatically encrypts all data. Credentials are also securely encrypted and stored. 
 - We back up each state database nightly and before upgrades. These backups are stored indefinitely.
+
+## Penetration Testing
+
+At least once a year, Tobiko engages a third-party security firm to perform a penetration test. This test evaluates our systems by identifying and attempting to exploit known vulnerabilities, focusing on critical external and/or internal assets. A detailed report is available upon request.
  
 
 ## Asset and Access Management 
