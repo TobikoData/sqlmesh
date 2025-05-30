@@ -36,7 +36,7 @@ class RenderModelEntry(PydanticModel):
 
     name: str
     fqn: str
-    description: str
+    description: t.Optional[str] = None
     rendered_query: str
 
 

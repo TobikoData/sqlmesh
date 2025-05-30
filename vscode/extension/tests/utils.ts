@@ -40,6 +40,8 @@ export const startVSCode = async (workspaceDir: string): Promise<{
       args,
     });
     const window = await electronApp.firstWindow();
+    await window.waitForLoadState('domcontentloaded');
+    await window.waitForLoadState('networkidle');
     return { window, close: async () => {
       await electronApp.close();
       await fs.removeSync(userDataDir);
