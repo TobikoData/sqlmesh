@@ -126,8 +126,6 @@ class PlanExplainer(PlanEvaluator):
                     )
                 )
 
-        steps.append(UpdateEnvironmentRecordStep())
-
         if snapshots_with_schema_migration:
             steps.append(MigrateSchemasStep(snapshots=snapshots_with_schema_migration))
 
@@ -246,11 +244,6 @@ class BackfillStep:
 
 
 @dataclass
-class UpdateEnvironmentRecordStep:
-    pass
-
-
-@dataclass
 class MigrateSchemasStep:
     snapshots: t.List[Snapshot]
 
@@ -269,7 +262,6 @@ PlanStep = t.Union[
     AuditOnlyRunStep,
     RestatementStep,
     BackfillStep,
-    UpdateEnvironmentRecordStep,
     MigrateSchemasStep,
     UpdateVirtualLayerStep,
 ]
@@ -359,7 +351,7 @@ class RichExplainerConsole(ExplainerConsole):
         return tree
 
     def visit_restatement_step(self, step: RestatementStep) -> Tree:
-        tree = Tree("[bold]Delete intervals for models as part of restatement[/bold]")
+        tree = Tree("[bold]Invalidate data intervals as part of restatement[/bold]")
         for snapshot_table_info, interval in step.snapshot_intervals.items():
             display_name = self._display_name(snapshot_table_info)
             tree.add(f"{display_name} [{to_ts(interval[0])} - {to_ts(interval[1])}]")
@@ -404,9 +396,6 @@ class RichExplainerConsole(ExplainerConsole):
             else:
                 tree.add(f"{display_name} \[standalone audit]")
         return tree
-
-    def visit_update_environment_record_step(self, step: UpdateEnvironmentRecordStep) -> Tree:
-        return Tree("[bold]Reflect environment changes in the metadata state[/bold]")
 
     def visit_migrate_schemas_step(self, step: MigrateSchemasStep) -> Tree:
         tree = Tree(
