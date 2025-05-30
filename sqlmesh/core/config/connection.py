@@ -220,6 +220,7 @@ class DuckDBAttachOptions(BaseConfig):
     type: str
     path: str
     read_only: bool = False
+    data_path: t.Optional[str] = None  # Support for ducklake DATA_PATH
 
     def to_sql(self, alias: str) -> str:
         options = []
@@ -229,6 +230,9 @@ class DuckDBAttachOptions(BaseConfig):
             options.append(f"TYPE {self.type.upper()}")
         if self.read_only:
             options.append("READ_ONLY")
+        # Add DATA_PATH for ducklake
+        if self.type == "ducklake" and self.data_path:
+            options.append(f"DATA_PATH '{self.data_path}'")
         options_sql = f" ({', '.join(options)})" if options else ""
         alias_sql = ""
         # TODO: Add support for Postgres schema. Currently adding it blocks access to the information_schema
