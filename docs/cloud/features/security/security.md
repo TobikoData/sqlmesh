@@ -50,7 +50,7 @@ Below you will find a few examples of our internal code requirements.
 - Binary is signed using cosign and OIDC for keyless. [Signing docs](https://docs.sigstore.dev/cosign/signing/overview/)
 - Attestations are created to certify an image. We use GCP Binary Authorization to enforce this. [Attestation docs](https://cloud.google.com/binary-authorization/docs/key-concepts#attestations)
 - Encryption is a key feature of our security posture and is enforced at each stage of access. For example, the state database automatically encrypts all data. Credentials are also securely encrypted and stored. 
-- We back up each state database nightly and before upgrades. These backups are stored indefinitely.
+- We back up each state database nightly and before upgrades. These backups are stored for 14 days.
 
 ## Penetration Testing
 
