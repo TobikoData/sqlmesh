@@ -41,6 +41,14 @@ export class RenderedModelProvider
   }
 
   /**
+   * Update existing rendered model content
+   */
+  updateRenderedModel(uri: vscode.Uri, content: string): void {
+    this.renderedModels.set(uri.toString(), content)
+    this._onDidChange.fire(uri)
+  }
+
+  /**
    * Get the URI scheme for rendered models
    */
   static getScheme(): string {
