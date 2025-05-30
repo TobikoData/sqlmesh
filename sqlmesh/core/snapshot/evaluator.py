@@ -1591,6 +1591,7 @@ class IncrementalByUniqueKeyStrategy(MaterializableStrategy):
                 columns_to_types=model.columns_to_types,
                 unique_key=model.unique_key,
                 when_matched=model.when_matched,
+                when_matched_exclude=model.when_matched_exclude,
                 merge_filter=model.render_merge_filter(
                     start=kwargs.get("start"),
                     end=kwargs.get("end"),

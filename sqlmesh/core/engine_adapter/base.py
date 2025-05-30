@@ -1873,6 +1873,7 @@ class EngineAdapter:
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
         unique_key: t.Sequence[exp.Expression],
         when_matched: t.Optional[exp.Whens] = None,
+        when_matched_exclude: t.Optional[t.Sequence[exp.Expression]] = None,
         merge_filter: t.Optional[exp.Expression] = None,
     ) -> None:
         source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
@@ -1889,16 +1890,52 @@ class EngineAdapter:
             on = exp.and_(merge_filter, on)
 
         if not when_matched:
+            """
+            # MSSQL MERGE logic
+
+            MERGE TARGET
+            USING SOURCE
+            ON    TARGET unique keys = SOURCE unique keys
+            WHEN  MATCHED AND EXISTS (
+                  SELECT each target column except unique keys and when_matched_exclude
+                  EXCEPT
+                  SELECT each source column except unique keys and when_matched_exclude
+                  )
+            THEN  UPDATE
+            SET   target columns to the source columns, skipping the unique keys, to prevent deferred updates 
+            WHEN  NOT MATCHED
+            THEN  INSERT
+
+            The EXISTS clause prevents rows from being updated when there have been no changes. This is
+            because MSSQL does not optimize away this operation, it updates every row and column.
+
+            Unique keys are excluded from the EXISTS comparison because they were already checked in the ON
+            clause. The when_matched_exclude keyword lets you exclude further columns from the comparison,
+            e.g. a [Date Loaded] column.
+
+            When updating existing rows, it's important not to set the unique keys a second time. If there
+            is a clustered index on those columns it will trigger an internal deferred update; e.g. a delete
+            and insert of the row, which can be less efficient than attempting to update the row in-place.
+            """
+            unique_key_names = [y.name for y in unique_key]
+            exclude_column_names = []
+            if when_matched_exclude:
+                exclude_column_names = [y.name for y in when_matched_exclude]
+            target_columns = [exp.column(c, MERGE_TARGET_ALIAS) for c in columns_to_types if c not in unique_key_names and c not in exclude_column_names]
+            source_columns = [exp.column(c, MERGE_SOURCE_ALIAS) for c in columns_to_types if c not in unique_key_names and c not in exclude_column_names]
+            condition = exp.Exists(this = exp.select(*target_columns).except_(exp.select(*source_columns)))
+            
             match_expressions = [
                 exp.When(
                     matched=True,
                     source=False,
+                    condition=condition,
                     then=exp.Update(
                         expressions=[
                             exp.column(col, MERGE_TARGET_ALIAS).eq(
                                 exp.column(col, MERGE_SOURCE_ALIAS)
                             )
-                            for col in columns_to_types
+                            for col in columns_to_types if col not in unique_key_names
                         ],
                     ),
                 )

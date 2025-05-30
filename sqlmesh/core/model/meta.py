@@ -513,6 +513,12 @@ class ModelMeta(_Node):
         return None
 
     @property
+    def when_matched_exclude(self) -> t.Optional[t.Sequence[exp.Expression]]:
+        if isinstance(self.kind, (IncrementalByUniqueKeyKind)):
+            return self.kind.when_matched_exclude
+        return []
+
+    @property
     def merge_filter(self) -> t.Optional[exp.Expression]:
         if isinstance(self.kind, IncrementalByUniqueKeyKind):
             return self.kind.merge_filter

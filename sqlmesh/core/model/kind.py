@@ -454,6 +454,7 @@ class IncrementalByUniqueKeyKind(_IncrementalBy):
     )
     unique_key: SQLGlotListOfFields
     when_matched: t.Optional[exp.Whens] = None
+    when_matched_exclude: t.Optional[SQLGlotListOfFields] = None
     merge_filter: t.Optional[exp.Expression] = None
     batch_concurrency: t.Literal[1] = 1
 
@@ -497,6 +498,7 @@ class IncrementalByUniqueKeyKind(_IncrementalBy):
             *super().data_hash_values,
             *(gen(k) for k in self.unique_key),
             gen(self.when_matched) if self.when_matched is not None else None,
+            gen(self.when_matched_exclude) if self.when_matched_exclude is not None else None,
             gen(self.merge_filter) if self.merge_filter is not None else None,
         ]
 
@@ -510,6 +512,7 @@ class IncrementalByUniqueKeyKind(_IncrementalBy):
                     {
                         "unique_key": exp.Tuple(expressions=self.unique_key),
                         "when_matched": self.when_matched,
+                        "when_matched_exclude": self.when_matched_exclude,
                         "merge_filter": self.merge_filter,
                     }
                 ),
