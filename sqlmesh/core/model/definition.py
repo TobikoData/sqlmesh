@@ -2040,7 +2040,7 @@ def load_sql_based_model(
 
 MODEL (
   name sqlmesh_example.full_model, --model name
-  kind VIEW, --materialization
+  kind FULL, --materialization
   cron '@daily', --schedule
 );
 

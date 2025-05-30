@@ -613,7 +613,7 @@ def test_unordered_model_statements():
 
     with pytest.raises(ConfigError) as ex:
         load_sql_based_model(expressions)
-    assert "MODEL statement is required" in str(ex.value)
+    assert "Please add a required MODEL block at top of the file. Example:" in str(ex.value)
 
 
 def test_no_query():
