@@ -7,7 +7,7 @@ from sqlmesh.lsp.uri import URI
 
 @pytest.mark.fast
 def test_macro_references_multirepo() -> None:
-    context = Context(paths=["examples/multi/repo_1", "examples/multi/repo_2"])
+    context = Context(paths=["examples/multi/repo_1", "examples/multi/repo_2"], gateway="memory")
     lsp_context = LSPContext(context)
 
     d_path = next(
