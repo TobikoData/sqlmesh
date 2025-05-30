@@ -12,7 +12,7 @@ import { AuthenticationProviderTobikoCloud } from './auth/auth'
 import { signOut } from './commands/signout'
 import { signIn } from './commands/signin'
 import { signInSpecifyFlow } from './commands/signinSpecifyFlow'
-import { renderModel } from './commands/renderModel'
+import { renderModel, disposeRenderModelWatchers } from './commands/renderModel'
 import { isErr } from '@bus/result'
 import {
   handleNotSginedInError,
@@ -170,6 +170,9 @@ export async function activate(context: vscode.ExtensionContext) {
 
 // This method is called when your extension is deactivated
 export async function deactivate() {
+  // Clean up render model watchers
+  disposeRenderModelWatchers()
+  
   if (lspClient) {
     await lspClient.dispose()
   }
