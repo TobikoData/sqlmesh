@@ -44,6 +44,7 @@ Below you will find a few examples of our interal code requirements.
 - Each commit to main is approved by someone different than the author.
 - We follow the standard of signing commits and then registering the key with GitHub. [Github Docs](https://docs.github.com/en/authentication/managing-commit-signature-verification/signing-commits)
 - Binary is signed using cosign and OIDC for keyless. [Signing docs](https://docs.sigstore.dev/cosign/signing/overview/)
+- Attestations are created that certify an image. We us GCP Binary Authorization to enforce this. [Attestation docs](https://cloud.google.com/binary-authorization/docs/key-concepts#attestations)
 - Encryption is a key feature of our security posture as well. This is enforced at each stage of access. For example, the state database automatically encrypts all data. Credentials are also securely encrypted and stored. 
 - We backup each state database nightly as well as before upgrades. These are stored indefinitely.
  
