@@ -42,10 +42,10 @@ export function renderModel(lspClient?: LSPClient) {
     // If multiple models, let user choose
     let selectedModel: RenderModelEntry
     if (result.value.models.length > 1) {
-      const items = result.value.models.map((model: RenderModelEntry) => ({
+      const items = result.value.models.map(model => ({
         label: model.name,
         description: model.fqn,
-        detail: model.description,
+        detail: model.description ? model.description : undefined,
         model: model,
       }))
 
