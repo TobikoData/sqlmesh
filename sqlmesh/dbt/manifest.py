@@ -154,16 +154,21 @@ class ManifestHelper:
     def _load_sources(self) -> None:
         for source in self._manifest.sources.values():
             # starting in dbt-core 1.9.5, freshness can be set in both source and source config
-            freshness = merge_freshness(source.freshness, source.config.freshness)
-
-            config_source_dict = _config(source)
-            config_source_dict.pop("freshness", None)
-
             source_dict = source.to_dict()
             source_dict.pop("freshness", None)
 
+            source_config_dict = _config(source)
+            source_config_dict.pop("freshness", None)
+
+            source_config_freshness = getattr(source.config, "freshness", None)
+            freshness = (
+                merge_freshness(source.freshness, source_config_freshness)
+                if source_config_freshness
+                else source.freshness
+            )
+
             source_config = SourceConfig(
-                **config_source_dict,
+                **source_config_dict,
                 **source_dict,
                 freshness=freshness.to_dict() if freshness else None,
             )
