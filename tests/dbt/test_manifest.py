@@ -9,6 +9,7 @@ from sqlmesh.dbt.context import DbtContext
 from sqlmesh.dbt.manifest import ManifestHelper
 from sqlmesh.dbt.profile import Profile
 from sqlmesh.dbt.builtin import Api, _relation_info_to_relation
+from sqlmesh.dbt.util import DBT_VERSION
 from sqlmesh.utils.jinja import MacroReference
 
 pytestmark = pytest.mark.dbt
@@ -113,6 +114,12 @@ def test_manifest_helper(caplog):
     assert sources["streaming.orders"].schema_ == "raw"
     assert sources["streaming.order_items"].table_name == "order_items"
     assert sources["streaming.order_items"].schema_ == "raw"
+
+    assert sources["streaming.order_items"].freshness == {
+        "warn_after": {"count": 10 if DBT_VERSION < (1, 9, 5) else 12, "period": "hour"},
+        "error_after": {"count": 11 if DBT_VERSION < (1, 9, 5) else 13, "period": "hour"},
+        "filter": None,
+    }
 
 
 @pytest.mark.xdist_group("dbt_manifest")

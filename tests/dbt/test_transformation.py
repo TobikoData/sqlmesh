@@ -1556,9 +1556,9 @@ def test_grain():
     assert model.to_sqlmesh(context).grains == [exp.to_column("id_a")]
 
 
-def test_on_run_start_end(copy_to_temp_path):
-    project_root = "tests/fixtures/dbt/sushi_test"
-    sushi_context = Context(paths=copy_to_temp_path(project_root))
+@pytest.mark.xdist_group("dbt_manifest")
+def test_on_run_start_end():
+    sushi_context = Context(paths=["tests/fixtures/dbt/sushi_test"])
     assert len(sushi_context._environment_statements) == 2
 
     # Root project's on run start / on run end should be first by checking the macros

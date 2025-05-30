@@ -93,7 +93,6 @@ from sqlmesh.core.plan import Plan, PlanBuilder, SnapshotIntervals
 from sqlmesh.core.plan.definition import UserProvidedFlags
 from sqlmesh.core.reference import ReferenceGraph
 from sqlmesh.core.scheduler import Scheduler, CompletionStatus
-from sqlmesh.core.schema_diff import SchemaDiffer
 from sqlmesh.core.schema_loader import create_external_models_file
 from sqlmesh.core.selector import Selector
 from sqlmesh.core.snapshot import (
@@ -389,7 +388,6 @@ class GenericContext(BaseContext, t.Generic[C]):
         self.pinned_environments = Environment.sanitize_names(self.config.pinned_environments)
         self.auto_categorize_changes = self.config.plan.auto_categorize_changes
         self.selected_gateway = gateway or self.config.default_gateway_name
-        self.gateway_managed_virtual_layer = self.config.gateway_managed_virtual_layer
 
         gw_model_defaults = self.config.gateways[self.selected_gateway].model_defaults
         if gw_model_defaults:
@@ -1541,7 +1539,6 @@ class GenericContext(BaseContext, t.Generic[C]):
             ),
             end_bounded=not run,
             ensure_finalized_snapshots=self.config.plan.use_finalized_state,
-            engine_schema_differ=SchemaDiffer(),  # TODO: fix to properly handle it
             interval_end_per_model=max_interval_end_per_model,
             console=self.console,
             user_provided_flags=user_provided_flags,
@@ -1718,7 +1715,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                 if target_snapshot and source_snapshot:
                     if (source_snapshot.fingerprint != target_snapshot.fingerprint) and (
                         (source_snapshot.version != target_snapshot.version)
-                        or (source_snapshot.is_forward_only or target_snapshot.is_forward_only)
+                        or source_snapshot.is_forward_only
                     ):
                         # Compare the virtual layer instead of the physical layer because the virtual layer is guaranteed to point
                         # to the correct/active snapshot for the model in the specified environment, taking into account things like dev previews
@@ -2619,7 +2616,8 @@ class GenericContext(BaseContext, t.Generic[C]):
             ensure_finalized_snapshots=ensure_finalized_snapshots,
             diff_rendered=diff_rendered,
             environment_statements=self._environment_statements,
-            gateway_managed_virtual_layer=self.gateway_managed_virtual_layer,
+            gateway_managed_virtual_layer=self.config.gateway_managed_virtual_layer,
+            infer_python_dependencies=self.config.infer_python_dependencies,
         )
 
     def _destroy(self) -> None:

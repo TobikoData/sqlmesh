@@ -279,7 +279,6 @@ def test_diff(sushi_context: Context, mocker: MockerFixture):
 
     plan = PlanBuilder(
         context_diff=sushi_context._context_diff("prod"),
-        engine_schema_differ=sushi_context.engine_adapter.SCHEMA_DIFFER,
     ).build()
 
     # stringify used to trigger an unhashable exception due to
@@ -1239,6 +1238,19 @@ def test_requirements(copy_to_temp_path: t.Callable):
     diff = context.plan_builder("dev", skip_tests=True, skip_backfill=True).build().context_diff
     assert set(diff.previous_requirements) == requirements
     assert set(diff.requirements) == {"numpy", "pandas"}
+
+
+def test_deactivate_automatic_requirement_inference(copy_to_temp_path: t.Callable):
+    context_path = copy_to_temp_path("examples/sushi")[0]
+    config = next(iter(load_configs("config", Config, paths=context_path).values()))
+
+    config.infer_python_dependencies = False
+    context = Context(paths=context_path, config=config)
+    environment = context.plan(
+        "dev", no_prompts=True, skip_tests=True, skip_backfill=True, auto_apply=True
+    ).environment
+
+    assert environment.requirements == {"pandas": "2.2.2"}
 
 
 @pytest.mark.slow
