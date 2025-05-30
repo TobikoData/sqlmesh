@@ -548,7 +548,7 @@ class SQLMeshMagics(Magics):
     def evaluate(self, context: Context, line: str) -> None:
         """Evaluate a model query and fetches a dataframe."""
         context.refresh()
-        
+
         snowpark = optional_import("snowflake.snowpark")
         args = parse_argstring(self.evaluate, line)
 
@@ -559,10 +559,10 @@ class SQLMeshMagics(Magics):
             execution_time=args.execution_time,
             limit=args.limit,
         )
-        
+
         if snowpark and isinstance(df, snowpark.DataFrame):
             df = df.limit(args.limit or 100).to_pandas()
-            
+
         self.display(df)
 
     @magic_arguments()
