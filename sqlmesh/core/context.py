@@ -1718,7 +1718,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                 if target_snapshot and source_snapshot:
                     if (source_snapshot.fingerprint != target_snapshot.fingerprint) and (
                         (source_snapshot.version != target_snapshot.version)
-                        or (source_snapshot.is_forward_only or target_snapshot.is_forward_only)
+                        or source_snapshot.is_forward_only
                     ):
                         # Compare the virtual layer instead of the physical layer because the virtual layer is guaranteed to point
                         # to the correct/active snapshot for the model in the specified environment, taking into account things like dev previews
