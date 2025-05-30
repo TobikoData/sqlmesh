@@ -22,8 +22,7 @@ For some customers, our hybrid deployment option is a great fit. It provides a s
 
 In a hybrid deployment, Tobiko Cloud does not execute tasks directly with the engine. Instead, it passes tasks to the executors hosted in your environment, which then execute the tasks with the engine. 
 
-Executors are Docker containers that connect to both Tobiko Cloud and your SQL engine. They pull work tasks from the Tobiko Cloud scheduler and execute them with your SQL engine. This is a pull-only mechanism authenicated through an OAuth Client ID/Secret. Whitelist IPs in your network to allow reaching Tobiko Cloud IPs from the executor: 34.28.17.91, 34.136.27.153,
-34.136.131.201
+Executors are Docker containers that connect to both Tobiko Cloud and your SQL engine. They pull work tasks from the Tobiko Cloud scheduler and execute them with your SQL engine. This is a pull-only mechanism authenicated through an OAuth Client ID/Secret. Whitelist IPs in your network to allow reaching Tobiko Cloud IPs from the executor: 34.28.17.91, 34.136.27.153, 34.136.131.20
 
 Below is a diagram of the components along with their description. 
 
