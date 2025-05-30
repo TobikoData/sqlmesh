@@ -21,7 +21,11 @@ from sqlmesh.core.plan.definition import (
     UserProvidedFlags,
     earliest_interval_start,
 )
-from sqlmesh.core.schema_diff import SchemaDiffer, has_drop_alteration, get_dropped_column_names
+from sqlmesh.core.schema_diff import (
+    get_schema_differ,
+    has_drop_alteration,
+    get_dropped_column_names,
+)
 from sqlmesh.core.snapshot import (
     DeployabilityIndex,
     Snapshot,
@@ -78,14 +82,12 @@ class PlanBuilder:
         ensure_finalized_snapshots: Whether to compare against snapshots from the latest finalized
             environment state, or to use whatever snapshots are in the current environment state even if
             the environment is not finalized.
-        engine_schema_differ: Schema differ from the context engine adapter.
         interval_end_per_model: The mapping from model FQNs to target end dates.
     """
 
     def __init__(
         self,
         context_diff: ContextDiff,
-        engine_schema_differ: SchemaDiffer,
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         execution_time: t.Optional[TimeLike] = None,
@@ -137,7 +139,6 @@ class PlanBuilder:
         self._backfill_models = backfill_models
         self._end = end or default_end
         self._apply = apply
-        self._engine_schema_differ = engine_schema_differ
         self._console = console or get_console()
         self._choices: t.Dict[SnapshotId, SnapshotChangeCategory] = {}
         self._user_provided_flags = user_provided_flags
@@ -493,7 +494,7 @@ class PlanBuilder:
             if columns_to_types_all_known(old_columns_to_types) and columns_to_types_all_known(
                 new_columns_to_types
             ):
-                schema_diff = self._engine_schema_differ.compare_columns(
+                schema_diff = get_schema_differ(snapshot.model.dialect).compare_columns(
                     new.name,
                     old_columns_to_types,
                     new_columns_to_types,

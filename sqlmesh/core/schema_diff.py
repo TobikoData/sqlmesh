@@ -723,5 +723,27 @@ def get_dropped_column_names(alter_expressions: t.List[exp.Alter]) -> t.List[str
     return dropped_columns
 
 
+def get_schema_differ(dialect: str) -> SchemaDiffer:
+    """
+    Returns the appropriate SchemaDiffer for a given dialect without initializing the engine adapter.
+
+    Args:
+        dialect: The dialect for which to get the schema differ.
+
+    Returns:
+        The SchemaDiffer instance configured for the given dialect.
+    """
+    from sqlmesh.core.engine_adapter import (
+        DIALECT_TO_ENGINE_ADAPTER,
+        DIALECT_ALIASES,
+        EngineAdapter,
+    )
+
+    dialect = dialect.lower()
+    dialect = DIALECT_ALIASES.get(dialect, dialect)
+    engine_adapter_class = DIALECT_TO_ENGINE_ADAPTER.get(dialect, EngineAdapter)
+    return getattr(engine_adapter_class, "SCHEMA_DIFFER", SchemaDiffer())
+
+
 def _get_name_and_type(struct: exp.ColumnDef) -> t.Tuple[exp.Identifier, exp.DataType]:
     return struct.this, struct.args["kind"]

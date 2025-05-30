@@ -93,7 +93,6 @@ from sqlmesh.core.plan import Plan, PlanBuilder, SnapshotIntervals
 from sqlmesh.core.plan.definition import UserProvidedFlags
 from sqlmesh.core.reference import ReferenceGraph
 from sqlmesh.core.scheduler import Scheduler, CompletionStatus
-from sqlmesh.core.schema_diff import SchemaDiffer
 from sqlmesh.core.schema_loader import create_external_models_file
 from sqlmesh.core.selector import Selector
 from sqlmesh.core.snapshot import (
@@ -1541,7 +1540,6 @@ class GenericContext(BaseContext, t.Generic[C]):
             ),
             end_bounded=not run,
             ensure_finalized_snapshots=self.config.plan.use_finalized_state,
-            engine_schema_differ=SchemaDiffer(),  # TODO: fix to properly handle it
             interval_end_per_model=max_interval_end_per_model,
             console=self.console,
             user_provided_flags=user_provided_flags,
