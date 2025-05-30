@@ -36,3 +36,36 @@ test('Render works correctly', async () => {
       await fs.remove(tempDir);
     }
   });
+
+test('Render works correctly with model without a description', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'vscode-test-sushi-'));
+  await fs.copy(SUSHI_SOURCE_PATH, tempDir);
+
+  try {
+    const { window, close } = await startVSCode(tempDir);
+
+    //   Wait for the models folder to be visible
+    await window.waitForSelector('text=models');
+
+    // Click on the models folder, excluding external_models
+    await window.getByRole('treeitem', { name: 'models', exact: true }).locator('a').click();
+
+    // Open the latest_order model
+    await window.getByRole('treeitem', { name: 'latest_order.sql', exact: true }).locator('a').click();
+
+    await window.waitForSelector('text=custom_full_with_custom_kind');
+    await window.waitForSelector('text=Loaded SQLMesh Context')
+
+    // Render the model
+    await window.keyboard.press(process.platform === 'darwin' ? 'Meta+Shift+P' : 'Control+Shift+P');
+    await window.keyboard.type('Render Model');
+    await window.keyboard.press('Enter');
+
+    // Check if the model is rendered correctly
+    await expect(window.locator('text="orders"."id" AS "id",')).toBeVisible();
+
+    await close();
+  } finally {
+    await fs.remove(tempDir);
+  }
+});

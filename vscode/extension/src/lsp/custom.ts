@@ -21,7 +21,7 @@ interface RenderModelResponse {
 export interface RenderModelEntry {
   name: string
   fqn: string
-  description: string
+  description: string | null | undefined
   rendered_query: string
 }
 
