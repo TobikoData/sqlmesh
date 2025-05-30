@@ -22,7 +22,6 @@ def sushi_plan(sushi_context: Context, mocker: MockerFixture) -> Plan:
 
     return PlanBuilder(
         sushi_context._context_diff("dev"),
-        sushi_context.engine_adapter.SCHEMA_DIFFER,
         is_dev=True,
         include_unmodified=True,
     ).build()
@@ -57,9 +56,7 @@ def test_builtin_evaluator_push(sushi_context: Context, make_snapshot):
     new_model_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
     new_view_model_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
-    plan = PlanBuilder(
-        sushi_context._context_diff("prod"), sushi_context.engine_adapter.SCHEMA_DIFFER
-    ).build()
+    plan = PlanBuilder(sushi_context._context_diff("prod")).build()
 
     evaluator = BuiltInPlanEvaluator(
         sushi_context.state_sync,
