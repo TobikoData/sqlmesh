@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from rich.console import Console as RichConsole
 from rich.tree import Tree
 from sqlglot.dialects.dialect import DialectType
+from sqlmesh.core import constants as c
 from sqlmesh.core.console import Console, TerminalConsole, get_console
 from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.plan.definition import EvaluatablePlan, SnapshotIntervals
@@ -51,7 +52,7 @@ class PlanExplainer(PlanEvaluator):
         }
 
         deployability_index = DeployabilityIndex.create(snapshots, start=plan.start)
-        deployability_index_for_migration = deployability_index
+        deployability_index_for_creation = deployability_index
         if plan.is_dev:
             before_promote_snapshots = all_selected_for_backfill_snapshots
             after_promote_snapshots = set()
@@ -71,7 +72,7 @@ class PlanExplainer(PlanEvaluator):
                 for s in snapshots.values()
                 if s.is_paused
                 and s.is_materialized
-                and not deployability_index_for_migration.is_representative(s)
+                and not deployability_index_for_creation.is_representative(s)
             ]
 
         snapshots_to_intervals = self._missing_intervals(
@@ -97,7 +98,7 @@ class PlanExplainer(PlanEvaluator):
             steps.append(
                 PhysicalLayerUpdateStep(
                     snapshots=snapshots_to_create,
-                    deployability_index=deployability_index,
+                    deployability_index=deployability_index_for_creation,
                 )
             )
 
@@ -125,6 +126,8 @@ class PlanExplainer(PlanEvaluator):
                         deployability_index=deployability_index,
                     )
                 )
+
+        steps.append(UpdateEnvironmentRecordStep())
 
         if snapshots_with_schema_migration:
             steps.append(MigrateSchemasStep(snapshots=snapshots_with_schema_migration))
@@ -255,6 +258,11 @@ class UpdateVirtualLayerStep:
     deployability_index: DeployabilityIndex
 
 
+@dataclass
+class UpdateEnvironmentRecordStep:
+    pass
+
+
 PlanStep = t.Union[
     BeforeAllStep,
     AfterAllStep,
@@ -264,6 +272,7 @@ PlanStep = t.Union[
     BackfillStep,
     MigrateSchemasStep,
     UpdateVirtualLayerStep,
+    UpdateEnvironmentRecordStep,
 ]
 
 
@@ -298,7 +307,9 @@ class RichExplainerConsole(ExplainerConsole):
             if not hasattr(self, handler_name):
                 raise SQLMeshError(f"Unexpected step: {step.__class__.__name__}")
             handler = getattr(self, handler_name)
-            tree.add(self._limit_tree(handler(step)))
+            result = handler(step)
+            if result:
+                tree.add(self._limit_tree(result))
         self.console.print(tree)
 
     def visit_before_all_step(self, step: BeforeAllStep) -> Tree:
@@ -316,7 +327,11 @@ class RichExplainerConsole(ExplainerConsole):
     def visit_physical_layer_update_step(self, step: PhysicalLayerUpdateStep) -> Tree:
         tree = Tree("[bold]Validate SQL and create physical tables if they do not exist[/bold]")
         for snapshot in step.snapshots:
-            is_deployable = step.deployability_index.is_deployable(snapshot)
+            is_deployable = (
+                step.deployability_index.is_deployable(snapshot)
+                if self.environment_naming_info.name != c.PROD
+                else True
+            )
             display_name = self._display_name(snapshot)
             table_name = snapshot.table_name(is_deployable)
             model_tree = Tree(f"{display_name} -> {table_name}")
@@ -328,14 +343,18 @@ class RichExplainerConsole(ExplainerConsole):
                     model_tree.add("Dry run model query without inserting results")
 
             if snapshot.is_view:
-                model_tree.add(f"Create view [underline]{table_name}[/underline] if doesn't exist")
+                create_tree = Tree("Create view if it doesn't exist")
             elif snapshot.is_forward_only and snapshot.previous_versions:
                 prod_table = snapshot.table_name(True)
-                model_tree.add(
-                    f"Clone [underline]{prod_table}[/underline] into [underline]{table_name}[/underline] and then update its schema if it doesn't exist"
+                create_tree = Tree(
+                    f"Clone {prod_table} into {table_name} and then update its schema if it doesn't exist"
                 )
             else:
-                model_tree.add(f"Create table [underline]{table_name}[/underline] if doesn't exist")
+                create_tree = Tree("Create table if it doesn't exist")
+
+            if not is_deployable:
+                create_tree.add("[orange1]preview[/orange1]: data will NOT be reused in production")
+            model_tree.add(create_tree)
 
             if snapshot.is_model and snapshot.model.post_statements:
                 model_tree.add("Run post-statements")
@@ -378,12 +397,12 @@ class RichExplainerConsole(ExplainerConsole):
                         snapshot_id=snapshot.snapshot_id, intervals=intervals
                     ).format_intervals(snapshot.node.interval_unit)
                     model_tree.add(
-                        f"Incrementally insert records within the range [{formatted_range}] into [underline]{table_name}[/underline]"
+                        f"Incrementally insert records within the range [{formatted_range}]"
                     )
                 elif snapshot.is_view:
-                    model_tree.add(f"Recreate view [underline]{table_name}[/underline]")
+                    model_tree.add("Recreate view")
                 else:
-                    model_tree.add(f"Fully refresh table [underline]{table_name}[/underline]")
+                    model_tree.add("Fully refresh table")
 
                 if snapshot.model.post_statements:
                     model_tree.add("Run post-statements")
@@ -399,7 +418,7 @@ class RichExplainerConsole(ExplainerConsole):
 
     def visit_migrate_schemas_step(self, step: MigrateSchemasStep) -> Tree:
         tree = Tree(
-            "[bold]Update schemas of production physical tables to reflect forward-only changes[/bold]"
+            "[bold]Update schemas (add, drop, alter columns) of production physical tables to reflect forward-only changes[/bold]"
         )
         for snapshot in step.snapshots:
             display_name = self._display_name(snapshot)
@@ -431,6 +450,11 @@ class RichExplainerConsole(ExplainerConsole):
         if step.demoted_snapshots:
             tree.add(self._limit_tree(demote_tree))
         return tree
+
+    def visit_update_environment_record_step(
+        self, step: UpdateEnvironmentRecordStep
+    ) -> t.Optional[Tree]:
+        return None
 
     def _display_name(self, snapshot: SnapshotInfoMixin) -> str:
         return snapshot.display_name(
