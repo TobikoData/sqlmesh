@@ -388,7 +388,6 @@ class GenericContext(BaseContext, t.Generic[C]):
         self.pinned_environments = Environment.sanitize_names(self.config.pinned_environments)
         self.auto_categorize_changes = self.config.plan.auto_categorize_changes
         self.selected_gateway = gateway or self.config.default_gateway_name
-        self.gateway_managed_virtual_layer = self.config.gateway_managed_virtual_layer
 
         gw_model_defaults = self.config.gateways[self.selected_gateway].model_defaults
         if gw_model_defaults:
@@ -2617,7 +2616,8 @@ class GenericContext(BaseContext, t.Generic[C]):
             ensure_finalized_snapshots=ensure_finalized_snapshots,
             diff_rendered=diff_rendered,
             environment_statements=self._environment_statements,
-            gateway_managed_virtual_layer=self.gateway_managed_virtual_layer,
+            gateway_managed_virtual_layer=self.config.gateway_managed_virtual_layer,
+            infer_python_dependencies=self.config.infer_python_dependencies,
         )
 
     def _destroy(self) -> None:
