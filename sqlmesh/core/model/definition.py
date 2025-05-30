@@ -2036,18 +2036,25 @@ def load_sql_based_model(
         variables: The variables to pass to the model.
         kwargs: Additional kwargs to pass to the loader.
     """
+    missing_model_msg = f"""Please add a required MODEL block at top of the file. Example:
+
+MODEL (
+  name sqlmesh_example.full_model, --model name
+  kind VIEW, --materialization
+  cron '@daily', --schedule
+);
+
+Learn more at https://sqlmesh.readthedocs.io/en/stable/concepts/models/overview
+"""
+
     if not expressions:
-        raise_config_error("Incomplete model definition, missing MODEL statement", path)
+        raise_config_error(missing_model_msg)
 
     dialect = dialect or ""
     meta = expressions[0]
     if not isinstance(meta, d.Model):
         if not infer_names:
-            raise_config_error(
-                "The MODEL statement is required as the first statement in the definition, "
-                "unless model name inference is enabled.",
-                path,
-            )
+            raise_config_error(missing_model_msg)
         meta = d.Model(expressions=[])  # Dummy meta node
         expressions.insert(0, meta)
 
