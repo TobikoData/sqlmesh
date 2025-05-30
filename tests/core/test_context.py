@@ -279,7 +279,6 @@ def test_diff(sushi_context: Context, mocker: MockerFixture):
 
     plan = PlanBuilder(
         context_diff=sushi_context._context_diff("prod"),
-        engine_schema_differ=sushi_context.engine_adapter.SCHEMA_DIFFER,
     ).build()
 
     # stringify used to trigger an unhashable exception due to
